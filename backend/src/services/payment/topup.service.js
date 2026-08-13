@@ -266,7 +266,9 @@ export async function createTopupPaymentLink({
   }
 
   const net = Math.round(quote.total);
-  const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, net);
+  const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, net, {
+    accountEmail: userEmail,
+  });
   const amount = priced.amount;
   const invoiceInfo = priced.invoiceInfo;
   const orderCode = generateOrderCode();

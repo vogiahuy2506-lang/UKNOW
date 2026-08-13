@@ -10,7 +10,11 @@ import {
   PAYOS_RECONCILE_JOB_CODE,
   PAYOS_EXPIRE_JOB_CODE,
 } from '../../payment/payosReconcile.service.js';
-import { EINVOICE_RECONCILE_JOB_CODE } from '../../payment/matbaoInvoice.service.js';
+import {
+  EINVOICE_RECONCILE_JOB_CODE,
+  EINVOICE_EMAIL_JOB_CODE,
+  EINVOICE_REPAIR_JOB_CODE,
+} from '../../payment/matbaoInvoice.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEDULER_PATH = path.resolve(__dirname, '../../../utils/scheduler.js');
@@ -32,6 +36,12 @@ function extractRecordedJobCodes(schedulerSource) {
   }
   if (/recordRun\(\s*EINVOICE_RECONCILE_JOB_CODE/.test(schedulerSource)) {
     codes.add(EINVOICE_RECONCILE_JOB_CODE);
+  }
+  if (/recordRun\(\s*EINVOICE_EMAIL_JOB_CODE/.test(schedulerSource)) {
+    codes.add(EINVOICE_EMAIL_JOB_CODE);
+  }
+  if (/recordRun\(\s*EINVOICE_REPAIR_JOB_CODE/.test(schedulerSource)) {
+    codes.add(EINVOICE_REPAIR_JOB_CODE);
   }
   return codes;
 }
@@ -58,9 +68,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 18 cron cố định, không trùng mã', () => {
-    expect(CRON_JOBS).toHaveLength(18);
+  it('đúng 20 cron cố định, không trùng mã', () => {
+    expect(CRON_JOBS).toHaveLength(20);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(18);
+    expect(new Set(codes).size).toBe(20);
   });
 });

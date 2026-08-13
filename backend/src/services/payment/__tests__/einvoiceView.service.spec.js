@@ -17,12 +17,16 @@ jest.unstable_mockModule('../../../repositories/payment/einvoice.repository.js',
     return 'issued';
   },
   einvoiceStatusRank: (s) => {
-    if (s === 'pending') return 0;
+    if (s === 'pending' || s === 'processing') return 0;
     if (s === 'failed') return 1;
     if (s === 'issued') return 2;
     if (s === 'cqt_ok' || s === 'cqt_rejected') return 3;
     return 0;
   },
+}));
+
+jest.unstable_mockModule('../matbaoInvoice.service.js', () => ({
+  streamInvoicePdfForOwner: jest.fn(),
 }));
 
 const {
@@ -158,6 +162,9 @@ describe('getInvoiceForOwner', () => {
     expect(r.status).toBe('pending');
     expect(r.gross).toBe(110);
     expect(r.buyer.companyName).toBe('ABC');
+    expect(r.canDownload).toBe(false);
+    expect(r.emailStatus).toBe('pending');
+    expect(r.pdfUrl).toBeUndefined();
   });
 
   it('returns einvoice fields when row exists', async () => {
@@ -172,14 +179,18 @@ describe('getInvoiceForOwner', () => {
       cqt_code: 'TAX1',
       pdf_url: 'https://x/pdf',
       issued_at: '2026-01-01',
+      email_status: 'sent',
+      email_sent_at: '2026-01-02',
     });
     const r = await getInvoiceForOwner(55, 9);
     expect(r).toMatchObject({
       hasInvoice: true,
       status: 'cqt_ok',
       maSoHdon: 'MSO',
-      pdfUrl: 'https://x/pdf',
       cqtCode: 'TAX1',
+      canDownload: true,
+      emailStatus: 'sent',
     });
+    expect(r.pdfUrl).toBeUndefined();
   });
 });

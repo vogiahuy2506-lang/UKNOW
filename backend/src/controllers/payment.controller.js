@@ -3,6 +3,7 @@ import {
   verifyMatbaoWebhookSecret,
   handleMatbaoCqtWebhook,
   getInvoiceForOwner,
+  streamInvoicePdfForOwner,
 } from '../services/payment/einvoiceView.service.js';
 
 export const createPayment = async (req, res) => {
@@ -171,5 +172,36 @@ export const getInvoiceForOrder = async (req, res) => {
     } catch (err) {
         console.error(err);
         return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+};
+
+/** Owner-only PDF stream — never redirect to Mat Bao URL. */
+export const downloadInvoicePdf = async (req, res) => {
+    try {
+        const { orderCode } = req.params;
+        if (!orderCode || !req.user?.id) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy hoá đơn' });
+        }
+        const result = await streamInvoicePdfForOwner(orderCode, req.user.id);
+        if (result.status === 404) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy hoá đơn' });
+        }
+        if (result.status === 409) {
+            return res.status(409).json({
+                success: false,
+                message: 'Hóa đơn chưa sẵn sàng để tải',
+                code: result.code || 'INVOICE_PDF_NOT_READY',
+            });
+        }
+        res.setHeader('Content-Type', result.contentType || 'application/pdf');
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="${result.filename || `hoa-don-${orderCode}.pdf`}"`,
+        );
+        res.setHeader('Cache-Control', 'no-store');
+        return res.send(result.buffer);
+    } catch (err) {
+        console.error('[InvoicePdf]', err?.message || err);
+        return res.status(502).json({ success: false, message: 'Không tải được PDF hóa đơn' });
     }
 };

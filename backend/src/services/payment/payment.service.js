@@ -32,7 +32,7 @@ import {
 } from './payosReconcile.service.js';
 import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
 import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
-import { scheduleIssueInvoiceAfterCommit } from './matbaoInvoice.service.js';
+import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
@@ -135,7 +135,9 @@ export const createPaymentLink = async ({
         amount = Number(resolved.finalAmount || 0);
         discount = resolved.discount;
 
-        const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount);
+        const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount, {
+            accountEmail: userEmail,
+        });
         amount = priced.amount;
         const invoiceInfo = priced.invoiceInfo;
 
@@ -266,9 +268,9 @@ export const handleWebhook = async (body) => {
                 return webhookData;
             }
 
-            await fulfillPaidOrder(order, client);
+            const einvoiceId = await fulfillPaidOrder(order, client);
             await client.query('COMMIT');
-            scheduleIssueInvoiceAfterCommit(order);
+            scheduleDispatchEinvoiceAfterCommit(einvoiceId);
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -499,7 +501,9 @@ export const createCustomPaymentLink = async ({
         amount = Number(resolved.finalAmount || 0);
         discount = resolved.discount;
 
-        const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount);
+        const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount, {
+            accountEmail: userEmail,
+        });
         amount = priced.amount;
         const invoiceInfo = priced.invoiceInfo;
 

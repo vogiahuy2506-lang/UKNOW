@@ -27,14 +27,41 @@ function createTransporter() {
 
 // ─── Core Sender ─────────────────────────────────────────────────────────────
 
-export async function sendSystemEmail({ to, subject, html }) {
+export async function sendSystemEmail({
+  to,
+  subject,
+  html,
+  attachments = [],
+  messageId = undefined,
+}) {
   // Test env: no-op để KHÔNG gọi SMTP thật. SMTP fail trong test rồi retry
   // (setTimeout backoff) sẽ log SAU khi test kết thúc → flaky
   // "Cannot log after tests are done". Test nào CẦN xác minh gửi mail thì mock
   // nodemailer + set TEST_SEND_EMAIL='1' (verification.test.js, email.test.js).
   // Guard CHỈ khi NODE_ENV==='test' → prod/dev luôn gửi SMTP bình thường.
   if (process.env.NODE_ENV === 'test' && process.env.TEST_SEND_EMAIL !== '1') {
-    return { messageId: 'test-noop', accepted: [to], skipped: true };
+    return { messageId: messageId || 'test-noop', accepted: [to], skipped: true };
+  }
+
+  if (!to) {
+    throw new Error('sendSystemEmail: thiếu recipient `to`');
+  }
+
+  const safeAttachments = Array.isArray(attachments) ? attachments : [];
+  const maxAttachBytes = Number(process.env.SYSTEM_EMAIL_MAX_ATTACHMENT_BYTES) || 12 * 1024 * 1024;
+  let totalBytes = 0;
+  for (const a of safeAttachments) {
+    if (!a || typeof a !== 'object') {
+      throw new Error('sendSystemEmail: attachment không hợp lệ');
+    }
+    if (a.path || a.href || a.url) {
+      throw new Error('sendSystemEmail: không chấp nhận path/URL attachment');
+    }
+    const size = Buffer.isBuffer(a.content) ? a.content.length : Buffer.byteLength(String(a.content || ''));
+    totalBytes += size;
+  }
+  if (totalBytes > maxAttachBytes) {
+    throw new Error('sendSystemEmail: tổng kích thước attachment vượt giới hạn');
   }
 
   const transporter = createTransporter();
@@ -50,13 +77,19 @@ export async function sendSystemEmail({ to, subject, html }) {
         to,
         subject,
         html,
+        attachments: safeAttachments.map((a) => ({
+          filename: a.filename || 'attachment',
+          content: a.content,
+          contentType: a.contentType || 'application/octet-stream',
+        })),
+        ...(messageId ? { messageId, headers: { 'Message-ID': messageId } } : {}),
       });
-      console.log(`[SystemEmail] Sent to ${to} (attempt ${attempt}): ${info.messageId}`);
+      console.log(`[SystemEmail] Sent (attempt ${attempt}): ${info.messageId}`);
       return info;
     } catch (err) {
       lastError = err;
       const isRetryable = err.statusCode >= 500 || err.statusCode === 429;
-      console.warn(`[SystemEmail] Attempt ${attempt}/${maxRetries} failed for ${to}: ${err.message}`);
+      console.warn(`[SystemEmail] Attempt ${attempt}/${maxRetries} failed: ${err.message}`);
 
       if (!isRetryable || attempt === maxRetries) {
         break;
@@ -527,10 +560,13 @@ export function buildPaymentSuccessEmail({ fullName, email, planName, amount, bi
     ${invoiceUrl ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
       <tr>
         <td style="text-align:center">
+          <p style="margin:0 0 12px;font-size:13px;color:#6b7280;line-height:1.5">
+            Hóa đơn VAT đang được xử lý và sẽ được gửi tới email tài khoản của bạn.
+          </p>
           <a href="${invoiceUrl}"
              style="display:inline-block;background:#374151;color:#fff;font-size:14px;font-weight:600;
                     padding:12px 28px;border-radius:8px;text-decoration:none">
-            📄 Xem hóa đơn
+            Xem trạng thái hóa đơn
           </a>
         </td>
       </tr>
@@ -548,6 +584,68 @@ export function buildPaymentSuccessEmail({ fullName, email, planName, amount, bi
       subtitle: 'Xác nhận thanh toán',
       content,
       footerNote: 'Email này là chứng từ thanh toán. Vui lòng lưu giữ để đối soát.',
+    }),
+  };
+}
+
+// ─── Invoice PDF issued email ─────────────────────────────────────────────────
+
+export function buildInvoiceIssuedEmail({
+  orderCode,
+  soHdon,
+  khhdon,
+  amount,
+  invoiceUrl,
+  cqtOk = false,
+}) {
+  const amountFormatted = new Intl.NumberFormat('vi-VN').format(Number(amount) || 0);
+  const statusNote = cqtOk
+    ? 'Hóa đơn đã được cơ quan thuế tiếp nhận.'
+    : 'Hóa đơn điện tử đã được phát hành. File PDF đính kèm trong email này.';
+
+  const content = `
+    <p style="margin:0 0 16px;font-size:15px;color:#6b7280;line-height:1.6">
+      ${statusNote}
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:10px;margin-bottom:20px">
+      <tr>
+        <td style="padding:16px">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Mã đơn hàng</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">#${orderCode}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Ký hiệu / số HĐ</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${khhdon || '—'} ${soHdon || ''}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">Tổng tiền</td>
+              <td style="padding:8px 0;font-size:15px;font-weight:700;color:#f97316;text-align:right">${amountFormatted}đ</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+    ${invoiceUrl ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${invoiceUrl}"
+             style="display:inline-block;background:#374151;color:#fff;font-size:14px;font-weight:600;
+                    padding:12px 28px;border-radius:8px;text-decoration:none">
+            Mở trang hóa đơn
+          </a>
+        </td>
+      </tr>
+    </table>` : ''}
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Hóa đơn điện tử đơn #${orderCode}`,
+    html: buildBaseTemplate({
+      subtitle: 'Hóa đơn điện tử',
+      content,
+      footerNote: 'File PDF hóa đơn được đính kèm. Vui lòng lưu giữ để đối soát.',
     }),
   };
 }

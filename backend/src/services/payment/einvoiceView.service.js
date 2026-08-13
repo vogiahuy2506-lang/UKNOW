@@ -8,6 +8,7 @@ import {
   applyCqtWebhook,
   findOrderInvoiceForOwner,
 } from '../../repositories/payment/einvoice.repository.js';
+import { streamInvoicePdfForOwner } from './matbaoInvoice.service.js';
 
 function parseInvoiceInfo(raw) {
   if (!raw) return null;
@@ -38,7 +39,7 @@ function buyerFromInvoiceInfo(info) {
       buyerType: 'personal',
       fullName: info.fullName || null,
       idNumber: info.idNumber || null,
-      email: info.email || null,
+      // Do not echo recipient email — FE already has auth user email.
       phone: info.phone || null,
       address: info.address || null,
     };
@@ -48,7 +49,6 @@ function buyerFromInvoiceInfo(info) {
     taxCode: info.taxCode || null,
     companyName: info.companyName || null,
     companyAddress: info.companyAddress || info.address || null,
-    email: info.email || null,
     phone: info.phone || null,
   };
 }
@@ -100,8 +100,7 @@ export async function handleMatbaoCqtWebhook(body = {}) {
 
 /**
  * Owner-facing invoice payload for GET /payments/invoice/:orderCode.
- * @returns {null | { hasInvoice: false } | { hasInvoice: true, ... }}
- * null → caller should 404 (not owner / no order)
+ * Does not expose pdfUrl / provider URLs / raw recipient.
  */
 export async function getInvoiceForOwner(orderCode, userId) {
   const row = await findOrderInvoiceForOwner(orderCode, userId);
@@ -111,6 +110,9 @@ export async function getInvoiceForOwner(orderCode, userId) {
   const wantInvoice = Boolean(info?.wantInvoice);
   const amounts = amountsFromInvoiceInfo(info);
   const buyer = buyerFromInvoiceInfo(info);
+  const canDownload = Boolean(
+    row.einvoice_id && ['issued', 'cqt_ok'].includes(row.einvoice_status),
+  );
 
   if (!row.einvoice_id) {
     if (!wantInvoice) {
@@ -124,8 +126,10 @@ export async function getInvoiceForOwner(orderCode, userId) {
       soHdon: null,
       khhdon: null,
       cqtCode: null,
-      pdfUrl: null,
       issuedAt: null,
+      emailStatus: 'pending',
+      emailSentAt: null,
+      canDownload: false,
       buyer,
       ...amounts,
     };
@@ -139,9 +143,13 @@ export async function getInvoiceForOwner(orderCode, userId) {
     soHdon: row.so_hdon != null ? String(row.so_hdon) : null,
     khhdon: row.khhdon || null,
     cqtCode: row.cqt_code || null,
-    pdfUrl: row.pdf_url || null,
     issuedAt: row.issued_at || null,
+    emailStatus: row.email_status || null,
+    emailSentAt: row.email_sent_at || null,
+    canDownload,
     buyer,
     ...amounts,
   };
 }
+
+export { streamInvoicePdfForOwner };

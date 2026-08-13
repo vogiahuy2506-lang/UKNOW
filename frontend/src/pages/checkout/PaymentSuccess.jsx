@@ -8,6 +8,19 @@ import { trackEvent } from '../../utils/analytics';
 
 const GLASS_CARD = 'bg-white/70 border border-white/90 backdrop-blur-md rounded-2xl shadow-xl shadow-orange-500/10';
 
+const INVOICE_POLL_INTERVAL_MS = 3000;
+const INVOICE_POLL_MAX_MS = 30000;
+
+/** Map owner invoice DTO → delivery note key (or null = hide). */
+function resolveInvoiceDeliveryKey(invoice) {
+  if (!invoice || invoice.hasInvoice === false) return null;
+  const status = invoice.emailStatus;
+  if (status === 'sent') return 'sent';
+  if (status === 'failed') return 'failed';
+  // pending | sending | null (legacy / not yet emailed)
+  return 'pending';
+}
+
 const PaymentSuccessPage = () => {
     const { t } = useI18n();
     const navigate = useNavigate();
@@ -20,6 +33,8 @@ const PaymentSuccessPage = () => {
     const [loading, setLoading] = useState(true);
     const [orderCode, setOrderCode] = useState(null);
     const [needsLogin, setNeedsLogin] = useState(false);
+    /** null | 'login' | 'pending' | 'sent' | 'failed' */
+    const [invoiceDelivery, setInvoiceDelivery] = useState(null);
 
     useEffect(() => {
         const verify = async () => {
@@ -62,6 +77,48 @@ const PaymentSuccessPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // After success: authenticated → poll invoice delivery; unauthenticated → login CTA only.
+    useEffect(() => {
+        if (!verified || !orderCode) return undefined;
+
+        if (!isAuthenticated) {
+            setInvoiceDelivery('login');
+            return undefined;
+        }
+
+        let cancelled = false;
+        let timerId = null;
+        const startedAt = Date.now();
+
+        const scheduleNext = () => {
+            if (cancelled) return;
+            if (Date.now() - startedAt >= INVOICE_POLL_MAX_MS) return;
+            timerId = setTimeout(poll, INVOICE_POLL_INTERVAL_MS);
+        };
+
+        const poll = async () => {
+            try {
+                const invoice = await checkoutApiService.getInvoice(orderCode);
+                if (cancelled) return;
+                const key = resolveInvoiceDeliveryKey(invoice);
+                setInvoiceDelivery(key);
+                if (key === null || key === 'sent') return;
+            } catch {
+                if (cancelled) return;
+                // Keep last known state; do not invent invoice facts on error.
+            }
+
+            scheduleNext();
+        };
+
+        poll();
+
+        return () => {
+            cancelled = true;
+            if (timerId) clearTimeout(timerId);
+        };
+    }, [verified, orderCode, isAuthenticated]);
+
     if (loading) {
         return (
             <div className="relative min-h-[60vh] flex items-center justify-center">
@@ -95,8 +152,14 @@ const PaymentSuccessPage = () => {
     const features = [
         t('paymentSuccess.feature1'),
         t('paymentSuccess.feature2'),
-        t('paymentSuccess.feature3'),
     ];
+
+    const invoiceNoteKey = {
+        pending: 'paymentSuccess.invoicePending',
+        sent: 'paymentSuccess.invoiceSent',
+        failed: 'paymentSuccess.invoiceFailed',
+        login: 'paymentSuccess.invoiceLoginHint',
+    }[invoiceDelivery];
 
     return (
         <div className="relative min-h-screen">
@@ -140,6 +203,22 @@ const PaymentSuccessPage = () => {
                                     <span>{item}</span>
                                 </div>
                             ))}
+                            {invoiceNoteKey && (
+                                <div className="flex items-start gap-3 text-sm text-slate-700">
+                                    <div className="w-4 h-4 mt-0.5 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                    </div>
+                                    <span>{t(invoiceNoteKey)}</span>
+                                </div>
+                            )}
+                            {invoiceDelivery === 'login' && (
+                                <Link
+                                    to={`/login?redirect=${encodeURIComponent(`/payment-success?orderCode=${orderCode || ''}`)}`}
+                                    className="inline-flex text-sm font-semibold text-orange-600 hover:underline"
+                                >
+                                    {t('paymentSuccess.loginToViewInvoice')}
+                                </Link>
+                            )}
                         </div>
                     </div>
 

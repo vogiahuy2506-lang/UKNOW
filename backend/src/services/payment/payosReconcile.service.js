@@ -13,7 +13,7 @@ import {
   findOrderByCode,
 } from '../../repositories/payment/payment.repository.js';
 import { fulfillPaidOrder } from './payosOrderFulfillment.service.js';
-import { scheduleIssueInvoiceAfterCommit } from './matbaoInvoice.service.js';
+import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
 
 export const PAYOS_RECONCILE_JOB_CODE = 'payos_order_reconcile';
 export const PAYOS_EXPIRE_JOB_CODE = 'payos_order_expire';
@@ -58,9 +58,9 @@ export async function claimAndFulfillFromPayos({ order, amountPaid, source = 're
       return 'not_claimed';
     }
 
-    await fulfillPaidOrder(claimed, client);
+    const einvoiceId = await fulfillPaidOrder(claimed, client);
     await client.query('COMMIT');
-    scheduleIssueInvoiceAfterCommit(claimed);
+    scheduleDispatchEinvoiceAfterCommit(einvoiceId);
     console.log(`[PayOSReconcile] Fulfilled order ${claimed.order_code} via ${source}`);
     return 'fulfilled';
   } catch (err) {

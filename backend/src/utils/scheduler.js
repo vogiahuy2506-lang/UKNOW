@@ -1034,14 +1034,18 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Help reembed pending: mỗi 30 phút');
 
-  // ── Mat Bao e-invoice retry (failed with retryable codes) ─────────────────
+  // ── Mat Bao e-invoice retry (pending/failed/lease-expired) ─────────────────
   cron.schedule('7-59/15 * * * *', async () => {
     if (process.env.NODE_ENV === 'test') return;
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
       const {
         retryFailedEinvoices,
+        retryEinvoiceEmails,
+        repairMissingEinvoiceIntents,
         EINVOICE_RECONCILE_JOB_CODE,
+        EINVOICE_EMAIL_JOB_CODE,
+        EINVOICE_REPAIR_JOB_CODE,
       } = await import('../services/payment/matbaoInvoice.service.js');
       await cronJobRunRepository.recordRun(EINVOICE_RECONCILE_JOB_CODE, async () => {
         const summary = await retryFailedEinvoices({ limit: 20 });
@@ -1051,6 +1055,16 @@ export const initScheduler = () => {
           );
         }
         return summary;
+      });
+      await cronJobRunRepository.recordRun(EINVOICE_EMAIL_JOB_CODE, async () => {
+        const summary = await retryEinvoiceEmails({ limit: 20 });
+        if (summary.sent > 0) {
+          console.log(`[Scheduler] Invoice email retry: sent=${summary.sent}`);
+        }
+        return summary;
+      });
+      await cronJobRunRepository.recordRun(EINVOICE_REPAIR_JOB_CODE, async () => {
+        return repairMissingEinvoiceIntents({ limit: 20 });
       });
     } catch (error) {
       console.error('[Scheduler] Lỗi retry hoá đơn Mắt Bão:', error.message);

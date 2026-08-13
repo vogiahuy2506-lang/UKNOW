@@ -37,7 +37,9 @@ jest.unstable_mockModule('../payosOrderFulfillment.service.js', () => ({
 }));
 
 jest.unstable_mockModule('../matbaoInvoice.service.js', () => ({
+  scheduleDispatchEinvoiceAfterCommit: jest.fn(),
   scheduleIssueInvoiceAfterCommit: jest.fn(),
+  streamInvoicePdfForOwner: jest.fn(),
   EINVOICE_RECONCILE_JOB_CODE: 'einvoice_matbao_retry',
 }));
 

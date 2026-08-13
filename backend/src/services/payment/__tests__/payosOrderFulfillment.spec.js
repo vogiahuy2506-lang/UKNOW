@@ -36,7 +36,11 @@ jest.unstable_mockModule('../topupLock.service.js', () => ({
 
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
-  buildPaymentSuccessEmail: (p) => p,
+  buildPaymentSuccessEmail: (p) => ({ subject: 'ok', html: 'ok', ...p }),
+}));
+
+jest.unstable_mockModule('../matbaoInvoice.service.js', () => ({
+  prepareEinvoiceForPaidOrder: jest.fn().mockResolvedValue(null),
 }));
 
 const { fulfillPaidOrder } = await import('../payosOrderFulfillment.service.js');
@@ -79,6 +83,9 @@ describe('fulfillPaidOrder', () => {
     expect(mockFulfillTopupOrder).not.toHaveBeenCalled();
     expect(mockActivateUserPlan).toHaveBeenCalledWith(9, 3, 'monthly', client);
     expect(mockRedeemVoucher).toHaveBeenCalledTimes(1);
+    expect(mockSendSystemEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'a@test.com' }),
+    );
   });
 
   it('gia hạn gói mở khoá tài nguyên bị khoá lúc gói hết hạn', async () => {

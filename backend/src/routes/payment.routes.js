@@ -7,6 +7,7 @@ import {
   webhook,
   einvoiceWebhook,
   getInvoiceForOrder,
+  downloadInvoicePdf,
 } from '../controllers/payment.controller.js';
 import authMiddleware, { optionalAuthMiddleware } from '../middleware/auth.middleware.js';
 import { webhookLimiter, publicLeadLimiter } from '../middleware/rateLimiter.middleware.js';
@@ -19,6 +20,7 @@ router.post('/activate-free', authMiddleware, activateFree);
 router.post('/webhook', webhookLimiter, webhook);
 router.post('/einvoice/webhook/:secret', webhookLimiter, einvoiceWebhook);
 router.get('/invoice/:orderCode', authMiddleware, getInvoiceForOrder);
+router.get('/invoice/:orderCode/pdf', authMiddleware, downloadInvoicePdf);
 // Status is status-only (no PII). Auth optional so PayOS returnUrl works without SPA token;
 // when authenticated, ownership is still enforced. Rate-limited against probing.
 router.get('/status/:orderCode', publicLeadLimiter, optionalAuthMiddleware, getPaymentStatus);

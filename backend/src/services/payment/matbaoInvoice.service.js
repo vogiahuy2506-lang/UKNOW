@@ -1,26 +1,43 @@
 /**
- * Issue VAT e-invoices via Mat Bao after paid orders (fire-and-forget, idempotent).
+ * Issue VAT e-invoices via Mat Bao after paid orders (durable prepare + async dispatch).
  */
 import {
   findEinvoiceByOrderId,
+  findEinvoiceJobWithOrder,
   insertPendingEinvoice,
   markEinvoiceIssued,
   markEinvoiceFailed,
-  listRetryableFailedEinvoices,
-  resetEinvoiceForRetry,
+  claimEinvoiceByIdForIssue,
+  claimNextEinvoiceJob,
+  claimEinvoiceByIdForEmail,
+  claimNextEinvoiceEmailJob,
+  markEinvoiceEmailSent,
+  markEinvoiceEmailFailed,
+  listMissingEinvoiceIntents,
   RETRYABLE_MATBAO_ERROR_CODES,
 } from '../../repositories/payment/einvoice.repository.js';
 import {
   isMatbaoConfigured,
   getMatbaoSeriesConfig,
   matbaoCreateInvoices,
+  matbaoDownloadInvoicePdf,
   parseCreateInvoiceItemResult,
 } from '../../utils/matbaoHddtClient.util.js';
-import { isInvoiceVatEnabled } from '../../utils/invoiceVat.util.js';
+import {
+  isInvoiceVatEnabled,
+  isMatbaoEinvoiceWorkerEnabled,
+} from '../../utils/invoiceVat.util.js';
 import { vndAmountToVietnameseWords } from '../../utils/vndAmountWords.util.js';
+import {
+  sendSystemEmail,
+  buildInvoiceIssuedEmail,
+} from '../../utils/systemEmail.util.js';
 
 export const EINVOICE_RECONCILE_JOB_CODE = 'einvoice_matbao_retry';
+export const EINVOICE_EMAIL_JOB_CODE = 'einvoice_email_retry';
+export const EINVOICE_REPAIR_JOB_CODE = 'einvoice_missing_intent_repair';
 const HANOI_TZ = 'Asia/Ho_Chi_Minh';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
 export function buildMaTraCuu(orderCode) {
   return `UK${orderCode}`;
@@ -30,16 +47,7 @@ export function buildMTChieu(orderCode) {
   return buildMaTraCuu(orderCode).slice(0, 20);
 }
 
-/**
- * Invoice issue date for Mat Bao NLap — calendar date in Asia/Ho_Chi_Minh.
- * Never use Date#toISOString() (UTC) or setHours on a server in UTC.
- * @param {Date} [now]
- * @returns {string} `YYYY-MM-DDT00:00:00`
- */
 export function formatMatbaoNLap(now = new Date()) {
-  // Ngày + GIỜ VN thật (không ép 00:00): Mắt Bão bắt NLap >= NLap hóa đơn liền kề
-  // trước cùng ký hiệu (lỗi 333) → dùng giờ hiện tại để NLap luôn tăng dần.
-  // hourCycle 'h23' để nửa đêm ra "00" (không phải "24"). Ngày pháp lý vẫn là ngày VN.
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: HANOI_TZ,
     year: 'numeric',
@@ -62,35 +70,17 @@ function parseInvoiceInfo(order) {
   return info && typeof info === 'object' ? info : null;
 }
 
-export function shouldIssueInvoiceForOrder(order) {
-  if (!isInvoiceVatEnabled()) return false;
-  if (!isMatbaoConfigured()) return false;
+/** Durable intent — does not require Matbao/worker readiness. */
+export function hasInvoiceIntent(order) {
   const info = parseInvoiceInfo(order);
   return Boolean(info?.wantInvoice && order?.id && order?.order_code);
 }
 
-/**
- * Schedule Mat Bao HTTP AFTER the PayOS fulfill transaction commits.
- * Safe to call multiple times — issueInvoiceForOrder is idempotent.
- */
-export function scheduleIssueInvoiceAfterCommit(order) {
-  if (!shouldIssueInvoiceForOrder(order)) return;
-  const snapshot = {
-    id: order.id,
-    order_code: order.order_code,
-    invoice_info: order.invoice_info,
-    amount: order.amount,
-    note: order.note,
-    user_email: order.user_email,
-  };
-  setImmediate(() => {
-    issueInvoiceForOrder(snapshot).catch((err) => {
-      console.error(
-        `[MatBaoInvoice] issue failed order=${snapshot.order_code}:`,
-        err?.message || err,
-      );
-    });
-  });
+export function shouldIssueInvoiceForOrder(order) {
+  if (!isInvoiceVatEnabled()) return false;
+  if (!isMatbaoConfigured()) return false;
+  if (!isMatbaoEinvoiceWorkerEnabled()) return false;
+  return hasInvoiceIntent(order);
 }
 
 function lineDescription(order) {
@@ -99,8 +89,14 @@ function lineDescription(order) {
   return 'Gói dịch vụ Founder AI';
 }
 
+function backoffMs(attemptCount) {
+  const n = Math.max(1, Number(attemptCount) || 1);
+  return Math.min(60 * 60 * 1000, (2 ** Math.min(n, 6)) * 60 * 1000);
+}
+
 /**
  * Build create-invoice array payload (1 invoice).
+ * Buyer email: order.user_email first, then invoice_info.email for legacy.
  */
 export function buildCreateInvoicePayload(order, info) {
   const { khmshdon, khhdon } = getMatbaoSeriesConfig();
@@ -110,6 +106,8 @@ export function buildCreateInvoicePayload(order, info) {
   const vatRate = Math.round(Number(info.vatRate) || 10);
   const maTraCuu = buildMaTraCuu(order.order_code);
   const mtchieu = buildMTChieu(order.order_code);
+  const accountEmail = String(order.user_email || '').trim();
+  const buyerEmail = accountEmail || String(info.email || '').trim();
 
   const isCompany = info.buyerType !== 'personal';
   const buyer = {
@@ -118,7 +116,7 @@ export function buildCreateInvoicePayload(order, info) {
     NMua_DChi: isCompany
       ? (info.companyAddress || info.address || '')
       : (info.address || ''),
-    NMua_DCTDTu: info.email || '',
+    NMua_DCTDTu: buyerEmail,
     NMua_SDThoai: info.phone || '',
   };
   if (!isCompany && info.idNumber) {
@@ -164,43 +162,109 @@ export function buildCreateInvoicePayload(order, info) {
 }
 
 /**
- * Issue (or re-issue failed) invoice for a paid order snapshot.
+ * DB-only prepare inside fulfillment transaction. No HTTP.
+ * @returns {Promise<number|null>} einvoice id
  */
-export async function issueInvoiceForOrder(order) {
-  if (!shouldIssueInvoiceForOrder(order)) {
-    return { skipped: true };
-  }
+export async function prepareEinvoiceForPaidOrder(order, queryable) {
+  if (!hasInvoiceIntent(order)) return null;
 
   const info = parseInvoiceInfo(order);
-  if (!info?.wantInvoice) return { skipped: true };
+  if (!info?.wantInvoice) return null;
+
+  const existing = await findEinvoiceByOrderId(order.id, queryable);
+  if (existing) return existing.id;
+
+  const { khmshdon, khhdon } = getMatbaoSeriesConfig();
+  const maTraCuu = buildMaTraCuu(order.order_code);
+  const mtchieu = buildMTChieu(order.order_code);
+
+  const row = await insertPendingEinvoice({
+    orderId: order.id,
+    maTraCuu,
+    mtchieu,
+    khmshdon,
+    khhdon,
+    requestPayload: null,
+  }, queryable);
+
+  if (row) return row.id;
+  const again = await findEinvoiceByOrderId(order.id, queryable);
+  return again?.id || null;
+}
+
+/**
+ * Fast-path after COMMIT — worker cron is the durable fallback.
+ */
+export function scheduleDispatchEinvoiceAfterCommit(einvoiceId) {
+  if (!einvoiceId) return;
+  if (!isMatbaoEinvoiceWorkerEnabled() || !isMatbaoConfigured()) return;
+  setImmediate(() => {
+    dispatchPreparedEinvoice(einvoiceId).catch((err) => {
+      console.error(
+        `[MatBaoInvoice] dispatch failed einvoice=${einvoiceId}:`,
+        err?.message || err,
+      );
+    });
+  });
+}
+
+/** @deprecated Prefer scheduleDispatchEinvoiceAfterCommit(einvoiceId) */
+export function scheduleIssueInvoiceAfterCommit(order) {
+  if (!hasInvoiceIntent(order)) return;
+  setImmediate(async () => {
+    try {
+      let id = null;
+      const existing = await findEinvoiceByOrderId(order.id);
+      if (existing) id = existing.id;
+      else {
+        // Legacy callers without prepare — best-effort prepare outside txn.
+        id = await prepareEinvoiceForPaidOrder(order);
+      }
+      if (id) await dispatchPreparedEinvoice(id);
+    } catch (err) {
+      console.error(
+        `[MatBaoInvoice] legacy schedule failed order=${order.order_code}:`,
+        err?.message || err,
+      );
+    }
+  });
+}
+
+/**
+ * HTTP Mat Bao issue for a prepared row.
+ * Always claims atomically first so fast-path + cron cannot double-create.
+ */
+export async function dispatchPreparedEinvoice(einvoiceId) {
+  if (!isMatbaoEinvoiceWorkerEnabled() || !isMatbaoConfigured()) {
+    return { skipped: true, reason: 'worker_disabled' };
+  }
+
+  const claimed = await claimEinvoiceByIdForIssue(einvoiceId);
+  if (!claimed) {
+    const existing = await findEinvoiceJobWithOrder(einvoiceId);
+    if (!existing) return { skipped: true, reason: 'missing' };
+    if (['issued', 'cqt_ok'].includes(existing.status)) {
+      scheduleSendInvoiceEmailAfterIssue(existing.id);
+      return { skipped: true, reason: 'already_issued', row: existing };
+    }
+    return { skipped: true, reason: 'not_claimable', status: existing.status };
+  }
+
+  const job = await findEinvoiceJobWithOrder(einvoiceId);
+  if (!job) return { skipped: true, reason: 'missing' };
+
+  const order = {
+    id: job.order_id,
+    order_code: job.order_code,
+    invoice_info: job.invoice_info,
+    amount: job.amount,
+    note: job.note,
+    user_email: job.user_email,
+  };
+  const info = parseInvoiceInfo(order);
+  if (!info?.wantInvoice) return { skipped: true, reason: 'no_intent' };
 
   const built = buildCreateInvoicePayload(order, info);
-  let row = await findEinvoiceByOrderId(order.id);
-
-  if (row && ['issued', 'cqt_ok'].includes(row.status)) {
-    return { skipped: true, reason: 'already_issued', row };
-  }
-
-  if (!row) {
-    row = await insertPendingEinvoice({
-      orderId: order.id,
-      maTraCuu: built.maTraCuu,
-      mtchieu: built.mtchieu,
-      khmshdon: built.khmshdon,
-      khhdon: built.khhdon,
-      requestPayload: built.payload,
-    });
-    if (!row) {
-      row = await findEinvoiceByOrderId(order.id);
-      if (row && ['issued', 'cqt_ok'].includes(row.status)) {
-        return { skipped: true, reason: 'already_issued', row };
-      }
-    }
-  }
-
-  if (!row) {
-    throw new Error(`Không tạo được bản ghi einvoices cho order ${order.order_code}`);
-  }
 
   let api;
   try {
@@ -209,32 +273,37 @@ export async function issueInvoiceForOrder(order) {
     const code = /timeout|AbortError|ECONN|ETIMEDOUT|fetch failed/i.test(String(err?.message || err))
       ? 'timeout'
       : 'network';
-    await markEinvoiceFailed(row.id, {
+    const next = new Date(Date.now() + backoffMs(job.attempt_count));
+    await markEinvoiceFailed(job.id, {
       errorCode: code,
       errorMessage: err?.message || String(err),
       requestPayload: built.payload,
+      nextAttemptAt: next.toISOString(),
     });
-    return { ok: false, errorCode: code, row };
+    return { ok: false, errorCode: code };
   }
 
   const parsed = parseCreateInvoiceItemResult(api.body);
-  // 304 = MaTraCuu already exists → treat as issued (idempotent)
   if (parsed.errorCode === '200' || parsed.errorCode === '304') {
-    const updated = await markEinvoiceIssued(row.id, {
+    const updated = await markEinvoiceIssued(job.id, {
       maSoHdon: parsed.maSoHdon,
       soHdon: parsed.soHdon,
       pdfUrl: parsed.pdfUrl,
       responsePayload: api.body,
       requestPayload: built.payload,
     });
+    scheduleSendInvoiceEmailAfterIssue(job.id);
     return { ok: true, row: updated, errorCode: parsed.errorCode };
   }
 
-  const updated = await markEinvoiceFailed(row.id, {
+  const permanent = parsed.errorCode === '327';
+  const next = permanent ? null : new Date(Date.now() + backoffMs(job.attempt_count));
+  const updated = await markEinvoiceFailed(job.id, {
     errorCode: parsed.errorCode,
     errorMessage: parsed.errorMessage || `Mat Bao HTTP ${api.status}`,
     responsePayload: api.body,
     requestPayload: built.payload,
+    nextAttemptAt: next ? next.toISOString() : null,
   });
 
   if (parsed.errorCode === '327') {
@@ -247,44 +316,221 @@ export async function issueInvoiceForOrder(order) {
   return { ok: false, errorCode: parsed.errorCode, row: updated };
 }
 
+/** @deprecated Prefer dispatchPreparedEinvoice */
+export async function issueInvoiceForOrder(order) {
+  if (!shouldIssueInvoiceForOrder(order) && !hasInvoiceIntent(order)) {
+    return { skipped: true };
+  }
+  let id = (await findEinvoiceByOrderId(order.id))?.id || null;
+  if (!id) id = await prepareEinvoiceForPaidOrder(order);
+  if (!id) return { skipped: true };
+  return dispatchPreparedEinvoice(id);
+}
+
+export function scheduleSendInvoiceEmailAfterIssue(einvoiceId) {
+  if (!einvoiceId) return;
+  if (!isMatbaoEinvoiceWorkerEnabled()) return;
+  setImmediate(() => {
+    sendInvoicePdfForEinvoice(einvoiceId).catch((err) => {
+      console.error(
+        `[MatBaoInvoice] email failed einvoice=${einvoiceId}:`,
+        err?.message || err,
+      );
+    });
+  });
+}
+
+export async function sendInvoicePdfForEinvoice(einvoiceId) {
+  if (!isMatbaoEinvoiceWorkerEnabled()) {
+    return { skipped: true, reason: 'worker_disabled' };
+  }
+
+  const claimed = await claimEinvoiceByIdForEmail(einvoiceId);
+  if (!claimed) {
+    const existing = await findEinvoiceJobWithOrder(einvoiceId);
+    if (!existing) return { skipped: true, reason: 'missing' };
+    if (existing.email_status === 'sent') {
+      return { skipped: true, reason: 'already_sent' };
+    }
+    if (!['issued', 'cqt_ok'].includes(existing.status)) {
+      return { skipped: true, reason: 'not_issued' };
+    }
+    return { skipped: true, reason: 'not_claimable' };
+  }
+
+  const job = await findEinvoiceJobWithOrder(einvoiceId);
+  if (!job) return { skipped: true, reason: 'missing' };
+
+  const to = String(job.user_email || '').trim();
+  if (!to) {
+    // Permanent — no email_next_attempt_at → cron will not retry.
+    await markEinvoiceEmailFailed(job.id, 'Missing orders.user_email', { nextAttemptAt: null });
+    return { ok: false, reason: 'no_recipient' };
+  }
+
+  let pdf;
+  try {
+    pdf = await matbaoDownloadInvoicePdf({
+      maTraCuu: job.ma_tra_cuu,
+      maSoHdon: job.ma_so_hdon,
+      pdfUrl: job.pdf_url,
+    });
+  } catch (err) {
+    const next = new Date(Date.now() + backoffMs(job.email_attempt_count));
+    await markEinvoiceEmailFailed(job.id, err?.message || String(err), {
+      nextAttemptAt: next.toISOString(),
+    });
+    return { ok: false, reason: 'pdf_fetch' };
+  }
+
+  const info = parseInvoiceInfo(job);
+  const orderCode = job.order_code;
+  const email = buildInvoiceIssuedEmail({
+    orderCode,
+    soHdon: job.so_hdon,
+    khhdon: job.khhdon,
+    amount: info?.gross ?? job.amount,
+    invoiceUrl: `${FRONTEND_URL}/invoices/${orderCode}`,
+    cqtOk: job.status === 'cqt_ok',
+  });
+
+  try {
+    await sendSystemEmail({
+      to,
+      subject: email.subject,
+      html: email.html,
+      attachments: [{
+        filename: `hoa-don-${orderCode}.pdf`,
+        content: pdf.buffer,
+        contentType: 'application/pdf',
+      }],
+      messageId: `<einvoice-${job.id}-${orderCode}@founderai.biz>`,
+    });
+    await markEinvoiceEmailSent(job.id);
+    return { ok: true };
+  } catch (err) {
+    const next = new Date(Date.now() + backoffMs(job.email_attempt_count));
+    await markEinvoiceEmailFailed(job.id, err?.message || String(err), {
+      nextAttemptAt: next.toISOString(),
+    });
+    return { ok: false, reason: 'smtp' };
+  }
+}
+
 /**
- * Cron: retry failed einvoices with retryable error codes.
+ * Cron: claim + dispatch pending/failed/lease-expired jobs.
  */
 export async function retryFailedEinvoices({ limit = 20 } = {}) {
   if (process.env.NODE_ENV === 'test') {
     return { scanned: 0, retried: 0, issued: 0, skipped: 0 };
   }
-  if (!isInvoiceVatEnabled() || !isMatbaoConfigured()) {
+  if (!isMatbaoEinvoiceWorkerEnabled() || !isMatbaoConfigured()) {
     return { scanned: 0, retried: 0, issued: 0, skipped: 0, disabled: true };
   }
 
-  const rows = await listRetryableFailedEinvoices({ limit });
-  const summary = { scanned: rows.length, retried: 0, issued: 0, skipped: 0, errors: 0 };
+  const claimed = await claimNextEinvoiceJob({ limit });
+  const summary = {
+    scanned: claimed.length,
+    retried: claimed.length,
+    issued: 0,
+    skipped: 0,
+    errors: 0,
+  };
 
-  for (const row of rows) {
-    if (!RETRYABLE_MATBAO_ERROR_CODES.has(String(row.error_code))) {
+  for (const row of claimed) {
+    if (row.error_code && !RETRYABLE_MATBAO_ERROR_CODES.has(String(row.error_code))
+      && row.status === 'failed') {
       summary.skipped += 1;
       continue;
     }
-    await resetEinvoiceForRetry(row.id);
-    summary.retried += 1;
     try {
-      const result = await issueInvoiceForOrder({
-        id: row.order_id,
-        order_code: row.order_code,
-        invoice_info: row.invoice_info,
-        amount: row.amount,
-        note: row.note,
-        user_email: row.user_email,
-      });
+      const result = await dispatchPreparedEinvoice(row.id);
       if (result?.ok) summary.issued += 1;
     } catch (err) {
       summary.errors += 1;
-      console.error(`[MatBaoInvoice] retry error order=${row.order_code}:`, err.message);
+      console.error(`[MatBaoInvoice] retry error id=${row.id}:`, err.message);
     }
   }
 
   summary.status = summary.issued > 0 ? 'success' : 'noop';
   summary.synced = summary.issued;
   return summary;
+}
+
+export async function retryEinvoiceEmails({ limit = 20 } = {}) {
+  if (process.env.NODE_ENV === 'test') {
+    return { scanned: 0, sent: 0, errors: 0 };
+  }
+  if (!isMatbaoEinvoiceWorkerEnabled()) {
+    return { scanned: 0, sent: 0, errors: 0, disabled: true };
+  }
+
+  const claimed = await claimNextEinvoiceEmailJob({ limit });
+  const summary = { scanned: claimed.length, sent: 0, errors: 0 };
+  for (const row of claimed) {
+    try {
+      const result = await sendInvoicePdfForEinvoice(row.id);
+      if (result?.ok) summary.sent += 1;
+    } catch (err) {
+      summary.errors += 1;
+      console.error(`[MatBaoInvoice] email retry id=${row.id}:`, err.message);
+    }
+  }
+  summary.status = summary.sent > 0 ? 'success' : 'noop';
+  summary.synced = summary.sent;
+  return summary;
+}
+
+export async function repairMissingEinvoiceIntents({ limit = 20 } = {}) {
+  if (process.env.NODE_ENV === 'test') {
+    return { scanned: 0, prepared: 0, reportedOnly: true };
+  }
+  const fromIso = String(process.env.EINVOICE_REPAIR_FROM || '').trim();
+  if (!fromIso) {
+    return { scanned: 0, prepared: 0, reportedOnly: true, missingCutoff: true };
+  }
+
+  const rows = await listMissingEinvoiceIntents({ fromIso, limit });
+  const summary = { scanned: rows.length, prepared: 0, errors: 0, reportedOnly: false };
+  for (const order of rows) {
+    const info = parseInvoiceInfo(order);
+    if (!info?.wantInvoice || info.net == null || info.vatAmount == null || info.gross == null) {
+      console.warn(`[MatBaoInvoice][OPS] Missing intent incomplete snapshot order=${order.order_code}`);
+      continue;
+    }
+    try {
+      const id = await prepareEinvoiceForPaidOrder(order);
+      if (id) {
+        summary.prepared += 1;
+        scheduleDispatchEinvoiceAfterCommit(id);
+      }
+    } catch (err) {
+      summary.errors += 1;
+      console.error(`[MatBaoInvoice] repair error order=${order.order_code}:`, err.message);
+    }
+  }
+  summary.status = summary.prepared > 0 ? 'success' : 'noop';
+  summary.synced = summary.prepared;
+  return summary;
+}
+
+export async function streamInvoicePdfForOwner(orderCode, userId) {
+  const { findOrderInvoiceForOwner } = await import('../../repositories/payment/einvoice.repository.js');
+  const row = await findOrderInvoiceForOwner(orderCode, userId);
+  if (!row) return { status: 404 };
+  if (!row.einvoice_id) return { status: 404 };
+  if (!['issued', 'cqt_ok'].includes(row.einvoice_status)) {
+    return { status: 409, code: 'INVOICE_PDF_NOT_READY' };
+  }
+  const pdf = await matbaoDownloadInvoicePdf({
+    maTraCuu: row.ma_tra_cuu,
+    maSoHdon: row.ma_so_hdon,
+    pdfUrl: row.pdf_url,
+  });
+  return {
+    status: 200,
+    buffer: pdf.buffer,
+    contentType: pdf.contentType,
+    filename: `hoa-don-${orderCode}.pdf`,
+  };
 }

@@ -275,7 +275,7 @@ CREATE INDEX idx_orders_plan_id    ON orders(plan_id);
 CREATE INDEX idx_orders_user_id    ON orders(user_id);
 CREATE INDEX idx_orders_order_code ON orders(order_code);
 
--- Electronic invoices (migration 121)
+-- Electronic invoices (migration 121 + 124)
 CREATE TABLE einvoices (
   id               BIGSERIAL PRIMARY KEY,
   order_id         INTEGER      NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -286,7 +286,7 @@ CREATE TABLE einvoices (
   ma_so_hdon       TEXT,
   so_hdon          VARCHAR(64),
   status           VARCHAR(32)  NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'issued', 'failed', 'cqt_ok', 'cqt_rejected')),
+    CHECK (status IN ('pending', 'processing', 'issued', 'failed', 'cqt_ok', 'cqt_rejected')),
   cqt_code         VARCHAR(64),
   error_code       VARCHAR(64),
   error_message    TEXT,
@@ -294,6 +294,19 @@ CREATE TABLE einvoices (
   request_payload  JSONB,
   response_payload JSONB,
   issued_at        TIMESTAMPTZ,
+  processing_started_at TIMESTAMPTZ,
+  attempt_count    INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at  TIMESTAMPTZ,
+  email_status     VARCHAR(24)
+    CHECK (
+      email_status IS NULL
+      OR email_status IN ('pending', 'sending', 'sent', 'failed')
+    ),
+  email_attempt_count INTEGER NOT NULL DEFAULT 0,
+  email_last_attempt_at TIMESTAMPTZ,
+  email_next_attempt_at TIMESTAMPTZ,
+  email_sent_at    TIMESTAMPTZ,
+  email_last_error TEXT,
   created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT einvoices_order_id_key UNIQUE (order_id),
@@ -302,6 +315,12 @@ CREATE TABLE einvoices (
 
 CREATE INDEX idx_einvoices_status_retry
   ON einvoices (status, error_code, updated_at);
+
+CREATE INDEX idx_einvoices_worker_claim
+  ON einvoices (status, next_attempt_at, updated_at);
+
+CREATE INDEX idx_einvoices_email_worker
+  ON einvoices (email_status, email_next_attempt_at, email_last_attempt_at);
 
 -- ─── Top-up pricing & grants (migration 099) ───────────────────────────
 CREATE TABLE topup_pricing (

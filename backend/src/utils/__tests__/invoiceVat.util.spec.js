@@ -6,14 +6,35 @@ import {
 
 describe('invoiceVat.util', () => {
   const prevEnabled = process.env.INVOICE_VAT_ENABLED;
+  const prevWorker = process.env.MATBAO_EINVOICE_WORKER_ENABLED;
+  const prevBase = process.env.MATBAO_HDDT_BASE_URL;
+  const prevMst = process.env.MATBAO_HDDT_MST;
+  const prevUser = process.env.MATBAO_HDDT_USER;
+  const prevPass = process.env.MATBAO_HDDT_PASS;
+  const prevKh = process.env.MATBAO_HDDT_KHHDON;
 
   beforeAll(() => {
     process.env.INVOICE_VAT_ENABLED = 'true';
+    process.env.MATBAO_EINVOICE_WORKER_ENABLED = 'true';
+    process.env.MATBAO_HDDT_BASE_URL = 'https://matbao.example';
+    process.env.MATBAO_HDDT_MST = '0312345678';
+    process.env.MATBAO_HDDT_USER = 'user';
+    process.env.MATBAO_HDDT_PASS = 'pass';
+    process.env.MATBAO_HDDT_KHHDON = 'C26TAT';
   });
 
   afterAll(() => {
-    if (prevEnabled === undefined) delete process.env.INVOICE_VAT_ENABLED;
-    else process.env.INVOICE_VAT_ENABLED = prevEnabled;
+    const restore = (key, val) => {
+      if (val === undefined) delete process.env[key];
+      else process.env[key] = val;
+    };
+    restore('INVOICE_VAT_ENABLED', prevEnabled);
+    restore('MATBAO_EINVOICE_WORKER_ENABLED', prevWorker);
+    restore('MATBAO_HDDT_BASE_URL', prevBase);
+    restore('MATBAO_HDDT_MST', prevMst);
+    restore('MATBAO_HDDT_USER', prevUser);
+    restore('MATBAO_HDDT_PASS', prevPass);
+    restore('MATBAO_HDDT_KHHDON', prevKh);
   });
 
   const companyOk = {
@@ -51,12 +72,19 @@ describe('invoiceVat.util', () => {
     expect(r.invoiceInfo).toBeNull();
   });
 
-  test('INVOICE_VAT_ENABLED off ignores wantInvoice', () => {
+  test('INVOICE_VAT_ENABLED off + wantInvoice → 503', () => {
     process.env.INVOICE_VAT_ENABLED = 'false';
-    const r = resolveOrderAmountWithInvoice(companyOk, 499000);
-    expect(r.amount).toBe(499000);
-    expect(r.invoiceInfo).toBeNull();
+    expect(() => resolveOrderAmountWithInvoice(companyOk, 499000)).toThrow(
+      expect.objectContaining({ status: 503, code: 'INVOICE_UNAVAILABLE' }),
+    );
     process.env.INVOICE_VAT_ENABLED = 'true';
+  });
+
+  test('accountEmail overrides client email', () => {
+    const r = resolveOrderAmountWithInvoice(companyOk, 499000, {
+      accountEmail: 'owner@account.com',
+    });
+    expect(r.invoiceInfo.email).toBe('owner@account.com');
   });
 
   test('company missing taxCode → 400', () => {

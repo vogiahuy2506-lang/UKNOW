@@ -25,6 +25,7 @@ describe('buildPaymentSuccessEmail invoice CTA', () => {
       invoiceUrl: 'https://example.com/invoices/123',
     });
     expect(html).toContain('https://example.com/invoices/123');
-    expect(html).toContain('Xem hóa đơn');
+    expect(html).toContain('Xem trạng thái hóa đơn');
+    expect(html).toContain('Hóa đơn VAT đang được xử lý');
   });
 });

@@ -14,9 +14,21 @@ export function computeDisplayVat(net, wantInvoice, vatRate = DEFAULT_FE_INVOICE
   return { net: n, vatAmount, gross: n + vatAmount, vatRate };
 }
 
+/** Mask account email for display — recipient is server-owned, not editable. */
+export function maskAccountEmail(email) {
+  const s = String(email || '').trim();
+  const at = s.indexOf('@');
+  if (at <= 0) return s || '—';
+  const local = s.slice(0, at);
+  const domain = s.slice(at + 1);
+  const keep = local.length <= 2 ? 1 : 2;
+  return `${local.slice(0, keep)}***@${domain}`;
+}
+
 /**
- * Shared VAT invoice form for Checkout + Topup.
+ * Shared VAT invoice form for Checkout.
  * Parent owns display of totals; this emits payload via onChange.
+ * Recipient email is account email (read-only); server overrides anyway.
  */
 export default function InvoiceVatForm({
   netAmount = 0,
@@ -29,15 +41,15 @@ export default function InvoiceVatForm({
   const vatRate = DEFAULT_FE_INVOICE_VAT_RATE;
   const net = Math.round(Number(netAmount) || 0);
   const canRequest = net > 0 && !disabled;
+  const accountEmail = String(defaultEmail || '').trim();
 
-  const [wantInvoice, setWantInvoice] = useState(true);
+  const [wantInvoice, setWantInvoice] = useState(false);
   const [buyerType, setBuyerType] = useState('company');
   const [taxCode, setTaxCode] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
   const [fullName, setFullName] = useState('');
   const [idNumber, setIdNumber] = useState('');
-  const [email, setEmail] = useState(defaultEmail || '');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
 
@@ -50,7 +62,8 @@ export default function InvoiceVatForm({
     const base = {
       wantInvoice: true,
       buyerType,
-      email: String(email || '').trim(),
+      // Included for payload shape; server overrides with account email.
+      email: accountEmail,
       phone: String(phone || '').trim() || undefined,
       address: String(address || '').trim() || undefined,
     };
@@ -70,7 +83,7 @@ export default function InvoiceVatForm({
   }, [
     effectiveWant,
     buyerType,
-    email,
+    accountEmail,
     phone,
     address,
     taxCode,
@@ -85,11 +98,6 @@ export default function InvoiceVatForm({
   useEffect(() => {
     onChangeRef.current?.(payload);
   }, [payload]);
-
-  useEffect(() => {
-    if (defaultEmail && !email) setEmail(defaultEmail);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultEmail]);
 
   if (!canRequest) return null;
 
@@ -109,6 +117,8 @@ export default function InvoiceVatForm({
 
   const inputClass =
     'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300';
+  const readonlyClass =
+    'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 cursor-not-allowed';
 
   return (
     <div className={`rounded-xl border border-orange-200/80 bg-orange-50/50 ${className}`}>
@@ -206,14 +216,20 @@ export default function InvoiceVatForm({
             />
           </>
         )}
-        <input
-          className={inputClass}
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder={t('invoiceVat.email')}
-          autoComplete="email"
-        />
+        <div>
+          <input
+            className={readonlyClass}
+            type="text"
+            value={maskAccountEmail(accountEmail)}
+            readOnly
+            aria-readonly="true"
+            aria-label={t('invoiceVat.emailReadonly')}
+            title={t('invoiceVat.emailPdfHint')}
+          />
+          <p className="mt-1 text-[11px] text-slate-500 leading-snug">
+            {t('invoiceVat.emailPdfHint')}
+          </p>
+        </div>
         <input
           className={inputClass}
           value={phone}

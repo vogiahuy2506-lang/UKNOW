@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { HiOutlineDocumentDownload, HiOutlineExclamation } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
-import api from '../../services/api';
+import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
 
 const fmtVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
 
 function statusKey(status) {
   switch (status) {
     case 'pending': return 'invoicePage.statusPending';
+    case 'processing': return 'invoicePage.statusPending';
     case 'issued': return 'invoicePage.statusIssued';
     case 'cqt_ok': return 'invoicePage.statusCqtOk';
     case 'cqt_rejected': return 'invoicePage.statusCqtRejected';
@@ -23,6 +24,8 @@ export default function InvoicePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,21 +33,16 @@ export default function InvoicePage() {
       try {
         setLoading(true);
         setError(null);
-        const { data } = await api.get(`/payments/invoice/${encodeURIComponent(orderCode)}`);
+        const invoice = await checkoutApiService.getInvoice(orderCode);
         if (cancelled) return;
-        if (!data?.success) {
-          setError(data?.message || t('invoicePage.loadFailed'));
-          setResult(null);
-          return;
-        }
-        setResult(data.result);
+        setResult(invoice);
       } catch (err) {
         if (cancelled) return;
         const status = err?.response?.status;
         setError(
           status === 404
             ? t('invoicePage.notFound')
-            : (err?.response?.data?.message || t('invoicePage.loadFailed')),
+            : (err?.response?.data?.message || err?.message || t('invoicePage.loadFailed')),
         );
         setResult(null);
       } finally {
@@ -53,6 +51,19 @@ export default function InvoicePage() {
     })();
     return () => { cancelled = true; };
   }, [orderCode, t]);
+
+  const handleDownload = useCallback(async () => {
+    if (!orderCode || !result?.canDownload || downloading) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      await checkoutApiService.downloadInvoicePdf(orderCode);
+    } catch (err) {
+      setDownloadError(err?.message || t('invoicePage.downloadFailed'));
+    } finally {
+      setDownloading(false);
+    }
+  }, [orderCode, result?.canDownload, downloading, t]);
 
   if (loading) {
     return (
@@ -88,6 +99,7 @@ export default function InvoicePage() {
 
   const buyer = result?.buyer || {};
   const buyerName = buyer.companyName || buyer.fullName || '—';
+  const canDownload = Boolean(result?.canDownload);
 
   return (
     <div className="mx-auto max-w-xl px-4 py-10 sm:py-14">
@@ -128,12 +140,6 @@ export default function InvoicePage() {
               <span className="font-medium text-slate-800">{buyer.taxCode}</span>
             </div>
           )}
-          {buyer.email && (
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-500">{t('invoicePage.email')}</span>
-              <span className="font-medium text-slate-800">{buyer.email}</span>
-            </div>
-          )}
           {result.net != null && (
             <div className="flex justify-between gap-3 pt-2">
               <span className="text-slate-500">{t('invoicePage.net')}</span>
@@ -156,16 +162,31 @@ export default function InvoicePage() {
           )}
         </div>
 
-        {result.pdfUrl ? (
-          <a
-            href={result.pdfUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
-          >
-            <HiOutlineDocumentDownload className="h-5 w-5" />
-            {t('invoicePage.downloadPdf')}
-          </a>
+        {canDownload ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled={downloading}
+              onClick={handleDownload}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <HiOutlineDocumentDownload className="h-5 w-5" />
+              {downloading ? t('invoicePage.downloading') : t('invoicePage.downloadPdf')}
+            </button>
+            {downloadError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center">
+                <p className="text-xs text-red-700">{downloadError}</p>
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="mt-1 text-xs font-semibold text-orange-600 hover:underline disabled:opacity-50"
+                >
+                  {t('invoicePage.retryDownload')}
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-center text-xs text-slate-500">
             {t('invoicePage.pdfPending')}
