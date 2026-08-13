@@ -856,6 +856,9 @@ export const createCampaignNodeRunner = (deps) => {
         landingLeadsOccupations: JSON.stringify(occ),
         landingLeadsInterests: JSON.stringify(intr),
         landingLeadsSlugs: JSON.stringify(slugArr),
+        landingLeadsCustomFilters: JSON.stringify(
+          Array.isArray(config.landingLeadsCustomFilters) ? config.landingLeadsCustomFilters : []
+        ),
         landingLeadsLimit: limit,
       };
       const response = await apiService.previewLandingLeads(params, { signal });
@@ -1649,10 +1652,10 @@ export const createCampaignNodeRunner = (deps) => {
         for (let index = 0; index < recipientsForStep.length; index += 1) {
           const recipient = recipientsForStep[index];
           if (index > 0) {
-             
+
             await waitRandomTemplateStepDelay(`email_step_${stepIndex + 1}`, signal, 'email');
           }
-           
+
           const result = await sendStepToRecipient(recipient, step, stepIndex, { skipApiDelay: true });
           applyEmailResultForRecipient(recipient, stepIndex, result);
         }
@@ -1660,7 +1663,7 @@ export const createCampaignNodeRunner = (deps) => {
 
       if (sendAllAtOnce) {
         for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
-           
+
           await runEmailStepWave(steps[stepIndex], stepIndex);
         }
       } else {
@@ -1668,13 +1671,13 @@ export const createCampaignNodeRunner = (deps) => {
         let previousStepTargetAt = scheduleStartAt;
         for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
           const step = steps[stepIndex];
-           
+
           previousStepTargetAt = await waitForScheduledEmailStep({
             scheduleStartAt,
             previousStepTargetAt,
             step,
           });
-           
+
           await runEmailStepWave(step, stepIndex);
         }
       }
@@ -1749,7 +1752,7 @@ export const createCampaignNodeRunner = (deps) => {
         ctx.zaloTemplateContentCache = templateContentCache;
         const steps = [];
         for (const step of templateSteps) {
-           
+
           const templateContent = await getZaloTemplateContent(step.templateId, templateContentCache, signal);
           if (!templateContent.message) {
             throw new Error('Template Zalo không có nội dung để gửi');
@@ -1812,7 +1815,7 @@ export const createCampaignNodeRunner = (deps) => {
               channel: 'zalo',
             });
           }
-           
+
           const response = await apiService.sendPreviewZaloPersonal({
             accountId: accountForSend.id,
             recipients: [recipient],
@@ -1900,7 +1903,7 @@ export const createCampaignNodeRunner = (deps) => {
                 await waitRandomTemplateStepDelay(`zalo_personal_single_batch_${offset}`, signal, 'zalo');
               }
               const batch = recipientsForStep.slice(offset, offset + zaloPreviewPoolParallel);
-               
+
               await Promise.all(
                 batch.map((rec) => runStepForRecipient(step, stepIndex, rec, { skipApiDelay: true }))
               );
@@ -1909,10 +1912,10 @@ export const createCampaignNodeRunner = (deps) => {
           }
           for (let index = 0; index < recipientsForStep.length; index += 1) {
             if (index > 0) {
-               
+
               await waitRandomTemplateStepDelay(`zalo_personal_step_${stepIndex + 1}`, signal, 'zalo');
             }
-             
+
             await runStepForRecipient(step, stepIndex, recipientsForStep[index], { skipApiDelay: true });
           }
         };
@@ -1922,18 +1925,18 @@ export const createCampaignNodeRunner = (deps) => {
           let previousStepTargetAt = scheduleStartAt;
           for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
             const step = steps[stepIndex];
-             
+
             previousStepTargetAt = await waitForScheduledStep({
               scheduleStartAt,
               previousStepTargetAt,
               step,
             });
-             
+
             await runZaloStepWave(step, stepIndex);
           }
         } else {
           for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
-             
+
             await runZaloStepWave(steps[stepIndex], stepIndex);
           }
         }
@@ -2024,7 +2027,7 @@ export const createCampaignNodeRunner = (deps) => {
       if (zaloPreviewPoolParallel > 1) {
         for (let offset = 0; offset < pendingRecipients.length; offset += zaloPreviewPoolParallel) {
           const batch = pendingRecipients.slice(offset, offset + zaloPreviewPoolParallel);
-           
+
           await Promise.all(
             batch.map(async (recipient) => {
               const entry = recipientEntries.find(
@@ -2190,7 +2193,7 @@ export const createCampaignNodeRunner = (deps) => {
         if (index > 0) {
           await waitRandomTemplateStepDelay(`zalo_friend_request_${index + 1}`, signal, 'zalo');
         }
-         
+
         const response = await apiService.sendPreviewZaloFriendRequest({
           accountId: selectedAccount.id,
           recipients: [entry.phone],
@@ -2275,7 +2278,7 @@ export const createCampaignNodeRunner = (deps) => {
         ctx.zaloGroupTemplateContentCache = templateContentCache;
         const steps = [];
         for (const step of templateSteps) {
-           
+
           const templateContent = await getZaloTemplateContent(step.templateId, templateContentCache, signal);
           if (!templateContent.message) {
             throw new Error('Template Zalo không có nội dung để gửi');
@@ -2316,7 +2319,7 @@ export const createCampaignNodeRunner = (deps) => {
             const groupId = String(entry?.value || '').trim();
             if (!groupId) continue;
             if (index > 0) {
-               
+
               await waitRandomTemplateStepDelay(`zalo_group_step_${stepIndex + 1}`, signal, 'zalo_group_template');
             }
             const renderedMessage = mappings.length > 0
@@ -2328,7 +2331,7 @@ export const createCampaignNodeRunner = (deps) => {
                 fallbackNodeId: config.zaloGroupNodeId || '',
               })
               : String(step.message || '').trim();
-             
+
             const response = await apiService.sendPreviewZaloGroup({
               accountId: selectedAccount.id,
               groupIds: [groupId],
@@ -2389,18 +2392,18 @@ export const createCampaignNodeRunner = (deps) => {
           let previousStepTargetAt = scheduleStartAt;
           for (let index = 0; index < steps.length; index += 1) {
             const step = steps[index];
-             
+
             previousStepTargetAt = await waitForScheduledGroupStep({
               scheduleStartAt,
               previousStepTargetAt,
               step,
             });
-             
+
             await runSingleStep(step, index);
           }
         } else {
           for (let index = 0; index < steps.length; index += 1) {
-             
+
             await runSingleStep(steps[index], index);
           }
         }

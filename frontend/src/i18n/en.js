@@ -496,6 +496,32 @@ export default {
     forms: 'Form',
   },
 
+  leadFormConfig: {
+    title: 'Signup form',
+    help: 'Toggle Occupation and Interest; add custom fields. The public iframe loads the latest config — no HTML rewrite needed.',
+    showOccupation: 'Show Occupation',
+    showInterest: 'Show Interest area',
+    customFields: 'Custom fields',
+    addField: 'Add field',
+    labelVi: 'Vietnamese label',
+    labelEn: 'English label',
+    placeholderVi: 'Placeholder VI',
+    placeholderEn: 'Placeholder EN',
+    required: 'Required',
+    addOption: 'Add option',
+    removeOption: 'Remove option',
+    typeLocked: 'Saved field type cannot be changed',
+    optionValueLocked: 'Saved option value cannot be changed',
+    localPreview: 'Form preview (submit disabled)',
+    types: {
+      text: 'Short text',
+      textarea: 'Long text',
+      select: 'Dropdown',
+      radio: 'Single choice',
+      checkbox: 'Checkbox',
+    },
+  },
+
   // Visual Block Editor translations
   visualBlockEditor: {
     title: 'Visual Block Editor',
@@ -3203,6 +3229,8 @@ export default {
     email: 'Email',
     phone: 'Phone',
     landingSlug: 'Source page',
+    extraInfo: 'Extra info',
+    extraEmpty: 'None',
     allSlugs: 'All source pages',
     searchPlaceholder: 'Search by name, email, phone...',
     occupation: 'Occupation',
@@ -3226,6 +3254,10 @@ export default {
     occupationLabel: 'Occupation',
     interestLabel: 'Interest Area',
     slugSourceLabel: 'Landing / source slug (empty = all)',
+    customFieldsLabel: 'Custom fields',
+    exportSuccess: 'Excel file downloaded',
+    exportFailed: 'Could not export Excel',
+    exportTruncated: 'Excel export was truncated at the row limit.',
   },
 
   landingInbox: {

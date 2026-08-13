@@ -1,5 +1,6 @@
 import { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchLandingLeadsSlugFilterOptions } from '../utils/landingLeadsSlugFilterOptions.js';
+import { fetchLandingLeadsCustomFieldDefinitions } from '../services/landingLeadsAdminApi.service.js';
 import { founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/founder-landing-options';
 import { useI18n } from '../../../i18n';
 
@@ -122,8 +123,12 @@ export function LandingLeadsAdminFilters({
     ? draftFilters.landingLeadsInterests
     : [];
   const slugs = Array.isArray(draftFilters.landingLeadsSlugs) ? draftFilters.landingLeadsSlugs : [];
+  const customFilters = Array.isArray(draftFilters.landingLeadsCustomFilters)
+    ? draftFilters.landingLeadsCustomFilters
+    : [];
 
   const [slugOptions, setSlugOptions] = useState([{ value: 'l', labelVi: 'Landing React (/l)' }]);
+  const [customDefs, setCustomDefs] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +136,21 @@ export function LandingLeadsAdminFilters({
       const raw = await fetchLandingLeadsSlugFilterOptions();
       if (cancelled) return;
       setSlugOptions(raw.map((o) => ({ value: o.value, labelVi: o.label })));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await fetchLandingLeadsCustomFieldDefinitions();
+        if (!cancelled) setCustomDefs(Array.isArray(items) ? items : []);
+      } catch {
+        if (!cancelled) setCustomDefs([]);
+      }
     })();
     return () => {
       cancelled = true;
@@ -237,6 +257,68 @@ export function LandingLeadsAdminFilters({
         selected={slugs}
         setDraftFilters={setDraftFilters}
       />
+
+      {customDefs.length > 0 ? (
+        <div className="space-y-3">
+          <span className="text-sm font-medium text-gray-700">{t('landingLeads.customFieldsLabel')}</span>
+          {customDefs.map((field) => {
+            const current = customFilters.find((f) => f.key === field.key) || null;
+            const isChoice = field.type === 'select' || field.type === 'radio' || field.type === 'checkbox';
+            return (
+              <div key={field.key} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                <div className="text-sm text-gray-800">{field.labelVi || field.key}</div>
+                {isChoice ? (
+                  <select
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={current?.values?.[0] || current?.value || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setDraftFilters((prev) => {
+                        const rest = (Array.isArray(prev.landingLeadsCustomFilters) ? prev.landingLeadsCustomFilters : [])
+                          .filter((f) => f.key !== field.key);
+                        if (!value) return { ...prev, landingLeadsCustomFilters: rest };
+                        return {
+                          ...prev,
+                          landingLeadsCustomFilters: [...rest, { key: field.key, operator: 'eq', value }],
+                        };
+                      });
+                    }}
+                  >
+                    <option value="">—</option>
+                    {(field.options || []).map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.labelVi || opt.value}</option>
+                    ))}
+                    {field.type === 'checkbox' ? (
+                      <>
+                        <option value="true">{t('landingLeads.yes')}</option>
+                        <option value="false">{t('landingLeads.no')}</option>
+                      </>
+                    ) : null}
+                  </select>
+                ) : (
+                  <input
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    placeholder={field.labelVi}
+                    value={current?.value || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setDraftFilters((prev) => {
+                        const rest = (Array.isArray(prev.landingLeadsCustomFilters) ? prev.landingLeadsCustomFilters : [])
+                          .filter((f) => f.key !== field.key);
+                        if (!value.trim()) return { ...prev, landingLeadsCustomFilters: rest };
+                        return {
+                          ...prev,
+                          landingLeadsCustomFilters: [...rest, { key: field.key, operator: 'contains', value }],
+                        };
+                      });
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

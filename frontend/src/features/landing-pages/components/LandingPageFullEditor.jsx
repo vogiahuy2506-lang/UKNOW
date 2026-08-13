@@ -26,6 +26,7 @@ import SaveTemplateModal from './SaveTemplateModal.jsx';
 import { normalizeLandingLpTrackApiBase } from '../utils/normalizeLandingLpTrackApiBase.js';
 import TemplateGallery from './TemplateGallery.jsx';
 import VisualBlockEditor from './VisualBlockEditor.jsx';
+import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
 import { getAiQuotaErrorMessage } from '../../../utils/aiLimitError.util';
 
 const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
@@ -926,7 +927,7 @@ export default function LandingPageFullEditor({
   const runQuickAiGenerate = async () => {
     const template = AI_TEMPLATES[aiTemplate];
     if (!template) return;
-    
+
     setAiBusy(true);
     try {
       const res = await generateLandingHtmlWithAi({
@@ -1045,7 +1046,7 @@ export default function LandingPageFullEditor({
     return () => {
       cancelled = true;
     };
-   
+
   }, [open, editingId]);
 
   const saveCustomDomainHostname = async () => {
@@ -1112,7 +1113,14 @@ export default function LandingPageFullEditor({
     setCdBusy(true);
     try {
       const result = await onCreatePageWithCustomDomain(
-        { title: form.title || h, slug: form.slug || '', htmlContent: form.htmlContent || '', isPublished: Boolean(form.isPublished) },
+        {
+          title: form.title || h,
+          slug: form.slug || '',
+          htmlContent: form.htmlContent || '',
+          isPublished: Boolean(form.isPublished),
+          leadFormConfig: form.leadFormConfig,
+          leadFormPersistedMeta: form.leadFormPersistedMeta,
+        },
         h,
         cdIsApexDomain
       );
@@ -1344,6 +1352,10 @@ export default function LandingPageFullEditor({
               {t('landingPageEditor.publish')}
             </label>
 
+            <SectionCard title={t('leadFormConfig.title')} icon={HiOutlinePencilAlt} defaultOpen={false}>
+              <LeadFormConfigPanel form={form} setForm={setForm} t={t} />
+            </SectionCard>
+
             {/* Custom Domain Section */}
             <SectionCard title="Custom Domain" icon={HiOutlineGlobeAlt} defaultOpen={true}>
               <div className="space-y-4">
@@ -1566,7 +1578,7 @@ export default function LandingPageFullEditor({
                   Mở trong tab mới
                 </a>
               )}
-             
+
             </div>
           </div>
           <iframe

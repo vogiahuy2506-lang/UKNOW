@@ -168,7 +168,7 @@ export function createApp() {
   app.use('/api/zalo-templates', zaloTemplateRoutes);
   app.use('/api/public', publicRoutes);
   app.use('/api/public', landingCmsPublicRoutes);
-  app.use('/api/public', leadPublicRoutes);
+  app.use('/api/public/leads', leadPublicRoutes);
   app.use('/api/public', publicPromotionRoutes);
   app.use('/api/admin/landing-featured-courses', adminLandingFeaturedCourseRoutes);
   app.use('/api/admin/landing-testimonials', adminLandingTestimonialRoutes);

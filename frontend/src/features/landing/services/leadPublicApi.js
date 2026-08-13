@@ -24,3 +24,7 @@ const publicClient = axios.create({
 export function postPublicLead(payload) {
   return publicClient.post('/public/leads', payload);
 }
+
+export function fetchPublicLeadFormConfig(slug) {
+  return publicClient.get(`/public/landing-pages/${encodeURIComponent(slug)}/form-config`);
+}

@@ -2,6 +2,7 @@ import landingPageRepository from '../../repositories/landingPage.repository.js'
 import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
 import { isValidPublicLandingRedirectUrl } from '../../utils/landingRedirectTarget.util.js';
 import landingPageDomainService from './landingPageDomain.service.js';
+import { toPublicLeadFormConfig } from '../../utils/landingLeadFormConfig.util.js';
 
 /**
  * API công khai: HTML landing đã publish, analytics view, redirect click có ghi log.
@@ -47,6 +48,27 @@ class LandingPagePublicService {
       slug: row.slug,
       title: row.title || '',
       htmlContent,
+    };
+  }
+
+  /**
+   * DTO hẹp form lead cho iframe public — chỉ landing published, không locked.
+   *
+   * @param {string} slug
+   * @returns {Promise<{ leadFormConfig: object }|null>}
+   */
+  async getPublishedFormConfig(slug) {
+    const row = await landingPageRepository.findPublishedBySlug(slug);
+    if (!row) return null;
+    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', row.id)) {
+      const err = new Error('Landing page tạm ngừng');
+      err.statusCode = 503;
+      err.code = 'RESOURCE_LOCKED';
+      throw err;
+    }
+    return {
+      leadFormConfig: toPublicLeadFormConfig(row.customConfig),
     };
   }
 

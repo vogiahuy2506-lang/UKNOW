@@ -1,21 +1,57 @@
 import ExcelJS from 'exceljs';
 
+function formulaSafe(value) {
+  const text = value == null ? '' : String(value);
+  if (!text) return '';
+  if (/^[=+\-@]/.test(text) || text.startsWith('\t')) {
+    return `'${text}`;
+  }
+  return text;
+}
+
+function displayForLocale(entry, locale = 'vi') {
+  if (!entry || typeof entry !== 'object') return '';
+  if (locale === 'en') {
+    return entry.displayEn || entry.displayVi || String(entry.value ?? '');
+  }
+  return entry.displayVi || entry.displayEn || String(entry.value ?? '');
+}
+
+function headerForKey(key, currentByKey, snapshotEntry) {
+  const current = currentByKey.get(key);
+  if (current?.labelVi) return `${current.labelVi} (${key})`;
+  if (snapshotEntry?.labelVi) return `${snapshotEntry.labelVi} (${key})`;
+  return key;
+}
+
 /**
  * Tạo nội dung file Excel (.xlsx) cho danh sách lead landing (màn admin).
  *
- * Luồng hoạt động:
- * 1. Khởi tạo workbook + sheet, cố định hàng tiêu đề.
- * 2. Ghi từng dòng theo cột hiển thị trên UI (họ tên, liên hệ, slug, nghề, lĩnh vực, đồng ý marketing, thời gian).
- * 3. Trả Buffer để controller gửi `Content-Disposition: attachment`.
- *
- * @param {object[]} items Các object đã qua `mapLeadRowToCampaignItem`
+ * @param {object[]} items Admin items (customFields = snapshot DTO)
+ * @param {{ currentSchemas?: object[] }} [opts]
  * @returns {Promise<Buffer>}
  */
-export async function buildLandingLeadsAdminXlsxBuffer(items) {
+export async function buildLandingLeadsAdminXlsxBuffer(items, opts = {}) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Khách landing', {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
+
+  const currentByKey = new Map();
+  for (const field of opts.currentSchemas || []) {
+    if (field?.key) currentByKey.set(field.key, field);
+  }
+
+  const customKeys = [];
+  const seen = new Set();
+  for (const item of items || []) {
+    const cf = item?.customFields && typeof item.customFields === 'object' ? item.customFields : {};
+    for (const key of Object.keys(cf)) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      customKeys.push(key);
+    }
+  }
 
   sheet.columns = [
     { header: 'Họ và tên', key: 'fullName', width: 28 },
@@ -26,6 +62,11 @@ export async function buildLandingLeadsAdminXlsxBuffer(items) {
     { header: 'Lĩnh vực quan tâm', key: 'interestArea', width: 28 },
     { header: 'Đồng ý nhận tin', key: 'marketingConsent', width: 18 },
     { header: 'Thời gian đăng ký', key: 'createdAt', width: 22 },
+    ...customKeys.map((key) => ({
+      header: formulaSafe(headerForKey(key, currentByKey, null)),
+      key,
+      width: 24,
+    })),
   ];
 
   const headerRow = sheet.getRow(1);
@@ -35,8 +76,13 @@ export async function buildLandingLeadsAdminXlsxBuffer(items) {
     pattern: 'solid',
     fgColor: { argb: 'FFF3F4F6' },
   };
+  customKeys.forEach((key, i) => {
+    const sample = (items || []).find((item) => item?.customFields?.[key]);
+    const header = headerForKey(key, currentByKey, sample?.customFields?.[key]);
+    headerRow.getCell(9 + i).value = formulaSafe(header);
+  });
 
-  for (const item of items) {
+  for (const item of items || []) {
     const created = item.createdAt ? new Date(item.createdAt) : null;
     const createdStr =
       created && !Number.isNaN(created.getTime())
@@ -49,16 +95,21 @@ export async function buildLandingLeadsAdminXlsxBuffer(items) {
         })
         : '';
 
-    sheet.addRow({
-      fullName: item.fullName || '—',
-      email: item.email || '',
-      phone: item.phone || '',
-      landingPageSlug: item.landingPageSlug || '',
-      occupation: item.occupation || '',
-      interestArea: item.interestArea || '',
+    const row = {
+      fullName: formulaSafe(item.fullName || '—'),
+      email: formulaSafe(item.email || ''),
+      phone: formulaSafe(item.phone || ''),
+      landingPageSlug: formulaSafe(item.landingPageSlug || ''),
+      occupation: formulaSafe(item.occupation || ''),
+      interestArea: formulaSafe(item.interestArea || ''),
       marketingConsent: item.marketingConsent ? 'Có' : 'Không',
       createdAt: createdStr,
-    });
+    };
+    const cf = item.customFields && typeof item.customFields === 'object' ? item.customFields : {};
+    for (const key of customKeys) {
+      row[key] = formulaSafe(displayForLocale(cf[key], 'vi'));
+    }
+    sheet.addRow(row);
   }
 
   const buf = await workbook.xlsx.writeBuffer();

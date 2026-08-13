@@ -15,6 +15,13 @@ import {
 import LandingPageFullEditor from '../../features/landing-pages/components/LandingPageFullEditor.jsx';
 import { prepareLandingHtmlForPreview } from '../../features/landing-pages/utils/injectLandingEnhancements.js';
 import { normalizeLandingLpTrackApiBase } from '../../features/landing-pages/utils/normalizeLandingLpTrackApiBase.js';
+import {
+  applyLeadFormDraft,
+  defaultLeadFormConfig,
+  normalizeLeadFormConfig,
+  prepareLeadFormConfigForSave,
+  snapshotLeadFormPersistedMeta,
+} from '../../features/landing-pages/utils/landingLeadFormConfig.js';
 
 const BASE_DOMAIN = 'founderai.biz';
 
@@ -38,7 +45,26 @@ const emptyForm = () => ({
   isPublished: false,
   domainType: 'system',
   domainSubtype: 'subdomain',
+  leadFormConfig: defaultLeadFormConfig(),
+  leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
+  leadFormFieldErrors: {},
 });
+
+function resolveLeadFormConfigForSave(form, setForm) {
+  const { config, errors } = prepareLeadFormConfigForSave(
+    form.leadFormConfig,
+    form.leadFormPersistedMeta
+  );
+  if (errors.length) {
+    setForm((prev) => ({
+      ...prev,
+      leadFormFieldErrors: Object.fromEntries(errors.map((e) => [e.key, e.message])),
+    }));
+    toast.error(errors[0].message);
+    return null;
+  }
+  return config;
+}
 
 export default function LandingPagesAdminPage() {
   const { t } = useI18n();
@@ -67,6 +93,11 @@ export default function LandingPagesAdminPage() {
       isPublished: false,
       domainType: 'system',
       domainSubtype: 'subdomain',
+      leadFormConfig: aiDraft.leadFormDraft
+        ? applyLeadFormDraft(aiDraft.leadFormDraft)
+        : defaultLeadFormConfig(),
+      leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
+      leadFormFieldErrors: {},
     });
     setModalOpen(true);
     window.history.replaceState({}, '');
@@ -189,6 +220,9 @@ export default function LandingPagesAdminPage() {
         isPublished: Boolean(full.isPublished),
         domainType: full.domainType === 'custom' ? 'custom' : 'system',
         domainSubtype: full.domainSubtype === 'apex' ? 'apex' : 'subdomain',
+        leadFormConfig: normalizeLeadFormConfig(full.leadFormConfig),
+        leadFormPersistedMeta: snapshotLeadFormPersistedMeta(full.leadFormConfig),
+        leadFormFieldErrors: {},
       });
       setModalOpen(true);
     } catch (e) {
@@ -208,6 +242,8 @@ export default function LandingPagesAdminPage() {
       toast.error('Vui lòng nhập tên landing page.');
       return;
     }
+    const leadFormConfig = resolveLeadFormConfigForSave(form, setForm);
+    if (!leadFormConfig) return;
     setSaving(true);
     try {
       if (editingId) {
@@ -218,6 +254,7 @@ export default function LandingPagesAdminPage() {
           isPublished: form.isPublished,
           domainType: form.domainType,
           domainSubtype: form.domainSubtype,
+          leadFormConfig,
         });
         toast.success(t('landingPagesAdmin.updated'));
       } else {
@@ -228,6 +265,7 @@ export default function LandingPagesAdminPage() {
           isPublished: form.isPublished,
           domainType: form.domainType,
           domainSubtype: form.domainSubtype,
+          leadFormConfig,
         });
         toast.success(t('landingPagesAdmin.created'));
         if (created?.customDomainProvisioned === false) {
@@ -262,6 +300,10 @@ export default function LandingPagesAdminPage() {
     if (!slug) {
       slug = isApex ? null : deriveSubSlugFromHostname(hostname);
     }
+    const leadFormConfig = resolveLeadFormConfigForSave(payload, setForm);
+    if (!leadFormConfig) {
+      throw new Error('leadFormConfig không hợp lệ');
+    }
     const created = await createLandingPageAdmin({
       slug,
       title,
@@ -269,6 +311,7 @@ export default function LandingPagesAdminPage() {
       isPublished: payload.isPublished,
       domainType: 'custom',
       domainSubtype: isApex ? 'apex' : 'subdomain',
+      leadFormConfig,
     });
     const newId = created?.id ?? created?.data?.id;
     if (!newId) throw new Error('Không có id từ create');
@@ -327,7 +370,7 @@ export default function LandingPagesAdminPage() {
         </div>
       </div>
 
-     
+
 
       <div className="card overflow-x-auto">
         {loading ? (

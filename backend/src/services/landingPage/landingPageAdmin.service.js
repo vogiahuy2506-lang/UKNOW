@@ -7,6 +7,10 @@ import {
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
 } from '../../utils/landingHtmlInjection.util.js';
+import {
+  mergeLeadFormIntoCustomConfig,
+  toPublicLeadFormConfig,
+} from '../../utils/landingLeadFormConfig.util.js';
 
 /** Slug dành cho landing React cố định `/l` — không quản lý qua bảng `landing_pages`. */
 const RESERVED_SLUG_FIXED_LANDING = 'l';
@@ -16,6 +20,15 @@ function buildScopeFromAuthUser(authUser) {
     userId: authUser?.id,
     roleCode: authUser?.role,
     ownerId: authUser?.activeContext?.ownerId,
+  };
+}
+
+function toAdminLandingDto(row) {
+  if (!row) return null;
+  const { customConfig, ...rest } = row;
+  return {
+    ...rest,
+    leadFormConfig: toPublicLeadFormConfig(customConfig),
   };
 }
 
@@ -44,7 +57,9 @@ class LandingPageAdminService {
    */
   async list(scope = {}) {
     const rows = await landingPageRepository.listByScope(scope);
-    return rows.filter((r) => String(r.slug || '').trim().toLowerCase() !== RESERVED_SLUG_FIXED_LANDING);
+    return rows
+      .filter((r) => String(r.slug || '').trim().toLowerCase() !== RESERVED_SLUG_FIXED_LANDING)
+      .map((r) => toAdminLandingDto(r));
   }
 
   /**
@@ -59,7 +74,7 @@ class LandingPageAdminService {
       err.statusCode = 404;
       throw err;
     }
-    return row;
+    return toAdminLandingDto(row);
   }
 
   /**
@@ -131,6 +146,7 @@ class LandingPageAdminService {
         idUser: userId,
         domainType,
         domainSubtype,
+        customConfig: mergeLeadFormIntoCustomConfig({}, body?.leadFormConfig),
       }, client);
       await client.query('COMMIT');
     } catch (error) {
@@ -146,14 +162,14 @@ class LandingPageAdminService {
     if (domainType === 'system' && slug) {
       const domainResult = await landingPageDomainService.autoProvisionSubdomain(lp.id, slug);
       return {
-        ...lp,
+        ...toAdminLandingDto(lp),
         customDomain: domainResult.hostname,
         cfManaged: domainResult.cfManaged,
         customDomainProvisioned: domainResult.ok === true,
         customDomainMessage: domainResult.message || null,
       };
     }
-    return lp;
+    return toAdminLandingDto(lp);
   }
 
   /**
@@ -206,6 +222,10 @@ class LandingPageAdminService {
       : null;
     const typeChanged = nextDomainType !== (current.domainType || 'system');
 
+    const nextCustomConfig = Object.prototype.hasOwnProperty.call(body || {}, 'leadFormConfig')
+      ? mergeLeadFormIntoCustomConfig(current.customConfig, body.leadFormConfig)
+      : mergeLeadFormIntoCustomConfig(current.customConfig, undefined);
+
     const updated = await landingPageRepository.updateById(id, {
       slug,
       title: body?.title,
@@ -214,6 +234,7 @@ class LandingPageAdminService {
       idUser: current.idUser,
       domainType: nextDomainType,
       domainSubtype: nextDomainSubtype,
+      customConfig: nextCustomConfig,
     });
 
     // Đồng bộ DNS:
@@ -247,7 +268,7 @@ class LandingPageAdminService {
       );
     }
 
-    return updated;
+    return toAdminLandingDto(updated);
   }
 
   /**

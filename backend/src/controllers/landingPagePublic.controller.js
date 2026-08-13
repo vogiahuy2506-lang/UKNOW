@@ -33,6 +33,33 @@ class LandingPagePublicController {
   }
 
   /**
+   * GET /api/public/landing-pages/:slug/form-config
+   */
+  async getPublishedFormConfig(req, res) {
+    try {
+      const slug = String(req.params.slug || '').trim().toLowerCase();
+      const data = await landingPagePublicService.getPublishedFormConfig(slug);
+      if (!data) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy landing page hoặc chưa được công bố',
+        });
+      }
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) {
+        console.error('[LandingPagePublicController.getPublishedFormConfig]', error);
+      }
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải cấu hình form',
+        ...(error.code ? { code: error.code } : {}),
+      });
+    }
+  }
+
+  /**
    * GET /api/public/landing-pages-by-host?host=www.example.com
    *
    * @param {import('express').Request} req

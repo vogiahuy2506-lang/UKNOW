@@ -66,6 +66,7 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         custom_config AS "customConfig",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_pages
@@ -94,6 +95,7 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         custom_config AS "customConfig",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_pages
@@ -143,6 +145,7 @@ class LandingPageRepository {
          lp.id_user AS "idUser",
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
+         lp.custom_config AS "customConfig",
          lp.domain_type AS "domainType",
          ld.is_apex_domain AS "customDomainIsApex",
          ld.hostname AS "customDomainHostname",
@@ -216,6 +219,7 @@ class LandingPageRepository {
          id_user AS "idUser",
          domain_type AS "domainType",
          domain_subtype AS "domainSubtype",
+         custom_config AS "customConfig",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_pages
@@ -247,6 +251,7 @@ class LandingPageRepository {
          lp.updated_at AS "updatedAt",
          lp.domain_type AS "domainType",
          lp.domain_subtype AS "domainSubtype",
+         lp.custom_config AS "customConfig",
          ld.is_apex_domain AS "customDomainIsApex",
          ld.hostname AS "customDomainHostname",
          ld.status AS "customDomainStatus"
@@ -268,11 +273,12 @@ class LandingPageRepository {
     const queryable = client || db;
     const result = await queryable.query(
       `INSERT INTO landing_pages
-         (slug, title, html_content, is_published, id_user, domain_type, domain_subtype, created_at, updated_at)
+         (slug, title, html_content, is_published, id_user, domain_type, domain_subtype, custom_config, created_at, updated_at)
        VALUES
          (NULLIF(LOWER(TRIM($1)), ''), $2, $3, COALESCE($4, false), $5,
           COALESCE($6, 'system'),
           CASE WHEN $6 = 'custom' THEN $7 ELSE NULL END,
+          COALESCE($8::jsonb, '{}'::jsonb),
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING
          id,
@@ -283,6 +289,7 @@ class LandingPageRepository {
          id_user AS "idUser",
          domain_type AS "domainType",
          domain_subtype AS "domainSubtype",
+         custom_config AS "customConfig",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -293,6 +300,7 @@ class LandingPageRepository {
         payload.idUser ?? null,
         payload.domainType === 'custom' ? 'custom' : 'system',
         payload.domainType === 'custom' ? (payload.domainSubtype === 'apex' ? 'apex' : 'subdomain') : null,
+        JSON.stringify(payload.customConfig && typeof payload.customConfig === 'object' ? payload.customConfig : {}),
       ]
     );
     return result.rows[0];
@@ -317,6 +325,7 @@ class LandingPageRepository {
            WHEN $7 = 'system' THEN NULL
            ELSE domain_subtype
          END,
+         custom_config = COALESCE($9::jsonb, custom_config),
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
        RETURNING
@@ -328,6 +337,7 @@ class LandingPageRepository {
          id_user AS "idUser",
          domain_type AS "domainType",
          domain_subtype AS "domainSubtype",
+         custom_config AS "customConfig",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -339,6 +349,7 @@ class LandingPageRepository {
         payload.idUser ?? null,
         payload.domainType === 'custom' || payload.domainType === 'system' ? payload.domainType : null,
         payload.domainType === 'custom' ? (payload.domainSubtype === 'apex' ? 'apex' : 'subdomain') : null,
+        payload.customConfig != null ? JSON.stringify(payload.customConfig) : null,
       ]
     );
     return result.rows[0] || null;
@@ -351,6 +362,23 @@ class LandingPageRepository {
   async deleteById(id) {
     const result = await db.query('DELETE FROM landing_pages WHERE id = $1', [id]);
     return Number(result.rowCount || 0) > 0;
+  }
+
+  /**
+   * custom_config của landing trong workspace — dùng để đề xuất field filter hiện tại.
+   *
+   * @param {{ userId: number|string, role?: string, ownerId?: number|string }} scope
+   * @returns {Promise<object[]>}
+   */
+  async listLeadFormConfigsInScope(scope = {}) {
+    const { clause, params } = this.buildLandingScopeCondition(scope);
+    const result = await db.query(
+      `SELECT lp.custom_config AS "customConfig"
+       FROM landing_pages lp
+       WHERE ${clause}`,
+      params
+    );
+    return result.rows;
   }
 }
 

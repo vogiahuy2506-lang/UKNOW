@@ -468,7 +468,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [generatingDay, setGeneratingDay] = useState(null);
   const [contentPlanWorkflow, setContentPlanWorkflow] = useState(null);
   const [wizardContext, setWizardContext] = useState(() => deriveWizardContext([]));
-  
+
   // Trạng thái cho flow campaign mới: hỏi chọn type → hỏi audience → confirm → tạo
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [pendingCampaignPrompt, setPendingCampaignPrompt] = useState(null); // Prompt gốc của user
@@ -2426,12 +2426,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       );
       if (response.success) {
         refreshAiCredits();
-        const { title, html, css } = response.data;
+        const { title, html, css, leadFormDraft } = response.data;
         update(prev => [...prev, {
           role: 'assistant',
           content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
           type: 'landing_page',
-          data: { title, html, css },
+          data: { title, html, css, ...(leadFormDraft ? { leadFormDraft } : {}) },
         }]);
         setPendingLandingPrompt(null);
         setPendingLandingData(null);
@@ -2450,7 +2450,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const handleSelectCampaignType = async (campaignType) => {
     if (!pendingCampaignPrompt || !pendingCampaignData) return;
-    
+
     setIsTyping(true);
     setMessages(prev => [...prev, {
       role: 'assistant',
@@ -2465,13 +2465,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'assistant', content: 'Tôi sẽ hỏi bạn chọn kênh trước.' },
         { role: 'user', content: `Tôi muốn gửi qua ${campaignType}` }
       ];
-      
+
       const response = await aiApi.chat(enrichedHistory, [], null, locale);
-      
+
       if (response.success) {
         refreshAiCredits();
         const { type, content, data } = response.data;
-        
+
         // Nếu AI trả về confirm_create
         if (type === 'confirm_create' && data) {
           await prepareAndShowCampaignConfirmation({
@@ -3235,7 +3235,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   locale={locale}
                 />
               )}
-              
+
               {/* Campaign Draft Editor - Chỉnh sửa trong chatbot */}
               {msg.type === 'confirm_create' && msg.data && isEditingDraft && idx === latestConfirmationIndex && (
                 <CampaignDraftEditor

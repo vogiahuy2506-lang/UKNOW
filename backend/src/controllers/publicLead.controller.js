@@ -35,6 +35,7 @@ class PublicLeadController {
       return res.status(status).json({
         success: false,
         message,
+        ...(error.code ? { code: error.code } : {}),
       });
     }
   }

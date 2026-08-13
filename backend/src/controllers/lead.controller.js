@@ -11,6 +11,7 @@ function parseLandingLeadFilters(q) {
   let occupations = [];
   let interests = [];
   let landingSlugs = [];
+  let customFilters = [];
   try {
     if (q.landingLeadsOccupations) {
       occupations = JSON.parse(String(q.landingLeadsOccupations));
@@ -32,6 +33,9 @@ function parseLandingLeadFilters(q) {
   } catch {
     landingSlugs = [];
   }
+  if (q.landingLeadsCustomFilters) {
+    customFilters = q.landingLeadsCustomFilters;
+  }
 
   return {
     landingLeadsUseDateRange: String(q.landingLeadsUseDateRange || '').toLowerCase() === 'true'
@@ -42,6 +46,7 @@ function parseLandingLeadFilters(q) {
     landingLeadsOccupations: Array.isArray(occupations) ? occupations : [],
     landingLeadsInterests: Array.isArray(interests) ? interests : [],
     landingLeadsSlugs: Array.isArray(landingSlugs) ? landingSlugs : [],
+    landingLeadsCustomFilters: customFilters,
     landingLeadsLimit: q.landingLeadsLimit,
   };
 }
@@ -65,10 +70,12 @@ class LeadController {
       const effectiveOwnerId = req.user.activeContext?.type === 'employee'
         ? req.user.activeContext.ownerId
         : userId;
-        
+
       const config = {
         ...parseLandingLeadFilters(req.query || {}),
         idUser: effectiveOwnerId,
+        roleCode: req.user?.role,
+        ownerId: req.user.activeContext?.ownerId,
       };
       const { items, total } = await leadService.getLeadsForCampaignConfig(config);
       const limitNorm = clampLandingLeadsLimit(config.landingLeadsLimit, 1000);
@@ -85,10 +92,31 @@ class LeadController {
         },
       });
     } catch (error) {
-      console.error('[LeadController.preview]', error);
-      return res.status(500).json({
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LeadController.preview]', error);
+      return res.status(status).json({
         success: false,
         message: error.message || 'Không thể tải dữ liệu lead',
+      });
+    }
+  }
+
+  /**
+   * GET /api/leads/custom-field-definitions
+   */
+  async listCustomFieldDefinitions(req, res) {
+    try {
+      const items = await leadService.listCustomFieldDefinitions({
+        userId: req.user?.id,
+        roleCode: req.user?.role,
+        ownerId: req.user.activeContext?.ownerId,
+      });
+      return res.json({ success: true, data: { items } });
+    } catch (error) {
+      console.error('[LeadController.listCustomFieldDefinitions]', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Không thể tải trường tùy chỉnh',
       });
     }
   }
@@ -121,6 +149,8 @@ class LeadController {
       const { items, total, totalPages } = await leadService.listAdminPaginated({
         ...base,
         idUser: effectiveOwnerId,
+        roleCode: req.user?.role,
+        ownerId: req.user.activeContext?.ownerId,
         page,
         pageSize,
       });
@@ -138,8 +168,9 @@ class LeadController {
         },
       });
     } catch (error) {
-      console.error('[LeadController.list]', error);
-      return res.status(500).json({
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LeadController.list]', error);
+      return res.status(status).json({
         success: false,
         message: error.message || 'Không thể tải danh sách lead',
       });
@@ -166,6 +197,8 @@ class LeadController {
       const base = {
         ...parseLandingLeadFilters(req.query || {}),
         idUser: effectiveOwnerId,
+        roleCode: req.user?.role,
+        ownerId: req.user.activeContext?.ownerId,
       };
       const { buffer, total, exportedCount, truncated } = await leadService.exportAdminFilteredXlsx(base);
 
@@ -188,8 +221,9 @@ class LeadController {
 
       return res.send(buffer);
     } catch (error) {
-      console.error('[LeadController.exportXlsx]', error);
-      return res.status(500).json({
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LeadController.exportXlsx]', error);
+      return res.status(status).json({
         success: false,
         message: error.message || 'Không thể xuất file Excel',
       });

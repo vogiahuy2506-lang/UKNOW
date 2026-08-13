@@ -129,6 +129,31 @@ describe('GET /api/admin/landing-pages', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.map((r) => r.slug).sort()).toEqual(['promo-1']);
   });
+
+  it('list trả leadFormConfig đã lưu, không fallback mặc định', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-list-cfg' } });
+    const token = await loginAs(me);
+    const created = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        slug: 'list-cfg',
+        title: 'List cfg',
+        htmlContent: '<p>x</p>',
+        leadFormConfig: {
+          version: 1,
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: true } },
+          customFields: [],
+        },
+      });
+    expect(created.status).toBe(201);
+
+    const res = await request(app).get('/api/admin/landing-pages').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const row = res.body.data.find((r) => r.slug === 'list-cfg');
+    expect(row.leadFormConfig.fixedFields.occupation.visible).toBe(false);
+    expect(row.customConfig).toBeUndefined();
+  });
 });
 
 describe('GET /api/admin/landing-pages/:id', () => {
@@ -155,6 +180,8 @@ describe('GET /api/admin/landing-pages/:id', () => {
     const res = await request(app).get(`/api/admin/landing-pages/${row.id}`).set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ slug: 'my-page', title: 'Hello' });
+    expect(res.body.data.leadFormConfig.fixedFields.occupation.visible).toBe(true);
+    expect(res.body.data.customConfig).toBeUndefined();
   });
 });
 
@@ -783,11 +810,13 @@ describe('POST /api/public/leads', () => {
       .send({ ...baseLead, landingPageSlug: 'pub-lead', utmSource: 'fb' });
     expect(res.status).toBe(201);
     const lead = await db.query(
-      `SELECT id_user, landing_page_slug FROM leads WHERE id = $1`,
+      `SELECT id_user, landing_page_slug, occupation, interest_area, custom_fields FROM leads WHERE id = $1`,
       [res.body.data.id]
     );
     expect(Number(lead.rows[0].id_user)).toBe(Number(owner.id));
     expect(lead.rows[0].landing_page_slug).toBe('pub-lead');
+    expect(res.body.data).toEqual({ id: expect.anything() });
+    expect(res.body.data.email).toBeUndefined();
 
     const evt = await db.query(
       `SELECT event_type, utm_source FROM landing_page_events WHERE landing_page_slug = 'pub-lead' AND event_type = 'submit'`
@@ -808,5 +837,70 @@ describe('POST /api/public/leads', () => {
       `SELECT 1 FROM leads WHERE landing_page_slug = 'draft-lead'`
     );
     expect(leads.rows).toHaveLength(0);
+  });
+
+  it('GET form-config chỉ published; unpublished 404; không lộ raw custom_config', async () => {
+    const owner = await createUser({ username: 'form-cfg-owner' });
+    await insertLandingPage({ idUser: owner.id, slug: 'cfg-pub', isPublished: true });
+    await insertLandingPage({ idUser: owner.id, slug: 'cfg-draft', isPublished: false });
+    const ok = await request(app).get('/api/public/landing-pages/cfg-pub/form-config');
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.leadFormConfig.fixedFields.occupation.visible).toBe(true);
+    expect(ok.body.data.customConfig).toBeUndefined();
+    const draft = await request(app).get('/api/public/landing-pages/cfg-draft/form-config');
+    expect(draft.status).toBe(404);
+  });
+
+  it('tắt occupation thì spoof bị bỏ; custom field lưu snapshot', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-cfg-save' } });
+    const token = await loginAs(me);
+    const created = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        slug: 'cfg-fields',
+        title: 'Form fields',
+        htmlContent: '<p>x</p>',
+        isPublished: true,
+        leadFormConfig: {
+          version: 1,
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: true } },
+          customFields: [{
+            key: 'cf_company_size_ab12',
+            type: 'select',
+            labelVi: 'Quy mô công ty',
+            labelEn: 'Company size',
+            required: true,
+            options: [{ value: 'small', labelVi: '1-10', labelEn: '1-10' }],
+          }],
+        },
+      });
+    expect(created.status).toBe(201);
+
+    const spoof = await request(app).post('/api/public/leads').send({
+      ...baseLead,
+      email: 'spoof@u.local',
+      landingPageSlug: 'cfg-fields',
+      occupation: 'Freelancer',
+      customFields: { cf_company_size_ab12: 'small' },
+    });
+    expect(spoof.status).toBe(201);
+    const row = await db.query(
+      `SELECT occupation, custom_fields FROM leads WHERE id = $1`,
+      [spoof.body.data.id]
+    );
+    expect(row.rows[0].occupation).toBe('');
+    expect(row.rows[0].custom_fields.cf_company_size_ab12.value).toBe('small');
+    expect(row.rows[0].custom_fields.cf_company_size_ab12.displayVi).toBe('1-10');
+
+    const bad = await request(app).post('/api/public/leads').send({
+      ...baseLead,
+      email: 'badcf@u.local',
+      landingPageSlug: 'cfg-fields',
+      customFields: { cf_unknown_zzzz: 'x' },
+    });
+    expect(bad.status).toBe(400);
+    const none = await db.query(`SELECT 1 FROM leads WHERE email = 'badcf@u.local'`);
+    expect(none.rows).toHaveLength(0);
   });
 });

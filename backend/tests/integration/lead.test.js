@@ -10,11 +10,11 @@
  *     `X-Export-Total`, `X-Export-Count`, `X-Export-Truncated`.
  *
  * KHÔNG cover:
- *   - createPublicLead (gắn vào `public.routes`, không thuộc `/api/leads`).
+ *   - createPublicLead (gắn vào `leadPublic.routes` → `publicLeadController`, không thuộc `/api/leads`).
  *   - File buffer của .xlsx (chỉ verify header + size > 0).
  *
- * NOTE: Lead module không có concept tenant — landing leads là pool shared.
- * Mọi user đã đăng nhập đều thấy cùng dữ liệu.
+ * NOTE: Lead list/preview/export lọc theo `id_user` của workspace (owner).
+ * Integration seed phải gắn `id_user` của user đang login.
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
@@ -40,6 +40,7 @@ async function loginAs(user) {
 }
 
 async function insertLead({
+  idUser,
   lastName = 'Nguyen',
   firstName = 'A',
   email = `${Math.random().toString(36).slice(2)}@test.local`,
@@ -50,20 +51,20 @@ async function insertLead({
   createdAt = null,
 }) {
   const params = [
-    lastName, firstName, email, phone, occupation, interestArea, true, landingPageSlug,
+    lastName, firstName, email, phone, occupation, interestArea, true, landingPageSlug, idUser,
   ];
   if (createdAt) {
     params.push(createdAt);
     const { rows } = await db.query(
-      `INSERT INTO leads (last_name, first_name, email, phone, occupation, interest_area, marketing_consent, landing_page_slug, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      `INSERT INTO leads (last_name, first_name, email, phone, occupation, interest_area, marketing_consent, landing_page_slug, id_user, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       params
     );
     return rows[0];
   }
   const { rows } = await db.query(
-    `INSERT INTO leads (last_name, first_name, email, phone, occupation, interest_area, marketing_consent, landing_page_slug)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    `INSERT INTO leads (last_name, first_name, email, phone, occupation, interest_area, marketing_consent, landing_page_slug, id_user)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
     params
   );
   return rows[0];
@@ -90,10 +91,10 @@ describe('Authorization — /api/leads', () => {
 
 describe('GET /api/leads/preview', () => {
   it('trả về toàn bộ lead (không filter) + pagination meta', async () => {
-    await insertLead({ email: 'a@test.local' });
-    await insertLead({ email: 'b@test.local' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'a@test.local' });
+    await insertLead({ idUser: o.id, email: 'b@test.local' });
+
     const t = await loginAs(o);
     const res = await request(app).get('/api/leads/preview').set('Authorization', `Bearer ${t}`);
 
@@ -103,11 +104,11 @@ describe('GET /api/leads/preview', () => {
   });
 
   it('filter theo occupation', async () => {
-    await insertLead({ email: 'a@test.local', occupation: 'developer' });
-    await insertLead({ email: 'b@test.local', occupation: 'designer' });
-    await insertLead({ email: 'c@test.local', occupation: 'designer' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'a@test.local', occupation: 'developer' });
+    await insertLead({ idUser: o.id, email: 'b@test.local', occupation: 'designer' });
+    await insertLead({ idUser: o.id, email: 'c@test.local', occupation: 'designer' });
+
     const t = await loginAs(o);
     const res = await request(app)
       .get('/api/leads/preview')
@@ -119,10 +120,10 @@ describe('GET /api/leads/preview', () => {
   });
 
   it('filter theo interest_area', async () => {
-    await insertLead({ email: 'a@test.local', interestArea: 'tech' });
-    await insertLead({ email: 'b@test.local', interestArea: 'marketing' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'a@test.local', interestArea: 'tech' });
+    await insertLead({ idUser: o.id, email: 'b@test.local', interestArea: 'marketing' });
+
     const t = await loginAs(o);
     const res = await request(app)
       .get('/api/leads/preview')
@@ -134,10 +135,10 @@ describe('GET /api/leads/preview', () => {
   });
 
   it('filter theo landingSlugs', async () => {
-    await insertLead({ email: 'a@test.local', landingPageSlug: 'home' });
-    await insertLead({ email: 'b@test.local', landingPageSlug: 'about' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'a@test.local', landingPageSlug: 'home' });
+    await insertLead({ idUser: o.id, email: 'b@test.local', landingPageSlug: 'about' });
+
     const t = await loginAs(o);
     const res = await request(app)
       .get('/api/leads/preview')
@@ -149,11 +150,11 @@ describe('GET /api/leads/preview', () => {
   });
 
   it('filter theo khoảng ngày (landingLeadsUseDateRange=true)', async () => {
-    await insertLead({ email: 'old@test.local', createdAt: '2024-01-15T00:00:00Z' });
-    await insertLead({ email: 'mid@test.local', createdAt: '2025-06-15T00:00:00Z' });
-    await insertLead({ email: 'new@test.local', createdAt: '2025-12-15T00:00:00Z' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'old@test.local', createdAt: '2024-01-15T00:00:00Z' });
+    await insertLead({ idUser: o.id, email: 'mid@test.local', createdAt: '2025-06-15T00:00:00Z' });
+    await insertLead({ idUser: o.id, email: 'new@test.local', createdAt: '2025-12-15T00:00:00Z' });
+
     const t = await loginAs(o);
     const res = await request(app)
       .get('/api/leads/preview')
@@ -171,11 +172,11 @@ describe('GET /api/leads/preview', () => {
   });
 
   it('combine nhiều filter (occupation + interest)', async () => {
-    await insertLead({ email: 'a@test.local', occupation: 'dev', interestArea: 'tech' });
-    await insertLead({ email: 'b@test.local', occupation: 'dev', interestArea: 'mkt' });
-    await insertLead({ email: 'c@test.local', occupation: 'designer', interestArea: 'tech' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'a@test.local', occupation: 'dev', interestArea: 'tech' });
+    await insertLead({ idUser: o.id, email: 'b@test.local', occupation: 'dev', interestArea: 'mkt' });
+    await insertLead({ idUser: o.id, email: 'c@test.local', occupation: 'designer', interestArea: 'tech' });
+
     const t = await loginAs(o);
     const res = await request(app)
       .get('/api/leads/preview')
@@ -190,7 +191,8 @@ describe('GET /api/leads/preview', () => {
   });
 
   it('item shape có leadId/fullName/email/phone/occupation/interestArea/landingPageSlug/createdAt', async () => {
-    await insertLead({
+    const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id,
       lastName: 'Nguyen',
       firstName: 'Van A',
       email: 'a@test.local',
@@ -200,7 +202,6 @@ describe('GET /api/leads/preview', () => {
       landingPageSlug: 'home',
     });
 
-    const o = await createUser({ role: 'user', username: 'u' });
     const t = await loginAs(o);
     const res = await request(app).get('/api/leads/preview').set('Authorization', `Bearer ${t}`);
 
@@ -226,11 +227,11 @@ describe('GET /api/leads/preview', () => {
 
 describe('GET /api/leads', () => {
   it('pagination: page/pageSize/totalPages', async () => {
+    const o = await createUser({ role: 'user', username: 'u' });
     for (let i = 0; i < 5; i += 1) {
-      await insertLead({ email: `lead${i}@test.local` });
+      await insertLead({ idUser: o.id, email: `lead${i}@test.local` });
     }
 
-    const o = await createUser({ role: 'user', username: 'u' });
     const t = await loginAs(o);
     const res = await request(app)
       .get('/api/leads?page=2&pageSize=2')
@@ -257,11 +258,11 @@ describe('GET /api/leads', () => {
   });
 
   it('sort DESC theo created_at', async () => {
-    await insertLead({ email: 'old@test.local', createdAt: '2024-01-01T00:00:00Z' });
-    await insertLead({ email: 'mid@test.local', createdAt: '2024-06-01T00:00:00Z' });
-    await insertLead({ email: 'new@test.local', createdAt: '2025-01-01T00:00:00Z' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'old@test.local', createdAt: '2024-01-01T00:00:00Z' });
+    await insertLead({ idUser: o.id, email: 'mid@test.local', createdAt: '2024-06-01T00:00:00Z' });
+    await insertLead({ idUser: o.id, email: 'new@test.local', createdAt: '2025-01-01T00:00:00Z' });
+
     const t = await loginAs(o);
     const res = await request(app).get('/api/leads').set('Authorization', `Bearer ${t}`);
     expect(res.body.data.items.map((x) => x.email)).toEqual([
@@ -278,10 +279,10 @@ describe('GET /api/leads', () => {
 
 describe('GET /api/leads/export', () => {
   it('xuất xlsx với header đúng + non-empty body', async () => {
-    await insertLead({ email: 'a@test.local' });
-    await insertLead({ email: 'b@test.local' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'a@test.local' });
+    await insertLead({ idUser: o.id, email: 'b@test.local' });
+
     const t = await loginAs(o);
     const res = await request(app).get('/api/leads/export').set('Authorization', `Bearer ${t}`);
 
@@ -308,11 +309,11 @@ describe('GET /api/leads/export', () => {
   });
 
   it('export tôn trọng filter slug', async () => {
-    await insertLead({ email: 'home1@test.local', landingPageSlug: 'home' });
-    await insertLead({ email: 'home2@test.local', landingPageSlug: 'home' });
-    await insertLead({ email: 'about1@test.local', landingPageSlug: 'about' });
-
     const o = await createUser({ role: 'user', username: 'u' });
+    await insertLead({ idUser: o.id, email: 'home1@test.local', landingPageSlug: 'home' });
+    await insertLead({ idUser: o.id, email: 'home2@test.local', landingPageSlug: 'home' });
+    await insertLead({ idUser: o.id, email: 'about1@test.local', landingPageSlug: 'about' });
+
     const t = await loginAs(o);
     const res = await request(app)
       .get('/api/leads/export')

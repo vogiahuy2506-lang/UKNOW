@@ -10,6 +10,30 @@ backend/src/services/campaign/campaignZaloSender.service.js whitespace=cr-at-eol
 backend/src/services/campaign/campaignEmailSender.service.js whitespace=cr-at-eol
 backend/src/controllers/zaloSettings.controller.js whitespace=cr-at-eol
 backend/src/utils/zaloTimeoutRetry.util.js whitespace=cr-at-eol
+# File CRLF sẵn trong repo — git diff --check coi CR là trailing whitespace nếu không có cờ này
+backend/src/controllers/landingPagePublic.controller.js whitespace=cr-at-eol
+backend/src/controllers/lead.controller.js whitespace=cr-at-eol
+backend/src/controllers/publicLead.controller.js whitespace=cr-at-eol
+backend/src/repositories/landingPage.repository.js whitespace=cr-at-eol
+backend/src/repositories/lead.repository.js whitespace=cr-at-eol
+backend/src/routes/lead.routes.js whitespace=cr-at-eol
+backend/src/services/campaign/campaignNodeData.service.js whitespace=cr-at-eol
+backend/src/services/landingPage/landingPageAdmin.service.js whitespace=cr-at-eol
+backend/src/services/landingPage/landingPagePublic.service.js whitespace=cr-at-eol
+backend/src/services/lead/lead.service.js whitespace=cr-at-eol
+backend/src/utils/landingLeadsXlsxExport.util.js whitespace=cr-at-eol
+backend/tests/integration/lead.test.js whitespace=cr-at-eol
+frontend/src/features/campaigns/components/NodeConfigReadLandingLeadsSection.jsx whitespace=cr-at-eol
+frontend/src/features/campaigns/constants/dataNodeColumnOptions.js whitespace=cr-at-eol
+frontend/src/features/campaigns/utils/campaignBuilderNodeRunner.js whitespace=cr-at-eol
+frontend/src/features/campaigns/utils/nodeConfigModal.helpers.js whitespace=cr-at-eol
+frontend/src/features/landing/components/LandingLeadsAdminFilters.jsx whitespace=cr-at-eol
+frontend/src/features/landing/hooks/useEmbedLeadFormResize.js whitespace=cr-at-eol
+frontend/src/features/landing/hooks/useLandingLeadsList.js whitespace=cr-at-eol
+frontend/src/features/landing/services/landingLeadsAdminApi.service.js whitespace=cr-at-eol
+frontend/src/features/landing/services/leadPublicApi.js whitespace=cr-at-eol
+frontend/src/pages/landing-leads/LandingLeadsListPage.jsx whitespace=cr-at-eol
+frontend/src/pages/public/EmbedLeadFormPage.jsx whitespace=cr-at-eol
 
 # Binary
 *.png       binary

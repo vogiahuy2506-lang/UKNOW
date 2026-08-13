@@ -5,6 +5,7 @@ import { LANDING_LEADS_MAX_RECORDS, clampLandingLeadsLimitUi } from '../constant
 import { LANDING_LEAD_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 import { fetchLandingLeadsSlugFilterOptions } from '../../landing/utils/landingLeadsSlugFilterOptions.js';
+import api from '../../../services/api.js';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách riêng để React bỏ qua re-render khi prop ổn định.
@@ -115,12 +116,29 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
   const slugs = Array.isArray(formData.landingLeadsSlugs) ? formData.landingLeadsSlugs : [];
 
   const [slugOptions, setSlugOptions] = useState([{ value: 'l', label: t('nodeConfigLanding.landingReactSlug', { defaultValue: 'Landing React (/l)' }) }]);
+  const [customDefs, setCustomDefs] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const merged = await fetchLandingLeadsSlugFilterOptions();
       if (!cancelled) setSlugOptions(merged);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/leads/custom-field-definitions');
+        const items = Array.isArray(data?.data?.items) ? data.data.items : [];
+        if (!cancelled) setCustomDefs(items);
+      } catch {
+        if (!cancelled) setCustomDefs([]);
+      }
     })();
     return () => {
       cancelled = true;
@@ -197,6 +215,69 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
         selected={interests}
         setFormData={setFormData}
       />
+
+      {customDefs.length > 0 ? (
+        <div className="space-y-3">
+          <span className="text-sm font-medium text-gray-700">{t('leadFormConfig.customFields')}</span>
+          {customDefs.map((field) => {
+            const filters = Array.isArray(formData.landingLeadsCustomFilters) ? formData.landingLeadsCustomFilters : [];
+            const current = filters.find((f) => f.key === field.key) || null;
+            const isChoice = field.type === 'select' || field.type === 'radio' || field.type === 'checkbox';
+            return (
+              <div key={field.key} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                <div className="text-sm text-gray-800">{field.labelVi || field.key}</div>
+                {isChoice ? (
+                  <select
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={current?.values?.[0] || current?.value || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData((prev) => {
+                        const rest = (Array.isArray(prev.landingLeadsCustomFilters) ? prev.landingLeadsCustomFilters : [])
+                          .filter((f) => f.key !== field.key);
+                        if (!value) return { ...prev, landingLeadsCustomFilters: rest };
+                        return {
+                          ...prev,
+                          landingLeadsCustomFilters: [...rest, { key: field.key, operator: 'eq', value }],
+                        };
+                      });
+                    }}
+                  >
+                    <option value="">—</option>
+                    {(field.options || []).map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.labelVi || opt.value}</option>
+                    ))}
+                    {field.type === 'checkbox' ? (
+                      <>
+                        <option value="true">Có</option>
+                        <option value="false">Không</option>
+                      </>
+                    ) : null}
+                  </select>
+                ) : (
+                  <input
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    placeholder={field.labelVi}
+                    value={current?.value || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData((prev) => {
+                        const rest = (Array.isArray(prev.landingLeadsCustomFilters) ? prev.landingLeadsCustomFilters : [])
+                          .filter((f) => f.key !== field.key);
+                        if (!value.trim()) return { ...prev, landingLeadsCustomFilters: rest };
+                        return {
+                          ...prev,
+                          landingLeadsCustomFilters: [...rest, { key: field.key, operator: 'contains', value }],
+                        };
+                      });
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">

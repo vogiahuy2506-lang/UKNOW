@@ -699,7 +699,9 @@ CREATE TABLE leads (
   utm_content         VARCHAR(255),
   utm_term            VARCHAR(255),
   ip_address          VARCHAR(45),
-  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  custom_fields       JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT leads_custom_fields_object_check CHECK (jsonb_typeof(custom_fields) = 'object')
 );
 CREATE INDEX idx_leads_slug ON leads(landing_page_slug);
 CREATE INDEX idx_leads_email ON leads(email);
@@ -1042,6 +1044,7 @@ CREATE TABLE landing_pages (
     CHECK (domain_type IN ('system', 'custom')),
   domain_subtype VARCHAR(20) DEFAULT NULL
     CHECK (domain_subtype IS NULL OR domain_subtype IN ('subdomain', 'apex')),
+  custom_config JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

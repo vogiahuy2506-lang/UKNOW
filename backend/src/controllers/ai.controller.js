@@ -22,6 +22,7 @@ import {
   buildLandingBriefContext,
   resolveOwnerUserId,
 } from '../services/ai/landingBrief.service.js';
+import { buildLeadFormDraftFromBrief } from '../utils/landingLeadFormConfig.util.js';
 import {
   normalizeAssistantLocale,
   resolveAssistantLocaleContext,
@@ -989,6 +990,13 @@ class AiController {
         contentLocale,
       });
 
+      const leadFormDraft = resolvedBrief
+        ? buildLeadFormDraftFromBrief(resolvedBrief.normalizedBrief)
+        : null;
+      if (leadFormDraft) {
+        data.leadFormDraft = leadFormDraft;
+      }
+
       // Lưu vào session nếu có sessionId (actor, not owner)
       const sid = sessionId ? Number(sessionId) : null;
       if (sid) {
@@ -996,7 +1004,11 @@ class AiController {
         const assistantMsg = {
           content: `Đã tạo landing page "${data.title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
           type: 'landing_page',
-          data: { title: data.title, html: data.html },
+          data: {
+            title: data.title,
+            html: data.html,
+            ...(leadFormDraft ? { leadFormDraft } : {}),
+          },
         };
         await aiSessionRepo.saveMessages(sid, req.user.id, userContent, assistantMsg).catch(() => {});
       }

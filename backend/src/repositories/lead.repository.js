@@ -1,6 +1,63 @@
 import db from '../config/database.js';
 import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 import { expandLandingSlugsForSqlFilter } from '../utils/landingPageSlugCanonical.util.js';
+import { appendCustomFieldFilterSql } from '../utils/landingLeadCustomFilters.util.js';
+
+function buildLeadWhere(filters) {
+  const useDateRange = Boolean(filters.useDateRange);
+  const dateFrom = String(filters.dateFrom || '').trim();
+  const dateTo = String(filters.dateTo || '').trim();
+  const occupations = Array.isArray(filters.occupations) ? filters.occupations.filter(Boolean) : [];
+  const interests = Array.isArray(filters.interests) ? filters.interests.filter(Boolean) : [];
+  const landingSlugs = Array.isArray(filters.landingSlugs)
+    ? filters.landingSlugs.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+
+  const conditions = [];
+  const params = [];
+  let idx = 1;
+
+  if (useDateRange && dateFrom) {
+    conditions.push(`created_at >= $${idx}::timestamptz`);
+    params.push(`${dateFrom}T00:00:00.000Z`);
+    idx += 1;
+  }
+  if (useDateRange && dateTo) {
+    conditions.push(`created_at <= $${idx}::timestamptz`);
+    params.push(`${dateTo}T23:59:59.999Z`);
+    idx += 1;
+  }
+  if (occupations.length > 0) {
+    conditions.push(`occupation = ANY($${idx}::text[])`);
+    params.push(occupations);
+    idx += 1;
+  }
+  if (interests.length > 0) {
+    conditions.push(`interest_area = ANY($${idx}::text[])`);
+    params.push(interests);
+    idx += 1;
+  }
+  if (landingSlugs.length > 0) {
+    const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
+    conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
+    params.push(slugVariants);
+    idx += 1;
+  }
+
+  if (filters.idUser) {
+    conditions.push(`id_user = $${idx}`);
+    params.push(filters.idUser);
+    idx += 1;
+  }
+
+  const next = appendCustomFieldFilterSql(
+    { conditions, params, idx },
+    filters.customFilters || []
+  );
+
+  const whereClause = next.conditions.length ? `WHERE ${next.conditions.join(' AND ')}` : '';
+  return { whereClause, params: next.params, idx: next.idx };
+}
 
 /**
  * Repository truy vấn bảng `leads` (form landing công khai).
@@ -28,8 +85,8 @@ class LeadRepository {
       `INSERT INTO leads (
          last_name, first_name, email, phone, occupation, interest_area, marketing_consent,
          landing_page_slug, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-         id_user
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         id_user, custom_fields
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15::jsonb, '{}'::jsonb))
        RETURNING
          id,
          last_name AS "lastName",
@@ -46,6 +103,7 @@ class LeadRepository {
          utm_content AS "utmContent",
          utm_term AS "utmTerm",
          id_user AS "idUser",
+         custom_fields AS "customFields",
          created_at AS "createdAt"`,
       [
         payload.lastName,
@@ -62,6 +120,7 @@ class LeadRepository {
         payload.utmContent ?? null,
         payload.utmTerm ?? null,
         payload.idUser,
+        JSON.stringify(payload.customFields && typeof payload.customFields === 'object' ? payload.customFields : {}),
       ]
     );
     return result.rows[0] || null;
@@ -86,57 +145,10 @@ class LeadRepository {
    * @returns {Promise<object[]>}
    */
   async findFiltered(filters) {
-    const useDateRange = Boolean(filters.useDateRange);
-    const dateFrom = String(filters.dateFrom || '').trim();
-    const dateTo = String(filters.dateTo || '').trim();
-    const occupations = Array.isArray(filters.occupations) ? filters.occupations.filter(Boolean) : [];
-    const interests = Array.isArray(filters.interests) ? filters.interests.filter(Boolean) : [];
-    const landingSlugs = Array.isArray(filters.landingSlugs)
-      ? filters.landingSlugs.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
-      : [];
     const limit = clampLandingLeadsLimit(filters.limit, 1000);
     const offsetRaw = Number(filters.offset);
     const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
-
-    const conditions = [];
-    const params = [];
-    let idx = 1;
-
-    if (useDateRange && dateFrom) {
-      conditions.push(`created_at >= $${idx}::timestamptz`);
-      params.push(`${dateFrom}T00:00:00.000Z`);
-      idx += 1;
-    }
-    if (useDateRange && dateTo) {
-      conditions.push(`created_at <= $${idx}::timestamptz`);
-      params.push(`${dateTo}T23:59:59.999Z`);
-      idx += 1;
-    }
-    if (occupations.length > 0) {
-      conditions.push(`occupation = ANY($${idx}::text[])`);
-      params.push(occupations);
-      idx += 1;
-    }
-    if (interests.length > 0) {
-      conditions.push(`interest_area = ANY($${idx}::text[])`);
-      params.push(interests);
-      idx += 1;
-    }
-    if (landingSlugs.length > 0) {
-      // Mở rộng alias: lọc `l` vẫn khớp bản ghi lưu `/l` hoặc `/` (legacy / nhập sai)
-      const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
-      conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
-      params.push(slugVariants);
-      idx += 1;
-    }
-
-    if (filters.idUser) {
-      conditions.push(`id_user = $${idx}`);
-      params.push(filters.idUser);
-      idx += 1;
-    }
-
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const { whereClause, params, idx } = buildLeadWhere(filters);
     params.push(limit);
     params.push(offset);
 
@@ -151,6 +163,7 @@ class LeadRepository {
          interest_area AS "interestArea",
          marketing_consent AS "marketingConsent",
          landing_page_slug AS "landingPageSlug",
+         custom_fields AS "customFields",
          created_at AS "createdAt"
        FROM leads
        ${whereClause}
@@ -168,53 +181,7 @@ class LeadRepository {
    * @returns {Promise<number>}
    */
   async countFiltered(filters) {
-    const useDateRange = Boolean(filters.useDateRange);
-    const dateFrom = String(filters.dateFrom || '').trim();
-    const dateTo = String(filters.dateTo || '').trim();
-    const occupations = Array.isArray(filters.occupations) ? filters.occupations.filter(Boolean) : [];
-    const interests = Array.isArray(filters.interests) ? filters.interests.filter(Boolean) : [];
-    const landingSlugs = Array.isArray(filters.landingSlugs)
-      ? filters.landingSlugs.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
-      : [];
-
-    const conditions = [];
-    const params = [];
-    let idx = 1;
-
-    if (useDateRange && dateFrom) {
-      conditions.push(`created_at >= $${idx}::timestamptz`);
-      params.push(`${dateFrom}T00:00:00.000Z`);
-      idx += 1;
-    }
-    if (useDateRange && dateTo) {
-      conditions.push(`created_at <= $${idx}::timestamptz`);
-      params.push(`${dateTo}T23:59:59.999Z`);
-      idx += 1;
-    }
-    if (occupations.length > 0) {
-      conditions.push(`occupation = ANY($${idx}::text[])`);
-      params.push(occupations);
-      idx += 1;
-    }
-    if (interests.length > 0) {
-      conditions.push(`interest_area = ANY($${idx}::text[])`);
-      params.push(interests);
-      idx += 1;
-    }
-    if (landingSlugs.length > 0) {
-      const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
-      conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
-      params.push(slugVariants);
-      idx += 1;
-    }
-
-    if (filters.idUser) {
-      conditions.push(`id_user = $${idx}`);
-      params.push(filters.idUser);
-      idx += 1;
-    }
-
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const { whereClause, params } = buildLeadWhere(filters);
     const result = await db.query(`SELECT COUNT(*)::bigint AS c FROM leads ${whereClause}`, params);
     return Number(result.rows[0]?.c || 0);
   }

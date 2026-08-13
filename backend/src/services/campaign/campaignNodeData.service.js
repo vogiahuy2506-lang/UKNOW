@@ -172,7 +172,10 @@ class CampaignNodeDataService {
       }
 
       case 'read_landing_leads': {
-        const { items: landingItems } = await leadService.getLeadsForCampaignConfig(config);
+        const { items: landingItems } = await leadService.getLeadsForCampaignConfig({
+          ...config,
+          idUser: userId,
+        });
         return applyDataColumnSelectionToItems(landingItems, config.dataSelectedColumns, 'landing');
       }
 

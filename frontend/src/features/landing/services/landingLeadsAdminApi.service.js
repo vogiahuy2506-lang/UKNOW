@@ -28,12 +28,28 @@ function buildLandingLeadsFilterQuery(params = {}, opts = {}) {
     landingLeadsSlugs: JSON.stringify(
       Array.isArray(params.landingLeadsSlugs) ? params.landingLeadsSlugs : []
     ),
+    landingLeadsCustomFilters: JSON.stringify(
+      Array.isArray(params.landingLeadsCustomFilters) ? params.landingLeadsCustomFilters : []
+    ),
   };
   if (includePaging) {
     q.page = params.page ?? 1;
     q.pageSize = params.pageSize ?? 20;
   }
   return q;
+}
+
+/**
+ * Schema custom field hiện tại trong workspace (GET /api/leads/custom-field-definitions).
+ *
+ * @returns {Promise<object[]>}
+ */
+export async function fetchLandingLeadsCustomFieldDefinitions() {
+  const { data } = await api.get('/leads/custom-field-definitions');
+  if (!data?.success) {
+    throw new Error(data?.message || 'Không tải được trường tùy chỉnh');
+  }
+  return Array.isArray(data?.data?.items) ? data.data.items : [];
 }
 
 /**

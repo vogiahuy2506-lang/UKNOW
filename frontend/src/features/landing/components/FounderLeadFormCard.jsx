@@ -1,4 +1,5 @@
 import { getOptionLabel, founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/founder-landing-options.js';
+import { fieldLabel, normalizeLeadFormConfig, optionLabel } from '../../landing-pages/utils/landingLeadFormConfig.js';
 
 /**
  * Thẻ form đăng ký lead — khớp mock `.form-card`; link chính sách nội bộ `/privacy-policy`.
@@ -24,8 +25,18 @@ export function FounderLeadFormCard({
   success,
   onSubmit,
   variant = 'default',
+  leadFormConfig,
+  previewMode = false,
 }) {
   const isEmbed = variant === 'embed';
+  const config = normalizeLeadFormConfig(leadFormConfig);
+  const showOccupation = config.fixedFields.occupation.visible;
+  const showInterest = config.fixedFields.interestArea.visible;
+  const customFields = config.customFields || [];
+  const customValues = form.customFields && typeof form.customFields === 'object' ? form.customFields : {};
+  const setCustom = (key, value) => {
+    setField('customFields', { ...customValues, [key]: value });
+  };
   /** Nền ô nhập: embed dùng xám rất nhạt để khớp “một khối trắng”, tránh tông kem. */
   const fieldSurface = isEmbed
     ? 'border-gray-200 bg-gray-50 focus:border-founder-teal focus:bg-white'
@@ -129,7 +140,7 @@ export function FounderLeadFormCard({
         className="space-y-3.5"
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit();
+          if (!previewMode) onSubmit();
         }}
       >
         {/* Embed: gutter rõ giữa Họ / Tên để hai cột không dính sát. */}
@@ -198,6 +209,7 @@ export function FounderLeadFormCard({
           />
         </div>
 
+        {showOccupation ? (
         <div>
           <label htmlFor="founder-job" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
             {formCopy.occupation}
@@ -216,7 +228,9 @@ export function FounderLeadFormCard({
             ))}
           </select>
         </div>
+        ) : null}
 
+        {showInterest ? (
         <div>
           <label htmlFor="founder-interest" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
             {formCopy.interest}
@@ -235,6 +249,87 @@ export function FounderLeadFormCard({
             ))}
           </select>
         </div>
+        ) : null}
+
+        {customFields.map((field) => {
+          const label = fieldLabel(field, locale);
+          const ph = locale === 'en'
+            ? (field.placeholderEn || field.placeholderVi || '')
+            : (field.placeholderVi || field.placeholderEn || '');
+          const value = customValues[field.key];
+          const inputId = `founder-cf-${field.key}`;
+          return (
+            <div key={field.key}>
+              <label htmlFor={inputId} className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
+                {label}{field.required ? <span className="text-red-500"> *</span> : null}
+              </label>
+              {field.type === 'textarea' ? (
+                <textarea
+                  id={inputId}
+                  rows={3}
+                  placeholder={ph}
+                  required={field.required}
+                  value={value || ''}
+                  onChange={(e) => setCustom(field.key, e.target.value)}
+                  className={`w-full rounded-lg border-[1.5px] px-3.5 py-2.5 text-[0.875rem] text-founder-ink outline-none transition ${fieldSurface}`}
+                />
+              ) : null}
+              {field.type === 'text' ? (
+                <input
+                  id={inputId}
+                  type="text"
+                  placeholder={ph}
+                  required={field.required}
+                  value={value || ''}
+                  onChange={(e) => setCustom(field.key, e.target.value)}
+                  className={`w-full rounded-lg border-[1.5px] px-3.5 py-2.5 text-[0.875rem] text-founder-ink outline-none transition ${fieldSurface}`}
+                />
+              ) : null}
+              {field.type === 'select' ? (
+                <select
+                  id={inputId}
+                  required={field.required}
+                  value={value || ''}
+                  onChange={(e) => setCustom(field.key, e.target.value)}
+                  className={`w-full appearance-none rounded-lg border-[1.5px] px-3.5 py-2.5 text-[0.875rem] text-founder-ink outline-none transition ${fieldSurface}`}
+                >
+                  <option value="">{locale === 'en' ? 'Select' : 'Chọn'}</option>
+                  {(field.options || []).map((opt) => (
+                    <option key={opt.value} value={opt.value}>{optionLabel(opt, locale)}</option>
+                  ))}
+                </select>
+              ) : null}
+              {field.type === 'radio' ? (
+                <div className="space-y-1.5">
+                  {(field.options || []).map((opt) => (
+                    <label key={opt.value} className="flex items-center gap-2 text-sm text-founder-ink">
+                      <input
+                        type="radio"
+                        name={inputId}
+                        checked={value === opt.value}
+                        onChange={() => setCustom(field.key, opt.value)}
+                        className="accent-founder-teal"
+                      />
+                      {optionLabel(opt, locale)}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {field.type === 'checkbox' ? (
+                <label className="flex items-center gap-2 text-sm text-founder-ink">
+                  <input
+                    id={inputId}
+                    type="checkbox"
+                    checked={Boolean(value)}
+                    onChange={(e) => setCustom(field.key, e.target.checked)}
+                    className="accent-founder-teal"
+                  />
+                  {label}
+                </label>
+              ) : null}
+            </div>
+          );
+        })}
 
         <div className="flex items-start gap-2.5 pt-1">
           <input
@@ -262,7 +357,7 @@ export function FounderLeadFormCard({
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || previewMode}
           className="relative w-full overflow-hidden rounded-lg bg-gradient-to-br from-founder-teal to-founder-teal-mid py-3.5 text-[0.975rem] font-bold tracking-wide text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(11,85,99,0.35)] active:translate-y-0 disabled:opacity-60"
         >
           {submitting ? formCopy.submitting : `${formCopy.submit} →`}

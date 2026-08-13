@@ -4,6 +4,18 @@ import landingPageEventRepository from '../../repositories/landingPageEvent.repo
 import { clampLandingLeadsLimit, MAX_LANDING_LEADS_LIMIT } from '../../utils/landingLeadsLimit.util.js';
 import { buildLandingLeadsAdminXlsxBuffer } from '../../utils/landingLeadsXlsxExport.util.js';
 import { canonicalLandingPageSlug } from '../../utils/landingPageSlugCanonical.util.js';
+import {
+  buildTrustedCustomFieldsSnapshot,
+  customFieldsSnapshotToPrimitives,
+  isInterestAreaVisible,
+  isOccupationVisible,
+  normalizeInterestAreaValue,
+  normalizeOccupationValue,
+  normalizePersistedLeadForm,
+  sanitizeCustomFieldsSnapshotForAdmin,
+  toPublicLeadFormConfig,
+} from '../../utils/landingLeadFormConfig.util.js';
+import { normalizeLandingLeadsCustomFilters } from '../../utils/landingLeadCustomFilters.util.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -44,6 +56,15 @@ export const mapLeadRowToCampaignItem = (row) => {
     marketingConsent: Boolean(row.marketingConsent ?? row.marketing_consent),
     landingPageSlug: String(row.landingPageSlug ?? row.landing_page_slug ?? '').trim() || null,
     createdAt: row.createdAt || row.created_at,
+    customFields: customFieldsSnapshotToPrimitives(row.customFields ?? row.custom_fields),
+  };
+};
+
+export const mapLeadRowToAdminItem = (row) => {
+  const item = mapLeadRowToCampaignItem(row);
+  return {
+    ...item,
+    customFields: sanitizeCustomFieldsSnapshotForAdmin(row.customFields ?? row.custom_fields),
   };
 };
 
@@ -102,10 +123,59 @@ function normalizeLeadUseDateRange(raw) {
   return s === 'true' || s === '1' || s === 'yes';
 }
 
+function missingLandingError() {
+  const err = new Error('Thiếu trang đích hợp lệ để ghi nhận lead');
+  err.statusCode = 400;
+  return err;
+}
+
+function hasCustomFilterPayload(raw) {
+  if (raw == null || raw === '') return false;
+  if (Array.isArray(raw)) return raw.length > 0;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    return Boolean(trimmed) && trimmed !== '[]';
+  }
+  return true;
+}
+
+function buildSharedLeadFilters(config = {}, fieldTypeByKey) {
+  return {
+    useDateRange: normalizeLeadUseDateRange(config.landingLeadsUseDateRange),
+    dateFrom: String(config.landingLeadsDateFrom || '').trim() || null,
+    dateTo: String(config.landingLeadsDateTo || '').trim() || null,
+    occupations: normalizeLeadFilterStringArray(config.landingLeadsOccupations),
+    interests: normalizeLeadFilterStringArray(config.landingLeadsInterests),
+    landingSlugs: normalizeLeadFilterSlugArray(config.landingLeadsSlugs),
+    customFilters: normalizeLandingLeadsCustomFilters(config.landingLeadsCustomFilters, { fieldTypeByKey }),
+    idUser: config.idUser || null,
+  };
+}
+
 /**
  * Dịch vụ nghiệp vụ lead (form landing + preview/node).
  */
 class LeadService {
+  /**
+   * Chuẩn hóa bộ lọc chung; khi có custom filter thì tra type từ schema workspace.
+   * Field đã xóa (không còn trong schema) vẫn chạy operator cũ.
+   *
+   * @param {object} config
+   * @returns {Promise<object>}
+   */
+  async resolveSharedLeadFilters(config = {}) {
+    let fieldTypeByKey;
+    if (hasCustomFilterPayload(config.landingLeadsCustomFilters) && (config.idUser || config.userId)) {
+      const defs = await this.listCustomFieldDefinitions({
+        userId: config.idUser || config.userId,
+        roleCode: config.roleCode,
+        ownerId: config.ownerId,
+      });
+      fieldTypeByKey = new Map(defs.map((d) => [d.key, d.type]));
+    }
+    return buildSharedLeadFilters(config, fieldTypeByKey);
+  }
+
   /**
    * Validate và tạo lead từ payload public API.
    *
@@ -122,8 +192,6 @@ class LeadService {
     const firstName = String(body?.firstName ?? body?.first_name ?? '').trim();
     const email = String(body?.email ?? '').trim().toLowerCase();
     const phone = normalizePhone(body?.phone);
-    const occupation = String(body?.occupation ?? '').trim();
-    const interestArea = String(body?.interestArea ?? body?.interest_area ?? '').trim();
     const marketingConsent = Boolean(body?.marketingConsent ?? body?.marketing_consent);
 
     if (!lastName || !firstName) {
@@ -141,33 +209,41 @@ class LeadService {
       err.statusCode = 400;
       throw err;
     }
-    // Nghề nghiệp / lĩnh vực có thể để trống (khớp form landing công khai); DB vẫn nhận chuỗi rỗng (NOT NULL varchar).
     if (!marketingConsent) {
       const err = new Error('Cần đồng ý nhận thông tin từ Founder AI');
       err.statusCode = 400;
       throw err;
     }
 
-    // Chuẩn hóa slug: `/l` → `l`, tránh lọc admin (chọn `l`) không khớp DB
     const landingPageSlug = canonicalLandingPageSlug(
       body?.landingPageSlug ?? body?.landing_page_slug ?? ''
     );
-
-    // Xác định id_user từ landing page slug
-    let idUser = 1; // Mặc định nếu không tìm thấy (admin/hệ thống)
-    if (landingPageSlug) {
-      const lp = await landingPageRepository.findPublishedBySlug(landingPageSlug);
-      if (lp && lp.idUser) {
-        const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
-        if (await resourceIsLocked('landing_pages', lp.id)) {
-          const err = new Error('Landing page tạm ngừng');
-          err.statusCode = 503;
-          err.code = 'RESOURCE_LOCKED';
-          throw err;
-        }
-        idUser = lp.idUser;
-      }
+    if (!landingPageSlug) {
+      throw missingLandingError();
     }
+
+    const lp = await landingPageRepository.findPublishedBySlug(landingPageSlug);
+    if (!lp || !lp.idUser) {
+      throw missingLandingError();
+    }
+
+    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', lp.id)) {
+      const err = new Error('Landing page tạm ngừng');
+      err.statusCode = 503;
+      err.code = 'RESOURCE_LOCKED';
+      throw err;
+    }
+
+    const idUser = lp.idUser;
+    const leadForm = normalizePersistedLeadForm(lp.customConfig);
+    const occupation = isOccupationVisible(leadForm)
+      ? normalizeOccupationValue(body?.occupation)
+      : '';
+    const interestArea = isInterestAreaVisible(leadForm)
+      ? normalizeInterestAreaValue(body?.interestArea ?? body?.interest_area)
+      : '';
+    const customFieldsSnapshot = buildTrustedCustomFieldsSnapshot(leadForm, body?.customFields);
 
     const utmSource = body?.utmSource != null ? String(body.utmSource).trim().slice(0, 255) || null : null;
     const utmMedium = body?.utmMedium != null ? String(body.utmMedium).trim().slice(0, 255) || null : null;
@@ -190,6 +266,7 @@ class LeadService {
       utmContent,
       utmTerm,
       idUser,
+      customFields: customFieldsSnapshot,
     });
     if (!row) {
       const err = new Error('Không thể lưu thông tin');
@@ -197,25 +274,23 @@ class LeadService {
       throw err;
     }
 
-    if (landingPageSlug) {
-      try {
-        await landingPageEventRepository.insert({
-          eventType: 'submit',
-          landingPageSlug,
-          idUser,
-          targetUrl: null,
-          utmSource,
-          utmMedium,
-          utmCampaign,
-          utmContent,
-          utmTerm,
-          visitorId: body?.visitorId != null ? String(body.visitorId).trim().slice(0, 64) : null,
-          referrer: body?.referrer != null ? String(body.referrer).trim().slice(0, 2000) : null,
-          userAgent: null,
-        });
-      } catch (e) {
-        console.warn('[LeadService] Không ghi landing_page_events submit:', e?.message || e);
-      }
+    try {
+      await landingPageEventRepository.insert({
+        eventType: 'submit',
+        landingPageSlug,
+        idUser,
+        targetUrl: null,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm,
+        visitorId: body?.visitorId != null ? String(body.visitorId).trim().slice(0, 64) : null,
+        referrer: body?.referrer != null ? String(body.referrer).trim().slice(0, 2000) : null,
+        userAgent: null,
+      });
+    } catch (e) {
+      console.warn('[LeadService] Không ghi landing_page_events submit:', e?.message || e);
     }
 
     return { row, item: mapLeadRowToCampaignItem(row) };
@@ -228,34 +303,13 @@ class LeadService {
    * @returns {Promise<{ items: object[], total: number }>}
    */
   async getLeadsForCampaignConfig(config = {}) {
-    const useDateRange = normalizeLeadUseDateRange(config.landingLeadsUseDateRange);
-    const dateFrom = String(config.landingLeadsDateFrom || '').trim() || null;
-    const dateTo = String(config.landingLeadsDateTo || '').trim() || null;
-    const occupations = normalizeLeadFilterStringArray(config.landingLeadsOccupations);
-    const interests = normalizeLeadFilterStringArray(config.landingLeadsInterests);
-    const landingSlugs = normalizeLeadFilterSlugArray(config.landingLeadsSlugs);
+    const shared = await this.resolveSharedLeadFilters(config);
     const limit = clampLandingLeadsLimit(config.landingLeadsLimit, 1000);
-
-    const filterBase = {
-      useDateRange,
-      dateFrom,
-      dateTo,
-      occupations,
-      interests,
-      landingSlugs,
-      limit,
-    };
+    const filterBase = { ...shared, limit };
 
     const [rows, total] = await Promise.all([
       leadRepository.findFiltered(filterBase),
-      leadRepository.countFiltered({
-        useDateRange,
-        dateFrom,
-        dateTo,
-        occupations,
-        interests,
-        landingSlugs,
-      }),
+      leadRepository.countFiltered(shared),
     ]);
 
     const items = rows.map(mapLeadRowToCampaignItem);
@@ -265,58 +319,22 @@ class LeadService {
   /**
    * Danh sách lead landing cho trang quản trị: lọc giống node/read_landing_leads, có phân trang offset.
    *
-   * Luồng hoạt động:
-   * 1. Chuẩn hóa khoảng ngày / nghề / lĩnh vực từ query.
-   * 2. Đếm tổng bản ghi khớp filter (không LIMIT).
-   * 3. SELECT một trang với LIMIT + OFFSET.
-   *
    * @param {object} config
-   * @param {boolean} config.landingLeadsUseDateRange
-   * @param {string} config.landingLeadsDateFrom
-   * @param {string} config.landingLeadsDateTo
-   * @param {string[]} config.landingLeadsOccupations
-   * @param {string[]} config.landingLeadsInterests
-   * @param {string[]} config.landingLeadsSlugs Slug landing (vd `l`); rỗng = không lọc theo slug
-   * @param {number} config.page Trang (1-based)
-   * @param {number} config.pageSize Số dòng mỗi trang (đã clamp ở controller)
    * @returns {Promise<{ items: object[], total: number, page: number, pageSize: number, totalPages: number }>}
    */
   async listAdminPaginated(config = {}) {
-    const useDateRange = normalizeLeadUseDateRange(config.landingLeadsUseDateRange);
-    const dateFrom = String(config.landingLeadsDateFrom || '').trim() || null;
-    const dateTo = String(config.landingLeadsDateTo || '').trim() || null;
-    const occupations = normalizeLeadFilterStringArray(config.landingLeadsOccupations);
-    const interests = normalizeLeadFilterStringArray(config.landingLeadsInterests);
-    const landingSlugs = normalizeLeadFilterSlugArray(config.landingLeadsSlugs);
+    const shared = await this.resolveSharedLeadFilters(config);
     const page = Math.max(1, parseInt(String(config.page), 10) || 1);
     const pageSize = Math.max(1, parseInt(String(config.pageSize), 10) || 20);
     const offset = (page - 1) * pageSize;
     const limit = clampLandingLeadsLimit(pageSize, 100);
 
-    const filterBase = {
-      useDateRange,
-      dateFrom,
-      dateTo,
-      occupations,
-      interests,
-      landingSlugs,
-      limit,
-      offset,
-    };
-
     const [rows, total] = await Promise.all([
-      leadRepository.findFiltered(filterBase),
-      leadRepository.countFiltered({
-        useDateRange,
-        dateFrom,
-        dateTo,
-        occupations,
-        interests,
-        landingSlugs,
-      }),
+      leadRepository.findFiltered({ ...shared, limit, offset }),
+      leadRepository.countFiltered(shared),
     ]);
 
-    const items = rows.map(mapLeadRowToCampaignItem);
+    const items = rows.map(mapLeadRowToAdminItem);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     return { items, total, page, pageSize, totalPages };
   }
@@ -324,45 +342,30 @@ class LeadService {
   /**
    * Xuất toàn bộ lead khớp bộ lọc admin ra buffer Excel (tối đa `MAX_LANDING_LEADS_LIMIT` dòng).
    *
-   * Luồng hoạt động:
-   * 1. Chuẩn hóa filter giống `listAdminPaginated`.
-   * 2. Đếm tổng → LIMIT = min(tổng, trần export).
-   * 3. SELECT một lần (offset 0), map item, build workbook.
-   *
-   * @param {object} config Cùng các trường lọc như list admin (không cần page/pageSize)
+   * @param {object} config
    * @returns {Promise<{ buffer: Buffer, total: number, exportedCount: number, truncated: boolean }>}
    */
   async exportAdminFilteredXlsx(config = {}) {
-    const useDateRange = normalizeLeadUseDateRange(config.landingLeadsUseDateRange);
-    const dateFrom = String(config.landingLeadsDateFrom || '').trim() || null;
-    const dateTo = String(config.landingLeadsDateTo || '').trim() || null;
-    const occupations = normalizeLeadFilterStringArray(config.landingLeadsOccupations);
-    const interests = normalizeLeadFilterStringArray(config.landingLeadsInterests);
-    const landingSlugs = normalizeLeadFilterSlugArray(config.landingLeadsSlugs);
-
-    const filterBase = {
-      useDateRange,
-      dateFrom,
-      dateTo,
-      occupations,
-      interests,
-      landingSlugs,
-    };
-
-    const total = await leadRepository.countFiltered(filterBase);
+    const shared = await this.resolveSharedLeadFilters(config);
+    const total = await leadRepository.countFiltered(shared);
     const fetchLimit = Math.min(total, MAX_LANDING_LEADS_LIMIT);
 
     const rows =
       fetchLimit > 0
         ? await leadRepository.findFiltered({
-            ...filterBase,
+            ...shared,
             limit: fetchLimit,
             offset: 0,
           })
         : [];
 
-    const items = rows.map(mapLeadRowToCampaignItem);
-    const buffer = await buildLandingLeadsAdminXlsxBuffer(items);
+    const items = rows.map(mapLeadRowToAdminItem);
+    const currentSchemas = await this.listCustomFieldDefinitions({
+      userId: config.idUser,
+      roleCode: config.roleCode,
+      ownerId: config.ownerId,
+    });
+    const buffer = await buildLandingLeadsAdminXlsxBuffer(items, { currentSchemas });
 
     return {
       buffer,
@@ -370,6 +373,36 @@ class LeadService {
       exportedCount: items.length,
       truncated: total > items.length,
     };
+  }
+
+  /**
+   * Schema custom field hiện tại trong workspace (không gồm field đã xóa).
+   *
+   * @param {{ userId?: number|string, roleCode?: string, ownerId?: number|string }} scope
+   * @returns {Promise<object[]>}
+   */
+  async listCustomFieldDefinitions(scope = {}) {
+    const rows = await landingPageRepository.listLeadFormConfigsInScope({
+      userId: scope.userId || scope.idUser,
+      role: scope.roleCode || scope.role,
+      ownerId: scope.ownerId,
+    });
+    const byKey = new Map();
+    for (const row of rows) {
+      const cfg = toPublicLeadFormConfig(row.customConfig);
+      for (const field of cfg.customFields) {
+        if (!byKey.has(field.key)) {
+          byKey.set(field.key, {
+            key: field.key,
+            type: field.type,
+            labelVi: field.labelVi,
+            labelEn: field.labelEn,
+            options: field.options,
+          });
+        }
+      }
+    }
+    return [...byKey.values()];
   }
 }
 

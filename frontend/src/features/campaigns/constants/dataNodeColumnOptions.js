@@ -41,4 +41,5 @@ export const LANDING_LEAD_COLUMN_OPTIONS = [
   { key: 'marketingConsent', label: 'marketingConsent' },
   { key: 'landingPageSlug', label: 'landingPageSlug (nguồn landing)' },
   { key: 'createdAt', label: 'createdAt' },
+  { key: 'customFields', label: 'customFields (thông tin thêm)' },
 ];

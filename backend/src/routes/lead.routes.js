@@ -10,6 +10,11 @@ router.use(requirePasswordChange);
 router.use(requireActivePlan);
 
 router.get('/preview', requirePermission('leads'), leadController.preview.bind(leadController));
+router.get(
+  '/custom-field-definitions',
+  requirePermission('leads'),
+  leadController.listCustomFieldDefinitions.bind(leadController)
+);
 
 /**
  * GET /api/leads/export — tải Excel theo bộ lọc (đặt trước `/` để không bị nhầm path).
