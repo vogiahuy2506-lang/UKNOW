@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencilAlt, HiOutlineReply } from 'react-icons/hi';
+import {
+  HiOutlineClipboardCopy,
+  HiOutlineEye,
+  HiOutlineEyeOff,
+  HiOutlinePlus,
+  HiOutlineRefresh,
+  HiOutlineTrash,
+  HiOutlinePencilAlt,
+  HiOutlineReply,
+} from 'react-icons/hi';
 import adminVouchersApiService from '../../features/admin/services/adminVouchersApi.service';
 import { Field, FormSection, ModalShell } from '../../features/admin/plans/PlanModalsShared.jsx';
 import { PriceInput } from '../../features/admin/plans/PlanInputs.jsx';
@@ -439,6 +448,7 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
 };
 
 const TABS = ['active', 'expired', 'disabled'];
+const OFFER_MODE_FILTERS = ['all', 'public_code', 'private_code', 'automatic'];
 
 export default function AdminVouchersPage() {
   const { t, locale } = useI18n();
@@ -450,6 +460,8 @@ export default function AdminVouchersPage() {
   const [saving, setSaving] = useState(false);
   const [plans, setPlans] = useState([]);
   const [tab, setTab] = useState('active');
+  const [offerModeFilter, setOfferModeFilter] = useState('all');
+  const [revealedPrivateIds, setRevealedPrivateIds] = useState(() => new Set());
 
   const counts = useMemo(() => {
     const now = Date.now();
@@ -461,8 +473,12 @@ export default function AdminVouchersPage() {
 
   const filtered = useMemo(() => {
     const now = Date.now();
-    return vouchers.filter((v) => getVoucherLifecycleStatus(v, now) === tab);
-  }, [vouchers, tab]);
+    return vouchers.filter((voucher) => {
+      const mode = voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
+      return getVoucherLifecycleStatus(voucher, now) === tab &&
+        (offerModeFilter === 'all' || mode === offerModeFilter);
+    });
+  }, [vouchers, offerModeFilter, tab]);
 
   const fetchVouchers = useCallback(async () => {
     setLoading(true);
@@ -546,6 +562,24 @@ export default function AdminVouchersPage() {
 
   const voucherLabel = (voucher) => voucher.name || voucher.code || `#${voucher.id}`;
 
+  const togglePrivateCode = (voucherId) => {
+    setRevealedPrivateIds((current) => {
+      const next = new Set(current);
+      if (next.has(voucherId)) next.delete(voucherId);
+      else next.add(voucherId);
+      return next;
+    });
+  };
+
+  const copyPrivateCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(String(code || ''));
+      toast.success(t('voucherAdmin.codeCopied'));
+    } catch {
+      toast.error(t('voucherAdmin.copyCodeFailed'));
+    }
+  };
+
   const handleDeactivate = async (voucher) => {
     if (!window.confirm(t('voucherAdmin.deactivateConfirm', { code: voucherLabel(voucher) }))) return;
     try {
@@ -619,19 +653,33 @@ export default function AdminVouchersPage() {
         <div className="card p-4"><p className="text-xs text-gray-400 uppercase">{t('voucherAdmin.disabledVouchers')}</p><p className="text-2xl font-bold">{counts.disabled}</p></div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-              tab === key ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            {t(`voucherAdmin.tab.${key}`)} ({counts[key]})
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {TABS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                tab === key ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {t(`voucherAdmin.tab.${key}`)} ({counts[key]})
+            </button>
+          ))}
+        </div>
+        <select
+          className="input min-w-44 text-sm"
+          value={offerModeFilter}
+          onChange={(event) => setOfferModeFilter(event.target.value)}
+          aria-label={t('voucherAdmin.filterByMode')}
+        >
+          {OFFER_MODE_FILTERS.map((mode) => (
+            <option key={mode} value={mode}>
+              {mode === 'all' ? t('voucherAdmin.allModes') : t(`voucherAdmin.modeBadge.${mode}`)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {showForm && (
@@ -673,15 +721,40 @@ export default function AdminVouchersPage() {
               ) : filtered.map((voucher) => {
                 const status = getVoucherLifecycleStatus(voucher);
                 const mode = voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
+                const privateCodeRevealed = mode === 'private_code' && revealedPrivateIds.has(voucher.id);
                 const codeDisplay = mode === 'automatic'
                   ? (voucher.name || t('voucherAdmin.autoBadge'))
                   : mode === 'private_code'
-                    ? `••••${String(voucher.code || '').slice(-4)}`
+                    ? privateCodeRevealed
+                      ? voucher.code
+                      : `••••${String(voucher.code || '').slice(-4)}`
                     : voucher.code;
                 return (
                   <tr key={voucher.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <div className="font-mono font-semibold text-gray-900">{codeDisplay}</div>
+                      <div className="flex items-center gap-1">
+                        <div className="font-mono font-semibold text-gray-900">{codeDisplay}</div>
+                        {mode === 'private_code' && (
+                          <>
+                            <button
+                              type="button"
+                              className="p-1 text-gray-400 hover:text-primary-600"
+                              onClick={() => togglePrivateCode(voucher.id)}
+                              title={privateCodeRevealed ? t('voucherAdmin.hideCode') : t('voucherAdmin.revealCode')}
+                            >
+                              {privateCodeRevealed ? <HiOutlineEyeOff /> : <HiOutlineEye />}
+                            </button>
+                            <button
+                              type="button"
+                              className="p-1 text-gray-400 hover:text-primary-600"
+                              onClick={() => copyPrivateCode(voucher.code)}
+                              title={t('voucherAdmin.copyCode')}
+                            >
+                              <HiOutlineClipboardCopy />
+                            </button>
+                          </>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-500">{voucher.name}</div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{discountLabel(voucher, t)}</td>
