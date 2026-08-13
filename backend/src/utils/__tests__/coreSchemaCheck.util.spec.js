@@ -51,6 +51,10 @@ const CHECKS_OK = [
     conname: 'orders_billing_period_check',
     def: "CHECK (billing_period IN ('monthly', 'yearly'))",
   },
+  {
+    conname: 'orders_discount_source_check',
+    def: "CHECK (discount_source IS NULL OR discount_source IN ('public_code', 'private_code', 'automatic'))",
+  },
 ];
 
 const FKS_OK = [

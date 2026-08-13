@@ -43,6 +43,8 @@ const COLUMNS = Object.freeze({
     billing_period: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 10 }),
     discount_amount: Object.freeze({ udt: 'numeric', nullable: false }),
     voucher_id: Object.freeze({ udt: 'int8', nullable: true }),
+    discount_source: Object.freeze({ udt: 'varchar', nullable: true, maxLen: 24 }),
+    discount_label: Object.freeze({ udt: 'varchar', nullable: true, maxLen: 160 }),
     note: Object.freeze({ udt: 'text', nullable: true }),
     topup_config: Object.freeze({ udt: 'jsonb', nullable: true }),
   }),
@@ -51,6 +53,9 @@ const COLUMNS = Object.freeze({
     is_custom: Object.freeze({ udt: 'bool', nullable: false }),
     grace_period_days: Object.freeze({ udt: 'int4', nullable: false }),
     custom_owner_user_id: Object.freeze({ udt: 'int8', nullable: true }),
+  }),
+  vouchers: Object.freeze({
+    offer_mode: Object.freeze({ udt: 'varchar', nullable: false, maxLen: 24 }),
   }),
 });
 
@@ -78,6 +83,7 @@ export const CORE_SCHEMA_EXPECTED = Object.freeze({
     status: Object.freeze(["'pending'", "'success'", "'cancelled'", "'failed'"]),
     payment_method: Object.freeze(["'payos'", "'manual'", "'free'", "'voucher'"]),
     billing_period: Object.freeze(["'monthly'", "'yearly'"]),
+    discount_source: Object.freeze(["'public_code'", "'private_code'", "'automatic'"]),
   }),
 
   /** Allowed orders.status values after 092. Extra values = drift / legacy. */
