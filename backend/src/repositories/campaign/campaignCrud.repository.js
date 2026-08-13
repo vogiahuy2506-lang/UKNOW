@@ -120,7 +120,7 @@ class CampaignCrudRepository {
    * @returns {Promise<object|null>}
    */
   async findCampaignById({ campaignId, isAdmin, userId }) {
-    const params = [campaignId, userId];
+    const params = isAdmin ? [campaignId] : [campaignId, userId];
     let query = `
       SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
              c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
