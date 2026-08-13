@@ -13,15 +13,16 @@ const MarketplaceCreateRedirect = () => {
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;
-    
+
     showCreateListingForm();
-    
+
     // Navigate back to marketplace after opening modal
     navigate('/app/marketplace', { replace: true });
-    
+
     return () => {
       hideMarketplace();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return null;

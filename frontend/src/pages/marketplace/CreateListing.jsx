@@ -4,7 +4,6 @@ import {
   HiOutlineX,
   HiOutlineCheckCircle,
   HiOutlineMail,
-  HiOutlineTag,
   HiOutlineLightBulb,
   HiOutlineTemplate,
 } from 'react-icons/hi';
@@ -67,6 +66,7 @@ const CreateListing = ({ onClose, onSuccess }) => {
 
   useEffect(() => {
     fetchCampaigns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredCampaigns = typeFilter

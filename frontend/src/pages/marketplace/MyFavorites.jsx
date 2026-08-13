@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { HiOutlineHeart, HiOutlineEye, HiOutlineShoppingCart } from 'react-icons/hi';
+import { HiOutlineHeart, HiOutlineEye } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
 import Pagination from '../../components/common/Pagination';
 import ListingCard from '../../components/marketplace/ListingCard';
@@ -72,17 +72,6 @@ const MyFavorites = () => {
 
   const handleListingClick = (id) => {
     showListing(id, 'favorites');
-  };
-
-  const getCategoryBadgeClass = (category) => {
-    const classes = {
-      marketing: 'bg-orange-100 text-orange-700',
-      automation: 'bg-blue-100 text-blue-700',
-      support: 'bg-purple-100 text-purple-700',
-      sales: 'bg-green-100 text-green-700',
-      onboarding: 'bg-cyan-100 text-cyan-700',
-    };
-    return classes[category] || 'bg-gray-100 text-gray-700';
   };
 
   return (

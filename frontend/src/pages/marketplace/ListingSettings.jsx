@@ -7,7 +7,6 @@ import {
   HiOutlineEye,
   HiOutlineEyeOff,
   HiOutlineStar,
-  HiOutlineCurrencyDollar,
   HiOutlineTag,
   HiOutlineMail,
   HiOutlineChat,
@@ -47,6 +46,7 @@ const ListingSettings = ({ id: propId, onClose: propOnClose, onBack: propOnBack 
     } else {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchListing = async () => {

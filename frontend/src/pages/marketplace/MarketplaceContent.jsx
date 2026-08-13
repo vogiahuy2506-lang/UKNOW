@@ -67,6 +67,7 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
       setFilters({ category: '', sort: 'rating', search: '' });
       setPagination((prev) => ({ ...prev, page: 1 }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const fetchListings = useCallback(
@@ -133,6 +134,7 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
       setPagination((prev) => ({ ...prev, page: 1 }));
     }, 300);
     return () => clearTimeout(filterTimeoutRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTab, filters.category, filters.sort, filters.search]);
 
   useEffect(() => {
@@ -171,6 +173,7 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
 
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page, pagination.totalPages, isLoading, isLoadingMore]);
 
   const handleFavorite = async (listingId, e) => {

@@ -3,7 +3,6 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
-import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
 import {

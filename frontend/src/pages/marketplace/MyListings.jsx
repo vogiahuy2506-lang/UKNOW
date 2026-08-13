@@ -30,6 +30,7 @@ const MyListings = () => {
 
   useEffect(() => {
     fetchListings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, pagination.page]);
 
   const fetchListings = async () => {

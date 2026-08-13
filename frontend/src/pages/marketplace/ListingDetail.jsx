@@ -9,7 +9,6 @@ import {
   HiOutlineClock,
   HiOutlineUser,
   HiOutlineCheckCircle,
-  HiOutlineSparkles,
   HiOutlineDownload,
   HiOutlineShare,
   HiOutlineFlag,
@@ -19,7 +18,6 @@ import {
   HiOutlineTag,
   HiOutlineMail,
   HiOutlineChat,
-  HiOutlineTemplate,
   HiOutlineChevronLeft,
   HiThumbUp,
   HiStar,
@@ -705,6 +703,7 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
         abortControllerRef.current.abort();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchReviews = async () => {

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { HiOutlineStar, HiOutlineEye, HiOutlineShoppingCart, HiOutlineHeart, HiOutlineClock, HiOutlineMail, HiOutlineChat, HiOutlineTemplate } from 'react-icons/hi';
 
 export const CATEGORY_STYLES = {
