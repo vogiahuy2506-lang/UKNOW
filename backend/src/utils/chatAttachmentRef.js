@@ -62,8 +62,10 @@ export function resolveChatAttachmentRef(ref, { chatbotId, uid = null, sid = nul
   const sig = ref.slice(dotIndex + 1);
 
   const expected = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
-  const sigBuf = Buffer.from(sig, 'base64url');
-  const expBuf = Buffer.from(expected, 'base64url');
+  // Compare encoded signatures, not decoded bytes — base64url aliases can
+  // decode to the same buffer and would accept a tampered suffix.
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expected);
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     const err = new Error('Token đính kèm không hợp lệ');
     err.status = 403;
