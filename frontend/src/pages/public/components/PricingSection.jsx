@@ -347,7 +347,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
             const rawPlanPrice = billingPeriod === 'yearly' && plan.price_yearly
               ? Number(plan.price_yearly)
               : Number(plan.price || 0);
-            const promotedPrice = hasPromotion ? Number(promotion.finalAmount || rawPlanPrice) : rawPlanPrice;
+            const promotedPrice = hasPromotion ? Number(promotion.finalAmount ?? rawPlanPrice) : rawPlanPrice;
             const discountPct = hasPromotion && rawPlanPrice > 0
               ? Math.round(promotion.discountAmount / rawPlanPrice * 100)
               : 0;

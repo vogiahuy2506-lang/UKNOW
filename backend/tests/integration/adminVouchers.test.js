@@ -133,6 +133,7 @@ describe('GET /api/admin/vouchers', () => {
     expect(v).toHaveProperty('discountValue');
     expect(v).toHaveProperty('isActive');
     expect(v).toHaveProperty('usedCount');
+    expect(v).toHaveProperty('hasOrderReference', false);
     expect(v).toHaveProperty('createdAt');
   });
 });
@@ -331,7 +332,7 @@ describe('PATCH /api/admin/vouchers/:id', () => {
     expect(row.rows[0].is_active).toBe(false);
   });
 
-  it('cho phép reclassify public_code thành private_code sau khi đã có order reference', async () => {
+  it('không cho đổi loại voucher sau khi đã có order reference', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const user = await createUser({ role: 'user', username: 'buyer1' });
     const token = await loginAs(admin);
@@ -351,14 +352,18 @@ describe('PATCH /api/admin/vouchers/:id', () => {
       order.id,
     ]);
 
+    const listed = await request(app)
+      .get('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`);
+    expect(listed.body.data.find((voucher) => voucher.id === created.body.data.id)?.hasOrderReference).toBe(true);
+
     const res = await request(app)
       .patch(`/api/admin/vouchers/${created.body.data.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ offerMode: 'private_code' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.offerMode).toBe('private_code');
-    expect(res.body.data.code).toBe('TEST20');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VOUCHER_MODE_LOCKED');
   });
 
   it('không tái sử dụng internal automatic code khi đổi sang code mode', async () => {

@@ -620,15 +620,11 @@ export async function updateAdminVoucher(id, input) {
 
     if (hasRef) {
       if (patch.offerMode && patch.offerMode !== resolveOfferMode(current)) {
-        const currentIsCode = CODE_OFFER_MODES.includes(resolveOfferMode(current));
-        const nextIsCode = CODE_OFFER_MODES.includes(patch.offerMode);
-        if (!(currentIsCode && nextIsCode)) {
-          throw {
-            status: 400,
-            message: 'Không thể đổi giữa mã nhập và khuyến mãi tự động sau khi voucher đã gắn với đơn hàng',
-            code: 'VOUCHER_MODE_LOCKED',
-          };
-        }
+        throw {
+          status: 400,
+          message: 'Không thể đổi loại voucher sau khi voucher đã gắn với đơn hàng',
+          code: 'VOUCHER_MODE_LOCKED',
+        };
       }
       if (patch.code && normalizeVoucherCode(patch.code) !== normalizeVoucherCode(current.code)) {
         throw {

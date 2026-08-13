@@ -163,15 +163,17 @@ const getVoucherErrorMessage = (err, t, fallbackKey) => {
   return message || t(fallbackKey);
 };
 
-const SelectablePill = ({ checked, title, subtitle, onClick }) => (
+const SelectablePill = ({ checked, title, subtitle, onClick, disabled = false, disabledTitle }) => (
   <button
     type="button"
     onClick={onClick}
+    disabled={disabled}
+    title={disabled ? disabledTitle : undefined}
     className={`rounded-xl border px-4 py-3 text-left transition-all ${
       checked
         ? 'border-orange-300 bg-orange-50 text-orange-700 shadow-sm'
         : 'border-slate-200 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50/60'
-    }`}
+    } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
   >
     <span className="block text-sm font-bold">{title}</span>
     {subtitle && <span className="mt-1 block text-xs text-slate-500">{subtitle}</span>}
@@ -181,6 +183,7 @@ const SelectablePill = ({ checked, title, subtitle, onClick }) => (
 const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans, t }) => {
   const offerMode = resolveFormOfferMode(form);
   const isAutomatic = offerMode === 'automatic';
+  const isModeLocked = Boolean(editing?.hasOrderReference);
   const publicPlans = plans.filter(
     (plan) =>
       plan &&
@@ -214,6 +217,8 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
             checked={offerMode === 'public_code'}
             title={t('voucherAdmin.publicCode')}
             subtitle={t('voucherAdmin.publicCodeSubtitle')}
+            disabled={isModeLocked}
+            disabledTitle={t('voucherAdmin.modeLockedHint')}
             onClick={() => setForm((p) => ({
               ...p,
               offerMode: 'public_code',
@@ -224,6 +229,8 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
             checked={offerMode === 'private_code'}
             title={t('voucherAdmin.privateCode')}
             subtitle={t('voucherAdmin.privateCodeSubtitle')}
+            disabled={isModeLocked}
+            disabledTitle={t('voucherAdmin.modeLockedHint')}
             onClick={() => setForm((p) => ({
               ...p,
               offerMode: 'private_code',
@@ -234,6 +241,8 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
             checked={offerMode === 'automatic'}
             title={t('voucherAdmin.autoPromotion')}
             subtitle={t('voucherAdmin.autoPromotionSubtitle')}
+            disabled={isModeLocked}
+            disabledTitle={t('voucherAdmin.modeLockedHint')}
             onClick={() => setForm((p) => ({
               ...p,
               offerMode: 'automatic',
@@ -244,6 +253,11 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
             }))}
           />
         </div>
+        {editing && (
+          <p className={`mt-3 text-xs ${isModeLocked ? 'text-amber-700' : 'text-slate-500'}`}>
+            {isModeLocked ? t('voucherAdmin.modeLockedHint') : t('voucherAdmin.modeEditableHint')}
+          </p>
+        )}
       </FormSection>
 
       <FormSection
@@ -702,6 +716,7 @@ export default function AdminVouchersPage() {
               <tr>
                 {[
                   t('voucherAdmin.tableCode'),
+                  t('voucherAdmin.tableType'),
                   t('voucherAdmin.tableOffer'),
                   t('voucherAdmin.tableCondition'),
                   t('voucherAdmin.tableTime'),
@@ -715,9 +730,9 @@ export default function AdminVouchersPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400">{t('voucherAdmin.loading')}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">{t('voucherAdmin.loading')}</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400">{t('voucherAdmin.empty')}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">{t('voucherAdmin.empty')}</td></tr>
               ) : filtered.map((voucher) => {
                 const status = getVoucherLifecycleStatus(voucher);
                 const mode = voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
@@ -757,6 +772,9 @@ export default function AdminVouchersPage() {
                       </div>
                       <div className="text-xs text-gray-500">{voucher.name}</div>
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="badge badge-yellow text-xs">{t(`voucherAdmin.modeBadge.${mode}`)}</span>
+                    </td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{discountLabel(voucher, t)}</td>
                     <td className="px-4 py-3 text-gray-600">
                       <div>{t('voucherAdmin.orderFrom', { amount: fmtVnd(voucher.minOrderAmount) })}</div>
@@ -769,7 +787,6 @@ export default function AdminVouchersPage() {
                         <span className={`badge text-xs ${status === 'active' ? 'badge-green' : 'badge-gray'}`}>
                           {t(`voucherAdmin.statusBadge.${status}`)}
                         </span>
-                        <span className="badge badge-yellow text-xs">{t(`voucherAdmin.modeBadge.${mode}`)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
