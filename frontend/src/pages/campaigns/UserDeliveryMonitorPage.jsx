@@ -43,6 +43,7 @@ const categoryClass = {
   account_session: 'badge-warning',
   recipient_invalid: 'badge-gray',
   email_provider: 'badge-warning',
+  zalo_silent_drop: 'badge-warning',
   other: 'badge-gray',
   unknown: 'badge-gray',
 };
@@ -88,6 +89,33 @@ const CustomTooltip = ({ active, payload, label, t }) => {
         <p key={item.dataKey} style={{ color: item.color }}>
           {t(`userDeliveryMonitor.chart.${item.dataKey}`)}: <strong>{fmt(item.value)}</strong>
         </p>
+      ))}
+    </div>
+  );
+};
+
+const severityClass = {
+  critical: 'border-red-100 bg-red-50 text-red-700',
+  warning: 'border-amber-100 bg-amber-50 text-amber-700',
+};
+
+const SignalsBanner = ({ signals, t }) => {
+  if (!signals?.length) return null;
+  return (
+    <div className="space-y-2">
+      {signals.map((signal, index) => (
+        <div key={`${signal.code}-${signal.accountId ?? index}`} className={`rounded-xl border px-4 py-3 text-sm ${severityClass[signal.level] || severityClass.warning}`}>
+          <p className="font-semibold">{t(`userDeliveryMonitor.signal.${signal.code}`)}</p>
+          {signal.accountName && (
+            <p className="mt-0.5 text-xs opacity-80">{t('userDeliveryMonitor.signalAccount', { name: signal.accountName })}</p>
+          )}
+          {signal.silentDrops != null && signal.attempts != null && (
+            <p className="mt-0.5 text-xs opacity-80">{t('userDeliveryMonitor.signalSilentDropDetail', { drops: fmt(signal.silentDrops), attempts: fmt(signal.attempts) })}</p>
+          )}
+          {signal.value !== null && signal.value !== undefined && (
+            <p className="mt-0.5 text-xs opacity-80">{t('userDeliveryMonitor.signalRate', { value: fmt(signal.value) })}</p>
+          )}
+        </div>
       ))}
     </div>
   );
@@ -368,6 +396,8 @@ export default function UserDeliveryMonitorPage() {
       {error && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
+
+      <SignalsBanner signals={data?.signals || []} t={t} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <KpiCard icon={HiOutlineCheckCircle} label={t('userDeliveryMonitor.kpi.sent')} value={fmt(summary.sent)} sub={t('userDeliveryMonitor.kpi.attempts', { attempts: fmt(summary.attempts) })} tone="green" />

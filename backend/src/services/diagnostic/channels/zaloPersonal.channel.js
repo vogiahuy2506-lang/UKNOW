@@ -47,7 +47,7 @@ class ZaloPersonalChannel {
 
     const sendStartedAt = Date.now();
     try {
-      await campaignZaloSenderService.sendResolvedPersonalMessage({
+      const result = await campaignZaloSenderService.sendResolvedPersonalMessage({
         api,
         uid: resolved.uid,
         recipient: normalizedRecipient,
@@ -61,6 +61,11 @@ class ZaloPersonalChannel {
         zaloName: resolved.zaloName || null,
         lookupMs,
         sendMs: Date.now() - sendStartedAt,
+        status: result.status || 'success',
+        code: result.code || null,
+        errorCategory: result.errorCategory || null,
+        errorLabel: result.errorLabel || null,
+        dispatchCount: result.dispatchCount || 0,
       };
     } catch (error) {
       error.stage = 'send';

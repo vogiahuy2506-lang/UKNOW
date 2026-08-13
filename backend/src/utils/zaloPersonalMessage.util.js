@@ -1,4 +1,5 @@
 import { normalizeZaloGroupId } from './zaloGroupName.util.js';
+import { isPositiveZaloMsgId } from './zaloDispatchDelivery.util.js';
 
 /**
  * Resolve conversation external_id for a Zalo Personal inbound message.
@@ -27,9 +28,16 @@ export function resolveConversationExternalId({ isGroup, groupId, threadId, from
  * @returns {string|null}
  */
 export function extractSendMsgId(sent) {
-  const raw = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
-  if (raw == null || raw === '') return null;
-  return String(raw);
+  if (isPositiveZaloMsgId(sent?.message?.msgId)) {
+    return String(sent.message.msgId).trim();
+  }
+  const attachments = Array.isArray(sent?.attachment) ? sent.attachment : [];
+  for (const item of attachments) {
+    if (isPositiveZaloMsgId(item?.msgId)) {
+      return String(item.msgId).trim();
+    }
+  }
+  return null;
 }
 
 /**

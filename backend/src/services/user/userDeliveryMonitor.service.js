@@ -1,5 +1,10 @@
 import deliveryMonitorRepository from '../../repositories/admin/deliveryMonitor.repository.js';
 import { buildTopRunsQuery, mapTopRunRow } from '../shared/deliveryMonitorTopRuns.query.js';
+import {
+  buildZaloSilentDropHourlySql,
+  buildZaloSilentDropSignals,
+  classifyDeliveryMonitorFailure,
+} from '../../utils/deliveryMonitorSignals.util.js';
 
 const clampWindowDays = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -21,17 +26,7 @@ const inferChannel = (row = {}) => {
   return 'email';
 };
 
-const classifyFailure = (message = '') => {
-  const text = String(message || '').toLowerCase();
-  if (!text.trim()) return 'unknown';
-  if (text.includes('rate') || text.includes('limit') || text.includes('quota') || text.includes('too many')) return 'rate_limit';
-  if (text.includes('block') || text.includes('ban') || text.includes('spam') || text.includes('restrict')) return 'provider_block';
-  if (text.includes('timeout') || text.includes('etimedout') || text.includes('econnreset')) return 'network_timeout';
-  if (text.includes('auth') || text.includes('login') || text.includes('session') || text.includes('cookie')) return 'account_session';
-  if (text.includes('not found') || text.includes('unreachable') || text.includes('invalid') || text.includes('bounce')) return 'recipient_invalid';
-  if (text.includes('smtp') || text.includes('mail') || text.includes('email')) return 'email_provider';
-  return 'other';
-};
+const classifyFailure = classifyDeliveryMonitorFailure;
 
 export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWindowDays } = {}) {
   const windowDays = clampWindowDays(rawWindowDays);
@@ -59,6 +54,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     emailFail48h,
     zaloFail48h,
     totalRecipientsRows,
+    silentDropAccountRows,
   ] = await Promise.all([
     safeQuery(
       `SELECT cr.status, COUNT(*)::int AS count
@@ -292,6 +288,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        GROUP BY channel`,
       params
     ),
+    safeQuery(buildZaloSilentDropHourlySql({ userScoped: true }), [userId], []),
   ]);
 
   const CHANNEL_LABELS = { email: 'Email', zalo: 'Zalo cá nhân', zalo_group: 'Zalo nhóm' };
@@ -388,6 +385,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     })),
     topRuns,
     recentErrors,
+    signals: buildZaloSilentDropSignals(silentDropAccountRows),
     health: {
       hardBounceCount: toNumber(hardBounceRows[0]?.count),
       zaloDisconnectedCount: toNumber(zaloDisconnectedRows[0]?.count),

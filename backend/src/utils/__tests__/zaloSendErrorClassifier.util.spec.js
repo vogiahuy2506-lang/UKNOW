@@ -24,6 +24,12 @@ describe('zaloSendErrorClassifier.util', () => {
   });
 
   describe('classifyZaloSendError', () => {
+    it('map NOT_DELIVERED marker → ZALO_SILENT_DROP even when wrapped as new Error(message)', () => {
+      const result = classifyZaloSendError(new Error('[ZALO_SEND_NOT_DELIVERED] Zalo did not confirm delivery op=send_group_message dispatch=1/1'));
+      expect(result.category).toBe('ZALO_SILENT_DROP');
+      expect(result.label).toContain('không xác nhận');
+    });
+
     it('map tra số quá nhiều → PHONE_LOOKUP_RATE_LIMIT', () => {
       const result = classifyZaloSendError(new Error('Tìm số điện thoại quá nhiều'), { stage: 'lookup' });
       expect(result.category).toBe('PHONE_LOOKUP_RATE_LIMIT');

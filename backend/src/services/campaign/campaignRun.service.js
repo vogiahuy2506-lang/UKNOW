@@ -16,6 +16,14 @@ import {
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import {
+  isZaloPartialDeliveryResult,
+  mapZaloPartialDelivery,
+  buildZaloPartialCampaignOutcome,
+  resolveZaloContinuousSendFailureProgress,
+  shouldAdvanceZaloContinuousLedger,
+  shouldAdvanceZaloOneShotLedger,
+} from '../../utils/zaloDispatchDelivery.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from '../../utils/billingCycle.util.js';
@@ -4660,6 +4668,13 @@ class CampaignRunService {
                 sendResult.zaloName = resolvedRecipientZaloName;
                 sendResult.zalo_display = resolvedRecipientZaloName;
               }
+              if (isZaloPartialDeliveryResult(sendResult)) {
+                return {
+                  sendResult,
+                  trackedMessage,
+                  status: 'partial',
+                };
+              }
               markZaloOutboundSuccess({
                 accountId: workingAccount.id,
                 channel: 'zalo_personal',
@@ -4668,9 +4683,83 @@ class CampaignRunService {
               return {
                 sendResult,
                 trackedMessage,
+                status: 'success',
               };
             }
           );
+          if (sendOutcome?.status === 'partial' || isZaloPartialDeliveryResult(sendOutcome?.sendResult)) {
+            failedSends += 1;
+            const { sendResult, trackedMessage } = sendOutcome;
+            const mapped = mapZaloPartialDelivery(sendResult);
+            const progressMessage = buildZaloPersonalProgressMessage();
+            const sentAt = toHoChiMinhIso();
+            const senderName = resolveZaloSenderName(workingAccount);
+            const zaloName = resolveZaloRecipientName({
+              entryRow,
+              sendResult,
+              fallbackRecipient: recipient,
+            });
+            const failedPayload = withZaloPersonalObservation({
+              channel: 'zalo_personal',
+              accountId: workingAccount.id,
+              accountName: workingAccount.displayName,
+              senderName,
+              zaloName,
+              zalo_display: zaloName,
+              groupName: null,
+              recipientType,
+              recipient,
+              customerId,
+              zaloMessageId,
+              phone: sendResult.phone || (recipientType === 'phone' ? recipient : null),
+              message: trackedMessage,
+              status: 'partial',
+              error: mapped.errorLabel,
+              uid: sendResult.uid || null,
+              resolvedUid: sendResult.uid || null,
+              lookupMs: Number.isFinite(Number(sendResult.lookupMs)) ? Number(sendResult.lookupMs) : null,
+              sendMs: Number.isFinite(Number(sendResult.sendMs)) ? Number(sendResult.sendMs) : null,
+              messageText: progressMessage,
+              sentAt,
+              templateId: stepMeta?.templateId || null,
+              stepIndex: stepMeta?.stepIndex || null,
+              attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
+              trackingToken,
+              variables,
+              dispatchCount: mapped.dispatchCount,
+              failedDispatchIndex: mapped.failedDispatchIndex,
+            }, {
+              errorStage: mapped.errorStage,
+              errorCategory: mapped.errorCategory,
+              errorLabel: mapped.errorLabel,
+              lookupMs: Number.isFinite(Number(sendResult.lookupMs)) ? Number(sendResult.lookupMs) : null,
+              sendMs: Number.isFinite(Number(sendResult.sendMs)) ? Number(sendResult.sendMs) : null,
+              attempts: null,
+              cleanMessage: mapped.errorLabel,
+            });
+            await updateZaloMessageTrackingMeta(zaloMessageId, {
+              status: 'failed',
+              error: mapped.errorLabel,
+              errorCategory: mapped.errorCategory,
+              errorLabel: mapped.errorLabel,
+              stepIndex: stepMeta?.stepIndex ?? null,
+            });
+            sendResults.push(failedPayload);
+            {
+              const zpLog = getZaloPersonalProgressForLog();
+              await campaignExecutionLogService.logExecutionNode({
+                campaignId,
+                runId,
+                node,
+                status: 'failed',
+                progressCurrent: zpLog.current,
+                progressTotal: zpLog.total,
+                errorMessage: mapped.errorLabel,
+                executionData: buildSendZaloPersonalExecutionData(failedPayload),
+              });
+            }
+            return buildZaloPartialCampaignOutcome(sendResult);
+          }
           successfulSends += 1;
           void this._clearQuotaPauseStateAfterProgress(runId);
           const { sendResult, trackedMessage } = sendOutcome;
@@ -4916,8 +5005,11 @@ class CampaignRunService {
                   recipientKey: recipient,
                 });
                 const prevFail = Math.max(0, Number.parseInt(zp.zaloSendFailureCount, 10) || 0);
-                const nextFail = prevFail + 1;
-                if (nextFail >= this.CONTINUOUS_ZALO_MAX_SEND_FAILURES) {
+                const { nextFailureCount: nextFail, abandon } = resolveZaloContinuousSendFailureProgress({
+                  prevFailureCount: prevFail,
+                  maxFailures: this.CONTINUOUS_ZALO_MAX_SEND_FAILURES,
+                });
+                if (abandon) {
                   failedSends += 1;
                   const observation = buildZaloPersonalErrorObservation(error);
                   const abandonNote = (
@@ -5175,7 +5267,7 @@ class CampaignRunService {
                       variables,
                       entryRow: entry?.row || null,
                     });
-                    if (sendOutcome?.success) {
+                    if (shouldAdvanceZaloContinuousLedger(sendOutcome)) {
                       const completedAtIso = toHoChiMinhIso();
                       const firstSentAt = progress.firstSentAt || completedAtIso;
                       const nextDueAt = computeStepDueAt({
@@ -5225,7 +5317,7 @@ class CampaignRunService {
                     message,
                     entryRow: entry?.row || null,
                   });
-                  if (sendOutcome?.success) {
+                  if (shouldAdvanceZaloContinuousLedger(sendOutcome)) {
                     const completedAtIso = toHoChiMinhIso();
                     await upsertRecipientProgress({
                       nodeId: node.id,
@@ -5337,7 +5429,7 @@ class CampaignRunService {
                 variables,
                 entryRow: entry?.row || null,
               });
-              if (sendOutcome?.success) {
+              if (shouldAdvanceZaloOneShotLedger(sendOutcome)) {
                 await markRecipientStepCompleted({
                   nodeId: node.id,
                   channel: 'zalo_personal',
@@ -5414,7 +5506,7 @@ class CampaignRunService {
                     variables,
                     entryRow: entry?.row || null,
                   });
-                  if (sendOutcome?.success) {
+                  if (shouldAdvanceZaloOneShotLedger(sendOutcome)) {
                     // eslint-disable-next-line no-await-in-loop
                     await markRecipientStepCompleted({
                       nodeId: node.id,
@@ -5493,7 +5585,7 @@ class CampaignRunService {
                 message,
                 entryRow: entry?.row || null,
               });
-              if (sendOutcome?.success) {
+              if (shouldAdvanceZaloOneShotLedger(sendOutcome)) {
                 await markRecipientStepCompleted({
                   nodeId: node.id,
                   channel: 'zalo_personal',
@@ -6368,6 +6460,21 @@ class CampaignRunService {
               },
             };
           };
+          const buildZaloGroupErrorObservation = (error) => {
+            const classified = classifyZaloSendError(error, { stage: error?.stage || 'send' });
+            return {
+              errorStage: error?.stage || 'send',
+              errorCategory: classified.category,
+              errorLabel: classified.label,
+              cleanMessage: String(error?.message || '').trim(),
+            };
+          };
+          const withZaloGroupObservation = (payload, observation) => ({
+            ...payload,
+            errorStage: observation?.errorStage || null,
+            errorCategory: observation?.errorCategory || null,
+            errorLabel: observation?.errorLabel || null,
+          });
           const sendSingleGroup = async ({
             groupId,
             message,
@@ -6438,6 +6545,60 @@ class CampaignRunService {
                 message: trackedMessage,
                 attachments,
               });
+              if (isZaloPartialDeliveryResult(sendResult)) {
+                failedSends += 1;
+                const mapped = mapZaloPartialDelivery(sendResult);
+                const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+                const sentAt = toHoChiMinhIso();
+                const senderName = resolveZaloSenderName(account);
+                const failedPayload = {
+                  channel: 'zalo_group',
+                  accountId: account.id,
+                  accountName: account.displayName,
+                  senderName,
+                  zaloName: senderName,
+                  groupId,
+                  groupName,
+                  zaloMessageId,
+                  message: trackedMessage,
+                  status: 'partial',
+                  error: mapped.errorLabel,
+                  errorStage: mapped.errorStage,
+                  errorCategory: mapped.errorCategory,
+                  errorLabel: mapped.errorLabel,
+                  messageText: progressMessage,
+                  sentAt,
+                  templateId: stepMeta?.templateId || null,
+                  stepIndex: stepMeta?.stepIndex || null,
+                  attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
+                  trackingToken,
+                  variables,
+                  dispatchCount: mapped.dispatchCount,
+                  failedDispatchIndex: mapped.failedDispatchIndex,
+                };
+                await updateZaloMessageTrackingMeta(zaloMessageId, {
+                  status: 'failed',
+                  error: mapped.errorLabel,
+                  errorCategory: mapped.errorCategory,
+                  errorLabel: mapped.errorLabel,
+                  stepIndex: stepMeta?.stepIndex ?? null,
+                  groupName,
+                  attachments: attachmentList,
+                  attachmentsCount: attachmentList.length,
+                });
+                sendResults.push(failedPayload);
+                await campaignExecutionLogService.logExecutionNode({
+                  campaignId,
+                  runId,
+                  node,
+                  status: 'failed',
+                  progressCurrent: successfulSends + failedSends + skippedSends,
+                  progressTotal: totalRecipients,
+                  errorMessage: mapped.errorLabel,
+                  executionData: buildSendZaloGroupExecutionData(failedPayload),
+                });
+                return buildZaloPartialCampaignOutcome(sendResult);
+              }
               successfulSends += 1;
               void this._clearQuotaPauseStateAfterProgress(runId);
               markZaloOutboundSuccess({ accountId: account.id, channel: 'zalo_group' });
@@ -6565,8 +6726,11 @@ class CampaignRunService {
                   recipientKey: groupId,
                 });
                 const prevFail = Math.max(0, Number.parseInt(zp.zaloSendFailureCount, 10) || 0);
-                const nextFail = prevFail + 1;
-                if (nextFail >= this.CONTINUOUS_ZALO_MAX_SEND_FAILURES) {
+                const { nextFailureCount: nextFail, abandon } = resolveZaloContinuousSendFailureProgress({
+                  prevFailureCount: prevFail,
+                  maxFailures: this.CONTINUOUS_ZALO_MAX_SEND_FAILURES,
+                });
+                if (abandon) {
                   failedSends += 1;
                   const abandonNote = (
                     ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
@@ -6575,8 +6739,9 @@ class CampaignRunService {
                   const sentAt = toHoChiMinhIso();
                   const senderName = resolveZaloSenderName(account);
                   const zaloName = senderName;
-                  const errText = `${String(error?.message || '').trim()}${abandonNote}`;
-                  const failedPayload = {
+                  const observation = buildZaloGroupErrorObservation(error);
+                  const errText = `${observation.cleanMessage}${abandonNote}`;
+                  const failedPayload = withZaloGroupObservation({
                     channel: 'zalo_group',
                     accountId: account.id,
                     accountName: account.displayName,
@@ -6597,7 +6762,7 @@ class CampaignRunService {
                     trackingToken,
                     variables,
                     attachments: attachmentList,
-                  };
+                  }, observation);
                   // eslint-disable-next-line no-await-in-loop
                   await upsertRecipientProgress({
                     nodeId: node.id,
@@ -6614,6 +6779,9 @@ class CampaignRunService {
                   await updateZaloMessageTrackingMeta(zaloMessageId, {
                     status: 'failed',
                     error: errText,
+                    errorCategory: observation.errorCategory,
+                    errorLabel: observation.errorLabel,
+                    errorStage: observation.errorStage,
                     groupName,
                     attachments: attachmentList,
                     attachmentsCount: attachmentList.length,
@@ -6649,11 +6817,12 @@ class CampaignRunService {
                 });
               }
               failedSends += 1;
+              const observation = buildZaloGroupErrorObservation(error);
               const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(account);
               const zaloName = senderName;
-              const failedPayload = {
+              const failedPayload = withZaloGroupObservation({
                 channel: 'zalo_group',
                 accountId: account.id,
                 accountName: account.displayName,
@@ -6664,7 +6833,7 @@ class CampaignRunService {
                 zaloMessageId,
                 message,
                 status: 'failed',
-                error: error.message,
+                error: observation.cleanMessage || error.message,
                 messageText: progressMessage,
                 sentAt,
                 templateId: stepMeta?.templateId || null,
@@ -6673,10 +6842,13 @@ class CampaignRunService {
                 trackingToken,
                 variables,
                 attachments: attachmentList,
-              };
+              }, observation);
               await updateZaloMessageTrackingMeta(zaloMessageId, {
                 status: 'failed',
-                error: error.message,
+                error: observation.cleanMessage || error.message,
+                errorCategory: observation.errorCategory,
+                errorLabel: observation.errorLabel,
+                errorStage: observation.errorStage,
                 groupName,
                 attachments: attachmentList,
                 attachmentsCount: attachmentList.length,
@@ -6689,10 +6861,10 @@ class CampaignRunService {
                 status: 'failed',
                 progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
-                errorMessage: error.message,
+                errorMessage: observation.cleanMessage || error.message,
                 executionData: buildSendZaloGroupExecutionData(failedPayload),
               });
-              return { success: false, status: 'failed', error: error.message };
+              return { success: false, status: 'failed', error: observation.cleanMessage || error.message };
             }
           };
 
@@ -6826,7 +6998,7 @@ class CampaignRunService {
                       groupEntry: entry,
                       applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                     });
-                    if (sendOutcome?.success) {
+                    if (shouldAdvanceZaloContinuousLedger(sendOutcome)) {
                       const completedAtIso = toHoChiMinhIso();
                       const firstSentAt = progress.firstSentAt || completedAtIso;
                       const nextDueAt = computeStepDueAt({
@@ -6879,7 +7051,7 @@ class CampaignRunService {
                     groupEntry: entry,
                     applyRandomDelay: shouldApplyRandomDelayInContinuous(),
                   });
-                  if (sendOutcome?.success) {
+                  if (shouldAdvanceZaloContinuousLedger(sendOutcome)) {
                     const completedAtIso = toHoChiMinhIso();
                     await upsertRecipientProgress({
                       nodeId: node.id,
@@ -7001,7 +7173,7 @@ class CampaignRunService {
                   groupEntry: entry,
                   applyRandomDelay: false,
                 });
-                if (sendOutcome?.success) {
+                if (shouldAdvanceZaloOneShotLedger(sendOutcome)) {
                   // eslint-disable-next-line no-await-in-loop
                   await markRecipientStepCompleted({
                     nodeId: node.id,
@@ -7071,7 +7243,7 @@ class CampaignRunService {
                 attachments: manualGroupAttachments,
                 groupEntry: entry,
               });
-              if (sendOutcome?.success) {
+              if (shouldAdvanceZaloOneShotLedger(sendOutcome)) {
                 // eslint-disable-next-line no-await-in-loop
                 await markRecipientStepCompleted({
                   nodeId: node.id,

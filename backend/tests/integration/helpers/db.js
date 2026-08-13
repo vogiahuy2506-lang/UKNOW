@@ -396,6 +396,47 @@ export async function createOrder({
 }
 
 /**
+ * Seed một bản ghi zalo_messages cho delivery-monitor (không chứa SĐT/payload khách).
+ *
+ * @param {object} input
+ * @param {number} input.campaignId
+ * @param {number|null} [input.runId]
+ * @param {number} input.accountId
+ * @param {string} [input.accountName]
+ * @param {'sent'|'failed'} [input.status]
+ * @param {string|null} [input.errorCategory]
+ * @param {Date|string} [input.createdAt]
+ * @param {number} [input.count]
+ */
+export async function insertZaloMonitorMessages({
+  campaignId,
+  runId = null,
+  accountId,
+  accountName = 'Monitor Acc',
+  status = 'failed',
+  errorCategory = null,
+  createdAt = new Date(),
+  count = 1,
+} = {}) {
+  const metadata = {
+    status,
+    ...(errorCategory ? { errorCategory } : {}),
+  };
+  const ids = [];
+  for (let i = 0; i < count; i += 1) {
+    const { rows } = await db.query(
+      `INSERT INTO zalo_messages
+         (id_campaign, id_run, channel, status, account_id, account_name, tracking_metadata, created_at, updated_at)
+       VALUES ($1, $2, 'zalo', $3, $4, $5, $6::jsonb, $7, $7)
+       RETURNING id`,
+      [campaignId, runId, status, accountId, accountName, JSON.stringify(metadata), createdAt]
+    );
+    ids.push(rows[0].id);
+  }
+  return ids;
+}
+
+/**
  * Đóng pool sau khi tất cả test xong (gọi trong globalTeardown hoặc afterAll).
  */
 export async function closePool() {

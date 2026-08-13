@@ -14,7 +14,9 @@ import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser } from './helpers/db.js';
+import { truncateAll, createUser, insertZaloMonitorMessages } from './helpers/db.js';
+import { ZALO_SILENT_DROP_SIGNAL_CODE } from '../../src/utils/deliveryMonitorSignals.util.js';
+import { ZALO_SILENT_DROP_CATEGORY } from '../../src/utils/zaloDispatchDelivery.util.js';
 
 let app;
 
@@ -107,6 +109,8 @@ describe('GET /api/delivery-monitor/overview — response shape', () => {
     expect(data).toHaveProperty('topRuns');
     expect(data).toHaveProperty('recentErrors');
     expect(data).toHaveProperty('health');
+    expect(data).toHaveProperty('signals');
+    expect(Array.isArray(data.signals)).toBe(true);
   });
 
   it('summary counter mặc định = 0 khi user chưa có campaign', async () => {
@@ -278,5 +282,50 @@ describe('GET /api/delivery-monitor/overview — windowDays param', () => {
       .get('/api/delivery-monitor/overview')
       .set('Authorization', `Bearer ${token}`);
     expect(res.body.data.windowDays).toBe(7);
+  });
+});
+
+function silentDropSignals(data) {
+  return (data?.signals || []).filter((item) => item.code === ZALO_SILENT_DROP_SIGNAL_CODE);
+}
+
+describe('GET /api/delivery-monitor/overview — Zalo silent drop tenant', () => {
+  it('chỉ user sở hữu campaign mới thấy tín hiệu; user khác cùng lúc không thấy', async () => {
+    const userA = await createUser({ username: 'sdOwner' });
+    const userB = await createUser({ username: 'sdOther' });
+    const campA = await createCampaign({ userId: userA.id, name: 'A zalo', type: 'zalo' });
+    const campB = await createCampaign({ userId: userB.id, name: 'B zalo', type: 'zalo' });
+
+    await insertZaloMonitorMessages({
+      campaignId: campA.id, accountId: 11, accountName: 'Acc A',
+      status: 'failed', errorCategory: ZALO_SILENT_DROP_CATEGORY, count: 10,
+    });
+    await insertZaloMonitorMessages({
+      campaignId: campB.id, accountId: 22, accountName: 'Acc B',
+      status: 'sent', count: 10,
+    });
+
+    const tokenA = await loginAs(userA);
+    const resA = await request(app)
+      .get('/api/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${tokenA}`);
+    expect(resA.status).toBe(200);
+    const silentA = silentDropSignals(resA.body.data);
+    expect(silentA).toHaveLength(1);
+    expect(silentA[0]).toMatchObject({
+      accountId: 11,
+      accountName: 'Acc A',
+      silentDrops: 10,
+      attempts: 10,
+      value: 100,
+      level: 'critical',
+    });
+
+    const tokenB = await loginAs(userB);
+    const resB = await request(app)
+      .get('/api/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${tokenB}`);
+    expect(resB.status).toBe(200);
+    expect(silentDropSignals(resB.body.data)).toHaveLength(0);
   });
 });

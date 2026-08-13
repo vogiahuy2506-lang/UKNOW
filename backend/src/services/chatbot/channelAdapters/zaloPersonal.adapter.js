@@ -28,6 +28,11 @@ import {
   resolveConversationExternalId,
   runInboxHandlerAfterSave,
 } from '../../../utils/zaloPersonalMessage.util.js';
+import {
+  collectDeliveredZaloMsgIds,
+  isZaloPartialDeliveryResult,
+  mapZaloPartialDelivery,
+} from '../../../utils/zaloDispatchDelivery.util.js';
 import campaignZaloSender from '../../campaign/campaignZaloSender.service.js';
 
 /**
@@ -166,6 +171,22 @@ class ZaloPersonalAdapter {
       ZaloPersonalAdapter.recentBotOutbound.set(`text:${accountId}:${content}`, now);
     }
     ZaloPersonalAdapter._pruneBotOutbound();
+  }
+
+  /**
+   * Mark echo ids immediately after a dispatch is confirmed delivered.
+   * Never marks invalid ids like "0" and never falls back to content.
+   *
+   * @param {number|string} accountId
+   * @param {object} dispatchResult
+   * @returns {string[]}
+   */
+  static markDeliveredDispatchEcho(accountId, dispatchResult) {
+    const ids = collectDeliveredZaloMsgIds([dispatchResult]);
+    ids.forEach((msgId) => {
+      ZaloPersonalAdapter.markBotOutbound(accountId, { msgId });
+    });
+    return ids;
   }
 
   /**
@@ -686,36 +707,36 @@ class ZaloPersonalAdapter {
         Array.isArray(attachments) ? attachments : []
       );
 
-      let lastOutboundMsgId = null;
-      const outboundMsgIds = [];
-      const { response: sent } = await campaignZaloSender.sendMessageWithAttachmentDispatch({
+      // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định
+      // ThreadType.User, coi group_id như uid cá nhân và tin không bao giờ tới nhóm.
+      const sendResult = await campaignZaloSender.sendMessageWithAttachmentDispatch({
         operationName: 'inbox_zalo_personal',
         message: payload,
         attachments: attachmentSources,
         logIdentity: String(sendTarget || ''),
-        sendOperation: async (dispatchPayload) => {
-          // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định
-          // ThreadType.User, coi group_id như uid cá nhân và tin không bao giờ tới nhóm.
-          const response = sendToGroup
-            ? await api.sendMessage(dispatchPayload, sendTarget, ThreadType.Group)
-            : await api.sendMessage(dispatchPayload, sendTarget);
-          const dispatchMsgId = extractSendMsgId(response);
-          const dispatchContent = typeof dispatchPayload === 'string'
-            ? dispatchPayload
-            : String(dispatchPayload?.msg || '');
-          // Mỗi lượt có msgId riêng — phải mark hết để echo-suppression không bỏ sót ảnh/file đầu.
-          ZaloPersonalAdapter.markBotOutbound(session.accountId, {
-            msgId: dispatchMsgId,
-            content: dispatchContent || payload,
-          });
-          if (dispatchMsgId) outboundMsgIds.push(String(dispatchMsgId));
-          lastOutboundMsgId = dispatchMsgId;
-          return response;
+        sendOperation: async (dispatchPayload) => (
+          sendToGroup
+            ? api.sendMessage(dispatchPayload, sendTarget, ThreadType.Group)
+            : api.sendMessage(dispatchPayload, sendTarget)
+        ),
+        onDispatchDelivered: (dispatchResult) => {
+          ZaloPersonalAdapter.markDeliveredDispatchEcho(session.accountId, dispatchResult);
         },
       });
-      const outboundMsgId = lastOutboundMsgId || extractSendMsgId(sent);
-      const msgIds = outboundMsgIds.length > 0
-        ? [...new Set(outboundMsgIds)]
+      const deliveredMsgIds = collectDeliveredZaloMsgIds(sendResult.dispatchResults);
+      if (isZaloPartialDeliveryResult(sendResult) || sendResult?.status !== 'success') {
+        const mapped = mapZaloPartialDelivery(sendResult);
+        return {
+          success: false,
+          error: mapped.errorLabel,
+          code: mapped.code,
+          errorCategory: mapped.errorCategory,
+          msgIds: deliveredMsgIds,
+        };
+      }
+      const outboundMsgId = deliveredMsgIds[0] || extractSendMsgId(sendResult.response);
+      const msgIds = deliveredMsgIds.length > 0
+        ? deliveredMsgIds
         : (outboundMsgId ? [String(outboundMsgId)] : []);
 
       // Persist only when caller did not already save (AI path). Manual inbox sets persist=false.

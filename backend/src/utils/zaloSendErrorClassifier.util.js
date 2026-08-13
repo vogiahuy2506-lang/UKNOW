@@ -10,6 +10,13 @@ import {
   isZaloSenderBlockedError,
   isZaloUnreachableRecipientError,
 } from './zaloPhoneCampaign.util.js';
+import {
+  isZaloSendNotDeliveredError,
+  ZALO_PARTIAL_DELIVERY_CATEGORY,
+  ZALO_PARTIAL_DELIVERY_LABEL,
+  ZALO_SILENT_DROP_CATEGORY,
+  ZALO_SILENT_DROP_LABEL,
+} from './zaloDispatchDelivery.util.js';
 
 const CATEGORY_LABELS = {
   PHONE_LOOKUP_RATE_LIMIT: 'Tra số quá nhiều — Zalo tạm khóa tra cứu (~3h)',
@@ -18,6 +25,8 @@ const CATEGORY_LABELS = {
   ACCOUNT_DISCONNECTED: 'Tài khoản Zalo mất kết nối / hết phiên',
   NOT_FRIEND_OR_BLOCKED: 'Người nhận chặn / chưa là bạn / hạn chế',
   ZALO_GROUP_UNREACHABLE: 'Không gửi được tới nhóm Zalo',
+  [ZALO_SILENT_DROP_CATEGORY]: ZALO_SILENT_DROP_LABEL,
+  [ZALO_PARTIAL_DELIVERY_CATEGORY]: ZALO_PARTIAL_DELIVERY_LABEL,
   EMAIL_HARD_BOUNCE: 'Email hard bounce / địa chỉ không tồn tại',
   EMAIL_SOFT_BOUNCE: 'Email soft bounce / lỗi tạm thời',
   EMAIL_SMTP_AUTH_ERROR: 'Lỗi cấu hình SMTP / xác thực email gửi',
@@ -148,6 +157,14 @@ export function classifyZaloSendError(error, { stage } = {}) {
   const rawMessage = String(
     error && typeof error === 'object' ? (error.message || error.code || '') : (error ?? '')
   ).trim();
+
+  if (isZaloSendNotDeliveredError(error)) {
+    return {
+      category: ZALO_SILENT_DROP_CATEGORY,
+      label: CATEGORY_LABELS[ZALO_SILENT_DROP_CATEGORY],
+      hint: 'Zalo nhận lệnh gửi nhưng không trả msgId hợp lệ; có thể liên quan giới hạn/anti-spam.',
+    };
+  }
 
   if (isZaloPhoneLookupRateLimitError(error)) {
     return {

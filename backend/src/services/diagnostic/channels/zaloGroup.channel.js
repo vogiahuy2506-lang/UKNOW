@@ -26,6 +26,11 @@ class ZaloGroupChannel {
         groupId: result.groupId || String(recipient || '').trim(),
         lookupMs: null,
         sendMs: Date.now() - sendStartedAt,
+        status: result.status || 'success',
+        code: result.code || null,
+        errorCategory: result.errorCategory || null,
+        errorLabel: result.errorLabel || null,
+        dispatchCount: result.dispatchCount || 0,
       };
     } catch (error) {
       error.stage = 'send';

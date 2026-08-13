@@ -1,5 +1,9 @@
 import diagnosticRepository from '../../repositories/diagnostic.repository.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import {
+  describeZaloOutboundFailure,
+  isZaloOutboundResultSuccessful,
+} from '../../utils/zaloDispatchDelivery.util.js';
 import { buildZaloRateLimiterFromEnv } from '../campaign/buildZaloRateLimiterFromEnv.js';
 import zaloPersonalChannel from './channels/zaloPersonal.channel.js';
 import zaloGroupChannel from './channels/zaloGroup.channel.js';
@@ -12,6 +16,11 @@ const CHANNEL_ADAPTERS = {
 };
 
 const SUPPORTED_CHANNELS = Object.keys(CHANNEL_ADAPTERS);
+const ZALO_DIAGNOSTIC_CHANNELS = new Set(['zalo_personal', 'zalo_group']);
+
+function isZaloDiagnosticChannel(channelKey) {
+  return ZALO_DIAGNOSTIC_CHANNELS.has(String(channelKey || ''));
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -247,27 +256,52 @@ class DiagnosticRunnerService {
         const staged = await adapter.sendStaged?.({ api, recipient: msg.recipient, message: messageText, dryRun })
           ?? { lookupMs: null, sendMs: null, ...(await adapter.send({ api, recipient: msg.recipient, message: messageText })) };
 
-        if (mode === 'production' && staged.dryRun !== true) {
-          runLimiter.markOutboundSuccess({
-            accountId,
-            channel: channelKey,
-          });
-        }
+        const stagedIsSuccessful = isZaloDiagnosticChannel(channelKey)
+          ? isZaloOutboundResultSuccessful(staged, { allowDryRun: true })
+          : true;
 
-        await diagnosticRepository.updateMessage(runId, msg.seq, {
-          status: 'sent',
-          sentAt: new Date(sentAt),
-          delayMs: actualDelayMs,
-          waitMs: preSendWaitMs,
-          waitReason: preSendWaitReason,
-          lookupMs: staged.lookupMs ?? null,
-          sendMs: staged.sendMs ?? null,
-          resolvedUid: staged.uid ?? null,
-          zaloName: staged.zaloName ?? null,
-          attempts: staged.attempts ?? null,
-          dryRun: staged.dryRun === true,
-        });
-        await diagnosticRepository.incrementSentCount(runId);
+        if (stagedIsSuccessful) {
+          if (mode === 'production' && staged.dryRun !== true) {
+            runLimiter.markOutboundSuccess({
+              accountId,
+              channel: channelKey,
+            });
+          }
+
+          await diagnosticRepository.updateMessage(runId, msg.seq, {
+            status: 'sent',
+            sentAt: new Date(sentAt),
+            delayMs: actualDelayMs,
+            waitMs: preSendWaitMs,
+            waitReason: preSendWaitReason,
+            lookupMs: staged.lookupMs ?? null,
+            sendMs: staged.sendMs ?? null,
+            resolvedUid: staged.uid ?? null,
+            zaloName: staged.zaloName ?? null,
+            attempts: staged.attempts ?? null,
+            dryRun: staged.dryRun === true,
+          });
+          await diagnosticRepository.incrementSentCount(runId);
+        } else {
+          const mapped = describeZaloOutboundFailure(staged);
+          await diagnosticRepository.updateMessage(runId, msg.seq, {
+            status: 'failed',
+            sentAt: new Date(sentAt),
+            delayMs: actualDelayMs,
+            errorCode: mapped.code,
+            errorMessage: mapped.errorLabel,
+            errorCategory: mapped.errorCategory,
+            waitMs: preSendWaitMs,
+            waitReason: preSendWaitReason,
+            lookupMs: staged.lookupMs ?? null,
+            sendMs: staged.sendMs ?? null,
+            resolvedUid: staged.uid ?? null,
+            zaloName: staged.zaloName ?? null,
+            attempts: staged.attempts ?? null,
+            dryRun: false,
+          });
+          await diagnosticRepository.incrementFailedCount(runId);
+        }
       } catch (err) {
         const classified = classifyZaloSendError(err, { stage: err.stage || 'send' });
         await diagnosticRepository.updateMessage(runId, msg.seq, {

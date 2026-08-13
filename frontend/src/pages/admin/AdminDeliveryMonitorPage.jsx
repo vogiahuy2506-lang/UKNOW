@@ -52,6 +52,7 @@ const categoryClass = {
   account_session: 'badge-warning',
   recipient_invalid: 'badge-gray',
   email_provider: 'badge-warning',
+  zalo_silent_drop: 'badge-warning',
   other: 'badge-gray',
   unknown: 'badge-gray',
 };
@@ -217,10 +218,20 @@ const SignalsPanel = ({ signals, t }) => (
     ) : (
       <div className="space-y-2">
         {signals.map((signal, index) => (
-          <div key={`${signal.code}-${index}`} className={`rounded-xl border px-4 py-3 text-sm ${severityClass[signal.level] || severityClass.warning}`}>
+          <div key={`${signal.code}-${signal.accountId ?? index}`} className={`rounded-xl border px-4 py-3 text-sm ${severityClass[signal.level] || severityClass.warning}`}>
             <p className="font-semibold">{t(`adminDeliveryMonitor.signal.${signal.code}`)}</p>
+            {signal.accountName && (
+              <p className="mt-0.5 text-xs opacity-80">{t('adminDeliveryMonitor.signalAccount', { name: signal.accountName })}</p>
+            )}
+            {signal.silentDrops != null && signal.attempts != null && (
+              <p className="mt-0.5 text-xs opacity-80">{t('adminDeliveryMonitor.signalSilentDropDetail', { drops: fmt(signal.silentDrops), attempts: fmt(signal.attempts) })}</p>
+            )}
             {signal.value !== null && signal.value !== undefined && (
-              <p className="mt-0.5 text-xs opacity-80">{t('adminDeliveryMonitor.signalValue', { value: fmt(signal.value) })}</p>
+              <p className="mt-0.5 text-xs opacity-80">
+                {signal.code === 'zalo_silent_drop_high'
+                  ? t('adminDeliveryMonitor.signalRate', { value: fmt(signal.value) })
+                  : t('adminDeliveryMonitor.signalValue', { value: fmt(signal.value) })}
+              </p>
             )}
           </div>
         ))}

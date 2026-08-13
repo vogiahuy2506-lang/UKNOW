@@ -874,6 +874,8 @@ CREATE TABLE zalo_messages (
   recipient_uid       VARCHAR(255),
   recipient_name      VARCHAR(255),
   message_content     TEXT,
+  account_id          BIGINT,
+  account_name        VARCHAR(255),
   click_count         INTEGER      NOT NULL DEFAULT 0,
   status              VARCHAR(30)  NOT NULL DEFAULT 'pending',
   sent_at             TIMESTAMPTZ,
@@ -884,6 +886,9 @@ CREATE TABLE zalo_messages (
 );
 CREATE INDEX idx_zalo_messages_customer ON zalo_messages(id_customer);
 CREATE INDEX idx_zalo_messages_token    ON zalo_messages(tracking_token);
+CREATE INDEX idx_zalo_messages_account_created
+  ON zalo_messages (account_id, created_at DESC)
+  WHERE account_id IS NOT NULL;
 
 -- ─── Campaign-customer pivot ───────────────────────────────────────────
 -- Theo dõi tham gia + counters tương tác per (campaign, customer).
@@ -1770,3 +1775,10 @@ UPDATE email_settings SET email_mode = 'platform' WHERE email_mode IS NULL;
 
 ALTER TABLE email_settings ALTER COLUMN platform_prefix SET NOT NULL;
 ALTER TABLE email_settings ALTER COLUMN email_mode SET NOT NULL;
+
+-- ─── Zalo message sender snapshot (mirrors 135) ─────────────────────────
+ALTER TABLE zalo_messages ADD COLUMN IF NOT EXISTS account_id BIGINT;
+ALTER TABLE zalo_messages ADD COLUMN IF NOT EXISTS account_name VARCHAR(255);
+CREATE INDEX IF NOT EXISTS idx_zalo_messages_account_created
+  ON zalo_messages (account_id, created_at DESC)
+  WHERE account_id IS NOT NULL;

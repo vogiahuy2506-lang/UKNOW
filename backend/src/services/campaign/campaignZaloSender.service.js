@@ -13,6 +13,12 @@ import outboundMessageQueueService, {
 import trackingShortLinkService from '../tracking/trackingShortLink.service.js';
 import { getZaloHttpPolyfillOption } from '../../utils/zaloUndiciFetch.util.js';
 import { restoreZaloSessionFromCookie } from '../../utils/zaloSessionRestore.util.js';
+import {
+  classifyZaloDispatchDelivery,
+  collectDeliveredZaloMsgIds,
+  createZaloSendNotDeliveredError,
+  withZaloPartialDeliveryFields,
+} from '../../utils/zaloDispatchDelivery.util.js';
 
 /**
  * Ánh xạ mảng với giới hạn đồng thời — tránh bắn hàng trăm request Zalo cùng lúc khi enrich tên nhóm.
@@ -536,18 +542,36 @@ class CampaignZaloSenderService {
    * @param {string} input.message nội dung text
    * @param {Array<any>} [input.attachments] danh sách attachment nguồn
    * @param {(payload: string|{msg: string, attachments: Array<any>}) => Promise<any>} input.sendOperation hàm gửi thực tế tới zca-js
+   * @param {(dispatchResult: object) => (void|Promise<void>)} [input.onDispatchDelivered] mark echo ngay sau dispatch hợp lệ
    * @param {string} [input.logIdentity] thông tin nhận diện người nhận/nhóm để log retry
-   * @returns {Promise<{response: any, dispatchCount: number}>}
+   * @returns {Promise<{
+   *   status: 'success'|'partial',
+   *   response: any,
+   *   dispatchCount: number,
+   *   dispatchResults: Array<object>,
+   *   failedDispatch: object|null,
+   * }>}
    */
   async sendMessageWithAttachmentDispatch({
     operationName,
     message,
     attachments = [],
     sendOperation,
+    onDispatchDelivered = null,
     logIdentity = '',
   }) {
     const dispatches = this.buildAttachmentDispatches({ message, attachments });
     let lastResponse = null;
+    let anyDelivered = false;
+    const dispatchResults = [];
+
+    const notifyDispatchDelivered = async (dispatchResult) => {
+      if (typeof onDispatchDelivered !== 'function') return;
+      const status = dispatchResult?.delivery?.status;
+      if (status !== 'delivered' && status !== 'partial') return;
+      if (collectDeliveredZaloMsgIds([dispatchResult]).length === 0) return;
+      await onDispatchDelivered(dispatchResult);
+    };
 
     for (let index = 0; index < dispatches.length; index += 1) {
       const dispatch = dispatches[index];
@@ -555,23 +579,100 @@ class CampaignZaloSenderService {
         message: dispatch.msg,
         attachments: dispatch.attachments,
       });
-      // eslint-disable-next-line no-await-in-loop
-      lastResponse = await executeWithZaloTimeoutRetry({
-        operationName: `${operationName}_${dispatch.type}_${index + 1}`,
-        operation: () => sendOperation(payload),
-        onRetry: ({ attempt, maxAttempts, delayMs }) => {
-          console.warn(
-            `[ZaloRetry] op=${operationName} dispatch=${dispatch.type} attempt=${attempt}/${maxAttempts} `
-            + `next_delay_ms=${delayMs} ${logIdentity ? `target=${logIdentity}` : ''}`.trim()
-          );
-        },
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        lastResponse = await executeWithZaloTimeoutRetry({
+          operationName: `${operationName}_${dispatch.type}_${index + 1}`,
+          operation: () => sendOperation(payload),
+          onRetry: ({ attempt, maxAttempts, delayMs }) => {
+            console.warn(
+              `[ZaloRetry] op=${operationName} dispatch=${dispatch.type} attempt=${attempt}/${maxAttempts} `
+              + `next_delay_ms=${delayMs} ${logIdentity ? `target=${logIdentity}` : ''}`.trim()
+            );
+          },
+        });
+      } catch (error) {
+        const failedDispatch = {
+          type: dispatch.type,
+          index,
+          msg: dispatch.msg,
+          msgIds: [],
+          response: null,
+          delivery: {
+            status: 'not_delivered',
+            msgIds: [],
+            failedComponents: [{ kind: 'exception' }],
+          },
+          errorCode: error?.code || null,
+        };
+        dispatchResults.push(failedDispatch);
+        if (anyDelivered) {
+          return withZaloPartialDeliveryFields({
+            status: 'partial',
+            response: lastResponse,
+            dispatchCount: dispatches.length,
+            dispatchResults,
+            failedDispatch,
+          });
+        }
+        throw error;
+      }
+      const delivery = classifyZaloDispatchDelivery({ dispatch, response: lastResponse });
+      const dispatchResult = {
+        type: dispatch.type,
+        index,
+        msg: dispatch.msg,
+        msgIds: delivery.msgIds,
+        response: lastResponse,
+        delivery,
+      };
+      dispatchResults.push(dispatchResult);
+
+      if (delivery.status === 'delivered') {
+        anyDelivered = true;
+        // eslint-disable-next-line no-await-in-loop
+        await notifyDispatchDelivered(dispatchResult);
+        continue;
+      }
+      if (delivery.status === 'partial' || anyDelivered) {
+        // eslint-disable-next-line no-await-in-loop
+        await notifyDispatchDelivered(dispatchResult);
+        return withZaloPartialDeliveryFields({
+          status: 'partial',
+          response: lastResponse,
+          dispatchCount: dispatches.length,
+          dispatchResults,
+          failedDispatch: dispatchResult,
+        });
+      }
+      throw createZaloSendNotDeliveredError({
+        operationName,
+        dispatchIndex: index,
+        dispatchCount: dispatches.length,
       });
     }
 
     return {
+      status: 'success',
       response: lastResponse,
       dispatchCount: dispatches.length,
+      dispatchResults,
+      failedDispatch: null,
     };
+  }
+
+  decorateZaloSendResult(base, sendResult) {
+    const isPartial = sendResult?.status === 'partial';
+    const decorated = {
+      ...base,
+      status: isPartial ? 'partial' : 'success',
+      response: sendResult?.response || null,
+      dispatchCount: sendResult?.dispatchCount || 0,
+      dispatchResults: Array.isArray(sendResult?.dispatchResults) ? sendResult.dispatchResults : [],
+      failedDispatch: sendResult?.failedDispatch || null,
+      msgIds: collectDeliveredZaloMsgIds(sendResult?.dispatchResults),
+    };
+    return isPartial ? withZaloPartialDeliveryFields(decorated) : decorated;
   }
 
   /**
@@ -1891,7 +1992,7 @@ class CampaignZaloSenderService {
       sendOperation: (payload) => api.sendMessage(payload, normalizedUid),
       logIdentity: normalizedRecipient,
     });
-    return {
+    return this.decorateZaloSendResult({
       recipient: normalizedRecipient,
       recipientType: normalizedRecipientType,
       phone: normalizedRecipientType === 'phone' ? normalizedRecipient : '',
@@ -1899,10 +2000,7 @@ class CampaignZaloSenderService {
       zaloName,
       zalo_display: zaloName,
       attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
-      status: 'success',
-      response: sendResult.response || null,
-      dispatchCount: sendResult.dispatchCount || 0,
-    };
+    }, sendResult);
   }
 
   /**
@@ -2165,13 +2263,10 @@ class CampaignZaloSenderService {
       sendOperation: (payload) => api.sendMessage(payload, normalizedGroupId, ThreadType.Group),
       logIdentity: normalizedGroupId,
     });
-    return {
+    return this.decorateZaloSendResult({
       groupId: normalizedGroupId,
       attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
-      status: 'success',
-      response: sendResult.response || null,
-      dispatchCount: sendResult.dispatchCount || 0,
-    };
+    }, sendResult);
   }
 }
 

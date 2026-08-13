@@ -50,6 +50,17 @@ describe('zaloPersonalMessage.util', () => {
     expect(extractSendMsgId({ message: null, attachment: [] })).toBeNull();
     expect(extractSendMsgId(null)).toBeNull();
   });
+
+  it('extractSendMsgId treats 0 as invalid and falls back to attachment', () => {
+    expect(extractSendMsgId({
+      message: { msgId: 0 },
+      attachment: [{ msgId: '8128678217945' }],
+    })).toBe('8128678217945');
+    expect(extractSendMsgId({
+      message: { msgId: '0' },
+      attachment: [{ msgId: 0 }],
+    })).toBeNull();
+  });
 });
 
 describe('isInboxSendEcho (handoff re-pause guard)', () => {
@@ -173,6 +184,30 @@ describe('ZaloPersonalAdapter.consumeBotOutbound', () => {
   it('falls back to text when msgId missing', () => {
     ZaloPersonalAdapter.markBotOutbound(7, { msgId: null, content: 'fallback text' });
     expect(ZaloPersonalAdapter.consumeBotOutbound(7, { msgId: null, content: 'fallback text' })).toBe(true);
+  });
+
+  it('does not treat msgId 0 as a markable outbound id', () => {
+    const msgId = extractSendMsgId({ message: { msgId: 0 }, attachment: [] });
+    expect(msgId).toBeNull();
+    ZaloPersonalAdapter.markBotOutbound(3, { msgId, content: '' });
+    expect(ZaloPersonalAdapter.consumeBotOutbound(3, { msgId: '0', content: '' })).toBe(false);
+  });
+
+  it('markDeliveredDispatchEcho marks only valid ids, never 0 or content', () => {
+    ZaloPersonalAdapter.recentBotOutbound.clear();
+    const marked = ZaloPersonalAdapter.markDeliveredDispatchEcho(8, {
+      delivery: { status: 'delivered' },
+      msgIds: ['8128678217945', '0', 0],
+    });
+    expect(marked).toEqual(['8128678217945']);
+    expect(ZaloPersonalAdapter.consumeBotOutbound(8, { msgId: '8128678217945' })).toBe(true);
+    expect(ZaloPersonalAdapter.consumeBotOutbound(8, { msgId: '0' })).toBe(false);
+
+    ZaloPersonalAdapter.markDeliveredDispatchEcho(8, {
+      delivery: { status: 'not_delivered' },
+      msgIds: ['0'],
+    });
+    expect(ZaloPersonalAdapter.consumeBotOutbound(8, { msgId: '0', content: 'failed text' })).toBe(false);
   });
 
   it('sendMessage shape with only attachment msgId still marks', () => {

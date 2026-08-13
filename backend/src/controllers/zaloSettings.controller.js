@@ -18,6 +18,11 @@ import { ZALO_LISTENER_OPTIONS } from '../utils/zaloListenerOptions.util.js';
 import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
+import { classifyZaloSendError } from '../utils/zaloSendErrorClassifier.util.js';
+import {
+  describeZaloOutboundFailure,
+  isZaloOutboundResultSuccessful,
+} from '../utils/zaloDispatchDelivery.util.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.js';
 import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
@@ -2249,18 +2254,36 @@ class ZaloSettingsController {
             message,
             attachments: preparedAttachments,
           });
-          items.push({
-            recipient,
-            recipientType,
-            phone: sent.phone || null,
-            status: 'success',
-            uid: sent.uid || null,
-            zaloName: sent.zaloName || null,
-            senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
-            response: sent.response || null,
-            attachments: templateAttachments,
-            attachmentsCount: preparedAttachments.length,
-          });
+          if (!isZaloOutboundResultSuccessful(sent)) {
+            const mapped = describeZaloOutboundFailure(sent);
+            items.push({
+              recipient,
+              recipientType,
+              phone: sent.phone || null,
+              status: 'failed',
+              error: mapped.errorLabel,
+              errorCategory: mapped.errorCategory,
+              errorLabel: mapped.errorLabel,
+              uid: sent.uid || null,
+              zaloName: sent.zaloName || null,
+              senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
+              attachments: templateAttachments,
+              attachmentsCount: preparedAttachments.length,
+            });
+          } else {
+            items.push({
+              recipient,
+              recipientType,
+              phone: sent.phone || null,
+              status: 'success',
+              uid: sent.uid || null,
+              zaloName: sent.zaloName || null,
+              senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
+              response: sent.response || null,
+              attachments: templateAttachments,
+              attachmentsCount: preparedAttachments.length,
+            });
+          }
         } catch (error) {
           const cleanErrorMessage = campaignZaloSenderService.extractZaloSendObservability(error).message;
           if (isZaloSenderBlockedError(error)) {
@@ -2275,11 +2298,14 @@ class ZaloSettingsController {
             });
             continue;
           }
+          const classified = classifyZaloSendError(error, { stage: 'send' });
           items.push({
             recipient,
             recipientType,
             status: 'failed',
             error: cleanErrorMessage || 'Không thể gửi tin nhắn',
+            errorCategory: classified.category,
+            errorLabel: classified.label,
             attachments: templateAttachments,
             attachmentsCount: preparedAttachments.length,
           });
@@ -2455,18 +2481,34 @@ class ZaloSettingsController {
             message,
             attachments: preparedAttachments,
           });
-          items.push({
-            groupId,
-            status: 'success',
-            response: sent.response || null,
-            attachments: templateAttachments,
-            attachmentsCount: preparedAttachments.length,
-          });
+          if (!isZaloOutboundResultSuccessful(sent)) {
+            const mapped = describeZaloOutboundFailure(sent);
+            items.push({
+              groupId,
+              status: 'failed',
+              error: mapped.errorLabel,
+              errorCategory: mapped.errorCategory,
+              errorLabel: mapped.errorLabel,
+              attachments: templateAttachments,
+              attachmentsCount: preparedAttachments.length,
+            });
+          } else {
+            items.push({
+              groupId,
+              status: 'success',
+              response: sent.response || null,
+              attachments: templateAttachments,
+              attachmentsCount: preparedAttachments.length,
+            });
+          }
         } catch (error) {
+          const classified = classifyZaloSendError(error, { stage: 'send' });
           items.push({
             groupId,
             status: 'failed',
             error: error?.message || 'Không thể gửi tin nhắn nhóm',
+            errorCategory: classified.category,
+            errorLabel: classified.label,
             attachments: templateAttachments,
             attachmentsCount: preparedAttachments.length,
           });

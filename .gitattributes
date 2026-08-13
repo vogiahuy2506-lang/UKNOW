@@ -23,6 +23,7 @@ backend/src/services/landingPage/landingPagePublic.service.js whitespace=cr-at-e
 backend/src/services/lead/lead.service.js whitespace=cr-at-eol
 backend/src/utils/landingLeadsXlsxExport.util.js whitespace=cr-at-eol
 backend/tests/integration/lead.test.js whitespace=cr-at-eol
+backend/tests/integration/helpers/db.js whitespace=cr-at-eol
 frontend/src/features/campaigns/components/NodeConfigReadLandingLeadsSection.jsx whitespace=cr-at-eol
 frontend/src/features/campaigns/constants/dataNodeColumnOptions.js whitespace=cr-at-eol
 frontend/src/features/campaigns/utils/campaignBuilderNodeRunner.js whitespace=cr-at-eol
