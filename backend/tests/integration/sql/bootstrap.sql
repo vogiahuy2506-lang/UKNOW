@@ -1251,9 +1251,54 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   max_tokens          INTEGER DEFAULT 2048,
   ai_model            VARCHAR(50) DEFAULT 'gemini-2.5-flash',
   allow_attachments   BOOLEAN NOT NULL DEFAULT FALSE,
+  reply_limit_config  JSONB NOT NULL DEFAULT '{"version":1,"windows":{}}'::jsonb
+    CHECK (jsonb_typeof(reply_limit_config) = 'object'),
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS chatbot_studio_conversations (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_user         BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  id_chatbot      BIGINT NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  session_id      VARCHAR(128) UNIQUE,
+  title           VARCHAR(255),
+  status          VARCHAR(32) DEFAULT 'active',
+  message_count   INTEGER DEFAULT 0,
+  last_message_at TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_studio_conv_user
+  ON chatbot_studio_conversations(id_user);
+CREATE INDEX IF NOT EXISTS idx_studio_conv_chatbot
+  ON chatbot_studio_conversations(id_chatbot);
+CREATE INDEX IF NOT EXISTS idx_studio_conv_session
+  ON chatbot_studio_conversations(session_id);
+CREATE INDEX IF NOT EXISTS idx_studio_conv_status
+  ON chatbot_studio_conversations(id_user, status);
+CREATE INDEX IF NOT EXISTS idx_studio_conv_last_msg
+  ON chatbot_studio_conversations(id_user, last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS chatbot_studio_messages (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_conversation  UUID NOT NULL REFERENCES chatbot_studio_conversations(id) ON DELETE CASCADE,
+  role             VARCHAR(32) NOT NULL,
+  content          TEXT,
+  message_type     VARCHAR(32) DEFAULT 'text',
+  ai_model         VARCHAR(64),
+  ai_tokens_used   INTEGER,
+  ai_latency_ms    INTEGER,
+  attachments      JSONB DEFAULT '[]',
+  metadata         JSONB DEFAULT '{}',
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_studio_msg_conv
+  ON chatbot_studio_messages(id_conversation);
+CREATE INDEX IF NOT EXISTS idx_studio_msg_created
+  ON chatbot_studio_messages(id_conversation, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS web_widget_configs (
   id               BIGSERIAL PRIMARY KEY,

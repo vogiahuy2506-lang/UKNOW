@@ -121,7 +121,7 @@ const MainLayout = () => {
 
   // Mobile layout
   if (isMobile) {
-    const mobileContentClass = isSpecialPage
+    const mobileContentClass = isSpecialPage && !isChatbotStudio
       ? 'h-full overflow-hidden'
       : 'overflow-auto';
 
@@ -144,9 +144,9 @@ const MainLayout = () => {
           onToggle={() => setMobileDrawerOpen(!mobileDrawerOpen)}
         />
 
-        <div className="flex-1 min-w-0 flex flex-col" style={{ paddingTop: HEADER_HEIGHT }}>
+        <div className="flex-1 min-h-0 min-w-0 flex flex-col" style={{ paddingTop: HEADER_HEIGHT }}>
           {!isSpecialPage && <CreditWarningBanner />}
-          <main ref={mainContentRef} className={`flex-1 min-w-0 ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
+          <main ref={mainContentRef} className={`flex-1 min-h-0 min-w-0 ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
             <div className={isSpecialPage ? 'h-full' : ''}>
               <Outlet />
             </div>
@@ -160,11 +160,11 @@ const MainLayout = () => {
           onChanged={() => updateUser({ ...user, mustChangePassword: false })}
         />
 
-        {!isAiHomePage && (
+        {!isAiHomePage && !isChatbotStudio && (
           <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         )}
 
-        {!aiPanelOpen && !isAiHomePage && (
+        {!aiPanelOpen && !isAiHomePage && !isChatbotStudio && (
           <button
             onClick={() => setAiPanelOpen(true)}
             className="fixed bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full shadow-2xl z-30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"

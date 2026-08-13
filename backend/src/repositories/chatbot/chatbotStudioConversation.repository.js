@@ -109,15 +109,33 @@ class ChatbotStudioConversationRepository {
     return result.rows[0]?.id;
   }
 
-  async getMessagesByConversation(conversationId, { limit = 50, offset = 0 } = {}) {
+  async getMessagesByConversation(conversationId, { limit = 50, beforeId = null } = {}) {
+    const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 50, 1), 100);
+    const cursor = String(beforeId || '').trim();
+    const hasCursor = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cursor);
+    const params = hasCursor
+      ? [conversationId, cursor, safeLimit + 1]
+      : [conversationId, safeLimit + 1];
     const result = await db.query(
-      `SELECT * FROM chatbot_studio_messages 
-       WHERE id_conversation = $1 
-       ORDER BY created_at ASC 
-       LIMIT $2 OFFSET $3`,
-      [conversationId, limit, offset]
+      `${hasCursor ? `WITH cursor_message AS (
+         SELECT created_at, id
+         FROM chatbot_studio_messages
+         WHERE id_conversation = $1 AND id = $2::uuid
+       )` : ''}
+       SELECT m.* FROM chatbot_studio_messages m
+       WHERE m.id_conversation = $1
+         ${hasCursor ? 'AND (m.created_at, m.id) < (SELECT created_at, id FROM cursor_message)' : ''}
+       ORDER BY m.created_at DESC, m.id DESC
+       LIMIT $${hasCursor ? 3 : 2}`,
+      params
     );
-    return result.rows;
+    const hasMore = result.rows.length > safeLimit;
+    const page = result.rows.slice(0, safeLimit).reverse();
+    return {
+      items: page,
+      hasMore,
+      nextBeforeId: page[0]?.id || null,
+    };
   }
 
   async createMessage({ conversationId, role, content, messageType = 'text', aiModel, aiTokensUsed, aiLatencyMs, attachments = [], metadata = {} }) {

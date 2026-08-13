@@ -1,11 +1,26 @@
 import IORedis from 'ioredis';
-import { vnDayKey } from '../../utils/vnTimeFormat.util.js';
+import { vnDayKey, vnMonthKey } from '../../utils/vnTimeFormat.util.js';
+import {
+  CHATBOT_REPLY_LIMIT_WINDOWS,
+  DEFAULT_CHATBOT_REPLY_LIMIT_MESSAGE,
+  hasEnabledChatbotReplyLimit,
+  normalizeChatbotReplyLimitConfig,
+} from '../../utils/chatbotReplyLimit.util.js';
 
 const DEFAULT_STATIC_REPLY =
   'Trợ lý đang bận, chưa trả lời thêm được lúc này. Bạn cứ để lại câu hỏi, chúng tôi sẽ xem và phản hồi.';
 
-const NOTIFY_REASONS = new Set(['sender_day', 'chatbot_hour', 'owner_cap']);
+const NOTIFY_REASONS = new Set([
+  'sender_day',
+  'chatbot_hour',
+  'owner_cap',
+  'custom_minute',
+  'custom_hour',
+  'custom_day',
+  'custom_month',
+]);
 const OWNER_CAP_CACHE_TTL_MS = 60_000;
+const CHATBOT_CONFIG_CACHE_TTL_MS = 60_000;
 /** TTL cho khoá ngày lịch VN — đủ dài để khoá hôm qua tự dọn sau nửa đêm. */
 const DAY_COUNTER_TTL_SEC = 172800;
 
@@ -40,6 +55,8 @@ const memoryCounters = new Map();
 
 /** ownerUserId → { value: number|null, expiresAt } */
 const ownerCapCache = new Map();
+/** chatbotId → { value: normalized config, expiresAt } */
+const chatbotConfigCache = new Map();
 
 function memoryIncr(key, windowSec) {
   const now = Date.now();
@@ -68,7 +85,10 @@ function memorySet(key, windowSec) {
 }
 
 function notifyWindowSec(reason) {
-  return reason === 'chatbot_hour' ? 3600 : 86400;
+  if (reason === 'chatbot_hour' || reason === 'custom_hour') return 3600;
+  if (reason === 'custom_minute') return 60;
+  if (reason === 'custom_month') return 2_764_800;
+  return 86400;
 }
 
 function ownerDayCounterKey(ownerUserId) {
@@ -77,6 +97,18 @@ function ownerDayCounterKey(ownerUserId) {
 
 function senderDayCounterKey(ch, bot, sender) {
   return `cbrl:sender:${ch}:${bot}:${sender}:d:${vnDayKey()}`;
+}
+
+function customBotCounter({ chatbotId, window }) {
+  const bot = String(chatbotId || 'unknown');
+  if (window === 'day') {
+    return { key: `cbrl:custom:${bot}:d:${vnDayKey()}`, ttl: DAY_COUNTER_TTL_SEC };
+  }
+  if (window === 'month') {
+    return { key: `cbrl:custom:${bot}:mo:${vnMonthKey()}`, ttl: 3_456_000 };
+  }
+  if (window === 'hour') return { key: `cbrl:custom:${bot}:h`, ttl: 3600 };
+  return { key: `cbrl:custom:${bot}:m`, ttl: 60 };
 }
 
 class ChatbotRateLimitService {
@@ -281,6 +313,61 @@ class ChatbotRateLimitService {
     ownerCapCache.delete(String(ownerUserId));
   }
 
+  async getChatbotReplyLimitConfig(chatbotId, ownerUserId) {
+    const bot = String(chatbotId || '').trim();
+    if (!bot) {
+      return {
+        config: normalizeChatbotReplyLimitConfig(null),
+        schemaAvailable: false,
+      };
+    }
+
+    const cached = chatbotConfigCache.get(bot);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { config: cached.value, schemaAvailable: cached.schemaAvailable };
+    }
+
+    if (this._skipDbChatbotConfig) {
+      return {
+        config: normalizeChatbotReplyLimitConfig(null),
+        schemaAvailable: false,
+      };
+    }
+
+    let value = normalizeChatbotReplyLimitConfig(null);
+    let schemaAvailable = true;
+    try {
+      const db = (await import('../../config/database.js')).default;
+      const params = [bot];
+      let query = 'SELECT reply_limit_config FROM custom_chatbots WHERE id = $1';
+      if (ownerUserId != null && String(ownerUserId).trim() !== '') {
+        params.push(String(ownerUserId));
+        query += ' AND id_user = $2';
+      }
+      const { rows } = await db.query(query, params);
+      value = normalizeChatbotReplyLimitConfig(rows[0]?.reply_limit_config);
+    } catch (err) {
+      // Compatibility during rolling deploy before migration 127.
+      schemaAvailable = false;
+      console.warn('[ChatbotRateLimit] reply_limit_config read failed:', err.message);
+    }
+
+    chatbotConfigCache.set(bot, {
+      value,
+      schemaAvailable,
+      expiresAt: Date.now() + CHATBOT_CONFIG_CACHE_TTL_MS,
+    });
+    return { config: value, schemaAvailable };
+  }
+
+  invalidateChatbotConfigCache(chatbotId) {
+    if (chatbotId == null) {
+      chatbotConfigCache.clear();
+      return;
+    }
+    chatbotConfigCache.delete(String(chatbotId));
+  }
+
   /**
    * Số lượt bot đã trả lời trong ngày lịch VN của một chủ tài khoản.
    * Chỉ đọc — không tăng bộ đếm.
@@ -296,15 +383,59 @@ class ChatbotRateLimitService {
     }
   }
 
-  async buildBlockedResult({ channel, ownerUserId, chatbotId, senderKey, reason, staticReply }) {
-    const shouldNotify = await this.resolveShouldNotify({
-      channel,
-      ownerUserId,
-      chatbotId,
-      senderKey,
-      reason,
-    });
+  async buildBlockedResult({
+    channel,
+    ownerUserId,
+    chatbotId,
+    senderKey,
+    reason,
+    staticReply,
+    action,
+  }) {
+    const shouldNotify = action === 'silent'
+      ? false
+      : await this.resolveShouldNotify({
+        channel,
+        ownerUserId,
+        chatbotId,
+        senderKey,
+        reason,
+      });
     return { allowed: false, reason, shouldNotify, staticReply };
+  }
+
+  async checkCustomChatbotLimits(scope) {
+    const { config, schemaAvailable } = await this.getChatbotReplyLimitConfig(
+      scope.chatbotId,
+      scope.ownerUserId
+    );
+    const hasCustomLimits = hasEnabledChatbotReplyLimit(config);
+    if (!hasCustomLimits) {
+      return { blocked: null, hasCustomLimits: false, schemaAvailable };
+    }
+
+    for (const window of CHATBOT_REPLY_LIMIT_WINDOWS) {
+      const rule = config.windows[window];
+      if (rule.limit == null) continue;
+      const counter = customBotCounter({ chatbotId: scope.chatbotId, window });
+      const count = await this.incrWithTtl(counter.key, counter.ttl);
+      if (count > rule.limit) {
+        const staticReply = rule.action === 'notify'
+          ? (rule.message || DEFAULT_CHATBOT_REPLY_LIMIT_MESSAGE)
+          : '';
+        return {
+          hasCustomLimits: true,
+          schemaAvailable,
+          blocked: await this.buildBlockedResult({
+            ...scope,
+            reason: `custom_${window}`,
+            action: rule.action,
+            staticReply,
+          }),
+        };
+      }
+    }
+    return { blocked: null, hasCustomLimits: true, schemaAvailable };
   }
 
   /**
@@ -325,12 +456,14 @@ class ChatbotRateLimitService {
     const scope = { channel: ch, ownerUserId: owner, chatbotId: bot, senderKey: sender };
 
     if (!sender || sender === 'unknown') {
+      const custom = await this.checkCustomChatbotLimits(scope);
+      if (custom.blocked) return custom.blocked;
       // No stable identity — owner day count + chatbot hourly only.
       let ownerCount = 0;
       if (owner) {
         ownerCount = await this.incrWithTtl(ownerDayCounterKey(owner), DAY_COUNTER_TTL_SEC);
       }
-      const ownerCap = await this.getOwnerDailyCap(owner);
+      const ownerCap = custom.schemaAvailable ? null : await this.getOwnerDailyCap(owner);
       if (ownerCap != null && ownerCount > ownerCap) {
         return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
       }
@@ -366,10 +499,13 @@ class ChatbotRateLimitService {
       return this.buildBlockedResult({ ...scope, reason: 'sender_day', staticReply });
     }
 
+    const custom = await this.checkCustomChatbotLimits(scope);
+    if (custom.blocked) return custom.blocked;
+
     const ownerCount = owner
       ? await this.incrWithTtl(ownerDayCounterKey(owner), DAY_COUNTER_TTL_SEC)
       : 0;
-    const ownerCap = await this.getOwnerDailyCap(owner);
+    const ownerCap = custom.schemaAvailable ? null : await this.getOwnerDailyCap(owner);
     if (ownerCap != null && ownerCount > ownerCap) {
       return this.buildBlockedResult({ ...scope, reason: 'owner_cap', staticReply });
     }
@@ -386,9 +522,11 @@ class ChatbotRateLimitService {
   _resetMemoryForTests() {
     memoryCounters.clear();
     ownerCapCache.clear();
+    chatbotConfigCache.clear();
     this.redisFailed = true;
     this.redis = null;
     this._skipDbOwnerCap = true;
+    this._skipDbChatbotConfig = true;
   }
 
   /** Test helper — set owner cap without DB. */
@@ -397,6 +535,14 @@ class ChatbotRateLimitService {
     const n = Number(cap);
     const value = Number.isFinite(n) && n > 0 ? n : null;
     ownerCapCache.set(owner, { value, expiresAt: Date.now() + OWNER_CAP_CACHE_TTL_MS });
+  }
+
+  _setChatbotConfigForTests(chatbotId, config) {
+    chatbotConfigCache.set(String(chatbotId), {
+      value: normalizeChatbotReplyLimitConfig(config, { strict: true }),
+      schemaAvailable: true,
+      expiresAt: Date.now() + CHATBOT_CONFIG_CACHE_TTL_MS,
+    });
   }
 }
 

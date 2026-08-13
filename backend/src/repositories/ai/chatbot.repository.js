@@ -460,7 +460,7 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key, allow_attachments,
+              suggested_questions, widget_key, allow_attachments, reply_limit_config,
               created_at, updated_at
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true
@@ -565,6 +565,7 @@ class ChatbotRepository {
          chat_height = COALESCE($18, chat_height),
          widget_key = COALESCE($19, widget_key),
          allow_attachments = COALESCE($20, allow_attachments),
+         reply_limit_config = COALESCE($21::jsonb, reply_limit_config),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -574,7 +575,8 @@ class ChatbotRepository {
        data.primary_color, data.background_color, data.text_color, data.accent_color,
        data.logo_url, data.show_avatar, data.position, data.border_radius,
        data.chat_height, data.widget_key,
-       data.allow_attachments === undefined ? null : Boolean(data.allow_attachments)];
+       data.allow_attachments === undefined ? null : Boolean(data.allow_attachments),
+       data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config)];
     } else {
       // Update suggested_questions field
       query = `UPDATE custom_chatbots SET
@@ -597,6 +599,7 @@ class ChatbotRepository {
          suggested_questions = $19,
          widget_key = COALESCE($20, widget_key),
          allow_attachments = COALESCE($21, allow_attachments),
+         reply_limit_config = COALESCE($22::jsonb, reply_limit_config),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -606,7 +609,8 @@ class ChatbotRepository {
        data.primary_color, data.background_color, data.text_color, data.accent_color,
        data.logo_url, data.show_avatar, data.position, data.border_radius,
        data.chat_height, suggestedQuestions, data.widget_key,
-       data.allow_attachments === undefined ? null : Boolean(data.allow_attachments)];
+       data.allow_attachments === undefined ? null : Boolean(data.allow_attachments),
+       data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config)];
     }
 
     const { rows } = await db.query(query, params);

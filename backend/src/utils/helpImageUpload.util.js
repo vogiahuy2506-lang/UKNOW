@@ -1,6 +1,7 @@
 import path from 'path';
+import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from './uploadLimits.util.js';
 
-export const HELP_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const HELP_IMAGE_MAX_BYTES = MAX_UPLOAD_FILE_BYTES;
 
 export const HELP_IMAGE_MIMES = new Set([
   'image/jpeg',
@@ -29,7 +30,7 @@ export function validateHelpImageFile(file = {}) {
   const size = Number(file.size) || 0;
 
   if (size > HELP_IMAGE_MAX_BYTES) {
-    return { ok: false, message: 'Ảnh bài viết tối đa 5MB' };
+    return { ok: false, message: `Ảnh bài viết tối đa ${MAX_UPLOAD_FILE_MB}MB` };
   }
   if (!HELP_IMAGE_MIMES.has(mimetype)) {
     return {

@@ -80,7 +80,7 @@ router.delete('/chatbot-studio/conversations/:id/messages', aiController.clearCh
 // Custom AI - Document upload (extract, chunk, embed)
 router.post('/custom-chat/upload', upload.single('file'), aiController.customChatUpload.bind(aiController));
 
-// Custom AI - Logo image upload (2MB limit)
+// Custom AI - Logo image upload
 router.post('/custom-chat/logo', upload.single('file'), aiController.customChatLogoUpload.bind(aiController));
 
 // Custom AI - Get documents

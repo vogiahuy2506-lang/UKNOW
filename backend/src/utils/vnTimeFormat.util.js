@@ -40,6 +40,18 @@ export function vnDayKey(input = new Date()) {
   return `${get('year')}${get('month')}${get('day')}`;
 }
 
+/** Khoá tháng lịch giờ Việt Nam dạng `yyyymm`. */
+export function vnMonthKey(input = new Date()) {
+  const d = toDateOrNull(input) || new Date();
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: VIETNAM_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(d);
+  const get = (type) => parts.find((p) => p.type === type)?.value || '';
+  return `${get('year')}${get('month')}`;
+}
+
 /**
  * Một dòng log: ISO UTC + cùng mốc theo lịch Việt Nam (24h).
  *

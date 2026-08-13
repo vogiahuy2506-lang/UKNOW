@@ -65,6 +65,8 @@ export async function truncateAll() {
       webchat_messages,
       webchat_conversations,
       web_widget_configs,
+      chatbot_studio_messages,
+      chatbot_studio_conversations,
       custom_chatbots,
       chat_attachments,
       sub_assistants,

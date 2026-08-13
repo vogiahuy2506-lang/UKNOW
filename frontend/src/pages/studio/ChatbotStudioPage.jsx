@@ -17,11 +17,11 @@ import MessageAttachments, { formatFileSize } from '../../components/MessageAtta
 import ChatbotSettings from './ChatbotSettings';
 import ChatListSidebar from './ChatListSidebar';
 import { MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
+import { useI18n } from '../../i18n';
 
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
 const MAX_FILE_MB = MAX_UPLOAD_FILE_MB;
-const MAX_IMAGE_MB = 5;
 
 function clientValidateFile(file) {
   const name = file.name || '';
@@ -32,10 +32,9 @@ function clientValidateFile(file) {
   if (lower.endsWith('.svg')) {
     return 'Không nhận file SVG';
   }
-  const isImage = /\.(png|jpe?g|webp)$/i.test(name) || String(file.type || '').startsWith('image/');
-  const maxBytes = (isImage ? MAX_IMAGE_MB : MAX_FILE_MB) * 1024 * 1024;
+  const maxBytes = MAX_FILE_MB * 1024 * 1024;
   if (file.size > maxBytes) {
-    return `File vượt dung lượng tối đa ${isImage ? MAX_IMAGE_MB : MAX_FILE_MB} MB`;
+    return `File vượt dung lượng tối đa ${MAX_FILE_MB} MB`;
   }
   return null;
 }
@@ -163,15 +162,22 @@ function ConversationList({ conversations, activeId, onSelect, onNewChat: _onNew
 
 // Chat Message Area with conversation saving
 function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
+  const { t } = useI18n();
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [nextBeforeId, setNextBeforeId] = useState(null);
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const messagesEndRef = useRef(null);
+  const messagesScrollRef = useRef(null);
+  const pendingScrollRestoreRef = useRef(null);
+  const shouldScrollToBottomRef = useRef(false);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -200,19 +206,59 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
   const loadMessages = async (conversationId) => {
     setLoadingMessages(true);
     try {
-      const res = await chatbotApi.getChatbotStudioMessages(conversationId);
-      if (res.data?.data) {
+      const res = await chatbotApi.getChatbotStudioMessages(conversationId, { limit: 30 });
+      if (Array.isArray(res.data?.data)) {
+        shouldScrollToBottomRef.current = true;
         setMessages(res.data.data.map(m => ({
+          id: m.id,
           role: m.role,
           content: m.content,
           created_at: m.created_at,
           attachments: m.attachments || [],
         })));
+        setHasOlderMessages(Boolean(res.data?.pagination?.hasMore));
+        setNextBeforeId(res.data?.pagination?.nextBeforeId || null);
       }
     } catch (err) {
       console.error('Load messages error:', err);
     } finally {
       setLoadingMessages(false);
+    }
+  };
+
+  const loadOlderMessages = async () => {
+    if (!activeConversation?.id || !hasOlderMessages || !nextBeforeId || loadingOlderMessages) return;
+    const container = messagesScrollRef.current;
+    if (container) {
+      pendingScrollRestoreRef.current = {
+        scrollHeight: container.scrollHeight,
+        scrollTop: container.scrollTop,
+      };
+    }
+    setLoadingOlderMessages(true);
+    try {
+      const res = await chatbotApi.getChatbotStudioMessages(activeConversation.id, {
+        limit: 30,
+        beforeId: nextBeforeId,
+      });
+      const older = Array.isArray(res.data?.data) ? res.data.data.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        created_at: message.created_at,
+        attachments: message.attachments || [],
+      })) : [];
+      setMessages((current) => {
+        const known = new Set(current.map((message) => message.id).filter(Boolean));
+        return [...older.filter((message) => !message.id || !known.has(message.id)), ...current];
+      });
+      setHasOlderMessages(Boolean(res.data?.pagination?.hasMore));
+      setNextBeforeId(res.data?.pagination?.nextBeforeId || null);
+    } catch (err) {
+      pendingScrollRestoreRef.current = null;
+      toast.error(err.response?.data?.message || t('chatbot.studio.loadOlderMessagesFailed'));
+    } finally {
+      setLoadingOlderMessages(false);
     }
   };
 
@@ -230,6 +276,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
         setConversations(prev => [newConv, ...prev]);
         setActiveConversation(newConv);
         setMessages([]);
+        setHasOlderMessages(false);
+        setNextBeforeId(null);
         setPendingAttachments([]);
       }
     } catch (err) {
@@ -245,6 +293,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       if (activeConversation?.id === convId) {
         setActiveConversation(null);
         setMessages([]);
+        setHasOlderMessages(false);
+        setNextBeforeId(null);
         setPendingAttachments([]);
       }
       toast.success('Đã xóa cuộc trò chuyện');
@@ -329,6 +379,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       created_at: new Date().toISOString(),
       attachments: attachmentsToSend,
     };
+    shouldScrollToBottomRef.current = true;
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setPendingAttachments([]);
@@ -369,6 +420,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
           content: res.data.content,
         });
 
+        shouldScrollToBottomRef.current = true;
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: res.data.content,
@@ -395,7 +447,17 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesScrollRef.current;
+    const restore = pendingScrollRestoreRef.current;
+    if (container && restore) {
+      container.scrollTop = container.scrollHeight - restore.scrollHeight + restore.scrollTop;
+      pendingScrollRestoreRef.current = null;
+      return;
+    }
+    if (shouldScrollToBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      shouldScrollToBottomRef.current = false;
+    }
   }, [messages]);
 
   const handleKeyDown = (e) => {
@@ -411,6 +473,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     try {
       await chatbotApi.clearChatbotStudioConversation(activeConversation.id);
       setMessages([]);
+      setHasOlderMessages(false);
+      setNextBeforeId(null);
       toast.success('Đã xóa tin nhắn');
     } catch (err) {
       toast.error('Không thể xóa tin nhắn');
@@ -423,7 +487,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="flex-1 min-h-0 flex flex-col bg-white">
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -468,7 +532,24 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-messages-scroll">
+      <div
+        ref={messagesScrollRef}
+        className="flex-1 min-h-0 overflow-y-scroll overscroll-contain p-4 space-y-4 chat-messages-scroll [scrollbar-gutter:stable]"
+      >
+        {hasOlderMessages && messages.length > 0 && (
+          <div className="flex justify-center pb-1">
+            <button
+              type="button"
+              onClick={loadOlderMessages}
+              disabled={loadingOlderMessages}
+              className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {loadingOlderMessages
+                ? t('chatbot.studio.loadingOlderMessages')
+                : t('chatbot.studio.loadOlderMessages')}
+            </button>
+          </div>
+        )}
         {/* Conversations list toggle area */}
         {messages.length === 0 && (
           <div className="mb-4">
@@ -523,7 +604,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
 
         {/* Message bubbles */}
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+          <div key={msg.id || `${msg.created_at}-${idx}`} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {/* Bot Avatar */}
             {msg.role !== 'user' && (
               <div
@@ -694,7 +775,7 @@ function ChatbotStudioPage() {
   }, []);
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">AI Chatbot</h1>
         <p className="text-sm text-gray-500 mt-2">
@@ -702,10 +783,10 @@ function ChatbotStudioPage() {
         </p>
       </div>
 
-      <div className="flex flex-col xl:flex-row gap-6 items-start">
+      <div className="flex flex-col xl:flex-row gap-4 items-stretch">
         {/* Left Sidebar (List) */}
         <div className={`transition-all duration-300 ease-in-out shrink-0 ${leftCollapsed ? 'w-full xl:w-16' : 'w-full xl:w-72'}`}>
-          <div className="card h-[700px] flex flex-col overflow-hidden relative">
+          <div className="card h-[calc(100vh-10rem)] min-h-[640px] max-h-[820px] flex flex-col overflow-hidden relative">
             <button
               onClick={() => setLeftCollapsed(!leftCollapsed)}
               className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
@@ -735,7 +816,7 @@ function ChatbotStudioPage() {
 
         {/* Middle Chat (Preview) */}
         <div className="flex-1 w-full min-w-0 transition-all duration-300">
-          <div className="card h-[700px] flex flex-col overflow-hidden">
+          <div className="card h-[calc(100vh-10rem)] min-h-[640px] max-h-[820px] flex min-h-0 flex-col overflow-hidden">
             {selectedBot ? (
               <ChatMessageArea
                 key={`chat-${selectedBot.id}`}
@@ -750,7 +831,7 @@ function ChatbotStudioPage() {
 
         {/* Right Settings */}
         <div className={`transition-all duration-300 ease-in-out shrink-0 ${rightCollapsed ? 'w-full xl:w-16' : 'w-full xl:w-[400px]'}`}>
-          <div className="card h-[700px] flex flex-col overflow-hidden relative">
+          <div className="card h-[calc(100vh-10rem)] min-h-[640px] max-h-[820px] flex min-h-0 flex-col overflow-hidden relative">
             <button
               onClick={() => setRightCollapsed(!rightCollapsed)}
               className={`absolute z-20 w-7 h-14 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-l-xl shadow-md border border-slate-200 border-r-0 transition-colors ${

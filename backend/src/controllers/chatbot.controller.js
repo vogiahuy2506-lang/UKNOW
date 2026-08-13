@@ -17,6 +17,7 @@ import chatAttachmentService from '../services/chatbot/chatAttachment.service.js
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
+import { normalizeChatbotReplyLimitConfig } from '../utils/chatbotReplyLimit.util.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
@@ -1190,10 +1191,30 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
-      const updated = await chatbotRepository.updateChatbot(id, req.user.id, req.body);
+      const updatePayload = { ...req.body };
+      if (req.body.reply_limit_config !== undefined) {
+        try {
+          updatePayload.reply_limit_config = normalizeChatbotReplyLimitConfig(
+            req.body.reply_limit_config,
+            { strict: true }
+          );
+        } catch (validationError) {
+          return res.status(400).json({
+            success: false,
+            message: validationError.message,
+            code: 'CHATBOT_REPLY_LIMIT_INVALID',
+          });
+        }
+      }
+
+      const updated = await chatbotRepository.updateChatbot(id, req.user.id, updatePayload);
 
       if (!updated) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      if (updatePayload.reply_limit_config !== undefined) {
+        chatbotRateLimitService.invalidateChatbotConfigCache(id);
       }
 
       // Sync AI settings to chatbot_settings table for ALL channels

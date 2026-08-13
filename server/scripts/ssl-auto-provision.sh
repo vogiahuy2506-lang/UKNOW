@@ -197,7 +197,8 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 1d;
 
-    client_max_body_size 50m;
+    # File limit is 50MB in the app; allow multipart envelope overhead here.
+    client_max_body_size 52m;
 
     root /usr/share/nginx/html;
     index index.html;

@@ -26,7 +26,7 @@ const normalizeFileName = (name) => name.trim().normalize('NFC');
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
-import BotDailyReplyCapCard from '../../features/billing/BotDailyReplyCapCard';
+import ChatbotReplyLimitsCard from '../../features/chatbot/components/ChatbotReplyLimitsCard';
 import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
 import { useI18n } from '../../i18n';
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
@@ -498,8 +498,8 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const handleLogoFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('File ảnh vượt quá 2MB. Vui lòng chọn ảnh nhỏ hơn.');
+    if (file.size > MAX_UPLOAD_FILE_BYTES) {
+      toast.error(`File ảnh vượt quá ${MAX_UPLOAD_FILE_MB}MB. Vui lòng chọn ảnh nhỏ hơn.`);
       e.target.value = '';
       return;
     }
@@ -679,7 +679,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex min-h-0 flex-col h-full overflow-hidden">
 
       {/* ── Header ── */}
       <div className="px-5 py-4 border-b border-slate-100 bg-white shrink-0">
@@ -730,22 +730,20 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       </div>
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-scroll overscroll-contain [scrollbar-gutter:stable]">
         <div className="p-5 space-y-5">
 
           {/* ── GENERAL ── */}
           {activeTab === 'general' && (
             <div className="space-y-5">
 
+              <ChatbotReplyLimitsCard
+                chatbot={chatbot}
+                onSaved={(updated) => onUpdate?.(updated)}
+              />
+
               {profileData && (
                 <>
-                  <BotDailyReplyCapCard
-                    data={profileData}
-                    t={t}
-                    onSaved={(next) => {
-                      setProfileData((prev) => (prev ? { ...prev, botDailyReplyCap: next } : prev));
-                    }}
-                  />
                   <AiHandoffAutoResumeCard
                     data={profileData}
                     t={t}

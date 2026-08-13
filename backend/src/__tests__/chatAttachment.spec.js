@@ -38,6 +38,8 @@ const {
   presentAttachmentsForClient,
   buildAiParts,
   MAX_FILES_PER_MESSAGE,
+  MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
   TEXT_PER_FILE_CHARS,
   TEXT_BUDGET_CHARS,
 } = chatAttachment;
@@ -70,6 +72,11 @@ describe('chatAttachment', () => {
   afterAll(cleanup);
 
   describe('validateFile', () => {
+    it('uses the same 50MB limit for images and documents', () => {
+      expect(MAX_IMAGE_BYTES).toBe(50 * 1024 * 1024);
+      expect(MAX_IMAGE_BYTES).toBe(MAX_FILE_BYTES);
+    });
+
     it('accepts pdf with correct mime and magic', () => {
       const result = validateFile({
         buffer: pdfBuffer(),

@@ -69,6 +69,22 @@ describe('htmlToPlainText', () => {
 });
 
 describe('validateHelpImageFile', () => {
+  it('accepts images up to 50MB and rejects larger images', () => {
+    const atLimit = validateHelpImageFile({
+      mimetype: 'image/png',
+      originalName: 'large.png',
+      size: 50 * 1024 * 1024,
+    });
+    const overLimit = validateHelpImageFile({
+      mimetype: 'image/png',
+      originalName: 'too-large.png',
+      size: (50 * 1024 * 1024) + 1,
+    });
+
+    expect(atLimit.ok).toBe(true);
+    expect(overLimit).toEqual({ ok: false, message: 'Ảnh bài viết tối đa 50MB' });
+  });
+
   it('rejects svg mime', () => {
     const r = validateHelpImageFile({
       mimetype: 'image/svg+xml',

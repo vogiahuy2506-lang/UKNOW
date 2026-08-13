@@ -230,4 +230,64 @@ describe('chatbotRateLimit.service', () => {
     expect(await chatbotRateLimitService.getOwnerUsedToday(99)).toBe(2);
     expect(await chatbotRateLimitService.getOwnerUsedToday(99)).toBe(2);
   });
+
+  it('applies a per-chatbot minute rule across senders and stays silent when configured', async () => {
+    chatbotRateLimitService._setChatbotConfigForTests(123, {
+      windows: {
+        minute: { limit: 2, action: 'silent' },
+      },
+    });
+
+    const base = { channel: 'web', ownerUserId: 7, chatbotId: 123 };
+    expect((await chatbotRateLimitService.checkBeforeAi({ ...base, senderKey: 'a' })).allowed).toBe(true);
+    expect((await chatbotRateLimitService.checkBeforeAi({ ...base, senderKey: 'b' })).allowed).toBe(true);
+
+    const blocked = await chatbotRateLimitService.checkBeforeAi({ ...base, senderKey: 'c' });
+    expect(blocked).toMatchObject({
+      allowed: false,
+      reason: 'custom_minute',
+      shouldNotify: false,
+      staticReply: '',
+    });
+  });
+
+  it('uses a custom notice once for the configured window', async () => {
+    chatbotRateLimitService._setChatbotConfigForTests(321, {
+      windows: {
+        month: { limit: 1, action: 'notify', message: 'Bot đã hết lượt tháng này.' },
+      },
+    });
+
+    const params = { channel: 'zalo_oa', ownerUserId: 8, chatbotId: 321, senderKey: 'visitor' };
+    expect((await chatbotRateLimitService.checkBeforeAi(params)).allowed).toBe(true);
+    const firstBlock = await chatbotRateLimitService.checkBeforeAi(params);
+    expect(firstBlock).toMatchObject({
+      reason: 'custom_month',
+      shouldNotify: true,
+      staticReply: 'Bot đã hết lượt tháng này.',
+    });
+
+    await chatbotRateLimitService.markRateLimitNotified({ ...params, reason: 'custom_month' });
+    expect((await chatbotRateLimitService.checkBeforeAi(params)).shouldNotify).toBe(false);
+  });
+
+  it('keeps custom counters isolated per chatbot', async () => {
+    const config = { windows: { hour: { limit: 1, action: 'silent' } } };
+    chatbotRateLimitService._setChatbotConfigForTests(41, config);
+    chatbotRateLimitService._setChatbotConfigForTests(42, config);
+
+    const base = { channel: 'web', ownerUserId: 9, senderKey: 'same-user' };
+    expect((await chatbotRateLimitService.checkBeforeAi({ ...base, chatbotId: 41 })).allowed).toBe(true);
+    expect((await chatbotRateLimitService.checkBeforeAi({ ...base, chatbotId: 41 })).reason).toBe('custom_hour');
+    expect((await chatbotRateLimitService.checkBeforeAi({ ...base, chatbotId: 42 })).allowed).toBe(true);
+  });
+
+  it('does not apply the deprecated owner cap once the per-chatbot schema is available', async () => {
+    chatbotRateLimitService._setOwnerCapForTests(90, 1);
+    chatbotRateLimitService._setChatbotConfigForTests(50, { windows: {} });
+
+    const base = { channel: 'web', ownerUserId: 90, chatbotId: 50 };
+    expect((await chatbotRateLimitService.checkBeforeAi({ ...base, senderKey: 'a' })).allowed).toBe(true);
+    expect((await chatbotRateLimitService.checkBeforeAi({ ...base, senderKey: 'b' })).allowed).toBe(true);
+  });
 });

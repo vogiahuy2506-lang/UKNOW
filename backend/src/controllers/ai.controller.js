@@ -27,6 +27,7 @@ import {
   normalizeAssistantLocale,
   resolveAssistantLocaleContext,
 } from '../utils/assistantLocale.util.js';
+import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits.util.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -1100,15 +1101,18 @@ class AiController {
   }
 
   /**
-   * Upload logo image for Custom AI Chatbot (2MB limit)
+   * Upload logo image for Custom AI Chatbot.
    */
   async customChatLogoUpload(req, res) {
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'Không có file ảnh' });
       }
-      if (req.file.size > 2 * 1024 * 1024) {
-        return res.status(400).json({ success: false, message: 'File ảnh vượt quá 2MB' });
+      if (req.file.size > MAX_UPLOAD_FILE_BYTES) {
+        return res.status(400).json({
+          success: false,
+          message: `File ảnh vượt quá ${MAX_UPLOAD_FILE_MB}MB`,
+        });
       }
       const allowedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
       if (!allowedFormats.includes(req.file.mimetype)) {
@@ -1297,14 +1301,21 @@ class AiController {
    */
   async getChatbotStudioMessages(req, res) {
     try {
-      const { limit = 50, offset = 0 } = req.query;
-      const messages = await chatbotStudioConversationService.getMessages({
+      const { limit = 30, beforeId = null } = req.query;
+      const page = await chatbotStudioConversationService.getMessages({
         userId: req.user.id,
         conversationId: req.params.id,
         limit: parseInt(limit, 10),
-        offset: parseInt(offset, 10),
+        beforeId,
       });
-      return res.json({ success: true, data: messages });
+      return res.json({
+        success: true,
+        data: page.items,
+        pagination: {
+          hasMore: page.hasMore,
+          nextBeforeId: page.nextBeforeId,
+        },
+      });
     } catch (error) {
       console.error('[ChatbotStudio] Get messages error:', error);
       return res.status(error.status || 500).json({ success: false, message: error.message });

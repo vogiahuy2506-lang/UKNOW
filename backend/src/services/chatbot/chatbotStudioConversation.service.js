@@ -42,24 +42,25 @@ class ChatbotStudioConversationService {
     return conversation;
   }
 
-  async getMessages({ userId, conversationId, limit, offset }) {
+  async getMessages({ userId, conversationId, limit, beforeId }) {
     const conversation = await chatbotStudioConversationRepository.getConversationById(userId, conversationId);
     if (!conversation) {
       throw new Error('Không tìm thấy cuộc hội thoại');
     }
-    const messages = await chatbotStudioConversationRepository.getMessagesByConversation(conversationId, {
+    const page = await chatbotStudioConversationRepository.getMessagesByConversation(conversationId, {
       limit,
-      offset,
+      beforeId,
     });
 
     const bind = { chatbotId: conversation.id_chatbot, uid: userId };
-    return messages.map((msg) => {
+    const items = page.items.map((msg) => {
       const stored = parseAttachments(msg.attachments);
       return {
         ...msg,
         attachments: chatAttachmentService.presentAttachmentsForClient(stored, bind),
       };
     });
+    return { ...page, items };
   }
 
   async addMessage({ userId, conversationId, role, content, messageType, aiModel, aiTokensUsed, aiLatencyMs, attachments, metadata }) {
