@@ -120,7 +120,7 @@ class CampaignCrudRepository {
    * @returns {Promise<object|null>}
    */
   async findCampaignById({ campaignId, isAdmin, userId }) {
-    const params = [campaignId];
+    const params = isAdmin ? [campaignId] : [campaignId, userId];
     let query = `
       SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
              c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
@@ -131,12 +131,23 @@ class CampaignCrudRepository {
              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
              c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
       FROM campaigns c
-      LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $2
-      WHERE c.id = $1 AND (c.id_user = $2 OR cs.id IS NOT NULL)`;
+      WHERE c.id = $1`;
     if (!isAdmin) {
-      query += ` AND (c.id_user = $2 OR cs.share_type IN ('edit', 'view'))`;
+      query = `
+      SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+             c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
+             c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
+             c.timezone,
+             c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
+             c.total_converted, c.total_revenue,
+             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
+             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+      FROM campaigns c
+      LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $2
+      WHERE c.id = $1 AND (c.id_user = $2 OR cs.id IS NOT NULL)
+        AND (c.id_user = $2 OR cs.share_type IN ('edit', 'view'))`;
     }
-    const result = await db.query(query, [campaignId, userId]);
+    const result = await db.query(query, params);
     return result.rows[0] || null;
   }
 
@@ -179,7 +190,11 @@ class CampaignCrudRepository {
    * @returns {Promise<object|null>}
    */
   async findCampaignByIdTx(client, { campaignId, isAdmin, userId }) {
-    let campaignQuery = `
+    let campaignQuery;
+    if (isAdmin) {
+      // Admin có thể xem campaign của bất kỳ user nào — chỉ cần filter theo id.
+      // Tham số truyền vào: [campaignId] để tránh mismatch với placeholder.
+      campaignQuery = `
         SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
                c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
                c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
@@ -189,9 +204,24 @@ class CampaignCrudRepository {
                c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
                c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
         FROM campaigns c
-        LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $1
-        WHERE c.id = $2 AND (c.id_user = $1 OR cs.id IS NOT NULL)`;
-    const campaignResult = await client.query(campaignQuery, [userId, campaignId]);
+        WHERE c.id = $1`;
+    } else {
+      campaignQuery = `
+        SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+               c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
+               c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
+               c.timezone,
+               c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
+               c.total_converted, c.total_revenue,
+               c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
+               c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+        FROM campaigns c
+        LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $2
+        WHERE c.id = $1 AND (c.id_user = $2 OR cs.id IS NOT NULL)
+          AND (c.id_user = $2 OR cs.share_type IN ('edit', 'view'))`;
+    }
+    const campaignParams = isAdmin ? [campaignId] : [campaignId, userId];
+    const campaignResult = await client.query(campaignQuery, campaignParams);
     return campaignResult.rows[0] || null;
   }
 
