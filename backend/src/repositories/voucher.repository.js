@@ -22,8 +22,8 @@ const VOUCHER_SELECT = `
   auto_apply AS "autoApply",
   offer_mode AS "offerMode",
   (
-    EXISTS (SELECT 1 FROM orders WHERE voucher_id = v.id)
-    OR EXISTS (SELECT 1 FROM voucher_redemptions WHERE voucher_id = v.id)
+    EXISTS (SELECT 1 FROM orders WHERE voucher_id = vouchers.id)
+    OR EXISTS (SELECT 1 FROM voucher_redemptions WHERE voucher_id = vouchers.id)
   ) AS "hasOrderReference",
   stackable,
   is_active AS "isActive",
