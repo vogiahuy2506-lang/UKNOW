@@ -33,6 +33,11 @@ const emailSettingsApiService = {
     return api.post(`/email-settings/${emailSettingId}/send-test`, payload);
   },
 
+  // Gửi email trực tiếp (dùng cho Quick Send)
+  sendEmail(payload) {
+    return api.post('/email-settings/send-email', payload);
+  },
+
   // Domain verification (Hướng 2)
   initiateDomainVerification(emailSettingId) {
     return api.post(`/email-settings/${emailSettingId}/domain-verification/initiate`);

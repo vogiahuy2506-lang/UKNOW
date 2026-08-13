@@ -9,7 +9,7 @@ import './index.css'
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
+  <>
     <ErrorBoundary>
       {clientId ? (
         <GoogleOAuthProvider clientId={clientId}>
@@ -23,5 +23,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </I18nProvider>
       )}
     </ErrorBoundary>
-  </React.StrictMode>,
+  </>,
 )

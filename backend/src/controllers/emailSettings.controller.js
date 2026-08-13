@@ -565,6 +565,7 @@ ${linkItems}
 
   async sendCustomEmail(req, res) {
     try {
+      console.log('[sendCustomEmail] BODY:', JSON.stringify(req.body));
       const data = await emailSettingsSmtpService.sendCustomEmail({
         userId: req.user.id,
         roleCode: req.user?.role,

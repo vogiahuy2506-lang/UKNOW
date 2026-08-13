@@ -66,6 +66,43 @@ class MarketplaceReviewRepository {
   }
 
   /**
+   * Create a review (with transaction)
+   * @param {object} client - DB client
+   * @param {object} data
+   * @returns {Promise<object>}
+   */
+  async createTx(client, data) {
+    const { idUser, listingId, rating, reviewText } = data;
+    const { rows } = await client.query(
+      `INSERT INTO marketplace_reviews (id_user, listing_id, rating, review_text)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (id_user, listing_id)
+       DO UPDATE SET rating = $3, review_text = $4, updated_at = NOW()
+       RETURNING *`,
+      [idUser, listingId, rating, reviewText]
+    );
+    return rows[0];
+  }
+
+  /**
+   * Calculate average rating for a listing (with transaction)
+   * @param {object} client - DB client
+   * @param {number} listingId
+   * @returns {Promise<{avg: number, count: number}>}
+   */
+  async getAverageRatingTx(client, listingId) {
+    const { rows } = await client.query(
+      `SELECT COALESCE(AVG(rating), 0) as avg, COUNT(*) as count
+       FROM marketplace_reviews WHERE listing_id = $1`,
+      [listingId]
+    );
+    return {
+      avg: parseFloat(rows[0].avg) || 0,
+      count: parseInt(rows[0].count, 10) || 0,
+    };
+  }
+
+  /**
    * Calculate average rating for a listing
    * @param {number} listingId
    * @returns {Promise<{avg: number, count: number}>}

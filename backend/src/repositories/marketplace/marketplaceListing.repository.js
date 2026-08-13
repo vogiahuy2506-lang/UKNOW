@@ -17,15 +17,16 @@ class MarketplaceListingRepository {
       tags,
       priceCredits,
       visibility,
+      status,
       snapshotData,
     } = data;
 
     const { rows } = await db.query(
       `INSERT INTO marketplace_listings
-       (id_user, resource_type, resource_id, title, description, category, tags, price_credits, visibility, snapshot_data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (id_user, resource_type, resource_id, title, description, category, tags, price_credits, visibility, status, snapshot_data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [idUser, resourceType, resourceId, title, description, category, tags, priceCredits || 0, visibility || 'public', JSON.stringify(snapshotData)]
+      [idUser, resourceType, resourceId, title, description, category, tags, priceCredits || 0, visibility || 'public', status || 'draft', JSON.stringify(snapshotData)]
     );
     return rows[0];
   }

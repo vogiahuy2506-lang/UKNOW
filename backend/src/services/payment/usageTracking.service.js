@@ -18,9 +18,10 @@ class UsageTrackingService {
    * @param {string} resourceType - e.g., 'campaign', 'landing_page', 'email_sent', 'zalo_sent'
    * @param {number} delta - Amount to add (default 1)
    * @param {object} metadata - Optional usage metadata
+   * @param {object} [client] - Optional pg client (khi chạy trong transaction)
    */
-  async trackUsage(userId, resourceType, delta = 1, metadata = {}) {
-    return usageTrackingRepository.trackUsage(userId, resourceType, delta, metadata);
+  async trackUsage(userId, resourceType, delta = 1, metadata = {}, client = null) {
+    return usageTrackingRepository.trackUsage(userId, resourceType, delta, metadata, client);
   }
 
   /**
@@ -199,9 +200,10 @@ class UsageTrackingService {
    * @param {number} userId
    * @param {number} amount - Amount to deduct (must be > 0)
    * @param {object} metadata - Optional metadata
+   * @param {object} [client] - Optional pg client (khi chạy trong transaction)
    */
-  async deductCredits(userId, amount, metadata = {}) {
-    return usageTrackingRepository.deductCredits(userId, amount, metadata);
+  async deductCredits(userId, amount, metadata = {}, client = null) {
+    return usageTrackingRepository.deductCredits(userId, amount, metadata, client);
   }
 
   _calculatePercentages(usageMap, limits) {

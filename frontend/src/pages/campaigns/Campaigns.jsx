@@ -44,6 +44,7 @@ const Campaigns = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [originTab, setOriginTab] = useState('self_created'); // 'self_created' | 'marketplace_purchased' | 'shared_with_me'
   const [activeMenu, setActiveMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuButtonRefs = useRef({});
@@ -52,6 +53,9 @@ const Campaigns = () => {
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
+  const [showShareModal, setShowShareModal] = useState({ show: false, campaign: null });
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareForm, setShareForm] = useState({ email: '', shareType: 'view', canRun: false });
   const [createCampaignForm, setCreateCampaignForm] = useState({
     campaignName: '',
     campaignType: 'email',
@@ -59,8 +63,8 @@ const Campaigns = () => {
 
   useEffect(() => {
     fetchCampaigns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ refetch theo filter/page
-  }, [pagination.page, statusFilter, typeFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ refetch theo filter/page/origin
+  }, [pagination.page, statusFilter, typeFilter, originTab]);
 
   useEffect(() => {
     if (!location.state?.openCreateCampaignModal) return;
@@ -71,17 +75,31 @@ const Campaigns = () => {
   const fetchCampaigns = async () => {
     setIsLoading(true);
     try {
-      const params = {
-        page: pagination.page,
-        limit: 10,
-        ...(search && { search }),
-        ...(statusFilter && { status: statusFilter }),
-        ...(typeFilter && { type: typeFilter }),
-      };
+      if (originTab === 'shared_with_me') {
+        // Fetch shared campaigns
+        const params = {
+          page: pagination.page,
+          limit: 10,
+          ...(search && { search }),
+          ...(statusFilter && { status: statusFilter }),
+        };
+        const response = await campaignApiService.getSharedWithMe(params);
+        setCampaigns(response.data.data.items);
+        setPagination(response.data.data.pagination);
+      } else {
+        const params = {
+          page: pagination.page,
+          limit: 10,
+          origin: originTab,
+          ...(search && { search }),
+          ...(statusFilter && { status: statusFilter }),
+          ...(typeFilter && { type: typeFilter }),
+        };
 
-      const response = await campaignApiService.getCampaigns(params);
-      setCampaigns(response.data.data.items);
-      setPagination(response.data.data.pagination);
+        const response = await campaignApiService.getCampaigns(params);
+        setCampaigns(response.data.data.items);
+        setPagination(response.data.data.pagination);
+      }
     } catch (error) {
       toast.error(t('campaigns.loadFailed'));
     } finally {
@@ -148,6 +166,44 @@ const Campaigns = () => {
   const closeDuplicateModal = () => {
     setDuplicateModal({ show: false, campaign: null });
     setDuplicateName('');
+  };
+
+  // Share modal handlers
+  const openShareModal = (campaign) => {
+    setShareForm({ email: '', shareType: 'view', canRun: false });
+    setShowShareModal({ show: true, campaign });
+    setActiveMenu(null);
+  };
+
+  const closeShareModal = () => {
+    setShowShareModal({ show: false, campaign: null });
+    setShareForm({ email: '', shareType: 'view', canRun: false });
+  };
+
+  const handleShare = async () => {
+    if (!shareForm.email.trim()) {
+      toast.error(t('campaigns.enterEmail'));
+      return;
+    }
+    if (!shareForm.email.includes('@')) {
+      toast.error(t('campaigns.invalidEmail'));
+      return;
+    }
+
+    setIsSharing(true);
+    try {
+      await campaignApiService.shareCampaign(showShareModal.campaign.id, {
+        recipientEmail: shareForm.email.trim(),
+        shareType: shareForm.shareType,
+        canRun: shareForm.canRun,
+      });
+      toast.success(t('campaigns.shareSuccess'));
+      closeShareModal();
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('campaigns.shareFailed'));
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const handleDuplicate = async () => {
@@ -227,12 +283,58 @@ const Campaigns = () => {
               : t('campaigns.userDescription')}
           </p>
         </div>
+        {/* Chỉ hiển thị nút tạo khi ở tab tự tạo */}
+        {originTab === 'self_created' && (
+          <button
+            onClick={openCreateModal}
+            className="btn btn-primary"
+          >
+            <HiOutlinePlus className="w-5 h-5 mr-2" />
+            {t('campaigns.create')}
+          </button>
+        )}
+      </div>
+
+      {/* Origin Tabs - Self Created vs Purchased */}
+      <div className="flex gap-2 border-b border-gray-200">
         <button
-          onClick={openCreateModal}
-          className="btn btn-primary"
+          onClick={() => {
+            setOriginTab('self_created');
+            setPagination((prev) => ({ ...prev, page: 1 }));
+          }}
+          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
+            originTab === 'self_created'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
         >
-          <HiOutlinePlus className="w-5 h-5 mr-2" />
-          {t('campaigns.create')}
+          {t('campaigns.selfCreated') || 'Tự tạo'}
+        </button>
+        <button
+          onClick={() => {
+            setOriginTab('marketplace_purchased');
+            setPagination((prev) => ({ ...prev, page: 1 }));
+          }}
+          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
+            originTab === 'marketplace_purchased'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {t('campaigns.purchased') || 'Đã mua từ Marketplace'}
+        </button>
+        <button
+          onClick={() => {
+            setOriginTab('shared_with_me');
+            setPagination((prev) => ({ ...prev, page: 1 }));
+          }}
+          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
+            originTab === 'shared_with_me'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {t('campaigns.sharedWithMe') || 'Được chia sẻ'}
         </button>
       </div>
 
@@ -301,13 +403,15 @@ const Campaigns = () => {
             </div>
             <h3 className="text-lg font-medium text-gray-900">{t('campaigns.noCampaigns')}</h3>
             <p className="text-gray-500 mt-1">{t('campaigns.startFirst')}</p>
-            <button
-              onClick={openCreateModal}
-              className="btn btn-primary mt-4"
-            >
-              <HiOutlinePlus className="w-5 h-5 mr-2" />
-              {t('campaigns.createFirst')}
-            </button>
+            {originTab === 'self_created' && (
+              <button
+                onClick={openCreateModal}
+                className="btn btn-primary mt-4"
+              >
+                <HiOutlinePlus className="w-5 h-5 mr-2" />
+                {t('campaigns.createFirst')}
+              </button>
+            )}
           </div>
         ) : (
           <div className="table-container relative">
@@ -334,6 +438,16 @@ const Campaigns = () => {
                         className="text-primary-600 hover:text-primary-700 font-medium"
                       >
                         {campaign.campaignName}
+                        {campaign.origin === 'marketplace_purchased' && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                            {t('campaigns.marketplace') || 'Marketplace'}
+                          </span>
+                        )}
+                        {campaign.origin === 'shared_received' && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                            {t('campaigns.shared') || 'Được chia sẻ'}
+                          </span>
+                        )}
                       </Link>
                     </td>
                     <td>
@@ -456,13 +570,40 @@ const Campaigns = () => {
                                   {t('campaigns.activate')}
                                 </button>
                               )}
-                              <button
-                                onClick={() => openDuplicateModal(campaign)}
-                                className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                              >
-                                <HiOutlineDuplicate className="w-4 h-4 mr-3" />
-                                {t('campaigns.duplicate')}
-                              </button>
+                              {/* Publish to Marketplace - only for self-created campaigns (not shared) */}
+                              {campaign.origin === 'self_created' && (
+                                <button
+                                  onClick={() => {
+                                    // TODO: Implement publish to marketplace
+                                    toast.success('Tính năng đang phát triển');
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full flex items-center px-4 py-2 text-sm text-purple-600 hover:bg-purple-50"
+                                >
+                                  <HiOutlineMail className="w-4 h-4 mr-3" />
+                                  {t('campaigns.publishToMarketplace') || 'Đăng Marketplace'}
+                                </button>
+                              )}
+                              {/* Share - only for self-created campaigns */}
+                              {campaign.origin === 'self_created' && (
+                                <button
+                                  onClick={() => openShareModal(campaign)}
+                                  className="w-full flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                                >
+                                  <HiOutlineMail className="w-4 h-4 mr-3" />
+                                  {t('campaigns.share') || 'Chia sẻ'}
+                                </button>
+                              )}
+                              {/* Duplicate - only for self-created campaigns (not marketplace, not shared) */}
+                              {originTab !== 'shared_with_me' && (!campaign.origin || campaign.origin === 'self_created') && (
+                                <button
+                                  onClick={() => openDuplicateModal(campaign)}
+                                  className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                >
+                                  <HiOutlineDuplicate className="w-4 h-4 mr-3" />
+                                  {t('campaigns.duplicate')}
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleDelete(campaign.id)}
                                 className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -640,6 +781,94 @@ const Campaigns = () => {
               </button>
               <button onClick={handleCreateCampaign} className="btn btn-primary" disabled={isCreatingCampaign}>
                 {isCreatingCampaign ? t('campaigns.creating') : t('campaigns.createAndDesign')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal chia sẻ chiến dịch */}
+      {showShareModal.show && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={closeShareModal}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {t('campaigns.shareModalTitle') || 'Chia sẻ chiến dịch'}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {showShareModal.campaign?.campaignName}
+              </p>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('campaigns.recipientEmail') || 'Email người nhận'}
+                </label>
+                <input
+                  type="email"
+                  value={shareForm.email}
+                  onChange={(e) => setShareForm({ ...shareForm, email: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleShare();
+                    if (e.key === 'Escape') closeShareModal();
+                  }}
+                  placeholder="email@example.com"
+                  className="input w-full"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('campaigns.sharePermission') || 'Quyền chia sẻ'}
+                </label>
+                <select
+                  value={shareForm.shareType}
+                  onChange={(e) => setShareForm({ ...shareForm, shareType: e.target.value })}
+                  className="input w-full"
+                >
+                  <option value="view">{t('campaigns.viewOnly') || 'Chỉ xem'}</option>
+                  <option value="edit">{t('campaigns.viewAndEdit') || 'Xem và chỉnh sửa'}</option>
+                </select>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="canRun"
+                  checked={shareForm.canRun}
+                  onChange={(e) => setShareForm({ ...shareForm, canRun: e.target.checked })}
+                  className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                />
+                <label htmlFor="canRun" className="ml-2 text-sm text-gray-700">
+                  {t('campaigns.canRunCampaign') || 'Cho phép chạy chiến dịch'}
+                </label>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
+              <button
+                onClick={closeShareModal}
+                disabled={isSharing}
+                className="btn btn-secondary"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={isSharing}
+                className="btn btn-primary"
+              >
+                {isSharing ? (
+                  <>
+                    <div className="spinner w-4 h-4 mr-2"></div>
+                    {t('common.processing')}
+                  </>
+                ) : (
+                  t('campaigns.share')
+                )}
               </button>
             </div>
           </div>

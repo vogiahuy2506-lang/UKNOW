@@ -90,11 +90,13 @@ import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import Marketplace from './pages/marketplace/Marketplace';
 import { MarketplaceModalProvider } from './contexts/MarketplaceModalProvider';
-import { ComingSoonProvider } from './contexts/ComingSoonProvider';
+import { useMarketplaceModal } from './contexts/useMarketplaceModal';
+import MarketplaceModal from './components/marketplace/MarketplaceModal';
 import MarketplaceListingRedirect from './pages/marketplace/MarketplaceListingRedirect';
-import CreateListing from './pages/marketplace/CreateListing';
+import MarketplaceCreateRedirect from './pages/marketplace/MarketplaceCreateRedirect';
 import AdminMarketplace from './pages/marketplace/AdminMarketplace';
 import MarketplaceAnalytics from './pages/marketplace/MarketplaceAnalytics';
+import ListingSettings from './pages/marketplace/ListingSettings';
 import { getPostAuthPath } from './utils/authRedirect';
 
 const LoadingScreen = () => {
@@ -204,6 +206,40 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+// Modal phải nằm trong <Router> để MarketplaceContent (dùng useNavigate) hoạt động.
+const MarketplaceModalRoot = () => {
+  const {
+    open,
+    selectedListingId,
+    selectedMyListingId,
+    activeTab,
+    hideMarketplace,
+    onSelectListing,
+    onSelectMyListing,
+    onTabChange,
+    showCreateForm,
+    onCreateSuccess,
+    showCreateListingForm,
+  } = useMarketplaceModal();
+  return (
+    <MarketplaceModal
+      open={open}
+      onClose={hideMarketplace}
+      // Tab "Khám phá" - chi tiết public
+      selectedListingId={selectedListingId}
+      onSelectListing={onSelectListing}
+      // Tab "Của tôi" - settings template
+      selectedMyListingId={selectedMyListingId}
+      onSelectMyListing={onSelectMyListing}
+      activeTab={activeTab}
+      onTabChange={onTabChange}
+      showCreateForm={showCreateForm}
+      onCreateSuccess={onCreateSuccess}
+      onShowCreateForm={showCreateListingForm}
+    />
+  );
+};
+
 function App() {
   const { t } = useI18n();
   const toaster = (
@@ -238,10 +274,9 @@ function App() {
     <>
       <I18nProvider>
         <MarketplaceModalProvider>
-        <ComingSoonProvider>
-        <Router>
-          <RouteAnalytics />
-          {toaster}
+          <Router>
+            <RouteAnalytics />
+            {toaster}
           <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={
@@ -400,8 +435,9 @@ function App() {
             <Route path="marketplace/my" element={<Marketplace />} />
             <Route path="marketplace/my-purchases" element={<Marketplace />} />
             <Route path="marketplace/my-favorites" element={<Marketplace />} />
-            <Route path="marketplace/create" element={<CreateListing />} />
+            <Route path="marketplace/create" element={<MarketplaceCreateRedirect />} />
             <Route path="marketplace/:id" element={<MarketplaceListingRedirect />} />
+            <Route path="marketplace/listing/:id/settings" element={<ListingSettings />} />
             <Route path="admin/marketplace" element={<AdminMarketplace />} />
             <Route path="admin/marketplace/analytics" element={<MarketplaceAnalytics />} />
           </Route>
@@ -445,8 +481,8 @@ function App() {
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Router>
-        </ComingSoonProvider>
+        <MarketplaceModalRoot />
+        </Router>
         </MarketplaceModalProvider>
       </I18nProvider>
       {createPortal(<div id="modal-root"></div>, document.body)}

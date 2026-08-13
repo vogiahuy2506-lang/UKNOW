@@ -12,10 +12,13 @@ export default function PublicFooter() {
             <div className="flex items-center gap-3 mb-4">
               <img src="/logo-digiso.png" alt="DIGISO" className="h-10 w-auto brightness-0 invert" />
             </div>
-            <p className="text-slate-400 text-sm leading-relaxed max-w-md mb-6">
+            <p className="text-slate-400 text-sm leading-relaxed max-w-md mb-4">
               {t('footer.publicBrandDesc')}
             </p>
-            <div className="flex items-center gap-4">
+            <p className="text-slate-500 text-xs">
+              <span className="font-medium">MST:</span> 0316725362
+            </p>
+            <div className="flex items-center gap-4 mt-6">
               <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-orange-500 transition-colors">
                 <span className="text-sm">f</span>
               </a>

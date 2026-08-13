@@ -37,6 +37,8 @@ class ZaloTemplateRepository {
         zt.template_name,
         zt.template_code,
         zt.subject,
+        zt.body_text,
+        zt.body_html,
         zt.category,
         zt.is_active,
         zt.usage_count,

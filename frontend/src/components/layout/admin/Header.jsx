@@ -13,7 +13,7 @@ import {
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
-import { useComingSoon } from '../../../contexts/useComingSoon';
+import { useMarketplaceModal } from '../../../contexts/useMarketplaceModal';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
@@ -28,7 +28,7 @@ const Header = () => {
   const { t, locale, changeLocale } = useI18n();
   const { user, logout, activeContext, switchContext } = useAuthStore();
   const navigate = useNavigate();
-  const { showComingSoon } = useComingSoon();
+  const { showMarketplace } = useMarketplaceModal();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
@@ -46,7 +46,7 @@ const Header = () => {
   }, []);
 
   const quickItems = [
-    { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showComingSoon() },
+    { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
     { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
     { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
     { key: 'pricing', label: t('header.pricing'), onClick: () => navigate('/pricing') },
@@ -95,7 +95,7 @@ const Header = () => {
         {/* Mobile: compact marketplace icon */}
         <button
           type="button"
-          onClick={() => showComingSoon()}
+          onClick={() => showMarketplace()}
           className="lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-600 text-white hover:bg-orange-700 shadow-sm transition-colors"
           aria-label="Marketplace"
         >

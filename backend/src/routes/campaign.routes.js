@@ -1,6 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
 import campaignController from '../controllers/campaign.controller.js';
+import campaignShareController from '../controllers/campaignShare.controller.js';
 import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
@@ -68,5 +69,42 @@ router.post('/:id/duplicate',
 
 // Đồng bộ trạng thái khách hàng từ Founder AI cho chiến dịch cụ thể
 router.post('/:id/sync-founderai', requirePermission('campaigns_view'), founderaiController.syncCampaignUknow.bind(founderaiController));
+
+// ============ Campaign Sharing ============
+
+// Share a campaign with another user
+router.post('/:id/share',
+  requirePermission('campaigns_view'),
+  [
+    body('recipientEmail').isEmail().withMessage('Email không hợp lệ'),
+    body('shareType').optional().isIn(['view', 'edit']).withMessage('Loại chia sẻ không hợp lệ')
+  ],
+  handleValidationErrors,
+  campaignShareController.share.bind(campaignShareController)
+);
+
+// Get campaigns shared with me
+router.get('/shared/with-me',
+  requirePermission('campaigns_view'),
+  campaignShareController.getSharedWithMe.bind(campaignShareController)
+);
+
+// Get campaigns I've shared with others
+router.get('/shared/by-me',
+  requirePermission('campaigns_view'),
+  campaignShareController.getSharedByMe.bind(campaignShareController)
+);
+
+// Get all shares for a campaign (owner only)
+router.get('/:id/shares',
+  requirePermission('campaigns_view'),
+  campaignShareController.getCampaignShares.bind(campaignShareController)
+);
+
+// Revoke a share
+router.delete('/:id/share',
+  requirePermission('campaigns_view'),
+  campaignShareController.revokeShare.bind(campaignShareController)
+);
 
 export default router;

@@ -83,6 +83,11 @@ export const marketplaceService = {
   removeFavorite(listingId) {
     return api.delete(`${MARKETPLACE_URL}/favorites/${listingId}`);
   },
+
+  // Vote review as helpful
+  voteReviewHelpful(reviewId) {
+    return api.post(`${MARKETPLACE_URL}/reviews/${reviewId}/helpful`);
+  },
 };
 
 export default marketplaceService;

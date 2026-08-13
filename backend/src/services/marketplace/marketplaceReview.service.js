@@ -1,6 +1,7 @@
 import marketplaceReviewRepository from '../../repositories/marketplace/marketplaceReview.repository.js';
 import marketplaceListingRepository from '../../repositories/marketplace/marketplaceListing.repository.js';
 import marketplacePurchaseRepository from '../../repositories/marketplace/marketplacePurchase.repository.js';
+import db from '../../config/database.js';
 
 class MarketplaceReviewService {
   /**
@@ -12,28 +13,41 @@ class MarketplaceReviewService {
    */
   async createOrUpdate(listingId, userId, data) {
     const { rating, reviewText } = data;
+    const client = await db.getClient();
 
-    // Verify user has purchased the listing
-    const purchase = await marketplacePurchaseRepository.findByUserAndListing(userId, listingId);
-    if (!purchase) {
-      const error = new Error('Bạn cần mua listing trước khi đánh giá');
-      error.status = 403;
+    try {
+      await client.query('BEGIN');
+
+      // Verify user has purchased the listing (trong transaction để tránh TOCTOU)
+      const purchase = await marketplacePurchaseRepository.findByUserAndListingTx(
+        client, userId, listingId
+      );
+      if (!purchase) {
+        const error = new Error('Bạn cần mua listing trước khi đánh giá');
+        error.status = 403;
+        throw error;
+      }
+
+      // Create/update review trong transaction
+      const review = await marketplaceReviewRepository.createTx(client, {
+        idUser: userId,
+        listingId,
+        rating,
+        reviewText,
+      });
+
+      // Recalculate listing rating dựa trên dữ liệu mới nhất
+      const stats = await marketplaceReviewRepository.getAverageRatingTx(client, listingId);
+      await marketplaceListingRepository.updateRating(listingId, stats.avg, stats.count);
+
+      await client.query('COMMIT');
+      return review;
+    } catch (error) {
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
-
-    // Create/update review
-    const review = await marketplaceReviewRepository.create({
-      idUser: userId,
-      listingId,
-      rating,
-      reviewText,
-    });
-
-    // Recalculate listing rating
-    const stats = await marketplaceReviewRepository.getAverageRating(listingId);
-    await marketplaceListingRepository.updateRating(listingId, stats.avg, stats.count);
-
-    return review;
   }
 
   /**

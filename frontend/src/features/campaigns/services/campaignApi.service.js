@@ -44,6 +44,27 @@ export const campaignApiService = {
   duplicateCampaign(campaignId, payload) {
     return api.post(`/campaigns/${campaignId}/duplicate`, payload);
   },
+
+  // Campaign sharing
+  getSharedWithMe(params = {}) {
+    return api.get('/campaigns/shared/with-me', { params });
+  },
+
+  getSharedByMe(params = {}) {
+    return api.get('/campaigns/shared/by-me', { params });
+  },
+
+  shareCampaign(campaignId, payload) {
+    return api.post(`/campaigns/${campaignId}/share`, payload);
+  },
+
+  getCampaignShares(campaignId) {
+    return api.get(`/campaigns/${campaignId}/shares`);
+  },
+
+  revokeShare(campaignId, payload) {
+    return api.delete(`/campaigns/${campaignId}/share`, { data: payload });
+  },
 };
 
 export default campaignApiService;

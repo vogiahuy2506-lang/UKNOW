@@ -93,7 +93,13 @@ router.get('/:id/domain-verification/status',
 
 router.post('/send-email',
   [
-    body('fromEmailId').isInt().withMessage('Email gửi không hợp lệ'),
+    body('fromEmailId').custom((value) => {
+      const id = parseInt(value, 10);
+      if (isNaN(id) || id < 1) {
+        throw new Error('Email gửi không hợp lệ');
+      }
+      return true;
+    }),
     body('to').isEmail().withMessage('Email người nhận không hợp lệ'),
     body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
     body('cc').optional().custom((value) => {
@@ -112,8 +118,8 @@ router.post('/send-email',
       }
       return true;
     }),
-    body('subject').optional().isLength({ min: 1 }).withMessage('Tiêu đề không được để trống'),
-    body('content').optional().isLength({ min: 1 }).withMessage('Nội dung không được để trống')
+    body('subject').optional(),
+    body('content').optional()
   ],
   handleValidationErrors,
   emailSettingsController.sendCustomEmail.bind(emailSettingsController)

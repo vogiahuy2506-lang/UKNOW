@@ -12,7 +12,7 @@ import {
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
-import { useComingSoon } from '../../../contexts/useComingSoon';
+import { useMarketplaceModal } from '../../../contexts/useMarketplaceModal';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 
@@ -20,7 +20,7 @@ const QuickTaskBar = ({ className = '' }) => {
   const { t, locale, changeLocale } = useI18n();
   const { user, logout, activeContext, switchContext } = useAuthStore();
   const navigate = useNavigate();
-  const { showComingSoon } = useComingSoon();
+  const { showMarketplace } = useMarketplaceModal();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
@@ -38,7 +38,7 @@ const QuickTaskBar = ({ className = '' }) => {
   }, []);
 
   const quickItems = [
-    { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showComingSoon() },
+    { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
     { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
     { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
     { key: 'pricing', label: t('header.pricing'), onClick: () => navigate('/pricing') },

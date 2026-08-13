@@ -8,6 +8,17 @@ import en from '../i18n/en';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+// Request deduplication - prevent duplicate concurrent requests
+const pendingRequests = new Map();
+
+const getRequestKey = (config) => {
+  return `${config.method || 'GET'}:${config.url}:${JSON.stringify(config.params || {})}`;
+};
+
+const cleanupRequest = (key) => {
+  pendingRequests.delete(key);
+};
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -99,6 +110,18 @@ const forceLogoutAndRedirect = async () => {
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
+    // Request deduplication - cancel duplicate in-flight requests
+    const key = getRequestKey(config);
+    if (pendingRequests.has(key)) {
+      const controller = pendingRequests.get(key);
+      controller.abort();
+      pendingRequests.delete(key);
+    }
+    
+    const controller = new AbortController();
+    config.signal = controller.signal;
+    pendingRequests.set(key, controller);
+    
     const token = getStoredToken('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -125,8 +148,18 @@ const getLimitReachedLabel = () => {
 
 // Response interceptor
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Clean up pending request on success
+    const key = getRequestKey(response.config);
+    cleanupRequest(key);
+    return response;
+  },
   async (error) => {
+    // Clean up pending request on error
+    if (error.config) {
+      const key = getRequestKey(error.config);
+      cleanupRequest(key);
+    }
     // Map server message vào Error.message để toast/UI không hiện chuỗi axios mặc định (vd. 429)
     const serverMessage = error.response?.data?.message;
     if (typeof serverMessage === 'string' && serverMessage.trim()) {

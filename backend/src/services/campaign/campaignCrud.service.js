@@ -24,12 +24,12 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object>}
    */
-  async getAllCampaigns({ userId, roleCode, page = 1, limit = 10, status, type, search }) {
+  async getAllCampaigns({ userId, roleCode, page = 1, limit = 10, status, type, search, origin }) {
     const offset = (page - 1) * limit;
     const isAdmin = isAdminRole(roleCode);
 
-    const rows = await campaignCrudRepository.findCampaigns({ userId, isAdmin, status, type, search, limit, offset });
-    const total = await campaignCrudRepository.countCampaigns({ userId, isAdmin, status, type, search });
+    const rows = await campaignCrudRepository.findCampaigns({ userId, isAdmin, status, type, search, origin, limit, offset });
+    const total = await campaignCrudRepository.countCampaigns({ userId, isAdmin, status, type, search, origin });
 
     return {
       items: rows.map((item) => ({
@@ -54,6 +54,7 @@ class CampaignCrudService {
         runningCount: item.running_count,
         completedCount: item.completed_count,
         createdBy: item.creator_name ? { name: item.creator_name } : null,
+        origin: item.origin,
       })),
       pagination: {
         page: parseInt(page, 10),
@@ -483,6 +484,22 @@ class CampaignCrudService {
       if (!originalCampaign) {
         await client.query('ROLLBACK');
         return null;
+      }
+
+      // Only owner can duplicate (not shared campaigns)
+      if (originalCampaign.id_user !== userId && !isAdmin) {
+        await client.query('ROLLBACK');
+        const error = new Error('Chỉ chủ sở hữu mới có thể nhân bản chiến dịch');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // Cannot duplicate marketplace purchased campaigns
+      if (originalCampaign.origin === 'marketplace_purchased') {
+        await client.query('ROLLBACK');
+        const error = new Error('Không thể nhân bản chiến dịch mua từ marketplace');
+        error.statusCode = 403;
+        throw error;
       }
 
       await enforceResourceLimitTx(client, {

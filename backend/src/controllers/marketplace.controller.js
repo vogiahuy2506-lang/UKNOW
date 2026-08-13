@@ -98,7 +98,7 @@ class MarketplaceController {
       const { id } = req.params;
       const userId = req.user?.id;
 
-      const listing = await marketplaceListingService.getById(parseInt(id, 10));
+      const listing = await marketplaceListingService.getById(parseInt(id, 10), userId);
       if (!listing) {
         return res.status(404).json({
           success: false,
@@ -324,6 +324,14 @@ class MarketplaceController {
         data: result,
       });
     } catch (error) {
+      if (error.code === 'CAMPAIGN_LIMIT_EXCEEDED') {
+        return res.status(400).json({
+          success: false,
+          code: 'CAMPAIGN_LIMIT_EXCEEDED',
+          message: error.message,
+          limitReached: true,
+        });
+      }
       next(error);
     }
   }
@@ -337,15 +345,18 @@ class MarketplaceController {
       const userId = req.user.id;
       const { page = 1, limit = 20 } = req.query;
 
+      const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);
+      const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+
       const { purchases, total } = await marketplacePurchaseService.getUserPurchases(userId, {
-        limit: parseInt(limit, 10),
-        offset: paginate({ page, limit }).offset,
+        limit: sanitizedLimit,
+        offset: paginate({ page: sanitizedPage, limit: sanitizedLimit }).offset,
       });
 
       res.json({
         success: true,
         data: purchases,
-        pagination: paginate({ page, limit, total }),
+        pagination: paginate({ page: sanitizedPage, limit: sanitizedLimit, total }),
       });
     } catch (error) {
       next(error);
@@ -392,15 +403,18 @@ class MarketplaceController {
       const { id } = req.params;
       const { page = 1, limit = 20 } = req.query;
 
+      const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);
+      const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+
       const { reviews, total } = await marketplaceReviewService.getByListing(parseInt(id, 10), {
-        limit: parseInt(limit, 10),
-        offset: paginate({ page, limit }).offset,
+        limit: sanitizedLimit,
+        offset: paginate({ page: sanitizedPage, limit: sanitizedLimit }).offset,
       });
 
       res.json({
         success: true,
         data: reviews,
-        pagination: paginate({ page, limit, total }),
+        pagination: paginate({ page: sanitizedPage, limit: sanitizedLimit, total }),
       });
     } catch (error) {
       next(error);
@@ -505,15 +519,18 @@ class MarketplaceController {
       const userId = req.user.id;
       const { page = 1, limit = 20 } = req.query;
 
+      const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);
+      const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+
       const { favorites, total } = await marketplaceFavoriteService.getUserFavorites(userId, {
-        limit: parseInt(limit, 10),
-        offset: paginate({ page, limit }).offset,
+        limit: sanitizedLimit,
+        offset: paginate({ page: sanitizedPage, limit: sanitizedLimit }).offset,
       });
 
       res.json({
         success: true,
         data: favorites,
-        pagination: paginate({ page, limit, total }),
+        pagination: paginate({ page: sanitizedPage, limit: sanitizedLimit, total }),
       });
     } catch (error) {
       next(error);

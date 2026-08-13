@@ -3,6 +3,12 @@
 
 BEGIN;
 
+-- Drop existing tables (safe to run even if they don't exist)
+DROP TABLE IF EXISTS marketplace_favorites CASCADE;
+DROP TABLE IF EXISTS marketplace_reviews CASCADE;
+DROP TABLE IF EXISTS marketplace_purchases CASCADE;
+DROP TABLE IF EXISTS marketplace_listings CASCADE;
+
 -- 1. marketplace_listings (listing chính)
 CREATE TABLE marketplace_listings (
     id BIGSERIAL PRIMARY KEY,

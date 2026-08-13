@@ -1,7 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
-import customerApiService from '../../features/customers/services/customerApi.service';
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
@@ -13,8 +12,8 @@ import {
   HiOutlineChat,
   HiOutlineUsers,
   HiOutlineCheckCircle,
+  HiOutlineXCircle,
   HiOutlineChevronRight,
-  HiOutlineSearch,
 } from 'react-icons/hi';
 
 const QUICK_SEND_STEPS = {
@@ -35,14 +34,9 @@ const QuickSend = () => {
   const [currentStep, setCurrentStep] = useState(QUICK_SEND_STEPS.RECIPIENTS);
   const [selectedChannel, setSelectedChannel] = useState(CHANNEL_TYPES.EMAIL);
 
-  // Recipients state
-  const [customers, setCustomers] = useState([]);
-  const [selectedCustomers, setSelectedCustomers] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  // Manual input state
   const [manualEmails, setManualEmails] = useState('');
   const [manualPhones, setManualPhones] = useState('');
-  const [showManualInput, setShowManualInput] = useState(false);
 
   // Sender accounts state
   const [emailAccounts, setEmailAccounts] = useState([]);
@@ -62,20 +56,6 @@ const QuickSend = () => {
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
 
-  // Fetch customers
-  const fetchCustomers = useCallback(async () => {
-    setIsLoadingCustomers(true);
-    try {
-      const response = await customerApiService.getCustomers({ page: 1, limit: 100 });
-      const items = response?.data?.data?.items || [];
-      setCustomers(items);
-    } catch (error) {
-      toast.error(t('quickSend.loadCustomersFailed'));
-    } finally {
-      setIsLoadingCustomers(false);
-    }
-  }, [t]);
-
   // Fetch templates
   const fetchTemplates = useCallback(async () => {
     setIsLoadingTemplates(true);
@@ -84,6 +64,7 @@ const QuickSend = () => {
         emailTemplateApiService.getTemplates({ page: 1, limit: 50 }),
         zaloTemplateApiService.getTemplates({ page: 1, limit: 50 }),
       ]);
+      // Backend trả về data.items, items chứa templateName, subject, bodyHtml/bodyText
       setEmailTemplates(emailRes?.data?.data?.items || []);
       setZaloTemplates(zaloRes?.data?.data?.items || []);
     } catch (error) {
@@ -122,55 +103,25 @@ const QuickSend = () => {
   useEffect(() => {
     if (currentStep === QUICK_SEND_STEPS.RECIPIENTS) {
       fetchAccounts();
-      fetchCustomers();
     } else if (currentStep === QUICK_SEND_STEPS.TEMPLATE) {
       fetchTemplates();
     }
-  }, [currentStep, fetchCustomers, fetchTemplates, fetchAccounts]);
+  }, [currentStep, fetchTemplates, fetchAccounts]);
 
-  // Filter customers by search
-  const filteredCustomers = useMemo(() => {
-    if (!searchTerm) return customers;
-    const term = searchTerm.toLowerCase();
-    return customers.filter(
-      (c) =>
-        (c.name || '').toLowerCase().includes(term) ||
-        (c.email || '').toLowerCase().includes(term) ||
-        (c.phone || '').toLowerCase().includes(term)
-    );
-  }, [customers, searchTerm]);
-
-  // Get final recipients
-  const finalRecipients = useMemo(() => {
-    const selected = selectedCustomers.map((id) => {
-      const customer = customers.find((c) => c.id === id);
-      return customer;
-    }).filter(Boolean);
-
+  // Get final recipients from manual input only
+  const finalRecipients = () => {
     const manualList = (selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones)
       .split(/[\n,]/)
       .map((s) => s.trim())
       .filter((s) => s && (selectedChannel === CHANNEL_TYPES.EMAIL ? s.includes('@') : /^\d+$/.test(s)));
 
-    return [...selected, ...manualList.map((contact) => ({ email: contact, phone: contact, name: contact }))];
-  }, [selectedCustomers, customers, manualEmails, manualPhones, selectedChannel]);
-
-  // Toggle customer selection
-  const toggleCustomer = (customerId) => {
-    setSelectedCustomers((prev) =>
-      prev.includes(customerId) ? prev.filter((id) => id !== customerId) : [...prev, customerId]
-    );
+    return manualList.map((contact) => ({ email: contact, phone: contact, name: contact }));
   };
 
-  // Select all filtered customers
-  const selectAllFiltered = () => {
-    const filteredIds = filteredCustomers.map((c) => c.id);
-    setSelectedCustomers((prev) => [...new Set([...prev, ...filteredIds])]);
-  };
-
-  // Deselect all
-  const deselectAll = () => {
-    setSelectedCustomers([]);
+  // Check if has manual recipients
+  const hasManualRecipients = () => {
+    const input = selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones;
+    return input.trim().length > 0;
   };
 
   // Select template
@@ -179,18 +130,19 @@ const QuickSend = () => {
     if (selectedChannel === CHANNEL_TYPES.EMAIL) {
       setTemplateContent({
         subject: template.subject || '',
-        body: template.html_content || template.content || '',
+        body: template.bodyHtml || template.body_text || '',
       });
     } else {
       setTemplateContent({
-        body: template.content || template.message || '',
+        body: template.bodyText || template.body_text || '',
       });
     }
   };
 
-  // Send quick campaign
+  // Send quick campaign - gửi trực tiếp không cần tạo campaign
   const handleSend = async () => {
-    if (finalRecipients.length === 0) {
+    const recipients = finalRecipients();
+    if (recipients.length === 0) {
       toast.error(t('quickSend.noRecipients'));
       return;
     }
@@ -217,55 +169,61 @@ const QuickSend = () => {
     setCurrentStep(QUICK_SEND_STEPS.SENDING);
 
     try {
-      // Create a temporary campaign for sending
-      const campaignPayload = {
-        name: `${t('quickSend.campaignPrefix') || 'Quick Send'} - ${new Date().toLocaleString('vi-VN')}`,
-        type: selectedChannel,
-        status: 'draft',
-        flow_data: {
-          nodes: [
-            {
-              id: 'send-node',
-              type: selectedChannel === CHANNEL_TYPES.EMAIL ? 'sendEmail' : 'sendZalo',
-              data: {
-                templateId: selectedTemplate?.id,
-                subject: templateContent.subject,
-                content: templateContent.body,
-                emailAccountId: selectedEmailAccount?.id,
-                zaloAccountId: selectedZaloAccount?.id,
-              },
-            },
-          ],
-          edges: [],
-        },
-      };
+      const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
+      let successCount = 0;
+      let failCount = 0;
 
-      // Create campaign
-      const campaignRes = await campaignApiService.createCampaign(campaignPayload);
-      const campaignId = campaignRes?.data?.data?.id;
-
-      if (!campaignId) {
-        throw new Error('Failed to create campaign');
+      if (isEmail) {
+        // Gửi email trực tiếp cho từng người nhận
+        for (const recipient of recipients) {
+          try {
+            await emailSettingsApiService.sendEmail({
+              fromEmailId: parseInt(selectedEmailAccount.id, 10),
+              to: recipient.email,
+              subject: templateContent.subject || selectedTemplate?.subject || 'Không có tiêu đề',
+              content: templateContent.body || selectedTemplate?.bodyHtml || '',
+            });
+            successCount++;
+          } catch (err) {
+            console.error('Send email error to:', recipient.email, err);
+            failCount++;
+          }
+        }
+      } else {
+        // Gửi Zalo trực tiếp cho từng người nhận
+        const message = templateContent.body || selectedTemplate?.bodyText || '';
+        for (const recipient of recipients) {
+          try {
+            await zaloSettingsApiService.sendMessage({
+              accountId: selectedZaloAccount.id,
+              phone: recipient.phone,
+              message: message,
+            });
+            successCount++;
+          } catch (err) {
+            console.error('Send Zalo error to:', recipient.phone, err);
+            failCount++;
+          }
+        }
       }
 
-      // Add recipients and run
-      const recipientPayload = selectedChannel === CHANNEL_TYPES.EMAIL
-        ? { emails: finalRecipients.map((r) => r.email || r.phone).filter(Boolean) }
-        : { phone_numbers: finalRecipients.map((r) => r.phone || r.email).filter(Boolean) };
-
-      // Run campaign immediately
-      const runRes = await campaignApiService.runCampaign(campaignId, recipientPayload);
-
-      setSendResult({
-        success: true,
-        campaignId,
-        recipientsCount: finalRecipients.length,
-        runId: runRes?.data?.data?.runId,
-      });
-      setCurrentStep(QUICK_SEND_STEPS.DONE);
-      toast.success(t('quickSend.sendSuccess'));
+      if (successCount === 0) {
+        toast.error(t('quickSend.sendFailed'));
+        setSendResult({ success: false, failCount });
+        setCurrentStep(QUICK_SEND_STEPS.DONE);
+      } else {
+        setSendResult({
+          success: true,
+          recipientsCount: recipients.length,
+          successCount,
+          failCount,
+        });
+        setCurrentStep(QUICK_SEND_STEPS.DONE);
+        toast.success(t('quickSend.sendSuccess'));
+      }
     } catch (error) {
-      toast.error(error?.message || t('quickSend.sendFailed'));
+      console.error('Quick send error:', error);
+      toast.error(error?.response?.data?.message || error?.message || t('quickSend.sendFailed'));
       setCurrentStep(QUICK_SEND_STEPS.PREVIEW);
     } finally {
       setIsSending(false);
@@ -275,7 +233,6 @@ const QuickSend = () => {
   // Reset and start over
   const handleStartOver = () => {
     setCurrentStep(QUICK_SEND_STEPS.RECIPIENTS);
-    setSelectedCustomers([]);
     setSelectedTemplate(null);
     setTemplateContent({ subject: '', body: '' });
     setManualEmails('');
@@ -462,121 +419,42 @@ const QuickSend = () => {
               </div>
             )}
 
-            {/* Recipients from Customers */}
+            {/* Manual Input Section */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">{t('quickSend.selectRecipients')}</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={selectAllFiltered}
-                    className="text-sm text-orange-600 hover:text-orange-700"
-                  >
-                    {t('quickSend.selectAll')}
-                  </button>
-                  <span className="text-gray-300">|</span>
-                  <button
-                    onClick={deselectAll}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    {t('quickSend.deselectAll')}
-                  </button>
-                </div>
+              <div className="flex items-center gap-2 mb-4">
+                <HiOutlinePlus className="w-5 h-5 text-orange-500" />
+                <h2 className="text-lg font-semibold text-gray-900">{t('quickSend.manualInput')}</h2>
               </div>
-
-              {/* Search */}
-              <div className="relative mb-4">
-                <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={t('quickSend.searchPlaceholder')}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                />
-              </div>
-
-              {/* Customer List */}
-              {isLoadingCustomers ? (
-                <div className="flex items-center justify-center py-10">
-                  <div className="h-8 w-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
-                </div>
-              ) : (
-                <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
-                  {filteredCustomers.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500">{t('quickSend.noCustomers')}</div>
-                  ) : (
-                    filteredCustomers.map((customer) => (
-                      <label
-                        key={customer.id}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedCustomers.includes(customer.id)}
-                          onChange={() => toggleCustomer(customer.id)}
-                          className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{customer.name || 'No name'}</p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {selectedChannel === CHANNEL_TYPES.EMAIL ? customer.email : customer.phone}
-                          </p>
-                        </div>
-                      </label>
-                    ))
-                  )}
-                </div>
-              )}
-
-              <p className="text-sm text-gray-500 mt-2">
-                {t('quickSend.selectedCount', { count: selectedCustomers.length })}
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {selectedChannel === CHANNEL_TYPES.EMAIL
+                  ? t('quickSend.manualEmails')
+                  : t('quickSend.manualPhones')}
+              </label>
+              <textarea
+                value={selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones}
+                onChange={(e) =>
+                  selectedChannel === CHANNEL_TYPES.EMAIL
+                    ? setManualEmails(e.target.value)
+                    : setManualPhones(e.target.value)
+                }
+                placeholder={
+                  selectedChannel === CHANNEL_TYPES.EMAIL
+                    ? 'email1@example.com\nemail2@example.com'
+                    : '0901234567\n0902345678'
+                }
+                rows={6}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                {t('quickSend.manualInputHint')}
               </p>
-            </div>
-
-            {/* Manual Input Toggle */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <button
-                onClick={() => setShowManualInput(!showManualInput)}
-                className="flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium"
-              >
-                <HiOutlinePlus className="w-5 h-5" />
-                {showManualInput ? t('quickSend.hideManualInput') : t('quickSend.addManualInput')}
-              </button>
-
-              {showManualInput && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {selectedChannel === CHANNEL_TYPES.EMAIL
-                      ? t('quickSend.manualEmails')
-                      : t('quickSend.manualPhones')}
-                  </label>
-                  <textarea
-                    value={selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones}
-                    onChange={(e) =>
-                      selectedChannel === CHANNEL_TYPES.EMAIL
-                        ? setManualEmails(e.target.value)
-                        : setManualPhones(e.target.value)
-                    }
-                    placeholder={
-                      selectedChannel === CHANNEL_TYPES.EMAIL
-                        ? 'email1@example.com\nemail2@example.com'
-                        : '0901234567\n0902345678'
-                    }
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {t('quickSend.manualInputHint')}
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Next Button */}
             <div className="flex justify-end">
               <button
                 onClick={() => setCurrentStep(QUICK_SEND_STEPS.TEMPLATE)}
-                disabled={selectedCustomers.length === 0 && !manualEmails && !manualPhones}
+                disabled={!hasManualRecipients()}
                 className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {t('quickSend.next')}
@@ -609,13 +487,13 @@ const QuickSend = () => {
                       }`}
                     >
                       <p className="font-medium text-gray-900 truncate">
-                        {template.name || template.title || 'Untitled'}
+                        {template.templateName || template.name || template.title || 'Untitled'}
                       </p>
                       {template.subject && (
                         <p className="text-sm text-gray-500 truncate mt-1">{template.subject}</p>
                       )}
                       <p className="text-xs text-gray-400 truncate mt-1">
-                        {template.content || template.message || ''}
+                        {template.bodyText || template.body_html || template.body_text || ''}
                       </p>
                     </button>
                   ))}
@@ -625,7 +503,7 @@ const QuickSend = () => {
               {selectedTemplate && (
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                   <p className="text-sm font-medium text-gray-700 mb-2">{t('quickSend.selectedTemplate')}</p>
-                  <p className="text-gray-900">{selectedTemplate.name || selectedTemplate.title}</p>
+                  <p className="text-gray-900">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
                 </div>
               )}
             </div>
@@ -672,7 +550,7 @@ const QuickSend = () => {
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-500">{t('quickSend.recipients')}</p>
-                  <p className="text-lg font-semibold text-gray-900">{finalRecipients.length}</p>
+                  <p className="text-lg font-semibold text-gray-900">{finalRecipients().length}</p>
                 </div>
               </div>
 
@@ -680,7 +558,7 @@ const QuickSend = () => {
               {selectedTemplate && (
                 <div className="p-4 bg-gray-50 rounded-lg mb-4">
                   <p className="text-sm font-medium text-gray-700">{t('quickSend.template')}</p>
-                  <p className="text-gray-900 mt-1">{selectedTemplate.name || selectedTemplate.title}</p>
+                  <p className="text-gray-900 mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
                 </div>
               )}
 
@@ -688,14 +566,14 @@ const QuickSend = () => {
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm font-medium text-gray-700 mb-2">{t('quickSend.recipientsList')}</p>
                 <div className="max-h-40 overflow-y-auto">
-                  {finalRecipients.slice(0, 20).map((r, i) => (
+                  {finalRecipients().slice(0, 20).map((r, i) => (
                     <p key={i} className="text-sm text-gray-600">
                       {r.name || r.email || r.phone}
                     </p>
                   ))}
-                  {finalRecipients.length > 20 && (
+                  {finalRecipients().length > 20 && (
                     <p className="text-sm text-gray-500 mt-2">
-                      ...{t('quickSend.andMore', { count: finalRecipients.length - 20 })}
+                      ...{t('quickSend.andMore', { count: finalRecipients().length - 20 })}
                     </p>
                   )}
                 </div>
@@ -741,25 +619,36 @@ const QuickSend = () => {
         {/* Done */}
         {currentStep === QUICK_SEND_STEPS.DONE && sendResult && (
           <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <HiOutlineCheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sendSuccessTitle')}</h2>
-            <p className="text-gray-500 mb-6">
-              {t('quickSend.sendSuccessDesc', { count: sendResult.recipientsCount })}
-            </p>
+            {sendResult.success ? (
+              <>
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <HiOutlineCheckCircle className="w-8 h-8 text-green-500" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sendSuccessTitle')}</h2>
+                <p className="text-gray-500 mb-2">
+                  {t('quickSend.sendSuccessDesc', { count: sendResult.successCount })}
+                </p>
+                {sendResult.failCount > 0 && (
+                  <p className="text-red-600 text-sm mb-4">
+                    {t('quickSend.sendPartialFail', { failCount: sendResult.failCount })}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <HiOutlineXCircle className="w-8 h-8 text-red-500" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sendAllFailedTitle')}</h2>
+                <p className="text-gray-500 mb-4">{t('quickSend.sendAllFailedDesc')}</p>
+              </>
+            )}
             <div className="flex justify-center gap-4">
               <button
                 onClick={handleStartOver}
                 className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
               >
                 {t('quickSend.sendAnother')}
-              </button>
-              <button
-                onClick={() => window.location.href = '/app/campaigns'}
-                className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition"
-              >
-                {t('quickSend.viewCampaigns')}
               </button>
             </div>
           </div>

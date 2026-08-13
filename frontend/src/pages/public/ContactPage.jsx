@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineMail, HiOutlinePhone, HiOutlineLocationMarker,
   HiOutlineCheckCircle, HiOutlineArrowRight,
-  HiOutlineClock,
+  HiOutlineClock, HiOutlineIdentification,
 } from 'react-icons/hi';
 import { FaArrowRight } from 'react-icons/fa';
 import PublicFooter from './components/PublicFooter';
@@ -31,6 +31,15 @@ const getChannels = (t) => [
     value: '(+84) 877 909 606',
     meta: t('contact.channelHotlineMeta'),
     href: 'tel:+84877909606',
+  },
+  {
+    icon: HiOutlineIdentification,
+    iconBg: 'bg-gradient-to-br from-purple-500 to-pink-600',
+    iconRing: 'bg-purple-100',
+    label: t('contact.channelTaxIdLabel'),
+    value: '0316725362',
+    meta: t('contact.channelTaxIdMeta'),
+    href: null,
   },
   {
     icon: HiOutlineLocationMarker,
@@ -242,12 +251,9 @@ export default function ContactPage() {
               {/* Channel list — icon block style */}
               <div className="space-y-2.5 flex-1">
                 {contactChannels.map((ch) => (
-                  <a
+                  <div
                     key={ch.label}
-                    href={ch.href}
-                    target={ch.href.startsWith('http') ? '_blank' : undefined}
-                    rel={ch.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                    className="group flex items-center gap-3.5 p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-300 hover:shadow-sm transition-all"
+                    className={`group flex items-center gap-3.5 p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-300 hover:shadow-sm transition-all ${ch.href ? 'cursor-pointer' : 'cursor-default'}`}
                   >
                     <div className={`relative w-10 h-10 rounded-xl ${ch.iconRing} flex items-center justify-center shrink-0`}>
                       <div className={`w-7 h-7 rounded-lg ${ch.iconBg} flex items-center justify-center`}>
@@ -265,8 +271,12 @@ export default function ContactPage() {
                         {ch.meta}
                       </div>
                     </div>
-                    <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all shrink-0" />
-                  </a>
+                    {ch.href ? (
+                      <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    ) : (
+                      <div className="w-4 h-4 shrink-0" />
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

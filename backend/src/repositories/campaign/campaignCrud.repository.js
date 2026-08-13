@@ -10,11 +10,12 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.status
    * @param {string|undefined} params.type
    * @param {string|undefined} params.search
+   * @param {string|undefined} params.origin - 'self_created' | 'marketplace_purchased'
    * @param {number} params.limit
    * @param {number} params.offset
    * @returns {Promise<object[]>}
    */
-  async findCampaigns({ userId, isAdmin, status, type, search, limit, offset }) {
+  async findCampaigns({ userId, isAdmin, status, type, search, origin, limit, offset }) {
     let query = `
       SELECT c.id, c.campaign_name, c.description, c.campaign_type, c.status,
              c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
@@ -22,7 +23,7 @@ class CampaignCrudRepository {
              c.total_opened, c.total_clicked, c.total_converted, c.total_revenue,
              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
              c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
-             c.id_user,
+             c.id_user, c.origin, c.marketplace_purchase_id,
              COALESCE(u.full_name, u.username) AS creator_name,
              COALESCE(run_stats.running_count, 0)::INTEGER AS running_count,
              COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count
@@ -56,6 +57,10 @@ class CampaignCrudRepository {
       params.push(`%${search}%`);
       query += ` AND c.campaign_name ILIKE $${params.length}`;
     }
+    if (origin) {
+      params.push(origin);
+      query += ` AND c.origin = $${params.length}`;
+    }
 
     query += ` ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
@@ -73,9 +78,10 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.status
    * @param {string|undefined} params.type
    * @param {string|undefined} params.search
+   * @param {string|undefined} params.origin
    * @returns {Promise<number>}
    */
-  async countCampaigns({ userId, isAdmin, status, type, search }) {
+  async countCampaigns({ userId, isAdmin, status, type, search, origin }) {
     let countQuery = 'SELECT COUNT(*) FROM campaigns WHERE 1=1';
     const countParams = [];
 
@@ -94,6 +100,10 @@ class CampaignCrudRepository {
     if (search) {
       countParams.push(`%${search}%`);
       countQuery += ` AND campaign_name ILIKE $${countParams.length}`;
+    }
+    if (origin) {
+      countParams.push(origin);
+      countQuery += ` AND origin = $${countParams.length}`;
     }
 
     const countResult = await db.query(countQuery, countParams);
@@ -120,12 +130,13 @@ class CampaignCrudRepository {
              c.total_converted, c.total_revenue,
              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
              c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
-      FROM campaigns c WHERE c.id = $1`;
+      FROM campaigns c
+      LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $2
+      WHERE c.id = $1 AND (c.id_user = $2 OR cs.id IS NOT NULL)`;
     if (!isAdmin) {
-      params.push(userId);
-      query += ` AND id_user = $${params.length}`;
+      query += ` AND (c.id_user = $2 OR cs.share_type IN ('edit', 'view'))`;
     }
-    const result = await db.query(query, params);
+    const result = await db.query(query, [campaignId, userId]);
     return result.rows[0] || null;
   }
 
@@ -168,7 +179,6 @@ class CampaignCrudRepository {
    * @returns {Promise<object|null>}
    */
   async findCampaignByIdTx(client, { campaignId, isAdmin, userId }) {
-    const campaignParams = [campaignId];
     let campaignQuery = `
         SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
                c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
@@ -178,12 +188,10 @@ class CampaignCrudRepository {
                c.total_converted, c.total_revenue,
                c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
                c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
-        FROM campaigns c WHERE c.id = $1`;
-    if (!isAdmin) {
-      campaignParams.push(userId);
-      campaignQuery += ` AND id_user = $${campaignParams.length}`;
-    }
-    const campaignResult = await client.query(campaignQuery, campaignParams);
+        FROM campaigns c
+        LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $1
+        WHERE c.id = $2 AND (c.id_user = $1 OR cs.id IS NOT NULL)`;
+    const campaignResult = await client.query(campaignQuery, [userId, campaignId]);
     return campaignResult.rows[0] || null;
   }
 

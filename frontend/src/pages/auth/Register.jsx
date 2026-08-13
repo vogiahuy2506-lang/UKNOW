@@ -18,6 +18,7 @@ import {
   HiOutlineArrowLeft,
   HiOutlineCheckCircle,
   HiOutlineShieldCheck,
+  HiOutlineX,
 } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
@@ -216,6 +217,128 @@ const OtpStep = ({ email, formData, onBack }) => {
   );
 };
 
+// ── Popup đồng ý điều khoản cho Google ─────────────────────────────────────
+const TermsConsentPopup = ({ isOpen, onClose, onAccept, isLoading }) => {
+  const { t } = useI18n();
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [acceptDpa, setAcceptDpa] = useState(false);
+
+  const allChecked = acceptTerms && acceptPrivacy && acceptDpa;
+
+  const handleAccept = () => {
+    if (!allChecked) {
+      toast.error(t('register.acceptAllTerms'));
+      return;
+    }
+    onAccept();
+  };
+
+  // Reset checkboxes when popup opens
+  useEffect(() => {
+    if (isOpen) {
+      setAcceptTerms(false);
+      setAcceptPrivacy(false);
+      setAcceptDpa(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white">{t('register.termsConsentTitle')}</h3>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-full hover:bg-white/20 transition-colors"
+            >
+              <HiOutlineX className="w-5 h-5 text-white" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 max-h-[60vh] overflow-y-auto">
+          <p className="text-sm text-slate-600 leading-relaxed mb-4">
+            {t('register.termsConsentDesc')}
+          </p>
+          <div className="mt-4 space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+                className="mt-1 w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500"
+              />
+              <span className="text-xs text-slate-600 leading-relaxed group-hover:text-slate-700 transition-colors">
+                {t('register.termsConsentTerms')}
+                {' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">(Xem)</a>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={acceptPrivacy}
+                onChange={(e) => setAcceptPrivacy(e.target.checked)}
+                className="mt-1 w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500"
+              />
+              <span className="text-xs text-slate-600 leading-relaxed group-hover:text-slate-700 transition-colors">
+                {t('register.termsConsentPrivacy')}
+                {' '}
+                <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">(Xem)</a>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={acceptDpa}
+                onChange={(e) => setAcceptDpa(e.target.checked)}
+                className="mt-1 w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500"
+              />
+              <span className="text-xs text-slate-600 leading-relaxed group-hover:text-slate-700 transition-colors">
+                {t('register.termsConsentDpa')}
+                {' '}
+                <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">(Xem)</a>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 font-medium transition-colors"
+          >
+            {t('register.cancel')}
+          </button>
+          <button
+            onClick={handleAccept}
+            disabled={isLoading || !allChecked}
+            className="px-6 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-orange-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                {t('register.processing')}
+              </span>
+            ) : t('register.acceptAndContinue')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Form đăng ký ──────────────────────────────────────────────────────────────
 const Register = () => {
   const { t } = useI18n();
@@ -225,20 +348,31 @@ const Register = () => {
   const [isSendingCode, setIsSendingCode]             = useState(false);
   const [otpData, setOtpData]                         = useState(null);
   const [termsChecked, setTermsChecked]               = useState(false);
+  const [showGoogleConsent, setShowGoogleConsent]   = useState(false);
+  const [pendingGoogleToken, setPendingGoogleToken] = useState(null);
   const { googleLogin }                               = useAuthStore();
   const navigate                                      = useNavigate();
 
-  const handleGoogleSuccess = async (tokenResponse) => {
+  const handleGoogleSuccess = (tokenResponse) => {
+    setPendingGoogleToken(tokenResponse);
+    setShowGoogleConsent(true);
+  };
+
+  const handleGoogleConsentAccept = async () => {
+    if (!pendingGoogleToken) return;
     setIsSendingCode(true);
     try {
-      const result = await googleLogin({ access_token: tokenResponse.access_token });
+      const result = await googleLogin({ access_token: pendingGoogleToken.access_token });
       toast.success(t('register.googleLoginSuccess'));
+      setShowGoogleConsent(false);
       navigate(getPostAuthPath(result?.data?.user));
     } catch (error) {
       const message = error.response?.data?.message || t('register.googleLoginFailed');
       toast.error(message);
+      setShowGoogleConsent(false);
     } finally {
       setIsSendingCode(false);
+      setPendingGoogleToken(null);
     }
   };
 
@@ -525,13 +659,24 @@ const Register = () => {
 
       <p className="mt-8 text-center text-sm text-slate-600">
         {t('auth.alreadyHaveAccount')}{' '}
-        <Link 
-          to="/login" 
+        <Link
+          to="/login"
           className="text-orange-500 hover:text-orange-600 font-bold hover:underline underline-offset-4 transition-colors"
         >
           {t('auth.loginHere')}
         </Link>
       </p>
+
+      {/* Terms Consent Popup for Google Signup */}
+      <TermsConsentPopup
+        isOpen={showGoogleConsent}
+        onClose={() => {
+          setShowGoogleConsent(false);
+          setPendingGoogleToken(null);
+        }}
+        onAccept={handleGoogleConsentAccept}
+        isLoading={isSendingCode}
+      />
     </div>
   );
 };

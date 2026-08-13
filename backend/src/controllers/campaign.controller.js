@@ -150,7 +150,7 @@ class CampaignController {
     try {
       const userId = req.user.id;
       const roleCode = req.user.role;
-      const { page = 1, limit = 10, status, type, search } = req.query;
+      const { page = 1, limit = 10, status, type, search, origin } = req.query;
       const data = await campaignCrudService.getAllCampaigns({
         userId,
         roleCode,
@@ -159,6 +159,7 @@ class CampaignController {
         status,
         type,
         search,
+        origin,
       });
 
       res.json({

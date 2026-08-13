@@ -28,6 +28,16 @@ const zaloSettingsApiService = {
   getLoginQrStatus(sessionKey) {
     return api.get(`/zalo/accounts/login-qr/${sessionKey}/status`);
   },
+
+  // Gửi tin nhắn Zalo cá nhân (dùng cho Quick Send)
+  sendMessage(payload) {
+    return api.post('/zalo/preview/send-personal', {
+      accountId: payload.accountId,
+      recipients: [payload.phone],
+      recipientType: 'phone',
+      message: payload.message || '',
+    });
+  },
 };
 
 export default zaloSettingsApiService;

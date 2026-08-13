@@ -1,5 +1,5 @@
 import marketplaceFavoriteRepository from '../../repositories/marketplace/marketplaceFavorite.repository.js';
-import marketplaceListingService from './marketplaceListing.service.js';
+import marketplaceListingRepository from '../../repositories/marketplace/marketplaceListing.repository.js';
 
 class MarketplaceFavoriteService {
   /**
@@ -9,8 +9,8 @@ class MarketplaceFavoriteService {
    * @returns {Promise<object>}
    */
   async addFavorite(listingId, userId) {
-    // Verify listing exists
-    const listing = await marketplaceListingService.getById(listingId);
+    // Verify listing exists - dùng repository trực tiếp để KHÔNG tăng view_count khi favorite
+    const listing = await marketplaceListingRepository.findById(listingId);
     if (!listing) {
       const error = new Error('Listing không tồn tại');
       error.status = 404;

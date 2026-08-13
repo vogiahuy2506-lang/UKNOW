@@ -13,6 +13,45 @@ class MarketplaceListingService {
   async createFromCampaign(userId, data) {
     const { campaignId, title, description, category, tags, priceCredits, visibility } = data;
 
+    // Validate campaignId
+    if (!campaignId || !Number.isFinite(Number(campaignId)) || Number(campaignId) <= 0) {
+      const error = new Error('campaignId không hợp lệ');
+      error.status = 400;
+      throw error;
+    }
+
+    // Validate category nếu được truyền
+    if (category !== undefined && category !== null && category !== '') {
+      const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
+      if (!VALID_CATEGORIES.includes(category)) {
+        const error = new Error('Category không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+    }
+
+    // Validate visibility
+    if (visibility !== undefined) {
+      const VALID_VISIBILITIES = ['public', 'team'];
+      if (!VALID_VISIBILITIES.includes(visibility)) {
+        const error = new Error('Visibility không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+    }
+
+    // Validate priceCredits
+    let sanitizedPrice = 0;
+    if (priceCredits !== undefined && priceCredits !== null && priceCredits !== '') {
+      const price = Number(priceCredits);
+      if (!Number.isFinite(price) || price < 0) {
+        const error = new Error('Price credits không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+      sanitizedPrice = Math.floor(price);
+    }
+
     // Get campaign data
     const campaign = await campaignCrudRepository.findCampaignById({
       campaignId,
@@ -56,29 +95,34 @@ class MarketplaceListingService {
       })),
     };
 
+    // Ensure title is not empty
+    const finalTitle = (title?.trim() || campaign?.campaign_name?.trim() || '').substring(0, 255) || `Template ${campaignId}`;
+    
     return marketplaceListingRepository.create({
       idUser: userId,
       resourceType: 'campaign',
       resourceId: campaignId,
-      title: title || campaign.campaign_name,
+      title: finalTitle,
       description,
       category,
       tags,
-      priceCredits,
+      priceCredits: sanitizedPrice,
       visibility,
+      status: visibility === 'public' ? 'published' : 'draft',
       snapshotData,
     });
   }
 
   /**
-   * Get listing by ID
+   * Get listing by ID (increment view count unless viewer is the seller)
    * @param {number} id
+   * @param {number} [viewerUserId] - Optional viewer; chính chủ không tính view
    * @returns {Promise<object|null>}
    */
-  async getById(id) {
+  async getById(id, viewerUserId = null) {
     const listing = await marketplaceListingRepository.findById(id);
-    if (listing) {
-      // Increment view count
+    if (listing && Number(listing.id_user) !== Number(viewerUserId)) {
+      // Tăng view nếu người xem không phải chính chủ listing
       await marketplaceListingRepository.incrementViewCount(id);
     }
     return listing;
@@ -106,6 +150,60 @@ class MarketplaceListingService {
    * @returns {Promise<object|null>}
    */
   async update(id, userId, data) {
+    // Validate title
+    if (data.title !== undefined) {
+      const title = String(data.title).trim();
+      if (title.length === 0) {
+        const error = new Error('Title không được để trống');
+        error.status = 400;
+        throw error;
+      }
+      if (title.length > 255) {
+        const error = new Error('Title không được quá 255 ký tự');
+        error.status = 400;
+        throw error;
+      }
+      data.title = title;
+    }
+
+    // Validate description length
+    if (data.description !== undefined && data.description !== null) {
+      const desc = String(data.description);
+      if (desc.length > 2000) {
+        const error = new Error('Description không được quá 2000 ký tự');
+        error.status = 400;
+        throw error;
+      }
+    }
+
+    // Validate category nếu được cập nhật
+    if (data.category !== undefined) {
+      const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
+      if (data.category !== null && data.category !== '' && !VALID_CATEGORIES.includes(data.category)) {
+        const error = new Error('Category không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+    }
+    // Validate visibility
+    if (data.visibility !== undefined) {
+      const VALID_VISIBILITIES = ['public', 'team'];
+      if (!VALID_VISIBILITIES.includes(data.visibility)) {
+        const error = new Error('Visibility không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+    }
+    // Validate price credits
+    if (data.priceCredits !== undefined) {
+      const price = Number(data.priceCredits);
+      if (!Number.isFinite(price) || price < 0) {
+        const error = new Error('Price credits không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+      data.priceCredits = Math.floor(price);
+    }
     return marketplaceListingRepository.update(id, userId, data);
   }
 
@@ -149,6 +247,17 @@ class MarketplaceListingService {
    * @returns {Promise<object|null>}
    */
   async pause(id, userId) {
+    const listing = await marketplaceListingRepository.findById(id);
+    if (!listing) {
+      const error = new Error('Listing không tồn tại');
+      error.status = 404;
+      throw error;
+    }
+    if (listing.id_user !== userId) {
+      const error = new Error('Bạn không có quyền chỉnh sửa listing này');
+      error.status = 403;
+      throw error;
+    }
     return marketplaceListingRepository.update(id, userId, { status: 'paused' });
   }
 

@@ -819,10 +819,22 @@ function TermsOfService() {
                 <strong>Website:</strong> <a href="https://digiso.vn" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">https://digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Địa chỉ:</strong> Việt Nam
+                <strong>Địa chỉ:</strong> Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh, Đ. Võ Trường Toản, Khu phố 33, Phường Linh Xuân, TP Hồ Chí Minh, Việt Nam
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Address:</strong> Vietnam
+                <strong>Address:</strong> Room I.101B, Building A, Software Technology Park, Vietnam National University HCMC, Vo Truong Toan Street, Quarter 33, Linh Xuan Ward, Ho Chi Minh City, Vietnam
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Điện thoại:</strong> 0877 909 606
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Phone:</strong> 0877 909 606
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>MST:</strong> 0316725362
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Tax ID:</strong> 0316725362
               </li>
             </ul>
           </section>
@@ -843,36 +855,71 @@ function TermsOfService() {
                 If you have questions or requests regarding these Terms of Service, please contact:
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Grid cho tiếng Việt */}
+            <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${lc(language, 'vi')}`}>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">
-                  Công ty / Company
-                </div>
-                <div className="break-words text-[13.5px] leading-snug text-slate-100">
-                  Công ty TNHH Giải pháp số DIGISO
-                </div>
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Công ty</div>
+                <div className="break-words text-[13.5px] leading-snug text-slate-100">Công ty TNHH Giải pháp số DIGISO</div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">
-                    info@digiso.vn
-                  </a>
+                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
                 </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Điện thoại</div>
+                <div className="break-words text-[13.5px] text-slate-100">0877 909 606</div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Website</div>
                 <div className="break-words text-[13.5px] leading-relaxed text-slate-100">
-                  <a href="https://digiso.vn" target="_blank" rel="noopener noreferrer" className="text-orange-400 no-underline hover:underline">
-                    digiso.vn
-                  </a>
+                  <a href="https://digiso.vn" target="_blank" rel="noopener noreferrer" className="text-orange-400 no-underline hover:underline">digiso.vn</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">
-                  Địa chỉ / Address
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">MST</div>
+                <div className="break-words text-[13.5px] text-slate-100">0316725362</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Địa chỉ</div>
+                <div className="break-words text-[13.5px] text-slate-100 leading-relaxed">
+                  Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh
                 </div>
-                <div className="break-words text-[13.5px] text-slate-100">Việt Nam</div>
+              </div>
+            </div>
+
+            {/* Grid cho tiếng Anh */}
+            <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${lc(language, 'en')}`}>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Company</div>
+                <div className="break-words text-[13.5px] leading-snug text-slate-100">DIGISO Digital Solutions Co., Ltd.</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
+                <div className="break-words text-[13.5px]">
+                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Phone</div>
+                <div className="break-words text-[13.5px] text-slate-100">0877 909 606</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Website</div>
+                <div className="break-words text-[13.5px] leading-relaxed text-slate-100">
+                  <a href="https://digiso.vn" target="_blank" rel="noopener noreferrer" className="text-orange-400 no-underline hover:underline">digiso.vn</a>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Tax ID</div>
+                <div className="break-words text-[13.5px] text-slate-100">0316725362</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Address</div>
+                <div className="break-words text-[13.5px] text-slate-100 leading-relaxed">
+                  Room I.101B, Building A, Software Technology Park, Vietnam National University HCMC
+                </div>
               </div>
             </div>
           </div>
