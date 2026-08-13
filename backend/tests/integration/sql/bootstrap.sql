@@ -258,6 +258,12 @@ CREATE TABLE orders (
   discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   voucher_id  BIGINT,
   voucher_code VARCHAR(64),
+  discount_source VARCHAR(24)
+    CHECK (
+      discount_source IS NULL
+      OR discount_source IN ('public_code', 'private_code', 'automatic')
+    ),
+  discount_label VARCHAR(160),
   topup_config JSONB,
   invoice_info JSONB,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -358,11 +364,16 @@ CREATE TABLE vouchers (
   usage_limit_per_user       INTEGER CHECK (usage_limit_per_user IS NULL OR usage_limit_per_user >= 0),
   used_count                 INTEGER NOT NULL DEFAULT 0 CHECK (used_count >= 0),
   auto_apply                 BOOLEAN NOT NULL DEFAULT FALSE,
+  offer_mode                 VARCHAR(24) NOT NULL DEFAULT 'public_code'
+    CHECK (offer_mode IN ('public_code', 'private_code', 'automatic')),
   stackable                  BOOLEAN NOT NULL DEFAULT FALSE,
   is_active                  BOOLEAN NOT NULL DEFAULT TRUE,
   created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_vouchers_offer_mode_eligibility
+  ON vouchers (offer_mode, is_active, starts_at, ends_at);
 
 CREATE UNIQUE INDEX vouchers_code_active_uniq ON vouchers (code) WHERE is_active = TRUE;
 

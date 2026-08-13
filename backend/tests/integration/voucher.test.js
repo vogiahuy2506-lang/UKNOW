@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
+import db from '../../src/config/database.js';
 import { truncateAll, createUser, createPlan } from './helpers/db.js';
 
 let app;
@@ -47,6 +48,15 @@ async function createVoucherViaAdmin(token, payload) {
   if (res.status !== 201) throw new Error(`createVoucher failed: ${JSON.stringify(res.body)}`);
   return res.body.data;
 }
+
+
+const futureEndsAt = () => new Date(Date.now() + 60 * 86400000).toISOString();
+const automaticFields = (planCodes = ['basic']) => ({
+  offerMode: 'automatic',
+  appliesToPlanCodes: planCodes,
+  appliesToBillingPeriods: ['monthly', 'yearly'],
+  endsAt: futureEndsAt(),
+});
 
 // ─── Authorization ──────────────────────────────────────────────────────────
 describe('Authorization — /api/vouchers/*', () => {
@@ -88,7 +98,7 @@ describe('GET /api/vouchers/available', () => {
       discountType: 'percentage',
       discountValue: 20,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(),
     });
 
     const token = await loginAs(user);
@@ -98,7 +108,8 @@ describe('GET /api/vouchers/available', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.vouchers).toHaveLength(1);
-    expect(res.body.data.vouchers[0].code).toBe('AUTO20');
+    expect(res.body.data.vouchers[0].code).toBeUndefined();
+    expect(res.body.data.vouchers[0].name).toBe('Auto 20%');
     expect(res.body.data.vouchers[0].discountAmount).toBe(20000);
     expect(res.body.data.vouchers[0].isEligible).toBe(true);
   });
@@ -134,7 +145,7 @@ describe('GET /api/vouchers/available', () => {
       discountType: 'percentage',
       discountValue: 10,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(),
     });
     await request(app)
       .patch(`/api/admin/vouchers/${v.id}`)
@@ -176,7 +187,7 @@ describe('GET /api/vouchers/available', () => {
       discountType: 'percentage',
       discountValue: 10,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(['pro']),
       appliesToBillingPeriods: ['yearly'],
     });
 
@@ -188,6 +199,29 @@ describe('GET /api/vouchers/available', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.originalAmount).toBe(1800000);
     expect(res.body.data.vouchers[0].discountAmount).toBe(180000);
+  });
+
+  it('custom plan không preview automatic dù row legacy target custom', async () => {
+    const user = await createUser({ username: 'u1' });
+    await createPlan({ code: 'basic', name: 'Basic', price: 100000 });
+    const adminTk = await adminToken();
+    const voucher = await createVoucherViaAdmin(adminTk, {
+      name: 'Legacy custom auto',
+      discountType: 'percentage',
+      discountValue: 20,
+      minOrderAmount: 0,
+      ...automaticFields(),
+    });
+    await db.query(`UPDATE vouchers SET applies_to_plan_codes = ARRAY['custom'] WHERE id = $1`, [voucher.id]);
+
+    const token = await loginAs(user);
+    const res = await request(app)
+      .get('/api/vouchers/available?planCode=custom&amount=500000')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.originalAmount).toBe(500000);
+    expect(res.body.data.vouchers).toEqual([]);
   });
 });
 
@@ -227,7 +261,7 @@ describe('GET /api/vouchers/code-suggestions', () => {
       discountType: 'percentage',
       discountValue: 15,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(),
     });
 
     const token = await loginAs(user);

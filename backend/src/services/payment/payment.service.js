@@ -2,7 +2,8 @@ import crypto from 'crypto';
 import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import payosClient from '../../utils/payos.util.js';
 import db from '../../config/database.js';
-import { validateVoucherForCheckout } from '../voucher.service.js';
+import { resolveCheckoutDiscount } from '../voucher.service.js';
+import { toValidatedCodeDto } from '../../utils/voucherOffer.util.js';
 import {
     createOrder,
     findOrderStatusByCode,
@@ -77,6 +78,7 @@ export const createPaymentLink = async ({
     userId = null,
     billingPeriod = 'monthly',
     voucherCode = null,
+    explicitVoucherCode = null,
     invoiceInfo: invoiceInfoRaw = null,
 }) => {
     const plan = await findPlanByCode(planCode);
@@ -90,7 +92,6 @@ export const createPaymentLink = async ({
 
     if (originalAmount <= 0) throw new Error('Giá tiền không hợp lệ cho gói này');
 
-    const hasVoucher = Boolean(String(voucherCode || '').trim());
     const pendingWindowMinutes = getPayosPendingWindowMinutes();
     const reuseWindowMinutes = Math.max(1, pendingWindowMinutes - 2);
     const orderCode = generateOrderCode();
@@ -111,51 +112,28 @@ export const createPaymentLink = async ({
     let voucher = null;
     let amount = Math.round(originalAmount);
     let discountAmount = 0;
+    let discount = null;
 
     try {
         await client.query('BEGIN');
 
-        if (hasVoucher) {
-            await client.query(
-                `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
-                [`voucher-code:${String(voucherCode).trim().toUpperCase()}`, 'redeem']
-            );
-
-            const validation = await validateVoucherForCheckout({
-                planCode,
-                billingPeriod,
-                userId,
-                userEmail,
-                code: voucherCode,
-                queryable: client,
-                pendingWindowMinutes,
-            });
-            if (!validation.voucher) {
-                throw { status: 400, message: 'Voucher không hợp lệ hoặc không đủ điều kiện' };
-            }
-
-            await client.query(
-                `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
-                [`voucher:${validation.voucher.id}`, 'redeem']
-            );
-
-            const recheck = await validateVoucherForCheckout({
-                planCode,
-                billingPeriod,
-                userId,
-                userEmail,
-                code: voucherCode,
-                queryable: client,
-                pendingWindowMinutes,
-            });
-            if (!recheck.voucher || Number(recheck.voucher.id) !== Number(validation.voucher.id)) {
-                throw { status: 400, message: 'Voucher không hợp lệ hoặc đã hết lượt sử dụng' };
-            }
-
-            voucher = recheck.voucher;
-            discountAmount = Number(voucher.discountAmount || 0);
-            amount = Number(voucher.finalAmount || 0);
-        }
+        const resolved = await resolveCheckoutDiscount({
+            userId,
+            userEmail,
+            planCode,
+            billingPeriod,
+            originalAmount,
+            explicitCode: explicitVoucherCode,
+            voucherCodeAlias: String(explicitVoucherCode || '').trim() ? null : voucherCode,
+            allowAutomatic: true,
+            lockForPayment: true,
+            queryable: client,
+            pendingWindowMinutes,
+        });
+        voucher = resolved.voucher;
+        discountAmount = Number(resolved.discountAmount || 0);
+        amount = Number(resolved.finalAmount || 0);
+        discount = resolved.discount;
 
         const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount);
         amount = priced.amount;
@@ -170,8 +148,10 @@ export const createPaymentLink = async ({
             billingPeriod,
             originalAmount,
             discountAmount,
-            voucherId: voucher?.id || null,
-            voucherCode: voucher?.code || null,
+            voucherId: resolved.snapshot.voucherId,
+            voucherCode: resolved.snapshot.voucherCode,
+            discountSource: resolved.snapshot.discountSource,
+            discountLabel: resolved.snapshot.discountLabel,
             status: amount <= 0 ? 'success' : 'pending',
             paymentMethod: amount <= 0 ? 'voucher' : 'payos',
             invoiceInfo,
@@ -200,7 +180,8 @@ export const createPaymentLink = async ({
             originalAmount: Math.round(originalAmount),
             discountAmount,
             amount,
-            voucher,
+            voucher: voucher ? toValidatedCodeDto(voucher) : null,
+            discount,
             noPayment: true,
         };
     }
@@ -226,7 +207,8 @@ export const createPaymentLink = async ({
             originalAmount: Math.round(originalAmount),
             discountAmount,
             amount,
-            voucher,
+            voucher: voucher ? toValidatedCodeDto(voucher) : null,
+            discount,
             expiredAt,
         };
     } catch (err) {
@@ -371,6 +353,7 @@ export const createCustomPaymentLink = async ({
     userId,
     billingPeriod = 'monthly',
     voucherCode = null,
+    explicitVoucherCode = null,
     reusePlanId = null,
     invoiceInfo: invoiceInfoRaw = null,
 }) => {
@@ -407,7 +390,6 @@ export const createCustomPaymentLink = async ({
     const pendingWindowMinutes = getPayosPendingWindowMinutes();
     const reuseWindowMinutes = Math.max(1, pendingWindowMinutes - 2);
     const orderCode = generateOrderCode();
-    const hasVoucher = Boolean(String(voucherCode || '').trim());
 
     const client = await db.getClient();
     let plan = null;
@@ -416,6 +398,7 @@ export const createCustomPaymentLink = async ({
     let voucher = null;
     let amount = originalAmount;
     let discountAmount = 0;
+    let discount = null;
 
     try {
         await client.query('BEGIN');
@@ -498,49 +481,23 @@ export const createCustomPaymentLink = async ({
             bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code)).catch(() => {});
         }
 
-        if (hasVoucher) {
-            await client.query(
-                `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
-                [`voucher-code:${String(voucherCode).trim().toUpperCase()}`, 'redeem']
-            );
-
-            const validation = await validateVoucherForCheckout({
-                planCode: CUSTOM_PLAN_VOUCHER_CODE,
-                billingPeriod,
-                userId,
-                userEmail,
-                code: voucherCode,
-                amountOverride: originalAmount,
-                queryable: client,
-                pendingWindowMinutes,
-            });
-            if (!validation.voucher) {
-                throw { status: 400, message: 'Voucher không hợp lệ hoặc không đủ điều kiện' };
-            }
-
-            await client.query(
-                `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
-                [`voucher:${validation.voucher.id}`, 'redeem']
-            );
-
-            const recheck = await validateVoucherForCheckout({
-                planCode: CUSTOM_PLAN_VOUCHER_CODE,
-                billingPeriod,
-                userId,
-                userEmail,
-                code: voucherCode,
-                amountOverride: originalAmount,
-                queryable: client,
-                pendingWindowMinutes,
-            });
-            if (!recheck.voucher || Number(recheck.voucher.id) !== Number(validation.voucher.id)) {
-                throw { status: 400, message: 'Voucher không hợp lệ hoặc đã hết lượt sử dụng' };
-            }
-
-            voucher = recheck.voucher;
-            discountAmount = Number(voucher.discountAmount || 0);
-            amount = Number(voucher.finalAmount || 0);
-        }
+        const resolved = await resolveCheckoutDiscount({
+            userId,
+            userEmail,
+            planCode: CUSTOM_PLAN_VOUCHER_CODE,
+            billingPeriod,
+            originalAmount,
+            explicitCode: explicitVoucherCode,
+            voucherCodeAlias: String(explicitVoucherCode || '').trim() ? null : voucherCode,
+            allowAutomatic: false,
+            lockForPayment: true,
+            queryable: client,
+            pendingWindowMinutes,
+        });
+        voucher = resolved.voucher;
+        discountAmount = Number(resolved.discountAmount || 0);
+        amount = Number(resolved.finalAmount || 0);
+        discount = resolved.discount;
 
         const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount);
         amount = priced.amount;
@@ -555,8 +512,10 @@ export const createCustomPaymentLink = async ({
             billingPeriod,
             originalAmount,
             discountAmount,
-            voucherId: voucher?.id || null,
-            voucherCode: voucher?.code || null,
+            voucherId: resolved.snapshot.voucherId,
+            voucherCode: resolved.snapshot.voucherCode,
+            discountSource: resolved.snapshot.discountSource,
+            discountLabel: resolved.snapshot.discountLabel,
             status: amount <= 0 ? 'success' : 'pending',
             paymentMethod: amount <= 0 ? 'voucher' : 'payos',
             note: 'custom_self_serve',
@@ -585,7 +544,8 @@ export const createCustomPaymentLink = async ({
             originalAmount,
             discountAmount,
             amount,
-            voucher,
+            voucher: voucher ? toValidatedCodeDto(voucher) : null,
+            discount,
             quote,
             noPayment: true,
         };
@@ -611,7 +571,8 @@ export const createCustomPaymentLink = async ({
             originalAmount,
             discountAmount,
             amount,
-            voucher,
+            voucher: voucher ? toValidatedCodeDto(voucher) : null,
+            discount,
             quote,
             expiredAt,
         };

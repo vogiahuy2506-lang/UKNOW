@@ -75,6 +75,24 @@ export const apiLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKeyForRequest(req, 'api:'),
 });
 
+/** Dedicated limiter for voucher validate — user+IP key, no body logging. */
+export const voucherValidateLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: {
+    success: false,
+    message: 'Quá nhiều lần kiểm tra mã. Vui lòng thử lại sau.',
+    code: 'VOUCHER_VALIDATE_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const userPart = req.user?.id != null ? `user:${req.user.id}` : 'anon';
+    return `voucher-validate:${userPart}:ip:${clientIpKey(req)}`;
+  },
+});
+
 // Upload limiter - 20 uploads per 15 minutes
 export const uploadLimiter = rateLimit({
   skip: skipInTest,

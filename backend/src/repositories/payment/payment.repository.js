@@ -18,15 +18,18 @@ export const createOrder = async ({
     discountAmount = 0,
     voucherId = null,
     voucherCode = null,
+    discountSource = null,
+    discountLabel = null,
     topupConfig = null,
     invoiceInfo = null,
 }, queryable = db) => {
     const { rows } = await queryable.query(
         `INSERT INTO orders (
             order_code, plan_id, amount, user_email, user_id, status, payment_method, note, billing_period,
-            original_amount, discount_amount, voucher_id, voucher_code, topup_config, invoice_info, created_at
+            original_amount, discount_amount, voucher_id, voucher_code, discount_source, discount_label,
+            topup_config, invoice_info, created_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW()) RETURNING *`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW()) RETURNING *`,
         [
             orderCode,
             planId,
@@ -41,6 +44,8 @@ export const createOrder = async ({
             discountAmount || 0,
             voucherId,
             voucherCode,
+            discountSource,
+            discountLabel,
             topupConfig ? JSON.stringify(topupConfig) : null,
             invoiceInfo ? JSON.stringify(invoiceInfo) : null,
         ]

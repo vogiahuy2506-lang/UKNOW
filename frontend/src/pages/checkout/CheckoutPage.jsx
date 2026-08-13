@@ -79,17 +79,24 @@ const CheckoutPage = () => {
     const [voucherCode, setVoucherCode] = useState('');
     const [voucherLoading, setVoucherLoading] = useState(false);
     const [paymentStarted, setPaymentStarted] = useState(false);
+    const [authoritativePayment, setAuthoritativePayment] = useState(null);
     const [invoiceInfo, setInvoiceInfo] = useState({ wantInvoice: false });
     const invoiceVatUiEnabled = isInvoiceVatUiEnabled();
 
     const appliedVoucher = manualVoucher || autoPromotion;
-    const discountAmount = Number(appliedVoucher?.discountAmount || 0);
-    const finalAmount = Math.max(0, displayPrice - discountAmount);
+    const effectiveOriginalAmount = Number(authoritativePayment?.originalAmount ?? displayPrice);
+    const discountAmount = Number(
+        authoritativePayment?.discountAmount ?? appliedVoucher?.discountAmount ?? 0,
+    );
+    const finalAmount = Number(
+        authoritativePayment?.discount?.finalAmount ??
+        Math.max(0, effectiveOriginalAmount - discountAmount),
+    );
     const vatBreakdown = computeDisplayVat(
         finalAmount,
         invoiceVatUiEnabled && Boolean(invoiceInfo?.wantInvoice),
     );
-    const payableAmount = vatBreakdown.gross;
+    const payableAmount = Number(authoritativePayment?.amount ?? vatBreakdown.gross);
     const hasManualVoucherInList = manualVoucher
         ? codeVouchers.some((voucher) => voucher.code === manualVoucher.code)
         : false;
@@ -99,6 +106,64 @@ const CheckoutPage = () => {
         setCopied(true);
         toast.success(t('checkout.copied'));
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const applyAuthoritativePayment = (result) => {
+        const serverDiscount = result?.discount || null;
+        const source = serverDiscount?.source || null;
+        const serverDiscountAmount = Number(result?.discountAmount ?? serverDiscount?.discountAmount ?? 0);
+        const serverOriginalAmount = Number(result?.originalAmount ?? displayPrice);
+        const serverFinalAmount = Number(
+            serverDiscount?.finalAmount ?? Math.max(0, serverOriginalAmount - serverDiscountAmount),
+        );
+        const serverAmount = Number(result?.amount ?? serverFinalAmount);
+        const previewSource = manualVoucher
+            ? (manualVoucher.offerMode || 'public_code')
+            : (autoPromotion ? 'automatic' : null);
+        const previewCode = manualVoucher?.code || null;
+        const changed =
+            source !== previewSource ||
+            (source && source !== 'automatic' && serverDiscount?.code !== previewCode) ||
+            serverDiscountAmount !== discountAmount ||
+            serverAmount !== payableAmount;
+
+        setAuthoritativePayment({
+            originalAmount: serverOriginalAmount,
+            discountAmount: serverDiscountAmount,
+            amount: serverAmount,
+            discount: {
+                ...serverDiscount,
+                source,
+                originalAmount: serverOriginalAmount,
+                discountAmount: serverDiscountAmount,
+                finalAmount: serverFinalAmount,
+            },
+        });
+
+        if (source === 'automatic') {
+            setManualVoucher(null);
+            setAutoPromotion((current) => ({
+                ...current,
+                ...serverDiscount,
+                offerMode: 'automatic',
+                discountAmount: serverDiscountAmount,
+                finalAmount: serverFinalAmount,
+            }));
+        } else if (source === 'public_code' || source === 'private_code') {
+            setManualVoucher((current) => ({
+                ...current,
+                ...(result?.voucher || {}),
+                ...serverDiscount,
+                offerMode: source,
+                discountAmount: serverDiscountAmount,
+                finalAmount: serverFinalAmount,
+            }));
+        } else {
+            setManualVoucher(null);
+            setAutoPromotion(null);
+        }
+
+        if (changed) toast(t('checkout.discountUpdated'));
     };
 
     const createPayment = async () => {
@@ -135,11 +200,14 @@ const CheckoutPage = () => {
                 const { data } = await checkoutApiService.createCustomPayment({
                     quantities: customQuantities,
                     billingPeriod,
-                    voucherCode: appliedVoucher?.code || null,
+                    explicitVoucherCode: manualVoucher?.code || null,
+                    voucherCode: null,
                     reusePlanId,
                     invoiceInfo: invoiceVatUiEnabled ? invoiceInfo : { wantInvoice: false },
                 });
                 if (!data.success) throw new Error(data.message);
+
+                applyAuthoritativePayment(data.result);
 
                 if (data.result.noPayment) {
                     navigate('/payment-success', {
@@ -172,10 +240,13 @@ const CheckoutPage = () => {
             const { data } = await checkoutApiService.createPayment({
                 planCode: plan.code,
                 billingPeriod,
-                voucherCode: appliedVoucher?.code || null,
+                explicitVoucherCode: manualVoucher?.code || null,
+                voucherCode: null,
                 invoiceInfo: invoiceVatUiEnabled ? invoiceInfo : { wantInvoice: false },
             });
             if (!data.success) throw new Error(data.message);
+
+            applyAuthoritativePayment(data.result);
 
             if (data.result.noPayment) {
                 navigate('/payment-success', {
@@ -241,6 +312,7 @@ const CheckoutPage = () => {
                 ...(isCustomPlan ? { amount: displayPrice } : {}),
             });
             setManualVoucher(data.data.voucher);
+            setAuthoritativePayment(null);
             setVoucherCode(normalized);
             toast.success(t('checkout.voucherApplied'));
         } catch (err) {
@@ -329,7 +401,7 @@ const CheckoutPage = () => {
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between text-slate-500">
                                         <span>{t('checkout.serviceFee')}</span>
-                                        <span className="font-medium text-slate-700">{fmtVnd(displayPrice)}</span>
+                                        <span className="font-medium text-slate-700">{fmtVnd(effectiveOriginalAmount)}</span>
                                     </div>
                                     {isYearly && !isCustomPlan && (
                                         <div className="flex justify-between text-emerald-600 text-xs">
@@ -385,7 +457,16 @@ const CheckoutPage = () => {
                                 <div className="flex items-center justify-between">
                                     <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('checkout.offerAndVoucher')}</h2>
                                     {manualVoucher && (
-                                        <button type="button" className="text-xs text-slate-400 hover:text-red-500 transition-colors" onClick={() => { setManualVoucher(null); setVoucherCode(''); }}>
+                                        <button
+                                            type="button"
+                                            className="text-xs text-slate-400 hover:text-red-500 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                                            onClick={() => {
+                                                setManualVoucher(null);
+                                                setAuthoritativePayment(null);
+                                                setVoucherCode('');
+                                            }}
+                                            disabled={paymentStarted}
+                                        >
                                             {t('checkout.removeCode')}
                                         </button>
                                     )}

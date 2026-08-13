@@ -1,7 +1,13 @@
 import * as voucherService from '../services/voucher.service.js';
 
 const handleError = (res, err) => {
-  res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi server' });
+  const status = err.status || 500;
+  const body = {
+    success: false,
+    message: err.message || 'Lỗi server',
+  };
+  if (err.code) body.code = err.code;
+  res.status(status).json(body);
 };
 
 export async function available(req, res) {
@@ -39,7 +45,7 @@ export async function codeSuggestions(req, res) {
 export async function validate(req, res) {
   try {
     const amountOverride = req.body.amount != null ? Number(req.body.amount) : null;
-    const result = await voucherService.validateVoucherForCheckout({
+    const result = await voucherService.validateCheckoutCode({
       planCode: req.body.planCode,
       billingPeriod: req.body.billingPeriod || 'monthly',
       code: req.body.code,
@@ -48,7 +54,11 @@ export async function validate(req, res) {
       amountOverride: Number.isFinite(amountOverride) ? amountOverride : null,
     });
     if (!result.voucher) {
-      return res.status(404).json({ success: false, message: 'Voucher không hợp lệ hoặc không đủ điều kiện' });
+      return res.status(404).json({
+        success: false,
+        message: 'Voucher không hợp lệ hoặc không đủ điều kiện',
+        code: 'VOUCHER_NOT_APPLICABLE',
+      });
     }
     res.json({ success: true, data: result });
   } catch (err) {

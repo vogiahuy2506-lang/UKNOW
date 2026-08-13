@@ -6,6 +6,7 @@ export async function active(req, res) {
       ? req.query.billingPeriod
       : 'monthly';
     const data = await voucherService.listPublicActivePromotions({ billingPeriod });
+    res.set('Cache-Control', 'no-store');
     res.json({ success: true, data });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi server' });

@@ -56,6 +56,35 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function insertVoucher({
+  code,
+  name = code,
+  offerMode = 'public_code',
+  discountValue = 10,
+  planCodes = null,
+  startsAt = null,
+}) {
+  const { rows } = await db.query(
+    `INSERT INTO vouchers (
+       code, name, discount_type, discount_value, min_order_amount,
+       applies_to_plan_codes, applies_to_billing_periods, starts_at, ends_at,
+       auto_apply, offer_mode, is_active
+     ) VALUES ($1, $2, 'percentage', $3, 0, $4, ARRAY['monthly', 'yearly'], $5,
+       NOW() + INTERVAL '60 days', $6, $7, TRUE)
+     RETURNING *`,
+    [
+      code,
+      name,
+      discountValue,
+      planCodes,
+      startsAt,
+      offerMode === 'automatic',
+      offerMode,
+    ]
+  );
+  return rows[0];
+}
+
 // ===========================================================================
 // POST /api/payments/create-payment
 // ===========================================================================
@@ -186,6 +215,133 @@ describe('POST /api/payments/create-payment', () => {
     expect(Number(order.rows[0].amount)).toBe(199000);
     expect(Number(order.rows[0].plan_id)).toBe(Number(plan.id));
     expect(Number(order.rows[0].user_id)).toBe(Number(user.id));
+  });
+
+  it('không có explicit code thì backend tự áp automatic và snapshot không lộ code', async () => {
+    const user = await createUser({ username: 'auto-payment' });
+    const token = await loginAs(user);
+    await createPlan({ code: 'auto_plan', price: 200000 });
+    await insertVoucher({
+      code: 'AUTO_PAYMENT20',
+      name: 'Automatic 20%',
+      offerMode: 'automatic',
+      discountValue: 20,
+      planCodes: ['auto_plan'],
+    });
+    mockPaymentRequestsCreate.mockResolvedValue({
+      qrCode: 'data:image/png;base64,FAKE',
+      checkoutUrl: 'https://pay.payos.vn/web/fake-id',
+    });
+
+    const res = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'auto_plan' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.result).toMatchObject({
+      originalAmount: 200000,
+      discountAmount: 40000,
+      amount: 160000,
+      discount: {
+        source: 'automatic',
+        name: 'Automatic 20%',
+        code: null,
+        finalAmount: 160000,
+      },
+    });
+    expect(mockPaymentRequestsCreate.mock.calls[0][0].amount).toBe(160000);
+    const order = await db.query(
+      `SELECT amount, voucher_code, discount_source, discount_label
+       FROM orders WHERE order_code = $1`,
+      [res.body.result.orderCode]
+    );
+    expect(Number(order.rows[0].amount)).toBe(160000);
+    expect(order.rows[0].voucher_code).toBeNull();
+    expect(order.rows[0].discount_source).toBe('automatic');
+    expect(order.rows[0].discount_label).toBe('Automatic 20%');
+  });
+
+  it('explicit private code thắng automatic và invalid explicit không fallback', async () => {
+    const user = await createUser({ username: 'private-payment' });
+    const token = await loginAs(user);
+    await createPlan({ code: 'private_plan', price: 200000 });
+    await insertVoucher({
+      code: 'AUTO_PRIVATE30',
+      name: 'Automatic 30%',
+      offerMode: 'automatic',
+      discountValue: 30,
+      planCodes: ['private_plan'],
+    });
+    await insertVoucher({
+      code: 'HIDDEN10',
+      name: 'Private 10%',
+      offerMode: 'private_code',
+      discountValue: 10,
+      planCodes: ['private_plan'],
+    });
+    mockPaymentRequestsCreate.mockResolvedValue({
+      qrCode: 'data:image/png;base64,FAKE',
+      checkoutUrl: 'https://pay.payos.vn/web/fake-id',
+    });
+
+    const explicit = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'private_plan', explicitVoucherCode: 'HIDDEN10' });
+    expect(explicit.status).toBe(200);
+    expect(explicit.body.result).toMatchObject({
+      discountAmount: 20000,
+      amount: 180000,
+      discount: { source: 'private_code', code: 'HIDDEN10' },
+    });
+
+    mockPaymentRequestsCreate.mockClear();
+    const invalid = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'private_plan', explicitVoucherCode: 'NOTVALID' });
+    expect(invalid.status).toBe(400);
+    expect(mockPaymentRequestsCreate).not.toHaveBeenCalled();
+  });
+
+  it('legacy voucherCode automatic chỉ là hint, không ép chọn promotion yếu hơn', async () => {
+    const user = await createUser({ username: 'legacy-auto-hint' });
+    const token = await loginAs(user);
+    await createPlan({ code: 'legacy_hint_plan', price: 100000 });
+    await insertVoucher({
+      code: 'AUTO_WEAK10',
+      name: 'Weak 10%',
+      offerMode: 'automatic',
+      discountValue: 10,
+      planCodes: ['legacy_hint_plan'],
+      startsAt: '2026-01-01T00:00:00Z',
+    });
+    await insertVoucher({
+      code: 'AUTO_BEST20',
+      name: 'Best 20%',
+      offerMode: 'automatic',
+      discountValue: 20,
+      planCodes: ['legacy_hint_plan'],
+      startsAt: '2026-02-01T00:00:00Z',
+    });
+    mockPaymentRequestsCreate.mockResolvedValue({
+      qrCode: 'data:image/png;base64,FAKE',
+      checkoutUrl: 'https://pay.payos.vn/web/fake-id',
+    });
+
+    const res = await request(app)
+      .post('/api/payments/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planCode: 'legacy_hint_plan', voucherCode: 'AUTO_WEAK10' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.discount).toMatchObject({
+      source: 'automatic',
+      name: 'Best 20%',
+      code: null,
+    });
+    expect(res.body.result.amount).toBe(80000);
   });
 
   it('PayOS throw lỗi → 502 và KHÔNG để lại đơn pending mồ côi', async () => {

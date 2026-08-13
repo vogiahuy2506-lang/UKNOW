@@ -1,4 +1,10 @@
 import db from '../config/database.js';
+import {
+  CODE_OFFER_MODES,
+  normalizeUserVoucherCode,
+  offerModeToAutoApply,
+  resolveOfferMode,
+} from '../utils/voucherOffer.util.js';
 
 const VOUCHER_SELECT = `
   id, code, name, description,
@@ -14,13 +20,26 @@ const VOUCHER_SELECT = `
   usage_limit_per_user AS "usageLimitPerUser",
   used_count AS "usedCount",
   auto_apply AS "autoApply",
+  offer_mode AS "offerMode",
   stackable,
   is_active AS "isActive",
   created_at AS "createdAt",
   updated_at AS "updatedAt"
 `;
 
-export const normalizeVoucherCode = (code) => String(code || '').trim().toUpperCase();
+const mapRow = (row) => {
+  if (!row) return null;
+  const offerMode = resolveOfferMode(row);
+  return {
+    ...row,
+    offerMode,
+    autoApply: offerMode === 'automatic',
+  };
+};
+
+const mapRows = (rows) => (rows || []).map(mapRow);
+
+export const normalizeVoucherCode = (code) => normalizeUserVoucherCode(code);
 
 /** Default matches typical PayOS VietQR link window when expiredAt is set explicitly. */
 export function getPayosPendingWindowMinutes() {
@@ -28,13 +47,23 @@ export function getPayosPendingWindowMinutes() {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 15;
 }
 
-export async function findAdminVouchers() {
-  const { rows } = await db.query(`
+export async function findAdminVouchers({ offerMode = null } = {}) {
+  const params = [];
+  let where = '';
+  if (offerMode) {
+    params.push(offerMode);
+    where = `WHERE offer_mode = $1`;
+  }
+  const { rows } = await db.query(
+    `
     SELECT ${VOUCHER_SELECT}
     FROM vouchers
+    ${where}
     ORDER BY created_at DESC, id DESC
-  `);
-  return rows;
+  `,
+    params
+  );
+  return mapRows(rows);
 }
 
 export async function findVoucherById(id, queryable = db) {
@@ -42,7 +71,7 @@ export async function findVoucherById(id, queryable = db) {
     `SELECT ${VOUCHER_SELECT} FROM vouchers WHERE id = $1`,
     [id]
   );
-  return rows[0] || null;
+  return mapRow(rows[0] || null);
 }
 
 export async function findActiveVoucherByCode(code, queryable = db) {
@@ -53,18 +82,31 @@ export async function findActiveVoucherByCode(code, queryable = db) {
      LIMIT 1`,
     [normalizeVoucherCode(code)]
   );
-  return rows[0] || null;
+  return mapRow(rows[0] || null);
+}
+
+export async function voucherHasOrderReference(id, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT (
+       EXISTS (SELECT 1 FROM orders WHERE voucher_id = $1)
+       OR EXISTS (SELECT 1 FROM voucher_redemptions WHERE voucher_id = $1)
+     ) AS has_ref`,
+    [id]
+  );
+  return Boolean(rows[0]?.has_ref);
 }
 
 export async function createVoucher(payload) {
+  const offerMode = resolveOfferMode(payload);
+  const autoApply = offerModeToAutoApply(offerMode);
   const { rows } = await db.query(
     `INSERT INTO vouchers (
        code, name, description, discount_type, discount_value, max_discount_amount,
        min_order_amount, applies_to_plan_codes, applies_to_billing_periods,
        starts_at, ends_at, usage_limit, usage_limit_per_user,
-       auto_apply, stackable, is_active
+       auto_apply, offer_mode, stackable, is_active
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      RETURNING ${VOUCHER_SELECT}`,
     [
       normalizeVoucherCode(payload.code),
@@ -80,15 +122,18 @@ export async function createVoucher(payload) {
       payload.endsAt,
       payload.usageLimit,
       payload.usageLimitPerUser,
-      payload.autoApply,
+      autoApply,
+      offerMode,
       payload.stackable ?? false,
       payload.isActive,
     ]
   );
-  return rows[0];
+  return mapRow(rows[0]);
 }
 
 export async function updateVoucher(id, payload) {
+  const offerMode = resolveOfferMode(payload);
+  const autoApply = offerModeToAutoApply(offerMode);
   const { rows } = await db.query(
     `UPDATE vouchers
        SET code = $2,
@@ -105,8 +150,9 @@ export async function updateVoucher(id, payload) {
            usage_limit = $13,
            usage_limit_per_user = $14,
            auto_apply = $15,
-           stackable = $16,
-           is_active = $17,
+           offer_mode = $16,
+           stackable = $17,
+           is_active = $18,
            updated_at = NOW()
      WHERE id = $1
      RETURNING ${VOUCHER_SELECT}`,
@@ -125,12 +171,13 @@ export async function updateVoucher(id, payload) {
       payload.endsAt,
       payload.usageLimit,
       payload.usageLimitPerUser,
-      payload.autoApply,
+      autoApply,
+      offerMode,
       payload.stackable ?? false,
       payload.isActive,
     ]
   );
-  return rows[0] || null;
+  return mapRow(rows[0] || null);
 }
 
 /** Soft-delete: deactivate so redemption history is preserved. */
@@ -184,7 +231,7 @@ export async function restoreVoucher(id, { endsAt = undefined } = {}) {
   if (conflict && Number(conflict.id) !== Number(id)) {
     throw {
       status: 409,
-      message: `Mã ${current.code} hiện đang được dùng bởi voucher «${conflict.name}» (ID ${conflict.id}). Đổi mã của voucher này hoặc ngừng voucher kia trước khi khôi phục.`,
+      message: `Mã hiện đang được dùng bởi voucher «${conflict.name}» (ID ${conflict.id}). Đổi mã của voucher này hoặc ngừng voucher kia trước khi khôi phục.`,
       code: 'VOUCHER_CODE_IN_USE',
     };
   }
@@ -198,18 +245,20 @@ export async function restoreVoucher(id, { endsAt = undefined } = {}) {
       RETURNING ${VOUCHER_SELECT}`,
     [id, nextEndsAt || null]
   );
-  return rows[0] || null;
+  return mapRow(rows[0] || null);
 }
 
 /**
  * Eligible vouchers for checkout, counting both redemptions and recent pending orders.
  * @param {object} opts
+ * @param {string[]|null} [opts.offerModes]
  * @param {import('pg').Pool|import('pg').PoolClient} [opts.queryable]
  */
 export async function findEligibleVouchers({
   code = null,
   autoOnly = false,
   manualOnly = false,
+  offerModes = null,
   ignoreMinOrder = false,
   planCode,
   billingPeriod,
@@ -219,10 +268,15 @@ export async function findEligibleVouchers({
   pendingWindowMinutes = getPayosPendingWindowMinutes(),
   queryable = db,
 } = {}) {
+  let modes = Array.isArray(offerModes) ? offerModes.filter(Boolean) : null;
+  if (!modes) {
+    if (autoOnly) modes = ['automatic'];
+    else if (manualOnly) modes = ['public_code'];
+  }
+
   const params = [
     code ? normalizeVoucherCode(code) : null,
-    Boolean(autoOnly),
-    Boolean(manualOnly),
+    modes && modes.length ? modes : null,
     String(planCode || '').trim().toLowerCase(),
     String(billingPeriod || 'monthly').trim().toLowerCase(),
     Number(amount || 0),
@@ -237,11 +291,13 @@ export async function findEligibleVouchers({
      FROM vouchers v
      WHERE v.is_active = TRUE
        AND ($1::text IS NULL OR UPPER(v.code) = $1)
-       AND ($2::boolean = FALSE OR v.auto_apply = TRUE)
-       AND ($3::boolean = FALSE OR v.auto_apply = FALSE)
+       AND (
+         $2::text[] IS NULL
+         OR v.offer_mode = ANY($2::text[])
+       )
        AND (v.starts_at IS NULL OR v.starts_at <= NOW())
        AND (v.ends_at IS NULL OR v.ends_at >= NOW())
-       AND ($9::boolean = TRUE OR v.min_order_amount <= $6)
+       AND ($8::boolean = TRUE OR v.min_order_amount <= $5)
        AND (
          v.usage_limit IS NULL
          OR v.used_count
@@ -249,19 +305,24 @@ export async function findEligibleVouchers({
               SELECT COUNT(*)::int FROM orders o
               WHERE o.voucher_id = v.id
                 AND o.status = 'pending'
-                AND o.created_at > NOW() - ($10 || ' minutes')::interval
+                AND o.created_at > NOW() - ($9 || ' minutes')::interval
             )
             < v.usage_limit
        )
        AND (
-         v.applies_to_plan_codes IS NULL
-         OR cardinality(v.applies_to_plan_codes) = 0
-         OR EXISTS (SELECT 1 FROM unnest(v.applies_to_plan_codes) AS plan_code WHERE LOWER(plan_code) = $4)
+         EXISTS (SELECT 1 FROM unnest(v.applies_to_plan_codes) AS plan_code WHERE LOWER(plan_code) = $3)
+         OR (
+           (v.applies_to_plan_codes IS NULL OR cardinality(v.applies_to_plan_codes) = 0)
+           AND (
+             v.offer_mode <> 'automatic'
+             OR $3 <> 'custom'
+           )
+         )
        )
        AND (
          v.applies_to_billing_periods IS NULL
          OR cardinality(v.applies_to_billing_periods) = 0
-         OR EXISTS (SELECT 1 FROM unnest(v.applies_to_billing_periods) AS period WHERE LOWER(period) = $5)
+         OR EXISTS (SELECT 1 FROM unnest(v.applies_to_billing_periods) AS period WHERE LOWER(period) = $4)
        )
        AND (
          v.usage_limit_per_user IS NULL
@@ -271,8 +332,8 @@ export async function findEligibleVouchers({
              FROM voucher_redemptions r
              WHERE r.voucher_id = v.id
                AND (
-                 ($7::bigint IS NOT NULL AND r.user_id = $7)
-                 OR ($8::text IS NOT NULL AND LOWER(r.user_email) = $8)
+                 ($6::bigint IS NOT NULL AND r.user_id = $6)
+                 OR ($7::text IS NOT NULL AND LOWER(r.user_email) = $7)
                )
            )
            +
@@ -281,18 +342,18 @@ export async function findEligibleVouchers({
              FROM orders o
              WHERE o.voucher_id = v.id
                AND o.status = 'pending'
-               AND o.created_at > NOW() - ($10 || ' minutes')::interval
+               AND o.created_at > NOW() - ($9 || ' minutes')::interval
                AND (
-                 ($7::bigint IS NOT NULL AND o.user_id = $7)
-                 OR ($8::text IS NOT NULL AND LOWER(o.user_email) = $8)
+                 ($6::bigint IS NOT NULL AND o.user_id = $6)
+                 OR ($7::text IS NOT NULL AND LOWER(o.user_email) = $7)
                )
            )
          ) < v.usage_limit_per_user
        )
-     ORDER BY v.auto_apply DESC, v.created_at DESC`,
+     ORDER BY v.starts_at DESC NULLS LAST, v.id DESC`,
     params
   );
-  return rows;
+  return mapRows(rows);
 }
 
 /**
@@ -310,7 +371,7 @@ export async function redeemVoucherForOrder(order, queryable = db) {
 
     // Soft over-limit warning for ops (do not reject — customer already paid).
     const { rows: limitRows } = await client.query(
-      `SELECT usage_limit, usage_limit_per_user, used_count, code
+      `SELECT usage_limit, usage_limit_per_user, used_count, code, offer_mode
        FROM vouchers WHERE id = $1 FOR UPDATE`,
       [order.voucher_id]
     );
@@ -334,7 +395,8 @@ export async function redeemVoucherForOrder(order, queryable = db) {
         userRedemptions >= Number(voucher.usage_limit_per_user);
       if (overGlobal || overPerUser) {
         console.warn(
-          `[Voucher] Over-limit redemption allowed after payment: code=${voucher.code} order_id=${order.id} ` +
+          `[Voucher] Over-limit redemption allowed after payment: voucher_id=${order.voucher_id} ` +
+            `offer_mode=${voucher.offer_mode} order_id=${order.id} ` +
             `used_count=${voucher.used_count}/${voucher.usage_limit ?? '∞'} ` +
             `user_redemptions=${userRedemptions}/${voucher.usage_limit_per_user ?? '∞'}`
         );
@@ -366,3 +428,5 @@ export async function redeemVoucherForOrder(order, queryable = db) {
     if (ownsClient) client.release();
   }
 }
+
+export { CODE_OFFER_MODES };

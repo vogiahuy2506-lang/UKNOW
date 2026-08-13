@@ -21,52 +21,92 @@ const emptyForm = {
   maxDiscountAmount: '',
   minOrderAmount: '',
   appliesToPlanCodes: '',
-  appliesToBillingPeriods: '',
+  appliesToBillingPeriods: 'monthly, yearly',
   startsAt: '',
   endsAt: '',
   usageLimit: '',
   usageLimitPerUser: 1,
-  autoApply: false,
+  offerMode: 'public_code',
   isActive: true,
+  originalOfferMode: null,
+  legacyAllPlans: false,
+  legacyAllCycles: false,
+  legacyNoEndDate: false,
 };
 
 const toInputDate = (value) => value ? String(value).slice(0, 10) : '';
 
 const normalizeCsv = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 
-const toPayload = (form) => ({
-  ...form,
-  code: String(form.code || '').trim().toUpperCase(),
-  discountValue: Number(form.discountValue || 0),
-  maxDiscountAmount: form.discountType === 'percentage' && form.maxDiscountAmount !== ''
-    ? Number(form.maxDiscountAmount)
-    : null,
-  minOrderAmount: form.minOrderAmount === '' ? 0 : Number(form.minOrderAmount),
-  usageLimit: form.usageLimit === '' ? null : Number(form.usageLimit),
-  usageLimitPerUser: form.usageLimitPerUser === '' ? null : Number(form.usageLimitPerUser),
-  appliesToPlanCodes: normalizeCsv(form.appliesToPlanCodes),
-  appliesToBillingPeriods: normalizeCsv(form.appliesToBillingPeriods),
-  startsAt: form.startsAt ? `${form.startsAt}T00:00:00` : null,
-  endsAt: form.endsAt ? `${form.endsAt}T23:59:59` : null,
-});
+const resolveFormOfferMode = (form) => {
+  if (['public_code', 'private_code', 'automatic'].includes(form.offerMode)) return form.offerMode;
+  return form.autoApply ? 'automatic' : 'public_code';
+};
 
-const fromVoucher = (voucher) => ({
-  code: voucher.code || '',
-  name: voucher.name || '',
-  description: voucher.description || '',
-  discountType: voucher.discountType || 'fixed_amount',
-  discountValue: voucher.discountValue ?? '',
-  maxDiscountAmount: voucher.maxDiscountAmount ?? '',
-  minOrderAmount: voucher.minOrderAmount ?? '',
-  appliesToPlanCodes: (voucher.appliesToPlanCodes || []).join(', '),
-  appliesToBillingPeriods: (voucher.appliesToBillingPeriods || []).join(', '),
-  startsAt: toInputDate(voucher.startsAt),
-  endsAt: toInputDate(voucher.endsAt),
-  usageLimit: voucher.usageLimit ?? '',
-  usageLimitPerUser: voucher.usageLimitPerUser ?? '',
-  autoApply: Boolean(voucher.autoApply),
-  isActive: Boolean(voucher.isActive),
-});
+const toPayload = (form) => {
+  const offerMode = resolveFormOfferMode(form);
+  const payload = {
+    ...form,
+    offerMode,
+    autoApply: offerMode === 'automatic',
+    discountValue: Number(form.discountValue || 0),
+    maxDiscountAmount: form.discountType === 'percentage' && form.maxDiscountAmount !== ''
+      ? Number(form.maxDiscountAmount)
+      : null,
+    minOrderAmount: form.minOrderAmount === '' ? 0 : Number(form.minOrderAmount),
+    usageLimit: form.usageLimit === '' ? null : Number(form.usageLimit),
+    usageLimitPerUser: form.usageLimitPerUser === '' ? null : Number(form.usageLimitPerUser),
+    appliesToPlanCodes: normalizeCsv(form.appliesToPlanCodes),
+    appliesToBillingPeriods: normalizeCsv(form.appliesToBillingPeriods),
+    startsAt: form.startsAt ? `${form.startsAt}T00:00:00` : null,
+    endsAt: form.endsAt ? `${form.endsAt}T23:59:59` : null,
+  };
+  delete payload.originalOfferMode;
+  delete payload.legacyAllPlans;
+  delete payload.legacyAllCycles;
+  delete payload.legacyNoEndDate;
+  if (offerMode === 'automatic') {
+    delete payload.code;
+    if (form.legacyAllPlans && !normalizeCsv(form.appliesToPlanCodes).length) {
+      delete payload.appliesToPlanCodes;
+    }
+    if (form.legacyAllCycles && !normalizeCsv(form.appliesToBillingPeriods).length) {
+      delete payload.appliesToBillingPeriods;
+    }
+    if (form.legacyNoEndDate && !form.endsAt) {
+      delete payload.endsAt;
+    }
+  } else {
+    payload.code = String(form.code || '').trim().toUpperCase();
+  }
+  return payload;
+};
+
+const fromVoucher = (voucher) => {
+  const offerMode = voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
+  const isAutomatic = offerMode === 'automatic';
+  return {
+    code: voucher.code || '',
+    name: voucher.name || '',
+    description: voucher.description || '',
+    discountType: voucher.discountType || 'fixed_amount',
+    discountValue: voucher.discountValue ?? '',
+    maxDiscountAmount: voucher.maxDiscountAmount ?? '',
+    minOrderAmount: voucher.minOrderAmount ?? '',
+    appliesToPlanCodes: (voucher.appliesToPlanCodes || []).join(', '),
+    appliesToBillingPeriods: (voucher.appliesToBillingPeriods || []).join(', '),
+    startsAt: toInputDate(voucher.startsAt),
+    endsAt: toInputDate(voucher.endsAt),
+    usageLimit: voucher.usageLimit ?? '',
+    usageLimitPerUser: voucher.usageLimitPerUser ?? '',
+    offerMode,
+    isActive: Boolean(voucher.isActive),
+    originalOfferMode: offerMode,
+    legacyAllPlans: isAutomatic && !voucher.appliesToPlanCodes?.length,
+    legacyAllCycles: isAutomatic && !voucher.appliesToBillingPeriods?.length,
+    legacyNoEndDate: isAutomatic && !voucher.endsAt,
+  };
+};
 
 const discountLabel = (voucher, t) => {
   if (voucher.discountType === 'percentage') {
@@ -129,8 +169,19 @@ const SelectablePill = ({ checked, title, subtitle, onClick }) => (
   </button>
 );
 
-const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans, t }) => (
-  renderModal(
+const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans, t }) => {
+  const offerMode = resolveFormOfferMode(form);
+  const isAutomatic = offerMode === 'automatic';
+  const publicPlans = plans.filter(
+    (plan) =>
+      plan &&
+      plan.isCustom !== true &&
+      plan.is_custom !== true &&
+      plan.isActive !== false &&
+      plan.is_active !== false
+  );
+
+  return renderModal(
     <ModalShell
       title={editing ? t('voucherAdmin.editTitle') : t('voucherAdmin.createTitle')}
       subtitle={t('voucherAdmin.formSubtitle')}
@@ -149,18 +200,39 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
         title={t('voucherAdmin.offerType')}
         description={t('voucherAdmin.offerTypeDescription')}
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <SelectablePill
-            checked={!form.autoApply}
-            title={t('voucherAdmin.manualCode')}
-            subtitle={t('voucherAdmin.manualCodeSubtitle')}
-            onClick={() => setForm((p) => ({ ...p, autoApply: false }))}
+            checked={offerMode === 'public_code'}
+            title={t('voucherAdmin.publicCode')}
+            subtitle={t('voucherAdmin.publicCodeSubtitle')}
+            onClick={() => setForm((p) => ({
+              ...p,
+              offerMode: 'public_code',
+              code: resolveFormOfferMode(p) === 'automatic' ? '' : p.code,
+            }))}
           />
           <SelectablePill
-            checked={form.autoApply}
+            checked={offerMode === 'private_code'}
+            title={t('voucherAdmin.privateCode')}
+            subtitle={t('voucherAdmin.privateCodeSubtitle')}
+            onClick={() => setForm((p) => ({
+              ...p,
+              offerMode: 'private_code',
+              code: resolveFormOfferMode(p) === 'automatic' ? '' : p.code,
+            }))}
+          />
+          <SelectablePill
+            checked={offerMode === 'automatic'}
             title={t('voucherAdmin.autoPromotion')}
             subtitle={t('voucherAdmin.autoPromotionSubtitle')}
-            onClick={() => setForm((p) => ({ ...p, autoApply: true }))}
+            onClick={() => setForm((p) => ({
+              ...p,
+              offerMode: 'automatic',
+              appliesToBillingPeriods:
+                p.legacyAllCycles || p.appliesToBillingPeriods
+                  ? p.appliesToBillingPeriods
+                  : 'monthly, yearly',
+            }))}
           />
         </div>
       </FormSection>
@@ -168,12 +240,20 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
       <FormSection
         kicker="DISCOUNT"
         title={t('voucherAdmin.discountInfo')}
-        description={form.autoApply ? t('voucherAdmin.autoDiscountDescription') : t('voucherAdmin.manualDiscountDescription')}
+        description={isAutomatic ? t('voucherAdmin.autoDiscountDescription') : t('voucherAdmin.manualDiscountDescription')}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label={t('voucherAdmin.voucherCode')}>
-            <input className="input w-full font-mono uppercase" value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} required />
-          </Field>
+          {!isAutomatic && (
+            <Field label={t('voucherAdmin.voucherCode')}>
+              <input
+                className="input w-full font-mono uppercase"
+                value={form.code}
+                onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
+                required
+                disabled={Boolean(editing && form.originalOfferMode !== 'automatic')}
+              />
+            </Field>
+          )}
           <Field label={t('voucherAdmin.displayName')}>
             <input className="input w-full" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder={t('voucherAdmin.displayNamePlaceholder')} required />
           </Field>
@@ -241,7 +321,7 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
       <FormSection
         kicker="RULES"
         title={t('voucherAdmin.rules')}
-        description={form.autoApply ? t('voucherAdmin.autoRulesDescription') : t('voucherAdmin.manualRulesDescription')}
+        description={isAutomatic ? t('voucherAdmin.autoRulesDescription') : t('voucherAdmin.manualRulesDescription')}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label={t('voucherAdmin.minOrder')}>
@@ -256,37 +336,53 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
           <div />
           <Field label={t('voucherAdmin.applicablePlans')} className="md:col-span-2">
             <div className="flex flex-wrap gap-2">
-              <SelectablePill
-                checked={!normalizeCsv(form.appliesToPlanCodes).length}
-                title={t('voucherAdmin.allPlans')}
-                subtitle={t('voucherAdmin.allPlansSubtitle')}
-                onClick={() => setForm((p) => ({ ...p, appliesToPlanCodes: '' }))}
-              />
-              {plans.map((plan) => (
+              {(!isAutomatic || form.legacyAllPlans) && (
+                <SelectablePill
+                  checked={!normalizeCsv(form.appliesToPlanCodes).length}
+                  title={t('voucherAdmin.allPlans')}
+                  subtitle={t('voucherAdmin.allPlansSubtitle')}
+                  onClick={() => {
+                    if (!isAutomatic) setForm((p) => ({ ...p, appliesToPlanCodes: '' }));
+                  }}
+                />
+              )}
+              {publicPlans.map((plan) => (
                 <SelectablePill
                   key={plan.id || plan.code}
                   checked={normalizeCsv(form.appliesToPlanCodes).map(normalizeCode).includes(normalizeCode(plan.code))}
                   title={plan.name || plan.code}
                   subtitle={plan.code}
-                  onClick={() => setForm((p) => ({ ...p, appliesToPlanCodes: toggleCsvValue(p.appliesToPlanCodes, plan.code) }))}
+                  onClick={() => setForm((p) => ({
+                    ...p,
+                    legacyAllPlans: false,
+                    appliesToPlanCodes: toggleCsvValue(p.appliesToPlanCodes, plan.code),
+                  }))}
                 />
               ))}
             </div>
           </Field>
           <Field label={t('voucherAdmin.applicableCycles')} className="md:col-span-2">
             <div className="flex flex-wrap gap-2">
-              <SelectablePill
-                checked={!normalizeCsv(form.appliesToBillingPeriods).length}
-                title={t('voucherAdmin.allCycles')}
-                subtitle={t('voucherAdmin.monthAndYear')}
-                onClick={() => setForm((p) => ({ ...p, appliesToBillingPeriods: '' }))}
-              />
+              {(!isAutomatic || form.legacyAllCycles) && (
+                <SelectablePill
+                  checked={!normalizeCsv(form.appliesToBillingPeriods).length}
+                  title={t('voucherAdmin.allCycles')}
+                  subtitle={t('voucherAdmin.monthAndYear')}
+                  onClick={() => {
+                    if (!isAutomatic) setForm((p) => ({ ...p, appliesToBillingPeriods: '' }));
+                  }}
+                />
+              )}
               {['monthly', 'yearly'].map((period) => (
                 <SelectablePill
                   key={period}
                   checked={normalizeCsv(form.appliesToBillingPeriods).map(normalizeCode).includes(period)}
                   title={t(`voucherAdmin.${period}`)}
-                  onClick={() => setForm((p) => ({ ...p, appliesToBillingPeriods: toggleCsvValue(p.appliesToBillingPeriods, period) }))}
+                  onClick={() => setForm((p) => ({
+                    ...p,
+                    legacyAllCycles: false,
+                    appliesToBillingPeriods: toggleCsvValue(p.appliesToBillingPeriods, period),
+                  }))}
                 />
               ))}
             </div>
@@ -303,8 +399,18 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
           <Field label={t('voucherAdmin.startsAt')}>
             <input type="date" className="input w-full" value={form.startsAt} onChange={(e) => setForm((p) => ({ ...p, startsAt: e.target.value }))} />
           </Field>
-          <Field label={t('voucherAdmin.endsAt')}>
-            <input type="date" className="input w-full" value={form.endsAt} onChange={(e) => setForm((p) => ({ ...p, endsAt: e.target.value }))} />
+          <Field label={t('voucherAdmin.endsAt')} note={isAutomatic ? t('voucherAdmin.endsAtRequiredNote') : undefined}>
+            <input
+              type="date"
+              className="input w-full"
+              value={form.endsAt}
+              onChange={(e) => setForm((p) => ({
+                ...p,
+                endsAt: e.target.value,
+                legacyNoEndDate: false,
+              }))}
+              required={isAutomatic && !form.legacyNoEndDate}
+            />
           </Field>
           <Field label={t('voucherAdmin.usageLimit')} note={t('voucherAdmin.unlimitedHint')}>
             <input type="number" min="1" className="input w-full" value={form.usageLimit} onChange={(e) => setForm((p) => ({ ...p, usageLimit: e.target.value }))} placeholder={t('voucherAdmin.unlimited')} />
@@ -318,7 +424,7 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
       <FormSection
         kicker="STATUS"
         title={t('voucherAdmin.status')}
-        description={form.autoApply ? t('voucherAdmin.autoStatusDescription') : t('voucherAdmin.manualStatusDescription')}
+        description={isAutomatic ? t('voucherAdmin.autoStatusDescription') : t('voucherAdmin.manualStatusDescription')}
       >
         <p className="mb-3 text-sm text-slate-500">{t('voucherAdmin.oneCodePerOrder')}</p>
         <label className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -329,8 +435,8 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
     </ModalShell>,
     onCancel,
     MODAL_FORM
-  )
-);
+  );
+};
 
 const TABS = ['active', 'expired', 'disabled'];
 
@@ -392,6 +498,7 @@ export default function AdminVouchersPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const offerMode = resolveFormOfferMode(form);
     const discountValue = Number(form.discountValue);
     if (form.discountValue === '' || !Number.isFinite(discountValue) || discountValue <= 0) {
       toast.error(t('voucherAdmin.errorDiscountValue'));
@@ -400,6 +507,24 @@ export default function AdminVouchersPage() {
     if (form.discountType === 'percentage' && discountValue > 100) {
       toast.error(t('voucherAdmin.errorPercentageMax'));
       return;
+    }
+    if (offerMode !== 'automatic' && !String(form.code || '').trim()) {
+      toast.error(t('voucherAdmin.errorCodeRequired'));
+      return;
+    }
+    if (offerMode === 'automatic') {
+      if (!normalizeCsv(form.appliesToPlanCodes).length && !form.legacyAllPlans) {
+        toast.error(t('voucherAdmin.errorPlansRequired'));
+        return;
+      }
+      if (!normalizeCsv(form.appliesToBillingPeriods).length && !form.legacyAllCycles) {
+        toast.error(t('voucherAdmin.errorCyclesRequired'));
+        return;
+      }
+      if (!form.endsAt && !form.legacyNoEndDate) {
+        toast.error(t('voucherAdmin.errorEndsAtRequired'));
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -419,8 +544,10 @@ export default function AdminVouchersPage() {
     }
   };
 
+  const voucherLabel = (voucher) => voucher.name || voucher.code || `#${voucher.id}`;
+
   const handleDeactivate = async (voucher) => {
-    if (!window.confirm(t('voucherAdmin.deactivateConfirm', { code: voucher.code }))) return;
+    if (!window.confirm(t('voucherAdmin.deactivateConfirm', { code: voucherLabel(voucher) }))) return;
     try {
       await adminVouchersApiService.deleteVoucher(voucher.id);
       toast.success(t('voucherAdmin.deactivateSuccess'));
@@ -431,7 +558,7 @@ export default function AdminVouchersPage() {
   };
 
   const handleRestore = async (voucher) => {
-    if (!window.confirm(t('voucherAdmin.restoreConfirm', { code: voucher.code }))) return;
+    if (!window.confirm(t('voucherAdmin.restoreConfirm', { code: voucherLabel(voucher) }))) return;
     const needsNewEnd = voucher.endsAt && new Date(voucher.endsAt).getTime() <= Date.now();
     let endsAt;
     if (needsNewEnd) {
@@ -459,7 +586,7 @@ export default function AdminVouchersPage() {
       toast.error(t('voucherAdmin.hardDeleteBlocked'));
       return;
     }
-    if (!window.confirm(t('voucherAdmin.hardDeleteConfirm', { code: voucher.code }))) return;
+    if (!window.confirm(t('voucherAdmin.hardDeleteConfirm', { code: voucherLabel(voucher) }))) return;
     try {
       await adminVouchersApiService.hardDeleteVoucher(voucher.id);
       toast.success(t('voucherAdmin.hardDeleteSuccess'));
@@ -545,10 +672,16 @@ export default function AdminVouchersPage() {
                 <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400">{t('voucherAdmin.empty')}</td></tr>
               ) : filtered.map((voucher) => {
                 const status = getVoucherLifecycleStatus(voucher);
+                const mode = voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
+                const codeDisplay = mode === 'automatic'
+                  ? (voucher.name || t('voucherAdmin.autoBadge'))
+                  : mode === 'private_code'
+                    ? `••••${String(voucher.code || '').slice(-4)}`
+                    : voucher.code;
                 return (
                   <tr key={voucher.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <div className="font-mono font-semibold text-gray-900">{voucher.code}</div>
+                      <div className="font-mono font-semibold text-gray-900">{codeDisplay}</div>
                       <div className="text-xs text-gray-500">{voucher.name}</div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{discountLabel(voucher, t)}</td>
@@ -563,7 +696,7 @@ export default function AdminVouchersPage() {
                         <span className={`badge text-xs ${status === 'active' ? 'badge-green' : 'badge-gray'}`}>
                           {t(`voucherAdmin.statusBadge.${status}`)}
                         </span>
-                        {voucher.autoApply && <span className="badge badge-yellow text-xs">{t('voucherAdmin.autoBadge')}</span>}
+                        <span className="badge badge-yellow text-xs">{t(`voucherAdmin.modeBadge.${mode}`)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">

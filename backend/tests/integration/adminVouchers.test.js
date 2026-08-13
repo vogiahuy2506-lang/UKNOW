@@ -12,9 +12,17 @@ import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser } from './helpers/db.js';
+import { truncateAll, createUser, createPlan, createOrder } from './helpers/db.js';
 
 let app;
+
+const futureEndsAt = () => new Date(Date.now() + 60 * 86400000).toISOString();
+const automaticFields = (planCodes = ['basic']) => ({
+  offerMode: 'automatic',
+  appliesToPlanCodes: planCodes,
+  appliesToBillingPeriods: ['monthly', 'yearly'],
+  endsAt: futureEndsAt(),
+});
 
 beforeAll(() => {
   app = createApp();
@@ -171,9 +179,32 @@ describe('POST /api/admin/vouchers', () => {
     expect(res.body.data.code).toBe('LOWER20');
   });
 
+  it('reject offerMode không thuộc enum', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, offerMode: 'secret-ish' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VOUCHER_OFFER_MODE_INVALID');
+  });
+
+  it('giữ tương thích mã manual legacy có tiền tố AUTO_', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, code: 'AUTO_PUBLIC' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.code).toBe('AUTO_PUBLIC');
+  });
+
   it('voucher với usageLimit, usageLimitPerUser, endsAt', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const token = await loginAs(admin);
+    await createPlan({ code: 'basic', name: 'Basic', price: 100000 });
     const res = await request(app)
       .post('/api/admin/vouchers')
       .set('Authorization', `Bearer ${token}`)
@@ -182,13 +213,14 @@ describe('POST /api/admin/vouchers', () => {
         code: 'LIMITED',
         usageLimit: 100,
         usageLimitPerUser: 1,
-        endsAt: '2099-12-31T23:59:59Z',
-        autoApply: true,
+        ...automaticFields(),
       });
     expect(res.status).toBe(201);
     expect(res.body.data.usageLimit).toBe(100);
     expect(res.body.data.usageLimitPerUser).toBe(1);
     expect(res.body.data.autoApply).toBe(true);
+    expect(res.body.data.offerMode).toBe('automatic');
+    expect(String(res.body.data.code || '')).toMatch(/^AUTO_/);
   });
 
   it('trùng code → 409', async () => {
@@ -297,6 +329,94 @@ describe('PATCH /api/admin/vouchers/:id', () => {
 
     const row = await db.query('SELECT is_active FROM vouchers WHERE id = $1', [id]);
     expect(row.rows[0].is_active).toBe(false);
+  });
+
+  it('cho phép reclassify public_code thành private_code sau khi đã có order reference', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const user = await createUser({ role: 'user', username: 'buyer1' });
+    const token = await loginAs(admin);
+    const plan = await createPlan({ code: 'basic', name: 'Basic', price: 100000 });
+    const created = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, offerMode: 'public_code' });
+    const order = await createOrder({
+      planId: plan.id,
+      userId: user.id,
+      userEmail: user.email,
+    });
+    await db.query('UPDATE orders SET voucher_id = $1, voucher_code = $2 WHERE id = $3', [
+      created.body.data.id,
+      created.body.data.code,
+      order.id,
+    ]);
+
+    const res = await request(app)
+      .patch(`/api/admin/vouchers/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ offerMode: 'private_code' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.offerMode).toBe('private_code');
+    expect(res.body.data.code).toBe('TEST20');
+  });
+
+  it('không tái sử dụng internal automatic code khi đổi sang code mode', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    await createPlan({ code: 'basic', name: 'Basic', price: 100000 });
+    const created = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, ...automaticFields() });
+
+    const res = await request(app)
+      .patch(`/api/admin/vouchers/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ offerMode: 'public_code', code: created.body.data.code });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VOUCHER_INTERNAL_CODE_REUSE');
+  });
+
+  it('sửa metadata automatic legacy vẫn preserve NULL targets/cycles/end date', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    await createPlan({ code: 'basic', name: 'Basic', price: 100000 });
+    const created = await request(app)
+      .post('/api/admin/vouchers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...baseVoucher, ...automaticFields() });
+    await db.query(
+      `UPDATE vouchers
+       SET applies_to_plan_codes = NULL,
+           applies_to_billing_periods = NULL,
+           ends_at = NULL
+       WHERE id = $1`,
+      [created.body.data.id]
+    );
+
+    const res = await request(app)
+      .patch(`/api/admin/vouchers/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        offerMode: 'automatic',
+        name: 'Legacy renamed',
+        discountType: 'percentage',
+        discountValue: 20,
+        maxDiscountAmount: null,
+        minOrderAmount: 0,
+        startsAt: null,
+        usageLimit: null,
+        usageLimitPerUser: null,
+        isActive: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.name).toBe('Legacy renamed');
+    expect(res.body.data.appliesToPlanCodes).toBeNull();
+    expect(res.body.data.appliesToBillingPeriods).toBeNull();
+    expect(res.body.data.endsAt).toBeNull();
   });
 
   it('id không tồn tại → 404', async () => {

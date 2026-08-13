@@ -42,6 +42,15 @@ async function createVoucher(token, payload) {
   return res.body.data;
 }
 
+
+const futureEndsAt = () => new Date(Date.now() + 60 * 86400000).toISOString();
+const automaticFields = (planCodes = ['basic']) => ({
+  offerMode: 'automatic',
+  appliesToPlanCodes: planCodes,
+  appliesToBillingPeriods: ['monthly', 'yearly'],
+  endsAt: futureEndsAt(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 describe('GET /api/public/promotions/active', () => {
   it('không cần auth — public endpoint', async () => {
@@ -77,15 +86,19 @@ describe('GET /api/public/promotions/active', () => {
       discountType: 'percentage',
       discountValue: 25,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(),
     });
 
     const res = await request(app).get('/api/public/promotions/active');
     expect(res.body.data.hasPromotion).toBe(true);
     expect(res.body.data.topPromotion).not.toBeNull();
-    expect(res.body.data.topPromotion.code).toBe('PROMO25');
+    expect(res.body.data.topPromotion.code).toBeUndefined();
+    expect(res.body.data.topPromotion.id).toBeUndefined();
+    expect(res.body.data.topPromotion.name).toBe('Promo 25%');
     expect(res.body.data.topPromotion.discountAmount).toBe(50000);
     expect(res.body.data.byPlanCode).toHaveProperty('basic');
+    expect(res.body.data.byPlanCode.basic.code).toBeUndefined();
+    expect(res.body.data.byPlanCode.basic.id).toBeUndefined();
   });
 
   it('voucher manual (auto_apply=false) không xuất hiện trong promotions', async () => {
@@ -119,7 +132,7 @@ describe('GET /api/public/promotions/active', () => {
       discountType: 'percentage',
       discountValue: 20,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(['pro']),
       appliesToBillingPeriods: ['yearly'],
     });
 
@@ -145,7 +158,7 @@ describe('GET /api/public/promotions/active', () => {
       discountType: 'percentage',
       discountValue: 10,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(['basic', 'pro']),
     });
     await createVoucher(adminTk, {
       code: 'BIG30',
@@ -153,12 +166,13 @@ describe('GET /api/public/promotions/active', () => {
       discountType: 'percentage',
       discountValue: 30,
       minOrderAmount: 0,
-      autoApply: true,
+      ...automaticFields(['basic', 'pro']),
     });
 
     const res = await request(app).get('/api/public/promotions/active');
     expect(res.body.data.hasPromotion).toBe(true);
     // BIG30 trên plan pro: 30% × 500000 = 150000 > SMALL10 trên pro: 10% × 500000 = 50000
-    expect(res.body.data.topPromotion.code).toBe('BIG30');
+    expect(res.body.data.topPromotion.code).toBeUndefined();
+    expect(res.body.data.topPromotion.name).toBe('Big 30%');
   });
 });
