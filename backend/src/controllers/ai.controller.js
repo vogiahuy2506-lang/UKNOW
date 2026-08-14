@@ -28,6 +28,7 @@ import {
   resolveAssistantLocaleContext,
 } from '../utils/assistantLocale.util.js';
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits.util.js';
+import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -255,7 +256,8 @@ class AiController {
               originalName: f.originalName,
               contentType: f.contentType,
               size: f.size,
-              ownerUserId: req.user.id,
+              ownerUserId: resolveWorkspaceOwnerId(req.user),
+              actorUserId: req.user.id,
             });
             safeFiles.push({
               storage_key: promoted.storage_key,
@@ -1055,7 +1057,7 @@ class AiController {
     try {
       const { history, chatbot_id, system_instruction, temperature, max_tokens, attachments } = req.body;
       const chatbotId = parseInt(chatbot_id, 10) || 0;
-      const userId = req.user?.id || 1;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const data = await customChatService.chat({
         history,
         chatbotId,
@@ -1084,9 +1086,15 @@ class AiController {
    */
   async customChatUpload(req, res) {
     try {
+      const chatbotId = parseInt(req.body.chatbot_id, 10) || 0;
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
       const data = await customChatService.uploadDocument({
-        chatbotId: parseInt(req.body.chatbot_id, 10) || 0,
-        userId: req.user?.id || 1,
+        chatbotId,
+        userId: ownerUserId,
         file: req.file,
       });
 
@@ -1096,7 +1104,7 @@ class AiController {
       });
     } catch (error) {
       console.error('[CustomChatUpload] Error:', error);
-      return res.status(error.status || 500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error));
     }
   }
 
@@ -1148,11 +1156,12 @@ class AiController {
       // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
       // hợp lệ cũng bị 404 ("3" !== 3).
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
-      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
-      const documents = await customChatService.getDocuments(chatbotId);
+      const documents = await customChatService.getDocuments(chatbotId, ownerUserId);
 
       return res.json({
         success: true,
@@ -1174,12 +1183,13 @@ class AiController {
       // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
       // hợp lệ cũng bị 404 ("3" !== 3).
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
-      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
       const docId = decodeURIComponent(req.params.docId);
-      await customChatService.deleteDocument(chatbotId, docId);
+      await customChatService.deleteDocument(chatbotId, ownerUserId, docId);
       return res.json({ success: true, message: 'Document deleted' });
     } catch (error) {
       console.error('[CustomChat] Delete document error:', error);
@@ -1200,9 +1210,15 @@ class AiController {
         return res.status(400).json({ success: false, message: 'Content is required' });
       }
 
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
       const result = await customChatService.addTextDocument({
         chatbotId,
-        userId: req.user?.id || 1,
+        userId: ownerUserId,
         title: title || 'Text Document',
         content: content.trim(),
       });
@@ -1214,7 +1230,7 @@ class AiController {
       });
     } catch (error) {
       console.error('[CustomChat] Add text document error:', error);
-      return res.status(error.status || 500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json(buildAiErrorPayload(error));
     }
   }
 

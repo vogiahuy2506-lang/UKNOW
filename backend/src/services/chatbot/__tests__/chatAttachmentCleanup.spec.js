@@ -14,6 +14,19 @@ jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
   },
 }));
 
+jest.unstable_mockModule('../../storage/storageObject.service.js', () => ({
+  markDeletedAfterUnlink: jest.fn(async ({ physicalPaths }) => {
+    for (const filePath of physicalPaths) {
+      try {
+        await fs.unlink(filePath);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
+    return null;
+  }),
+}));
+
 const unlinkSpy = jest.spyOn(fs, 'unlink').mockResolvedValue(undefined);
 const readdirSpy = jest.spyOn(fs, 'readdir').mockResolvedValue([]);
 const statSpy = jest.spyOn(fs, 'stat');
@@ -42,7 +55,7 @@ describe('isKeyReferenced fail-closed', () => {
   it('returns false only when at least one table answered and none matched', async () => {
     mockQuery.mockResolvedValue({ rows: [] });
     await expect(isKeyReferenced('uploads/1/chat/orphan.pdf')).resolves.toBe(false);
-    expect(mockQuery).toHaveBeenCalledTimes(4);
+    expect(mockQuery).toHaveBeenCalledTimes(5);
   });
 
   it('skips missing tables (42P01) but still works if another table answers', async () => {
@@ -53,6 +66,7 @@ describe('isKeyReferenced fail-closed', () => {
       .mockRejectedValueOnce(missing)
       .mockRejectedValueOnce(missing)
       .mockRejectedValueOnce(missing)
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     await expect(isKeyReferenced('uploads/1/chat/a.pdf')).resolves.toBe(false);
@@ -85,6 +99,7 @@ describe('expires_at catalog cleanup', () => {
     mockResolveAbs.mockClear();
     unlinkSpy.mockReset().mockResolvedValue(undefined);
     readdirSpy.mockReset().mockResolvedValue([]);
+    statSpy.mockReset();
   });
 
   it('expired row → unlink file + sidecar + DELETE row', async () => {
@@ -153,6 +168,52 @@ describe('expires_at catalog cleanup', () => {
     expect(unlinkSpy).not.toHaveBeenCalled();
     expect(result.skipped).toBeGreaterThanOrEqual(1);
     expect(result.rowsDeleted).toBe(0);
+  });
+
+  it('legacy orphan pass reports but does not unlink while the durable delete gate is off', async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    const dirent = (name, isDirectory) => ({
+      name,
+      isDirectory: () => isDirectory,
+      isFile: () => !isDirectory,
+    });
+    readdirSpy
+      .mockResolvedValueOnce([dirent('9', true)])
+      .mockResolvedValueOnce([dirent('quarantine.pdf', false)]);
+    statSpy.mockResolvedValue({ mtimeMs: Date.now() - 100 * 24 * 60 * 60 * 1000 });
+
+    const result = await cleanupOrphanChatAttachments({ deleteUntracked: false });
+
+    expect(unlinkSpy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      untrackedDeleteEnabled: false,
+      untrackedDeleteCandidates: 1,
+      deleted: 0,
+      skipped: 1,
+    });
+  });
+
+  it('legacy orphan pass unlinks only when the durable delete gate is enabled', async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    const dirent = (name, isDirectory) => ({
+      name,
+      isDirectory: () => isDirectory,
+      isFile: () => !isDirectory,
+    });
+    readdirSpy
+      .mockResolvedValueOnce([dirent('9', true)])
+      .mockResolvedValueOnce([dirent('orphan.pdf', false)]);
+    statSpy.mockResolvedValue({ mtimeMs: Date.now() - 100 * 24 * 60 * 60 * 1000 });
+
+    const result = await cleanupOrphanChatAttachments({ deleteUntracked: true });
+
+    expect(unlinkSpy).toHaveBeenCalledWith(expect.stringContaining('orphan.pdf'));
+    expect(unlinkSpy).toHaveBeenCalledWith(expect.stringContaining('orphan.pdf.txt'));
+    expect(result).toMatchObject({
+      untrackedDeleteEnabled: true,
+      untrackedDeleteCandidates: 1,
+      deleted: 1,
+    });
   });
 
   it('isKeyInCatalog queries storage_key', async () => {

@@ -174,7 +174,13 @@ describe('GET /api/vouchers/available', () => {
     await request(app)
       .post('/api/admin/plans')
       .set('Authorization', `Bearer ${adminTk}`)
-      .send({ code: 'pro', name: 'Pro', price: 200000, maxEmployees: 5 });
+      .send({
+        code: 'pro',
+        name: 'Pro',
+        price: 200000,
+        maxEmployees: 5,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
     // Set price_yearly trực tiếp vào DB vì admin API không có field này
     const { rows } = await (await import('../../src/config/database.js')).default.query(
       `UPDATE plans SET price_yearly = 1800000 WHERE code = 'pro' RETURNING id`

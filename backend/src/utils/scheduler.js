@@ -592,7 +592,10 @@ export const initScheduler = () => {
         const { cleanupOrphanChatAttachments } = await import('../services/chatbot/chatAttachmentCleanup.service.js');
         const result = await cleanupOrphanChatAttachments();
         console.log(
-          `[Scheduler] chat_attachment_cleanup: scanned=${result.scanned} deleted=${result.deleted} rowsDeleted=${result.rowsDeleted ?? 0} skipped=${result.skipped}`
+          `[Scheduler] chat_attachment_cleanup: scanned=${result.scanned} deleted=${result.deleted} `
+          + `rowsDeleted=${result.rowsDeleted ?? 0} skipped=${result.skipped} `
+          + `untrackedDeleteEnabled=${result.untrackedDeleteEnabled} `
+          + `untrackedDeleteCandidates=${result.untrackedDeleteCandidates}`
         );
         return result;
       });
@@ -1072,4 +1075,38 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Mat Bao invoice retry: mỗi 15 phút');
+
+  // ── Storage ledger/filesystem reconciliation — nightly, off-peak ──────────
+  cron.schedule('40 2 * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        reconcileStorageObjects,
+        STORAGE_RECONCILE_JOB_CODE,
+      } = await import('../services/storage/storageReconcile.service.js');
+      await cronJobRunRepository.recordRun(STORAGE_RECONCILE_JOB_CODE, async () => {
+        const summary = await reconcileStorageObjects();
+        console.log(
+          `[Scheduler] Storage reconcile: processed=${summary.processed} `
+          + `orphaned=${summary.orphanedCount} drift=${summary.driftCount} `
+          + `cleanup=${summary.cleanupRetryDeleted} untrackedDurableBytes=${summary.untrackedDurableBytes} `
+          + `durableDeleteEnabled=${summary.untrackedDurableDeleteEnabled} `
+          + `durableDeleteCandidates=${summary.untrackedDurableDeleteCandidateCount}`
+        );
+        return {
+          ...summary,
+          synced: summary.orphanedCount
+            + summary.driftCount
+            + summary.cleanupRetryDeleted
+            + summary.expiredTempDeleted
+            + summary.untrackedDeletedCount,
+        };
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi đối soát storage ledger:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Storage reconcile: 02:40 hàng ngày');
 };

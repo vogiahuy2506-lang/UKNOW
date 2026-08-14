@@ -6,9 +6,12 @@ import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
 import multer from 'multer';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
+import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
+import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
+const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePaths().uploads] });
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
@@ -64,6 +67,7 @@ router.post('/custom-chat', aiLimiter, assertAiCreditAvailable('ai_custom_chat')
 router.post(
   '/chat-attachment',
   uploadLimiter,
+  workspaceUploadCapacityGuard,
   upload.single('file'),
   aiController.uploadChatAttachment.bind(aiController)
 );

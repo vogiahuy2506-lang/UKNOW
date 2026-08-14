@@ -5,6 +5,11 @@ import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { signChatAttachmentRef, resolveChatAttachmentRef } from '../../utils/chatAttachmentRef.js';
 import { MAX_UPLOAD_FILE_BYTES } from '../../utils/uploadLimits.util.js';
 import db from '../../config/database.js';
+import {
+  getPhysicalSize,
+  markDeletedAfterUnlink,
+  registerWrittenStorageObject,
+} from '../storage/storageObject.service.js';
 
 export const MAX_FILES_PER_MESSAGE = 3;
 export const MAX_FILE_BYTES = MAX_UPLOAD_FILE_BYTES;
@@ -126,7 +131,7 @@ function resolveSource({ source, bind = {} } = {}) {
 }
 
 /**
- * Insert catalog row — fail-soft (file on disk remains usable for chat).
+ * Insert catalog row. Storage ledger and catalog must not silently diverge.
  */
 export async function insertChatAttachmentRow({
   ownerUserId,
@@ -137,28 +142,17 @@ export async function insertChatAttachmentRow({
   sizeBytes,
   conversationRef = null,
   expiresAt = null,
+  storageObjectId = null,
 }) {
   const expires = expiresAt || new Date(Date.now() + CHAT_ATTACHMENT_TTL_MS);
-  try {
-    await db.query(
-      `INSERT INTO chat_attachments
-         (id_user, source, storage_key, display_name, mime_type, size_bytes, conversation_ref, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (storage_key) DO NOTHING`,
-      [
-        ownerUserId,
-        source,
-        storageKey,
-        displayName || null,
-        mimeType || null,
-        sizeBytes ?? null,
-        conversationRef,
-        expires,
-      ]
-    );
-  } catch (err) {
-    console.warn('[ChatAttachment] catalog insert failed:', err.message);
-  }
+  await db.query(
+    `INSERT INTO chat_attachments
+       (id_user, source, storage_key, display_name, mime_type, size_bytes, conversation_ref, expires_at, storage_object_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (storage_key) DO NOTHING`,
+    [ownerUserId, source, storageKey, displayName || null, mimeType || null,
+      sizeBytes ?? null, conversationRef, expires, storageObjectId]
+  );
 }
 
 /**
@@ -170,6 +164,7 @@ export async function persistChatBlob({
   originalName,
   mimetype,
   ownerUserId,
+  actorUserId = ownerUserId,
   source,
   conversationRef = null,
 }) {
@@ -211,16 +206,37 @@ export async function persistChatBlob({
   const expiresAt = new Date(Date.now() + CHAT_ATTACHMENT_TTL_MS);
   const resolvedSource = resolveSource({ source });
 
-  await insertChatAttachmentRow({
+  const storageObject = await registerWrittenStorageObject({
     ownerUserId,
-    source: resolvedSource,
+    actorUserId,
     storageKey: key,
-    displayName,
-    mimeType: mime,
-    sizeBytes: buffer.length,
-    conversationRef,
+    category: 'chat',
+    state: 'active',
+    sizeBytes: await getPhysicalSize([absPath, `${absPath}.txt`]),
     expiresAt,
+    referenceType: 'chat_attachment',
+    physicalPaths: [absPath, `${absPath}.txt`],
   });
+
+  try {
+    await insertChatAttachmentRow({
+      ownerUserId,
+      source: resolvedSource,
+      storageKey: key,
+      displayName,
+      mimeType: mime,
+      sizeBytes: buffer.length,
+      conversationRef,
+      expiresAt,
+      storageObjectId: storageObject.id,
+    });
+  } catch (error) {
+    await markDeletedAfterUnlink({
+      storageKey: key,
+      physicalPaths: [absPath, `${absPath}.txt`],
+    }).catch(() => {});
+    throw error;
+  }
 
   const type = kind === 'image' ? 'image' : 'file';
   const url = uploadController.buildDownloadUrlByKey(key, { preview: kind === 'image' });
@@ -289,6 +305,7 @@ export async function promoteAssistantTempFile({
   contentType,
   size,
   ownerUserId,
+  actorUserId = ownerUserId,
 }) {
   const buffer = await uploadController.readTempFileBuffer(tempId, originalName);
   const persisted = await persistChatBlob({
@@ -296,6 +313,7 @@ export async function promoteAssistantTempFile({
     originalName,
     mimetype: contentType,
     ownerUserId,
+    actorUserId,
     source: CHAT_ATTACHMENT_SOURCES.ASSISTANT,
   });
   try {

@@ -4,8 +4,16 @@ import emailTemplateController from '../controllers/emailTemplate.controller.js'
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
+import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
+const hasTempAttachments = (req) => Array.isArray(req.body?.tempAttachments)
+  && req.body.tempAttachments.some((attachment) => attachment?.tempId && attachment?.originalName);
+const workspacePromotionCapacityGuard = storageCapacityGuard({
+  paths: [getStoragePaths().uploads],
+  shouldCheck: hasTempAttachments,
+});
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
@@ -20,6 +28,7 @@ router.get('/:id', emailTemplateController.getById.bind(emailTemplateController)
 // Create — cần quyền email_templates
 router.post('/',
   requirePermission('email_templates'),
+  workspacePromotionCapacityGuard,
   [
     body('templateName').trim().notEmpty().withMessage('Tên mẫu không được để trống'),
     body('subject').trim().notEmpty().withMessage('Tiêu đề không được để trống'),
@@ -37,6 +46,7 @@ router.post('/',
 // Update — cần quyền email_templates
 router.put('/:id',
   requirePermission('email_templates'),
+  workspacePromotionCapacityGuard,
   [
     body('templateName').optional().trim().notEmpty().withMessage('Tên mẫu không được để trống'),
     body('subject').optional().trim().notEmpty().withMessage('Tiêu đề không được để trống')

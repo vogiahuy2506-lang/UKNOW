@@ -3,6 +3,7 @@ import zaloTemplateRepository from '../repositories/zalo/zaloTemplate.repository
 import db from '../config/database.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
+import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 class ZaloTemplateController {
   /**
@@ -157,6 +158,7 @@ class ZaloTemplateController {
     try {
       const userId = req.user.id;
       const roleCode = req.user?.role;
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
       const { templateName, templateCode, subject, bodyText, tempAttachments, variables, category } = req.body;
 
       const zaloTemplateLimitCheck = await checkUserResourceLimit({
@@ -175,15 +177,36 @@ class ZaloTemplateController {
 
       const normalizedBodyText = typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
       let storedAttachments = [];
+      let template = null;
 
       if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
         try {
-          storedAttachments = await uploadController.moveToS3(tempAttachments, userId);
-          storedAttachments = storedAttachments.map((savedAtt) => {
-            const source = tempAttachments.find((item) => item.tempId === savedAtt.tempId);
-            return { ...savedAtt, displayName: source?.displayName || '' };
+          await uploadController.moveToS3(tempAttachments, userId, {
+            ownerUserId,
+            actorUserId: userId,
+            category: 'zalo_template',
+            referenceType: 'zalo_template',
+            parentMutation: async (client, movedAttachments) => {
+              storedAttachments = movedAttachments.map((savedAtt) => {
+                const source = tempAttachments.find((item) => item.tempId === savedAtt.tempId);
+                return { ...savedAtt, displayName: source?.displayName || '' };
+              });
+              await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'zaloTemplates' });
+              template = await zaloTemplateRepository.create({
+                userId,
+                templateName,
+                templateCode,
+                subject,
+                bodyText: normalizedBodyText,
+                attachments: storedAttachments,
+                variables,
+                category,
+              }, client);
+              return { referenceId: template.id };
+            },
           });
         } catch (uploadError) {
+          if (uploadError?.code === 'RESOURCE_LIMIT_EXCEEDED' || uploadError?.limitReached) throw uploadError;
           console.error('Create zalo template upload error:', uploadError);
           res.status(500).json({
             success: false,
@@ -193,7 +216,7 @@ class ZaloTemplateController {
         }
       }
 
-      const template = await (async () => {
+      if (!template) template = await (async () => {
         const client = await db.getClient();
         try {
           await client.query('BEGIN');
@@ -309,25 +332,45 @@ class ZaloTemplateController {
       }
 
       if (deletedKeys.size > 0) {
-        try {
-          await uploadController.deleteFromS3(Array.from(deletedKeys));
-          finalAttachments = finalAttachments.filter((att) => {
-            const key = resolveAttachmentKey(att);
-            return !key || !deletedKeys.has(key);
-          });
-        } catch (deleteError) {
-          console.error('Delete zalo template attachments warning:', deleteError);
-        }
+        finalAttachments = finalAttachments.filter((att) => {
+          const key = resolveAttachmentKey(att);
+          return !key || !deletedKeys.has(key);
+        });
       }
 
+      let template = null;
       if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
         try {
-          let storedAttachments = await uploadController.moveToS3(tempAttachments, templateOwnerUserId);
-          storedAttachments = storedAttachments.map((savedAtt) => {
-            const source = tempAttachments.find((item) => item.tempId === savedAtt.tempId);
-            return { ...savedAtt, displayName: source?.displayName || '' };
+          await uploadController.moveToS3(tempAttachments, templateOwnerUserId, {
+            ownerUserId: templateOwnerUserId,
+            actorUserId: userId,
+            category: 'zalo_template',
+            referenceType: 'zalo_template',
+            referenceId: id,
+            parentMutation: async (client, movedAttachments) => {
+              const storedAttachments = movedAttachments.map((savedAtt) => {
+                const source = tempAttachments.find((item) => item.tempId === savedAtt.tempId);
+                return { ...savedAtt, displayName: source?.displayName || '' };
+              });
+              finalAttachments = finalAttachments.concat(storedAttachments);
+              template = await zaloTemplateRepository.update({
+                id,
+                userId,
+                isAdmin,
+                templateName,
+                templateCode,
+                subject,
+                hasBodyText,
+                bodyText: normalizedBodyText,
+                attachments: finalAttachments,
+                variables,
+                category,
+                isActive,
+              }, client);
+              if (!template) throw Object.assign(new Error('Không tìm thấy mẫu Zalo'), { statusCode: 404 });
+              return { referenceId: template.id };
+            },
           });
-          finalAttachments = finalAttachments.concat(storedAttachments);
         } catch (uploadError) {
           console.error('Update zalo template upload error:', uploadError);
           res.status(500).json({
@@ -338,20 +381,26 @@ class ZaloTemplateController {
         }
       }
 
-      const template = await zaloTemplateRepository.update({
-        id,
-        userId,
-        isAdmin,
-        templateName,
-        templateCode,
-        subject,
-        hasBodyText,
-        bodyText: normalizedBodyText,
-        attachments: finalAttachments,
-        variables,
-        category,
-        isActive,
-      });
+      if (!template) {
+        template = await zaloTemplateRepository.update({
+          id,
+          userId,
+          isAdmin,
+          templateName,
+          templateCode,
+          subject,
+          hasBodyText,
+          bodyText: normalizedBodyText,
+          attachments: finalAttachments,
+          variables,
+          category,
+          isActive,
+        });
+      }
+
+      if (deletedKeys.size > 0) {
+        await uploadController.deleteFromS3(Array.from(deletedKeys));
+      }
 
       res.json({
         success: true,

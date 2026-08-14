@@ -52,6 +52,24 @@ export async function getPlan(id) {
 }
 
 const parseLimitField = (v) => (v === '' || v === null || v === undefined) ? null : Number(v);
+const parseStorageLimitBytes = (v) => {
+  const value = Number(v);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw { status: 400, message: 'Dung lượng lưu trữ phải là số byte dương' };
+  }
+  return value;
+};
+const KB_LIMITS_BY_PLAN_CODE = Object.freeze({
+  trial: { maxKbDocuments: 3, maxKbExtractedChars: 100000 },
+  starter: { maxKbDocuments: 10, maxKbExtractedChars: 500000 },
+  basic: { maxKbDocuments: 25, maxKbExtractedChars: 1500000 },
+  professional: { maxKbDocuments: 75, maxKbExtractedChars: 5000000 },
+  enterprise: { maxKbDocuments: 200, maxKbExtractedChars: 20000000 },
+});
+const kbLimitsForPlanCode = (code) => (
+  KB_LIMITS_BY_PLAN_CODE[String(code || '').trim().toLowerCase()]
+  || KB_LIMITS_BY_PLAN_CODE.trial
+);
 const parseOptionalMoneyField = (v, label = 'Giá tiền', { emptyWhenZero = false } = {}) => {
   if (v === '' || v === null || v === undefined) return null;
   const n = Number(v);
@@ -66,7 +84,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
   aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
-  gracePeriodDays }) {
+  gracePeriodDays, storageLimitBytes }) {
   if (!name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (price === undefined || price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
   const normalizedCode = code?.trim() || null;
@@ -75,6 +93,7 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
     if (existingPlan) throw { status: 409, message: `Mã gói "${normalizedCode}" đã tồn tại` };
   }
   try {
+    const kbLimits = kbLimitsForPlanCode(normalizedCode);
     return await createPlan({
       code: normalizedCode, name: name.trim(), price, priceYearly: parseOptionalMoneyField(priceYearly, 'Giá năm', { emptyWhenZero: true }),
       description, features, maxEmployees: maxEmployees ?? 0, isActive,
@@ -99,6 +118,8 @@ export async function createNewPlan({ code, name, price, priceYearly, descriptio
       aiCreditsPerPeriod:      parseLimitField(aiCreditsPerPeriod),
       aiModel:                 aiModel?.trim() || 'gemini-2.5-flash',
       gracePeriodDays:         parseLimitField(gracePeriodDays) ?? 0,
+      storageLimitBytes:       parseStorageLimitBytes(storageLimitBytes),
+      ...kbLimits,
     });
   } catch (err) {
     if (err?.code === '23505' && String(err?.constraint || '').includes('plans_code')) {
@@ -142,6 +163,7 @@ export async function editPlan(id, payload) {
     aiCreditsPerPeriod:    parseLimitField(payload.aiCreditsPerPeriod),
     aiModel:               payload.aiModel?.trim() || plan.ai_model || 'gemini-2.5-flash',
     gracePeriodDays:       parseLimitField(payload.gracePeriodDays) ?? plan.grace_period_days ?? 0,
+    storageLimitBytes:     parseStorageLimitBytes(payload.storageLimitBytes),
   });
 }
 
@@ -244,6 +266,7 @@ export async function createCustomPlanForUser(userEmail, planData) {
     aiCreditsPerPeriod:    parseLimitField(planData.aiCreditsPerPeriod),
     aiModel:               planData.aiModel?.trim() || 'gemini-2.5-flash',
     gracePeriodDays:       parseLimitField(planData.gracePeriodDays) ?? 0,
+    storageLimitBytes:     parseStorageLimitBytes(planData.storageLimitBytes),
   });
 
   return { ...result, assignedTo: user };
@@ -298,6 +321,8 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
       aiCreditsPerPeriod:    parseLimitField(planData.aiCreditsPerPeriod),
       aiModel:               planData.aiModel?.trim() || 'gemini-2.5-flash',
       gracePeriodDays:       parseLimitField(planData.gracePeriodDays) ?? 0,
+      storageLimitBytes:     parseStorageLimitBytes(planData.storageLimitBytes),
+      ...KB_LIMITS_BY_PLAN_CODE.trial,
     });
 
     orderCode = Date.now();

@@ -40,6 +40,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     aiCreditsPerPeriod: plan.aiCreditsPerPeriod ?? '',
     aiModel: plan.aiModel || 'gemini-2.5-flash',
     gracePeriodDays: plan.gracePeriodDays ?? '',
+    storageLimitBytes: Number(plan.storageLimitBytes ?? 104857600),
   } : emptyForm());
   const [isSaving, setIsSaving] = useState(false);
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -164,6 +165,10 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
           </Field>
           <Field label={t('planInputs.employeesLabel')}>
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
+          </Field>
+          <Field label="Dung lượng lưu trữ (MB)">
+            <input type="number" min="1" className="input h-11 w-full" value={Math.max(1, Math.round(Number(form.storageLimitBytes || 0) / 1048576))}
+              onChange={(e) => set('storageLimitBytes', Number(e.target.value || 0) * 1048576)} />
           </Field>
           <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <input type="checkbox" id="isActive" className="h-4 w-4 rounded text-primary-600"

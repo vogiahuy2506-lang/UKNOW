@@ -21,6 +21,7 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import founderaiRoutes from './routes/founderai.routes.js';
 import googleSheetsRoutes from './routes/googleSheets.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
+import storageRoutes from './routes/storage.routes.js';
 import downloadRoutes from './routes/download.routes.js';
 import trackingRoutes from './routes/tracking.routes.js';
 import trackingShortLinkRoutes from './routes/trackingShortLink.routes.js';
@@ -156,6 +157,7 @@ export function createApp() {
   app.use('/api/founderai', founderaiRoutes);
   app.use('/api/google-sheets', googleSheetsRoutes);
   app.use('/api/uploads', uploadRoutes);
+  app.use('/api/storage', storageRoutes);
   app.use('/api/attachments', attachmentsRoutes);
   app.use('/file', downloadRoutes);
   app.use('/download', downloadRoutes);

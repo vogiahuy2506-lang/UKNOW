@@ -3,6 +3,7 @@ import emailTemplateRepository from '../repositories/email/emailTemplate.reposit
 import db from '../config/database.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
+import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 class EmailTemplateController {
   /**
@@ -153,6 +154,7 @@ class EmailTemplateController {
     try {
       const userId = req.user.id;
       const roleCode = req.user?.role;
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
       const { templateName, templateCode, subject, bodyHtml, bodyText, tempAttachments, variables, category } = req.body;
 
       const emailTemplateLimitCheck = await checkUserResourceLimit({
@@ -173,17 +175,40 @@ class EmailTemplateController {
       const normalizedBodyHtml = hasBodyHtml && typeof bodyHtml === 'string' && bodyHtml.trim() ? bodyHtml : null;
       const normalizedBodyText = hasBodyText && typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
 
-      // Xử lý temp attachments - lưu vào local uploads
       let storedAttachments = [];
+      let item = null;
       if (tempAttachments && tempAttachments.length > 0) {
         try {
-          storedAttachments = await uploadController.moveToS3(tempAttachments, userId);
-          // Gắn lại displayName từ tempAttachments vào attachment đã lưu
-          storedAttachments = storedAttachments.map((savedAtt) => {
-            const src = (tempAttachments || []).find((t) => t.tempId === savedAtt.tempId);
-            return { ...savedAtt, displayName: src?.displayName || '' };
+          await uploadController.moveToS3(tempAttachments, userId, {
+            ownerUserId,
+            actorUserId: userId,
+            category: 'email_template',
+            referenceType: 'email_template',
+            parentMutation: async (client, movedAttachments) => {
+              storedAttachments = movedAttachments.map((savedAtt) => {
+                const src = tempAttachments.find((t) => t.tempId === savedAtt.tempId);
+                return { ...savedAtt, displayName: src?.displayName || '' };
+              });
+              await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'emailTemplates' });
+              item = await emailTemplateRepository.create({
+                userId,
+                templateName,
+                templateCode,
+                subject,
+                bodyHtml: normalizedBodyHtml,
+                bodyText: normalizedBodyText,
+                attachments: storedAttachments,
+                variables,
+                category,
+              }, client);
+              for (const attachment of storedAttachments) {
+                await emailTemplateRepository.syncTemplateFile(item.id, attachment, client);
+              }
+              return { referenceId: item.id };
+            },
           });
         } catch (uploadError) {
+          if (uploadError?.code === 'RESOURCE_LIMIT_EXCEEDED' || uploadError?.limitReached) throw uploadError;
           console.error('Error saving attachments to local storage:', uploadError);
           return res.status(500).json({
             success: false,
@@ -192,7 +217,7 @@ class EmailTemplateController {
         }
       }
 
-      const item = await (async () => {
+      if (!item) item = await (async () => {
         const client = await db.getClient();
         try {
           await client.query('BEGIN');
@@ -324,32 +349,51 @@ class EmailTemplateController {
         }
       }
 
-      // Xử lý xóa files local đã bị remove
       if (deletedKeys.size > 0) {
-        try {
-          const keysToDelete = Array.from(deletedKeys);
-          await uploadController.deleteFromS3(keysToDelete);
-          // Xóa files khỏi finalAttachments
-          finalAttachments = finalAttachments.filter(att => {
-            const key = resolveAttachmentKey(att);
-            return !key || !deletedKeys.has(key);
-          });
-        } catch (error) {
-          console.error('Error deleting specific local attachments:', error);
-          // Tiếp tục thực hiện, chỉ log error
-        }
+        finalAttachments = finalAttachments.filter(att => {
+          const key = resolveAttachmentKey(att);
+          return !key || !deletedKeys.has(key);
+        });
       }
 
-      // Xử lý new temp attachments - lưu vào local uploads
+      let item = null;
       if (tempAttachments && tempAttachments.length > 0) {
         try {
-          let storedAttachments = await uploadController.moveToS3(tempAttachments, templateOwnerUserId);
-          // Gắn lại displayName từ tempAttachments
-          storedAttachments = storedAttachments.map((savedAtt) => {
-            const src = (tempAttachments || []).find((t) => t.tempId === savedAtt.tempId);
-            return { ...savedAtt, displayName: src?.displayName || '' };
+          await uploadController.moveToS3(tempAttachments, templateOwnerUserId, {
+            ownerUserId: templateOwnerUserId,
+            actorUserId: userId,
+            category: 'email_template',
+            referenceType: 'email_template',
+            referenceId: id,
+            parentMutation: async (client, movedAttachments) => {
+              const storedAttachments = movedAttachments.map((savedAtt) => {
+                const src = tempAttachments.find((t) => t.tempId === savedAtt.tempId);
+                return { ...savedAtt, displayName: src?.displayName || '' };
+              });
+              finalAttachments = finalAttachments.concat(storedAttachments);
+              item = await emailTemplateRepository.update({
+                id,
+                userId,
+                isAdmin,
+                templateName,
+                templateCode,
+                subject,
+                hasBodyHtml,
+                bodyHtml: normalizedBodyHtml,
+                hasBodyText,
+                bodyText: normalizedBodyText,
+                attachments: finalAttachments,
+                variables,
+                category,
+                isActive,
+              }, client);
+              if (!item) throw Object.assign(new Error('Không tìm thấy mẫu email'), { statusCode: 404 });
+              for (const attachment of finalAttachments) {
+                if (attachment.key) await emailTemplateRepository.syncTemplateFile(item.id, attachment, client);
+              }
+              return { referenceId: item.id };
+            },
           });
-          finalAttachments = finalAttachments.concat(storedAttachments);
         } catch (uploadError) {
           console.error('Error uploading new attachments:', uploadError);
           return res.status(500).json({
@@ -359,25 +403,29 @@ class EmailTemplateController {
         }
       }
 
-      const item = await emailTemplateRepository.update({
-        id,
-        userId,
-        isAdmin,
-        templateName,
-        templateCode,
-        subject,
-        hasBodyHtml,
-        bodyHtml: normalizedBodyHtml,
-        hasBodyText,
-        bodyText: normalizedBodyText,
-        attachments: finalAttachments,
-        variables,
-        category,
-        isActive,
-      });
+      if (!item) {
+        item = await emailTemplateRepository.update({
+          id,
+          userId,
+          isAdmin,
+          templateName,
+          templateCode,
+          subject,
+          hasBodyHtml,
+          bodyHtml: normalizedBodyHtml,
+          hasBodyText,
+          bodyText: normalizedBodyText,
+          attachments: finalAttachments,
+          variables,
+          category,
+          isActive,
+        });
+        await this.syncTemplateFiles(item.id, finalAttachments);
+      }
 
-      // Đồng bộ template_files
-      await this.syncTemplateFiles(item.id, finalAttachments);
+      if (deletedKeys.size > 0) {
+        await uploadController.deleteFromS3(Array.from(deletedKeys));
+      }
 
       res.json({
         success: true,

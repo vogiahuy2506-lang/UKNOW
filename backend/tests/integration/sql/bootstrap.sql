@@ -1,4 +1,5 @@
 -- =====================================================================
+
 -- Bootstrap schema cho integration test
 -- =====================================================================
 -- Đây là schema TỐI THIỂU đủ để chạy auth integration tests (register,
@@ -33,6 +34,9 @@ CREATE TABLE users (
   last_login_at           TIMESTAMPTZ,
   last_login_ip           VARCHAR(45),
   active_plan_id          INTEGER,
+  storage_quota_override_bytes BIGINT CHECK (
+    storage_quota_override_bytes IS NULL OR storage_quota_override_bytes > 0
+  ),
   preferred_ai_model      VARCHAR(80),
   subscription_expires_at TIMESTAMPTZ,
   -- Resource limits (migration 005-006)
@@ -157,6 +161,9 @@ CREATE TABLE plans (
   is_fup_enabled        BOOLEAN      NOT NULL DEFAULT FALSE,
   custom_owner_user_id  BIGINT,
   custom_config         JSONB,
+  storage_limit_bytes  BIGINT NOT NULL DEFAULT 104857600 CHECK (storage_limit_bytes > 0),
+  max_kb_documents     INTEGER NOT NULL DEFAULT 3 CHECK (max_kb_documents > 0),
+  max_kb_extracted_chars BIGINT NOT NULL DEFAULT 100000 CHECK (max_kb_extracted_chars > 0),
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -195,6 +202,41 @@ VALUES
 ALTER TABLE users
   ADD CONSTRAINT users_active_plan_id_fkey
     FOREIGN KEY (active_plan_id) REFERENCES plans(id) ON DELETE SET NULL;
+
+CREATE TABLE storage_objects (
+  id BIGSERIAL PRIMARY KEY,
+  pool_type VARCHAR(16) NOT NULL DEFAULT 'workspace'
+    CHECK (pool_type IN ('workspace', 'system')),
+  owner_user_id BIGINT REFERENCES users(id) ON DELETE RESTRICT,
+  actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  storage_key TEXT UNIQUE,
+  temp_key TEXT UNIQUE,
+  category VARCHAR(32) NOT NULL,
+  state VARCHAR(24) NOT NULL
+    CHECK (state IN ('active', 'temp', 'cleanup_pending', 'orphaned', 'deleted')),
+  size_bytes BIGINT NOT NULL DEFAULT 0 CHECK (size_bytes >= 0),
+  expires_at TIMESTAMPTZ,
+  reference_type VARCHAR(40),
+  reference_id VARCHAR(80),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT storage_objects_pool_owner_check CHECK (
+    (pool_type = 'workspace' AND owner_user_id IS NOT NULL)
+    OR (pool_type = 'system' AND owner_user_id IS NULL)
+  ),
+  CONSTRAINT storage_objects_live_key_check CHECK (
+    state NOT IN ('active', 'temp', 'cleanup_pending')
+    OR storage_key IS NOT NULL
+    OR temp_key IS NOT NULL
+  )
+);
+CREATE INDEX idx_storage_objects_owner_usage
+  ON storage_objects (owner_user_id, pool_type, state)
+  WHERE state IN ('active', 'temp', 'cleanup_pending');
+CREATE INDEX idx_storage_objects_expiry
+  ON storage_objects (expires_at)
+  WHERE state = 'temp' AND expires_at IS NOT NULL;
 
 ALTER TABLE plans
   ADD CONSTRAINT plans_custom_owner_user_fk
@@ -1262,6 +1304,88 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS knowledge_bases (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_sub_assistant BIGINT REFERENCES sub_assistants(id) ON DELETE SET NULL,
+  name             VARCHAR(255) NOT NULL,
+  description      TEXT,
+  is_active        BOOLEAN DEFAULT true,
+  chunking_mode    VARCHAR(20) DEFAULT 'paragraph',
+  chunk_size       INTEGER DEFAULT 500,
+  settings         JSONB DEFAULT '{}',
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS kb_documents (
+  id              BIGSERIAL PRIMARY KEY,
+  id_kb           BIGINT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+  id_user         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title           VARCHAR(500),
+  source_type     VARCHAR(20) NOT NULL,
+  source_url      TEXT,
+  content_text    TEXT,
+  file_name       VARCHAR(500),
+  file_size       BIGINT,
+  mime_type       VARCHAR(100),
+  status          VARCHAR(20) DEFAULT 'pending',
+  error_message   TEXT,
+  chunk_count     INTEGER DEFAULT 0,
+  extracted_chars BIGINT NOT NULL DEFAULT 0 CHECK (extracted_chars >= 0),
+  metadata        JSONB DEFAULT '{}',
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_kb_documents_owner_usage
+  ON kb_documents(id_user, status, extracted_chars);
+
+CREATE TABLE IF NOT EXISTS kb_chunks (
+  id          BIGSERIAL PRIMARY KEY,
+  id_document BIGINT NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
+  id_kb       BIGINT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+  id_user     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chunk_text  TEXT NOT NULL,
+  embedding   JSONB,
+  chunk_index INTEGER,
+  metadata    JSONB DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_chatbot_documents (
+  id              BIGSERIAL PRIMARY KEY,
+  chatbot_id      BIGINT NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  owner_user_id   BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  source_type     VARCHAR(20) NOT NULL CHECK (source_type IN ('file', 'text', 'url')),
+  source_key      VARCHAR(500) NOT NULL,
+  title           VARCHAR(500),
+  content_text    TEXT,
+  status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'processing', 'ready', 'error')),
+  error_message   TEXT,
+  extracted_chars BIGINT NOT NULL DEFAULT 0 CHECK (extracted_chars >= 0),
+  chunk_count     INTEGER NOT NULL DEFAULT 0 CHECK (chunk_count >= 0),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chatbot_id, source_key)
+);
+CREATE INDEX idx_custom_chatbot_documents_owner_usage
+  ON custom_chatbot_documents(owner_user_id, status, extracted_chars);
+
+CREATE TABLE IF NOT EXISTS custom_chatbot_chunks (
+  id          BIGSERIAL PRIMARY KEY,
+  document_id BIGINT REFERENCES custom_chatbot_documents(id) ON DELETE CASCADE,
+  chatbot_id  BIGINT NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chunk_text  TEXT NOT NULL,
+  embedding   JSONB,
+  chunk_index INTEGER NOT NULL,
+  source      VARCHAR(500),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_custom_chatbot_chunks_document
+  ON custom_chatbot_chunks(document_id, chunk_index);
+
 CREATE TABLE IF NOT EXISTS chatbot_studio_conversations (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   id_user         BIGINT REFERENCES users(id) ON DELETE CASCADE,
@@ -1378,6 +1502,8 @@ CREATE TABLE IF NOT EXISTS chat_attachments (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at       TIMESTAMPTZ
 );
+ALTER TABLE chat_attachments
+  ADD COLUMN IF NOT EXISTS storage_object_id BIGINT REFERENCES storage_objects(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_chat_attachments_user
   ON chat_attachments (id_user, created_at DESC);
 

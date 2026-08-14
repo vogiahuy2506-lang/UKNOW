@@ -54,7 +54,7 @@ class LandingTestimonialAdminController {
         ? req.user.activeContext.ownerId
         : userId;
 
-      const row = await landingTestimonialService.create(req.body || {}, effectiveOwnerId);
+      const row = await landingTestimonialService.create(req.body || {}, effectiveOwnerId, userId);
       return res.status(201).json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -90,7 +90,8 @@ class LandingTestimonialAdminController {
         req.params.id,
         req.body || {},
         effectiveOwnerId,
-        req.user?.role
+        req.user?.role,
+        userId
       );
       return res.json({ success: true, data: row });
     } catch (error) {

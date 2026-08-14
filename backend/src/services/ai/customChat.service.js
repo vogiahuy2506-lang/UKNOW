@@ -347,15 +347,13 @@ QUY TẮC TRẢ LỜI:
       throw error;
     }
 
-    const chunks = this.chunkText(text, 500);
-    const embeddings = await this.generateEmbeddings(chunks, userId);
-
-    await customChatDocumentRepository.replaceChunks({
+    const chunks = await this._replaceKnowledgeDocument({
       chatbotId,
-      userId,
-      chunks,
-      embeddings,
-      source: cleanName,
+      ownerUserId: userId,
+      sourceType: 'file',
+      sourceKey: cleanName,
+      title: cleanName,
+      text,
     });
 
     return {
@@ -380,55 +378,34 @@ QUY TẮC TRẢ LỜI:
     }
   }
 
-  async getDocuments(chatbotId) {
-    const rows = await customChatDocumentRepository.listDocuments(chatbotId);
-    const docsMap = {};
-
-    for (const row of rows) {
-      const source = row.source || 'Unknown';
-      if (!docsMap[source]) {
-        docsMap[source] = {
-          id: row.id,
-          title: source,
-          source: source,
-          type: 'file',
-          status: 'ready',
-          chunk_count: 0,
-          created_at: row.created_at,
-        };
-      }
-      docsMap[source].chunk_count += 1;
-    }
-
-    return Object.values(docsMap);
+  async getDocuments(chatbotId, ownerUserId) {
+    return customChatDocumentRepository.listDocuments(chatbotId, ownerUserId);
   }
 
-  async deleteDocument(chatbotId, docId) {
+  async deleteDocument(chatbotId, ownerUserId, docId) {
+    const { withKbQuotaLock } = await import('../storage/kbQuota.service.js');
     const decodedDocId = decodeURIComponent(docId);
-    const rows = await customChatDocumentRepository.listDocuments(chatbotId);
-    const numericDocId = Number(decodedDocId);
-    if (Number.isInteger(numericDocId) && numericDocId > 0) {
-      const deletedById = await customChatDocumentRepository.deleteChunksById(chatbotId, numericDocId);
-      if (deletedById > 0) return true;
-    }
-    
-    const normalize = (s) => s ? s.toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/\.docx?$/, '').replace(/\.pdf$/, '').trim() : '';
-    const normDocId = normalize(decodedDocId);
-    
-    const doc = rows.find(r => {
-      if (r.source === decodedDocId || String(r.id) === decodedDocId || r.source === docId) return true;
-      return normalize(r.source) === normDocId;
+    return withKbQuotaLock(ownerUserId, async ({ client }) => {
+      const numericId = Number(decodedDocId);
+      let doc = Number.isSafeInteger(numericId) && numericId > 0
+        ? await customChatDocumentRepository.findDocumentById(
+          chatbotId, ownerUserId, numericId, client, { forUpdate: true }
+        )
+        : null;
+      if (!doc && Number.isSafeInteger(numericId) && numericId > 0) {
+        doc = await customChatDocumentRepository.findDocumentByLegacyChunkId(
+          chatbotId, ownerUserId, numericId, client
+        );
+      }
+      if (!doc) {
+        doc = await customChatDocumentRepository.findDocumentBySource(
+          chatbotId, ownerUserId, decodedDocId, client, { forUpdate: true }
+        );
+      }
+      if (!doc) throw new Error('Document not found');
+      await customChatDocumentRepository.deleteDocument(doc.id, chatbotId, ownerUserId, client);
+      return true;
     });
-    
-    if (!doc) {
-      console.log('[CustomChat] Delete debug - docId:', docId, 'decoded:', decodedDocId, 'normalized:', normDocId);
-      console.log('[CustomChat] Delete debug - available sources:', rows.map(r => r.source));
-      throw new Error('Document not found');
-    }
-    await customChatDocumentRepository.deleteChunksBySource(chatbotId, doc.source);
-    return true;
   }
 
   async addTextDocument({ chatbotId, userId, title, content }) {
@@ -440,21 +417,84 @@ QUY TẮC TRẢ LỜI:
 
     const cleanTitle = title ? title.trim().normalize('NFC') : 'Text Document';
     const text = content.trim();
-    const chunks = this.chunkText(text, 500);
-    const embeddings = await this.generateEmbeddings(chunks, userId);
-
-    await customChatDocumentRepository.replaceChunks({
+    const chunks = await this._replaceKnowledgeDocument({
       chatbotId,
-      userId,
-      chunks,
-      embeddings,
-      source: cleanTitle,
+      ownerUserId: userId,
+      sourceType: 'text',
+      sourceKey: cleanTitle,
+      title: cleanTitle,
+      text,
     });
 
     return {
       message: `Đã xử lý ${chunks.length} đoạn từ văn bản`,
       chunks: chunks.length,
     };
+  }
+
+  async _replaceKnowledgeDocument({ chatbotId, ownerUserId, sourceType, sourceKey, title, text }) {
+    const {
+      countExtractedChars,
+      withKbQuotaLock,
+    } = await import('../storage/kbQuota.service.js');
+    let claimed;
+    try {
+      claimed = await withKbQuotaLock(ownerUserId, async ({ client, assertDelta }) => {
+        const previous = await customChatDocumentRepository.findDocumentBySource(
+          chatbotId, ownerUserId, sourceKey, client, { forUpdate: true }
+        );
+        const previousCounted = previous && previous.status !== 'error';
+        const extractedChars = countExtractedChars(text);
+        assertDelta({
+          documentDelta: previousCounted ? 0 : 1,
+          charDelta: extractedChars - (previousCounted ? Number(previous.extracted_chars || 0) : 0),
+        });
+        const document = await customChatDocumentRepository.upsertProcessingDocument({
+          chatbotId,
+          ownerUserId,
+          sourceType,
+          sourceKey,
+          title,
+          contentText: text,
+          extractedChars,
+        }, client);
+        return { document, previous };
+      });
+
+      const chunks = this.chunkText(text, 500);
+      const embeddings = await this.generateEmbeddings(chunks, ownerUserId);
+      await withKbQuotaLock(ownerUserId, async ({ client }) => {
+        const current = await customChatDocumentRepository.findDocumentById(
+          chatbotId, ownerUserId, claimed.document.id, client, { forUpdate: true }
+        );
+        if (!current) throw new Error('Document not found');
+        await customChatDocumentRepository.replaceChunks({
+          documentId: current.id,
+          chatbotId,
+          userId: ownerUserId,
+          chunks,
+          embeddings,
+          source: sourceKey,
+        }, client);
+        await customChatDocumentRepository.markReady(current.id, chunks.length, client);
+      });
+      return chunks;
+    } catch (error) {
+      if (claimed?.document) {
+        await withKbQuotaLock(ownerUserId, async ({ client }) => {
+          if (claimed.previous) {
+            await customChatDocumentRepository.restoreDocument(claimed.previous, client);
+          } else {
+            await customChatDocumentRepository.markError(
+              claimed.document.id, error.message, client
+            );
+          }
+        }).catch((cleanupError) => {
+          console.error('[CustomChat] Failed to compensate KB catalog:', cleanupError.message);
+        });
+      }
+      throw error;
+    }
   }
 
   chunkText(text, chunkSize = 500) {

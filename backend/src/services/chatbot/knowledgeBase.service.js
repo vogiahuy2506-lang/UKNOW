@@ -1,8 +1,11 @@
 import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.repository.js';
-import { embedText, embedTexts } from '../../utils/embeddingClient.util.js';
+import { embedTexts } from '../../utils/embeddingClient.util.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
-import uploadController from '../../controllers/upload.controller.js';
 import kbDocumentQueue from '../queue/kbDocumentQueue.service.js';
+import {
+  countExtractedChars,
+  withKbQuotaLock,
+} from '../storage/kbQuota.service.js';
 
 const DEFAULT_CHUNK_SIZE = 500;
 const CHUNK_OVERLAP = 50;
@@ -85,25 +88,31 @@ class KnowledgeBaseService {
    * @param {object} options
    */
   async processDocument(docId, kbId, userId, options = {}) {
-    const doc = await knowledgeBaseRepository.findDocumentById(docId, userId);
-    if (!doc) throw new Error('Document not found');
-
-    await knowledgeBaseRepository.updateDocumentStatus(docId, userId, { status: 'processing' });
-
+    let doc;
+    let previousDocument;
     try {
-      let text = doc.content_text || '';
+      const claim = await withKbQuotaLock(userId, async ({ client, assertDelta }) => {
+        const current = await knowledgeBaseRepository.findDocumentById(
+          docId, userId, client, { forUpdate: true }
+        );
+        if (!current) throw new Error('Document not found');
+        const extractedChars = countExtractedChars(current.content_text);
+        const previousChars = Number(current.extracted_chars || 0);
+        const previouslyCounted = current.status !== 'error';
+        assertDelta({
+          documentDelta: previouslyCounted ? 0 : 1,
+          charDelta: extractedChars - (previouslyCounted ? previousChars : 0),
+        });
+        const updated = await knowledgeBaseRepository.updateDocumentStatus(docId, userId, {
+          status: 'processing',
+          extracted_chars: extractedChars,
+        }, client);
+        return { previous: current, updated };
+      });
+      previousDocument = claim.previous;
+      doc = claim.updated;
 
-      // Nếu là file đã upload, đọc lại từ temp
-      if (doc.source_type === 'file' && doc.file_name && !text) {
-        try {
-          const buffer = await uploadController.readTempFileBuffer(
-            `kb_${docId}`, doc.file_name
-          );
-          text = await extractTextFromBuffer(buffer, doc.file_name, doc.mime_type);
-        } catch (e) {
-          console.warn(`[KB] Could not read temp file for doc ${docId}:`, e.message);
-        }
-      }
+      const text = doc.content_text || '';
 
       if (!text || text.trim().length < 10) {
         throw new Error('No readable text content found in document');
@@ -129,15 +138,22 @@ class KnowledgeBaseService {
         metadata: { source: doc.title || doc.file_name || 'unknown', chunkIndex: i },
       }));
 
-      // Remove old chunks and insert new
-      await knowledgeBaseRepository.deleteChunksByDocId(docId);
-      await knowledgeBaseRepository.insertChunksBatched(docId, kbId, userId, chunksWithMeta);
-
       const chunkCount = chunks.length;
-      await knowledgeBaseRepository.updateDocumentStatus(docId, userId, {
-        status: 'ready',
-        chunk_count: chunkCount,
-        content_text: text.slice(0, 10000),
+      await withKbQuotaLock(userId, async ({ client }) => {
+        const current = await knowledgeBaseRepository.findDocumentById(
+          docId, userId, client, { forUpdate: true }
+        );
+        if (!current) throw new Error('Document not found');
+        await knowledgeBaseRepository.deleteChunksByDocId(docId, client);
+        await knowledgeBaseRepository.insertChunksBatched(
+          docId, kbId, userId, chunksWithMeta, client
+        );
+        await knowledgeBaseRepository.updateDocumentStatus(docId, userId, {
+          status: 'ready',
+          chunk_count: chunkCount,
+          content_text: text,
+          extracted_chars: countExtractedChars(text),
+        }, client);
       });
 
       // Clear embedding cache for this user after document update
@@ -147,10 +163,29 @@ class KnowledgeBaseService {
       console.log(`[KB] Processed doc ${docId}: ${chunkCount} chunks stored`);
       return { docId, chunkCount, status: 'ready' };
     } catch (err) {
-      await knowledgeBaseRepository.updateDocumentStatus(docId, userId, {
-        status: 'error',
-        error_message: err.message,
-      });
+      if (doc) {
+        await withKbQuotaLock(userId, async ({ client }) => {
+          if (previousDocument?.status === 'ready') {
+            await knowledgeBaseRepository.updateDocumentStatus(docId, userId, {
+              status: previousDocument.status,
+              error_message: previousDocument.error_message,
+              chunk_count: previousDocument.chunk_count,
+              content_text: previousDocument.content_text,
+              extracted_chars: previousDocument.extracted_chars,
+            }, client);
+          } else {
+            await knowledgeBaseRepository.deleteChunksByDocId(docId, client);
+            await knowledgeBaseRepository.updateDocumentStatus(docId, userId, {
+              status: 'error',
+              error_message: err.message,
+              chunk_count: 0,
+              extracted_chars: 0,
+            }, client);
+          }
+        }).catch((cleanupError) => {
+          console.error(`[KB] Failed to release quota for doc ${docId}:`, cleanupError.message);
+        });
+      }
       throw err;
     }
   }
@@ -249,7 +284,11 @@ class KnowledgeBaseService {
   }
 
   async deleteKB(id, userId) {
-    return knowledgeBaseRepository.delete(id, userId);
+    return withKbQuotaLock(userId, async ({ client }) => {
+      const kb = await knowledgeBaseRepository.findById(id, userId, client, { forUpdate: true });
+      if (!kb) return null;
+      return knowledgeBaseRepository.delete(id, userId, client);
+    });
   }
 
   // ── Document CRUD ────────────────────────────────────────────────
@@ -259,10 +298,44 @@ class KnowledgeBaseService {
     return knowledgeBaseRepository.findDocumentsByKb(kbId, userId);
   }
 
-  async addDocument(kbId, userId, { title, source_type, source_url, content_text, file_name, file_size, mime_type }) {
-    await this._verifyKbOwnership(kbId, userId);
-    return knowledgeBaseRepository.createDocument(kbId, userId, {
-      title, source_type, source_url, content_text, file_name, file_size, mime_type,
+  async addDocument(kbId, userId, {
+    title, source_type, source_url, content_text, file_name, file_size, mime_type,
+  }) {
+    const extractedChars = countExtractedChars(content_text);
+    return withKbQuotaLock(userId, async ({ client, assertDelta }) => {
+      const kb = await knowledgeBaseRepository.findById(kbId, userId, client, { forUpdate: true });
+      if (!kb) throw new Error('Knowledge base not found');
+      assertDelta({ documentDelta: 1, charDelta: extractedChars });
+      return knowledgeBaseRepository.createDocument(kbId, userId, {
+        title, source_type, source_url, content_text, file_name, file_size, mime_type,
+        extracted_chars: extractedChars,
+      }, client);
+    });
+  }
+
+  async addFileDocument(kbId, userId, { title, file }) {
+    if (!file) {
+      const error = new Error('No file uploaded');
+      error.status = 400;
+      throw error;
+    }
+    const contentText = await extractTextFromBuffer(
+      file.buffer,
+      file.originalname,
+      file.mimetype
+    );
+    if (!contentText || contentText.trim().length < 10) {
+      const error = new Error('No readable text content found in document');
+      error.status = 400;
+      throw error;
+    }
+    return this.addDocument(kbId, userId, {
+      title: title || file.originalname,
+      source_type: 'file',
+      content_text: contentText,
+      file_name: file.originalname,
+      file_size: file.size,
+      mime_type: file.mimetype,
     });
   }
 
@@ -275,9 +348,13 @@ class KnowledgeBaseService {
   }
 
   async deleteDocument(docId, userId) {
-    const doc = await knowledgeBaseRepository.findDocumentById(docId, userId);
-    if (!doc) throw new Error('Document not found');
-    return knowledgeBaseRepository.deleteDocument(docId, userId);
+    return withKbQuotaLock(userId, async ({ client }) => {
+      const doc = await knowledgeBaseRepository.findDocumentById(
+        docId, userId, client, { forUpdate: true }
+      );
+      if (!doc) throw new Error('Document not found');
+      return knowledgeBaseRepository.deleteDocument(docId, userId, client);
+    });
   }
 
   async reprocessDocument(docId, userId, options = {}) {

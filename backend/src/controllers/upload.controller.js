@@ -4,6 +4,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
 import cloudinary from '../config/cloudinary.js';
 import { validateHelpImageFile } from '../utils/helpImageUpload.util.js';
+import { STORAGE_POOL_TYPES } from '../utils/storageCapacity.util.js';
+import {
+  ensureTrackedTempStorageObject,
+  markDeletedAfterUnlink,
+  promoteTempStorageObjects,
+} from '../services/storage/storageObject.service.js';
+import {
+  resolveWorkspaceOwnerId,
+  StorageQuotaExceededError,
+} from '../services/storage/storageQuota.service.js';
 
 // Resolve temp_uploads directory relative to project root (where the process starts)
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
@@ -176,6 +186,14 @@ class UploadController {
 
       // Lưu file vào temp directory
       await fs.writeFile(tempFilePath, req.file.buffer);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      await ensureTrackedTempStorageObject({
+        tempKey: tempFileName,
+        tempPath: tempFilePath,
+        ownerUserId,
+        actorUserId: req.user.id,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
 
       return res.json({
         success: true,
@@ -189,6 +207,14 @@ class UploadController {
       });
     } catch (error) {
       console.error('Upload temp error:', error);
+      if (error instanceof StorageQuotaExceededError) {
+        return res.status(error.status).json({
+          success: false,
+          code: error.code,
+          message: error.message,
+          data: error.usage,
+        });
+      }
       return res.status(500).json({
         success: false,
         message: 'Tải lên tạm thời thất bại'
@@ -226,6 +252,13 @@ class UploadController {
       const ext = path.extname(originalName);
       const tempFilePath = path.join(this.tempDir, `${fileId}${ext}`);
       await fs.writeFile(tempFilePath, req.file.buffer);
+      await ensureTrackedTempStorageObject({
+        tempKey: `${fileId}${ext}`,
+        tempPath: tempFilePath,
+        poolType: STORAGE_POOL_TYPES.SYSTEM,
+        actorUserId: req.user.id,
+        category: 'help',
+      });
 
       const results = await this.moveToS3(
         [{
@@ -234,7 +267,12 @@ class UploadController {
           size: req.file.size,
           contentType: req.file.mimetype,
         }],
-        req.user.id
+        req.user.id,
+        {
+          poolType: STORAGE_POOL_TYPES.SYSTEM,
+          actorUserId: req.user.id,
+          category: 'help',
+        }
       );
       if (!results.length) {
         return res.status(500).json({ success: false, message: 'Không thể lưu ảnh' });
@@ -261,7 +299,10 @@ class UploadController {
       if (!req.user?.id) return res.status(401).json({ success: false, message: 'Chưa xác thực' });
       const { tempId, originalName } = req.body;
       if (!tempId || !originalName) return res.status(400).json({ success: false, message: 'Thiếu tempId hoặc originalName' });
-      const results = await this.moveToS3([{ tempId, originalName }], req.user.id);
+      const results = await this.moveToS3([{ tempId, originalName }], req.user.id, {
+        ownerUserId: resolveWorkspaceOwnerId(req.user),
+        actorUserId: req.user.id,
+      });
       if (!results.length) return res.status(500).json({ success: false, message: 'Không thể lưu file' });
       return res.json({ success: true, data: { url: results[0].url } });
     } catch (err) {
@@ -278,44 +319,61 @@ class UploadController {
    * @param {string|number} userId - ID của user
    * @returns {Promise<Array<{key: string, url: string, originalName: string, tempFileName: string}>>}
    */
-  async moveToS3(tempFiles, userId) {
+  async moveToS3(tempFiles, userId, {
+    ownerUserId = userId,
+    actorUserId = userId,
+    poolType = STORAGE_POOL_TYPES.WORKSPACE,
+    category = 'other',
+    expiresAt = null,
+    referenceType = null,
+    referenceId = null,
+    parentMutation = null,
+  } = {}) {
+    const items = [];
     const results = [];
-    
     for (const tempFile of tempFiles) {
-      try {
-        const tempPath = this.resolveTempFilePath(tempFile.tempId, tempFile.originalName);
-        const fileBuffer = await fs.readFile(tempPath);
-        
-        const ext = path.extname(tempFile.originalName);
-        const baseName = this.sanitizeFileBaseName(tempFile.originalName);
-        const key = `uploads/${userId}/${Date.now()}_${baseName}${ext}`;
-        const targetPath = this.resolveAbsolutePathFromKey(key);
-        if (!targetPath) {
-          throw new Error('Không thể xác định đường dẫn lưu file local');
-        }
+      const tempPath = this.resolveTempFilePath(tempFile.tempId, tempFile.originalName);
+      const tempKey = path.basename(tempPath);
+      const tracked = await ensureTrackedTempStorageObject({
+        tempKey,
+        tempPath,
+        ownerUserId: poolType === STORAGE_POOL_TYPES.WORKSPACE ? ownerUserId : null,
+        actorUserId,
+        poolType,
+        category: 'temp',
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
 
-        await fs.mkdir(path.dirname(targetPath), { recursive: true });
-        await fs.writeFile(targetPath, fileBuffer);
-        /** URL dùng nhúng ảnh / tải nội dung — không dùng `/file/:token` (HTML viewer). */
-        const signedUrl = this.buildDownloadUrlByKey(key, { preview: true });
-        
-        results.push({
-          tempId: tempFile.tempId,
-          key,
-          url: signedUrl,
-          originalName: tempFile.originalName,
-          size: tempFile.size,
-          contentType: tempFile.contentType
-        });
-        
-        // Xóa file temp
-        await fs.unlink(tempPath).catch(() => {});
-      } catch (error) {
-        console.error(`Error moving file ${tempFile.tempId} to S3:`, error);
-        throw error;
-      }
+      const ext = path.extname(tempFile.originalName);
+      const baseName = this.sanitizeFileBaseName(tempFile.originalName);
+      const key = `uploads/${userId}/${Date.now()}_${uuidv4()}_${baseName}${ext}`;
+      const targetPath = this.resolveAbsolutePathFromKey(key);
+      if (!targetPath) throw new Error('Không thể xác định đường dẫn lưu file local');
+
+      items.push({ tempKey, tempPath, storageKey: key, targetPath, category });
+      results.push({
+        tempId: tempFile.tempId,
+        key,
+        url: this.buildDownloadUrlByKey(key, { preview: true }),
+        originalName: tempFile.originalName,
+        size: tempFile.size,
+        contentType: tempFile.contentType,
+        storageObjectId: tracked.id,
+      });
     }
-    
+
+    await promoteTempStorageObjects({
+      items,
+      expiresAt,
+      referenceType,
+      referenceId,
+      poolType,
+      ownerUserId: poolType === STORAGE_POOL_TYPES.WORKSPACE ? ownerUserId : null,
+      actorUserId,
+      parentMutation: parentMutation
+        ? (client) => parentMutation(client, results)
+        : null,
+    });
     return results;
   }
 
@@ -345,7 +403,7 @@ class UploadController {
         try {
           const stats = await fs.stat(filePath);
           if (now - stats.mtime.getTime() > maxAge) {
-            await fs.unlink(filePath);
+            await markDeletedAfterUnlink({ tempKey: file, physicalPaths: [filePath] });
             cleaned++;
           }
         } catch (error) {
@@ -381,7 +439,10 @@ class UploadController {
         if (!filePath) continue;
         try {
           // eslint-disable-next-line no-await-in-loop
-          await fs.unlink(filePath);
+          await markDeletedAfterUnlink({
+            storageKey: this.normalizeStorageKey(rawKey),
+            physicalPaths: [filePath, `${filePath}.txt`],
+          });
           deletedCount += 1;
         } catch (error) {
           if (error?.code === 'ENOENT') continue;
@@ -439,7 +500,8 @@ class UploadController {
 
       for (const fname of matched) {
         try {
-          await fs.unlink(path.join(this.tempDir, fname));
+          const filePath = path.join(this.tempDir, fname);
+          await markDeletedAfterUnlink({ tempKey: fname, physicalPaths: [filePath] });
           console.log(`[Upload] Deleted temp file: ${fname}`);
         } catch { /* ignore individual failures */ }
       }
@@ -473,7 +535,7 @@ class UploadController {
       
       if (tempFile) {
         const tempFilePath = path.join(this.tempDir, tempFile);
-        await fs.unlink(tempFilePath);
+        await markDeletedAfterUnlink({ tempKey: tempFile, physicalPaths: [tempFilePath] });
       }
 
       return res.json({

@@ -196,6 +196,7 @@ describe('POST /api/admin/plans', () => {
         price: 49000,
         description: 'Test plan',
         maxEmployees: 1,
+        storageLimitBytes: 100 * 1024 * 1024,
       });
 
     expect(res.status).toBe(201);
@@ -232,7 +233,12 @@ describe('POST /api/admin/plans', () => {
     const res = await request(app)
       .post('/api/admin/plans')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Unlimited', price: 0, maxEmployees: -1 });
+      .send({
+        name: 'Unlimited',
+        price: 0,
+        maxEmployees: -1,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
     expect(res.status).toBe(201);
     expect(res.body.data.max_employees).toBe(-1);
   });
@@ -247,7 +253,12 @@ describe('PATCH /api/admin/plans/:id', () => {
     const res = await request(app)
       .patch(`/api/admin/plans/${plan.id}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Updated', price: 200000, maxEmployees: 10 });
+      .send({
+        name: 'Updated',
+        price: 200000,
+        maxEmployees: 10,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe('Updated');
@@ -260,7 +271,12 @@ describe('PATCH /api/admin/plans/:id', () => {
     const res = await request(app)
       .patch('/api/admin/plans/99999')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'X', price: 100, maxEmployees: 0 });
+      .send({
+        name: 'X',
+        price: 100,
+        maxEmployees: 0,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
     expect(res.status).toBe(404);
   });
 
@@ -467,6 +483,7 @@ describe('POST /api/admin/plans/custom — tạo gói riêng + gán user', () =>
         name: 'Bespoke Plan',
         price: 5000000,
         maxEmployees: 20,
+        storageLimitBytes: 100 * 1024 * 1024,
       });
 
     expect(res.status).toBe(201);
@@ -484,7 +501,13 @@ describe('POST /api/admin/plans/custom — tạo gói riêng + gán user', () =>
     const res = await request(app)
       .post('/api/admin/plans/custom')
       .set('Authorization', `Bearer ${token}`)
-      .send({ userEmail: 'ghost@x.com', name: 'X', price: 100000, maxEmployees: 0 });
+      .send({
+        userEmail: 'ghost@x.com',
+        name: 'X',
+        price: 100000,
+        maxEmployees: 0,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
     expect(res.status).toBe(404);
   });
 });

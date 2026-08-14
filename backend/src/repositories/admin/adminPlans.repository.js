@@ -21,6 +21,9 @@ const PLAN_COLS = `
   ai_credits_per_period AS "aiCreditsPerPeriod",
   ai_model AS "aiModel",
   grace_period_days AS "gracePeriodDays",
+  storage_limit_bytes AS "storageLimitBytes",
+  max_kb_documents AS "maxKbDocuments",
+  max_kb_extracted_chars AS "maxKbExtractedChars",
   created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export async function findAllPlans() {
@@ -51,6 +54,9 @@ export async function findCustomPlans({ showHidden = false } = {}) {
             p.ai_credits_per_period AS "aiCreditsPerPeriod",
             p.ai_model AS "aiModel",
             p.grace_period_days AS "gracePeriodDays",
+            p.storage_limit_bytes AS "storageLimitBytes",
+            p.max_kb_documents AS "maxKbDocuments",
+            p.max_kb_extracted_chars AS "maxKbExtractedChars",
             p.created_at AS "createdAt",
             COALESCE(u.email,     o_user.email)     AS "assignedEmail",
             COALESCE(u.full_name, o_user.full_name) AS "assignedName",
@@ -82,7 +88,8 @@ export async function createPlan({ code, name, price, priceYearly, description, 
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays,
+  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes,
+  maxKbDocuments, maxKbExtractedChars,
   customOwnerUserId = null, customConfig = null }, queryable = db) {
   const { rows } = await queryable.query(
     `INSERT INTO plans (code, name, price, price_yearly, description, features, max_employees, is_active, is_custom,
@@ -94,9 +101,10 @@ export async function createPlan({ code, name, price, priceYearly, description, 
                         max_zalo_accounts, max_email_accounts,
                         max_email_templates, max_zalo_templates,
                         max_chatbots, ai_tokens_per_period, ai_credits_per_period, ai_model, grace_period_days,
-                        custom_owner_user_id, custom_config,
+                        custom_owner_user_id, custom_config, storage_limit_bytes,
+                        max_kb_documents, max_kb_extracted_chars,
                         created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,NOW(),NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,NOW(),NOW())
      RETURNING *`,
     [code, name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
      durationDays ?? null,
@@ -109,7 +117,8 @@ export async function createPlan({ code, name, price, priceYearly, description, 
      maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
      gracePeriodDays ?? 0,
      customOwnerUserId ?? null,
-     customConfig != null ? JSON.stringify(customConfig) : null]
+     customConfig != null ? JSON.stringify(customConfig) : null,
+     storageLimitBytes ?? 104857600, maxKbDocuments ?? 3, maxKbExtractedChars ?? 100000]
   );
   return rows[0];
 }
@@ -119,7 +128,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays }) {
+  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes }) {
   const { rows } = await db.query(
     `UPDATE plans
      SET name = $1, price = $2, price_yearly = $3, description = $4, features = $5,
@@ -134,8 +143,9 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
          max_email_templates = $22, max_zalo_templates = $23,
          max_chatbots = $24, ai_tokens_per_period = $25, ai_credits_per_period = $26, ai_model = $27,
          grace_period_days = $28,
+         storage_limit_bytes = $29,
          updated_at = NOW()
-     WHERE id = $29
+     WHERE id = $30
      RETURNING *`,
     [name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive,
      durationDays ?? null,
@@ -146,7 +156,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
      maxEmailTemplates ?? null, maxZaloTemplates ?? null,
      maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
-     gracePeriodDays ?? 0, id]
+     gracePeriodDays ?? 0, storageLimitBytes, id]
   );
   return rows[0] || null;
 }
@@ -256,7 +266,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays }) {
+  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes }) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -270,9 +280,10 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
                           max_zalo_campaigns, max_zalo_group_campaigns, max_email_campaigns,
                           max_zalo_accounts, max_email_accounts,
                           max_email_templates, max_zalo_templates,
-                          max_chatbots, ai_tokens_per_period, ai_credits_per_period, ai_model, grace_period_days,
+                          max_chatbots, ai_tokens_per_period, ai_credits_per_period, ai_model, grace_period_days, storage_limit_bytes,
+                          max_kb_documents, max_kb_extracted_chars,
                           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,3,100000,NOW(),NOW())
        RETURNING *`,
       [code || null, name, price, toNullableBigint(priceYearly), description || null, maxEmployees,
        durationDays ?? null,
@@ -283,7 +294,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
        maxZaloAccounts ?? null, maxEmailAccounts ?? null,
        maxEmailTemplates ?? null, maxZaloTemplates ?? null,
        maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
-       gracePeriodDays ?? 0]
+       gracePeriodDays ?? 0, storageLimitBytes]
     );
     const plan = planResult.rows[0];
 

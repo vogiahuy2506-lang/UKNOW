@@ -12,9 +12,12 @@ import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
 import multer from 'multer';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
+import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
+import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
+const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePaths().uploads] });
 
 function runGate(middleware, req, res) {
   return new Promise((resolve) => {
@@ -179,6 +182,7 @@ router.get('/inbox/conversations/:id', unifiedInboxController.getConversation.bi
 router.get('/inbox/conversations/:id/messages', unifiedInboxController.getMessages.bind(unifiedInboxController));
 router.post(
   '/inbox/attachments',
+  workspaceUploadCapacityGuard,
   upload.single('file'),
   unifiedInboxController.uploadInboxAttachment.bind(unifiedInboxController)
 );

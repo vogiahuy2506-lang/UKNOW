@@ -4,6 +4,7 @@ import {
   persistChatBlob,
 } from '../services/chatbot/chatAttachment.service.js';
 import { checkSendQuota } from '../utils/userSendLimit.util.js';
+import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 function normalizeInboxQueryFilters(query = {}) {
   const rawStatus = String(query.status || '').trim().toLowerCase();
@@ -165,7 +166,8 @@ class UnifiedInboxController {
         buffer: req.file.buffer,
         originalName: req.file.originalname,
         mimetype: req.file.mimetype,
-        ownerUserId: req.user.id,
+        ownerUserId: resolveWorkspaceOwnerId(req.user),
+        actorUserId: req.user.id,
         source: CHAT_ATTACHMENT_SOURCES.INBOX_OUTBOUND,
       });
 

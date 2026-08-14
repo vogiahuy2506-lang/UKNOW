@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import db from '../../config/database.js';
 import outboundMessageQueueService from '../queue/outboundMessageQueue.service.js';
-
-const execFileAsync = promisify(execFile);
+import {
+  getStorageCapacityPolicy,
+  getStorageCapacityState,
+  getStorageCapacitySummary,
+  getStoragePaths,
+} from '../../utils/storageCapacity.util.js';
 
 const DOCKER_SOCKET = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock';
 const CONTAINER_ALLOWLIST = {
@@ -89,26 +91,7 @@ const getCpuUsage = async () => {
   };
 };
 
-const getDiskUsage = async () => {
-  try {
-    const { stdout } = await execFileAsync('df', ['-kP', '/'], { timeout: 3000 });
-    const lines = stdout.trim().split('\n');
-    const cols = lines[1]?.trim().split(/\s+/) || [];
-    const total = bytes(cols[1]);
-    const used = bytes(cols[2]);
-    const available = bytes(cols[3]);
-    return {
-      filesystem: cols[0] || '/',
-      mount: cols[5] || '/',
-      total,
-      used,
-      available,
-      percent: total > 0 ? pct((used / total) * 100) : 0,
-    };
-  } catch {
-    return { filesystem: '/', mount: '/', total: 0, used: 0, available: 0, percent: 0 };
-  }
-};
+const getDiskUsage = () => getStorageCapacitySummary(Object.values(getStoragePaths()));
 
 const parseNetwork = (text) => {
   let rxBytes = 0;
@@ -242,8 +225,17 @@ const buildAlerts = ({ cpu, memory, disk, docker, redis, dbPool }) => {
   if (memory.percent >= 95) alerts.push({ level: 'critical', code: 'MEMORY_HIGH', message: 'Memory usage is above 95%' });
   else if (memory.percent >= 85) alerts.push({ level: 'warning', code: 'MEMORY_WARNING', message: 'Memory usage is above 85%' });
 
-  if (disk.percent >= 90) alerts.push({ level: 'critical', code: 'DISK_HIGH', message: 'Disk usage is above 90%' });
-  else if (disk.percent >= 80) alerts.push({ level: 'warning', code: 'DISK_WARNING', message: 'Disk usage is above 80%' });
+  if (!disk.readable) {
+    alerts.push({ level: 'critical', code: 'DISK_UNAVAILABLE', message: 'Storage capacity cannot be read; local uploads are blocked' });
+  } else {
+    const diskPolicy = getStorageCapacityPolicy();
+    const diskState = getStorageCapacityState(disk);
+    if (diskState === 'critical') {
+      alerts.push({ level: 'critical', code: 'DISK_HIGH', message: `Disk usage is above ${diskPolicy.criticalPercent}%` });
+    } else if (diskState === 'warning' || diskState === 'blocked') {
+      alerts.push({ level: 'warning', code: 'DISK_WARNING', message: `Disk usage is above ${diskPolicy.warningPercent}%` });
+    }
+  }
 
   docker.containers.forEach((container) => {
     if (container.state !== 'running') {

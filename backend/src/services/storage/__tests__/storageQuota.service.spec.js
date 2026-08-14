@@ -1,0 +1,48 @@
+import { describe, expect, it, jest } from '@jest/globals';
+
+const mockGetEffectiveQuota = jest.fn();
+const mockGetWorkspaceUsage = jest.fn();
+
+jest.unstable_mockModule('../../../repositories/storage.repository.js', () => ({
+  getEffectiveQuota: mockGetEffectiveQuota,
+  getWorkspaceUsage: mockGetWorkspaceUsage,
+}));
+
+const {
+  DEFAULT_STORAGE_LIMIT_BYTES,
+  StorageQuotaExceededError,
+  assertQuotaAvailable,
+  getStorageUsage,
+  resolveWorkspaceOwnerId,
+} = await import('../storageQuota.service.js');
+
+describe('storageQuota.service', () => {
+  it('resolves employee usage to the active workspace owner', () => {
+    expect(resolveWorkspaceOwnerId({ id: 9, activeContext: { type: 'employee', ownerId: 42 } })).toBe(42);
+    expect(resolveWorkspaceOwnerId({ id: 9, activeContext: { type: 'self' } })).toBe(9);
+  });
+
+  it('uses override before effective billing plan and returns a narrow usage DTO', async () => {
+    mockGetEffectiveQuota.mockResolvedValueOnce({ overrideBytes: '200', planLimitBytes: '100' });
+    mockGetWorkspaceUsage.mockResolvedValueOnce('50');
+    await expect(getStorageUsage(1)).resolves.toEqual({
+      usedBytes: 50, reservedBytes: 0, limitBytes: 200, remainingBytes: 150,
+      percent: 25, overLimit: false, source: 'override',
+    });
+  });
+
+  it('falls back to the safe 100MB plan limit when no plan resolves', async () => {
+    mockGetEffectiveQuota.mockResolvedValueOnce(null);
+    mockGetWorkspaceUsage.mockResolvedValueOnce('0');
+    await expect(getStorageUsage(1)).resolves.toMatchObject({ limitBytes: DEFAULT_STORAGE_LIMIT_BYTES, source: 'plan' });
+  });
+
+  it('rejects an over-limit write when enforcement is enabled', () => {
+    const previous = process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED;
+    process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED = 'true';
+    expect(() => assertQuotaAvailable({ usage: { usedBytes: 90, limitBytes: 100 }, requestedBytes: 11 }))
+      .toThrow(StorageQuotaExceededError);
+    if (previous === undefined) delete process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED;
+    else process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED = previous;
+  });
+});

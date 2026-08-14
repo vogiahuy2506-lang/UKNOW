@@ -4,9 +4,12 @@ import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js'
 import chatbotController from '../controllers/chatbot.controller.js';
 import { publicChatLimiter, publicUploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
+import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
+import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
+const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePaths().uploads] });
 
 // Apply allow-all CORS to all routes (for widget/iframe embedding)
 router.use(allowAllCorsMiddleware);
@@ -40,12 +43,14 @@ router.post('/custom-chatbot/id/:chatbotId/chat', publicChatLimiter, chatbotCont
 router.post(
   '/custom-chatbot/:widgetKey/attachment',
   publicUploadLimiter,
+  workspaceUploadCapacityGuard,
   upload.single('file'),
   chatbotController.uploadPublicChatAttachment.bind(chatbotController)
 );
 router.post(
   '/custom-chatbot/id/:chatbotId/attachment',
   publicUploadLimiter,
+  workspaceUploadCapacityGuard,
   upload.single('file'),
   chatbotController.uploadPublicChatAttachmentById.bind(chatbotController)
 );

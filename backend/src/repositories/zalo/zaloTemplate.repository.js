@@ -161,8 +161,9 @@ class ZaloTemplateRepository {
     variables,
     category,
     isActive,
-  }) {
-    const result = await db.query(
+  }, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `UPDATE zalo_templates SET
         template_name = COALESCE($1, template_name),
         template_code = COALESCE($2, template_code),

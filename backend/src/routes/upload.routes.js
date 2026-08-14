@@ -6,6 +6,8 @@ import { requireAdmin } from '../middleware/authorization.middleware.js';
 import { uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { HELP_IMAGE_MAX_BYTES } from '../utils/helpImageUpload.util.js';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
+import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
+import { getStoragePaths, STORAGE_POOL_TYPES } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
 const upload = multer({
@@ -16,16 +18,28 @@ const helpImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: HELP_IMAGE_MAX_BYTES },
 });
+const storagePaths = getStoragePaths();
+const workspaceTempCapacityGuard = storageCapacityGuard({
+  paths: [storagePaths.tempUploads],
+});
+const workspacePromoteCapacityGuard = storageCapacityGuard({
+  paths: [storagePaths.uploads],
+});
+const systemHelpCapacityGuard = storageCapacityGuard({
+  paths: [storagePaths.tempUploads, storagePaths.uploads],
+  poolType: STORAGE_POOL_TYPES.SYSTEM,
+});
 
 // auth trước → uploadLimiter key theo user (không theo IP)
-router.post('/temp', authMiddleware, uploadLimiter, upload.single('file'), uploadController.uploadTemp.bind(uploadController));
+router.post('/temp', authMiddleware, uploadLimiter, workspaceTempCapacityGuard, upload.single('file'), uploadController.uploadTemp.bind(uploadController));
 router.post('/logo', authMiddleware, uploadLimiter, upload.single('file'), uploadController.uploadLogo.bind(uploadController));
-router.post('/promote', authMiddleware, uploadLimiter, uploadController.promoteTemp.bind(uploadController));
+router.post('/promote', authMiddleware, uploadLimiter, workspacePromoteCapacityGuard, uploadController.promoteTemp.bind(uploadController));
 router.post(
   '/help-image',
   authMiddleware,
   requireAdmin,
   uploadLimiter,
+  systemHelpCapacityGuard,
   helpImageUpload.single('file'),
   uploadController.uploadHelpImage.bind(uploadController)
 );

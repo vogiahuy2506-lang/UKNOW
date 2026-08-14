@@ -2,12 +2,14 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import db from '../../config/database.js';
 import uploadController from '../../controllers/upload.controller.js';
+import { markDeletedAfterUnlink } from '../storage/storageObject.service.js';
 
 const UPLOADS_ROOT = path.resolve(process.cwd(), 'uploads');
 const MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 const REF_TABLES = [
   'webchat_messages',
+  'chatbot_messages',
   'chatbot_studio_messages',
   'channel_messages',
   'zalo_personal_messages',
@@ -33,16 +35,10 @@ export async function isKeyReferenced(storageKey) {
     try {
       const { rows } = await db.query(
         `SELECT 1
-         FROM ${table} m,
-              LATERAL jsonb_array_elements(
-                CASE
-                  WHEN jsonb_typeof(m.attachments) = 'array' THEN m.attachments
-                  ELSE '[]'::jsonb
-                END
-              ) AS elem
-         WHERE elem->>'key' = $1
+         FROM ${table} m
+         WHERE m.attachments::text LIKE $1
          LIMIT 1`,
-        [storageKey]
+        [`%${storageKey}%`]
       );
       queriedOk += 1;
       if (rows.length > 0) return true;
@@ -102,11 +98,15 @@ export async function cleanupExpiredCatalogRows() {
 
   for (const row of rows) {
     const abs = uploadController.resolveAbsolutePathFromKey(row.storage_key);
+    let removed = false;
     if (abs) {
       try {
-        await unlinkQuiet(abs);
-        await unlinkQuiet(`${abs}.txt`);
+        await markDeletedAfterUnlink({
+          storageKey: row.storage_key,
+          physicalPaths: [abs, `${abs}.txt`],
+        });
         filesDeleted += 1;
+        removed = true;
       } catch (err) {
         console.warn(
           `[ChatAttachmentCleanup] failed to unlink expired ${row.storage_key}:`,
@@ -119,8 +119,10 @@ export async function cleanupExpiredCatalogRows() {
       );
     }
 
-    await db.query(`DELETE FROM chat_attachments WHERE id = $1`, [row.id]);
-    rowsDeleted += 1;
+    if (removed) {
+      await db.query(`DELETE FROM chat_attachments WHERE id = $1`, [row.id]);
+      rowsDeleted += 1;
+    }
   }
 
   return { expiredScanned: rows.length, rowsDeleted, filesDeleted };
@@ -167,7 +169,12 @@ function absoluteToStorageKey(absPath) {
  *  1) Catalog rows past expires_at → unlink file+sidecar + DELETE row
  *  2) Legacy orphans on disk (>90d, not in REF_TABLES, not in catalog)
  */
-export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } = {}) {
+export async function cleanupOrphanChatAttachments({
+  olderThanMs = MAX_AGE_MS,
+  deleteUntracked = String(process.env.STORAGE_RECONCILE_DELETE_UNTRACKED || '')
+    .trim()
+    .toLowerCase() === 'true',
+} = {}) {
   // Pass 1 first — if DB is down, throw before any unlink in either pass.
   const expired = await cleanupExpiredCatalogRows();
 
@@ -181,6 +188,8 @@ export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } 
       deleted: expired.filesDeleted,
       rowsDeleted: expired.rowsDeleted,
       skipped: 0,
+      untrackedDeleteEnabled: deleteUntracked,
+      untrackedDeleteCandidates: 0,
     };
   }
 
@@ -193,6 +202,7 @@ export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } 
 
   let deleted = expired.filesDeleted;
   let skipped = 0;
+  let untrackedDeleteCandidates = 0;
 
   for (const abs of candidates) {
     const key = absoluteToStorageKey(abs);
@@ -212,6 +222,11 @@ export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } 
       skipped += 1;
       continue;
     }
+    untrackedDeleteCandidates += 1;
+    if (!deleteUntracked) {
+      skipped += 1;
+      continue;
+    }
     try {
       await unlinkQuiet(abs);
       await unlinkQuiet(`${abs}.txt`);
@@ -227,6 +242,8 @@ export async function cleanupOrphanChatAttachments({ olderThanMs = MAX_AGE_MS } 
     deleted,
     rowsDeleted: expired.rowsDeleted,
     skipped,
+    untrackedDeleteEnabled: deleteUntracked,
+    untrackedDeleteCandidates,
   };
 }
 

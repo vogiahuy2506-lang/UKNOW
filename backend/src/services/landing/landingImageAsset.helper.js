@@ -58,15 +58,28 @@ export function normalizeOptionalHttpImageUrl(raw) {
 }
 
 /**
- * Chuyển file từ `temp_uploads/` sang `uploads/` (chỉ gọi khi sắp ghi DB thành công;
- * nếu insert/update lỗi sau bước này, service phải gọi `deleteUploadedFileIfAny` cho URL vừa tạo).
+ * Chuyển file từ `temp_uploads/` sang `uploads/`; parentMutation chạy cùng transaction
+ * với ledger activation nên lỗi parent giữ nguyên temp để caller có thể retry.
  *
  * @param {string} tempId
  * @param {string} originalName
  * @param {number} userId
  * @returns {Promise<string|null>} URL public hoặc null
  */
-export async function moveTempUploadToPermanent(tempId, originalName, userId) {
-  const moved = await uploadController.moveToS3([{ tempId, originalName }], userId);
+export async function moveTempUploadToPermanent(
+  tempId,
+  originalName,
+  userId,
+  { actorUserId = userId, parentMutation = null } = {}
+) {
+  const moved = await uploadController.moveToS3([{ tempId, originalName }], userId, {
+    ownerUserId: userId,
+    actorUserId,
+    category: 'landing',
+    referenceType: 'landing',
+    parentMutation: parentMutation
+      ? (client, results) => parentMutation(client, results[0]?.url || null, results[0] || null)
+      : null,
+  });
   return moved[0]?.url || null;
 }

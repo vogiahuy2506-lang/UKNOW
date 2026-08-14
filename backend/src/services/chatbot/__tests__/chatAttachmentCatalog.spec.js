@@ -39,6 +39,13 @@ jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
   extractTextFromBuffer: jest.fn(async () => 'enough text content here for extraction'),
 }));
 
+const mockRegisterStorage = jest.fn(async () => ({ id: 77 }));
+jest.unstable_mockModule('../../storage/storageObject.service.js', () => ({
+  getPhysicalSize: jest.fn(async () => 123),
+  registerWrittenStorageObject: mockRegisterStorage,
+  markDeletedAfterUnlink: jest.fn(async () => null),
+}));
+
 const {
   persistChatBlob,
   storeChatFile,
@@ -106,19 +113,15 @@ describe('persistChatBlob / storeChatFile catalog', () => {
     expect(mockQuery.mock.calls[0][1][1]).toBe('chatbot_studio');
   });
 
-  it('catalog insert failure is fail-soft (still returns file)', async () => {
+  it('catalog insert failure removes the ledger-backed physical object', async () => {
     mockQuery.mockRejectedValueOnce(new Error('db down'));
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const buf = Buffer.from('%PDF-1.4 hello');
-    const result = await persistChatBlob({
+    await expect(persistChatBlob({
       buffer: buf,
       originalName: 'a.pdf',
       mimetype: 'application/pdf',
       ownerUserId: 1,
       source: 'ai_assistant',
-    });
-    expect(result._key).toBeTruthy();
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
+    })).rejects.toThrow('db down');
   });
 });

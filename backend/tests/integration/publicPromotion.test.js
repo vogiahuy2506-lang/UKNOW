@@ -122,7 +122,13 @@ describe('GET /api/public/promotions/active', () => {
     await request(app)
       .post('/api/admin/plans')
       .set('Authorization', `Bearer ${adminTk}`)
-      .send({ code: 'pro', name: 'Pro', price: 200000, maxEmployees: 5 });
+      .send({
+        code: 'pro',
+        name: 'Pro',
+        price: 200000,
+        maxEmployees: 5,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
     const db = (await import('../../src/config/database.js')).default;
     await db.query(`UPDATE plans SET price_yearly = 1800000 WHERE code = 'pro'`);
 

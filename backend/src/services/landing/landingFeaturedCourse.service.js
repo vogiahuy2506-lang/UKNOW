@@ -50,7 +50,7 @@ class LandingFeaturedCourseService {
    * @param {object} body
    * @param {number} userId
    */
-  async create(body, userId) {
+  async create(body, userId, actorUserId = userId) {
     const b = body && typeof body === 'object' ? body : {};
     const titleVi = String(b.titleVi ?? '').trim();
     const titleEn = String(b.titleEn ?? '').trim();
@@ -81,22 +81,24 @@ class LandingFeaturedCourseService {
     };
 
     if (hasTemp) {
-      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId);
+      let createdRow = null;
+      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId, {
+        actorUserId,
+        parentMutation: async (client, imageUrl) => {
+          createdRow = await landingFeaturedCourseRepository.insert({
+            ...payloadBase,
+            imageUrl,
+            idUser: userId,
+          }, client);
+          return { referenceId: createdRow.id };
+        },
+      });
       if (!newUrl) {
         const err = new Error('Không thể lưu file ảnh');
         err.statusCode = 500;
         throw err;
       }
-      try {
-        return await landingFeaturedCourseRepository.insert({
-          ...payloadBase,
-          imageUrl: newUrl,
-          idUser: userId,
-        });
-      } catch (dbErr) {
-        await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingFeaturedCourseRollback');
-        throw dbErr;
-      }
+      return createdRow;
     }
 
     const imageUrl = normalizeOptionalHttpImageUrl(b.imageUrl);
@@ -112,7 +114,7 @@ class LandingFeaturedCourseService {
    * @param {object} body
    * @param {number} userId
    */
-  async update(id, body, userId, roleCode = null) {
+  async update(id, body, userId, roleCode = null, actorUserId = userId) {
     const existing = await landingFeaturedCourseRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy khóa học nổi bật');
@@ -155,23 +157,33 @@ class LandingFeaturedCourseService {
     });
 
     if (hasTemp) {
-      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId);
+      let updatedRow = null;
+      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId, {
+        actorUserId,
+        parentMutation: async (client, imageUrl) => {
+          updatedRow = await landingFeaturedCourseRepository.updateById(
+            id,
+            mergePayload(imageUrl),
+            client
+          );
+          if (!updatedRow) {
+            const err = new Error('Không tìm thấy khóa học nổi bật');
+            err.statusCode = 404;
+            throw err;
+          }
+          return { referenceId: updatedRow.id };
+        },
+      });
       if (!newUrl) {
         const err = new Error('Không thể lưu file ảnh');
         err.statusCode = 500;
         throw err;
       }
-      try {
-        const row = await landingFeaturedCourseRepository.updateById(id, mergePayload(newUrl));
-        const newKey = extractStorageKeyFromImageUrl(row.imageUrl);
-        if (oldKey && oldKey !== newKey) {
-          await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse');
-        }
-        return row;
-      } catch (dbErr) {
-        await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingFeaturedCourseRollback');
-        throw dbErr;
+      const newKey = extractStorageKeyFromImageUrl(updatedRow.imageUrl);
+      if (oldKey && oldKey !== newKey) {
+        await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse');
       }
+      return updatedRow;
     }
 
     let imageUrl = existing.imageUrl;

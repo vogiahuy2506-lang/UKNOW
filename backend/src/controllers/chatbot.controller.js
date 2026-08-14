@@ -18,6 +18,8 @@ import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import { normalizeChatbotReplyLimitConfig } from '../utils/chatbotReplyLimit.util.js';
+import { consumeWidgetUploadBytes } from '../services/storage/widgetUploadCap.service.js';
+import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
@@ -26,6 +28,22 @@ const HANDOFF_VISITOR_ACK =
 
 function isAiTokenLimitError(error) {
   return error?.code === 'RESOURCE_LIMIT_EXCEEDED' && error?.resource === 'ai_token';
+}
+
+function kbErrorStatus(error) {
+  if (error?.status) return error.status;
+  return String(error?.message || '').includes('not found') ? 404 : 500;
+}
+
+function kbErrorPayload(error) {
+  return {
+    success: false,
+    message: error.message,
+    ...(error.code ? { code: error.code } : {}),
+    ...(error.resource ? { resource: error.resource } : {}),
+    ...(error.used !== undefined ? { used: error.used } : {}),
+    ...(error.limit !== undefined ? { limit: error.limit } : {}),
+  };
 }
 
 async function preparePublicChatCredit(ownerUserId) {
@@ -122,7 +140,7 @@ class ChatbotController {
 
   async listKBs(req, res) {
     try {
-      const kbs = await knowledgeBaseService.getKBs(req.user.id);
+      const kbs = await knowledgeBaseService.getKBs(resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, data: kbs });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -131,7 +149,7 @@ class ChatbotController {
 
   async getKB(req, res) {
     try {
-      const kb = await knowledgeBaseService.getKBById(parseInt(req.params.id), req.user.id);
+      const kb = await knowledgeBaseService.getKBById(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user));
       if (!kb) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
       return res.json({ success: true, data: kb });
     } catch (err) {
@@ -141,7 +159,7 @@ class ChatbotController {
 
   async createKB(req, res) {
     try {
-      const kb = await knowledgeBaseService.createKB(req.user.id, req.body);
+      const kb = await knowledgeBaseService.createKB(resolveWorkspaceOwnerId(req.user), req.body);
       return res.status(201).json({ success: true, data: kb });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -150,7 +168,7 @@ class ChatbotController {
 
   async updateKB(req, res) {
     try {
-      const kb = await knowledgeBaseService.updateKB(parseInt(req.params.id), req.user.id, req.body);
+      const kb = await knowledgeBaseService.updateKB(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user), req.body);
       if (!kb) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
       return res.json({ success: true, data: kb });
     } catch (err) {
@@ -160,7 +178,7 @@ class ChatbotController {
 
   async deleteKB(req, res) {
     try {
-      const deleted = await knowledgeBaseService.deleteKB(parseInt(req.params.id), req.user.id);
+      const deleted = await knowledgeBaseService.deleteKB(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user));
       if (!deleted) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
       return res.json({ success: true, message: 'Knowledge base deleted' });
     } catch (err) {
@@ -172,7 +190,7 @@ class ChatbotController {
 
   async listDocuments(req, res) {
     try {
-      const docs = await knowledgeBaseService.getDocuments(parseInt(req.params.kbId), req.user.id);
+      const docs = await knowledgeBaseService.getDocuments(parseInt(req.params.kbId), resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, data: docs });
     } catch (err) {
       return res.status(err.message.includes('not found') ? 404 : 500)
@@ -183,23 +201,18 @@ class ChatbotController {
   async uploadDocument(req, res) {
     try {
       const kbId = parseInt(req.params.kbId);
-      const kb = await knowledgeBaseService.getKBById(kbId, req.user.id);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const kb = await knowledgeBaseService.getKBById(kbId, ownerUserId);
       if (!kb) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
 
       const file = req.file;
       if (!file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
       const title = req.body.title || file.originalname;
-      const doc = await knowledgeBaseService.addDocument(kbId, req.user.id, {
-        title,
-        source_type: 'file',
-        file_name: file.originalname,
-        file_size: file.size,
-        mime_type: file.mimetype,
-      });
+      const doc = await knowledgeBaseService.addFileDocument(kbId, ownerUserId, { title, file });
 
       // Process asynchronously via queue (non-blocking)
-      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, req.user.id, {
+      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, ownerUserId, {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       }).catch(err => {
@@ -212,26 +225,27 @@ class ChatbotController {
         message: 'Document uploaded and processing started',
       });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(kbErrorStatus(err)).json(kbErrorPayload(err));
     }
   }
 
   async addTextDocument(req, res) {
     try {
       const kbId = parseInt(req.params.kbId);
-      const kb = await knowledgeBaseService.getKBById(kbId, req.user.id);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const kb = await knowledgeBaseService.getKBById(kbId, ownerUserId);
       if (!kb) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
 
       const { title, content } = req.body;
       if (!content?.trim()) return res.status(400).json({ success: false, message: 'Content is required' });
 
-      const doc = await knowledgeBaseService.addDocument(kbId, req.user.id, {
+      const doc = await knowledgeBaseService.addDocument(kbId, ownerUserId, {
         title: title || 'Text Entry',
         source_type: 'text',
         content_text: content,
       });
 
-      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, req.user.id, {
+      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, ownerUserId, {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       }).catch(err => {
@@ -244,14 +258,15 @@ class ChatbotController {
         message: 'Document added and processing started',
       });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(kbErrorStatus(err)).json(kbErrorPayload(err));
     }
   }
 
   async addUrlDocument(req, res) {
     try {
       const kbId = parseInt(req.params.kbId);
-      const kb = await knowledgeBaseService.getKBById(kbId, req.user.id);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const kb = await knowledgeBaseService.getKBById(kbId, ownerUserId);
       if (!kb) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
 
       const { title, url } = req.body;
@@ -305,14 +320,14 @@ class ChatbotController {
         scrapeStatus = `error: ${e.message}`;
       }
 
-      const doc = await knowledgeBaseService.addDocument(kbId, req.user.id, {
+      const doc = await knowledgeBaseService.addDocument(kbId, ownerUserId, {
         title: title || url,
         source_type: 'url',
         source_url: url,
         content_text: content || `⚠️ Failed to extract content from ${url}. Status: ${scrapeStatus}`,
       });
 
-      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, req.user.id, {
+      knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, ownerUserId, {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       }).catch(err => {
@@ -327,14 +342,14 @@ class ChatbotController {
           : `URL added. ${scrapeStatus === 'partial' ? 'Content may be incomplete (page requires JavaScript).' : 'Content extraction had issues but URL was saved.'}`,
       });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(kbErrorStatus(err)).json(kbErrorPayload(err));
     }
   }
 
   async deleteDocument(req, res) {
     try {
       const docId = parseInt(req.params.docId);
-      const deleted = await knowledgeBaseService.deleteDocument(docId, req.user.id);
+      const deleted = await knowledgeBaseService.deleteDocument(docId, resolveWorkspaceOwnerId(req.user));
       if (!deleted) return res.status(404).json({ success: false, message: 'Document not found' });
       return res.json({ success: true, message: 'Document deleted' });
     } catch (err) {
@@ -345,10 +360,11 @@ class ChatbotController {
 
   async reprocessDocument(req, res) {
     try {
-      const kb = await knowledgeBaseService.getKBById(parseInt(req.params.kbId), req.user.id);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const kb = await knowledgeBaseService.getKBById(parseInt(req.params.kbId), ownerUserId);
       if (!kb) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
 
-      await knowledgeBaseService.reprocessDocument(parseInt(req.params.docId), req.user.id, {
+      await knowledgeBaseService.reprocessDocument(parseInt(req.params.docId), ownerUserId, {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       });
@@ -1071,6 +1087,12 @@ class ChatbotController {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Không có file được tải lên' });
     }
+
+    await consumeWidgetUploadBytes({
+      ip: req.ip || req.socket?.remoteAddress,
+      chatbotId: chatbot.id,
+      bytes: req.file.size,
+    });
 
     const sessionId = String(req.body?.sessionId || req.body?.session_id || '').trim();
     if (!sessionId) {

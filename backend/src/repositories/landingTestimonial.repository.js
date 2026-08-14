@@ -125,8 +125,9 @@ class LandingTestimonialRepository {
     return this._mapRow(result.rows[0]);
   }
 
-  async insert(payload) {
-    const result = await db.query(
+  async insert(payload, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `INSERT INTO landing_testimonials (
          sort_order,
          quote_vi, quote_en,
@@ -179,8 +180,9 @@ class LandingTestimonialRepository {
    * @param {object} payload
    * @returns {Promise<object|null>}
    */
-  async updateById(id, payload) {
-    const result = await db.query(
+  async updateById(id, payload, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `UPDATE landing_testimonials SET
          sort_order = $2,
          quote_vi = $3,

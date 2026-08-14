@@ -40,6 +40,7 @@ jest.unstable_mockModule('../../sse.service.js', () => ({
 }));
 
 jest.unstable_mockModule('../../../utils/billingCycle.util.js', () => ({
+  EFFECTIVE_PLAN_ID_SQL: 'u.active_plan_id',
   resolveBillingUserId: mockResolveBilling,
 }));
 

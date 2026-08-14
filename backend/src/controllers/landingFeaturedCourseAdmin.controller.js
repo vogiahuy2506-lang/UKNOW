@@ -52,7 +52,7 @@ class LandingFeaturedCourseAdminController {
         ? req.user.activeContext.ownerId
         : userId;
 
-      const row = await landingFeaturedCourseService.create(req.body || {}, effectiveOwnerId);
+      const row = await landingFeaturedCourseService.create(req.body || {}, effectiveOwnerId, userId);
       return res.status(201).json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -88,7 +88,8 @@ class LandingFeaturedCourseAdminController {
         req.params.id,
         req.body || {},
         effectiveOwnerId,
-        req.user?.role
+        req.user?.role,
+        userId
       );
       return res.json({ success: true, data: row });
     } catch (error) {

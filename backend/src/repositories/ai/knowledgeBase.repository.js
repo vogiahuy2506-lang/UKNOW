@@ -17,12 +17,12 @@ class KnowledgeBaseRepository {
     return rows;
   }
 
-  async findById(id, userId) {
-    const { rows } = await db.query(
+  async findById(id, userId, queryable = db, { forUpdate = false } = {}) {
+    const { rows } = await queryable.query(
       `SELECT kb.*, sa.name AS sub_assistant_name
        FROM knowledge_bases kb
        LEFT JOIN sub_assistants sa ON sa.id = kb.id_sub_assistant
-       WHERE kb.id = $1 AND kb.id_user = $2`,
+       WHERE kb.id = $1 AND kb.id_user = $2${forUpdate ? ' FOR UPDATE OF kb' : ''}`,
       [id, userId]
     );
     return rows[0] || null;
@@ -75,9 +75,9 @@ class KnowledgeBaseRepository {
     return rows[0];
   }
 
-  async delete(id, userId) {
+  async delete(id, userId, queryable = db) {
     // CASCADE sẽ xóa kb_documents, kb_chunks
-    const { rows } = await db.query(
+    const { rows } = await queryable.query(
       `DELETE FROM knowledge_bases WHERE id = $1 AND id_user = $2 RETURNING id`,
       [id, userId]
     );
@@ -94,85 +94,65 @@ class KnowledgeBaseRepository {
     return rows;
   }
 
-  async findDocumentById(id, userId) {
-    const { rows } = await db.query(
+  async findDocumentById(id, userId, queryable = db, { forUpdate = false } = {}) {
+    const { rows } = await queryable.query(
       `SELECT d.* FROM kb_documents d
        INNER JOIN knowledge_bases kb ON d.id_kb = kb.id
-       WHERE d.id = $1 AND kb.id_user = $2`,
+       WHERE d.id = $1 AND kb.id_user = $2${forUpdate ? ' FOR UPDATE OF d' : ''}`,
       [id, userId]
     );
     return rows[0] || null;
   }
 
-  async createDocument(kbId, userId, { title, source_type, source_url, content_text, file_name, file_size, mime_type }) {
-    const { rows } = await db.query(
-      `INSERT INTO kb_documents (id_kb, id_user, title, source_type, source_url, content_text, file_name, file_size, mime_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  async createDocument(kbId, userId, {
+    title, source_type, source_url, content_text, file_name, file_size, mime_type, extracted_chars,
+  }, queryable = db) {
+    const { rows } = await queryable.query(
+      `INSERT INTO kb_documents
+        (id_kb, id_user, title, source_type, source_url, content_text, file_name,
+         file_size, mime_type, extracted_chars)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [kbId, userId, title, source_type, source_url || null, content_text || null,
-       file_name || null, file_size || null, mime_type || null]
+       file_name || null, file_size || null, mime_type || null, extracted_chars || 0]
     );
     return rows[0];
   }
 
-  async updateDocumentStatus(id, userId, { status, error_message, chunk_count, content_text }) {
-    const { rows } = await db.query(
+  async updateDocumentStatus(id, userId, {
+    status, error_message, chunk_count, content_text, extracted_chars,
+  }, queryable = db) {
+    const { rows } = await queryable.query(
       `UPDATE kb_documents SET
          status = COALESCE($3, status),
          error_message = $4,
          chunk_count = COALESCE($5, chunk_count),
          content_text = COALESCE($6, content_text),
+         extracted_chars = COALESCE($7, extracted_chars),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`,
-      [id, userId, status, error_message || null, chunk_count, content_text]
+      [id, userId, status, error_message || null, chunk_count, content_text, extracted_chars]
     );
     return rows[0];
   }
 
-  async deleteDocument(id, userId) {
-    // Lấy thông tin document trước khi xóa
-    const doc = await this.findDocumentById(id, userId);
-    if (!doc) return null;
-
-    // Xóa file đã upload nếu có
-    if (doc.source_type === 'file') {
-      try {
-        const { uploadController } = await import('../../controllers/upload.controller.js');
-        await uploadController.deleteTempFileById(`kb_${id}`, null);
-      } catch (e) {
-        console.warn(`[KB] Could not delete uploaded file for doc ${id}:`, e.message);
-      }
-    }
-
-    // Xóa chunks trước (đảm bảo không có FK conflict)
-    try {
-      await this.deleteChunksByDocId(id);
-    } catch (e) {
-      console.warn(`[KB] Could not delete chunks for doc ${id}:`, e.message);
-    }
-
-    // Xóa document
-    try {
-      const { rows } = await db.query(
-        `DELETE FROM kb_documents WHERE id = $1 AND id_kb IN
-         (SELECT id FROM knowledge_bases WHERE id_user = $2) RETURNING id`,
-        [id, userId]
-      );
-      return rows[0]?.id || null;
-    } catch (dbErr) {
-      console.error(`[KB] deleteDocument DB error for doc ${id}:`, dbErr.message);
-      throw dbErr;
-    }
+  async deleteDocument(id, userId, queryable = db) {
+    const { rows } = await queryable.query(
+      `DELETE FROM kb_documents WHERE id = $1 AND id_kb IN
+       (SELECT id FROM knowledge_bases WHERE id_user = $2) RETURNING id`,
+      [id, userId]
+    );
+    return rows[0]?.id || null;
   }
 
   // ── KB Chunks ──────────────────────────────────────────────────
 
-  async deleteChunksByDocId(docId) {
-    await db.query(`DELETE FROM kb_chunks WHERE id_document = $1`, [docId]);
+  async deleteChunksByDocId(docId, queryable = db) {
+    await queryable.query(`DELETE FROM kb_chunks WHERE id_document = $1`, [docId]);
   }
 
-  async insertChunksBatched(docId, kbId, userId, chunks) {
+  async insertChunksBatched(docId, kbId, userId, chunks, queryable = db) {
     if (!chunks.length) return;
 
     // Use multi-row INSERT for better performance (single transaction instead of N queries)
@@ -187,7 +167,7 @@ class KnowledgeBaseRepository {
       );
       params.push(
         docId, kbId, userId,
-        JSON.stringify(c.embedding),
+        Array.isArray(c.embedding) ? JSON.stringify(c.embedding) : null,
         c.text,
         JSON.stringify(c.metadata || {}),
         i
@@ -195,7 +175,7 @@ class KnowledgeBaseRepository {
       paramIndex += 7;
     }
 
-    await db.query(
+    await queryable.query(
       `INSERT INTO kb_chunks (id_document, id_kb, id_user, embedding, chunk_text, metadata, chunk_index)
        VALUES ${values.join(', ')}`,
       params

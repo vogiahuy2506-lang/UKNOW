@@ -129,6 +129,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'storage_objects_reconcile',
+    label: 'Đối soát storage ledger',
+    schedule: '02:40 hàng ngày',
+    description: 'Đối chiếu storage_objects với file local theo batch, retry cleanup và báo cáo file durable chưa catalog; mặc định không tự xoá file durable.',
+    impact: 'Ledger và filesystem tiếp tục lệch, có thể tính sai quota hoặc bỏ sót file rác trên VPS.',
+    tracked: true,
+  },
+  {
     code: 'courses_daily_sync',
     label: 'Đồng bộ khoá học & dọn voucher',
     schedule: '00:30',

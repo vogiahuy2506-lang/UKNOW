@@ -15,6 +15,8 @@ import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.
 import zaloInboxService from './services/chatbot/zaloInbox.service.js';
 import landingPageDomainService from './services/landingPage/landingPageDomain.service.js';
 import { decryptZaloCookieRows } from './utils/zaloCookieCrypto.util.js';
+import { validateActivePlanKbLimits } from './services/storage/kbQuota.service.js';
+import { validateStorageEnv } from './utils/storageStartupConfig.util.js';
 
 const app = createApp();
 
@@ -77,10 +79,7 @@ const testDBConnection = async () => {
         await sleep(STARTUP_DB_RETRY_MS);
         continue;
       }
-      if (process.env.NODE_ENV === 'production') {
-        process.exit(1);
-      }
-      return;
+      throw error;
     } finally {
       if (client) client.release();
     }
@@ -170,10 +169,25 @@ const restoreZaloSessionsOnStartup = async () => {
   }
 };
 
+async function validateStartupBeforeListen() {
+  try {
+    validateStorageEnv();
+    await testDBConnection();
+    await validateActivePlanKbLimits();
+  } catch (error) {
+    if (process.env.NODE_ENV === 'production') throw error;
+    console.warn(`[Startup] Validation warning in development: ${error.message}`);
+  }
+}
+
+await validateStartupBeforeListen().catch((error) => {
+  console.error(`[Startup] Refusing to listen: ${error.message}`);
+  process.exit(1);
+});
+
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  await testDBConnection();
   setupCleanupTask();
   initScheduler();
   await outboundMessageQueueService.startWorker();

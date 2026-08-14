@@ -23,6 +23,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
     maxZaloAccounts: '', maxEmailAccounts: '',
     maxEmailTemplates: '', maxZaloTemplates: '',
     maxChatbots: '', aiCreditsPerPeriod: '', aiTokensPerPeriod: '',
+    storageLimitBytes: 104857600,
   });
   const [isSaving, setIsSaving] = useState(false);
   const [paymentResult, setPaymentResult] = useState(null);
@@ -105,6 +106,10 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
           </Field>
           <Field label={t('planInputs.employeesLabel')}>
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
+          </Field>
+          <Field label="Dung lượng lưu trữ (MB)">
+            <input type="number" min="1" className="input h-11 w-full" value={Math.max(1, Math.round(Number(form.storageLimitBytes || 0) / 1048576))}
+              onChange={(e) => set('storageLimitBytes', Number(e.target.value || 0) * 1048576)} />
           </Field>
           <Field label={t('planInputs.durationLabel')}>
             <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />

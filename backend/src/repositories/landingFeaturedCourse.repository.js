@@ -112,8 +112,9 @@ class LandingFeaturedCourseRepository {
    * @param {object} payload
    * @returns {Promise<object>}
    */
-  async insert(payload) {
-    const result = await db.query(
+  async insert(payload, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `INSERT INTO landing_featured_courses (
          sort_order,
          title_vi, title_en,
@@ -155,8 +156,9 @@ class LandingFeaturedCourseRepository {
    * @param {object} payload
    * @returns {Promise<object|null>}
    */
-  async updateById(id, payload) {
-    const result = await db.query(
+  async updateById(id, payload, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `UPDATE landing_featured_courses SET
          sort_order = $2,
          title_vi = $3,

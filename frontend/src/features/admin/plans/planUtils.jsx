@@ -187,5 +187,6 @@ export const emptyForm = () => ({
   maxZaloAccounts: '', maxEmailAccounts: '',
   maxEmailTemplates: '', maxZaloTemplates: '',
   maxChatbots: '', aiCreditsPerPeriod: '', aiTokensPerPeriod: '', aiModel: 'gemini-2.5-flash',
+  storageLimitBytes: 104857600,
   gracePeriodDays: '',
 });

@@ -93,4 +93,13 @@ describe('bootstrap.sql text parity (S-2)', () => {
     expect(bootstrapSql).toMatch(/CREATE TABLE alert_events\s*\(/i);
     expect(bootstrapSql).toMatch(/CREATE TABLE cron_job_runs\s*\(/i);
   });
+
+  it('bootstrap mirrors PR-2-KB catalog and positive plan limits', () => {
+    const plansBody = tableBody(bootstrapSql, 'plans');
+    expect(plansBody).toMatch(/max_kb_documents\s+INTEGER\s+NOT NULL\s+DEFAULT 3/i);
+    expect(plansBody).toMatch(/max_kb_extracted_chars\s+BIGINT\s+NOT NULL\s+DEFAULT 100000/i);
+    expect(bootstrapSql).toMatch(/CREATE TABLE IF NOT EXISTS custom_chatbot_documents\s*\(/i);
+    expect(bootstrapSql).toMatch(/CREATE TABLE IF NOT EXISTS kb_documents\s*\([\s\S]*?extracted_chars/i);
+    expect(bootstrapSql).toMatch(/custom_chatbot_chunks\s*\([\s\S]*?document_id/i);
+  });
 });

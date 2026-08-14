@@ -44,7 +44,7 @@ class LandingTestimonialService {
    * @param {object} body
    * @param {number} userId
    */
-  async create(body, userId) {
+  async create(body, userId, actorUserId = userId) {
     const b = body && typeof body === 'object' ? body : {};
     const starRating = normalizeStarRating(b.starRating);
     const quoteVi = String(b.quoteVi ?? '').trim();
@@ -91,22 +91,24 @@ class LandingTestimonialService {
     };
 
     if (hasTemp) {
-      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId);
+      let createdRow = null;
+      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId, {
+        actorUserId,
+        parentMutation: async (client, imageUrl) => {
+          createdRow = await landingTestimonialRepository.insert({
+            ...payloadBase,
+            imageUrl,
+            idUser: userId,
+          }, client);
+          return { referenceId: createdRow.id };
+        },
+      });
       if (!newUrl) {
         const err = new Error('Không thể lưu file ảnh');
         err.statusCode = 500;
         throw err;
       }
-      try {
-        return await landingTestimonialRepository.insert({
-          ...payloadBase,
-          imageUrl: newUrl,
-          idUser: userId,
-        });
-      } catch (dbErr) {
-        await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingTestimonialRollback');
-        throw dbErr;
-      }
+      return createdRow;
     }
 
     const imageUrl = normalizeOptionalHttpImageUrl(b.imageUrl);
@@ -122,7 +124,7 @@ class LandingTestimonialService {
    * @param {object} body
    * @param {number} userId
    */
-  async update(id, body, userId, roleCode = null) {
+  async update(id, body, userId, roleCode = null, actorUserId = userId) {
     const existing = await landingTestimonialRepository.findById(id);
     if (!existing) {
       const err = new Error('Không tìm thấy đánh giá landing');
@@ -180,23 +182,29 @@ class LandingTestimonialService {
     });
 
     if (hasTemp) {
-      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId);
+      let updatedRow = null;
+      const newUrl = await moveTempUploadToPermanent(tempId, orig, userId, {
+        actorUserId,
+        parentMutation: async (client, imageUrl) => {
+          updatedRow = await landingTestimonialRepository.updateById(id, mergePayload(imageUrl), client);
+          if (!updatedRow) {
+            const err = new Error('Không tìm thấy đánh giá landing');
+            err.statusCode = 404;
+            throw err;
+          }
+          return { referenceId: updatedRow.id };
+        },
+      });
       if (!newUrl) {
         const err = new Error('Không thể lưu file ảnh');
         err.statusCode = 500;
         throw err;
       }
-      try {
-        const row = await landingTestimonialRepository.updateById(id, mergePayload(newUrl));
-        const newKey = extractStorageKeyFromImageUrl(row.imageUrl);
-        if (oldKey && oldKey !== newKey) {
-          await deleteUploadedFileIfAny(oldKey, 'landingTestimonial');
-        }
-        return row;
-      } catch (dbErr) {
-        await deleteUploadedFileIfAny(extractStorageKeyFromImageUrl(newUrl), 'landingTestimonialRollback');
-        throw dbErr;
+      const newKey = extractStorageKeyFromImageUrl(updatedRow.imageUrl);
+      if (oldKey && oldKey !== newKey) {
+        await deleteUploadedFileIfAny(oldKey, 'landingTestimonial');
       }
+      return updatedRow;
     }
 
     let imageUrl = existing.imageUrl;

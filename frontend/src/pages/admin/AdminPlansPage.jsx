@@ -21,6 +21,7 @@ const buildPlanUpdatePayload = (plan, overrides = {}) => ({
   description: plan.description || '',
   features: plan.features || [],
   maxEmployees: Number(plan.maxEmployees ?? 0),
+  storageLimitBytes: Number(plan.storageLimitBytes ?? 104857600),
   isActive: plan.isActive ?? true,
   durationDays: plan.durationDays ?? '',
   dailyEmailLimit: plan.dailyEmailLimit ?? '',

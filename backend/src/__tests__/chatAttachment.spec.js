@@ -25,6 +25,15 @@ jest.unstable_mockModule('../config/database.js', () => ({
   default: { query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }) },
 }));
 
+jest.unstable_mockModule('../services/storage/storageObject.service.js', () => ({
+  getPhysicalSize: jest.fn(async () => 1),
+  registerWrittenStorageObject: jest.fn(async () => ({ id: 1 })),
+  markDeletedAfterUnlink: jest.fn(async () => null),
+  ensureTrackedTempStorageObject: jest.fn(async () => ({ id: 1 })),
+  promoteTempStorageObjects: jest.fn(async () => [{ id: 1 }]),
+  promoteTempStorageObject: jest.fn(async () => ({ id: 1 })),
+}));
+
 const {
   signChatAttachmentRef,
   resolveChatAttachmentRef,
