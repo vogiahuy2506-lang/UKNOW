@@ -707,7 +707,7 @@ class LandingPageDomainService {
     const scriptPath = process.env.SSL_PROVISION_SCRIPT;
     if (!scriptPath) {
       console.log(`[LandingPageDomainService] SSL auto-provision skipped: SSL_PROVISION_SCRIPT not set`);
-      return;
+      return { total: 0, attempted: 0, skipped: 0, failed: 0 };
     }
 
     try {
@@ -715,23 +715,35 @@ class LandingPageDomainService {
 
       if (!domains || domains.length === 0) {
         console.log(`[LandingPageDomainService] No active domains found for SSL provisioning`);
-        return;
+        return { total: 0, attempted: 0, skipped: 0, failed: 0 };
       }
 
       console.log(`[LandingPageDomainService] Found ${domains.length} active domain(s), checking SSL status...`);
 
+      let attempted = 0;
+      let skipped = 0;
+      let failed = 0;
       for (const domain of domains) {
         // Cloudflare-managed platform subdomains use Universal SSL, not Certbot/Let's Encrypt.
-        if (domain.cfManaged && !domain.cfHostnameId) continue;
+        if (domain.cfManaged && !domain.cfHostnameId) {
+          skipped += 1;
+          continue;
+        }
 
-        // Check if cert already exists and is valid
-        // We can't check from Node, so just try to provision - script will skip if valid
-        this.provisionSsl(domain.hostname).catch((err) => {
+        attempted += 1;
+        try {
+          // Script tự check expiry (openssl x509 -checkend) và chỉ renew khi
+          // cert còn < 30 ngày hoặc chưa tồn tại — an toàn để gọi mỗi ngày.
+          await this.provisionSsl(domain.hostname);
+        } catch (err) {
+          failed += 1;
           console.error(`[LandingPageDomainService] SSL provisioning failed for ${domain.hostname}:`, err.message);
-        });
+        }
       }
+      return { total: domains.length, attempted, skipped, failed };
     } catch (err) {
       console.error(`[LandingPageDomainService] Failed to get active domains for SSL provisioning:`, err.message);
+      return { total: 0, attempted: 0, skipped: 0, failed: 0, error: err.message };
     }
   }
 

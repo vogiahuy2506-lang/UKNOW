@@ -866,6 +866,45 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Custom Domain Auto-Verify: kiểm tra pending domains mỗi 5 phút');
 
+  // ── Custom domain SSL auto-renewal — chạy 02:00 hàng ngày ───────────────
+  // Gọi ssl-auto-provision.sh cho mọi active domain không qua Cloudflare.
+  // Script tự check expiry (`openssl x509 -checkend`) và chỉ renew khi cert
+  // còn < 30 ngày (mặc định Let's Encrypt) hoặc chưa tồn tại — an toàn chạy mỗi ngày.
+  const renewCustomDomainSsl = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+    try {
+      await cronJobRunRepository.recordRun('custom_domain_ssl_renew', async () => {
+        const landingPageDomainService = (await import('../services/landingPage/landingPageDomain.service.js')).default;
+        const result = await landingPageDomainService.provisionSslForAllActiveDomains();
+        if (result.attempted > 0) {
+          console.log(
+            `[Scheduler] SSL auto-renew: total=${result.total} attempted=${result.attempted} `
+            + `skipped=${result.skipped} failed=${result.failed}`
+          );
+        }
+        return {
+          total: result.total || 0,
+          attempted: result.attempted || 0,
+          skipped: result.skipped || 0,
+          failed: result.failed || 0,
+          synced: result.attempted || 0,
+        };
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi auto-renew SSL cho custom domain:', error.message);
+    }
+  };
+
+  // 02:00 mỗi ngày — lệch giờ với các job khác để tránh dồn tải certbot.
+  cron.schedule('0 2 * * *', async () => {
+    await renewCustomDomainSsl();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  // Cũng chạy ngay khi backend khởi động để bù nếu backend down trong ngày.
+  renewCustomDomainSsl();
+
+  console.log('[Scheduler] Đã khởi tạo Custom Domain SSL Auto-Renewal: kiểm tra mỗi ngày lúc 02:00');
+
   // ── AI Model Catalog Sync - Đồng bộ danh sách model Gemini ─────────────────────
   const aiModelSyncCron = String(process.env.AI_MODEL_SYNC_CRON || '15 2 * * *').trim();
   const syncAiModels = async () => {

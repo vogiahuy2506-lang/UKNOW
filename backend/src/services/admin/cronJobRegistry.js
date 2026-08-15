@@ -96,6 +96,19 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'custom_domain_ssl_renew',
+    label: 'Tự gia hạn SSL custom domain',
+    schedule: '02:00 hàng ngày (+ chạy ngay khi khởi động)',
+    description:
+      'Gọi ssl-auto-provision.sh cho mọi active domain không qua Cloudflare. Script tự check '
+      + 'thời hạn cert (openssl x509 -checkend) và chỉ renew khi cert sắp hết (< 30 ngày) hoặc '
+      + 'chưa tồn tại. Tự chạy lại khi backend restart để bù nếu lỡ ngày.',
+    impact:
+      'SSL custom domain hết hạn không được gia hạn, khách vào site thấy cảnh báo chứng chỉ hết hạn.',
+    tracked: true,
+    optional: true,
+  },
+  {
     code: 'custom_plan_orphan_cleanup',
     label: 'Dọn gói tự chọn bỏ dở',
     schedule: 'Mỗi giờ, phút 15',
