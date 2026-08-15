@@ -49,12 +49,18 @@ const nodeType = (node) => String(
 
 const nodeId = (node, index) => String(node?.id || node?.tempId || `preview-node-${index + 1}`);
 
+const extractText = (val) => {
+  if (!val) return '';
+  if (typeof val === 'object') return String(val.vi || val.en || Object.values(val)[0] || '');
+  return String(val);
+};
+
 const sourceLabel = (config, nodes, channel) => {
   const sourceId = channel === 'email'
     ? config?.recipientNodeId
     : config?.zaloRecipientNodeId || config?.zaloGroupNodeId;
   const source = nodes.find((node) => String(node?.id || node?.tempId || '') === String(sourceId || ''));
-  return source?.nodeName || source?.node_name || source?.name || null;
+  return extractText(source?.nodeName || source?.node_name || source?.name || null);
 };
 
 const manualRecipientCount = (value) => String(value || '')
@@ -227,7 +233,7 @@ class CampaignConfirmationService {
           nodeId: currentNodeId,
           stepIndex,
           channel,
-          title: node?.nodeName || node?.node_name || node?.name || (channel === 'email' ? 'Email' : 'Zalo'),
+          title: extractText(node?.nodeName || node?.node_name || node?.name || (channel === 'email' ? 'Email' : 'Zalo')),
           content,
           timing: {
             anchor: stepConfig?.delayFrom === 'previous' || stepConfig?.delayFrom === 'prev' ? 'prev' : 'start',
@@ -256,8 +262,8 @@ class CampaignConfirmationService {
     return {
       version: 1,
       campaign: {
-        name: script?.campaignName || script?.name || '',
-        description: script?.description || '',
+        name: extractText(script?.campaignName || script?.name || ''),
+        description: extractText(script?.description || ''),
         type: script?.campaignType || script?.type || null,
       },
       totals: { sendSteps: steps.length },
