@@ -7,6 +7,8 @@ import { getPlans } from '../../../services/plan.service';
 import { getActivePromotions } from '../../../services/promotion.service';
 import { useI18n } from '../../../i18n';
 import CustomPlanBuilder from '../../../features/billing/CustomPlanBuilder';
+import { toast } from 'react-hot-toast';
+import checkoutApiService from '../../../features/checkout/services/checkoutApi.service';
 
 const isContactPlan = (plan) => {
   const code = String(plan?.code || '').trim().toLowerCase();
@@ -180,6 +182,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [promotionsByPlanCode, setPromotionsByPlanCode] = useState({});
   const [showCustomBuilder, setShowCustomBuilder] = useState(false);
+  const [activatingPlanId, setActivatingPlanId] = useState(null);
 
   const getPlansData = async () => {
     try {
@@ -229,16 +232,42 @@ export default function PricingSection({ embedded = false, compact = false, glas
     setShowCustomBuilder(true);
   };
 
-  const handlePlanClick = (plan) => {
+  const handlePlanClick = async (plan) => {
     if (isContactPlan(plan)) {
       openCustomBuilder();
       return;
     }
     if (!isAuthenticated) {
       navigate('/login');
-    } else {
-      navigate('/checkout', { state: { plan, billingPeriod } });
+      return;
     }
+    // Gói miễn phí (dùng thử): kích hoạt ngay, không đưa qua trang thanh toán.
+    // Backend vẫn là nơi chặn thật (1 lượt/tài khoản, không cho hạ gói giữa kỳ).
+    if (isFreePlan(plan)) {
+      if (activatingPlanId) return;
+      setActivatingPlanId(plan.id);
+      try {
+        const { data } = await checkoutApiService.activateFreePlan({
+          planCode: plan.code,
+          billingPeriod,
+        });
+        if (!data?.success) throw new Error(data?.message);
+        navigate('/payment-success', {
+          replace: true,
+          state: { orderCode: data.result.orderCode, fromCheckout: true },
+        });
+      } catch (err) {
+        toast.error(
+          err?.response?.data?.message
+          || err?.message
+          || t('pricing.trialActivateFailed')
+        );
+      } finally {
+        setActivatingPlanId(null);
+      }
+      return;
+    }
+    navigate('/checkout', { state: { plan, billingPeriod } });
   };
 
   if (loading) {
@@ -435,9 +464,12 @@ export default function PricingSection({ embedded = false, compact = false, glas
                   {/* CTA */}
                   <button
                     onClick={() => handlePlanClick(plan)}
-                    className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all ${style.button}`}
+                    disabled={activatingPlanId === plan.id}
+                    className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all disabled:opacity-60 disabled:cursor-not-allowed ${style.button}`}
                   >
-                    {hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t)}
+                    {activatingPlanId === plan.id
+                      ? t('pricing.activating')
+                      : (hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t))}
                     <FaArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

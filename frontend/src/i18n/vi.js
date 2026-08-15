@@ -3894,6 +3894,8 @@ export default {
     saveLabel: 'Tiết kiệm',
     getQuote: 'Nhận báo giá',
     startTrial: 'Dùng thử miễn phí',
+    activating: 'Đang kích hoạt...',
+    trialActivateFailed: 'Không kích hoạt được gói dùng thử. Vui lòng thử lại.',
     choosePlan: 'Đăng ký gói',
     claimOffer: 'Nhận ưu đãi',
     promoDiscount: 'ƯU ĐÃI {pct}%',

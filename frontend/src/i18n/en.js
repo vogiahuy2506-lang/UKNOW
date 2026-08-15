@@ -3860,6 +3860,8 @@ export default {
     saveLabel: 'Save',
     getQuote: 'Get a Quote',
     startTrial: 'Start Free Trial',
+    activating: 'Activating...',
+    trialActivateFailed: 'Could not activate the trial plan. Please try again.',
     choosePlan: 'Choose plan',
     claimOffer: 'Claim offer',
     promoDiscount: 'SAVE {pct}%',
