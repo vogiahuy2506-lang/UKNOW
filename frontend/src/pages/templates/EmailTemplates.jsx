@@ -13,6 +13,9 @@ import emailTemplateUploadApiService from '../../features/templates/services/ema
 import fetchAllTemplateListPages from '../../features/templates/utils/fetchAllTemplateListPages';
 import useEmailTemplateDerivedData from '../../features/templates/hooks/useEmailTemplateDerivedData';
 import FullScreenOverlay from '../../components/FullScreenOverlay';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import {
   getCaretPosition,
   getCaretPositionForInput,
@@ -24,6 +27,7 @@ import {
 
 const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = null, activeChannel = null, onChannelChange = null }) => {
   const { t } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const templateApiService = isZaloTemplate ? zaloTemplateApiService : emailTemplateApiService;
   const templateKindLabel = isZaloTemplate ? 'zalo' : 'email';
   const subjectLabel = isZaloTemplate ? t('templates.zaloSubject') : t('templates.emailSubject');
@@ -550,6 +554,12 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = 
   const handleFileSelect = async (event) => {
     const file = event.target.files?.[0];
     if (!file || isUploading) return;
+    const validation = validateFilesBeforeUpload([file], storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      event.target.value = '';
+      return;
+    }
     setIsUploading(true);
     try {
       const payload = new FormData();
@@ -579,6 +589,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = 
       }));
 
       toast.success(t('templates.uploadSuccess'));
+      notifyStorageQuotaRefresh();
     } catch (error) {
       console.error('Upload error:', error);
       toast.error(t('templates.uploadFailed'));

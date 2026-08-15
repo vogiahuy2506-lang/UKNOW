@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import { getStoredLocale } from '../utils/i18n';
 import vi from '../i18n/vi';
 import en from '../i18n/en';
+import { notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -160,10 +161,28 @@ api.interceptors.response.use(
       const key = getRequestKey(error.config);
       cleanupRequest(key);
     }
-    // Map server message vào Error.message để toast/UI không hiện chuỗi axios mặc định (vd. 429)
-    const serverMessage = error.response?.data?.message;
-    if (typeof serverMessage === 'string' && serverMessage.trim()) {
-      error.message = serverMessage;
+
+    // Map server message và storage error codes vào Error.message để toast/UI hiện câu tiếng Việt rõ nghĩa
+    const serverCode = error.response?.data?.code;
+    const locale = getStoredLocale();
+    const tr = locale === 'en' ? en : vi;
+
+    if (serverCode === 'STORAGE_QUOTA_EXCEEDED') {
+      error.message = tr?.storageQuota?.quotaExceededServer || 'Workspace đã dùng hết dung lượng lưu trữ. Hãy xoá bớt tệp cũ hoặc nâng gói.';
+      try {
+        notifyStorageQuotaRefresh();
+      } catch {
+        // ignore
+      }
+    } else if (serverCode === 'STORAGE_CAPACITY_PROTECTED') {
+      error.message = tr?.storageQuota?.capacityProtectedServer || 'Hệ thống lưu trữ máy chủ đang bảo vệ dung lượng. Vui lòng thử lại sau ít phút.';
+    } else if (serverCode === 'STORAGE_CAPACITY_UNKNOWN') {
+      error.message = tr?.storageQuota?.capacityUnknownServer || 'Không thể xác định dung lượng lưu trữ hệ thống. Vui lòng thử lại sau.';
+    } else {
+      const serverMessage = error.response?.data?.message;
+      if (typeof serverMessage === 'string' && serverMessage.trim()) {
+        error.message = serverMessage;
+      }
     }
 
     const originalRequest = error.config;

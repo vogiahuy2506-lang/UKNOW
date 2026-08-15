@@ -29,7 +29,9 @@ import { getMyProfile } from '../../features/auth/services/authApi.service';
 import ChatbotReplyLimitsCard from '../../features/chatbot/components/ChatbotReplyLimitsCard';
 import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
 import { useI18n } from '../../i18n';
-import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import {
   ChannelGuideModal,
   ChannelOverview,
@@ -67,6 +69,7 @@ const TABS = [
 
 export default function ChatbotSettings({ chatbot, onUpdate }) {
   const { t } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('general');
   const [saving, setSaving] = useState(false);
@@ -498,8 +501,9 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const handleLogoFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_UPLOAD_FILE_BYTES) {
-      toast.error(`File ảnh vượt quá ${MAX_UPLOAD_FILE_MB}MB. Vui lòng chọn ảnh nhỏ hơn.`);
+    const validation = validateFilesBeforeUpload([file], storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
       e.target.value = '';
       return;
     }
@@ -517,6 +521,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         if (res.data?.success && res.data.data?.url) {
           setForm(p => ({ ...p, logo_url: res.data.data.url }));
           toast.success('Đã tải logo lên thành công');
+          notifyStorageQuotaRefresh();
         } else {
           toast.error(res.data?.message || 'Upload thất bại');
         }
@@ -533,8 +538,10 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > MAX_UPLOAD_FILE_BYTES) {
-        toast.error(t('chatbot.knowledgeBase.fileTooLarge'));
+      const validation = validateFilesBeforeUpload([file], storageQuota);
+      if (!validation.ok) {
+        toast.error(getUploadValidationErrorMessage(validation, t));
+        e.target.value = '';
         return;
       }
       setUploadForm({ title: file.name.replace(/\.[^.]+$/, ''), file });
@@ -546,11 +553,6 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     e.preventDefault();
     if (!uploadForm.file) {
       toast.error(t('errors.validationError'));
-      return;
-    }
-    // Validate file size
-    if (uploadForm.file.size > MAX_UPLOAD_FILE_BYTES) {
-      toast.error(`File quá lớn. Vui lòng chọn file nhỏ hơn ${MAX_UPLOAD_FILE_MB}MB.`);
       return;
     }
     // Validate file type
@@ -570,6 +572,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         setShowUploadModal(false);
         setUploadForm({ title: '', file: null });
         toast.success(`Đã huấn luyện thành công: ${res.data.chunks || 0} đoạn`);
+        notifyStorageQuotaRefresh();
         // Reload documents from backend to ensure sync and correct data
         await loadDocumentsForChatbot(chatbot.id);
       } else {

@@ -51,6 +51,7 @@ export async function getStorageUsage(ownerUserId, queryable = db) {
     percent: limitBytes ? Math.round((usedBytes / limitBytes) * 100) : 100,
     overLimit: usedBytes > limitBytes,
     source: overrideBytes ? 'override' : 'plan',
+    enforcementEnabled: isStorageQuotaEnforcementEnabled(),
   };
 }
 

@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import MessageAttachments, { formatFileSize } from '../../components/MessageAttachments';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 
 const ACCEPTED = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACH = 3;
@@ -87,6 +88,12 @@ export default function PublicChatbotPage() {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (!files.length || !allowAttachments) return;
+    const validation = validateFilesBeforeUpload(files, null);
+    if (!validation.ok) {
+      // eslint-disable-next-line no-alert
+      alert(getUploadValidationErrorMessage(validation));
+      return;
+    }
     const remaining = MAX_ATTACH - pendingAttachments.length;
     if (remaining <= 0) return;
 

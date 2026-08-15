@@ -32,6 +32,9 @@ import CreditWarningBanner from '../../components/layout/CreditWarningBanner';
 import { getAiQuotaErrorMessage, shouldShowAiUpgradeCta } from '../../utils/aiLimitError.util';
 import { getAiBillingBlockState } from '../../utils/subscriptionStatus.util.js';
 import zaloSettingsApiService from '../settings/services/zaloSettingsApi.service';
+import useStorageQuota from '../storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../storage/storageEvents';
 import {
   buildLandingBriefFromAnswers,
 } from './utils/landingBrief.js';
@@ -427,6 +430,7 @@ const normalizeContentPlanData = (rawData) => {
 
 const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResizeStart, onResizeEnd, variant = 'panel' }) => {
   const { t, locale } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const { user, fetchAiCredits, aiCredits, billingStatus, addons, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
   const isEmployeeCtx = activeContext?.type === 'employee';
@@ -923,6 +927,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const uploadFiles = async (files) => {
     if (!files.length) return;
+    const validation = validateFilesBeforeUpload(files, storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t, locale));
+      return;
+    }
     setIsUploading(true);
     try {
       const results = await Promise.all(files.map(async (file) => {
@@ -935,6 +944,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       }));
       setUploadedFiles(prev => [...prev, ...results]);
       toast.success(`Đã tải lên ${results.length} tệp`);
+      notifyStorageQuotaRefresh();
     } catch {
       toast.error('Tải tệp lên thất bại');
     } finally {

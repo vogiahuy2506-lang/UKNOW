@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
+import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
 
@@ -249,6 +250,7 @@ export const useAuthStore = create((set, get) => ({
     } finally {
       removeToken('accessToken');
       sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
+      notifyStorageQuotaClear();
       set({
         user: null,
         isAuthenticated: false,
@@ -295,7 +297,9 @@ export const useAuthStore = create((set, get) => ({
     if (!ownerId) {
       const ctx = { type: 'self' };
       saveContext(ctx);
+      notifyStorageQuotaClear();
       set({ activeContext: ctx });
+      notifyStorageQuotaRefresh();
       return;
     }
 
@@ -321,7 +325,9 @@ export const useAuthStore = create((set, get) => ({
     };
 
     saveContext(ctx);
+    notifyStorageQuotaClear();
     set({ activeContext: ctx });
+    notifyStorageQuotaRefresh();
   },
 
   /** Cập nhật thông tin user trong store. */

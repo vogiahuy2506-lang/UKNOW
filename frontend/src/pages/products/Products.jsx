@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import productApiService from '../../features/products/services/productApi.service';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import {
   HiOutlineCube,
   HiOutlineSearch,
@@ -52,6 +55,7 @@ const formatDate = (v) => {
 
 const Products = () => {
   const { t } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -187,6 +191,11 @@ const Products = () => {
       toast.error(t('products.imageRequired'));
       return;
     }
+    const validation = validateFilesBeforeUpload([file], storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      return;
+    }
     setIsUploadingThumbnail(true);
     try {
       const payload = new FormData();
@@ -196,6 +205,7 @@ const Products = () => {
       if (!url) throw new Error('missing-url');
       setField('thumbnailUrl', url);
       toast.success(t('products.uploadSuccess'));
+      notifyStorageQuotaRefresh();
     } catch {
       toast.error(t('products.uploadFailed'));
     } finally {

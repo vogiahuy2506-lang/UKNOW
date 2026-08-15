@@ -4,6 +4,8 @@ import { HiOutlineExclamation, HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getAiBillingBlockState, isUnlimitedPlanLimit } from '../../utils/subscriptionStatus.util.js';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { formatBytes, getStorageAlertLevel } from '../../features/storage/storageUtils';
 
 const DISMISS_KEY_PREFIX = 'founder_ai_credit_warning_dismissed:';
 
@@ -67,7 +69,8 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
   const sendUsage = useAuthStore((state) => state.sendUsage);
   const addons = useAuthStore((state) => state.addons);
   const billingStatus = useAuthStore((state) => state.billingStatus);
-  const [dismissedMetric, setDismissedMetric] = useState(null);
+  const { usage: storageUsage } = useStorageQuota();
+  const [dismissedKind, setDismissedKind] = useState(null);
   const isEmployeeCtx = activeContext?.type === 'employee';
 
   const alertState = useMemo(() => {
@@ -92,6 +95,35 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
     });
 
     const candidates = [];
+
+    // Storage quota warning (evaluated for both owner and employee)
+    const storageAlertLevel = getStorageAlertLevel(storageUsage);
+    if (storageAlertLevel === 'critical') {
+      candidates.push({
+        metric: 'storage',
+        kind: 'storage-critical',
+        isEmpty: false,
+        ratio: 0.99,
+        message: isEmployeeCtx
+          ? t('creditBanner.storageEmployeeLow')
+          : t('creditBanner.storageCritical', {
+              remaining: formatBytes(storageUsage?.remainingBytes),
+            }),
+      });
+    } else if (storageAlertLevel === 'warning') {
+      candidates.push({
+        metric: 'storage',
+        kind: 'storage-warning',
+        isEmpty: false,
+        ratio: 0.8,
+        message: isEmployeeCtx
+          ? t('creditBanner.storageEmployeeLow')
+          : t('creditBanner.storageWarning', {
+              percent: storageUsage?.percent,
+              remaining: formatBytes(storageUsage?.remainingBytes),
+            }),
+      });
+    }
 
     if (aiBlock?.type === 'credits') {
       candidates.push({
@@ -144,38 +176,38 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
       return (b.ratio || 0) - (a.ratio || 0);
     });
     return candidates[0];
-  }, [addons, aiCredits, billingStatus, isEmployeeCtx, sendUsage, t, user]);
+  }, [addons, aiCredits, billingStatus, isEmployeeCtx, sendUsage, storageUsage, t, user]);
 
   useEffect(() => {
-    if (!alertState?.metric || alertState.isEmpty) {
-      setDismissedMetric(null);
+    if (!alertState?.kind || alertState.isEmpty) {
+      setDismissedKind(null);
       return;
     }
     try {
-      if (sessionStorage.getItem(`${DISMISS_KEY_PREFIX}${alertState.metric}`) === '1') {
-        setDismissedMetric(alertState.metric);
+      if (sessionStorage.getItem(`${DISMISS_KEY_PREFIX}${alertState.kind}`) === '1') {
+        setDismissedKind(alertState.kind);
       } else {
-        setDismissedMetric(null);
+        setDismissedKind(null);
       }
     } catch {
-      setDismissedMetric(null);
+      setDismissedKind(null);
     }
-  }, [alertState?.isEmpty, alertState?.metric]);
+  }, [alertState?.isEmpty, alertState?.kind]);
 
-  if (!alertState || (!alertState.isEmpty && dismissedMetric === alertState.metric)) return null;
+  if (!alertState || (!alertState.isEmpty && dismissedKind === alertState.kind)) return null;
 
   const handleDismiss = () => {
-    if (alertState.isEmpty || !alertState.metric) return;
+    if (alertState.isEmpty || !alertState.kind) return;
     try {
-      sessionStorage.setItem(`${DISMISS_KEY_PREFIX}${alertState.metric}`, '1');
+      sessionStorage.setItem(`${DISMISS_KEY_PREFIX}${alertState.kind}`, '1');
     } catch {
       // ignore storage failures
     }
-    setDismissedMetric(alertState.metric);
+    setDismissedKind(alertState.kind);
   };
 
   const isComposer = placement === 'composer';
-  const showBuyTopup = alertState.kind !== 'expired' && !isEmployeeCtx;
+  const showBuyTopup = alertState.kind !== 'expired' && alertState.metric !== 'storage' && !isEmployeeCtx;
   const primaryHref = (alertState.kind === 'expired' || isEmployeeCtx)
     ? '/pricing'
     : '/app/billing';

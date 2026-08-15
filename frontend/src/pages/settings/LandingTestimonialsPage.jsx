@@ -10,6 +10,9 @@ import {
 import emailTemplateUploadApiService from '../../features/templates/services/emailTemplateUploadApi.service.js';
 import { normalizePublicFileUrlForEmbed } from '../../features/landing/utils/publicFileUrl.js';
 import { useI18n } from '../../i18n';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 
 const emptyForm = () => ({
   quoteVi: '',
@@ -34,6 +37,7 @@ const emptyForm = () => ({
  */
 const LandingTestimonialsPage = () => {
   const { t } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,6 +123,11 @@ const LandingTestimonialsPage = () => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || uploadingFile) return;
+    const validation = validateFilesBeforeUpload([file], storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      return;
+    }
     setUploadingFile(true);
     try {
       const payload = new FormData();
@@ -139,6 +148,7 @@ const LandingTestimonialsPage = () => {
       });
       setPendingImage({ tempId: tempData.tempId, originalName: tempData.originalName || file.name });
       toast.success(t('landingTestimonials.imageUploaded'));
+      notifyStorageQuotaRefresh();
     } catch {
       toast.error(t('landingTestimonials.uploadFailed'));
     } finally {

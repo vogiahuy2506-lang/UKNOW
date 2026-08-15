@@ -11,6 +11,7 @@ import {
 import { useI18n } from '../../i18n';
 import { getSubscriptionUiStatus } from '../../utils/subscriptionStatus.util.js';
 import UsageBar from './UsageBar';
+import StorageUsageSection from '../storage/StorageUsageSection';
 
 function formatPrice(price, t) {
   if (price === null || price === undefined) return t('accountProfileModal.contactForPrice');
@@ -207,6 +208,9 @@ export default function PlanSection({ data, t }) {
           usingAddons={!!data.addons}
         />
       </div>
+
+      {/* Storage quota usage */}
+      <StorageUsageSection />
 
       {data.addons && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-2">

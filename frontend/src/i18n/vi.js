@@ -188,14 +188,31 @@ export default {
     low: 'Sắp hết credit AI — còn {remaining} lượt ({percent}%).',
     empty: 'Đã hết credit AI kỳ này — nâng cấp để tiếp tục.',
     expired: 'Gói đã hết hạn — gửi tin & AI tạm dừng cho đến khi gia hạn.',
+    storageCritical: 'Dung lượng lưu trữ sắp hết (còn {remaining}). Hãy dọn bớt tệp hoặc nâng cấp gói.',
+    storageWarning: 'Dung lượng lưu trữ đã dùng {percent}% (còn {remaining}). Hãy kiểm tra để tránh gián đoạn.',
+    storageEmployeeLow: 'Workspace sắp hết dung lượng lưu trữ — vui lòng báo chủ tài khoản nâng cấp gói.',
     upgrade: 'Nâng cấp',
     buyTopup: 'Mua thêm',
     viewPricing: 'Xem bảng giá',
     goBilling: 'Đi tới trang Thanh toán',
-    dismiss: 'Ẩn cảnh báo credit AI',
+    dismiss: 'Ẩn cảnh báo',
     resources: {
       ai: 'credit AI',
     },
+  },
+
+  storageQuota: {
+    title: 'Dung lượng lưu trữ',
+    usedOfTotal: 'Đã dùng {used} / {limit} ({percent}%)',
+    remaining: 'Còn trống: {remaining}',
+    sourcePlan: 'Theo gói',
+    sourceOverride: 'Tùy chỉnh',
+    fileTooLarge: 'Tệp "{fileName}" vượt quá giới hạn 50MB/tệp.',
+    fileTooLargeGeneric: 'Tệp vượt quá giới hạn 50MB/tệp.',
+    quotaExceeded: 'Workspace chỉ còn {remaining}. Tệp bạn chọn nặng {total}. Hãy xoá bớt tệp cũ hoặc nâng gói.',
+    quotaExceededServer: 'Workspace đã dùng hết dung lượng lưu trữ. Hãy xoá bớt tệp cũ hoặc nâng gói.',
+    capacityProtectedServer: 'Hệ thống lưu trữ máy chủ đang bảo vệ dung lượng. Vui lòng thử lại sau ít phút.',
+    capacityUnknownServer: 'Không thể xác định dung lượng lưu trữ hệ thống. Vui lòng thử lại sau.',
   },
 
   auth: {

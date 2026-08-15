@@ -18,6 +18,9 @@ import ChatbotSettings from './ChatbotSettings';
 import ChatListSidebar from './ChatListSidebar';
 import { MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
 import { useI18n } from '../../i18n';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
@@ -163,6 +166,7 @@ function ConversationList({ conversations, activeId, onSelect, onNewChat: _onNew
 // Chat Message Area with conversation saving
 function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
   const { t } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -308,6 +312,12 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     e.target.value = '';
     if (files.length === 0) return;
 
+    const validation = validateFilesBeforeUpload(files, storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      return;
+    }
+
     const remaining = MAX_ATTACHMENTS - pendingAttachments.length;
     if (remaining <= 0) {
       toast.error(`Tối đa ${MAX_ATTACHMENTS} tệp mỗi tin nhắn`);
@@ -340,6 +350,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
           toast('Đã gửi tệp, nhưng chatbot không đọc được nội dung', { icon: '⚠️' });
         }
         setPendingAttachments(prev => [...prev, data]);
+        notifyStorageQuotaRefresh();
       }
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Tải file thất bại');

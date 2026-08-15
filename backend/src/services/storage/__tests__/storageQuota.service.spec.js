@@ -28,6 +28,7 @@ describe('storageQuota.service', () => {
     await expect(getStorageUsage(1)).resolves.toEqual({
       usedBytes: 50, reservedBytes: 0, limitBytes: 200, remainingBytes: 150,
       percent: 25, overLimit: false, source: 'override',
+      enforcementEnabled: false,
     });
   });
 
@@ -35,6 +36,20 @@ describe('storageQuota.service', () => {
     mockGetEffectiveQuota.mockResolvedValueOnce(null);
     mockGetWorkspaceUsage.mockResolvedValueOnce('0');
     await expect(getStorageUsage(1)).resolves.toMatchObject({ limitBytes: DEFAULT_STORAGE_LIMIT_BYTES, source: 'plan' });
+  });
+
+  it('returns enforcementEnabled: true when STORAGE_QUOTA_ENFORCEMENT_ENABLED is true', async () => {
+    const previous = process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED;
+    process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED = 'true';
+    mockGetEffectiveQuota.mockResolvedValueOnce({ overrideBytes: '200', planLimitBytes: '100' });
+    mockGetWorkspaceUsage.mockResolvedValueOnce('50');
+    try {
+      const usage = await getStorageUsage(1);
+      expect(usage.enforcementEnabled).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED;
+      else process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED = previous;
+    }
   });
 
   it('rejects an over-limit write when enforcement is enabled', () => {

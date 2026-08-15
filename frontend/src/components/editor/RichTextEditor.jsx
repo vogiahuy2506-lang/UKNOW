@@ -5,6 +5,10 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import api from '../../services/api';
+import { useI18n } from '../../i18n';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 
 async function uploadHelpImageFile(file) {
   const fd = new FormData();
@@ -43,6 +47,8 @@ export default function RichTextEditor({
   placeholder = 'Soạn nội dung…',
   disabled = false,
 }) {
+  const { t, locale } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const editorRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -52,17 +58,23 @@ export default function RichTextEditor({
 
   const insertImageFromFile = useCallback(async (ed, file) => {
     if (!file || !ed) return;
+    const validation = validateFilesBeforeUpload([file], storageQuota);
+    if (!validation.ok) {
+      setUploadError(getUploadValidationErrorMessage(validation, t, locale));
+      return;
+    }
     setUploadError('');
     setUploading(true);
     try {
       const url = await uploadHelpImageFile(file);
+      notifyStorageQuotaRefresh();
       ed.chain().focus().setImage({ src: url, alt: file.name || 'image' }).run();
     } catch (err) {
       setUploadError(err?.response?.data?.message || err.message || 'Upload ảnh thất bại');
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [locale, storageQuota, t]);
 
   const editor = useEditor({
     extensions: [

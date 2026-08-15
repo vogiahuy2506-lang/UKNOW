@@ -8,7 +8,9 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { useI18n } from '../../i18n';
-import { MAX_UPLOAD_FILE_BYTES } from '../../constants/uploadLimits';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 
 const STATUS_COLORS = {
   pending: 'text-slate-400 bg-slate-100',
@@ -24,8 +26,9 @@ const STATUS_ICONS = {
   error: HiOutlineExclamationCircle,
 };
 
-function KnowledgeBasePage() {
+const KnowledgeBasePage = () => {
   const { t } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const [kbs, setKbs] = useState([]);
   const [selectedKb, setSelectedKb] = useState(null);
   const [documents, setDocuments] = useState([]);
@@ -97,7 +100,12 @@ function KnowledgeBasePage() {
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > MAX_UPLOAD_FILE_BYTES) { toast.error(t('chatbot.knowledgeBase.fileTooLarge')); return; }
+      const validation = validateFilesBeforeUpload([file], storageQuota);
+      if (!validation.ok) {
+        toast.error(getUploadValidationErrorMessage(validation, t));
+        e.target.value = '';
+        return;
+      }
       setUploadForm(prev => ({ ...prev, file, title: file.name.replace(/\.[^.]+$/, '') }));
     }
     e.target.value = '';
@@ -119,6 +127,7 @@ function KnowledgeBasePage() {
       setShowUploadModal(false);
       setUploadForm({ title: '', file: null });
       toast.success(t('chatbot.knowledgeBase.processing'));
+      notifyStorageQuotaRefresh();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('errors.uploadFailed'));
     } finally { setUploading(false); }

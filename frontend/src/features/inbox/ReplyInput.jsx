@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { HiPaperAirplane, HiPaperClip, HiX, HiOutlineEmojiHappy, HiOutlinePhotograph, HiDocument } from 'react-icons/hi';
+import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n';
+import useStorageQuota from '../storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../storage/storageEvents';
 
 const EMOJI_GROUPS = [
   { name: '😊', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😋', '😛', '😜', '🤪', '😝'] },
@@ -9,11 +14,13 @@ const EMOJI_GROUPS = [
 ];
 
 const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }) => {
+  const { t, locale } = useI18n();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const { usage: storageQuota } = useStorageQuota();
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -51,6 +58,9 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
     setIsSending(true);
     try {
       await onSend(message.trim(), replyingTo, uploadedFiles);
+      if (uploadedFiles.length > 0) {
+        notifyStorageQuotaRefresh();
+      }
       setMessage('');
       setUploadedFiles([]);
       if (textareaRef.current) {
@@ -80,7 +90,14 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
 
   const handleFileSelect = (e, type) => {
     const files = Array.from(e.target.files || []);
+    e.target.value = '';
     if (files.length === 0) return;
+
+    const validation = validateFilesBeforeUpload(files, storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t, locale));
+      return;
+    }
 
     const newFiles = files.map(file => ({
       id: Date.now() + Math.random(),

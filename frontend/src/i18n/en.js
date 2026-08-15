@@ -188,14 +188,31 @@ export default {
     low: 'AI credits are running low — {remaining} left ({percent}%).',
     empty: 'AI credits are used up for this period — upgrade to continue.',
     expired: 'Your plan has expired — messaging and AI are paused until renewal.',
+    storageCritical: 'Storage space is critically low ({remaining} remaining). Please clean up files or upgrade your plan.',
+    storageWarning: 'Storage space is {percent}% full ({remaining} remaining). Please review to avoid interruptions.',
+    storageEmployeeLow: 'Workspace storage is almost full — please inform the account owner to upgrade.',
     upgrade: 'Upgrade',
     buyTopup: 'Buy more',
     viewPricing: 'View pricing',
     goBilling: 'Go to billing',
-    dismiss: 'Dismiss AI credit warning',
+    dismiss: 'Dismiss warning',
     resources: {
       ai: 'AI credits',
     },
+  },
+
+  storageQuota: {
+    title: 'Storage Space',
+    usedOfTotal: 'Used {used} / {limit} ({percent}%)',
+    remaining: 'Remaining: {remaining}',
+    sourcePlan: 'From plan',
+    sourceOverride: 'Custom override',
+    fileTooLarge: 'File "{fileName}" exceeds the 50MB limit per file.',
+    fileTooLargeGeneric: 'File exceeds the 50MB limit per file.',
+    quotaExceeded: 'Workspace only has {remaining} remaining. Selected files total {total}. Please remove old files or upgrade your plan.',
+    quotaExceededServer: 'Workspace storage quota exceeded. Please remove old files or upgrade your plan.',
+    capacityProtectedServer: 'Server storage is currently under maintenance. Please try again later.',
+    capacityUnknownServer: 'Unable to verify server storage capacity. Please try again later.',
   },
 
   auth: {

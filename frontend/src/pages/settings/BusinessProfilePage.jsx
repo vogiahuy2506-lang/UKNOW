@@ -11,6 +11,9 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import businessProfileApiService from '../../features/settings/services/businessProfileApi.service';
 import productApiService from '../../features/products/services/productApi.service';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 
   const TONE_OPTIONS = (t) => [
   { value: 'professional', label: t('businessProfile.professional') },
@@ -131,6 +134,7 @@ const SegmentList = ({ segments, onChange }) => {
 // ── Page ──────────────────────────────────────────────────────────────────────
 const BusinessProfilePage = () => {
   const { t } = useI18n();
+  const { usage: storageQuota } = useStorageQuota();
   const [form, setForm]             = useState(EMPTY_FORM);
   const [isLoading, setIsLoading]   = useState(true);
   const [isSaving, setIsSaving]     = useState(false);
@@ -181,6 +185,11 @@ const BusinessProfilePage = () => {
       toast.error(t('businessProfile.imageRequired'));
       return;
     }
+    const validation = validateFilesBeforeUpload([file], storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      return;
+    }
     setIsUploadingLogo(true);
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -201,6 +210,7 @@ const BusinessProfilePage = () => {
             formData.append('file', blob, 'logo.jpg');
             const res = await businessProfileApiService.uploadLogo(formData);
             set('logo_url', res.data.data.url);
+            notifyStorageQuotaRefresh();
           } catch {
             toast.error(t('businessProfile.uploadFailed'));
             setLogoPreview('');
