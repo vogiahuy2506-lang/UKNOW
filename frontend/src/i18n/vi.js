@@ -3986,6 +3986,7 @@ export default {
       employees: 'nhân viên',
       campaigns: 'chiến dịch',
       templates: 'template',
+      storageGb: 'GB',
     },
     priceBreakdown: 'Chi tiết giá',
     updating: 'Đang cập nhật…',
@@ -3998,6 +3999,7 @@ export default {
     priceFloorTitle: 'Giá đã được điều chỉnh',
     priceFloorFallback: 'Giá đã được đưa về mức tối thiểu so với gói đại trà gần trùng cấu hình.',
     capacityHint: 'Mỗi tài khoản Zalo gửi tối đa ~{n} tin/tháng.',
+    storageKbHint: 'Kèm theo: ~{docs} tài liệu kiến thức AI (~{chars} ký tự)',
     items: {
       baseFee: 'Phí nền',
       zaloMessages: 'Tin Zalo / tháng',
@@ -4014,6 +4016,7 @@ export default {
       emailCampaigns: 'Chiến dịch Email',
       emailTemplates: 'Email template',
       zaloTemplates: 'Zalo template',
+      storageGb: 'Dung lượng lưu trữ',
     },
   },
 

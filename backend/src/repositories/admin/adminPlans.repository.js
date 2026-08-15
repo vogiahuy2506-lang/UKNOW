@@ -266,7 +266,8 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
-  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes }) {
+  maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes,
+  maxKbDocuments, maxKbExtractedChars }) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -283,7 +284,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
                           max_chatbots, ai_tokens_per_period, ai_credits_per_period, ai_model, grace_period_days, storage_limit_bytes,
                           max_kb_documents, max_kb_extracted_chars,
                           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,3,100000,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW())
        RETURNING *`,
       [code || null, name, price, toNullableBigint(priceYearly), description || null, maxEmployees,
        durationDays ?? null,
@@ -294,7 +295,8 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
        maxZaloAccounts ?? null, maxEmailAccounts ?? null,
        maxEmailTemplates ?? null, maxZaloTemplates ?? null,
        maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
-       gracePeriodDays ?? 0, storageLimitBytes]
+       gracePeriodDays ?? 0, storageLimitBytes,
+       maxKbDocuments ?? 3, maxKbExtractedChars ?? 100000]
     );
     const plan = planResult.rows[0];
 

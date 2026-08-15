@@ -3952,6 +3952,7 @@ export default {
       employees: 'employee',
       campaigns: 'campaign',
       templates: 'template',
+      storageGb: 'GB',
     },
     priceBreakdown: 'Price breakdown',
     updating: 'Updating…',
@@ -3964,6 +3965,7 @@ export default {
     priceFloorTitle: 'Price adjusted',
     priceFloorFallback: 'Price was raised to match the nearest standard plan for this near-clone setup.',
     capacityHint: 'Each Zalo account can send up to ~{n} messages/month.',
+    storageKbHint: 'Includes: ~{docs} AI knowledge docs (~{chars} characters)',
     items: {
       baseFee: 'Base fee',
       zaloMessages: 'Zalo messages / month',
@@ -3980,6 +3982,7 @@ export default {
       emailCampaigns: 'Email campaigns',
       emailTemplates: 'Email templates',
       zaloTemplates: 'Zalo templates',
+      storageGb: 'Storage capacity',
     },
   },
 

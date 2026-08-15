@@ -11,6 +11,15 @@ export const CONFIG_ITEM_KEYS = Object.freeze([
 export const BASE_FEE_KEY = 'base_fee';
 export const CUSTOM_PLAN_VOUCHER_CODE = 'custom';
 
+/** qty của item nhập theo đơn vị thân thiện (GB) nhưng cột plans lưu đơn vị gốc (byte). */
+export const QTY_TO_COLUMN_SCALE = Object.freeze({
+  storage_gb: 1073741824,
+});
+
+export function qtyToColumnValue(itemKey, qty) {
+  return Number(qty || 0) * (QTY_TO_COLUMN_SCALE[itemKey] || 1);
+}
+
 const isConfigKey = (key) => CONFIG_ITEM_KEYS.includes(key);
 
 /**
@@ -196,6 +205,7 @@ export function mapQuantitiesToPlanColumns(configRows, quantities) {
     max_email_campaigns: 'maxEmailCampaigns',
     max_email_templates: 'maxEmailTemplates',
     max_zalo_templates: 'maxZaloTemplates',
+    storage_limit_bytes: 'storageLimitBytes',
   };
 
   const payload = {
@@ -214,7 +224,16 @@ export function mapQuantitiesToPlanColumns(configRows, quantities) {
       continue;
     }
     // Safety net: never write a plan limit below included_qty (admin misconfig).
-    payload[camel] = Math.max(Number(qty), Number(row.includedQty || 0));
+    payload[camel] = Math.max(
+      qtyToColumnValue(row.itemKey, qty),
+      qtyToColumnValue(row.itemKey, row.includedQty || 0)
+    );
+  }
+
+  const storageGb = Number(quantities?.storage_gb) || 0;
+  if (storageGb > 0) {
+    payload.maxKbDocuments      = Math.max(25,      storageGb * 50);
+    payload.maxKbExtractedChars = Math.max(1500000, storageGb * 5000000);
   }
 
   return payload;
@@ -231,7 +250,7 @@ export function planCoversQuantities(plan, quantities, configRows) {
     .filter((r) => r.isActive && r.planColumn && !isConfigKey(r.itemKey));
 
   for (const row of billable) {
-    const needed = Number(quantities?.[row.itemKey] || 0);
+    const needed = qtyToColumnValue(row.itemKey, quantities?.[row.itemKey]);
     if (needed <= 0) continue;
     const planVal = plan[row.planColumn];
     if (planVal === null || planVal === undefined) continue; // unlimited
@@ -255,7 +274,7 @@ export function planUsageRatio(plan, quantities, configRows) {
 
   let minRatio = null;
   for (const row of billable) {
-    const qty = Number(quantities?.[row.itemKey] || 0);
+    const qty = qtyToColumnValue(row.itemKey, quantities?.[row.itemKey]);
     if (qty <= 0) continue;
     const planVal = plan[row.planColumn];
     if (planVal === null || planVal === undefined) continue;

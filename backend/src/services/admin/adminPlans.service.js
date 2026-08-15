@@ -237,6 +237,11 @@ export async function createCustomPlanForUser(userEmail, planData) {
   if (!planData.name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (planData.price < 0)     throw { status: 400, message: 'Giá tiền không hợp lệ' };
 
+  const storageLimitBytes = parseStorageLimitBytes(planData.storageLimitBytes);
+  const storageGb = Math.max(0, Math.round(storageLimitBytes / 1073741824));
+  const maxKbDocuments = parseLimitField(planData.maxKbDocuments) ?? Math.max(25, storageGb * 50);
+  const maxKbExtractedChars = parseLimitField(planData.maxKbExtractedChars) ?? Math.max(1500000, storageGb * 5000000);
+
   const result = await createAndAssignCustomPlan(user.id, {
     code:                  planData.code?.trim() || null,
     name:                  planData.name.trim(),
@@ -266,7 +271,9 @@ export async function createCustomPlanForUser(userEmail, planData) {
     aiCreditsPerPeriod:    parseLimitField(planData.aiCreditsPerPeriod),
     aiModel:               planData.aiModel?.trim() || 'gemini-2.5-flash',
     gracePeriodDays:       parseLimitField(planData.gracePeriodDays) ?? 0,
-    storageLimitBytes:     parseStorageLimitBytes(planData.storageLimitBytes),
+    storageLimitBytes,
+    maxKbDocuments,
+    maxKbExtractedChars,
   });
 
   return { ...result, assignedTo: user };
@@ -286,6 +293,11 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
   if (!planData.price || planData.price <= 0) throw { status: 400, message: 'Giá tiền phải lớn hơn 0 để tạo link thanh toán' };
 
   assertPaymentEnv();
+
+  const storageLimitBytes = parseStorageLimitBytes(planData.storageLimitBytes);
+  const storageGb = Math.max(0, Math.round(storageLimitBytes / 1073741824));
+  const maxKbDocuments = parseLimitField(planData.maxKbDocuments) ?? Math.max(25, storageGb * 50);
+  const maxKbExtractedChars = parseLimitField(planData.maxKbExtractedChars) ?? Math.max(1500000, storageGb * 5000000);
 
   let plan = null;
   let orderCode = null;
@@ -321,8 +333,9 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
       aiCreditsPerPeriod:    parseLimitField(planData.aiCreditsPerPeriod),
       aiModel:               planData.aiModel?.trim() || 'gemini-2.5-flash',
       gracePeriodDays:       parseLimitField(planData.gracePeriodDays) ?? 0,
-      storageLimitBytes:     parseStorageLimitBytes(planData.storageLimitBytes),
-      ...KB_LIMITS_BY_PLAN_CODE.trial,
+      storageLimitBytes,
+      maxKbDocuments,
+      maxKbExtractedChars,
     });
 
     orderCode = Date.now();

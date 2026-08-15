@@ -22,6 +22,7 @@ const sampleRows = [
   { item_key: 'chatbots', plan_column: 'max_chatbots', unit_price: 70000, unit_size: 1, included_qty: 1, min_qty: 1, max_qty: 100, step_qty: 1, is_active: true, sort_order: 80 },
   { item_key: 'employees', plan_column: 'max_employees', unit_price: 35000, unit_size: 1, included_qty: 1, min_qty: 1, max_qty: 100, step_qty: 1, is_active: true, sort_order: 90 },
   { item_key: 'campaigns', plan_column: 'max_campaigns', unit_price: 10000, unit_size: 1, included_qty: 1, min_qty: 1, max_qty: 500, step_qty: 1, is_active: true, sort_order: 100 },
+  { item_key: 'storage_gb', plan_column: 'storage_limit_bytes', unit_price: 30000, unit_size: 1, included_qty: 1, min_qty: 1, max_qty: 20, step_qty: 1, is_active: true, sort_order: 160 },
 ];
 
 const minQty = {
@@ -35,6 +36,7 @@ const minQty = {
   chatbots: 1,
   employees: 1,
   campaigns: 1,
+  storage_gb: 1,
 };
 
 describe('customPlanPricing.util', () => {
@@ -426,5 +428,81 @@ describe('customPlanPricing.util', () => {
     expect(result.suggestedPlan).toBeNull();
     expect(result.priceFloorApplied).toBe(false);
     expect(result.flooredMonthlyTotal).toBe(499000);
+  });
+
+  describe('storage_gb and KB limits (Migration 138)', () => {
+    test('5GB storage maps to 5368709120 bytes and derives AI KB limits', () => {
+      const cols = mapQuantitiesToPlanColumns(sampleRows, {
+        ...minQty,
+        storage_gb: 5,
+      });
+      expect(cols.storageLimitBytes).toBe(5368709120);
+      expect(cols.maxKbDocuments).toBe(250); // 5 * 50
+      expect(cols.maxKbExtractedChars).toBe(25000000); // 5 * 5,000,000
+    });
+
+    test('1GB minimum storage stays at floor limits', () => {
+      const cols = mapQuantitiesToPlanColumns(sampleRows, {
+        ...minQty,
+        storage_gb: 1,
+      });
+      expect(cols.storageLimitBytes).toBe(1073741824);
+      expect(cols.maxKbDocuments).toBe(50); // max(25, 1 * 50) = 50
+      expect(cols.maxKbExtractedChars).toBe(5000000); // max(1.5M, 1 * 5M) = 5M
+    });
+
+    test('5GB storage pricing: (5 - 1) * 30000 = 120000đ extra', () => {
+      const priced = computeCustomPlanPrice(sampleRows, {
+        ...minQty,
+        storage_gb: 5,
+      }, 'monthly');
+      const storageLine = priced.items.find((i) => i.itemKey === 'storage_gb');
+      expect(storageLine.qty).toBe(5);
+      expect(storageLine.unitCount).toBe(4); // 5 - 1 included = 4
+      expect(storageLine.subtotal).toBe(120000);
+      expect(priced.monthlyTotal).toBe(199000 + 120000); // 319000
+    });
+
+    test('20GB custom storage is NOT covered by standard public plans with 1GB/2GB', () => {
+      const publicPlans = [
+        {
+          id: 1,
+          code: 'basic',
+          name: 'Basic',
+          price: 599000,
+          is_active: true,
+          is_custom: false,
+          storage_limit_bytes: 1073741824, // 1GB
+          monthly_zalo_limit: 8000,
+          monthly_email_limit: 20000,
+        },
+        {
+          id: 2,
+          code: 'professional',
+          name: 'Pro',
+          price: 1299000,
+          is_active: true,
+          is_custom: false,
+          storage_limit_bytes: 2147483648, // 2GB
+          monthly_zalo_limit: 20000,
+          monthly_email_limit: 50000,
+        },
+      ];
+
+      const qty = { ...minQty, storage_gb: 20 };
+      expect(planCoversQuantities(publicPlans[0], qty, sampleRows)).toBe(false);
+      expect(planCoversQuantities(publicPlans[1], qty, sampleRows)).toBe(false);
+
+      const result = applyPublicPlanGuardrail({
+        publicPlans,
+        quantities: qty,
+        configRows: sampleRows,
+        monthlyTotal: 769000, // 199k + 19 * 30k
+        yearlyTotal: 7382400,
+        billingPeriod: 'monthly',
+      });
+      expect(result.suggestedPlan).toBeNull();
+      expect(result.priceFloorApplied).toBe(false);
+    });
   });
 });

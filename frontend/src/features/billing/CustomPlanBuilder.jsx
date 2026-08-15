@@ -24,6 +24,7 @@ const ITEM_LABEL_KEYS = {
   email_campaigns: 'customPlan.items.emailCampaigns',
   email_templates: 'customPlan.items.emailTemplates',
   zalo_templates: 'customPlan.items.zaloTemplates',
+  storage_gb: 'customPlan.items.storageGb',
 };
 
 const UNIT_LABEL_KEYS = {
@@ -41,6 +42,7 @@ const UNIT_LABEL_KEYS = {
   email_campaigns: 'customPlan.units.campaigns',
   email_templates: 'customPlan.units.templates',
   zalo_templates: 'customPlan.units.templates',
+  storage_gb: 'customPlan.units.storageGb',
 };
 
 /** "1.000 tin" / "landing page" — always spells out the unit noun. */
@@ -316,6 +318,14 @@ export default function CustomPlanBuilder({
                           <p className="text-[11px] text-emerald-700 mt-0.5">
                             {t('customPlan.includedInBase', {
                               n: formatQtyWithUnit(item.itemKey, item.includedQty, t),
+                            })}
+                          </p>
+                        )}
+                        {item.itemKey === 'storage_gb' && (
+                          <p className="text-[11px] text-indigo-600 font-medium mt-0.5">
+                            {t('customPlan.storageKbHint', {
+                              docs: Math.max(25, (Number(quantities[item.itemKey]) || item.minQty || 1) * 50).toLocaleString('vi-VN'),
+                              chars: `${(Math.max(1500000, (Number(quantities[item.itemKey]) || item.minQty || 1) * 5000000) / 1000000).toLocaleString('vi-VN')}M`,
                             })}
                           </p>
                         )}

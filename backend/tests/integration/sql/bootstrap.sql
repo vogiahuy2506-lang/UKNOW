@@ -278,7 +278,8 @@ VALUES
   ('zalo_group_campaigns', 'max_zalo_group_campaigns', 10000, 1, 0, 0, 200, 1, TRUE, 120),
   ('email_campaigns', 'max_email_campaigns', 10000, 1, 0, 0, 200, 1, TRUE, 130),
   ('email_templates', 'max_email_templates', 8000, 1, 0, 0, 500, 1, TRUE, 140),
-  ('zalo_templates', 'max_zalo_templates', 8000, 1, 0, 0, 500, 1, TRUE, 150);
+  ('zalo_templates', 'max_zalo_templates', 8000, 1, 0, 0, 500, 1, TRUE, 150),
+  ('storage_gb', 'storage_limit_bytes', 30000, 1, 1, 1, 20, 1, TRUE, 160);
 
 -- Khớp production (PLAN_SCHEMA_BUOC2): id/plan_id int4, amount numeric,
 -- status/payment_method varchar(50), FK ON DELETE NO ACTION (giữ lịch sử tiền).

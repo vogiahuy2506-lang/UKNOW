@@ -104,6 +104,7 @@ export async function updateCustomPlanLimits(planId, {
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
   maxChatbots, messagesPerPeriod = null, dailyEmailLimit = null, dailyZaloLimit = null,
   isFupEnabled = false, durationDays = 30, gracePeriodDays = 0,
+  storageLimitBytes, maxKbDocuments, maxKbExtractedChars,
 }, queryable = db) {
   const { rows } = await queryable.query(
     `UPDATE plans SET
@@ -131,6 +132,9 @@ export async function updateCustomPlanLimits(planId, {
        is_fup_enabled = $23,
        duration_days = $24,
        grace_period_days = $25,
+       storage_limit_bytes = COALESCE($26, storage_limit_bytes),
+       max_kb_documents = COALESCE($27, max_kb_documents),
+       max_kb_extracted_chars = COALESCE($28, max_kb_extracted_chars),
        updated_at = NOW()
      WHERE id = $1 AND is_custom = TRUE
      RETURNING *`,
@@ -144,6 +148,7 @@ export async function updateCustomPlanLimits(planId, {
       maxEmailTemplates ?? null, maxZaloTemplates ?? null,
       maxChatbots ?? null, messagesPerPeriod, dailyEmailLimit, dailyZaloLimit,
       Boolean(isFupEnabled), durationDays ?? 30, gracePeriodDays ?? 0,
+      storageLimitBytes ?? null, maxKbDocuments ?? null, maxKbExtractedChars ?? null,
     ]
   );
   return rows[0] || null;
