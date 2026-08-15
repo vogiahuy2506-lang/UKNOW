@@ -101,19 +101,11 @@ export function createApp() {
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com'],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-          imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
-          connectSrc: ["'self'", 'https://generativelanguage.googleapis.com', 'https://accounts.google.com'],
-          frameSrc: ["'self'", 'https://www.youtube.com'],
-          objectSrc: ["'none'"],
-          upgradeInsecureRequests: [],
-        },
-      },
+      // CSP tắt hoàn toàn: landing pages là HTML user-generated, paste từ AI/web builder
+      // thường chứa CDN (tailwind, font-awesome, zingmp3 iframe, cloudflare beacon, tracking
+      // pixels...) mà không thể liệt kê trước. Set `false` để helmet KHÔNG gắn header
+      // Content-Security-Policy lên bất kỳ response nào (SPA, /api/*, landing đều tự do).
+      contentSecurityPolicy: false,
       hsts: {
         maxAge: 31536000,
         includeSubDomains: true,
