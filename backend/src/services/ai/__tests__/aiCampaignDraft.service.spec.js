@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it, jest } from '@jest/globals';
 import aiCampaignDraftService from '../aiCampaignDraft.service.js';
 import campaignNodeRegistryService from '../../campaign/campaignNodeRegistry.service.js';
 
@@ -53,3 +53,101 @@ describe('aiCampaignDraftService.canonicalizeScript', () => {
     expect(validation.valid).toBe(true);
   });
 });
+
+describe('aiCampaignDraftService.autoCreateZaloTemplates', () => {
+  it('creates Zalo templates for send_zalo_group and send_zalo_personal multi-step nodes', async () => {
+    let templateCounter = 100;
+    const created = [];
+
+    const mockRepo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    const spy = jest.spyOn(mockRepo, 'createZaloTemplate').mockImplementation(async (payload) => {
+      templateCounter += 1;
+      created.push({ id: templateCounter, ...payload });
+      return { id: templateCounter };
+    });
+
+    const nodes = [
+      {
+        nodeType: 'action',
+        nodeSubtype: 'send_zalo_group',
+        nodeName: 'Zalo Nhóm Sale',
+        config: {
+          zaloGroupTemplateSteps: [
+            { message: 'Tin 1 chào nhóm', delayValue: 0, delayUnit: 'days' },
+            { message: 'Tin 2 ưu đãi', delayValue: 1, delayUnit: 'days' },
+          ],
+        },
+      },
+      {
+        nodeType: 'action',
+        nodeSubtype: 'send_zalo_personal',
+        nodeName: 'Zalo Cá Nhân',
+        config: {
+          zaloPersonalTemplateSteps: [
+            { message: 'Tin cá nhân 1', delayValue: 0, delayUnit: 'days' },
+          ],
+        },
+      },
+    ];
+
+    await aiCampaignDraftService.autoCreateZaloTemplates(nodes, 42);
+
+    expect(nodes[0].config.zaloGroupTemplateSteps[0].templateId).toBe(101);
+    expect(nodes[0].config.zaloGroupTemplateSteps[1].templateId).toBe(102);
+    expect(nodes[1].config.zaloPersonalTemplateSteps[0].templateId).toBe(103);
+    expect(created.length).toBe(3);
+    expect(created[0].userId).toBe(42);
+    expect(created[0].bodyText).toBe('Tin 1 chào nhóm');
+
+    // Idempotent: calling again should not create new templates
+    await aiCampaignDraftService.autoCreateZaloTemplates(nodes, 42);
+    expect(created.length).toBe(3);
+
+    spy.mockRestore();
+  });
+
+  it('handles single inline message on node without multi-step array', async () => {
+    const mockRepo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    const spy = jest.spyOn(mockRepo, 'createZaloTemplate').mockResolvedValue({ id: 999 });
+
+    const nodes = [
+      {
+        nodeType: 'action',
+        nodeSubtype: 'send_zalo_group',
+        nodeName: 'Zalo Nhóm Đơn',
+        config: {
+          zaloGroupMessage: 'Tin nhắn đơn lẻ inline',
+        },
+      },
+    ];
+
+    await aiCampaignDraftService.autoCreateZaloTemplates(nodes, 10);
+
+    expect(nodes[0].config.zaloGroupTemplateSteps).toBeDefined();
+    expect(nodes[0].config.zaloGroupTemplateSteps[0].templateId).toBe(999);
+    expect(nodes[0].config.zaloGroupTemplateSteps[0].message).toBe('Tin nhắn đơn lẻ inline');
+
+    spy.mockRestore();
+  });
+
+  it('throws error when createZaloTemplate fails to return an id', async () => {
+    const mockRepo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    const spy = jest.spyOn(mockRepo, 'createZaloTemplate').mockResolvedValue(null);
+
+    const nodes = [
+      {
+        nodeType: 'action',
+        nodeSubtype: 'send_zalo_group',
+        config: {
+          zaloGroupTemplateSteps: [{ message: 'Tin fail' }],
+        },
+      },
+    ];
+
+    await expect(aiCampaignDraftService.autoCreateZaloTemplates(nodes, 10))
+      .rejects.toThrow('Không thể tạo Zalo template');
+
+    spy.mockRestore();
+  });
+});
+

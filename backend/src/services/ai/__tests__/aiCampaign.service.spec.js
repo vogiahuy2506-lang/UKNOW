@@ -540,4 +540,119 @@ describe('aiCampaign.service', () => {
     expect(reserve).toHaveBeenCalledWith(9, expect.any(Object));
     expect(record).toHaveBeenCalledWith(9, expect.any(Object), expect.objectContaining({ feature: 'smart_chat' }));
   });
+
+  it('PR-B: trims content_plan days when model returns more days than user schedule', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    type: 'content_plan',
+                    content: 'Kế hoạch 5 ngày cho chiến dịch',
+                    data: {
+                      totalDays: 5,
+                      days: [
+                        { day: 1, slots: [{ summary: 'Tin 1' }] },
+                        { day: 2, slots: [{ summary: 'Tin 2' }] },
+                        { day: 3, slots: [{ summary: 'Tin 3' }] },
+                        { day: 4, slots: [{ summary: 'Tin 4' }] },
+                        { day: 5, slots: [{ summary: 'Tin 5' }] },
+                      ],
+                    },
+                    missing_fields: [],
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await aiCampaignService.processSmartChat({
+      userId: 1,
+      history: [
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":1}\nTK 1' },
+        { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+        { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Sale"}\nSale' },
+        { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":3,"slotsPerDay":1}\n3 ngày' },
+        { role: 'assistant', type: 'suggest_content_plan', content: 'Lên kế hoạch' },
+        { role: 'user', content: 'Lên kế hoạch cho tôi' },
+      ],
+      locale: 'vi',
+    });
+
+    expect(result.type).toBe('content_plan');
+    expect(result.data.days.length).toBe(3);
+    expect(result.data.totalDays).toBe(3);
+    expect(result.content).toContain('tự động điều chỉnh còn đúng 3 ngày');
+  });
+
+  it('PR-B: trims multi-step in confirm_create to match schedule.days * slotsPerDay', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    type: 'confirm_create',
+                    content: 'Tạo chiến dịch Zalo',
+                    data: {
+                      campaignName: 'Zalo 3 tin',
+                      nodes: [
+                        {
+                          nodeType: 'action',
+                          nodeSubtype: 'send_zalo_group',
+                          config: {
+                            zaloGroupTemplateSteps: [
+                              { message: 'Tin 1', delayValue: 0 },
+                              { message: 'Tin 2', delayValue: 1 },
+                              { message: 'Tin 3', delayValue: 2 },
+                              { message: 'Tin 4', delayValue: 3 },
+                              { message: 'Tin 5', delayValue: 4 },
+                            ],
+                          },
+                        },
+                      ],
+                      connections: [],
+                    },
+                    missing_fields: [],
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await aiCampaignService.processSmartChat({
+      userId: 1,
+      history: [
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":1}\nTK 1' },
+        { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+        { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Sale"}\nSale' },
+        { role: 'user', content: '[wizard]{"gate":"schedule","value":"drip","mode":"drip","days":3,"slotsPerDay":1}\n3 ngày' },
+        { role: 'assistant', type: 'content_plan', data: { totalDays: 3, days: [{ day: 1 }, { day: 2 }, { day: 3 }] } },
+        { role: 'user', content: '[wizard]{"gate":"planApproved","value":"approve"}\nĐồng ý' },
+        { role: 'user', content: 'Tạo chiến dịch' },
+      ],
+      locale: 'vi',
+    });
+
+    expect(result.type).toBe('confirm_create');
+    const groupNode = result.data.nodes[0];
+    expect(groupNode.config.zaloGroupTemplateSteps.length).toBe(3);
+  });
 });

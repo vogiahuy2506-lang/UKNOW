@@ -274,23 +274,21 @@ D. ZALO NHÓM:
   ]
 }
 
-=== ZALO NHÓM (lấy nhóm từ tài khoản, 2 tin) ===
+=== ZALO NHÓM (lấy nhóm từ tài khoản, 2 tin trong 1 node) ===
 {
   "campaignName": "...", "description": "...", "campaignType": "zalo_group", "isAiDraft": true,
   "nodes": [
     { "tempId": "n1", "nodeType": "trigger", "nodeSubtype": "manual", "nodeName": "Bắt đầu", "nodeDescription": "", "positionX": 100, "positionY": 200, "config": {} },
     { "tempId": "n2", "nodeType": "data", "nodeSubtype": "select_zalo_account", "nodeName": "Chọn tài khoản Zalo", "nodeDescription": "Tài khoản gửi tin nhóm", "positionX": 350, "positionY": 200, "config": { "zaloAccountId": null } },
     { "tempId": "n3", "nodeType": "data", "nodeSubtype": "get_all_groups", "nodeName": "Lấy danh sách nhóm", "nodeDescription": "Lấy tất cả nhóm từ tài khoản", "positionX": 600, "positionY": 200, "config": { "zaloGroupAccountNodeId": "n2" } },
-    { "tempId": "n4", "nodeType": "action", "nodeSubtype": "send_zalo_group", "nodeName": "Gửi nhóm tin 1", "nodeDescription": "Gửi ngay đến tất cả nhóm", "positionX": 850, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "📢 Thông báo quan trọng từ chúng tôi...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 0, "delayUnit": "days" } },
-    { "tempId": "n5", "nodeType": "action", "nodeSubtype": "send_zalo_group", "nodeName": "Gửi nhóm tin 2", "nodeDescription": "Gửi sau 1 ngày", "positionX": 1100, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "🎉 Cập nhật mới nhất và ưu đãi dành cho nhóm...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 1, "delayUnit": "days" } },
-    { "tempId": "n6", "nodeType": "end", "nodeSubtype": "end", "nodeName": "Kết thúc", "nodeDescription": "", "positionX": 1350, "positionY": 200, "config": {} }
+    { "tempId": "n4", "nodeType": "action", "nodeSubtype": "send_zalo_group", "nodeName": "Gửi nhóm tin Zalo", "nodeDescription": "Gửi chuỗi 2 tin nhắn", "positionX": 850, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "saveMessageLog": true, "zaloGroupTemplateSteps": [ { "message": "📢 Thông báo quan trọng từ chúng tôi...", "delayValue": 0, "delayUnit": "days", "templateMappings": [] }, { "message": "🎉 Cập nhật mới nhất và ưu đãi dành cho nhóm...", "delayValue": 1, "delayUnit": "days", "templateMappings": [] } ] } },
+    { "tempId": "n5", "nodeType": "end", "nodeSubtype": "end", "nodeName": "Kết thúc", "nodeDescription": "", "positionX": 1100, "positionY": 200, "config": {} }
   ],
   "connections": [
     { "sourceNodeId": "n1", "targetNodeId": "n2" },
     { "sourceNodeId": "n2", "targetNodeId": "n3" },
     { "sourceNodeId": "n3", "targetNodeId": "n4" },
-    { "sourceNodeId": "n4", "targetNodeId": "n5" },
-    { "sourceNodeId": "n5", "targetNodeId": "n6" }
+    { "sourceNodeId": "n4", "targetNodeId": "n5" }
   ]
 }
 
@@ -1033,10 +1031,10 @@ LUỒNG ZALO CÁ NHÂN (từ DB):
   send_zalo_personal config: { zaloAccountId:<ID|null>, zaloRecipientSource:"node", zaloRecipientNodeId:"<tempId>", zaloRecipientField:"phone", zaloRecipientType:"phone", message:"...", zaloPersonalTemplateSteps:[], delayValue:0, delayUnit:"days", saveMessageLog:true }
 
 LUỒNG ZALO NHÓM:
-  trigger → select_zalo_account → get_all_groups → send_zalo_group(delay:0) → send_zalo_group(delay:Nd) → end
+  trigger → select_zalo_account → get_all_groups → send_zalo_group(chuỗi nhiều tin trong 1 node) → end
   select_zalo_account config: { zaloAccountId:<ID|null> }
   get_all_groups config: { zaloGroupAccountNodeId:"<tempId_select_zalo_account>" }
-  send_zalo_group config: { zaloAccountId:<ID|null>, zaloGroupSource:"node", zaloGroupNodeId:"<tempId_get_all_groups>", zaloGroupField:"groupId", zaloGroupMessage:"...", zaloGroupTemplateSteps:[], delayValue:0, delayUnit:"days", saveMessageLog:true }
+  send_zalo_group config: { zaloAccountId:<ID|null>, zaloGroupSource:"node", zaloGroupNodeId:"<tempId_get_all_groups>", zaloGroupField:"groupId", zaloGroupTemplateSteps:[{ message:"...", delayValue:0, delayUnit:"days" }], saveMessageLog:true }
 
 LUẬT DELAY: KHÔNG tạo node wait/delay riêng. Delay đặt trong delayValue+delayUnit của action node.
 Điền zaloAccountId từ danh sách tài nguyên. Tự soạn nội dung tin nhắn thực tế nếu không có template.
@@ -1060,11 +1058,10 @@ Zalo cá nhân campaign:
   "nodes": [
     { "tempId": "n1", "nodeType": "trigger",  "nodeSubtype": "manual",                  "nodeName": "Bắt đầu",          "nodeDescription": "", "positionX": 100, "positionY": 200, "config": {} },
     { "tempId": "n2", "nodeType": "data",     "nodeSubtype": "interested_customers",    "nodeName": "Danh sách khách",  "nodeDescription": "Khách từ database", "positionX": 350, "positionY": 200, "config": { "interestedCustomerType": "both", "interestedLimit": 1000 } },
-    { "tempId": "n3", "nodeType": "action",   "nodeSubtype": "send_zalo_personal",      "nodeName": "Zalo tin 1",       "nodeDescription": "Gửi ngay", "positionX": 600, "positionY": 200, "config": { "zaloAccountId": null, "zaloRecipientSource": "node", "zaloRecipientNodeId": "n2", "zaloRecipientField": "phone", "zaloRecipientType": "phone", "message": "Nội dung tin nhắn 1...", "zaloPersonalTemplateSteps": [], "saveMessageLog": true, "delayValue": 0, "delayUnit": "days" } },
-    { "tempId": "n4", "nodeType": "action",   "nodeSubtype": "send_zalo_personal",      "nodeName": "Zalo tin 2",       "nodeDescription": "Gửi sau 2 ngày", "positionX": 850, "positionY": 200, "config": { "zaloAccountId": null, "zaloRecipientSource": "node", "zaloRecipientNodeId": "n2", "zaloRecipientField": "phone", "zaloRecipientType": "phone", "message": "Nội dung tin nhắn 2...", "zaloPersonalTemplateSteps": [], "saveMessageLog": true, "delayValue": 2, "delayUnit": "days" } },
-    { "tempId": "n5", "nodeType": "end",      "nodeSubtype": "end",                     "nodeName": "Kết thúc",         "nodeDescription": "", "positionX": 1100, "positionY": 200, "config": {} }
+    { "tempId": "n3", "nodeType": "action",   "nodeSubtype": "send_zalo_personal",      "nodeName": "Gửi Zalo cá nhân", "nodeDescription": "Gửi chuỗi 2 tin",  "positionX": 600, "positionY": 200, "config": { "zaloAccountId": null, "zaloRecipientSource": "node", "zaloRecipientNodeId": "n2", "zaloRecipientField": "phone", "zaloRecipientType": "phone", "saveMessageLog": true, "zaloPersonalTemplateSteps": [ { "message": "Xin chào {{full_name}}! Nội dung tin 1...", "delayValue": 0, "delayUnit": "days", "enableLinkTracking": true, "templateMappings": [] }, { "message": "Nội dung tin 2 sau 2 ngày...", "delayValue": 2, "delayUnit": "days", "enableLinkTracking": true, "templateMappings": [] } ] } },
+    { "tempId": "n4", "nodeType": "end",      "nodeSubtype": "end",                     "nodeName": "Kết thúc",         "nodeDescription": "", "positionX": 900, "positionY": 200, "config": {} }
   ],
-  "connections": [{"sourceNodeId":"n1","targetNodeId":"n2"},{"sourceNodeId":"n2","targetNodeId":"n3"},{"sourceNodeId":"n3","targetNodeId":"n4"},{"sourceNodeId":"n4","targetNodeId":"n5"}]
+  "connections": [{"sourceNodeId":"n1","targetNodeId":"n2"},{"sourceNodeId":"n2","targetNodeId":"n3"},{"sourceNodeId":"n3","targetNodeId":"n4"}]
 }
 
 Zalo nhóm campaign:
@@ -1073,11 +1070,10 @@ Zalo nhóm campaign:
     { "tempId": "n1", "nodeType": "trigger",  "nodeSubtype": "manual",                  "nodeName": "Bắt đầu",          "nodeDescription": "", "positionX": 100, "positionY": 200, "config": {} },
     { "tempId": "n2", "nodeType": "data",     "nodeSubtype": "select_zalo_account",     "nodeName": "Chọn tài khoản Zalo", "nodeDescription": "", "positionX": 350, "positionY": 200, "config": { "zaloAccountId": null } },
     { "tempId": "n3", "nodeType": "data",     "nodeSubtype": "get_all_groups",          "nodeName": "Lấy danh sách nhóm", "nodeDescription": "", "positionX": 600, "positionY": 200, "config": { "zaloGroupAccountNodeId": "n2" } },
-    { "tempId": "n4", "nodeType": "action",   "nodeSubtype": "send_zalo_group",         "nodeName": "Gửi nhóm tin 1",   "nodeDescription": "Gửi ngay", "positionX": 850, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "Nội dung tin nhắn nhóm 1...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 0, "delayUnit": "days" } },
-    { "tempId": "n5", "nodeType": "action",   "nodeSubtype": "send_zalo_group",         "nodeName": "Gửi nhóm tin 2",   "nodeDescription": "Gửi sau 1 ngày", "positionX": 1100, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "Nội dung tin nhắn nhóm 2...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 1, "delayUnit": "days" } },
-    { "tempId": "n6", "nodeType": "end",      "nodeSubtype": "end",                     "nodeName": "Kết thúc",         "nodeDescription": "", "positionX": 1350, "positionY": 200, "config": {} }
+    { "tempId": "n4", "nodeType": "action",   "nodeSubtype": "send_zalo_group",         "nodeName": "Gửi nhóm tin Zalo","nodeDescription": "Gửi chuỗi 2 tin",  "positionX": 850, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "saveMessageLog": true, "zaloGroupTemplateSteps": [ { "message": "Nội dung tin nhắn nhóm 1...", "delayValue": 0, "delayUnit": "days", "templateMappings": [] }, { "message": "Nội dung tin nhắn nhóm 2...", "delayValue": 1, "delayUnit": "days", "templateMappings": [] } ] } },
+    { "tempId": "n5", "nodeType": "end",      "nodeSubtype": "end",                     "nodeName": "Kết thúc",         "nodeDescription": "", "positionX": 1100, "positionY": 200, "config": {} }
   ],
-  "connections": [{"sourceNodeId":"n1","targetNodeId":"n2"},{"sourceNodeId":"n2","targetNodeId":"n3"},{"sourceNodeId":"n3","targetNodeId":"n4"},{"sourceNodeId":"n4","targetNodeId":"n5"},{"sourceNodeId":"n5","targetNodeId":"n6"}]
+  "connections": [{"sourceNodeId":"n1","targetNodeId":"n2"},{"sourceNodeId":"n2","targetNodeId":"n3"},{"sourceNodeId":"n3","targetNodeId":"n4"},{"sourceNodeId":"n4","targetNodeId":"n5"}]
 }
 
 Mixed campaign (Email + Zalo cùng lúc — 2 nhánh song song từ 1 data node):
@@ -1403,9 +1399,27 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       };
     }
 
-    // AI vừa sinh content_plan mới → plan lifecycle mới, replace nguyên section plan
+    // PR-B: Enforce user's selected schedule on content_plan and confirm_create
     let planChange = null;
     if (finalResponse?.type === 'content_plan' && finalResponse.data) {
+      const schedule = gateState?.schedule;
+      if (schedule?.mode === 'drip' && schedule?.days) {
+        const expectedDays = Number(schedule.days);
+        if (Number.isFinite(expectedDays) && expectedDays > 0 && Array.isArray(finalResponse.data.days)) {
+          if (finalResponse.data.days.length > expectedDays) {
+            finalResponse.data.days = finalResponse.data.days.slice(0, expectedDays);
+            finalResponse.data.totalDays = expectedDays;
+            if (typeof finalResponse.content === 'string') {
+              const notice = locale === 'en'
+                ? ` (Plan automatically adjusted to ${expectedDays} day(s) according to your schedule preference.)`
+                : ` (Kế hoạch đã được tự động điều chỉnh còn đúng ${expectedDays} ngày theo lựa chọn của bạn.)`;
+              if (!finalResponse.content.includes('tự động điều chỉnh') && !finalResponse.content.includes('automatically adjusted')) {
+                finalResponse.content = finalResponse.content.trim() + notice;
+              }
+            }
+          }
+        }
+      }
       gatesForPersist.hasContentPlan = true;
       gatesForPersist.planApproved = false;
       planChange = {
@@ -1414,6 +1428,42 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
         planSourcePrompt: findOriginalCampaignPrompt(history),
         planRequiresApproval: finalResponse.data?.requiresApproval !== false,
       };
+    }
+
+    if ((finalResponse?.type === 'confirm_create' || finalResponse?.type === 'create_and_run') && finalResponse.data) {
+      const schedule = gateState?.schedule;
+      let maxSteps = null;
+      if (schedule?.mode === 'drip' && schedule?.days) {
+        const days = Number(schedule.days);
+        const slotsPerDay = Number(schedule.slotsPerDay) || 1;
+        if (Number.isFinite(days) && days > 0) {
+          maxSteps = days * slotsPerDay;
+        }
+      } else if (schedule?.mode === 'once') {
+        maxSteps = 1;
+      }
+
+      if (maxSteps) {
+        const nodes = Array.isArray(finalResponse.data?.nodes)
+          ? finalResponse.data.nodes
+          : (Array.isArray(finalResponse.data?.script?.nodes) ? finalResponse.data.script.nodes : null);
+
+        if (Array.isArray(nodes)) {
+          for (const node of nodes) {
+            const cfg = node.config || node.nodeConfig || {};
+            if (Array.isArray(cfg.emailSteps) && cfg.emailSteps.length > maxSteps) {
+              cfg.emailSteps = cfg.emailSteps.slice(0, maxSteps);
+            }
+            if (Array.isArray(cfg.zaloPersonalTemplateSteps) && cfg.zaloPersonalTemplateSteps.length > maxSteps) {
+              cfg.zaloPersonalTemplateSteps = cfg.zaloPersonalTemplateSteps.slice(0, maxSteps);
+            }
+            if (Array.isArray(cfg.zaloGroupTemplateSteps) && cfg.zaloGroupTemplateSteps.length > maxSteps) {
+              cfg.zaloGroupTemplateSteps = cfg.zaloGroupTemplateSteps.slice(0, maxSteps);
+            }
+            node.config = cfg;
+          }
+        }
+      }
     }
 
     const _wizard = buildWizard(guarded.gateAsked, planChange);

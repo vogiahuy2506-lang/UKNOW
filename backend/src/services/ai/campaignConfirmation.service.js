@@ -166,8 +166,27 @@ class CampaignConfirmationService {
       for (const [stepIndex, configuredStep] of effectiveSteps.entries()) {
         let content;
         if (configuredStep) {
-          content = await hydrateTemplate(channel === 'email' ? 'email' : 'zalo', configuredStep.templateId, currentNodeId, stepIndex);
-          if (!content) continue;
+          const hasTemplateId = configuredStep.templateId !== undefined && configuredStep.templateId !== null && String(configuredStep.templateId).trim() !== '';
+          if (hasTemplateId) {
+            content = await hydrateTemplate(channel === 'email' ? 'email' : 'zalo', configuredStep.templateId, currentNodeId, stepIndex);
+            if (!content) continue;
+          } else {
+            const subject = channel === 'email' ? String(configuredStep.emailSubject || config.emailSubject || '') : '';
+            const body = channel === 'email'
+              ? plainText(configuredStep.emailBody || configuredStep.bodyText || '')
+              : String(configuredStep.message || '').trim();
+            if (!body) {
+              addIssue({ code: 'missing_message_content', nodeId: currentNodeId, stepIndex });
+              continue;
+            }
+            content = {
+              templateId: null,
+              templateName: null,
+              subject,
+              bodyText: body,
+              attachments: attachmentMetadata(configuredStep.attachments || (channel === 'zalo_group' ? config.zaloGroupAttachments : config.attachments)),
+            };
+          }
         } else if (channel === 'email' && asNumber(config.emailTemplateId)) {
           content = await hydrateTemplate('email', config.emailTemplateId, currentNodeId, 0);
           if (!content) continue;

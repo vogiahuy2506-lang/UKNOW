@@ -406,7 +406,6 @@ class CampaignNodeRegistryService {
           saveMessageLog: true,
           zaloPersonalTemplateSteps: [
             {
-              templateId: null,
               message: 'Xin chào {{full_name}}! Cảm ơn bạn đã quan tâm. Chúng tôi sẽ liên hệ sớm nhất!',
               delayValue: 0,
               delayUnit: 'days',
@@ -472,7 +471,6 @@ class CampaignNodeRegistryService {
           saveMessageLog: true,
           zaloGroupTemplateSteps: [
             {
-              templateId: null,
               message: '📢 Thông báo quan trọng từ chúng tôi...',
               delayValue: 0,
               delayUnit: 'days',
@@ -658,7 +656,6 @@ class CampaignNodeRegistryService {
     lines.push('    "zaloRecipientField": "phone"');
     lines.push('    "zaloPersonalTemplateSteps": [          ← ★ MẢNG - NHIỀU TIN TRONG 1 NODE');
     lines.push('      {');
-    lines.push('        "templateId": <ID|null>,');
     lines.push('        "message": "Nội dung tin nhắn 1...",');
     lines.push('        "delayValue": 0,                     ← ★ Gửi ngay');
     lines.push('        "delayUnit": "days",');

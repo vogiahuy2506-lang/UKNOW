@@ -20,6 +20,24 @@ class AiCampaignDraftRepository {
     return rows[0] || null;
   }
 
+  async createZaloTemplate({ userId, name, code, subject, bodyText }) {
+    const { rows } = await db.query(
+      `INSERT INTO zalo_templates (id_user, template_name, template_code, subject, body_text, attachments, variables, category)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [
+        userId,
+        name,
+        code,
+        subject || name,
+        bodyText || '',
+        JSON.stringify([]),
+        JSON.stringify([]),
+        'marketing',
+      ]
+    );
+    return rows[0] || null;
+  }
+
   async findDefaultEmailSettingId(userId) {
     const { rows } = await db.query(
       `SELECT id FROM email_settings
