@@ -1292,7 +1292,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         nodes: [
           { tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', nodeDescription: '', positionX: 100, positionY: 200, config: {} },
           { tempId: 'n2', nodeType: 'action', nodeSubtype: 'select_zalo_account', nodeName: 'Chọn tài khoản Zalo', nodeDescription: '', positionX: 300, positionY: 200, config: { zaloAccountId: null } },
-          { tempId: 'n3', nodeType: 'data', nodeSubtype: 'get_all_groups', nodeName: 'Danh sách nhóm', nodeDescription: 'Lấy tất cả nhóm Zalo', positionX: 500, positionY: 200, config: { zaloAccountNodeId: 'n2' } },
+          { tempId: 'n3', nodeType: 'data', nodeSubtype: 'get_all_groups', nodeName: 'Danh sách nhóm', nodeDescription: 'Lấy tất cả nhóm Zalo', positionX: 500, positionY: 200, config: { zaloGroupAccountNodeId: 'n2' } },
           {
             tempId: 'n4',
             nodeType: 'action',

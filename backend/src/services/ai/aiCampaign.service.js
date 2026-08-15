@@ -142,10 +142,10 @@ CHỈ được dùng các node sau. Ngoài danh sách này đều KHÔNG hợp l
   config: { "zaloAccountId": <ID_TK_ZALO> }
 
 • nodeType: "data", nodeSubtype: "get_all_friends"        ← lấy danh sách bạn bè Zalo
-  config: { "zaloAccountNodeId": "<tempId_của_select_zalo_account>" }
+  config: { "zaloFriendAccountNodeId": "<tempId_của_select_zalo_account>" }
 
 • nodeType: "data", nodeSubtype: "get_all_groups"         ← lấy danh sách nhóm Zalo
-  config: { "zaloAccountNodeId": "<tempId_của_select_zalo_account>" }
+  config: { "zaloGroupAccountNodeId": "<tempId_của_select_zalo_account>" }
 
 • nodeType: "data", nodeSubtype: "save_customer"          ← lưu khách hàng vào DB
   config: { "saveCustomerNodeId": "<tempId_node_nguồn>", "saveCustomerFieldMap": { "email": {"mode":"node","field":"email","nodeId":"<tempId>"}, "phone": {"mode":"node","field":"phone","nodeId":"<tempId>"} } }
@@ -280,7 +280,7 @@ D. ZALO NHÓM:
   "nodes": [
     { "tempId": "n1", "nodeType": "trigger", "nodeSubtype": "manual", "nodeName": "Bắt đầu", "nodeDescription": "", "positionX": 100, "positionY": 200, "config": {} },
     { "tempId": "n2", "nodeType": "data", "nodeSubtype": "select_zalo_account", "nodeName": "Chọn tài khoản Zalo", "nodeDescription": "Tài khoản gửi tin nhóm", "positionX": 350, "positionY": 200, "config": { "zaloAccountId": null } },
-    { "tempId": "n3", "nodeType": "data", "nodeSubtype": "get_all_groups", "nodeName": "Lấy danh sách nhóm", "nodeDescription": "Lấy tất cả nhóm từ tài khoản", "positionX": 600, "positionY": 200, "config": { "zaloAccountNodeId": "n2" } },
+    { "tempId": "n3", "nodeType": "data", "nodeSubtype": "get_all_groups", "nodeName": "Lấy danh sách nhóm", "nodeDescription": "Lấy tất cả nhóm từ tài khoản", "positionX": 600, "positionY": 200, "config": { "zaloGroupAccountNodeId": "n2" } },
     { "tempId": "n4", "nodeType": "action", "nodeSubtype": "send_zalo_group", "nodeName": "Gửi nhóm tin 1", "nodeDescription": "Gửi ngay đến tất cả nhóm", "positionX": 850, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "📢 Thông báo quan trọng từ chúng tôi...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 0, "delayUnit": "days" } },
     { "tempId": "n5", "nodeType": "action", "nodeSubtype": "send_zalo_group", "nodeName": "Gửi nhóm tin 2", "nodeDescription": "Gửi sau 1 ngày", "positionX": 1100, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "🎉 Cập nhật mới nhất và ưu đãi dành cho nhóm...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 1, "delayUnit": "days" } },
     { "tempId": "n6", "nodeType": "end", "nodeSubtype": "end", "nodeName": "Kết thúc", "nodeDescription": "", "positionX": 1350, "positionY": 200, "config": {} }
@@ -1035,7 +1035,7 @@ LUỒNG ZALO CÁ NHÂN (từ DB):
 LUỒNG ZALO NHÓM:
   trigger → select_zalo_account → get_all_groups → send_zalo_group(delay:0) → send_zalo_group(delay:Nd) → end
   select_zalo_account config: { zaloAccountId:<ID|null> }
-  get_all_groups config: { zaloAccountNodeId:"<tempId_select_zalo_account>" }
+  get_all_groups config: { zaloGroupAccountNodeId:"<tempId_select_zalo_account>" }
   send_zalo_group config: { zaloAccountId:<ID|null>, zaloGroupSource:"node", zaloGroupNodeId:"<tempId_get_all_groups>", zaloGroupField:"groupId", zaloGroupMessage:"...", zaloGroupTemplateSteps:[], delayValue:0, delayUnit:"days", saveMessageLog:true }
 
 LUẬT DELAY: KHÔNG tạo node wait/delay riêng. Delay đặt trong delayValue+delayUnit của action node.
@@ -1072,7 +1072,7 @@ Zalo nhóm campaign:
   "nodes": [
     { "tempId": "n1", "nodeType": "trigger",  "nodeSubtype": "manual",                  "nodeName": "Bắt đầu",          "nodeDescription": "", "positionX": 100, "positionY": 200, "config": {} },
     { "tempId": "n2", "nodeType": "data",     "nodeSubtype": "select_zalo_account",     "nodeName": "Chọn tài khoản Zalo", "nodeDescription": "", "positionX": 350, "positionY": 200, "config": { "zaloAccountId": null } },
-    { "tempId": "n3", "nodeType": "data",     "nodeSubtype": "get_all_groups",          "nodeName": "Lấy danh sách nhóm", "nodeDescription": "", "positionX": 600, "positionY": 200, "config": { "zaloAccountNodeId": "n2" } },
+    { "tempId": "n3", "nodeType": "data",     "nodeSubtype": "get_all_groups",          "nodeName": "Lấy danh sách nhóm", "nodeDescription": "", "positionX": 600, "positionY": 200, "config": { "zaloGroupAccountNodeId": "n2" } },
     { "tempId": "n4", "nodeType": "action",   "nodeSubtype": "send_zalo_group",         "nodeName": "Gửi nhóm tin 1",   "nodeDescription": "Gửi ngay", "positionX": 850, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "Nội dung tin nhắn nhóm 1...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 0, "delayUnit": "days" } },
     { "tempId": "n5", "nodeType": "action",   "nodeSubtype": "send_zalo_group",         "nodeName": "Gửi nhóm tin 2",   "nodeDescription": "Gửi sau 1 ngày", "positionX": 1100, "positionY": 200, "config": { "zaloAccountId": null, "zaloGroupSource": "node", "zaloGroupNodeId": "n3", "zaloGroupField": "groupId", "zaloGroupMessage": "Nội dung tin nhắn nhóm 2...", "zaloGroupTemplateSteps": [], "saveMessageLog": true, "delayValue": 1, "delayUnit": "days" } },
     { "tempId": "n6", "nodeType": "end",      "nodeSubtype": "end",                     "nodeName": "Kết thúc",         "nodeDescription": "", "positionX": 1350, "positionY": 200, "config": {} }

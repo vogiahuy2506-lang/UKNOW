@@ -145,7 +145,8 @@ class CampaignNodeRegistryService {
         color: '#E3F2FD',
         configRequired: true,
         configSchema: {
-          zaloAccountNodeId: {
+          // Tên field phải khớp runtime (campaignRun đọc zaloFriendAccountNodeId) và builder thủ công.
+          zaloFriendAccountNodeId: {
             type: 'string',
             required: true,
             label: 'Node chọn tài khoản Zalo',
@@ -153,7 +154,7 @@ class CampaignNodeRegistryService {
           },
         },
         exampleConfig: {
-          zaloAccountNodeId: '',
+          zaloFriendAccountNodeId: '',
         },
       },
 
@@ -164,14 +165,15 @@ class CampaignNodeRegistryService {
         color: '#E3F2FD',
         configRequired: true,
         configSchema: {
-          zaloAccountNodeId: {
+          // Tên field phải khớp runtime (campaignRun đọc zaloGroupAccountNodeId) và builder thủ công.
+          zaloGroupAccountNodeId: {
             type: 'string',
             required: true,
             label: 'Node chọn tài khoản Zalo',
           },
         },
         exampleConfig: {
-          zaloAccountNodeId: '',
+          zaloGroupAccountNodeId: '',
         },
       },
 
@@ -611,10 +613,10 @@ class CampaignNodeRegistryService {
     lines.push('  config: { "zaloAccountId": <ID> } (BẮT BUỘC trước get_all_friends/get_all_groups)');
     lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "get_all_friends"');
-    lines.push('  config: { "zaloAccountNodeId": "<tempId_select_zalo_account>" }');
+    lines.push('  config: { "zaloFriendAccountNodeId": "<tempId_select_zalo_account>" }');
     lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "get_all_groups"');
-    lines.push('  config: { "zaloAccountNodeId": "<tempId_select_zalo_account>" }');
+    lines.push('  config: { "zaloGroupAccountNodeId": "<tempId_select_zalo_account>" }');
     lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "save_customer"');
     lines.push('  config: { "saveCustomerNodeId": "<tempId>", "saveCustomerFieldMap": {...} }');
