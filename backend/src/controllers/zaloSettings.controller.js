@@ -15,8 +15,9 @@ import { isAdminRole, isSuperAdmin } from '../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import { getZaloHttpPolyfillOption } from '../utils/zaloUndiciFetch.util.js';
 import { ZALO_LISTENER_OPTIONS } from '../utils/zaloListenerOptions.util.js';
-import { addPendingAccount } from '../services/zalo/zaloAccountRegistry.service.js';
+import { addPendingAccount, unmarkAccountRegistered } from '../services/zalo/zaloAccountRegistry.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
+import zaloPersonalAdapter from '../services/chatbot/channelAdapters/zaloPersonal.adapter.js';
 import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
 import { classifyZaloSendError } from '../utils/zaloSendErrorClassifier.util.js';
 import {
@@ -1662,8 +1663,22 @@ class ZaloSettingsController {
 
       zaloAccountSessionService.clearAccountApi(deleted.id);
 
-      // Invalidate inbox cache
-      zaloPersonalInboxService.invalidateAccountCache();
+      // Invalidate inbox cache & cleanup listeners
+      try {
+        zaloPersonalAdapter.removeMessageHandler(deleted.id);
+      } catch {
+        /* ignore */
+      }
+      try {
+        unmarkAccountRegistered(deleted.id);
+      } catch {
+        /* ignore */
+      }
+      try {
+        zaloPersonalInboxService.forgetAccount(deleted.id_user, deleted.id);
+      } catch {
+        /* ignore */
+      }
 
       if (deleted.is_default) {
         await zaloSettingRepository.promoteNextDefaultAccount(deleted.id_user);

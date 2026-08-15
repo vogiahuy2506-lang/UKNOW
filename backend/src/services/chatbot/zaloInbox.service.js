@@ -235,6 +235,16 @@ class ZaloPersonalInboxService {
   }
 
   /**
+   * Dọn dẹp cache và trạng thái khi tài khoản Zalo bị xóa
+   */
+  forgetAccount(userId, accountId) {
+    if (userId && accountId) {
+      this.zaloSettingCache.delete(`${userId}_${accountId}`);
+    }
+    this._accountCache.timestamp = 0;
+  }
+
+  /**
    * Get zalo_setting_id for a zalo_personal account
    * Caches the mapping to avoid repeated DB lookups
    */
