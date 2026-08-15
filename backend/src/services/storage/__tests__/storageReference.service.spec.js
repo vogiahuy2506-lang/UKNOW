@@ -10,6 +10,7 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 const {
   buildStorageReferenceIndex,
   getIndexedStorageReferences,
+  isReferenceAlive,
   resolveWorkspaceOwner,
 } = await import('../storageReference.service.js');
 
@@ -72,6 +73,41 @@ describe('storageReference.service', () => {
       ownerUserId: 12,
       source: 'membership',
       ambiguous: false,
+    });
+  });
+
+  it('checks isReferenceAlive accurately', async () => {
+    // 1. empty input
+    await expect(isReferenceAlive(null, null)).resolves.toEqual({ alive: false });
+
+    // 2. alive reference
+    query.mockResolvedValueOnce({ rows: [{ id: 10, name: 'Khuyến mãi T8' }] });
+    await expect(isReferenceAlive('zalo_template', 10)).resolves.toEqual({
+      alive: true,
+      label: 'Mẫu Zalo',
+      name: 'Khuyến mãi T8',
+      url: '/templates',
+    });
+
+    // 3. dead reference
+    query.mockResolvedValueOnce({ rows: [] });
+    await expect(isReferenceAlive('email_template', 99)).resolves.toEqual({ alive: false });
+
+    // 4. unknown reference (fail-safe alive)
+    await expect(isReferenceAlive('unknown_parent_type', 123)).resolves.toEqual({
+      alive: true,
+      label: 'unknown_parent_type',
+      name: 'unknown_parent_type #123',
+      url: null,
+    });
+
+    // 5. query error (fail-safe alive on 42703, 22P02, etc.)
+    query.mockRejectedValueOnce(new Error('column does not exist (42703)'));
+    await expect(isReferenceAlive('campaign_node', 5)).resolves.toEqual({
+      alive: true,
+      label: 'Chiến dịch',
+      name: 'Chiến dịch #5',
+      url: '/campaigns',
     });
   });
 });

@@ -335,9 +335,142 @@ export async function resolveWorkspaceOwner(rawUserId, queryable = db) {
   return { ownerUserId: userId, source: 'self', ambiguous: false };
 }
 
+const REFERENCE_CONFIGS = {
+  business_profile: {
+    sql: `SELECT id, company_name AS name FROM business_profiles WHERE id = $1 LIMIT 1`,
+    label: 'Hồ sơ doanh nghiệp',
+    url: '/settings/business-profile',
+  },
+  campaign_node: {
+    sql: `SELECT cn.id, c.campaign_name AS name FROM campaign_nodes cn JOIN campaigns c ON c.id = cn.id_campaign WHERE cn.id = $1 LIMIT 1`,
+    label: 'Chiến dịch',
+    url: '/campaigns',
+  },
+  chat_attachment: {
+    sql: `SELECT id, display_name AS name FROM chat_attachments WHERE id = $1 LIMIT 1`,
+    label: 'Hộp thư chat',
+    url: '/inbox',
+  },
+  custom_chatbot: {
+    sql: `SELECT id, name FROM custom_chatbots WHERE id = $1 LIMIT 1`,
+    label: 'Chatbot',
+    url: '/studio',
+  },
+  email_template: {
+    sql: `SELECT id, template_name AS name FROM email_templates WHERE id = $1 LIMIT 1`,
+    label: 'Mẫu Email',
+    url: '/templates',
+  },
+  help_article: {
+    sql: `SELECT id, title AS name FROM help_articles WHERE id = $1 LIMIT 1`,
+    label: 'Bài viết hướng dẫn',
+    url: '/help',
+  },
+  landing: {
+    sql: `SELECT id, title AS name FROM landing_pages WHERE id = $1 LIMIT 1`,
+    label: 'Landing Page',
+    url: '/landing-pages',
+  },
+  landing_page: {
+    sql: `SELECT id, title AS name FROM landing_pages WHERE id = $1 LIMIT 1`,
+    label: 'Landing Page',
+    url: '/landing-pages',
+  },
+  landing_featured_course: {
+    sql: `SELECT id, COALESCE(title_vi, title_en) AS name FROM landing_featured_courses WHERE id = $1 LIMIT 1`,
+    label: 'Khóa học nổi bật',
+    url: '/settings/landing-featured-courses',
+  },
+  landing_page_section: {
+    sql: `SELECT id, section AS name FROM landing_page_sections WHERE id = $1 LIMIT 1`,
+    label: 'Section Landing Page',
+    url: '/landing-pages',
+  },
+  landing_page_template: {
+    sql: `SELECT id, name FROM landing_page_templates WHERE id = $1 LIMIT 1`,
+    label: 'Mẫu Landing Page',
+    url: '/landing-pages',
+  },
+  landing_testimonial: {
+    sql: `SELECT id, COALESCE(name_vi, name_en) AS name FROM landing_testimonials WHERE id = $1 LIMIT 1`,
+    label: 'Đánh giá Landing Page',
+    url: '/settings/landing-testimonials',
+  },
+  sub_assistant: {
+    sql: `SELECT id, name FROM sub_assistants WHERE id = $1 LIMIT 1`,
+    label: 'Trợ lý AI',
+    url: '/studio',
+  },
+  template_file: {
+    sql: `SELECT id, original_name AS name FROM template_files WHERE id = $1 LIMIT 1`,
+    label: 'Tệp đính kèm mẫu',
+    url: '/templates',
+  },
+  web_widget_config: {
+    sql: `SELECT id, display_name AS name FROM web_widget_configs WHERE id = $1 LIMIT 1`,
+    label: 'Cấu hình Livechat',
+    url: '/studio',
+  },
+  zalo_template: {
+    sql: `SELECT id, template_name AS name FROM zalo_templates WHERE id = $1 LIMIT 1`,
+    label: 'Mẫu Zalo',
+    url: '/templates',
+  },
+};
+
+/**
+ * Check if a reference parent record is still alive in the database.
+ * Does not scan tables; runs a single parameterized lookup.
+ * Fail-safe: Any error or unknown type is treated as alive to prevent deleting active files.
+ * @param {string} referenceType
+ * @param {string|number} referenceId
+ * @param {object} queryable
+ * @returns {Promise<{ alive: boolean, label?: string, name?: string, url?: string }>}
+ */
+export async function isReferenceAlive(referenceType, referenceId, queryable = db) {
+  if (!referenceType || referenceId == null) {
+    return { alive: false };
+  }
+
+  const config = REFERENCE_CONFIGS[referenceType];
+  if (!config) {
+    // Fail-safe: if referenceType is unknown, treat as alive to prevent accidental data loss
+    return {
+      alive: true,
+      label: referenceType,
+      name: `${referenceType} #${referenceId}`,
+      url: null,
+    };
+  }
+
+  try {
+    const { rows } = await queryable.query(config.sql, [referenceId]);
+    if (rows.length > 0) {
+      return {
+        alive: true,
+        label: config.label,
+        name: rows[0].name || `${config.label} #${referenceId}`,
+        url: config.url,
+      };
+    }
+    return { alive: false };
+  } catch (error) {
+    // Fail-safe: if query fails (schema error, DB error, type mismatch 22P02, etc.),
+    // treat as alive to avoid deleting active customer files.
+    console.warn(`[StorageReference] isReferenceAlive query failed for ${referenceType}#${referenceId}:`, error?.message);
+    return {
+      alive: true,
+      label: config.label,
+      name: `${config.label} #${referenceId}`,
+      url: config.url,
+    };
+  }
+}
+
 export default {
   buildStorageReferenceIndex,
   getIndexedStorageReferences,
+  isReferenceAlive,
   isStorageKeyReferencedByMessage,
   resolveWorkspaceOwner,
 };
