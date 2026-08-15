@@ -8,6 +8,7 @@ import {
   HiOutlineExclamation,
   HiOutlineSparkles,
 } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
 import { getSubscriptionUiStatus } from '../../utils/subscriptionStatus.util.js';
 import UsageBar from './UsageBar';
 
@@ -17,8 +18,16 @@ function formatPrice(price, t) {
   return `${Number(price).toLocaleString('vi-VN')} ₫`;
 }
 
+function unwrapFeature(feat, locale) {
+  if (typeof feat === 'object' && feat !== null) {
+    return feat[locale] || feat.vi || feat.en || '';
+  }
+  return feat;
+}
+
 /** Plan + usage section shown for user_admin. */
 export default function PlanSection({ data, t }) {
+  const { locale } = useI18n();
   const hasPlan = !!data?.activePlanId;
   const planLabel = data?.activePlanName || data?.activePlanCode || (hasPlan ? `#${data.activePlanId}` : '');
 
@@ -145,7 +154,7 @@ export default function PlanSection({ data, t }) {
               className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full"
             >
               <HiOutlineBadgeCheck className="w-3 h-3 text-green-500" />
-              {feat}
+              {unwrapFeature(feat, locale)}
             </span>
           ))}
         </div>
