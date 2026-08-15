@@ -104,13 +104,16 @@ class AuthController {
 
       // Gửi Welcome Email (async, không block response)
       const { full_name, email: userEmail } = user;
-      sendSystemEmail(
-        buildWelcomeEmail({
-          fullName: full_name,
-          email: userEmail,
-          loginUrl: `${FRONTEND_URL}/login`,
-        })
-      ).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
+      const welcome = buildWelcomeEmail({
+        fullName: full_name,
+        email: userEmail,
+        loginUrl: `${FRONTEND_URL}/login`,
+      });
+      sendSystemEmail({
+        to: userEmail,
+        subject: welcome.subject,
+        html: welcome.html,
+      }).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
 
       return res.status(201).json({
         success: true,
@@ -349,13 +352,16 @@ class AuthController {
 
         // Gửi Welcome Email cho user mới đăng ký qua Google (async)
         const { full_name, email: userEmail } = user;
-        sendSystemEmail(
-          buildWelcomeEmail({
-            fullName: full_name,
-            email: userEmail,
-            loginUrl: `${FRONTEND_URL}/login`,
-          })
-        ).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
+        const welcome = buildWelcomeEmail({
+          fullName: full_name,
+          email: userEmail,
+          loginUrl: `${FRONTEND_URL}/login`,
+        });
+        sendSystemEmail({
+          to: userEmail,
+          subject: welcome.subject,
+          html: welcome.html,
+        }).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
       } else {
         user = result.rows[0];
 
