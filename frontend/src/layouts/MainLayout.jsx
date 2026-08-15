@@ -146,8 +146,8 @@ const MainLayout = () => {
 
         <div className="flex-1 min-h-0 min-w-0 flex flex-col" style={{ paddingTop: HEADER_HEIGHT }}>
           {!isSpecialPage && <CreditWarningBanner />}
-          <main ref={mainContentRef} className={`flex-1 min-h-0 min-w-0 ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
-            <div className={isSpecialPage ? 'h-full' : ''}>
+          <main ref={mainContentRef} className={`flex-1 min-h-0 min-w-0 relative ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
+            <div className="relative h-full flex flex-col min-h-0">
               <Outlet />
             </div>
           </main>
@@ -210,9 +210,9 @@ const MainLayout = () => {
 
         <main
           ref={mainContentRef}
-          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
+          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
-          <div className={isSpecialPage ? 'h-full' : ''}>
+          <div className="relative h-full flex flex-col min-h-0">
             <Outlet />
           </div>
         </main>

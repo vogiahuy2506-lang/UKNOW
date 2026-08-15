@@ -1236,8 +1236,8 @@ export default function LandingPageFullEditor({
 
   const overlay = (
     <div
-      className="fixed z-[35] flex flex-col bg-white"
-      style={{ left: 'var(--sidebar-w, 0px)', right: 0, top: 0, bottom: 0 }}
+      className="absolute inset-0 z-30 flex flex-col bg-white rounded-2xl overflow-hidden"
+      data-testid="landing-page-full-editor"
     >
       <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">
@@ -1801,7 +1801,7 @@ export default function LandingPageFullEditor({
 
   return (
     <>
-      {createPortal(overlay, document.body)}
+      {overlay}
       {aiOverlay}
 
       {/* Template Gallery Modal */}

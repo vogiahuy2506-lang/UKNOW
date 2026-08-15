@@ -154,13 +154,28 @@ export default function LandingPagesAdminPage() {
     const rawTrim = (form.htmlContent || '').trim();
     const emptyHint =
       `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body><p class="p-4 text-gray-500 text-sm">${t('landingPagesAdmin.previewPlaceholder')}</p></body></html>`;
+    /**
+     * Đảm bảo HTML preview luôn có CDN Tailwind để các class utility (do AI generate)
+     * render đúng. Nếu thiếu `<head>` thì tự thêm; nếu đã có CDN thì bỏ qua.
+     */
+    const ensureTailwindCdn = (html) => {
+      if (!html) return html;
+      if (/cdn\.tailwindcss\.com/i.test(html)) return html;
+      const cdnTag = '<script src="https://cdn.tailwindcss.com"></script>';
+      if (/<head\b[^>]*>/i.test(html)) {
+        return html.replace(/<head\b([^>]*)>/i, `<head$1>\n  ${cdnTag}`);
+      }
+      if (/<html\b[^>]*>/i.test(html)) {
+        return html.replace(/<html\b([^>]*)>/i, `<html$1><head>\n  <meta charset="utf-8"/>\n  ${cdnTag}\n</head>`);
+      }
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"/>\n  ${cdnTag}</head><body>${html}</body></html>`;
+    };
+
     if (!slug) {
-      const raw = rawTrim || emptyHint;
-      if (!raw || raw.includes('cdn.tailwindcss.com')) return raw;
-      return raw.replace(/<head([^>]*)>/i, `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`);
+      return ensureTailwindCdn(rawTrim || emptyHint);
     }
     if (typeof window === 'undefined') {
-      return rawTrim || emptyHint;
+      return ensureTailwindCdn(rawTrim || emptyHint);
     }
     // Filter out Node.js code (require, __dirname, __filename, module.exports, process, etc.)
     // Remove entire script blocks containing Node.js syntax
@@ -181,10 +196,26 @@ export default function LandingPagesAdminPage() {
 
     let baseHtml;
     if (isFullHtml) {
-      // Extract body content and re-wrap for preview
-      const bodyMatch = cleanHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-      const bodyContent = bodyMatch ? bodyMatch[1] : cleanHtml;
-      baseHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${form.title || ''}</title></head><body>${bodyContent}</body></html>`;
+      // Giữ nguyên <head> gốc (Tailwind CDN, custom CSS, meta tags...) — chỉ
+      // set/update <title> nếu form.title có giá trị; không rebuild document
+      // để tránh vứt mất head làm preview hiển thị text thô.
+      const title = String(form.title || '').trim();
+      let out = cleanHtml;
+      if (title) {
+        if (/<title[^>]*>[\s\S]*?<\/title>/i.test(out)) {
+          out = out.replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${title}</title>`);
+        } else if (/<head\b[^>]*>/i.test(out)) {
+          out = out.replace(/<head\b([^>]*)>/i, `<head$1><title>${title}</title>`);
+        } else {
+          // Không có <head> nhưng có <html>: chèn head + title trước <body> hoặc trước <html> nội dung
+          if (/<body\b[^>]*>/i.test(out)) {
+            out = out.replace(/<body\b([^>]*)>/i, `<head><meta charset="utf-8"/><title>${title}</title></head><body$1>`);
+          } else {
+            out = `<head><meta charset="utf-8"/><title>${title}</title></head>${out}`;
+          }
+        }
+      }
+      baseHtml = out;
     } else {
       baseHtml = cleanHtml
         ? `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${form.title || ''}</title></head><body>${cleanHtml}</body></html>`
@@ -192,8 +223,7 @@ export default function LandingPagesAdminPage() {
     }
 
     const preview = prepareLandingHtmlForPreview(baseHtml, { slug, frontendOrigin: origin, apiBase });
-    if (preview.includes('cdn.tailwindcss.com')) return preview;
-    return preview.replace(/<head([^>]*)>/i, `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`);
+    return ensureTailwindCdn(preview);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.htmlContent, form.slug, form.title]);
 
@@ -350,7 +380,8 @@ export default function LandingPagesAdminPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="relative flex h-full min-h-0 flex-col">
+      <div className="space-y-6 flex-1 min-h-0 overflow-auto pr-1">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">{t('landingPagesAdmin.title')}</h1>
@@ -477,6 +508,8 @@ export default function LandingPagesAdminPage() {
             </tbody>
           </table>
         )}
+      </div>
+
       </div>
 
       <LandingPageFullEditor
