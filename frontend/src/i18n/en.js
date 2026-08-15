@@ -3185,6 +3185,8 @@ export default {
     wizardNewQr: 'New code',
     wizardGroupTitle: 'Choose Zalo groups',
     wizardGroupLoadFailed: 'Could not load Zalo groups.',
+    wizardGroupSearchPlaceholder: 'Search groups...',
+    wizardGroupSearchEmpty: 'No matching groups found.',
     wizardClearAll: 'Clear all',
     wizardSelectAll: 'Select all',
     wizardUseGroups: 'Use selected groups',

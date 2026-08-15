@@ -9,6 +9,7 @@ import {
   HiOutlineUserGroup,
   HiOutlineChat,
   HiOutlineArrowLeft,
+  HiOutlineSearch,
 } from 'react-icons/hi';
 import campaignBuilderApiService from '../../campaigns/services/campaignBuilderApi.service';
 import emailSettingsApiService from '../../settings/services/emailSettingsApi.service';
@@ -423,12 +424,19 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
   );
 };
 
+const foldDiacritics = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[̀-ͯ]/g, '')
+  .replace(/đ/gi, (m) => (m === 'Đ' ? 'D' : 'd'))
+  .toLowerCase();
+
 export const ZaloGroupPickerCard = ({ data, onSubmit, t }) => {
   const accountId = data?.accountId;
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
   const loadGroups = async () => {
     if (!accountId) return;
@@ -451,9 +459,26 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, t }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
-  const allIds = useMemo(() => groups.map((group) => group.groupId || group.group_id || group.id).filter(Boolean), [groups]);
-  const allSelected = allIds.length > 0 && allIds.every((id) => selected.includes(id));
+  const filteredGroups = useMemo(() => {
+    const query = foldDiacritics(search.trim());
+    if (!query) return groups;
+    return groups.filter((group) => {
+      const name = group.groupName || group.group_name || group.name || '';
+      return foldDiacritics(name).includes(query);
+    });
+  }, [groups, search]);
+
+  const filteredIds = useMemo(
+    () => filteredGroups.map((group) => group.groupId || group.group_id || group.id).filter(Boolean),
+    [filteredGroups]
+  );
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.includes(id));
   const toggle = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  const toggleAllFiltered = () => setSelected((prev) => (
+    allSelected
+      ? prev.filter((id) => !filteredIds.includes(id))
+      : Array.from(new Set([...prev, ...filteredIds]))
+  ));
 
   return (
     <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4">
@@ -475,26 +500,43 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, t }) => {
       )}
       {!loading && !error && groups.length > 0 && (
         <>
+          <div className="relative mb-2">
+            <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('aiChatbot.wizardGroupSearchPlaceholder') || 'Tìm nhóm...'}
+              className="w-full rounded-xl border border-purple-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-300"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => setSelected(allSelected ? [] : allIds)}
-            className="mb-2 rounded-xl border border-purple-200 bg-white px-3 py-2 text-xs font-black text-purple-700"
+            onClick={toggleAllFiltered}
+            disabled={filteredIds.length === 0}
+            className="mb-2 rounded-xl border border-purple-200 bg-white px-3 py-2 text-xs font-black text-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {allSelected ? (t('aiChatbot.wizardClearAll') || 'Bỏ chọn tất cả') : (t('aiChatbot.wizardSelectAll') || 'Chọn tất cả')}
           </button>
-          <div className="max-h-56 space-y-2 overflow-y-auto">
-            {groups.map((group) => {
-              const id = group.groupId || group.group_id || group.id;
-              const name = group.groupName || group.group_name || group.name || id;
-              return (
-                <label key={id} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={selected.includes(id)} onChange={() => toggle(id)} />
-                  <span className="min-w-0 flex-1 truncate">{name}</span>
-                  {group.memberCount || group.member_count ? <span className="text-xs text-slate-400">{group.memberCount || group.member_count}</span> : null}
-                </label>
-              );
-            })}
-          </div>
+          {filteredGroups.length === 0 ? (
+            <p className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500">
+              {t('aiChatbot.wizardGroupSearchEmpty') || 'Không tìm thấy nhóm phù hợp.'}
+            </p>
+          ) : (
+            <div className="max-h-56 space-y-2 overflow-y-auto">
+              {filteredGroups.map((group) => {
+                const id = group.groupId || group.group_id || group.id;
+                const name = group.groupName || group.group_name || group.name || id;
+                return (
+                  <label key={id} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={selected.includes(id)} onChange={() => toggle(id)} />
+                    <span className="min-w-0 flex-1 truncate">{name}</span>
+                    {group.memberCount || group.member_count ? <span className="text-xs text-slate-400">{group.memberCount || group.member_count}</span> : null}
+                  </label>
+                );
+              })}
+            </div>
+          )}
           <button
             type="button"
             disabled={selected.length === 0}
