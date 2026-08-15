@@ -3219,6 +3219,8 @@ export default {
     wizardNewQr: 'Tạo mã mới',
     wizardGroupTitle: 'Chọn nhóm Zalo',
     wizardGroupLoadFailed: 'Không tải được danh sách nhóm.',
+    wizardGroupSearchPlaceholder: 'Tìm nhóm...',
+    wizardGroupSearchEmpty: 'Không tìm thấy nhóm phù hợp.',
     wizardClearAll: 'Bỏ chọn tất cả',
     wizardSelectAll: 'Chọn tất cả',
     wizardUseGroups: 'Dùng các nhóm đã chọn',

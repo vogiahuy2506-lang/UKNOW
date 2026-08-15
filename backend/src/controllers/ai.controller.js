@@ -575,9 +575,10 @@ class AiController {
       await campaignConfirmationService.assertResourceVersionsCurrent({ resourceVersions, userId: req.user.id });
       const normalizedNodes = preparedScript.nodes;
       const normalizedConnections = preparedScript.connections;
-      // Runtime only executes emailSteps with templateId. Materialize inline steps before validation.
+      // Runtime only executes email/zalo steps with templateId. Materialize inline steps before validation.
       // A later create failure can leave an orphan template; transaction coupling is intentionally deferred.
       await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, req.user.id);
+      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, req.user.id);
       const ownershipPreview = await campaignConfirmationService.buildConfirmationView({
         script: preparedScript,
         userId: req.user.id,
@@ -810,8 +811,9 @@ class AiController {
         this.applyDirectRecipients(script, directRecipients);
       }
 
-      // Tự động tạo email templates từ inline content
+      // Tự động tạo email/zalo templates từ inline content
       await aiCampaignDraftService.autoCreateEmailTemplates(script.nodes, req.user.id);
+      await aiCampaignDraftService.autoCreateZaloTemplates(script.nodes, req.user.id);
 
       // Normalize AI nodes trước khi tạo campaign
       const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);

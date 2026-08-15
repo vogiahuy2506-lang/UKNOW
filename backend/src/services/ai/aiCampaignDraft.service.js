@@ -54,6 +54,94 @@ class AiCampaignDraftService {
     }
   }
 
+  async autoCreateZaloTemplates(nodes, userId) {
+    for (const node of nodes) {
+      const cfg = node.config || node.nodeConfig || {};
+      const nodeType = node.nodeType || node.type || node.node_type || '';
+      const nodeSubtype = node.nodeSubtype || node.subtype || node.node_subtype || '';
+
+      const isZaloPersonal = ['send_zalo_personal', 'zalo_personal', 'zalo'].includes(nodeType) ||
+        ['send_zalo_personal', 'zalo_personal', 'zalo'].includes(nodeSubtype);
+      const isZaloGroup = ['send_zalo_group', 'zalo_group'].includes(nodeType) ||
+        ['send_zalo_group', 'zalo_group'].includes(nodeSubtype);
+
+      if (!isZaloPersonal && !isZaloGroup) continue;
+
+      const createTemplate = async ({ body, suffix = '' }) => {
+        const name = node.nodeName || node.name || (isZaloGroup ? 'Zalo nhóm từ AI' : 'Zalo cá nhân từ AI');
+        const templateName = suffix ? `${name} ${suffix}` : name;
+        const row = await aiCampaignDraftRepository.createZaloTemplate({
+          userId,
+          name: templateName,
+          code: `ai_zalo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          subject: templateName,
+          bodyText: body,
+        });
+        if (!row?.id) throw new Error('Không thể tạo Zalo template từ nội dung nháp');
+        return row.id;
+      };
+
+      if (isZaloPersonal) {
+        if (Array.isArray(cfg.zaloPersonalTemplateSteps)) {
+          for (let index = 0; index < cfg.zaloPersonalTemplateSteps.length; index += 1) {
+            const step = cfg.zaloPersonalTemplateSteps[index] || {};
+            const hasValidTemplateId = Number.isFinite(parseInt(step.templateId, 10)) && parseInt(step.templateId, 10) > 0;
+            if (!hasValidTemplateId && step.message) {
+              step.templateId = await createTemplate({
+                body: step.message,
+                suffix: cfg.zaloPersonalTemplateSteps.length > 1 ? `#${index + 1}` : '',
+              });
+            }
+            cfg.zaloPersonalTemplateSteps[index] = step;
+          }
+        } else if (cfg.message || cfg.zaloPersonalMessage) {
+          const body = cfg.message || cfg.zaloPersonalMessage;
+          const templateId = await createTemplate({ body });
+          cfg.zaloPersonalTemplateSteps = [
+            {
+              templateId,
+              message: body,
+              delayValue: cfg.delayValue || 0,
+              delayUnit: cfg.delayUnit || 'days',
+              enableLinkTracking: cfg.enableLinkTracking !== false,
+              templateMappings: [],
+            },
+          ];
+        }
+      }
+
+      if (isZaloGroup) {
+        if (Array.isArray(cfg.zaloGroupTemplateSteps)) {
+          for (let index = 0; index < cfg.zaloGroupTemplateSteps.length; index += 1) {
+            const step = cfg.zaloGroupTemplateSteps[index] || {};
+            const hasValidTemplateId = Number.isFinite(parseInt(step.templateId, 10)) && parseInt(step.templateId, 10) > 0;
+            if (!hasValidTemplateId && step.message) {
+              step.templateId = await createTemplate({
+                body: step.message,
+                suffix: cfg.zaloGroupTemplateSteps.length > 1 ? `#${index + 1}` : '',
+              });
+            }
+            cfg.zaloGroupTemplateSteps[index] = step;
+          }
+        } else if (cfg.zaloGroupMessage || cfg.message) {
+          const body = cfg.zaloGroupMessage || cfg.message;
+          const templateId = await createTemplate({ body });
+          cfg.zaloGroupTemplateSteps = [
+            {
+              templateId,
+              message: body,
+              delayValue: cfg.delayValue || 0,
+              delayUnit: cfg.delayUnit || 'days',
+              templateMappings: [],
+            },
+          ];
+        }
+      }
+
+      node.config = cfg;
+    }
+  }
+
   async autoFillEmailChannels(nodes, userId) {
     try {
       const defaultChannelId = await aiCampaignDraftRepository.findDefaultEmailSettingId(userId);

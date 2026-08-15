@@ -49,13 +49,55 @@ describe('campaignConfirmation.service', () => {
     expect(result.steps[0]).not.toHaveProperty('recipientEmails');
   });
 
-  it('blocks a multi-step action with a missing template instead of presenting it as a send', async () => {
+  it('allows multi-step Zalo and Email actions with inline messages (without templateId)', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: 1,
+      script: {
+        campaignName: 'Zalo Group Launch',
+        nodes: [
+          {
+            tempId: 'zalo-group-1',
+            nodeType: 'action',
+            nodeSubtype: 'send_zalo_group',
+            nodeName: 'Zalo Nhóm',
+            config: {
+              zaloGroupTemplateSteps: [
+                { message: 'Tin 1 chào nhóm', delayValue: 0, delayUnit: 'days' },
+                { message: 'Tin 2 ưu đãi đặc biệt', delayValue: 1, delayUnit: 'days' },
+              ],
+            },
+          },
+          {
+            tempId: 'email-inline-1',
+            nodeType: 'action',
+            nodeSubtype: 'send_email',
+            nodeName: 'Email Inline',
+            config: {
+              emailSteps: [
+                { emailSubject: 'Tiêu đề email inline', emailBody: '<p>Nội dung email inline</p>', delayValue: 0, delayUnit: 'days' },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(result.blockingIssues).toHaveLength(0);
+    expect(result.steps).toHaveLength(3);
+    expect(result.steps[0].content.bodyText).toBe('Tin 1 chào nhóm');
+    expect(result.steps[1].content.bodyText).toBe('Tin 2 ưu đãi đặc biệt');
+    expect(result.steps[2].content.bodyText).toBe('Nội dung email inline');
+    expect(result.steps[2].content.subject).toBe('Tiêu đề email inline');
+  });
+
+  it('blocks a multi-step action with neither templateId nor message content', async () => {
     const result = await service.default.buildConfirmationView({
       userId: 1,
       script: {
         nodes: [{
           tempId: 'zalo-1', nodeType: 'action', nodeSubtype: 'send_zalo_personal',
-          config: { zaloPersonalTemplateSteps: [{ templateId: null }] },
+          config: { zaloPersonalTemplateSteps: [{ templateId: null, message: '' }] },
         }],
       },
     });
@@ -63,7 +105,25 @@ describe('campaignConfirmation.service', () => {
     expect(result.readyToCreate).toBe(false);
     expect(result.steps).toHaveLength(0);
     expect(result.blockingIssues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'invalid_template_step', nodeId: 'zalo-1', stepIndex: 0 }),
+      expect.objectContaining({ code: 'missing_message_content', nodeId: 'zalo-1', stepIndex: 0 }),
+    ]));
+  });
+
+  it('blocks a multi-step action with invalid templateId string', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: 1,
+      script: {
+        nodes: [{
+          tempId: 'zalo-2', nodeType: 'action', nodeSubtype: 'send_zalo_personal',
+          config: { zaloPersonalTemplateSteps: [{ templateId: 'not-a-number' }] },
+        }],
+      },
+    });
+
+    expect(result.readyToCreate).toBe(false);
+    expect(result.steps).toHaveLength(0);
+    expect(result.blockingIssues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'invalid_template_step', nodeId: 'zalo-2', stepIndex: 0 }),
     ]));
   });
 });
