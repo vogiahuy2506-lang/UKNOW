@@ -96,6 +96,18 @@ jobs:
             chmod +x /root/uknow/scripts/ssl-auto-provision.sh /root/uknow/scripts/ssl-provision-pending.sh
             chown -R www-data:www-data /root/uknow/certbot 2>/dev/null || true
             echo "SSL scripts deployed to /root/uknow/scripts"
+            # ── Migration chạy TRƯỚC khi hạ container cũ ──────────────────────
+            # Nếu migration hỏng, `set -e` dừng deploy tại đây và container cũ vẫn
+            # đang phục vụ. Hạ container trước rồi mới migrate thì migration hỏng
+            # = web sập cho tới khi có người vào tay.
+            # Chạy bằng ĐÚNG image vừa pull nên file migration luôn khớp code sắp chạy.
+            echo "Chạy migration bằng image mới (container cũ vẫn đang phục vụ)..."
+            docker run --rm \
+              --name uknow-migrate \
+              --network uknow_network \
+              -v /root/uknow/backend/.env:/app/.env \
+              "$BACKEND_IMAGE" node scripts/migrate.js
+            echo "Migration hoàn tất — bắt đầu đổi container"
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
               echo "Removing old backend container..."
               docker update --restart=no uknow-campaign-backend || true
@@ -123,6 +135,7 @@ jobs:
               --group-add "$DOCKER_GID" \
               --label org.opencontainers.image.revision="$EXPECTED_SHA" \
               --restart unless-stopped \
+              -e SKIP_MIGRATIONS=true \
               -p 5001:5001 \
               -v /root/uknow/backend/.env:/app/.env \
               -v /var/run/docker.sock:/var/run/docker.sock:ro \

@@ -9,7 +9,7 @@ import outboundMessageQueueService from './services/queue/outboundMessageQueue.s
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
 import kbDocumentQueue from './services/queue/kbDocumentQueue.service.js';
 import knowledgeBaseService from './services/chatbot/knowledgeBase.service.js';
-import { runMigrations } from './utils/migrationRunner.util.js';
+import { runMigrations, assertMigrationsUpToDate } from './utils/migrationRunner.util.js';
 import campaignZaloSenderService from './services/campaign/campaignZaloSender.service.js';
 import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
 import zaloInboxService from './services/chatbot/zaloInbox.service.js';
@@ -63,7 +63,11 @@ const testDBConnection = async () => {
         `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
       );
       if (process.env.SKIP_MIGRATIONS === 'true') {
-        console.log('[Migration] Skipped (SKIP_MIGRATIONS=true)');
+        // Bỏ chạy KHÔNG có nghĩa là bỏ kiểm. Migration đã tách sang bước riêng
+        // trong pipeline; nếu bước đó hỏng hoặc bị bỏ sót mà app vẫn lên thì ta
+        // sẽ chạy im lặng trên schema cũ — kiểu hỏng khó lần nhất.
+        console.log('[Migration] Skipped (SKIP_MIGRATIONS=true) — đang kiểm tra schema');
+        await assertMigrationsUpToDate(client);
       } else {
         await runMigrations(client);
       }
