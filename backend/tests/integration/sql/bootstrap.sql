@@ -61,6 +61,8 @@ CREATE TABLE users (
   messages_per_period     INTEGER,
   is_fup_enabled          BOOLEAN      NOT NULL DEFAULT FALSE,
   auth_provider           VARCHAR(16)  NOT NULL DEFAULT 'local' CHECK (auth_provider IN ('local', 'google')),
+  -- migration 141: hồ sơ xuất hoá đơn điền sẵn
+  invoice_profile         JSONB,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -1596,6 +1598,15 @@ VALUES (
   'Cron đối soát tìm thấy đơn PAID mà webhook chưa kích hoạt',
   1, NULL, 'email', 'critical', 30,
   '{"jobCode": "payos_order_reconcile"}'::jsonb
+);
+
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'einvoice_series_low',
+  'Dải số hoá đơn Mắt Bão sắp hết hoặc sai năm',
+  'Số lượng hoá đơn còn lại dưới ngưỡng hoặc ký hiệu hoá đơn không khớp năm hiện tại',
+  50, NULL, 'email', 'critical', 360,
+  '{"jobCode": "einvoice_series_check"}'::jsonb
 );
 
 CREATE TABLE alert_events (

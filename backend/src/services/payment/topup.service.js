@@ -27,7 +27,8 @@ import {
 } from '../../repositories/payment/payment.repository.js';
 import { getPayosPendingWindowMinutes } from '../../repositories/voucher.repository.js';
 import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
-import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
+import { resolveOrderAmountWithInvoice, normalizeBuyerInvoiceProfile } from '../../utils/invoiceVat.util.js';
+import { saveInvoiceProfile } from '../../repositories/user/user.repository.js';
 import { _clearQuotaCache } from '../../utils/userSendLimit.util.js';
 import crypto from 'crypto';
 
@@ -271,24 +272,6 @@ export async function createTopupPaymentLink({
   });
   const amount = priced.amount;
   const invoiceInfo = priced.invoiceInfo;
-  const orderCode = generateOrderCode();
-  const pendingWindowMinutes = await getPayosPendingWindowMinutes();
-  const reuseWindowMinutes = Math.max(1, Number(pendingWindowMinutes) - 2);
-  const topupConfig = {
-    quantities: quote.quantities,
-    billingUserId: quote.billingUserId,
-    items: quote.items,
-    total: net,
-    months: quote.months,
-  };
-
-  const cancelledDupes = await cancelRecentPendingTopupOrders({
-    userId,
-    withinMinutes: reuseWindowMinutes,
-  });
-  if (cancelledDupes.length) {
-    await bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code));
-  }
 
   const client = await db.getClient();
   let order;
@@ -315,6 +298,15 @@ export async function createTopupPaymentLink({
     throw err;
   } finally {
     client.release();
+  }
+
+  if (userId && invoiceInfoRaw?.saveProfile === true) {
+    try {
+      const normalizedProfile = normalizeBuyerInvoiceProfile(invoiceInfoRaw);
+      await saveInvoiceProfile(userId, normalizedProfile);
+    } catch (err) {
+      console.warn('[TopupService] Failed to auto-save invoice profile:', err.message);
+    }
   }
 
   const expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;

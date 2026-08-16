@@ -380,15 +380,48 @@ export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
             p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
             p.daily_email_limit, p.monthly_email_limit,
             p.daily_zalo_limit, p.monthly_zalo_limit,
-            o.note, o.topup_config
+            o.note, o.topup_config,
+            e.status AS einvoice_status, e.so_hdon, e.khhdon,
+            e.issued_at AS einvoice_issued_at, e.email_status AS einvoice_email_status
      FROM orders o
      LEFT JOIN plans p ON o.plan_id = p.id
+     LEFT JOIN einvoices e ON e.order_id = o.id
      WHERE (o.user_id = $1 OR o.user_email = $2) AND o.status = 'success'
      ORDER BY o.created_at DESC
      LIMIT 20`,
     [userId, userEmail]
   );
   return rows;
+}
+
+export async function findInvoiceProfileByUserId(userId, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT invoice_profile FROM users WHERE id = $1`,
+    [userId]
+  );
+  return rows[0]?.invoice_profile || null;
+}
+
+export async function saveInvoiceProfile(userId, profile, queryable = db) {
+  const { rows } = await queryable.query(
+    `UPDATE users
+     SET invoice_profile = $2, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING invoice_profile`,
+    [userId, profile ? JSON.stringify(profile) : null]
+  );
+  return rows[0]?.invoice_profile || null;
+}
+
+export async function clearInvoiceProfile(userId, queryable = db) {
+  const { rows } = await queryable.query(
+    `UPDATE users
+     SET invoice_profile = NULL, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING invoice_profile`,
+    [userId]
+  );
+  return rows[0]?.invoice_profile || null;
 }
 
 export async function findActiveUserByEmail(email) {

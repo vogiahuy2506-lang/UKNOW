@@ -190,6 +190,31 @@ export async function metricLatestCronRescued(jobCode = 'payos_order_reconcile')
   return { rescued, found: true, result: rows[0].result || {} };
 }
 
+/**
+ * Latest einvoice series check result (series remaining count & year mismatch).
+ * @param {string} [jobCode]
+ * @returns {Promise<{ cLai: number|null, yearMismatch: boolean, notFound: boolean, found: boolean, result: object|null }>}
+ */
+export async function metricLatestEinvoiceSeries(jobCode = 'einvoice_series_check') {
+  const { rows } = await db.query(
+    `SELECT status, result, error_message
+     FROM cron_job_runs
+     WHERE job_code = $1
+     ORDER BY started_at DESC
+     LIMIT 1`,
+    [jobCode]
+  );
+  if (!rows.length) return { cLai: null, yearMismatch: false, notFound: false, error: null, found: false, result: null };
+  const res = rows[0].result || {};
+  const cLai = res.cLai != null ? Number(res.cLai) : null;
+  const yearMismatch = Boolean(res.yearMismatch);
+  const notFound = Boolean(res.notFound);
+  const error = res.error
+    ? String(res.error)
+    : (rows[0].status === 'failure' ? (rows[0].error_message || 'Cron job failed') : null);
+  return { cLai, yearMismatch, notFound, error, found: true, result: res };
+}
+
 export async function metricAiTokenSpike() {
   const { rows } = await db.query(
     `WITH today AS (

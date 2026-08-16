@@ -50,25 +50,11 @@ function isLikelyEmail(email) {
 }
 
 /**
- * Fail-closed before INSERT/PayOS on missing/invalid buyer data or unconfigured Mat Bao.
- * @throws {{ status: number, message: string, code: string }}
+ * Validate required buyer fields without checking feature flags / Mat Bao readiness.
+ * Used for both intake validation and saving invoice profile.
+ * @throws {{ status: number, message: string }}
  */
-export function assertInvoiceIntakeAllowed(rawInvoiceInfo) {
-  if (!isInvoiceVatEnabled()) {
-    throw {
-      status: 503,
-      message: 'Xuất hoá đơn VAT tạm thời không khả dụng',
-      code: 'INVOICE_UNAVAILABLE',
-    };
-  }
-  if (!isMatbaoEinvoiceWorkerEnabled() || !isMatbaoConfigured()) {
-    throw {
-      status: 503,
-      message: 'Xuất hoá đơn VAT tạm thời không khả dụng',
-      code: 'INVOICE_UNAVAILABLE',
-    };
-  }
-
+export function assertBuyerFieldsValid(rawInvoiceInfo) {
   if (!rawInvoiceInfo || typeof rawInvoiceInfo !== 'object') {
     throw { status: 400, message: 'Vui lòng cung cấp thông tin xuất hoá đơn VAT' };
   }
@@ -91,6 +77,69 @@ export function assertInvoiceIntakeAllowed(rawInvoiceInfo) {
       throw { status: 400, message: 'Số CCCD/CMND không hợp lệ (gồm 9 đến 12 chữ số)' };
     }
   }
+}
+
+/**
+ * Clean & normalize buyer invoice profile for storage in users.invoice_profile.
+ * Strips any money/calculation fields (net, vat, gross, vatRate) and saveProfile flag.
+ * @param {object} raw
+ * @returns {object}
+ */
+export function normalizeBuyerInvoiceProfile(raw) {
+  assertBuyerFieldsValid(raw);
+  const buyerType = raw.buyerType === 'personal' ? 'personal' : 'company';
+  const phone = trimStr(raw.phone) || undefined;
+  const address = trimStr(raw.address) || undefined;
+  const savedAt = new Date().toISOString();
+
+  if (buyerType === 'company') {
+    const taxCode = trimStr(raw.taxCode).replace(/\s+/g, '');
+    const companyName = trimStr(raw.companyName);
+    const companyAddress = trimStr(raw.companyAddress) || undefined;
+    return {
+      buyerType: 'company',
+      taxCode,
+      companyName,
+      companyAddress,
+      phone,
+      address,
+      savedAt,
+    };
+  }
+
+  const fullName = trimStr(raw.fullName);
+  const idNumber = trimStr(raw.idNumber).replace(/\s+/g, '');
+  return {
+    buyerType: 'personal',
+    fullName,
+    idNumber,
+    phone,
+    address,
+    savedAt,
+  };
+}
+
+/**
+ * Fail-closed before INSERT/PayOS on missing/invalid buyer data or unconfigured Mat Bao.
+ * @throws {{ status: number, message: string, code: string }}
+ */
+export function assertInvoiceIntakeAllowed(rawInvoiceInfo) {
+  if (!isInvoiceVatEnabled()) {
+    throw {
+      status: 503,
+      message: 'Xuất hoá đơn VAT tạm thời không khả dụng',
+      code: 'INVOICE_UNAVAILABLE',
+    };
+  }
+  if (!isMatbaoEinvoiceWorkerEnabled() || !isMatbaoConfigured()) {
+    throw {
+      status: 503,
+      message: 'Xuất hoá đơn VAT tạm thời không khả dụng',
+      code: 'INVOICE_UNAVAILABLE',
+    };
+  }
+
+  assertBuyerFieldsValid(rawInvoiceInfo);
 }
 
 /**

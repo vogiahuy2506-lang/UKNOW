@@ -10,6 +10,9 @@ const resolveBillingUserId = jest.fn();
 const sumActiveTopupGrants = jest.fn();
 const getWalletBalance = jest.fn();
 const findSuccessfulOrdersForUser = jest.fn();
+const findInvoiceProfileByUserId = jest.fn();
+const saveInvoiceProfile = jest.fn();
+const clearInvoiceProfile = jest.fn();
 
 jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findLegacyEmployees: jest.fn(),
@@ -24,6 +27,9 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findRoleAndLimits: jest.fn(),
   findRoleAndLimitsFallback: jest.fn(),
   findSuccessfulOrdersForUser,
+  findInvoiceProfileByUserId,
+  saveInvoiceProfile,
+  clearInvoiceProfile,
   findUserByEmailExceptId: jest.fn(),
   resetLegacyEmployeePassword: jest.fn(),
   revokeAllRefreshTokensForUser: jest.fn(),
@@ -424,13 +430,147 @@ describe('UserController.getMyOrders', () => {
             ],
           },
           plan: null,
+          invoice: null,
         }),
         expect.objectContaining({
           kind: 'plan',
           topup: null,
           plan: expect.objectContaining({ name: 'Starter', code: 'starter' }),
+          invoice: null,
         }),
       ],
+    });
+  });
+
+  it("gắn object invoice khi order có einvoice_status", async () => {
+    findSuccessfulOrdersForUser.mockResolvedValue([
+      {
+        id: 3,
+        order_code: 300,
+        amount: 548900,
+        status: 'success',
+        created_at: new Date('2026-08-16'),
+        updated_at: new Date('2026-08-16'),
+        plan_id: 1,
+        plan_name: 'Pro',
+        einvoice_status: 'issued',
+        so_hdon: '00000772',
+        khhdon: 'C26TAT',
+        einvoice_email_status: 'sent',
+        einvoice_issued_at: new Date('2026-08-16T10:00:00Z'),
+      },
+    ]);
+
+    await userController.getMyOrders(
+      { user: { id: 42, email: 'sub@test.local' } },
+      res
+    );
+
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: [
+        expect.objectContaining({
+          invoice: {
+            status: 'issued',
+            soHdon: '00000772',
+            khhdon: 'C26TAT',
+            emailStatus: 'sent',
+            issuedAt: expect.any(Date),
+          },
+        }),
+      ],
+    });
+  });
+});
+
+describe('UserController Invoice Profile', () => {
+  let res;
+
+  beforeEach(() => {
+    findInvoiceProfileByUserId.mockReset();
+    saveInvoiceProfile.mockReset();
+    clearInvoiceProfile.mockReset();
+    res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  });
+
+  it('getInvoiceProfile returns saved profile or null', async () => {
+    findInvoiceProfileByUserId.mockResolvedValue({
+      buyerType: 'company',
+      taxCode: '0312345678',
+      companyName: 'Cong Ty ABC',
+    });
+
+    await userController.getInvoiceProfile({ user: { id: 42 } }, res);
+
+    expect(findInvoiceProfileByUserId).toHaveBeenCalledWith(42);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: {
+        buyerType: 'company',
+        taxCode: '0312345678',
+        companyName: 'Cong Ty ABC',
+      },
+    });
+  });
+
+  it('updateInvoiceProfile validates and saves normalized profile', async () => {
+    saveInvoiceProfile.mockImplementation((userId, profile) => Promise.resolve(profile));
+
+    await userController.updateInvoiceProfile(
+      {
+        user: { id: 42 },
+        body: {
+          buyerType: 'company',
+          taxCode: '0312345678',
+          companyName: 'Cong Ty ABC',
+          saveProfile: true,
+          gross: 999999,
+        },
+      },
+      res
+    );
+
+    expect(saveInvoiceProfile).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({
+        buyerType: 'company',
+        taxCode: '0312345678',
+        companyName: 'Cong Ty ABC',
+      })
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({
+        buyerType: 'company',
+        taxCode: '0312345678',
+      }),
+    });
+  });
+
+  it('updateInvoiceProfile returns 400 on invalid data', async () => {
+    await userController.updateInvoiceProfile(
+      {
+        user: { id: 42 },
+        body: { buyerType: 'company', taxCode: '123' },
+      },
+      res
+    );
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false })
+    );
+  });
+
+  it('deleteInvoiceProfile clears profile', async () => {
+    clearInvoiceProfile.mockResolvedValue(null);
+
+    await userController.deleteInvoiceProfile({ user: { id: 42 } }, res);
+
+    expect(clearInvoiceProfile).toHaveBeenCalledWith(42);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      message: 'Đã xoá thông tin xuất hoá đơn đã lưu',
     });
   });
 });

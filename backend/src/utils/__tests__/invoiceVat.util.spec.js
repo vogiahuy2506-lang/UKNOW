@@ -1,6 +1,8 @@
 import {
   computeVatBreakdown,
   resolveOrderAmountWithInvoice,
+  assertBuyerFieldsValid,
+  normalizeBuyerInvoiceProfile,
   DEFAULT_INVOICE_VAT_RATE,
 } from '../invoiceVat.util.js';
 
@@ -188,5 +190,66 @@ describe('invoiceVat.util', () => {
     const r = resolveOrderAmountWithInvoice(companyOk, 0);
     expect(r.amount).toBe(0);
     expect(r.invoiceInfo).toBeNull();
+  });
+
+  describe('assertBuyerFieldsValid & normalizeBuyerInvoiceProfile', () => {
+    test('works even when INVOICE_VAT_ENABLED and worker are false', () => {
+      process.env.INVOICE_VAT_ENABLED = 'false';
+      process.env.MATBAO_EINVOICE_WORKER_ENABLED = 'false';
+
+      expect(() => assertBuyerFieldsValid(companyOk)).not.toThrow();
+
+      const profile = normalizeBuyerInvoiceProfile({
+        ...companyOk,
+        saveProfile: true,
+        gross: 548900,
+        vatAmount: 49900,
+        net: 499000,
+        vatRate: 10,
+      });
+
+      expect(profile).toMatchObject({
+        buyerType: 'company',
+        taxCode: '0312345678',
+        companyName: 'Cong Ty ABC',
+      });
+      expect(profile.savedAt).toBeDefined();
+      expect(profile.gross).toBeUndefined();
+      expect(profile.net).toBeUndefined();
+      expect(profile.vatAmount).toBeUndefined();
+      expect(profile.vatRate).toBeUndefined();
+      expect(profile.saveProfile).toBeUndefined();
+
+      process.env.INVOICE_VAT_ENABLED = 'true';
+      process.env.MATBAO_EINVOICE_WORKER_ENABLED = 'true';
+    });
+
+    test('personal buyer profile normalization', () => {
+      const profile = normalizeBuyerInvoiceProfile({
+        ...personalOk,
+        phone: '0987654321',
+        address: '123 HCM',
+      });
+
+      expect(profile).toMatchObject({
+        buyerType: 'personal',
+        fullName: 'Nguyen Van A',
+        idNumber: '001099012345',
+        phone: '0987654321',
+        address: '123 HCM',
+      });
+    });
+
+    test('invalid tax code throws 400', () => {
+      expect(() => assertBuyerFieldsValid({ buyerType: 'company', taxCode: '123' })).toThrow(
+        expect.objectContaining({ status: 400 })
+      );
+    });
+
+    test('invalid idNumber throws 400', () => {
+      expect(() => assertBuyerFieldsValid({ buyerType: 'personal', fullName: 'A', idNumber: '123' })).toThrow(
+        expect.objectContaining({ status: 400 })
+      );
+    });
   });
 });

@@ -1164,4 +1164,28 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Storage reconcile: 02:40 hàng ngày');
+
+  // ── Mat Bao E-Invoice series & year check — nightly 03:10 ─────────────────
+  cron.schedule('10 3 * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        checkEinvoiceSeries,
+        EINVOICE_SERIES_CHECK_JOB_CODE,
+      } = await import('../services/payment/matbaoInvoice.service.js');
+      await cronJobRunRepository.recordRun(EINVOICE_SERIES_CHECK_JOB_CODE, async () => {
+        const summary = await checkEinvoiceSeries();
+        console.log(
+          `[Scheduler] Einvoice series check: status=${summary.status} cLai=${summary.cLai} `
+          + `yearMismatch=${summary.yearMismatch} notFound=${summary.notFound}`
+        );
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi kiểm tra dải số hoá đơn Mắt Bão:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Mat Bao series check: 03:10 hàng ngày');
 };

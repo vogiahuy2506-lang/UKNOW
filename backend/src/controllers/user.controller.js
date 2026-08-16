@@ -10,6 +10,9 @@ import {
   findRoleAndLimits,
   findRoleAndLimitsFallback,
   findSuccessfulOrdersForUser,
+  findInvoiceProfileByUserId,
+  saveInvoiceProfile,
+  clearInvoiceProfile,
   findUserByEmailExceptId,
   resetLegacyEmployeePassword,
   revokeAllRefreshTokensForUser,
@@ -31,6 +34,7 @@ import {
 } from '../utils/topupDisplay.util.js';
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
+import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -784,11 +788,67 @@ class UserController {
               dailyZaloLimit: row.daily_zalo_limit,
               monthlyZaloLimit: row.monthly_zalo_limit,
             } : null,
+            invoice: row.einvoice_status ? {
+              status: row.einvoice_status,
+              soHdon: row.so_hdon,
+              khhdon: row.khhdon,
+              emailStatus: row.einvoice_email_status,
+              issuedAt: row.einvoice_issued_at,
+            } : null,
           };
         }),
       });
     } catch (error) {
       console.error('Get my orders error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * GET /api/users/invoice-profile
+   * Trả hồ sơ xuất hoá đơn đã lưu của user (hoặc null).
+   */
+  async getInvoiceProfile(req, res) {
+    try {
+      const userId = req.user.id;
+      const profile = await findInvoiceProfileByUserId(userId);
+      res.json({ success: true, data: profile });
+    } catch (error) {
+      console.error('Get invoice profile error:', error.message);
+      res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * PUT /api/users/invoice-profile
+   * Lưu hoặc cập nhật hồ sơ xuất hoá đơn của user.
+   */
+  async updateInvoiceProfile(req, res) {
+    try {
+      const userId = req.user.id;
+      const normalized = normalizeBuyerInvoiceProfile(req.body);
+      const saved = await saveInvoiceProfile(userId, normalized);
+      res.json({ success: true, data: saved });
+    } catch (error) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message });
+      }
+      console.error('Update invoice profile error:', error.message);
+      res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * DELETE /api/users/invoice-profile
+   * Xoá hồ sơ xuất hoá đơn đã lưu của user.
+   */
+  async deleteInvoiceProfile(req, res) {
+    try {
+      const userId = req.user.id;
+      await clearInvoiceProfile(userId);
+      res.json({ success: true, message: 'Đã xoá thông tin xuất hoá đơn đã lưu' });
+    } catch (error) {
+      console.error('Delete invoice profile error:', error.message);
       res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }

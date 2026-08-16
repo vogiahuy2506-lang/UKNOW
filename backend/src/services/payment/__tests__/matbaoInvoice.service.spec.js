@@ -43,6 +43,8 @@ jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
 
 const { parseCreateInvoiceItemResult } = await import('../../../utils/matbaoHddtClient.util.js');
 
+const mockListTemplates = jest.fn();
+
 jest.unstable_mockModule('../../../utils/matbaoHddtClient.util.js', () => ({
   isMatbaoConfigured: () => true,
   getMatbaoSeriesConfig: () => ({ khmshdon: '1', khhdon: 'C26TAT' }),
@@ -50,7 +52,7 @@ jest.unstable_mockModule('../../../utils/matbaoHddtClient.util.js', () => ({
   matbaoDownloadInvoicePdf: mockDownloadPdf,
   parseCreateInvoiceItemResult,
   matbaoLogin: jest.fn(),
-  matbaoListTemplates: jest.fn(),
+  matbaoListTemplates: mockListTemplates,
   _resetMatbaoTokenCacheForTests: jest.fn(),
 }));
 
@@ -66,6 +68,7 @@ const {
   shouldIssueInvoiceForOrder,
   sendInvoicePdfForEinvoice,
   dispatchPreparedEinvoice,
+  checkEinvoiceSeries,
 } = await import('../matbaoInvoice.service.js');
 
 /** Shape from Postman demo create-invoice success. */
@@ -166,6 +169,8 @@ describe('matbaoInvoice.service', () => {
     expect(line.TThue).toBe(49900);
     expect(line.TgTien).toBe(548900);
     expect(inv.TgThTien).toBe(499000);
+    expect(inv.TTCKTMai).toBe(0);
+    expect(inv.TGTKhac).toBe(0);
     expect(inv.TgTThue).toBe(49900);
     expect(inv.TgTTTBSo).toBe(548900);
     expect(inv.LoaiHDon).toBe(1);
@@ -326,5 +331,106 @@ describe('matbaoInvoice.service', () => {
     const result = await sendInvoicePdfForEinvoice(7);
     expect(result.skipped).toBe(true);
     expect(mockSendSystemEmail).not.toHaveBeenCalled();
+  });
+
+  describe('checkEinvoiceSeries', () => {
+    const prevEnv = process.env.NODE_ENV;
+
+    afterEach(() => {
+      process.env.NODE_ENV = prevEnv;
+    });
+
+    it('returns disabled in test environment', async () => {
+      process.env.NODE_ENV = 'test';
+      const r = await checkEinvoiceSeries();
+      expect(r.disabled).toBe(true);
+    });
+
+    it('warns when remaining count is low (<= threshold)', async () => {
+      process.env.NODE_ENV = 'production';
+      mockListTemplates.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: {
+          data: [
+            { khmshDon: '1', khhDon: 'C26TAT', cLai: 25 },
+          ],
+        },
+      });
+
+      const r = await checkEinvoiceSeries({ currentYear: 2026, threshold: 50 });
+      expect(r.status).toBe('warning');
+      expect(r.cLai).toBe(25);
+      expect(r.isLow).toBe(true);
+      expect(r.yearMismatch).toBe(false);
+    });
+
+    it('healthy when count is high and year matches', async () => {
+      process.env.NODE_ENV = 'production';
+      mockListTemplates.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: {
+          data: [
+            { khmshDon: '1', khhDon: 'C26TAT', cLai: 100 },
+          ],
+        },
+      });
+
+      const r = await checkEinvoiceSeries({ currentYear: 2026, threshold: 50 });
+      expect(r.status).toBe('success');
+      expect(r.isLow).toBe(false);
+      expect(r.yearMismatch).toBe(false);
+      expect(r.cLai).toBe(100);
+    });
+
+    it('warns when series year does not match current year (e.g. year 2027 vs C26TAT)', async () => {
+      process.env.NODE_ENV = 'production';
+      mockListTemplates.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: {
+          data: [
+            { khmshDon: '1', khhDon: 'C26TAT', cLai: 100 },
+          ],
+        },
+      });
+
+      const r = await checkEinvoiceSeries({ currentYear: 2027, threshold: 50 });
+      expect(r.status).toBe('warning');
+      expect(r.yearMismatch).toBe(true);
+      expect(r.isLow).toBe(false);
+    });
+
+    it('warns when configured series not found in templates', async () => {
+      process.env.NODE_ENV = 'production';
+      mockListTemplates.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: {
+          data: [
+            { khmshDon: '1', khhDon: 'C26OTHER', cLai: 100 },
+          ],
+        },
+      });
+
+      const r = await checkEinvoiceSeries({ currentYear: 2026 });
+      expect(r.status).toBe('warning');
+      expect(r.notFound).toBe(true);
+    });
+
+    it('returns error when Mat Bao API fails (!res.ok)', async () => {
+      process.env.NODE_ENV = 'production';
+      mockListTemplates.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        body: { message: 'Bad gateway' },
+      });
+
+      const r = await checkEinvoiceSeries({ currentYear: 2026 });
+      expect(r.status).toBe('error');
+      expect(r.cLai).toBeNull();
+      expect(r.error).toBe('Bad gateway');
+    });
   });
 });

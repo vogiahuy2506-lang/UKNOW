@@ -41,6 +41,11 @@ ENV VITE_FEATURE_PRODUCTS=${VITE_FEATURE_PRODUCTS}
 ARG VITE_FEATURE_LANDING_CMS=false
 ENV VITE_FEATURE_LANDING_CMS=${VITE_FEATURE_LANDING_CMS}
 
+# Hiện form xuất hoá đơn VAT ở checkout + top-up. Phải bật SAU khi backend đã bật
+# INVOICE_VAT_ENABLED, nếu không khách điền form mà đơn vẫn không có hoá đơn.
+ARG VITE_INVOICE_VAT_ENABLED=false
+ENV VITE_INVOICE_VAT_ENABLED=${VITE_INVOICE_VAT_ENABLED}
+
 RUN npm run build
 RUN printf '{"sha":"%s"}\n' "$BUILD_SHA" > /app/dist/version.json
 

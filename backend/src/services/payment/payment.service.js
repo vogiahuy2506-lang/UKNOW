@@ -31,7 +31,8 @@ import {
     tryFulfillPendingOrderOnStatusCheck,
 } from './payosReconcile.service.js';
 import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
-import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
+import { resolveOrderAmountWithInvoice, normalizeBuyerInvoiceProfile } from '../../utils/invoiceVat.util.js';
+import { saveInvoiceProfile } from '../../repositories/user/user.repository.js';
 import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
@@ -174,6 +175,15 @@ export const createPaymentLink = async ({
         throw err;
     } finally {
         client.release();
+    }
+
+    if (userId && invoiceInfoRaw?.saveProfile === true) {
+        try {
+            const normalizedProfile = normalizeBuyerInvoiceProfile(invoiceInfoRaw);
+            await saveInvoiceProfile(userId, normalizedProfile);
+        } catch (err) {
+            console.warn('[PaymentService] Failed to auto-save invoice profile:', err.message);
+        }
     }
 
     if (amount <= 0) {
@@ -542,6 +552,15 @@ export const createCustomPaymentLink = async ({
         throw err;
     } finally {
         client.release();
+    }
+
+    if (userId && invoiceInfoRaw?.saveProfile === true) {
+        try {
+            const normalizedProfile = normalizeBuyerInvoiceProfile(invoiceInfoRaw);
+            await saveInvoiceProfile(userId, normalizedProfile);
+        } catch (err) {
+            console.warn('[PaymentService] Failed to auto-save invoice profile:', err.message);
+        }
     }
 
     if (amount <= 0) {

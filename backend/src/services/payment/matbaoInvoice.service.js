@@ -20,6 +20,7 @@ import {
   isMatbaoConfigured,
   getMatbaoSeriesConfig,
   matbaoCreateInvoices,
+  matbaoListTemplates,
   matbaoDownloadInvoicePdf,
   parseCreateInvoiceItemResult,
 } from '../../utils/matbaoHddtClient.util.js';
@@ -36,6 +37,8 @@ import {
 export const EINVOICE_RECONCILE_JOB_CODE = 'einvoice_matbao_retry';
 export const EINVOICE_EMAIL_JOB_CODE = 'einvoice_email_retry';
 export const EINVOICE_REPAIR_JOB_CODE = 'einvoice_missing_intent_repair';
+export const EINVOICE_SERIES_CHECK_JOB_CODE = 'einvoice_series_check';
+export const DEFAULT_SERIES_LOW_THRESHOLD = 50;
 const HANOI_TZ = 'Asia/Ho_Chi_Minh';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
@@ -153,6 +156,8 @@ export function buildCreateInvoicePayload(order, info) {
       },
     ],
     TgThTien: net,
+    TTCKTMai: 0,
+    TGTKhac: 0,
     TgTThue: vatAmount,
     TgTTTBSo: gross,
     TgTTTBChu: vndAmountToVietnameseWords(gross),
@@ -512,6 +517,85 @@ export async function repairMissingEinvoiceIntents({ limit = 20 } = {}) {
   summary.status = summary.prepared > 0 ? 'success' : 'noop';
   summary.synced = summary.prepared;
   return summary;
+}
+
+/**
+ * Cron: Check series availability and calendar year matching for Mat Bao invoice series.
+ */
+export async function checkEinvoiceSeries({
+  currentYear = new Date().getFullYear(),
+  threshold = Number(process.env.EINVOICE_SERIES_LOW_THRESHOLD) || DEFAULT_SERIES_LOW_THRESHOLD,
+} = {}) {
+  if (process.env.NODE_ENV === 'test') {
+    return { scanned: 0, cLai: null, disabled: true };
+  }
+  if (!isMatbaoEinvoiceWorkerEnabled() || !isMatbaoConfigured()) {
+    return { scanned: 0, cLai: null, disabled: true };
+  }
+
+  const res = await matbaoListTemplates(currentYear);
+  if (!res.ok) {
+    const errorMsg = res.body?.message || res.body?.errorMessage || `HTTP ${res.status}`;
+    console.error('[MatBaoInvoice][OPS ALERT] Không lấy được danh sách templates từ Mắt Bão:', res.body);
+    return {
+      status: 'error',
+      synced: 0,
+      cLai: null,
+      error: errorMsg,
+    };
+  }
+
+  const list = res.body?.data || res.body?.Data || (Array.isArray(res.body) ? res.body : []);
+  const seriesConfig = getMatbaoSeriesConfig();
+  const cfgKhmshdon = String(seriesConfig.khmshdon || '').trim();
+  const cfgKhhdon = String(seriesConfig.khhdon || '').trim();
+
+  // Kiểm tra năm ký hiệu (KHHDon: C26TAT -> "26" vs 2 số cuối năm)
+  const currentYear2Digits = String(currentYear).slice(-2);
+  const seriesYear2Digits = cfgKhhdon.slice(1, 3);
+  const yearMismatch = seriesYear2Digits !== currentYear2Digits;
+
+  const matched = list.find((item) => {
+    const itemKhmshdon = String(item.khmshDon ?? item.KHMSHDon ?? item.khmshdon ?? '').trim();
+    const itemKhhdon = String(item.khhDon ?? item.KHHDon ?? item.khhdon ?? '').trim();
+    return itemKhmshdon === cfgKhmshdon && itemKhhdon === cfgKhhdon;
+  });
+
+  if (!matched) {
+    console.error(`[MatBaoInvoice][OPS ALERT] Không tìm thấy dải ký hiệu khớp cấu hình: KHMSHDon=${cfgKhmshdon}, KHHDon=${cfgKhhdon}`);
+    return {
+      status: 'warning',
+      synced: 0,
+      notFound: true,
+      khhdon: cfgKhhdon,
+      khmshdon: cfgKhmshdon,
+      cLai: 0,
+      yearMismatch,
+    };
+  }
+
+  const rawCLai = matched.cLai ?? matched.CLai ?? matched.cl ?? 0;
+  const cLai = Number(rawCLai) || 0;
+  const isLow = cLai <= threshold;
+
+  if (isLow) {
+    console.error(`[MatBaoInvoice][OPS ALERT] Dải số hoá đơn sắp hết: còn lại ${cLai} số (ngưỡng <= ${threshold}).`);
+  }
+  if (yearMismatch) {
+    console.error(`[MatBaoInvoice][OPS ALERT] Ký hiệu hoá đơn sai năm: đang dùng ${cfgKhhdon} (năm ${seriesYear2Digits}), năm hiện tại là ${currentYear}.`);
+  }
+
+  return {
+    status: isLow || yearMismatch ? 'warning' : 'success',
+    synced: 1,
+    cLai,
+    threshold,
+    isLow,
+    yearMismatch,
+    notFound: false,
+    khhdon: cfgKhhdon,
+    khmshdon: cfgKhmshdon,
+  };
 }
 
 export async function streamInvoicePdfForOwner(orderCode, userId) {

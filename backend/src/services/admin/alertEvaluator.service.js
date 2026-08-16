@@ -113,6 +113,49 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'einvoice_series_low': {
+      const jobCode = config.jobCode || 'einvoice_series_check';
+      const m = await alertRepo.metricLatestEinvoiceSeries(jobCode);
+      if (!m.found) return null;
+      if (m.result?.disabled) return null; // tính năng đang tắt — không phải sự cố
+      if (m.error || (m.result?.status === 'error')) {
+        return {
+          measuredValue: 0,
+          message: `Không kết nối được API Mắt Bão để đọc dải số hoá đơn: ${m.error || m.result?.error || 'Lỗi kết nối'}`,
+          payload: m,
+        };
+      }
+      if (m.notFound) {
+        return {
+          measuredValue: 0,
+          message: 'Không tìm thấy dải ký hiệu hoá đơn Mắt Bão khớp cấu hình — kiểm tra MATBAO_HDDT_KHHDON',
+          payload: m,
+        };
+      }
+      if (m.yearMismatch) {
+        return {
+          measuredValue: m.cLai ?? 0,
+          message: `Ký hiệu hoá đơn Mắt Bão (${m.result?.khhdon}) không khớp năm hiện tại — cần đổi sang ký hiệu năm mới`,
+          payload: m,
+        };
+      }
+      const need = Number.isFinite(threshold) ? threshold : 50;
+      if (m.cLai == null) {
+        return {
+          measuredValue: 0,
+          message: 'Không đọc được số lượng hoá đơn còn lại từ Mắt Bão',
+          payload: m,
+        };
+      }
+      if (m.cLai <= need) {
+        return {
+          measuredValue: m.cLai,
+          message: `Dải số hoá đơn điện tử Mắt Bão sắp hết: còn lại ${m.cLai} số (ngưỡng <= ${need})`,
+          payload: m,
+        };
+      }
+      return null;
+    }
     case 'ai_cost_spike': {
       const m = await alertRepo.metricAiTokenSpike();
       if (m.avgPrev7 <= 0) return null;

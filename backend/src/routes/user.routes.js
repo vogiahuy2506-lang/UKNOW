@@ -15,6 +15,11 @@ router.get('/profile', userController.getProfile.bind(userController));
 // Lịch sử mua gói dịch vụ của user đang đăng nhập
 router.get('/my-orders', userController.getMyOrders.bind(userController));
 
+// Hồ sơ xuất hoá đơn người dùng tự lưu
+router.get('/invoice-profile', userController.getInvoiceProfile.bind(userController));
+router.put('/invoice-profile', userController.updateInvoiceProfile.bind(userController));
+router.delete('/invoice-profile', userController.deleteInvoiceProfile.bind(userController));
+
 /**
  * PATCH /api/users/bot-daily-reply-cap
  * Chủ tài khoản đặt trần lượt bot trả lời mỗi ngày (null/empty = bỏ giới hạn).

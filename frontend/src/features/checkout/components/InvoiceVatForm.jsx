@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
+import api from '../../../services/api';
 
 /** Keep in sync with backend DEFAULT_INVOICE_VAT_RATE / INVOICE_VAT_RATE. */
 export const DEFAULT_FE_INVOICE_VAT_RATE = 10;
@@ -47,7 +48,7 @@ export function maskAccountEmail(email) {
 
 /**
  * Mandatory VAT invoice form for Checkout.
- * Pre-fills known account info to minimize checkout friction.
+ * Pre-fills known account info or saved profile to minimize checkout friction.
  */
 export default function InvoiceVatForm({
   netAmount = 0,
@@ -72,6 +73,47 @@ export default function InvoiceVatForm({
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState(defaultPhone || '');
   const [address, setAddress] = useState('');
+  const [saveProfile, setSaveProfile] = useState(true);
+
+  // Field touch states for field-level error messages
+  const [touched, setTouched] = useState({
+    taxCode: false,
+    companyName: false,
+    fullName: false,
+    idNumber: false,
+  });
+
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  // Load saved profile on initial mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/users/invoice-profile');
+        const profile = res?.data?.data;
+        if (cancelled || !profile || typeof profile !== 'object') return;
+
+        if (profile.buyerType === 'company' || profile.buyerType === 'personal') {
+          setBuyerType(profile.buyerType);
+        }
+        if (profile.taxCode) setTaxCode(profile.taxCode);
+        if (profile.companyName) setCompanyName(profile.companyName);
+        if (profile.companyAddress) setCompanyAddress(profile.companyAddress);
+        if (profile.fullName) setFullName(profile.fullName);
+        if (profile.idNumber) setIdNumber(profile.idNumber);
+        if (profile.phone) setPhone(profile.phone);
+        if (profile.address) setAddress(profile.address);
+      } catch {
+        // Silently fallback to defaults on error
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Synchronize defaults if profile loads after initial mount
   useEffect(() => {
@@ -83,6 +125,33 @@ export default function InvoiceVatForm({
     }
   }, [defaultFullName, defaultPhone]);
 
+  // Compute validation errors
+  const errors = useMemo(() => {
+    const errs = {};
+    if (buyerType === 'company') {
+      const cleanTax = String(taxCode || '').trim().replace(/\s+/g, '');
+      if (!cleanTax) {
+        errs.taxCode = t('invoiceVat.errors.taxCodeRequired');
+      } else if (!TAX_CODE_REGEX.test(cleanTax)) {
+        errs.taxCode = t('invoiceVat.errors.taxCodeInvalid');
+      }
+      if (!String(companyName || '').trim()) {
+        errs.companyName = t('invoiceVat.errors.companyNameRequired');
+      }
+    } else {
+      if (!String(fullName || '').trim()) {
+        errs.fullName = t('invoiceVat.errors.fullNameRequired');
+      }
+      const cleanId = String(idNumber || '').trim().replace(/\s+/g, '');
+      if (!cleanId) {
+        errs.idNumber = t('invoiceVat.errors.idNumberRequired');
+      } else if (!ID_NUMBER_REGEX.test(cleanId)) {
+        errs.idNumber = t('invoiceVat.errors.idNumberInvalid');
+      }
+    }
+    return errs;
+  }, [buyerType, taxCode, companyName, fullName, idNumber, t]);
+
   const payload = useMemo(() => {
     if (!canRequest) {
       return { wantInvoice: false };
@@ -93,6 +162,7 @@ export default function InvoiceVatForm({
       email: accountEmail,
       phone: String(phone || '').trim() || undefined,
       address: String(address || '').trim() || undefined,
+      saveProfile,
     };
     if (buyerType === 'company') {
       return {
@@ -113,6 +183,7 @@ export default function InvoiceVatForm({
     accountEmail,
     phone,
     address,
+    saveProfile,
     taxCode,
     companyName,
     companyAddress,
@@ -128,8 +199,14 @@ export default function InvoiceVatForm({
 
   if (!canRequest) return null;
 
-  const inputClass =
-    'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300';
+  const getInputClass = (fieldName) => {
+    const hasError = Boolean(touched[fieldName] && errors[fieldName]);
+    if (hasError) {
+      return 'w-full rounded-lg border border-red-400 bg-red-50/30 px-3 py-2 text-sm text-red-900 placeholder:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400';
+    }
+    return 'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300';
+  };
+
   const readonlyClass =
     'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 cursor-not-allowed';
 
@@ -170,53 +247,85 @@ export default function InvoiceVatForm({
       <div className="space-y-2 px-3 pb-3">
         {buyerType === 'company' ? (
           <>
-            <input
-              className={inputClass}
-              value={taxCode}
-              onChange={(e) => setTaxCode(e.target.value)}
-              placeholder={t('invoiceVat.taxCode')}
-              maxLength={14}
-              autoComplete="off"
-            />
-            <input
-              className={inputClass}
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder={t('invoiceVat.companyName')}
-              autoComplete="organization"
-            />
-            <input
-              className={inputClass}
-              value={companyAddress}
-              onChange={(e) => setCompanyAddress(e.target.value)}
-              placeholder={t('invoiceVat.companyAddress')}
-              autoComplete="street-address"
-            />
+            <div>
+              <input
+                className={getInputClass('taxCode')}
+                value={taxCode}
+                onChange={(e) => setTaxCode(e.target.value)}
+                onBlur={() => handleBlur('taxCode')}
+                placeholder={t('invoiceVat.taxCode')}
+                maxLength={14}
+                autoComplete="off"
+                aria-invalid={Boolean(touched.taxCode && errors.taxCode)}
+              />
+              {touched.taxCode && errors.taxCode && (
+                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.taxCode}</p>
+              )}
+            </div>
+            <div>
+              <input
+                className={getInputClass('companyName')}
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                onBlur={() => handleBlur('companyName')}
+                placeholder={t('invoiceVat.companyName')}
+                autoComplete="organization"
+                aria-invalid={Boolean(touched.companyName && errors.companyName)}
+              />
+              {touched.companyName && errors.companyName && (
+                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.companyName}</p>
+              )}
+            </div>
+            <div>
+              <input
+                className={getInputClass('companyAddress')}
+                value={companyAddress}
+                onChange={(e) => setCompanyAddress(e.target.value)}
+                placeholder={t('invoiceVat.companyAddress')}
+                autoComplete="street-address"
+              />
+            </div>
           </>
         ) : (
           <>
-            <input
-              className={inputClass}
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder={t('invoiceVat.fullName')}
-              autoComplete="name"
-            />
-            <input
-              className={inputClass}
-              value={idNumber}
-              onChange={(e) => setIdNumber(e.target.value)}
-              placeholder={t('invoiceVat.idNumber')}
-              maxLength={12}
-              autoComplete="off"
-            />
-            <input
-              className={inputClass}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder={t('invoiceVat.address')}
-              autoComplete="street-address"
-            />
+            <div>
+              <input
+                className={getInputClass('fullName')}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                onBlur={() => handleBlur('fullName')}
+                placeholder={t('invoiceVat.fullName')}
+                autoComplete="name"
+                aria-invalid={Boolean(touched.fullName && errors.fullName)}
+              />
+              {touched.fullName && errors.fullName && (
+                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.fullName}</p>
+              )}
+            </div>
+            <div>
+              <input
+                className={getInputClass('idNumber')}
+                value={idNumber}
+                onChange={(e) => setIdNumber(e.target.value)}
+                onBlur={() => handleBlur('idNumber')}
+                placeholder={t('invoiceVat.idNumber')}
+                maxLength={12}
+                autoComplete="off"
+                aria-invalid={Boolean(touched.idNumber && errors.idNumber)}
+              />
+              {touched.idNumber && errors.idNumber && (
+                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.idNumber}</p>
+              )}
+            </div>
+            <div>
+              <input
+                className={getInputClass('address')}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={t('invoiceVat.address')}
+                autoComplete="street-address"
+              />
+            </div>
           </>
         )}
         <div>
@@ -233,13 +342,28 @@ export default function InvoiceVatForm({
             {t('invoiceVat.emailPdfHint')}
           </p>
         </div>
-        <input
-          className={inputClass}
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder={t('invoiceVat.phone')}
-          autoComplete="tel"
-        />
+        <div>
+          <input
+            className={getInputClass('phone')}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder={t('invoiceVat.phone')}
+            autoComplete="tel"
+          />
+        </div>
+
+        {/* Checkbox auto-save profile for next time */}
+        <div className="pt-1">
+          <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={saveProfile}
+              onChange={(e) => setSaveProfile(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+            />
+            <span>{t('invoiceVat.saveProfile')}</span>
+          </label>
+        </div>
       </div>
     </div>
   );

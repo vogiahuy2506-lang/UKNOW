@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   HiOutlineClipboardList,
   HiOutlineCheckCircle,
@@ -34,6 +35,80 @@ function formatTopupItemsSummary(items, t) {
       return `${Number(it.qty).toLocaleString('vi-VN')} ${label}`;
     })
     .join(' · ');
+}
+
+function renderInvoiceStatus(invoice, orderCode, t) {
+  if (!invoice || !invoice.status) {
+    return (
+      <span className="text-xs text-gray-400">
+        {t('invoiceVat.history.none')}
+      </span>
+    );
+  }
+
+  const { status, soHdon } = invoice;
+
+  if (status === 'pending' || status === 'processing') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
+        {t('invoiceVat.history.pending')}
+      </span>
+    );
+  }
+
+  if (status === 'issued') {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+          {t('invoiceVat.history.issued', { soHdon: soHdon || '—' })}
+        </span>
+        <Link
+          to={`/invoices/${orderCode}`}
+          className="inline-flex items-center text-xs font-semibold text-primary-600 hover:text-primary-700 underline"
+        >
+          {t('invoiceVat.history.view')}
+        </Link>
+      </div>
+    );
+  }
+
+  if (status === 'cqt_ok') {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+          {t('invoiceVat.history.cqtOk')}
+        </span>
+        <Link
+          to={`/invoices/${orderCode}`}
+          className="inline-flex items-center text-xs font-semibold text-primary-600 hover:text-primary-700 underline"
+        >
+          {t('invoiceVat.history.view')}
+        </Link>
+      </div>
+    );
+  }
+
+  if (status === 'failed') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 border border-rose-200">
+        {t('invoiceVat.history.failed')}
+      </span>
+    );
+  }
+
+  if (status === 'cqt_rejected') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 border border-rose-200">
+        {t('invoiceVat.history.cqtRejected')}
+      </span>
+    );
+  }
+
+  return (
+    <span className="text-xs text-gray-400">
+      {t('invoiceVat.history.none')}
+    </span>
+  );
 }
 
 export default function OrderHistoryTab({ isUserAdmin, t }) {
@@ -112,6 +187,17 @@ export default function OrderHistoryTab({ isUserAdmin, t }) {
                 <span>{t('accountProfileModal.zaloPerMonth')} <strong className="text-gray-700">{order.plan.monthlyZaloLimit ?? t('accountProfileModal.unlimitedShort')}</strong></span>
               </div>
             )}
+
+            {/* Electronic invoice status row */}
+            <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs text-gray-500 font-medium">
+                {t('invoiceVat.history.invoiceLabel')}:
+              </span>
+              <div>
+                {renderInvoiceStatus(order.invoice, order.orderCode, t)}
+              </div>
+            </div>
+
             <p className="text-xs text-gray-400 mt-2">
               {new Date(order.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
