@@ -53,6 +53,11 @@ jobs:
             VITE_PRIMARY_APP_HOSTS=localhost,127.0.0.1,founderai.biz,www.founderai.biz
             VITE_DEFAULT_FROM_DOMAIN=digiso.vn
             VITE_GA_MEASUREMENT_ID=${{ secrets.VITE_GA_MEASUREMENT_ID }}
+            # Cờ tính năng — chỉ 'true' mới mở route, thiếu biến = đóng.
+            VITE_FEATURE_ORDERS=true
+            VITE_FEATURE_COURSES=true
+            VITE_FEATURE_LANDING_CMS=true
+            VITE_FEATURE_PRODUCTS=true
             BUILD_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -148,12 +148,6 @@ const OwnerRoute = ({ children }) => {
   return children;
 };
 
-// Ẩn route đang hoàn thiện trên bản production (dev/preview vẫn truy cập được)
-const ProductionHiddenRoute = ({ children }) => {
-  if (import.meta.env.MODE === 'production') return <UnauthorizedScreen />;
-  return children;
-};
-
 // Gác route bằng cờ tính năng (Feature flag)
 const FeatureFlagRoute = ({ flag, children }) => {
   if (import.meta.env[flag] !== 'true') return <UnauthorizedScreen />;
@@ -424,7 +418,7 @@ function App() {
 
             {/* Courses */}
             <Route path="courses" element={<FeatureFlagRoute flag="VITE_FEATURE_COURSES"><Courses /></FeatureFlagRoute>} />
-            <Route path="products" element={<OwnerRoute><ProductionHiddenRoute><Products /></ProductionHiddenRoute></OwnerRoute>} />
+            <Route path="products" element={<FeatureFlagRoute flag="VITE_FEATURE_PRODUCTS"><OwnerRoute><Products /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="landing-leads" element={<LandingLeadsListPage />} />
 
             {/* Marketplace - unified page with tabs */}
