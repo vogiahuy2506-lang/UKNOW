@@ -24,8 +24,8 @@ npm run dev
 
 # Frontend (terminal khác)
 cd frontend
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 ## Testing

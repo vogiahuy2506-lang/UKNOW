@@ -50,11 +50,11 @@ jobs:
             backend/package-lock.json
             e2e/package-lock.json
 
-      - name: Cache frontend Yarn deps
+      - name: Cache frontend npm deps
         uses: actions/cache@v4
         with:
           path: frontend/node_modules
-          key: yarn-${{ hashFiles('frontend/yarn.lock') }}
+          key: npm-${{ hashFiles('frontend/package-lock.json') }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -67,7 +67,7 @@ jobs:
         working-directory: backend
 
       - name: Install frontend deps
-        run: yarn install --frozen-lockfile
+        run: npm ci
         working-directory: frontend
 
       - name: Install e2e deps

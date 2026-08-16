@@ -2,8 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+COPY package.json package-lock.json ./
+RUN npm ci
 
 ARG BUILD_SHA=dev
 RUN echo "Build SHA: $BUILD_SHA"
@@ -41,7 +41,7 @@ ENV VITE_FEATURE_PRODUCTS=${VITE_FEATURE_PRODUCTS}
 ARG VITE_FEATURE_LANDING_CMS=false
 ENV VITE_FEATURE_LANDING_CMS=${VITE_FEATURE_LANDING_CMS}
 
-RUN yarn build
+RUN npm run build
 RUN printf '{"sha":"%s"}\n' "$BUILD_SHA" > /app/dist/version.json
 
 FROM nginx:1.27-alpine AS runner
