@@ -269,7 +269,13 @@ export async function cascadeSlugChange(oldSlug, newSlug, queryable = db) {
 }
 
 export async function deleteArticle(id, queryable = db) {
-  await queryable.query(`DELETE FROM help_articles WHERE id = $1`, [id]);
+  // Find the article to get its slug
+  const { rows } = await queryable.query(`SELECT slug FROM help_articles WHERE id = $1`, [id]);
+  if (!rows[0]) return;
+  const { slug } = rows[0];
+
+  // Delete all articles with the same slug (both VI and EN)
+  await queryable.query(`DELETE FROM help_articles WHERE slug = $1`, [slug]);
 }
 
 export async function listMedia(articleId, queryable = db) {

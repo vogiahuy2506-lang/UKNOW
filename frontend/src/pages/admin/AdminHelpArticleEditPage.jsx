@@ -249,9 +249,11 @@ export default function AdminHelpArticleEditPage() {
               <button
                 type="button"
                 onClick={() => switchLocale('vi')}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                disabled={!siblingViId && currentLocale !== 'vi'}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-40 ${
                   currentLocale === 'vi' ? 'bg-primary-50 text-primary-700' : 'text-slate-600 hover:bg-slate-50'
                 }`}
+                title={!siblingViId && currentLocale !== 'vi' ? 'Lỗi: Thiếu bản gốc tiếng Việt' : t('adminHelp.switchToVi')}
               >
                 {t('adminHelp.localeVi')}
               </button>
@@ -290,6 +292,11 @@ export default function AdminHelpArticleEditPage() {
       {!isCreate && currentLocale === 'vi' && !siblingEnId && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600">
           {t('adminHelp.enMissingHint')}
+        </div>
+      )}
+      {!isCreate && currentLocale === 'en' && !siblingViId && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <strong>Lỗi dữ liệu:</strong> Bài viết này hiện chỉ có bản tiếng Anh (bản gốc tiếng Việt cùng slug đã bị xoá hoặc không tồn tại). Nút chuyển "VI" và nút dịch tự động bị vô hiệu hoá. Để sửa lỗi, bạn hãy xoá bài này và viết lại từ đầu bằng tiếng Việt.
         </div>
       )}
 

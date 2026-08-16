@@ -40,7 +40,7 @@ export default function AdminHelpArticlesPage() {
     load();
   }, [load]);
 
-  // Prefer showing VI rows; attach EN sibling meta for badges.
+  // Show row for each unique slug.
   const rows = useMemo(() => {
     const bySlug = new Map();
     for (const a of articles) {
@@ -55,7 +55,9 @@ export default function AdminHelpArticlesPage() {
         const primary = vi || en;
         return {
           ...primary,
+          _vi: vi,
           _en: en,
+          _hasVi: Boolean(vi),
           _hasEn: Boolean(en),
           _enStale: Boolean(en?.is_stale),
         };
@@ -160,9 +162,15 @@ export default function AdminHelpArticlesPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-1">
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
-                            {t('adminHelp.localeVi')}
-                          </span>
+                          {article._hasVi ? (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+                              {t('adminHelp.localeVi')}
+                            </span>
+                          ) : (
+                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600 font-medium" title="Lỗi: Bài viết này bị mất bản gốc tiếng Việt!">
+                              Thiếu VI
+                            </span>
+                          )}
                           {article._hasEn ? (
                             <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                               article._enStale
