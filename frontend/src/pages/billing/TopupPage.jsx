@@ -3,7 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { HiMinus, HiPlus, HiOutlineExclamation } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import { useAuthStore } from '../../stores/authStore';
 import { getTopupConfig, quoteTopup, createTopupPayment } from '../../services/topup.service';
+import InvoiceVatForm, { isInvoiceInfoValid } from '../../features/checkout/components/InvoiceVatForm';
+import { isInvoiceVatUiEnabled } from '../../constants/invoiceVat';
 
 const fmtVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
 
@@ -46,15 +49,17 @@ function formatQtyInput(value) {
 const TopupPage = () => {
   const { t } = useI18n();
   const navigate = useNavigate();
-
-  const [loading, setLoading] = useState(true);
-  const [quoting, setQuoting] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const [error, setError] = useState(null);
+  const user = useAuthStore((state) => state.user);
   const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState({});
   const [months, setMonths] = useState(1);
   const [quote, setQuote] = useState(null);
+  const [quoting, setQuoting] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState(null);
+  const [invoiceInfo, setInvoiceInfo] = useState(null);
+  const invoiceVatUiEnabled = isInvoiceVatUiEnabled();
 
   useEffect(() => {
     let cancelled = false;
@@ -219,15 +224,22 @@ const TopupPage = () => {
   const total = Number(quote?.total || 0);
   const meetsMinimum = Boolean(quote?.meetsMinimum);
   const shortfall = Number(quote?.shortfall || 0);
-  const canPay = meetsMinimum && !paying && !quoting && !error && !hasQuantityIssues;
+  const isInvoiceValid = !invoiceVatUiEnabled || total <= 0 || isInvoiceInfoValid(invoiceInfo);
+  const canPay = meetsMinimum && !paying && !quoting && !error && !hasQuantityIssues && isInvoiceValid;
 
   const handlePay = async () => {
-    if (!canPay) return;
+    if (!canPay) {
+      if (invoiceVatUiEnabled && total > 0 && !isInvoiceInfoValid(invoiceInfo)) {
+        toast.error(t('invoiceVat.fillRequiredFields'));
+      }
+      return;
+    }
     try {
       setPaying(true);
       const { data } = await createTopupPayment({
         quantities,
         months,
+        invoiceInfo: invoiceVatUiEnabled ? invoiceInfo : null,
       });
       const result = data.result || data.data;
       if (result?.checkoutUrl) {
@@ -398,6 +410,17 @@ const TopupPage = () => {
         </div>
       )}
 
+      {invoiceVatUiEnabled && total > 0 && (
+        <InvoiceVatForm
+          netAmount={total}
+          disabled={paying}
+          defaultEmail={user?.email || ''}
+          defaultFullName={user?.full_name || user?.name || ''}
+          defaultPhone={user?.phone || ''}
+          onChange={setInvoiceInfo}
+        />
+      )}
+
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
         <div className="flex items-center justify-between text-sm text-slate-600">
           <span>{t('topup.total')}</span>
@@ -410,7 +433,12 @@ const TopupPage = () => {
           </span>
         </div>
         <div className="flex items-center justify-between text-base font-bold text-slate-900">
-          <span>{t('checkout.total')}</span>
+          <div>
+            <span className="block">{t('checkout.total')}</span>
+            <span className="text-[10px] text-slate-400 font-normal">
+              {t('checkout.vatIncluded')}
+            </span>
+          </div>
           <span>
             {hasQuantityIssues
               ? t('topup.fixQtyToSeePrice')

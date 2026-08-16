@@ -442,6 +442,11 @@ export default function PricingSection({ embedded = false, compact = false, glas
                         <span className={`text-xs ml-1 ${style.unit}`}>{t('pricing.perMonth')}</span>
                       </div>
                     )}
+                    {!isCustom && Number(promotedPrice || rawPlanPrice || plan.price || 0) > 0 && (
+                      <div className={`text-[10px] ${style.unit} mt-1`}>
+                        {t('checkout.vatIncluded')}
+                      </div>
+                    )}
                   </div>
 
                   {/* Features */}

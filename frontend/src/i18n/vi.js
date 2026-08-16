@@ -2192,10 +2192,9 @@ export default {
   },
 
   invoiceVat: {
-    bannerTitle: 'Bạn có muốn xuất hoá đơn VAT?',
-    vatAdditiveNote: 'Giá chưa gồm VAT, cộng {rate}% khi xuất hoá đơn',
-    dismiss: 'Không xuất hoá đơn',
-    reopenBanner: 'Xuất hoá đơn VAT (tuỳ chọn)',
+    bannerTitle: 'Thông tin xuất hoá đơn',
+    bannerSubtitle: 'Theo quy định, hoá đơn VAT phải được xuất ngay khi thanh toán thành công.',
+    vatAdditiveNote: 'Giá chưa gồm VAT, cộng {rate}% thuế suất GTGT',
     tabCompany: 'Công ty',
     tabPersonal: 'Cá nhân',
     taxCode: 'Mã số thuế *',
@@ -2208,6 +2207,7 @@ export default {
     emailReadonly: 'Email tài khoản',
     emailPdfHint: 'PDF hoá đơn sẽ được gửi tới email tài khoản này',
     phone: 'Số điện thoại',
+    fillRequiredFields: 'Vui lòng điền đầy đủ thông tin xuất hoá đơn',
   },
 
   voucherAdmin: {
@@ -3614,7 +3614,7 @@ export default {
     faq2Q: 'Tôi có thể nâng cấp hoặc hạ cấp gói dịch vụ không?',
     faq2A: 'Có. Bạn có thể thay đổi gói bất kỳ lúc nào từ trang quản lý tài khoản.',
     faq3Q: 'Chi phí có bao gồm thuế VAT không?',
-    faq3A: 'Giá hiển thị chưa bao gồm VAT 10%. Bạn có thể yêu cầu xuất hóa đơn GTGT.',
+    faq3A: 'Giá hiển thị chưa bao gồm VAT 10%. Thuế VAT sẽ được cộng thêm ở bước thanh toán và hoá đơn GTGT được phát hành tự động.',
     faq4Q: 'Founder AI có hỗ trợ setup ban đầu không?',
     faq4A: 'Gói Professional và Enterprise được hỗ trợ setup miễn phí trong 30 phút đầu tiên.',
   },

@@ -73,7 +73,7 @@ function parseInvoiceInfo(order) {
 /** Durable intent — does not require Matbao/worker readiness. */
 export function hasInvoiceIntent(order) {
   const info = parseInvoiceInfo(order);
-  return Boolean(info?.wantInvoice && order?.id && order?.order_code);
+  return Boolean(info && Number(info.vatAmount) > 0 && order?.id && order?.order_code);
 }
 
 export function shouldIssueInvoiceForOrder(order) {
@@ -169,7 +169,7 @@ export async function prepareEinvoiceForPaidOrder(order, queryable) {
   if (!hasInvoiceIntent(order)) return null;
 
   const info = parseInvoiceInfo(order);
-  if (!info?.wantInvoice) return null;
+  if (!info || !(Number(info.vatAmount) > 0)) return null;
 
   const existing = await findEinvoiceByOrderId(order.id, queryable);
   if (existing) return existing.id;
@@ -262,7 +262,7 @@ export async function dispatchPreparedEinvoice(einvoiceId) {
     user_email: job.user_email,
   };
   const info = parseInvoiceInfo(order);
-  if (!info?.wantInvoice) return { skipped: true, reason: 'no_intent' };
+  if (!info || !(Number(info.vatAmount) > 0)) return { skipped: true, reason: 'no_intent' };
 
   const built = buildCreateInvoicePayload(order, info);
 
@@ -494,7 +494,7 @@ export async function repairMissingEinvoiceIntents({ limit = 20 } = {}) {
   const summary = { scanned: rows.length, prepared: 0, errors: 0, reportedOnly: false };
   for (const order of rows) {
     const info = parseInvoiceInfo(order);
-    if (!info?.wantInvoice || info.net == null || info.vatAmount == null || info.gross == null) {
+    if (!info || !(Number(info.vatAmount) > 0) || info.net == null || info.gross == null) {
       console.warn(`[MatBaoInvoice][OPS] Missing intent incomplete snapshot order=${order.order_code}`);
       continue;
     }

@@ -6,7 +6,7 @@ import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getAvailableVouchers, getVoucherCodeSuggestions, validateVoucher } from '../../services/voucher.service';
 import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
-import InvoiceVatForm, { computeDisplayVat } from '../../features/checkout/components/InvoiceVatForm';
+import InvoiceVatForm, { computeDisplayVat, isInvoiceInfoValid } from '../../features/checkout/components/InvoiceVatForm';
 import { isInvoiceVatUiEnabled } from '../../constants/invoiceVat';
 import { trackEvent } from '../../utils/analytics';
 import QRCode from 'qrcode';
@@ -94,9 +94,10 @@ const CheckoutPage = () => {
     );
     const vatBreakdown = computeDisplayVat(
         finalAmount,
-        invoiceVatUiEnabled && Boolean(invoiceInfo?.wantInvoice),
+        invoiceVatUiEnabled,
     );
     const payableAmount = Number(authoritativePayment?.amount ?? vatBreakdown.gross);
+    const isInvoiceValid = !invoiceVatUiEnabled || finalAmount <= 0 || isInvoiceInfoValid(invoiceInfo);
     const hasManualVoucherInList = manualVoucher
         ? codeVouchers.some((voucher) => voucher.code === manualVoucher.code)
         : false;
@@ -177,6 +178,10 @@ const CheckoutPage = () => {
         }
 
         try {
+            if (invoiceVatUiEnabled && finalAmount > 0 && !isInvoiceInfoValid(invoiceInfo)) {
+                toast.error(t('invoiceVat.fillRequiredFields'));
+                return;
+            }
             setPaymentStarted(true);
             setLoading(true);
             trackEvent('begin_checkout', {
@@ -422,7 +427,7 @@ const CheckoutPage = () => {
                                             <span className="font-semibold">-{fmtVnd(discountAmount)}</span>
                                         </div>
                                     )}
-                                    {invoiceVatUiEnabled && Boolean(invoiceInfo?.wantInvoice) && vatBreakdown.vatAmount > 0 && (
+                                    {invoiceVatUiEnabled && vatBreakdown.vatAmount > 0 && (
                                         <div className="flex justify-between text-slate-500 text-xs">
                                             <span>{t('checkout.vatLine', { rate: vatBreakdown.vatRate })}</span>
                                             <span className="font-medium text-slate-700">+{fmtVnd(vatBreakdown.vatAmount)}</span>
@@ -440,11 +445,13 @@ const CheckoutPage = () => {
                                 </div>
                             </div>
 
-                            {invoiceVatUiEnabled && (
+                            {invoiceVatUiEnabled && finalAmount > 0 && (
                                 <InvoiceVatForm
                                     netAmount={finalAmount}
                                     disabled={paymentStarted}
                                     defaultEmail={user?.email || ''}
+                                    defaultFullName={user?.full_name || user?.name || ''}
+                                    defaultPhone={user?.phone || ''}
                                     onChange={setInvoiceInfo}
                                 />
                             )}
@@ -639,7 +646,13 @@ const CheckoutPage = () => {
                                                 {error && <p className="text-red-600 text-xs text-center px-3 font-medium">{error}</p>}
                                                 {qrImageUrl && <img src={qrImageUrl} alt="QR" className="w-40 h-40 rounded-xl" />}
                                                 {!paymentStarted && (
-                                                    <button type="button" onClick={createPayment} className="btn btn-primary text-sm px-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={createPayment}
+                                                        disabled={!isInvoiceValid}
+                                                        title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : undefined}
+                                                        className="btn btn-primary text-sm px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
                                                         {t('checkout.createPaymentQr')}
                                                     </button>
                                                 )}

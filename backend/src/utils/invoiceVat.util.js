@@ -8,6 +8,8 @@ import { isMatbaoConfigured } from './matbaoHddtClient.util.js';
 export const DEFAULT_INVOICE_VAT_RATE = 10;
 export const MAX_TAX_CODE_LEN = 14;
 export const MAX_ID_NUMBER_LEN = 12;
+export const TAX_CODE_REGEX = /^\d{10}(-\d{3})?$/;
+export const ID_NUMBER_REGEX = /^\d{9,12}$/;
 
 /** Master switch — OFF until Mat Bao issue path is live (PR2). */
 export function isInvoiceVatEnabled() {
@@ -48,13 +50,10 @@ function isLikelyEmail(email) {
 }
 
 /**
- * Fail-closed before INSERT/PayOS when client asks for VAT invoice.
+ * Fail-closed before INSERT/PayOS on missing/invalid buyer data or unconfigured Mat Bao.
  * @throws {{ status: number, message: string, code: string }}
  */
 export function assertInvoiceIntakeAllowed(rawInvoiceInfo) {
-  const wantInvoice = Boolean(rawInvoiceInfo && rawInvoiceInfo.wantInvoice === true);
-  if (!wantInvoice) return;
-
   if (!isInvoiceVatEnabled()) {
     throw {
       status: 503,
@@ -68,6 +67,29 @@ export function assertInvoiceIntakeAllowed(rawInvoiceInfo) {
       message: 'Xuất hoá đơn VAT tạm thời không khả dụng',
       code: 'INVOICE_UNAVAILABLE',
     };
+  }
+
+  if (!rawInvoiceInfo || typeof rawInvoiceInfo !== 'object') {
+    throw { status: 400, message: 'Vui lòng cung cấp thông tin xuất hoá đơn VAT' };
+  }
+
+  const buyerType = rawInvoiceInfo.buyerType === 'personal' ? 'personal' : 'company';
+  if (buyerType === 'company') {
+    const taxCode = trimStr(rawInvoiceInfo.taxCode).replace(/\s+/g, '');
+    const companyName = trimStr(rawInvoiceInfo.companyName);
+    if (!taxCode) throw { status: 400, message: 'Thiếu mã số thuế' };
+    if (!TAX_CODE_REGEX.test(taxCode)) {
+      throw { status: 400, message: 'Mã số thuế không hợp lệ (10 số hoặc 13 số dạng xxxxxxxxxx-xxx)' };
+    }
+    if (!companyName) throw { status: 400, message: 'Thiếu tên công ty' };
+  } else {
+    const fullName = trimStr(rawInvoiceInfo.fullName);
+    const idNumber = trimStr(rawInvoiceInfo.idNumber).replace(/\s+/g, '');
+    if (!fullName) throw { status: 400, message: 'Thiếu họ tên người mua' };
+    if (!idNumber) throw { status: 400, message: 'Thiếu số CCCD/CMND' };
+    if (!ID_NUMBER_REGEX.test(idNumber)) {
+      throw { status: 400, message: 'Số CCCD/CMND không hợp lệ (gồm 9 đến 12 chữ số)' };
+    }
   }
 }
 
@@ -89,19 +111,13 @@ export function resolveOrderAmountWithInvoice(raw, netAfterDiscount, options = {
     return { amount: 0, invoiceInfo: null };
   }
 
-  const wantInvoice = Boolean(raw && raw.wantInvoice === true);
-  if (wantInvoice) {
-    assertInvoiceIntakeAllowed(raw);
-  }
-
   // Feature gate — refuse to charge VAT until e-invoice issuance is enabled.
   if (!isInvoiceVatEnabled()) {
     return { amount: net, invoiceInfo: null };
   }
 
-  if (!wantInvoice) {
-    return { amount: net, invoiceInfo: null };
-  }
+  // Validate required intake fields (company or personal) and Mat Bao readiness
+  assertInvoiceIntakeAllowed(raw);
 
   const buyerType = raw.buyerType === 'personal' ? 'personal' : 'company';
   const accountEmail = trimStr(options.accountEmail);
@@ -130,25 +146,15 @@ export function resolveOrderAmountWithInvoice(raw, netAfterDiscount, options = {
   if (address) invoiceInfo.address = address;
 
   if (buyerType === 'company') {
-    const taxCode = trimStr(raw.taxCode);
+    const taxCode = trimStr(raw.taxCode).replace(/\s+/g, '');
     const companyName = trimStr(raw.companyName);
     const companyAddress = trimStr(raw.companyAddress) || undefined;
-    if (!taxCode) throw { status: 400, message: 'Thiếu mã số thuế' };
-    if (taxCode.length > MAX_TAX_CODE_LEN) {
-      throw { status: 400, message: `Mã số thuế tối đa ${MAX_TAX_CODE_LEN} ký tự` };
-    }
-    if (!companyName) throw { status: 400, message: 'Thiếu tên công ty' };
     invoiceInfo.taxCode = taxCode;
     invoiceInfo.companyName = companyName;
     if (companyAddress) invoiceInfo.companyAddress = companyAddress;
   } else {
     const fullName = trimStr(raw.fullName);
     const idNumber = trimStr(raw.idNumber).replace(/\s+/g, '');
-    if (!fullName) throw { status: 400, message: 'Thiếu họ tên người mua' };
-    if (!idNumber) throw { status: 400, message: 'Thiếu số CCCD/CMND' };
-    if (idNumber.length > MAX_ID_NUMBER_LEN) {
-      throw { status: 400, message: `CCCD/CMND tối đa ${MAX_ID_NUMBER_LEN} ký tự` };
-    }
     invoiceInfo.fullName = fullName;
     invoiceInfo.idNumber = idNumber;
   }

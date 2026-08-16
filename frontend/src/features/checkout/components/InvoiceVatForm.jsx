@@ -1,18 +1,37 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 /** Keep in sync with backend DEFAULT_INVOICE_VAT_RATE / INVOICE_VAT_RATE. */
 export const DEFAULT_FE_INVOICE_VAT_RATE = 10;
 
-export function computeDisplayVat(net, wantInvoice, vatRate = DEFAULT_FE_INVOICE_VAT_RATE) {
+export function computeDisplayVat(net, enabled = true, vatRate = DEFAULT_FE_INVOICE_VAT_RATE) {
   const n = Math.round(Number(net) || 0);
-  if (!wantInvoice || n <= 0) {
+  if (!enabled || n <= 0) {
     return { net: n, vatAmount: 0, gross: n, vatRate };
   }
   const vatAmount = Math.round((n * vatRate) / 100);
   return { net: n, vatAmount, gross: n + vatAmount, vatRate };
+}
+
+export const TAX_CODE_REGEX = /^\d{10}(-\d{3})?$/;
+export const ID_NUMBER_REGEX = /^\d{9,12}$/;
+
+export function isInvoiceInfoValid(info) {
+  if (!info || typeof info !== 'object') return false;
+  const email = String(info.email || '').trim();
+  if (!email) return false;
+  if (info.buyerType === 'company') {
+    const taxCode = String(info.taxCode || '').trim().replace(/\s+/g, '');
+    const companyName = String(info.companyName || '').trim();
+    return Boolean(taxCode && companyName && TAX_CODE_REGEX.test(taxCode));
+  }
+  if (info.buyerType === 'personal') {
+    const fullName = String(info.fullName || '').trim();
+    const idNumber = String(info.idNumber || '').trim().replace(/\s+/g, '');
+    return Boolean(fullName && idNumber && ID_NUMBER_REGEX.test(idNumber));
+  }
+  return false;
 }
 
 /** Mask account email for display — recipient is server-owned, not editable. */
@@ -27,14 +46,15 @@ export function maskAccountEmail(email) {
 }
 
 /**
- * Shared VAT invoice form for Checkout.
- * Parent owns display of totals; this emits payload via onChange.
- * Recipient email is account email (read-only); server overrides anyway.
+ * Mandatory VAT invoice form for Checkout.
+ * Pre-fills known account info to minimize checkout friction.
  */
 export default function InvoiceVatForm({
   netAmount = 0,
   disabled = false,
   defaultEmail = '',
+  defaultFullName = '',
+  defaultPhone = '',
   onChange,
   className = '',
 }) {
@@ -44,26 +64,32 @@ export default function InvoiceVatForm({
   const canRequest = net > 0 && !disabled;
   const accountEmail = String(defaultEmail || '').trim();
 
-  const [wantInvoice, setWantInvoice] = useState(false);
-  const [buyerType, setBuyerType] = useState('company');
+  const [buyerType, setBuyerType] = useState('personal');
   const [taxCode, setTaxCode] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState(defaultFullName || '');
   const [idNumber, setIdNumber] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(defaultPhone || '');
   const [address, setAddress] = useState('');
 
-  const effectiveWant = canRequest && wantInvoice;
+  // Synchronize defaults if profile loads after initial mount
+  useEffect(() => {
+    if (defaultFullName) {
+      setFullName((prev) => prev || defaultFullName);
+    }
+    if (defaultPhone) {
+      setPhone((prev) => prev || defaultPhone);
+    }
+  }, [defaultFullName, defaultPhone]);
 
   const payload = useMemo(() => {
-    if (!effectiveWant) {
+    if (!canRequest) {
       return { wantInvoice: false };
     }
     const base = {
       wantInvoice: true,
       buyerType,
-      // Included for payload shape; server overrides with account email.
       email: accountEmail,
       phone: String(phone || '').trim() || undefined,
       address: String(address || '').trim() || undefined,
@@ -82,7 +108,7 @@ export default function InvoiceVatForm({
       idNumber: String(idNumber || '').trim(),
     };
   }, [
-    effectiveWant,
+    canRequest,
     buyerType,
     accountEmail,
     phone,
@@ -102,20 +128,6 @@ export default function InvoiceVatForm({
 
   if (!canRequest) return null;
 
-  if (!wantInvoice) {
-    return (
-      <div className={className}>
-        <button
-          type="button"
-          onClick={() => setWantInvoice(true)}
-          className="w-full rounded-xl border border-dashed border-slate-300 bg-white/50 px-3 py-2.5 text-left text-sm text-slate-600 hover:border-orange-300 hover:bg-orange-50/40 transition-colors"
-        >
-          {t('invoiceVat.reopenBanner')}
-        </button>
-      </div>
-    );
-  }
-
   const inputClass =
     'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300';
   const readonlyClass =
@@ -123,35 +135,14 @@ export default function InvoiceVatForm({
 
   return (
     <div className={`rounded-xl border border-orange-200/80 bg-orange-50/50 ${className}`}>
-      <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
-        <div>
-          <p className="text-sm font-semibold text-slate-800">{t('invoiceVat.bannerTitle')}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            {t('invoiceVat.vatAdditiveNote', { rate: vatRate })}
-          </p>
-        </div>
-        <button
-          type="button"
-          aria-label={t('invoiceVat.dismiss')}
-          onClick={() => setWantInvoice(false)}
-          className="shrink-0 rounded-lg p-1 text-slate-400 hover:bg-white/80 hover:text-slate-700 transition-colors"
-        >
-          <HiOutlineX className="h-5 w-5" />
-        </button>
+      <div className="px-3 pt-3 pb-2">
+        <p className="text-sm font-semibold text-slate-800">{t('invoiceVat.bannerTitle')}</p>
+        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+          {t('invoiceVat.bannerSubtitle') || t('invoiceVat.vatAdditiveNote', { rate: vatRate })}
+        </p>
       </div>
 
       <div className="flex gap-1 px-3 mb-3">
-        <button
-          type="button"
-          onClick={() => setBuyerType('company')}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-            buyerType === 'company'
-              ? 'bg-white text-orange-700 shadow-sm border border-orange-200'
-              : 'text-slate-500 hover:bg-white/60'
-          }`}
-        >
-          {t('invoiceVat.tabCompany')}
-        </button>
         <button
           type="button"
           onClick={() => setBuyerType('personal')}
@@ -162,6 +153,17 @@ export default function InvoiceVatForm({
           }`}
         >
           {t('invoiceVat.tabPersonal')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setBuyerType('company')}
+          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+            buyerType === 'company'
+              ? 'bg-white text-orange-700 shadow-sm border border-orange-200'
+              : 'text-slate-500 hover:bg-white/60'
+          }`}
+        >
+          {t('invoiceVat.tabCompany')}
         </button>
       </div>
 

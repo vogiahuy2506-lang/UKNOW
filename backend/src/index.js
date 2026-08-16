@@ -17,6 +17,7 @@ import landingPageDomainService from './services/landingPage/landingPageDomain.s
 import { decryptZaloCookieRows } from './utils/zaloCookieCrypto.util.js';
 import { validateActivePlanKbLimits } from './services/storage/kbQuota.service.js';
 import { validateStorageEnv } from './utils/storageStartupConfig.util.js';
+import { validateInvoiceEnv } from './utils/invoiceStartupConfig.util.js';
 
 const app = createApp();
 
@@ -176,6 +177,7 @@ const restoreZaloSessionsOnStartup = async () => {
 async function validateStartupBeforeListen() {
   try {
     validateStorageEnv();
+    validateInvoiceEnv();
     await testDBConnection();
     await validateActivePlanKbLimits();
   } catch (error) {

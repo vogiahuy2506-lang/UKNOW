@@ -522,7 +522,7 @@ export async function listMissingEinvoiceIntents({
      LEFT JOIN einvoices e ON e.order_id = o.id
      WHERE o.status = 'success'
        AND o.created_at >= $1::timestamptz
-       AND (o.invoice_info->>'wantInvoice') = 'true'
+       AND ((o.invoice_info->>'vatAmount')::numeric > 0 OR (o.invoice_info->>'wantInvoice') = 'true')
        AND e.id IS NULL
      ORDER BY o.created_at ASC
      LIMIT $2`,

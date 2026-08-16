@@ -66,18 +66,21 @@ describe('invoiceVat.util', () => {
     expect(computeVatBreakdown(1000).vatAmount).toBe(100);
   });
 
-  test('wantInvoice false keeps net and null invoice_info', () => {
-    const r = resolveOrderAmountWithInvoice({ wantInvoice: false }, 499000);
+  test('INVOICE_VAT_ENABLED off keeps net and null invoice_info', () => {
+    process.env.INVOICE_VAT_ENABLED = 'false';
+    const r = resolveOrderAmountWithInvoice(companyOk, 499000);
     expect(r.amount).toBe(499000);
     expect(r.invoiceInfo).toBeNull();
+    process.env.INVOICE_VAT_ENABLED = 'true';
   });
 
-  test('INVOICE_VAT_ENABLED off + wantInvoice → 503', () => {
-    process.env.INVOICE_VAT_ENABLED = 'false';
-    expect(() => resolveOrderAmountWithInvoice(companyOk, 499000)).toThrow(
-      expect.objectContaining({ status: 503, code: 'INVOICE_UNAVAILABLE' }),
+  test('missing or empty invoiceInfo throws 400 when enabled', () => {
+    expect(() => resolveOrderAmountWithInvoice(null, 499000)).toThrow(
+      expect.objectContaining({ status: 400 }),
     );
-    process.env.INVOICE_VAT_ENABLED = 'true';
+    expect(() => resolveOrderAmountWithInvoice({}, 499000)).toThrow(
+      expect.objectContaining({ status: 400 }),
+    );
   });
 
   test('accountEmail overrides client email', () => {
@@ -87,11 +90,29 @@ describe('invoiceVat.util', () => {
     expect(r.invoiceInfo.email).toBe('owner@account.com');
   });
 
-  test('company missing taxCode → 400', () => {
+  test('company missing or invalid taxCode → 400', () => {
     expect(() => resolveOrderAmountWithInvoice({
       ...companyOk,
       taxCode: '',
     }, 499000)).toThrow(expect.objectContaining({ status: 400 }));
+
+    expect(() => resolveOrderAmountWithInvoice({
+      ...companyOk,
+      taxCode: 'ABC1234567',
+    }, 499000)).toThrow(expect.objectContaining({ status: 400 }));
+
+    expect(() => resolveOrderAmountWithInvoice({
+      ...companyOk,
+      taxCode: '12345',
+    }, 499000)).toThrow(expect.objectContaining({ status: 400 }));
+  });
+
+  test('company valid 10-digit or 13-digit branch taxCode', () => {
+    const r1 = resolveOrderAmountWithInvoice({ ...companyOk, taxCode: '0312345678' }, 499000);
+    expect(r1.invoiceInfo.taxCode).toBe('0312345678');
+
+    const r2 = resolveOrderAmountWithInvoice({ ...companyOk, taxCode: '0312345678-001' }, 499000);
+    expect(r2.invoiceInfo.taxCode).toBe('0312345678-001');
   });
 
   test('company ok stores breakdown and ignores forged amount', () => {
@@ -117,17 +138,32 @@ describe('invoiceVat.util', () => {
     });
   });
 
-  test('personal missing idNumber → 400', () => {
+  test('personal missing or invalid idNumber → 400', () => {
     expect(() => resolveOrderAmountWithInvoice({
       ...personalOk,
       idNumber: '',
     }, 100000)).toThrow(expect.objectContaining({ status: 400 }));
+
+    expect(() => resolveOrderAmountWithInvoice({
+      ...personalOk,
+      idNumber: 'ABC123456',
+    }, 100000)).toThrow(expect.objectContaining({ status: 400 }));
+
+    expect(() => resolveOrderAmountWithInvoice({
+      ...personalOk,
+      idNumber: '12345678', // 8 digits (too short)
+    }, 100000)).toThrow(expect.objectContaining({ status: 400 }));
+
+    expect(() => resolveOrderAmountWithInvoice({
+      ...personalOk,
+      idNumber: '1234567890123', // 13 digits (too long)
+    }, 100000)).toThrow(expect.objectContaining({ status: 400 }));
   });
 
-  test('personal ok', () => {
-    const r = resolveOrderAmountWithInvoice(personalOk, 100000);
-    expect(r.amount).toBe(110000);
-    expect(r.invoiceInfo).toMatchObject({
+  test('personal ok with 9 or 12 digits', () => {
+    const r1 = resolveOrderAmountWithInvoice(personalOk, 100000);
+    expect(r1.amount).toBe(110000);
+    expect(r1.invoiceInfo).toMatchObject({
       buyerType: 'personal',
       fullName: 'Nguyen Van A',
       idNumber: '001099012345',
@@ -135,6 +171,9 @@ describe('invoiceVat.util', () => {
       vatAmount: 10000,
       gross: 110000,
     });
+
+    const r2 = resolveOrderAmountWithInvoice({ ...personalOk, idNumber: '123456789' }, 100000);
+    expect(r2.invoiceInfo.idNumber).toBe('123456789');
   });
 
   test('VAT on net after voucher', () => {
