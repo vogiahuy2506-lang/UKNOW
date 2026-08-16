@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
-import { HiOutlineUser, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff, HiOutlineShieldCheck } from 'react-icons/hi';
+import { HiOutlineUser, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff, HiOutlineShieldCheck, HiOutlineInformationCircle } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
 
@@ -62,11 +62,15 @@ const Login = () => {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: { rememberMe: true },
   });
+
+  const usernameValue = useWatch({ control, name: 'username' }) || '';
+  const isTypingEmail = usernameValue.includes('@');
 
   const onSubmit = async (data) => {
     setIsLoading(true);
@@ -150,7 +154,7 @@ const Login = () => {
                     ? 'border-orange-500 shadow-lg shadow-orange-500/10'
                     : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
               }`}
-              placeholder={t('auth.email')}
+              placeholder={t('auth.usernameLabel')}
               autoComplete="username"
             />
           </div>
@@ -159,6 +163,13 @@ const Login = () => {
               <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
               {errors.username.message}
             </p>
+          )}
+          {/* Gợi ý mềm khi gõ ký tự @ */}
+          {isTypingEmail && (
+            <div className="mt-2.5 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800 animate-fadeIn">
+              <HiOutlineInformationCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>{t('auth.typingEmailHint')}</span>
+            </div>
           )}
         </div>
 
@@ -265,6 +276,9 @@ const Login = () => {
             text={t('auth.continueWithGoogle')}
             disabled={isLoading}
           />
+          <p className="mt-2.5 text-center text-xs text-slate-400">
+            {t('auth.googleAuthHint')}
+          </p>
         </>
       )}
 

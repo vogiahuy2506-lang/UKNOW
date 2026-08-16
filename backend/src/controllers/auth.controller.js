@@ -85,8 +85,8 @@ class AuthController {
       const passwordHash = await bcrypt.hash(password, 10);
 
       const result = await client.query(
-        `INSERT INTO users (username, email, password_hash, full_name, phone, status, is_verified, verified_at, role, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `INSERT INTO users (username, email, password_hash, full_name, phone, status, is_verified, verified_at, role, auth_provider, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', 'local', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING id, username, email, full_name, avatar_url, status, role`,
         [username, email, passwordHash, fullName || null, phone || null]
       );
@@ -343,8 +343,8 @@ class AuthController {
         const passwordHash = await bcrypt.hash(randomPassword, 10);
 
         const insertResult = await client.query(
-          `INSERT INTO users (username, email, password_hash, full_name, avatar_url, is_verified, status, role, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, true, 'active', 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `INSERT INTO users (username, email, password_hash, full_name, avatar_url, is_verified, status, role, auth_provider, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, true, 'active', 'user', 'google', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
            RETURNING id, username, email, full_name, avatar_url, status, role`,
           [username, email, passwordHash, name || null, picture || null]
         );

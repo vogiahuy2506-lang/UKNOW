@@ -291,6 +291,8 @@ export default {
     googleLoginSuccess: 'Google login successful!',
     googleLoginFailed: 'Google login failed',
     googleError: 'Error connecting to Google',
+    googleAuthHint: 'Signed up with Google? Please use the "Continue with Google" button below.',
+    typingEmailHint: 'You are entering an email. If you signed up with Google, please use the Google button below.',
   },
 
   register: {
@@ -6826,6 +6828,21 @@ export default {
     manualInput: 'Enter recipient addresses',
     noEmailAccountSelected: 'Please select an email sender account',
     noZaloAccountSelected: 'Please select a Zalo sender account',
+    estimatedDuration: 'Estimated completion time',
+    immediate: 'Immediate',
+    estimateSeconds: '~{value} seconds',
+    estimateMinutes: '~{value} minutes',
+    estimateHours: '~{value} hours',
+    estimateDays: '~{value} days',
+    quietHoursNotice: 'The system automatically pauses sending during quiet hours {start} – {end} daily to comply with Zalo policy and protect your account.',
+    testSendTitle: 'Test Send',
+    testSendDesc: 'Send 1 test message to your phone / email to verify before launching the batch.',
+    testRecipientEmailPlaceholder: 'Enter test email (e.g. your@email.com)',
+    testRecipientPhonePlaceholder: 'Enter test Zalo phone (e.g. 0912345678)',
+    testSendButton: 'Send Test',
+    testing: 'Sending test...',
+    testSendSuccess: 'Test message sent successfully',
+    testSendFailed: 'Failed to send test message',
   },
 
   helpDocs: {

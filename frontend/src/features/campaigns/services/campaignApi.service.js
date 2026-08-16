@@ -62,8 +62,17 @@ export const campaignApiService = {
     return api.get(`/campaigns/${campaignId}/shares`);
   },
 
-  revokeShare(campaignId, payload) {
-    return api.delete(`/campaigns/${campaignId}/share`, { data: payload });
+  revokeShare(campaignId) {
+    return api.delete(`/campaigns/${campaignId}/share`);
+  },
+
+  // Quick send estimate & test send
+  getQuickSendEstimate(params = {}) {
+    return api.get('/campaigns/quick-send/estimate', { params });
+  },
+
+  testSendQuickCampaign(payload) {
+    return api.post('/campaigns/quick-send/test-send', payload);
   },
 };
 

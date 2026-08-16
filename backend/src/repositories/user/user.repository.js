@@ -367,7 +367,7 @@ export async function findActiveUserByEmail(email) {
 
 export async function updatePasswordByEmail(passwordHash, email) {
   const { rows } = await db.query(
-    `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+    `UPDATE users SET password_hash = $1, auth_provider = 'local', updated_at = CURRENT_TIMESTAMP
      WHERE email = $2 AND status = 'active'
      RETURNING id`,
     [passwordHash, email]

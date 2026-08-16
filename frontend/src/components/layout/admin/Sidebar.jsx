@@ -100,12 +100,12 @@ const userMenuItems = (t) => [
     ],
   },
   {
-    name: t('nav.adminOnlyCluster'), icon: HiOutlineCube, adminUsernameOnly: true,
+    name: t('nav.adminOnlyCluster'), icon: HiOutlineCube,
     children: [
-      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar },
-      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar },
-      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap },
-      { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList },
+      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS' },
+      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS' },
+      { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, flag: 'VITE_FEATURE_COURSES' },
+      { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList, flag: 'VITE_FEATURE_ORDERS' },
     ],
   },
   {
@@ -213,7 +213,6 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
 
   const { user, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
-  const isAdminUsername = user?.username?.toLowerCase() === 'admin';
   const menuItems = isSuperAdmin ? superAdminMenuItems(t) : userMenuItems(t);
   const isEmployeeCtx = activeContext?.type === 'employee';
   const ctxPermissions = activeContext?.permissions || {};
@@ -231,12 +230,8 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
 
   const filterItem = (item) => {
     if (item.hideInProd && import.meta.env.MODE === 'production') return false;
+    if (item.flag && import.meta.env[item.flag] !== 'true') return false;
     if (item.ownerOnly && isEmployeeCtx) return false;
-    if (item.adminUsernameOnly) {
-      if (isAdminUsername) return true;
-      const ownerUsername = activeContext?.owner?.username?.toLowerCase();
-      return ownerUsername === 'admin';
-    }
     if (item.permission && isEmployeeCtx) {
       return item.permission.some((p) => ctxPermissions[p] === true);
     }

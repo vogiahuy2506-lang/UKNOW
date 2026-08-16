@@ -41,6 +41,13 @@ import {
   notifyCampaignQuotaStopped,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 
+export const EMAIL_API_DELAY_MIN_MS = 50;
+export const EMAIL_API_DELAY_MAX_MS = 250;
+export const ZALO_API_DELAY_MIN_MS = 25;
+export const ZALO_API_DELAY_MAX_MS = 125;
+export const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 250;
+export const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
+
 class CampaignRunService {
   constructor() {
     const parsePositiveInt = (value, defaultValue) => {
@@ -1197,12 +1204,6 @@ class CampaignRunService {
           reason: `plan_quota_${quota.limitType}`,
         });
       };
-      const EMAIL_API_DELAY_MIN_MS = 50;
-      const EMAIL_API_DELAY_MAX_MS = 250;
-      const ZALO_API_DELAY_MIN_MS = 25;
-      const ZALO_API_DELAY_MAX_MS = 125;
-      const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 250;
-      const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
       /**
        * Add random delay for outbound email/Zalo API calls.
        *

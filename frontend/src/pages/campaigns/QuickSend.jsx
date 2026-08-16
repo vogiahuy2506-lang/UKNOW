@@ -5,6 +5,7 @@ import emailTemplateApiService from '../../features/templates/services/emailTemp
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
+import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import {
   HiOutlinePlus,
   HiOutlineMail,
@@ -13,6 +14,9 @@ import {
   HiOutlineCheckCircle,
   HiOutlineXCircle,
   HiOutlineChevronRight,
+  HiOutlineClock,
+  HiOutlineMoon,
+  HiOutlinePaperAirplane,
 } from 'react-icons/hi';
 
 const QUICK_SEND_STEPS = {
@@ -54,6 +58,12 @@ const QuickSend = () => {
   // Send state
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+
+  // Estimation & test send state
+  const [estimate, setEstimate] = useState(null);
+  const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
+  const [testRecipient, setTestRecipient] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
 
   // Fetch templates
   const fetchTemplates = useCallback(async () => {
@@ -108,14 +118,14 @@ const QuickSend = () => {
   }, [currentStep, fetchTemplates, fetchAccounts]);
 
   // Get final recipients from manual input only
-  const finalRecipients = () => {
+  const finalRecipients = useCallback(() => {
     const manualList = (selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones)
       .split(/[\n,]/)
       .map((s) => s.trim())
       .filter((s) => s && (selectedChannel === CHANNEL_TYPES.EMAIL ? s.includes('@') : /^\d+$/.test(s)));
 
     return manualList.map((contact) => ({ email: contact, phone: contact, name: contact }));
-  };
+  }, [selectedChannel, manualEmails, manualPhones]);
 
   // Check if has manual recipients
   const hasManualRecipients = () => {
@@ -135,6 +145,68 @@ const QuickSend = () => {
       setTemplateContent({
         body: template.bodyText || template.body_text || '',
       });
+    }
+  };
+
+  // Fetch estimated completion time from backend policy when entering PREVIEW
+  useEffect(() => {
+    if (currentStep !== QUICK_SEND_STEPS.PREVIEW) return;
+    let isMounted = true;
+    const fetchEstimate = async () => {
+      setIsLoadingEstimate(true);
+      try {
+        const count = finalRecipients().length;
+        const res = await campaignApiService.getQuickSendEstimate({
+          channel: selectedChannel,
+          recipients: count,
+        });
+        if (isMounted && res?.data?.data) {
+          setEstimate(res.data.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch estimate:', err);
+      } finally {
+        if (isMounted) setIsLoadingEstimate(false);
+      }
+    };
+    fetchEstimate();
+    return () => { isMounted = false; };
+  }, [currentStep, selectedChannel, finalRecipients]);
+
+  // Test send to a single address
+  const handleTestSend = async () => {
+    const cleanRecipient = testRecipient.trim();
+    if (!cleanRecipient) {
+      toast.error(
+        selectedChannel === CHANNEL_TYPES.EMAIL
+          ? t('quickSend.testRecipientEmailPlaceholder')
+          : t('quickSend.testRecipientPhonePlaceholder')
+      );
+      return;
+    }
+
+    setIsTesting(true);
+    try {
+      const accountId = selectedChannel === CHANNEL_TYPES.EMAIL
+        ? selectedEmailAccount?.id
+        : selectedZaloAccount?.id;
+
+      const res = await campaignApiService.testSendQuickCampaign({
+        channel: selectedChannel,
+        recipient: cleanRecipient,
+        subject: templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW',
+        message: selectedChannel === CHANNEL_TYPES.EMAIL
+          ? (templateContent.body || selectedTemplate?.bodyHtml || '')
+          : (templateContent.body || selectedTemplate?.bodyText || ''),
+        accountId,
+      });
+
+      toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
+    } catch (err) {
+      const msg = err.response?.data?.message || t('quickSend.testSendFailed');
+      toast.error(msg);
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -534,24 +606,58 @@ const QuickSend = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.previewAndSend')}</h2>
 
               {/* Summary */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500">{t('quickSend.channel')}</p>
-                  <p className="text-lg font-semibold text-gray-900 capitalize">{selectedChannel}</p>
+                  <p className="text-xs text-gray-500">{t('quickSend.channel')}</p>
+                  <p className="text-base font-semibold text-gray-900 capitalize mt-1">{selectedChannel}</p>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500">{t('quickSend.senderAccount') || 'Tài khoản gửi'}</p>
-                  <p className="text-lg font-semibold text-gray-900 truncate">
+                  <p className="text-xs text-gray-500">{t('quickSend.senderAccount') || 'Tài khoản gửi'}</p>
+                  <p className="text-base font-semibold text-gray-900 truncate mt-1">
                     {selectedChannel === CHANNEL_TYPES.EMAIL
                       ? (selectedEmailAccount?.name || selectedEmailAccount?.email || '-')
                       : (selectedZaloAccount?.name || selectedZaloAccount?.display_name || '-')}
                   </p>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500">{t('quickSend.recipients')}</p>
-                  <p className="text-lg font-semibold text-gray-900">{finalRecipients().length}</p>
+                  <p className="text-xs text-gray-500">{t('quickSend.recipients')}</p>
+                  <p className="text-base font-semibold text-gray-900 mt-1">{finalRecipients().length}</p>
+                </div>
+                <div className="p-4 bg-orange-50/60 border border-orange-100 rounded-lg">
+                  <p className="text-xs text-orange-600 font-medium flex items-center gap-1">
+                    <HiOutlineClock className="w-3.5 h-3.5" />
+                    {t('quickSend.estimatedDuration')}
+                  </p>
+                  <p className="text-base font-semibold text-orange-900 mt-1">
+                    {isLoadingEstimate ? '...' : (
+                      estimate?.unit === 'immediate'
+                        ? t('quickSend.immediate')
+                        : estimate?.unit === 'seconds'
+                          ? t('quickSend.estimateSeconds', { value: estimate.value })
+                          : estimate?.unit === 'minutes'
+                            ? t('quickSend.estimateMinutes', { value: estimate.value })
+                            : estimate?.unit === 'hours'
+                              ? t('quickSend.estimateHours', { value: estimate.value })
+                              : estimate?.unit === 'days'
+                                ? t('quickSend.estimateDays', { value: estimate.value })
+                                : t('quickSend.immediate')
+                    )}
+                  </p>
                 </div>
               </div>
+
+              {/* Quiet hours notice if applicable */}
+              {estimate?.quietHours?.enabled && (
+                <div className="mb-6 p-3.5 rounded-lg bg-indigo-50 border border-indigo-200 flex items-start gap-2.5 text-xs text-indigo-900 animate-fadeIn">
+                  <HiOutlineMoon className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    {t('quickSend.quietHoursNotice', {
+                      start: estimate.quietHours.startFormatted || '23:00',
+                      end: estimate.quietHours.endFormatted || '06:00',
+                    })}
+                  </span>
+                </div>
+              )}
 
               {/* Template Preview */}
               {selectedTemplate && (
@@ -576,6 +682,46 @@ const QuickSend = () => {
                     </p>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Test Send Box */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <HiOutlinePaperAirplane className="w-5 h-5 text-orange-500" />
+                <h3 className="text-base font-semibold text-gray-900">{t('quickSend.testSendTitle')}</h3>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">{t('quickSend.testSendDesc')}</p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type={selectedChannel === CHANNEL_TYPES.EMAIL ? 'email' : 'tel'}
+                  value={testRecipient}
+                  onChange={(e) => setTestRecipient(e.target.value)}
+                  placeholder={
+                    selectedChannel === CHANNEL_TYPES.EMAIL
+                      ? t('quickSend.testRecipientEmailPlaceholder')
+                      : t('quickSend.testRecipientPhonePlaceholder')
+                  }
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestSend}
+                  disabled={isTesting || !testRecipient.trim()}
+                  className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                >
+                  {isTesting ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>{t('quickSend.testing')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <HiOutlinePaperAirplane className="w-4 h-4" />
+                      <span>{t('quickSend.testSendButton')}</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 

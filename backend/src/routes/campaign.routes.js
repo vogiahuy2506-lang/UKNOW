@@ -6,7 +6,7 @@ import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
-import { campaignRunLimiter } from '../middleware/rateLimiter.middleware.js';
+import { campaignRunLimiter, quickSendTestLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed'];
@@ -19,6 +19,10 @@ router.use(requireActivePlan);
 router.get('/', requirePermission('campaigns_view'), campaignController.getAll.bind(campaignController));
 
 router.get('/delay-config', requirePermission('campaigns_view'), campaignController.getDelayConfig.bind(campaignController));
+
+// Quick send estimate & test send (rate limited 5 tests/hour per user)
+router.get('/quick-send/estimate', requirePermission('campaigns_view'), campaignController.getQuickSendEstimate.bind(campaignController));
+router.post('/quick-send/test-send', quickSendTestLimiter, requirePermission('campaigns_create'), campaignController.testSendQuickCampaign.bind(campaignController));
 
 // Get by id — chỉ cần quyền xem
 router.get('/:id', requirePermission('campaigns_view'), campaignController.getById.bind(campaignController));

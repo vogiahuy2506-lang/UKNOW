@@ -248,3 +248,19 @@ export const publicLandingAnalyticsLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => `public-analytics:${clientIpKey(req)}`,
 });
+
+// Quick Send Test Message limiter — tối đa 5 lần gửi thử / 1 giờ / tài khoản
+export const quickSendTestLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Bạn đã đạt giới hạn 5 lần gửi thử nghiệm trong 1 giờ. Vui lòng thử lại sau.',
+    code: 'TEST_SEND_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => rateLimitKeyForRequest(req, 'quick-send-test:'),
+});
+

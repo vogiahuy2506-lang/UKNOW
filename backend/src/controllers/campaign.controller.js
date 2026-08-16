@@ -2,7 +2,10 @@ import uploadController from './upload.controller.js';
 import { serverError, paginate } from '../helpers.js';
 import campaignFlowService from '../services/campaign/campaignFlow.service.js';
 import campaignCustomerRepository from '../repositories/campaign/campaignCustomer.repository.js';
-import campaignRunService from '../services/campaign/campaignRun.service.js';
+import campaignRunService, {
+  EMAIL_API_DELAY_MIN_MS,
+  EMAIL_API_DELAY_MAX_MS,
+} from '../services/campaign/campaignRun.service.js';
 import campaignNodeDataService from '../services/campaign/campaignNodeData.service.js';
 import campaignExecutionLogService from '../services/campaign/campaignExecutionLog.service.js';
 import campaignEmailSenderService from '../services/campaign/campaignEmailSender.service.js';
@@ -10,6 +13,15 @@ import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { checkSendQuota } from '../utils/userSendLimit.util.js';
+import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
+import zaloSettingsController from './zaloSettings.controller.js';
+import emailSettingsController from './emailSettings.controller.js';
+import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.service.js';
+import {
+  isZaloOutboundResultSuccessful,
+  describeZaloOutboundFailure,
+} from '../utils/zaloDispatchDelivery.util.js';
 
 class CampaignController {
   /**
@@ -796,54 +808,290 @@ class CampaignController {
   }
 
     /**
-   * Lấy cấu hình delay từ environment variables để đồng bộ với Campaign Builder preview.
+   * Lấy cấu hình delay từ environment variables & shared rate limiter để đồng bộ với Campaign Builder preview.
    * @param {import('express').Request} req
    * @param {import('express').Response} res
    */
     async getDelayConfig(req, res) {
       try {
-        const parsePositiveInt = (value, defaultValue) => {
-          const parsed = Number.parseInt(value, 10);
-          if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
-          return parsed;
-        };
-  
-        const zaloPersonalMin = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0)
-          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
-        const zaloPersonalMax = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0)
-          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
-  
-        const zaloGroupMin = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0)
-          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
-        const zaloGroupMax = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0)
-          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
-  
-        const zaloFriendMin = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0)
-          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
-        const zaloFriendMax = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0)
-          || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
-  
-        const emailMin = parsePositiveInt(process.env.EMAIL_INTER_MESSAGE_MIN_MS, 1000);
-        const emailMax = parsePositiveInt(process.env.EMAIL_INTER_MESSAGE_MAX_MS, 1000);
-  
+        const limiter = campaignRunService.zaloRateLimiter;
+        const zaloPersonalPolicy = limiter.resolveOutboundPolicy('zalo_personal');
+        const zaloGroupPolicy = limiter.resolveOutboundPolicy('zalo_group');
+        const zaloFriendPolicy = limiter.resolveOutboundPolicy('zalo_friend_request');
+
         res.json({
           success: true,
           data: {
-            zalo_personal: { minMs: zaloPersonalMin, maxMs: zaloPersonalMax },
-            zalo_group: { minMs: zaloGroupMin, maxMs: zaloGroupMax },
-            zalo_friend: { minMs: zaloFriendMin, maxMs: zaloFriendMax },
-            email: { minMs: emailMin, maxMs: emailMax }
-          }
+            zalo_personal: {
+              minMs: zaloPersonalPolicy.minDelayMs || zaloPersonalPolicy.interMessageMinMs || 20000,
+              maxMs: zaloPersonalPolicy.maxDelayMs || zaloPersonalPolicy.interMessageMaxMs || 50000,
+            },
+            zalo_group: {
+              minMs: zaloGroupPolicy.minDelayMs || zaloGroupPolicy.interMessageMinMs || 20000,
+              maxMs: zaloGroupPolicy.maxDelayMs || zaloGroupPolicy.interMessageMaxMs || 50000,
+            },
+            zalo_friend: {
+              minMs: zaloFriendPolicy.minDelayMs || zaloFriendPolicy.interMessageMinMs || 20000,
+              maxMs: zaloFriendPolicy.maxDelayMs || zaloFriendPolicy.interMessageMaxMs || 50000,
+            },
+            email: {
+              minMs: EMAIL_API_DELAY_MIN_MS,
+              maxMs: EMAIL_API_DELAY_MAX_MS,
+            },
+          },
         });
       } catch (error) {
         console.error('Get delay config error:', error);
         res.status(500).json({
           success: false,
-          message: 'Lỗi server khi lấy cấu hình delay'
+          message: 'Lỗi server khi lấy cấu hình delay',
         });
       }
     }
 
+  /**
+   * GET /api/campaigns/quick-send/estimate?channel=zalo|email&recipients=N
+   * Ước tính thời gian gửi và thông số khung giờ nghỉ đêm từ policy runtime thực tế.
+   */
+  async getQuickSendEstimate(req, res) {
+    try {
+      const channel = String(req.query.channel || 'email').trim().toLowerCase();
+      const recipients = Math.max(1, parseInt(req.query.recipients, 10) || 1);
+
+      if (channel.startsWith('zalo')) {
+        const limiter = campaignRunService.zaloRateLimiter;
+        const policy = limiter.resolveOutboundPolicy(channel === 'zalo_group' ? 'zalo_group' : 'zalo_personal');
+        const minDelayMs = policy.minDelayMs || policy.interMessageMinMs || 20_000;
+        const maxDelayMs = policy.maxDelayMs || policy.interMessageMaxMs || 50_000;
+        const avgDelayMs = (minDelayMs + maxDelayMs) / 2;
+
+        const quietHoursStart = limiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
+        const quietHoursEnd = limiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+        const qsFormatted = `${String(quietHoursStart).padStart(2, '0')}:00`;
+        const qeFormatted = `${String(quietHoursEnd).padStart(2, '0')}:00`;
+
+        if (recipients <= 1) {
+          return res.json({
+            success: true,
+            data: {
+              estimatedMs: 0,
+              unit: 'immediate',
+              value: 0,
+              quietHours: {
+                enabled: false,
+                start: quietHoursStart,
+                end: quietHoursEnd,
+                startFormatted: qsFormatted,
+                endFormatted: qeFormatted,
+              },
+            },
+          });
+        }
+
+        const quietSpanHours = ((quietHoursEnd - quietHoursStart + 24) % 24) || 7;
+        const activeSpanHours = 24 - quietSpanHours; // ví dụ 17h/ngày
+        const activeDailyMs = activeSpanHours * 3600 * 1000;
+
+        const totalActiveMs = (recipients - 1) * avgDelayMs;
+        const fullDays = Math.floor(totalActiveMs / activeDailyMs);
+        const remainderActiveMs = totalActiveMs % activeDailyMs;
+        const totalWallClockMs = (fullDays * 24 * 3600 * 1000) + remainderActiveMs;
+
+        let unit = 'seconds';
+        let value = 0;
+        if (totalWallClockMs < 60_000) {
+          unit = 'seconds';
+          value = Math.ceil(totalWallClockMs / 1000);
+        } else if (totalWallClockMs < 3_600_000) {
+          unit = 'minutes';
+          value = Math.ceil(totalWallClockMs / 60_000);
+        } else if (totalWallClockMs < 86_400_000) {
+          unit = 'hours';
+          value = Math.round((totalWallClockMs / 3_600_000) * 10) / 10;
+        } else {
+          unit = 'days';
+          value = Math.round((totalWallClockMs / 86_400_000) * 10) / 10;
+        }
+
+        const quietHoursEnabled = totalActiveMs >= 2 * 3600 * 1000;
+
+        return res.json({
+          success: true,
+          data: {
+            estimatedMs: totalWallClockMs,
+            unit,
+            value,
+            quietHours: {
+              enabled: quietHoursEnabled,
+              start: quietHoursStart,
+              end: quietHoursEnd,
+              startFormatted: qsFormatted,
+              endFormatted: qeFormatted,
+            },
+          },
+        });
+      }
+
+      // Email estimate — dùng cùng hằng số với campaign runner và getDelayConfig (mặc định 50-250ms, avg 150ms)
+      const emailAvgDelayMs = (EMAIL_API_DELAY_MIN_MS + EMAIL_API_DELAY_MAX_MS) / 2;
+      const totalMs = recipients <= 1 ? 0 : (recipients - 1) * emailAvgDelayMs;
+
+      let unit = 'immediate';
+      let value = 0;
+      if (recipients <= 1 || totalMs <= 0) {
+        unit = 'immediate';
+        value = 0;
+      } else if (totalMs < 60_000) {
+        unit = 'seconds';
+        value = Math.ceil(totalMs / 1000);
+      } else if (totalMs < 3_600_000) {
+        unit = 'minutes';
+        value = Math.ceil(totalMs / 60_000);
+      } else {
+        unit = 'hours';
+        value = Math.round((totalMs / 3_600_000) * 10) / 10;
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          estimatedMs: totalMs,
+          unit,
+          value,
+          quietHours: {
+            enabled: false,
+            start: null,
+            end: null,
+            startFormatted: null,
+            endFormatted: null,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Quick send estimate error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server khi ước tính thời gian gửi' });
+    }
+  }
+
+  /**
+   * POST /api/campaigns/quick-send/test-send
+   * Gửi thử nghiệm 1 tin nhắn/email cho người dùng kiểm tra trước khi gửi chiến dịch lớn.
+   * Có rate limit chống lách hạn mức, kiểm tra quiet hours và account mutex Zalo dùng chung với campaign runner.
+   */
+  async testSendQuickCampaign(req, res) {
+    try {
+      const channel = String(req.body.channel || 'email').trim().toLowerCase();
+      const recipient = String(req.body.recipient || '').trim();
+      const message = String(req.body.message || '').trim();
+      const subject = String(req.body.subject || '').trim();
+      const accountId = req.body.accountId;
+      const attachments = Array.isArray(req.body.attachments) ? req.body.attachments : [];
+
+      if (!recipient) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vui lòng nhập địa chỉ / số điện thoại người nhận thử nghiệm',
+        });
+      }
+
+      // Kiểm tra quota tài khoản hiện tại
+      const quota = await checkSendQuota({
+        userId: req.user.id,
+        channel: channel.startsWith('zalo') ? 'zalo' : 'email',
+        roleCode: req.user.role,
+        ownerContextId: req.user.activeContext?.ownerId,
+      });
+
+      if (!quota.allowed) {
+        return res.status(403).json({
+          success: false,
+          code: 'SEND_QUOTA_EXCEEDED',
+          message: quota.message || 'Bạn đã hết hạn mức gửi tin.',
+        });
+      }
+
+      if (channel.startsWith('zalo')) {
+        const limiter = campaignRunService.zaloRateLimiter;
+
+        // 1. Kiểm tra khung giờ yên lặng trước khi gửi Zalo
+        const nextAllowedSendAt = limiter.computeNextAllowedSendAtByQuietHours(Date.now());
+        if (nextAllowedSendAt) {
+          const qs = String(limiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE).padStart(2, '0');
+          const qe = String(limiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE).padStart(2, '0');
+          return res.status(400).json({
+            success: false,
+            code: 'QUIET_HOURS_ACTIVE',
+            message: `Đang trong khung giờ yên lặng (${qs}:00 – ${qe}:00). Hệ thống tạm dừng gửi tin Zalo để bảo vệ tài khoản.`,
+          });
+        }
+
+        const { account, api } = await zaloSettingsController.resolvePreviewAccountAndApi({
+          userId: req.user.id,
+          roleCode: req.user.role,
+          accountId,
+        });
+
+        const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(attachments);
+
+        // 2. Chạy qua Account Mutex chung của CampaignRunService để đồng bộ tuyệt đối với campaign worker
+        const sent = await campaignRunService.runWithZaloAccountMutex(account.id, async () => {
+          return campaignZaloSenderService.sendPersonalMessage({
+            api,
+            recipient,
+            recipientType: 'phone',
+            message,
+            attachments: preparedAttachments,
+          });
+        });
+
+        if (!isZaloOutboundResultSuccessful(sent)) {
+          const failure = describeZaloOutboundFailure(sent);
+          return res.status(400).json({
+            success: false,
+            message: `Gửi tin Zalo thất bại: ${failure.userReason || failure.errorMessage || 'Lỗi không xác định'}`,
+            data: failure,
+          });
+        }
+
+        return res.json({
+          success: true,
+          message: `Đã gửi tin Zalo thử nghiệm thành công tới ${recipient}`,
+          data: sent,
+        });
+      } else {
+        const emailResult = await emailSettingsSmtpService.sendCustomEmail({
+          userId: req.user.id,
+          roleCode: req.user.role,
+          payload: {
+            fromEmailId: accountId,
+            to: recipient,
+            subject: subject || 'Thử nghiệm gửi nhanh UKNOW Campaign',
+            content: message,
+            attachments,
+          },
+          trackingConfig: emailSettingsController.resolveTrackingBaseUrl(req),
+        }, {
+          normalizeEmailList: (v) => emailSettingsController.normalizeEmailList(v),
+          buildTrackedHtml: (...args) => emailSettingsController.buildTrackedHtml(...args),
+          buildMailAttachments: (items) => emailSettingsController.buildMailAttachments(items),
+          createSmtpTransporter: (input) => emailSettingsController.createSmtpTransporter(input),
+          formatUtc7: () => emailSettingsController.formatUtc7(),
+        });
+
+        return res.json({
+          success: true,
+          message: `Đã gửi email thử nghiệm thành công tới ${recipient}`,
+          data: emailResult,
+        });
+      }
+    } catch (error) {
+      console.error('[QuickSend] testSendQuickCampaign error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi gửi thử nghiệm',
+      });
+    }
+  }
 }
 
 export default new CampaignController();

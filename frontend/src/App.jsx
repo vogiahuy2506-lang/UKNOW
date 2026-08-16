@@ -154,12 +154,9 @@ const ProductionHiddenRoute = ({ children }) => {
   return children;
 };
 
-// Chỉ username "admin" hoặc nhân viên của account admin mới được vào
-const AdminUsernameRoute = ({ children }) => {
-  const { user, activeContext } = useAuthStore();
-  const isAdminUsername = user?.username?.toLowerCase() === 'admin';
-  const ownerUsername = activeContext?.owner?.username?.toLowerCase();
-  if (!isAdminUsername && ownerUsername !== 'admin') return <UnauthorizedScreen />;
+// Gác route bằng cờ tính năng (Feature flag)
+const FeatureFlagRoute = ({ flag, children }) => {
+  if (import.meta.env[flag] !== 'true') return <UnauthorizedScreen />;
   return children;
 };
 
@@ -400,15 +397,15 @@ function App() {
             <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
             <Route path="settings/audit-logs" element={<OwnerRoute><AuditLogsPage /></OwnerRoute>} />
-            {/* Admin-only cluster: chỉ username "admin" */}
-            <Route path="settings/landing-featured-courses" element={<AdminUsernameRoute><OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute></AdminUsernameRoute>} />
-            <Route path="settings/landing-testimonials" element={<AdminUsernameRoute><OwnerRoute><LandingTestimonialsPage /></OwnerRoute></AdminUsernameRoute>} />
+            {/* Admin-only cluster: gác bằng cờ tính năng độc lập */}
+            <Route path="settings/landing-featured-courses" element={<FeatureFlagRoute flag="VITE_FEATURE_LANDING_CMS"><OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute></FeatureFlagRoute>} />
+            <Route path="settings/landing-testimonials" element={<FeatureFlagRoute flag="VITE_FEATURE_LANDING_CMS"><OwnerRoute><LandingTestimonialsPage /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
             <Route path="settings/media-library" element={<OwnerRoute><MediaLibraryPage /></OwnerRoute>} />
-            <Route path="orders" element={<AdminUsernameRoute><OwnerRoute><Orders /></OwnerRoute></AdminUsernameRoute>} />
+            <Route path="orders" element={<FeatureFlagRoute flag="VITE_FEATURE_ORDERS"><OwnerRoute><Orders /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="billing" element={<OwnerRoute><BillingHubPage /></OwnerRoute>} />
             <Route path="topup" element={<OwnerRoute><TopupPage /></OwnerRoute>} />
 
@@ -426,7 +423,7 @@ function App() {
             <Route path="settings/chatbot-channels" element={<Navigate to="/app/chatbot-studio" replace />} />
 
             {/* Courses */}
-            <Route path="courses" element={<AdminUsernameRoute><Courses /></AdminUsernameRoute>} />
+            <Route path="courses" element={<FeatureFlagRoute flag="VITE_FEATURE_COURSES"><Courses /></FeatureFlagRoute>} />
             <Route path="products" element={<OwnerRoute><ProductionHiddenRoute><Products /></ProductionHiddenRoute></OwnerRoute>} />
             <Route path="landing-leads" element={<LandingLeadsListPage />} />
 

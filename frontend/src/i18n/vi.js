@@ -291,6 +291,8 @@ export default {
     googleLoginSuccess: 'Đăng nhập Google thành công!',
     googleLoginFailed: 'Đăng nhập Google thất bại',
     googleError: 'Lỗi khi kết nối với Google',
+    googleAuthHint: 'Bạn đăng ký bằng Google? Hãy dùng nút "Tiếp tục bằng Google" bên dưới.',
+    typingEmailHint: 'Bạn đang nhập email. Nếu đăng ký bằng Google, vui lòng đăng nhập bằng nút Google bên dưới.',
   },
 
   register: {
@@ -6806,6 +6808,21 @@ export default {
     manualInput: 'Nhập địa chỉ người nhận',
     noEmailAccountSelected: 'Vui lòng chọn tài khoản gửi email',
     noZaloAccountSelected: 'Vui lòng chọn tài khoản gửi Zalo',
+    estimatedDuration: 'Thời gian hoàn tất ước tính',
+    immediate: 'Ngay lập tức',
+    estimateSeconds: '~{value} giây',
+    estimateMinutes: '~{value} phút',
+    estimateHours: '~{value} giờ',
+    estimateDays: '~{value} ngày',
+    quietHoursNotice: 'Hệ thống tự động tạm dừng gửi trong khung giờ yên lặng {start} – {end} sáng hàng ngày để tuân thủ chính sách Zalo và bảo vệ tài khoản.',
+    testSendTitle: 'Gửi thử nghiệm',
+    testSendDesc: 'Gửi 1 tin mẫu tới số điện thoại / email của bạn để kiểm tra trước khi gửi hàng loạt.',
+    testRecipientEmailPlaceholder: 'Nhập email nhận thử (vd: your@email.com)',
+    testRecipientPhonePlaceholder: 'Nhập SĐT Zalo nhận thử (vd: 0912345678)',
+    testSendButton: 'Gửi thử',
+    testing: 'Đang gửi thử...',
+    testSendSuccess: 'Gửi thử nghiệm thành công',
+    testSendFailed: 'Gửi thử nghiệm thất bại',
   },
 
   helpDocs: {

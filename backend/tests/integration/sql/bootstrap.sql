@@ -60,6 +60,7 @@ CREATE TABLE users (
   must_change_password    BOOLEAN      NOT NULL DEFAULT FALSE,
   messages_per_period     INTEGER,
   is_fup_enabled          BOOLEAN      NOT NULL DEFAULT FALSE,
+  auth_provider           VARCHAR(16)  NOT NULL DEFAULT 'local' CHECK (auth_provider IN ('local', 'google')),
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
