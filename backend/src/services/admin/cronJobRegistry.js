@@ -142,6 +142,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'refresh_token_cleanup',
+    label: 'Dọn refresh token hết hạn',
+    schedule: '00:50',
+    description: 'Xoá bản ghi refresh_tokens đã hết hạn quá 30 ngày (đổi qua REFRESH_TOKEN_RETENTION_DAYS), theo lô 5000 dòng.',
+    impact: 'Bảng phiên đăng nhập phình vô hạn; mỗi lần đăng nhập lại thêm một dòng không bao giờ được dọn.',
+    tracked: true,
+  },
+  {
     code: 'storage_objects_reconcile',
     label: 'Đối soát storage ledger',
     schedule: '02:40 hàng ngày',

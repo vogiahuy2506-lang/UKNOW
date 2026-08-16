@@ -604,6 +604,22 @@ export const initScheduler = () => {
     }
   }, { timezone: HANOI_TIME_ZONE });
 
+  // ── Dọn refresh token hết hạn quá 30 ngày — 00:50 mỗi ngày ───────────────
+  cron.schedule('50 0 * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('refresh_token_cleanup', async () => {
+        const { deleteExpiredRefreshTokens } = await import('../repositories/user/user.repository.js');
+        const retentionDays = Number.parseInt(process.env.REFRESH_TOKEN_RETENTION_DAYS, 10) || 30;
+        const deleted = await deleteExpiredRefreshTokens(retentionDays);
+        console.log(`[Scheduler] refresh_token_cleanup: deleted=${deleted} retentionDays=${retentionDays}`);
+        return { deleted, retentionDays };
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi dọn refresh_tokens:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');

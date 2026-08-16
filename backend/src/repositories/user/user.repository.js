@@ -270,6 +270,40 @@ export async function revokeAllRefreshTokensForUser(userId, reason = 'password_c
   );
 }
 
+/**
+ * Xoá refresh token đã hết hạn quá `retentionDays` ngày.
+ *
+ * Chỉ dựa vào `expires_at` — token bị thu hồi vẫn giữ hạn gốc nên cũng bị dọn
+ * theo, không cần điều kiện riêng cho `is_revoked`. Giữ lại một khoảng sau khi
+ * hết hạn để còn truy được lịch sử phiên khi điều tra sự cố đăng nhập.
+ *
+ * Xoá theo lô để một lần chạy đầu tiên trên bảng lớn không khoá bảng quá lâu;
+ * job chạy hằng đêm nên phần dư sẽ được dọn nốt ở các lần sau.
+ *
+ * @param {number} [retentionDays]
+ * @param {number} [batchSize]
+ * @returns {Promise<number>} số dòng đã xoá
+ */
+export async function deleteExpiredRefreshTokens(retentionDays = 30, batchSize = 5000) {
+  const days = Number.isFinite(Number(retentionDays)) && Number(retentionDays) > 0
+    ? Math.floor(Number(retentionDays))
+    : 30;
+  const limit = Number.isFinite(Number(batchSize)) && Number(batchSize) > 0
+    ? Math.floor(Number(batchSize))
+    : 5000;
+
+  const { rowCount } = await db.query(
+    `DELETE FROM refresh_tokens
+     WHERE id IN (
+       SELECT id FROM refresh_tokens
+       WHERE expires_at < NOW() - ($1 || ' days')::INTERVAL
+       LIMIT $2
+     )`,
+    [String(days), limit]
+  );
+  return rowCount || 0;
+}
+
 export async function findLegacyEmployees({ includeLimits = true } = {}) {
   const limitSelect = includeLimits
     ? 'u.max_campaigns, u.max_zalo_accounts, u.max_email_accounts, u.max_email_templates, u.max_zalo_templates, u.max_landing_pages,'
