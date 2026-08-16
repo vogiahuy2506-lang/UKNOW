@@ -272,6 +272,24 @@ export async function createTopupPaymentLink({
   });
   const amount = priced.amount;
   const invoiceInfo = priced.invoiceInfo;
+  const orderCode = generateOrderCode();
+  const pendingWindowMinutes = await getPayosPendingWindowMinutes();
+  const reuseWindowMinutes = Math.max(1, Number(pendingWindowMinutes) - 2);
+  const topupConfig = {
+    quantities: quote.quantities,
+    billingUserId: quote.billingUserId,
+    items: quote.items,
+    total: net,
+    months: quote.months,
+  };
+
+  const cancelledDupes = await cancelRecentPendingTopupOrders({
+    userId,
+    withinMinutes: reuseWindowMinutes,
+  });
+  if (cancelledDupes.length) {
+    await bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code));
+  }
 
   const client = await db.getClient();
   let order;
