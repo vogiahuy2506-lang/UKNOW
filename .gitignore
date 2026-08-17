@@ -15,6 +15,13 @@ docs/TEST_ACCOUNTS.md
 # Tài liệu API nhà cung cấp (Mắt Bão HDDT) — có credentials demo, KHÔNG commit lên repo public.
 /HoaDonBanRa/
 
+# Khoá service account Google Cloud (chứa private key). TUYỆT ĐỐI không commit.
+# Trên server: đặt file ngoài repo và trỏ GOOGLE_APPLICATION_CREDENTIALS vào đó.
+gen-lang-client-*.json
+*-service-account*.json
+*gcp-key*.json
+service-account*.json
+
 
 ####################
 # DOCS / DUMP (root)
