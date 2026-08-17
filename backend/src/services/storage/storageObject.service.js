@@ -17,6 +17,7 @@ import {
   getStorageUsage,
   StorageQuotaExceededError,
 } from './storageQuota.service.js';
+import { getStorageBackend } from './storageBackend.js';
 
 const COUNTED_STATES = new Set(['active', 'temp', 'cleanup_pending']);
 
@@ -140,12 +141,18 @@ export async function ensureTrackedTempStorageObject({
   });
 }
 
-export async function markDeletedAfterUnlink({ storageKey = null, tempKey = null, physicalPaths = [] }) {
+export async function markDeletedAfterUnlink({ storageKey = null, tempKey = null, physicalPaths = [], keys = null }) {
   const object = storageKey
     ? await findStorageObjectByKey(storageKey)
     : await findStorageObjectByTempKey(tempKey);
   try {
-    await unlinkAll(physicalPaths);
+    if (keys || storageKey) {
+      const keysToDelete = keys || [storageKey, `${storageKey}.txt`].filter(Boolean);
+      await getStorageBackend().delete(keysToDelete);
+    }
+    if (physicalPaths && physicalPaths.length > 0) {
+      await unlinkAll(physicalPaths);
+    }
   } catch (error) {
     // A promoted object can retain temp_key when post-commit temp cleanup failed.
     // Keep it active so retry only targets the stale temp copy, not the durable file.

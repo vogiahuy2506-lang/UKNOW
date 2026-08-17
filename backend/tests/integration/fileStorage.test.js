@@ -28,6 +28,11 @@ import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import uploadController from '../../src/controllers/upload.controller.js';
 import { generateFileToken } from '../../src/utils/fileDownloadToken.js';
+import {
+  setStorageBackendInstance,
+  resetStorageBackendForTest,
+} from '../../src/services/storage/storageBackend.js';
+import { LocalStorageBackend } from '../../src/services/storage/localStorageBackend.js';
 import { truncateAll, createUser } from './helpers/db.js';
 
 const TEST_ROOT = path.join(
@@ -44,6 +49,13 @@ beforeAll(async () => {
   await fs.mkdir(TEST_UPLOADS_DIR, { recursive: true });
   uploadController.tempDir = TEST_TEMP_DIR;
   uploadController.uploadsRootDir = TEST_UPLOADS_DIR;
+  // Đường đọc/ghi file đi qua StorageBackend chứ không còn qua uploadController,
+  // nên phải trỏ backend vào đúng thư mục tạm của suite này. Thiếu bước này thì
+  // backend tìm ở <cwd>/uploads và mọi truy cập file trả 404.
+  setStorageBackendInstance(new LocalStorageBackend({
+    uploadsRootDir: TEST_UPLOADS_DIR,
+    tempDir: TEST_TEMP_DIR,
+  }));
   app = createApp();
 });
 
@@ -55,6 +67,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  resetStorageBackendForTest();
   await fs.rm(TEST_ROOT, { recursive: true, force: true }).catch(() => {});
 });
 

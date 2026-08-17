@@ -90,13 +90,12 @@ export async function deleteStorageObject(req, res) {
       }
     }
 
-    // Delete physical file and update ledger
+    // Delete storage object and update ledger
     if (object.storage_key) {
-      const physicalPath = uploadController.resolveAbsolutePathFromKey(object.storage_key);
-      const physicalPaths = [physicalPath, `${physicalPath}.txt`].filter(Boolean);
+      const normalizedKey = uploadController.normalizeStorageKey(object.storage_key);
       await markDeletedAfterUnlink({
-        storageKey: object.storage_key,
-        physicalPaths,
+        storageKey: normalizedKey,
+        keys: [normalizedKey, `${normalizedKey}.txt`].filter(Boolean),
       });
     } else if (object.temp_key) {
       let tempPath = null;

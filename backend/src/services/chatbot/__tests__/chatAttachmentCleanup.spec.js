@@ -10,21 +10,31 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 
 jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
   default: {
+    normalizeStorageKey: jest.fn((key) => key),
     resolveAbsolutePathFromKey: mockResolveAbs,
   },
 }));
 
-jest.unstable_mockModule('../../storage/storageObject.service.js', () => ({
-  markDeletedAfterUnlink: jest.fn(async ({ physicalPaths }) => {
-    for (const filePath of physicalPaths) {
-      try {
-        await fs.unlink(filePath);
-      } catch (error) {
-        if (error?.code !== 'ENOENT') throw error;
-      }
+const mockMarkDeletedAfterUnlink = jest.fn(async ({ physicalPaths = [], keys = [] }) => {
+  for (const filePath of physicalPaths) {
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
     }
-    return null;
-  }),
+  }
+  for (const key of keys) {
+    try {
+      await fs.unlink(`/abs/${key}`);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
+  return null;
+});
+
+jest.unstable_mockModule('../../storage/storageObject.service.js', () => ({
+  markDeletedAfterUnlink: mockMarkDeletedAfterUnlink,
 }));
 
 const unlinkSpy = jest.spyOn(fs, 'unlink').mockResolvedValue(undefined);
@@ -116,7 +126,10 @@ describe('expires_at catalog cleanup', () => {
 
     const result = await cleanupExpiredCatalogRows();
 
-    expect(mockResolveAbs).toHaveBeenCalledWith('uploads/1/chat/old.pdf');
+    expect(mockMarkDeletedAfterUnlink).toHaveBeenCalledWith({
+      storageKey: 'uploads/1/chat/old.pdf',
+      keys: ['uploads/1/chat/old.pdf', 'uploads/1/chat/old.pdf.txt'],
+    });
     expect(unlinkSpy).toHaveBeenCalledWith('/abs/uploads/1/chat/old.pdf');
     expect(unlinkSpy).toHaveBeenCalledWith('/abs/uploads/1/chat/old.pdf.txt');
     const deleteCall = mockQuery.mock.calls.find(([sql]) => sql.includes('DELETE FROM chat_attachments'));

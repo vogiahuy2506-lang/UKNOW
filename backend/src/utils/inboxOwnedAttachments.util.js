@@ -58,7 +58,7 @@ export function sanitizeOwnedInboxAttachments(attachments, ownerUserId) {
     if (!att || typeof att !== 'object') continue;
     const key = resolveInboxAttachmentStorageKey(att);
     if (!key || !key.startsWith(ownerPrefix)) continue;
-    if (!uploadController.resolveAbsolutePathFromKey(key)) continue;
+    if (!uploadController.normalizeStorageKey(key)) continue;
 
     const item = { key };
     const displayName = att.displayName || att.name || null;

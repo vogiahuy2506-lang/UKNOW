@@ -23,16 +23,16 @@ jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('fs', () => ({
-  promises: {
-    mkdir: mockMkdir,
-    writeFile: mockWriteFile,
-    readFile: mockReadFile,
-    unlink: mockUnlink,
-    rm: jest.fn(),
-    readdir: jest.fn(),
-    stat: jest.fn(),
-  },
+const mockPut = jest.fn(async () => {});
+const mockGetBuffer = jest.fn(async () => Buffer.from('mock buffer'));
+
+jest.unstable_mockModule('../../storage/storageBackend.js', () => ({
+  getStorageBackend: () => ({
+    put: mockPut,
+    getBuffer: mockGetBuffer,
+    exists: jest.fn(async () => true),
+    delete: jest.fn(async () => {}),
+  }),
 }));
 
 jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
@@ -58,8 +58,8 @@ describe('persistChatBlob / storeChatFile catalog', () => {
   beforeEach(() => {
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 1 });
-    mockMkdir.mockReset().mockResolvedValue(undefined);
-    mockWriteFile.mockReset().mockResolvedValue(undefined);
+    mockPut.mockReset().mockResolvedValue(undefined);
+    mockGetBuffer.mockReset().mockResolvedValue(Buffer.from('mock buffer'));
     mockBuildUrl.mockClear();
     mockSanitize.mockClear();
     mockResolveAbs.mockClear();

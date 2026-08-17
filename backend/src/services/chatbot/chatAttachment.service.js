@@ -15,6 +15,7 @@ import {
   markStorageObjectCleanupPending,
 } from '../../repositories/storage.repository.js';
 import { isStorageKeyReferencedByMessage } from '../storage/storageReference.service.js';
+import { getStorageBackend } from '../storage/storageBackend.js';
 
 export const MAX_FILES_PER_MESSAGE = 3;
 export const MAX_FILE_BYTES = MAX_UPLOAD_FILE_BYTES;
@@ -178,50 +179,44 @@ export async function persistChatBlob({
 
   const safeBase = uploadController.sanitizeFileBaseName(originalName);
   const key = `uploads/${ownerUserId}/chat/${Date.now()}_${safeBase}${ext}`;
-  const absPath = uploadController.resolveAbsolutePathFromKey(key);
-  if (!absPath) {
-    throw httpError('Không thể lưu file', 500);
-  }
-
-  await fs.mkdir(path.dirname(absPath), { recursive: true });
-  await fs.writeFile(absPath, buffer);
+  await getStorageBackend().put(key, buffer, { contentType: mime });
 
   let textExtracted = kind === 'image';
+  let extractedText = '';
   if (kind === 'doc') {
-    let text = '';
     try {
-      text = await extractWithTimeout(buffer, `${safeBase}${ext}`, mime, { max: PDF_MAX_PAGES });
-      text = String(text || '').slice(0, TEXT_PER_FILE_CHARS);
-      if (text.trim().length >= 10) {
+      extractedText = await extractWithTimeout(buffer, `${safeBase}${ext}`, mime, { max: PDF_MAX_PAGES });
+      extractedText = String(extractedText || '').slice(0, TEXT_PER_FILE_CHARS);
+      if (extractedText.trim().length >= 10) {
         textExtracted = true;
-        console.log(`[ChatAttachment] extracted ${text.length} chars from ${safeBase}${ext}`);
+        console.log(`[ChatAttachment] extracted ${extractedText.length} chars from ${safeBase}${ext}`);
       } else {
-        text = '';
+        extractedText = '';
         textExtracted = false;
       }
     } catch (err) {
       console.warn(`[ChatAttachment] extract failed: ${err.message}`);
-      text = '';
+      extractedText = '';
       textExtracted = false;
     }
-    const sidecarPath = `${absPath}.txt`;
-    await fs.writeFile(sidecarPath, text, 'utf8');
+    const sidecarKey = `${key}.txt`;
+    await getStorageBackend().put(sidecarKey, extractedText, { contentType: 'text/plain' });
   }
 
   const displayName = sanitizeDisplayName(originalName);
   const expiresAt = new Date(Date.now() + CHAT_ATTACHMENT_TEMP_TTL_MS);
   const resolvedSource = resolveSource({ source });
 
+  const totalBytes = buffer.length + (extractedText ? Buffer.byteLength(extractedText, 'utf8') : 0);
   const storageObject = await registerWrittenStorageObject({
     ownerUserId,
     actorUserId,
     storageKey: key,
     category: 'chat',
     state: 'temp',
-    sizeBytes: await getPhysicalSize([absPath, `${absPath}.txt`]),
+    sizeBytes: totalBytes,
     expiresAt,
     referenceType: 'chat_attachment',
-    physicalPaths: [absPath, `${absPath}.txt`],
   });
 
   try {
@@ -239,7 +234,7 @@ export async function persistChatBlob({
   } catch (error) {
     await markDeletedAfterUnlink({
       storageKey: key,
-      physicalPaths: [absPath, `${absPath}.txt`],
+      keys: [key, `${key}.txt`],
     }).catch(() => {});
     throw error;
   }
@@ -536,21 +531,19 @@ export function presentAttachmentsForClient(attachments, { chatbotId, uid = null
 }
 
 async function readSidecarText(storageKey) {
-  const absPath = uploadController.resolveAbsolutePathFromKey(storageKey);
-  if (!absPath) return '';
+  if (!storageKey) return '';
   try {
-    const text = await fs.readFile(`${absPath}.txt`, 'utf8');
-    return String(text || '').slice(0, TEXT_PER_FILE_CHARS);
+    const buf = await getStorageBackend().getBuffer(`${storageKey}.txt`);
+    return String(buf || '').slice(0, TEXT_PER_FILE_CHARS);
   } catch {
     return '';
   }
 }
 
 async function readFileBase64(storageKey) {
-  const absPath = uploadController.resolveAbsolutePathFromKey(storageKey);
-  if (!absPath) return null;
+  if (!storageKey) return null;
   try {
-    const buf = await fs.readFile(absPath);
+    const buf = await getStorageBackend().getBuffer(storageKey);
     return buf.toString('base64');
   } catch {
     return null;

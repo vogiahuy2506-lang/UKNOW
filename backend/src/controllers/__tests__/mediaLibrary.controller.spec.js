@@ -30,6 +30,7 @@ const mockResolveTempFilePath = jest.fn((tempKey) => `/tmp/test_uploads/${tempKe
 
 jest.unstable_mockModule('../upload.controller.js', () => ({
   default: {
+    normalizeStorageKey: jest.fn((key) => key),
     resolveAbsolutePathFromKey: mockResolveAbsolutePathFromKey,
     resolveTempFilePath: mockResolveTempFilePath,
     tempDir: '/tmp/test_uploads',

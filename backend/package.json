@@ -80,6 +80,7 @@
   "author": "UKNOW",
   "license": "MIT",
   "dependencies": {
+    "@google-cloud/storage": "^7.22.0",
     "@payos/node": "^2.0.5",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",

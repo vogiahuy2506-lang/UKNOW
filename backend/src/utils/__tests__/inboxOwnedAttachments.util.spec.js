@@ -97,7 +97,7 @@ describe('sanitizeOwnedInboxAttachments', () => {
   });
 
   it('drops path-traversal / invalid absolute paths', () => {
-    mockResolveAbs.mockReturnValue('');
+    mockNormalize.mockReturnValue('');
     const out = sanitizeOwnedInboxAttachments([
       { key: 'uploads/42/chat/a.pdf', url: 'uploads/42/chat/a.pdf' },
     ], 42);

@@ -4,15 +4,11 @@ import uploadController from './upload.controller.js';
 import { verifyFileToken } from '../utils/fileDownloadToken.js';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
 import { serverError } from '../helpers.js';
+import { getStorageBackend } from '../services/storage/storageBackend.js';
 
 class DownloadController {
   /**
-   * Stream file local theo storage key ra HTTP response.
-   *
-   * Luồng hoạt động:
-   * 1. Chuẩn hóa key và kiểm tra tồn tại file trong uploads.
-   * 2. Thiết lập Content-Type và Content-Disposition theo chế độ preview/download.
-   * 3. Trả file bằng `sendFile` để trình duyệt hiển thị hoặc tải về.
+   * Stream file theo storage key ra HTTP response qua StorageBackend.
    *
    * @param {import('express').Response} res
    * @param {{ storageKey: string, fileName?: string, mimeType?: string, preview?: boolean }} opts
@@ -20,25 +16,8 @@ class DownloadController {
    */
   async sendLocalFile(res, { storageKey, fileName = 'file', mimeType = '', preview = false }) {
     const normalizedKey = uploadController.normalizeStorageKey(storageKey);
-    const filePath = uploadController.resolveAbsolutePathFromKey(normalizedKey);
-    if (!normalizedKey || !filePath) return false;
-    try {
-      await uploadController.readFileBufferByKey(normalizedKey);
-    } catch {
-      return false;
-    }
-    const safeName = String(fileName || 'file').replace(/"/g, '');
-    const disposition = preview ? 'inline' : `attachment; filename="${safeName}"`;
-    if (mimeType) {
-      res.setHeader('Content-Type', mimeType);
-    }
-    res.setHeader('Content-Disposition', disposition);
-    /** Ảnh nhúng từ trang frontend khác origin — bổ sung CORP để chắc chắn không bị chặn (nginx/proxy có thể ghi đè Helmet). */
-    if (preview) {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    }
-    res.sendFile(filePath);
-    return true;
+    if (!normalizedKey) return false;
+    return getStorageBackend().stream(normalizedKey, res, { fileName, mimeType, preview });
   }
 
   /** IP thực từ request (hỗ trợ proxy) */

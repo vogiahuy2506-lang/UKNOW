@@ -14,6 +14,7 @@ import {
   resolveWorkspaceOwnerId,
   StorageQuotaExceededError,
 } from '../services/storage/storageQuota.service.js';
+import { getStorageBackend } from '../services/storage/storageBackend.js';
 
 // Resolve temp_uploads directory relative to project root (where the process starts)
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
@@ -420,28 +421,28 @@ class UploadController {
     }
   }
 
-  // Xóa files từ local uploads
+  // Xóa files từ permanent storage
   /**
-   * Xóa một hoặc nhiều file local theo storage key.
+   * Xóa một hoặc nhiều file theo storage key.
    * @param {string[]} fileKeys - Mảng storage key cần xóa
-   * @returns {Promise<void>}
+   * @returns {Promise<{success: boolean, deletedCount: number, errors: Array}>}
    */
   async deleteFromS3(fileKeys) {
     try {
       if (!fileKeys || fileKeys.length === 0) {
-        return { success: true, message: 'Không có tệp để xóa' };
+        return { success: true, deletedCount: 0, errors: [] };
       }
 
       let deletedCount = 0;
       const errors = [];
       for (const rawKey of fileKeys) {
-        const filePath = this.resolveAbsolutePathFromKey(rawKey);
-        if (!filePath) continue;
+        const normalizedKey = this.normalizeStorageKey(rawKey);
+        if (!normalizedKey) continue;
         try {
           // eslint-disable-next-line no-await-in-loop
           await markDeletedAfterUnlink({
-            storageKey: this.normalizeStorageKey(rawKey),
-            physicalPaths: [filePath, `${filePath}.txt`],
+            storageKey: normalizedKey,
+            keys: [normalizedKey, `${normalizedKey}.txt`],
           });
           deletedCount += 1;
         } catch (error) {
@@ -456,17 +457,17 @@ class UploadController {
         errors,
       };
     } catch (error) {
-      console.error('Error deleting local files:', error);
+      console.error('Error deleting files:', error);
       throw error;
     }
   }
 
   async readFileBufferByKey(storageKey) {
-    const filePath = this.resolveAbsolutePathFromKey(storageKey);
-    if (!filePath) {
+    const key = this.normalizeStorageKey(storageKey);
+    if (!key) {
       throw new Error('Storage key không hợp lệ');
     }
-    return fs.readFile(filePath);
+    return getStorageBackend().getBuffer(key);
   }
 
   async readTempFileBuffer(tempId, originalName) {
@@ -515,7 +516,7 @@ class UploadController {
   // Xóa temp file
   /**
    * Xóa một file tạm khỏi temp_uploads/ theo tên file.
-   * @param {import('express').Request} req - params: { fileName }
+   * @param {import('express').Request} req - params: { tempId }
    * @param {import('express').Response} res
    */
   async deleteTempFile(req, res) {
@@ -552,8 +553,8 @@ class UploadController {
   }
 
   /**
-   * Tạo presigned URL để truy cập file S3 (hết hạn sau 1 giờ).
-   * @param {import('express').Request} req - params: { key } (S3 object key, URL-encoded)
+   * Tạo presigned URL để truy cập file (hết hạn sau 1 giờ).
+   * @param {import('express').Request} req - params: { key } (Storage key, URL-encoded)
    * @param {import('express').Response} res
    */
   async getSignedUrl(req, res) {
@@ -569,14 +570,19 @@ class UploadController {
       }
 
       const normalizedKey = this.normalizeStorageKey(key);
-      const filePath = this.resolveAbsolutePathFromKey(normalizedKey);
-      if (!filePath) {
+      if (!normalizedKey) {
         return res.status(400).json({
           success: false,
           message: 'Key của file không hợp lệ'
         });
       }
-      await fs.access(filePath);
+      const exists = await getStorageBackend().exists(normalizedKey);
+      if (!exists) {
+        return res.status(404).json({
+          success: false,
+          message: 'File không tồn tại'
+        });
+      }
 
       // Trả URL public dạng token để frontend mở tab mới trực tiếp.
       const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -591,12 +597,6 @@ class UploadController {
       });
     } catch (error) {
       console.error('Get signed URL error:', error);
-      if (error?.code === 'ENOENT') {
-        return res.status(404).json({
-          success: false,
-          message: 'File không tồn tại'
-        });
-      }
       return res.status(500).json({
         success: false,
         message: 'Không thể tạo signed URL'

@@ -114,13 +114,13 @@ export async function cleanupExpiredCatalogRows() {
       continue;
     }
 
-    const abs = uploadController.resolveAbsolutePathFromKey(row.storage_key);
+    const normalizedKey = uploadController.normalizeStorageKey(row.storage_key);
     let removed = false;
-    if (abs) {
+    if (normalizedKey) {
       try {
         await markDeletedAfterUnlink({
-          storageKey: row.storage_key,
-          physicalPaths: [abs, `${abs}.txt`],
+          storageKey: normalizedKey,
+          keys: [normalizedKey, `${normalizedKey}.txt`],
         });
         filesDeleted += 1;
         removed = true;
