@@ -169,6 +169,38 @@ describe('aiCampaign.service', () => {
     expect(response.data.userPrompt).toContain('5 tin nhắn Zalo');
   });
 
+  it('bypasses suggest_content_plan when intent is content_plan_request (PR-A)', () => {
+    const response = aiCampaignService._guardContentPlanResponse(
+      {
+        type: 'text',
+        content: 'Tin nhắn 1: Chào bạn\nTin nhắn 2: Ưu đãi đặc biệt',
+      },
+      [{ role: 'user', content: 'Soạn chiến dịch 5 tin nhắn Zalo trong 5 ngày kêu gọi đăng ký' }],
+      null,
+      'content_plan_request'
+    );
+
+    expect(response.type).toBe('text');
+    expect(response.content).toContain('Tin nhắn 1');
+  });
+
+  it('bypasses suggest_content_plan when history already has suggest_content_plan (hard brake PR-A)', () => {
+    const response = aiCampaignService._guardContentPlanResponse(
+      {
+        type: 'text',
+        content: 'Tin nhắn 1: Chào bạn\nTin nhắn 2: Ưu đãi đặc biệt',
+      },
+      [
+        { role: 'user', content: 'Soạn chiến dịch 5 tin nhắn Zalo trong 5 ngày kêu gọi đăng ký' },
+        { role: 'assistant', type: 'suggest_content_plan', content: 'Kế hoạch gợi ý' },
+        { role: 'user', content: 'Hãy trả về content_plan JSON' },
+      ]
+    );
+
+    expect(response.type).toBe('text');
+    expect(response.content).toContain('Tin nhắn 1');
+  });
+
   it('does not convert inline drafts to content_plan for quick-send', () => {
     const response = aiCampaignService._guardContentPlanResponse(
       {

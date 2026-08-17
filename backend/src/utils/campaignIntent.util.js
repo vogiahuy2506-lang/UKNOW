@@ -39,9 +39,9 @@ export function asksOnlyForGoogleSheet(response) {
     && /google\s*sheet|spreadsheet|sheet\s*url|đường dẫn google sheet|docs\.google\.com\/spreadsheets/.test(text);
 }
 
-export function buildCampaignDataSourceQuestion(locale = 'vi') {
+export function buildCampaignDataSourceQuestion(locale = 'vi', gateState = null) {
   // A4b: unify with wizard helper (manual + wizardGate)
-  return buildDataSourceQuestion(locale);
+  return buildDataSourceQuestion(locale, gateState);
 }
 
 export function isMultiDaySeriesRequest(text = '') {
@@ -54,3 +54,18 @@ export function looksLikeInlineSeriesDraft(content = '') {
   const matches = String(content || '').match(/tin nhắn\s*\d+|ngày\s*\d+|email\s*\d+|message\s*\d+|day\s*\d+/gi) || [];
   return matches.length >= 2;
 }
+
+export function countSuggestContentPlan(history = []) {
+  if (!Array.isArray(history) || history.length === 0) return 0;
+  let count = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg?.role === 'assistant' || msg?.role === 'model') {
+      if (msg?.type === 'suggest_content_plan') {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+

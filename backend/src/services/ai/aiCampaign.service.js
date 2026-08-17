@@ -14,6 +14,7 @@ import {
   asksOnlyForGoogleSheet,
   isMultiDaySeriesRequest,
   looksLikeInlineSeriesDraft,
+  countSuggestContentPlan,
   buildAssistantLanguageInstructions,
 } from '../../utils/campaignIntent.util.js';
 import {
@@ -352,20 +353,24 @@ D. ZALO NHÓM:
     return parseAiJson(text);
   }
 
-  _guardCampaignDataSourceResponse(response, history = [], locale = 'vi') {
+  _guardCampaignDataSourceResponse(response, history = [], locale = 'vi', gateState = null) {
     const lastUserText = lastUserMessageContent(history);
     if (
       looksLikeCampaignRequest(lastUserText)
       && asksOnlyForGoogleSheet(response)
       && !hasExplicitCustomerSource(lastUserText)
     ) {
-      return buildDataSourceQuestion(locale);
+      return buildDataSourceQuestion(locale, gateState);
     }
     return response;
   }
 
-  _guardContentPlanResponse(response, history = [], brief = null) {
+  _guardContentPlanResponse(response, history = [], brief = null, intent = null) {
     if (response?.type === 'content_plan') return response;
+    if (intent === 'content_plan_request') return response;
+
+    // Hard brake (phanh cứng chống lặp): từ 1 lần suggest_content_plan trở lên trong history thì không bọc lại
+    if (countSuggestContentPlan(history) >= 1) return response;
 
     const lastUserText = lastUserMessageContent(history);
     const sourcePrompt = findOriginalCampaignPrompt(history);
@@ -525,6 +530,7 @@ D. ZALO NHÓM:
     localeContext = null,
     model = null,
     persistedWizardState = null,
+    intent = null,
   }) {
     let contextBlock = '';
     // Tenant resources (courses, templates, profile) belong to workspace owner;
@@ -1372,9 +1378,10 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       this._guardManualRecipientsNoAutoRun(
         this._guardQuickSendResponse(
           this._guardContentPlanResponse(
-            this._guardCampaignDataSourceResponse(response, history, locale),
+            this._guardCampaignDataSourceResponse(response, history, locale, gateState),
             history,
-            briefForState
+            briefForState,
+            intent
           ),
           history,
           briefForState
