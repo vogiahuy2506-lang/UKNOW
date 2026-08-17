@@ -205,6 +205,18 @@ const chatbotApiService = {
   getZaloChatHistory(conversationId, limit = 50) {
     return api.get(`/ai/chatbot/zalo-personal/history?conversationId=${conversationId}&limit=${limit}`);
   },
+
+  // Get synced friends from DB
+  getZaloFriends({ accountId, search = '', page = 1, limit = 50 } = {}) {
+    return api.get('/ai/chatbot/zalo-personal/friends', {
+      params: {
+        accountId,
+        ...(search ? { search } : {}),
+        page,
+        limit,
+      },
+    });
+  },
 };
 
 export default chatbotApiService;

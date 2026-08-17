@@ -1921,3 +1921,20 @@ ALTER TABLE zalo_messages ADD COLUMN IF NOT EXISTS account_name VARCHAR(255);
 CREATE INDEX IF NOT EXISTS idx_zalo_messages_account_created
   ON zalo_messages (account_id, created_at DESC)
   WHERE account_id IS NOT NULL;
+
+-- ─── Zalo friends sync (mirrors 142) ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS zalo_friends (
+  id               BIGSERIAL PRIMARY KEY,
+  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  friend_id        VARCHAR(100) NOT NULL,
+  display_name     VARCHAR(255),
+  phone            VARCHAR(32),
+  avatar_url       TEXT,
+  synced_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT zalo_friends_setting_friend_key UNIQUE (id_zalo_setting, friend_id)
+);
+CREATE INDEX IF NOT EXISTS idx_zalo_friends_setting ON zalo_friends(id_zalo_setting);
+CREATE INDEX IF NOT EXISTS idx_zalo_friends_search ON zalo_friends(id_zalo_setting, display_name);
+

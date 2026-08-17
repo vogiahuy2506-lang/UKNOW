@@ -14,6 +14,7 @@ import {
 import campaignBuilderApiService from '../../campaigns/services/campaignBuilderApi.service';
 import emailSettingsApiService from '../../settings/services/emailSettingsApi.service';
 import zaloSettingsApiService from '../../settings/services/zaloSettingsApi.service';
+import chatbotApiService from '../../chatbot/services/chatbotApi.service';
 
 const getQrImage = (payload) => (
   payload?.qrImage || payload?.qr_image || payload?.qrCode || payload?.qr_code || payload?.image || payload?.data?.qrImage || ''
@@ -550,3 +551,252 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, t }) => {
     </div>
   );
 };
+
+export const ZaloFriendPickerCard = ({ data, onSubmit, t }) => {
+  const accountId = data?.accountId;
+  const maxRecipients = data?.maxRecipients || 1000;
+  const [friends, setFriends] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const loadFriends = async (targetPage = 1, searchQuery = '') => {
+    if (!accountId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const response = await chatbotApiService.getZaloFriends({
+        accountId,
+        search: searchQuery,
+        page: targetPage,
+        limit: 100,
+      });
+      const payload = response?.data?.data || response?.data || {};
+      setFriends(payload.items || []);
+      setTotalPages(payload.totalPages || 1);
+      setTotalCount(payload.total || 0);
+      setPage(payload.page || targetPage);
+      if (payload.lastSyncedAt) {
+        setLastSyncedAt(payload.lastSyncedAt);
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || t('aiChatbot.wizardFriendLoadFailed') || 'Không tải được danh bạ Zalo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFriends(1, search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearch(val);
+    loadFriends(1, val);
+  };
+
+  const handleSyncContacts = async () => {
+    if (!accountId || syncing) return;
+    setSyncing(true);
+    try {
+      await chatbotApiService.syncZaloContacts(accountId);
+      toast.success(t('aiChatbot.wizardZaloSyncSuccess') || 'Đồng bộ danh bạ thành công.');
+      await loadFriends(1, search);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('aiChatbot.wizardZaloSyncFailed') || 'Đồng bộ danh bạ thất bại.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const currentFriendIds = useMemo(
+    () => friends.map((f) => f.friend_id || f.friendId || f.id).filter(Boolean),
+    [friends]
+  );
+  const allCurrentSelected = currentFriendIds.length > 0 && currentFriendIds.every((id) => selected.includes(id));
+
+  const toggle = (id) => setSelected((prev) => {
+    if (prev.includes(id)) {
+      return prev.filter((item) => item !== id);
+    }
+    if (prev.length >= maxRecipients) {
+      toast.error(t('aiChatbot.wizardMaxRecipientsReached', { max: maxRecipients }) || `Tối đa ${maxRecipients} người nhận.`);
+      return prev;
+    }
+    return [...prev, id];
+  });
+
+  const toggleAllCurrent = () => setSelected((prev) => {
+    if (allCurrentSelected) {
+      return prev.filter((id) => !currentFriendIds.includes(id));
+    }
+    const toAdd = currentFriendIds.filter((id) => !prev.includes(id));
+    const combined = [...prev, ...toAdd];
+    if (combined.length > maxRecipients) {
+      toast.error(t('aiChatbot.wizardMaxRecipientsReached', { max: maxRecipients }) || `Tối đa ${maxRecipients} người nhận.`);
+      return combined.slice(0, maxRecipients);
+    }
+    return combined;
+  });
+
+  const handleSubmit = () => {
+    const selectedObjects = friends.filter((f) => selected.includes(f.friend_id || f.friendId || f.id));
+    onSubmit(selected, selectedObjects);
+  };
+
+  return (
+    <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <HiOutlineChat className="h-5 w-5 text-blue-500" />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">
+            {t('aiChatbot.wizardFriendTitle') || 'Danh bạ Zalo'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleSyncContacts}
+          disabled={syncing}
+          className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50"
+        >
+          <HiOutlineRefresh className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? (t('common.syncing') || 'Đang đồng bộ...') : (t('aiChatbot.wizardReSync') || 'Đồng bộ lại')}
+        </button>
+      </div>
+
+      {lastSyncedAt && (
+        <p className="mb-2 text-[11px] text-slate-500">
+          {t('aiChatbot.wizardLastSynced') || 'Đồng bộ gần nhất'}: {new Date(lastSyncedAt).toLocaleString('vi-VN')}
+        </p>
+      )}
+
+      {loading && <p className="text-xs text-slate-500">{t('common.loading') || 'Loading...'}</p>}
+      {error && (
+        <div className="rounded-xl bg-white p-3">
+          <p className="mb-2 text-xs text-red-600">{error}</p>
+          <button type="button" onClick={() => loadFriends(1, search)} className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-black text-blue-700">
+            {t('common.retry') || 'Thử lại'}
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && totalCount === 0 && (
+        <div className="rounded-xl bg-white p-4 text-center">
+          <p className="text-xs text-slate-600 mb-2">
+            {t('aiChatbot.wizardNoFriendsFound') || 'Chưa có bạn bè nào trong danh bạ đã đồng bộ.'}
+          </p>
+          <button
+            type="button"
+            onClick={handleSyncContacts}
+            disabled={syncing}
+            className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {syncing ? (t('common.syncing') || 'Đang đồng bộ...') : (t('aiChatbot.wizardSyncNow') || 'Đồng bộ danh bạ ngay')}
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && totalCount > 0 && (
+        <>
+          <div className="relative mb-2">
+            <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={handleSearchChange}
+              placeholder={t('aiChatbot.wizardFriendSearchPlaceholder') || 'Tìm bạn bè theo tên hoặc SĐT...'}
+              className="w-full rounded-xl border border-blue-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={toggleAllCurrent}
+              disabled={currentFriendIds.length === 0}
+              className="rounded-xl border border-blue-200 bg-white px-3 py-1.5 text-xs font-black text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {allCurrentSelected ? (t('aiChatbot.wizardClearAll') || 'Bỏ chọn') : (t('aiChatbot.wizardSelectAll') || 'Chọn tất cả')}
+            </button>
+            <span className="text-xs font-bold text-slate-600">
+              {t('aiChatbot.wizardSelectedCount', { count: selected.length, max: maxRecipients }) || `Đã chọn: ${selected.length} / ${maxRecipients}`}
+            </span>
+          </div>
+
+          {friends.length === 0 ? (
+            <p className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500">
+              {t('aiChatbot.wizardFriendSearchEmpty') || 'Không tìm thấy bạn bè phù hợp.'}
+            </p>
+          ) : (
+            <div className="max-h-60 space-y-2 overflow-y-auto">
+              {friends.map((friend) => {
+                const id = friend.friend_id || friend.friendId || friend.id;
+                const name = friend.display_name || friend.displayName || id;
+                const avatar = friend.avatar_url || friend.avatar;
+                const phone = friend.phone;
+                const isChecked = selected.includes(id);
+
+                return (
+                  <label key={id} className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 transition-colors">
+                    <input type="checkbox" checked={isChecked} onChange={() => toggle(id)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                    {avatar ? (
+                      <img src={avatar} alt={name} className="h-8 w-8 rounded-full object-cover border border-slate-200" />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 truncate">
+                      <p className="truncate font-semibold text-slate-800 text-xs">{name}</p>
+                      {phone && <p className="text-[11px] text-slate-400 truncate">{phone}</p>}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => loadFriends(page - 1, search)}
+                className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 font-bold text-blue-600 disabled:opacity-40"
+              >
+                {t('common.previous') || 'Trước'}
+              </button>
+              <span>Trang {page} / {totalPages} ({totalCount} bạn)</span>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => loadFriends(page + 1, search)}
+                className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 font-bold text-blue-600 disabled:opacity-40"
+              >
+                {t('common.next') || 'Sau'}
+              </button>
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={selected.length === 0}
+            onClick={handleSubmit}
+            className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+          >
+            {t('aiChatbot.wizardUseFriends', { count: selected.length }) || `Dùng ${selected.length} bạn bè đã chọn`}
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+

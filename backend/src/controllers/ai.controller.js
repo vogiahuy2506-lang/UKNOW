@@ -52,7 +52,7 @@ class AiController {
 
       const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id);
       if (directRecipients) this.applyDirectRecipients(preparedScript, directRecipients);
-      else if (preparedScript.wizardDataSource === 'manual') this.markManualRecipientsRequired(preparedScript);
+      else if (preparedScript.wizardDataSource === 'manual' || preparedScript.wizardDataSource === 'zalo_contacts') this.markManualRecipientsRequired(preparedScript);
       const confirmationView = await campaignConfirmationService.buildConfirmationView({
         script: preparedScript,
         userId: req.user.id,
@@ -151,7 +151,8 @@ class AiController {
    */
   async chat(req, res) {
     try {
-      const { history, files, sessionId, locale, model } = req.body;
+      const { history, files, sessionId, locale, model, intent } = req.body;
+      const sanitizedIntent = (typeof intent === 'string' && intent === 'content_plan_request') ? intent : null;
 
       if (!history || !history.length) {
         return res.status(400).json({
@@ -218,6 +219,7 @@ class AiController {
           localeContext,
           model,
           persistedWizardState,
+          intent: sanitizedIntent,
         });
         ({ wizardShortCircuit, _wizard, ...publicResponse } = response || {});
       }
@@ -649,8 +651,8 @@ class AiController {
     const recipients = validateManualRecipients(directRecipients);
     const hasEmailAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_email');
     const hasZaloPersonalAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_zalo_personal');
-    if ((recipients.emails.length && !hasEmailAction) || (recipients.phones.length && !hasZaloPersonalAction)) {
-      const error = new Error('Email chỉ dùng cho chiến dịch Email; số điện thoại chỉ dùng cho Zalo cá nhân.');
+    if ((recipients.emails.length && !hasEmailAction) || ((recipients.phones.length || recipients.uids.length) && !hasZaloPersonalAction)) {
+      const error = new Error('Email chỉ dùng cho chiến dịch Email; số điện thoại hoặc bạn bè Zalo chỉ dùng cho Zalo cá nhân.');
       error.code = 'MANUAL_RECIPIENT_CHANNEL_MISMATCH';
       error.statusCode = 400;
       throw error;
@@ -663,9 +665,17 @@ class AiController {
         config.recipientSource = 'manual';
         config.recipientEmails = recipients.emails;
         matched = true;
-      } else if (subtype === 'send_zalo_personal' && recipients.phones.length) {
+      } else if (subtype === 'send_zalo_personal' && (recipients.phones.length || recipients.uids.length)) {
         config.zaloRecipientSource = 'manual';
-        config.zaloRecipientPhones = recipients.phones;
+        if (recipients.uids.length) {
+          config.zaloRecipientType = 'uid';
+          config.zaloRecipientField = 'uid';
+          config.zaloRecipientPhones = recipients.uids;
+        } else {
+          config.zaloRecipientType = 'phone';
+          config.zaloRecipientField = 'phone';
+          config.zaloRecipientPhones = recipients.phones;
+        }
         matched = true;
       }
     }
@@ -802,6 +812,7 @@ class AiController {
 
       // M2 defense: manual recipients require private overlay — never silent auto-run with model-copied PII.
       const looksManual = script.wizardDataSource === 'manual'
+        || script.wizardDataSource === 'zalo_contacts'
         || (script.nodes || []).some((node) => {
           const config = node?.config || {};
           return config.recipientSource === 'manual' || config.zaloRecipientSource === 'manual';

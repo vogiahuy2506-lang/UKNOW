@@ -80,8 +80,10 @@ const aiApi = {
    */
   // Model AI do hệ thống quyết định (super admin chọn 1 model duy nhất) —
   // client không gửi model nữa, backend luôn resolve về model hệ thống.
-  chat: async (history, files = [], sessionId = null, locale = 'vi') => {
-    const response = await api.post('/ai/chat', { history, files, sessionId, locale }, {
+  chat: async (history, files = [], sessionId = null, locale = 'vi', intent = null) => {
+    const payload = { history, files, sessionId, locale };
+    if (intent) payload.intent = intent;
+    const response = await api.post('/ai/chat', payload, {
       timeout: 120000
     });
     return response.data;

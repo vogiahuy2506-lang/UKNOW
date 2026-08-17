@@ -214,6 +214,7 @@ router.get('/zalo-personal/sync/status', zaloPersonalSyncController.getSyncStatu
 router.post('/zalo-personal/sync/chat-history', zaloPersonalSyncController.syncChatHistory.bind(zaloPersonalSyncController));
 router.post('/zalo-personal/sync/group-history', zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
 router.get('/zalo-personal/history', zaloPersonalSyncController.getChatHistory.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/friends', zaloPersonalSyncController.getFriends.bind(zaloPersonalSyncController));
 router.get('/zalo-personal/group-members', zaloPersonalSyncController.getGroupMembers.bind(zaloPersonalSyncController));
 router.get('/zalo-personal/group-senders', zaloPersonalSyncController.getGroupSenders.bind(zaloPersonalSyncController));
 

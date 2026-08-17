@@ -25,6 +25,7 @@ import {
   AskSenderAccountCard,
   EmailSetupGuideCard,
   ZaloGroupPickerCard,
+  ZaloFriendPickerCard,
   ZaloQrLoginCard,
 } from './components/AiChatbotWizardCards';
 import ConfirmModal from '../inbox/ConfirmModal';
@@ -181,6 +182,9 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
     case 'zaloGroups':
       return t('aiChatbot.wizardDisplayPickedGroups', { count: marker.groupIds?.length || 0 })
         || `Đã chọn ${marker.groupIds?.length || 0} nhóm Zalo.`;
+    case 'zaloFriends':
+      return t('aiChatbot.wizardDisplayPickedFriends', { count: marker.friendIds?.length || marker.friendUids?.length || 0 })
+        || `Đã chọn ${marker.friendIds?.length || marker.friendUids?.length || 0} bạn bè từ danh bạ Zalo.`;
     case 'planApproved':
       return t('aiChatbot.wizardDisplayPlanApproved') || 'Đã đồng ý với kế hoạch này.';
     case 'campaignBrief': {
@@ -216,6 +220,7 @@ const deriveWizardContext = (items = []) => {
     dataSource: null,
     sheetUrl: null,
     zaloGroupIds: [],
+    zaloFriendIds: [],
     schedule: null,
     planApproved: false,
   };
@@ -234,6 +239,7 @@ const deriveWizardContext = (items = []) => {
       context.senderAccountName = null;
       context.dataSource = null;
       context.zaloGroupIds = [];
+      context.zaloFriendIds = [];
       context.schedule = null;
       context.planApproved = false;
     } else if (marker.gate === 'senderAccount') {
@@ -242,9 +248,15 @@ const deriveWizardContext = (items = []) => {
       context.senderAccountName = marker.accountName || null;
     } else if (marker.gate === 'dataSource') {
       context.dataSource = marker.value || marker.dataSource || null;
+      if (Array.isArray(marker.friendUids)) {
+        context.zaloFriendIds = marker.friendUids;
+      }
     } else if (marker.gate === 'zaloGroups') {
       context.senderAccountId = marker.accountId ?? context.senderAccountId;
       context.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
+    } else if (marker.gate === 'zaloFriends') {
+      context.senderAccountId = marker.accountId ?? context.senderAccountId;
+      context.zaloFriendIds = Array.isArray(marker.friendIds || marker.friendUids) ? (marker.friendIds || marker.friendUids) : [];
     } else if (marker.gate === 'schedule') {
       context.schedule = {
         mode: marker.mode || marker.value || 'once',
@@ -719,7 +731,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
 
       const mappedMessages = dbMessages.map((m) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
@@ -1459,7 +1471,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const sendChatMessage = async (trimmedInput, messageFiles = [], options = {}) => {
-    const { silentUser = false, historyBase = null } = options;
+    const { silentUser = false, historyBase = null, intent = null } = options;
     if (isSendingRef.current) return;
     if (aiBillingBlock) {
       notifyAiRequestError({
@@ -1497,7 +1509,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setIsTyping(true);
 
     try {
-      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale);
+      const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale, intent);
       if (response.success) {
         refreshAiCredits();
         const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
@@ -1778,11 +1790,23 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     );
   };
 
+  const handleWizardFriendsSubmit = async (friendIds, friends = []) => {
+    const labels = friends
+      .map((friend) => friend.display_name || friend.displayName || friend.name)
+      .filter(Boolean);
+    directRecipientsRef.current = { uids: friendIds, friends };
+    setDirectRecipients({ uids: friendIds, friends });
+    await emitWizardAnswer(
+      { gate: 'zaloFriends', accountId: wizardContext.senderAccountId, friendIds },
+      `Tôi chọn ${friendIds.length} bạn bè từ danh bạ Zalo${labels.length <= 5 && labels.length > 0 ? `: ${labels.join(', ')}` : ''}.`
+    );
+  };
+
   const requestContentPlan = async (userPrompt, historyBase = null) => {
     const text = locale === 'en'
       ? `Return content_plan JSON only (day-by-day overview, no full message bodies) for: ${userPrompt}`
       : `Hãy trả về content_plan JSON (kế hoạch từng ngày, không viết full nội dung tin) cho: ${userPrompt}`;
-    await sendChatMessage(text, [], { silentUser: true, historyBase });
+    await sendChatMessage(text, [], { silentUser: true, historyBase, intent: 'content_plan_request' });
   };
 
   const handleSend = async () => {
@@ -3201,6 +3225,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <ZaloGroupPickerCard
                   data={msg.data}
                   onSubmit={handleWizardGroupsSubmit}
+                  t={t}
+                />
+              )}
+
+              {msg.type === 'zalo_friend_picker' && msg.data && (
+                <ZaloFriendPickerCard
+                  data={msg.data}
+                  onSubmit={handleWizardFriendsSubmit}
                   t={t}
                 />
               )}

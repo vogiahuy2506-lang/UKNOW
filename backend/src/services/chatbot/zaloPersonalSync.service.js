@@ -122,14 +122,161 @@ class ZaloPersonalSyncService {
       console.log(`[ZaloSync] getAllFriends returned ${friends?.length || 0} friends`);
 
       if (!friends?.length) {
-        return { synced: 0, message: 'No friends found or API returned empty' };
+        return { synced: 0, friends: [], message: 'No friends found or API returned empty' };
       }
 
-      return { synced: friends.length, friends };
+      const persisted = await this.persistFriends(accountId, friends);
+      return { synced: persisted, friends };
     } catch (error) {
       console.error('[ZaloSync] Error syncing contacts:', error.message, error.stack);
       throw error;
     }
+  }
+
+  /**
+   * Lưu danh sách bạn bè vào DB (bảng zalo_friends) theo lô
+   * @param {number} accountId - zalo_setting.id
+   * @param {Array} friends - raw array from api.getAllFriends()
+   */
+  async persistFriends(accountId, friends = []) {
+    const rawList = Array.isArray(friends) ? friends : [];
+    if (!rawList.length) return 0;
+
+    const normalizedList = campaignZaloSenderService.normalizeFriends(rawList);
+    let skippedCount = 0;
+    // Khử trùng theo friendId: Postgres ném "ON CONFLICT DO UPDATE command cannot affect
+    // row a second time" nếu một câu INSERT gộp lô chứa hai dòng cùng khoá unique.
+    // getAllFriends() phân trang nên có thể trả trùng — bản ghi sau thắng.
+    const rowByFriendId = new Map();
+    const now = new Date();
+
+    normalizedList.forEach((item, index) => {
+      const friendId = String(item.uid || '').trim();
+      const raw = item.raw || rawList[index] || {};
+      if (!friendId) {
+        skippedCount++;
+        return;
+      }
+      const displayName = String(item.display_name || '').trim() || null;
+      const phone = String(item.phoneNumber || '').trim() || null;
+      const avatarUrl = String(raw.avatar || raw.avatarUrl || raw.avatar_url || raw.avatar_120 || raw.profile?.avatar || raw.data?.avatar || '').trim() || null;
+      rowByFriendId.set(friendId, {
+        friendId,
+        displayName,
+        phone,
+        avatarUrl,
+      });
+    });
+
+    const validRows = Array.from(rowByFriendId.values());
+
+    if (skippedCount > 0) {
+      const sampleKeys = rawList[0] && typeof rawList[0] === 'object' ? Object.keys(rawList[0]) : [];
+      console.warn(`[ZaloSync] persistFriends skipped ${skippedCount}/${rawList.length} items without valid UID. Sample keys from first item:`, sampleKeys);
+    }
+
+    if (!validRows.length) return 0;
+
+    // Batch insert theo lô 500
+    const BATCH_SIZE = 500;
+    let persisted = 0;
+
+    for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
+      const chunk = validRows.slice(i, i + BATCH_SIZE);
+      const valueSets = [];
+      const params = [accountId, now];
+      let paramIdx = 3;
+
+      for (const row of chunk) {
+        valueSets.push(`($1, $${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $2, $2)`);
+        params.push(row.friendId, row.displayName, row.phone, row.avatarUrl);
+        paramIdx += 4;
+      }
+
+      await db.query(
+        `INSERT INTO zalo_friends (id_zalo_setting, friend_id, display_name, phone, avatar_url, synced_at, updated_at)
+         VALUES ${valueSets.join(', ')}
+         ON CONFLICT (id_zalo_setting, friend_id)
+         DO UPDATE SET
+           display_name = EXCLUDED.display_name,
+           phone = COALESCE(EXCLUDED.phone, zalo_friends.phone),
+           avatar_url = COALESCE(EXCLUDED.avatar_url, zalo_friends.avatar_url),
+           synced_at = EXCLUDED.synced_at,
+           updated_at = EXCLUDED.updated_at`,
+        params
+      );
+      persisted += chunk.length;
+    }
+
+    return persisted;
+  }
+
+  /**
+   * Lấy danh sách bạn bè đã lưu trong DB (có phân trang + tìm kiếm)
+   * @param {Object} params
+   * @param {number} params.accountId - zalo_setting.id
+   * @param {number} params.userId - user sở hữu tài khoản
+   * @param {string} [params.search] - từ khóa tìm kiếm tên / SĐT
+   * @param {number} [params.page] - trang (1-based)
+   * @param {number} [params.limit] - số lượng mỗi trang
+   */
+  async listFriends({ accountId, userId, search = '', page = 1, limit = 50 }) {
+    const settingRes = await db.query(
+      `SELECT id, name, zalo_name, phone_number
+       FROM zalo_settings
+       WHERE id = $1 AND id_user = $2`,
+      [accountId, userId]
+    );
+    if (!settingRes.rows.length) {
+      const error = new Error('Không tìm thấy tài khoản Zalo hoặc không có quyền truy cập');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const safeLimit = Math.min(Math.max(1, Number(limit) || 50), 1000);
+    const safePage = Math.max(1, Number(page) || 1);
+    const offset = (safePage - 1) * safeLimit;
+    const query = String(search || '').trim();
+
+    let countSql = `SELECT COUNT(*)::int AS total FROM zalo_friends WHERE id_zalo_setting = $1`;
+    let dataSql = `
+      SELECT id, friend_id, display_name, phone, avatar_url, synced_at, created_at
+      FROM zalo_friends
+      WHERE id_zalo_setting = $1
+    `;
+    const params = [accountId];
+
+    if (query) {
+      params.push(`%${query}%`);
+      const searchClause = ` AND (display_name ILIKE $2 OR phone ILIKE $2 OR friend_id ILIKE $2)`;
+      countSql += searchClause;
+      dataSql += searchClause;
+    }
+
+    dataSql += ` ORDER BY display_name ASC NULLS LAST, id ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    const dataParams = [...params, safeLimit, offset];
+
+    const [countRes, dataRes] = await Promise.all([
+      db.query(countSql, params),
+      db.query(dataSql, dataParams),
+    ]);
+
+    const total = countRes.rows[0]?.total || 0;
+    const items = dataRes.rows;
+
+    const syncRes = await db.query(
+      `SELECT MAX(synced_at) AS last_synced_at FROM zalo_friends WHERE id_zalo_setting = $1`,
+      [accountId]
+    );
+
+    return {
+      items,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(total / safeLimit) || 1,
+      lastSyncedAt: syncRes.rows[0]?.last_synced_at || null,
+    };
   }
 
   /**

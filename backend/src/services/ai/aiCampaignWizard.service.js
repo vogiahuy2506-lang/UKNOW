@@ -189,6 +189,7 @@ export function extractWizardState(history = []) {
     dataSource: null,
     sheetUrl: null,
     zaloGroupIds: [],
+    zaloFriendIds: [],
     schedule: null,
     planApproved: false,
     senderOtherRequested: false,
@@ -296,6 +297,7 @@ export function extractWizardState(history = []) {
       state.senderAccountName = null;
       state.dataSource = null;
       state.zaloGroupIds = [];
+      state.zaloFriendIds = [];
       state.schedule = null;
       state.planApproved = false;
       state.senderOtherRequested = false;
@@ -321,10 +323,19 @@ export function extractWizardState(history = []) {
     } else if (marker.gate === 'dataSource') {
       recordMarkerGate('dataSource');
       state.dataSource = marker.value || marker.dataSource || null;
+      if (Array.isArray(marker.friendUids)) {
+        state.zaloFriendIds = marker.friendUids;
+      }
     } else if (marker.gate === 'zaloGroups') {
       recordMarkerGate('zaloGroups');
       state.senderAccountId = marker.accountId ?? state.senderAccountId;
       state.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
+    } else if (marker.gate === 'zaloFriends') {
+      recordMarkerGate('zaloFriends');
+      state.senderAccountId = marker.accountId ?? state.senderAccountId;
+      state.zaloFriendIds = Array.isArray(marker.friendIds || marker.friendUids)
+        ? (marker.friendIds || marker.friendUids)
+        : [];
     } else if (marker.gate === 'schedule') {
       recordMarkerGate('schedule');
       const mode = marker.mode || marker.value || 'once';
@@ -380,8 +391,9 @@ export function buildChannelQuestion(locale = 'vi') {
   };
 }
 
-export function buildDataSourceQuestion(locale = 'vi') {
+export function buildDataSourceQuestion(locale = 'vi', gateState = null) {
   const isEnglish = locale === 'en';
+  const isZalo = gateState?.channel === 'zalo';
   return {
     type: 'ask_campaign_details',
     content: isEnglish
@@ -416,6 +428,14 @@ export function buildDataSourceQuestion(locale = 'vi') {
                 ? 'People who submitted the form on your landing page (name, phone, email)'
                 : 'Người điền form trên trang landing (tên, SĐT, email)',
             },
+            ...(isZalo ? [{
+              value: 'zalo_contacts',
+              label: isEnglish ? 'Zalo Contacts' : 'Danh bạ Zalo',
+              description: isEnglish
+                ? 'Select from connected Zalo friends list'
+                : 'Chọn từ danh sách bạn bè trên tài khoản Zalo đã kết nối',
+              maxRecipients: MAX_AI_MANUAL_RECIPIENTS,
+            }] : []),
             {
               value: 'manual',
               label: isEnglish ? 'Enter recipients directly' : 'Nhập người nhận trực tiếp',
@@ -631,6 +651,18 @@ export function buildGroupPickerCard(accountId, locale = 'vi') {
   };
 }
 
+export function buildFriendPickerCard(accountId, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  return {
+    type: 'zalo_friend_picker',
+    content: isEnglish
+      ? 'Choose the Zalo friends who should receive this campaign.'
+      : 'Bạn chọn bạn bè Zalo sẽ nhận chiến dịch này nhé.',
+    missing_fields: [],
+    data: { accountId, maxRecipients: MAX_AI_MANUAL_RECIPIENTS },
+  };
+}
+
 export function evaluateNextGate(state, resources = {}, locale = 'vi') {
   if (!state?.isCampaignFlow) return null;
   if (!state.channel) return { gate: 'channel', response: buildChannelQuestion(locale) };
@@ -678,7 +710,11 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
   }
 
   if (state.channel !== 'zalo_group' && !state.dataSource) {
-    return { gate: 'dataSource', response: buildDataSourceQuestion(locale) };
+    return { gate: 'dataSource', response: buildDataSourceQuestion(locale, state) };
+  }
+
+  if (state.channel === 'zalo' && state.dataSource === 'zalo_contacts' && (!Array.isArray(state.zaloFriendIds) || state.zaloFriendIds.length === 0)) {
+    return { gate: 'zaloFriends', response: buildFriendPickerCard(state.senderAccountId, locale) };
   }
 
   if (!isCampaignBriefReady(state.brief || resources.brief)) {
@@ -745,6 +781,7 @@ export function createEmptyWizardState() {
       dataSource: null,
       sheetUrl: null,
       zaloGroupIds: [],
+      zaloFriendIds: [],
       schedule: null,
       planApproved: false,
       senderOtherRequested: false,
@@ -1002,6 +1039,7 @@ export const GATE_PROMPT_TYPES = new Set([
   'email_setup_guide',
   'zalo_qr_login',
   'zalo_group_picker',
+  'zalo_friend_picker',
   'confirm_create',
   'content_plan_actions',
 ]);

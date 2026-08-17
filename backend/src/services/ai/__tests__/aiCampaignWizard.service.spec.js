@@ -404,4 +404,41 @@ describe('aiCampaignWizard.service', () => {
     expect(prompt).toContain('Lịch gửi: gửi một lần.');
     expect(prompt.endsWith('=== CAMPAIGN_BRIEF DATA ===')).toBe(true);
   });
+
+  it('buildDataSourceQuestion includes zalo_contacts only for zalo channel (PR-B)', () => {
+    const zaloQuestion = buildCampaignBriefQuestion; // check imports
+    const stateZalo = { channel: 'zalo' };
+    const stateEmail = { channel: 'email' };
+
+    const gateZalo = evaluateNextGate(
+      { isCampaignFlow: true, channel: 'zalo', senderAccountId: 1, dataSource: null },
+      {}
+    );
+    const optionsZalo = gateZalo.response.data.questions[0].options.map((o) => o.value);
+    expect(optionsZalo).toContain('zalo_contacts');
+
+    const gateEmail = evaluateNextGate(
+      { isCampaignFlow: true, channel: 'email', senderAccountId: 1, dataSource: null },
+      {}
+    );
+    const optionsEmail = gateEmail.response.data.questions[0].options.map((o) => o.value);
+    expect(optionsEmail).not.toContain('zalo_contacts');
+  });
+
+  it('asks friend picker for zalo channel when dataSource is zalo_contacts and no friends selected (PR-B)', () => {
+    const state = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":15}\nTK 15' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"zalo_contacts"}\nDanh bạ Zalo' },
+    ]);
+
+    const gate = evaluateNextGate(state, {});
+
+    expect(gate.gate).toBe('zaloFriends');
+    expect(gate.response).toMatchObject({
+      type: 'zalo_friend_picker',
+      data: { accountId: 15 },
+    });
+  });
 });
+

@@ -122,6 +122,44 @@ class ZaloPersonalSyncController {
   }
 
   /**
+   * GET /api/chatbot/zalo-personal/friends
+   * Lấy danh sách bạn bè Zalo đã lưu (phân trang + tìm kiếm)
+   */
+  async getFriends(req, res) {
+    try {
+      const userId = req.user.id;
+      const accountId = Number(req.query.accountId || req.params.accountId);
+      if (!accountId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu accountId tài khoản Zalo',
+        });
+      }
+
+      const { search, page, limit } = req.query;
+      const result = await zaloPersonalSyncService.listFriends({
+        accountId,
+        userId,
+        search,
+        page,
+        limit,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error('[ZaloPersonalSyncController] getFriends error:', error);
+      const status = error.statusCode || 500;
+      res.status(status).json({
+        success: false,
+        message: error.message || 'Lấy danh sách bạn bè thất bại',
+      });
+    }
+  }
+
+  /**
    * GET /api/chatbot/zalo-personal/sync/groups
    * Chỉ đồng bộ danh sách nhóm
    */
