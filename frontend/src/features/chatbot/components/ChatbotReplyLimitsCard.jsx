@@ -10,14 +10,16 @@ const WINDOWS = [
   { id: 'month', labelKey: 'chatbot.studio.replyLimitMonth' },
 ];
 
-const emptyRule = () => ({ limit: '', action: 'silent', message: '' });
+const emptyRule = () => ({ enabled: false, limit: '', action: 'silent', message: '' });
 
 function toFormConfig(raw) {
   const windows = raw?.windows || {};
   return Object.fromEntries(WINDOWS.map(({ id }) => {
     const rule = windows[id] || {};
+    const hasLimit = Number(rule.limit) > 0;
     return [id, {
-      limit: Number(rule.limit) > 0 ? String(rule.limit) : '',
+      enabled: hasLimit,
+      limit: hasLimit ? String(rule.limit) : '',
       action: rule.action === 'notify' ? 'notify' : 'silent',
       message: String(rule.message || ''),
     }];
@@ -30,7 +32,7 @@ function toPayload(config) {
     windows: Object.fromEntries(WINDOWS.map(({ id }) => {
       const rule = config[id] || emptyRule();
       return [id, {
-        limit: rule.limit === '' ? null : Number(rule.limit),
+        limit: (rule.enabled && rule.limit !== '') ? Number(rule.limit) : null,
         action: rule.action,
         message: rule.action === 'notify' ? rule.message.trim() : '',
       }];
@@ -50,7 +52,7 @@ export default function ChatbotReplyLimitsCard({ chatbot, onSaved }) {
   }, [chatbot?.id, chatbot?.reply_limit_config]);
 
   const enabledCount = useMemo(
-    () => WINDOWS.filter(({ id }) => config[id]?.limit !== '').length,
+    () => WINDOWS.filter(({ id }) => config[id]?.enabled).length,
     [config]
   );
 
@@ -66,14 +68,14 @@ export default function ChatbotReplyLimitsCard({ chatbot, onSaved }) {
     for (const { id, labelKey } of WINDOWS) {
       const label = t(labelKey);
       const rule = config[id];
-      if (rule.limit !== '') {
+      if (rule.enabled) {
         const limit = Number(rule.limit);
-        if (!Number.isInteger(limit) || limit <= 0) {
+        if (rule.limit === '' || !Number.isInteger(limit) || limit <= 0) {
           setError(t('chatbot.studio.replyLimitPositiveInteger', { period: label }));
           return;
         }
       }
-      if (rule.action === 'notify' && rule.limit !== '' && rule.message.trim().length > 500) {
+      if (rule.enabled && rule.action === 'notify' && rule.message.trim().length > 500) {
         setError(t('chatbot.studio.replyLimitMessageTooLong', { period: label }));
         return;
       }
@@ -121,7 +123,7 @@ export default function ChatbotReplyLimitsCard({ chatbot, onSaved }) {
         {WINDOWS.map(({ id, labelKey }) => {
           const label = t(labelKey);
           const rule = config[id] || emptyRule();
-          const enabled = rule.limit !== '';
+          const enabled = rule.enabled;
           return (
             <div key={id} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -129,7 +131,10 @@ export default function ChatbotReplyLimitsCard({ chatbot, onSaved }) {
                   <input
                     type="checkbox"
                     checked={enabled}
-                    onChange={(event) => updateRule(id, { limit: event.target.checked ? '1' : '' })}
+                    onChange={(event) => updateRule(id, { 
+                      enabled: event.target.checked,
+                      limit: event.target.checked && rule.limit === '' ? '1' : rule.limit
+                    })}
                     className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                   />
                   {label}
