@@ -248,7 +248,6 @@ class CampaignNodeRegistryService {
           },
           emailSteps: {
             type: 'array',
-            required: true,
             label: 'Danh sách email gửi',
             description: 'THÊM NHIỀU EMAIL - mỗi email cách nhau thời gian',
             itemSchema: {
@@ -361,7 +360,6 @@ class CampaignNodeRegistryService {
           },
           zaloPersonalTemplateSteps: {
             type: 'array',
-            required: true,
             label: 'Danh sách tin nhắn gửi',
             description: 'THÊM NHIỀU TIN - mỗi tin cách nhau thời gian',
             itemSchema: {
@@ -452,7 +450,6 @@ class CampaignNodeRegistryService {
           },
           zaloGroupTemplateSteps: {
             type: 'array',
-            required: true,
             label: 'Danh sách tin nhắn gửi',
             itemSchema: {
               templateId: { type: 'number' },

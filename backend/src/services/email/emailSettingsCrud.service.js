@@ -164,7 +164,10 @@ class EmailSettingsCrudService {
     }
 
     const emailMode = payload.emailMode || (payload.email ? 'smtp' : 'platform');
-    const platformDomain = process.env.DEFAULT_FROM_DOMAIN;
+    const platformDomain = String(process.env.DEFAULT_FROM_DOMAIN || '').trim();
+    if (emailMode === 'platform' && !platformDomain) {
+      throw createServiceError('Hệ thống chưa cấu hình tên miền gửi mặc định (DEFAULT_FROM_DOMAIN) — liên hệ quản trị viên', 500);
+    }
     const useSmtp = emailMode === 'smtp';
 
     // Validate and sanitize platform prefix for platform mode
@@ -245,7 +248,10 @@ class EmailSettingsCrudService {
     }
 
     const emailMode = payload.emailMode || current.email_mode || 'platform';
-    const platformDomain = process.env.DEFAULT_FROM_DOMAIN;
+    const platformDomain = String(process.env.DEFAULT_FROM_DOMAIN || '').trim();
+    if (emailMode === 'platform' && !platformDomain) {
+      throw createServiceError('Hệ thống chưa cấu hình tên miền gửi mặc định (DEFAULT_FROM_DOMAIN) — liên hệ quản trị viên', 500);
+    }
     const useSmtp = emailMode === 'smtp';
 
     // Validate and sanitize platform prefix for platform mode
