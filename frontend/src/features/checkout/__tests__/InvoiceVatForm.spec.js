@@ -79,25 +79,20 @@ describe('InvoiceVatForm utilities', () => {
   });
 
   describe('computeDisplayVat', () => {
-    it('calculates 10% VAT correctly', () => {
+    it('returns KCT tax breakdown (vatAmount = 0, vatRate = -1, gross = net)', () => {
       const res = computeDisplayVat(499000);
       expect(res.net).toBe(499000);
-      expect(res.vatAmount).toBe(49900);
-      expect(res.gross).toBe(548900);
+      expect(res.vatAmount).toBe(0);
+      expect(res.gross).toBe(499000);
+      expect(res.vatRate).toBe(-1);
     });
 
-    it('returns 0 VAT when disabled or net <= 0', () => {
-      expect(computeDisplayVat(499000, false)).toEqual({
-        net: 499000,
-        vatAmount: 0,
-        gross: 499000,
-        vatRate: 10,
-      });
+    it('handles net 0 correctly', () => {
       expect(computeDisplayVat(0)).toEqual({
         net: 0,
         vatAmount: 0,
         gross: 0,
-        vatRate: 10,
+        vatRate: -1,
       });
     });
   });

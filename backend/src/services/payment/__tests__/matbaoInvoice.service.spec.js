@@ -64,6 +64,7 @@ const {
   buildMaTraCuu,
   buildMTChieu,
   formatMatbaoNLap,
+  hasInvoiceIntent,
   issueInvoiceForOrder,
   shouldIssueInvoiceForOrder,
   sendInvoicePdfForEinvoice,
@@ -114,15 +115,16 @@ describe('matbaoInvoice.service', () => {
     user_email: 'buyer@example.com',
     invoice_info: {
       wantInvoice: true,
+      taxType: 'KCT',
       buyerType: 'company',
       taxCode: '0312345678',
       companyName: 'Cong Ty ABC',
       companyAddress: 'HCM',
       email: 'a@b.com',
-      vatRate: 10,
+      vatRate: -1,
       net: 499000,
-      vatAmount: 49900,
-      gross: 548900,
+      vatAmount: 0,
+      gross: 499000,
     },
   };
 
@@ -160,19 +162,19 @@ describe('matbaoInvoice.service', () => {
     expect(formatMatbaoNLap(new Date('2026-08-09T16:30:00.000Z'))).toBe('2026-08-09T23:30:00');
   });
 
-  it('payload line totals match net/vat/gross with TSuat=10', () => {
+  it('payload line totals match net/vat/gross with TSuat=-1 (KCT)', () => {
     const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
     const inv = payload[0];
     const line = inv.DSHHDVu[0];
-    expect(line.TSuat).toBe(10);
+    expect(line.TSuat).toBe(-1);
     expect(line.DGia).toBe(499000);
-    expect(line.TThue).toBe(49900);
-    expect(line.TgTien).toBe(548900);
+    expect(line.TThue).toBe(0);
+    expect(line.TgTien).toBe(499000);
     expect(inv.TgThTien).toBe(499000);
     expect(inv.TTCKTMai).toBe(0);
     expect(inv.TGTKhac).toBe(0);
-    expect(inv.TgTThue).toBe(49900);
-    expect(inv.TgTTTBSo).toBe(548900);
+    expect(inv.TgTThue).toBe(0);
+    expect(inv.TgTTTBSo).toBe(499000);
     expect(inv.LoaiHDon).toBe(1);
     expect(inv.NMua_MST).toBe('0312345678');
     expect(inv.TgTTTBChu).toMatch(/đồng$/i);
@@ -431,6 +433,64 @@ describe('matbaoInvoice.service', () => {
       expect(r.status).toBe('error');
       expect(r.cLai).toBeNull();
       expect(r.error).toBe('Bad gateway');
+    });
+  });
+
+  describe('KCT and backward compatibility (PR-D)', () => {
+    it('T1: hasInvoiceIntent returns true with { wantInvoice: true, vatAmount: 0 }', () => {
+      const kctOrder = {
+        id: 101,
+        order_code: 172300000000101,
+        invoice_info: {
+          wantInvoice: true,
+          vatAmount: 0,
+          net: 299000,
+          gross: 299000,
+        },
+      };
+      expect(hasInvoiceIntent(kctOrder)).toBe(true);
+      expect(shouldIssueInvoiceForOrder(kctOrder)).toBe(true);
+    });
+
+    it('T2: hasInvoiceIntent returns true with legacy order { vatAmount: 49900 } without wantInvoice', () => {
+      const legacyOrder = {
+        id: 102,
+        order_code: 172300000000102,
+        invoice_info: {
+          vatAmount: 49900,
+          net: 499000,
+          gross: 548900,
+          vatRate: 10,
+        },
+      };
+      expect(hasInvoiceIntent(legacyOrder)).toBe(true);
+      expect(shouldIssueInvoiceForOrder(legacyOrder)).toBe(true);
+    });
+
+    it('T3: buildCreateInvoicePayload with info.vatRate = 10 (legacy order) produces TSuat: 10 and TThue: 49900', () => {
+      const legacyOrder = {
+        id: 103,
+        order_code: 172300000000103,
+        note: 'custom_self_serve',
+        user_email: 'legacy@example.com',
+      };
+      const legacyInfo = {
+        buyerType: 'company',
+        taxCode: '0312345678',
+        companyName: 'Legacy Corp',
+        vatRate: 10,
+        net: 499000,
+        vatAmount: 49900,
+        gross: 548900,
+      };
+      const { payload } = buildCreateInvoicePayload(legacyOrder, legacyInfo);
+      const inv = payload[0];
+      const line = inv.DSHHDVu[0];
+      expect(line.TSuat).toBe(10);
+      expect(line.TThue).toBe(49900);
+      expect(line.TgTien).toBe(548900);
+      expect(inv.TgTThue).toBe(49900);
+      expect(inv.TgTTTBSo).toBe(548900);
     });
   });
 });

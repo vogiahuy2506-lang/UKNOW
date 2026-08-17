@@ -149,9 +149,15 @@ export default function InvoicePage() {
           {result.vatAmount != null && result.vatAmount > 0 && (
             <div className="flex justify-between gap-3">
               <span className="text-slate-500">
-                {t('invoicePage.vat', { rate: result.vatRate || 10 })}
+                {t('invoicePage.vat', { rate: result.vatRate ?? 10 })}
               </span>
               <span>{fmtVnd(result.vatAmount)}</span>
+            </div>
+          )}
+          {result.vatRate === -1 && (
+            <div className="flex justify-between gap-3 text-xs text-slate-500">
+              <span>{t('invoicePage.vatLabel') || 'Thuế GTGT'}</span>
+              <span>{t('invoicePage.notSubjectToVat') || 'Không chịu thuế (KCT)'}</span>
             </div>
           )}
           {result.gross != null && (

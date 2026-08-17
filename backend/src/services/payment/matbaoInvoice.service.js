@@ -27,6 +27,7 @@ import {
 import {
   isInvoiceVatEnabled,
   isMatbaoEinvoiceWorkerEnabled,
+  INVOICE_TAX_RATE_KCT,
 } from '../../utils/invoiceVat.util.js';
 import { vndAmountToVietnameseWords } from '../../utils/vndAmountWords.util.js';
 import {
@@ -76,7 +77,10 @@ function parseInvoiceInfo(order) {
 /** Durable intent — does not require Matbao/worker readiness. */
 export function hasInvoiceIntent(order) {
   const info = parseInvoiceInfo(order);
-  return Boolean(info && Number(info.vatAmount) > 0 && order?.id && order?.order_code);
+  if (!info || !order?.id || !order?.order_code) return false;
+  // KCT: vatAmount luôn = 0, KHÔNG được dùng nó làm cổng ý định.
+  // Đơn cũ (trước 17/08/2026) không có wantInvoice nhưng có vatAmount > 0.
+  return info.wantInvoice === true || Number(info.vatAmount) > 0;
 }
 
 export function shouldIssueInvoiceForOrder(order) {
@@ -106,7 +110,10 @@ export function buildCreateInvoicePayload(order, info) {
   const net = Math.round(Number(info.net));
   const vatAmount = Math.round(Number(info.vatAmount));
   const gross = Math.round(Number(info.gross));
-  const vatRate = Math.round(Number(info.vatRate) || 10);
+  // Đơn cũ trước 17/08/2026 có vatRate = 10; đơn mới là -1 (KCT).
+  // Đọc từ ảnh chụp của chính đơn đó, KHÔNG áp mã KCT cho đơn cũ.
+  const rawRate = Number(info.vatRate);
+  const vatRate = Number.isFinite(rawRate) ? rawRate : INVOICE_TAX_RATE_KCT;
   const maTraCuu = buildMaTraCuu(order.order_code);
   const mtchieu = buildMTChieu(order.order_code);
   const accountEmail = String(order.user_email || '').trim();
@@ -172,9 +179,6 @@ export function buildCreateInvoicePayload(order, info) {
  */
 export async function prepareEinvoiceForPaidOrder(order, queryable) {
   if (!hasInvoiceIntent(order)) return null;
-
-  const info = parseInvoiceInfo(order);
-  if (!info || !(Number(info.vatAmount) > 0)) return null;
 
   const existing = await findEinvoiceByOrderId(order.id, queryable);
   if (existing) return existing.id;
@@ -266,8 +270,8 @@ export async function dispatchPreparedEinvoice(einvoiceId) {
     note: job.note,
     user_email: job.user_email,
   };
+  if (!hasInvoiceIntent(order)) return { skipped: true, reason: 'no_intent' };
   const info = parseInvoiceInfo(order);
-  if (!info || !(Number(info.vatAmount) > 0)) return { skipped: true, reason: 'no_intent' };
 
   const built = buildCreateInvoicePayload(order, info);
 
@@ -499,7 +503,7 @@ export async function repairMissingEinvoiceIntents({ limit = 20 } = {}) {
   const summary = { scanned: rows.length, prepared: 0, errors: 0, reportedOnly: false };
   for (const order of rows) {
     const info = parseInvoiceInfo(order);
-    if (!info || !(Number(info.vatAmount) > 0) || info.net == null || info.gross == null) {
+    if (!hasInvoiceIntent(order) || info?.net == null || info?.gross == null) {
       console.warn(`[MatBaoInvoice][OPS] Missing intent incomplete snapshot order=${order.order_code}`);
       continue;
     }

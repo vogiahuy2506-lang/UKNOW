@@ -3,7 +3,7 @@ import {
   resolveOrderAmountWithInvoice,
   assertBuyerFieldsValid,
   normalizeBuyerInvoiceProfile,
-  DEFAULT_INVOICE_VAT_RATE,
+  INVOICE_TAX_RATE_KCT,
 } from '../invoiceVat.util.js';
 
 describe('invoiceVat.util', () => {
@@ -55,17 +55,13 @@ describe('invoiceVat.util', () => {
     email: 'a@example.com',
   };
 
-  test('499000 + 10% = 548900', () => {
-    const { net, vatAmount, gross, vatRate } = computeVatBreakdown(499000, 10);
-    expect(vatRate).toBe(10);
+  test('499000 KCT → 499000, vatAmount = 0, vatRate = -1', () => {
+    const { net, vatAmount, gross, vatRate } = computeVatBreakdown(499000);
+    expect(vatRate).toBe(INVOICE_TAX_RATE_KCT);
+    expect(vatRate).toBe(-1);
     expect(net).toBe(499000);
-    expect(vatAmount).toBe(49900);
-    expect(gross).toBe(548900);
-  });
-
-  test('default vat rate is 10', () => {
-    expect(DEFAULT_INVOICE_VAT_RATE).toBe(10);
-    expect(computeVatBreakdown(1000).vatAmount).toBe(100);
+    expect(vatAmount).toBe(0);
+    expect(gross).toBe(499000);
   });
 
   test('INVOICE_VAT_ENABLED off keeps net and null invoice_info', () => {
@@ -126,17 +122,18 @@ describe('invoiceVat.util', () => {
       gross: 1,
       vatRate: 99,
     }, 499000);
-    expect(r.amount).toBe(548900);
+    expect(r.amount).toBe(499000);
     expect(r.invoiceInfo).toMatchObject({
       wantInvoice: true,
+      taxType: 'KCT',
       buyerType: 'company',
       taxCode: '0312345678',
       companyName: 'Cong Ty ABC',
       email: 'billing@example.com',
-      vatRate: 10,
+      vatRate: -1,
       net: 499000,
-      vatAmount: 49900,
-      gross: 548900,
+      vatAmount: 0,
+      gross: 499000,
     });
   });
 
@@ -164,14 +161,16 @@ describe('invoiceVat.util', () => {
 
   test('personal ok with 9 or 12 digits', () => {
     const r1 = resolveOrderAmountWithInvoice(personalOk, 100000);
-    expect(r1.amount).toBe(110000);
+    expect(r1.amount).toBe(100000);
     expect(r1.invoiceInfo).toMatchObject({
+      wantInvoice: true,
+      taxType: 'KCT',
       buyerType: 'personal',
       fullName: 'Nguyen Van A',
       idNumber: '001099012345',
       net: 100000,
-      vatAmount: 10000,
-      gross: 110000,
+      vatAmount: 0,
+      gross: 100000,
     });
 
     const r2 = resolveOrderAmountWithInvoice({ ...personalOk, idNumber: '123456789' }, 100000);
@@ -182,8 +181,9 @@ describe('invoiceVat.util', () => {
     const netAfterVoucher = 400000;
     const r = resolveOrderAmountWithInvoice(companyOk, netAfterVoucher);
     expect(r.invoiceInfo.net).toBe(400000);
-    expect(r.invoiceInfo.vatAmount).toBe(40000);
-    expect(r.amount).toBe(440000);
+    expect(r.invoiceInfo.vatAmount).toBe(0);
+    expect(r.invoiceInfo.vatRate).toBe(-1);
+    expect(r.amount).toBe(400000);
   });
 
   test('net 0 skips invoice even if wantInvoice', () => {

@@ -5,7 +5,8 @@
 
 import { isMatbaoConfigured } from './matbaoHddtClient.util.js';
 
-export const DEFAULT_INVOICE_VAT_RATE = 10;
+/** Mã thuế suất Mắt Bão: -1 = KCT (không chịu thuế). Tài liệu mục DSHHDVu/TSuat. */
+export const INVOICE_TAX_RATE_KCT = -1;
 export const MAX_TAX_CODE_LEN = 14;
 export const MAX_ID_NUMBER_LEN = 12;
 export const TAX_CODE_REGEX = /^\d{10}(-\d{3})?$/;
@@ -23,22 +24,15 @@ export function isMatbaoEinvoiceWorkerEnabled() {
   return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
-export function getInvoiceVatRate() {
-  const raw = Number(process.env.INVOICE_VAT_RATE);
-  if (Number.isFinite(raw) && raw >= 0 && raw <= 100) return Math.round(raw);
-  return DEFAULT_INVOICE_VAT_RATE;
-}
-
 /**
+ * KCT — không chịu thuế. Tiền thuế luôn 0, tổng thanh toán = tiền hàng.
+ * Giữ nguyên tên hàm + hình dạng trả về để không phải sửa nơi gọi.
  * @param {number} net
- * @param {number} [vatRate]
  * @returns {{ net: number, vatAmount: number, gross: number, vatRate: number }}
  */
-export function computeVatBreakdown(net, vatRate = getInvoiceVatRate()) {
+export function computeVatBreakdown(net) {
   const n = Math.round(Number(net) || 0);
-  const rate = Math.round(Number(vatRate) || 0);
-  const vatAmount = Math.round((n * rate) / 100);
-  return { net: n, vatAmount, gross: n + vatAmount, vatRate: rate };
+  return { net: n, vatAmount: 0, gross: n, vatRate: INVOICE_TAX_RATE_KCT };
 }
 
 function trimStr(v) {
@@ -184,6 +178,7 @@ export function resolveOrderAmountWithInvoice(raw, netAfterDiscount, options = {
   /** @type {Record<string, unknown>} */
   const invoiceInfo = {
     wantInvoice: true,
+    taxType: 'KCT',
     buyerType,
     email: recipientEmail,
     vatRate,

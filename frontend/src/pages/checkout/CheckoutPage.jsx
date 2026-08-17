@@ -92,10 +92,7 @@ const CheckoutPage = () => {
         authoritativePayment?.discount?.finalAmount ??
         Math.max(0, effectiveOriginalAmount - discountAmount),
     );
-    const vatBreakdown = computeDisplayVat(
-        finalAmount,
-        invoiceVatUiEnabled,
-    );
+    const vatBreakdown = computeDisplayVat(finalAmount);
     const payableAmount = Number(authoritativePayment?.amount ?? vatBreakdown.gross);
     const isInvoiceValid = !invoiceVatUiEnabled || finalAmount <= 0 || isInvoiceInfoValid(invoiceInfo);
     const hasManualVoucherInList = manualVoucher
@@ -425,12 +422,6 @@ const CheckoutPage = () => {
                                         <div className="flex justify-between text-emerald-600 text-xs">
                                             <span>{manualVoucher ? t('checkout.voucherSummary', { code: manualVoucher.code }) : (autoPromotion.name || autoPromotion.code)}</span>
                                             <span className="font-semibold">-{fmtVnd(discountAmount)}</span>
-                                        </div>
-                                    )}
-                                    {invoiceVatUiEnabled && vatBreakdown.vatAmount > 0 && (
-                                        <div className="flex justify-between text-slate-500 text-xs">
-                                            <span>{t('checkout.vatLine', { rate: vatBreakdown.vatRate })}</span>
-                                            <span className="font-medium text-slate-700">+{fmtVnd(vatBreakdown.vatAmount)}</span>
                                         </div>
                                     )}
                                     <div className="pt-2 border-t border-slate-200/60 flex justify-between items-center">

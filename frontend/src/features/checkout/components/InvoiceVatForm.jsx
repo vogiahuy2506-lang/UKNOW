@@ -3,16 +3,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import api from '../../../services/api';
 
-/** Keep in sync with backend DEFAULT_INVOICE_VAT_RATE / INVOICE_VAT_RATE. */
-export const DEFAULT_FE_INVOICE_VAT_RATE = 10;
+/** KCT — không chịu thuế. Khớp với backend computeVatBreakdown. */
+export const FE_INVOICE_TAX_RATE_KCT = -1;
 
-export function computeDisplayVat(net, enabled = true, vatRate = DEFAULT_FE_INVOICE_VAT_RATE) {
+export function computeDisplayVat(net) {
   const n = Math.round(Number(net) || 0);
-  if (!enabled || n <= 0) {
-    return { net: n, vatAmount: 0, gross: n, vatRate };
-  }
-  const vatAmount = Math.round((n * vatRate) / 100);
-  return { net: n, vatAmount, gross: n + vatAmount, vatRate };
+  return { net: n, vatAmount: 0, gross: n, vatRate: FE_INVOICE_TAX_RATE_KCT };
 }
 
 export const TAX_CODE_REGEX = /^\d{10}(-\d{3})?$/;
@@ -60,7 +56,6 @@ export default function InvoiceVatForm({
   className = '',
 }) {
   const { t } = useI18n();
-  const vatRate = DEFAULT_FE_INVOICE_VAT_RATE;
   const net = Math.round(Number(netAmount) || 0);
   const canRequest = net > 0 && !disabled;
   const accountEmail = String(defaultEmail || '').trim();
@@ -215,7 +210,7 @@ export default function InvoiceVatForm({
       <div className="px-3 pt-3 pb-2">
         <p className="text-sm font-semibold text-slate-800">{t('invoiceVat.bannerTitle')}</p>
         <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-          {t('invoiceVat.bannerSubtitle') || t('invoiceVat.vatAdditiveNote', { rate: vatRate })}
+          {t('invoiceVat.bannerSubtitle')}
         </p>
       </div>
 
