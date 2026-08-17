@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaCheckCircle, FaCrown, FaGem, FaRocket, FaStar, FaBolt, FaArrowRight } from 'react-icons/fa';
 import AnimatedSection from '../../../components/AnimatedSection';
@@ -9,6 +9,7 @@ import { useI18n } from '../../../i18n';
 import CustomPlanBuilder from '../../../features/billing/CustomPlanBuilder';
 import { toast } from 'react-hot-toast';
 import checkoutApiService from '../../../features/checkout/services/checkoutApi.service';
+import { getMyCustomPlan } from '../../../services/customPlan.service';
 
 const isContactPlan = (plan) => {
   const code = String(plan?.code || '').trim().toLowerCase();
@@ -18,7 +19,8 @@ const isContactPlan = (plan) => {
 
 const isFreePlan = (plan) => Number(plan?.price || 0) <= 0 && !isContactPlan(plan);
 
-const getPlanCtaLabel = (plan, t) => {
+const getPlanCtaLabel = (plan, t, isCurrentCustom = false) => {
+  if (isCurrentCustom) return t('pricing.editCustomPlan');
   if (isContactPlan(plan)) return t('customPlan.cardCta');
   if (isFreePlan(plan)) return t('pricing.startTrial');
   return t('pricing.choosePlan');
@@ -176,13 +178,19 @@ const calcSavings = (monthly, yearly) => {
 export default function PricingSection({ embedded = false, compact = false, glass = false }) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user, activeContext } = useAuthStore();
+  const isEmployee = activeContext?.type === 'employee';
+  const activePlanId = user?.activePlanId;
+  const activePlanIsCustom = Boolean(user?.activePlanIsCustom);
+  const activePlanPrice = user?.activePlanPrice;
+
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [promotionsByPlanCode, setPromotionsByPlanCode] = useState({});
   const [showCustomBuilder, setShowCustomBuilder] = useState(false);
   const [activatingPlanId, setActivatingPlanId] = useState(null);
+  const [myCustomPlan, setMyCustomPlan] = useState(null);
 
   const getPlansData = async () => {
     try {
@@ -222,12 +230,47 @@ export default function PricingSection({ embedded = false, compact = false, glas
     loadPromotions();
   }, [billingPeriod]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !activePlanIsCustom || isEmployee) {
+      setMyCustomPlan(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getMyCustomPlan();
+        if (!cancelled && data?.data) {
+          setMyCustomPlan(data.data);
+        }
+      } catch (err) {
+        console.warn('Failed to load my custom plan', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthenticated, activePlanIsCustom, isEmployee]);
+
   const hasYearlyPricing = plans.some(p => !isContactPlan(p) && p.price_yearly);
 
-  const openCustomBuilder = () => {
+  const handleCloseCustomBuilder = useCallback(() => {
+    setShowCustomBuilder(false);
+  }, []);
+
+  const openCustomBuilder = async () => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
+    }
+    if (isEmployee) return;
+    if (activePlanIsCustom && !myCustomPlan) {
+      try {
+        const { data } = await getMyCustomPlan();
+        if (data?.data) {
+          setMyCustomPlan(data.data);
+        }
+      } catch {
+        toast.error(t('customPlan.loadConfigFailed'));
+        return;
+      }
     }
     setShowCustomBuilder(true);
   };
@@ -362,6 +405,11 @@ export default function PricingSection({ embedded = false, compact = false, glas
         }`}>
           {plans.map((plan, index) => {
             const isCustom = isContactPlan(plan);
+            const isCurrentCustom = isAuthenticated && !isEmployee && isCustom && activePlanIsCustom;
+            const isOwnerCustomForEmployee = isAuthenticated && isEmployee && isCustom && activePlanIsCustom;
+            const isCurrentStandard = isAuthenticated && !isCustom && !activePlanIsCustom && Number(plan.id) === Number(activePlanId);
+            const isCurrentPlan = isCurrentCustom || isCurrentStandard || isOwnerCustomForEmployee;
+
             const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
 
@@ -381,9 +429,23 @@ export default function PricingSection({ embedded = false, compact = false, glas
               ? Math.round(promotion.discountAmount / rawPlanPrice * 100)
               : 0;
 
+            const wrapperClass = isCurrentPlan
+              ? 'bg-white border-2 border-orange-500 ring-1 ring-orange-200 shadow-md'
+              : style.wrapper;
+
             return (
               <AnimatedSection key={plan.id} delay={index * 100}>
-                <div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${style.wrapper}`}>
+                <div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${wrapperClass}`}>
+                  {/* Current plan badge */}
+                  {isCurrentPlan && (
+                    <div className="mb-2">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+                        <FaStar className="w-2.5 h-2.5" />
+                        {t('pricing.currentPlan')}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Plan name + icon */}
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-1">
@@ -398,9 +460,43 @@ export default function PricingSection({ embedded = false, compact = false, glas
                   {/* Price */}
                   <div className="mb-5 pb-5 border-b border-slate-200/30">
                     {isCustom ? (
-                      <div className={`text-2xl font-black ${style.price}`}>
-                        {t('customPlan.priceLabel')}
-                      </div>
+                      activePlanIsCustom ? (
+                        <div>
+                          {billingPeriod === 'yearly' && myCustomPlan?.priceYearly ? (
+                            <div>
+                              <div className="flex items-baseline gap-0.5">
+                                <span className={`text-3xl font-black ${style.price}`}>
+                                  {fmtVnd(myCustomPlan.priceYearly)}
+                                </span>
+                                <span className={`text-base ${style.unit}`}>đ</span>
+                              </div>
+                              <div className={`text-xs ${style.unit}`}>{t('pricing.perYear')}</div>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className={`text-xs ${style.unit}`}>
+                                  ≈ {fmtVnd(Math.round(Number(myCustomPlan.priceYearly) / 12))} / tháng
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="flex items-baseline gap-0.5">
+                                <span className={`text-3xl font-black ${style.price}`}>
+                                  {fmtVnd(activePlanPrice || myCustomPlan?.price || 0)}
+                                </span>
+                                <span className={`text-base ${style.unit}`}>đ</span>
+                                <span className={`text-xs ml-1 ${style.unit}`}>{t('pricing.perMonth')}</span>
+                              </div>
+                            </div>
+                          )}
+                          <div className={`text-[10px] ${style.unit} mt-1`}>
+                            {t('checkout.vatIncluded')}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={`text-2xl font-black ${style.price}`}>
+                          {t('customPlan.priceLabel')}
+                        </div>
+                      )
                     ) : hasPromotion ? (
                       <div>
                         <div className="flex items-center gap-1.5 mb-1">
@@ -467,16 +563,33 @@ export default function PricingSection({ embedded = false, compact = false, glas
                   </ul>
 
                   {/* CTA */}
-                  <button
-                    onClick={() => handlePlanClick(plan)}
-                    disabled={activatingPlanId === plan.id}
-                    className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all disabled:opacity-60 disabled:cursor-not-allowed ${style.button}`}
-                  >
-                    {activatingPlanId === plan.id
-                      ? t('pricing.activating')
-                      : (hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t))}
-                    <FaArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  {isCurrentStandard || isOwnerCustomForEmployee ? (
+                    <button
+                      disabled
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all bg-slate-100 text-slate-400 border border-slate-200 cursor-default shadow-none"
+                    >
+                      {t('pricing.currentPlan')}
+                    </button>
+                  ) : isCurrentCustom ? (
+                    <button
+                      onClick={() => handlePlanClick(plan)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all bg-orange-500 text-white hover:bg-orange-600 shadow-sm"
+                    >
+                      {t('pricing.editCustomPlan')}
+                      <FaArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handlePlanClick(plan)}
+                      disabled={activatingPlanId === plan.id}
+                      className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all disabled:opacity-60 disabled:cursor-not-allowed ${style.button}`}
+                    >
+                      {activatingPlanId === plan.id
+                        ? t('pricing.activating')
+                        : (hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t))}
+                      <FaArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </AnimatedSection>
             );
@@ -492,8 +605,10 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
       <CustomPlanBuilder
         open={showCustomBuilder}
-        onClose={() => setShowCustomBuilder(false)}
-        billingPeriod={billingPeriod}
+        onClose={handleCloseCustomBuilder}
+        billingPeriod={myCustomPlan?.customConfig?.billingPeriod || billingPeriod}
+        initialQuantities={myCustomPlan?.customConfig?.quantities || (typeof myCustomPlan?.customConfig === 'object' ? myCustomPlan.customConfig : null)}
+        reusePlanId={myCustomPlan?.customConfig ? myCustomPlan.id : null}
         glass={glass}
       />
     </section>

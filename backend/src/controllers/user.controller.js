@@ -149,6 +149,7 @@ const mapProfileResponse = (userRow) => ({
   activePlanName: userRow.plan_name ?? null,
   activePlanCode: userRow.plan_code ?? null,
   activePlanPrice: userRow.plan_price ?? null,
+  activePlanIsCustom: Boolean(userRow.plan_is_custom ?? false),
   activePlanFeatures: userRow.plan_features ?? null,
   planMaxEmployees: userRow.plan_max_employees ?? null,
   dailyEmailLimit: userRow.daily_email_limit ?? null,

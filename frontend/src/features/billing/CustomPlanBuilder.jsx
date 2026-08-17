@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HiMinus, HiPlus, HiOutlineExclamation, HiOutlineLightBulb } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
@@ -78,10 +78,27 @@ function defaultQuantities(items = []) {
   return q;
 }
 
+function mergeInitialQuantities(items = [], initialQuantities = null) {
+  const defaults = defaultQuantities(items);
+  if (!initialQuantities || typeof initialQuantities !== 'object') return defaults;
+  const merged = { ...defaults };
+  for (const item of items) {
+    if (initialQuantities[item.itemKey] !== undefined && initialQuantities[item.itemKey] !== null) {
+      const parsed = Number(initialQuantities[item.itemKey]);
+      if (Number.isFinite(parsed)) {
+        merged[item.itemKey] = parsed;
+      }
+    }
+  }
+  return merged;
+}
+
 export default function CustomPlanBuilder({
   open,
   onClose,
   billingPeriod: initialBillingPeriod = 'monthly',
+  initialQuantities = null,
+  reusePlanId = null,
   glass = false,
 }) {
   const { t } = useI18n();
@@ -95,6 +112,11 @@ export default function CustomPlanBuilder({
   const [billingPeriod, setBillingPeriod] = useState(initialBillingPeriod);
   const [quote, setQuote] = useState(null);
   const [error, setError] = useState(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -108,18 +130,19 @@ export default function CustomPlanBuilder({
         const nextItems = data?.data?.items || [];
         setItems(nextItems);
         setConfig(data?.data?.config || {});
-        setQuantities(defaultQuantities(nextItems));
+        setQuantities(mergeInitialQuantities(nextItems, initialQuantities));
       } catch (err) {
         if (!cancelled) {
           toast.error(err?.response?.data?.message || t('customPlan.loadConfigFailed'));
-          onClose?.();
+          onCloseRef.current?.();
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [open, initialBillingPeriod, onClose, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const editableItems = useMemo(
     () => items.filter((item) => item.itemKey !== 'base_fee'),
@@ -237,6 +260,7 @@ export default function CustomPlanBuilder({
         quantities: quote.quantities,
         billingPeriod,
         quote,
+        ...(reusePlanId ? { reusePlanId } : {}),
       },
     });
   };

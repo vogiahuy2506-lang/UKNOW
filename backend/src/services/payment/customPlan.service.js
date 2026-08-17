@@ -5,6 +5,7 @@ import {
   findPricingRowByKey,
   updatePricingRow,
   deleteOrphanCustomPlans,
+  findCustomPlanOwnedByUser,
 } from '../../repositories/payment/customPlan.repository.js';
 import {
   CONFIG_ITEM_KEYS,
@@ -213,4 +214,18 @@ export async function updateAdminCustomPlanPricing(itemKey, patch) {
 
 export async function cleanupOrphanCustomPlans(olderThanMinutes) {
   return deleteOrphanCustomPlans(olderThanMinutes);
+}
+
+export async function getMyCustomPlan({ userId, activePlanId }) {
+  if (!activePlanId || !userId) return null;
+  const plan = await findCustomPlanOwnedByUser(activePlanId, userId);
+  if (!plan) return null;
+  return {
+    id: plan.id,
+    name: plan.name,
+    price: Number(plan.price || 0),
+    priceYearly: plan.price_yearly != null ? Number(plan.price_yearly) : null,
+    customConfig: plan.custom_config,
+    createdAt: plan.created_at,
+  };
 }
