@@ -7,6 +7,7 @@ import {
   HiOutlinePencil,
   HiOutlineDatabase,
   HiOutlineDocumentText,
+  HiOutlineTrash,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
@@ -87,6 +88,20 @@ export default function AdminHelpArticlesPage() {
       toast.success(t('adminHelp.reindexSuccess', { count: res.data?.result?.chunkCount ?? 0 }));
     } catch (err) {
       toast.error(err?.response?.data?.message || t('adminHelp.reindexFailed'));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const deleteArticle = async (article) => {
+    if (!window.confirm(t('adminHelp.confirmDelete'))) return;
+    setSavingId(article.id);
+    try {
+      await help.adminDeleteHelpArticle(article.id);
+      toast.success(t('adminHelp.deleteSuccess'));
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminHelp.deleteFailed'));
     } finally {
       setSavingId(null);
     }
@@ -221,6 +236,15 @@ export default function AdminHelpArticlesPage() {
                           >
                             <HiOutlinePencil className="h-4 w-4" />
                           </Link>
+                          <button
+                            type="button"
+                            onClick={() => deleteArticle(article)}
+                            disabled={busy}
+                            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            title={t('common.delete')}
+                          >
+                            <HiOutlineTrash className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
