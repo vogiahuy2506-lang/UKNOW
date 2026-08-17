@@ -1893,7 +1893,6 @@ export default {
     aiDisabledChatbotOff: 'Chatbot is not enabled for account {name}.',
     aiDisabledNoAccount: 'This conversation is not linked to any Zalo account.',
     btnReconnect: 'Reconnect',
-    openDeployModal: 'Open deploy settings',
     aiPausedPending: 'AI paused…',
     aiCountdown: 'AI resumes in {time}',
     aiResumeOnNextMessage: 'Ready to resume on the next customer message',

@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { HiOutlineChatAlt2 } from 'react-icons/hi';
-import chatbotApi from '../services/chatbotApi.service';
 import { useI18n } from '../../../i18n';
 
 const WINDOWS = [

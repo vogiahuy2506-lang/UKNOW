@@ -1898,7 +1898,6 @@ export default {
     aiDisabledChatbotOff: 'Chatbot chưa được bật cho tài khoản {name}.',
     aiDisabledNoAccount: 'Hội thoại này chưa gắn với tài khoản Zalo nào.',
     btnReconnect: 'Kết nối lại',
-    openDeployModal: 'Mở cài đặt deploy',
     aiPausedPending: 'AI tạm dừng…',
     aiCountdown: 'AI tự bật lại sau {time}',
     aiResumeOnNextMessage: 'Sẵn sàng tự bật khi khách nhắn tiếp',
