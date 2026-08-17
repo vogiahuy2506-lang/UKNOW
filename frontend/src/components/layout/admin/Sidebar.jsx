@@ -102,7 +102,7 @@ const userMenuItems = (t) => [
   {
     name: t('nav.adminOnlyCluster'), icon: HiOutlineCube,
     children: [
-      { name: t('nav.featuredProducts'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS' },
+      { name: t('nav.featuredCourses'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS' },
       { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS' },
       { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, flag: 'VITE_FEATURE_COURSES' },
       { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList, flag: 'VITE_FEATURE_ORDERS' },

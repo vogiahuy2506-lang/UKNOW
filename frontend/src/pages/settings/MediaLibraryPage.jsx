@@ -233,6 +233,7 @@ export default function MediaLibraryPage() {
       } else if (tab === 'owned') {
         path = '/media-library';
         if (source) params.source = source;
+        if (search) params.search = search;
       } else if (tab === 'channels') {
         path = '/media-library/channels';
       }
@@ -380,23 +381,24 @@ export default function MediaLibraryPage() {
         </div>
       )}
 
-      {/* Filters bar */}
-      <div className="flex flex-wrap gap-2.5 items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
-        {tab === 'all' && (
-          <>
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder={t('mediaLibrary.searchPlaceholder')}
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-              />
-            </div>
+      {/* Filters bar — search bên trái + bộ lọc theo tab bên phải, đồng nhất giữa 2 tab có dữ liệu nội bộ. */}
+      {tab !== 'channels' && (
+        <div className="flex flex-wrap gap-2.5 items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder={t('mediaLibrary.searchPlaceholder')}
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+            />
+          </div>
+
+          {tab === 'all' && (
             <select
               value={category}
               onChange={(e) => {
@@ -409,21 +411,21 @@ export default function MediaLibraryPage() {
                 <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-          </>
-        )}
+          )}
 
-        {tab === 'owned' && (
-          <select
-            value={source}
-            onChange={(e) => { setSource(e.target.value); setPage(1); }}
-            className="ml-auto border border-slate-200 rounded-lg text-sm px-3 py-1.5 bg-white text-slate-700"
-          >
-            {sourceOptions.map((opt) => (
-              <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        )}
-      </div>
+          {tab === 'owned' && (
+            <select
+              value={source}
+              onChange={(e) => { setSource(e.target.value); setPage(1); }}
+              className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 bg-white text-slate-700"
+            >
+              {sourceOptions.map((opt) => (
+                <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {tab === 'channels' && (
         <div className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3.5 py-2.5">

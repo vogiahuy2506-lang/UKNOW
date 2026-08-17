@@ -2,12 +2,13 @@ import db from '../../config/database.js';
 import { collectStorageKeys, normalizeStorageKey } from '../../utils/storageKey.util.js';
 
 const OPTIONAL_SCHEMA_ERRORS = new Set(['42P01', '42703']);
-const MESSAGE_REFERENCE_TABLES = [
-  'webchat_messages',
-  'chatbot_messages',
-  'chatbot_studio_messages',
-  'channel_messages',
-  'zalo_personal_messages',
+const MESSAGE_REFERENCE_CONFIGS = [
+  { table: 'webchat_messages', column: 'attachments' },
+  { table: 'chatbot_messages', column: 'attachments' },
+  { table: 'chatbot_studio_messages', column: 'attachments' },
+  { table: 'channel_messages', column: 'attachments' },
+  { table: 'zalo_personal_messages', column: 'attachments' },
+  { table: 'ai_chat_messages', column: 'data' },
 ];
 
 async function queryOptional(queryable, sql) {
@@ -282,12 +283,12 @@ export async function isStorageKeyReferencedByMessage(storageKey, queryable = db
   if (!key) return false;
 
   let queriedTables = 0;
-  for (const table of MESSAGE_REFERENCE_TABLES) {
+  for (const { table, column } of MESSAGE_REFERENCE_CONFIGS) {
     try {
       const { rows } = await queryable.query(
         `SELECT 1
            FROM ${table}
-          WHERE attachments::text LIKE $1
+          WHERE ${column}::text LIKE $1
           LIMIT 1`,
         [`%${key}%`]
       );

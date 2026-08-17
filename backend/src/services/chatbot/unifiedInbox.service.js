@@ -394,6 +394,12 @@ class UnifiedInboxService {
       );
     }
 
+    if (ownedAttachments.length > 0) {
+      await chatAttachmentService.promoteChatAttachments(ownedAttachments).catch((promoteErr) => {
+        console.warn('[UnifiedInbox] promoteChatAttachments failed:', promoteErr.message);
+      });
+    }
+
     // Handoff: pause AI for this conversation when owner replies from inbox.
     // Uses reason=handoff (default); does not overwrite an existing manual pause.
     let pauseState = {

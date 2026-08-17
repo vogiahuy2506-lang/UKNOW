@@ -11,6 +11,7 @@ const {
   buildStorageReferenceIndex,
   getIndexedStorageReferences,
   isReferenceAlive,
+  isStorageKeyReferencedByMessage,
   resolveWorkspaceOwner,
 } = await import('../storageReference.service.js');
 
@@ -108,6 +109,40 @@ describe('storageReference.service', () => {
       label: 'Chiến dịch',
       name: 'Chiến dịch #5',
       url: '/campaigns',
+    });
+  });
+
+  describe('isStorageKeyReferencedByMessage', () => {
+    it('detects reference in ai_chat_messages via data column', async () => {
+      query.mockImplementation(async (sql) => {
+        if (/ai_chat_messages/i.test(sql)) {
+          return { rows: [{ 1: 1 }] };
+        }
+        return { rows: [] };
+      });
+
+      const referenced = await isStorageKeyReferencedByMessage('uploads/42/chat/assistant.pdf');
+      expect(referenced).toBe(true);
+      const aiQueryCall = query.mock.calls.find(([sql]) => sql.includes('ai_chat_messages'));
+      expect(aiQueryCall[0]).toMatch(/data::text LIKE \$1/);
+    });
+
+    it('detects reference in webchat_messages via attachments column', async () => {
+      query.mockImplementation(async (sql) => {
+        if (/webchat_messages/i.test(sql)) {
+          return { rows: [{ 1: 1 }] };
+        }
+        return { rows: [] };
+      });
+
+      const referenced = await isStorageKeyReferencedByMessage('uploads/42/chat/webchat.pdf');
+      expect(referenced).toBe(true);
+    });
+
+    it('returns false when no table contains the key', async () => {
+      query.mockResolvedValue({ rows: [] });
+      const referenced = await isStorageKeyReferencedByMessage('uploads/42/chat/orphan.pdf');
+      expect(referenced).toBe(false);
     });
   });
 });

@@ -55,7 +55,7 @@ describe('isKeyReferenced fail-closed', () => {
   it('returns false only when at least one table answered and none matched', async () => {
     mockQuery.mockResolvedValue({ rows: [] });
     await expect(isKeyReferenced('uploads/1/chat/orphan.pdf')).resolves.toBe(false);
-    expect(mockQuery).toHaveBeenCalledTimes(5);
+    expect(mockQuery).toHaveBeenCalledTimes(6);
   });
 
   it('skips missing tables (42P01) but still works if another table answers', async () => {
@@ -66,6 +66,7 @@ describe('isKeyReferenced fail-closed', () => {
       .mockRejectedValueOnce(missing)
       .mockRejectedValueOnce(missing)
       .mockRejectedValueOnce(missing)
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
@@ -133,6 +134,35 @@ describe('expires_at catalog cleanup', () => {
         return { rows: [{ '?column?': 1 }], rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
+    });
+
+    const result = await cleanupExpiredCatalogRows();
+    expect(unlinkSpy).not.toHaveBeenCalled();
+    expect(result.rowsDeleted).toBe(0);
+  });
+
+  it('expired row referenced in ai_chat_messages data column is SKIPPED from deletion', async () => {
+    mockQuery.mockImplementation(async (sql) => {
+      if (/SELECT id, storage_key/i.test(sql)) {
+        return { rows: [{ id: 12, storage_key: 'uploads/1/chat/ai_assistant.pdf' }], rowCount: 1 };
+      }
+      if (/ai_chat_messages/i.test(sql)) {
+        return { rows: [{ '?column?': 1 }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const result = await cleanupExpiredCatalogRows();
+    expect(unlinkSpy).not.toHaveBeenCalled();
+    expect(result.rowsDeleted).toBe(0);
+  });
+
+  it('expired row skips deletion when reference check throws (fail-safe)', async () => {
+    mockQuery.mockImplementation(async (sql) => {
+      if (/SELECT id, storage_key/i.test(sql)) {
+        return { rows: [{ id: 13, storage_key: 'uploads/1/chat/err.pdf' }], rowCount: 1 };
+      }
+      throw new Error('Connection reset');
     });
 
     const result = await cleanupExpiredCatalogRows();

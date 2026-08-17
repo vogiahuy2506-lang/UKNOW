@@ -7,16 +7,17 @@ import { markDeletedAfterUnlink } from '../storage/storageObject.service.js';
 const UPLOADS_ROOT = path.resolve(process.cwd(), 'uploads');
 const MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
-const REF_TABLES = [
-  'webchat_messages',
-  'chatbot_messages',
-  'chatbot_studio_messages',
-  'channel_messages',
-  'zalo_personal_messages',
+const REF_CONFIGS = [
+  { table: 'webchat_messages', column: 'attachments' },
+  { table: 'chatbot_messages', column: 'attachments' },
+  { table: 'chatbot_studio_messages', column: 'attachments' },
+  { table: 'channel_messages', column: 'attachments' },
+  { table: 'zalo_personal_messages', column: 'attachments' },
+  { table: 'ai_chat_messages', column: 'data' },
 ];
 
 function isUndefinedTableError(err) {
-  return String(err?.code || '') === '42P01';
+  return String(err?.code || '') === '42P01' || String(err?.code || '') === '42703';
 }
 
 function isEnoent(err) {
@@ -24,19 +25,19 @@ function isEnoent(err) {
 }
 
 /**
- * True if any message attachments JSONB references this storage key.
+ * True if any message attachments JSONB/data references this storage key.
  * Fail-closed: connection / unexpected DB errors propagate; only missing
- * tables (42P01) are skipped. If no table could be queried, throw.
+ * tables/columns (42P01, 42703) are skipped. If no table could be queried, throw.
  */
 export async function isKeyReferenced(storageKey) {
   let queriedOk = 0;
 
-  for (const table of REF_TABLES) {
+  for (const { table, column } of REF_CONFIGS) {
     try {
       const { rows } = await db.query(
         `SELECT 1
          FROM ${table} m
-         WHERE m.attachments::text LIKE $1
+         WHERE m.${column}::text LIKE $1
          LIMIT 1`,
         [`%${storageKey}%`]
       );
@@ -44,7 +45,7 @@ export async function isKeyReferenced(storageKey) {
       if (rows.length > 0) return true;
     } catch (err) {
       if (isUndefinedTableError(err)) {
-        console.warn(`[ChatAttachmentCleanup] skip missing table ${table}:`, err.message);
+        console.warn(`[ChatAttachmentCleanup] skip missing table/column ${table}.${column}:`, err.message);
         continue;
       }
       throw err;
@@ -97,10 +98,18 @@ export async function cleanupExpiredCatalogRows() {
   let filesDeleted = 0;
 
   for (const row of rows) {
-    const referenced = await isKeyReferenced(row.storage_key);
-    if (referenced) {
+    try {
+      const referenced = await isKeyReferenced(row.storage_key);
+      if (referenced) {
+        console.warn(
+          `[ChatAttachmentCleanup] CẢNH BÁO: Catalog row ${row.id} (${row.storage_key}) đã hết hạn nhưng đang được tin nhắn tham chiếu! Bỏ qua không xóa.`
+        );
+        continue;
+      }
+    } catch (refErr) {
       console.warn(
-        `[ChatAttachmentCleanup] CẢNH BÁO: Catalog row ${row.id} (${row.storage_key}) đã hết hạn nhưng đang được tin nhắn tham chiếu! Bỏ qua không xóa.`
+        `[ChatAttachmentCleanup] Không thể kiểm tra tham chiếu cho catalog row ${row.id} (${row.storage_key}):`,
+        refErr.message
       );
       continue;
     }

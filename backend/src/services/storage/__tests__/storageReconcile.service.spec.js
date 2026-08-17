@@ -201,4 +201,59 @@ describe('storageReconcile.service', () => {
       untrackedDurableBytes: 0,
     });
   });
+
+  it('auto-promotes expired temp row when referenced by a message instead of deleting', async () => {
+    const tempFilePath = path.join(roots.uploads, '7', 'chat', 'temp-referenced.pdf');
+    await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
+    await fs.writeFile(tempFilePath, 'chat-data');
+
+    const now = new Date('2026-08-14T03:00:00.000Z');
+    const expiredAt = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+    listStorageObjectsForReconcile.mockResolvedValueOnce([{
+      id: 99,
+      owner_user_id: 7,
+      storage_key: 'uploads/7/chat/temp-referenced.pdf',
+      state: 'temp',
+      expires_at: expiredAt.toISOString(),
+      size_bytes: 9,
+    }]);
+
+    isStorageKeyReferencedByMessage.mockResolvedValueOnce(true);
+
+    const metrics = await reconcileStorageObjects({ roots, now });
+
+    expect(activateStorageObject).toHaveBeenCalledWith(expect.objectContaining({
+      id: 99,
+      storageKey: 'uploads/7/chat/temp-referenced.pdf',
+    }));
+    await expect(fs.access(tempFilePath)).resolves.toBeUndefined();
+    expect(metrics.expiredTempDeleted).toBe(0);
+  });
+
+  it('fails safe and skips deletion of expired temp when reference check throws', async () => {
+    const tempFilePath = path.join(roots.uploads, '7', 'chat', 'temp-error.pdf');
+    await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
+    await fs.writeFile(tempFilePath, 'chat-data');
+
+    const now = new Date('2026-08-14T03:00:00.000Z');
+    const expiredAt = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+    listStorageObjectsForReconcile.mockResolvedValueOnce([{
+      id: 100,
+      owner_user_id: 7,
+      storage_key: 'uploads/7/chat/temp-error.pdf',
+      state: 'temp',
+      expires_at: expiredAt.toISOString(),
+      size_bytes: 9,
+    }]);
+
+    isStorageKeyReferencedByMessage.mockRejectedValueOnce(new Error('DB unreachable'));
+
+    const metrics = await reconcileStorageObjects({ roots, now });
+
+    await expect(fs.access(tempFilePath)).resolves.toBeUndefined();
+    expect(markStorageObjectDeleted).not.toHaveBeenCalled();
+    expect(metrics.expiredTempDeleted).toBe(0);
+  });
 });

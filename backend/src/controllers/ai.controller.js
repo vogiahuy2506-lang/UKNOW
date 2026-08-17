@@ -283,6 +283,12 @@ class AiController {
           safeFiles
         );
 
+        if (safeFiles.length > 0) {
+          await chatAttachmentService.promoteChatAttachments(safeFiles).catch((promoteErr) => {
+            console.warn('[AI] promoteChatAttachments failed:', promoteErr.message);
+          });
+        }
+
         const localeMetaPatch = {
           conversationLocale: localeContext.conversationLocale,
           conversationLocaleSource: localeContext.conversationLocaleSource,

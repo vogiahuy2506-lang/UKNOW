@@ -32,17 +32,22 @@ function mapLibraryRow(row) {
 export async function listOwnedAttachments(ownerUserId, query = {}) {
   const { page, limit, offset } = parsePageLimit(query);
   const source = String(query.source || '').trim();
+  const search = String(query.search || '').trim();
   const params = [ownerUserId];
-  let sourceSql = '';
+  let filterSql = '';
   if (source && ALLOWED_SOURCES.has(source)) {
     params.push(source);
-    sourceSql = ` AND source = $${params.length}`;
+    filterSql += ` AND source = $${params.length}`;
+  }
+  if (search) {
+    params.push(`%${search}%`);
+    filterSql += ` AND (display_name ILIKE $${params.length} OR storage_key ILIKE $${params.length})`;
   }
 
   const countRes = await db.query(
     `SELECT COUNT(*)::int AS total
      FROM chat_attachments
-     WHERE id_user = $1${sourceSql}`,
+     WHERE id_user = $1${filterSql}`,
     params
   );
 
@@ -51,7 +56,7 @@ export async function listOwnedAttachments(ownerUserId, query = {}) {
     `SELECT id, source, storage_key, display_name, mime_type, size_bytes,
             conversation_ref, created_at, expires_at
      FROM chat_attachments
-     WHERE id_user = $1${sourceSql}
+     WHERE id_user = $1${filterSql}
      ORDER BY created_at DESC
      LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params

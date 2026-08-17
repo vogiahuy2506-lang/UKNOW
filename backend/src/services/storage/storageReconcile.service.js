@@ -184,6 +184,7 @@ async function processLedgerRow(row, roots, metrics, now) {
         }
       } catch (err) {
         console.warn(`[StorageReconcile] Failed to check message reference for ${row.storage_key}:`, err.message);
+        return;
       }
     }
 
