@@ -45,14 +45,6 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
   const [config, setConfig] = useState(() => toFormConfig(value));
   const [error, setError] = useState('');
 
-  const isInitialized = useRef(false);
-  useEffect(() => {
-    if (value !== undefined && !isInitialized.current) {
-      setConfig(toFormConfig(value));
-      isInitialized.current = true;
-    }
-  }, [value]);
-
   const enabledCount = useMemo(
     () => WINDOWS.filter(({ id }) => config[id]?.enabled).length,
     [config]

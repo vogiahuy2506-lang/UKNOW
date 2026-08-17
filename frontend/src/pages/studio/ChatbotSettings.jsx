@@ -80,6 +80,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const [showFacebookChannelModal, setShowFacebookChannelModal] = useState(false);
   const [showZaloPersonalChannelModal, setShowZaloPersonalChannelModal] = useState(false);
   const [profileData, setProfileData] = useState(null);
+  const [hydrated, setHydrated] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
@@ -216,6 +217,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       setDocuments([]);
       loadDocumentsForChatbot(chatbot.id);
       loadChannels(chatbot.id);
+      setHydrated(true);
     }
    
   }, [chatbot?.id]);
@@ -743,10 +745,12 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
           {activeTab === 'general' && (
             <div className="space-y-5">
 
-              <ChatbotReplyLimitsCard
-                value={form.reply_limit_config}
-                onChange={(newConfig) => setForm(prev => ({ ...prev, reply_limit_config: newConfig }))}
-              />
+              {hydrated && (
+                <ChatbotReplyLimitsCard
+                  value={form.reply_limit_config}
+                  onChange={(newConfig) => setForm(prev => ({ ...prev, reply_limit_config: newConfig }))}
+                />
+              )}
 
               {profileData && (
                 <>
