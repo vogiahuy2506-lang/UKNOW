@@ -13,6 +13,9 @@
  *   node scripts/migrateStorageToGcs.js
  *   node scripts/migrateStorageToGcs.js --limit=100
  */
+// PHẢI nạp trước database.js: file đó đọc process.env ngay lúc import, thiếu .env
+// thì DB_HOST rỗng và pool rơi về 127.0.0.1 (chính container này, không phải Postgres).
+import 'dotenv/config';
 import path from 'path';
 import { promises as fs } from 'fs';
 import db from '../src/config/database.js';

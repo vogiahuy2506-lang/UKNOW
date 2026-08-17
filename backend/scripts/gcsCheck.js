@@ -16,6 +16,7 @@
  * Script CHỈ ghi/xoá đúng một object tạm có tiền tố `_healthcheck/`,
  * không đụng dữ liệu thật.
  */
+import 'dotenv/config';
 import { Storage } from '@google-cloud/storage';
 
 const BUCKET = String(process.env.GCS_BUCKET || '').trim();
