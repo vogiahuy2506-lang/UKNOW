@@ -3,15 +3,19 @@ import { Link, useLocation } from 'react-router-dom';
 import { HiOutlineQuestionMarkCircle } from 'react-icons/hi';
 import { resolveHelpFeature } from '../../services/help.service';
 import { useI18n } from '../../i18n';
+import { HELP_FEATURE_KEYS } from '../../constants/helpFeatureKeys';
 
-/** Map pathname → feature_key (Nhóm 1 + một số màn đã có bài). */
+/**
+ * Map pathname → feature_key (Nhóm 1 + một số màn đã có bài).
+ * Mã key lấy từ `constants/helpFeatureKeys` để không lệch với dropdown ở màn quản trị.
+ */
 const ROUTE_FEATURE_MAP = [
-  { test: (p) => p.includes('/settings/ai-profile'), key: 'ai-profile' },
-  { test: (p) => p.includes('/settings/channels'), key: 'channels' },
-  { test: (p) => p.includes('/quick-send'), key: 'quick-send' },
-  { test: (p) => p.includes('/campaigns/new') || /\/campaigns\/[^/]+\/builder/.test(p), key: 'campaign-create' },
-  { test: (p) => p.includes('/billing'), key: 'plan-and-billing' },
-  { test: (p) => p.includes('/topup'), key: 'plan-and-billing' },
+  { test: (p) => p.includes('/settings/ai-profile'), key: HELP_FEATURE_KEYS.AI_PROFILE },
+  { test: (p) => p.includes('/settings/channels'), key: HELP_FEATURE_KEYS.CHANNELS },
+  { test: (p) => p.includes('/quick-send'), key: HELP_FEATURE_KEYS.QUICK_SEND },
+  { test: (p) => p.includes('/campaigns/new') || /\/campaigns\/[^/]+\/builder/.test(p), key: HELP_FEATURE_KEYS.CAMPAIGN_CREATE },
+  { test: (p) => p.includes('/billing'), key: HELP_FEATURE_KEYS.PLAN_AND_BILLING },
+  { test: (p) => p.includes('/topup'), key: HELP_FEATURE_KEYS.PLAN_AND_BILLING },
 ];
 
 /**

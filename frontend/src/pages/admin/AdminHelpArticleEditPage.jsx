@@ -11,6 +11,7 @@ import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
 import RichTextEditor from '../../components/editor/RichTextEditor';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml';
+import { HELP_FEATURE_KEY_LIST, helpFeatureKeyLabel } from '../../constants/helpFeatureKeys';
 
 const EMPTY_FORM = {
   title: '',
@@ -92,6 +93,12 @@ export default function AdminHelpArticleEditPage() {
   }, [id, isCreate, t]);
 
   const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Bài cũ có thể mang key ngoài danh mục (vd 'voucher') — vẫn cho hiện để lưu
+  // lại không âm thầm đổi chủ đề của bài.
+  const featureKeyOptions = form.feature_key && !HELP_FEATURE_KEY_LIST.includes(form.feature_key)
+    ? [...HELP_FEATURE_KEY_LIST, form.feature_key]
+    : HELP_FEATURE_KEY_LIST;
 
   const handleConvertToRich = () => {
     if (!window.confirm(t('adminHelp.convertToRichConfirm'))) return;
@@ -371,26 +378,25 @@ export default function AdminHelpArticleEditPage() {
           )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* Route chính đã ẩn: không giao diện nào đọc primary_route (link bài viết
+            ghép từ slug). Giá trị cũ vẫn giữ nguyên trong form state + payload. */}
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminHelp.fieldFeatureKey')} *</label>
-            <input
-              type="text"
+            <select
               className="input"
               value={form.feature_key}
               onChange={(e) => setField('feature_key', e.target.value)}
               required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminHelp.fieldPrimaryRoute')}</label>
-            <input
-              type="text"
-              className="input"
-              value={form.primary_route}
-              onChange={(e) => setField('primary_route', e.target.value)}
-              placeholder="/app/..."
-            />
+            >
+              <option value="">{t('adminHelp.featureKeyPlaceholder')}</option>
+              {featureKeyOptions.map((key) => (
+                <option key={key} value={key}>
+                  {helpFeatureKeyLabel(t, key)}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">{t('adminHelp.featureKeyHint')}</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminHelp.fieldSortOrder')}</label>
