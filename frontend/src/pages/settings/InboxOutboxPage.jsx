@@ -22,6 +22,20 @@ import { getMessagePreviewText } from '../../features/inbox/utils/normalizeMessa
 
 const getConversationKey = (conv) => (conv ? `${conv.type || ''}:${conv.id}` : '');
 
+/** Single source of truth for "is this a Zalo group conversation" — used by both
+ * the channel label and the AI auto-reply toggle so they never disagree. */
+const isGroupConversation = (conversation) => {
+  if (!conversation) return false;
+  const visitorInfo = conversation.visitorInfo || conversation.visitor_info || {};
+  const parsedVisitorInfo = typeof visitorInfo === 'string' ? JSON.parse(visitorInfo || '{}') : visitorInfo;
+  return (
+    conversation.isGroup === true ||
+    parsedVisitorInfo?.is_group === true ||
+    parsedVisitorInfo?.isGroup === true ||
+    parsedVisitorInfo?.source === 'zalo_group'
+  );
+};
+
 const extractPauseState = (res) => {
   const payload = res?.data ?? res ?? {};
   return {
@@ -667,14 +681,7 @@ const InboxPage = () => {
   };
 
   const getChannelLabel = (channel, conversation = null) => {
-    const visitorInfo = conversation?.visitorInfo || conversation?.visitor_info || {};
-    const parsedVisitorInfo = typeof visitorInfo === 'string' ? JSON.parse(visitorInfo || '{}') : visitorInfo;
-    if (
-      conversation?.isGroup === true ||
-      parsedVisitorInfo?.is_group === true ||
-      parsedVisitorInfo?.isGroup === true ||
-      parsedVisitorInfo?.source === 'zalo_group'
-    ) {
+    if (isGroupConversation(conversation)) {
       return t('inbox.zaloGroup') || 'Zalo Nhóm';
     }
 
@@ -784,6 +791,7 @@ const InboxPage = () => {
               <ZaloAccountSelector
                 selectedAccountId={selectedAccountId}
                 onAccountChange={setSelectedAccountId}
+                refreshTrigger={sessionStatus.connected}
                 onSyncComplete={() => {
                   fetchSessionStatus();
                   fetchConversations(true);
@@ -860,7 +868,7 @@ const InboxPage = () => {
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <div className="flex items-center gap-2">
                   <span className={`text-sm text-right leading-tight ${
-                    selectedConversation.chatbotEnabled === false
+                    selectedConversation.chatbotEnabled === false || isGroupConversation(selectedConversation)
                       ? 'text-gray-400'
                       : 'text-gray-700'
                   }`}>
@@ -869,10 +877,10 @@ const InboxPage = () => {
                   <button
                     type="button"
                     role="switch"
-                    aria-checked={selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused}
-                    disabled={selectedConversation.chatbotEnabled === false}
+                    aria-checked={selectedConversation.chatbotEnabled !== false && !isGroupConversation(selectedConversation) && !selectedConversation.aiPaused}
+                    disabled={selectedConversation.chatbotEnabled === false || isGroupConversation(selectedConversation)}
                     onClick={async () => {
-                      if (selectedConversation.chatbotEnabled === false) return;
+                      if (selectedConversation.chatbotEnabled === false || isGroupConversation(selectedConversation)) return;
                       try {
                         const nextPaused = !selectedConversation.aiPaused;
                         const apiRes = await chatbotApi.setConversationAiPaused(
@@ -892,14 +900,14 @@ const InboxPage = () => {
                       }
                     }}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-                      selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused
+                      selectedConversation.chatbotEnabled !== false && !isGroupConversation(selectedConversation) && !selectedConversation.aiPaused
                         ? 'bg-primary-600'
                         : 'bg-slate-200'
                     }`}
                   >
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        selectedConversation.chatbotEnabled !== false && !selectedConversation.aiPaused
+                        selectedConversation.chatbotEnabled !== false && !isGroupConversation(selectedConversation) && !selectedConversation.aiPaused
                           ? 'translate-x-6'
                           : 'translate-x-1'
                       }`}
@@ -932,6 +940,12 @@ const InboxPage = () => {
                           {t('inbox.openDeployModal')}
                         </button>
                       ) : null}
+                    </div>
+                  ) : isGroupConversation(selectedConversation) ? (
+                    <div className="flex flex-col items-end gap-1">
+                      <p className="text-[11px] text-amber-700 text-right leading-snug max-w-[220px]">
+                        {t('inbox.aiGroupUnsupported')}
+                      </p>
                     </div>
                   ) : selectedConversation.aiPaused ? (
                     <p className="text-[11px] text-gray-500 text-right leading-snug max-w-[220px]">

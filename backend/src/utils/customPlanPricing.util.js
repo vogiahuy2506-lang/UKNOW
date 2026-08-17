@@ -166,7 +166,14 @@ export function computeCustomPlanPrice(configRows, quantities, billingPeriod = '
   }
 
   const yearlyDiscountPercent = getConfigValue(configRows, 'yearly_discount_percent', 20);
-  const yearlyTotal = Math.round(monthlyTotal * 12 * (1 - yearlyDiscountPercent / 100));
+  const NO_YEARLY_DISCOUNT_KEYS = new Set(['storage_gb']);
+  const discountableMonthly = items
+    .filter((i) => !NO_YEARLY_DISCOUNT_KEYS.has(i.itemKey))
+    .reduce((sum, i) => sum + i.subtotal, 0);
+  const flatMonthly = monthlyTotal - discountableMonthly;
+  const yearlyTotal = Math.round(
+    discountableMonthly * 12 * (1 - yearlyDiscountPercent / 100) + flatMonthly * 12
+  );
   const period = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
   const total = period === 'yearly' ? yearlyTotal : monthlyTotal;
 
@@ -232,8 +239,10 @@ export function mapQuantitiesToPlanColumns(configRows, quantities) {
 
   const storageGb = Number(quantities?.storage_gb) || 0;
   if (storageGb > 0) {
-    payload.maxKbDocuments      = Math.max(25,      storageGb * 50);
-    payload.maxKbExtractedChars = Math.max(1500000, storageGb * 5000000);
+    const KB_DOCS_CAP = 1000;
+    const KB_CHARS_CAP = 100000000;
+    payload.maxKbDocuments      = Math.min(KB_DOCS_CAP, Math.max(25, storageGb * 50));
+    payload.maxKbExtractedChars = Math.min(KB_CHARS_CAP, Math.max(1500000, storageGb * 5000000));
   }
 
   return payload;

@@ -44,15 +44,20 @@ describe('topupPricing.util', () => {
       expect(priced.shortfall).toBe(TOPUP_MIN_ORDER_AMOUNT - 10000);
     });
 
-    it('đơn trộn: tin không nhân months, slot chatbot nhân 12', () => {
+    it('đơn trộn: tin không nhân months, slot chatbot và storage_gb nhân 12', () => {
+      const extendedPricingRows = [
+        ...pricingRows,
+        { item_key: 'storage_gb', unit_price: 25000, min_qty: 5, step_qty: 5, max_qty: 200, is_active: true, sort_order: 90 },
+      ];
       const priced = computeTopupPrice(
-        pricingRows,
-        { zalo_messages: 500, chatbots: 1 },
+        extendedPricingRows,
+        { zalo_messages: 500, chatbots: 1, storage_gb: 10 },
         12
       );
       expect(priced.items.find((i) => i.itemKey === 'zalo_messages').subtotal).toBe(50000);
       expect(priced.items.find((i) => i.itemKey === 'chatbots').subtotal).toBe(1_200_000);
-      expect(priced.total).toBe(1_250_000);
+      expect(priced.items.find((i) => i.itemKey === 'storage_gb').subtotal).toBe(10 * 25000 * 12);
+      expect(priced.total).toBe(50000 + 1_200_000 + 3_000_000);
     });
   });
 

@@ -19,6 +19,7 @@ const ITEM_LABEL_KEYS = {
   landing_pages: 'topup.items.landingPages',
   chatbots: 'topup.items.chatbots',
   employees: 'topup.items.employees',
+  storage_gb: 'topup.items.storageGb',
 };
 
 const UNIT_LABEL_KEYS = {
@@ -30,6 +31,7 @@ const UNIT_LABEL_KEYS = {
   landing_pages: 'topup.units.landingPages',
   chatbots: 'topup.units.chatbots',
   employees: 'topup.units.employees',
+  storage_gb: 'topup.units.storageGb',
 };
 
 const STRUCTURAL_KEYS = new Set([
@@ -38,6 +40,7 @@ const STRUCTURAL_KEYS = new Set([
   'landing_pages',
   'chatbots',
   'employees',
+  'storage_gb',
 ]);
 
 function formatQtyInput(value) {
@@ -186,6 +189,10 @@ const TopupPage = () => {
     ?? config?.zaloCapacity?.remaining
     ?? null;
 
+  const storageRemaining = quote?.storageCapacity?.remaining
+    ?? config?.storageCapacity?.remaining
+    ?? null;
+
   const adjustQty = (item, delta) => {
     if (STRUCTURAL_KEYS.has(item.itemKey) && structuralBlocked) return;
     const step = Number(item.stepQty || 1);
@@ -193,6 +200,9 @@ const TopupPage = () => {
     let max = item.maxQty == null ? Infinity : Number(item.maxQty);
     if (item.itemKey === 'zalo_messages' && zaloRemaining != null) {
       max = Math.min(max, Number(zaloRemaining));
+    }
+    if (item.itemKey === 'storage_gb' && storageRemaining != null) {
+      max = Math.min(max, Number(storageRemaining));
     }
     setQuantities((prev) => {
       const raw = prev[item.itemKey];
@@ -357,6 +367,11 @@ const TopupPage = () => {
                   {item.itemKey === 'zalo_messages' && zaloRemaining != null && (
                     <div className="mt-1 text-xs text-amber-700">
                       {t('topup.zaloRemaining', { n: Number(zaloRemaining).toLocaleString('vi-VN') })}
+                    </div>
+                  )}
+                  {item.itemKey === 'storage_gb' && storageRemaining != null && (
+                    <div className="mt-1 text-xs text-amber-700">
+                      {t('topup.storageRemaining', { n: Number(storageRemaining).toLocaleString('vi-VN') })}
                     </div>
                   )}
                 </div>

@@ -1925,6 +1925,7 @@ export default {
     sseRetry: 'Retry',
     aiPausedHint: 'AI is paused',
     aiToggleLabel: 'AI auto-reply',
+    aiGroupUnsupported: 'AI replies are not available in Zalo groups yet',
     zaloNotConnected: 'Zalo is not connected',
     connectZaloFirst: 'Connect a Zalo account first to receive messages',
     manualBadgeTitle: 'Manual mode',
@@ -4056,6 +4057,7 @@ export default {
     priceFloorFallback: 'Price was raised to match the nearest standard plan for this near-clone setup.',
     capacityHint: 'Each Zalo account can send up to ~{n} messages/month.',
     storageKbHint: 'Includes: ~{docs} AI knowledge docs (~{chars} characters)',
+    storageNoYearlyDiscount: 'Yearly discount does not apply to storage capacity.',
     items: {
       baseFee: 'Base fee',
       zaloMessages: 'Zalo messages / month',
@@ -4147,6 +4149,7 @@ export default {
     viewPricing: 'View pricing',
     stepHint: 'Step {step}',
     zaloRemaining: 'You can buy up to {n} more messages based on connected account capacity',
+    storageRemaining: 'You can buy up to {n} more GB (self-serve cap: 200 GB per account)',
     zaloConnectFirst: 'Connect a Zalo account before buying more messages.',
     qtyRequired: 'Please enter a quantity',
     qtyBelowMin: 'Must be at least {n}',
@@ -4169,6 +4172,7 @@ export default {
       landingPages: 'landing page',
       chatbots: 'chatbot',
       employees: 'employee',
+      storageGb: 'GB',
     },
     items: {
       zaloMessages: 'Zalo messages',
@@ -4179,6 +4183,7 @@ export default {
       landingPages: 'Landing pages',
       chatbots: 'AI Chatbots',
       employees: 'Employees',
+      storageGb: 'Storage capacity',
     },
   },
 

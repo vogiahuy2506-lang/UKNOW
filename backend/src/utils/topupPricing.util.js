@@ -19,6 +19,7 @@ export const TOPUP_STRUCTURAL_KEYS = Object.freeze([
   'landing_pages',
   'chatbots',
   'employees',
+  'storage_gb',
 ]);
 
 export const TOPUP_ITEM_KEYS = Object.freeze([
@@ -367,3 +368,33 @@ export function checkTopupZaloCapacity({
     requested,
   };
 }
+
+/** Trần dung lượng một tài khoản tự mua thêm được, không cần admin duyệt. */
+export const STORAGE_TOPUP_AUTO_APPROVE_GB = 200;
+
+export function checkTopupStorageCapacity({
+  existingStorageGrants = 0,
+  requestedQty = 0,
+  autoApproveGb = STORAGE_TOPUP_AUTO_APPROVE_GB,
+} = {}) {
+  const cap       = Math.max(0, Number(autoApproveGb) || 0);
+  const existing  = Math.max(0, Number(existingStorageGrants) || 0);
+  const requested = Math.max(0, Number(requestedQty) || 0);
+  const remaining = Math.max(0, cap - existing);
+  const ok = requested <= remaining;
+
+  return {
+    ok,
+    autoApproveGb: cap,
+    existingGrants: existing,
+    remaining,
+    requested,
+    ...(ok ? {} : {
+      code: 'STORAGE_TOPUP_APPROVAL_REQUIRED',
+      message: remaining > 0
+        ? `Bạn đang có ${existing} GB dung lượng mua thêm. Mỗi tài khoản tự mua tối đa ${cap} GB — lần này còn ${remaining} GB. Cần nhiều hơn, liên hệ hỗ trợ để chuyển sang gói tự chọn.`
+        : `Bạn đã dùng hết ${cap} GB dung lượng mua thêm. Để tăng tiếp, liên hệ hỗ trợ để chuyển sang gói tự chọn (tối đa 1000 GB).`,
+    }),
+  };
+}
+

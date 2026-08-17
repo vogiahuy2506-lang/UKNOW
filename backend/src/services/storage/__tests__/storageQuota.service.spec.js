@@ -1,15 +1,21 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockGetEffectiveQuota = jest.fn();
 const mockGetWorkspaceUsage = jest.fn();
+const mockSumActiveTopupGrants = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/storage.repository.js', () => ({
   getEffectiveQuota: mockGetEffectiveQuota,
   getWorkspaceUsage: mockGetWorkspaceUsage,
 }));
 
+jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
+  sumActiveTopupGrants: mockSumActiveTopupGrants,
+}));
+
 const {
   DEFAULT_STORAGE_LIMIT_BYTES,
+  BYTES_PER_GB,
   StorageQuotaExceededError,
   assertQuotaAvailable,
   getStorageUsage,
@@ -17,6 +23,11 @@ const {
 } = await import('../storageQuota.service.js');
 
 describe('storageQuota.service', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSumActiveTopupGrants.mockResolvedValue(0);
+  });
+
   it('resolves employee usage to the active workspace owner', () => {
     expect(resolveWorkspaceOwnerId({ id: 9, activeContext: { type: 'employee', ownerId: 42 } })).toBe(42);
     expect(resolveWorkspaceOwnerId({ id: 9, activeContext: { type: 'self' } })).toBe(9);
@@ -30,6 +41,31 @@ describe('storageQuota.service', () => {
       percent: 25, overLimit: false, source: 'override',
       enforcementEnabled: false,
     });
+  });
+
+  it('adds active topup grants on top of plan limits and updates source', async () => {
+    mockGetEffectiveQuota.mockResolvedValueOnce({ overrideBytes: null, planLimitBytes: '1073741824' }); // 1 GB
+    mockGetWorkspaceUsage.mockResolvedValueOnce('500000000');
+    mockSumActiveTopupGrants.mockResolvedValueOnce(5); // +5 GB
+
+    const expectedLimit = 1073741824 + 5 * BYTES_PER_GB;
+    const usage = await getStorageUsage(1);
+
+    expect(mockSumActiveTopupGrants).toHaveBeenCalledWith(1, 'storage_gb', expect.anything());
+    expect(usage.limitBytes).toBe(expectedLimit);
+    expect(usage.source).toBe('plan+topup');
+  });
+
+  it('adds active topup grants on top of override limits and updates source', async () => {
+    mockGetEffectiveQuota.mockResolvedValueOnce({ overrideBytes: '5368709120', planLimitBytes: '1073741824' }); // 5 GB override
+    mockGetWorkspaceUsage.mockResolvedValueOnce('0');
+    mockSumActiveTopupGrants.mockResolvedValueOnce(10); // +10 GB
+
+    const expectedLimit = 5368709120 + 10 * BYTES_PER_GB;
+    const usage = await getStorageUsage(1);
+
+    expect(usage.limitBytes).toBe(expectedLimit);
+    expect(usage.source).toBe('override+topup');
   });
 
   it('falls back to the safe 100MB plan limit when no plan resolves', async () => {

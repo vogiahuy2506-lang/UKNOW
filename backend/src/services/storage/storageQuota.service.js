@@ -1,7 +1,9 @@
 import db from '../../config/database.js';
 import { getEffectiveQuota, getWorkspaceUsage } from '../../repositories/storage.repository.js';
+import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
 
 export const DEFAULT_STORAGE_LIMIT_BYTES = 100 * 1024 * 1024;
+export const BYTES_PER_GB = 1073741824;
 
 export class StorageQuotaExceededError extends Error {
   constructor(usage) {
@@ -40,9 +42,17 @@ export async function getStorageUsage(ownerUserId, queryable = db) {
   const usedValue = await getWorkspaceUsage(ownerUserId, queryable);
   const overrideBytes = toSafeNumber(quota?.overrideBytes, 0);
   const planLimitBytes = toSafeNumber(quota?.planLimitBytes, DEFAULT_STORAGE_LIMIT_BYTES);
-  const limitBytes = overrideBytes || planLimitBytes || DEFAULT_STORAGE_LIMIT_BYTES;
+  const baseBytes = overrideBytes || planLimitBytes || DEFAULT_STORAGE_LIMIT_BYTES;
+
+  const topupGb = await sumActiveTopupGrants(ownerUserId, 'storage_gb', queryable);
+  const topupBytes = Math.max(0, Number(topupGb) || 0) * BYTES_PER_GB;
+  const limitBytes = baseBytes + topupBytes;
+
   const usedBytes = toSafeNumber(usedValue, 0);
   const remainingBytes = Math.max(0, limitBytes - usedBytes);
+  const baseSource = overrideBytes ? 'override' : 'plan';
+  const source = topupBytes > 0 ? `${baseSource}+topup` : baseSource;
+
   return {
     usedBytes,
     reservedBytes: 0,
@@ -50,7 +60,7 @@ export async function getStorageUsage(ownerUserId, queryable = db) {
     remainingBytes,
     percent: limitBytes ? Math.round((usedBytes / limitBytes) * 100) : 100,
     overLimit: usedBytes > limitBytes,
-    source: overrideBytes ? 'override' : 'plan',
+    source,
     enforcementEnabled: isStorageQuotaEnforcementEnabled(),
   };
 }

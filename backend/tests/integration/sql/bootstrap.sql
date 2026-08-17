@@ -282,7 +282,7 @@ VALUES
   ('email_campaigns', 'max_email_campaigns', 10000, 1, 0, 0, 200, 1, TRUE, 130),
   ('email_templates', 'max_email_templates', 8000, 1, 0, 0, 500, 1, TRUE, 140),
   ('zalo_templates', 'max_zalo_templates', 8000, 1, 0, 0, 500, 1, TRUE, 150),
-  ('storage_gb', 'storage_limit_bytes', 30000, 1, 1, 1, 20, 1, TRUE, 160);
+  ('storage_gb', 'storage_limit_bytes', 15000, 1, 10, 10, 1000, 10, TRUE, 160);
 
 -- Khớp production (PLAN_SCHEMA_BUOC2): id/plan_id int4, amount numeric,
 -- status/payment_method varchar(50), FK ON DELETE NO ACTION (giữ lịch sử tiền).
@@ -395,7 +395,8 @@ VALUES
   ('email_accounts', 50000, 1, 1, 50,  TRUE,  50),
   ('landing_pages',  30000, 1, 1, 200, TRUE,  60),
   ('chatbots',      100000, 1, 1, 100, TRUE,  70),
-  ('employees',      50000, 1, 1, 100, FALSE, 80);
+  ('employees',      50000, 1, 1, 100, FALSE, 80),
+  ('storage_gb',     25000, 5, 5, 200, TRUE,  90);
 
 CREATE TABLE topup_grants (
   id         BIGSERIAL PRIMARY KEY,

@@ -1930,6 +1930,7 @@ export default {
     sseRetry: 'Thử lại',
     aiPausedHint: 'AI đang tạm dừng',
     aiToggleLabel: 'AI tự động trả lời',
+    aiGroupUnsupported: 'AI chưa hỗ trợ trả lời trong nhóm Zalo',
     zaloNotConnected: 'Chưa kết nối Zalo',
     connectZaloFirst: 'Kết nối tài khoản Zalo trước để nhận tin nhắn',
     manualBadgeTitle: 'Chế độ thủ công',
@@ -4090,6 +4091,7 @@ export default {
     priceFloorFallback: 'Giá đã được đưa về mức tối thiểu so với gói đại trà gần trùng cấu hình.',
     capacityHint: 'Mỗi tài khoản Zalo gửi tối đa ~{n} tin/tháng.',
     storageKbHint: 'Kèm theo: ~{docs} tài liệu kiến thức AI (~{chars} ký tự)',
+    storageNoYearlyDiscount: 'Chiết khấu năm không áp dụng cho dung lượng lưu trữ.',
     items: {
       baseFee: 'Phí nền',
       zaloMessages: 'Tin Zalo / tháng',
@@ -4181,6 +4183,7 @@ export default {
     viewPricing: 'Xem bảng giá',
     stepHint: 'Bước {step}',
     zaloRemaining: 'Còn mua được tối đa {n} tin theo năng lực tài khoản đã kết nối',
+    storageRemaining: 'Còn mua được tối đa {n} GB (giới hạn tự mua 200 GB/tài khoản)',
     zaloConnectFirst: 'Hãy kết nối tài khoản Zalo trước khi mua thêm tin.',
     qtyRequired: 'Vui lòng nhập số lượng',
     qtyBelowMin: 'Phải tối thiểu {n}',
@@ -4203,6 +4206,7 @@ export default {
       landingPages: 'landing page',
       chatbots: 'chatbot',
       employees: 'nhân viên',
+      storageGb: 'GB',
     },
     items: {
       zaloMessages: 'Tin Zalo',
@@ -4213,6 +4217,7 @@ export default {
       landingPages: 'Landing page',
       chatbots: 'Chatbot AI',
       employees: 'Nhân viên',
+      storageGb: 'Dung lượng lưu trữ',
     },
   },
 

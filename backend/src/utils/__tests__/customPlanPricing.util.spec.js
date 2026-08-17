@@ -504,5 +504,26 @@ describe('customPlanPricing.util', () => {
       expect(result.suggestedPlan).toBeNull();
       expect(result.priceFloorApplied).toBe(false);
     });
+
+    it('excludes storage_gb from yearly discount', () => {
+      // base_fee: 199k, zalo_messages: 500 (included=500 -> 0), storage_gb: 11 (included=1, billable=10 -> 10 * 30000 = 300000)
+      // monthlyTotal = 199000 + 300000 = 499000
+      // discountable = 199000 (base_fee) * 12 * 0.8 = 1910400
+      // flat = 300000 * 12 = 3600000
+      // yearlyTotal = 1910400 + 3600000 = 5510400
+      const qty = { ...minQty, storage_gb: 11 };
+      const priced = computeCustomPlanPrice(sampleRows, qty, 'yearly');
+      expect(priced.monthlyTotal).toBe(499000);
+      expect(priced.yearlyTotal).toBe(5510400);
+      expect(priced.total).toBe(5510400);
+    });
+
+    it('caps maxKbDocuments and maxKbExtractedChars at 1000 and 100M when storage is large', () => {
+      const qty = { ...minQty, storage_gb: 1000 };
+      const cols = mapQuantitiesToPlanColumns(sampleRows, qty);
+      expect(cols.storageLimitBytes).toBe(1000 * 1073741824);
+      expect(cols.maxKbDocuments).toBe(1000); // capped from 50000
+      expect(cols.maxKbExtractedChars).toBe(100000000); // capped from 5000000000
+    });
   });
 });

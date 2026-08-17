@@ -7,6 +7,7 @@ import {
   validateTopupQuantities,
   computeTopupPrice,
   checkTopupZaloCapacity,
+  checkTopupStorageCapacity,
   resolveMaxTopupMonths,
   filterAllowedTopupMonths,
   resolveTopupMonths,
@@ -142,6 +143,10 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
   const pricingRows = await findAllTopupPricing();
   const subscription = await getSubscriptionStatus(userId, billingOptions);
   const zaloCapacity = await buildZaloCapacityContext(billingUserId, 0);
+  const storageCapacity = checkTopupStorageCapacity({
+    existingStorageGrants: await sumActiveTopupGrants(billingUserId, 'storage_gb'),
+    requestedQty: 0,
+  });
 
   const maxMonths = resolveMaxTopupMonths(subscription);
   return {
@@ -163,6 +168,7 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
     maxMonths,
     allowedMonths: filterAllowedTopupMonths(maxMonths),
     zaloCapacity,
+    storageCapacity,
     billingUserId,
   };
 }
@@ -213,16 +219,40 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {}, mont
     };
   }
 
-  // Cap zalo maxQty dynamically for UI when quoting
-  const items = priced.items.map((item) => {
-    if (item.itemKey !== 'zalo_messages') return item;
-    const dynamicMax = zaloCapacity.remaining + (validation.quantities.zalo_messages || 0);
-    return {
-      ...item,
-      maxQty: item.maxQty == null
-        ? dynamicMax
-        : Math.min(Number(item.maxQty), dynamicMax),
+  const storageCapacity = checkTopupStorageCapacity({
+    existingStorageGrants: await sumActiveTopupGrants(billingUserId, 'storage_gb'),
+    requestedQty: validation.quantities.storage_gb || 0,
+  });
+  if ((validation.quantities.storage_gb || 0) > 0 && !storageCapacity.ok) {
+    throw {
+      status: 400,
+      message: storageCapacity.message,
+      code: storageCapacity.code,
+      capacity: storageCapacity,
     };
+  }
+
+  // Cap maxQty dynamically for UI when quoting
+  const items = priced.items.map((item) => {
+    if (item.itemKey === 'zalo_messages') {
+      const dynamicMax = zaloCapacity.remaining;
+      return {
+        ...item,
+        maxQty: item.maxQty == null
+          ? dynamicMax
+          : Math.min(Number(item.maxQty), dynamicMax),
+      };
+    }
+    if (item.itemKey === 'storage_gb') {
+      const dynamicMax = storageCapacity.remaining;
+      return {
+        ...item,
+        maxQty: item.maxQty == null
+          ? dynamicMax
+          : Math.min(Number(item.maxQty), dynamicMax),
+      };
+    }
+    return item;
   });
 
   return {
@@ -233,6 +263,7 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {}, mont
     shortfall: priced.shortfall,
     minOrderAmount: priced.minOrderAmount,
     zaloCapacity,
+    storageCapacity,
     billingUserId,
     months: monthsResolved.months,
     maxMonths: monthsResolved.maxMonths,

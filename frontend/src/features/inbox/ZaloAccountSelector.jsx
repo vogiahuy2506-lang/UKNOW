@@ -17,7 +17,7 @@ function pickDefaultAccount(accounts, savedId) {
   return accounts[0]?.id ?? null;
 }
 
-const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplete }) => {
+const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplete, refreshTrigger }) => {
   const navigate = useNavigate();
   const { t } = useI18n();
   const userId = useAuthStore((s) => s.user?.id);
@@ -37,7 +37,7 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
         const mapped = payload.data.accounts.map((account) => ({
           id: account.id,
           displayName: account.displayName || account.display_name || 'Zalo Cá nhân',
-          isActive: account.status === 'connected' && account.hasActiveSession,
+          isActive: account.hasActiveSession,
           hasSession: account.hasActiveSession,
           conversationCount: account.conversationCount,
         }));
@@ -71,7 +71,7 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
   useEffect(() => {
     fetchAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, refreshTrigger]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {

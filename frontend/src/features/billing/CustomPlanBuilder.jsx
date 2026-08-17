@@ -458,9 +458,14 @@ export default function CustomPlanBuilder({
                     </span>
                   </div>
                   {billingPeriod === 'yearly' && quote?.monthlyTotal != null && (
-                    <p className="text-xs text-emerald-700 text-right">
-                      {t('customPlan.equivMonthly', { amount: fmtVnd(Math.round((quote.total || 0) / 12)) })}
-                    </p>
+                    <div className="space-y-0.5 text-right">
+                      <p className="text-xs text-emerald-700">
+                        {t('customPlan.equivMonthly', { amount: fmtVnd(Math.round((quote.total || 0) / 12)) })}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {t('customPlan.storageNoYearlyDiscount')}
+                      </p>
+                    </div>
                   )}
                 </div>
                 )}
