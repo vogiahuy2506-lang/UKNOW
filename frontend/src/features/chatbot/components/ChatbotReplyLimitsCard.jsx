@@ -40,16 +40,18 @@ function toPayload(config) {
   };
 }
 
-export default function ChatbotReplyLimitsCard({ chatbot, onSaved }) {
+export default function ChatbotReplyLimitsCard({ value, onChange }) {
   const { t } = useI18n();
-  const [config, setConfig] = useState(() => toFormConfig(chatbot?.reply_limit_config));
-  const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState(() => toFormConfig(value));
   const [error, setError] = useState('');
 
+  const isInitialized = useRef(false);
   useEffect(() => {
-    setConfig(toFormConfig(chatbot?.reply_limit_config));
-    setError('');
-  }, [chatbot?.id, chatbot?.reply_limit_config]);
+    if (value !== undefined && !isInitialized.current) {
+      setConfig(toFormConfig(value));
+      isInitialized.current = true;
+    }
+  }, [value]);
 
   const enabledCount = useMemo(
     () => WINDOWS.filter(({ id }) => config[id]?.enabled).length,
@@ -57,48 +59,34 @@ export default function ChatbotReplyLimitsCard({ chatbot, onSaved }) {
   );
 
   const updateRule = (windowId, patch) => {
-    setError('');
-    setConfig((prev) => ({
-      ...prev,
-      [windowId]: { ...(prev[windowId] || emptyRule()), ...patch },
-    }));
-  };
+    const newConfig = {
+      ...config,
+      [windowId]: { ...(config[windowId] || emptyRule()), ...patch },
+    };
+    setConfig(newConfig);
 
-  const handleSave = async () => {
+    // Local validation before pushing to parent
+    let hasError = false;
     for (const { id, labelKey } of WINDOWS) {
-      const label = t(labelKey);
-      const rule = config[id];
-      if (rule.enabled) {
+      const rule = newConfig[id];
+      if (rule?.enabled) {
         const limit = Number(rule.limit);
         if (rule.limit === '' || !Number.isInteger(limit) || limit <= 0) {
-          setError(t('chatbot.studio.replyLimitPositiveInteger', { period: label }));
-          return;
+          setError(t('chatbot.studio.replyLimitPositiveInteger', { period: t(labelKey) }));
+          hasError = true;
+          break;
         }
       }
-      if (rule.enabled && rule.action === 'notify' && rule.message.trim().length > 500) {
-        setError(t('chatbot.studio.replyLimitMessageTooLong', { period: label }));
-        return;
+      if (rule?.enabled && rule.action === 'notify' && rule.message.trim().length > 500) {
+        setError(t('chatbot.studio.replyLimitMessageTooLong', { period: t(labelKey) }));
+        hasError = true;
+        break;
       }
     }
-
-    setSaving(true);
-    setError('');
-    try {
-      const replyLimitConfig = toPayload(config);
-      const response = await chatbotApi.updateChatbot(chatbot.id, {
-        reply_limit_config: replyLimitConfig,
-      });
-      const updated = {
-        ...chatbot,
-        ...(response?.data || {}),
-        reply_limit_config: response?.data?.reply_limit_config || replyLimitConfig,
-      };
-      setConfig(toFormConfig(updated.reply_limit_config || replyLimitConfig));
-      onSaved?.(updated);
-    } catch (err) {
-      setError(err?.response?.data?.message || err?.message || t('chatbot.studio.replyLimitSaveFailed'));
-    } finally {
-      setSaving(false);
+    
+    if (!hasError) {
+      setError('');
+      onChange?.(toPayload(newConfig));
     }
   };
 
@@ -189,18 +177,7 @@ export default function ChatbotReplyLimitsCard({ chatbot, onSaved }) {
         })}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex h-9 items-center justify-center rounded-md bg-primary-600 px-4 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60"
-        >
-          {saving ? t('common.saving') : t('chatbot.studio.replyLimitSave')}
-        </button>
-      </div>
+      {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
     </section>
   );
 }

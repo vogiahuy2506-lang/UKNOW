@@ -101,6 +101,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     logo_url: '',
     show_avatar: true,
     suggested_questions: [],
+    reply_limit_config: null,
   });
 
   const [newQuestion, setNewQuestion] = useState('');
@@ -205,6 +206,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         logo_url: ws.logo_url || '',
         show_avatar: ws.show_avatar !== false,
         suggested_questions: ws.suggested_questions || [],
+        reply_limit_config: chatbot.reply_limit_config || null,
       });
       setZaloConnectForm({
         display_name: chatbot.name ? `${chatbot.name} Zalo OA` : '',
@@ -390,6 +392,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         widget_key: chatbot.widget_key || form.widget_key,
         chat_height: '600px',
         suggested_questions: form.suggested_questions || [],
+        reply_limit_config: form.reply_limit_config,
       };
 
       let updatedBot;
@@ -741,8 +744,8 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
             <div className="space-y-5">
 
               <ChatbotReplyLimitsCard
-                chatbot={chatbot}
-                onSaved={(updated) => onUpdate?.(updated)}
+                value={form.reply_limit_config}
+                onChange={(newConfig) => setForm(prev => ({ ...prev, reply_limit_config: newConfig }))}
               />
 
               {profileData && (
