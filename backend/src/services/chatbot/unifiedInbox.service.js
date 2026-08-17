@@ -68,10 +68,17 @@ class UnifiedInboxService {
   _resolveChatbotEnabled(conversation, zaloEnabledMap) {
     if (conversation.type === 'zalo_personal' || conversation.channel === 'zalo_personal') {
       const settingId = Number(conversation.idZaloSetting || conversation.id_zalo_setting);
-      if (!Number.isFinite(settingId)) return false;
-      return zaloEnabledMap.get(settingId) === true;
+      if (!Number.isFinite(settingId) || !settingId) {
+        return { enabled: false, reason: 'no_account' };
+      }
+      const isAccountActive = conversation.channelIsActive === true || conversation.channel_is_active === true;
+      if (!isAccountActive) {
+        return { enabled: false, reason: 'account_disconnected' };
+      }
+      const enabled = zaloEnabledMap.get(settingId) === true;
+      return { enabled, reason: enabled ? null : 'chatbot_off' };
     }
-    return true;
+    return { enabled: true, reason: null };
   }
 
   /**
@@ -114,8 +121,10 @@ class UnifiedInboxService {
           aiPausedAt,
           autoResumeMinutes,
         }),
-        chatbotEnabled: this._resolveChatbotEnabled(conv, zaloEnabledMap),
+        chatbotEnabled: this._resolveChatbotEnabled(conv, zaloEnabledMap).enabled,
+        chatbotDisabledReason: this._resolveChatbotEnabled(conv, zaloEnabledMap).reason,
         idZaloSetting: conv.idZaloSetting || null,
+        channelIsActive: conv.channelIsActive === true,
       };
     });
 
@@ -171,14 +180,20 @@ class UnifiedInboxService {
       });
     }
 
-    let chatbotEnabled = true;
+    let chatbotRes = { enabled: true, reason: null };
     if (conversationType === 'zalo_personal') {
       const zaloSettingId = conversation.id_zalo_setting;
       if (zaloSettingId) {
-        const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
-        chatbotEnabled = accountSettings?.is_enabled === true;
+        const isAccountActive = conversation.channel_is_active === true;
+        if (!isAccountActive) {
+          chatbotRes = { enabled: false, reason: 'account_disconnected' };
+        } else {
+          const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
+          const enabled = accountSettings?.is_enabled === true;
+          chatbotRes = { enabled, reason: enabled ? null : 'chatbot_off' };
+        }
       } else {
-        chatbotEnabled = false;
+        chatbotRes = { enabled: false, reason: 'no_account' };
       }
     }
 
@@ -203,8 +218,10 @@ class UnifiedInboxService {
       lastMessageAt: conversation.last_message_at,
       status: conversation.status,
       ...pauseState,
-      chatbotEnabled,
+      chatbotEnabled: chatbotRes.enabled,
+      chatbotDisabledReason: chatbotRes.reason,
       idZaloSetting: conversation.id_zalo_setting || null,
+      channelIsActive: conversation.channel_is_active === true,
     };
   }
 

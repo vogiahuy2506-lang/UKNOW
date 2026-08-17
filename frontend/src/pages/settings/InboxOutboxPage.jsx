@@ -849,6 +849,11 @@ const InboxPage = () => {
                 <p className="text-sm text-gray-500">
                   {getChannelLabel(selectedConversation.channel, selectedConversation)}
                   <AiPauseStatusText conversation={selectedConversation} t={t} />
+                  {selectedConversation.channelDisplayName && (
+                    <span className="block text-xs text-gray-400 mt-0.5">
+                      {selectedConversation.channelDisplayName}
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -902,16 +907,32 @@ const InboxPage = () => {
                   </button>
                 </div>
                   {selectedConversation.chatbotEnabled === false ? (
-                    <p className="text-[11px] text-amber-700 text-right leading-snug max-w-[220px]">
-                      {t('inbox.aiToggleDisabledHint')}{' '}
-                      <button
-                        type="button"
-                        className="underline font-medium"
-                        onClick={() => window.open('/app/chatbot-studio', '_blank')}
-                      >
-                        {t('inbox.openDeployModal')}
-                      </button>
-                    </p>
+                    <div className="flex flex-col items-end gap-1">
+                      <p className="text-[11px] text-amber-700 text-right leading-snug max-w-[220px]">
+                        {selectedConversation.chatbotDisabledReason === 'account_disconnected'
+                          ? t('inbox.aiDisabledAccountDisconnected', { name: selectedConversation.channelDisplayName || '' })
+                          : selectedConversation.chatbotDisabledReason === 'chatbot_off'
+                          ? t('inbox.aiDisabledChatbotOff', { name: selectedConversation.channelDisplayName || '' })
+                          : t('inbox.aiDisabledNoAccount')}
+                      </p>
+                      {selectedConversation.chatbotDisabledReason === 'account_disconnected' ? (
+                        <button
+                          type="button"
+                          className="text-[11px] text-amber-700 underline font-medium"
+                          onClick={() => window.open('/app/settings/channels', '_blank')}
+                        >
+                          {t('inbox.btnReconnect')}
+                        </button>
+                      ) : selectedConversation.chatbotDisabledReason === 'chatbot_off' ? (
+                        <button
+                          type="button"
+                          className="text-[11px] text-amber-700 underline font-medium"
+                          onClick={() => window.open('/app/chatbot-studio', '_blank')}
+                        >
+                          {t('inbox.openDeployModal')}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : selectedConversation.aiPaused ? (
                     <p className="text-[11px] text-gray-500 text-right leading-snug max-w-[220px]">
                       {!selectedConversation.aiPausedAt

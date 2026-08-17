@@ -525,7 +525,7 @@ class UnifiedInboxRepository {
       return rows[0] || null;
     } else if (conversationType === 'zalo_personal') {
       const { rows } = await db.query(
-        `SELECT zp.*, 'zalo_personal' as channel, COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name
+        `SELECT zp.*, 'zalo_personal' as channel, COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name, CASE WHEN zs.status = 'connected' THEN true ELSE false END as channel_is_active
          FROM zalo_personal_conversations zp
          LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
          WHERE zp.id = $1 AND zp.id_user = $2`,
