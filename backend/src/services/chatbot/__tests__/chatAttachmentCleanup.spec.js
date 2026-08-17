@@ -103,41 +103,67 @@ describe('expires_at catalog cleanup', () => {
   });
 
   it('expired row → unlink file + sidecar + DELETE row', async () => {
-    mockQuery
-      .mockResolvedValueOnce({
-        rows: [{ id: 11, storage_key: 'uploads/1/chat/old.pdf' }],
-      })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] }); // DELETE
+    mockQuery.mockImplementation(async (sql) => {
+      if (/SELECT id, storage_key/i.test(sql)) {
+        return { rows: [{ id: 11, storage_key: 'uploads/1/chat/old.pdf' }], rowCount: 1 };
+      }
+      if (/DELETE FROM chat_attachments/i.test(sql)) {
+        return { rowCount: 1, rows: [] };
+      }
+      return { rows: [], rowCount: 0 };
+    });
 
     const result = await cleanupExpiredCatalogRows();
 
     expect(mockResolveAbs).toHaveBeenCalledWith('uploads/1/chat/old.pdf');
     expect(unlinkSpy).toHaveBeenCalledWith('/abs/uploads/1/chat/old.pdf');
     expect(unlinkSpy).toHaveBeenCalledWith('/abs/uploads/1/chat/old.pdf.txt');
-    expect(mockQuery.mock.calls[1][0]).toMatch(/DELETE FROM chat_attachments WHERE id = \$1/);
-    expect(mockQuery.mock.calls[1][1]).toEqual([11]);
+    const deleteCall = mockQuery.mock.calls.find(([sql]) => sql.includes('DELETE FROM chat_attachments'));
+    expect(deleteCall).toBeDefined();
+    expect(deleteCall[1]).toEqual([11]);
     expect(result).toMatchObject({ expiredScanned: 1, rowsDeleted: 1, filesDeleted: 1 });
   });
 
+  it('expired row with active message reference is SKIPPED from deletion', async () => {
+    mockQuery.mockImplementation(async (sql) => {
+      if (/SELECT id, storage_key/i.test(sql)) {
+        return { rows: [{ id: 11, storage_key: 'uploads/1/chat/referenced.pdf' }], rowCount: 1 };
+      }
+      if (/webchat_messages/i.test(sql)) {
+        return { rows: [{ '?column?': 1 }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const result = await cleanupExpiredCatalogRows();
+    expect(unlinkSpy).not.toHaveBeenCalled();
+    expect(result.rowsDeleted).toBe(0);
+  });
+
   it('no expired rows → nothing unlinked', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValue({ rows: [] });
     const result = await cleanupExpiredCatalogRows();
     expect(unlinkSpy).not.toHaveBeenCalled();
     expect(result.rowsDeleted).toBe(0);
   });
 
   it('ENOENT on unlink is swallowed; row still deleted', async () => {
-    mockQuery
-      .mockResolvedValueOnce({
-        rows: [{ id: 3, storage_key: 'uploads/1/chat/gone.pdf' }],
-      })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+    mockQuery.mockImplementation(async (sql) => {
+      if (/SELECT id, storage_key/i.test(sql)) {
+        return { rows: [{ id: 3, storage_key: 'uploads/1/chat/gone.pdf' }], rowCount: 1 };
+      }
+      if (/DELETE FROM chat_attachments/i.test(sql)) {
+        return { rowCount: 1, rows: [] };
+      }
+      return { rows: [], rowCount: 0 };
+    });
 
     unlinkSpy.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
 
     const result = await cleanupExpiredCatalogRows();
     expect(result.rowsDeleted).toBe(1);
-    expect(mockQuery.mock.calls[1][0]).toMatch(/DELETE FROM chat_attachments/);
+    const deleteCall = mockQuery.mock.calls.find(([sql]) => sql.includes('DELETE FROM chat_attachments'));
+    expect(deleteCall).toBeDefined();
   });
 
   it('catalog SELECT failure throws (fail-closed, no orphan pass)', async () => {

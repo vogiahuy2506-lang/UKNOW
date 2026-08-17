@@ -47,12 +47,22 @@ router.post(
   upload.single('file'),
   chatbotController.uploadPublicChatAttachment.bind(chatbotController)
 );
+router.delete(
+  '/custom-chatbot/:widgetKey/attachment',
+  publicChatLimiter,
+  chatbotController.deletePublicChatAttachment.bind(chatbotController)
+);
 router.post(
   '/custom-chatbot/id/:chatbotId/attachment',
   publicUploadLimiter,
   workspaceUploadCapacityGuard,
   upload.single('file'),
   chatbotController.uploadPublicChatAttachmentById.bind(chatbotController)
+);
+router.delete(
+  '/custom-chatbot/id/:chatbotId/attachment',
+  publicChatLimiter,
+  chatbotController.deletePublicChatAttachmentById.bind(chatbotController)
 );
 
 // Get messages for polling agent replies (requires sessionId)

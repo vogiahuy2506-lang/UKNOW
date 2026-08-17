@@ -97,6 +97,14 @@ export async function cleanupExpiredCatalogRows() {
   let filesDeleted = 0;
 
   for (const row of rows) {
+    const referenced = await isKeyReferenced(row.storage_key);
+    if (referenced) {
+      console.warn(
+        `[ChatAttachmentCleanup] CẢNH BÁO: Catalog row ${row.id} (${row.storage_key}) đã hết hạn nhưng đang được tin nhắn tham chiếu! Bỏ qua không xóa.`
+      );
+      continue;
+    }
+
     const abs = uploadController.resolveAbsolutePathFromKey(row.storage_key);
     let removed = false;
     if (abs) {

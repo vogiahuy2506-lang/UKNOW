@@ -359,8 +359,20 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
     }
   };
 
-  const removePendingAttachment = (index) => {
+  const removePendingAttachment = async (index) => {
+    const toRemove = pendingAttachments[index];
     setPendingAttachments(prev => prev.filter((_, i) => i !== index));
+    if (toRemove?.ref && chatbot?.id) {
+      try {
+        await chatbotApi.deleteChatAttachment({
+          ref: toRemove.ref,
+          chatbot_id: chatbot.id,
+        });
+        notifyStorageQuotaRefresh();
+      } catch (err) {
+        console.warn('[ChatbotStudio] Không thể xóa tệp đính kèm tạm:', err.message);
+      }
+    }
   };
 
   const handleSend = async () => {

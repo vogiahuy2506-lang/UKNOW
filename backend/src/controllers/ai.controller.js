@@ -1315,6 +1315,35 @@ class AiController {
   }
 
   /**
+   * Delete chat attachment (when user clicks 'X' before sending)
+   * DELETE /api/ai/chat-attachment
+   */
+  async deleteChatAttachment(req, res) {
+    try {
+      const ref = req.body?.ref || req.query?.ref || req.params?.ref;
+      const chatbotId = parseInt(req.body?.chatbot_id || req.body?.chatbotId || req.query?.chatbot_id || req.query?.chatbotId, 10);
+      if (!ref) {
+        return res.status(400).json({ success: false, message: 'ref is required' });
+      }
+
+      await chatAttachmentService.deleteChatAttachment({
+        ref,
+        chatbotId,
+        bind: { uid: req.user.id },
+        ownerUserId: req.user.id,
+      });
+
+      return res.json({ success: true, message: 'Đã xóa tệp đính kèm' });
+    } catch (error) {
+      console.error('[ChatAttachment] delete error:', error);
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || 'Không thể xóa tệp đính kèm',
+      });
+    }
+  }
+
+  /**
    * Get messages for a conversation
    */
   async getChatbotStudioMessages(req, res) {

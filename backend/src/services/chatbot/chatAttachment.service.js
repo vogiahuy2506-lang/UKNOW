@@ -10,6 +10,11 @@ import {
   markDeletedAfterUnlink,
   registerWrittenStorageObject,
 } from '../storage/storageObject.service.js';
+import {
+  findStorageObjectByKey,
+  markStorageObjectCleanupPending,
+} from '../../repositories/storage.repository.js';
+import { isStorageKeyReferencedByMessage } from '../storage/storageReference.service.js';
 
 export const MAX_FILES_PER_MESSAGE = 3;
 export const MAX_FILE_BYTES = MAX_UPLOAD_FILE_BYTES;
@@ -20,6 +25,7 @@ export const PDF_MAX_PAGES = 30;
 export const PARSE_TIMEOUT_MS = 20_000;
 export const MAX_IMAGES_LATEST_TURN = 2;
 export const CHAT_ATTACHMENT_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+export const CHAT_ATTACHMENT_TEMP_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const CHAT_ATTACHMENT_SOURCES = Object.freeze({
   WEB: 'chatbot_web',
@@ -203,7 +209,7 @@ export async function persistChatBlob({
   }
 
   const displayName = sanitizeDisplayName(originalName);
-  const expiresAt = new Date(Date.now() + CHAT_ATTACHMENT_TTL_MS);
+  const expiresAt = new Date(Date.now() + CHAT_ATTACHMENT_TEMP_TTL_MS);
   const resolvedSource = resolveSource({ source });
 
   const storageObject = await registerWrittenStorageObject({
@@ -211,7 +217,7 @@ export async function persistChatBlob({
     actorUserId,
     storageKey: key,
     category: 'chat',
-    state: 'active',
+    state: 'temp',
     sizeBytes: await getPhysicalSize([absPath, `${absPath}.txt`]),
     expiresAt,
     referenceType: 'chat_attachment',
@@ -339,6 +345,75 @@ export function resolveRef(ref, { chatbotId, uid = null, sid = null } = {}) {
 
 export function signRef(key, { chatbotId, uid = null, sid = null } = {}) {
   return signChatAttachmentRef(key, { chatbotId, uid, sid });
+}
+
+/**
+ * Explicitly delete an unreferenced chat attachment when user clicks 'X'.
+ * Refuses deletion (409) if the file has already been referenced in a message.
+ */
+export async function deleteChatAttachment({
+  ref,
+  chatbotId,
+  bind = {},
+  ownerUserId = null,
+}) {
+  if (!ref) {
+    throw httpError('ref is required', 400);
+  }
+  let storageKey;
+  try {
+    storageKey = resolveRef(ref, { chatbotId, uid: bind.uid, sid: bind.sid });
+  } catch (err) {
+    throw httpError(err.message || 'Chữ ký tệp không hợp lệ hoặc đã hết hạn', err.status || 403);
+  }
+
+  // Refuse if already referenced by any chat message
+  const referenced = await isStorageKeyReferencedByMessage(storageKey);
+  if (referenced) {
+    throw httpError('Tệp đã được gửi trong tin nhắn, không thể xoá', 409);
+  }
+
+  const so = await findStorageObjectByKey(storageKey);
+  if (so) {
+    if (ownerUserId && Number(so.owner_user_id) !== Number(ownerUserId)) {
+      throw httpError('Bạn không có quyền xoá tệp này', 403);
+    }
+    await markStorageObjectCleanupPending(so.id);
+  }
+
+  // Remove from catalog
+  await db.query(`DELETE FROM chat_attachments WHERE storage_key = $1`, [storageKey]);
+
+  return { success: true, message: 'Đã đánh dấu xoá tệp' };
+}
+
+/**
+ * Promote attachments from temp -> active when message is actually sent.
+ * Resets TTL to 90 days.
+ */
+export async function promoteChatAttachments(attachments, { expiresAt = null } = {}) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return;
+  const targetExpiresAt = expiresAt || new Date(Date.now() + CHAT_ATTACHMENT_TTL_MS);
+  for (const item of attachments) {
+    const key = typeof item === 'string' ? item : item?.key || item?.storage_key;
+    if (!key) continue;
+
+    await db.query(
+      `UPDATE storage_objects
+          SET state = 'active',
+              expires_at = $2,
+              updated_at = NOW()
+        WHERE storage_key = $1 AND state = 'temp'`,
+      [key, targetExpiresAt]
+    );
+
+    await db.query(
+      `UPDATE chat_attachments
+          SET expires_at = $2
+        WHERE storage_key = $1`,
+      [key, targetExpiresAt]
+    );
+  }
 }
 
 function mimeFromKey(storageKey) {
@@ -650,11 +725,15 @@ const chatAttachmentService = {
   presentAttachmentsForClient,
   buildAiParts,
   buildAiPartsFromHistory,
+  deleteChatAttachment,
+  promoteChatAttachments,
   MAX_FILES_PER_MESSAGE,
   MAX_FILE_BYTES,
   MAX_IMAGE_BYTES,
   TEXT_PER_FILE_CHARS,
   TEXT_BUDGET_CHARS,
+  CHAT_ATTACHMENT_TTL_MS,
+  CHAT_ATTACHMENT_TEMP_TTL_MS,
   CHAT_ATTACHMENT_SOURCES,
 };
 

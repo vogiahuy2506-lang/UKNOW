@@ -8,6 +8,7 @@ const client = {
   release: jest.fn(),
 };
 const acquireStorageQuotaLock = jest.fn();
+const activateStorageObject = jest.fn();
 const findStorageObjectById = jest.fn();
 const listStorageObjectsForReconcile = jest.fn();
 const listTrackedStorageKeys = jest.fn();
@@ -24,6 +25,7 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 }));
 jest.unstable_mockModule('../../../repositories/storage.repository.js', () => ({
   acquireStorageQuotaLock,
+  activateStorageObject,
   findStorageObjectById,
   listStorageObjectsForReconcile,
   listTrackedStorageKeys,

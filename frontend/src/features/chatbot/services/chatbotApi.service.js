@@ -39,6 +39,10 @@ const chatbotApiService = {
     });
   },
 
+  deleteChatAttachment(payload) {
+    return api.delete('/ai/chat-attachment', { data: payload });
+  },
+
   uploadPublicChatAttachment(chatbotId, formData) {
     return api.post(`/chatbot-public/custom-chatbot/id/${chatbotId}/attachment`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -46,11 +50,19 @@ const chatbotApiService = {
     });
   },
 
+  deletePublicChatAttachment(chatbotId, payload) {
+    return api.delete(`/chatbot-public/custom-chatbot/id/${chatbotId}/attachment`, { data: payload });
+  },
+
   uploadPublicChatAttachmentByWidgetKey(widgetKey, formData) {
     return api.post(`/chatbot-public/custom-chatbot/${widgetKey}/attachment`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: AI_CHAT_TIMEOUT_MS,
     });
+  },
+
+  deletePublicChatAttachmentByWidgetKey(widgetKey, payload) {
+    return api.delete(`/chatbot-public/custom-chatbot/${widgetKey}/attachment`, { data: payload });
   },
 
   // Chatbot Studio Conversations

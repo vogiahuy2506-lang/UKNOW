@@ -49,6 +49,8 @@ jest.unstable_mockModule('../../storage/storageObject.service.js', () => ({
 const {
   persistChatBlob,
   storeChatFile,
+  deleteChatAttachment,
+  promoteChatAttachments,
   CHAT_ATTACHMENT_SOURCES,
 } = await import('../chatAttachment.service.js');
 
@@ -63,7 +65,7 @@ describe('persistChatBlob / storeChatFile catalog', () => {
     mockResolveAbs.mockClear();
   });
 
-  it('persistChatBlob inserts chat_attachments with storage_key and expires_at', async () => {
+  it('persistChatBlob inserts chat_attachments with storage_key and 24h temp expires_at', async () => {
     const buf = Buffer.from('%PDF-1.4 hello');
     const result = await persistChatBlob({
       buffer: buf,
@@ -83,8 +85,15 @@ describe('persistChatBlob / storeChatFile catalog', () => {
     expect(params[2]).toBe(result._key);
     expect(params[7]).toBeInstanceOf(Date);
     const ttlMs = params[7].getTime() - Date.now();
-    expect(ttlMs).toBeGreaterThan(89 * 24 * 60 * 60 * 1000);
-    expect(ttlMs).toBeLessThan(91 * 24 * 60 * 60 * 1000);
+    expect(ttlMs).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(ttlMs).toBeLessThan(25 * 60 * 60 * 1000);
+
+    expect(mockRegisterStorage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: 'temp',
+        ownerUserId: 42,
+      })
+    );
   });
 
   it('storeChatFile with bind.sid uses chatbot_web source', async () => {
@@ -123,5 +132,45 @@ describe('persistChatBlob / storeChatFile catalog', () => {
       ownerUserId: 1,
       source: 'ai_assistant',
     })).rejects.toThrow('db down');
+  });
+
+  describe('promoteChatAttachments', () => {
+    it('promotes storage objects from temp to active with 90d TTL', async () => {
+      await promoteChatAttachments([{ key: 'uploads/42/chat/test.pdf' }]);
+      expect(mockQuery).toHaveBeenCalled();
+      const calls = mockQuery.mock.calls;
+      const updateStorage = calls.find(([sql]) => sql.includes('UPDATE storage_objects'));
+      expect(updateStorage).toBeDefined();
+      expect(updateStorage[0]).toMatch(/SET state = 'active'/);
+      expect(updateStorage[1][0]).toBe('uploads/42/chat/test.pdf');
+    });
+  });
+
+  describe('deleteChatAttachment', () => {
+    it('throws 409 if file is already referenced by a message', async () => {
+      // Mock db.query so isKeyReferenced returns a row
+      mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }], rowCount: 1 });
+      const stored = await storeChatFile({
+        buffer: Buffer.from('%PDF-1.4 hello'),
+        originalName: 'a.pdf',
+        mimetype: 'application/pdf',
+        ownerUserId: 7,
+        chatbotId: 9,
+        bind: { uid: 7 },
+      });
+
+      mockQuery.mockReset();
+      // isKeyReferenced query returns 1 row (referenced)
+      mockQuery.mockResolvedValueOnce({ rows: [{ exists: 1 }], rowCount: 1 });
+
+      await expect(
+        deleteChatAttachment({
+          ref: stored.ref,
+          chatbotId: 9,
+          bind: { uid: 7 },
+          ownerUserId: 7,
+        })
+      ).rejects.toThrow(/đã được gửi trong tin nhắn/);
+    });
   });
 });

@@ -71,6 +71,11 @@ router.post(
   upload.single('file'),
   aiController.uploadChatAttachment.bind(aiController)
 );
+router.delete(
+  '/chat-attachment',
+  aiLimiter,
+  aiController.deleteChatAttachment.bind(aiController)
+);
 
 // Chatbot Studio Conversations
 router.get('/chatbot-studio/conversations', aiController.getChatbotStudioConversations.bind(aiController));

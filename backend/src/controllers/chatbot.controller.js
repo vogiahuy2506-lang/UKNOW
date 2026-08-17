@@ -1148,6 +1148,64 @@ class ChatbotController {
     }
   }
 
+  async _deletePublicAttachmentCore(req, res, chatbot) {
+    if (!chatbot) {
+      return res.status(404).json({ success: false, message: 'Chatbot không tồn tại' });
+    }
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || req.query?.sessionId || req.query?.session_id || '').trim();
+    const ref = req.body?.ref || req.query?.ref || req.params?.ref;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, message: 'sessionId is required' });
+    }
+    if (!ref) {
+      return res.status(400).json({ success: false, message: 'ref is required' });
+    }
+
+    await chatAttachmentService.deleteChatAttachment({
+      ref,
+      chatbotId: chatbot.id,
+      bind: { sid: sessionId },
+      ownerUserId: chatbot.id_user,
+    });
+
+    return res.json({ success: true, message: 'Đã xóa tệp đính kèm' });
+  }
+
+  async deletePublicChatAttachment(req, res) {
+    try {
+      const { widgetKey } = req.params;
+      const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
+      return await this._deletePublicAttachmentCore(req, res, chatbot);
+    } catch (err) {
+      console.error('[ChatAttachment] public delete error:', err);
+      return res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Không thể xóa tệp đính kèm',
+      });
+    }
+  }
+
+  async deletePublicChatAttachmentById(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId, 10);
+      let chatbot = null;
+      if (!Number.isNaN(id)) {
+        chatbot = await chatbotRepository.findChatbotById(id);
+      }
+      if (!chatbot) {
+        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
+      }
+      return await this._deletePublicAttachmentCore(req, res, chatbot);
+    } catch (err) {
+      console.error('[ChatAttachment] public delete by id error:', err);
+      return res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Không thể xóa tệp đính kèm',
+      });
+    }
+  }
+
   // ── Custom Chatbots (Studio) ──────────────────────────────────────
 
   async getCustomChatbot(req, res) {
@@ -1603,6 +1661,10 @@ class ChatbotController {
           content: userContent,
           attachments: storedAttachments,
         });
+
+        if (storedAttachments.length > 0) {
+          await chatAttachmentService.promoteChatAttachments(storedAttachments);
+        }
 
         // Prefer first visitor snippet as display name when still generic
         await chatbotRepository.maybeSetWebChatVisitorNameFromMessage(

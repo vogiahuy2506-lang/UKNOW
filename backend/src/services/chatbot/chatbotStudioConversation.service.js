@@ -89,6 +89,10 @@ class ChatbotStudioConversationService {
       metadata,
     });
 
+    if (storedAttachments.length > 0) {
+      await chatAttachmentService.promoteChatAttachments(storedAttachments);
+    }
+
     // Update conversation
     const title = conversation.title === 'Cuộc trò chuyện mới' && role === 'user'
       ? content.substring(0, 50) + (content.length > 50 ? '...' : '')

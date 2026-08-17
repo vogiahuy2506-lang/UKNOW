@@ -3,6 +3,7 @@ import path from 'path';
 import db from '../../config/database.js';
 import {
   acquireStorageQuotaLock,
+  activateStorageObject,
   findStorageObjectById,
   listStorageObjectsForReconcile,
   listTrackedStorageKeys,
@@ -169,6 +170,23 @@ async function processLedgerRow(row, roots, metrics, now) {
     && row.expires_at
     && new Date(row.expires_at).getTime() <= now.getTime();
   if (expiredTemp) {
+    if (row.storage_key) {
+      try {
+        const isReferenced = await isStorageKeyReferencedByMessage(row.storage_key);
+        if (isReferenced) {
+          console.warn(`[StorageReconcile] CẢNH BÁO: Tệp temp quá hạn (${row.storage_key}, id=${row.id}) đang được tin nhắn tham chiếu! Có thể promote bị sót. Đang tự động promote lên active thay vì xóa.`);
+          await activateStorageObject({
+            id: row.id,
+            storageKey: row.storage_key,
+            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn(`[StorageReconcile] Failed to check message reference for ${row.storage_key}:`, err.message);
+      }
+    }
+
     metrics.expiredTempScanned += 1;
     try {
       await unlinkAll(cleanupPaths(row, roots));

@@ -116,6 +116,21 @@ export default function PublicChatbotPage() {
     }
   };
 
+  const handleRemoveAttachment = async (idx) => {
+    const toRemove = pendingAttachments[idx];
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== idx));
+    if (toRemove?.ref && chatbotId && sessionId.current) {
+      try {
+        await chatbotApi.deletePublicChatAttachment(chatbotId, {
+          ref: toRemove.ref,
+          sessionId: sessionId.current,
+        });
+      } catch (err) {
+        console.warn('[PublicChatbot] Không thể xóa tệp đính kèm tạm:', err.message);
+      }
+    }
+  };
+
   const sendMessage = async (text) => {
     if ((!text?.trim() && pendingAttachments.length === 0) || isTyping || uploading) return;
 
@@ -324,7 +339,7 @@ export default function PublicChatbotPage() {
                 <div key={att.ref || idx} className="text-xs px-2 py-1 rounded-lg bg-slate-100 flex items-center gap-1">
                   <span className="truncate max-w-[140px]">{att.displayName || att.name}</span>
                   <span className="text-slate-400">{formatFileSize(att.size)}</span>
-                  <button type="button" className="text-slate-500" onClick={() => setPendingAttachments((p) => p.filter((_, i) => i !== idx))}>×</button>
+                  <button type="button" className="text-slate-500" onClick={() => handleRemoveAttachment(idx)}>×</button>
                 </div>
               ))}
             </div>
