@@ -2173,6 +2173,9 @@ export default {
     pricingDetails: 'Chi tiết giá tiền',
     vatExempt: 'Không chịu thuế GTGT',
     securityBadge: 'Bảo mật SSL 256-bit & Kích hoạt tự động',
+    trustBadge1: 'Thanh toán an toàn qua PayOS, mã hoá SSL 256-bit',
+    trustBadge2: 'Kích hoạt gói ngay khi thanh toán thành công',
+    trustBadge3: 'Đội ngũ hỗ trợ sẵn sàng 24/7',
   },
 
   invoicePage: {

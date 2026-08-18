@@ -250,7 +250,7 @@ export default function InvoiceVatForm({
                   value={taxCode}
                   onChange={(e) => setTaxCode(e.target.value)}
                   onBlur={() => handleBlur('taxCode')}
-                  placeholder={t('invoiceVat.taxCode') + ' *'}
+                  placeholder={t('invoiceVat.taxCode')}
                   maxLength={14}
                   autoComplete="off"
                   aria-invalid={Boolean(touched.taxCode && errors.taxCode)}
@@ -265,7 +265,7 @@ export default function InvoiceVatForm({
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   onBlur={() => handleBlur('companyName')}
-                  placeholder={t('invoiceVat.companyName') + ' *'}
+                  placeholder={t('invoiceVat.companyName')}
                   autoComplete="organization"
                   aria-invalid={Boolean(touched.companyName && errors.companyName)}
                 />
@@ -293,7 +293,7 @@ export default function InvoiceVatForm({
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   onBlur={() => handleBlur('fullName')}
-                  placeholder={t('invoiceVat.fullName') + ' *'}
+                  placeholder={t('invoiceVat.fullName')}
                   autoComplete="name"
                   aria-invalid={Boolean(touched.fullName && errors.fullName)}
                 />
@@ -307,7 +307,7 @@ export default function InvoiceVatForm({
                   value={idNumber}
                   onChange={(e) => setIdNumber(e.target.value)}
                   onBlur={() => handleBlur('idNumber')}
-                  placeholder={t('invoiceVat.idNumber') + ' *'}
+                  placeholder={t('invoiceVat.idNumber')}
                   maxLength={12}
                   autoComplete="off"
                   aria-invalid={Boolean(touched.idNumber && errors.idNumber)}

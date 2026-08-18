@@ -2142,6 +2142,9 @@ export default {
     pricingDetails: 'Price details',
     vatExempt: 'VAT exempt',
     securityBadge: '256-bit SSL Security & Instant Activation',
+    trustBadge1: 'Secure payment via PayOS, 256-bit SSL encryption',
+    trustBadge2: 'Plan activates instantly after payment',
+    trustBadge3: '24/7 support team ready to help',
   },
 
   invoicePage: {

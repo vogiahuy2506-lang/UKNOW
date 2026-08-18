@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { HiArrowLeft, HiOutlineDuplicate, HiOutlineCheck } from 'react-icons/hi';
+import {
+    HiArrowLeft,
+    HiOutlineDuplicate,
+    HiOutlineCheck,
+    HiOutlineShieldCheck,
+    HiOutlineLightningBolt,
+    HiOutlineChatAlt2,
+} from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
@@ -377,10 +384,10 @@ const CheckoutPage = () => {
                 {/* Main Card */}
                 {currentStep === 'info' ? (
                     <div className="bg-white/80 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-4 md:p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
 
-                            {/* Cột Trái (7/12): Form VAT */}
-                            <div className="md:col-span-7">
+                            {/* Cột Trái (7/12): Form VAT + lý do an tâm thanh toán */}
+                            <div className="md:col-span-7 flex flex-col gap-3">
                                 {invoiceVatUiEnabled && (
                                     <InvoiceVatForm
                                         netAmount={finalAmount}
@@ -390,6 +397,23 @@ const CheckoutPage = () => {
                                         onChange={setInvoiceInfo}
                                     />
                                 )}
+
+                                <div className="flex-1" />
+
+                                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3.5 space-y-2">
+                                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                                        <HiOutlineShieldCheck className="w-4 h-4 text-orange-500 shrink-0" />
+                                        <span>{t('checkout.trustBadge1')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                                        <HiOutlineLightningBolt className="w-4 h-4 text-orange-500 shrink-0" />
+                                        <span>{t('checkout.trustBadge2')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                                        <HiOutlineChatAlt2 className="w-4 h-4 text-orange-500 shrink-0" />
+                                        <span>{t('checkout.trustBadge3')}</span>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Cột Phải (5/12): Tóm tắt đơn hàng & Voucher & Chi tiết giá */}
@@ -453,7 +477,7 @@ const CheckoutPage = () => {
                                                 disabled={voucherLoading || !voucherCode.trim()}
                                                 className="btn btn-primary text-xs px-3 py-1.5 shrink-0 disabled:opacity-50"
                                             >
-                                                {voucherLoading ? '...' : t('checkout.apply')}
+                                                {voucherLoading ? '...' : t('checkout.applyVoucher')}
                                             </button>
                                         )}
                                     </div>
@@ -496,7 +520,7 @@ const CheckoutPage = () => {
                                     </div>
 
                                     <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 font-bold text-slate-900">
-                                        <span className="text-sm">{t('checkout.totalAmount')}</span>
+                                        <span className="text-sm">{t('checkout.total')}</span>
                                         <span className="text-xl font-black text-orange-600">{fmtVnd(payableAmount)}</span>
                                     </div>
                                 </div>
