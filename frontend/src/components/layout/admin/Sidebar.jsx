@@ -54,6 +54,7 @@ const superAdminMenuItems = (t) => [
   { name: t('nav.planManagement'), section: t('nav.adminNavBusiness'), path: '/admin/plans', icon: HiOutlineCurrencyDollar },
   { name: t('nav.voucherManagement'), section: t('nav.adminNavBusiness'), path: '/admin/vouchers', icon: HiOutlineTicket },
   { name: t('nav.orders'), section: t('nav.adminNavBusiness'), path: '/admin/orders', icon: HiOutlineClipboardList },
+  { name: t('nav.einvoices'), section: t('nav.adminNavBusiness'), path: '/admin/einvoices', icon: HiOutlineDocumentText },
   { name: t('nav.serverMonitoring'), section: t('nav.adminNavMonitoring'), path: '/admin/health/system', icon: HiOutlineServer },
   { name: t('nav.alertCenter'), section: t('nav.adminNavMonitoring'), path: '/admin/alerts', icon: HiOutlineBell },
   { name: t('nav.activationFunnel'), section: t('nav.adminNavOverview'), path: '/admin/funnel', icon: HiOutlineFilter },

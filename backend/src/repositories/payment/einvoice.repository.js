@@ -5,6 +5,28 @@ export const RETRYABLE_MATBAO_ERROR_CODES = new Set([
   'timeout', 'network',
 ]);
 
+/**
+ * Mệnh đề phân loại hoá đơn kẹt, dùng chung cho cảnh báo (alert.repository.js) và
+ * trang admin (adminEinvoice.repository.js). Một định nghĩa, hai nơi dùng — chép
+ * lần hai thì khi RETRYABLE_MATBAO_ERROR_CODES đổi, hai chỗ sẽ báo hai con số khác nhau.
+ *
+ * Danh sách mã lỗi được nội suy thẳng vào chuỗi SQL: chúng là hằng số tĩnh trong
+ * chính file này, KHÔNG phải dữ liệu người dùng, nên không có đường tiêm SQL. Nhờ vậy
+ * mệnh đề chỉ còn đúng MỘT tham số và cắm được vào câu query nào cũng dễ.
+ *
+ * @param {string} staleHoursPlaceholder — vị trí tham số của caller, ví dụ '$1' hoặc '$5'
+ */
+export function stuckEinvoiceKindSql(staleHoursPlaceholder) {
+  const codes = [...RETRYABLE_MATBAO_ERROR_CODES].map((c) => `'${c}'`).join(',');
+  return `CASE
+  WHEN e.status = 'cqt_rejected' THEN 'dead'
+  WHEN e.status = 'failed'
+    AND (e.error_code IS NULL OR NOT (e.error_code = ANY(ARRAY[${codes}]::text[]))) THEN 'dead'
+  WHEN e.updated_at <= NOW() - (${staleHoursPlaceholder} || ' hours')::interval THEN 'stalled'
+  ELSE NULL
+END`;
+}
+
 const LEASE_MINUTES = () => {
   const n = Number(process.env.EINVOICE_PROCESSING_LEASE_MINUTES);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 15;

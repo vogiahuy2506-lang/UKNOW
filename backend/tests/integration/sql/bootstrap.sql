@@ -1610,6 +1610,15 @@ VALUES (
   '{"jobCode": "einvoice_series_check"}'::jsonb
 );
 
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'einvoice_stuck',
+  'Hoá đơn điện tử kẹt — đã thu tiền, chưa xuất được',
+  'Hoá đơn hỏng hẳn (cron không tự thử lại) hoặc đọng quá lâu ở trạng thái chờ',
+  1, NULL, 'email', 'critical', 720,
+  '{"staleHours": 6}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,

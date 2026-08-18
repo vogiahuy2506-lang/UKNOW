@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { stuckEinvoiceKindSql } from '../payment/einvoice.repository.js';
 
 export async function listRules() {
   const { rows } = await db.query(
@@ -213,6 +214,57 @@ export async function metricLatestEinvoiceSeries(jobCode = 'einvoice_series_chec
     ? String(res.error)
     : (rows[0].status === 'failure' ? (rows[0].error_message || 'Cron job failed') : null);
   return { cLai, yearMismatch, notFound, error, found: true, result: res };
+}
+
+/**
+ * Hoá đơn điện tử đã thu tiền nhưng chưa phát hành được, chia 2 nhóm:
+ *
+ * - `dead`: cron retry KHÔNG BAO GIỜ nhặt lại. Gồm `cqt_rejected` (không nằm trong
+ *   mệnh đề claim) và `failed` với mã lỗi ngoài `RETRYABLE_MATBAO_ERROR_CODES`
+ *   (matbaoInvoice.service.js:450 bỏ qua rồi `continue`). Không giới hạn tuổi:
+ *   nghĩa vụ xuất hoá đơn không hết hạn theo thời gian.
+ * - `stalled`: về lý thuyết cron nhặt được nhưng nằm im quá lâu — dấu hiệu worker
+ *   tắt, hết lease, hoặc backoff chồng chất.
+ *
+ * Danh sách mã retry được giữ ở einvoice.repository.js; truyền vào để tránh import
+ * chéo giữa hai repository.
+ */
+export async function metricStuckEinvoices(staleHours) {
+  const { rows } = await db.query(
+    `WITH classified AS (
+       SELECT
+         e.id,
+         e.status,
+         e.error_code,
+         o.order_code,
+         ${stuckEinvoiceKindSql('$1')} AS kind
+       FROM einvoices e
+       JOIN orders o ON o.id = e.order_id
+       WHERE e.status IN ('pending', 'processing', 'failed', 'cqt_rejected')
+     ),
+     flagged AS (
+       SELECT * FROM classified WHERE kind IS NOT NULL
+     )
+     SELECT
+       (SELECT COUNT(*)::int FROM flagged WHERE kind = 'dead')    AS dead_count,
+       (SELECT COUNT(*)::int FROM flagged WHERE kind = 'stalled') AS stalled_count,
+       (SELECT COALESCE(json_agg(s), '[]'::json) FROM (
+          SELECT order_code AS "orderCode", status, error_code AS "errorCode", kind
+          FROM flagged
+          ORDER BY kind ASC, id ASC
+          LIMIT 5
+        ) s) AS samples`,
+    [String(staleHours)]
+  );
+  const r = rows[0] || {};
+  const deadCount = Number(r.dead_count || 0);
+  const stalledCount = Number(r.stalled_count || 0);
+  return {
+    deadCount,
+    stalledCount,
+    total: deadCount + stalledCount,
+    samples: Array.isArray(r.samples) ? r.samples : [],
+  };
 }
 
 export async function metricAiTokenSpike() {

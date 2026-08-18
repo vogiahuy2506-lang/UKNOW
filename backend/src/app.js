@@ -46,6 +46,7 @@ import adminStatsRoutes from './routes/adminStats.routes.js';
 import adminPlansRoutes from './routes/adminPlans.routes.js';
 import adminMembersRoutes from './routes/adminMembers.routes.js';
 import adminOrdersRoutes from './routes/adminOrders.routes.js';
+import adminEinvoiceRoutes from './routes/adminEinvoice.routes.js';
 import adminVouchersRoutes from './routes/adminVouchers.routes.js';
 import adminSystemRoutes from './routes/adminSystem.routes.js';
 import adminDeliveryMonitorRoutes from './routes/adminDeliveryMonitor.routes.js';
@@ -182,6 +183,7 @@ export function createApp() {
   app.use('/api/admin/plans', adminPlansRoutes);
   app.use('/api/admin/members', adminMembersRoutes);
   app.use('/api/admin/orders', adminOrdersRoutes);
+  app.use('/api/admin/einvoices', adminEinvoiceRoutes);
   app.use('/api/admin/vouchers', adminVouchersRoutes);
   app.use('/api/admin/system', adminSystemRoutes);
   app.use('/api/admin/delivery-monitor', adminDeliveryMonitorRoutes);

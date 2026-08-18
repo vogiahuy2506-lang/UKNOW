@@ -104,6 +104,10 @@ export const AUDIT_ACTIONS = {
   // Workspace — channel connection (activation funnel)
   EMAIL_ACCOUNT_CONNECTED: 'EMAIL_ACCOUNT_CONNECTED',
   ZALO_ACCOUNT_CONNECTED: 'ZALO_ACCOUNT_CONNECTED',
+
+  // System — einvoices
+  EINVOICE_RETRIED: 'EINVOICE_RETRIED',
+  EINVOICE_EMAIL_RESENT: 'EINVOICE_EMAIL_RESENT',
 };
 
 export const AUDIT_ENTITY_TYPES = {
@@ -117,6 +121,7 @@ export const AUDIT_ENTITY_TYPES = {
   EMAIL_SETTING: 'email_setting',
   ZALO_SETTING: 'zalo_setting',
   AI_SESSION: 'ai_session',
+  EINVOICE: 'einvoice',
 };
 
 /**

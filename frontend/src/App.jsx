@@ -65,6 +65,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminMembersPage from './pages/admin/AdminMembersPage';
 import AdminPlansPage from './pages/admin/AdminPlansPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
+import AdminEinvoicesPage from './pages/admin/AdminEinvoicesPage';
 import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
 import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
@@ -444,6 +445,7 @@ function App() {
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="einvoices" element={<AdminEinvoicesPage />} />
             <Route path="alerts" element={<AdminAlertsPage />} />
             <Route path="funnel" element={<AdminFunnelPage />} />
             <Route path="health" element={<AdminSystemHealthPage />}>

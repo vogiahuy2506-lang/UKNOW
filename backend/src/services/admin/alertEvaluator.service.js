@@ -156,6 +156,29 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'einvoice_stuck': {
+      const staleHours = Number(config.staleHours) || 6;
+      const need = Number.isFinite(threshold) && threshold > 0 ? threshold : 1;
+      const m = await alertRepo.metricStuckEinvoices(staleHours);
+      if (m.total < need) return null;
+
+      const parts = [];
+      if (m.deadCount > 0) {
+        parts.push(`${m.deadCount} hoá đơn hỏng hẳn (cron không tự thử lại)`);
+      }
+      if (m.stalledCount > 0) {
+        parts.push(`${m.stalledCount} hoá đơn đọng > ${staleHours} giờ`);
+      }
+      const codes = m.samples.map((s) => `#${s.orderCode}`).join(', ');
+      return {
+        measuredValue: m.total,
+        message:
+          `${parts.join(' · ')} — khách đã trả tiền nhưng chưa có hoá đơn`
+          + (codes ? ` (${codes})` : '')
+          + '. Cần xử lý tay.',
+        payload: m,
+      };
+    }
     case 'ai_cost_spike': {
       const m = await alertRepo.metricAiTokenSpike();
       if (m.avgPrev7 <= 0) return null;
