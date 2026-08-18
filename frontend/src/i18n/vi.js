@@ -2107,6 +2107,7 @@ export default {
   checkout: {
     pageTitle: 'Thanh toán',
     pageSubtitle: 'Hoàn tất thanh toán để kích hoạt gói dịch vụ',
+    copy: 'Sao chép',
     copied: 'Đã sao chép nội dung!',
     userEmailNotFound: 'Không tìm thấy email người dùng. Vui lòng đăng nhập lại.',
     createOrderFailed: 'Không thể tạo đơn hàng. Vui lòng thử lại.',
@@ -2173,6 +2174,7 @@ export default {
     pricingDetails: 'Chi tiết giá tiền',
     vatExempt: 'Không chịu thuế GTGT',
     securityBadge: 'Bảo mật SSL 256-bit & Kích hoạt tự động',
+    discount: 'Giảm giá',
     trustBadge1: 'Thanh toán an toàn qua PayOS, mã hoá SSL 256-bit',
     trustBadge2: 'Kích hoạt gói ngay khi thanh toán thành công',
     trustBadge3: 'Đội ngũ hỗ trợ sẵn sàng 24/7',

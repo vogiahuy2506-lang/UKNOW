@@ -468,7 +468,7 @@ const CheckoutPage = () => {
                                                 }}
                                                 className="btn btn-secondary text-xs px-3 py-1.5 shrink-0"
                                             >
-                                                {t('checkout.remove')}
+                                                {t('checkout.removeCode')}
                                             </button>
                                         ) : (
                                             <button

@@ -31,17 +31,6 @@ export function isInvoiceInfoValid(info) {
   return false;
 }
 
-/** Mask account email for display — recipient is server-owned, not editable. */
-export function maskAccountEmail(email) {
-  const s = String(email || '').trim();
-  const at = s.indexOf('@');
-  if (at <= 0) return s || '—';
-  const local = s.slice(0, at);
-  const domain = s.slice(at + 1);
-  const keep = local.length <= 2 ? 1 : 2;
-  return `${local.slice(0, keep)}***@${domain}`;
-}
-
 /**
  * Mandatory VAT invoice form for Checkout.
  * Pre-fills known account info or saved profile to minimize checkout friction.
@@ -334,7 +323,7 @@ export default function InvoiceVatForm({
             <input
               className={readonlyClass}
               type="text"
-              value={maskAccountEmail(accountEmail)}
+              value={accountEmail}
               readOnly
               aria-readonly="true"
               aria-label={t('invoiceVat.emailReadonly')}

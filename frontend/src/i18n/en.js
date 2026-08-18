@@ -2076,6 +2076,7 @@ export default {
   checkout: {
     pageTitle: 'Checkout',
     pageSubtitle: 'Complete payment to activate your plan',
+    copy: 'Copy',
     copied: 'Content copied!',
     userEmailNotFound: 'User email not found. Please log in again.',
     createOrderFailed: 'Failed to create order. Please try again.',
@@ -2142,6 +2143,7 @@ export default {
     pricingDetails: 'Price details',
     vatExempt: 'VAT exempt',
     securityBadge: '256-bit SSL Security & Instant Activation',
+    discount: 'Discount',
     trustBadge1: 'Secure payment via PayOS, 256-bit SSL encryption',
     trustBadge2: 'Plan activates instantly after payment',
     trustBadge3: '24/7 support team ready to help',

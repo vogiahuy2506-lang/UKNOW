@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   computeDisplayVat,
   isInvoiceInfoValid,
-  maskAccountEmail,
   TAX_CODE_REGEX,
   ID_NUMBER_REGEX,
 } from '../components/InvoiceVatForm';
@@ -94,13 +93,6 @@ describe('InvoiceVatForm utilities', () => {
         gross: 0,
         vatRate: -1,
       });
-    });
-  });
-
-  describe('maskAccountEmail', () => {
-    it('masks local part', () => {
-      expect(maskAccountEmail('admin@example.com')).toBe('ad***@example.com');
-      expect(maskAccountEmail('a@example.com')).toBe('a***@example.com');
     });
   });
 });
