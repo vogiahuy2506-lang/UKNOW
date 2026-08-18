@@ -15,8 +15,13 @@ mockClient.query.mockImplementation((sql) => {
 
 const mockGetClient = jest.fn().mockResolvedValue(mockClient);
 
+const mockDbQuery = jest.fn().mockResolvedValue({ rows: [] });
+
 jest.unstable_mockModule('../../../config/database.js', () => ({
-  default: { getClient: mockGetClient, query: jest.fn() },
+  default: {
+    getClient: mockGetClient,
+    query: mockDbQuery,
+  },
 }));
 
 // Mock repositories
@@ -47,7 +52,20 @@ jest.unstable_mockModule('../../payment/usageTracking.service.js', () => ({
   default: {
     deductCredits: mockDeductCredits,
     trackUsage: mockTrackUsage,
+    getUserPlanLimits: jest.fn(),
+    getCreditUsageForCycle: jest.fn(),
   },
+}));
+
+const mockCheckCreditAvailability = jest.fn().mockResolvedValue({ allowed: true });
+const mockAiDeductCredits = jest.fn().mockResolvedValue({ success: true });
+jest.unstable_mockModule('../../ai/aiCreditMeter.service.js', () => ({
+  default: {
+    checkCreditAvailability: mockCheckCreditAvailability,
+    resolveCreditContext: jest.fn().mockResolvedValue({ skip: true }),
+    deductCredits: mockAiDeductCredits,
+  },
+  AI_CREDIT_RESOURCE: 'ai_credit',
 }));
 
 // Mock userResourceLimit util — luôn cho phép trong unit test
@@ -64,6 +82,7 @@ const { default: marketplacePurchaseService } = await import('../marketplacePurc
 describe('marketplacePurchase.service.purchase', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDbQuery.mockResolvedValue({ rows: [] });
     mockClient.query.mockClear();
     mockClient.query.mockImplementation((sql) => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
@@ -95,7 +114,7 @@ describe('marketplacePurchase.service.purchase', () => {
 
     const result = await marketplacePurchaseService.purchase(1, 10);
 
-    expect(mockDeductCredits).not.toHaveBeenCalled();
+    expect(mockAiDeductCredits).not.toHaveBeenCalled();
     expect(mockTrackUsage).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
     expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
@@ -108,7 +127,7 @@ describe('marketplacePurchase.service.purchase', () => {
       id_user: 5, title: 'Paid Listing', snapshot_data: {},
     });
     mockFindByUserAndListingTx.mockResolvedValue(null);
-    mockDeductCredits.mockResolvedValue({ success: true });
+    mockAiDeductCredits.mockResolvedValue({ success: true });
 
     mockClient.query.mockImplementation((sql) => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
@@ -122,11 +141,12 @@ describe('marketplacePurchase.service.purchase', () => {
 
     await marketplacePurchaseService.purchase(1, 10);
 
-    expect(mockDeductCredits).toHaveBeenCalledTimes(1);
-    const deductCall = mockDeductCredits.mock.calls[0];
+    expect(mockAiDeductCredits).toHaveBeenCalledTimes(1);
+    const deductCall = mockAiDeductCredits.mock.calls[0];
     expect(deductCall[0]).toBe(10); // buyerId
     expect(deductCall[1]).toBe(100); // price
-    expect(deductCall[3]).toBe(mockClient); // client
+    // 4th là options chứa externalClient
+    expect(deductCall[2]?.externalClient).toBe(mockClient);
   });
 
   it('truyền client xuống trackUsage khi seller nhận tiền', async () => {
@@ -135,7 +155,7 @@ describe('marketplacePurchase.service.purchase', () => {
       id_user: 5, title: 'Paid Listing', snapshot_data: {},
     });
     mockFindByUserAndListingTx.mockResolvedValue(null);
-    mockDeductCredits.mockResolvedValue({ success: true });
+    mockAiDeductCredits.mockResolvedValue({ success: true });
     mockTrackUsage.mockResolvedValue({ success: true });
 
     mockClient.query.mockImplementation((sql) => {

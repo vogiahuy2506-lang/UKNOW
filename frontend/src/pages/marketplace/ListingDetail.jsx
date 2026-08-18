@@ -765,10 +765,13 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
       onAfterPurchase?.();
     } catch (error) {
       const errorCode = error.code || error.response?.data?.code;
+      const errorMessage = error.response?.data?.message || error.message || t('detail.purchaseError');
       if (errorCode === 'CAMPAIGN_LIMIT_EXCEEDED') {
         toast.error(t('detail.campaignLimitExceeded'));
+      } else if (errorCode === 'INSUFFICIENT_CREDITS') {
+        toast.error(errorMessage);
       } else {
-        toast.error(error.response?.data?.message || t('detail.purchaseError'));
+        toast.error(errorMessage);
       }
     } finally {
       setIsPurchasing(false);

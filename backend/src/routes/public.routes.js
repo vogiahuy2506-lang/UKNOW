@@ -60,4 +60,53 @@ router.get('/landing-overrides/:page', async (req, res) => {
   }
 });
 
+// Contact form submission from hero page
+router.post('/hero/contact', async (req, res) => {
+  try {
+    const { visitorId, visitorIp, name, email, phone, message, topic } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng điền đầy đủ thông tin bắt buộc.'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email không hợp lệ.'
+      });
+    }
+
+    // TODO: Save to database and send notification
+    // For now, just log and return success
+    console.log('[Hero Contact Form]', {
+      visitorId,
+      visitorIp,
+      name,
+      email,
+      phone,
+      topic,
+      message,
+      timestamp: new Date().toISOString()
+    });
+
+    return res.json({
+      success: true,
+      message: 'Liên hệ của bạn đã được gửi thành công!'
+    });
+
+  } catch (error) {
+    console.error('[Hero Contact]', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Có lỗi xảy ra. Vui lòng thử lại sau.'
+    });
+  }
+});
+
 export default router;

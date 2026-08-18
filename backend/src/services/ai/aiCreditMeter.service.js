@@ -186,6 +186,130 @@ class AiCreditMeterService {
     );
     return rows[0]?.role || null;
   }
+
+  /**
+   * Deduct multiple credits (for marketplace purchase).
+   * Uses same logic as consume() but for arbitrary amount.
+   *
+   * @param {number} userId
+   * @param {number} amount - Number of credits to deduct
+   * @param {object} options
+   * @param {string} [options.feature] - Feature name for audit trail
+   * @param {object} [options.ctx] - Pre-resolved credit context
+   * @param {object} [options.externalClient] - External DB client for transaction participation
+   * @returns {Promise<{success: boolean, deducted: number, remaining: object}>}
+   */
+  async deductCredits(userId, amount, { feature, ctx: preCtx, externalClient } = {}) {
+    if (amount <= 0) {
+      throw new Error('Amount must be positive');
+    }
+
+    const resolvedCtx = preCtx || await this.resolveCreditContext(userId, { forceBillable: true });
+    if (resolvedCtx.skip) {
+      return { success: true, deducted: amount, remaining: { plan: Infinity, wallet: 0 } };
+    }
+
+    const billingUserId = resolvedCtx.billingUserId || userId;
+    const ownsClient = !externalClient;
+    const client = externalClient || await db.getClient();
+
+    try {
+      if (ownsClient) await client.query('BEGIN');
+      await acquireUsageTrackingLock(client, billingUserId, AI_CREDIT_RESOURCE);
+
+      const cycle = resolvedCtx.cycle || await getBillingCycle(billingUserId);
+      const limits = await usageTrackingService.getUserPlanLimits(billingUserId, client);
+      const baseLimit = Number(limits?.ai_credits_per_period) || 0;
+
+      // Calculate current usage within cycle
+      let currentUsed = 0;
+      if (resolvedCtx.hasPlan && cycle?.cycleStart) {
+        currentUsed = Number(await usageTrackingRepository.getUsageInRange(
+          billingUserId,
+          AI_CREDIT_RESOURCE,
+          cycle.cycleStart,
+          new Date(),
+          client
+        )) || 0;
+      }
+
+      // Calculate what to deduct from plan vs wallet
+      let remaining = amount;
+      let planDeducted = 0;
+      let walletDeducted = 0;
+      const planAvailable = Math.max(0, baseLimit - currentUsed);
+
+      // First deduct from plan allowance
+      if (remaining > 0 && planAvailable > 0) {
+        planDeducted = Math.min(remaining, planAvailable);
+        remaining -= planDeducted;
+      }
+
+      // Then deduct from wallet if needed
+      if (remaining > 0) {
+        const wallet = await getWalletBalance(billingUserId, 'ai_credits');
+        const walletAvailable = Number(wallet?.remaining || 0);
+        walletDeducted = Math.min(remaining, walletAvailable);
+        remaining -= walletDeducted;
+      }
+
+      // If still remaining, not enough credits
+      if (remaining > 0) {
+        const totalAvailable = planAvailable + Number(resolvedCtx.walletRemaining || 0);
+        const error = new Error(
+          `Không đủ credits. Bạn có ${totalAvailable} credits, cần ${amount} credits.`
+        );
+        error.status = 400;
+        error.code = 'INSUFFICIENT_CREDITS';
+        error.available = totalAvailable;
+        error.required = amount;
+        throw error;
+      }
+
+      // Track plan deduction if any
+      if (planDeducted > 0) {
+        await usageTrackingRepository.trackUsage(
+          billingUserId,
+          AI_CREDIT_RESOURCE,
+          planDeducted,
+          {
+            feature: feature || 'marketplace_purchase',
+            periodStart: cycle?.cycleStart?.toISOString() || null,
+            periodEnd: cycle?.cycleEnd?.toISOString() || null,
+            actorUserId: userId,
+          },
+          client
+        );
+      }
+
+      // Deduct from wallet if any
+      if (walletDeducted > 0) {
+        await acquireWalletLock(client, billingUserId, 'ai_credits');
+        await insertTopupDebit({
+          userId: billingUserId,
+          itemKey: 'ai_credits',
+          qty: walletDeducted,
+          sourceKey: `marketplace_purchase:${Date.now()}`,
+        }, client);
+      }
+
+      if (ownsClient) await client.query('COMMIT');
+      return {
+        success: true,
+        deducted: amount,
+        breakdown: { planDeducted, walletDeducted },
+        remaining: {
+          plan: baseLimit - (currentUsed + planDeducted),
+          wallet: Number(resolvedCtx.walletRemaining || 0) - walletDeducted,
+        },
+      };
+    } catch (error) {
+      if (ownsClient) await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      if (ownsClient) client.release();
+    }
+  }
 }
 
 export default new AiCreditMeterService();

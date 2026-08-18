@@ -1,11 +1,40 @@
 import marketplaceListingRepository from '../../repositories/marketplace/marketplaceListing.repository.js';
 import marketplacePurchaseRepository from '../../repositories/marketplace/marketplacePurchase.repository.js';
 import usageTrackingService from '../payment/usageTracking.service.js';
+import aiCreditMeter, { AI_CREDIT_RESOURCE } from '../ai/aiCreditMeter.service.js';
 import campaignCrudService from '../campaign/campaignCrud.service.js';
 import db from '../../config/database.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 
 class MarketplacePurchaseService {
+  /**
+   * Check if user has enough AI credits for purchase (uses same logic as aiCreditMeter).
+   * Returns { hasEnough: boolean, available: number, limit: number, walletRemaining: number }
+   */
+  async _checkCreditAvailability(userId, amount) {
+    const ctx = await aiCreditMeter.resolveCreditContext(userId, { forceBillable: true });
+    if (ctx.skip) {
+      return { hasEnough: true, available: Infinity, limit: Infinity, walletRemaining: 0 };
+    }
+
+    // For billOnly context (no plan limit), check wallet only
+    if (ctx.billOnly) {
+      const wallet = await aiCreditMeter.resolveCreditContext(userId, {});
+      const walletRemaining = Number(ctx.walletRemaining || 0);
+      const hasEnough = walletRemaining >= amount;
+      return { hasEnough, available: walletRemaining, limit: 0, walletRemaining, ctx };
+    }
+
+    const used = Number(ctx.used || 0);
+    const limit = Number(ctx.limit || 0);
+    const walletRemaining = Number(ctx.walletRemaining || 0);
+    const planAvailable = Math.max(0, limit - used);
+    const totalAvailable = planAvailable + walletRemaining;
+    const hasEnough = totalAvailable >= amount;
+
+    return { hasEnough, available: totalAvailable, limit, used, walletRemaining, ctx };
+  }
+
   /**
    * Purchase a listing
    * @param {number} listingId
@@ -59,16 +88,32 @@ class MarketplacePurchaseService {
 
       // 5. Process credits if price > 0 (sau khi check limit)
       if (listing.price_credits > 0) {
-        // Deduct credits from buyer
-        await usageTrackingService.deductCredits(buyerId, listing.price_credits, {
-          listing_id: listingId,
-          listing_title: listing.title,
-          seller_id: listing.id_user,
-        }, client);
+        const amount = listing.price_credits;
+
+        // Check availability using same logic as aiCreditMeter
+        const check = await this._checkCreditAvailability(buyerId, amount);
+        if (!check.hasEnough) {
+          const error = new Error(
+            `Không đủ credits. Bạn có ${check.available} credits, cần ${amount} credits cho listing này.`
+          );
+          error.status = 400;
+          error.code = 'INSUFFICIENT_CREDITS';
+          error.available = check.available;
+          error.required = amount;
+          throw error;
+        }
+
+        // Deduct credits using aiCreditMeter (handles plan + wallet correctly)
+        // aiCreditMeter.deductCredits already tracks usage and debits wallet
+        await aiCreditMeter.deductCredits(buyerId, amount, {
+          feature: `marketplace_purchase:${listingId}`,
+          ctx: check.ctx,
+          externalClient: client,
+        });
 
         // Add credits to seller (90% after platform fee)
         const sellerAmount = Math.floor(listing.price_credits * 0.9);
-        await usageTrackingService.trackUsage(listing.id_user, 'ai_credit', sellerAmount, {
+        await usageTrackingService.trackUsage(listing.id_user, AI_CREDIT_RESOURCE, sellerAmount, {
           type: 'marketplace_sale',
           listing_id: listingId,
           buyer_id: buyerId,
