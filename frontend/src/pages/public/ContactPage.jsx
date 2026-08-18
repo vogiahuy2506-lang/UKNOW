@@ -12,6 +12,7 @@ import { submitContactForm } from '../../services/contactApi.service';
 import AnimatedSection from '../../components/AnimatedSection';
 import { useI18n } from '../../i18n';
 import { usePublicLandingOverrides } from '../../features/landing-customizer';
+import HeroChatWidget from '../../features/hero/components/HeroChatWidget';
 
 const getChannels = (t) => [
   {
@@ -41,15 +42,15 @@ const getChannels = (t) => [
     meta: t('contact.channelTaxIdMeta'),
     href: null,
   },
-  {
-    icon: HiOutlineLocationMarker,
-    iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
-    iconRing: 'bg-emerald-100',
-    label: t('contact.channelOfficeLabel'),
-    value: 'ĐHQG TP.HCM',
-    meta: t('contact.channelOfficeMeta'),
-    href: 'https://maps.google.com/?q=Phòng+I101B,+Khu+Công+nghệ+phần+mềm+ĐHQG+HCM',
-  },
+{
+  icon: HiOutlineLocationMarker,
+  iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
+  iconRing: 'bg-emerald-100',
+  label: t('contact.channelOfficeLabel'),
+  value: t('contact.channelOfficeValue'),
+  meta: t('contact.channelOfficeMeta'),
+  href: 'https://maps.google.com/?q=I101B+Building,+Software+Park,+VNU-HCM,+Ho+Chi+Minh+City',
+},
 ];
 
 const getTrustStats = (t) => [
@@ -250,34 +251,55 @@ export default function ContactPage() {
 
               {/* Channel list — icon block style */}
               <div className="space-y-2.5 flex-1">
-                {contactChannels.map((ch) => (
-                  <div
-                    key={ch.label}
-                    className={`group flex items-center gap-3.5 p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-300 hover:shadow-sm transition-all ${ch.href ? 'cursor-pointer' : 'cursor-default'}`}
-                  >
-                    <div className={`relative w-10 h-10 rounded-xl ${ch.iconRing} flex items-center justify-center shrink-0`}>
-                      <div className={`w-7 h-7 rounded-lg ${ch.iconBg} flex items-center justify-center`}>
-                        <ch.icon className="w-3.5 h-3.5 text-white" />
+                {contactChannels.map((ch) => {
+                  const inner = (
+                    <>
+                      <div className={`relative w-10 h-10 rounded-xl ${ch.iconRing} flex items-center justify-center shrink-0`}>
+                        <div className={`w-7 h-7 rounded-lg ${ch.iconBg} flex items-center justify-center`}>
+                          <ch.icon className="w-3.5 h-3.5 text-white" />
+                        </div>
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-medium text-slate-500">
+                          {ch.label}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-900 truncate">
+                          {ch.value}
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          {ch.meta}
+                        </div>
+                      </div>
+                      {ch.href ? (
+                        <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                      ) : (
+                        <div className="w-4 h-4 shrink-0" />
+                      )}
+                    </>
+                  );
+
+                  const cardClass = `group flex items-center gap-3.5 p-3 rounded-xl border border-slate-200 bg-white transition-all ${
+                    ch.href
+                      ? 'hover:border-orange-300 hover:shadow-sm cursor-pointer'
+                      : 'cursor-default'
+                  }`;
+
+                  return ch.href ? (
+                    <a
+                      key={ch.label}
+                      href={ch.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cardClass}
+                    >
+                      {inner}
+                    </a>
+                  ) : (
+                    <div key={ch.label} className={cardClass}>
+                      {inner}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-medium text-slate-500">
-                        {ch.label}
-                      </div>
-                      <div className="text-sm font-semibold text-slate-900 truncate">
-                        {ch.value}
-                      </div>
-                      <div className="text-[11px] text-slate-400 truncate">
-                        {ch.meta}
-                      </div>
-                    </div>
-                    {ch.href ? (
-                      <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all shrink-0" />
-                    ) : (
-                      <div className="w-4 h-4 shrink-0" />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -410,6 +432,7 @@ export default function ContactPage() {
       </section>
 
       <PublicFooter />
+      <HeroChatWidget />
     </div>
   );
 }

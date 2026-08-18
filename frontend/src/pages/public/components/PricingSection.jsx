@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaCheckCircle, FaCrown, FaGem, FaRocket, FaStar, FaBolt, FaArrowRight } from 'react-icons/fa';
+import { FaCheckCircle, FaCheck, FaCrown, FaGem, FaRocket, FaStar, FaBolt, FaArrowRight, FaCog } from 'react-icons/fa';
 import AnimatedSection from '../../../components/AnimatedSection';
 import { useAuthStore } from '../../../stores/authStore';
+import { getMyProfile } from '../../../features/auth/services/authApi.service';
 import { getPlans } from '../../../services/plan.service';
 import { getActivePromotions } from '../../../services/promotion.service';
 import { useI18n } from '../../../i18n';
@@ -179,18 +180,26 @@ export default function PricingSection({ embedded = false, compact = false, glas
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const { isAuthenticated, user, activeContext } = useAuthStore();
-  const isEmployee = activeContext?.type === 'employee';
+const isEmployee = activeContext?.type === 'employee';
   const activePlanId = user?.activePlanId;
   const activePlanIsCustom = Boolean(user?.activePlanIsCustom);
   const activePlanPrice = user?.activePlanPrice;
-
+  const currentPlanId = isAuthenticated && activeContext?.type === 'self'
+    ? (user?.active_plan_id ?? user?.activePlanId ?? null)
+    : null;
+  const subscriptionExpiresAt = isAuthenticated && activeContext?.type === 'self'
+    ? (user?.subscription_expires_at ?? user?.subscriptionExpiresAt ?? null)
+    : null;
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [promotionsByPlanCode, setPromotionsByPlanCode] = useState({});
   const [showCustomBuilder, setShowCustomBuilder] = useState(false);
   const [activatingPlanId, setActivatingPlanId] = useState(null);
-  const [myCustomPlan, setMyCustomPlan] = useState(null);
+const [myCustomPlan, setMyCustomPlan] = useState(null);
+  // Thông tin plan hiện tại từ /users/profile — dùng khi gói không có trong list public
+  // (custom, hoặc plan đã ngưng active). null = không có hoặc chưa load xong.
+  const [customPlanInfo, setCustomPlanInfo] = useState(null);
 
   const getPlansData = async () => {
     try {
@@ -217,6 +226,35 @@ export default function PricingSection({ embedded = false, compact = false, glas
   useEffect(() => {
     getPlansData();
   }, []);
+
+  // Nếu user đã có plan mà plan đó không có trong list public (gói custom / gói cũ
+  // đã bị soft-delete), fetch /users/profile để biết tên gói và hiển thị banner
+  // "Bạn đang dùng gói ..." thay vì để trống — chỉ chạy sau khi plans đã load.
+  useEffect(() => {
+    if (!currentPlanId || loading) return;
+    const matched = plans.some((p) => Number(p.id) === Number(currentPlanId));
+    if (matched) {
+      setCustomPlanInfo(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getMyProfile();
+        if (cancelled) return;
+        const profile = data?.data || data || {};
+        setCustomPlanInfo({
+          id: profile.activePlanId ?? currentPlanId,
+          name: profile.activePlanName || null,
+          code: profile.activePlanCode || null,
+          price: profile.activePlanPrice ?? null,
+        });
+      } catch {
+        if (!cancelled) setCustomPlanInfo({ id: currentPlanId });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentPlanId, plans, loading]);
 
   useEffect(() => {
     const loadPromotions = async () => {
@@ -364,6 +402,41 @@ export default function PricingSection({ embedded = false, compact = false, glas
           </AnimatedSection>
         )}
 
+        {/* Current plan banner — chỉ hiện khi user đang dùng plan không có trong list public
+            (gói custom / gói cũ đã soft-delete). Khi match card → card tự highlight, không cần banner. */}
+        {customPlanInfo && (
+          <div className={`max-w-3xl mx-auto mb-6 rounded-xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white p-5 flex items-start gap-4 shadow-sm`}>
+            <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+              <FaCheck className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider">
+                  {t('pricing.currentPlanBadge')}
+                </span>
+                {customPlanInfo.name && (
+                  <span className="text-sm font-bold text-slate-900 truncate">{customPlanInfo.name}</span>
+                )}
+                {customPlanInfo.code && (
+                  <span className="text-xs text-emerald-700 font-mono">{customPlanInfo.code}</span>
+                )}
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed mb-3">
+                {customPlanInfo.code?.toLowerCase() === 'custom' || !customPlanInfo.code
+                  ? t('pricing.customPlanBannerDesc')
+                  : t('pricing.currentPlanNoExpiry')}
+              </p>
+              <button
+                onClick={() => navigate('/app/billing')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
+              >
+                <FaCog className="w-3.5 h-3.5" />
+                {t('pricing.customPlanBannerCta')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Billing period toggle */}
         {hasYearlyPricing && (
           <div className={`flex justify-center ${compact ? 'mb-4' : 'mb-6'}`}>
@@ -412,7 +485,6 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
             const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
-
             const features = Array.isArray(plan.features)
               ? plan.features
               : JSON.parse(plan.features || '[]');
@@ -428,6 +500,10 @@ export default function PricingSection({ embedded = false, compact = false, glas
             const discountPct = hasPromotion && rawPlanPrice > 0
               ? Math.round(promotion.discountAmount / rawPlanPrice * 100)
               : 0;
+            const isCurrentPlan = !isCustom && currentPlanId != null && Number(plan.id) === Number(currentPlanId);
+            const currentPlanExpiryText = isCurrentPlan && subscriptionExpiresAt
+              ? new Date(subscriptionExpiresAt).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' })
+              : null;
 
             const wrapperClass = isCurrentPlan
               ? 'bg-white border-2 border-orange-500 ring-1 ring-orange-200 shadow-md'
@@ -435,14 +511,16 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
             return (
               <AnimatedSection key={plan.id} delay={index * 100}>
-                <div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${wrapperClass}`}>
+<div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${
+                  isCurrentPlan
+                    ? 'bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 border-2 border-emerald-400 shadow-md ring-1 ring-emerald-200'
+                    : style.wrapper
+                }`}>
                   {/* Current plan badge */}
                   {isCurrentPlan && (
-                    <div className="mb-2">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
-                        <FaStar className="w-2.5 h-2.5" />
-                        {t('pricing.currentPlan')}
-                      </span>
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-md whitespace-nowrap">
+                      <FaCheck className="w-3 h-3" />
+                      <span>{t('pricing.currentPlanBadge')}</span>
                     </div>
                   )}
 
@@ -455,6 +533,16 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       </div>
                     </div>
                     <p className={`text-xs leading-relaxed min-h-[32px] ${style.unit}`}>{planDescription}</p>
+                    {isCurrentPlan && currentPlanExpiryText && (
+                      <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                        {t('pricing.currentPlanMeta', { date: currentPlanExpiryText })}
+                      </p>
+                    )}
+                    {isCurrentPlan && !currentPlanExpiryText && (
+                      <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                        {t('pricing.currentPlanNoExpiry')}
+                      </p>
+                    )}
                   </div>
 
                   {/* Price */}
@@ -563,19 +651,12 @@ export default function PricingSection({ embedded = false, compact = false, glas
                   </ul>
 
                   {/* CTA */}
-                  {isCurrentStandard || isOwnerCustomForEmployee ? (
+{isCurrentPlan ? (
                     <button
-                      disabled
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all bg-slate-100 text-slate-400 border border-slate-200 cursor-default shadow-none"
+                      onClick={() => navigate('/app/billing')}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all bg-emerald-600 text-white hover:bg-emerald-700"
                     >
-                      {t('pricing.currentPlan')}
-                    </button>
-                  ) : isCurrentCustom ? (
-                    <button
-                      onClick={() => handlePlanClick(plan)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all bg-orange-500 text-white hover:bg-orange-600 shadow-sm"
-                    >
-                      {t('pricing.editCustomPlan')}
+                      {t('pricing.managePlan')}
                       <FaArrowRight className="w-3.5 h-3.5" />
                     </button>
                   ) : (

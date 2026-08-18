@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FaEnvelope, FaComments, FaUsers, FaChartBar, FaBolt, FaShieldAlt,
@@ -6,10 +7,16 @@ import {
   FaBullseye, FaHandshake, FaClock, FaTools,
   FaPiggyBank,
 } from 'react-icons/fa';
+import {
+  HiOutlineMail, HiOutlineChatAlt2, HiOutlineUserGroup,
+  HiOutlinePlay, HiOutlineSparkles,
+} from 'react-icons/hi';
 import HeroNavbar from './components/HeroNavbar';
 import PublicFooter from './components/PublicFooter';
 import HeroDashboardMock from './components/HeroDashboardMock';
 import AnimatedSection from '../../components/AnimatedSection';
+import HeroChatWidget from '../../features/hero/components/HeroChatWidget';
+import CampaignFlowModal from '../../features/hero/components/CampaignFlowModal';
 import { useI18n } from '../../i18n';
 import { usePublicLandingOverrides } from '../../features/landing-customizer';
 
@@ -108,6 +115,20 @@ export default function HeroPage() {
   const features = getFeatures(t);
   const steps = getSteps(t);
   const benefits = getBenefits(t);
+  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
+  const [campaignModalFlow, setCampaignModalFlow] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const key = e.detail?.flowKey;
+      if (key) {
+        setCampaignModalFlow(key);
+        setCampaignModalOpen(true);
+      }
+    };
+    window.addEventListener('open-campaign-flow', handler);
+    return () => window.removeEventListener('open-campaign-flow', handler);
+  }, []);
 
   const getValue = (baseKey, fallback) => {
     const override = getOverride(baseKey);
@@ -322,6 +343,35 @@ export default function HeroPage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* ── SECTION 2.5: Xem chiến dịch chạy ntn trong hệ thống ── */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      <section className="py-20 md:py-28 bg-white relative overflow-hidden">
+        {/* Grid background */}
+        <div className="absolute inset-0 opacity-[0.3]" style={{
+          backgroundColor: '#f8fafc',
+          backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
+          backgroundSize: '24px 24px'
+        }} />
+        <div className="max-w-5xl mx-auto px-6 relative z-10">
+          <CampaignFlowLauncher t={t} />
+
+          <div className="mt-10 max-w-2xl mx-auto">
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-4">
+              <p className="text-xs text-orange-900 leading-relaxed">
+                <span className="font-semibold">💡 {t('heroPage.campaignDemo.tipTitle') || 'Mẹo:'}</span>{' '}
+                {t('heroPage.campaignDemo.tipContent') || 'Bạn có thể chạy đồng thời cả 3 loại chiến dịch để tiếp cận khách hàng đa kênh, tăng hiệu quả chuyển đổi lên đến 3 lần.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Divider ── */}
+      <div className="max-w-6xl mx-auto px-6">
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 3: Tại sao chọn Founder AI? ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <section className="py-20 md:py-28 bg-white relative overflow-hidden">
@@ -402,6 +452,130 @@ export default function HeroPage() {
       </section>
 
       <PublicFooter />
+
+      <HeroChatWidget />
+
+      <CampaignFlowModal
+        open={campaignModalOpen}
+        flowKey={campaignModalFlow}
+        onClose={() => setCampaignModalOpen(false)}
+      />
+    </div>
+  );
+}
+
+// Component bấm nút để mở modal mô phỏng campaign flow
+function CampaignFlowLauncher({ t }) {
+  const [hovered, setHovered] = useState(null);
+
+  const campaigns = [
+    {
+      key: 'email',
+      title: t('heroPage.campaignDemo.emailTitle') || 'Email Marketing',
+      desc: t('heroPage.campaignDemo.emailDesc') || 'Gửi email hàng loạt, theo dõi mở/click/chuyển đổi',
+      icon: HiOutlineMail,
+      gradient: 'from-blue-500 to-blue-600',
+      lightBg: 'bg-blue-50',
+      border: 'border-blue-200',
+      hoverBorder: 'hover:border-blue-400',
+      textColor: 'text-blue-700',
+      iconBg: 'bg-blue-100',
+      iconColor: 'text-blue-600',
+      btnBg: 'bg-blue-500 hover:bg-blue-600',
+      stats: ['1.250 khách', '8 node', '~12 phút'],
+    },
+    {
+      key: 'zalo',
+      title: t('heroPage.campaignDemo.zaloPersonalTitle') || 'Zalo cá nhân',
+      desc: t('heroPage.campaignDemo.zaloPersonalDesc') || 'Gửi tin nhắn qua Zalo OA đến từng khách hàng',
+      icon: HiOutlineChatAlt2,
+      gradient: 'from-emerald-500 to-emerald-600',
+      lightBg: 'bg-emerald-50',
+      border: 'border-emerald-200',
+      hoverBorder: 'hover:border-emerald-400',
+      textColor: 'text-emerald-700',
+      iconBg: 'bg-emerald-100',
+      iconColor: 'text-emerald-600',
+      btnBg: 'bg-emerald-500 hover:bg-emerald-600',
+      stats: ['480 khách', '8 node', '~14 phút'],
+    },
+    {
+      key: 'zalo_group',
+      title: t('heroPage.campaignDemo.zaloGroupTitle') || 'Zalo nhóm',
+      desc: t('heroPage.campaignDemo.zaloGroupDesc') || 'Đăng bài vào các nhóm Zalo đã tham gia',
+      icon: HiOutlineUserGroup,
+      gradient: 'from-violet-500 to-violet-600',
+      lightBg: 'bg-violet-50',
+      border: 'border-violet-200',
+      hoverBorder: 'hover:border-violet-400',
+      textColor: 'text-violet-700',
+      iconBg: 'bg-violet-100',
+      iconColor: 'text-violet-600',
+      btnBg: 'bg-violet-500 hover:bg-violet-600',
+      stats: ['25 nhóm', '7 node', '~16 phút'],
+    },
+  ];
+
+  const openFlow = (key) => {
+    window.dispatchEvent(new CustomEvent('open-campaign-flow', { detail: { flowKey: key } }));
+  };
+
+  return (
+    <div>
+      {/* Header text */}
+      <div className="text-center mb-10">
+        <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+          {t('heroPage.campaignDemoBadge') || 'Live Demo'}
+        </span>
+        <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
+          {t('heroPage.campaignDemoTitle') || 'Chiến dịch chạy như thế nào?'}
+        </h2>
+        <p className="text-slate-600 max-w-2xl mx-auto">
+          {t('heroPage.campaignDemoSubtitle') || 'Xem chi tiết các bước (node) mà mỗi chiến dịch sẽ chạy trong hệ thống Founder AI. Bấm vào từng loại để xem mô phỏng trực quan.'}
+        </p>
+      </div>
+
+      {/* 3 campaign buttons */}
+      <div className="grid md:grid-cols-3 gap-5">
+        {campaigns.map((c) => {
+          const Icon = c.icon;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => openFlow(c.key)}
+              onMouseEnter={() => setHovered(c.key)}
+              onMouseLeave={() => setHovered(null)}
+              className={`group text-left bg-white rounded-2xl border-2 ${c.border} ${c.hoverBorder} p-6 transition-all hover:shadow-xl hover:-translate-y-1`}
+            >
+              <div className={`w-14 h-14 rounded-xl ${c.iconBg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                <Icon className={`w-7 h-7 ${c.iconColor}`} />
+              </div>
+              <h3 className={`text-lg font-bold ${c.textColor} mb-2`}>{c.title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed mb-4 min-h-[3rem]">
+                {c.desc}
+              </p>
+
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 mb-4">
+                {c.stats.map((s, i) => (
+                  <span key={i} className="px-2 py-0.5 bg-slate-50 rounded-md font-medium">
+                    {s}
+                  </span>
+                ))}
+              </div>
+
+              <div className={`flex items-center justify-between px-4 py-2.5 ${c.btnBg} text-white rounded-xl font-semibold text-sm shadow-sm group-hover:shadow-md transition-all`}>
+                <span className="flex items-center gap-2">
+                  <HiOutlinePlay className="w-4 h-4" />
+                  Xem mô phỏng
+                </span>
+                <HiOutlineSparkles className={`w-4 h-4 transition-transform ${hovered === c.key ? 'translate-x-1' : ''}`} />
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

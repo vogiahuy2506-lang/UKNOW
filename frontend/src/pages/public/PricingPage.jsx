@@ -3,6 +3,7 @@ import { usePublicLandingOverrides } from '../../features/landing-customizer';
 import PublicFooter from './components/PublicFooter';
 import AnimatedSection from '../../components/AnimatedSection';
 import PricingSection from './components/PricingSection';
+import HeroChatWidget from '../../features/hero/components/HeroChatWidget';
 import { FaCheck } from 'react-icons/fa';
 
 const getFaqs = (t) => [
@@ -139,6 +140,7 @@ export default function PricingPage() {
       </section>
 
       <PublicFooter />
+      <HeroChatWidget />
     </div>
   );
 }
