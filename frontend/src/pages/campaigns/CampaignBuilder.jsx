@@ -78,7 +78,7 @@ const CampaignBuilder = () => {
   const [isDirty, setIsDirty] = useState(false);
   const [runLogs, setRunLogs] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [showRunLogs, setShowRunLogs] = useLocalStorageState('founder_ai_builder_showRunLogs', true);
+  const [showRunLogs, setShowRunLogs] = useLocalStorageState('founder_ai_builder_showRunLogs', false);
   /** Chế độ cắt log/preview trên Builder: luôn `100` (node Sheet có thể ghi đè trong cấu hình). */
   const builderLogItemsMode = '100';
   const [selectedRunLogId, setSelectedRunLogId] = useState(null);
@@ -88,7 +88,7 @@ const CampaignBuilder = () => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedCategories, setExpandedCategories] = useLocalStorageState('founder_ai_builder_expandedCategories', ['Triggers', 'Actions', 'Logic', 'Data']);
+  const [expandedCategories, setExpandedCategories] = useLocalStorageState('founder_ai_builder_expandedCategories', ['Triggers', 'Zalo', 'Data', 'Logic', 'Actions']);
   const [showNameModal, setShowNameModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);

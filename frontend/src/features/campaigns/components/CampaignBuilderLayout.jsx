@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { HiOutlineExclamationCircle, HiOutlineX } from 'react-icons/hi';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
 import { useI18n } from '../../../i18n';
+import { isLogicNodeType } from '../utils/campaignBuilderFlow';
 
 export const CampaignNameModal = ({
   isOpen,
@@ -154,7 +155,7 @@ export const FlowCanvas = ({
   /** Khi flow đã bật pool đa TK Zalo — không cho thả node «Lấy danh sách bạn bè» lên canvas */
   suppressGetAllFriendsPalette = false,
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const reactFlowWrapper = useRef(null);
   const { project } = useReactFlow();
 
@@ -174,7 +175,10 @@ export const FlowCanvas = ({
       const allowedDataTypes = getAllowedDataNodeTypesByCampaignType(campaignType);
       const isTriggerNode = isTriggerNodeType(nodeType);
       const isActionNode = String(nodeType || '').startsWith('send_');
-      const isDataNode = !isTriggerNode && !isActionNode;
+      // Logic nodes (condition / tag_contact / update_attribute) LUÔN được phép —
+      // không phụ thuộc campaign type.
+      const isLogicNode = isLogicNodeType(nodeType);
+      const isDataNode = !isTriggerNode && !isActionNode && !isLogicNode;
       const isRestrictedDataNode = isDataNode && allowedDataTypes && !allowedDataTypes.has(nodeType);
       if (isActionNode && !allowedActionTypes.has(nodeType)) {
         toast.error(t('campaignBuilder.nodeTypeNotSupported', { type: campaignType?.toUpperCase() }));
@@ -198,7 +202,10 @@ export const FlowCanvas = ({
       position.x -= nodeDropOffsetX;
       position.y -= nodeDropOffsetY;
 
-      let nodeName = data.nodeData.name;
+      const isVi = locale === 'vi';
+      const nodeData = data?.nodeData || {};
+      const baseName = (isVi && nodeData.nameVi) ? nodeData.nameVi : nodeData.name;
+      let nodeName = baseName;
       const existingNames = nodes.map((n) => n.data?.label).filter(Boolean);
       const samePrefixNames = existingNames.filter(
         (name) =>
@@ -247,6 +254,7 @@ export const FlowCanvas = ({
       getAllowedActionNodeTypesByCampaignType,
       getAllowedDataNodeTypesByCampaignType,
       isTriggerNodeType,
+      locale,
       nodeDropOffsetX,
       nodeDropOffsetY,
       nodes,

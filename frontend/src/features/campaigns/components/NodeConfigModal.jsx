@@ -44,6 +44,11 @@ import {
 } from './NodeConfigModalReadSections';
 import { NodeConfigReadLandingLeadsSection } from './NodeConfigReadLandingLeadsSection';
 import { NodeConfigSelectZaloAccountSection } from './NodeConfigModalSelectZaloAccountSection';
+import {
+  NodeConfigConditionSection,
+  NodeConfigTagContactSection,
+  NodeConfigUpdateAttributeSection,
+} from './NodeConfigModalLogicSection';
 
 const NodeConfigModal = ({
   isOpen,
@@ -634,6 +639,24 @@ const NodeConfigModal = ({
             getSchemaForNodeId={getSchemaForNodeId}
             normalizeTemplateVariables={normalizeTemplateVariables}
             onOpenTemplateAttachment={handleOpenTemplateAttachment}
+          />
+        );
+      case 'condition':
+        return <NodeConfigConditionSection formData={formData} setFormData={setFormData} />;
+      case 'tag_contact':
+        return (
+          <NodeConfigTagContactSection
+            formData={formData}
+            setFormData={setFormData}
+            upstreamNodes={upstreamNodes}
+          />
+        );
+      case 'update_attribute':
+        return (
+          <NodeConfigUpdateAttributeSection
+            formData={formData}
+            setFormData={setFormData}
+            upstreamNodes={upstreamNodes}
           />
         );
       default:

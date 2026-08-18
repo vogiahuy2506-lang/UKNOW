@@ -301,6 +301,18 @@ export const nodeConfigs = {
       descriptionVi: 'Lead từ form landing Founder AI (lọc ngày, nghề, lĩnh vực)',
     },
     {
+      type: 'save_customer',
+      name: 'Save Customer',
+      nameVi: 'Lưu khách hàng',
+      icon: HiOutlineUserAdd,
+      bgColor: '#E0F7FA',
+      iconColor: '#00838F',
+      description: 'Save customer data to database',
+      descriptionVi: 'Lưu dữ liệu khách hàng vào database',
+    },
+  ],
+  zalo: [
+    {
       type: 'select_zalo_account',
       name: 'Select Zalo Account',
       nameVi: 'Chọn tài khoản Zalo',
@@ -330,16 +342,6 @@ export const nodeConfigs = {
       description: 'Get group info from selected account',
       descriptionVi: 'Lấy thông tin nhóm từ tài khoản đã chọn',
     },
-    {
-      type: 'save_customer',
-      name: 'Save Customer',
-      nameVi: 'Lưu khách hàng',
-      icon: HiOutlineUserAdd,
-      bgColor: '#E0F7FA',
-      iconColor: '#00838F',
-      description: 'Save customer data to database',
-      descriptionVi: 'Lưu dữ liệu khách hàng vào database',
-    },
   ],
 };
 
@@ -348,6 +350,7 @@ export const getAllNodeConfigs = () => [
   ...nodeConfigs.actions,
   ...nodeConfigs.logic,
   ...nodeConfigs.data,
+  ...nodeConfigs.zalo,
 ];
 
 // Custom edge type with hover and delete functionality
@@ -458,7 +461,7 @@ const StartNode = ({ data, selected }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2.5 !h-2.5 !bg-orange-400 !border-2 !border-white !-right-1.5 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-right-2 transition-transform group-hover:scale-125"
       />
     </div>
   );
@@ -478,7 +481,7 @@ const EndNode = ({ data, selected }) => {
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2.5 !h-2.5 !bg-orange-400 !border-2 !border-white !-left-1.5 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-left-2 transition-transform group-hover:scale-125"
       />
       <div className="p-2.5 sm:p-3 flex flex-col items-center justify-center gap-2 sm:gap-2.5">
         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-50 flex items-center justify-center">
@@ -513,7 +516,7 @@ const TaskNode = ({ data, selected }) => {
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2.5 !h-2.5 !bg-orange-400 !border-2 !border-white !-left-1.5 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-left-2 transition-transform group-hover:scale-125"
       />
       <div className="p-2.5 sm:p-3 flex flex-col items-center justify-center gap-2 sm:gap-2.5">
         <div
@@ -532,7 +535,7 @@ const TaskNode = ({ data, selected }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2.5 !h-2.5 !bg-orange-400 !border-2 !border-white !-right-1.5 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-right-2 transition-transform group-hover:scale-125"
       />
     </div>
   );

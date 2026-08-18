@@ -3050,6 +3050,11 @@ export default {
       connect: 'Connect',
       selectBotToConfigure: 'Select a chatbot to configure',
 
+      // Mobile tab switcher
+      tabList: 'Bots',
+      tabChat: 'Chat',
+      tabSettings: 'Settings',
+
       // Deploy tab
       widgetSettings: 'Widget Settings',
       scriptCode: 'Script Code',
@@ -3661,7 +3666,8 @@ export default {
     channelHotlineLabel: 'Hotline',
     channelHotlineMeta: 'Free consultation',
     channelOfficeLabel: 'Office',
-    channelOfficeMeta: 'Room I101B',
+    channelOfficeValue: 'VNU-HCM',
+    channelOfficeMeta: 'Room I101B, Software Park, VNU-HCM',
     channelTaxIdLabel: 'Tax ID',
     channelTaxIdMeta: 'Tax Identification Number',
     trustStat1Label: 'Avg. response',
@@ -3746,6 +3752,7 @@ export default {
     docs: 'Docs',
     home: 'Home',
     pricing: 'Pricing',
+    upgrade: 'Upgrade',
     contact: 'Contact',
     changePassword: 'Change Password',
     logout: 'Logout',
@@ -3806,6 +3813,56 @@ export default {
       descriptionPlaceholder: 'Description about this trigger...',
       note: 'Note',
       noteTriggerLaunch: 'This node will launch the campaign when you click "Run".',
+    },
+
+    // Condition node
+    condition: {
+      nodeName: 'Node name',
+      nodeNamePlaceholder: 'Condition',
+      description: 'Description',
+      descriptionPlaceholder: 'Describe this condition...',
+      matchMode: 'Combine',
+      matchAll: 'All (AND)',
+      matchAny: 'Any (OR)',
+      rules: 'Rules',
+      addRule: 'Add rule',
+      fieldPlaceholder: 'Field (e.g. email, tag)',
+      valuePlaceholder: 'Value',
+      note: 'Note',
+      noteHelp: 'Rules are evaluated in order; the next node runs when the combination matches (AND/OR).',
+    },
+
+    // Tag contact node
+    tagContact: {
+      nodeName: 'Node name',
+      nodeNamePlaceholder: 'Tag contact',
+      description: 'Description',
+      descriptionPlaceholder: 'Describe this tagging action...',
+      action: 'Action',
+      actionAdd: 'Add tag',
+      actionRemove: 'Remove tag',
+      tagName: 'Tag name',
+      tagNamePlaceholder: 'e.g. lead-hot, vip, contacted',
+      sourceNode: 'Contact source',
+      sourceNodePlaceholder: '— Pick a node providing the contact list —',
+      note: 'Note',
+      noteHelp: 'The add/remove tag action applies to every contact returned by the selected source node.',
+    },
+
+    // Update attribute node
+    updateAttribute: {
+      nodeName: 'Node name',
+      nodeNamePlaceholder: 'Update attribute',
+      description: 'Description',
+      descriptionPlaceholder: 'Describe this update action...',
+      field: 'Field to update',
+      fieldPlaceholder: 'e.g. status, score, lastContactAt',
+      value: 'New value',
+      valuePlaceholder: 'Value (text/number)',
+      sourceNode: 'Contact source',
+      sourceNodePlaceholder: '— Pick a node providing the contact list —',
+      note: 'Note',
+      noteHelp: 'The field is updated for every contact returned by the source node. For per-row different values, use a Data node with mapping upstream.',
     },
 
     // Email send section
@@ -4014,6 +4071,13 @@ export default {
     trialActivateFailed: 'Could not activate the trial plan. Please try again.',
     choosePlan: 'Choose plan',
     claimOffer: 'Claim offer',
+    currentPlanBadge: 'Your current plan',
+    managePlan: 'Manage plan',
+    currentPlanMeta: 'Active — renews {date}',
+    currentPlanNoExpiry: 'Active',
+    customPlanBannerTitle: 'You are on a custom plan',
+    customPlanBannerDesc: 'Your plan is tailored specifically for your team and is not shown on the public pricing page. Our team will reach out for renewals and adjustments.',
+    customPlanBannerCta: 'Open management',
     promoDiscount: 'SAVE {pct}%',
     trialOffer: '14-day free trial — no credit card required',
     planNames: {
@@ -4549,6 +4613,9 @@ export default {
     triggers: 'Triggers',
     actions: 'Actions',
     data: 'Data',
+    logic: 'Logic',
+    zalo: 'Zalo (Accounts & Groups)',
+    paletteOrderHint: 'The number on each node is the suggested execution order. Email: Triggers → Data → Logic → Actions. Zalo: Triggers → Zalo → Data → Logic → Actions.',
     properties: 'Properties',
     name: 'Name',
     type: 'Type',
@@ -6032,6 +6099,55 @@ export default {
     heroTrust1: '14-day free trial',
     heroTrust2: 'No credit card required',
     heroTrust3: 'Cancel anytime',
+    // Campaign Demo section
+    campaignDemoBadge: 'Live Demo',
+    campaignDemoTitle: 'How does a campaign run?',
+    campaignDemoSubtitle: 'See the detailed steps (nodes) that each campaign runs in Founder AI. Click any type to view the live simulation.',
+    campaignDemo: {
+      emailTitle: 'Email Marketing',
+      emailDesc: 'Send bulk emails and track open rates, clicks, and conversions',
+      zaloPersonalTitle: 'Zalo Personal',
+      zaloPersonalDesc: 'Send Zalo OA messages to each customer individually',
+      zaloGroupTitle: 'Zalo Group',
+      zaloGroupDesc: 'Post to Zalo groups you have already joined',
+      tipTitle: 'Tip:',
+      tipContent: 'You can run all 3 campaign types simultaneously to reach customers across multiple channels, increasing conversion rates up to 3x.',
+    },
+    // Campaign Flow Modal
+    campaignFlow: {
+      title: 'Campaign Simulation',
+      subtitle: 'Nodes run according to the real system flow',
+      nodes: 'Nodes',
+      executing: 'Executing',
+      results: 'Campaign Results',
+      autoLoop: 'Auto restart',
+      close: 'Close',
+    },
+    // Hero Chatbot Widget - Contact Form
+    heroConsultation: {
+      title: 'Consultation Assistant',
+      welcomeMessage: `Hello! I am Foundy - Founder AI Assistant.
+Feel free to ask me anything!`,
+      suggestionsTitle: 'Suggestions:',
+      placeholder: 'Enter your question...',
+      openChat: 'Get Consultation',
+      close: 'Close',
+      freeChats: 'Free Consultation',
+      quotaTitle: 'Limit Reached',
+      quotaExceeded: 'You have reached your free consultation limit. Fill out the form below, our team will call you back within 24 hours!',
+      loginToContinue: 'Log in to continue',
+      quickReplies: [
+        { id: 'pricing', text: 'How much is it?', response: 'Founder AI has 3 pricing plans:\n\n💎 **Starter** - $39/month: Perfect for individuals, 1 landing page, 500 emails/month\n\n🚀 **Pro** - $99/month: For small businesses, 5 landing pages, 2000 emails, Zalo automation\n\n🏢 **Enterprise** - Contact for quote: Full features, advanced CRM, priority support\n\nWhich plan interests you?' },
+        { id: 'start', text: 'Best plan for beginners?', response: 'For beginners, I recommend the **Starter** plan - $39/month:\n\n✅ 1 Landing Page\n✅ 500 emails/month\n✅ Basic auto reply\n✅ Tracking dashboard\n✅ Vietnamese support\n\n**Free 7-day trial** available if you want to experience before deciding!' },
+        { id: 'landing', text: 'What is a Landing Page?', response: 'A **Landing Page** is a single-purpose destination page - usually for sign-ups or purchases.\n\nWith Founder AI:\n✅ No coding needed, easy drag-and-drop\n✅ Ready professional templates\n✅ Lead capture form integration\n✅ A/B testing for conversion optimization\n✅ Responsive - looks great on all devices' },
+        { id: 'email', text: 'What is Email Marketing?', response: '**Email Marketing** is sending bulk emails to potential customers for nurturing and conversion.\n\nWith Founder AI:\n✅ AI-powered email writing\n✅ Professional email templates\n✅ Send 2000+ emails/month (varies by plan)\n✅ Track open rates and clicks\n✅ Automatic customer segmentation\n\nWant to learn more about any feature?' },
+        { id: 'zalo', text: 'Zalo Automation?', response: '**Zalo Automation** helps you:\n\n🤖 Auto reply to Zalo messages 24/7\n📊 Store chat history\n👥 Automatic customer classification\n🔗 Connect with CRM for lead nurturing\n\nCustomers messaging at 2 AM still get instant replies!\n\nThis feature is available in Pro plan and above.' },
+        { id: 'trial', text: 'Free trial available?', response: 'Yes! Founder AI offers **7-day free trial** with full features.\n\n🎁 Sign up now, no credit card required\n✅ Create 1 landing page\n✅ Send 100 test emails\n✅ Basic Zalo auto reply\n\n\nWant to start your free trial?' },
+        { id: 'compare', text: 'Compare with competitors?', response: 'Founder AI stands out with **ALL-IN-ONE** platform:\n\n📊 Compared to scattered tools (Mailchimp + Unbounce + Zalo OA):\n✅ Single account manages everything\n✅ Synchronized data - leads from landing → email → Zalo → CRM\n✅ Vietnamese interface, Vietnam support\n✅ Transparent pricing, no hidden fees\n\n\nWhich tools are you currently using?' },
+        { id: 'support', text: 'Vietnamese support?', response: 'Absolutely! Founder AI is **designed specifically for the Vietnamese market**:\n\n🇻🇳 100% Vietnamese interface\n📞 Vietnamese support team 24/7\n💬 Chat, Zalo, Hotline available\n📚 Vietnamese documentation and guides\n🎓 Online courses in Vietnamese\n\nAnything else you need help with?' },
+        { id: 'campaign_demo', text: '🎬 How does a campaign run?', response: 'A campaign in Founder AI is built from **nodes** connected together, similar to the Zalo personal / group / Email flows you see.\n\n**Example: an Email Marketing flow with 8 nodes:**\n\n1️⃣ **Manual Trigger** — start the campaign with a button click\n2️⃣ **Read customer list** — from CRM, Sheet, or Landing Leads\n3️⃣ **Filter by condition** — e.g. VIP customers, purchased > 1 time\n4️⃣ **Send Email** — template with variables `{{customer_name}}`, `{{product}}`\n5️⃣ **Wait 24 hours** — let customers open the email\n6️⃣ **Check if opened?** — branch into 2 paths\n7️⃣ **Send reminder email** — for the not-opened branch\n8️⃣ **Save customer & End** — save history back to CRM\n\nEach node has its own **config**: email template, delay duration, filter conditions, Zalo account used for sending... You drag & drop in Campaign Builder to auto-generate a JSON flow, and the backend executes it node-by-node in order.\n\nClick the button below to see a visual simulation of these 8 nodes running step by step!', isAction: 'open_campaign_demo' },
+      ],
+    },
   },
 
   // About Page
@@ -6153,6 +6269,30 @@ export default {
     heroTrust1: '14-day free trial',
     heroTrust2: 'No credit card required',
     heroTrust3: 'Cancel anytime',
+    // Campaign Demo section
+    campaignDemoBadge: 'Live Demo',
+    campaignDemoTitle: 'How does a campaign run?',
+    campaignDemoSubtitle: 'See the detailed steps (nodes) that each campaign runs in Founder AI. Click any type to view the live simulation.',
+    campaignDemo: {
+      emailTitle: 'Email Marketing',
+      emailDesc: 'Send bulk emails and track open rates, clicks, and conversions',
+      zaloPersonalTitle: 'Zalo Personal',
+      zaloPersonalDesc: 'Send Zalo OA messages to each customer individually',
+      zaloGroupTitle: 'Zalo Group',
+      zaloGroupDesc: 'Post to Zalo groups you have already joined',
+      tipTitle: 'Tip:',
+      tipContent: 'You can run all 3 campaign types simultaneously to reach customers across multiple channels, increasing conversion rates up to 3x.',
+    },
+    // Campaign Flow Modal
+    campaignFlow: {
+      title: 'Campaign Simulation',
+      subtitle: 'Nodes run according to the real system flow',
+      nodes: 'Nodes',
+      executing: 'Executing',
+      results: 'Campaign Results',
+      autoLoop: 'Auto restart',
+      close: 'Close',
+    },
   },
 
   // Footer

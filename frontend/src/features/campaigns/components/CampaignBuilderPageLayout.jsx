@@ -22,6 +22,96 @@ import NodeConfigModal from './NodeConfigModal';
 import { nodeConfigs } from './CampaignBuilderFlowNodes';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 
+/**
+ * Số thứ tự cho mỗi node trên palette, đánh theo thứ tự thực thi gợi ý:
+ *   Triggers → Zalo (account / friends / groups) → Data → Logic → Actions.
+ * Thứ tự thay đổi theo từng loại chiến dịch (email / zalo / zalo_group) — mỗi
+ * loại có một dãy số riêng bắt đầu từ 1, giúp người dùng đọc trực quan thứ tự
+ * thả node khi dựng flow.
+ */
+const buildPaletteOrderByCampaignType = (campaignType) => {
+  const triggers = nodeConfigs.triggers;
+  const logic = nodeConfigs.logic;
+  const zaloNodes = nodeConfigs.zalo || [];
+  const selectZalo = zaloNodes.find((n) => n.type === 'select_zalo_account');
+  const getAllFriends = zaloNodes.find((n) => n.type === 'get_all_friends');
+  const getAllGroups = zaloNodes.find((n) => n.type === 'get_all_groups');
+
+  const normalizedType = String(campaignType || '').trim().toLowerCase();
+
+  // Email: chỉ dùng common data + email action; không có node zalo.
+  if (normalizedType === 'email') {
+    return [...triggers, ...nodeConfigs.data, ...logic, ...nodeConfigs.actions];
+  }
+
+  // Zalo cá nhân: trigger → chọn TK → lấy bạn bè → data → logic → action zalo cá nhân.
+  if (normalizedType === 'zalo' || normalizedType === 'zalo_personal'
+      || normalizedType === 'zalo-individual' || normalizedType === 'zalo_individual') {
+    const zaloFlow = [selectZalo, getAllFriends].filter(Boolean);
+    const actions = nodeConfigs.actions.filter(
+      (n) => n.type === 'send_zalo_personal' || n.type === 'send_zalo_friend_request'
+    );
+    return [...triggers, ...zaloFlow, ...nodeConfigs.data, ...logic, ...actions];
+  }
+
+  // Zalo nhóm: trigger → chọn TK → lấy nhóm → data (không có read_interested_customers) → logic → action zalo group.
+  if (normalizedType === 'zalo-group' || normalizedType === 'zalo_group' || normalizedType === 'group_zalo') {
+    const zaloFlow = [selectZalo, getAllGroups].filter(Boolean);
+    const data = nodeConfigs.data.filter(
+      (n) => n.type !== 'read_interested_customers'
+    );
+    const actions = nodeConfigs.actions.filter((n) => n.type === 'send_zalo_group');
+    return [...triggers, ...zaloFlow, ...data, ...logic, ...actions];
+  }
+
+  // Fallback: giữ thứ tự gộp đầy đủ (mọi node đều có số, không hiển thị '-').
+  return [
+    ...triggers,
+    ...(selectZalo ? [selectZalo] : []),
+    ...(getAllFriends ? [getAllFriends] : []),
+    ...(getAllGroups ? [getAllGroups] : []),
+    ...nodeConfigs.data,
+    ...logic,
+    ...nodeConfigs.actions,
+  ];
+};
+
+const buildNodeOrderIndex = (campaignType) => {
+  const order = buildPaletteOrderByCampaignType(campaignType);
+  return order.reduce((acc, node, index) => {
+    acc[node.type] = index + 1;
+    return acc;
+  }, {});
+};
+
+const NodePaletteItem = ({ node, orderIndex, onDragStart }) => {
+  const { locale } = useI18n();
+  const hasOrder = typeof orderIndex === 'number' || (typeof orderIndex === 'string' && orderIndex !== '-');
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, node.type, node)}
+      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors gap-2 sm:gap-2.5"
+    >
+      <span
+        className="shrink-0 w-5 h-5 sm:w-5 sm:h-5 rounded bg-slate-50 text-slate-400 text-[10px] font-medium flex items-center justify-center tabular-nums border border-slate-200/70"
+        title={hasOrder ? 'Thứ tự gợi ý' : ''}
+      >
+        {orderIndex}
+      </span>
+      <div
+        className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0"
+        style={{ backgroundColor: node.bgColor }}
+      >
+        <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
+      </div>
+      <span className="text-sm text-gray-700 leading-5 truncate">
+        {locale === 'vi' ? node.nameVi : node.name}
+      </span>
+    </div>
+  );
+};
+
 const CampaignBuilderPageLayout = ({
   campaignName,
   campaignStatus,
@@ -110,10 +200,11 @@ const CampaignBuilderPageLayout = ({
   leaveModalTitle,
   leaveModalMessage,
 }) => {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const campaignTypeMeta = getCampaignTypeMeta(campaignType);
   const [isNodeMenuCollapsed, setIsNodeMenuCollapsed] = useState(false);
   const effectiveBuilderSidebarWidth = isNodeMenuCollapsed ? 52 : builderSidebarWidth;
+  const NODE_ORDER_INDEX = buildNodeOrderIndex(campaignType);
 
   return (
     <div className="h-full min-h-0 w-full min-w-0 overflow-hidden flex flex-col">
@@ -228,6 +319,11 @@ const CampaignBuilderPageLayout = ({
 
           {!isNodeMenuCollapsed && (
             <div className="flex-1 min-h-0 overflow-y-auto px-2.5 sm:px-3 pb-2.5 sm:pb-3">
+            {/* Hint: thứ tự thực thi gợi ý — số ở đầu mỗi node trong palette. */}
+            <div className="mb-3 px-2 py-1.5 rounded-md bg-slate-50 border border-slate-100 text-[11px] text-slate-500 leading-relaxed">
+              {t('campaignBuilder.paletteOrderHint')}
+            </div>
+
             <div className="mb-2">
               <button
                 onClick={() => toggleCategory('Triggers')}
@@ -239,17 +335,12 @@ const CampaignBuilderPageLayout = ({
               {expandedCategories.includes('Triggers') && (
                 <div className="space-y-1">
                   {filterNodes(nodeConfigs.triggers).map((node) => (
-                    <div
+                    <NodePaletteItem
                       key={node.type}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, node.type, node)}
-                      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors gap-2.5 sm:gap-3"
-                    >
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: node.bgColor }}>
-                        <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
-                      </div>
-                      <span className="text-sm text-gray-700 leading-5">{locale === 'vi' ? node.nameVi : node.name}</span>
-                    </div>
+                      node={node}
+                      orderIndex={NODE_ORDER_INDEX[node.type] ?? '-'}
+                      onDragStart={onDragStart}
+                    />
                   ))}
                 </div>
               )}
@@ -257,26 +348,25 @@ const CampaignBuilderPageLayout = ({
 
             <div className="mb-2">
               <button
-                onClick={() => toggleCategory('Actions')}
+                onClick={() => toggleCategory('Zalo')}
                 className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
               >
-                <span>{t('campaignBuilder.actions')}</span>
-                <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Actions') ? '' : '-rotate-90'}`} />
+                <span>{t('campaignBuilder.zalo')}</span>
+                <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Zalo') ? '' : '-rotate-90'}`} />
               </button>
-              {expandedCategories.includes('Actions') && (
+              {expandedCategories.includes('Zalo') && (
                 <div className="space-y-1">
-                  {filterNodes(nodeConfigs.actions.filter((node) => allowedActionNodeTypes.has(node.type))).map((node) => (
-                    <div
+                  {filterNodes(nodeConfigs.zalo.filter((node) => {
+                    if (allowedDataNodeTypes && !allowedDataNodeTypes.has(node.type)) return false;
+                    if (suppressGetAllFriendsPalette && node.type === 'get_all_friends') return false;
+                    return true;
+                  })).map((node) => (
+                    <NodePaletteItem
                       key={node.type}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, node.type, node)}
-                      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors gap-2.5 sm:gap-3"
-                    >
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: node.bgColor }}>
-                        <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
-                      </div>
-                      <span className="text-sm text-gray-700 leading-5">{locale === 'vi' ? node.nameVi : node.name}</span>
-                    </div>
+                      node={node}
+                      orderIndex={NODE_ORDER_INDEX[node.type] ?? '-'}
+                      onDragStart={onDragStart}
+                    />
                   ))}
                 </div>
               )}
@@ -294,20 +384,58 @@ const CampaignBuilderPageLayout = ({
                 <div className="space-y-1">
                   {filterNodes(nodeConfigs.data.filter((node) => {
                     if (allowedDataNodeTypes && !allowedDataNodeTypes.has(node.type)) return false;
-                    if (suppressGetAllFriendsPalette && node.type === 'get_all_friends') return false;
                     return true;
                   })).map((node) => (
-                    <div
+                    <NodePaletteItem
                       key={node.type}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, node.type, node)}
-                      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors gap-2.5 sm:gap-3"
-                    >
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: node.bgColor }}>
-                        <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
-                      </div>
-                      <span className="text-sm text-gray-700 leading-5">{locale === 'vi' ? node.nameVi : node.name}</span>
-                    </div>
+                      node={node}
+                      orderIndex={NODE_ORDER_INDEX[node.type] ?? '-'}
+                      onDragStart={onDragStart}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-2">
+              <button
+                onClick={() => toggleCategory('Logic')}
+                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
+              >
+                <span>{t('campaignBuilder.logic')}</span>
+                <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Logic') ? '' : '-rotate-90'}`} />
+              </button>
+              {expandedCategories.includes('Logic') && (
+                <div className="space-y-1">
+                  {filterNodes(nodeConfigs.logic).map((node) => (
+                    <NodePaletteItem
+                      key={node.type}
+                      node={node}
+                      orderIndex={NODE_ORDER_INDEX[node.type] ?? '-'}
+                      onDragStart={onDragStart}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-2">
+              <button
+                onClick={() => toggleCategory('Actions')}
+                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
+              >
+                <span>{t('campaignBuilder.actions')}</span>
+                <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Actions') ? '' : '-rotate-90'}`} />
+              </button>
+              {expandedCategories.includes('Actions') && (
+                <div className="space-y-1">
+                  {filterNodes(nodeConfigs.actions.filter((node) => allowedActionNodeTypes.has(node.type))).map((node) => (
+                    <NodePaletteItem
+                      key={node.type}
+                      node={node}
+                      orderIndex={NODE_ORDER_INDEX[node.type] ?? '-'}
+                      onDragStart={onDragStart}
+                    />
                   ))}
                 </div>
               )}

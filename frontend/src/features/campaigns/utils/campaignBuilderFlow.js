@@ -8,6 +8,10 @@ const ZALO_PERSONAL_DATA_NODE_TYPES = ['get_all_friends'];
 const ZALO_GROUP_DATA_NODE_TYPES = ['get_all_groups'];
 const ZALO_GROUP_COMMON_DATA_NODE_TYPES = ['read_sheet', 'read_courses_db', 'read_products_db', 'read_landing_leads', 'save_customer'];
 
+// Logic nodes (điều kiện, gắn tag, cập nhật thuộc tính) khả dụng cho mọi loại
+// chiến dịch — không bị giới hạn theo email/zalo/zalo_group.
+const LOGIC_NODE_TYPES = ['condition', 'tag_contact', 'update_attribute'];
+
 /**
  * Chuẩn hóa campaign type từ nhiều định dạng legacy về key nội bộ.
  *
@@ -61,6 +65,15 @@ export const isTriggerNodeType = (nodeType) => {
   const value = nodeType || '';
   return value === 'manual_trigger' || value.includes('trigger') || value === 'start';
 };
+
+/**
+ * Logic node (điều kiện, gắn tag, cập nhật thuộc tính) — luôn được phép, không phụ
+ * thuộc loại chiến dịch.
+ *
+ * @param {string} nodeType
+ * @returns {boolean}
+ */
+export const isLogicNodeType = (nodeType) => LOGIC_NODE_TYPES.includes(String(nodeType || ''));
 
 /**
  * Flow có ít nhất một node «Chọn tài khoản Zalo» bật pool đa TK (có ít nhất 1 id trong pool).
