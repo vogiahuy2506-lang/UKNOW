@@ -107,6 +107,38 @@ bằng cách đối chiếu **vật thể code** mà plan hứa tạo ra.
 | Tự gia hạn SSL cho tên miền riêng | `c561668` |
 | Marketplace: thiết kế lại + sửa `campaigns.origin` | `2a5a5a2` |
 
+## Trung tâm trợ giúp
+
+| Việc | Commit |
+|---|---|
+| Dán Markdown do AI viết vào bài hướng dẫn không mất định dạng | `52bd947` |
+
+Quy trình: soạn ý chính → nhờ AI viết Markdown → dán vào trang admin qua nút **"Dán Markdown"**
+→ chèn ảnh chụp màn hình (nút Chèn ảnh hoặc Ctrl+V, tự upload qua `/api/uploads/help-image`).
+
+**Bốn ràng buộc trong `miniMarkdownToHtml.js` — đừng gỡ, mỗi cái vá một lỗi thật:**
+
+1. **Ảnh xử lý trước link** — `![alt](url)` cũng khớp regex link, đảo thứ tự là ra thẻ `<a>` sai.
+2. **Escape cả `"` và `'` trước khi parse** — URL được nội suy vào thuộc tính, thiếu escape nháy
+   kép thì `![x](" onerror=...)` tiêm được thuộc tính.
+3. **Placeholder stashing** — cất `<a>/<img>/<code>` ra khỏi chuỗi trước khi chạy luật đậm/nghiêng.
+   Không có nó thì gạch dưới trong URL vắt sang `target="_blank"` của chính thẻ vừa sinh, làm hỏng
+   **mọi** link kiểu `/bao_cao`.
+4. **Luật `_` tôn trọng ranh giới từ** (CommonMark §6.2) — để `snake_case` như `get_user_by_id`
+   không biến thành chữ nghiêng.
+
+Ba trong bốn lỗi trên cùng một họ: **quét regex tuần tự trên chuỗi đang dần thành HTML thì luật
+sau va vào output của luật trước**. Nếu cần thêm cú pháp (danh sách lồng, footnote), cân nhắc
+chuyển sang `marked` + `DOMPurify` thay vì mở rộng tiếp bộ regex tự viết.
+
+**Editor:** phải giữ extension bảng của TipTap (`@tiptap/extension-table`). Thiếu nó thì
+ProseMirror loại node ngoài schema — bảng hiện đúng lúc vừa chèn rồi **biến mất sau khi lưu và mở
+lại**, không báo lỗi.
+
+**Không làm (có chủ đích):** import PDF "giữ nguyên thiết kế". PDF chỉ có toạ độ chữ, muốn giữ
+nguyên thì phải render mỗi trang thành ảnh → RAG mù, dịch tự động không đọc được, đọc trên điện
+thoại rất tệ. Bài hướng dẫn phải là văn bản để `htmlToPlainText` còn index cho trợ lý AI.
+
 ## Hạ tầng & CI
 
 | Việc | Commit |
