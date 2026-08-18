@@ -16,6 +16,7 @@ import {
 import { OAuth2Client } from 'google-auth-library';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getSystemAuditContext } from '../utils/auditContext.util.js';
+import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -96,6 +97,17 @@ class AuthController {
       // Đánh dấu mã xác minh đã dùng
       await verificationService.markCodeAsUsed(verification.id);
 
+      const trial = await grantSignupTrial({ userId: user.id, userEmail: user.email });
+      if (trial) {
+        user.active_plan_id = trial.activePlanId;
+        user.subscription_expires_at = trial.expiresAt;
+        await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_PLAN_CHANGED, AUDIT_ENTITY_TYPES.USER, user.id, {
+          source: 'signup_auto_trial',
+          planCode: trial.planCode,
+          expiresAt: trial.expiresAt,
+        });
+      }
+
       const accessToken = this.generateAccessToken(user);
       const refreshToken = await this.generateRefreshToken(user, req);
       this.setRefreshTokenCookie(res, refreshToken);
@@ -121,6 +133,7 @@ class AuthController {
         data: {
           user: this.formatUser(user),
           accessToken,
+          trial,
         },
       });
     } catch (error) {
@@ -321,6 +334,7 @@ class AuthController {
       );
 
       let user;
+      let trial = null;
 
       // 3. Nếu chưa tồn tại, tạo mới
       if (result.rows.length === 0) {
@@ -349,6 +363,17 @@ class AuthController {
           [username, email, passwordHash, name || null, picture || null]
         );
         user = insertResult.rows[0];
+
+        trial = await grantSignupTrial({ userId: user.id, userEmail: user.email });
+        if (trial) {
+          user.active_plan_id = trial.activePlanId;
+          user.subscription_expires_at = trial.expiresAt;
+          await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_PLAN_CHANGED, AUDIT_ENTITY_TYPES.USER, user.id, {
+            source: 'signup_auto_trial',
+            planCode: trial.planCode,
+            expiresAt: trial.expiresAt,
+          });
+        }
 
         // Gửi Welcome Email cho user mới đăng ký qua Google (async)
         const { full_name, email: userEmail } = user;
@@ -423,6 +448,7 @@ class AuthController {
         data: {
           user: responseUser,
           accessToken,
+          trial,
         },
       });
     } catch (error) {

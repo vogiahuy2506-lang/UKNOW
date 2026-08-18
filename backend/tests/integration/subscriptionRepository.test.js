@@ -12,7 +12,6 @@ import {
   findExpiredUsers,
   expireUserPlan,
   incrementReminderCount,
-  assignPlanWithExpiry,
   isReturningCustomer,
 } from '../../src/repositories/subscription/subscription.repository.js';
 import db from '../../src/config/database.js';
@@ -158,72 +157,6 @@ describe('incrementReminderCount(userId)', () => {
   });
 });
 
-// ===========================================================================
-// assignPlanWithExpiry
-// ===========================================================================
-describe('assignPlanWithExpiry(userId, planId)', () => {
-  it('user chưa có expires_at → expires = NOW + 1 month', async () => {
-    const plan = await createPlan({ code: 'fresh' });
-    const user = await createUser({ username: 'fresh-buyer', withPlan: false });
-
-    const result = await assignPlanWithExpiry(user.id, plan.id);
-    expect(Number(result.active_plan_id)).toBe(Number(plan.id));
-
-    const ms = new Date(result.subscription_expires_at).getTime();
-    const days = (ms - Date.now()) / 86400000;
-    expect(days).toBeGreaterThan(27);
-    expect(days).toBeLessThan(33);
-  });
-
-  it('user có expires_at còn hạn → gia hạn += 1 month (renewal)', async () => {
-    const plan = await createPlan({ code: 'renew' });
-    const user = await createUser({ username: 'renew-buyer' });
-    const future = new Date(Date.now() + 15 * 86400000);
-    await setSubscription(user.id, plan.id, future, 2);
-
-    const result = await assignPlanWithExpiry(user.id, plan.id);
-
-    const newExpires = new Date(result.subscription_expires_at).getTime();
-    const extraDays = (newExpires - future.getTime()) / 86400000;
-    expect(extraDays).toBeGreaterThan(27);
-    expect(extraDays).toBeLessThan(33);
-  });
-
-  it('user có expires_at đã hết hạn → tính lại từ NOW + 1 month (không cộng vào quá khứ)', async () => {
-    const plan = await createPlan({ code: 're-old' });
-    const user = await createUser({ username: 'old-customer' });
-    const past = new Date(Date.now() - 30 * 86400000);
-    await setSubscription(user.id, plan.id, past, 3);
-
-    const result = await assignPlanWithExpiry(user.id, plan.id);
-    const days = (new Date(result.subscription_expires_at).getTime() - Date.now()) / 86400000;
-    expect(days).toBeGreaterThan(27);
-    expect(days).toBeLessThan(33);
-  });
-
-  it('reset reminder_count về 0 sau khi gia hạn', async () => {
-    const plan = await createPlan({ code: 'cnt' });
-    const user = await createUser({ username: 'cnt-user' });
-    await db.query(
-      `UPDATE users SET subscription_reminder_count = 2 WHERE id = $1`,
-      [user.id]
-    );
-
-    await assignPlanWithExpiry(user.id, plan.id);
-
-    const u = await db.query(
-      `SELECT subscription_reminder_count FROM users WHERE id = $1`,
-      [user.id]
-    );
-    expect(u.rows[0].subscription_reminder_count).toBe(0);
-  });
-
-  it('user không tồn tại → trả null', async () => {
-    const plan = await createPlan({ code: 'ghost' });
-    const result = await assignPlanWithExpiry(999999, plan.id);
-    expect(result).toBeNull();
-  });
-});
 
 // ===========================================================================
 // isReturningCustomer

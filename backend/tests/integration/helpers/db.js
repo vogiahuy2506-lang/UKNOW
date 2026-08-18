@@ -11,12 +11,43 @@ import { _clearQuotaCache } from '../../../src/utils/userSendLimit.util.js';
  * Truncate hết bảng dữ liệu giữa các test để bảo đảm test idempotent.
  * Không truncate schema_migrations để khỏi rerun bootstrap.
  */
+/**
+ * Chạy lại khi Postgres báo deadlock (SQLSTATE 40P01).
+ *
+ * Vì sao cần: `truncateAll()` chạy ở `beforeEach` của MỌI suite và lấy khoá
+ * ACCESS EXCLUSIVE trên ~60 bảng cùng lúc. Integration chạy `--runInBand` nên công
+ * việc bất đồng bộ còn sót của test trước (ghi `login_history`, audit log, reconcile
+ * lưu trữ…) vẫn có thể đang giữ khoá dòng khi TRUNCATE bắt đầu → chờ vòng tròn →
+ * Postgres giết một bên.
+ *
+ * Đây là nguyên nhân thật của chuyện integration đỏ giả ngẫu nhiên (đo 18/08/2026):
+ * mỗi lần đỏ một suite khác nhau vì `beforeEach` ở đâu cũng có, còn chạy riêng từng
+ * file thì luôn xanh vì không có việc sót từ suite trước.
+ *
+ * KHÔNG thêm 40P01 vào `isConnectionError` của `src/config/database.js`: ở production,
+ * deadlock là dấu hiệu sai thứ tự khoá và phải lộ ra, không được âm thầm thử lại.
+ * Tranh chấp lúc dọn bảng giữa các test thì khác — lành tính và thử lại được.
+ */
+async function retryOnDeadlock(operation, maxRetries = 5) {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (error?.code !== '40P01') throw error;
+      await new Promise((r) => setTimeout(r, 100 * (i + 1)));
+    }
+  }
+  throw lastError;
+}
+
 export async function truncateAll() {
   // RESTART IDENTITY tái sử dụng user id giữa các test — phải xóa quota cache
   // (TTL 10s, key theo billingUserId) để limits/counts của test trước không
   // rò sang test sau trong cùng process (runInBand dùng chung process cho mọi file).
   _clearQuotaCache();
-  await db.query(`
+  await retryOnDeadlock(() => db.query(`
     TRUNCATE TABLE
       usage_logs,
       dashboard_insights,
@@ -73,7 +104,7 @@ export async function truncateAll() {
       plans,
       users
     RESTART IDENTITY CASCADE
-  `);
+  `));
 }
 
 /**
@@ -214,12 +245,13 @@ export async function createPlan(overrides = {}) {
   const isCustom = overrides.isCustom ?? false;
   const isActive = overrides.isActive ?? true;
   const maxEmployees = overrides.maxEmployees ?? 5;
+  const durationDays = overrides.durationDays ?? overrides.duration_days ?? 30;
 
   const { rows } = await db.query(
     `INSERT INTO plans (code, name, price, description, features, max_employees, is_active, is_custom,
                         daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
-                        ai_credits_per_period, messages_per_period)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                        ai_credits_per_period, messages_per_period, duration_days, max_chatbots)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING *`,
     [
       code,
@@ -236,6 +268,8 @@ export async function createPlan(overrides = {}) {
       overrides.monthlyZaloLimit ?? null,
       overrides.aiCreditsPerPeriod ?? null,
       overrides.messagesPerPeriod ?? null,
+      durationDays,
+      overrides.maxChatbots ?? overrides.max_chatbots ?? null,
     ]
   );
   return rows[0];

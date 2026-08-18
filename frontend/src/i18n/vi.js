@@ -6234,6 +6234,22 @@ export default {
     errorOccurred: 'An error occurred. Please try again.',
   },
 
+  // Trial Welcome Modal
+  trialWelcome: {
+    title: 'Chào mừng bạn đến với Founder AI!',
+    subtitle: 'Tài khoản của bạn đã được kích hoạt gói dùng thử miễn phí.',
+    planLabel: 'Gói trải nghiệm',
+    duration: 'Thời hạn: {days} ngày',
+    expiresOn: 'Hết hạn vào: {date}',
+    highlightTitle: 'Quyền lợi gói trải nghiệm bao gồm:',
+    featureMessages: '{count} tin nhắn gửi đa kênh (Email & Zalo)',
+    featureAiCredits: '{count} AI credits trải nghiệm trợ lý thông minh',
+    featureChatbot: '{count} Trợ lý Chatbot AI đa nền tảng',
+    featureChatbotUnlimited: 'Trợ lý Chatbot AI không giới hạn',
+    startNow: 'Bắt đầu ngay',
+    viewPlans: 'Xem gói dịch vụ',
+  },
+
   // Forgot Password Page
   forgotPassword: {
     title: 'Quên mật khẩu',

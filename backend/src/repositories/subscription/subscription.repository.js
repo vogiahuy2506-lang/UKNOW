@@ -83,31 +83,6 @@ export async function incrementReminderCount(userId) {
   );
 }
 
-/**
- * Gán gói + set subscription_expires_at khi admin gán thủ công hoặc webhook PayOS.
- * Nếu user còn thời hạn cũ chưa hết → gia hạn từ ngày hết hạn cũ (không mất ngày).
- * Nếu đã hết hạn hoặc chưa có → tính từ NOW().
- *
- * @param {number} userId
- * @param {number} planId
- */
-export async function assignPlanWithExpiry(userId, planId) {
-  const { rows } = await db.query(
-    `UPDATE users
-     SET active_plan_id = $1,
-         subscription_expires_at = CASE
-           WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
-             THEN subscription_expires_at + INTERVAL '1 month'
-           ELSE NOW() + INTERVAL '1 month'
-         END,
-         subscription_reminder_count = 0,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = $2
-     RETURNING id, email, active_plan_id, subscription_expires_at`,
-    [planId, userId]
-  );
-  return rows[0] || null;
-}
 
 /**
  * Kiểm tra xem user đã từng mua gói chưa (khách cũ) — dựa vào lịch sử orders.

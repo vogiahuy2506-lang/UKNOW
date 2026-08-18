@@ -4,6 +4,7 @@ import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
 import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
+export const trialWelcomeKey = (userId) => `founderai_trial_welcome_${userId}`;
 
 const getStoredToken = (key) =>
   localStorage.getItem(key) || sessionStorage.getItem(key);
@@ -210,12 +211,20 @@ export const useAuthStore = create((set, get) => ({
    */
   googleLogin: async (tokenData, rememberMe = true) => {
     const response = await api.post('/auth/google-login', tokenData);
-    const { user, accessToken } = response.data.data;
+    const { user, accessToken, trial } = response.data.data;
 
     storeToken('accessToken', accessToken, rememberMe);
     const normalizedUser = normalizeUser(user);
     const activeContext = pickDefaultContext(normalizedUser);
     saveContext(activeContext);
+
+    if (trial && normalizedUser?.id) {
+      try {
+        localStorage.setItem(trialWelcomeKey(normalizedUser.id), JSON.stringify(trial));
+      } catch {
+        // ignore localStorage quota error
+      }
+    }
 
     set({ user: normalizedUser, isAuthenticated: true, activeContext });
 
@@ -224,12 +233,20 @@ export const useAuthStore = create((set, get) => ({
 
   register: async (data) => {
     const response = await api.post('/auth/register', data);
-    const { user, accessToken } = response.data.data;
+    const { user, accessToken, trial } = response.data.data;
 
     localStorage.setItem('accessToken', accessToken);
     const normalizedUser = normalizeUser(user);
     const activeContext = pickDefaultContext(normalizedUser);
     saveContext(activeContext);
+
+    if (trial && normalizedUser?.id) {
+      try {
+        localStorage.setItem(trialWelcomeKey(normalizedUser.id), JSON.stringify(trial));
+      } catch {
+        // ignore localStorage quota error
+      }
+    }
 
     set({ user: normalizedUser, isAuthenticated: true, activeContext });
 

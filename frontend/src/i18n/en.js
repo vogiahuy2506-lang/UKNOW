@@ -6253,6 +6253,22 @@ export default {
     errorOccurred: 'An error occurred. Please try again.',
   },
 
+  // Trial Welcome Modal
+  trialWelcome: {
+    title: 'Welcome to Founder AI!',
+    subtitle: 'Your account has been activated with a free trial plan.',
+    planLabel: 'Trial Plan',
+    duration: 'Duration: {days} days',
+    expiresOn: 'Expires on: {date}',
+    highlightTitle: 'Your trial benefits include:',
+    featureMessages: '{count} multi-channel messages (Email & Zalo)',
+    featureAiCredits: '{count} AI credits for smart assistant features',
+    featureChatbot: '{count} Multi-platform AI Chatbot Assistant',
+    featureChatbotUnlimited: 'Unlimited AI Chatbot Assistants',
+    startNow: 'Get Started',
+    viewPlans: 'View Plans & Pricing',
+  },
+
   // Forgot Password Page
   forgotPassword: {
     title: 'Forgot Password',

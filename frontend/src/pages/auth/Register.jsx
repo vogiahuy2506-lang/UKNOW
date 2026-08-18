@@ -122,10 +122,10 @@ const OtpStep = ({ email, formData, onBack }) => {
     if (code.length < 6) { toast.error(t('auth.enterFullCode')); return; }
     setIsSubmitting(true);
     try {
-      await registerUser({ ...formData, emailVerificationCode: code });
+      const result = await registerUser({ ...formData, emailVerificationCode: code });
       trackEvent('sign_up', { method: 'email' });
       toast.success(t('auth.registerSuccess'));
-      navigate('/');
+      navigate(getPostAuthPath(result?.data?.user));
     } catch (err) {
       const msg = err?.response?.data?.message || t('auth.verificationFailed');
       toast.error(msg);

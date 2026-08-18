@@ -10,6 +10,8 @@ import { useI18n } from '../i18n';
 import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
 import ChangePasswordModal from '../features/auth/components/ChangePasswordModal';
+import TrialWelcomeModal from '../features/auth/components/TrialWelcomeModal';
+import { trialWelcomeKey } from '../stores/authStore';
 
 const SIDEBAR_WIDTH_COLLAPSED = 44; // icon-only desktop width
 const SIDEBAR_WIDTH_EXPANDED = 220; // expanded desktop width
@@ -33,6 +35,31 @@ const MainLayout = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeContext = useAuthStore((state) => state.activeContext);
   const fetchAiCredits = useAuthStore((state) => state.fetchAiCredits);
+  const [trial, setTrial] = useState(null);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setTrial(null);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(trialWelcomeKey(user.id));
+      setTrial(stored ? JSON.parse(stored) : null);
+    } catch {
+      setTrial(null);
+    }
+  }, [user?.id]);
+
+  const handleCloseTrialWelcome = () => {
+    if (user?.id) {
+      try {
+        localStorage.removeItem(trialWelcomeKey(user.id));
+      } catch {
+        // ignore
+      }
+    }
+    setTrial(null);
+  };
 
   const isFullLayout =
     location.pathname.startsWith('/campaigns') &&
@@ -160,6 +187,12 @@ const MainLayout = () => {
           onChanged={() => updateUser({ ...user, mustChangePassword: false })}
         />
 
+        <TrialWelcomeModal
+          isOpen={Boolean(trial)}
+          trial={trial}
+          onClose={handleCloseTrialWelcome}
+        />
+
         {!isAiHomePage && !isChatbotStudio && (
           <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         )}
@@ -242,6 +275,19 @@ const MainLayout = () => {
           </div>
         </div>
       )}
+
+      <ChangePasswordModal
+        isOpen={mustChangePassword}
+        forced
+        onClose={() => {}}
+        onChanged={() => updateUser({ ...user, mustChangePassword: false })}
+      />
+
+      <TrialWelcomeModal
+        isOpen={Boolean(trial)}
+        trial={trial}
+        onClose={handleCloseTrialWelcome}
+      />
     </div>
   );
 };

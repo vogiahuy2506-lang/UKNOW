@@ -7,13 +7,13 @@
  * Mỗi test gọi HTTP thật qua supertest và kiểm tra cả response + DB state.
  * Mỗi test phải tự reset DB qua `truncateAll()` để không bị nhiễm chéo.
  */
-import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser, createVerificationCode } from './helpers/db.js';
+import { truncateAll, createUser, createVerificationCode, createPlan } from './helpers/db.js';
 
 let app;
 
@@ -138,6 +138,222 @@ describe('POST /api/auth/register', () => {
       emailVerificationCode: '123456',
     });
     expect(res.status).toBe(400);
+  });
+
+  it('có gói trial → tự động cấp gói dùng thử, tạo order free và ghi audit log', async () => {
+    const trialPlan = await createPlan({
+      code: 'trial',
+      name: 'Gói dùng thử',
+      price: 0,
+      durationDays: 10,
+      isActive: true,
+    });
+
+    const email = 'trialuser@test.local';
+    await createVerificationCode({ email, code: '123456' });
+
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'trialuser01',
+        email,
+        password: 'Passw0rd!',
+        fullName: 'Trial User',
+        emailVerificationCode: '123456',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.active_plan_id).toBe(trialPlan.id);
+    expect(res.body.data.user.subscriptionExpiresAt).toBeDefined();
+    expect(res.body.data.trial).toEqual(
+      expect.objectContaining({
+        activePlanId: trialPlan.id,
+        planCode: 'trial',
+        planName: 'Gói dùng thử',
+        durationDays: 10,
+      })
+    );
+
+    // Kiểm tra order 0đ được tạo thành công
+    const orderRows = await db.query(
+      `SELECT * FROM orders WHERE user_id = $1 AND plan_id = $2`,
+      [res.body.data.user.id, trialPlan.id]
+    );
+    expect(orderRows.rows.length).toBe(1);
+    expect(orderRows.rows[0].payment_method).toBe('free');
+    expect(orderRows.rows[0].status).toBe('success');
+    expect(Number(orderRows.rows[0].amount)).toBe(0);
+
+    // Kiểm tra audit log
+    const auditRows = await db.query(
+      `SELECT action, details FROM audit_logs WHERE entity_id = $1 AND action = 'USER_PLAN_CHANGED'`,
+      [res.body.data.user.id]
+    );
+    expect(auditRows.rows.length).toBe(1);
+    expect(auditRows.rows[0].details.source).toBe('signup_auto_trial');
+  });
+
+  it('không có gói trial trong DB → vẫn đăng ký thành công, trial trả về null', async () => {
+    const email = 'notrial@test.local';
+    await createVerificationCode({ email, code: '123456' });
+
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'notrial01',
+        email,
+        password: 'Passw0rd!',
+        fullName: 'No Trial User',
+        emailVerificationCode: '123456',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.active_plan_id).toBeNull();
+    expect(res.body.data.trial).toBeNull();
+  });
+});
+
+describe('POST /api/auth/google-login', () => {
+  let fetchSpy;
+
+  afterEach(() => {
+    fetchSpy?.mockRestore?.();
+  });
+
+  it('user Google mới đăng ký lần đầu khi có gói trial → tạo user, tự động cấp gói trial + order 0đ', async () => {
+    const trialPlan = await createPlan({
+      code: 'trial',
+      name: 'Gói dùng thử',
+      price: 0,
+      durationDays: 10,
+      messagesPerPeriod: 100,
+      aiCreditsPerPeriod: 50,
+      maxChatbots: 0,
+      isActive: true,
+    });
+
+    const googleEmail = 'newgoogleuser@test.local';
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email: googleEmail,
+        email_verified: true,
+        name: 'Google User',
+        picture: 'https://example.com/avatar.jpg',
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'fake_google_access_token' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.email).toBe(googleEmail);
+    expect(res.body.data.user.active_plan_id).toBe(trialPlan.id);
+    expect(res.body.data.trial).toEqual(
+      expect.objectContaining({
+        activePlanId: trialPlan.id,
+        planCode: 'trial',
+        durationDays: 10,
+        messagesPerPeriod: 100,
+        aiCreditsPerPeriod: 50,
+        maxChatbots: 0,
+      })
+    );
+
+    // Kiểm tra order 0đ được tạo trong DB
+    const orderRows = await db.query(
+      `SELECT * FROM orders WHERE user_id = $1 AND plan_id = $2`,
+      [res.body.data.user.id, trialPlan.id]
+    );
+    expect(orderRows.rows.length).toBe(1);
+    expect(orderRows.rows[0].payment_method).toBe('free');
+    expect(orderRows.rows[0].status).toBe('success');
+    expect(Number(orderRows.rows[0].amount)).toBe(0);
+
+    // Kiểm tra audit log
+    const auditRows = await db.query(
+      `SELECT action, details FROM audit_logs WHERE entity_id = $1 AND action = 'USER_PLAN_CHANGED'`,
+      [res.body.data.user.id]
+    );
+    expect(auditRows.rows.length).toBe(1);
+    expect(auditRows.rows[0].details.source).toBe('signup_auto_trial');
+  });
+
+  it('user Google cũ đăng nhập lại lần 2 → không tạo order mới, trial là null', async () => {
+    const trialPlan = await createPlan({
+      code: 'trial',
+      name: 'Gói dùng thử',
+      price: 0,
+      durationDays: 10,
+      isActive: true,
+    });
+
+    const googleEmail = 'existinggoogleuser@test.local';
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email: googleEmail,
+        email_verified: true,
+        name: 'Existing Google User',
+      }),
+    });
+
+    // Lần 1: đăng ký Google lần đầu
+    const res1 = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'fake_token_1' });
+    expect(res1.status).toBe(200);
+    expect(res1.body.data.trial).not.toBeNull();
+    expect(res1.body.data.user.active_plan_id).toBe(trialPlan.id);
+
+    // Lần 2: đăng nhập lại qua Google
+    const res2 = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'fake_token_2' });
+    expect(res2.status).toBe(200);
+    expect(res2.body.data.trial).toBeNull();
+
+    // Số lượng order trong DB vẫn chỉ là 1
+    const orderRows = await db.query(
+      `SELECT COUNT(*)::int AS count FROM orders WHERE user_id = $1`,
+      [res1.body.data.user.id]
+    );
+    expect(orderRows.rows[0].count).toBe(1);
+  });
+
+  it('Google token không hợp lệ (fetch !ok) → 401', async () => {
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 401,
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'invalid_token' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('Google email chưa xác thực (email_verified = false) → 401', async () => {
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email: 'unverified@test.local',
+        email_verified: false,
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'unverified_token' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toMatch(/chưa được xác thực/i);
   });
 });
 
