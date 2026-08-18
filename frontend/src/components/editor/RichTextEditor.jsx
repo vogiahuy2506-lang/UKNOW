@@ -4,11 +4,13 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
+import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
 import api from '../../services/api';
 import { useI18n } from '../../i18n';
 import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
+import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml';
 
 async function uploadHelpImageFile(file) {
   const fd = new FormData();
@@ -40,6 +42,7 @@ function ToolbarButton({ active, disabled, onClick, title, children }) {
 /**
  * TipTap rich-text editor for help articles (admin).
  * Images go through POST /api/uploads/help-image (admin + raster whitelist).
+ * Supports tables and inserting AI markdown.
  */
 export default function RichTextEditor({
   value = '',
@@ -52,6 +55,8 @@ export default function RichTextEditor({
   const editorRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [showMarkdownModal, setShowMarkdownModal] = useState(false);
+  const [markdownInput, setMarkdownInput] = useState('');
   const fileInputRef = useRef(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -87,6 +92,23 @@ export default function RichTextEditor({
         HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
       }),
       Image.configure({ inline: false, allowBase64: false }),
+      Table.configure({
+        resizable: false,
+        HTMLAttributes: {
+          class: 'w-full border-collapse border border-slate-200 my-4',
+        },
+      }),
+      TableRow,
+      TableHeader.configure({
+        HTMLAttributes: {
+          class: 'border border-slate-200 bg-slate-50 p-2 font-semibold text-left text-slate-900',
+        },
+      }),
+      TableCell.configure({
+        HTMLAttributes: {
+          class: 'border border-slate-200 p-2 text-slate-700',
+        },
+      }),
     ],
     content: value || '',
     editable: !disabled,
@@ -96,7 +118,7 @@ export default function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          'prose prose-sm max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800',
+          'prose prose-sm max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_td]:border [&_th]:border-slate-200 [&_td]:border-slate-200 [&_th]:bg-slate-50 [&_th]:p-2 [&_td]:p-2',
         'data-placeholder': placeholder,
       },
       handleDrop: (_view, event) => {
@@ -131,6 +153,7 @@ export default function RichTextEditor({
   useEffect(() => {
     editorRef.current = editor;
   }, [editor]);
+
   // Sync external value when switching articles (not on every keystroke)
   useEffect(() => {
     if (!editor) return;
@@ -156,6 +179,19 @@ export default function RichTextEditor({
       return;
     }
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  };
+
+  const handleInsertMarkdown = () => {
+    if (!markdownInput.trim()) {
+      setShowMarkdownModal(false);
+      return;
+    }
+    const html = miniMarkdownToHtml(markdownInput);
+    if (editor) {
+      editor.chain().focus().insertContent(html).run();
+    }
+    setMarkdownInput('');
+    setShowMarkdownModal(false);
   };
 
   return (
@@ -241,6 +277,19 @@ export default function RichTextEditor({
           {'</>'}
         </ToolbarButton>
         <ToolbarButton
+          title={t('adminHelp.table')}
+          active={editor.isActive('table')}
+          onClick={() => {
+            if (editor.isActive('table')) {
+              editor.chain().focus().deleteTable().run();
+            } else {
+              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+            }
+          }}
+        >
+          {t('adminHelp.table')}
+        </ToolbarButton>
+        <ToolbarButton
           title="Đường kẻ ngang"
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
         >
@@ -257,6 +306,17 @@ export default function RichTextEditor({
         >
           Ảnh
         </ToolbarButton>
+        <span className="mx-1 h-5 w-px bg-slate-200" />
+        <ToolbarButton
+          title={t('adminHelp.pasteMarkdownTitle')}
+          disabled={disabled}
+          onClick={() => setShowMarkdownModal(true)}
+        >
+          <span className="inline-flex items-center gap-1 font-semibold text-primary-600">
+            <span>📝</span>
+            <span>{t('adminHelp.pasteMarkdown')}</span>
+          </span>
+        </ToolbarButton>
         <input
           ref={fileInputRef}
           type="file"
@@ -272,9 +332,63 @@ export default function RichTextEditor({
           <span className="ml-2 text-xs text-slate-500">Đang tải ảnh…</span>
         )}
       </div>
+
       <EditorContent editor={editor} />
+
       {uploadError && (
         <p className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">{uploadError}</p>
+      )}
+
+      {showMarkdownModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-5 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">
+                {t('adminHelp.pasteMarkdownTitle')}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMarkdownModal(false);
+                  setMarkdownInput('');
+                }}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              {t('adminHelp.pasteMarkdownPlaceholder')}
+            </p>
+            <textarea
+              className="w-full h-64 rounded-lg border border-slate-300 p-3 font-mono text-xs focus:border-primary-500 focus:outline-none"
+              placeholder="# Tiêu đề hướng dẫn\n\nNội dung được tạo bởi AI...\n\n| Cột 1 | Cột 2 |\n|---|---|\n| Giá trị 1 | Giá trị 2 |"
+              value={markdownInput}
+              onChange={(e) => setMarkdownInput(e.target.value)}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMarkdownModal(false);
+                  setMarkdownInput('');
+                }}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {t('adminHelp.pasteMarkdownCancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertMarkdown}
+                disabled={!markdownInput.trim()}
+                className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {t('adminHelp.pasteMarkdownInsert')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
