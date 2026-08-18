@@ -104,6 +104,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     suggested_questions: [],
     reply_limit_config: null,
   });
+  const [initialFormSnapshot, setInitialFormSnapshot] = useState(null);
 
   const [newQuestion, setNewQuestion] = useState('');
 
@@ -187,7 +188,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   useEffect(() => {
     if (chatbot) {
       const ws = chatbot.widget_settings || {};
-      setForm({
+      const loadedForm = {
         name: chatbot.name || '',
         description: chatbot.description || '',
         avatar_url: chatbot.avatar_url || '',
@@ -208,7 +209,9 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         show_avatar: ws.show_avatar !== false,
         suggested_questions: ws.suggested_questions || [],
         reply_limit_config: chatbot.reply_limit_config || null,
-      });
+      };
+      setForm(loadedForm);
+      setInitialFormSnapshot(loadedForm);
       setZaloConnectForm({
         display_name: chatbot.name ? `${chatbot.name} Zalo OA` : '',
         zalo_app_id: '',
@@ -219,7 +222,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
       loadChannels(chatbot.id);
       setHydrated(true);
     }
-   
+
   }, [chatbot?.id]);
 
   useEffect(() => {
@@ -465,6 +468,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
 
       if (saveSuccess) {
         onUpdate(updatedBot);
+        setInitialFormSnapshot(form);
         toast.success(t('common.success'));
         // Verify by re-reading from localStorage
         const verifyBots = JSON.parse(localStorage.getItem('uknow_chatbots') || '[]');
@@ -677,6 +681,10 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
   const facebookVerifyToken = 'founderai';
   const publicChatbotUrl = `${productionApiBase}/chat/${chatbot.widget_key || chatbot.id}`;
 
+  const formDirty = initialFormSnapshot
+    ? JSON.stringify(form) !== JSON.stringify(initialFormSnapshot)
+    : false;
+
   const copyPublicUrl = () => {
     navigator.clipboard.writeText(publicChatbotUrl);
     setWidgetCopied(true);
@@ -690,8 +698,8 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
     <div className="flex min-h-0 flex-col h-full overflow-hidden">
 
       {/* ── Header ── */}
-      <div className="px-5 py-4 border-b border-slate-100 bg-white shrink-0">
-        <div className="flex items-center justify-between mb-4">
+      <div className="px-4 py-3 md:px-5 md:py-4 border-b border-slate-100 bg-white shrink-0">
+        <div className="flex items-center justify-between mb-3 md:mb-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0"
               style={{ background: `linear-gradient(135deg, ${form.primary_color}, ${form.accent_color})` }}>
@@ -705,10 +713,11 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
               </div>
             </div>
           </div>
+          {/* Save button — ẩn trên mobile (có sticky bottom bar) */}
           <button
             onClick={handleSave}
             disabled={saving}
-            className="btn btn-primary shrink-0"
+            className="btn btn-primary shrink-0 hidden md:inline-flex"
           >
             {saving
               ? <HiOutlineRefresh className="w-4 h-4 animate-spin" />
@@ -719,13 +728,13 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         </div>
 
         {/* Tab pills */}
-        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit overflow-x-auto max-w-full">
           {TABS.map(tab => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`px-3 md:px-4 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'bg-white text-slate-800 shadow-sm'
                   : 'text-slate-500 hover:text-slate-700'
@@ -739,7 +748,7 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 min-h-0 overflow-y-scroll overscroll-contain [scrollbar-gutter:stable]">
-        <div className="p-5 space-y-5">
+        <div className="p-4 md:p-5 space-y-4 md:space-y-5">
 
           {/* ── GENERAL ── */}
           {activeTab === 'general' && (
@@ -1522,6 +1531,28 @@ export default function ChatbotSettings({ chatbot, onUpdate }) {
         onSubmit={handleAddText}
         onChange={setTextForm}
       />
+
+      {/* Sticky bottom save bar (mobile only) */}
+      <div className="md:hidden sticky bottom-0 z-10 bg-white border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !formDirty}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-500 text-white text-sm font-bold rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+        >
+          {saving ? (
+            <>
+              <HiOutlineRefresh className="w-4 h-4 animate-spin" />
+              Đang lưu...
+            </>
+          ) : (
+            <>
+              <HiOutlineSave className="w-4 h-4" />
+              {formDirty ? 'Lưu thay đổi' : 'Đã lưu'}
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Delete Document Modal */}
       {deletingDocData && (

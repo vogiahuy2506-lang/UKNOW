@@ -6,20 +6,52 @@ import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
 export const trialWelcomeKey = (userId) => `founderai_trial_welcome_${userId}`;
 
+// Storage guard: an toàn cho SSR / test env không có window. Không throw nếu storage
+// bị chặn (private mode, cookie-less sandbox) — trả fallback để app vẫn chạy.
+const hasWindowStorage = () =>
+  typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
+const safeGetItem = (storage, key) => {
+  if (!hasWindowStorage()) return null;
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeSetItem = (storage, key, value) => {
+  if (!hasWindowStorage()) return;
+  try {
+    storage.setItem(key, value);
+  } catch {
+    /* storage full / disabled — ignore */
+  }
+};
+
+const safeRemoveItem = (storage, key) => {
+  if (!hasWindowStorage()) return;
+  try {
+    storage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+};
+
 const getStoredToken = (key) =>
-  localStorage.getItem(key) || sessionStorage.getItem(key);
+  safeGetItem(window.localStorage, key) || safeGetItem(window.sessionStorage, key);
 
 const storeToken = (key, value, rememberMe) => {
   if (rememberMe) {
-    localStorage.setItem(key, value);
+    safeSetItem(window.localStorage, key, value);
   } else {
-    sessionStorage.setItem(key, value);
+    safeSetItem(window.sessionStorage, key, value);
   }
 };
 
 const removeToken = (key) => {
-  localStorage.removeItem(key);
-  sessionStorage.removeItem(key);
+  safeRemoveItem(window.localStorage, key);
+  safeRemoveItem(window.sessionStorage, key);
 };
 
 /**
@@ -27,9 +59,10 @@ const removeToken = (key) => {
  * Trả về null nếu không có hoặc đã stale.
  */
 const loadStoredContext = () => {
+  const raw = safeGetItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
+  if (!raw) return null;
   try {
-    const raw = sessionStorage.getItem(CONTEXT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -37,9 +70,9 @@ const loadStoredContext = () => {
 
 const saveContext = (ctx) => {
   if (ctx && ctx.type === 'employee') {
-    sessionStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(ctx));
+    safeSetItem(window.sessionStorage, CONTEXT_STORAGE_KEY, JSON.stringify(ctx));
   } else {
-    sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
+    safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
   }
 };
 
@@ -172,7 +205,7 @@ export const useAuthStore = create((set, get) => ({
         console.error('Auth initialization failed:', error);
         removeToken('accessToken');
         removeToken('refreshToken');
-        sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
+        safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
         set({
           user: null,
           isAuthenticated: false,
@@ -235,7 +268,7 @@ export const useAuthStore = create((set, get) => ({
     const response = await api.post('/auth/register', data);
     const { user, accessToken, trial } = response.data.data;
 
-    localStorage.setItem('accessToken', accessToken);
+    safeSetItem(window.localStorage, 'accessToken', accessToken);
     const normalizedUser = normalizeUser(user);
     const activeContext = pickDefaultContext(normalizedUser);
     saveContext(activeContext);
@@ -266,7 +299,7 @@ export const useAuthStore = create((set, get) => ({
       // Bỏ qua lỗi logout phía server
     } finally {
       removeToken('accessToken');
-      sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
+      safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
       notifyStorageQuotaClear();
       set({
         user: null,

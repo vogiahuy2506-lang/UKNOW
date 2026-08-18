@@ -41,7 +41,7 @@ const QuickTaskBar = ({ className = '' }) => {
     { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
     { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
     { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
-    { key: 'pricing', label: t('header.pricing'), onClick: () => navigate('/pricing') },
+    { key: 'upgrade', label: t('header.upgrade'), accent: 'primary', onClick: () => navigate('/pricing') },
     { key: 'contact', label: t('header.contact'), onClick: () => navigate('/contact') },
   ];
 
@@ -49,20 +49,24 @@ const QuickTaskBar = ({ className = '' }) => {
     <>
       <div className={`sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-gray-200 ${className}`}>
         <div className="flex items-center justify-end h-8 px-2 gap-1">
-          {quickItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={item.onClick}
-              className={`inline-flex items-center h-7 px-2.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                item.accent
-                  ? 'bg-orange-600 text-white hover:bg-orange-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+          {quickItems.map((item) => {
+            const accentClass =
+              item.accent === 'primary'
+                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-sm hover:shadow-md'
+                : item.accent
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100';
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={item.onClick}
+                className={`inline-flex items-center h-7 px-2.5 rounded-md text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${accentClass}`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
 
           <div className="w-px h-4 bg-gray-200 mx-0.5" />
 

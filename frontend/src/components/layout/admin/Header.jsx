@@ -10,6 +10,7 @@ import {
   HiOutlineUserGroup,
   HiOutlineChevronDown,
   HiOutlineShoppingCart,
+  HiOutlineSparkles,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
@@ -49,7 +50,7 @@ const Header = () => {
     { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
     { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
     { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
-    { key: 'pricing', label: t('header.pricing'), onClick: () => navigate('/pricing') },
+    { key: 'upgrade', label: t('header.upgrade'), accent: 'primary', onClick: () => navigate('/pricing') },
     { key: 'contact', label: t('header.contact'), onClick: () => navigate('/contact') },
   ];
 
@@ -75,21 +76,26 @@ const Header = () => {
 
         {/* Center: quick nav */}
         <nav className="hidden lg:flex items-center gap-1">
-          {quickItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={item.onClick}
-              className={`inline-flex items-center h-7 px-2 rounded-md text-[12px] font-medium whitespace-nowrap transition-all ${
-                item.accent
-                  ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-            >
-              {item.key === 'marketplace' && <HiOutlineShoppingCart className="w-3.5 h-3.5 mr-1.5" />}
-              {item.label}
-            </button>
-          ))}
+          {quickItems.map((item) => {
+            const accentClass =
+              item.accent === 'primary'
+                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-sm hover:shadow-md'
+                : item.accent
+                ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100';
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={item.onClick}
+                className={`inline-flex items-center h-7 px-2 rounded-md text-[12px] font-medium whitespace-nowrap transition-all ${accentClass}`}
+              >
+                {item.key === 'marketplace' && <HiOutlineShoppingCart className="w-3.5 h-3.5 mr-1.5" />}
+                {item.key === 'upgrade' && <HiOutlineSparkles className="w-3.5 h-3.5 mr-1.5" />}
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
 
         {/* Mobile: compact marketplace icon */}

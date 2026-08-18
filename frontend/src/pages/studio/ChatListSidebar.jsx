@@ -209,8 +209,8 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
           </button>
         </div>
 
-        {/* Stats Row */}
-        <div className="flex items-center gap-3 mt-2">
+        {/* Stats Row - ẩn trên mobile để tiết kiệm chiều cao */}
+        <div className="hidden sm:flex items-center gap-3 mt-2">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
             <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
             <span>{activeCount} đang hoạt động</span>
@@ -304,12 +304,12 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
         </div>
       </div>
 
-      {/* ── Create Modal ───────────────────────────────────────────── */}
+      {/* ── Create Modal (bottom-sheet trên mobile, centered trên md+) ── */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl md:rounded-2xl shadow-2xl w-full md:max-w-sm md:mx-4 max-h-[92dvh] md:max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="relative px-6 pt-6 pb-4 bg-primary-500">
+            <div className="relative px-5 md:px-6 pt-5 md:pt-6 pb-4 bg-primary-500 shrink-0">
               <div className="absolute inset-0 bg-white/10" />
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -328,10 +328,12 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
                   <HiOutlineX className="w-5 h-5" />
                 </button>
               </div>
+              {/* Drag handle hint cho mobile */}
+              <div className="md:hidden absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-white/40 rounded-full" />
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={handleCreate} className="px-6 py-5 space-y-5">
+            <form onSubmit={handleCreate} className="px-5 md:px-6 py-4 md:py-5 space-y-4 md:space-y-5 overflow-y-auto">
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Tên Chatbot *
@@ -342,7 +344,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="VD: Hỗ trợ khách hàng, Tư vấn sản phẩm..."
                   autoFocus
-                  className="mt-2 w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-primary-400 transition-colors"
+                  className="mt-2 w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-base md:text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-primary-400 transition-colors"
                 />
               </div>
 
@@ -351,7 +353,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 block">
                   Chọn mẫu nhanh
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   {[
                     { label: 'Hỗ trợ khách hàng', emoji: '💬', desc: 'Trả lời FAQ, hỗ trợ' },
                     { label: 'Tư vấn bán hàng', emoji: '🛒', desc: 'Giới thiệu sản phẩm' },

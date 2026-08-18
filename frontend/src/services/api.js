@@ -191,8 +191,15 @@ api.interceptors.response.use(
     const isAuthRequest = isAuthEndpointRequest(requestUrl);
 
     // Khi server báo đạt giới hạn tài nguyên → show upgrade toast toàn app
-    if (error.response?.data?.limitReached || error.response?.data?.upgradeRequired) {
-      const msg = error.response.data.message;
+    // Bao gồm: limitReached, upgradeRequired, RESOURCE_LIMIT_EXCEEDED, INSUFFICIENT_CREDITS
+    const errorData = error.response?.data;
+    const isLimitError =
+      errorData?.limitReached ||
+      errorData?.upgradeRequired ||
+      errorData?.code === 'RESOURCE_LIMIT_EXCEEDED' ||
+      errorData?.code === 'INSUFFICIENT_CREDITS';
+    if (isLimitError) {
+      const msg = errorData.message;
       toast.custom(
         (tst) => React.createElement(
           'div',

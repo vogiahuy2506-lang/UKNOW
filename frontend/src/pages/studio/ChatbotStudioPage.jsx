@@ -10,6 +10,7 @@ import {
   HiOutlinePlus,
   HiOutlinePaperClip,
   HiOutlineX,
+  HiOutlineCog,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -21,10 +22,17 @@ import { useI18n } from '../../i18n';
 import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
 const MAX_FILE_MB = MAX_UPLOAD_FILE_MB;
+
+const MOBILE_PANELS = [
+  { id: 'list',     label: 'Danh sách',  icon: HiOutlineViewBoards },
+  { id: 'chat',     label: 'Trò chuyện', icon: HiOutlineChatAlt2 },
+  { id: 'settings', label: 'Cài đặt',    icon: HiOutlineCog },
+];
 
 function clientValidateFile(file) {
   const name = file.name || '';
@@ -59,11 +67,11 @@ function EmptyState({ chatbot, onCreateNew: _onCreateNew }) {
   const suggestedQuestions = chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8" style={{ backgroundColor: bgColor }}>
+    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8" style={{ backgroundColor: bgColor }}>
       {/* Avatar */}
-      <div className="relative mb-6">
+      <div className="relative mb-4 md:mb-6">
         <div
-          className="w-24 h-24 rounded-3xl flex items-center justify-center shadow-lg"
+          className="w-20 h-20 md:w-24 md:h-24 rounded-3xl flex items-center justify-center shadow-lg"
           style={{ background: gradientStyle }}
         >
           {chatbot?.logo_url ? (
@@ -71,27 +79,27 @@ function EmptyState({ chatbot, onCreateNew: _onCreateNew }) {
           ) : chatbot?.avatar_url ? (
             <img src={chatbot.avatar_url} alt="" className="w-full h-full rounded-3xl object-cover" />
           ) : (
-            <span className="text-white text-4xl font-bold">{chatbot?.name?.[0]?.toUpperCase() || '?'}</span>
+            <span className="text-white text-3xl md:text-4xl font-bold">{chatbot?.name?.[0]?.toUpperCase() || '?'}</span>
           )}
         </div>
-        <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-400 rounded-full border-4 border-white shadow-lg flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+        <div className="absolute -bottom-1 -right-1 w-7 h-7 md:w-8 md:h-8 bg-green-400 rounded-full border-4 border-white shadow-lg flex items-center justify-center">
+          <svg className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
           </svg>
         </div>
       </div>
 
       {/* Welcome */}
-      <h2 className="text-2xl font-bold mb-2" style={{ color: textColor }}>
+      <h2 className="text-xl md:text-2xl font-bold mb-2 px-2 text-center" style={{ color: textColor }}>
         {chatbot?.greeting_msg || `Chào bạn! Tôi là ${chatbot?.name || 'AI Assistant'}`}
       </h2>
-      <p className="text-sm mb-8 max-w-md text-center" style={{ color: `${textColor}99` }}>
+      <p className="text-sm mb-6 md:mb-8 max-w-md text-center px-2" style={{ color: `${textColor}99` }}>
         {chatbot?.description || 'Hãy hỏi tôi bất cứ điều gì về kiến thức đã được thiết lập.'}
       </p>
 
       {/* Suggested Questions */}
       {suggestedQuestions.length > 0 && (
-        <div className="mb-8 w-full max-w-md">
+        <div className="mb-6 md:mb-8 w-full max-w-md px-2">
           <p className="text-xs font-semibold mb-3 text-center uppercase tracking-wider" style={{ color: `${textColor}80` }}>
             Câu hỏi gợi ý
           </p>
@@ -100,7 +108,7 @@ function EmptyState({ chatbot, onCreateNew: _onCreateNew }) {
               <button
                 key={i}
                 onClick={() => {}}
-                className="px-4 py-2 rounded-full text-sm font-medium transition-all hover:scale-105"
+                className="px-3 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-medium transition-all hover:scale-105"
                 style={{
                   backgroundColor: `${primaryColor}15`,
                   border: `1px solid ${primaryColor}30`,
@@ -652,7 +660,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
             )}
 
             {/* Bubble */}
-            <div className={`max-w-[75%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
+            <div className={`max-w-[85%] md:max-w-[75%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
               <div
                 className="px-4 py-3 rounded-2xl text-sm leading-relaxed"
                 style={msg.role === 'user'
@@ -735,7 +743,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending || uploadingAttachment || pendingAttachments.length >= MAX_ATTACHMENTS}
-            className="w-12 h-12 rounded-xl flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+            className="w-11 h-11 md:w-12 md:h-12 rounded-xl flex items-center justify-center border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 shrink-0"
             title="Đính kèm tệp"
           >
             {uploadingAttachment ? (
@@ -751,7 +759,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
             onKeyDown={handleKeyDown}
             placeholder="Nhập tin nhắn..."
             rows={1}
-            className="flex-1 resize-none rounded-2xl px-4 py-3 text-sm outline-none transition-all"
+            className="flex-1 resize-none rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-base md:text-sm outline-none transition-all"
             style={{
               backgroundColor: `${primaryColor}05`,
               border: `2px solid ${primaryColor}20`,
@@ -763,7 +771,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
           <button
             onClick={handleSend}
             disabled={(!input.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment}
-            className="w-12 h-12 text-white rounded-xl flex items-center justify-center shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+            className="w-11 h-11 md:w-12 md:h-12 text-white rounded-xl flex items-center justify-center shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shrink-0"
             style={{ background: gradientStyle }}
           >
             {sending ? (
@@ -783,9 +791,18 @@ function ChatbotStudioPage() {
   const [_bots, setBots] = useState([]);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [activePanel, setActivePanel] = useState('list');
+
+  const isMobile = useMediaQuery('(max-width: 767.99px)');
+  const isCompact = useMediaQuery('(max-width: 1023.99px)'); // mobile + md → dùng tab view
+
+  // Trên mobile, các panel chat/settings không có bot được disable trên tab bar
+  // (chỉ list là khả dụng khi chưa chọn bot). isMobile dùng để dành cho logic tương lai.
+  const _isMobile = isMobile;
 
   const handleSelectBot = useCallback((bot) => {
     setSelectedBot(bot);
+    if (bot) setActivePanel('chat');
   }, []);
 
   const handleUpdateBot = useCallback((updatedBot) => {
@@ -794,25 +811,64 @@ function ChatbotStudioPage() {
   }, []);
 
   const handleCreateNew = useCallback(() => {
+    if (isCompact) setActivePanel('list');
     document.dispatchEvent(new CustomEvent('studio:create-new'));
-  }, []);
+  }, [isCompact]);
+
+  // Card heights:
+  // - Mobile (<768): dùng dvh để tránh lỗi khi browser chrome collapse; không có min-h cứng
+  // - Tablet/Desktop: giữ nguyên calc(100vh-10rem) và min-h-[640px]
+  const cardHeightClass = 'h-[calc(100dvh-9rem)] md:h-[calc(100vh-10rem)] md:min-h-[640px] md:max-h-[820px]';
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">AI Chatbot</h1>
-        <p className="text-sm text-gray-500 mt-2">
+        <p className="text-sm text-gray-500 mt-2 hidden md:block">
           Quản lý và thiết lập chatbot AI cho doanh nghiệp của bạn.
         </p>
       </div>
 
-      <div className="flex flex-col xl:flex-row gap-4 items-stretch">
+      {/* Mobile + tablet compact: tab switcher */}
+      {isCompact && (
+        <div className="lg:hidden sticky top-0 z-30 -mx-4 sm:mx-0 bg-white border-b border-slate-200 shadow-sm">
+          <div className="flex">
+            {MOBILE_PANELS.map((panel) => {
+              const Icon = panel.icon;
+              const isActive = activePanel === panel.id;
+              const disabled = (panel.id === 'chat' || panel.id === 'settings') && !selectedBot;
+              return (
+                <button
+                  key={panel.id}
+                  type="button"
+                  onClick={() => !disabled && setActivePanel(panel.id)}
+                  disabled={disabled}
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 relative transition-colors ${
+                    isActive ? 'text-primary-600' : 'text-slate-500 hover:text-slate-700'
+                  } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  aria-label={panel.label}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[11px] font-medium">{panel.label}</span>
+                  {isActive && (
+                    <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-primary-500 rounded-t-full" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-stretch">
         {/* Left Sidebar (List) */}
-        <div className={`transition-all duration-300 ease-in-out shrink-0 ${leftCollapsed ? 'w-full xl:w-16' : 'w-full xl:w-72'}`}>
-          <div className="card h-[calc(100vh-10rem)] min-h-[640px] max-h-[820px] flex flex-col overflow-hidden relative">
+        <div
+          className={`${isCompact ? (activePanel === 'list' ? 'flex' : 'hidden') : 'flex'} transition-all duration-300 ease-in-out shrink-0 w-full md:w-full ${isCompact ? '' : 'lg:w-56 xl:w-72'}`}
+        >
+          <div className={`card ${cardHeightClass} flex flex-col overflow-hidden relative w-full`}>
             <button
               onClick={() => setLeftCollapsed(!leftCollapsed)}
-              className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
+              className="absolute top-3 right-3 z-10 w-8 h-8 hidden xl:flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
               title={leftCollapsed ? 'Mở rộng' : 'Thu gọn'}
             >
               {leftCollapsed ? <HiOutlineChevronRight className="w-4 h-4" /> : <HiOutlineChevronLeft className="w-4 h-4" />}
@@ -838,8 +894,10 @@ function ChatbotStudioPage() {
         </div>
 
         {/* Middle Chat (Preview) */}
-        <div className="flex-1 w-full min-w-0 transition-all duration-300">
-          <div className="card h-[calc(100vh-10rem)] min-h-[640px] max-h-[820px] flex min-h-0 flex-col overflow-hidden">
+        <div
+          className={`${isCompact ? (activePanel === 'chat' ? 'flex' : 'hidden') : 'flex'} flex-1 w-full min-w-0 transition-all duration-300`}
+        >
+          <div className={`card ${cardHeightClass} flex min-h-0 flex-col overflow-hidden w-full`}>
             {selectedBot ? (
               <ChatMessageArea
                 key={`chat-${selectedBot.id}`}
@@ -853,11 +911,13 @@ function ChatbotStudioPage() {
         </div>
 
         {/* Right Settings */}
-        <div className={`transition-all duration-300 ease-in-out shrink-0 ${rightCollapsed ? 'w-full xl:w-16' : 'w-full xl:w-[400px]'}`}>
-          <div className="card h-[calc(100vh-10rem)] min-h-[640px] max-h-[820px] flex min-h-0 flex-col overflow-hidden relative">
+        <div
+          className={`${isCompact ? (activePanel === 'settings' ? 'flex' : 'hidden') : 'flex'} transition-all duration-300 ease-in-out shrink-0 w-full md:w-full ${isCompact ? '' : 'lg:w-72 xl:w-[400px]'}`}
+        >
+          <div className={`card ${cardHeightClass} flex min-h-0 flex-col overflow-hidden relative w-full`}>
             <button
               onClick={() => setRightCollapsed(!rightCollapsed)}
-              className={`absolute z-20 w-7 h-14 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-l-xl shadow-md border border-slate-200 border-r-0 transition-colors ${
+              className={`hidden xl:flex absolute z-20 w-7 h-14 items-center justify-center bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-l-xl shadow-md border border-slate-200 border-r-0 transition-colors ${
                 rightCollapsed
                   ? 'top-3 left-1/2 -translate-x-1/2'
                   : 'top-3 left-3 xl:top-1/2 xl:left-0 xl:-translate-x-1/2 xl:-translate-y-1/2'
@@ -874,8 +934,8 @@ function ChatbotStudioPage() {
                   onUpdate={handleUpdateBot}
                 />
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8 text-center h-full">
-                  <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-6 md:p-8 text-center h-full">
+                  <svg className="w-10 h-10 md:w-12 md:h-12 mb-3 md:mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
