@@ -197,79 +197,82 @@ export default function InvoiceVatForm({
   const getInputClass = (fieldName) => {
     const hasError = Boolean(touched[fieldName] && errors[fieldName]);
     if (hasError) {
-      return 'w-full rounded-lg border border-red-400 bg-red-50/30 px-3 py-2 text-sm text-red-900 placeholder:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400';
+      return 'w-full rounded-lg border border-red-400 bg-red-50/30 px-3 py-1.5 text-xs text-red-900 placeholder:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400';
     }
-    return 'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300';
+    return 'w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300';
   };
 
   const readonlyClass =
-    'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 cursor-not-allowed';
+    'w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-600 cursor-not-allowed';
 
   return (
-    <div className={`rounded-xl border border-orange-200/80 bg-orange-50/50 ${className}`}>
-      <div className="px-3 pt-3 pb-2">
-        <p className="text-sm font-semibold text-slate-800">{t('invoiceVat.bannerTitle')}</p>
-        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-          {t('invoiceVat.bannerSubtitle')}
-        </p>
+    <div className={`rounded-2xl border border-orange-200/70 bg-orange-50/40 p-3.5 ${className}`}>
+      <div className="flex items-center justify-between gap-2 mb-2.5">
+        <div>
+          <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">{t('invoiceVat.bannerTitle')}</p>
+          <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
+            {t('invoiceVat.bannerSubtitle')}
+          </p>
+        </div>
+        <div className="inline-flex rounded-lg bg-orange-100/70 p-0.5 border border-orange-200 shrink-0">
+          <button
+            type="button"
+            onClick={() => setBuyerType('personal')}
+            className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
+              buyerType === 'personal'
+                ? 'bg-white text-orange-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {t('invoiceVat.tabPersonal')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setBuyerType('company')}
+            className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
+              buyerType === 'company'
+                ? 'bg-white text-orange-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {t('invoiceVat.tabCompany')}
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-1 px-3 mb-3">
-        <button
-          type="button"
-          onClick={() => setBuyerType('personal')}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-            buyerType === 'personal'
-              ? 'bg-white text-orange-700 shadow-sm border border-orange-200'
-              : 'text-slate-500 hover:bg-white/60'
-          }`}
-        >
-          {t('invoiceVat.tabPersonal')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setBuyerType('company')}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-            buyerType === 'company'
-              ? 'bg-white text-orange-700 shadow-sm border border-orange-200'
-              : 'text-slate-500 hover:bg-white/60'
-          }`}
-        >
-          {t('invoiceVat.tabCompany')}
-        </button>
-      </div>
-
-      <div className="space-y-2 px-3 pb-3">
+      <div className="space-y-2">
         {buyerType === 'company' ? (
           <>
-            <div>
-              <input
-                className={getInputClass('taxCode')}
-                value={taxCode}
-                onChange={(e) => setTaxCode(e.target.value)}
-                onBlur={() => handleBlur('taxCode')}
-                placeholder={t('invoiceVat.taxCode')}
-                maxLength={14}
-                autoComplete="off"
-                aria-invalid={Boolean(touched.taxCode && errors.taxCode)}
-              />
-              {touched.taxCode && errors.taxCode && (
-                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.taxCode}</p>
-              )}
-            </div>
-            <div>
-              <input
-                className={getInputClass('companyName')}
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                onBlur={() => handleBlur('companyName')}
-                placeholder={t('invoiceVat.companyName')}
-                autoComplete="organization"
-                aria-invalid={Boolean(touched.companyName && errors.companyName)}
-              />
-              {touched.companyName && errors.companyName && (
-                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.companyName}</p>
-              )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <input
+                  className={getInputClass('taxCode')}
+                  value={taxCode}
+                  onChange={(e) => setTaxCode(e.target.value)}
+                  onBlur={() => handleBlur('taxCode')}
+                  placeholder={t('invoiceVat.taxCode') + ' *'}
+                  maxLength={14}
+                  autoComplete="off"
+                  aria-invalid={Boolean(touched.taxCode && errors.taxCode)}
+                />
+                {touched.taxCode && errors.taxCode && (
+                  <p className="mt-0.5 text-[10px] text-red-600 leading-tight">{errors.taxCode}</p>
+                )}
+              </div>
+              <div>
+                <input
+                  className={getInputClass('companyName')}
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  onBlur={() => handleBlur('companyName')}
+                  placeholder={t('invoiceVat.companyName') + ' *'}
+                  autoComplete="organization"
+                  aria-invalid={Boolean(touched.companyName && errors.companyName)}
+                />
+                {touched.companyName && errors.companyName && (
+                  <p className="mt-0.5 text-[10px] text-red-600 leading-tight">{errors.companyName}</p>
+                )}
+              </div>
             </div>
             <div>
               <input
@@ -283,34 +286,36 @@ export default function InvoiceVatForm({
           </>
         ) : (
           <>
-            <div>
-              <input
-                className={getInputClass('fullName')}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                onBlur={() => handleBlur('fullName')}
-                placeholder={t('invoiceVat.fullName')}
-                autoComplete="name"
-                aria-invalid={Boolean(touched.fullName && errors.fullName)}
-              />
-              {touched.fullName && errors.fullName && (
-                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.fullName}</p>
-              )}
-            </div>
-            <div>
-              <input
-                className={getInputClass('idNumber')}
-                value={idNumber}
-                onChange={(e) => setIdNumber(e.target.value)}
-                onBlur={() => handleBlur('idNumber')}
-                placeholder={t('invoiceVat.idNumber')}
-                maxLength={12}
-                autoComplete="off"
-                aria-invalid={Boolean(touched.idNumber && errors.idNumber)}
-              />
-              {touched.idNumber && errors.idNumber && (
-                <p className="mt-1 text-[11px] text-red-600 leading-snug">{errors.idNumber}</p>
-              )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <input
+                  className={getInputClass('fullName')}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  onBlur={() => handleBlur('fullName')}
+                  placeholder={t('invoiceVat.fullName') + ' *'}
+                  autoComplete="name"
+                  aria-invalid={Boolean(touched.fullName && errors.fullName)}
+                />
+                {touched.fullName && errors.fullName && (
+                  <p className="mt-0.5 text-[10px] text-red-600 leading-tight">{errors.fullName}</p>
+                )}
+              </div>
+              <div>
+                <input
+                  className={getInputClass('idNumber')}
+                  value={idNumber}
+                  onChange={(e) => setIdNumber(e.target.value)}
+                  onBlur={() => handleBlur('idNumber')}
+                  placeholder={t('invoiceVat.idNumber') + ' *'}
+                  maxLength={12}
+                  autoComplete="off"
+                  aria-invalid={Boolean(touched.idNumber && errors.idNumber)}
+                />
+                {touched.idNumber && errors.idNumber && (
+                  <p className="mt-0.5 text-[10px] text-red-600 leading-tight">{errors.idNumber}</p>
+                )}
+              </div>
             </div>
             <div>
               <input
@@ -323,40 +328,43 @@ export default function InvoiceVatForm({
             </div>
           </>
         )}
-        <div>
-          <input
-            className={readonlyClass}
-            type="text"
-            value={maskAccountEmail(accountEmail)}
-            readOnly
-            aria-readonly="true"
-            aria-label={t('invoiceVat.emailReadonly')}
-            title={t('invoiceVat.emailPdfHint')}
-          />
-          <p className="mt-1 text-[11px] text-slate-500 leading-snug">
-            {t('invoiceVat.emailPdfHint')}
-          </p>
-        </div>
-        <div>
-          <input
-            className={getInputClass('phone')}
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder={t('invoiceVat.phone')}
-            autoComplete="tel"
-          />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <input
+              className={readonlyClass}
+              type="text"
+              value={maskAccountEmail(accountEmail)}
+              readOnly
+              aria-readonly="true"
+              aria-label={t('invoiceVat.emailReadonly')}
+              title={t('invoiceVat.emailPdfHint')}
+            />
+            <p className="mt-0.5 text-[10px] text-slate-500 leading-tight">
+              {t('invoiceVat.emailPdfHint')}
+            </p>
+          </div>
+          <div>
+            <input
+              className={getInputClass('phone')}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder={t('invoiceVat.phone')}
+              autoComplete="tel"
+            />
+          </div>
         </div>
 
         {/* Checkbox auto-save profile for next time */}
-        <div className="pt-1">
-          <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
+        <div className="pt-0.5">
+          <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={saveProfile}
               onChange={(e) => setSaveProfile(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+              className="h-3.5 w-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
             />
-            <span>{t('invoiceVat.saveProfile')}</span>
+            <span className="text-[11px]">{t('invoiceVat.saveProfile')}</span>
           </label>
         </div>
       </div>

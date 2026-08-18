@@ -34,9 +34,6 @@ const camelItemKey = (key) => {
     return map[key] || key;
 };
 
-const GLASS_CARD = 'bg-white/60 border border-white/80 backdrop-blur-md rounded-2xl shadow-lg shadow-black/5';
-const GLASS_CARD_SOLID = 'bg-white/75 border border-white/90 backdrop-blur-md rounded-2xl shadow-xl shadow-orange-500/10';
-
 const voucherErrorKeyMap = {
     'Voucher không hợp lệ hoặc không đủ điều kiện': 'checkout.invalidVoucher',
     'Gói không tồn tại': 'checkout.planNotFound',
@@ -66,8 +63,9 @@ const CheckoutPage = () => {
         : plan?.name;
     const voucherPlanCode = isCustomPlan ? 'custom' : plan?.code;
 
+    const [currentStep, setCurrentStep] = useState('info'); // 'info' | 'qr'
     const [orderCode, setOrderCode] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const user = useAuthStore((state) => state.user);
     const isAuthLoading = useAuthStore((state) => state.isLoading);
@@ -78,7 +76,6 @@ const CheckoutPage = () => {
     const [codeVouchers, setCodeVouchers] = useState([]);
     const [voucherCode, setVoucherCode] = useState('');
     const [voucherLoading, setVoucherLoading] = useState(false);
-    const [paymentStarted, setPaymentStarted] = useState(false);
     const [authoritativePayment, setAuthoritativePayment] = useState(null);
     const [invoiceInfo, setInvoiceInfo] = useState({ wantInvoice: false });
     const invoiceVatUiEnabled = isInvoiceVatUiEnabled();
@@ -95,9 +92,6 @@ const CheckoutPage = () => {
     const vatBreakdown = computeDisplayVat(finalAmount);
     const payableAmount = Number(authoritativePayment?.amount ?? vatBreakdown.gross);
     const isInvoiceValid = !invoiceVatUiEnabled || finalAmount <= 0 || isInvoiceInfoValid(invoiceInfo);
-    const hasManualVoucherInList = manualVoucher
-        ? codeVouchers.some((voucher) => voucher.code === manualVoucher.code)
-        : false;
 
     const handleCopy = (text) => {
         navigator.clipboard.writeText(text);
@@ -179,7 +173,6 @@ const CheckoutPage = () => {
                 toast.error(t('invoiceVat.fillRequiredFields'));
                 return;
             }
-            setPaymentStarted(true);
             setLoading(true);
             trackEvent('begin_checkout', {
                 currency: 'VND',
@@ -189,11 +182,9 @@ const CheckoutPage = () => {
             const userEmail = location.state?.userEmail || user?.email;
             if (!userEmail) {
                 if (isAuthLoading) {
-                    setPaymentStarted(false);
                     return;
                 }
                 setError(t('checkout.userEmailNotFound'));
-                setPaymentStarted(false);
                 setLoading(false);
                 return;
             }
@@ -220,9 +211,10 @@ const CheckoutPage = () => {
                 }
 
                 setOrderCode(data.result.orderCode);
-                const qrDataUrl = await QRCode.toDataURL(data.result.qrCode, { width: 220, margin: 1 });
+                const qrDataUrl = await QRCode.toDataURL(data.result.qrCode, { width: 240, margin: 1 });
                 setQrImageUrl(qrDataUrl);
                 setError(null);
+                setCurrentStep('qr');
                 return;
             }
 
@@ -259,11 +251,11 @@ const CheckoutPage = () => {
             }
 
             setOrderCode(data.result.orderCode);
-            const qrDataUrl = await QRCode.toDataURL(data.result.qrCode, { width: 220, margin: 1 });
+            const qrDataUrl = await QRCode.toDataURL(data.result.qrCode, { width: 240, margin: 1 });
             setQrImageUrl(qrDataUrl);
             setError(null);
+            setCurrentStep('qr');
         } catch (err) {
-            setPaymentStarted(false);
             setError(err?.response?.data?.message || t('checkout.createOrderFailed'));
         } finally {
             setLoading(false);
@@ -348,348 +340,294 @@ const CheckoutPage = () => {
     }, [orderCode]);
 
     if (!isCustomPlan && !plan) return null;
-    if (isCustomPlan && !customQuantities) return null;
 
     return (
-        <div className="relative min-h-screen">
-            <div className="relative pt-4 pb-6 px-4 sm:px-6">
-                {/* Compact header bar */}
-                <div className="max-w-5xl mx-auto flex items-center justify-between mb-4">
-                    <button
-                        type="button"
-                        onClick={() => navigate(-1)}
-                        className="inline-flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors group"
-                    >
-                        <HiArrowLeft className="group-hover:-translate-x-0.5 transition-transform" />
-                        {t('checkout.changePlan')}
-                    </button>
-                    <div className="text-center">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Founder AI</p>
-                        <h1 className="text-xl font-black text-white leading-tight">{t('checkout.pageTitle')}</h1>
+        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-slate-50 to-slate-100 py-4 md:py-6 px-4 flex flex-col justify-center">
+            <div className="max-w-5xl mx-auto w-full">
+
+                {/* Top header navigation */}
+                <div className="flex items-center justify-between mb-3 px-1">
+                    {currentStep === 'info' ? (
+                        <Link
+                            to="/pricing"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-600 transition-colors"
+                        >
+                            <HiArrowLeft className="w-4 h-4" />
+                            {t('checkout.changePlan')}
+                        </Link>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setCurrentStep('info')}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-orange-600 transition-colors"
+                        >
+                            <HiArrowLeft className="w-4 h-4" />
+                            {t('checkout.backToEdit')}
+                        </button>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${currentStep === 'info' ? 'bg-orange-500' : 'bg-emerald-500'}`} />
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            {currentStep === 'info' ? t('checkout.step1Title') : t('checkout.step2Title')}
+                        </span>
                     </div>
-                    <div className="w-32" />
                 </div>
 
-                <div className="max-w-5xl mx-auto">
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
+                {/* Main Card */}
+                {currentStep === 'info' ? (
+                    <div className="bg-white/80 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-4 md:p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
 
-                        {/* ── Cột trái: 1 card thống nhất ── */}
-                        <div className={`lg:col-span-2 ${GLASS_CARD} p-5 flex flex-col gap-4`}>
-
-                            {/* Section 1: Chi tiết đăng ký */}
-                            <div>
-                                <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-                                    {t('checkout.registrationDetails')}
-                                </h2>
-                                <div className="bg-gradient-to-br from-orange-50 to-orange-100/60 border border-orange-200/70 rounded-xl p-3 mb-3">
-                                    <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-0.5">
-                                        {t('checkout.membershipPlan')}
-                                    </p>
-                                    <p className="text-lg font-black text-slate-900 leading-tight">{planName}</p>
-                                    <p className="text-xs text-slate-500 mt-0.5">
-                                        {isYearly ? t('checkout.yearlyBilling') : t('checkout.monthlyBilling')}
-                                    </p>
-                                </div>
-                                {isCustomPlan && Array.isArray(customQuote?.items) && (
-                                    <div className="mb-3 space-y-1 max-h-36 overflow-y-auto text-xs text-slate-600">
-                                        {customQuote.items.filter((i) => i.subtotal > 0 || i.itemKey === 'base_fee').map((line) => (
-                                            <div key={line.itemKey} className="flex justify-between gap-2">
-                                                <span className="truncate">{t(`customPlan.items.${camelItemKey(line.itemKey)}`)}</span>
-                                                <span className="font-medium shrink-0">{fmtVnd(line.subtotal)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                            {/* Cột Trái (7/12): Form VAT */}
+                            <div className="md:col-span-7">
+                                {invoiceVatUiEnabled && (
+                                    <InvoiceVatForm
+                                        netAmount={finalAmount}
+                                        defaultEmail={user?.email || ''}
+                                        defaultFullName={user?.name || user?.fullName || ''}
+                                        defaultPhone={user?.phone || ''}
+                                        onChange={setInvoiceInfo}
+                                    />
                                 )}
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between text-slate-500">
-                                        <span>{t('checkout.serviceFee')}</span>
-                                        <span className="font-medium text-slate-700">{fmtVnd(effectiveOriginalAmount)}</span>
-                                    </div>
-                                    {isYearly && !isCustomPlan && (
-                                        <div className="flex justify-between text-emerald-600 text-xs">
-                                            <span>{t('checkout.perMonthApprox', { amount: fmtVnd(Math.round(displayPrice / 12)) })}</span>
-                                            <span className="bg-emerald-100/80 px-1.5 py-0.5 rounded font-semibold">
-                                                -{Math.round((Number(plan.price) * 12 - displayPrice) / (Number(plan.price) * 12) * 100)}%
-                                            </span>
-                                        </div>
-                                    )}
-                                    {isYearly && isCustomPlan && (
-                                        <div className="flex justify-between text-emerald-600 text-xs">
-                                            <span>{t('checkout.perMonthApprox', { amount: fmtVnd(Math.round(displayPrice / 12)) })}</span>
-                                        </div>
-                                    )}
-                                    {appliedVoucher && (
-                                        <div className="flex justify-between text-emerald-600 text-xs">
-                                            <span>{manualVoucher ? t('checkout.voucherSummary', { code: manualVoucher.code }) : (autoPromotion.name || autoPromotion.code)}</span>
-                                            <span className="font-semibold">-{fmtVnd(discountAmount)}</span>
-                                        </div>
-                                    )}
-                                    <div className="pt-2 border-t border-slate-200/60 flex justify-between items-center">
+                            </div>
+
+                            {/* Cột Phải (5/12): Tóm tắt đơn hàng & Voucher & Chi tiết giá */}
+                            <div className="md:col-span-5 space-y-3">
+                                {/* Card Gói dịch vụ */}
+                                <div className="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border border-orange-200/70 rounded-2xl p-4">
+                                    <div className="flex items-start justify-between gap-2 mb-1">
                                         <div>
-                                            <span className="block text-sm font-bold text-slate-800">{t('checkout.total')}</span>
-                                            <span className="text-[10px] text-slate-400">
-                                                {invoiceVatUiEnabled ? t('checkout.vatIncluded') : null}
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">
+                                                {t('checkout.membershipPlan')}
                                             </span>
+                                            <h2 className="text-lg font-black text-slate-900 leading-tight mt-0.5">{planName}</h2>
                                         </div>
-                                        <span className="text-2xl font-black text-slate-900">{fmtVnd(payableAmount)}</span>
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200 shrink-0">
+                                            {isYearly ? t('checkout.yearlyBilling') : t('checkout.monthlyBilling')}
+                                        </span>
                                     </div>
+
+                                    {/* Breakdown gói custom nếu có */}
+                                    {isCustomPlan && customQuantities && (
+                                        <div className="mt-2 pt-2 border-t border-orange-200/50 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-600">
+                                            {Object.entries(customQuantities)
+                                                .filter(([k, v]) => k !== 'base_fee' && Number(v) > 0)
+                                                .slice(0, 6)
+                                                .map(([key, qty]) => (
+                                                    <div key={key} className="flex justify-between">
+                                                        <span className="text-slate-500 truncate">{t(`customPlan.items.${camelItemKey(key)}`)}:</span>
+                                                        <span className="font-bold text-slate-800 ml-1">{Number(qty).toLocaleString('vi-VN')}</span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Mã giảm giá & Ưu đãi */}
+                                <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-3">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={voucherCode}
+                                            onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                                            placeholder={t('checkout.voucherPlaceholder')}
+                                            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 font-mono uppercase"
+                                        />
+                                        {manualVoucher ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setManualVoucher(null);
+                                                    setVoucherCode('');
+                                                    setAuthoritativePayment(null);
+                                                }}
+                                                className="btn btn-secondary text-xs px-3 py-1.5 shrink-0"
+                                            >
+                                                {t('checkout.remove')}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => applyVoucherCode()}
+                                                disabled={voucherLoading || !voucherCode.trim()}
+                                                className="btn btn-primary text-xs px-3 py-1.5 shrink-0 disabled:opacity-50"
+                                            >
+                                                {voucherLoading ? '...' : t('checkout.apply')}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Voucher chips */}
+                                    {codeVouchers.length > 0 && !manualVoucher && (
+                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                            {codeVouchers.slice(0, 3).map((v) => (
+                                                <button
+                                                    key={v.code}
+                                                    type="button"
+                                                    onClick={() => applyVoucherCode(v.code)}
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-100/70 hover:bg-orange-200/80 border border-orange-200 text-[10px] font-bold text-orange-700 transition-colors"
+                                                >
+                                                    <span>🏷️ {v.code}</span>
+                                                    <span className="opacity-75">(-{fmtVnd(v.discountAmount)})</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Chi tiết giá tiền */}
+                                <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-3.5 space-y-2 text-xs">
+                                    <div className="flex justify-between text-slate-600">
+                                        <span>{t('checkout.serviceFee')}</span>
+                                        <span className="font-semibold text-slate-800">{fmtVnd(effectiveOriginalAmount)}</span>
+                                    </div>
+
+                                    {discountAmount > 0 && (
+                                        <div className="flex justify-between text-emerald-600 font-semibold">
+                                            <span>{t('checkout.discount')} ({appliedVoucher?.code || 'Ưu đãi'})</span>
+                                            <span>-{fmtVnd(discountAmount)}</span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between text-slate-500 text-[11px] pt-1 border-t border-slate-200/60">
+                                        <span>{t('checkout.vatExempt')}</span>
+                                        <span>0 đ</span>
+                                    </div>
+
+                                    <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 font-bold text-slate-900">
+                                        <span className="text-sm">{t('checkout.totalAmount')}</span>
+                                        <span className="text-xl font-black text-orange-600">{fmtVnd(payableAmount)}</span>
+                                    </div>
+                                </div>
+
+                                {error && (
+                                    <p className="text-red-600 text-xs text-center font-medium bg-red-50 p-2 rounded-xl border border-red-200">
+                                        {error}
+                                    </p>
+                                )}
+
+                                {/* Nút CTA Tiếp tục thanh toán */}
+                                <button
+                                    type="button"
+                                    onClick={createPayment}
+                                    disabled={loading || !isInvoiceValid}
+                                    title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : undefined}
+                                    className="w-full btn btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.01]"
+                                >
+                                    {loading ? (
+                                        <span>{t('checkout.checkingTransaction')}</span>
+                                    ) : (
+                                        <>
+                                            <span>{t('checkout.proceedToPayment')}</span>
+                                            <span className="bg-black/10 px-2 py-0.5 rounded-full text-xs font-black">
+                                                {fmtVnd(payableAmount)}
+                                            </span>
+                                            <span>→</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                <p className="text-[10px] text-center text-slate-400 font-medium">
+                                    🔒 {t('checkout.securityBadge')}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* Step 2: Màn hình quét mã QR thanh toán */
+                    <div className="bg-white/85 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-5 md:p-8">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+
+                            {/* Cột Trái (5/12): QR Code lớn & Trạng thái */}
+                            <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-gradient-to-b from-orange-500/5 to-transparent rounded-2xl border border-orange-200/50">
+                                <div className="bg-white p-3.5 rounded-2xl shadow-md border border-slate-100 flex flex-col items-center mb-3">
+                                    {qrImageUrl ? (
+                                        <img src={qrImageUrl} alt="Mã QR thanh toán PayOS" className="w-52 h-52 object-contain rounded-lg" />
+                                    ) : (
+                                        <div className="w-52 h-52 flex items-center justify-center text-slate-400 text-xs">
+                                            {t('checkout.checkingTransaction')}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold bg-white/80 px-3 py-1.5 rounded-full border border-orange-200 shadow-sm">
+                                    <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                                    <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse [animation-delay:0.2s]" />
+                                    <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse [animation-delay:0.4s]" />
+                                    <span className="ml-1 text-[11px]">{t('checkout.checkingTransaction')}</span>
                                 </div>
                             </div>
 
-                            {invoiceVatUiEnabled && finalAmount > 0 && (
-                                <InvoiceVatForm
-                                    netAmount={finalAmount}
-                                    disabled={paymentStarted}
-                                    defaultEmail={user?.email || ''}
-                                    defaultFullName={user?.full_name || user?.name || ''}
-                                    defaultPhone={user?.phone || ''}
-                                    onChange={setInvoiceInfo}
-                                />
-                            )}
+                            {/* Cột Phải (7/12): Chi tiết số tiền, Mã đơn, 3 Bước */}
+                            <div className="md:col-span-7 space-y-4">
+                                {/* Box Số tiền cần thanh toán */}
+                                <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl p-4 shadow-lg shadow-orange-500/20 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-100">
+                                            {t('checkout.amountDue')}
+                                        </p>
+                                        <p className="text-xs text-white/90 mt-0.5">{planName} ({isYearly ? t('checkout.yearlyBilling') : t('checkout.monthlyBilling')})</p>
+                                    </div>
+                                    <span className="text-2xl font-black">{fmtVnd(payableAmount)}</span>
+                                </div>
 
-                            {/* Divider */}
-                            <div className="border-t border-slate-200/60" />
-
-                            {/* Section 2: Ưu đãi & voucher — flex-1 để fill height */}
-                            <div className="flex flex-col gap-3 flex-1">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('checkout.offerAndVoucher')}</h2>
-                                    {manualVoucher && (
+                                {/* Box Mã đơn hàng */}
+                                {orderCode && (
+                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                {t('checkout.orderCode')}
+                                            </span>
+                                            <p className="text-sm font-mono font-bold text-slate-800">#{orderCode}</p>
+                                        </div>
                                         <button
                                             type="button"
-                                            className="text-xs text-slate-400 hover:text-red-500 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                                            onClick={() => {
-                                                setManualVoucher(null);
-                                                setAuthoritativePayment(null);
-                                                setVoucherCode('');
-                                            }}
-                                            disabled={paymentStarted}
+                                            onClick={() => handleCopy(String(orderCode))}
+                                            className="btn btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
                                         >
-                                            {t('checkout.removeCode')}
+                                            {copied ? <HiOutlineCheck className="w-4 h-4 text-emerald-600" /> : <HiOutlineDuplicate className="w-4 h-4" />}
+                                            <span>{copied ? t('checkout.copied') : t('checkout.copy')}</span>
                                         </button>
-                                    )}
+                                    </div>
+                                )}
+
+                                {/* 3 Bước thanh toán */}
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        {t('checkout.paymentGuide')}
+                                    </p>
+                                    {[t('checkout.step1'), t('checkout.step2'), t('checkout.step3')].map((step, i) => (
+                                        <div key={step} className="flex items-center gap-3 text-xs text-slate-700 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+                                            <span className="shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                                {i + 1}
+                                            </span>
+                                            <span className="font-medium">{step}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                                {autoPromotion && (
-                                    <div className={`rounded-xl border px-3 py-2.5 ${manualVoucher ? 'border-slate-200 bg-white/40' : 'border-emerald-300 bg-emerald-50/80 ring-1 ring-emerald-200'}`}>
-                                        <div className="flex items-center justify-between gap-2 mb-1">
-                                            <p className={`text-[10px] font-bold uppercase tracking-widest ${manualVoucher ? 'text-slate-400' : 'text-emerald-600'}`}>
-                                                {t('checkout.autoPromotion')}
-                                            </p>
-                                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${manualVoucher ? 'bg-slate-100 text-slate-400' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                {manualVoucher ? t('checkout.availablePromotion') : t('checkout.currentlyApplied')}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className={`font-semibold text-sm ${manualVoucher ? 'text-slate-600' : 'text-emerald-800'}`}>
-                                                {autoPromotion.name || autoPromotion.code}
-                                            </span>
-                                            <span className={`text-xs font-bold ${manualVoucher ? 'text-slate-400' : 'text-emerald-700'}`}>
-                                                -{fmtVnd(autoPromotion.discountAmount)}
-                                            </span>
-                                        </div>
-                                        <p className={`text-[11px] mt-0.5 ${manualVoucher ? 'text-slate-400' : 'text-emerald-600'}`}>
-                                            {manualVoucher ? t('checkout.autoPromotionPaused') : t('checkout.autoPromotionApplied')}
-                                        </p>
-                                    </div>
-                                )}
-                                {manualVoucher && !hasManualVoucherInList && (
-                                    <div className="rounded-xl border border-orange-200 bg-orange-50/80 px-3 py-2.5">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500 mb-1">{t('checkout.appliedCode')}</p>
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="font-semibold text-sm text-orange-800">{t('checkout.codeLabel', { code: manualVoucher.code })}</span>
-                                            <span className="text-xs font-bold text-orange-700">-{fmtVnd(manualVoucher.discountAmount)}</span>
-                                        </div>
-                                        <p className="text-[11px] text-orange-600 mt-0.5">{t('checkout.manualVoucherPriority')}</p>
-                                    </div>
-                                )}
-                                {codeVouchers.length > 0 && (
-                                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('checkout.availableVoucherCodes')}</p>
-                                        {codeVouchers.map((voucher) => {
-                                            const isSelected = manualVoucher?.code === voucher.code;
-                                            const isEligible = voucher.isEligible !== false;
-                                            const minOrderAmount = Number(voucher.minOrderAmount || 0);
-                                            const conditionText = minOrderAmount > 0
-                                                ? t('checkout.voucherMinOrder', { amount: fmtVnd(minOrderAmount) })
-                                                : t('checkout.voucherNoMinOrder');
-                                            return (
-                                                <button
-                                                    key={voucher.id || voucher.code}
-                                                    type="button"
-                                                    role="checkbox"
-                                                    aria-checked={isSelected}
-                                                    aria-label={
-                                                        !isEligible
-                                                            ? t('checkout.notEligible')
-                                                            : isSelected
-                                                                ? t('checkout.deselectVoucher')
-                                                                : t('checkout.selectVoucher')
-                                                    }
-                                                    className={`w-full rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed ${isSelected ? 'border-orange-400 bg-orange-50 ring-1 ring-orange-200' : isEligible ? 'border-orange-200 bg-orange-50/60 hover:bg-orange-100/70' : 'border-slate-200 bg-white/40 opacity-60'}`}
-                                                    onClick={() => {
-                                                        if (isSelected) {
-                                                            setManualVoucher(null);
-                                                            setAuthoritativePayment(null);
-                                                            setVoucherCode('');
-                                                            return;
-                                                        }
-                                                        applyVoucherCode(voucher.code);
-                                                    }}
-                                                    disabled={voucherLoading || paymentStarted || !isEligible}
-                                                >
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <p className={`font-semibold text-sm truncate ${isEligible ? 'text-orange-800' : 'text-slate-500'}`}>{voucher.name || voucher.code}</p>
-                                                            <p className={`text-[11px] truncate ${isEligible ? 'text-orange-600' : 'text-slate-400'}`}>{conditionText} · {t('checkout.codeLabel', { code: voucher.code })}</p>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 shrink-0">
-                                                            <div className="text-right">
-                                                                <p className={`text-xs font-bold ${isEligible ? 'text-orange-700' : 'text-slate-400'}`}>-{fmtVnd(voucher.discountAmount)}</p>
-                                                                {!isEligible && (
-                                                                    <p className="text-[10px] font-semibold text-slate-400">
-                                                                        {t('checkout.notEligible')}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                            {isEligible && (
-                                                                <span
-                                                                    aria-hidden="true"
-                                                                    className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                                                                        isSelected
-                                                                            ? 'border-orange-500 bg-orange-500 text-white'
-                                                                            : 'border-orange-300 bg-white'
-                                                                    }`}
-                                                                >
-                                                                    {isSelected && (
-                                                                        <HiOutlineCheck className="h-3.5 w-3.5" strokeWidth={3} />
-                                                                    )}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                                {/* Voucher input — luôn ở cuối */}
-                                <div className="mt-auto flex gap-2">
-                                    <input
-                                        className="input flex-1 uppercase bg-white/60 text-sm"
-                                        value={voucherCode}
-                                        onChange={(e) => setVoucherCode(e.target.value)}
-                                        placeholder={t('checkout.voucherPlaceholder')}
-                                        disabled={paymentStarted}
-                                    />
+
+                                {/* Footer support */}
+                                <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between text-xs text-slate-500">
+                                    <p>
+                                        {t('checkout.needHelp')}{' '}
+                                        <Link to="/contact" className="text-orange-600 hover:text-orange-700 font-bold underline">
+                                            {t('checkout.contactSupport')}
+                                        </Link>
+                                    </p>
                                     <button
                                         type="button"
-                                        className="btn btn-secondary shrink-0 text-sm"
-                                        onClick={() => applyVoucherCode()}
-                                        disabled={voucherLoading || paymentStarted}
+                                        onClick={() => setCurrentStep('info')}
+                                        className="text-xs text-slate-500 hover:text-slate-800 font-medium underline"
                                     >
-                                        {voucherLoading ? t('checkout.applyingVoucher') : t('checkout.applyVoucher')}
+                                        {t('checkout.backToEdit')}
                                     </button>
                                 </div>
                             </div>
                         </div>
-
-                        {/* ── Cột phải: Payment Guide ── */}
-                        <div className="lg:col-span-3 flex flex-col gap-3">
-                            <div className={`${GLASS_CARD_SOLID} overflow-hidden flex flex-col flex-1`}>
-                                {/* Header cam */}
-                                <div className="bg-gradient-to-r from-orange-500 to-red-500 px-5 py-3 flex items-center justify-between shrink-0">
-                                    <span className="text-sm font-bold text-white">{t('checkout.paymentGuide')}</span>
-                                    <span className="text-[10px] font-black text-white/90 uppercase tracking-widest bg-white/20 px-2.5 py-1 rounded-full">
-                                        {t('checkout.safeTransaction')}
-                                    </span>
-                                </div>
-
-                                {/* Body — flex-1 để fill chiều cao */}
-                                <div className="p-5 flex flex-col flex-1 gap-4">
-                                    {/* Amount / order code */}
-                                    {orderCode ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleCopy(String(orderCode))}
-                                            className="w-full text-left px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 rounded-xl transition-all group shadow-md shadow-orange-500/20 shrink-0"
-                                        >
-                                            <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mb-0.5">{t('checkout.orderCode')}</p>
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-bold text-white text-lg tracking-wide">{orderCode}</span>
-                                                {copied ? <HiOutlineCheck className="text-white shrink-0" /> : <HiOutlineDuplicate className="text-white/70 group-hover:text-white shrink-0 transition-colors" />}
-                                            </div>
-                                        </button>
-                                    ) : paymentStarted ? (
-                                        <div className="w-full px-4 py-3 bg-white/50 rounded-xl h-16 animate-pulse border border-white/60 shrink-0" />
-                                    ) : (
-                                        <div className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl shrink-0">
-                                            <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mb-0.5">{t('checkout.amountDue')}</p>
-                                            <span className="font-bold text-white text-xl">{fmtVnd(payableAmount)}</span>
-                                        </div>
-                                    )}
-
-                                    {/* QR + Steps — flex-1, căn giữa */}
-                                    <div className="flex flex-col sm:flex-row gap-5 items-center flex-1">
-                                        {/* QR box */}
-                                        <div className="shrink-0 flex flex-col items-center gap-2">
-                                            <div className="w-44 h-44 rounded-2xl border-2 border-white/80 bg-white/90 flex items-center justify-center shadow-lg">
-                                                {loading && paymentStarted && <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />}
-                                                {error && <p className="text-red-600 text-xs text-center px-3 font-medium">{error}</p>}
-                                                {qrImageUrl && <img src={qrImageUrl} alt="QR" className="w-40 h-40 rounded-xl" />}
-                                                {!paymentStarted && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={createPayment}
-                                                        disabled={!isInvoiceValid}
-                                                        title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : undefined}
-                                                        className="btn btn-primary text-sm px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        {t('checkout.createPaymentQr')}
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
-                                                {paymentStarted ? t('checkout.scanToPay') : t('checkout.payAmount', { amount: fmtVnd(payableAmount) })}
-                                            </p>
-                                        </div>
-
-                                        {/* Steps */}
-                                        <div className="flex-1 w-full space-y-3">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('checkout.paymentGuide')}</p>
-                                            {[t('checkout.step1'), t('checkout.step2'), t('checkout.step3')].map((step, i) => (
-                                                <div key={step} className="flex items-start gap-3 text-sm text-slate-700">
-                                                    <span className="shrink-0 w-6 h-6 rounded-full bg-orange-100 border border-orange-200 text-orange-600 text-[11px] font-bold flex items-center justify-center mt-0.5">
-                                                        {i + 1}
-                                                    </span>
-                                                    <span className="leading-relaxed">{step}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Footer: need help — mt-auto push xuống đáy */}
-                                    <div className="mt-auto pt-3 border-t border-slate-200/60 flex items-center justify-between">
-                                        <p className="text-sm text-slate-500">
-                                            {t('checkout.needHelp')}{' '}
-                                            <Link to="/contact" className="text-orange-500 hover:text-orange-600 font-semibold">
-                                                {t('checkout.contactSupport')}
-                                            </Link>
-                                        </p>
-                                        {paymentStarted && (
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse" />
-                                                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse [animation-delay:0.2s]" />
-                                                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse [animation-delay:0.4s]" />
-                                                <span className="text-[11px] font-semibold text-slate-500 ml-1">{t('checkout.checkingTransaction')}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
-                </div>
+                )}
+
             </div>
         </div>
     );
