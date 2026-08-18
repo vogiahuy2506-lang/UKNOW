@@ -81,6 +81,24 @@ Chuỗi dài nhất trong tháng, đi từ "chưa có gì" tới "quản lý đ�
 | Đánh dấu **gói đang dùng** trên bảng giá + sửa gói custom | `d8799a3` |
 | Thiết kế lại trang thanh toán thành 2 bước gọn trong 1 màn hình | `0d1357c`, `424eee4`, `dc370f3` |
 
+## Trợ lý AI — nhóm tính năng nền
+
+Nhóm này không map 1-1 với commit như các nhóm khác (thay đổi rải rác nhiều đợt), nên xác minh
+bằng cách đối chiếu **vật thể code** mà plan hứa tạo ra.
+
+| Việc | Bằng chứng trong code |
+|---|---|
+| Tách locale trợ lý + help nhạy cảm tiếng Anh | `backend/src/utils/assistantLocale.util.js` (`detectTextLocale`, `buildAssistantLanguageInstructions`), `isSensitiveHelpTopic` trong `helpAssistant.service.js` |
+| Tư vấn gói bằng dữ liệu live | `backend/src/utils/planAdviceIntent.util.js` (`isPlanAdviceQuestion`) |
+| Nối 2 não trợ lý (hết trả lời "không có tính năng") | `backend/src/services/ai/assistantCapabilities.js` |
+| `LandingBrief` có cấu trúc cho wizard tạo landing | `backend/src/services/ai/landingBrief.service.js` + `landingBriefWiring.spec.js` |
+| `CampaignBrief` có cấu trúc + field điều kiện | `backend/src/services/ai/campaignBrief.service.js` (`mergeCampaignBrief`), `computeWizardMeta`/`evaluateNextGate` trong `aiCampaignWizard.service.js` |
+| Trả trợ lý về đúng năng lực + giữ tệp sau F5 | `routeQuestion`/`answerWithDocs` trong `helpAssistant.service.js`; `saveMessages(..., userFiles)` trong `aiSession.repository.js` |
+| Chuẩn bị chiến dịch: tự tạo template, hỏi nguồn dữ liệu | `autoCreateEmailTemplates` (`ai.controller.js`), `buildDataSourceQuestion` (`campaignIntent.util.js`), `manualRecipients.util.js` |
+| Chống lặp vô hạn + danh bạ bạn bè Zalo | `isMultiDaySeriesRequest` (`campaignQuickSend.util.js`), `assertAiCreditAvailable` (`aiCredit.middleware.js`), migration `142_zalo_friends.sql` |
+| Hộp thư: bàn giao người thật, không đoán trạng thái tạm dừng | `buildAiPausePayload` (`aiHandoffResume.util.js`, dùng 3 chỗ trong `unifiedInbox.service.js`); `extractPauseState` ở FE thay cho `applySelfHandoffPause` đã xoá |
+| Giám sát gửi tin: hiện lỗi cấp-run (pre-flight) | `runLevelErrors` trong `userDeliveryMonitor.service.js`, `classifyDeliveryMonitorFailure` dùng chung 2 service |
+
 ## Landing page & Marketplace
 
 | Việc | Commit |
