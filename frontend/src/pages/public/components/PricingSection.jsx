@@ -481,7 +481,9 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
             const isCurrentCustom = isAuthenticated && !isEmployee && isCustom && activePlanIsCustom;
             const isOwnerCustomForEmployee = isAuthenticated && isEmployee && isCustom && activePlanIsCustom;
             const isCurrentStandard = isAuthenticated && !isCustom && !activePlanIsCustom && Number(plan.id) === Number(activePlanId);
-            const isCurrentPlan = isCurrentCustom || isCurrentStandard || isOwnerCustomForEmployee;
+            const isCurrentStandardPlan = isAuthenticated && activeContext?.type === 'self'
+              && !isCustom && currentPlanId != null && Number(plan.id) === Number(currentPlanId);
+            const isCurrentPlan = isCurrentCustom || isCurrentStandard || isOwnerCustomForEmployee || isCurrentStandardPlan;
 
             const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
@@ -500,8 +502,7 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
             const discountPct = hasPromotion && rawPlanPrice > 0
               ? Math.round(promotion.discountAmount / rawPlanPrice * 100)
               : 0;
-            const isCurrentPlan = !isCustom && currentPlanId != null && Number(plan.id) === Number(currentPlanId);
-            const currentPlanExpiryText = isCurrentPlan && subscriptionExpiresAt
+            const currentPlanExpiryText = isCurrentStandardPlan && subscriptionExpiresAt
               ? new Date(subscriptionExpiresAt).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' })
               : null;
 
