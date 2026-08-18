@@ -35,9 +35,15 @@ import { resolveOrderAmountWithInvoice, normalizeBuyerInvoiceProfile } from '../
 import { saveInvoiceProfile } from '../../repositories/user/user.repository.js';
 import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
 
+const isTrialOrFreePlan = (plan) => {
+    if (!plan) return false;
+    const trialCode = process.env.SIGNUP_TRIAL_PLAN_CODE || 'trial';
+    return plan.code === trialCode || Number(plan.price) === 0;
+};
+
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
-    // Rule: trial plan (10 ngày) chỉ được đăng ký 1 lần / tài khoản.
-    if (Number(plan?.duration_days) !== 10) return;
+    // Rule: Mọi gói dùng thử / miễn phí chỉ được đăng ký 1 lần / tài khoản.
+    if (!isTrialOrFreePlan(plan)) return;
 
     const alreadyRegistered = await hasSuccessfulOrderForPlanByUser({
         planId: plan.id,
@@ -45,7 +51,7 @@ const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
         userEmail,
     });
     if (alreadyRegistered) {
-        throw { status: 409, message: 'Gói dùng thử 10 ngày chỉ được đăng ký một lần cho mỗi tài khoản' };
+        throw { status: 409, message: 'Gói dùng thử chỉ được đăng ký một lần cho mỗi tài khoản' };
     }
 };
 
