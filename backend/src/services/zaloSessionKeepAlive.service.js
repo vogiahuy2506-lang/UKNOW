@@ -14,6 +14,8 @@
 
 import zaloAccountSessionService from './zalo/zaloAccountSession.service.js';
 import zaloPersonalInboxService from './chatbot/zaloInbox.service.js';
+import zaloPersonalAdapter from './chatbot/channelAdapters/zaloPersonal.adapter.js';
+import { getListenerSocketState } from '../utils/zaloListenerHealth.util.js';
 import db from '../config/database.js';
 import { restoreZaloSessionFromCookie } from '../utils/zaloSessionRestore.util.js';
 import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
@@ -26,29 +28,72 @@ import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 const refreshingAccounts = new Set();
 
 /**
- * Kiểm tra xem session API có thực sự hoạt động không
- * Thử gọi một API method đơn giản để xác nhận
+ * Kiểm tra session có THỰC SỰ còn nhận được tin đến không.
+ *
+ * Trước đây hàm này luôn trả true khi có object api trong memory → websocket chết
+ * âm thầm (không phát sự kiện `closed`) không bao giờ được phát hiện, hộp thư điếc
+ * cho tới khi restart backend. Nay soi thẳng readyState của websocket zca-js.
+ *
+ * @param {any} api
+ * @param {number|string} accountId
+ * @returns {boolean}
  */
-async function isSessionAlive(api, accountId) {
-  if (!api) return false;
+function isSessionAlive(api, accountId) {
+  const health = getListenerSocketState(api);
+  if (!health.healthy) {
+    console.warn(
+      `[ZaloKeepAlive] Account ${accountId}: listener KHÔNG sống `
+      + `(reason=${health.reason}, readyState=${health.readyState ?? 'null'}) → sẽ restore`
+    );
+  }
+  return health.healthy;
+}
 
+/**
+ * Socket còn sống nhưng handler hộp thư có thể đã rớt khỏi listener
+ * (rebind lỗi, đồng bộ thủ công, listener bị thay). Khi đó vẫn gửi được tin ra
+ * nhưng bạn bè nhắn vào KHÔNG vào hộp thư và AI không trả lời.
+ *
+ * @param {number|string} accountId
+ * @param {any} api
+ * @returns {Promise<boolean>}
+ */
+async function ensureInboxHandlerAttached(accountId, api) {
   try {
-    // Thử getOwnId - method nhanh nhất để kiểm tra session
-    if (typeof api.getOwnId === 'function') {
-      const ownId = api.getOwnId();
-      if (ownId) return true;
-    }
-
-    // Thử getUserInfo nếu có uid
-    if (typeof api.getUserInfo === 'function') {
-      // Thử lấy thông tin cơ bản
+    if (zaloPersonalAdapter.isHandlerAttachedTo(accountId, api?.listener)) {
       return true;
     }
-
-    return true; // Giả định alive nếu có api object
+    console.warn(
+      `[ZaloKeepAlive] Account ${accountId}: socket sống nhưng inbox handler chưa gắn → đăng ký lại`
+    );
+    return await zaloPersonalInboxService.registerAccountListener(accountId);
   } catch (error) {
-    console.warn(`[ZaloKeepAlive] Session check failed for account ${accountId}: ${error.message}`);
+    console.warn(
+      `[ZaloKeepAlive] Account ${accountId}: rebind inbox handler thất bại: ${error.message}`
+    );
     return false;
+  }
+}
+
+/**
+ * Dọn session chết trước khi restore: bỏ api khỏi memory (kèm unmark registered)
+ * rồi đóng socket zombie, tránh chạy song song 2 socket cho cùng tài khoản
+ * (Zalo sẽ đá kết nối trùng bằng mã 3000).
+ *
+ * @param {number|string} accountId
+ * @param {any} api
+ * @returns {void}
+ */
+function discardDeadSession(accountId, api) {
+  try {
+    zaloAccountSessionService.clearAccountApi(accountId, api);
+  } catch (error) {
+    console.warn(`[ZaloKeepAlive] Account ${accountId}: clearAccountApi lỗi: ${error.message}`);
+  }
+  try {
+    api?.listener?.stop?.();
+  } catch (error) {
+    console.warn(`[ZaloKeepAlive] Account ${accountId}: stop listener cũ lỗi: ${error.message}`);
   }
 }
 
@@ -104,13 +149,15 @@ async function refreshAccountSession(account) {
 
     if (currentApi) {
       // Kiểm tra xem session có thực sự hoạt động không
-      const isAlive = await isSessionAlive(currentApi, accountId);
+      const isAlive = isSessionAlive(currentApi, accountId);
       if (isAlive) {
         console.log(`[ZaloKeepAlive] Account ${accountId}: session is alive ✅`);
+        await ensureInboxHandlerAttached(accountId, currentApi);
         refreshingAccounts.delete(accountKey);
         return { accountId, status: 'alive', reason: 'session_valid' };
       }
       console.log(`[ZaloKeepAlive] Account ${accountId}: session exists but not alive, will try restore`);
+      discardDeadSession(accountId, currentApi);
     } else {
       console.log(`[ZaloKeepAlive] Account ${accountId}: no session in memory, will try restore`);
     }
