@@ -277,7 +277,7 @@ export default function LandingPagesAdminPage() {
     setSaving(true);
     try {
       if (editingId) {
-        await updateLandingPageAdmin(editingId, {
+        const updated = await updateLandingPageAdmin(editingId, {
           slug: slug || null,
           title: form.title,
           htmlContent: form.htmlContent,
@@ -287,6 +287,9 @@ export default function LandingPagesAdminPage() {
           leadFormConfig,
         });
         toast.success(t('landingPagesAdmin.updated'));
+        if (updated?.warning) {
+          toast(updated.warning, { icon: '⚠️', duration: 6000 });
+        }
       } else {
         const created = await createLandingPageAdmin({
           slug: slug || null,

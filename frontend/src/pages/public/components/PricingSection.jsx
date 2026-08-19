@@ -190,6 +190,7 @@ const isEmployee = activeContext?.type === 'employee';
   const subscriptionExpiresAt = isAuthenticated && activeContext?.type === 'self'
     ? (user?.subscription_expires_at ?? user?.subscriptionExpiresAt ?? null)
     : null;
+  const activeBillingPeriod = user?.activeBillingPeriod || 'monthly';
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
@@ -480,9 +481,17 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
             const isCustom = isContactPlan(plan);
             const isCurrentCustom = isAuthenticated && !isEmployee && isCustom && activePlanIsCustom;
             const isOwnerCustomForEmployee = isAuthenticated && isEmployee && isCustom && activePlanIsCustom;
-            const isCurrentStandard = isAuthenticated && !isCustom && !activePlanIsCustom && Number(plan.id) === Number(activePlanId);
-            const isCurrentStandardPlan = isAuthenticated && activeContext?.type === 'self'
-              && !isCustom && currentPlanId != null && Number(plan.id) === Number(currentPlanId);
+            const isCurrentStandard = isAuthenticated
+              && !isCustom
+              && !activePlanIsCustom
+              && Number(plan.id) === Number(activePlanId)
+              && billingPeriod === activeBillingPeriod;
+            const isCurrentStandardPlan = isAuthenticated
+              && activeContext?.type === 'self'
+              && !isCustom
+              && currentPlanId != null
+              && Number(plan.id) === Number(currentPlanId)
+              && billingPeriod === activeBillingPeriod;
             const isCurrentPlan = isCurrentCustom || isCurrentStandard || isOwnerCustomForEmployee || isCurrentStandardPlan;
 
             const style = styleSet[index % styleSet.length];

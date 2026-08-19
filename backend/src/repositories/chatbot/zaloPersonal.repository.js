@@ -186,14 +186,23 @@ class ZaloPersonalRepository {
    * @param {string|null} [params.externalId] Zalo msgId when known (echo dedupe)
    * @returns {Promise<void>}
    */
-  async insertAgentMessage({ conversationId, userId, zaloSettingId, content, now, externalId = null }) {
+  async insertAgentMessage({ conversationId, userId, zaloSettingId, content, now, externalId = null, metadata = {} }) {
     await db.query(
       `INSERT INTO zalo_personal_messages
-       (id_conversation, id_user, id_zalo_setting, role, content, external_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (id_conversation, id_user, id_zalo_setting, role, content, external_id, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id_zalo_setting, external_id) WHERE external_id IS NOT NULL
        DO NOTHING`,
-      [conversationId, userId, zaloSettingId, 'agent', content, externalId, now]
+      [
+        conversationId,
+        userId,
+        zaloSettingId,
+        'agent',
+        content,
+        externalId,
+        typeof metadata === 'object' && metadata !== null ? JSON.stringify(metadata) : '{}',
+        now,
+      ]
     );
   }
 
@@ -366,6 +375,96 @@ class ZaloPersonalRepository {
       metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata || '{}') : (row.metadata || {}),
     }));
   }
+
+  /**
+   * Báo cáo hoạt động AI và tin nhắn theo ngày
+   * @param {object} params
+   * @param {number} params.userId
+   * @param {string} params.startIso
+   * @param {string} params.endIso
+   * @param {number|null} [params.accountId]
+   * @returns {Promise<Array<object>>}
+   */
+  async getAiActivityReport({ userId, startIso, endIso, accountId = null }) {
+    const params = [userId, startIso, endIso];
+    let accountFilter = '';
+    if (accountId != null) {
+      params.push(Number(accountId));
+      accountFilter = `AND c.id_zalo_setting = $${params.length}`;
+    }
+
+    const { rows } = await db.query(
+      `SELECT c.id,
+              c.visitor_name,
+              c.external_id,
+              c.id_zalo_setting,
+              COUNT(*) FILTER (WHERE m.role = 'visitor')                                AS khach_nhan,
+              COUNT(*) FILTER (WHERE m.metadata->>'source' = 'ai_auto_reply')           AS ai_tra_loi,
+              COUNT(*) FILTER (WHERE m.metadata->>'source' IN ('manual_inbox','owner_zalo_app')) AS nguoi_tra_loi,
+              COUNT(*) FILTER (WHERE m.role = 'visitor' AND m.is_read = false)          AS chua_doc,
+              MIN(m.created_at) FILTER (WHERE m.role = 'visitor')                       AS tin_dau,
+              MAX(m.created_at)                                                          AS tin_cuoi,
+              c.ai_paused,
+              c.ai_paused_at
+       FROM zalo_personal_conversations c
+       JOIN zalo_personal_messages m ON m.id_conversation = c.id
+       WHERE c.id_user = $1
+         AND m.created_at >= $2 AND m.created_at < $3
+         ${accountFilter}
+       GROUP BY c.id
+       ORDER BY tin_cuoi DESC`,
+      params
+    );
+    return rows;
+  }
+
+  /**
+   * Lấy tin nhắn trong ngày của các hội thoại phục vụ tóm tắt AI
+   */
+  async getMessagesForSummary({ conversationIds = [], userId, startIso, endIso }) {
+    if (!Array.isArray(conversationIds) || conversationIds.length === 0) return [];
+    const { rows } = await db.query(
+      `SELECT id_conversation, role, content, metadata->>'source' as source, created_at
+       FROM zalo_personal_messages
+       WHERE id_user = $1
+         AND id_conversation = ANY($2::bigint[])
+         AND created_at >= $3 AND created_at < $4
+       ORDER BY id_conversation, created_at ASC`,
+      [userId, conversationIds, startIso, endIso]
+    );
+    return rows;
+  }
+
+  /**
+   * Bật lại tất cả AI đang bị tạm dừng do handoff (không bật những hội thoại cố ý tắt manual)
+   */
+  async bulkResumeAiPaused(userId) {
+    const result = await db.query(
+      `UPDATE zalo_personal_conversations
+       SET ai_paused = false, ai_paused_at = NULL
+       WHERE id_user = $1 AND ai_paused = true AND ai_paused_at IS NOT NULL
+       RETURNING id`,
+      [userId]
+    );
+    return result.rowCount;
+  }
+
+  /**
+   * Đếm số hội thoại bị AI tạm dừng do handoff quá số giờ quy định (mặc định 24h)
+   */
+  async countStaleAiPausedConversations(userId, hoursThreshold = 24) {
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS count
+       FROM zalo_personal_conversations
+       WHERE id_user = $1
+         AND ai_paused = true
+         AND ai_paused_at IS NOT NULL
+         AND ai_paused_at <= NOW() - ($2::text || ' hours')::interval`,
+      [userId, String(hoursThreshold)]
+    );
+    return rows[0]?.count || 0;
+  }
 }
 
 export default new ZaloPersonalRepository();
+

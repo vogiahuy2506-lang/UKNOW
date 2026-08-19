@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   HiArrowLeft, HiOutlineSearch, HiOutlineBell,
   HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineExclamation,
-  HiOutlineMail, HiOutlineInbox, HiX
+  HiOutlineMail, HiOutlineInbox, HiOutlineSparkles, HiX
 } from 'react-icons/hi';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ConversationList from '../../features/inbox/ConversationList';
@@ -12,6 +12,7 @@ import ReplyInput from '../../features/inbox/ReplyInput';
 import ZaloAccountSelector from '../../features/inbox/ZaloAccountSelector';
 import TypingIndicator from '../../features/inbox/TypingIndicator';
 import ConversationDetails from '../../features/inbox/ConversationDetails';
+import AiActivityReport from '../../features/inbox/AiActivityReport';
 import { useI18n } from '../../i18n';
 import toast from 'react-hot-toast';
 import useInboxSSE from '../../hooks/useInboxSSE';
@@ -140,6 +141,7 @@ const InboxPage = () => {
   const [hasMore, setHasMore] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'ai_report'
   
   const [sessionStatus, setSessionStatus] = useState({
     connected: false,
@@ -659,6 +661,21 @@ const InboxPage = () => {
     }
   }, [fetchUnreadCount, pendingMessages]);
 
+  const handleOpenConversationFromReport = useCallback((convId) => {
+    setActiveView('chat');
+    const found = conversations.find((c) => Number(c.id) === Number(convId));
+    if (found) {
+      handleSelectConversation(found);
+    } else {
+      handleSelectConversation({
+        id: convId,
+        type: 'zalo_personal',
+        visitorName: 'Khách hàng',
+        unreadCount: 0,
+      });
+    }
+  }, [conversations, handleSelectConversation]);
+
   useEffect(() => {
     fetchConversations(true);
     fetchUnreadCount();
@@ -700,8 +717,8 @@ const InboxPage = () => {
       <div
         className={`h-full min-h-0 bg-white flex flex-col flex-shrink-0 overflow-hidden border-r border-gray-200 ${
           !isResizing && 'transition-all duration-200'
-        } ${selectedConversation ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
-        style={{ width: isMobile && !selectedConversation ? '100%' : `${sidebarWidth}px` }}
+        } ${(selectedConversation || activeView === 'ai_report') ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
+        style={{ width: isMobile && !selectedConversation && activeView !== 'ai_report' ? '100%' : `${sidebarWidth}px` }}
       >
         {/* Sidebar toolbar — compact so list gets most of the height */}
         <div className="shrink-0 border-b border-gray-100">
@@ -733,12 +750,50 @@ const InboxPage = () => {
             </button>
           </div>
 
+          {/* View Toggle Tabs: Chat vs AI Report */}
+          <div className="flex items-center gap-1 p-1 bg-gray-100/90 rounded-xl mx-3 mb-2 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setActiveView('chat')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                activeView === 'chat'
+                  ? 'bg-white text-primary-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <HiOutlineInbox className="w-4 h-4" />
+              <span>{t('inbox.title') || 'Hộp thư'}</span>
+              {unreadCount > 0 && (
+                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('ai_report')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                activeView === 'ai_report'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <HiOutlineSparkles className="w-4 h-4 text-indigo-500" />
+              <span>Báo cáo AI</span>
+            </button>
+          </div>
+
           {!sessionStatus.connected && sessionStatus.accounts?.length > 0 && (
-            <div className="mx-3 mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-1.5">
-              <HiOutlineExclamation className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <p className="text-[11px] text-amber-800 leading-tight">
-                {t('inbox.sessionExpired')} — {t('inbox.rescanQR')}
-              </p>
+            <div className="mx-3 mb-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 shadow-sm">
+              <HiOutlineExclamation className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold text-rose-800 leading-tight">
+                  Tài khoản Zalo mất kết nối — Bot tạm dừng nhận tin!
+                </p>
+                <p className="text-[10px] text-rose-600 mt-0.5 leading-tight">
+                  {t('inbox.sessionExpired')} — Vui lòng quét lại mã QR tại Cài đặt kênh.
+                </p>
+              </div>
             </div>
           )}
 
@@ -832,10 +887,17 @@ const InboxPage = () => {
       {/* Right panel */}
       <div
         className={`h-full min-h-0 flex-1 min-w-0 overflow-hidden bg-gray-50 ${
-          selectedConversation ? 'grid grid-rows-[auto,minmax(0,1fr),auto]' : 'hidden lg:flex lg:flex-col'
+          (selectedConversation || activeView === 'ai_report')
+            ? (activeView === 'ai_report' ? 'flex flex-col' : 'grid grid-rows-[auto,minmax(0,1fr),auto]')
+            : 'hidden lg:flex lg:flex-col'
         }`}
       >
-        {selectedConversation ? (
+        {activeView === 'ai_report' ? (
+          <AiActivityReport
+            selectedAccountId={selectedAccountId}
+            onSelectConversation={handleOpenConversationFromReport}
+          />
+        ) : selectedConversation ? (
           <>
             {/* Message header */}
             <div className="shrink-0 px-5 py-4 bg-white border-b border-gray-200 flex items-center gap-4 shadow-sm">

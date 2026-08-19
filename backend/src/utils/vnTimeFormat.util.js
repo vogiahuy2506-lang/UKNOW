@@ -74,3 +74,56 @@ export function formatUtcAndVietnamForLog(input) {
   }).format(d);
   return `${utcIso} (giờ VN: ${vnWall})`;
 }
+
+/**
+ * Lấy khoảng thời gian bắt đầu và kết thúc của một ngày lịch Việt Nam (UTC ISO).
+ * Giờ VN luôn là UTC+7. Ngày YYYY-MM-DD bắt đầu từ `YYYY-MM-DDT00:00:00+07:00`
+ * (tức (D-1)T17:00:00Z) đến `YYYY-MM-(D+1)T00:00:00+07:00`.
+ *
+ * @param {string|Date|null|undefined} [dateInput] YYYY-MM-DD hoặc Date hoặc null (hôm nay)
+ * @returns {{ dayKey: string, dateStr: string, startIso: string, endIso: string, startUtc: Date, endUtc: Date }}
+ */
+export function getVietnamDayRange(dateInput) {
+  let y;
+  let m;
+  let d;
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())) {
+    const parts = dateInput.trim().split('-');
+    y = Number(parts[0]);
+    m = Number(parts[1]);
+    d = Number(parts[2]);
+  } else {
+    const targetDate = toDateOrNull(dateInput) || new Date();
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: VIETNAM_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(targetDate);
+    const get = (type) => parts.find((p) => p.type === type)?.value || '';
+    y = Number(get('year'));
+    m = Number(get('month'));
+    d = Number(get('day'));
+  }
+
+  const mm = String(m).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  const dayKey = `${y}${mm}${dd}`;
+  const dateStr = `${y}-${mm}-${dd}`;
+
+  // 00:00:00 GMT+7 tương đương ngày YYYY-MM-DD 00:00:00+07:00
+  const startUtc = new Date(`${dateStr}T00:00:00+07:00`);
+  // Kết thúc ngày là 00:00:00 GMT+7 ngày hôm sau
+  const nextDay = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000);
+  const endUtc = nextDay;
+
+  return {
+    dayKey,
+    dateStr,
+    startIso: startUtc.toISOString(),
+    endIso: endUtc.toISOString(),
+    startUtc,
+    endUtc,
+  };
+}
+

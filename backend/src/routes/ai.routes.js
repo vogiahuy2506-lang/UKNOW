@@ -32,6 +32,9 @@ router.post('/generate-campaign-v2', aiLimiter, assertAiCreditAvailable('ai_gene
 // Generate full landing page HTML (Tailwind CDN + business context)
 router.post('/generate-landing-html', aiLimiter, assertAiCreditAvailable('ai_generate_landing_html'), aiController.generateLandingHtml.bind(aiController));
 
+// Edit existing landing page HTML (Tailwind CDN + preserve untouched sections)
+router.post('/edit-landing-html', aiLimiter, assertAiCreditAvailable('ai_edit_landing_html'), aiController.editLandingHtml.bind(aiController));
+
 // Create and optionally run the campaign
 router.post('/execute-campaign', aiLimiter, aiController.executeCampaign.bind(aiController));
 

@@ -101,7 +101,11 @@ export async function createLandingPageAdmin(body) {
 export async function updateLandingPageAdmin(id, body) {
   const { data } = await api.put(`/admin/landing-pages/${id}`, body);
   if (!data?.success || !data?.data) throw new Error(data?.message || 'Không cập nhật được');
-  return data.data;
+  const result = data.data;
+  if (data?.warning && !result.warning) {
+    result.warning = data.warning;
+  }
+  return result;
 }
 
 /**
@@ -135,6 +139,21 @@ export async function generateLandingHtmlWithAi({ prompt, title } = {}) {
   const { data } = await api.post(
     '/ai/generate-landing-html',
     { prompt, title },
+    { timeout: 120000 }
+  );
+  return data;
+}
+
+/**
+ * Chỉnh sửa HTML landing hiện tại (Tailwind + Gemini + giữ nguyên cấu trúc/nội dung).
+ *
+ * @param {{ instruction: string, currentHtml: string, locale?: string }} params
+ * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
+ */
+export async function editLandingHtmlWithAi({ instruction, currentHtml, locale } = {}) {
+  const { data } = await api.post(
+    '/ai/edit-landing-html',
+    { instruction, currentHtml, locale },
     { timeout: 120000 }
   );
   return data;
@@ -199,3 +218,55 @@ export async function updateLandingTemplate(id, body) {
   if (!data?.success || !data?.data) throw new Error(data?.message || 'Không cập nhật được');
   return data.data;
 }
+
+/**
+ * Lấy danh sách lịch sử phiên bản của landing page.
+ *
+ * @param {number} landingPageId
+ * @returns {Promise<{ versions: Array<object>, totalSizeBytes: number, maxVersions: number }>}
+ */
+export async function fetchLandingPageVersions(landingPageId) {
+  const { data } = await api.get(`/admin/landing-pages/${landingPageId}/versions`);
+  if (!data?.success) throw new Error(data?.message || 'Không tải được danh sách phiên bản');
+  return data.data;
+}
+
+/**
+ * Xem trước HTML của một phiên bản.
+ *
+ * @param {number} landingPageId
+ * @param {number} versionId
+ * @returns {Promise<{ version: object, htmlContent: string }>}
+ */
+export async function previewLandingPageVersion(landingPageId, versionId) {
+  const { data } = await api.get(`/admin/landing-pages/${landingPageId}/versions/${versionId}/preview`);
+  if (!data?.success) throw new Error(data?.message || 'Không tải được nội dung phiên bản');
+  return data.data;
+}
+
+/**
+ * Khôi phục landing page về một phiên bản.
+ *
+ * @param {number} landingPageId
+ * @param {number} versionId
+ * @returns {Promise<object>}
+ */
+export async function restoreLandingPageVersion(landingPageId, versionId) {
+  const { data } = await api.post(`/admin/landing-pages/${landingPageId}/versions/${versionId}/restore`);
+  if (!data?.success) throw new Error(data?.message || 'Không khôi phục được phiên bản');
+  return data;
+}
+
+/**
+ * Xóa một phiên bản lịch sử.
+ *
+ * @param {number} landingPageId
+ * @param {number} versionId
+ * @returns {Promise<object>}
+ */
+export async function deleteLandingPageVersion(landingPageId, versionId) {
+  const { data } = await api.delete(`/admin/landing-pages/${landingPageId}/versions/${versionId}`);
+  if (!data?.success) throw new Error(data?.message || 'Không xóa được phiên bản');
+  return data;
+}
+

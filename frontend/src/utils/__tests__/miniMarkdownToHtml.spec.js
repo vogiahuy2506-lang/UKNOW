@@ -18,14 +18,18 @@ describe('miniMarkdownToHtml', () => {
     });
 
     it('neutralizes dangerous schemes like javascript:, vbscript:, data:', () => {
+      // Điều cốt lõi: URL nguy hiểm bị thay bằng '#', không còn scheme thực thi được.
       const linkJs = inline('[Click me](javascript:alert(1))');
-      expect(linkJs).toBe('<a href="#" rel="noopener noreferrer" target="_blank">Click me</a>');
+      expect(linkJs).toBe('<a href="#">Click me</a>');
+      expect(linkJs).not.toContain('javascript:');
 
       const linkVb = inline('[Click me](vbscript:msgbox(1))');
-      expect(linkVb).toBe('<a href="#" rel="noopener noreferrer" target="_blank">Click me</a>');
+      expect(linkVb).toBe('<a href="#">Click me</a>');
+      expect(linkVb).not.toContain('vbscript:');
 
       const linkData = inline('[Click me](data:text/html,<script>alert(1)</script>)');
-      expect(linkData).toBe('<a href="#" rel="noopener noreferrer" target="_blank">Click me</a>');
+      expect(linkData).toBe('<a href="#">Click me</a>');
+      expect(linkData).not.toContain('data:');
 
       const imgJs = inline('![avatar](javascript:alert(1))');
       expect(imgJs).toBe('<img src="#" alt="avatar">');
@@ -75,6 +79,19 @@ describe('miniMarkdownToHtml', () => {
       expect(res).toBe('<a href="https://example.com/docs" rel="noopener noreferrer" target="_blank">Xem tài liệu</a>');
     });
 
+    it('keeps in-app and cross-article links in the same tab', () => {
+      const appLink = inline('[Kênh gửi](/app/settings/channels)');
+      expect(appLink).toBe('<a href="/app/settings/channels">Kênh gửi</a>');
+      expect(appLink).not.toContain('target=');
+
+      const articleLink = inline('[Thêm tài khoản Email](email-account)');
+      expect(articleLink).toBe('<a href="email-account">Thêm tài khoản Email</a>');
+      expect(articleLink).not.toContain('target=');
+
+      // mailto vẫn mở ứng dụng thư ngoài
+      expect(inline('[Gửi thư](mailto:a@b.com)')).toContain('target="_blank"');
+    });
+
     it('parses inline bold and italic correctly', () => {
       const res1 = inline('**Chữ đậm** và *chữ nghiêng*');
       expect(res1).toBe('<strong>Chữ đậm</strong> và <em>chữ nghiêng</em>');
@@ -99,6 +116,27 @@ describe('miniMarkdownToHtml', () => {
       expect(miniMarkdownToHtml('# Tiêu đề cấp 1')).toBe('<h2>Tiêu đề cấp 1</h2>');
       expect(miniMarkdownToHtml('## Tiêu đề cấp 2')).toBe('<h3>Tiêu đề cấp 2</h3>');
       expect(miniMarkdownToHtml('### Tiêu đề cấp 3')).toBe('<h4>Tiêu đề cấp 3</h4>');
+    });
+
+    it('clamps #### and deeper headings to h4 instead of leaking literal # into the page', () => {
+      expect(miniMarkdownToHtml('#### Tiêu đề cấp 4')).toBe('<h4>Tiêu đề cấp 4</h4>');
+      expect(miniMarkdownToHtml('###### Tiêu đề cấp 6')).toBe('<h4>Tiêu đề cấp 6</h4>');
+    });
+
+    it('nests sub-lists under their parent <li> based on indentation', () => {
+      const md = '- Bước 1\n  - Bước con 1.1\n  - Bước con 1.2\n- Bước 2';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ul><li>Bước 1<ul><li>Bước con 1.1</li><li>Bước con 1.2</li></ul></li><li>Bước 2</li></ul>',
+      );
+    });
+
+    it('nests a bullet sub-list under an ordered parent item', () => {
+      const md = '1. Bước 1\n   - Ghi chú a\n   - Ghi chú b\n2. Bước 2';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ol><li>Bước 1<ul><li>Ghi chú a</li><li>Ghi chú b</li></ul></li><li>Bước 2</li></ol>',
+      );
     });
 
     it('converts bullet lists into <ul><li>', () => {

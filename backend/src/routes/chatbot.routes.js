@@ -3,11 +3,13 @@ import jwt from 'jsonwebtoken';
 import chatbotController from '../controllers/chatbot.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
 import zaloPersonalSyncController from '../controllers/zaloPersonalSync.controller.js';
+import aiActivityController from '../controllers/chatbot/aiActivity.controller.js';
 import authMiddleware, {
   attachSseUserIdForRateLimit,
   resolveUserContext,
 } from '../middleware/auth.middleware.js';
 import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
 import multer from 'multer';
@@ -192,6 +194,15 @@ router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.b
 router.delete('/inbox/conversations/:id', unifiedInboxController.deleteConversation.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/ai-pause', unifiedInboxController.setAiPaused.bind(unifiedInboxController));
 router.get('/inbox/unread-count', unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
+
+// ── AI Activity Report & Summaries ──────────────────────────────────
+router.get('/inbox/ai-activity', aiActivityController.getActivityReport.bind(aiActivityController));
+router.post('/inbox/ai-activity/resume-all', aiActivityController.resumeAllAi.bind(aiActivityController));
+router.post(
+  '/inbox/ai-activity/summarize',
+  assertAiCreditAvailable('inbox_ai_summary'),
+  aiActivityController.summarizeActivity.bind(aiActivityController)
+);
 
 // ── Zalo Personal Account Chatbot Settings ─────────────────────────
 

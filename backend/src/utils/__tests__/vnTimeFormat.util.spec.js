@@ -1,7 +1,23 @@
 import { describe, it, expect } from '@jest/globals';
-import { formatUtcAndVietnamForLog, vnDayKey } from '../vnTimeFormat.util.js';
+import { formatUtcAndVietnamForLog, vnDayKey, getVietnamDayRange } from '../vnTimeFormat.util.js';
 
 describe('vnTimeFormat.util', () => {
+  describe('getVietnamDayRange', () => {
+    it('chuỗi YYYY-MM-DD trả đúng startUtc và endUtc', () => {
+      const range = getVietnamDayRange('2026-08-19');
+      expect(range.dayKey).toBe('20260819');
+      expect(range.dateStr).toBe('2026-08-19');
+      expect(range.startIso).toBe('2026-08-18T17:00:00.000Z');
+      expect(range.endIso).toBe('2026-08-19T17:00:00.000Z');
+    });
+
+    it('Date object giờ UTC tối trả về ngày VN kế tiếp', () => {
+      // 2026-08-19 18:00 UTC = 2026-08-20 01:00 VN
+      const range = getVietnamDayRange(new Date('2026-08-19T18:00:00Z'));
+      expect(range.dayKey).toBe('20260820');
+      expect(range.dateStr).toBe('2026-08-20');
+    });
+  });
   describe('vnDayKey', () => {
     it('23:50 VN vẫn thuộc ngày cũ', () => {
       // 2026-08-08T16:50:00Z = 23:50 giờ VN

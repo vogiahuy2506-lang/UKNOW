@@ -12,6 +12,7 @@ import {
   findMembershipsByEmployeeId,
   insertRefreshToken,
   revokeAllRefreshTokensForUser,
+  findActiveBillingPeriod,
 } from '../repositories/user/user.repository.js';
 import { OAuth2Client } from 'google-auth-library';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -131,7 +132,7 @@ class AuthController {
         success: true,
         message: 'Đăng ký thành công',
         data: {
-          user: this.formatUser(user),
+          user: await this.formatUser(user),
           accessToken,
           trial,
         },
@@ -238,7 +239,7 @@ class AuthController {
       const refreshToken = await this.generateRefreshToken(user, req);
       this.setRefreshTokenCookie(res, refreshToken, rememberMe);
 
-      const responseUser = this.formatUser(user);
+      const responseUser = await this.formatUser(user);
 
       // Lấy memberships để frontend hiện Context Switcher ngay sau login
       const membershipsResult = await client.query(
@@ -426,7 +427,7 @@ class AuthController {
       const refreshToken = await this.generateRefreshToken(user, req);
       this.setRefreshTokenCookie(res, refreshToken);
 
-      const responseUser = this.formatUser(user);
+      const responseUser = await this.formatUser(user);
 
       const membershipsResult = await client.query(
         `SELECT um.owner_id AS "ownerId", u.full_name AS "ownerName",
@@ -729,7 +730,7 @@ class AuthController {
   async getMe(req, res) {
     try {
       const user = req.user;
-      const formatted = this.formatUser(user);
+      const formatted = await this.formatUser(user);
 
       // Lấy danh sách tổ chức mà user đang là employee (để hiện Context Switcher)
       formatted.memberships = await findMembershipsByEmployeeId(user.id);
@@ -746,9 +747,13 @@ class AuthController {
   /**
    * Chuẩn hóa object user trả về client — dùng chung cho register/login/getMe.
    */
-  formatUser(user) {
+  async formatUser(user) {
     const expiresAt = user.subscription_expires_at ?? null;
     const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
+    let activeBillingPeriod = user.active_billing_period || user.activeBillingPeriod;
+    if (!activeBillingPeriod && user.id) {
+      activeBillingPeriod = await findActiveBillingPeriod(user.id, user.email);
+    }
     return {
       id: user.id,
       username: user.username,
@@ -757,6 +762,8 @@ class AuthController {
       avatarUrl: user.avatar_url,
       role: user.role || 'user',
       active_plan_id: user.active_plan_id ?? null,
+      activePlanId: user.active_plan_id ?? user.plan_id ?? null,
+      activeBillingPeriod: activeBillingPeriod || 'monthly',
       subscriptionExpiresAt: expiresAt,
       subscriptionExpired: isExpired,
       isReturningCustomer: expiresAt !== null,

@@ -553,6 +553,7 @@ class ZaloPersonalInboxService {
             userId,
             accountId: zaloSettingId,
             persist: true,
+            replySource: 'ai_rate_limited',
           });
           if (sent?.success !== false) {
             await chatbotRateLimitService.markRateLimitNotified({
@@ -602,6 +603,7 @@ class ZaloPersonalInboxService {
           userId,
           accountId: zaloSettingId,
           persist: true,
+          replySource: 'ai_auto_reply',
         });
         sseService.broadcast(String(userId), 'inbox:new_message', {
           conversationId: conversation.id,

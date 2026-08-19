@@ -7,7 +7,6 @@ import Underline from '@tiptap/extension-underline';
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
 import api from '../../services/api';
 import { useI18n } from '../../i18n';
-import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml';
@@ -51,7 +50,6 @@ export default function RichTextEditor({
   disabled = false,
 }) {
   const { t, locale } = useI18n();
-  const { usage: storageQuota } = useStorageQuota();
   const editorRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -63,7 +61,11 @@ export default function RichTextEditor({
 
   const insertImageFromFile = useCallback(async (ed, file) => {
     if (!file || !ed) return;
-    const validation = validateFilesBeforeUpload([file], storageQuota);
+    // Help-article images write to the system storage pool (POST /uploads/help-image),
+    // not the admin's own workspace — only the per-file size cap applies here.
+    // Checking `storageQuota.remainingBytes` (workspace quota) would block an admin
+    // whose personal workspace is nearly full even though this upload never touches it.
+    const validation = validateFilesBeforeUpload([file], null);
     if (!validation.ok) {
       setUploadError(getUploadValidationErrorMessage(validation, t, locale));
       return;
@@ -79,7 +81,7 @@ export default function RichTextEditor({
     } finally {
       setUploading(false);
     }
-  }, [locale, storageQuota, t]);
+  }, [locale, t]);
 
   const editor = useEditor({
     extensions: [
