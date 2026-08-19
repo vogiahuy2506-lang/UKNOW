@@ -14,17 +14,18 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import usageTrackingService from '../../src/services/payment/usageTracking.service.js';
+import aiCreditMeter from '../../src/services/ai/aiCreditMeter.service.js';
 
 let app;
 let deductCreditsSpy;
 
 beforeAll(() => {
   app = createApp();
-  // Mock deductCredits để test purchase flow mà không thực sự trừ credits
+  // marketplacePurchase.service.js dùng aiCreditMeter.deductCredits (hợp nhất plan+wallet),
+  // không phải usageTrackingService.deductCredits — xem marketplacePurchase.service.js:108.
   deductCreditsSpy = jest
-    .spyOn(usageTrackingService, 'deductCredits')
-    .mockResolvedValue({ success: true, deducted: 50, newBalance: 50 });
+    .spyOn(aiCreditMeter, 'deductCredits')
+    .mockResolvedValue({ success: true, deducted: 50, remaining: { plan: Infinity, wallet: 0 } });
 });
 
 beforeEach(async () => {
@@ -324,7 +325,9 @@ describe('Marketplace API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(deductCreditsSpy).toHaveBeenCalledWith(buyer.id, 50, expect.any(Object), expect.any(Object));
+      expect(deductCreditsSpy).toHaveBeenCalledWith(buyer.id, 50, expect.objectContaining({
+        feature: `marketplace_purchase:${listing.id}`,
+      }));
     });
 
     it('should prevent duplicate purchase', async () => {
