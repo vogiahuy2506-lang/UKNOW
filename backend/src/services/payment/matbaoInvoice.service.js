@@ -119,18 +119,35 @@ export function buildCreateInvoicePayload(order, info) {
   const accountEmail = String(order.user_email || '').trim();
   const buyerEmail = accountEmail || String(info.email || '').trim();
 
-  const isCompany = info.buyerType !== 'personal';
+  const isCompany = info.buyerType !== 'personal' && info.buyerType !== 'consumer';
+  const isConsumer = info.buyerType === 'consumer';
+  
+  let nMuaTen = '';
+  let nMuaMst = '';
+  let nMuaDchi = '';
+  let nMuaCccd = '';
+
+  if (isConsumer) {
+    nMuaTen = 'Bán cho người tiêu dùng';
+  } else if (isCompany) {
+    nMuaTen = info.companyName;
+    nMuaMst = info.taxCode || '';
+    nMuaDchi = info.companyAddress || info.address || '';
+  } else {
+    nMuaTen = info.fullName;
+    nMuaDchi = info.address || '';
+    if (info.idNumber) nMuaCccd = String(info.idNumber).slice(0, 12);
+  }
+
   const buyer = {
-    NMua_Ten: isCompany ? info.companyName : info.fullName,
-    NMua_MST: isCompany ? (info.taxCode || '') : '',
-    NMua_DChi: isCompany
-      ? (info.companyAddress || info.address || '')
-      : (info.address || ''),
+    NMua_Ten: nMuaTen,
+    NMua_MST: nMuaMst,
+    NMua_DChi: nMuaDchi,
     NMua_DCTDTu: buyerEmail,
     NMua_SDThoai: info.phone || '',
   };
-  if (!isCompany && info.idNumber) {
-    buyer.NMua_CCCDan = String(info.idNumber).slice(0, 12);
+  if (nMuaCccd) {
+    buyer.NMua_CCCDan = nMuaCccd;
   }
 
   const invoice = {
@@ -187,6 +204,9 @@ export async function prepareEinvoiceForPaidOrder(order, queryable) {
   const maTraCuu = buildMaTraCuu(order.order_code);
   const mtchieu = buildMTChieu(order.order_code);
 
+  const orderInfo = parseInvoiceInfo(order);
+  const emailStatus = orderInfo?.deliverEmail === false ? 'skipped' : 'pending';
+
   const row = await insertPendingEinvoice({
     orderId: order.id,
     maTraCuu,
@@ -194,6 +214,7 @@ export async function prepareEinvoiceForPaidOrder(order, queryable) {
     khmshdon,
     khhdon,
     requestPayload: null,
+    emailStatus,
   }, queryable);
 
   if (row) return row.id;

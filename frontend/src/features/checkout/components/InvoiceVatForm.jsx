@@ -17,6 +17,7 @@ export const ID_NUMBER_REGEX = /^\d{9,12}$/;
 export function isInvoiceInfoValid(info) {
   if (!info || typeof info !== 'object') return false;
   const email = String(info.email || '').trim();
+  if (info.buyerType === 'consumer') return Boolean(email);
   if (!email) return false;
   if (info.buyerType === 'company') {
     const taxCode = String(info.taxCode || '').trim().replace(/\s+/g, '');
@@ -49,7 +50,7 @@ export default function InvoiceVatForm({
   const canRequest = net > 0 && !disabled;
   const accountEmail = String(defaultEmail || '').trim();
 
-  const [buyerType, setBuyerType] = useState('personal');
+  const [buyerType, setBuyerType] = useState('consumer');
   const [taxCode, setTaxCode] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
@@ -140,6 +141,9 @@ export default function InvoiceVatForm({
     if (!canRequest) {
       return { wantInvoice: false };
     }
+    if (buyerType === 'consumer') {
+      return { wantInvoice: false, buyerType: 'consumer', email: accountEmail };
+    }
     const base = {
       wantInvoice: true,
       buyerType,
@@ -206,6 +210,17 @@ export default function InvoiceVatForm({
         <div className="inline-flex rounded-lg bg-orange-100/70 p-0.5 border border-orange-200 shrink-0">
           <button
             type="button"
+            onClick={() => setBuyerType('consumer')}
+            className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
+              buyerType === 'consumer'
+                ? 'bg-white text-orange-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Không lấy hoá đơn
+          </button>
+          <button
+            type="button"
             onClick={() => setBuyerType('personal')}
             className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
               buyerType === 'personal'
@@ -230,7 +245,11 @@ export default function InvoiceVatForm({
       </div>
 
       <div className="space-y-2">
-        {buyerType === 'company' ? (
+        {buyerType === 'consumer' ? (
+          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600">
+            Chúng tôi vẫn xuất hoá đơn theo quy định, ghi 'Bán cho người tiêu dùng'. Bạn sẽ không nhận email hoá đơn.
+          </div>
+        ) : buyerType === 'company' ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
@@ -318,44 +337,48 @@ export default function InvoiceVatForm({
           </>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div>
-            <input
-              className={readonlyClass}
-              type="text"
-              value={accountEmail}
-              readOnly
-              aria-readonly="true"
-              aria-label={t('invoiceVat.emailReadonly')}
-              title={t('invoiceVat.emailPdfHint')}
-            />
-            <p className="mt-0.5 text-[10px] text-slate-500 leading-tight">
-              {t('invoiceVat.emailPdfHint')}
-            </p>
-          </div>
-          <div>
-            <input
-              className={getInputClass('phone')}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder={t('invoiceVat.phone')}
-              autoComplete="tel"
-            />
-          </div>
-        </div>
+        {buyerType !== 'consumer' && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <input
+                  className={readonlyClass}
+                  type="text"
+                  value={accountEmail}
+                  readOnly
+                  aria-readonly="true"
+                  aria-label={t('invoiceVat.emailReadonly')}
+                  title={t('invoiceVat.emailPdfHint')}
+                />
+                <p className="mt-0.5 text-[10px] text-slate-500 leading-tight">
+                  {t('invoiceVat.emailPdfHint')}
+                </p>
+              </div>
+              <div>
+                <input
+                  className={getInputClass('phone')}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={t('invoiceVat.phone')}
+                  autoComplete="tel"
+                />
+              </div>
+            </div>
 
-        {/* Checkbox auto-save profile for next time */}
-        <div className="pt-0.5">
-          <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={saveProfile}
-              onChange={(e) => setSaveProfile(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-            />
-            <span className="text-[11px]">{t('invoiceVat.saveProfile')}</span>
-          </label>
-        </div>
+            {/* Checkbox auto-save profile for next time */}
+            <div className="pt-0.5">
+              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={saveProfile}
+                  onChange={(e) => setSaveProfile(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                />
+                <span className="text-[11px]">{t('invoiceVat.saveProfile')}</span>
+              </label>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

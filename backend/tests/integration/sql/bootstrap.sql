@@ -346,7 +346,7 @@ CREATE TABLE einvoices (
   email_status     VARCHAR(24)
     CHECK (
       email_status IS NULL
-      OR email_status IN ('pending', 'sending', 'sent', 'failed')
+      OR email_status IN ('pending', 'sending', 'sent', 'failed', 'skipped')
     ),
   email_attempt_count INTEGER NOT NULL DEFAULT 0,
   email_last_attempt_at TIMESTAMPTZ,

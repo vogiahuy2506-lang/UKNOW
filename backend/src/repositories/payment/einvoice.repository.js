@@ -198,13 +198,14 @@ export async function insertPendingEinvoice({
   khmshdon,
   khhdon,
   requestPayload = null,
+  emailStatus = 'pending',
 }, queryable = db) {
   try {
     const { rows } = await queryable.query(
       `INSERT INTO einvoices (
          order_id, ma_tra_cuu, mtchieu, khmshdon, khhdon,
          status, email_status, request_payload, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, 'pending', 'pending', $6, NOW(), NOW())
+       ) VALUES ($1, $2, $3, $4, $5, 'pending', $7, $6, NOW(), NOW())
        ON CONFLICT (order_id) DO NOTHING
        RETURNING *`,
       [
@@ -214,6 +215,7 @@ export async function insertPendingEinvoice({
         khmshdon || null,
         khhdon || null,
         requestPayload ? JSON.stringify(requestPayload) : null,
+        emailStatus,
       ],
     );
     return rows[0] || null;

@@ -53,6 +53,8 @@ export function assertBuyerFieldsValid(rawInvoiceInfo) {
     throw { status: 400, message: 'Vui lòng cung cấp thông tin xuất hoá đơn VAT' };
   }
 
+  if (rawInvoiceInfo.buyerType === 'consumer') return;
+
   const buyerType = rawInvoiceInfo.buyerType === 'personal' ? 'personal' : 'company';
   if (buyerType === 'company') {
     const taxCode = trimStr(rawInvoiceInfo.taxCode).replace(/\s+/g, '');
@@ -159,21 +161,43 @@ export function resolveOrderAmountWithInvoice(raw, netAfterDiscount, options = {
     return { amount: net, invoiceInfo: null };
   }
 
-  // Validate required intake fields (company or personal) and Mat Bao readiness
-  assertInvoiceIntakeAllowed(raw);
+  const isConsumer = raw?.buyerType === 'consumer' || raw?.wantInvoice === false;
 
-  const buyerType = raw.buyerType === 'personal' ? 'personal' : 'company';
+  if (!isConsumer) {
+    // Validate required intake fields (company or personal) and Mat Bao readiness
+    assertInvoiceIntakeAllowed(raw);
+  }
+
   const accountEmail = trimStr(options.accountEmail);
-  const email = accountEmail || trimStr(raw.email);
+  const email = accountEmail || trimStr(raw?.email);
   if (!email || !isLikelyEmail(email)) {
     throw { status: 400, message: 'Email nhận hoá đơn không hợp lệ' };
   }
   // Prefer server account email; never trust client override when accountEmail is set.
   const recipientEmail = accountEmail && isLikelyEmail(accountEmail) ? accountEmail : email;
 
+  const { vatRate, vatAmount, gross } = computeVatBreakdown(net);
+
+  if (isConsumer) {
+    return {
+      amount: gross,
+      invoiceInfo: {
+        wantInvoice: true,
+        deliverEmail: false,
+        taxType: 'KCT',
+        buyerType: 'consumer',
+        email: recipientEmail,
+        vatRate,
+        net,
+        vatAmount,
+        gross,
+      },
+    };
+  }
+
+  const buyerType = raw.buyerType === 'personal' ? 'personal' : 'company';
   const phone = trimStr(raw.phone) || undefined;
   const address = trimStr(raw.address) || undefined;
-  const { vatRate, vatAmount, gross } = computeVatBreakdown(net);
 
   /** @type {Record<string, unknown>} */
   const invoiceInfo = {
