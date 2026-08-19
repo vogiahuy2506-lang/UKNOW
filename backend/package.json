@@ -25,7 +25,9 @@
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",
     "test:integration": "DB_POOL_MAX=2 node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000",
     "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit --coverage"
+    "test:coverage:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50% --ci --coverage --coverageDirectory=coverage/unit --coverageReporters=json",
+    "test:coverage:integration": "DB_POOL_MAX=2 node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000 --ci --coverage --coverageDirectory=coverage/integration --coverageReporters=json",
+    "test:coverage": "npm run test:coverage:unit && npm run test:coverage:integration && node scripts/mergeCoverage.js"
   },
   "jest": {
     "transform": {},
