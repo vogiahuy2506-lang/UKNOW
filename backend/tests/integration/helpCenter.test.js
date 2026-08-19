@@ -248,7 +248,9 @@ describe('Help center', () => {
     expect(chunks).toBeGreaterThan(0);
   });
 
-  it('seed markdown articles still expose bodyMd without bodyHtml', async () => {
+  // Bài seed giữ CẢ HAI: body_md là bản nguồn dễ sửa tay, body_html là bản
+  // hiển thị đã dựng sẵn bằng miniMarkdownToHtml. Trang đọc ưu tiên bodyHtml.
+  it('seed articles expose both bodyMd and bodyHtml', async () => {
     const admin = await createUser({ username: 'help-md-admin', role: 'admin' });
     const token = await loginAs(admin);
     await request(app)
@@ -260,7 +262,27 @@ describe('Help center', () => {
     const article = await request(app).get(`/api/help/articles/${slug}`);
     expect(article.status).toBe(200);
     expect(article.body.result.bodyMd).toBeTruthy();
-    expect(article.body.result.bodyHtml == null || article.body.result.bodyHtml === '').toBe(true);
+    expect(article.body.result.bodyHtml).toBeTruthy();
+  });
+
+  it('every seed article ships a rendered bodyHtml', async () => {
+    const missing = HELP_SEED_ARTICLES
+      .filter((a) => !String(a.body_html || '').trim())
+      .map((a) => a.slug);
+    expect(missing).toEqual([]);
+  });
+
+  it('seed internal links point at slugs that exist', async () => {
+    const slugs = new Set(HELP_SEED_ARTICLES.map((a) => a.slug));
+    const broken = [];
+    for (const article of HELP_SEED_ARTICLES) {
+      for (const match of String(article.body_md || '').matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+        const url = match[1];
+        if (url.startsWith('/') || url.startsWith('http')) continue;
+        if (!slugs.has(url)) broken.push(`${article.slug} -> ${url}`);
+      }
+    }
+    expect(broken).toEqual([]);
   });
 
   it('POST /uploads/help-image rejects non-admin', async () => {

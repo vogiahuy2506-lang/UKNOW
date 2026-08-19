@@ -73,11 +73,15 @@ export function inline(text) {
     return stashToken(`<img src="${safeUrl}" alt="${alt}">`);
   });
 
-  // 3. Links: [text](url) -> label can have inline formatting, but the whole <a> tag is stashed
+  // 3. Links: [text](url) -> label can have inline formatting, but the whole <a> tag is stashed.
+  // Only off-site links open in a new tab; in-app and cross-article links (/app/..., another
+  // article slug) stay in the same tab so reading several help pages doesn't spawn a tab each.
   s = s.replace(/\[([^\]]+)\]\(((?:[^()]+|\([^()]*\))*)\)/g, (_match, label, url) => {
     const safeUrl = isSafeUrl(url) ? url : '#';
     const formattedLabel = formatInlineText(label);
-    return stashToken(`<a href="${safeUrl}" rel="noopener noreferrer" target="_blank">${formattedLabel}</a>`);
+    const isExternal = /^(https?:|mailto:)/i.test(safeUrl);
+    const attrs = isExternal ? ' rel="noopener noreferrer" target="_blank"' : '';
+    return stashToken(`<a href="${safeUrl}"${attrs}>${formattedLabel}</a>`);
   });
 
   // 4. Bold, Italic, Strikethrough on the surrounding text
@@ -91,6 +95,52 @@ export function inline(text) {
   }
 
   return s;
+}
+
+/**
+ * Build a nested tree from a flat list of {indent, ordered, content} items,
+ * using an indent-stack (same idea as a bracket matcher): each new item pops
+ * shallower/equal-indent frames off the stack before attaching under the
+ * current deepest frame, which is what turns indentation into nesting.
+ * @param {Array<{indent: number, ordered: boolean, content: string}>} items
+ * @returns {Array<object>}
+ */
+function buildListNodes(items) {
+  const root = { children: [] };
+  const stack = [{ indent: -1, node: root }];
+  for (const item of items) {
+    while (stack.length > 1 && item.indent <= stack[stack.length - 1].indent) {
+      stack.pop();
+    }
+    const node = { content: item.content, ordered: item.ordered, children: [] };
+    stack[stack.length - 1].node.children.push(node);
+    stack.push({ indent: item.indent, node });
+  }
+  return root.children;
+}
+
+/**
+ * Render a list tree, grouping consecutive same-type siblings into one
+ * <ul>/<ol> and nesting child lists inside their parent <li>.
+ * @param {Array<object>} nodes
+ * @returns {string}
+ */
+function renderListNodes(nodes) {
+  let html = '';
+  let i = 0;
+  while (i < nodes.length) {
+    const ordered = nodes[i].ordered;
+    const tag = ordered ? 'ol' : 'ul';
+    let group = '';
+    while (i < nodes.length && nodes[i].ordered === ordered) {
+      const node = nodes[i];
+      const childHtml = node.children.length ? renderListNodes(node.children) : '';
+      group += `<li>${inline(node.content)}${childHtml}</li>`;
+      i += 1;
+    }
+    html += `<${tag}>${group}</${tag}>`;
+  }
+  return html;
 }
 
 /**
@@ -130,8 +180,7 @@ export function miniMarkdownToHtml(md) {
   let inCodeBlock = false;
   let codeLines = [];
 
-  let ulItems = [];
-  let olItems = [];
+  let listItems = []; // { indent, ordered, content } — flat buffer, nested at flush time
   let quoteLines = [];
   let tableLines = [];
   let paraLines = [];
@@ -143,16 +192,10 @@ export function miniMarkdownToHtml(md) {
     inCodeBlock = false;
   };
 
-  const flushUl = () => {
-    if (!ulItems.length) return;
-    blocks.push(`<ul>${ulItems.map((i) => `<li>${inline(i)}</li>`).join('')}</ul>`);
-    ulItems = [];
-  };
-
-  const flushOl = () => {
-    if (!olItems.length) return;
-    blocks.push(`<ol>${olItems.map((i) => `<li>${inline(i)}</li>`).join('')}</ol>`);
-    olItems = [];
+  const flushList = () => {
+    if (!listItems.length) return;
+    blocks.push(renderListNodes(buildListNodes(listItems)));
+    listItems = [];
   };
 
   const flushQuote = () => {
@@ -188,8 +231,7 @@ export function miniMarkdownToHtml(md) {
 
   const flushAll = () => {
     flushPara();
-    flushUl();
-    flushOl();
+    flushList();
     flushQuote();
     flushTable();
   };
@@ -220,8 +262,8 @@ export function miniMarkdownToHtml(md) {
       continue;
     }
 
-    // 3. Headings (# -> H2, ## -> H3, ### -> H4)
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    // 3. Headings (# -> H2, ## -> H3, ### and deeper -> H4 — editor schema tops out at H4)
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       flushAll();
       const level = Math.min(heading[1].length + 1, 4);
@@ -240,37 +282,27 @@ export function miniMarkdownToHtml(md) {
     const quoteMatch = trimmed.match(/^>\s?(.*)$/);
     if (quoteMatch) {
       flushPara();
-      flushUl();
-      flushOl();
+      flushList();
       flushTable();
       quoteLines.push(quoteMatch[1]);
       continue;
     }
     flushQuote();
 
-    // 6. Unordered Lists (- or * or +)
-    const ulMatch = trimmed.match(/^[-*+]\s+(.+)$/);
-    if (ulMatch) {
+    // 6/7. Lists (bullet or ordered) — read indent from the RAW line (not
+    // trimmed) so nested items (2+ spaces in) stay children of their parent
+    // instead of collapsing onto the top level.
+    const listMatch = raw.match(/^(\s*)([-*+]|\d+\.)\s+(.+)$/);
+    if (listMatch) {
       flushPara();
-      flushOl();
       flushQuote();
       flushTable();
-      ulItems.push(ulMatch[1]);
+      const indent = listMatch[1].length;
+      const ordered = /^\d+\.$/.test(listMatch[2]);
+      listItems.push({ indent, ordered, content: listMatch[3] });
       continue;
     }
-    flushUl();
-
-    // 7. Ordered Lists (1. 2. 3.)
-    const olMatch = trimmed.match(/^\d+\.\s+(.+)$/);
-    if (olMatch) {
-      flushPara();
-      flushUl();
-      flushQuote();
-      flushTable();
-      olItems.push(olMatch[1]);
-      continue;
-    }
-    flushOl();
+    flushList();
 
     // 8. Tables (| Header | Header |)
     if (trimmed.includes('|')) {

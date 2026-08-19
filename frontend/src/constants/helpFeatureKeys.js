@@ -14,7 +14,12 @@ export const HELP_FEATURE_KEYS = Object.freeze({
   CHANNELS: 'channels',
   QUICK_SEND: 'quick-send',
   CAMPAIGN_CREATE: 'campaign-create',
+  CUSTOMERS: 'khach-hang',
+  CHATBOT: 'chatbot',
+  INBOX: 'inbox',
+  LANDING_PAGE: 'landing-page',
   PLAN_AND_BILLING: 'plan-and-billing',
+  EMPLOYEES: 'nhan-vien',
   OTHER: 'khac',
 });
 
@@ -25,7 +30,12 @@ export const HELP_FEATURE_KEY_LIST = Object.freeze([
   HELP_FEATURE_KEYS.CHANNELS,
   HELP_FEATURE_KEYS.QUICK_SEND,
   HELP_FEATURE_KEYS.CAMPAIGN_CREATE,
+  HELP_FEATURE_KEYS.CUSTOMERS,
+  HELP_FEATURE_KEYS.CHATBOT,
+  HELP_FEATURE_KEYS.INBOX,
+  HELP_FEATURE_KEYS.LANDING_PAGE,
   HELP_FEATURE_KEYS.PLAN_AND_BILLING,
+  HELP_FEATURE_KEYS.EMPLOYEES,
   HELP_FEATURE_KEYS.OTHER,
 ]);
 
