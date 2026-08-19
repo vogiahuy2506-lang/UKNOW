@@ -10,6 +10,34 @@ export const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
 export const MAX_EDIT_HTML_INPUT_CHARS = 60000;
 
 /**
+ * Vớt HTML từ phản hồi model khi JSON.parse thất bại (model kèm lời dẫn,
+ * bọc code fence, hoặc trả thẳng HTML).
+ *
+ * Chỉ nhận nội dung code fence khi nó THỰC SỰ mở đầu bằng thẻ HTML: regex
+ * ```(?:html)? không khớp ```json nên chữ "json" lọt vào nhóm bắt, và cả
+ * chuỗi JSON thô sẽ bị coi là HTML nếu không chặn ở đây. Với trang gốc dạng
+ * fragment ngắn, rác đó lọt qua được cả ngưỡng teo tóp 60%.
+ *
+ * @param {string} text
+ * @returns {string} HTML vớt được, chuỗi rỗng nếu không có gì dùng được
+ */
+export function extractHtmlFromModelText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+
+  const fullDocMatch = raw.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
+  if (fullDocMatch) return fullDocMatch[0].trim();
+
+  const codeBlockMatch = raw.match(/```(?:html)?\s*([\s\S]*?)```/i);
+  const fenced = codeBlockMatch ? codeBlockMatch[1].trim() : '';
+  if (fenced.startsWith('<')) return fenced;
+
+  if (raw.startsWith('<') && raw.endsWith('>')) return raw;
+
+  return '';
+}
+
+/**
  * Validate HTML kết quả từ chế độ AI Edit Landing Page.
  * Ngăn chặn các lỗi: AI cắt ngang do quá token, AI viết lại từ đầu làm mất layout/nội dung,
  * AI làm mất form đăng ký sẵn có, hoặc AI lạm dụng inline style.

@@ -2,6 +2,7 @@ import businessProfileService from './businessProfile.service.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { normalizeAssistantLocale } from '../../utils/assistantLocale.util.js';
 import {
+  extractHtmlFromModelText,
   validateEditHtmlOutput,
   LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
@@ -261,17 +262,7 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       html = String(parsed?.html || '').trim();
     } catch {
       console.warn(`[LandingAI.editHtml] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML`);
-      const fullDocMatch = text.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
-      if (fullDocMatch) {
-        html = fullDocMatch[0].trim();
-      } else {
-        const codeBlockMatch = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
-        if (codeBlockMatch && codeBlockMatch[1].trim()) {
-          html = codeBlockMatch[1].trim();
-        } else if (text.trim().startsWith('<') && text.trim().endsWith('>')) {
-          html = text.trim();
-        }
-      }
+      html = extractHtmlFromModelText(text);
 
       if (!html) {
         const err = new Error(

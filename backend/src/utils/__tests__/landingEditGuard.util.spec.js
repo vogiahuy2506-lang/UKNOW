@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import {
+  extractHtmlFromModelText,
   validateEditHtmlOutput,
   LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
@@ -179,5 +180,32 @@ describe('landingEditGuard.util', () => {
 
   it('MAX_EDIT_HTML_INPUT_CHARS hằng số là 60000', () => {
     expect(MAX_EDIT_HTML_INPUT_CHARS).toBe(60000);
+  });
+});
+
+describe('extractHtmlFromModelText', () => {
+  it('vớt tài liệu đầy đủ dù model kèm lời dẫn', () => {
+    const text = 'Đây là kết quả:\n<!DOCTYPE html><html><body><p>Xin chào</p></body></html>\nHy vọng giúp được bạn.';
+    expect(extractHtmlFromModelText(text)).toBe('<!DOCTYPE html><html><body><p>Xin chào</p></body></html>');
+  });
+
+  it('vớt fragment trong code fence ```html', () => {
+    const text = '```html\n<section class="py-10"><h1>Tiêu đề</h1></section>\n```';
+    expect(extractHtmlFromModelText(text)).toBe('<section class="py-10"><h1>Tiêu đề</h1></section>');
+  });
+
+  it('code fence ```json KHÔNG bị nhận nhầm thành HTML', () => {
+    const text = 'Kết quả cho bạn:\n```json\n{"title":"X","html":"<div>abc</div>"}\n```';
+    expect(extractHtmlFromModelText(text)).toBe('');
+  });
+
+  it('model trả thẳng fragment không code fence', () => {
+    expect(extractHtmlFromModelText('  <section><p>abc</p></section>  ')).toBe('<section><p>abc</p></section>');
+  });
+
+  it('văn bản thuần / rỗng → chuỗi rỗng', () => {
+    expect(extractHtmlFromModelText('Tôi không thể thực hiện yêu cầu này.')).toBe('');
+    expect(extractHtmlFromModelText('')).toBe('');
+    expect(extractHtmlFromModelText(null)).toBe('');
   });
 });
