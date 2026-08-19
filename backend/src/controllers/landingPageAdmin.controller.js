@@ -90,7 +90,11 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const row = await landingPageAdminService.update(id, req.body || {}, req.user);
-      return res.json({ success: true, data: row });
+      const response = { success: true, data: row };
+      if (row?.warning) {
+        response.warning = row.warning;
+      }
+      return res.json(response);
     } catch (error) {
       const status = error.statusCode || 500;
       if (status >= 500) console.error('[LandingPageAdminController.update]', error);
@@ -215,6 +219,82 @@ class LandingPageAdminController {
       return res.status(status).json({ success: false, message: error.message || 'Không thể xóa' });
     }
   }
+
+  /**
+   * GET /api/admin/landing-pages/:id/versions
+   */
+  async listVersions(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageAdminService.listVersions(id, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.listVersions]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể tải danh sách phiên bản' });
+    }
+  }
+
+  /**
+   * GET /api/admin/landing-pages/:id/versions/:versionId/preview
+   */
+  async previewVersion(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      const versionId = parseInt(String(req.params.versionId), 10);
+      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageAdminService.previewVersion(id, versionId, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.previewVersion]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể xem trước phiên bản' });
+    }
+  }
+
+  /**
+   * POST /api/admin/landing-pages/:id/versions/:versionId/restore
+   */
+  async restoreVersion(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      const versionId = parseInt(String(req.params.versionId), 10);
+      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageAdminService.restoreVersion(id, versionId, req.user);
+      return res.json({ success: true, data, message: 'Khôi phục phiên bản thành công' });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.restoreVersion]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể khôi phục phiên bản' });
+    }
+  }
+
+  /**
+   * DELETE /api/admin/landing-pages/:id/versions/:versionId
+   */
+  async deleteVersion(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      const versionId = parseInt(String(req.params.versionId), 10);
+      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageAdminService.deleteVersion(id, versionId, req.user);
+      return res.json({ success: true, data, message: 'Đã xóa phiên bản thành công' });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.deleteVersion]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể xóa phiên bản' });
+    }
+  }
 }
 
 export default new LandingPageAdminController();
+

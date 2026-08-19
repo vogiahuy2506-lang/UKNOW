@@ -118,6 +118,24 @@ export async function findProfilePlanByUserId(userId) {
   return rows[0] || null;
 }
 
+export async function findActiveBillingPeriod(userId, email) {
+  try {
+    const { rows } = await db.query(
+      `SELECT billing_period FROM orders
+       WHERE (user_id = $1 OR user_email = $2)
+         AND status IN ('paid', 'success', 'completed')
+         AND note IS DISTINCT FROM 'topup'
+         AND topup_config IS NULL
+         AND plan_id IS NOT NULL
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId || null, email || null]
+    );
+    return rows[0]?.billing_period || 'monthly';
+  } catch {
+    return 'monthly';
+  }
+}
+
 export async function findProfilePlanByUserIdFallback(userId) {
   const { rows } = await db.query(
     `SELECT ${PLAN_COLUMNS_FALLBACK}

@@ -1,5 +1,6 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import landingPageDomainService from './landingPageDomain.service.js';
+import landingPageVersionService from './landingPageVersion.service.js';
 import db from '../../config/database.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import {
@@ -237,6 +238,25 @@ class LandingPageAdminService {
       customConfig: nextCustomConfig,
     });
 
+    // Nếu HTML thay đổi và bản hiện tại đã có HTML, chụp lại phiên bản cũ lên GCS sau khi update DB thành công
+    let snapshotWarning = null;
+    if (current.htmlContent && current.htmlContent !== htmlContent) {
+      const snapRes = await landingPageVersionService.createSnapshotIfChanged({
+        landingPageId: id,
+        userId: current.idUser,
+        actorUserId: authUser?.id,
+        oldHtml: current.htmlContent,
+        title: current.title,
+        source: body?.versionSource || 'manual',
+      }).catch((snapErr) => {
+        console.warn('[LandingPageAdmin.update] createSnapshotIfChanged failed:', snapErr.message);
+        return null;
+      });
+      if (snapRes?.warning) {
+        snapshotWarning = snapRes.warning;
+      }
+    }
+
     // Đồng bộ DNS:
     //  - system → custom : xóa CF subdomain cũ (nếu có) để giải phóng DNS, user sẽ tự cấu hình hostname mới.
     //  - custom → system : xóa custom hostname (nếu có), cấp lại slug.founderai.biz qua CF (nếu slug có).
@@ -268,7 +288,11 @@ class LandingPageAdminService {
       );
     }
 
-    return toAdminLandingDto(updated);
+    const dto = toAdminLandingDto(updated);
+    if (snapshotWarning && dto) {
+      dto.warning = snapshotWarning;
+    }
+    return dto;
   }
 
   /**
@@ -301,6 +325,69 @@ class LandingPageAdminService {
     }
     return true;
   }
+
+  /**
+   * Lấy danh sách các phiên bản của landing page
+   */
+  async listVersions(id, authUser) {
+    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    if (!current) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+    return landingPageVersionService.listVersions(id, current.idUser);
+  }
+
+  /**
+   * Xem trước nội dung HTML của một phiên bản
+   */
+  async previewVersion(id, versionId, authUser) {
+    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    if (!current) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+    return landingPageVersionService.getVersionHtml(versionId, id, current.idUser);
+  }
+
+  /**
+   * Khôi phục landing page về phiên bản chỉ định
+   */
+  async restoreVersion(id, versionId, authUser) {
+    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    if (!current) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+    const versionData = await landingPageVersionService.getVersionHtml(versionId, id, current.idUser);
+    return this.update(
+      id,
+      {
+        slug: current.slug,
+        title: current.title,
+        htmlContent: versionData.htmlContent,
+        versionSource: 'rollback',
+      },
+      authUser
+    );
+  }
+
+  /**
+   * Xóa một phiên bản lịch sử
+   */
+  async deleteVersion(id, versionId, authUser) {
+    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    if (!current) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+    return landingPageVersionService.deleteVersion(versionId, id, current.idUser);
+  }
 }
 
 export default new LandingPageAdminService();
+

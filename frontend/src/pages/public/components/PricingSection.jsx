@@ -183,6 +183,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
   const activePlanId = user?.activePlanId;
   const activePlanIsCustom = Boolean(user?.activePlanIsCustom);
   const activePlanPrice = user?.activePlanPrice;
+  const activeBillingPeriod = user?.activeBillingPeriod || 'monthly';
 
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -407,7 +408,11 @@ export default function PricingSection({ embedded = false, compact = false, glas
             const isCustom = isContactPlan(plan);
             const isCurrentCustom = isAuthenticated && !isEmployee && isCustom && activePlanIsCustom;
             const isOwnerCustomForEmployee = isAuthenticated && isEmployee && isCustom && activePlanIsCustom;
-            const isCurrentStandard = isAuthenticated && !isCustom && !activePlanIsCustom && Number(plan.id) === Number(activePlanId);
+            const isCurrentStandard = isAuthenticated
+              && !isCustom
+              && !activePlanIsCustom
+              && Number(plan.id) === Number(activePlanId)
+              && billingPeriod === activeBillingPeriod;
             const isCurrentPlan = isCurrentCustom || isCurrentStandard || isOwnerCustomForEmployee;
 
             const style = styleSet[index % styleSet.length];

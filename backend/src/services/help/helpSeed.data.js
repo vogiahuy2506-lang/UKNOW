@@ -1061,11 +1061,12 @@ Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, emai
 - Gói đã hết hạn, còn số dư mua thêm nhưng không gửi được → gia hạn gói; số dư không mất đi đâu.
 
 ## Liên quan
+- [Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn](doi-goi)
 - [Thêm tài khoản Zalo](zalo-account)
 - [Kết nối kênh gửi](channels)
 - [Câu hỏi thường gặp về thanh toán](faq-billing)
 `,
-    body_html: `<h2>Gói dịch vụ &amp; thanh toán</h2><p>Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, email, lượt AI).</p><h3>Vào ở đâu</h3><ul><li>Bảng giá công khai: <a href="/pricing">/pricing</a></li><li>Thanh toán / checkout: <a href="/checkout">/checkout</a></li><li>Mua thêm hạn mức: <a href="/app/topup">/app/topup</a></li><li>Đơn hàng: <a href="/app/orders">/app/orders</a> — chỉ <strong>chủ tài khoản</strong> thấy được (nhân viên không thấy)</li></ul><h3>Các bước</h3><ol><li>Vào /pricing chọn gói hoặc <strong>Gói tự chọn</strong>.</li><li>Thanh toán qua PayOS (QR). Sau khi thành công, hạn mức gói được kích hoạt.</li><li>Nếu sắp hết tin/email/AI giữa chu kỳ: vào /app/topup mua thêm (tối thiểu 50.000đ/đơn).</li><li>Phần mua thêm <strong>không hết hạn theo chu kỳ</strong> — còn nguyên sang kỳ sau, tiêu tới đâu trừ tới đó.</li></ol><h3>Hạn mức gói và phần mua thêm khác nhau thế nào</h3><ul><li><strong>Hạn mức gói</strong> làm mới mỗi kỳ. Dùng không hết thì mất, không cộng dồn.</li><li><strong>Phần mua thêm</strong> là số dư riêng, không làm mới và không mất khi sang kỳ mới.</li><li>Hệ thống <strong>tiêu hạn mức gói trước</strong>, hết mới trừ vào phần mua thêm — để phần bạn đã trả tiền được giữ lâu nhất.</li><li>Cần <strong>gói còn hiệu lực</strong> mới dùng được phần mua thêm. Gói hết hạn thì số dư vẫn còn nguyên, gia hạn là dùng tiếp.</li></ul><h3>Lỗi thường gặp</h3><ul><li>Đã trả tiền nhưng hạn mức chưa tăng → đợi webhook PayOS vài phút rồi tải lại trang.</li><li>Không mua được tin Zalo → năng lực tính theo <strong>số tài khoản Zalo đã kết nối</strong>, không theo số slot gói; hãy nối Zalo trước.</li><li>Hết credit AI → mua thêm tại /app/topup hoặc nâng gói.</li><li>Gói đã hết hạn, còn số dư mua thêm nhưng không gửi được → gia hạn gói; số dư không mất đi đâu.</li></ul><h3>Liên quan</h3><ul><li><a href="zalo-account">Thêm tài khoản Zalo</a></li><li><a href="channels">Kết nối kênh gửi</a></li><li><a href="faq-billing">Câu hỏi thường gặp về thanh toán</a></li></ul>`,
+    body_html: `<h2>Gói dịch vụ &amp; thanh toán</h2><p>Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, email, lượt AI).</p><h3>Vào ở đâu</h3><ul><li>Bảng giá công khai: <a href="/pricing">/pricing</a></li><li>Thanh toán / checkout: <a href="/checkout">/checkout</a></li><li>Mua thêm hạn mức: <a href="/app/topup">/app/topup</a></li><li>Đơn hàng: <a href="/app/orders">/app/orders</a> — chỉ <strong>chủ tài khoản</strong> thấy được (nhân viên không thấy)</li></ul><h3>Các bước</h3><ol><li>Vào /pricing chọn gói hoặc <strong>Gói tự chọn</strong>.</li><li>Thanh toán qua PayOS (QR). Sau khi thành công, hạn mức gói được kích hoạt.</li><li>Nếu sắp hết tin/email/AI giữa chu kỳ: vào /app/topup mua thêm (tối thiểu 50.000đ/đơn).</li><li>Phần mua thêm <strong>không hết hạn theo chu kỳ</strong> — còn nguyên sang kỳ sau, tiêu tới đâu trừ tới đó.</li></ol><h3>Hạn mức gói và phần mua thêm khác nhau thế nào</h3><ul><li><strong>Hạn mức gói</strong> làm mới mỗi kỳ. Dùng không hết thì mất, không cộng dồn.</li><li><strong>Phần mua thêm</strong> là số dư riêng, không làm mới và không mất khi sang kỳ mới.</li><li>Hệ thống <strong>tiêu hạn mức gói trước</strong>, hết mới trừ vào phần mua thêm — để phần bạn đã trả tiền được giữ lâu nhất.</li><li>Cần <strong>gói còn hiệu lực</strong> mới dùng được phần mua thêm. Gói hết hạn thì số dư vẫn còn nguyên, gia hạn là dùng tiếp.</li></ul><h3>Lỗi thường gặp</h3><ul><li>Đã trả tiền nhưng hạn mức chưa tăng → đợi webhook PayOS vài phút rồi tải lại trang.</li><li>Không mua được tin Zalo → năng lực tính theo <strong>số tài khoản Zalo đã kết nối</strong>, không theo số slot gói; hãy nối Zalo trước.</li><li>Hết credit AI → mua thêm tại /app/topup hoặc nâng gói.</li><li>Gói đã hết hạn, còn số dư mua thêm nhưng không gửi được → gia hạn gói; số dư không mất đi đâu.</li></ul><h3>Liên quan</h3><ul><li><a href="doi-goi">Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn</a></li><li><a href="zalo-account">Thêm tài khoản Zalo</a></li><li><a href="channels">Kết nối kênh gửi</a></li><li><a href="faq-billing">Câu hỏi thường gặp về thanh toán</a></li></ul>`,
   },
   {
     slug: 'faq-billing',
@@ -1073,7 +1074,7 @@ Quản lý gói thuê bao, thanh toán và mua thêm hạn mức (tin Zalo, emai
     primary_route: '/app/billing',
     sort_order: 125,
     title: 'Câu hỏi thường gặp về thanh toán & hoá đơn',
-    summary: 'Ai được mua, mua thêm có hết hạn không, slot hết hạn thì mất dữ liệu không, và tình trạng hoá đơn VAT.',
+    summary: 'Ai được mua, mua thêm có hết hạn không, slot hết hạn thì mất dữ liệu không, và cách hệ thống tự xuất hoá đơn điện tử.',
     body_md: `# Câu hỏi thường gặp về thanh toán & hoá đơn
 Các câu hỏi hay gặp nhất về tiền bạc. Xem trước phần này thì đỡ phải hỏi hỗ trợ.
 
@@ -1109,10 +1110,19 @@ Chỉ mua được **tin nhắn, email, lượt AI**. Không mua được thêm 
 ## Đã thanh toán nhưng hạn mức chưa tăng?
 Đợi vài phút rồi tải lại trang — hệ thống cần nhận xác nhận từ cổng thanh toán. Quá 15 phút vẫn chưa thấy thì liên hệ hỗ trợ kèm **mã đơn**, đơn không bị mất.
 
-## Có xuất hoá đơn VAT không?
-**Hiện chưa.** Sau khi thanh toán bạn nhận được email xác nhận có đầy đủ mã đơn, số tiền, gói đã mua và ngày hết hạn — dùng để đối chiếu nội bộ được, nhưng **chưa phải hoá đơn giá trị gia tăng hợp lệ**.
+## Có xuất hoá đơn điện tử không?
+**Có.** Hệ thống xuất hoá đơn điện tử **tự động ngay sau khi thanh toán thành công**, bạn không phải yêu cầu.
 
-Chức năng xuất hoá đơn điện tử tự động đang chờ hoàn thiện. Nếu bạn cần hoá đơn VAT cho đơn đã thanh toán, hãy liên hệ hỗ trợ kèm mã đơn và mã số thuế để được xử lý thủ công.
+**Giá niêm yết đã là giá cuối cùng.** Dịch vụ thuộc diện không chịu thuế nên hoá đơn **không cộng thêm phần trăm nào** — thấy 299.000đ thì trả đúng 299.000đ.
+
+Ở bước thanh toán bạn có thể điền thông tin xuất hoá đơn, theo hai dạng **Công ty** (tên, mã số thuế, địa chỉ) hoặc **Cá nhân**. Phần này **không bắt buộc**:
+
+- **Có điền** → hoá đơn ghi đúng tên bạn hoặc tên công ty, và được **gửi vào email** của bạn kèm file PDF.
+- **Không điền** → hệ thống vẫn xuất hoá đơn dưới dạng *"Bán cho người tiêu dùng"* theo đúng quy định, nhưng không gửi email cho bạn.
+
+Xem lại và tải hoá đơn bất cứ lúc nào tại **/invoices/mã-đơn-của-bạn**, mở từ mục Lịch sử đơn.
+
+Lưu ý: hoá đơn đã phát hành thì **không sửa và không huỷ được**. Nếu cần hoá đơn mang tên công ty, hãy điền mã số thuế **ngay ở bước thanh toán**, đừng để sau.
 
 ## Có hoàn tiền không?
 Hệ thống **không có luồng hoàn tiền tự động**. Trường hợp đặc biệt (thanh toán nhầm, trừ tiền hai lần) vui lòng liên hệ hỗ trợ kèm mã đơn.
@@ -1122,10 +1132,107 @@ Vào [/app/billing](/app/billing), mục **Lịch sử đơn** — có đủ đ�
 
 ## Liên quan
 - [Gói dịch vụ & thanh toán](plan-and-billing)
+- [Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn](doi-goi)
 - [Bắt đầu với Founder AI — 4 bước](getting-started)
 - [Kết nối kênh gửi](channels)
 `,
-    body_html: `<h2>Câu hỏi thường gặp về thanh toán &amp; hoá đơn</h2><p>Các câu hỏi hay gặp nhất về tiền bạc. Xem trước phần này thì đỡ phải hỏi hỗ trợ.</p><h3>Ai được mua gói và mua thêm?</h3><p>Chỉ <strong>chủ tài khoản</strong>. Nhân viên được cấp quyền vẫn dùng được sản phẩm nhưng không thấy trang mua và không tự thanh toán được — để không ai tiêu tiền thay chủ.</p><h3>Mua thêm tin nhắn / email / lượt AI có hết hạn không?</h3><p><strong>Không.</strong> Số dư mua thêm nằm ở một ví riêng, không làm mới theo chu kỳ và không mất khi sang kỳ mới. Điều kiện duy nhất là gói phải còn hiệu lực mới tiêu được.</p><p>Hệ thống luôn <strong>tiêu hạn mức của gói trước</strong>, hết mới trừ vào ví — để phần bạn đã bỏ tiền mua được giữ lâu nhất có thể.</p><h3>Vậy còn tài khoản Zalo, landing page, chatbot mua thêm?</h3><p>Nhóm này <strong>khác hẳn</strong>: đây là thuê chỗ theo tháng, không phải ví. Khi mua bạn chọn 1, 3, 6 hoặc 12 tháng. Thời hạn tính từ ngày mua, không gắn với ngày hết hạn gói — nên mua sát cuối kỳ cũng không bị thiệt, và gia hạn gói không làm mất slot vừa mua.</p><h3>Hết hạn slot thì tôi có mất dữ liệu không?</h3><p><strong>Không mất gì.</strong> Hệ thống chỉ <strong>tạm khoá</strong>, toàn bộ nội dung landing page, chatbot và kết nối tài khoản vẫn còn nguyên. Trả tiền là dùng lại được ngay.</p><p>Bạn còn được <strong>tự chọn giữ cái nào</strong>: vào <a href="/app/billing">/app/billing</a>, mục <strong>Tài nguyên khoá</strong>, tick những thứ quan trọng để giữ trong hạn mức còn hiệu lực. Hệ thống cũng gửi email nhắc trước <strong>7 ngày</strong> và <strong>3 ngày</strong>.</p><p>Lưu ý: tài nguyên bị khoá vẫn chiếm chỗ. Muốn tạo cái mới thì xoá cái đang khoá trước.</p><h3>Vì sao tôi không mua thêm tin Zalo được?</h3><p>Hai lý do thường gặp:</p><ul><li><strong>Chưa kết nối tài khoản Zalo nào.</strong> Mua tin mà không có tài khoản để gửi thì tiền nằm chết — hãy kết nối trước tại <a href="/app/settings/channels">/app/settings/channels</a>.</li><li><strong>Mua vượt năng lực gửi thật.</strong> Mỗi tài khoản Zalo chỉ gửi được khoảng 16.000 tin/tháng. Cần nhiều hơn thì mua thêm tài khoản Zalo, không phải mua thêm tin.</li></ul><h3>Đơn tối thiểu là bao nhiêu?</h3><p><strong>50.000đ</strong> một đơn mua thêm. Dưới mức này phí thanh toán ăn gần hết giá trị đơn.</p><h3>Gói tôi hết hạn, đang trong thời gian ân hạn thì mua được gì?</h3><p>Chỉ mua được <strong>tin nhắn, email, lượt AI</strong>. Không mua được thêm tài khoản Zalo/Email, landing page hay chatbot cho tới khi gia hạn gói.</p><h3>Đã thanh toán nhưng hạn mức chưa tăng?</h3><p>Đợi vài phút rồi tải lại trang — hệ thống cần nhận xác nhận từ cổng thanh toán. Quá 15 phút vẫn chưa thấy thì liên hệ hỗ trợ kèm <strong>mã đơn</strong>, đơn không bị mất.</p><h3>Có xuất hoá đơn VAT không?</h3><p><strong>Hiện chưa.</strong> Sau khi thanh toán bạn nhận được email xác nhận có đầy đủ mã đơn, số tiền, gói đã mua và ngày hết hạn — dùng để đối chiếu nội bộ được, nhưng <strong>chưa phải hoá đơn giá trị gia tăng hợp lệ</strong>.</p><p>Chức năng xuất hoá đơn điện tử tự động đang chờ hoàn thiện. Nếu bạn cần hoá đơn VAT cho đơn đã thanh toán, hãy liên hệ hỗ trợ kèm mã đơn và mã số thuế để được xử lý thủ công.</p><h3>Có hoàn tiền không?</h3><p>Hệ thống <strong>không có luồng hoàn tiền tự động</strong>. Trường hợp đặc biệt (thanh toán nhầm, trừ tiền hai lần) vui lòng liên hệ hỗ trợ kèm mã đơn.</p><h3>Xem lại đơn đã mua ở đâu?</h3><p>Vào <a href="/app/billing">/app/billing</a>, mục <strong>Lịch sử đơn</strong> — có đủ đơn mua gói và đơn mua thêm.</p><h3>Liên quan</h3><ul><li><a href="plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="getting-started">Bắt đầu với Founder AI — 4 bước</a></li><li><a href="channels">Kết nối kênh gửi</a></li></ul>`,
+    body_html: `<h2>Câu hỏi thường gặp về thanh toán &amp; hoá đơn</h2><p>Các câu hỏi hay gặp nhất về tiền bạc. Xem trước phần này thì đỡ phải hỏi hỗ trợ.</p><h3>Ai được mua gói và mua thêm?</h3><p>Chỉ <strong>chủ tài khoản</strong>. Nhân viên được cấp quyền vẫn dùng được sản phẩm nhưng không thấy trang mua và không tự thanh toán được — để không ai tiêu tiền thay chủ.</p><h3>Mua thêm tin nhắn / email / lượt AI có hết hạn không?</h3><p><strong>Không.</strong> Số dư mua thêm nằm ở một ví riêng, không làm mới theo chu kỳ và không mất khi sang kỳ mới. Điều kiện duy nhất là gói phải còn hiệu lực mới tiêu được.</p><p>Hệ thống luôn <strong>tiêu hạn mức của gói trước</strong>, hết mới trừ vào ví — để phần bạn đã bỏ tiền mua được giữ lâu nhất có thể.</p><h3>Vậy còn tài khoản Zalo, landing page, chatbot mua thêm?</h3><p>Nhóm này <strong>khác hẳn</strong>: đây là thuê chỗ theo tháng, không phải ví. Khi mua bạn chọn 1, 3, 6 hoặc 12 tháng. Thời hạn tính từ ngày mua, không gắn với ngày hết hạn gói — nên mua sát cuối kỳ cũng không bị thiệt, và gia hạn gói không làm mất slot vừa mua.</p><h3>Hết hạn slot thì tôi có mất dữ liệu không?</h3><p><strong>Không mất gì.</strong> Hệ thống chỉ <strong>tạm khoá</strong>, toàn bộ nội dung landing page, chatbot và kết nối tài khoản vẫn còn nguyên. Trả tiền là dùng lại được ngay.</p><p>Bạn còn được <strong>tự chọn giữ cái nào</strong>: vào <a href="/app/billing">/app/billing</a>, mục <strong>Tài nguyên khoá</strong>, tick những thứ quan trọng để giữ trong hạn mức còn hiệu lực. Hệ thống cũng gửi email nhắc trước <strong>7 ngày</strong> và <strong>3 ngày</strong>.</p><p>Lưu ý: tài nguyên bị khoá vẫn chiếm chỗ. Muốn tạo cái mới thì xoá cái đang khoá trước.</p><h3>Vì sao tôi không mua thêm tin Zalo được?</h3><p>Hai lý do thường gặp:</p><ul><li><strong>Chưa kết nối tài khoản Zalo nào.</strong> Mua tin mà không có tài khoản để gửi thì tiền nằm chết — hãy kết nối trước tại <a href="/app/settings/channels">/app/settings/channels</a>.</li><li><strong>Mua vượt năng lực gửi thật.</strong> Mỗi tài khoản Zalo chỉ gửi được khoảng 16.000 tin/tháng. Cần nhiều hơn thì mua thêm tài khoản Zalo, không phải mua thêm tin.</li></ul><h3>Đơn tối thiểu là bao nhiêu?</h3><p><strong>50.000đ</strong> một đơn mua thêm. Dưới mức này phí thanh toán ăn gần hết giá trị đơn.</p><h3>Gói tôi hết hạn, đang trong thời gian ân hạn thì mua được gì?</h3><p>Chỉ mua được <strong>tin nhắn, email, lượt AI</strong>. Không mua được thêm tài khoản Zalo/Email, landing page hay chatbot cho tới khi gia hạn gói.</p><h3>Đã thanh toán nhưng hạn mức chưa tăng?</h3><p>Đợi vài phút rồi tải lại trang — hệ thống cần nhận xác nhận từ cổng thanh toán. Quá 15 phút vẫn chưa thấy thì liên hệ hỗ trợ kèm <strong>mã đơn</strong>, đơn không bị mất.</p><h3>Có xuất hoá đơn điện tử không?</h3><p><strong>Có.</strong> Hệ thống xuất hoá đơn điện tử <strong>tự động ngay sau khi thanh toán thành công</strong>, bạn không phải yêu cầu.</p><p><strong>Giá niêm yết đã là giá cuối cùng.</strong> Dịch vụ thuộc diện không chịu thuế nên hoá đơn <strong>không cộng thêm phần trăm nào</strong> — thấy 299.000đ thì trả đúng 299.000đ.</p><p>Ở bước thanh toán bạn có thể điền thông tin xuất hoá đơn, theo hai dạng <strong>Công ty</strong> (tên, mã số thuế, địa chỉ) hoặc <strong>Cá nhân</strong>. Phần này <strong>không bắt buộc</strong>:</p><ul><li><strong>Có điền</strong> → hoá đơn ghi đúng tên bạn hoặc tên công ty, và được <strong>gửi vào email</strong> của bạn kèm file PDF.</li><li><strong>Không điền</strong> → hệ thống vẫn xuất hoá đơn dưới dạng <em>"Bán cho người tiêu dùng"</em> theo đúng quy định, nhưng không gửi email cho bạn.</li></ul><p>Xem lại và tải hoá đơn bất cứ lúc nào tại <strong>/invoices/mã-đơn-của-bạn</strong>, mở từ mục Lịch sử đơn.</p><p>Lưu ý: hoá đơn đã phát hành thì <strong>không sửa và không huỷ được</strong>. Nếu cần hoá đơn mang tên công ty, hãy điền mã số thuế <strong>ngay ở bước thanh toán</strong>, đừng để sau.</p><h3>Có hoàn tiền không?</h3><p>Hệ thống <strong>không có luồng hoàn tiền tự động</strong>. Trường hợp đặc biệt (thanh toán nhầm, trừ tiền hai lần) vui lòng liên hệ hỗ trợ kèm mã đơn.</p><h3>Xem lại đơn đã mua ở đâu?</h3><p>Vào <a href="/app/billing">/app/billing</a>, mục <strong>Lịch sử đơn</strong> — có đủ đơn mua gói và đơn mua thêm.</p><h3>Liên quan</h3><ul><li><a href="plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="doi-goi">Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn</a></li><li><a href="getting-started">Bắt đầu với Founder AI — 4 bước</a></li><li><a href="channels">Kết nối kênh gửi</a></li></ul>`,
+  },
+  {
+    slug: 'doi-goi',
+    feature_key: 'plan-and-billing',
+    primary_route: '/pricing',
+    sort_order: 128,
+    title: 'Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn',
+    summary: 'Nâng gói dùng được ngay nhưng mất phần ngày còn lại; hạ gói thì dùng hết chu kỳ rồi mới chuyển. Kèm quy tắc đổi tháng ↔ năm và cách xử lý khi vượt hạn mức.',
+    body_md: `# Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn
+Bạn đổi gói bất cứ lúc nào, không cần chờ hết hạn. Nhưng nâng gói và hạ gói chạy theo hai cách khác nhau — đọc phần dưới trước khi bấm để không mất tiền oan.
+
+## Nâng lên gói cao hơn — dùng được ngay
+Chọn gói cao hơn, thanh toán xong là dùng được ngay lập tức.
+
+**Điều quan trọng nhất cần biết:** thời hạn gói mới **tính lại từ ngày bạn nâng cấp**. Phần ngày chưa dùng hết của gói cũ **không được cộng dồn**.
+
+Ví dụ: bạn còn 25 ngày gói Cơ bản, nâng lên gói Chuyên nghiệp hôm nay → bạn có 30 ngày Chuyên nghiệp tính từ hôm nay, 25 ngày Cơ bản kia không được cộng thêm.
+
+Vì vậy nếu không gấp, nâng gói vào **gần cuối chu kỳ** sẽ lợi hơn. Hệ thống luôn hiện cảnh báo số ngày bạn sắp mất trước khi bấm xác nhận.
+
+## Hạ xuống gói thấp hơn — dùng hết chu kỳ đã trả
+Bạn **không bị cắt quyền lợi giữa chừng**. Gói hiện tại chạy hết chu kỳ đã thanh toán, tới ngày hết hạn hệ thống **tự chuyển sang gói mới**.
+
+Cách làm: chọn gói thấp hơn và **thanh toán ngay hôm nay**. Hệ thống ghi nhận lệnh rồi tự kích hoạt đúng ngày — bạn không phải nhớ, không phải vào lại lần nữa.
+
+Trong thời gian chờ, bạn vẫn dùng đầy đủ quyền lợi của gói cũ.
+
+## Đổi kỳ hạn tháng ↔ năm
+
+| Bạn đang dùng | Muốn đổi sang | Được không |
+|---|---|---|
+| Gói tháng | Cùng gói đó theo năm | Được — tính là nâng cấp, 365 ngày từ hôm nay |
+| Gói tháng | Gói khác theo năm | Được — tính là nâng cấp |
+| Gói năm | Gói khác theo năm | Được |
+| Gói năm | Bất kỳ gói nào theo tháng | Chỉ được khi gói năm **còn dưới 30 ngày** hoặc đã hết hạn |
+
+Đang dùng gói năm mà còn nhiều thời gian thì chưa chuyển về gói tháng được — chờ tới khi còn dưới 30 ngày.
+
+## Gói tự chọn
+Gói tự chọn được so cao/thấp với gói cố định **bằng giá tiền, và phải cùng kỳ hạn** — gói tự chọn theo tháng so với gói cố định theo tháng.
+
+Giá cao hơn thì tính là nâng cấp (dùng ngay), giá thấp hơn thì tính là hạ gói (chờ hết chu kỳ).
+
+## Lệnh hẹn đổi gói — những điều cần biết
+Khi bạn đã thanh toán để hạ gói từ kỳ sau, đó là một **lệnh hẹn**. Quy tắc:
+
+- **Mỗi lúc chỉ có một lệnh hẹn.**
+- **Không huỷ được và không hoàn tiền.** Hãy cân nhắc kỹ trước khi thanh toán.
+- **Giá đã khoá.** Bảng giá có tăng trong thời gian chờ cũng không thu thêm của bạn.
+- **Đổi lên gói cao hơn thì được** — bạn chỉ trả thêm phần chênh lệch, không phải trả lại từ đầu. Đổi xuống gói rẻ hơn thì không được.
+- **Vẫn nâng gói đang dùng bình thường.** Có lệnh hẹn không ngăn bạn nâng cấp ngay hôm nay nếu cần.
+- **Hoá đơn xuất ngay hôm bạn thanh toán**, không đợi tới ngày gói kích hoạt. Nếu sau đó bạn trả thêm chênh lệch để nâng lệnh hẹn thì lần trả thêm đó có **hoá đơn riêng** — bạn sẽ có hai hoá đơn cho cùng một gói, đây là điều bình thường và đúng quy định.
+
+## Sau khi hạ gói mà đang dùng quá hạn mức mới
+Ví dụ bạn có 10 landing page nhưng gói mới chỉ cho 3.
+
+**Hệ thống không xoá gì của bạn.** Cách xử lý:
+
+1. Từ ngày gói mới có hiệu lực, bạn có **7 ngày ân hạn** — mọi thứ vẫn chạy bình thường, phần vượt hạn mức được **tô đỏ** để bạn biết.
+2. Hết 7 ngày, phần tô đỏ bị **khoá** — không truy cập và không sử dụng được, nhưng **dữ liệu vẫn còn nguyên**.
+3. Bạn xoá bớt cho tới khi số lượng về đúng hạn mức → mọi thứ **mở khoá lại**.
+
+Bạn được xoá cái nào tuỳ ý, không bắt buộc xoá đúng cái đang bị tô đỏ.
+
+Áp dụng cho landing page, chiến dịch, mẫu tin, tài khoản Zalo/Email, chatbot, nhân viên và dung lượng lưu trữ. Riêng hai loại dưới đây ảnh hưởng ra bên ngoài, nên xử lý sớm:
+
+- **Nhân viên bị khoá** sẽ không vào được khu làm việc của công ty.
+- **Chatbot bị khoá** ngưng hoạt động — khách nhắn vào sẽ không có ai trả lời.
+
+Không áp dụng cho tin Zalo, email và lượt AI — ba loại này tự làm mới mỗi chu kỳ.
+
+## Hạn mức làm mới khi nào
+Hạn mức làm mới theo **chu kỳ 30 ngày tính từ ngày bạn đăng ký**, không theo ngày đầu tháng. Mua ngày 20 thì hạn mức làm mới vào khoảng ngày 20 hằng tháng.
+
+Mua gói năm cũng vậy: bạn nhận hạn mức **theo từng tháng**, không phải nhận trọn cả năm một lần. Gói 500 tin/tháng mua theo năm nghĩa là mỗi chu kỳ 500 tin, **không phải 6.000 tin dùng tự do**. Dùng không hết thì mất, không cộng dồn sang chu kỳ sau.
+
+Muốn phần không mất khi sang kỳ mới thì mua thêm tại trang mua thêm hạn mức — phần mua thêm nằm ở ví riêng và không hết hạn.
+
+## Câu hỏi thường gặp
+**Nâng gói có mất dữ liệu không?** Không. Toàn bộ chiến dịch, khách hàng, landing page, chatbot đều giữ nguyên.
+
+**Tôi nâng gói giữa chừng, số ngày cũ có được trả lại không?** Không. Thời hạn tính lại từ ngày nâng cấp.
+
+**Hạ gói rồi tôi có bị cắt quyền lợi ngay không?** Không. Bạn dùng hết chu kỳ đã thanh toán, sau đó mới chuyển.
+
+**Tôi đã đặt hạ gói, giờ muốn đổi ý?** Không huỷ được và không hoàn tiền. Nhưng bạn đổi lên gói cao hơn được bằng cách trả thêm phần chênh lệch.
+
+**Đang dùng gói năm, tôi muốn về gói tháng?** Chờ tới khi gói năm còn dưới 30 ngày.
+
+**Hết 7 ngày ân hạn, hệ thống có xoá landing page của tôi không?** Không xoá. Chỉ khoá lại, dữ liệu còn nguyên, xoá bớt là mở khoá.
+
+## Liên quan
+- [Gói dịch vụ & thanh toán](plan-and-billing)
+- [Câu hỏi thường gặp về thanh toán & hoá đơn](faq-billing)
+`,
+    body_html: `<h2>Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn</h2><p>Bạn đổi gói bất cứ lúc nào, không cần chờ hết hạn. Nhưng nâng gói và hạ gói chạy theo hai cách khác nhau — đọc phần dưới trước khi bấm để không mất tiền oan.</p><h3>Nâng lên gói cao hơn — dùng được ngay</h3><p>Chọn gói cao hơn, thanh toán xong là dùng được ngay lập tức.</p><p><strong>Điều quan trọng nhất cần biết:</strong> thời hạn gói mới <strong>tính lại từ ngày bạn nâng cấp</strong>. Phần ngày chưa dùng hết của gói cũ <strong>không được cộng dồn</strong>.</p><p>Ví dụ: bạn còn 25 ngày gói Cơ bản, nâng lên gói Chuyên nghiệp hôm nay → bạn có 30 ngày Chuyên nghiệp tính từ hôm nay, 25 ngày Cơ bản kia không được cộng thêm.</p><p>Vì vậy nếu không gấp, nâng gói vào <strong>gần cuối chu kỳ</strong> sẽ lợi hơn. Hệ thống luôn hiện cảnh báo số ngày bạn sắp mất trước khi bấm xác nhận.</p><h3>Hạ xuống gói thấp hơn — dùng hết chu kỳ đã trả</h3><p>Bạn <strong>không bị cắt quyền lợi giữa chừng</strong>. Gói hiện tại chạy hết chu kỳ đã thanh toán, tới ngày hết hạn hệ thống <strong>tự chuyển sang gói mới</strong>.</p><p>Cách làm: chọn gói thấp hơn và <strong>thanh toán ngay hôm nay</strong>. Hệ thống ghi nhận lệnh rồi tự kích hoạt đúng ngày — bạn không phải nhớ, không phải vào lại lần nữa.</p><p>Trong thời gian chờ, bạn vẫn dùng đầy đủ quyền lợi của gói cũ.</p><h3>Đổi kỳ hạn tháng ↔ năm</h3><table><thead><tr><th>Bạn đang dùng</th><th>Muốn đổi sang</th><th>Được không</th></tr></thead><tbody><tr><td>Gói tháng</td><td>Cùng gói đó theo năm</td><td>Được — tính là nâng cấp, 365 ngày từ hôm nay</td></tr><tr><td>Gói tháng</td><td>Gói khác theo năm</td><td>Được — tính là nâng cấp</td></tr><tr><td>Gói năm</td><td>Gói khác theo năm</td><td>Được</td></tr><tr><td>Gói năm</td><td>Bất kỳ gói nào theo tháng</td><td>Chỉ được khi gói năm <strong>còn dưới 30 ngày</strong> hoặc đã hết hạn</td></tr></tbody></table><p>Đang dùng gói năm mà còn nhiều thời gian thì chưa chuyển về gói tháng được — chờ tới khi còn dưới 30 ngày.</p><h3>Gói tự chọn</h3><p>Gói tự chọn được so cao/thấp với gói cố định <strong>bằng giá tiền, và phải cùng kỳ hạn</strong> — gói tự chọn theo tháng so với gói cố định theo tháng.</p><p>Giá cao hơn thì tính là nâng cấp (dùng ngay), giá thấp hơn thì tính là hạ gói (chờ hết chu kỳ).</p><h3>Lệnh hẹn đổi gói — những điều cần biết</h3><p>Khi bạn đã thanh toán để hạ gói từ kỳ sau, đó là một <strong>lệnh hẹn</strong>. Quy tắc:</p><ul><li><strong>Mỗi lúc chỉ có một lệnh hẹn.</strong></li><li><strong>Không huỷ được và không hoàn tiền.</strong> Hãy cân nhắc kỹ trước khi thanh toán.</li><li><strong>Giá đã khoá.</strong> Bảng giá có tăng trong thời gian chờ cũng không thu thêm của bạn.</li><li><strong>Đổi lên gói cao hơn thì được</strong> — bạn chỉ trả thêm phần chênh lệch, không phải trả lại từ đầu. Đổi xuống gói rẻ hơn thì không được.</li><li><strong>Vẫn nâng gói đang dùng bình thường.</strong> Có lệnh hẹn không ngăn bạn nâng cấp ngay hôm nay nếu cần.</li></ul><h3>Sau khi hạ gói mà đang dùng quá hạn mức mới</h3><p>Ví dụ bạn có 10 landing page nhưng gói mới chỉ cho 3.</p><p><strong>Hệ thống không xoá gì của bạn.</strong> Cách xử lý:</p><ol><li>Từ ngày gói mới có hiệu lực, bạn có <strong>7 ngày ân hạn</strong> — mọi thứ vẫn chạy bình thường, phần vượt hạn mức được <strong>tô đỏ</strong> để bạn biết.</li><li>Hết 7 ngày, phần tô đỏ bị <strong>khoá</strong> — không truy cập và không sử dụng được, nhưng <strong>dữ liệu vẫn còn nguyên</strong>.</li><li>Bạn xoá bớt cho tới khi số lượng về đúng hạn mức → mọi thứ <strong>mở khoá lại</strong>.</li></ol><p>Bạn được xoá cái nào tuỳ ý, không bắt buộc xoá đúng cái đang bị tô đỏ.</p><p>Áp dụng cho landing page, chiến dịch, mẫu tin, tài khoản Zalo/Email, chatbot, nhân viên và dung lượng lưu trữ. Riêng hai loại dưới đây ảnh hưởng ra bên ngoài, nên xử lý sớm:</p><ul><li><strong>Nhân viên bị khoá</strong> sẽ không vào được khu làm việc của công ty.</li><li><strong>Chatbot bị khoá</strong> ngưng hoạt động — khách nhắn vào sẽ không có ai trả lời.</li></ul><p>Không áp dụng cho tin Zalo, email và lượt AI — ba loại này tự làm mới mỗi chu kỳ.</p><h3>Hạn mức làm mới khi nào</h3><p>Hạn mức làm mới theo <strong>chu kỳ 30 ngày tính từ ngày bạn đăng ký</strong>, không theo ngày đầu tháng. Mua ngày 20 thì hạn mức làm mới vào khoảng ngày 20 hằng tháng.</p><p>Mua gói năm cũng vậy: bạn nhận hạn mức <strong>theo từng tháng</strong>, không phải nhận trọn cả năm một lần. Gói 500 tin/tháng mua theo năm nghĩa là mỗi chu kỳ 500 tin, <strong>không phải 6.000 tin dùng tự do</strong>. Dùng không hết thì mất, không cộng dồn sang chu kỳ sau.</p><p>Muốn phần không mất khi sang kỳ mới thì mua thêm tại trang mua thêm hạn mức — phần mua thêm nằm ở ví riêng và không hết hạn.</p><h3>Câu hỏi thường gặp</h3><p><strong>Nâng gói có mất dữ liệu không?</strong> Không. Toàn bộ chiến dịch, khách hàng, landing page, chatbot đều giữ nguyên.</p><p><strong>Tôi nâng gói giữa chừng, số ngày cũ có được trả lại không?</strong> Không. Thời hạn tính lại từ ngày nâng cấp.</p><p><strong>Hạ gói rồi tôi có bị cắt quyền lợi ngay không?</strong> Không. Bạn dùng hết chu kỳ đã thanh toán, sau đó mới chuyển.</p><p><strong>Tôi đã đặt hạ gói, giờ muốn đổi ý?</strong> Không huỷ được và không hoàn tiền. Nhưng bạn đổi lên gói cao hơn được bằng cách trả thêm phần chênh lệch.</p><p><strong>Đang dùng gói năm, tôi muốn về gói tháng?</strong> Chờ tới khi gói năm còn dưới 30 ngày.</p><p><strong>Hết 7 ngày ân hạn, hệ thống có xoá landing page của tôi không?</strong> Không xoá. Chỉ khoá lại, dữ liệu còn nguyên, xoá bớt là mở khoá.</p><h3>Liên quan</h3><ul><li><a href="plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="faq-billing">Câu hỏi thường gặp về thanh toán &amp; hoá đơn</a></li></ul>`,
   },
 ];
 

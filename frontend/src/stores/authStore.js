@@ -94,6 +94,8 @@ const normalizeUser = (user) => {
 
   return {
     ...user,
+    activePlanId: user.activePlanId ?? user.active_plan_id ?? null,
+    activeBillingPeriod: user.activeBillingPeriod ?? user.active_billing_period ?? 'monthly',
     roleCode,
     roleName,
     memberships: user.memberships || [],

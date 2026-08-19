@@ -1948,3 +1948,39 @@ CREATE TABLE IF NOT EXISTS zalo_friends (
 CREATE INDEX IF NOT EXISTS idx_zalo_friends_setting ON zalo_friends(id_zalo_setting);
 CREATE INDEX IF NOT EXISTS idx_zalo_friends_search ON zalo_friends(id_zalo_setting, display_name);
 
+-- ─── AI activity summaries cache (mirrors 146) ───────────────────────────
+CREATE TABLE IF NOT EXISTS ai_activity_summaries (
+  id BIGSERIAL PRIMARY KEY,
+  id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day_key VARCHAR(10) NOT NULL,
+  last_message_at TIMESTAMPTZ,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uniq_ai_activity_user_day UNIQUE (id_user, day_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_activity_summaries_user_day
+  ON ai_activity_summaries (id_user, day_key);
+
+-- ─── Landing page versions (mirrors 147) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS landing_page_versions (
+  id BIGSERIAL PRIMARY KEY,
+  id_landing_page BIGINT NOT NULL REFERENCES landing_pages(id) ON DELETE CASCADE,
+  id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  storage_key TEXT NOT NULL,
+  title VARCHAR(255),
+  html_hash VARCHAR(64) NOT NULL,
+  size_bytes BIGINT NOT NULL DEFAULT 0,
+  source VARCHAR(32) NOT NULL DEFAULT 'manual',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_page_created
+  ON landing_page_versions (id_landing_page, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_user
+  ON landing_page_versions (id_user);
+
+
+

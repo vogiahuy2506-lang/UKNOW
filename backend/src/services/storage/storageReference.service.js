@@ -123,6 +123,19 @@ export async function buildStorageReferenceIndex(queryable = db) {
     });
   }
 
+  const landingVersionRows = await queryOptional(queryable,
+    `SELECT id, id_user, storage_key FROM landing_page_versions`
+  );
+  for (const row of landingVersionRows) {
+    addReference(index, [row.storage_key], {
+      poolType: 'workspace',
+      ownerUserId: Number(row.id_user),
+      category: 'landing_version',
+      referenceType: 'landing_page_version',
+      referenceId: row.id,
+    });
+  }
+
   const landingTemplateRows = await queryOptional(queryable,
     `SELECT id, user_id, thumbnail_url, html_structure, css_variables, default_config
        FROM landing_page_templates`
@@ -375,6 +388,11 @@ const REFERENCE_CONFIGS = {
   landing_page: {
     sql: `SELECT id, title AS name FROM landing_pages WHERE id = $1 LIMIT 1`,
     label: 'Landing Page',
+    url: '/landing-pages',
+  },
+  landing_page_version: {
+    sql: `SELECT id, title AS name FROM landing_page_versions WHERE id = $1 LIMIT 1`,
+    label: 'Phiên bản Landing Page',
     url: '/landing-pages',
   },
   landing_featured_course: {

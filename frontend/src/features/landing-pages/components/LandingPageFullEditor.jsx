@@ -28,6 +28,7 @@ import { normalizeLandingLpTrackApiBase } from '../utils/normalizeLandingLpTrack
 import TemplateGallery from './TemplateGallery.jsx';
 import VisualBlockEditor from './VisualBlockEditor.jsx';
 import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
+import LandingVersionModal from './LandingVersionModal.jsx';
 import { getAiQuotaErrorMessage } from '../../../utils/aiLimitError.util';
 
 const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
@@ -835,6 +836,7 @@ export default function LandingPageFullEditor({
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
   const [visualEditorOpen, setVisualEditorOpen] = useState(false);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
+  const [versionModalOpen, setVersionModalOpen] = useState(false);
 
   const [editorSplit, setEditorSplit] = useState(50);
   const [isResizing, setIsResizing] = useState(false);
@@ -1375,6 +1377,17 @@ export default function LandingPageFullEditor({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4" />
               </svg>
               Hoàn tác
+            </button>
+          )}
+          {Boolean(editingId) && (
+            <button
+              type="button"
+              onClick={() => setVersionModalOpen(true)}
+              className="btn btn-secondary text-sm flex items-center gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+              title="Lịch sử các phiên bản của trang"
+            >
+              <HiOutlineClock className="w-4 h-4 text-indigo-600" />
+              <span>Lịch sử</span>
             </button>
           )}
           <button
@@ -1971,6 +1984,16 @@ export default function LandingPageFullEditor({
         landingPageTitle={form.title}
         onSuccess={() => {
           // Refresh template list if template gallery is open
+        }}
+      />
+
+      {/* Landing Page Version History Modal */}
+      <LandingVersionModal
+        open={versionModalOpen}
+        onClose={() => setVersionModalOpen(false)}
+        landingPageId={editingId}
+        onRestoreVersion={(htmlContent) => {
+          overwriteHtmlWithSnapshot(htmlContent, '');
         }}
       />
     </>
