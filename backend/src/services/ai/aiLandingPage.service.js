@@ -1,9 +1,11 @@
 import businessProfileService from './businessProfile.service.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { normalizeAssistantLocale } from '../../utils/assistantLocale.util.js';
-
-/** Marker để frontend (khi đã có slug) thay bằng iframe form embed. */
-const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
+import {
+  validateEditHtmlOutput,
+  LANDING_FORM_PLACEHOLDER,
+  MAX_EDIT_HTML_INPUT_CHARS,
+} from '../../utils/landingEditGuard.util.js';
 
 function stripJsonFences(raw) {
   let t = String(raw || '').trim();
@@ -161,6 +163,135 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         html = `${html}\n<!-- appended -->\n<section class="py-10 px-4">${LANDING_FORM_PLACEHOLDER}</section>`;
       }
     }
+
+    return { title, html };
+  }
+
+  /**
+   * Chỉnh sửa landing page HTML5 hiện tại theo yêu cầu, giữ nguyên cấu trúc/nội dung không đổi.
+   *
+   * @param {{ userId: number, currentHtml: string, instruction: string, contentLocale?: string, actorUserId?: number|null }} opts
+   * @returns {Promise<{ title: string, html: string }>}
+   */
+  async editHtml({
+    userId,
+    currentHtml,
+    instruction,
+    contentLocale = 'vi',
+    actorUserId = null,
+  }) {
+    const rawCurrent = String(currentHtml || '').trim();
+    if (!rawCurrent) {
+      const err = new Error('Không có mã nguồn HTML hiện tại để chỉnh sửa.');
+      err.status = 400;
+      throw err;
+    }
+
+    // Chốt chặn kích thước input:
+    // maxOutputTokens = 32768, ~3 ký tự/token tiếng Việt, trừ escape JSON và phần mở rộng thêm -> ~60.000 ký tự.
+    if (rawCurrent.length > MAX_EDIT_HTML_INPUT_CHARS) {
+      const err = new Error(
+        `Landing page hiện tại quá dài (${rawCurrent.length.toLocaleString('vi-VN')} ký tự, giới hạn ${MAX_EDIT_HTML_INPUT_CHARS.toLocaleString('vi-VN')} ký tự) để chỉnh sửa an toàn bằng AI. Vui lòng chỉnh sửa trực tiếp trong trình soạn thảo.`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const instr = String(instruction || '').trim();
+    if (!instr) {
+      const err = new Error('Vui lòng nhập mô tả yêu cầu chỉnh sửa cho AI.');
+      err.status = 400;
+      throw err;
+    }
+
+    const locale = normalizeAssistantLocale(contentLocale, 'vi');
+    const htmlLang = locale === 'en' ? 'en' : 'vi';
+
+    const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên chỉnh sửa landing page marketing.
+
+Nhiệm vụ: Chỉnh sửa trang landing HTML5 hiện tại theo ĐÚNG yêu cầu của người dùng.
+
+${contentLanguageInstruction(locale)}
+
+QUY TẮC CHỈNH SỬA TỐI QUAN TRỌNG:
+1) Dưới đây là HTML hiện tại của trang. Nhiệm vụ của bạn là CHỈ thay đổi đúng phần người dùng yêu cầu.
+2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và comment "${LANDING_FORM_PLACEHOLDER}" (hoặc thẻ iframe form nhúng "/embed/lead-form/..."). Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
+3) Trả về JSON { "title": "...", "html": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích.
+
+QUY TẮC KỸ THUẬT:
+1) Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Hai khóa: "title" (string) và "html" (string).
+2) Nếu bản gốc có thẻ <head> chứa Tailwind CDN, hãy luôn giữ nguyên: <script src="https://cdn.tailwindcss.com"></script>
+3) KHÔNG tự ý chèn thêm thuộc tính style="..." inline; chỉ dùng class Tailwind utility.
+4) Không dùng JavaScript logic ngoài script Tailwind CDN.
+
+HTML HIỆN TẠI CỦA TRANG:
+"""${rawCurrent}"""
+
+YÊU CẦU CHỈNH SỬA TỪ NGƯỜI DÙNG:
+"""${instr}"""
+
+Ví dụ định dạng trả về (JSON hợp lệ):
+{"title":"...","html":"..."}`;
+
+    const { text, blockReason, finishReason } = await aiUsageMeter.generateWithBudget(userId, {
+      parts: [{ text: fullPrompt }],
+      jsonMode: true,
+      maxOutputTokens: 32768,
+      timeoutMs: 120000,
+      temperature: 0.2,
+      feature: 'landing_page',
+      metadata: {
+        actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
+        mode: 'edit',
+      },
+    });
+
+    if (blockReason) {
+      const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử yêu cầu khác.');
+      err.status = 400;
+      throw err;
+    }
+
+    let title = 'Landing';
+    let html = '';
+
+    try {
+      const parsed = JSON.parse(stripJsonFences(text));
+      title = String(parsed?.title || '').trim() || 'Landing';
+      html = String(parsed?.html || '').trim();
+    } catch {
+      console.warn(`[LandingAI.editHtml] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML`);
+      const fullDocMatch = text.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
+      if (fullDocMatch) {
+        html = fullDocMatch[0].trim();
+      } else {
+        const codeBlockMatch = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
+        if (codeBlockMatch && codeBlockMatch[1].trim()) {
+          html = codeBlockMatch[1].trim();
+        } else if (text.trim().startsWith('<') && text.trim().endsWith('>')) {
+          html = text.trim();
+        }
+      }
+
+      if (!html) {
+        const err = new Error(
+          finishReason === 'MAX_TOKENS'
+            ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy chia nhỏ yêu cầu sửa đổi.'
+            : 'AI trả về không phải HTML hợp lệ. Vui lòng thử lại với yêu cầu cụ thể hơn.'
+        );
+        err.status = 502;
+        throw err;
+      }
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleMatch) title = titleMatch[1].trim();
+    }
+
+    // Chốt chặn kiểm tra chất lượng kết quả
+    validateEditHtmlOutput({
+      currentHtml: rawCurrent,
+      newHtml: html,
+      finishReason,
+    });
 
     return { title, html };
   }

@@ -1045,6 +1045,53 @@ class AiController {
   }
 
   /**
+   * POST /ai/edit-landing-html — Chỉnh sửa landing page HTML5 hiện tại theo yêu cầu.
+   */
+  async editLandingHtml(req, res) {
+    try {
+      const {
+        currentHtml,
+        instruction,
+        locale = 'vi',
+      } = req.body || {};
+
+      if (!String(currentHtml || '').trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu nội dung HTML hiện tại để chỉnh sửa',
+        });
+      }
+
+      if (!String(instruction || '').trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vui lòng nhập mô tả yêu cầu chỉnh sửa cho AI',
+        });
+      }
+
+      const ownerUserId = (req.user?.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : req.user.id);
+      const contentLocale = normalizeAssistantLocale(locale, 'vi');
+
+      const data = await aiLandingPageService.editHtml({
+        userId: ownerUserId,
+        actorUserId: req.user.id,
+        currentHtml: String(currentHtml),
+        instruction: String(instruction).trim(),
+        contentLocale,
+      });
+
+      await chargeAiCredit(req);
+
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('AI edit landing HTML error:', error);
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi chỉnh sửa landing page bằng AI'));
+    }
+  }
+
+  /**
    * PUT /ai/business-profile — Lưu + re-embed hồ sơ doanh nghiệp.
    */
   async saveBusinessProfile(req, res) {

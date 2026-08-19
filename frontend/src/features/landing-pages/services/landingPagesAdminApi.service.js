@@ -141,6 +141,21 @@ export async function generateLandingHtmlWithAi({ prompt, title } = {}) {
 }
 
 /**
+ * Chỉnh sửa HTML landing hiện tại (Tailwind + Gemini + giữ nguyên cấu trúc/nội dung).
+ *
+ * @param {{ instruction: string, currentHtml: string, locale?: string }} params
+ * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
+ */
+export async function editLandingHtmlWithAi({ instruction, currentHtml, locale } = {}) {
+  const { data } = await api.post(
+    '/ai/edit-landing-html',
+    { instruction, currentHtml, locale },
+    { timeout: 120000 }
+  );
+  return data;
+}
+
+/**
  * @param {number} landingPageId
  * @returns {Promise<object>}
  */
