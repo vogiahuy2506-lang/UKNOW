@@ -22,14 +22,15 @@ export const createOrder = async ({
     discountLabel = null,
     topupConfig = null,
     invoiceInfo = null,
+    customPlanConfig = null,
 }, queryable = db) => {
     const { rows } = await queryable.query(
         `INSERT INTO orders (
             order_code, plan_id, amount, user_email, user_id, status, payment_method, note, billing_period,
             original_amount, discount_amount, voucher_id, voucher_code, discount_source, discount_label,
-            topup_config, invoice_info, created_at
+            topup_config, invoice_info, custom_plan_config, created_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW()) RETURNING *`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW()) RETURNING *`,
         [
             orderCode,
             planId,
@@ -48,6 +49,7 @@ export const createOrder = async ({
             discountLabel,
             topupConfig ? JSON.stringify(topupConfig) : null,
             invoiceInfo ? JSON.stringify(invoiceInfo) : null,
+            customPlanConfig ? JSON.stringify(customPlanConfig) : null,
         ]
     );
     return rows[0];
@@ -74,7 +76,7 @@ export const claimOrderSuccess = async (orderCode, queryable = db) => {
            AND status NOT IN ('success', 'cancelled', 'failed')
          RETURNING id, user_id, plan_id, user_email, billing_period,
                    amount, voucher_id, voucher_code, discount_amount,
-                   note, topup_config, invoice_info, order_code, payment_method`,
+                   note, topup_config, invoice_info, custom_plan_config, order_code, payment_method`,
         [orderCode]
     );
     return rows[0] || null;
@@ -113,7 +115,7 @@ export const findOrderByCode = async (orderCode, queryable = db) => {
     const { rows } = await queryable.query(
         `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
                 amount, voucher_id, voucher_code, discount_amount, note, topup_config,
-                payment_method, created_at
+                invoice_info, custom_plan_config, payment_method, created_at
          FROM orders WHERE order_code = $1`,
         [orderCode]
     );
@@ -130,7 +132,7 @@ export const findPendingPayosOrdersSinceHours = async (withinHours = 48) => {
     const { rows } = await db.query(
         `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
                 amount, voucher_id, voucher_code, discount_amount, note, topup_config,
-                payment_method, created_at
+                invoice_info, custom_plan_config, payment_method, created_at
          FROM orders
          WHERE status = 'pending'
            AND COALESCE(payment_method, 'payos') = 'payos'
@@ -150,7 +152,7 @@ export const findStalePendingPayosOrders = async (olderThanHours = 72) => {
     const { rows } = await db.query(
         `SELECT id, order_code, user_id, plan_id, status, user_email, billing_period,
                 amount, voucher_id, voucher_code, discount_amount, note, topup_config,
-                payment_method, created_at
+                invoice_info, custom_plan_config, payment_method, created_at
          FROM orders
          WHERE status = 'pending'
            AND COALESCE(payment_method, 'payos') = 'payos'

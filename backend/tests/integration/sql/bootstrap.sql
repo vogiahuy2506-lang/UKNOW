@@ -312,6 +312,7 @@ CREATE TABLE orders (
   discount_label VARCHAR(160),
   topup_config JSONB,
   invoice_info JSONB,
+  custom_plan_config JSONB,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT orders_order_code_key UNIQUE (order_code)

@@ -55,11 +55,10 @@ const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     }
 };
 
-const assertNoImmediateDowngrade = async ({ targetPlan, userId }) => {
+const assertNoImmediateDowngrade = async ({ targetPlan, userId, currentPlan: existingCurrentPlan = null, queryable = db }) => {
     if (!userId) return;
-    const currentPlan = await getPlanByUserId(userId);
+    const currentPlan = existingCurrentPlan || (await getPlanByUserId(userId, queryable));
     if (!currentPlan) return;
-    if (Number(currentPlan.id) === Number(targetPlan.id)) return;
 
     const currentMonthlyPrice = Number(currentPlan.price || 0);
     const targetMonthlyPrice = Number(targetPlan.price || 0);
@@ -395,7 +394,6 @@ export const createCustomPaymentLink = async ({
         price_yearly: quote.yearlyTotal,
         duration_days: 30,
     };
-    await assertNoImmediateDowngrade({ targetPlan: virtualPlan, userId });
 
     const planColumns = quote.planColumns;
     const customConfig = {
@@ -426,30 +424,17 @@ export const createCustomPaymentLink = async ({
             if (!plan) {
                 throw { status: 403, message: 'Không thể tái sử dụng gói này' };
             }
-            const existingConfig = plan.custom_config || {};
-            const existingQty = existingConfig.quantities || existingConfig;
-            if (!configsEqual(existingQty, quote.quantities)) {
-                // Config changed — update limits on owned plan rather than creating a new row
-                plan = await updateCustomPlanLimits(plan.id, {
-                    name: plan.name,
-                    price: quote.monthlyTotal,
-                    priceYearly: quote.yearlyTotal,
-                    customConfig,
-                    ...planColumns,
-                    durationDays: 30,
-                }, client);
-            } else {
-                // Same config (renewal) — refresh prices
-                plan = await updateCustomPlanLimits(plan.id, {
-                    name: plan.name,
-                    price: quote.monthlyTotal,
-                    priceYearly: quote.yearlyTotal,
-                    customConfig,
-                    ...planColumns,
-                    durationDays: 30,
-                }, client);
+            const existingQty = plan.custom_config?.quantities || plan.custom_config || {};
+            const currentPlan = await getPlanByUserId(userId, client);
+            const isRenewalOfActivePlan =
+                currentPlan
+                && Number(currentPlan.id) === Number(plan.id)
+                && configsEqual(existingQty, quote.quantities);
+            if (!isRenewalOfActivePlan) {
+                await assertNoImmediateDowngrade({ targetPlan: virtualPlan, userId, currentPlan, queryable: client });
             }
         } else {
+            await assertNoImmediateDowngrade({ targetPlan: virtualPlan, userId, queryable: client });
             plan = await createPlan({
                 code: null,
                 name: buildCustomPlanName(userEmail),
@@ -488,6 +473,15 @@ export const createCustomPaymentLink = async ({
             }, client);
             createdNewPlan = true;
         }
+
+        const customPlanConfig = {
+            name: plan.name || buildCustomPlanName(userEmail),
+            price: quote.monthlyTotal,
+            priceYearly: quote.yearlyTotal,
+            customConfig,
+            ...planColumns,
+            durationDays: 30,
+        };
 
         const cancelledDupes = await cancelRecentPendingPlanOrders({
             userId,
@@ -543,10 +537,14 @@ export const createCustomPaymentLink = async ({
             paymentMethod: amount <= 0 ? 'voucher' : 'payos',
             note: 'custom_self_serve',
             invoiceInfo,
+            customPlanConfig,
         }, client);
 
         if (amount <= 0) {
             await redeemVoucherForOrder(order, client);
+            if (reusePlanId) {
+                await updateCustomPlanLimits(plan.id, customPlanConfig, client);
+            }
             await activateUserPlan(userId, plan.id, billingPeriod, client);
             const { reconcileResourceLocks } = await import('./topupLock.service.js');
             await reconcileResourceLocks(userId, client, { unlockOnly: true });

@@ -9,6 +9,12 @@ const mockFindPlanById = jest.fn();
 const mockSendSystemEmail = jest.fn().mockResolvedValue(undefined);
 const mockReconcileResourceLocks = jest.fn().mockResolvedValue({ locked: [], unlocked: [] });
 
+const mockUpdateCustomPlanLimits = jest.fn();
+
+jest.unstable_mockModule('../../../repositories/payment/customPlan.repository.js', () => ({
+  updateCustomPlanLimits: mockUpdateCustomPlanLimits,
+}));
+
 jest.unstable_mockModule('../topup.service.js', () => ({
   fulfillTopupOrder: mockFulfillTopupOrder,
 }));
@@ -104,5 +110,35 @@ describe('fulfillPaidOrder', () => {
     }, client);
 
     expect(mockReconcileResourceLocks).toHaveBeenCalledWith(9, client, { unlockOnly: true });
+  });
+
+  it('gói tự chọn có custom_plan_config được cập nhật limits trước khi kích hoạt', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'Custom User' });
+    mockFindPlanById.mockResolvedValue({ name: 'Custom Plan', duration_days: 30 });
+
+    const customConfig = {
+      name: 'Custom Plan',
+      price: 500000,
+      priceYearly: 5000000,
+      monthlyEmailLimit: 5000,
+    };
+
+    await fulfillPaidOrder({
+      order_code: 4,
+      user_id: 10,
+      plan_id: 99,
+      user_email: 'custom@test.com',
+      billing_period: 'monthly',
+      amount: 500000,
+      payment_method: 'payos',
+      custom_plan_config: customConfig,
+    }, client);
+
+    expect(mockUpdateCustomPlanLimits).toHaveBeenCalledWith(99, customConfig, client);
+    expect(mockActivateUserPlan).toHaveBeenCalledWith(10, 99, 'monthly', client);
+    expect(mockUpdateCustomPlanLimits.mock.invocationCallOrder[0]).toBeLessThan(
+      mockActivateUserPlan.mock.invocationCallOrder[0]
+    );
   });
 });

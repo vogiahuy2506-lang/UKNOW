@@ -40,6 +40,15 @@ export async function fulfillPaidOrder(order, client) {
     || (order.user_email ? await findUserIdByEmail(order.user_email) : null);
 
   if (userId && order.plan_id) {
+    let customConfig = order.custom_plan_config;
+    if (typeof customConfig === 'string') {
+      try { customConfig = JSON.parse(customConfig); } catch { customConfig = null; }
+    }
+    if (customConfig && typeof customConfig === 'object') {
+      const { updateCustomPlanLimits } = await import('../../repositories/payment/customPlan.repository.js');
+      await updateCustomPlanLimits(order.plan_id, customConfig, client);
+    }
+
     await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
 
     // Trần vừa tăng trở lại — mở khoá tài nguyên đã bị khoá khi gói hết hạn
