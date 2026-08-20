@@ -124,9 +124,29 @@ async function countEmailSentToday(billingUserId) {
   });
 }
 
-async function countEmailSentThisMonth(billingUserId) {
+export async function countEmailSentInCycle(billingUserId, cycleStart, cycleEnd, queryable = db) {
+  const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+  const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  return cached(`${billingUserId}:email_cycle:${startIso}:${endIso}`, async () => {
+    const { rows } = await queryable.query(
+      `SELECT COUNT(*)::int AS total
+       FROM email_messages em
+       INNER JOIN campaigns c ON c.id = em.id_campaign
+       WHERE ${CAMPAIGN_OWNER_PREDICATE}
+         AND em.status IN ('sent', 'delivered', 'bounced')
+         AND em.sent_at >= $2 AND em.sent_at < $3`,
+      [billingUserId, startIso, endIso]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
+
+export async function countEmailSentThisMonth(billingUserId, cycleStart = null, cycleEnd = null, queryable = db) {
+  if (cycleStart && cycleEnd) {
+    return countEmailSentInCycle(billingUserId, cycleStart, cycleEnd, queryable);
+  }
   return cached(`${billingUserId}:email_month`, async () => {
-    const { rows } = await db.query(
+    const { rows } = await queryable.query(
       `SELECT COUNT(*)::int AS total
        FROM email_messages em
        INNER JOIN campaigns c ON c.id = em.id_campaign
@@ -160,9 +180,35 @@ async function countZaloSentToday(billingUserId) {
   });
 }
 
-async function countZaloSentThisMonth(billingUserId) {
+export async function countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, queryable = db) {
+  const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+  const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  return cached(`${billingUserId}:zalo_cycle:${startIso}:${endIso}`, async () => {
+    const { rows } = await queryable.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM zalo_messages zm
+          JOIN campaigns c ON c.id = zm.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND zm.tracking_metadata->>'status' = 'sent'
+            AND zm.sent_at >= $2 AND zm.sent_at < $3)
+       + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+          WHERE ${ZPM_OWNER_PREDICATE}
+            AND zpm.role = 'agent'
+            AND zpm.metadata->>'source' = 'manual_inbox'
+            AND zpm.created_at >= $2 AND zpm.created_at < $3)
+       )::int AS total`,
+      [billingUserId, startIso, endIso]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
+
+export async function countZaloSentThisMonth(billingUserId, cycleStart = null, cycleEnd = null, queryable = db) {
+  if (cycleStart && cycleEnd) {
+    return countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, queryable);
+  }
   return cached(`${billingUserId}:zalo_month`, async () => {
-    const { rows } = await db.query(
+    const { rows } = await queryable.query(
       `SELECT (
          (SELECT COUNT(*) FROM zalo_messages zm
           JOIN campaigns c ON c.id = zm.id_campaign
@@ -336,9 +382,16 @@ export async function checkSendQuota({
         billingUserId,
       });
     }
+    const cycle = await cached(
+      `${billingUserId}:cycle`,
+      () => getBillingCycle(billingUserId)
+    );
+    const cycleStart = cycle?.hasPlan ? cycle.cycleStart : null;
+    const cycleEnd = cycle?.hasPlan ? cycle.cycleEnd : null;
+
     const count = isEmail
-      ? await countEmailSentThisMonth(billingUserId)
-      : await countZaloSentThisMonth(billingUserId);
+      ? await countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd)
+      : await countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd);
     if (count >= monthlyLimit) {
       // Hết hạn mức gói — còn ví thì vẫn cho gửi (trừ lúc ghi tin). Đọc ví không qua cache.
       const walletItemKey = WALLET_ITEM_BY_CHANNEL[isEmail ? 'email' : 'zalo'];
@@ -350,7 +403,7 @@ export async function checkSendQuota({
           limitType: 'monthly',
           limit: monthlyLimit,
           currentCount: count,
-          resetAt: nextVnMonthStart(),
+          resetAt: cycleEnd instanceof Date ? cycleEnd : (cycleEnd ? new Date(cycleEnd) : nextVnMonthStart()),
           message: `Đã đạt giới hạn gửi ${channelLabel} trong tháng (${count}/${monthlyLimit} ${unitLabel}). Vui lòng mua thêm hoặc liên hệ admin để nâng gói.`,
           billingUserId,
         });

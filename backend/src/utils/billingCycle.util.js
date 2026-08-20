@@ -33,12 +33,12 @@ const OWNER_EFFECTIVE_PLAN_ID_SQL = `COALESCE(
  * @param {BillingResolveOptions} [options]
  * @returns {Promise<number|string|null>}
  */
-export async function resolveBillingUserId(userId, { ownerContextId } = {}) {
+export async function resolveBillingUserId(userId, { ownerContextId } = {}, queryable = db) {
   if (ownerContextId != null && ownerContextId !== '') {
     return Number(ownerContextId);
   }
 
-  const { rows } = await db.query(
+  const { rows } = await queryable.query(
     `SELECT active_plan_id FROM users WHERE id = $1 LIMIT 1`,
     [userId]
   );
@@ -46,7 +46,7 @@ export async function resolveBillingUserId(userId, { ownerContextId } = {}) {
   if (!row) return null;
   if (row.active_plan_id) return userId;
 
-  const { rows: memberRows } = await db.query(
+  const { rows: memberRows } = await queryable.query(
     `SELECT um.owner_id
      FROM user_members um
      JOIN users o ON o.id = um.owner_id
@@ -61,40 +61,43 @@ export async function resolveBillingUserId(userId, { ownerContextId } = {}) {
 }
 
 /**
- * Tính cửa sổ chu kỳ [cycleStart, cycleEnd] chứa `now`, neo theo ngày hết hạn.
+ * Tính cửa sổ chu kỳ [cycleStart, cycleEnd] chứa `now`, đếm xuôi từ ngày kích hoạt (plan_activated_at).
  *
- * subscription_expires_at là mốc kết thúc kỳ. Nếu expiry ở xa trong tương lai
- * (> 1 chu kỳ so với now — ví dụ gói vừa mua/gia hạn hoặc admin set hạn xa),
- * cần lùi cửa sổ theo từng `durationDays` cho tới khi chứa `now`. Nếu không,
- * usage hôm nay sẽ nằm ngoài [cycleStart, cycleEnd] và không bao giờ được đếm.
+ * Chu kỳ hạn mức = đúng 30 ngày, đếm xuôi từ anchorStart (ngày kích hoạt gói).
+ * cycleIndex = floor((now - anchorStart) / 30 ngày)
+ * cycleStart = anchorStart + cycleIndex * 30 ngày
+ * cycleEnd = cycleStart + 30 ngày
  *
- * @param {Date|string|number} anchorEnd - mốc hết hạn (subscription_expires_at)
- * @param {number} durationDays
- * @param {Date} [now]
+ * @param {Date|string|number} anchorStart - mốc kích hoạt (plan_activated_at)
+ * @param {number} [durationDays=30] - số ngày mỗi chu kỳ (mặc định 30)
+ * @param {Date} [now=new Date()]
  * @returns {{ cycleStart: Date, cycleEnd: Date }}
  */
-export function computeBillingWindow(anchorEnd, durationDays, now = new Date()) {
+export function computeBillingWindow(anchorStart, durationDays = 30, now = new Date()) {
   const duration = Number(durationDays) || 30;
-  let cycleEnd = new Date(anchorEnd);
-  let cycleStart = new Date(cycleEnd);
-  cycleStart.setUTCDate(cycleStart.getUTCDate() - duration);
+  const startMs = new Date(anchorStart).getTime();
+  const nowMs = now.getTime();
+  const cycleMs = duration * 86400000;
 
-  // Lùi về đúng chu kỳ chứa now (guard chống lặp vô hạn khi dữ liệu bất thường).
-  let guard = 0;
-  while (cycleStart.getTime() > now.getTime() && guard < 600) {
-    cycleEnd = cycleStart;
-    cycleStart = new Date(cycleEnd);
-    cycleStart.setUTCDate(cycleStart.getUTCDate() - duration);
-    guard += 1;
+  if (nowMs < startMs) {
+    const cycleStart = new Date(startMs);
+    const cycleEnd = new Date(startMs + cycleMs);
+    return { cycleStart, cycleEnd };
   }
+
+  const cycleIndex = Math.floor((nowMs - startMs) / cycleMs);
+  const cycleStart = new Date(startMs + cycleIndex * cycleMs);
+  const cycleEnd = new Date(cycleStart.getTime() + cycleMs);
 
   return { cycleStart, cycleEnd };
 }
 
 /**
- * Chu kỳ thanh toán hiện tại: [cycleStart, cycleEnd] với cycleEnd = subscription_expires_at.
+ * Chu kỳ thanh toán hiện tại: [cycleStart, cycleEnd] neo theo chu kỳ 30 ngày từ plan_activated_at.
  *
  * @param {number|string|null|undefined} userId
+ * @param {BillingResolveOptions} [options]
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable=db]
  * @returns {Promise<{
  *   hasPlan: boolean,
  *   billingUserId: number|string|null,
@@ -103,7 +106,7 @@ export function computeBillingWindow(anchorEnd, durationDays, now = new Date()) 
  *   durationDays: number,
  * }>}
  */
-export async function getBillingCycle(userId, options = {}) {
+export async function getBillingCycle(userId, options = {}, queryable = db) {
   const empty = {
     hasPlan: false,
     billingUserId: null,
@@ -114,12 +117,13 @@ export async function getBillingCycle(userId, options = {}) {
 
   if (!userId) return empty;
 
-  const billingUserId = await resolveBillingUserId(userId, options);
+  const billingUserId = await resolveBillingUserId(userId, options, queryable);
   if (!billingUserId) return empty;
 
-  const { rows } = await db.query(
+  const { rows } = await queryable.query(
     `SELECT (${EFFECTIVE_PLAN_ID_SQL}) AS effective_plan_id,
             u.subscription_expires_at,
+            u.plan_activated_at,
             COALESCE(p.duration_days, 30)::int AS duration_days
      FROM users u
      LEFT JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
@@ -132,15 +136,23 @@ export async function getBillingCycle(userId, options = {}) {
     return { ...empty, billingUserId };
   }
 
-  const durationDays = Number(row.duration_days) || 30;
-  const anchorEnd = row.subscription_expires_at ? new Date(row.subscription_expires_at) : new Date();
-  const { cycleStart, cycleEnd } = computeBillingWindow(anchorEnd, durationDays);
+  let anchorStart;
+  if (row.plan_activated_at) {
+    anchorStart = new Date(row.plan_activated_at);
+  } else if (row.subscription_expires_at) {
+    const durationDays = Number(row.duration_days) || 30;
+    anchorStart = new Date(new Date(row.subscription_expires_at).getTime() - durationDays * 86400000);
+  } else {
+    anchorStart = new Date();
+  }
+
+  const { cycleStart, cycleEnd } = computeBillingWindow(anchorStart, 30);
 
   return {
     hasPlan: true,
     billingUserId,
     cycleStart,
     cycleEnd,
-    durationDays,
+    durationDays: 30,
   };
 }

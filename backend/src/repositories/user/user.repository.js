@@ -57,7 +57,7 @@ const PROFILE_PLAN_WHERE = `
 export async function findUserById(userId, queryable = db) {
   if (!userId) return null;
   const result = await queryable.query(
-    `SELECT id, email, full_name, role, active_plan_id, subscription_expires_at
+    `SELECT id, email, full_name, role, active_plan_id, subscription_expires_at, plan_activated_at
      FROM users WHERE id = $1 LIMIT 1`,
     [userId]
   );

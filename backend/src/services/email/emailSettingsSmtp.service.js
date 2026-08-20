@@ -165,16 +165,15 @@ class EmailSettingsSmtpService {
           const planLimitNum = planLimit == null || planLimit === ''
             ? null
             : Number.parseInt(planLimit, 10);
-          const { rows: countRows } = await client.query(
-            `SELECT COUNT(*)::int AS total
-             FROM email_messages em
-             INNER JOIN campaigns c ON c.id = em.id_campaign
-             WHERE ${EMAIL_OWNER_PREDICATE}
-               AND em.status IN ('sent', 'delivered', 'bounced')
-               AND em.sent_at >= DATE_TRUNC('month', NOW())`,
-            [billingUserId]
+          const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
+          const { countEmailSentThisMonth } = await import('../../utils/userSendLimit.util.js');
+          const cycle = await getBillingCycle(billingUserId, {}, client);
+          const usageCountAfterSend = await countEmailSentThisMonth(
+            billingUserId,
+            cycle?.hasPlan ? cycle.cycleStart : null,
+            cycle?.hasPlan ? cycle.cycleEnd : null,
+            client
           );
-          const usageCountAfterSend = Number(countRows[0]?.total) || 0;
           await maybeDebitWalletForSend(client, {
             billingUserId,
             itemKey: 'emails',

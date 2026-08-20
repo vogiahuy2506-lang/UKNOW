@@ -537,11 +537,12 @@ describe('POST /api/payments/webhook', () => {
     expect(o.rows[0].status).toBe('success');
 
     const u = await db.query(
-      `SELECT active_plan_id, subscription_expires_at, subscription_reminder_count
+      `SELECT active_plan_id, subscription_expires_at, plan_activated_at, subscription_reminder_count
        FROM users WHERE id = $1`,
       [user.id]
     );
     expect(Number(u.rows[0].active_plan_id)).toBe(Number(plan.id));
+    expect(u.rows[0].plan_activated_at).not.toBeNull();
     expect(u.rows[0].subscription_reminder_count).toBe(0);
 
     // Kiểm tra expires nằm trong khoảng [now + 29d, now + 32d]

@@ -280,6 +280,7 @@ export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly'
         `UPDATE users u
          SET active_plan_id = p.id,
              subscription_expires_at = NOW() + (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END),
+             plan_activated_at = NOW(),
              subscription_reminder_count = 0,
              max_landing_pages        = p.max_landing_pages,
              max_campaigns            = p.max_campaigns,

@@ -231,6 +231,7 @@ export async function assignPlanToUser(userId, planId) {
     `UPDATE users u
      SET active_plan_id            = p.id,
          subscription_expires_at   = NOW() + (COALESCE(p.duration_days, 30) || ' days')::INTERVAL,
+         plan_activated_at         = NOW(),
          subscription_reminder_count = 0,
          max_landing_pages         = p.max_landing_pages,
          max_campaigns             = p.max_campaigns,
@@ -300,6 +301,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
       `UPDATE users
        SET active_plan_id = $1,
            subscription_expires_at = NOW() + (COALESCE($3, 30) || ' days')::INTERVAL,
+           plan_activated_at = NOW(),
            subscription_reminder_count = 0,
            max_landing_pages = $4, max_campaigns = $5,
            max_zalo_campaigns = $6, max_zalo_group_campaigns = $7, max_email_campaigns = $8,
