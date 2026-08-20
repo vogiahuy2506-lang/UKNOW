@@ -77,7 +77,17 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
         if (res.success && res.data) {
           setChatbots(res.data);
           saveToStorage(res.data);
-          if (res.data.length > 0 && !selectedBot) onSelectBot(res.data[0]);
+          // Reset selectedBot when changing tabs to avoid showing wrong bot
+          if (res.data.length > 0) {
+            const firstBot = res.data[0];
+            // Only auto-select if current selectedBot doesn't belong to this origin tab
+            const currentBotBelongsToNewTab = selectedBot && res.data.some(b => b.id === selectedBot.id);
+            if (!currentBotBelongsToNewTab) {
+              onSelectBot(firstBot);
+            }
+          } else if (!selectedBot || !res.data.some(b => b.id === selectedBot.id)) {
+            onSelectBot(null);
+          }
         } else {
           throw new Error('Invalid response');
         }
@@ -85,7 +95,16 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
         console.warn('[ChatListSidebar] API load failed, using localStorage:', apiError.message);
         const bots = loadFromStorage();
         setChatbots(bots);
-        if (bots.length > 0 && !selectedBot) onSelectBot(bots[0]);
+        // Reset to first bot or null when tab changes
+        if (bots.length > 0) {
+          const firstBot = bots[0];
+          const currentBotBelongsToNewTab = selectedBot && bots.some(b => b.id === selectedBot.id);
+          if (!currentBotBelongsToNewTab) {
+            onSelectBot(firstBot);
+          }
+        } else {
+          onSelectBot(null);
+        }
       } finally {
         setLoading(false);
       }
