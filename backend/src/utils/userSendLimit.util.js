@@ -71,10 +71,8 @@ const toInt = (v) => {
 
 const toCount = (v) => Number.parseInt(v ?? 0, 10) || 0;
 
-/** Scope campaigns theo billing owner (owner + employee active). */
-const CAMPAIGN_OWNER_PREDICATE = `(c.id_user = $1 OR c.id_user IN (
-   SELECT um.employee_id FROM user_members um
-   WHERE um.owner_id = $1 AND um.status = 'active'))`;
+/** Scope campaign usage theo workspace owner đã persist; không suy đoán từ membership hiện tại. */
+const CAMPAIGN_OWNER_PREDICATE = 'COALESCE(c.workspace_owner_id, c.id_user) = $1';
 
 /** Scope zalo_personal_messages theo billing owner. */
 const ZPM_OWNER_PREDICATE = `(zpm.id_user = $1 OR zpm.id_user IN (

@@ -131,10 +131,18 @@ const triggerCampaignSchedule = async (schedule) => {
   try {
     // Hai nhánh dưới đây trước kia return im lặng — khi lịch không chạy, log không để lại
     // dấu vết nào và không thể phân biệt "cron không bắn" với "cron bắn rồi bị bỏ qua".
-    if (!schedule?.id_campaign || !schedule?.id_user) {
+    const workspaceOwnerId = Number.parseInt(
+      schedule?.workspace_owner_id ?? schedule?.id_user,
+      10
+    );
+    const actorUserId = Number.parseInt(
+      schedule?.created_by ?? workspaceOwnerId,
+      10
+    );
+    if (!schedule?.id_campaign || !Number.isFinite(workspaceOwnerId)) {
       console.warn(
-        `[Scheduler] Bỏ qua schedule #${schedule?.id ?? '?'}: thiếu id_campaign hoặc id_user ` +
-          `(id_campaign=${schedule?.id_campaign ?? 'null'}, id_user=${schedule?.id_user ?? 'null'})`
+        `[Scheduler] Bỏ qua schedule #${schedule?.id ?? '?'}: thiếu id_campaign hoặc workspace owner ` +
+          `(id_campaign=${schedule?.id_campaign ?? 'null'}, workspace_owner_id=${schedule?.workspace_owner_id ?? 'null'})`
       );
       return;
     }
@@ -200,7 +208,9 @@ const triggerCampaignSchedule = async (schedule) => {
     })}`;
     const runRecord = await campaignController.createCampaignRunRecord({
       campaignId: schedule.id_campaign,
-      userId: schedule.id_user,
+      workspaceOwnerId,
+      actorUserId: Number.isFinite(actorUserId) ? actorUserId : workspaceOwnerId,
+      isAdmin: false,
       source: 'schedule',
       scheduleId: schedule.id,
       runName,
@@ -224,7 +234,7 @@ const triggerCampaignSchedule = async (schedule) => {
       );
     }
 
-    campaignController.executeCampaign(schedule.id_campaign, runRecord.id, schedule.id_user).catch((error) => {
+    campaignController.executeCampaign(schedule.id_campaign, runRecord.id, workspaceOwnerId).catch((error) => {
       console.error(`[Scheduler] Lỗi chạy campaign #${schedule.id_campaign}:`, error.message);
     });
   } catch (error) {
@@ -254,7 +264,8 @@ const refreshCampaignSchedules = async () => {
         cs.cron_expression,
         cs.last_run_at,
         cs.created_at,
-        c.id_user
+        COALESCE(cs.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+        COALESCE(cs.created_by, c.created_by, c.id_user) AS created_by
        FROM campaign_schedules cs
        JOIN campaigns c ON c.id = cs.id_campaign
        WHERE cs.enabled = true`
@@ -302,7 +313,8 @@ AND (
 
 const recoverContinuousCampaignRuns = async () => {
   const result = await db.query(
-    `SELECT cr.id, cr.id_campaign, c.id_user
+    `SELECT cr.id, cr.id_campaign,
+            COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id
      FROM campaign_runs cr
      JOIN campaigns c ON c.id = cr.id_campaign
      WHERE cr.status = 'running'
@@ -315,7 +327,7 @@ const recoverContinuousCampaignRuns = async () => {
   for (const row of result.rows) {
     const runId = Number.parseInt(row.id, 10);
     const campaignId = Number.parseInt(row.id_campaign, 10);
-    const userId = Number.parseInt(row.id_user, 10);
+    const userId = Number.parseInt(row.workspace_owner_id, 10);
     if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
       continue;
     }
@@ -367,7 +379,8 @@ const triggerNonContinuousResume = ({ runId, campaignId, userId, resumedBy }) =>
  */
 const recoverNonContinuousCampaignRuns = async () => {
   const result = await db.query(
-    `SELECT cr.id, cr.id_campaign, c.id_user
+    `SELECT cr.id, cr.id_campaign,
+            COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id
      FROM campaign_runs cr
      JOIN campaigns c ON c.id = cr.id_campaign
      WHERE cr.status = 'running'
@@ -380,7 +393,7 @@ const recoverNonContinuousCampaignRuns = async () => {
   for (const row of result.rows) {
     const runId = Number.parseInt(row.id, 10);
     const campaignId = Number.parseInt(row.id_campaign, 10);
-    const userId = Number.parseInt(row.id_user, 10);
+    const userId = Number.parseInt(row.workspace_owner_id, 10);
     if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
       continue;
     }
@@ -404,7 +417,8 @@ const recoverNonContinuousCampaignRuns = async () => {
  */
 const recoverOverdueNonContinuousCampaignRuns = async () => {
   const result = await db.query(
-    `SELECT DISTINCT cr.id, cr.id_campaign, c.id_user
+    `SELECT DISTINCT cr.id, cr.id_campaign,
+            COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id
      FROM campaign_runs cr
      JOIN campaigns c ON c.id = cr.id_campaign
      JOIN campaign_run_recipient_steps crs ON crs.id_run = cr.id
@@ -421,7 +435,7 @@ const recoverOverdueNonContinuousCampaignRuns = async () => {
   for (const row of result.rows) {
     const runId = Number.parseInt(row.id, 10);
     const campaignId = Number.parseInt(row.id_campaign, 10);
-    const userId = Number.parseInt(row.id_user, 10);
+    const userId = Number.parseInt(row.workspace_owner_id, 10);
     if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
       continue;
     }

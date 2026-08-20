@@ -22,6 +22,7 @@ import {
   isZaloOutboundResultSuccessful,
   describeZaloOutboundFailure,
 } from '../utils/zaloDispatchDelivery.util.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 class CampaignController {
   /**
@@ -160,12 +161,9 @@ class CampaignController {
    */
   async getAll(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
       const { page = 1, limit = 10, status, type, search, origin } = req.query;
       const data = await campaignCrudService.getAllCampaigns({
-        userId,
-        roleCode,
+        authUser: req.user,
         page,
         limit,
         status,
@@ -194,12 +192,9 @@ class CampaignController {
    */
   async getById(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
       const { id } = req.params;
       const campaign = await campaignCrudService.getCampaignById({
-        userId,
-        roleCode,
+        authUser: req.user,
         campaignId: id,
       });
       if (!campaign) {
@@ -229,8 +224,7 @@ class CampaignController {
    */
   async create(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user?.role;
+      const workspaceContext = getWorkspaceContext(req.user);
       const {
         campaignName,
         description,
@@ -245,8 +239,8 @@ class CampaignController {
       } = req.body;
 
       const campaignLimitCheck = await checkUserResourceLimit({
-        userId,
-        roleCode,
+        userId: workspaceContext.workspaceOwnerId,
+        roleCode: workspaceContext.roleCode,
         resourceKey: 'campaigns',
       });
       if (!campaignLimitCheck.allowed) {
@@ -265,15 +259,18 @@ class CampaignController {
             ? 'zaloCampaigns'
             : null;
       if (typeResourceKey) {
-        const typeLimitCheck = await checkUserResourceLimit({ userId, roleCode, resourceKey: typeResourceKey });
+        const typeLimitCheck = await checkUserResourceLimit({
+          userId: workspaceContext.workspaceOwnerId,
+          roleCode: workspaceContext.roleCode,
+          resourceKey: typeResourceKey,
+        });
         if (!typeLimitCheck.allowed) {
           return res.status(400).json({ success: false, message: typeLimitCheck.message, limitReached: true });
         }
       }
 
       const campaign = await campaignCrudService.createCampaign({
-        userId,
-        roleCode,
+        authUser: req.user,
         campaignName,
         description,
         campaignType,
@@ -318,8 +315,6 @@ class CampaignController {
    */
   async update(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
       const { id } = req.params;
       const {
         campaignName,
@@ -337,8 +332,7 @@ class CampaignController {
 
       const data = await campaignCrudService.updateCampaign({
         campaignId: id,
-        userId,
-        roleCode,
+        authUser: req.user,
         isContentUpdate: campaignFlowService.isCampaignContentUpdateRequest(req.body),
         campaignName,
         description,
@@ -389,14 +383,11 @@ class CampaignController {
    */
   async delete(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
       const { id } = req.params;
 
       const { fileKeysToDelete } = await campaignCrudService.deleteCampaign({
         campaignId: id,
-        userId,
-        roleCode,
+        authUser: req.user,
       });
 
       if (fileKeysToDelete.length > 0) {
@@ -435,13 +426,10 @@ class CampaignController {
    */
   async publish(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
       const { id } = req.params;
 
       const campaign = await campaignCrudService.publishCampaign({
-        userId,
-        roleCode,
+        authUser: req.user,
         campaignId: id,
       });
 
@@ -476,13 +464,10 @@ class CampaignController {
    */
   async pause(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
       const { id } = req.params;
 
       const campaign = await campaignCrudService.pauseCampaign({
-        userId,
-        roleCode,
+        authUser: req.user,
         campaignId: id,
       });
 
@@ -530,8 +515,7 @@ class CampaignController {
    */
   async run(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
+      const workspaceContext = getWorkspaceContext(req.user);
       const campaignId = parseInt(req.params.id, 10);
       const source = String(req.body?.source || '').trim().toLowerCase();
       const scheduleId = Number.isFinite(parseInt(req.body?.scheduleId, 10))
@@ -594,8 +578,10 @@ class CampaignController {
       if (continueRunId !== null) {
         runRecord = await campaignRunService.resumeContinuousRunRecord({
           campaignId,
-          userId,
-          roleCode,
+          workspaceOwnerId: workspaceContext.workspaceOwnerId,
+          actorUserId: workspaceContext.actorUserId,
+          roleCode: workspaceContext.roleCode,
+          isAdmin: workspaceContext.isSuperAdmin,
           runId: continueRunId,
           runOptions: {
             adjacentZaloNodeDelayMs,
@@ -605,8 +591,10 @@ class CampaignController {
       } else {
         runRecord = await this.createCampaignRunRecord({
           campaignId,
-          userId,
-          roleCode,
+          workspaceOwnerId: workspaceContext.workspaceOwnerId,
+          actorUserId: workspaceContext.actorUserId,
+          roleCode: workspaceContext.roleCode,
+          isAdmin: workspaceContext.isSuperAdmin,
           source,
           scheduleId,
           runName,
@@ -637,8 +625,9 @@ class CampaignController {
       // (pool cạn — đúng lúc chạy chiến dịch là lúc pool căng nhất) thì chiến dịch KHÔNG
       // BAO GIỜ chạy dù API đã báo thành công; try/catch bắt được lỗi ném ra nhưng không
       // bắt được treo.
-      const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10) || userId;
-      this.executeCampaign(campaignId, runRecord.id, executionUserId, roleCode).catch(error => {
+      const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10)
+        || workspaceContext.workspaceOwnerId;
+      this.executeCampaign(campaignId, runRecord.id, executionUserId, workspaceContext.roleCode).catch(error => {
         console.error('Execute campaign error:', error);
       });
 
@@ -665,8 +654,11 @@ class CampaignController {
 
   async createCampaignRunRecord({
     campaignId,
-    userId,
+    userId = null,
+    workspaceOwnerId = userId,
+    actorUserId = userId,
     roleCode,
+    isAdmin,
     source,
     scheduleId = null,
     runName = '',
@@ -674,8 +666,10 @@ class CampaignController {
   }) {
     return campaignRunService.createCampaignRunRecord({
       campaignId,
-      userId,
+      workspaceOwnerId,
+      actorUserId,
       roleCode,
+      isAdmin,
       source,
       scheduleId,
       runName,
@@ -774,13 +768,10 @@ class CampaignController {
    */
   async duplicate(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
       const { id } = req.params;
       const { campaignName } = req.body;
       const duplicated = await campaignCrudService.duplicateCampaign({
-        userId,
-        roleCode,
+        authUser: req.user,
         campaignId: id,
         campaignName,
       });

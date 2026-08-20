@@ -908,8 +908,7 @@ class AiController {
       // Bước 2: Kích hoạt campaign (set status = active)
       try {
         await campaignCrudService.publishCampaign({
-          userId: req.user.id,
-          roleCode: req.user.role,
+          authUser: req.user,
           campaignId,
         });
       } catch (pubErr) {

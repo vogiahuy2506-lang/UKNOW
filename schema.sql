@@ -202,6 +202,8 @@ CREATE INDEX idx_email_templates_user ON email_templates(id_user);
 CREATE TABLE campaigns (
   id                    BIGSERIAL PRIMARY KEY,
   id_user               BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id    BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  created_by            BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   campaign_name         VARCHAR(255) NOT NULL,
   description           TEXT,
   campaign_type         VARCHAR(30)  NOT NULL DEFAULT 'email'
@@ -227,6 +229,9 @@ CREATE TABLE campaigns (
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaigns_user ON campaigns(id_user);
+CREATE INDEX idx_campaigns_workspace_owner ON campaigns(workspace_owner_id);
+CREATE INDEX idx_campaigns_effective_workspace_owner ON campaigns((COALESCE(workspace_owner_id, id_user)));
+CREATE INDEX idx_campaigns_created_by ON campaigns(created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_campaigns_status ON campaigns(status);
 
 CREATE TABLE campaign_nodes (
@@ -263,6 +268,7 @@ CREATE INDEX idx_campaign_connections_campaign ON campaign_connections(id_campai
 CREATE TABLE campaign_runs (
   id                BIGSERIAL PRIMARY KEY,
   id_campaign       BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT      REFERENCES users(id) ON DELETE CASCADE,
   id_schedule       BIGINT,
   run_name          VARCHAR(255),
   run_type          VARCHAR(20)  NOT NULL DEFAULT 'manual'
@@ -276,10 +282,13 @@ CREATE TABLE campaign_runs (
   failed_sends      INTEGER      NOT NULL DEFAULT 0,
   error_message     TEXT,
   run_metadata      JSONB        NOT NULL DEFAULT '{}',
+  triggered_by      BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaign_runs_campaign ON campaign_runs(id_campaign);
+CREATE INDEX idx_campaign_runs_workspace_owner ON campaign_runs(workspace_owner_id);
 CREATE INDEX idx_campaign_runs_status ON campaign_runs(status);
+CREATE INDEX idx_campaign_runs_triggered_by ON campaign_runs(triggered_by) WHERE triggered_by IS NOT NULL;
 
 -- Campaign executions â€” log tá»«ng node Ä‘Æ°á»£c engine xá»­ lÃ½ cho má»—i customer/run.
 -- Báº£ng tá»‘i thiá»ƒu Ä‘á»ƒ GET /api/campaign-runs/:id khÃ´ng 500 khi chÆ°a cÃ³ run nÃ o.
@@ -310,6 +319,8 @@ CREATE INDEX idx_campaign_executions_run ON campaign_executions(id_run);
 CREATE TABLE campaign_schedules (
   id              BIGSERIAL PRIMARY KEY,
   id_campaign     BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT    REFERENCES users(id) ON DELETE CASCADE,
+  created_by      BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   schedule_name   VARCHAR(255) NOT NULL,
   schedule_type   VARCHAR(20)  NOT NULL
     CHECK (schedule_type IN ('once', 'daily', 'weekly', 'monthly', 'custom')),
@@ -322,6 +333,8 @@ CREATE TABLE campaign_schedules (
   updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaign_schedules_campaign ON campaign_schedules(id_campaign);
+CREATE INDEX idx_campaign_schedules_workspace_owner ON campaign_schedules(workspace_owner_id);
+CREATE INDEX idx_campaign_schedules_created_by ON campaign_schedules(created_by) WHERE created_by IS NOT NULL;
 
 -- â”€â”€â”€ Zalo module (settings + templates) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Schema tá»‘i thiá»ƒu Ä‘á»ƒ CRUD zalo_settings (chá»‰ cá»™t mÃ  controller truy váº¥n)

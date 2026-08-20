@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockRefresh = jest.fn();
 const mockRepository = {
-  checkCampaignExists: jest.fn(),
+  findCampaignForSchedule: jest.fn(),
   hasRunningCampaignRun: jest.fn(),
   create: jest.fn(),
   findMutableById: jest.fn(),
@@ -20,6 +20,7 @@ jest.unstable_mockModule('../../repositories/campaign/campaignSchedule.repositor
 }));
 jest.unstable_mockModule('../../utils/roleScope.util.js', () => ({
   isAdminRole: jest.fn(() => false),
+  isSuperAdmin: jest.fn(() => false),
 }));
 jest.unstable_mockModule('../../utils/onceScheduleValidation.util.js', () => ({
   assertOnceCronNotYearRolled: jest.fn(() => ({ ok: true })),
@@ -48,7 +49,10 @@ const employeeWithoutRun = {
 describe('CampaignScheduleController execution permission', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockRepository.checkCampaignExists.mockResolvedValue(true);
+    mockRepository.findCampaignForSchedule.mockResolvedValue({
+      id: 12,
+      workspace_owner_id: 1,
+    });
     mockRepository.hasRunningCampaignRun.mockResolvedValue(false);
   });
 

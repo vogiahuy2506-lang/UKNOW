@@ -62,6 +62,22 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function addCampaignMembership(ownerId, employeeId, permissions = {}) {
+  const normalizedPermissions = {
+    campaigns_view: true,
+    campaigns_create: true,
+    campaigns_run: true,
+    ...permissions,
+  };
+  const { rows } = await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')
+     RETURNING id`,
+    [ownerId, employeeId, JSON.stringify(normalizedPermissions)]
+  );
+  return rows[0];
+}
+
 /**
  * Tạo campaign trực tiếp vào DB. Trả về row.
  */
@@ -256,6 +272,87 @@ describe('GET /api/campaigns', () => {
 
     expect(res.body.data.items[0].campaignName).toBe('new');
     expect(res.body.data.items[1].campaignName).toBe('old');
+  });
+});
+
+// ===========================================================================
+// EMPLOYEE WORKSPACE OWNERSHIP
+// ===========================================================================
+
+describe('Campaign employee workspace ownership', () => {
+  it('employee list/create scope theo owner; row lưu owner và actor riêng, không thấy tenant khác', async () => {
+    const ownerA = await createUser({ role: 'user', username: 'workspace_a' });
+    const ownerB = await createUser({ role: 'user', username: 'workspace_b' });
+    const employee = await createUser({ role: 'user', username: 'campaign_employee' });
+    await addCampaignMembership(ownerA.id, employee.id);
+    await insertCampaign({ ownerId: ownerA.id, campaignName: 'Owner A existing' });
+    const tenantBCampaign = await insertCampaign({ ownerId: ownerB.id, campaignName: 'Owner B secret' });
+
+    const employeeToken = await loginAs(employee);
+    const employeeHeaders = {
+      Authorization: `Bearer ${employeeToken}`,
+      'X-Owner-Context': String(ownerA.id),
+    };
+
+    const listRes = await request(app).get('/api/campaigns').set(employeeHeaders);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.items.map((item) => item.campaignName)).toEqual(['Owner A existing']);
+
+    const createRes = await request(app)
+      .post('/api/campaigns')
+      .set(employeeHeaders)
+      .send({ campaignName: 'Created by employee', campaignType: 'email' });
+    expect(createRes.status).toBe(201);
+
+    const { rows } = await db.query(
+      `SELECT id_user, workspace_owner_id, created_by
+       FROM campaigns
+       WHERE id = $1`,
+      [createRes.body.data.id]
+    );
+    expect(Number(rows[0].id_user)).toBe(Number(ownerA.id));
+    expect(Number(rows[0].workspace_owner_id)).toBe(Number(ownerA.id));
+    expect(Number(rows[0].created_by)).toBe(Number(employee.id));
+
+    const crossTenantRes = await request(app)
+      .get(`/api/campaigns/${tenantBCampaign.id}`)
+      .set(employeeHeaders);
+    expect(crossTenantRes.status).toBe(404);
+
+    const ownerToken = await loginAs(ownerA);
+    const ownerListRes = await request(app)
+      .get('/api/campaigns')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(ownerListRes.body.data.items.map((item) => item.campaignName).sort()).toEqual([
+      'Created by employee',
+      'Owner A existing',
+    ]);
+  });
+
+  it('employee create bị chặn bởi quota của workspace owner, không dùng quota cá nhân', async () => {
+    const owner = await createUser({ role: 'user', username: 'quota_owner' });
+    const employee = await createUser({ role: 'user', username: 'quota_employee' });
+    await addCampaignMembership(owner.id, employee.id);
+    await db.query('UPDATE users SET max_campaigns = 1 WHERE id = $1', [owner.id]);
+    await db.query('UPDATE users SET max_campaigns = 100 WHERE id = $1', [employee.id]);
+    await insertCampaign({ ownerId: owner.id, campaignName: 'Owner quota consumed' });
+
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ campaignName: 'Must be rejected', campaignType: 'email' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.limitReached).toBe(true);
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM campaigns
+       WHERE COALESCE(workspace_owner_id, id_user) = $1`,
+      [owner.id]
+    );
+    expect(rows[0].total).toBe(1);
   });
 });
 
@@ -989,5 +1086,39 @@ describe('POST /api/campaigns/:id/run', () => {
       adjacentZaloNodeDelayMs: 3000,
       source: 'campaign_run',
     });
+  });
+});
+
+describe('Campaign run employee attribution', () => {
+  it('manual run snapshot workspace owner, lưu employee actor và execute bằng owner', async () => {
+    const owner = await createUser({ role: 'user', username: 'run_workspace_owner' });
+    const employee = await createUser({ role: 'user', username: 'run_workspace_employee' });
+    await addCampaignMembership(owner.id, employee.id);
+    const campaign = await insertCampaign({
+      ownerId: owner.id,
+      status: 'active',
+      campaignName: 'Employee runnable campaign',
+    });
+
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .post(`/api/campaigns/${campaign.id}/run`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ source: 'campaign_run', runName: 'Employee run' });
+
+    expect(res.status).toBe(200);
+    const { rows } = await db.query(
+      `SELECT workspace_owner_id, triggered_by, run_metadata
+       FROM campaign_runs
+       WHERE id = $1`,
+      [res.body.data.runId]
+    );
+    expect(Number(rows[0].workspace_owner_id)).toBe(Number(owner.id));
+    expect(Number(rows[0].triggered_by)).toBe(Number(employee.id));
+    expect(Number(rows[0].run_metadata.triggeredBy)).toBe(Number(employee.id));
+
+    expect(executeCampaignSpy).toHaveBeenCalledTimes(1);
+    expect(Number(executeCampaignSpy.mock.calls[0][2])).toBe(Number(owner.id));
   });
 });
