@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaCheckCircle, FaCheck, FaCrown, FaGem, FaRocket, FaStar, FaBolt, FaArrowRight, FaCog } from 'react-icons/fa';
+import { FaCheckCircle, FaCheck, FaCrown, FaGem, FaRocket, FaStar, FaBolt, FaArrowRight, FaCog, FaClock, FaExclamationTriangle } from 'react-icons/fa';
 import AnimatedSection from '../../../components/AnimatedSection';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile } from '../../../features/auth/services/authApi.service';
@@ -11,6 +11,7 @@ import CustomPlanBuilder from '../../../features/billing/CustomPlanBuilder';
 import { toast } from 'react-hot-toast';
 import checkoutApiService from '../../../features/checkout/services/checkoutApi.service';
 import { getMyCustomPlan } from '../../../services/customPlan.service';
+import { resolvePlanChange } from '../../../utils/planChange.util';
 
 const isContactPlan = (plan) => {
   const code = String(plan?.code || '').trim().toLowerCase();
@@ -197,10 +198,71 @@ const isEmployee = activeContext?.type === 'employee';
   const [promotionsByPlanCode, setPromotionsByPlanCode] = useState({});
   const [showCustomBuilder, setShowCustomBuilder] = useState(false);
   const [activatingPlanId, setActivatingPlanId] = useState(null);
-const [myCustomPlan, setMyCustomPlan] = useState(null);
-  // Thông tin plan hiện tại từ /users/profile — dùng khi gói không có trong list public
-  // (custom, hoặc plan đã ngưng active). null = không có hoặc chưa load xong.
+  const [myCustomPlan, setMyCustomPlan] = useState(null);
   const [customPlanInfo, setCustomPlanInfo] = useState(null);
+  const [pendingChange, setPendingChange] = useState(null);
+  const [dayLossWarningPlan, setDayLossWarningPlan] = useState(null);
+  const [planResolutions, setPlanResolutions] = useState({});
+
+  const fetchScheduledChange = useCallback(async () => {
+    if (!isAuthenticated || isEmployee) {
+      setPendingChange(null);
+      return;
+    }
+    try {
+      const { data } = await checkoutApiService.getScheduledChange();
+      setPendingChange(data?.scheduledChange || null);
+    } catch {
+      setPendingChange(null);
+    }
+  }, [isAuthenticated, isEmployee]);
+
+  useEffect(() => {
+    fetchScheduledChange();
+  }, [fetchScheduledChange]);
+
+  // Single Source of Truth: Fetch dynamic plan change resolutions directly from BE
+  useEffect(() => {
+    if (!isAuthenticated || isEmployee || !plans.length) {
+      setPlanResolutions({});
+      return;
+    }
+    let cancelled = false;
+    const fetchResolutions = async () => {
+      const standardPlans = plans.filter((p) => !isContactPlan(p));
+      const results = await Promise.all(
+        standardPlans.map(async (plan) => {
+          try {
+            const { data } = await checkoutApiService.resolvePlanChange({
+              planId: plan.id,
+              planCode: plan.code,
+              billingPeriod,
+            });
+            return { planId: plan.id, resolution: data?.resolution };
+          } catch {
+            return { planId: plan.id, resolution: null };
+          }
+        })
+      );
+      if (!cancelled) {
+        const map = {};
+        results.forEach(({ planId, resolution }) => {
+          if (resolution) map[planId] = resolution;
+        });
+        setPlanResolutions(map);
+      }
+    };
+    fetchResolutions();
+    return () => { cancelled = true; };
+  }, [isAuthenticated, isEmployee, plans, billingPeriod, pendingChange, currentPlanId, subscriptionExpiresAt, activeBillingPeriod]);
+
+  const currentPlan = useMemo(() => {
+    if (!currentPlanId) return null;
+    const found = plans.find((p) => Number(p.id) === Number(currentPlanId));
+    if (found) return found;
+    if (customPlanInfo) return customPlanInfo;
+    return { id: currentPlanId, price: activePlanPrice || 0 };
+  }, [currentPlanId, plans, customPlanInfo, activePlanPrice]);
 
   const getPlansData = async () => {
     try {
@@ -314,7 +376,7 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
     setShowCustomBuilder(true);
   };
 
-  const handlePlanClick = async (plan) => {
+  const handlePlanClick = async (plan, bypassWarning = false) => {
     if (isContactPlan(plan)) {
       openCustomBuilder();
       return;
@@ -323,6 +385,48 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
       navigate('/login');
       return;
     }
+
+    let resolution = planResolutions[plan.id];
+    if (isAuthenticated && !isEmployee && !isContactPlan(plan)) {
+      try {
+        const { data } = await checkoutApiService.resolvePlanChange({
+          planId: plan.id,
+          planCode: plan.code,
+          billingPeriod,
+        });
+        if (data?.resolution) {
+          resolution = data.resolution;
+        }
+      } catch {
+        // Fallback to local
+      }
+    }
+
+    if (!resolution) {
+      resolution = resolvePlanChange({
+        currentPlan,
+        currentBillingPeriod: activeBillingPeriod,
+        subscriptionExpiresAt,
+        targetPlan: plan,
+        targetBillingPeriod: billingPeriod,
+        pendingChange,
+        now: new Date(),
+      });
+    }
+
+    if (resolution.action === 'blocked') {
+      toast.error(resolution.message || t('pricing.actionBlocked'));
+      return;
+    }
+
+    if (!bypassWarning && resolution.action === 'upgrade_now' && resolution.daysRemaining >= 1) {
+      setDayLossWarningPlan({
+        plan,
+        daysRemaining: Math.ceil(resolution.daysRemaining),
+      });
+      return;
+    }
+
     // Gói miễn phí (dùng thử): kích hoạt ngay, không đưa qua trang thanh toán.
     // Backend vẫn là nơi chặn thật (1 lượt/tài khoản, không cho hạ gói giữa kỳ).
     if (isFreePlan(plan)) {
@@ -349,7 +453,7 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
       }
       return;
     }
-    navigate('/checkout', { state: { plan, billingPeriod } });
+    navigate('/checkout', { state: { plan, billingPeriod, resolution } });
   };
 
   if (loading) {
@@ -401,6 +505,29 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
               {t('pricing.heroSubtitle')}
             </p>
           </AnimatedSection>
+        )}
+
+        {/* Pending scheduled plan change banner */}
+        {pendingChange && (
+          <div className="max-w-3xl mx-auto mb-6 rounded-xl border border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/40 p-4 flex items-start gap-4 shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+              <FaClock className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                  {t('pricing.pendingChangeBannerTitle')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {t('pricing.pendingChangeBannerDesc', {
+                  planName: pendingChange.plan_name,
+                  period: pendingChange.billing_period === 'yearly' ? t('pricing.billingYearly') : t('pricing.billingMonthly'),
+                  date: new Date(pendingChange.activate_after).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                })}
+              </p>
+            </div>
+          </div>
         )}
 
         {/* Current plan banner — chỉ hiện khi user đang dùng plan không có trong list public
@@ -494,6 +621,55 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
               && billingPeriod === activeBillingPeriod;
             const isCurrentPlan = isCurrentCustom || isCurrentStandard || isOwnerCustomForEmployee || isCurrentStandardPlan;
 
+            const resolution = (!isAuthenticated || isEmployee || isCustom)
+              ? { action: 'upgrade_now', amountToPay: 0, code: null, daysRemaining: 0 }
+              : (planResolutions[plan.id] || resolvePlanChange({
+                  currentPlan,
+                  currentBillingPeriod: activeBillingPeriod,
+                  subscriptionExpiresAt,
+                  targetPlan: plan,
+                  targetBillingPeriod: billingPeriod,
+                  pendingChange,
+                  now: new Date(),
+                }));
+
+            const isCurrentPlanCard = isCurrentPlan || (isAuthenticated && !isCustom && resolution.action === 'blocked' && resolution.code === 'SAME_PLAN');
+
+            let ctaButtonText = '';
+            let ctaButtonDisabled = activatingPlanId === plan.id;
+            let ctaButtonAction = () => handlePlanClick(plan);
+            let ctaButtonTitle = undefined;
+
+            if (isCurrentPlanCard) {
+              ctaButtonText = t('pricing.managePlan');
+              ctaButtonAction = () => navigate('/app/billing');
+            } else if (resolution.action === 'blocked') {
+              ctaButtonDisabled = true;
+              ctaButtonTitle = resolution.message || undefined;
+              if (resolution.code === 'YEARLY_TO_MONTHLY') {
+                ctaButtonText = t('pricing.yearlyToMonthlyBlocked');
+              } else if (resolution.code === 'PENDING_DOWNGRADE') {
+                ctaButtonText = t('pricing.pendingDowngradeBlocked');
+              } else {
+                ctaButtonText = t('pricing.currentPlan');
+              }
+            } else if (resolution.action === 'upgrade_pending') {
+              ctaButtonText = t('pricing.upgradePending');
+            } else if (resolution.action === 'schedule') {
+              ctaButtonText = t('pricing.scheduleChange');
+            } else {
+              // upgrade_now
+              if (currentPlan && subscriptionExpiresAt && new Date(subscriptionExpiresAt) > new Date()) {
+                if (billingPeriod === 'yearly' && activeBillingPeriod === 'monthly') {
+                  ctaButtonText = t('pricing.upgradeToYearly');
+                } else {
+                  ctaButtonText = t('pricing.upgradeNow');
+                }
+              } else {
+                ctaButtonText = hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t);
+              }
+            }
+
             const style = styleSet[index % styleSet.length];
             const PlanIcon = style.icon;
             const features = Array.isArray(plan.features)
@@ -515,19 +691,15 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
               ? new Date(subscriptionExpiresAt).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' })
               : null;
 
-            const wrapperClass = isCurrentPlan
-              ? 'bg-white border-2 border-orange-500 ring-1 ring-orange-200 shadow-md'
-              : style.wrapper;
-
             return (
               <AnimatedSection key={plan.id} delay={index * 100}>
-<div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${
-                  isCurrentPlan
+                <div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${
+                  isCurrentPlanCard
                     ? 'bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 border-2 border-emerald-400 shadow-md ring-1 ring-emerald-200'
                     : style.wrapper
                 }`}>
                   {/* Current plan badge */}
-                  {isCurrentPlan && (
+                  {isCurrentPlanCard && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-md whitespace-nowrap">
                       <FaCheck className="w-3 h-3" />
                       <span>{t('pricing.currentPlanBadge')}</span>
@@ -543,12 +715,12 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
                       </div>
                     </div>
                     <p className={`text-xs leading-relaxed min-h-[32px] ${style.unit}`}>{planDescription}</p>
-                    {isCurrentPlan && currentPlanExpiryText && (
+                    {isCurrentPlanCard && currentPlanExpiryText && (
                       <p className="text-[10px] text-emerald-600 font-medium mt-1">
                         {t('pricing.currentPlanMeta', { date: currentPlanExpiryText })}
                       </p>
                     )}
-                    {isCurrentPlan && !currentPlanExpiryText && (
+                    {isCurrentPlanCard && !currentPlanExpiryText && (
                       <p className="text-[10px] text-emerald-600 font-medium mt-1">
                         {t('pricing.currentPlanNoExpiry')}
                       </p>
@@ -661,26 +833,19 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
                   </ul>
 
                   {/* CTA */}
-{isCurrentPlan ? (
-                    <button
-                      onClick={() => navigate('/app/billing')}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all bg-emerald-600 text-white hover:bg-emerald-700"
-                    >
-                      {t('pricing.managePlan')}
-                      <FaArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handlePlanClick(plan)}
-                      disabled={activatingPlanId === plan.id}
-                      className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all disabled:opacity-60 disabled:cursor-not-allowed ${style.button}`}
-                    >
-                      {activatingPlanId === plan.id
-                        ? t('pricing.activating')
-                        : (hasPromotion ? t('pricing.claimOffer') : getPlanCtaLabel(plan, t))}
-                      <FaArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <button
+                    onClick={ctaButtonAction}
+                    disabled={ctaButtonDisabled}
+                    title={ctaButtonTitle}
+                    className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-xs transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                      isCurrentPlanCard
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : style.button
+                    }`}
+                  >
+                    {activatingPlanId === plan.id ? t('pricing.activating') : ctaButtonText}
+                    <FaArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </AnimatedSection>
             );
@@ -693,6 +858,45 @@ const [myCustomPlan, setMyCustomPlan] = useState(null);
           </p>
         )}
       </div>
+
+      {/* Day Loss Warning Modal */}
+      {dayLossWarningPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <FaExclamationTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                {t('pricing.dayLossWarningTitle')}
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              {t('pricing.dayLossWarningDesc', { days: dayLossWarningPlan.daysRemaining })}
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDayLossWarningPlan(null)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                {t('pricing.dayLossWarningCancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = dayLossWarningPlan.plan;
+                  setDayLossWarningPlan(null);
+                  handlePlanClick(target, true);
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-orange-600 text-white hover:bg-orange-700 transition-colors shadow-sm"
+              >
+                {t('pricing.dayLossWarningConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CustomPlanBuilder
         open={showCustomBuilder}

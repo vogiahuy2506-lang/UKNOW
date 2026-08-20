@@ -627,6 +627,17 @@ export const initScheduler = () => {
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
       await cronJobRunRepository.recordRun('subscription_reminder', async () => {
+        // 0. Kích hoạt lệnh hẹn đổi gói đã đến hạn (chạy trước findExpiredUsers để tránh hụt quyền lợi)
+        try {
+          const { processDueScheduledPlanChanges } = await import('../services/payment/scheduledPlanChange.service.js');
+          const { processed } = await processDueScheduledPlanChanges();
+          if (processed > 0) {
+            console.log(`[Subscription] Đã kích hoạt ${processed} lệnh hẹn đổi gói đến hạn`);
+          }
+        } catch (err) {
+          console.error('[Subscription] Lỗi khi kích hoạt lệnh hẹn đổi gói:', err.message);
+        }
+
         // 1. Hết hạn: revoke active_plan_id
         const expired = await findExpiredUsers();
         for (const user of expired) {

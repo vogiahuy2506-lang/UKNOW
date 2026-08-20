@@ -23,6 +23,18 @@ const checkoutApiService = {
     return api.post('/payments/create-custom-payment', payload);
   },
 
+  getScheduledChange() {
+    return api.get('/payments/scheduled-change');
+  },
+
+  cancelScheduledChange(id = null) {
+    return id ? api.delete(`/payments/scheduled-change/${id}`) : api.delete('/payments/scheduled-change');
+  },
+
+  resolvePlanChange(payload) {
+    return api.post('/payments/resolve-change', payload);
+  },
+
   async getPaymentStatus(orderCode) {
     const response = await api.get(`/payments/status/${orderCode}`);
     return response.data;

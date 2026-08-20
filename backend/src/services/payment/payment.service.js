@@ -35,6 +35,10 @@ import { resolveOrderAmountWithInvoice, normalizeBuyerInvoiceProfile } from '../
 import { saveInvoiceProfile } from '../../repositories/user/user.repository.js';
 import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
 
+import { resolvePlanChange } from '../../utils/planChange.util.js';
+import { scheduledPlanChangeRepository } from '../../repositories/payment/scheduledPlanChange.repository.js';
+import { findUserById, findActiveBillingPeriod, findActiveUserByEmail } from '../../repositories/user/user.repository.js';
+
 const isTrialOrFreePlan = (plan) => {
     if (!plan) return false;
     const trialCode = process.env.SIGNUP_TRIAL_PLAN_CODE || 'trial';
@@ -55,19 +59,46 @@ const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
     }
 };
 
-const assertNoImmediateDowngrade = async ({ targetPlan, userId, currentPlan: existingCurrentPlan = null, queryable = db }) => {
-    if (!userId) return;
-    const currentPlan = existingCurrentPlan || (await getPlanByUserId(userId, queryable));
-    if (!currentPlan) return;
+const validatePlanChange = async ({ targetPlan, targetBillingPeriod = 'monthly', targetPrice = null, userId, userEmail = null, queryable = db }) => {
+    if (!userId && !userEmail) return { action: 'upgrade_now' };
+    let user = null;
+    if (userId) {
+        user = await findUserById(userId, queryable);
+    } else if (userEmail) {
+        user = await findActiveUserByEmail(userEmail);
+    }
+    if (!user) return { action: 'upgrade_now' };
 
-    const currentMonthlyPrice = Number(currentPlan.price || 0);
-    const targetMonthlyPrice = Number(targetPlan.price || 0);
-    if (targetMonthlyPrice < currentMonthlyPrice) {
+    const currentPlan = await getPlanByUserId(user.id, queryable);
+    const currentBillingPeriod = await findActiveBillingPeriod(user.id, user.email);
+    const pendingChange = await scheduledPlanChangeRepository.findPendingByUserId(user.id, queryable);
+
+    const price = targetPrice !== null ? targetPrice : (
+        targetBillingPeriod === 'yearly' && targetPlan?.price_yearly
+            ? Number(targetPlan.price_yearly)
+            : Number(targetPlan?.price || 0)
+    );
+
+    const resolution = resolvePlanChange({
+        currentPlan,
+        currentBillingPeriod,
+        subscriptionExpiresAt: user.subscription_expires_at,
+        targetPlan,
+        targetBillingPeriod,
+        pendingChange,
+        targetPlanPrice: price,
+        now: new Date(),
+    });
+
+    if (resolution.action === 'blocked') {
         throw {
             status: 409,
-            message: 'Không thể hạ gói ngay khi còn hiệu lực gói hiện tại. Vui lòng hạ gói vào kỳ tiếp theo.',
+            code: resolution.code,
+            message: resolution.message,
         };
     }
+
+    return resolution;
 };
 
 /**
@@ -90,11 +121,20 @@ export const createPaymentLink = async ({
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
     await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
-    await assertNoImmediateDowngrade({ targetPlan: plan, userId });
+    const planChange = await validatePlanChange({
+        targetPlan: plan,
+        targetBillingPeriod: billingPeriod,
+        userId,
+        userEmail,
+    });
 
-    const originalAmount = billingPeriod === 'yearly' && plan.price_yearly
+    let originalAmount = billingPeriod === 'yearly' && plan.price_yearly
         ? Number(plan.price_yearly)
         : Number(plan.price);
+
+    if (planChange.action === 'upgrade_pending' && planChange.amountToPay !== undefined) {
+        originalAmount = planChange.amountToPay;
+    }
 
     if (originalAmount <= 0) throw new Error('Giá tiền không hợp lệ cho gói này');
 
@@ -147,6 +187,8 @@ export const createPaymentLink = async ({
         amount = priced.amount;
         const invoiceInfo = priced.invoiceInfo;
 
+        const isScheduledChange = planChange.action === 'schedule' || planChange.action === 'upgrade_pending';
+
         order = await createOrder({
             orderCode,
             planId: plan.id,
@@ -162,15 +204,34 @@ export const createPaymentLink = async ({
             discountLabel: resolved.snapshot.discountLabel,
             status: amount <= 0 ? 'success' : 'pending',
             paymentMethod: amount <= 0 ? 'voucher' : 'payos',
+            note: isScheduledChange ? 'scheduled_change' : null,
             invoiceInfo,
         }, client);
 
         if (amount <= 0) {
             await redeemVoucherForOrder(order, client);
-            if (userId) {
-                await activateUserPlan(userId, plan.id, billingPeriod, client);
-                const { reconcileResourceLocks } = await import('./topupLock.service.js');
-                await reconcileResourceLocks(userId, client, { unlockOnly: true });
+            if (isScheduledChange) {
+                if (userId) {
+                    const pendingBefore = await scheduledPlanChangeRepository.findPendingByUserId(userId, client);
+                    const previousPaid = pendingBefore ? Number(pendingBefore.amount_paid || 0) : 0;
+                    const totalAmountPaid = previousPaid + Math.max(0, Number(amount || 0));
+
+                    await scheduledPlanChangeRepository.supersedePendingByUserId(userId, client);
+                    await scheduledPlanChangeRepository.create({
+                        userId,
+                        planId: plan.id,
+                        billingPeriod,
+                        orderId: order.id,
+                        amountPaid: totalAmountPaid,
+                        activateAfter: planChange.activateAfter || new Date(),
+                    }, client);
+                }
+            } else {
+                if (userId) {
+                    await activateUserPlan(userId, plan.id, billingPeriod, client);
+                    const { reconcileResourceLocks } = await import('./topupLock.service.js');
+                    await reconcileResourceLocks(userId, client, { unlockOnly: true });
+                }
             }
         }
 
@@ -301,7 +362,12 @@ export const activateFreePlan = async ({ planCode, userId, userEmail, billingPer
     const plan = await findPlanByCode(planCode);
     if (!plan) throw new Error('Gói không tồn tại');
     await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
-    await assertNoImmediateDowngrade({ targetPlan: plan, userId });
+    await validatePlanChange({
+        targetPlan: plan,
+        targetBillingPeriod: billingPeriod,
+        userId,
+        userEmail,
+    });
 
     const amount = billingPeriod === 'yearly' && plan.price_yearly
         ? Number(plan.price_yearly)
@@ -393,6 +459,8 @@ export const createCustomPaymentLink = async ({
         price: quote.monthlyTotal,
         price_yearly: quote.yearlyTotal,
         duration_days: 30,
+        name: 'Gói tự chọn',
+        is_custom: true,
     };
 
     const planColumns = quote.planColumns;
@@ -419,22 +487,29 @@ export const createCustomPaymentLink = async ({
     try {
         await client.query('BEGIN');
 
+        let planChange;
         if (reusePlanId) {
             plan = await findCustomPlanOwnedByUser(reusePlanId, userId, client);
             if (!plan) {
                 throw { status: 403, message: 'Không thể tái sử dụng gói này' };
             }
-            const existingQty = plan.custom_config?.quantities || plan.custom_config || {};
-            const currentPlan = await getPlanByUserId(userId, client);
-            const isRenewalOfActivePlan =
-                currentPlan
-                && Number(currentPlan.id) === Number(plan.id)
-                && configsEqual(existingQty, quote.quantities);
-            if (!isRenewalOfActivePlan) {
-                await assertNoImmediateDowngrade({ targetPlan: virtualPlan, userId, currentPlan, queryable: client });
-            }
+            planChange = await validatePlanChange({
+                targetPlan: virtualPlan,
+                targetBillingPeriod: billingPeriod,
+                targetPrice: billingPeriod === 'yearly' ? quote.yearlyTotal : quote.monthlyTotal,
+                userId,
+                userEmail,
+                queryable: client,
+            });
         } else {
-            await assertNoImmediateDowngrade({ targetPlan: virtualPlan, userId, queryable: client });
+            planChange = await validatePlanChange({
+                targetPlan: virtualPlan,
+                targetBillingPeriod: billingPeriod,
+                targetPrice: billingPeriod === 'yearly' ? quote.yearlyTotal : quote.monthlyTotal,
+                userId,
+                userEmail,
+                queryable: client,
+            });
             plan = await createPlan({
                 code: null,
                 name: buildCustomPlanName(userEmail),
@@ -520,6 +595,8 @@ export const createCustomPaymentLink = async ({
         amount = priced.amount;
         const invoiceInfo = priced.invoiceInfo;
 
+        const isScheduledChange = planChange?.action === 'schedule' || planChange?.action === 'upgrade_pending';
+
         order = await createOrder({
             orderCode,
             planId: plan.id,
@@ -535,19 +612,37 @@ export const createCustomPaymentLink = async ({
             discountLabel: resolved.snapshot.discountLabel,
             status: amount <= 0 ? 'success' : 'pending',
             paymentMethod: amount <= 0 ? 'voucher' : 'payos',
-            note: 'custom_self_serve',
+            note: isScheduledChange ? 'scheduled_change' : 'custom_self_serve',
             invoiceInfo,
             customPlanConfig,
         }, client);
 
         if (amount <= 0) {
             await redeemVoucherForOrder(order, client);
-            if (reusePlanId) {
+            if (reusePlanId && !isScheduledChange) {
                 await updateCustomPlanLimits(plan.id, customPlanConfig, client);
             }
-            await activateUserPlan(userId, plan.id, billingPeriod, client);
-            const { reconcileResourceLocks } = await import('./topupLock.service.js');
-            await reconcileResourceLocks(userId, client, { unlockOnly: true });
+            if (isScheduledChange) {
+                if (userId) {
+                    const pendingBefore = await scheduledPlanChangeRepository.findPendingByUserId(userId, client);
+                    const previousPaid = pendingBefore ? Number(pendingBefore.amount_paid || 0) : 0;
+                    const totalAmountPaid = previousPaid + Math.max(0, Number(amount || 0));
+
+                    await scheduledPlanChangeRepository.supersedePendingByUserId(userId, client);
+                    await scheduledPlanChangeRepository.create({
+                        userId,
+                        planId: plan.id,
+                        billingPeriod,
+                        orderId: order.id,
+                        amountPaid: totalAmountPaid,
+                        activateAfter: planChange.activateAfter || new Date(),
+                    }, client);
+                }
+            } else {
+                await activateUserPlan(userId, plan.id, billingPeriod, client);
+                const { reconcileResourceLocks } = await import('./topupLock.service.js');
+                await reconcileResourceLocks(userId, client, { unlockOnly: true });
+            }
         }
 
         await client.query('COMMIT');

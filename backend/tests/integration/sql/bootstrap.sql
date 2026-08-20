@@ -369,6 +369,25 @@ CREATE INDEX idx_einvoices_worker_claim
 CREATE INDEX idx_einvoices_email_worker
   ON einvoices (email_status, email_next_attempt_at, email_last_attempt_at);
 
+-- Scheduled plan changes (migration 149)
+CREATE TABLE scheduled_plan_changes (
+  id            BIGSERIAL PRIMARY KEY,
+  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id       BIGINT NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
+  billing_period VARCHAR(10) NOT NULL CHECK (billing_period IN ('monthly','yearly')),
+  order_id      BIGINT REFERENCES orders(id) ON DELETE SET NULL,
+  amount_paid   BIGINT NOT NULL DEFAULT 0,
+  status        VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','activated','superseded')),
+  activate_after TIMESTAMPTZ NOT NULL,
+  activated_at  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX uq_scheduled_plan_change_pending
+  ON scheduled_plan_changes (user_id) WHERE status = 'pending';
+
 -- ─── Top-up pricing & grants (migration 099) ───────────────────────────
 CREATE TABLE topup_pricing (
   id           BIGSERIAL PRIMARY KEY,

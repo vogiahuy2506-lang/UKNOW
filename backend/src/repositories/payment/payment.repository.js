@@ -279,11 +279,7 @@ export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly'
     await queryable.query(
         `UPDATE users u
          SET active_plan_id = p.id,
-             subscription_expires_at = CASE
-               WHEN u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at > NOW()
-                 THEN u.subscription_expires_at + (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END)
-               ELSE NOW()              + (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END)
-             END,
+             subscription_expires_at = NOW() + (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END),
              subscription_reminder_count = 0,
              max_landing_pages        = p.max_landing_pages,
              max_campaigns            = p.max_campaigns,

@@ -54,6 +54,16 @@ const PROFILE_PLAN_WHERE = `
   )
 `;
 
+export async function findUserById(userId, queryable = db) {
+  if (!userId) return null;
+  const result = await queryable.query(
+    `SELECT id, email, full_name, role, active_plan_id, subscription_expires_at
+     FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
 export async function findProfileBase(userId) {
   const { rows } = await db.query(
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
@@ -125,6 +135,7 @@ export async function findActiveBillingPeriod(userId, email) {
        WHERE (user_id = $1 OR user_email = $2)
          AND status IN ('paid', 'success', 'completed')
          AND note IS DISTINCT FROM 'topup'
+         AND note IS DISTINCT FROM 'scheduled_change'
          AND topup_config IS NULL
          AND plan_id IS NOT NULL
        ORDER BY created_at DESC LIMIT 1`,

@@ -26,6 +26,7 @@ describe('findActiveBillingPeriod', () => {
     expect(mockDb.query).toHaveBeenCalledTimes(1);
     const [query, params] = mockDb.query.mock.calls[0];
     expect(query).toContain("note IS DISTINCT FROM 'topup'");
+    expect(query).toContain("note IS DISTINCT FROM 'scheduled_change'");
     expect(query).toContain('topup_config IS NULL');
     expect(query).toContain('plan_id IS NOT NULL');
     expect(params).toEqual([10, 'user@example.com']);

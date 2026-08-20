@@ -230,11 +230,7 @@ export async function assignPlanToUser(userId, planId) {
   const { rows } = await db.query(
     `UPDATE users u
      SET active_plan_id            = p.id,
-         subscription_expires_at   = CASE
-           WHEN u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at > NOW()
-             THEN u.subscription_expires_at + (COALESCE(p.duration_days, 30) || ' days')::INTERVAL
-           ELSE NOW()              + (COALESCE(p.duration_days, 30) || ' days')::INTERVAL
-         END,
+         subscription_expires_at   = NOW() + (COALESCE(p.duration_days, 30) || ' days')::INTERVAL,
          subscription_reminder_count = 0,
          max_landing_pages         = p.max_landing_pages,
          max_campaigns             = p.max_campaigns,
@@ -303,11 +299,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
     const userResult = await client.query(
       `UPDATE users
        SET active_plan_id = $1,
-           subscription_expires_at = CASE
-             WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
-               THEN subscription_expires_at + (COALESCE($3, 30) || ' days')::INTERVAL
-             ELSE NOW()              + (COALESCE($3, 30) || ' days')::INTERVAL
-           END,
+           subscription_expires_at = NOW() + (COALESCE($3, 30) || ' days')::INTERVAL,
            subscription_reminder_count = 0,
            max_landing_pages = $4, max_campaigns = $5,
            max_zalo_campaigns = $6, max_zalo_group_campaigns = $7, max_email_campaigns = $8,

@@ -455,7 +455,7 @@ describe('POST /api/payments/create-payment', () => {
       .post('/api/payments/create-payment')
       .set('Authorization', `Bearer ${token}`)
       .send({ planCode: 'free_via_voucher', voucherCode: 'FREE100' });
-    expect(second.status).toBe(400);
+    expect(second.status).toBe(409);
   });
 });
 
@@ -607,7 +607,7 @@ describe('POST /api/payments/webhook', () => {
     expect(u.rows[0].active_plan_id).toBeNull();
   });
 
-  it('renewal: user đã có subscription còn hạn → expires += 1 month (không mất ngày cũ)', async () => {
+  it('kích hoạt/nâng gói ghi đè subscription_expires_at = NOW() + 30 ngày (không cộng dồn ngày cũ)', async () => {
     const user = await createUser({ username: 'renew' });
     const plan = await createPlan({ code: 'renew-plan' });
 
@@ -633,10 +633,10 @@ describe('POST /api/payments/webhook', () => {
       [user.id]
     );
     const newExpires = new Date(u.rows[0].subscription_expires_at).getTime();
-    // Phải xa hơn futureDate (gia hạn từ ngày hết hạn cũ, ~ +30 ngày nữa)
-    const extraDays = (newExpires - futureDate.getTime()) / (1000 * 60 * 60 * 24);
-    expect(extraDays).toBeGreaterThan(27);
-    expect(extraDays).toBeLessThan(33);
+    // Tính lại từ hôm nay (~ +30 ngày từ NOW, ghi đè 10 ngày cũ)
+    const daysFromNow = (newExpires - Date.now()) / (1000 * 60 * 60 * 24);
+    expect(daysFromNow).toBeGreaterThan(28);
+    expect(daysFromNow).toBeLessThan(32);
   });
 
   it('subscription_reminder_count được reset về 0 sau khi gia hạn', async () => {

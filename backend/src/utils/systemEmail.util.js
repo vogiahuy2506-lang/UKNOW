@@ -490,20 +490,43 @@ export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }
 
 // ─── Payment Success Email ────────────────────────────────────────────────────
 
-export function buildPaymentSuccessEmail({ fullName, email, planName, amount, billingPeriod, orderCode, paymentMethod, expiresAt, invoiceUrl }) {
+export function buildPaymentSuccessEmail({
+  fullName,
+  email,
+  planName,
+  amount,
+  billingPeriod,
+  orderCode,
+  paymentMethod,
+  expiresAt,
+  invoiceUrl,
+  isScheduled = false,
+  activateAfter = null,
+}) {
   const amountFormatted = new Intl.NumberFormat('vi-VN').format(amount);
   const periodLabel = billingPeriod === 'yearly' ? 'năm' : 'tháng';
-  const expiresStr = new Date(expiresAt).toLocaleDateString('vi-VN', {
+  const expiresStr = expiresAt ? new Date(expiresAt).toLocaleDateString('vi-VN', {
     day: '2-digit', month: '2-digit', year: 'numeric',
-  });
+  }) : '';
+  const activateAfterStr = activateAfter ? new Date(activateAfter).toLocaleDateString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  }) : '';
   const methodLabel = paymentMethod === 'payos' ? 'PayOS (QR Code)' : paymentMethod === 'voucher' ? 'Voucher' : 'Thủ công';
+
+  const titleText = isScheduled ? 'Đặt lịch hẹn đổi gói thành công!' : 'Thanh toán thành công!';
+  const messageText = isScheduled
+    ? `Cảm ơn bạn đã thanh toán! Đơn đặt lịch hẹn đổi sang gói <strong>${planName}</strong> đã được ghi nhận thành công. Gói sẽ tự động kích hoạt vào ngày <strong>${activateAfterStr}</strong> khi gói hiện tại của bạn hết hạn.`
+    : `Cảm ơn bạn đã thanh toán! Chúng tôi đã nhận được thanh toán của bạn và gói <strong>${planName}</strong> đã được kích hoạt thành công.`;
+
+  const dateRowLabel = isScheduled ? 'Ngày tự động kích hoạt' : 'Ngày hết hạn';
+  const dateRowValue = isScheduled ? activateAfterStr : expiresStr;
 
   const content = `
     <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
       Xin chào <strong style="color:#f97316">${fullName || email}</strong>,
     </p>
     <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
-      Cảm ơn bạn đã thanh toán! Chúng tôi đã nhận được thanh toán của bạn và gói <strong>${planName}</strong> đã được kích hoạt thành công.
+      ${messageText}
     </p>
 
     <!-- Success Badge -->
@@ -512,7 +535,7 @@ export function buildPaymentSuccessEmail({ fullName, email, planName, amount, bi
         <td style="padding:20px;text-align:center">
           <p style="margin:0 0 8px;font-size:32px">🎉</p>
           <p style="margin:0;font-size:18px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:1px">
-            Thanh toán thành công!
+            ${titleText}
           </p>
         </td>
       </tr>
@@ -544,8 +567,8 @@ export function buildPaymentSuccessEmail({ fullName, email, planName, amount, bi
               <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${methodLabel}</td>
             </tr>
             <tr style="border-bottom:1px solid #e5e7eb">
-              <td style="padding:8px 0;font-size:13px;color:#6b7280">Ngày hết hạn</td>
-              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${expiresStr}</td>
+              <td style="padding:8px 0;font-size:13px;color:#6b7280">${dateRowLabel}</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;text-align:right">${dateRowValue}</td>
             </tr>
             <tr>
               <td style="padding:12px 0 0;font-size:15px;font-weight:600;color:#374151">Tổng thanh toán</td>
