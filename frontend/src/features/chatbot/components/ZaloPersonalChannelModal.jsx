@@ -43,14 +43,48 @@ const GUIDE_STEPS = [
   },
 ];
 
+function isLikelyZaloId(value) {
+  if (!value) return false;
+  const str = String(value);
+  // Zalo IDs are typically numeric, often 9-12 digits, may start with 0
+  return /^\d{9,15}$/.test(str.replace(/[\s-]/g, ''));
+}
+
+function isEmptyOrInvalid(value) {
+  if (!value) return true;
+  const str = String(value).trim();
+  return str === '' || str === 'null' || str === 'undefined';
+}
+
 function readAccount(acc) {
-  // Defensive parsing: backend may return either snake_case or camelCase
   const id = acc?.id ?? acc?.zalo_setting_id;
+  const displayNameRaw = acc?.display_name || acc?.displayName || '';
+  const zaloName = acc?.zalo_name || acc?.zaloName || '';
+  const zaloPhone = acc?.zalo_phone || acc?.zaloPhone || '';
+  const zaloUserId = acc?.zalo_user_id || acc?.zaloUserId || '';
+
+  // Prefer zaloName if displayName looks like a Zalo ID or is empty
+  let displayName = displayNameRaw;
+  if (isEmptyOrInvalid(displayName) || isLikelyZaloId(displayName)) {
+    if (!isEmptyOrInvalid(zaloName)) {
+      displayName = zaloName;
+    } else if (!isEmptyOrInvalid(zaloPhone)) {
+      displayName = zaloPhone;
+    } else if (!isEmptyOrInvalid(zaloUserId)) {
+      displayName = `Zalo ${zaloUserId}`;
+    }
+  }
+
+  // Final fallback if still empty
+  if (isEmptyOrInvalid(displayName) || isLikelyZaloId(displayName)) {
+    displayName = 'Zalo Account';
+  }
+
   return {
     id: String(id ?? ''),
-    displayName: acc?.display_name || acc?.displayName || acc?.zalo_name || acc?.zaloName || 'Zalo Account',
-    zaloName: acc?.zalo_name || acc?.zaloName || '',
-    zaloPhone: acc?.zalo_phone || acc?.zaloPhone || '',
+    displayName,
+    zaloName,
+    zaloPhone,
     avatar: acc?.avatar_url || acc?.avatarUrl || null,
     status: acc?.status || 'unknown',
     isActive: (acc?.is_active ?? acc?.isActive ?? true) !== false,
