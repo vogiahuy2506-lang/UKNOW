@@ -464,7 +464,7 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key, origin,
+              suggested_questions, widget_key, origin, reply_limit_config,
               created_at, updated_at
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`;

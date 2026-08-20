@@ -212,7 +212,13 @@ class LeadService {
       throw err;
     }
     // Nếu marketingConsent không được gửi hoặc undefined/null → coi như đồng ý (opt-in mềm)
-    const effectiveConsent = marketingConsent !== false;
+    if (body && (body.marketingConsent === false || body.marketing_consent === false)) {
+      const err = new Error('Vui lòng đồng ý nhận thông tin marketing để gửi yêu cầu');
+      err.statusCode = 400;
+      err.code = 'MARKETING_CONSENT_REQUIRED';
+      throw err;
+    }
+    const effectiveConsent = !(body && (body.marketingConsent === false || body.marketing_consent === false));
 
     const landingPageSlug = canonicalLandingPageSlug(
       body?.landingPageSlug ?? body?.landing_page_slug ?? ''
