@@ -58,10 +58,10 @@ function isEmptyOrInvalid(value) {
 
 function readAccount(acc) {
   const id = acc?.id ?? acc?.zalo_setting_id;
-  const displayNameRaw = acc?.display_name || acc?.displayName || '';
-  const zaloName = acc?.zalo_name || acc?.zaloName || '';
-  const zaloPhone = acc?.zalo_phone || acc?.zaloPhone || '';
-  const zaloUserId = acc?.zalo_user_id || acc?.zaloUserId || '';
+  const displayNameRaw = acc?.displayName || acc?.display_name || '';
+  const zaloName = acc?.zaloName || acc?.zalo_name || '';
+  const zaloPhone = acc?.zaloPhone || acc?.zalo_phone || '';
+  const zaloUserId = acc?.zaloUserId || acc?.zalo_user_id || '';
 
   // Check if displayName looks like a Zalo ID (numeric string 9-15 digits)
   const isLikelyZaloIdValue = (value) => {
@@ -82,9 +82,14 @@ function readAccount(acc) {
     }
   }
 
-  // Final fallback - never show Zalo ID as name
+  // If displayName is still a Zalo ID or empty, show a friendly fallback
+  // Try to use display_name_raw if it looks like a real name (not just digits)
   if (isEmptyOrInvalid(displayName) || isLikelyZaloIdValue(displayName)) {
-    displayName = 'Zalo Account';
+    if (!isEmptyOrInvalid(displayNameRaw) && !isLikelyZaloIdValue(displayNameRaw)) {
+      displayName = displayNameRaw;
+    } else {
+      displayName = 'Zalo Account';
+    }
   }
 
   return {
