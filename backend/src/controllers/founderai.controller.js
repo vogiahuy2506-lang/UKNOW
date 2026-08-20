@@ -3,6 +3,7 @@ import founderaiReadService from '../services/founderai/founderaiRead.service.js
 import founderaiSyncService from '../services/founderai/founderaiSync.service.js';
 import founderaiDataService from '../services/founderai/founderaiData.service.js';
 import founderaiSchemaRepository from '../repositories/founderai/founderaiSchema.repository.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 class FounderAIController {
   constructor() {
@@ -147,8 +148,8 @@ class FounderAIController {
     return founderaiDataService.findCustomer({ ctx: this, client, userId, email, phone });
   }
 
-  async upsertCustomer(client, userId, payload = {}) {
-    return founderaiDataService.upsertCustomer({ ctx: this, client, userId, payload });
+  async upsertCustomer(client, userId, payload = {}, actorUserId = userId) {
+    return founderaiDataService.upsertCustomer({ ctx: this, client, userId, actorUserId, payload });
   }
 
   /**
@@ -172,8 +173,8 @@ class FounderAIController {
     }
   }
 
-  async upsertCourse(client, userId, product = {}) {
-    return founderaiDataService.upsertCourse({ ctx: this, client, userId, product });
+  async upsertCourse(client, userId, product = {}, actorUserId = userId) {
+    return founderaiDataService.upsertCourse({ ctx: this, client, userId, actorUserId, product });
   }
 
   /**
@@ -184,8 +185,8 @@ class FounderAIController {
    * @param {object} productCache - Cache object để lưu product đã fetch (tránh fetch lại)
    * @returns {Promise<{courseId: number|null, inserted: boolean, updated: boolean}>}
    */
-  async ensureCourseFromLineItem(client, userId, lineItem = {}, productCache = {}) {
-    return founderaiDataService.ensureCourseFromLineItem({ ctx: this, client, userId, lineItem, productCache });
+  async ensureCourseFromLineItem(client, userId, lineItem = {}, productCache = {}, actorUserId = userId) {
+    return founderaiDataService.ensureCourseFromLineItem({ ctx: this, client, userId, actorUserId, lineItem, productCache });
   }
 
   async refreshCustomerPurchaseStats(client, customerId) {
@@ -239,8 +240,8 @@ class FounderAIController {
 
   async syncCustomers(req, res) {
     try {
-      const userId = req.user.id;
-      const result = await founderaiSyncService.syncCustomers({ ctx: this, userId });
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const result = await founderaiSyncService.syncCustomers({ ctx: this, userId, actorUserId });
       return res.json({ success: true, ...result });
     } catch (error) {
       if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
@@ -251,8 +252,8 @@ class FounderAIController {
 
   async syncCourses(req, res) {
     try {
-      const userId = req.user.id;
-      const result = await founderaiSyncService.syncCourses({ ctx: this, userId });
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const result = await founderaiSyncService.syncCourses({ ctx: this, userId, actorUserId });
       return res.json({ success: true, ...result });
     } catch (error) {
       if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
@@ -263,10 +264,11 @@ class FounderAIController {
 
   async syncOrders(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const result = await founderaiSyncService.syncOrders({
         ctx: this,
         userId,
+        actorUserId,
         status: req.query?.status,
         onlyMissing: req.query?.onlyMissing,
         sources: req.query?.sources,
@@ -297,9 +299,9 @@ class FounderAIController {
 
   async syncOrder(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const { orderId } = req.params;
-      const result = await founderaiSyncService.syncOrder({ ctx: this, userId, orderId });
+      const result = await founderaiSyncService.syncOrder({ ctx: this, userId, actorUserId, orderId });
       return res.json({ success: true, ...result });
     } catch (error) {
       if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
@@ -320,7 +322,7 @@ class FounderAIController {
 
   async syncCampaignUknow(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const campaignId = req.params.id;
       const result = await founderaiSyncService.syncCampaignUknow({ ctx: this, userId, campaignId });
       return res.json({ success: true, ...result });

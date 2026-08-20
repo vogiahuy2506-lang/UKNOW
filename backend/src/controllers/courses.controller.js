@@ -1,5 +1,6 @@
 import { serverError } from '../helpers.js';
 import courseService from '../services/courses/course.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 class CoursesController {
   /**
@@ -54,13 +55,10 @@ class CoursesController {
    */
   async syncManual(req, res) {
     try {
-      const userId = req.user.id;
-      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
-        ? req.user.activeContext.ownerId
-        : userId;
+      const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
 
-      console.log(`[Manual Sync] Bắt đầu đồng bộ khóa học bởi user ${userId} cho owner ${effectiveOwnerId}`);
-      const result = await courseService.syncCoursesFromFounderAI(effectiveOwnerId);
+      console.log(`[Manual Sync] Bắt đầu đồng bộ khóa học bởi user ${actorUserId} cho owner ${workspaceOwnerId}`);
+      const result = await courseService.syncCoursesFromFounderAI({ workspaceOwnerId, actorUserId });
 
       return res.json({
         success: result.success,

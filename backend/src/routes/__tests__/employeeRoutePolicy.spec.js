@@ -88,6 +88,14 @@ jest.unstable_mockModule('../../controllers/ai.controller.js', () => ({
   default: makeMockController('ai'),
 }));
 
+jest.unstable_mockModule('../../controllers/googleSheets.controller.js', () => ({
+  default: makeMockController('googleSheets'),
+}));
+
+jest.unstable_mockModule('../../controllers/founderai.controller.js', () => ({
+  default: makeMockController('founderai'),
+}));
+
 // Import routes after mocking
 const { default: adminLandingPageRoutes } = await import('../adminLandingPage.routes.js');
 const { default: customerRoutes } = await import('../customer.routes.js');
@@ -98,6 +106,8 @@ const { default: zaloTemplateRoutes } = await import('../zaloTemplate.routes.js'
 const { default: templateLabelRoutes } = await import('../templateLabel.routes.js');
 const { default: campaignScheduleRoutes } = await import('../campaignSchedule.routes.js');
 const { default: aiRoutes } = await import('../ai.routes.js');
+const { default: googleSheetsRoutes } = await import('../googleSheets.routes.js');
+const { default: founderaiRoutes } = await import('../founderai.routes.js');
 
 const app = express();
 app.use(express.json());
@@ -110,6 +120,8 @@ app.use('/api/zalo-templates', zaloTemplateRoutes);
 app.use('/api/template-labels', templateLabelRoutes);
 app.use('/api/campaign-schedules', campaignScheduleRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/google-sheets', googleSheetsRoutes);
+app.use('/api/founderai', founderaiRoutes);
 
 describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   const selfUser = {
@@ -260,6 +272,32 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       currentTestUser = createEmployee({ campaigns_create: true, campaigns_run: true });
       const res = await request(app).post('/api/ai/create-and-run-campaign').send({});
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('7. Workspace integrations', () => {
+    it('guards Google Sheets preview with campaigns_view', async () => {
+      currentTestUser = createEmployee({ campaigns_view: false });
+      const blocked = await request(app).post('/api/google-sheets/preview').send({});
+      expect(blocked.status).toBe(403);
+
+      currentTestUser = createEmployee({ campaigns_view: true });
+      const allowed = await request(app).post('/api/google-sheets/preview').send({});
+      expect(allowed.status).toBe(200);
+    });
+
+    it('guards FounderAI customer and course sync by matching resource permission', async () => {
+      currentTestUser = createEmployee({ customers: false, courses: true });
+      const customerBlocked = await request(app).post('/api/founderai/sync/customers');
+      expect(customerBlocked.status).toBe(403);
+      const courseAllowed = await request(app).post('/api/founderai/sync/courses');
+      expect(courseAllowed.status).toBe(200);
+
+      currentTestUser = createEmployee({ customers: true, courses: false });
+      const customerAllowed = await request(app).post('/api/founderai/sync/customers');
+      expect(customerAllowed.status).toBe(200);
+      const courseBlocked = await request(app).post('/api/founderai/sync/courses');
+      expect(courseBlocked.status).toBe(403);
     });
   });
 });

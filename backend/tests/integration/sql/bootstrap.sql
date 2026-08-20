@@ -877,6 +877,8 @@ CREATE INDEX idx_customers_phone ON customers(phone);
 CREATE TABLE courses (
   id              BIGSERIAL PRIMARY KEY,
   id_user         BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT    REFERENCES users(id) ON DELETE CASCADE,
+  created_by      BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   course_code     VARCHAR(100),
   course_name     VARCHAR(500),
   product_id      INTEGER,
@@ -890,6 +892,9 @@ CREATE TABLE courses (
   updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_courses_user       ON courses(id_user);
+CREATE INDEX idx_courses_workspace_owner ON courses(workspace_owner_id);
+CREATE INDEX idx_courses_effective_workspace_owner ON courses((COALESCE(workspace_owner_id, id_user)));
+CREATE INDEX idx_courses_created_by ON courses(created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_courses_code       ON courses(course_code);
 CREATE INDEX idx_courses_product_id ON courses(product_id);
 
@@ -897,6 +902,8 @@ CREATE INDEX idx_courses_product_id ON courses(product_id);
 CREATE TABLE products (
   id              SERIAL PRIMARY KEY,
   id_user         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_by      BIGINT REFERENCES users(id) ON DELETE SET NULL,
   product_code    VARCHAR(100),
   product_name    VARCHAR(255) NOT NULL,
   price           VARCHAR(100),
@@ -912,6 +919,9 @@ CREATE TABLE products (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_products_id_user ON products(id_user);
+CREATE INDEX idx_products_workspace_owner ON products(workspace_owner_id);
+CREATE INDEX idx_products_effective_workspace_owner ON products((COALESCE(workspace_owner_id, id_user)));
+CREATE INDEX idx_products_created_by ON products(created_by) WHERE created_by IS NOT NULL;
 
 -- ─── Email messages — outbound emails (tracking ready) ─────────────────
 CREATE TABLE email_messages (

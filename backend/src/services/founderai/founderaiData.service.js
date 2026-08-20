@@ -7,7 +7,7 @@ class FounderaiDataService {
       const byEmail = await client.query(
         `SELECT id
          FROM customers
-         WHERE id_user = $1
+         WHERE COALESCE(workspace_owner_id, id_user) = $1
            AND LOWER(email) = $2
          ORDER BY id ASC
          LIMIT 1`,
@@ -21,7 +21,7 @@ class FounderaiDataService {
       const byPhone = await client.query(
         `SELECT id
          FROM customers
-         WHERE id_user = $1
+         WHERE COALESCE(workspace_owner_id, id_user) = $1
            AND phone = $2
          ORDER BY id ASC
          LIMIT 1`,
@@ -34,7 +34,7 @@ class FounderaiDataService {
     return null;
   }
 
-  async upsertCustomer({ ctx, client, userId, payload = {} }) {
+  async upsertCustomer({ ctx, client, userId, actorUserId = userId, payload = {} }) {
     const email = ctx.toNullableText(payload.email);
     const phone = ctx.toNullableText(payload.phone);
 
@@ -53,12 +53,13 @@ class FounderaiDataService {
     if (!existingCustomer) {
       const insertResult = await client.query(
         `INSERT INTO customers (
-            id_user, email, phone, full_name, customer_source,
+            id_user, workspace_owner_id, created_by, email, phone, full_name, customer_source,
             has_purchased, total_orders, total_spent, last_order_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0), COALESCE($8, 0), $9)
+         ) VALUES ($1, $1, $2, $3, $4, $5, $6, $7, COALESCE($8, 0), COALESCE($9, 0), $10)
          RETURNING id`,
         [
           userId,
+          actorUserId,
           email,
           phone,
           fullName,
@@ -102,7 +103,7 @@ class FounderaiDataService {
     return { customerId: existingCustomer.id, inserted: false, updated: true };
   }
 
-  async upsertCourse({ ctx, client, userId, product = {} }) {
+  async upsertCourse({ ctx, client, userId, actorUserId = userId, product = {} }) {
     const productId = product?.id ? String(product.id) : null;
     if (!productId) {
       return { courseId: null, inserted: false, updated: false };
@@ -123,7 +124,7 @@ class FounderaiDataService {
     const existingCourse = await client.query(
       `SELECT id
        FROM courses
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
          AND course_code = $2
        LIMIT 1`,
       [userId, productId]
@@ -132,11 +133,11 @@ class FounderaiDataService {
     if (existingCourse.rows.length === 0) {
       const inserted = await client.query(
         `INSERT INTO courses (
-            id_user, course_name, course_code, description,
+            id_user, workspace_owner_id, created_by, course_name, course_code, description,
             price, original_price, category, thumbnail_url, status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ) VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING id`,
-        [userId, courseName, productId, description, price, originalPrice, category, thumbnailUrl, status]
+        [userId, actorUserId, courseName, productId, description, price, originalPrice, category, thumbnailUrl, status]
       );
 
       return { courseId: inserted.rows[0].id, inserted: true, updated: false };
@@ -160,14 +161,14 @@ class FounderaiDataService {
     return { courseId: existingCourse.rows[0].id, inserted: false, updated: true };
   }
 
-  async ensureCourseFromLineItem({ ctx, client, userId, lineItem = {}, productCache = {} }) {
+  async ensureCourseFromLineItem({ ctx, client, userId, actorUserId = userId, lineItem = {}, productCache = {} }) {
     const productId = ctx.getLineItemProductId(lineItem);
     if (!productId) return { courseId: null, inserted: false, updated: false };
 
     const existing = await client.query(
       `SELECT id
        FROM courses
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
          AND course_code = $2
        LIMIT 1`,
       [userId, productId]
@@ -186,16 +187,16 @@ class FounderaiDataService {
     }
 
     if (product) {
-      return this.upsertCourse({ ctx, client, userId, product });
+      return this.upsertCourse({ ctx, client, userId, actorUserId, product });
     }
 
     const courseName = ctx.toNullableText(lineItem.name) || `Product #${productId}`;
     const price = ctx.parseMoney(lineItem.price);
     const inserted = await client.query(
-      `INSERT INTO courses (id_user, course_name, course_code, price, original_price, status)
-       VALUES ($1, $2, $3, $4, $5, 'publish')
+      `INSERT INTO courses (id_user, workspace_owner_id, created_by, course_name, course_code, price, original_price, status)
+       VALUES ($1, $1, $2, $3, $4, $5, $6, 'publish')
        RETURNING id`,
-      [userId, courseName, productId, price, price]
+      [userId, actorUserId, courseName, productId, price, price]
     );
 
     return { courseId: inserted.rows[0].id, inserted: true, updated: false };

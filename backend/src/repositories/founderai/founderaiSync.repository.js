@@ -551,7 +551,7 @@ class FounderaiSyncRepository {
    */
   async campaignBelongsToUser(client, campaignId, userId) {
     const result = await client.query(
-      'SELECT id FROM campaigns WHERE id = $1 AND id_user = $2 LIMIT 1',
+      'SELECT id FROM campaigns WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 LIMIT 1',
       [campaignId, userId]
     );
     return result.rows.length > 0;

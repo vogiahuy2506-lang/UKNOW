@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { paginate } from '../../helpers.js';
 import courseRepository from '../../repositories/courses/course.repository.js';
+import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 
 class CourseService {
   constructor() {
@@ -90,10 +91,10 @@ class CourseService {
     const category = (query.category || '').trim();
     const statuses = this.parseStatuses(query.status);
 
+    const context = getWorkspaceContext(user);
     const { rows, total } = await courseRepository.list({
-      userId: user.id,
-      role: user.role,
-      activeContext: user.activeContext,
+      workspaceOwnerId: context.workspaceOwnerId,
+      isAdmin: context.isSuperAdmin,
       search,
       category,
       statuses,
@@ -108,28 +109,27 @@ class CourseService {
   }
 
   async getById({ courseId, user }) {
-    const row = await courseRepository.findById(courseId);
+    const context = getWorkspaceContext(user);
+    const row = await courseRepository.findById(courseId, {
+      workspaceOwnerId: context.workspaceOwnerId,
+      isAdmin: context.isSuperAdmin,
+    });
     if (!row) {
       const error = new Error('Không tìm thấy khóa học');
       error.status = 404;
       throw error;
     }
 
-    const isOwner = Number(row.id_user) === Number(user.id);
-    const isContextOwner =
-      user.activeContext?.type === 'employee' && Number(row.id_user) === Number(user.activeContext.ownerId);
-    const isAdmin = user.role === 'admin';
-
-    if (!isAdmin && !isOwner && !isContextOwner) {
-      const error = new Error('Bạn không có quyền truy cập khóa học này');
-      error.status = 403;
-      throw error;
-    }
-
     return this.mapCourse(row);
   }
 
-  async syncCoursesFromFounderAI(userId = 1) {
+  async syncCoursesFromFounderAI(workspaceInput = 1) {
+    const workspaceOwnerId = typeof workspaceInput === 'object'
+      ? Number(workspaceInput.workspaceOwnerId)
+      : Number(workspaceInput);
+    const actorUserId = typeof workspaceInput === 'object'
+      ? Number(workspaceInput.actorUserId || workspaceOwnerId)
+      : workspaceOwnerId;
     const startTime = Date.now();
     let totalOrders = 0;
     let totalLineItems = 0;
@@ -193,7 +193,7 @@ class CourseService {
       const productIds = Array.from(productIdsSet);
       console.log(`[Courses Sync] Thu thập được ${productIds.length} unique products từ ${totalOrders} orders (${totalLineItems} line items)`);
 
-      const existingCourses = await courseRepository.findAllByUser(userId);
+      const existingCourses = await courseRepository.findAllByUser(workspaceOwnerId);
       const existingCoursesMap = new Map();
       existingCourses.forEach((course) => {
         existingCoursesMap.set(course.course_code, course);
@@ -226,7 +226,8 @@ class CourseService {
         if (!existingCourse) {
           try {
             await courseRepository.insert({
-              userId,
+              workspaceOwnerId,
+              createdBy: actorUserId,
               courseCode,
               courseName,
               description,
@@ -257,7 +258,7 @@ class CourseService {
 
         if (hasChanged) {
           try {
-            await courseRepository.update(existingCourse.id, {
+            await courseRepository.update(existingCourse.id, workspaceOwnerId, {
               courseName,
               price,
               originalPrice,

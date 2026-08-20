@@ -62,6 +62,7 @@ export async function truncateAll() {
       campaign_customers,
       zalo_messages,
       email_messages,
+      products,
       courses,
       customers,
       landing_page_events,

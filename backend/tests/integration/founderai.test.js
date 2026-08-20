@@ -51,6 +51,14 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function addFounderAiMembership(ownerId, employeeId, permissions) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [ownerId, employeeId, JSON.stringify(permissions)]
+  );
+}
+
 async function createCampaign({ userId, name = 'CMP A', status = 'active' }) {
   const { rows } = await db.query(
     `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, $2, $3) RETURNING *`,
@@ -75,6 +83,19 @@ describe('GET /api/founderai/customers', () => {
   it('không token → 401', async () => {
     const res = await request(app).get('/api/founderai/customers');
     expect(res.status).toBe(401);
+  });
+
+  it('employee thiếu customers permission → 403 trước khi gọi Founder AI', async () => {
+    const owner = await createUser({ username: 'fa-read-owner' });
+    const employee = await createUser({ username: 'fa-read-employee' });
+    await addFounderAiMembership(owner.id, employee.id, { courses: true });
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .get('/api/founderai/customers')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id));
+    expect(res.status).toBe(403);
+    expect(mockAxiosGet).not.toHaveBeenCalled();
   });
 
   it('happy path → map đúng + auth header Basic', async () => {
@@ -185,6 +206,32 @@ describe('POST /api/founderai/sync/customers', () => {
     expect(res.status).toBe(401);
   });
 
+  it('employee sync customer vào owner workspace và lưu actor', async () => {
+    const owner = await createUser({ username: 'fa-sync-customer-owner' });
+    const employee = await createUser({ username: 'fa-sync-customer-employee' });
+    await addFounderAiMembership(owner.id, employee.id, { customers: true });
+    const token = await loginAs(employee);
+    mockAxiosGet.mockResolvedValue({
+      status: 200,
+      headers: { 'x-wp-totalpages': '1' },
+      data: [{ email: 'employee-sync@test.local', first_name: 'Employee', orders_count: 0 }],
+    });
+
+    const res = await request(app)
+      .post('/api/founderai/sync/customers')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id));
+    expect(res.status).toBe(200);
+
+    const { rows } = await db.query(
+      `SELECT id_user, workspace_owner_id, created_by
+       FROM customers WHERE email = 'employee-sync@test.local'`
+    );
+    expect(Number(rows[0].id_user)).toBe(Number(owner.id));
+    expect(Number(rows[0].workspace_owner_id)).toBe(Number(owner.id));
+    expect(Number(rows[0].created_by)).toBe(Number(employee.id));
+  });
+
   it('1 trang, 2 customer mới → inserted=2 + lưu source=founderai', async () => {
     const user = await createUser({ username: 'fa-sc-1' });
     const token = await loginAs(user);
@@ -252,6 +299,32 @@ describe('POST /api/founderai/sync/customers', () => {
 // POST /api/founderai/sync/courses
 // ═══════════════════════════════════════════════════════════════════════
 describe('POST /api/founderai/sync/courses', () => {
+  it('employee sync course vào owner workspace và lưu actor', async () => {
+    const owner = await createUser({ username: 'fa-sync-course-owner' });
+    const employee = await createUser({ username: 'fa-sync-course-employee' });
+    await addFounderAiMembership(owner.id, employee.id, { courses: true });
+    const token = await loginAs(employee);
+    mockAxiosGet.mockResolvedValue({
+      status: 200,
+      headers: { 'x-wp-totalpages': '1' },
+      data: [{ id: 778, name: 'Employee Course', price: '100000', status: 'publish' }],
+    });
+
+    const res = await request(app)
+      .post('/api/founderai/sync/courses')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id));
+    expect(res.status).toBe(200);
+
+    const { rows } = await db.query(
+      `SELECT id_user, workspace_owner_id, created_by
+       FROM courses WHERE course_code = '778'`
+    );
+    expect(Number(rows[0].id_user)).toBe(Number(owner.id));
+    expect(Number(rows[0].workspace_owner_id)).toBe(Number(owner.id));
+    expect(Number(rows[0].created_by)).toBe(Number(employee.id));
+  });
+
   it('1 product mới → INSERT vào courses với id_user', async () => {
     const user = await createUser({ username: 'fa-co-1' });
     const token = await loginAs(user);

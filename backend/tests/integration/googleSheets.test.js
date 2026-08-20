@@ -24,6 +24,7 @@ jest.unstable_mockModule('axios', () => ({
 
 const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
+const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
 
 let app;
@@ -44,6 +45,14 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function addGoogleSheetsMembership(ownerId, employeeId, campaignsView) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [ownerId, employeeId, JSON.stringify({ campaigns_view: campaignsView })]
+  );
+}
+
 const VALID_SHEET_URL = 'https://docs.google.com/spreadsheets/d/abc123XYZ_DEF/edit#gid=0';
 
 /**
@@ -61,6 +70,44 @@ describe('POST /api/google-sheets/check', () => {
   it('không token → 401', async () => {
     const res = await request(app).post('/api/google-sheets/check').send({ sheetUrl: VALID_SHEET_URL });
     expect(res.status).toBe(401);
+  });
+
+  it('employee thiếu campaigns_view → 403 trước khi tải sheet', async () => {
+    const owner = await createUser({ username: 'gs-permission-owner' });
+    const employee = await createUser({ username: 'gs-permission-employee' });
+    await addGoogleSheetsMembership(owner.id, employee.id, false);
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .post('/api/google-sheets/check')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ sheetUrl: VALID_SHEET_URL });
+    expect(res.status).toBe(403);
+    expect(mockAxiosGet).not.toHaveBeenCalled();
+  });
+
+  it('employee có campaigns_view → được kiểm tra sheet', async () => {
+    const owner = await createUser({ username: 'gs-allowed-owner' });
+    const employee = await createUser({ username: 'gs-allowed-employee' });
+    await addGoogleSheetsMembership(owner.id, employee.id, true);
+    const token = await loginAs(employee);
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes('/htmlview')) {
+        return { status: 200, data: htmlviewWithSheetNames('Sheet1') };
+      }
+      return {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+        data: 'email,name\na@test.local,Test User',
+      };
+    });
+    const res = await request(app)
+      .post('/api/google-sheets/check')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ sheetUrl: VALID_SHEET_URL });
+    expect(res.status).toBe(200);
+    expect(res.body.data.columns).toEqual(['email', 'name']);
   });
 
   it('thiếu sheetUrl → 400', async () => {

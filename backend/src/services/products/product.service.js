@@ -1,6 +1,7 @@
 import { paginate } from '../../helpers.js';
 import productRepository from '../../repositories/products/product.repository.js';
 import businessProfileService from '../ai/businessProfile.service.js';
+import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 
 class ProductService {
   normalizeStatus(rawStatus) {
@@ -36,28 +37,10 @@ class ProductService {
       .filter((item, idx, arr) => item && arr.indexOf(item) === idx);
   }
 
-  resolveOwnerId(user) {
-    if (user.activeContext?.type === 'employee') {
-      return Number(user.activeContext.ownerId);
-    }
-    return Number(user.id);
-  }
-
-  assertOwnership(row, user) {
+  assertExists(row) {
     if (!row) {
       const error = new Error('Không tìm thấy sản phẩm');
       error.status = 404;
-      throw error;
-    }
-
-    const isOwner = Number(row.id_user) === Number(user.id);
-    const isContextOwner =
-      user.activeContext?.type === 'employee' && Number(row.id_user) === Number(user.activeContext.ownerId);
-    const isAdmin = user.role === 'admin';
-
-    if (!isAdmin && !isOwner && !isContextOwner) {
-      const error = new Error('Bạn không có quyền truy cập sản phẩm này');
-      error.status = 403;
       throw error;
     }
   }
@@ -70,10 +53,10 @@ class ProductService {
     const category = (query.category || '').trim();
     const statuses = this.parseStatuses(query.status);
 
+    const context = getWorkspaceContext(user);
     const { rows, total } = await productRepository.list({
-      userId: user.id,
-      role: user.role,
-      activeContext: user.activeContext,
+      workspaceOwnerId: context.workspaceOwnerId,
+      isAdmin: context.isSuperAdmin,
       search,
       category,
       statuses,
@@ -88,14 +71,18 @@ class ProductService {
   }
 
   async getById({ productId, user }) {
-    const row = await productRepository.findById(productId);
-    this.assertOwnership(row, user);
+    const context = getWorkspaceContext(user);
+    const row = await productRepository.findById(productId, {
+      workspaceOwnerId: context.workspaceOwnerId,
+      isAdmin: context.isSuperAdmin,
+    });
+    this.assertExists(row);
     return this.mapProduct(row);
   }
 
   async getCategories({ user }) {
-    const ownerId = this.resolveOwnerId(user);
-    return productRepository.listCategories(ownerId);
+    const { workspaceOwnerId } = getWorkspaceContext(user);
+    return productRepository.listCategories(workspaceOwnerId);
   }
 
   async create({ payload, user }) {
@@ -106,9 +93,10 @@ class ProductService {
       throw error;
     }
 
-    const ownerId = this.resolveOwnerId(user);
+    const { actorUserId, workspaceOwnerId } = getWorkspaceContext(user);
     const id = await productRepository.insert({
-      userId: ownerId,
+      workspaceOwnerId,
+      createdBy: actorUserId,
       productCode: payload.productCode?.trim() || null,
       productName,
       description: payload.description?.trim() || null,
@@ -122,7 +110,7 @@ class ProductService {
       status: this.normalizeStatus(payload.status),
     });
 
-    await businessProfileService.reembedChunks(ownerId).catch((e) => {
+    await businessProfileService.reembedChunks(workspaceOwnerId).catch((e) => {
       console.warn('[Products] re-embed sau create thất bại:', e?.message || e);
     });
 
@@ -130,8 +118,13 @@ class ProductService {
   }
 
   async update({ productId, payload, user }) {
-    const row = await productRepository.findById(productId);
-    this.assertOwnership(row, user);
+    const context = getWorkspaceContext(user);
+    const row = await productRepository.findById(productId, {
+      workspaceOwnerId: context.workspaceOwnerId,
+      isAdmin: context.isSuperAdmin,
+    });
+    this.assertExists(row);
+    const resourceOwnerId = Number(row.workspace_owner_id || row.id_user);
 
     const productName = String(payload.productName ?? row.product_name ?? '').trim();
     if (!productName) {
@@ -140,7 +133,7 @@ class ProductService {
       throw error;
     }
 
-    await productRepository.update(productId, {
+    await productRepository.update(productId, resourceOwnerId, {
       productCode: payload.productCode !== undefined ? (payload.productCode?.trim() || null) : row.product_code,
       productName,
       price: payload.price !== undefined ? (payload.price?.trim() || null) : row.price,
@@ -154,7 +147,7 @@ class ProductService {
       status: payload.status !== undefined ? this.normalizeStatus(payload.status) : this.normalizeStatus(row.status),
     });
 
-    await businessProfileService.reembedChunks(row.id_user).catch((e) => {
+    await businessProfileService.reembedChunks(resourceOwnerId).catch((e) => {
       console.warn('[Products] re-embed sau update thất bại:', e?.message || e);
     });
 
@@ -162,16 +155,21 @@ class ProductService {
   }
 
   async remove({ productId, user }) {
-    const row = await productRepository.findById(productId);
-    this.assertOwnership(row, user);
-    const deleted = await productRepository.deleteById(productId);
+    const context = getWorkspaceContext(user);
+    const row = await productRepository.findById(productId, {
+      workspaceOwnerId: context.workspaceOwnerId,
+      isAdmin: context.isSuperAdmin,
+    });
+    this.assertExists(row);
+    const resourceOwnerId = Number(row.workspace_owner_id || row.id_user);
+    const deleted = await productRepository.deleteById(productId, resourceOwnerId);
     if (!deleted) {
       const error = new Error('Không thể xóa sản phẩm');
       error.status = 500;
       throw error;
     }
 
-    await businessProfileService.reembedChunks(row.id_user).catch((e) => {
+    await businessProfileService.reembedChunks(resourceOwnerId).catch((e) => {
       console.warn('[Products] re-embed sau delete thất bại:', e?.message || e);
     });
 

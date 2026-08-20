@@ -177,13 +177,13 @@ describe('GET /api/courses/:id', () => {
     });
   });
 
-  it('không phải owner và không phải admin → 403', async () => {
+  it('không phải owner và không phải admin → 404 không lộ resource tenant khác', async () => {
     const me = await createUser({ username: 'c-by-3' });
     const other = await createUser({ username: 'c-by-3-other' });
     const row = await insertCourse({ idUser: other.id, courseCode: 'B3' });
     const token = await loginAs(me);
     const res = await request(app).get(`/api/courses/${row.id}`).set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   it('admin xem được course của user khác', async () => {
@@ -393,7 +393,11 @@ describe('POST /api/courses/sync', () => {
       .set('X-Owner-Context', String(owner.id));
     expect(res.status).toBe(200);
 
-    const { rows } = await db.query(`SELECT id_user FROM courses WHERE course_code = '555'`);
+    const { rows } = await db.query(
+      `SELECT id_user, workspace_owner_id, created_by FROM courses WHERE course_code = '555'`
+    );
     expect(Number(rows[0].id_user)).toBe(Number(owner.id));
+    expect(Number(rows[0].workspace_owner_id)).toBe(Number(owner.id));
+    expect(Number(rows[0].created_by)).toBe(Number(employee.id));
   });
 });

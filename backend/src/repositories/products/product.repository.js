@@ -1,18 +1,13 @@
 import db from '../../config/database.js';
-import { buildUserScopeClause } from '../../utils/roleScope.util.js';
 
 class ProductRepository {
-  async list({ userId, role, activeContext, search, category, statuses, limit, offset }) {
-    const { clause: scopeClause, params: scopedParams } = buildUserScopeClause({
-      tableAlias: 'products',
-      userId,
-      role,
-      activeContext,
-    });
-
-    const params = [...scopedParams];
+  async list({ workspaceOwnerId, isAdmin, search, category, statuses, limit, offset }) {
+    const params = [];
     const whereClauses = [];
-    if (scopeClause) whereClauses.push(scopeClause);
+    if (!isAdmin) {
+      params.push(workspaceOwnerId);
+      whereClauses.push(`COALESCE(products.workspace_owner_id, products.id_user) = $${params.length}`);
+    }
 
     let paramIndex = params.length + 1;
 
@@ -69,11 +64,12 @@ class ProductRepository {
     };
   }
 
-  async findById(id) {
+  async findById(id, { workspaceOwnerId, isAdmin = false } = {}) {
     const result = await db.query(
       `SELECT
         id,
         id_user,
+        workspace_owner_id,
         product_code,
         product_name,
         price,
@@ -88,8 +84,9 @@ class ProductRepository {
         created_at,
         updated_at
       FROM products
-      WHERE id = $1`,
-      [id]
+      WHERE id = $1
+        ${isAdmin ? '' : 'AND COALESCE(workspace_owner_id, id_user) = $2'}`,
+      isAdmin ? [id] : [id, workspaceOwnerId]
     );
     return result.rows[0] || null;
   }
@@ -98,7 +95,7 @@ class ProductRepository {
     const result = await db.query(
       `SELECT id, product_code, product_name, price, original_price, description, usp, category, thumbnail_url, product_url, target_audience, status
        FROM products
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
        ORDER BY updated_at DESC, id DESC`,
       [userId]
     );
@@ -106,7 +103,8 @@ class ProductRepository {
   }
 
   async insert({
-    userId,
+    workspaceOwnerId,
+    createdBy,
     productCode,
     productName,
     description,
@@ -121,16 +119,16 @@ class ProductRepository {
   }) {
     const { rows } = await db.query(
       `INSERT INTO products (
-        id_user, product_code, product_name, description, usp,
+        id_user, workspace_owner_id, created_by, product_code, product_name, description, usp,
         price, original_price, category, thumbnail_url, product_url, target_audience, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING id`,
-      [userId, productCode, productName, description, usp, price, originalPrice, category, thumbnailUrl, productUrl, targetAudience, status]
+      [workspaceOwnerId, workspaceOwnerId, createdBy, productCode, productName, description, usp, price, originalPrice, category, thumbnailUrl, productUrl, targetAudience, status]
     );
     return rows[0]?.id || null;
   }
 
-  async update(id, {
+  async update(id, workspaceOwnerId, {
     productCode,
     productName,
     price,
@@ -159,8 +157,9 @@ class ProductRepository {
          status = $11,
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $12
+         AND COALESCE(workspace_owner_id, id_user) = $13
        RETURNING id`,
-      [productCode, productName, price, originalPrice, description, usp, category, thumbnailUrl, productUrl, targetAudience, status, id]
+      [productCode, productName, price, originalPrice, description, usp, category, thumbnailUrl, productUrl, targetAudience, status, id, workspaceOwnerId]
     );
     return rows[0] || null;
   }
@@ -169,7 +168,7 @@ class ProductRepository {
     const result = await db.query(
       `SELECT DISTINCT category
        FROM products
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
          AND category IS NOT NULL
          AND TRIM(category) <> ''
        ORDER BY category ASC`,
@@ -178,10 +177,12 @@ class ProductRepository {
     return result.rows.map((row) => String(row.category || '').trim()).filter(Boolean);
   }
 
-  async deleteById(id) {
+  async deleteById(id, workspaceOwnerId) {
     const { rows } = await db.query(
-      `DELETE FROM products WHERE id = $1 RETURNING id`,
-      [id]
+      `DELETE FROM products
+       WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2
+       RETURNING id`,
+      [id, workspaceOwnerId]
     );
     return rows[0] || null;
   }

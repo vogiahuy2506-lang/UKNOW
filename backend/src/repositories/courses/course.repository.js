@@ -1,18 +1,13 @@
 import db from '../../config/database.js';
-import { buildUserScopeClause } from '../../utils/roleScope.util.js';
 
 class CourseRepository {
-  async list({ userId, role, activeContext, search, category, statuses, limit, offset }) {
-    const { clause: scopeClause, params: scopedParams } = buildUserScopeClause({
-      tableAlias: 'courses',
-      userId,
-      role,
-      activeContext,
-    });
-
-    const params = [...scopedParams];
+  async list({ workspaceOwnerId, isAdmin, search, category, statuses, limit, offset }) {
+    const params = [];
     const whereClauses = [];
-    if (scopeClause) whereClauses.push(scopeClause);
+    if (!isAdmin) {
+      params.push(workspaceOwnerId);
+      whereClauses.push(`COALESCE(courses.workspace_owner_id, courses.id_user) = $${params.length}`);
+    }
 
     let paramIndex = params.length + 1;
 
@@ -66,7 +61,7 @@ class CourseRepository {
     };
   }
 
-  async findById(id) {
+  async findById(id, { workspaceOwnerId, isAdmin = false } = {}) {
     const result = await db.query(
       `SELECT
         id,
@@ -82,8 +77,9 @@ class CourseRepository {
         created_at,
         updated_at
       FROM courses
-      WHERE id = $1`,
-      [id]
+      WHERE id = $1
+        ${isAdmin ? '' : 'AND COALESCE(workspace_owner_id, id_user) = $2'}`,
+      isAdmin ? [id] : [id, workspaceOwnerId]
     );
     return result.rows[0] || null;
   }
@@ -101,7 +97,7 @@ class CourseRepository {
         price,
         original_price
       FROM courses
-      WHERE id = $1 AND id_user = $2
+      WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2
       LIMIT 1`,
       [id, ownerUserId]
     );
@@ -130,7 +126,7 @@ class CourseRepository {
         price,
         original_price
       FROM courses
-      WHERE id_user = $1 AND id = ANY($2::int[])`,
+      WHERE COALESCE(workspace_owner_id, id_user) = $1 AND id = ANY($2::int[])`,
       [ownerUserId, uniqueIds]
     );
     return result.rows;
@@ -140,23 +136,23 @@ class CourseRepository {
     const result = await db.query(
       `SELECT id, course_code, course_name, price, original_price, description, category, thumbnail_url, status
        FROM courses
-       WHERE id_user = $1`,
+       WHERE COALESCE(workspace_owner_id, id_user) = $1`,
       [userId]
     );
     return result.rows;
   }
 
-  async insert({ userId, courseCode, courseName, description, price, originalPrice, category, thumbnailUrl, status }) {
+  async insert({ workspaceOwnerId, createdBy, courseCode, courseName, description, price, originalPrice, category, thumbnailUrl, status }) {
     await db.query(
       `INSERT INTO courses (
-        id_user, course_code, course_name, description,
+        id_user, workspace_owner_id, created_by, course_code, course_name, description,
         price, original_price, category, thumbnail_url, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [userId, courseCode, courseName, description, price, originalPrice, category, thumbnailUrl, status]
+      ) VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [workspaceOwnerId, createdBy, courseCode, courseName, description, price, originalPrice, category, thumbnailUrl, status]
     );
   }
 
-  async update(id, { courseName, price, originalPrice, description, category, thumbnailUrl, status }) {
+  async update(id, workspaceOwnerId, { courseName, price, originalPrice, description, category, thumbnailUrl, status }) {
     await db.query(
       `UPDATE courses
        SET
@@ -168,8 +164,9 @@ class CourseRepository {
          thumbnail_url = $6,
          status = $7,
          updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8`,
-      [courseName, price, originalPrice, description, category, thumbnailUrl, status, id]
+       WHERE id = $8
+         AND COALESCE(workspace_owner_id, id_user) = $9`,
+      [courseName, price, originalPrice, description, category, thumbnailUrl, status, id, workspaceOwnerId]
     );
   }
 }

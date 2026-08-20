@@ -6,7 +6,7 @@ class UknowSyncService {
   /**
    * Sync customers from Founder AI API into local DB.
    */
-  async syncCustomers({ ctx, userId }) {
+  async syncCustomers({ ctx, userId, actorUserId = userId }) {
     const client = await db.getClient();
 
     try {
@@ -37,7 +37,7 @@ class UknowSyncService {
             totalOrders: parseInt(customer.orders_count || 0, 10) || 0,
             totalSpent: ctx.parseMoney(customer.total_spent),
             lastOrderAt: null,
-          });
+          }, actorUserId);
 
           if (result.inserted) inserted += 1;
           if (result.updated) updated += 1;
@@ -65,7 +65,7 @@ class UknowSyncService {
   /**
    * Sync courses from Founder AI API into local DB.
    */
-  async syncCourses({ ctx, userId }) {
+  async syncCourses({ ctx, userId, actorUserId = userId }) {
     const client = await db.getClient();
 
     try {
@@ -86,7 +86,7 @@ class UknowSyncService {
 
         for (const product of products) {
           processed += 1;
-          const result = await ctx.upsertCourse(client, userId, product);
+          const result = await ctx.upsertCourse(client, userId, product, actorUserId);
           if (result.inserted) inserted += 1;
           if (result.updated) updated += 1;
         }
@@ -113,7 +113,7 @@ class UknowSyncService {
   /**
    * Sync orders in bulk from Founder AI API.
    */
-  async syncOrders({ ctx, userId, status, onlyMissing, sources, days, startDate, endDate }) {
+  async syncOrders({ ctx, userId, actorUserId = userId, status, onlyMissing, sources, days, startDate, endDate }) {
     const client = await db.getClient();
 
     try {
@@ -322,7 +322,7 @@ class UknowSyncService {
           fullName,
           customerSource: 'uknow_campaign',
           hasPurchased: isPurchasedOrder,
-        });
+        }, actorUserId);
       };
 
       /**
@@ -577,7 +577,7 @@ class UknowSyncService {
             processedLineItems += 1;
             const lineItemProductId = ctx.getLineItemProductId(lineItem);
 
-            const ensuredCourse = await ctx.ensureCourseFromLineItem(client, userId, lineItem, productCache);
+            const ensuredCourse = await ctx.ensureCourseFromLineItem(client, userId, lineItem, productCache, actorUserId);
             if (ensuredCourse.inserted) insertedCourses += 1;
             if (ensuredCourse.updated) updatedCourses += 1;
 
@@ -739,7 +739,7 @@ class UknowSyncService {
   /**
    * Sync one order from Founder AI API.
    */
-  async syncOrder({ ctx, userId, orderId }) {
+  async syncOrder({ ctx, userId, actorUserId = userId, orderId }) {
     const client = await db.getClient();
 
     try {
@@ -778,7 +778,7 @@ class UknowSyncService {
         fullName: ctx.formatName(order.billing?.first_name, order.billing?.last_name),
         customerSource: 'uknow_campaign',
         hasPurchased: isPurchasedOrder,
-      });
+      }, actorUserId);
 
       if (!customerResult.customerId) {
         const err = new Error('Không thể xác định khách hàng từ đơn hàng này');
@@ -796,7 +796,7 @@ class UknowSyncService {
 
       for (const lineItem of order.line_items || []) {
         const lineItemProductId = ctx.getLineItemProductId(lineItem);
-        const ensuredCourse = await ctx.ensureCourseFromLineItem(client, userId, lineItem, productCache);
+        const ensuredCourse = await ctx.ensureCourseFromLineItem(client, userId, lineItem, productCache, actorUserId);
         if (ensuredCourse.inserted) insertedCourses += 1;
         if (ensuredCourse.updated) updatedCourses += 1;
 
