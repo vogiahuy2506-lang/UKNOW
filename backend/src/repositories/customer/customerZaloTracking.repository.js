@@ -3,20 +3,20 @@ import db from '../../config/database.js';
 class CustomerZaloTrackingRepository {
   async getCampaignUserId(client, campaignId) {
     const result = await client.query(
-      `SELECT id_user
+      `SELECT COALESCE(workspace_owner_id, id_user) AS workspace_owner_id
        FROM campaigns
        WHERE id = $1
        LIMIT 1`,
       [campaignId]
     );
-    return result.rows[0]?.id_user ?? null;
+    return result.rows[0]?.workspace_owner_id ?? null;
   }
 
   async findCustomerByZaloUid(client, userId, zaloUid) {
     const result = await client.query(
       `SELECT id
        FROM customers
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
          AND zalo_id = $2
        ORDER BY id ASC
        LIMIT 1`,
@@ -28,9 +28,9 @@ class CustomerZaloTrackingRepository {
   async createPlaceholderCustomerByZaloUid(client, userId, zaloUid) {
     const result = await client.query(
       `INSERT INTO customers
-         (id_user, zalo_id, customer_source, utm_source, created_at, updated_at)
+         (id_user, workspace_owner_id, zalo_id, customer_source, utm_source, created_at, updated_at)
        VALUES
-         ($1, $2, 'uknow_campaign', 'zalo_person_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ($1, $1, $2, 'uknow_campaign', 'zalo_person_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [userId, zaloUid]
     );

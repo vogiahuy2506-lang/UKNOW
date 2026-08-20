@@ -1,5 +1,6 @@
 import leadService from '../services/lead/lead.service.js';
 import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 /**
  * Parse query chung cho preview và danh sách admin (lọc lead landing).
@@ -66,16 +67,12 @@ class LeadController {
    */
   async preview(req, res) {
     try {
-      const userId = req.user?.id;
-      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
-        ? req.user.activeContext.ownerId
-        : userId;
+      const workspaceContext = getWorkspaceContext(req.user);
 
       const config = {
         ...parseLandingLeadFilters(req.query || {}),
-        idUser: effectiveOwnerId,
-        roleCode: req.user?.role,
-        ownerId: req.user.activeContext?.ownerId,
+        workspaceOwnerId: workspaceContext.workspaceOwnerId,
+        isSuperAdmin: workspaceContext.isSuperAdmin,
       };
       const { items, total } = await leadService.getLeadsForCampaignConfig(config);
       const limitNorm = clampLandingLeadsLimit(config.landingLeadsLimit, 1000);
@@ -107,9 +104,7 @@ class LeadController {
   async listCustomFieldDefinitions(req, res) {
     try {
       const items = await leadService.listCustomFieldDefinitions({
-        userId: req.user?.id,
-        roleCode: req.user?.role,
-        ownerId: req.user.activeContext?.ownerId,
+        ...getWorkspaceContext(req.user),
       });
       return res.json({ success: true, data: { items } });
     } catch (error) {
@@ -141,16 +136,12 @@ class LeadController {
       const pageSizeRaw = parseInt(String(q.pageSize), 10);
       const pageSize = Math.min(100, Math.max(1, Number.isFinite(pageSizeRaw) ? pageSizeRaw : 20));
 
-      const userId = req.user?.id;
-      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
-        ? req.user.activeContext.ownerId
-        : userId;
+      const workspaceContext = getWorkspaceContext(req.user);
 
       const { items, total, totalPages } = await leadService.listAdminPaginated({
         ...base,
-        idUser: effectiveOwnerId,
-        roleCode: req.user?.role,
-        ownerId: req.user.activeContext?.ownerId,
+        workspaceOwnerId: workspaceContext.workspaceOwnerId,
+        isSuperAdmin: workspaceContext.isSuperAdmin,
         page,
         pageSize,
       });
@@ -189,16 +180,12 @@ class LeadController {
    */
   async exportXlsx(req, res) {
     try {
-      const userId = req.user?.id;
-      const effectiveOwnerId = req.user.activeContext?.type === 'employee'
-        ? req.user.activeContext.ownerId
-        : userId;
+      const workspaceContext = getWorkspaceContext(req.user);
 
       const base = {
         ...parseLandingLeadFilters(req.query || {}),
-        idUser: effectiveOwnerId,
-        roleCode: req.user?.role,
-        ownerId: req.user.activeContext?.ownerId,
+        workspaceOwnerId: workspaceContext.workspaceOwnerId,
+        isSuperAdmin: workspaceContext.isSuperAdmin,
       };
       const { buffer, total, exportedCount, truncated } = await leadService.exportAdminFilteredXlsx(base);
 

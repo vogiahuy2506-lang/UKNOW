@@ -70,6 +70,41 @@ async function insertLead({
   return rows[0];
 }
 
+async function addLeadMembership(ownerId, employeeId) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [ownerId, employeeId, JSON.stringify({ leads: true })]
+  );
+}
+
+describe('Lead employee workspace ownership', () => {
+  it('employee preview/list chỉ thấy lead của active owner workspace', async () => {
+    const ownerA = await createUser({ username: 'lead_workspace_a' });
+    const ownerB = await createUser({ username: 'lead_workspace_b' });
+    const employee = await createUser({ username: 'lead_workspace_employee' });
+    await addLeadMembership(ownerA.id, employee.id);
+    await insertLead({ idUser: ownerA.id, email: 'lead-a@test.local' });
+    await insertLead({ idUser: ownerB.id, email: 'lead-b@test.local' });
+
+    const token = await loginAs(employee);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'X-Owner-Context': String(ownerA.id),
+    };
+
+    const [previewRes, listRes] = await Promise.all([
+      request(app).get('/api/leads/preview').set(headers),
+      request(app).get('/api/leads').set(headers),
+    ]);
+
+    expect(previewRes.status).toBe(200);
+    expect(previewRes.body.data.items.map((item) => item.email)).toEqual(['lead-a@test.local']);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.items.map((item) => item.email)).toEqual(['lead-a@test.local']);
+  });
+});
+
 // ===========================================================================
 // AUTHORIZATION
 // ===========================================================================

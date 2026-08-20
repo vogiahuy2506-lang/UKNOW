@@ -15,7 +15,7 @@ class CustomerReadRepository {
 
   async findOwnedCustomer(customerId, userId) {
     const result = await db.query(
-      'SELECT id FROM customers WHERE id = $1 AND id_user = $2',
+      'SELECT id FROM customers WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2',
       [customerId, userId]
     );
     return result.rows[0] || null;
@@ -42,7 +42,8 @@ class CustomerReadRepository {
           c.notes, c.custom_fields,
           c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
           c.email_hard_bounced
-       FROM customers c WHERE c.id = $1 AND c.id_user = $2`,
+       FROM customers c
+       WHERE c.id = $1 AND COALESCE(c.workspace_owner_id, c.id_user) = $2`,
       [customerId, userId]
     );
     return result.rows[0] || null;
@@ -110,7 +111,7 @@ class CustomerReadRepository {
        FROM campaign_customers cc
        JOIN campaigns c ON c.id = cc.id_campaign
        WHERE cc.id_customer = $1
-         AND c.id_user = $2
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2
        ORDER BY cc.last_activity_at DESC NULLS LAST, cc.joined_at DESC`,
       [customerId, userId]
     );
@@ -240,7 +241,7 @@ class CustomerReadRepository {
        FROM campaign_customers cc
        JOIN campaigns c ON c.id = cc.id_campaign
        WHERE cc.id_customer = $1
-         AND c.id_user = $2
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2
          ${participationFilter}
        ORDER BY cc.last_activity_at DESC NULLS LAST, cc.joined_at DESC`,
       participationParams
@@ -306,14 +307,14 @@ class CustomerReadRepository {
                FROM campaign_customers cc
                JOIN campaigns cp ON cp.id = cc.id_campaign
                WHERE cc.id_customer = c.id
-                 AND cp.id_user = c.id_user
+                 AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
              ), 0)::INTEGER AS campaign_count,
              (
                SELECT MAX(cc.last_activity_at)::timestamptz
                FROM campaign_customers cc
                JOIN campaigns cp ON cp.id = cc.id_campaign
                WHERE cc.id_customer = c.id
-                 AND cp.id_user = c.id_user
+                 AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
              ) AS last_campaign_activity_at,
              ${orderStatusExpr} AS order_status,
              ${uknowStatusExpr} AS uknow_status,
@@ -322,7 +323,7 @@ class CustomerReadRepository {
              ${campaignReceivedExpr} AS campaign_email_received_count,
              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at
       FROM customers c
-      WHERE c.id_user = $1
+      WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
     `;
     const normalizedStatus = typeof status === 'string' ? status.trim().toLowerCase() : '';
     const normalizedSource = typeof source === 'string' ? source.trim().toLowerCase() : '';
@@ -360,7 +361,7 @@ class CustomerReadRepository {
         SELECT 1
         FROM campaigns cp
         WHERE cp.id = $${campaignParamIdx}
-          AND cp.id_user = c.id_user
+          AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
           AND (
             EXISTS (
               SELECT 1
@@ -393,7 +394,7 @@ class CustomerReadRepository {
     query += ` ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
 
-    let countQuery = 'SELECT COUNT(*) FROM customers c WHERE c.id_user = $1';
+    let countQuery = 'SELECT COUNT(*) FROM customers c WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1';
     const countParams = [userId];
     if (normalizedStatus) {
       const isOrderStatus = ['completed', 'on-hold', 'onhold'].includes(normalizedStatus);
@@ -426,7 +427,7 @@ class CustomerReadRepository {
         SELECT 1
         FROM campaigns cp
         WHERE cp.id = $${countParams.length}
-          AND cp.id_user = c.id_user
+          AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
           AND (
             EXISTS (
               SELECT 1
@@ -471,7 +472,7 @@ class CustomerReadRepository {
     const result = await db.query(
       `SELECT id, campaign_type
        FROM campaigns
-       WHERE id = $1 AND id_user = $2
+       WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2
        LIMIT 1`,
       [campaignId, userId],
     );
@@ -605,7 +606,8 @@ class CustomerReadRepository {
       params.push(...normalizedNotPurchasedCourseIds);
       whereNotPurchased = ` AND cp.id_customer NOT IN (
         SELECT pur.id_customer FROM customer_purchases pur
-        JOIN customers cu ON cu.id = pur.id_customer AND cu.id_user = $1
+        JOIN customers cu ON cu.id = pur.id_customer
+         AND COALESCE(cu.workspace_owner_id, cu.id_user) = $1
         WHERE pur.id_course IN (${placeholders})
           AND LOWER(COALESCE(pur.product_type, '')) != 'interested'
       )`;
@@ -637,11 +639,11 @@ class CustomerReadRepository {
       FROM customer_purchases cp
       JOIN customers c
         ON c.id = cp.id_customer
-       AND c.id_user = $1
+       AND COALESCE(c.workspace_owner_id, c.id_user) = $1
       LEFT JOIN courses crs ON crs.id = cp.id_course
       LEFT JOIN campaigns camp
         ON camp.id = cp.id_campaign
-       AND camp.id_user = c.id_user
+       AND COALESCE(camp.workspace_owner_id, camp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
       WHERE ${interestedCondition}
         ${whereCampaign}
         ${whereCourse}
@@ -663,7 +665,7 @@ class CustomerReadRepository {
       FROM customer_purchases cp
       JOIN customers c
         ON c.id = cp.id_customer
-       AND c.id_user = $1
+       AND COALESCE(c.workspace_owner_id, c.id_user) = $1
       LEFT JOIN courses crs ON crs.id = cp.id_course
       WHERE ${interestedCondition}
         ${whereCampaign}
@@ -681,7 +683,7 @@ class CustomerReadRepository {
       FROM customer_purchases cp
       JOIN customers c
         ON c.id = cp.id_customer
-       AND c.id_user = $1
+       AND COALESCE(c.workspace_owner_id, c.id_user) = $1
       LEFT JOIN courses crs ON crs.id = cp.id_course
       WHERE ${interestedCondition}
         ${whereCampaign}

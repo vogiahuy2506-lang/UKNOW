@@ -53,11 +53,11 @@ class CustomerMutationService {
     return normalizedCustomerSource;
   }
 
-  async create({ userId, payload }) {
+  async create({ workspaceOwnerId, actorUserId, payload }) {
     const { email, phone, fullName, gender, customerSource, notes } = payload;
     const normalizedCustomerSource = this.validateCustomerSource(customerSource);
 
-    const customer = await customerMutationRepository.createCustomer(userId, {
+    const customer = await customerMutationRepository.createCustomer({ workspaceOwnerId, actorUserId }, {
       email,
       phone,
       fullName,
@@ -74,7 +74,7 @@ class CustomerMutationService {
     };
   }
 
-  async bulkUpsert({ userId, payload }) {
+  async bulkUpsert({ workspaceOwnerId, actorUserId, payload }) {
     const { items, campaignId } = payload || {};
     if (!Array.isArray(items) || items.length === 0) {
       throw createServiceError('Thiếu danh sách khách hàng', 400);
@@ -120,14 +120,14 @@ class CustomerMutationService {
           customFields: this.parseJsonObject(item.customFields || item.custom_fields),
         };
 
-        const existingId = await customerMutationRepository.findExistingCustomerId(client, userId, {
+        const existingId = await customerMutationRepository.findExistingCustomerId(client, workspaceOwnerId, {
           email,
           phone,
           zaloId,
         });
 
         if (existingId) {
-          await customerMutationRepository.updateBulkCustomer(client, userId, existingId, customer);
+          await customerMutationRepository.updateBulkCustomer(client, workspaceOwnerId, existingId, customer);
           updated += 1;
 
           if (Number.isFinite(participationCampaignId)) {
@@ -135,7 +135,11 @@ class CustomerMutationService {
             campaignLinked += 1;
           }
         } else {
-          const insertedCustomerId = await customerMutationRepository.insertBulkCustomer(client, userId, customer);
+          const insertedCustomerId = await customerMutationRepository.insertBulkCustomer(
+            client,
+            { workspaceOwnerId, actorUserId },
+            customer
+          );
 
           if (Number.isFinite(participationCampaignId) && Number.isFinite(parseInt(insertedCustomerId, 10))) {
             await campaignCustomerRepository.ensureCampaignParticipation(client, participationCampaignId, insertedCustomerId);
@@ -149,16 +153,16 @@ class CustomerMutationService {
     });
   }
 
-  async update({ userId, id, payload }) {
+  async update({ workspaceOwnerId, id, payload }) {
     const { email, phone, fullName, gender, customerSource, notes, customFields } = payload;
     const normalizedCustomerSource = this.validateCustomerSource(customerSource);
 
-    const existing = await customerMutationRepository.findOwnedCustomer(id, userId);
+    const existing = await customerMutationRepository.findOwnedCustomer(id, workspaceOwnerId);
     if (!existing) {
       throw createServiceError('Không tìm thấy khách hàng', 404);
     }
 
-    const customer = await customerMutationRepository.updateCustomer(userId, id, {
+    const customer = await customerMutationRepository.updateCustomer(workspaceOwnerId, id, {
       email,
       phone,
       fullName,
@@ -175,8 +179,8 @@ class CustomerMutationService {
     };
   }
 
-  async delete({ userId, id }) {
-    const deleted = await customerMutationRepository.deleteCustomer(userId, id);
+  async delete({ workspaceOwnerId, id }) {
+    const deleted = await customerMutationRepository.deleteCustomer(workspaceOwnerId, id);
     if (!deleted) {
       throw createServiceError('Không tìm thấy khách hàng', 404);
     }

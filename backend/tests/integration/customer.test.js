@@ -64,6 +64,67 @@ async function createCampaignRow({ userId, name = 'C1' }) {
   return rows[0];
 }
 
+async function addCustomerMembership(ownerId, employeeId) {
+  const { rows } = await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')
+     RETURNING id`,
+    [ownerId, employeeId, JSON.stringify({ customers: true })]
+  );
+  return rows[0];
+}
+
+describe('Customer employee workspace ownership', () => {
+  it('employee list/create theo owner, lưu owner và actor riêng, không thấy tenant khác', async () => {
+    const ownerA = await createUser({ username: 'customer_workspace_a' });
+    const ownerB = await createUser({ username: 'customer_workspace_b' });
+    const employee = await createUser({ username: 'customer_workspace_employee' });
+    await addCustomerMembership(ownerA.id, employee.id);
+    await createCustomerRow({ userId: ownerA.id, email: 'owner-a@test.local' });
+    const tenantBCustomer = await createCustomerRow({ userId: ownerB.id, email: 'owner-b@test.local' });
+
+    const token = await loginAs(employee);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'X-Owner-Context': String(ownerA.id),
+    };
+
+    const listRes = await request(app).get('/api/customers').set(headers);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.items.map((item) => item.email)).toEqual(['owner-a@test.local']);
+
+    const createRes = await request(app)
+      .post('/api/customers')
+      .set(headers)
+      .send({ email: 'employee-created@test.local', fullName: 'Employee Created' });
+    expect(createRes.status).toBe(201);
+
+    const { rows } = await db.query(
+      `SELECT id_user, workspace_owner_id, created_by
+       FROM customers
+       WHERE id = $1`,
+      [createRes.body.data.id]
+    );
+    expect(Number(rows[0].id_user)).toBe(Number(ownerA.id));
+    expect(Number(rows[0].workspace_owner_id)).toBe(Number(ownerA.id));
+    expect(Number(rows[0].created_by)).toBe(Number(employee.id));
+
+    const crossTenantRes = await request(app)
+      .get(`/api/customers/${tenantBCustomer.id}`)
+      .set(headers);
+    expect(crossTenantRes.status).toBe(404);
+
+    const ownerToken = await loginAs(ownerA);
+    const ownerListRes = await request(app)
+      .get('/api/customers')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(ownerListRes.body.data.items.map((item) => item.email).sort()).toEqual([
+      'employee-created@test.local',
+      'owner-a@test.local',
+    ]);
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────
 describe('Customer routes — authorization', () => {
   it.each([

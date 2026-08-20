@@ -765,6 +765,7 @@ CREATE INDEX idx_tracking_short_links_code ON tracking_short_links(short_code);
 CREATE TABLE leads (
   id                  BIGSERIAL PRIMARY KEY,
   id_user             BIGINT,
+  workspace_owner_id  BIGINT REFERENCES users(id) ON DELETE CASCADE,
   last_name           VARCHAR(255),
   first_name          VARCHAR(255),
   email               VARCHAR(255),
@@ -786,6 +787,8 @@ CREATE TABLE leads (
 CREATE INDEX idx_leads_slug ON leads(landing_page_slug);
 CREATE INDEX idx_leads_email ON leads(email);
 CREATE INDEX idx_leads_user ON leads(id_user);
+CREATE INDEX idx_leads_workspace_owner ON leads(workspace_owner_id);
+CREATE INDEX idx_leads_effective_workspace_owner ON leads((COALESCE(workspace_owner_id, id_user)));
 CREATE INDEX idx_leads_created_at ON leads(created_at DESC);
 
 -- Landing page events — view/click/submit tracking cho landing page.
@@ -815,6 +818,8 @@ CREATE INDEX idx_landing_page_events_user ON landing_page_events(id_user);
 CREATE TABLE customers (
   id                      BIGSERIAL PRIMARY KEY,
   id_user                 BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id      BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  created_by              BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   email                   VARCHAR(255),
   phone                   VARCHAR(50),
   zalo_id                 VARCHAR(255),
@@ -851,6 +856,9 @@ CREATE TABLE customers (
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_customers_user  ON customers(id_user);
+CREATE INDEX idx_customers_workspace_owner ON customers(workspace_owner_id);
+CREATE INDEX idx_customers_effective_workspace_owner ON customers((COALESCE(workspace_owner_id, id_user)));
+CREATE INDEX idx_customers_created_by ON customers(created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_customers_email ON customers(email);
 CREATE INDEX idx_customers_phone ON customers(phone);
 
@@ -2028,4 +2036,3 @@ CREATE INDEX IF NOT EXISTS idx_landing_page_versions_workspace_owner
 CREATE INDEX IF NOT EXISTS idx_landing_page_versions_created_by
   ON landing_page_versions (created_by)
   WHERE created_by IS NOT NULL;
-

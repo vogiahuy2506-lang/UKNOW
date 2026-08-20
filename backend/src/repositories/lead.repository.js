@@ -44,9 +44,9 @@ function buildLeadWhere(filters) {
     idx += 1;
   }
 
-  if (filters.idUser) {
-    conditions.push(`id_user = $${idx}`);
-    params.push(filters.idUser);
+  if (filters.workspaceOwnerId) {
+    conditions.push(`COALESCE(workspace_owner_id, id_user) = $${idx}`);
+    params.push(filters.workspaceOwnerId);
     idx += 1;
   }
 
@@ -85,8 +85,8 @@ class LeadRepository {
       `INSERT INTO leads (
          last_name, first_name, email, phone, occupation, interest_area, marketing_consent,
          landing_page_slug, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-         id_user, custom_fields
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15::jsonb, '{}'::jsonb))
+         id_user, workspace_owner_id, custom_fields
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14, COALESCE($15::jsonb, '{}'::jsonb))
        RETURNING
          id,
          last_name AS "lastName",
@@ -102,7 +102,7 @@ class LeadRepository {
          utm_campaign AS "utmCampaign",
          utm_content AS "utmContent",
          utm_term AS "utmTerm",
-         id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "idUser",
          custom_fields AS "customFields",
          created_at AS "createdAt"`,
       [
@@ -211,7 +211,7 @@ class LeadRepository {
     if (scope?.isSuperAdmin !== true) {
       const workspaceOwnerId = Number.parseInt(scope?.workspaceOwnerId, 10);
       if (!Number.isFinite(workspaceOwnerId)) return [];
-      conditions.push(`id_user = $${idx}`);
+      conditions.push(`COALESCE(workspace_owner_id, id_user) = $${idx}`);
       params.push(workspaceOwnerId);
       idx += 1;
     }

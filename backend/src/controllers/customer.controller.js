@@ -8,6 +8,9 @@ import customerCampaignJourneyDetailService from '../services/customer/customerC
 import customerEmailTrackingService from '../services/customer/customerEmailTracking.service.js';
 import customerZaloTrackingService from '../services/customer/customerZaloTracking.service.js';
 import customerMutationService from '../services/customer/customerMutation.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 class CustomerController {
   sendTrackingPixel(res) {
@@ -40,7 +43,7 @@ class CustomerController {
    */
   async getAll(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const { page = 1, limit = 10, status, search, source, campaignId } = req.query;
       const purchaseOrderStatusExpr = await this.resolvePurchaseOrderStatusExpr('cp');
       const data = await customerQueryService.getAllCustomers({
@@ -77,7 +80,7 @@ class CustomerController {
    */
   async getCampaignZaloGroupMessages(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const purchaseOrderStatusExpr = await this.resolvePurchaseOrderStatusExpr('cp');
       const data = await customerQueryService.getCampaignZaloGroupMessages({
         userId,
@@ -114,7 +117,7 @@ class CustomerController {
    */
   async getInterestedCustomersWithCourses(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const purchaseOrderStatusExpr = await this.resolvePurchaseOrderStatusExpr('cp');
       const data = await customerInterestedService.getInterestedCustomersWithCourses({
         userId,
@@ -148,7 +151,7 @@ class CustomerController {
    */
   async getInterestedCustomersFromUknowApi(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const data = await customerInterestedService.getInterestedCustomersFromUknowApi({
         userId,
         limit: req.query.limit,
@@ -178,7 +181,7 @@ class CustomerController {
    */
   async getById(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const customerId = parseInt(req.params.id, 10);
       const data = await customerProfileService.getById({
         userId,
@@ -213,7 +216,7 @@ class CustomerController {
    */
   async getCampaignParticipations(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const customerId = parseInt(req.params.id, 10);
       const data = await customerJourneyService.getCampaignParticipations({
         userId,
@@ -247,7 +250,7 @@ class CustomerController {
    */
   async getJourney(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const customerId = parseInt(req.params.id, 10);
       const { timeline, summary } = await customerJourneyService.getJourney({
         userId,
@@ -283,7 +286,7 @@ class CustomerController {
    */
   async getCampaignJourneyDetail(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
       const customerId = parseInt(req.params.id, 10);
       const campaignId = parseInt(req.params.campaignId, 10);
       const data = await customerCampaignJourneyDetailService.getCampaignJourneyDetail({
@@ -382,10 +385,20 @@ class CustomerController {
    */
   async create(req, res) {
     try {
+      const { workspaceOwnerId, actorUserId } = getWorkspaceContext(req.user);
       const data = await customerMutationService.create({
-        userId: req.user.id,
+        workspaceOwnerId,
+        actorUserId,
         payload: req.body,
       });
+
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.CUSTOMER_CREATED,
+        AUDIT_ENTITY_TYPES.CUSTOMER,
+        data.id,
+        {}
+      );
 
       return res.status(201).json({
         success: true,
@@ -410,10 +423,20 @@ class CustomerController {
    */
   async bulkUpsert(req, res) {
     try {
+      const { workspaceOwnerId, actorUserId } = getWorkspaceContext(req.user);
       const data = await customerMutationService.bulkUpsert({
-        userId: req.user.id,
+        workspaceOwnerId,
+        actorUserId,
         payload: req.body,
       });
+
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.CUSTOMER_BULK_UPSERTED,
+        AUDIT_ENTITY_TYPES.CUSTOMER,
+        null,
+        data
+      );
 
       return res.json({
         success: true,
@@ -437,11 +460,20 @@ class CustomerController {
    */
   async update(req, res) {
     try {
+      const { workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await customerMutationService.update({
-        userId: req.user.id,
+        workspaceOwnerId,
         id: req.params.id,
         payload: req.body,
       });
+
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.CUSTOMER_UPDATED,
+        AUDIT_ENTITY_TYPES.CUSTOMER,
+        data.id,
+        {}
+      );
 
       return res.json({
         success: true,
@@ -465,10 +497,19 @@ class CustomerController {
    */
   async delete(req, res) {
     try {
+      const { workspaceOwnerId } = getWorkspaceContext(req.user);
       await customerMutationService.delete({
-        userId: req.user.id,
+        workspaceOwnerId,
         id: req.params.id,
       });
+
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.CUSTOMER_DELETED,
+        AUDIT_ENTITY_TYPES.CUSTOMER,
+        Number(req.params.id),
+        {}
+      );
 
       return res.json({
         success: true,
@@ -486,7 +527,6 @@ class CustomerController {
 }
 
 export default new CustomerController();
-
 
 
 

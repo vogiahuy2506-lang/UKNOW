@@ -13,8 +13,11 @@ class CustomerCampaignJourneyDetailRepository {
     const result = await db.query(
       `SELECT c.id AS customer_id, cp.id AS campaign_id, cp.campaign_name
        FROM customers c
-       JOIN campaigns cp ON cp.id = $2 AND cp.id_user = $3
-       WHERE c.id = $1 AND c.id_user = $3`,
+       JOIN campaigns cp
+         ON cp.id = $2
+        AND COALESCE(cp.workspace_owner_id, cp.id_user) = $3
+       WHERE c.id = $1
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $3`,
       [customerId, campaignId, userId]
     );
     return result.rows[0] || null;
@@ -261,7 +264,7 @@ class CustomerCampaignJourneyDetailRepository {
        FROM campaign_customers cc
        JOIN campaigns c ON c.id = cc.id_campaign
        WHERE cc.id_customer = $1
-         AND c.id_user = $2`,
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2`,
       [customerId, userId]
     );
     return result.rows[0] || {};
@@ -284,7 +287,7 @@ class CustomerCampaignJourneyDetailRepository {
        FROM campaign_customers cc
        JOIN campaigns c ON c.id = cc.id_campaign
        WHERE cc.id_campaign = $1
-         AND c.id_user = $2`,
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2`,
       [campaignId, userId]
     );
     return result.rows[0] || {};
@@ -305,7 +308,7 @@ class CustomerCampaignJourneyDetailRepository {
           COALESCE(SUM(cc.email_clicked_count), 0)::INTEGER AS email_clicked_count
        FROM campaign_customers cc
        JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE c.id_user = $1`,
+       WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1`,
       [userId]
     );
     return result.rows[0] || {};
@@ -350,7 +353,7 @@ class CustomerCampaignJourneyDetailRepository {
           LIMIT 1
        ) pe ON TRUE
        WHERE cp.id_campaign = $1
-         AND cu.id_user = $2`,
+         AND COALESCE(cu.workspace_owner_id, cu.id_user) = $2`,
       [campaignId, userId]
     );
     return result.rows[0] || {};
@@ -396,7 +399,7 @@ class CustomerCampaignJourneyDetailRepository {
        ) pe ON TRUE
        WHERE cp.id_customer = $1
          AND cp.id_campaign IS NOT NULL
-         AND cu.id_user = $2`,
+         AND COALESCE(cu.workspace_owner_id, cu.id_user) = $2`,
       [customerId, userId]
     );
     return result.rows[0] || {};
@@ -440,7 +443,7 @@ class CustomerCampaignJourneyDetailRepository {
           LIMIT 1
        ) pe ON TRUE
        WHERE cp.id_campaign IS NOT NULL
-         AND cu.id_user = $1`,
+         AND COALESCE(cu.workspace_owner_id, cu.id_user) = $1`,
       [userId]
     );
     return result.rows[0] || {};

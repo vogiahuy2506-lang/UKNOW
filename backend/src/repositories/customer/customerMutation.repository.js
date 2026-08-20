@@ -1,13 +1,15 @@
 import db from '../../config/database.js';
 
 class CustomerMutationRepository {
-  async createCustomer(userId, payload) {
+  async createCustomer({ workspaceOwnerId, actorUserId }, payload) {
     const result = await db.query(
-      `INSERT INTO customers (id_user, email, phone, full_name, gender, customer_source, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO customers
+         (id_user, workspace_owner_id, created_by, email, phone, full_name, gender, customer_source, notes)
+       VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
-        userId,
+        workspaceOwnerId,
+        actorUserId,
         payload.email,
         payload.phone,
         payload.fullName,
@@ -39,28 +41,28 @@ class CustomerMutationRepository {
     if (email && phone) {
       result = await client.query(
         `SELECT id FROM customers
-         WHERE id_user = $1 AND email = $2 AND phone = $3
+         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND email = $2 AND phone = $3
          LIMIT 1`,
         [userId, email, phone]
       );
     } else if (email && !phone) {
       result = await client.query(
         `SELECT id FROM customers
-         WHERE id_user = $1 AND email = $2 AND phone IS NULL
+         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND email = $2 AND phone IS NULL
          LIMIT 1`,
         [userId, email]
       );
     } else if (!email && phone) {
       result = await client.query(
         `SELECT id FROM customers
-         WHERE id_user = $1 AND phone = $2 AND email IS NULL
+         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND phone = $2 AND email IS NULL
          LIMIT 1`,
         [userId, phone]
       );
     } else if (zaloId) {
       result = await client.query(
         `SELECT id FROM customers
-         WHERE id_user = $1 AND zalo_id = $2
+         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND zalo_id = $2
          LIMIT 1`,
         [userId, zaloId]
       );
@@ -88,7 +90,7 @@ class CustomerMutationRepository {
         notes = COALESCE($14, notes),
         custom_fields = COALESCE($15, custom_fields),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $16 AND id_user = $17`,
+       WHERE id = $16 AND COALESCE(workspace_owner_id, id_user) = $17`,
       [
         customer.email,
         customer.phone,
@@ -111,15 +113,16 @@ class CustomerMutationRepository {
     );
   }
 
-  async insertBulkCustomer(client, userId, customer) {
+  async insertBulkCustomer(client, { workspaceOwnerId, actorUserId }, customer) {
     const result = await client.query(
       `INSERT INTO customers
-        (id_user, email, phone, zalo_id, zalo_phone, facebook_id, full_name, gender,
+        (id_user, workspace_owner_id, created_by, email, phone, zalo_id, zalo_phone, facebook_id, full_name, gender,
          customer_source, source_landing_page, source_form_id, utm_source, utm_medium, utm_campaign, notes, custom_fields)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING id`,
       [
-        userId,
+        workspaceOwnerId,
+        actorUserId,
         customer.email,
         customer.phone,
         customer.zaloId,
@@ -141,7 +144,10 @@ class CustomerMutationRepository {
   }
 
   async findOwnedCustomer(id, userId) {
-    const result = await db.query('SELECT id FROM customers WHERE id = $1 AND id_user = $2', [id, userId]);
+    const result = await db.query(
+      'SELECT id FROM customers WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2',
+      [id, userId]
+    );
     return result.rows[0] || null;
   }
 
@@ -156,7 +162,7 @@ class CustomerMutationRepository {
         notes = COALESCE($6, notes),
         custom_fields = COALESCE($7, custom_fields),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8 AND id_user = $9
+       WHERE id = $8 AND COALESCE(workspace_owner_id, id_user) = $9
        RETURNING *`,
       [
         payload.email,
@@ -175,7 +181,7 @@ class CustomerMutationRepository {
 
   async deleteCustomer(userId, id) {
     const result = await db.query(
-      'DELETE FROM customers WHERE id = $1 AND id_user = $2 RETURNING id',
+      'DELETE FROM customers WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 RETURNING id',
       [id, userId]
     );
     return result.rows[0] || null;
@@ -185,7 +191,7 @@ class CustomerMutationRepository {
     const result = await db.query(
       `SELECT id
        FROM customers
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
          AND (phone = $2 OR zalo_phone = $2)
        ORDER BY id ASC
        LIMIT 1`,
@@ -215,7 +221,7 @@ class CustomerMutationRepository {
          zalo_friend_added_at = COALESCE(zalo_friend_added_at, CURRENT_TIMESTAMP),
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $6
-         AND id_user = $7`,
+         AND COALESCE(workspace_owner_id, id_user) = $7`,
       [phone, phone, uid, fullName, email, customerId, userId]
     );
   }
@@ -229,10 +235,10 @@ class CustomerMutationRepository {
   }) {
     const result = await db.query(
       `INSERT INTO customers
-         (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source,
+         (id_user, workspace_owner_id, email, phone, zalo_id, zalo_phone, full_name, customer_source,
           zalo_is_friend, zalo_friend_added_at, created_at, updated_at)
        VALUES
-         ($1, NULLIF($2, ''), $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7,
+         ($1, $1, NULLIF($2, ''), $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7,
           TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [userId, email, phone, uid, phone, fullName, 'uknow_campaign']
@@ -246,7 +252,7 @@ class CustomerMutationRepository {
        SET zalo_id = COALESCE(NULLIF(zalo_id, ''), $1),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
-         AND id_user = $3
+         AND COALESCE(workspace_owner_id, id_user) = $3
          AND (zalo_id IS NULL OR zalo_id = '')`,
       [uid, customerId, userId]
     );
@@ -255,7 +261,7 @@ class CustomerMutationRepository {
   async findCustomerByUidOrPhone(userId, uid, phonePlaceholder) {
     const result = await db.query(
       `SELECT id FROM customers
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
          AND (zalo_id = $2 OR (phone = $3 AND $3 <> '') OR (zalo_phone = $3 AND $3 <> ''))
        ORDER BY id ASC
        LIMIT 1`,
@@ -277,8 +283,8 @@ class CustomerMutationRepository {
   async insertMinimalCustomerByPhoneUid(userId, phone, uid) {
     await db.query(
       `INSERT INTO customers
-         (id_user, phone, zalo_id, zalo_phone, customer_source, created_at, updated_at)
-       VALUES ($1, $2, $3, $2, 'uknow_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         (id_user, workspace_owner_id, phone, zalo_id, zalo_phone, customer_source, created_at, updated_at)
+       VALUES ($1, $1, $2, $3, $2, 'uknow_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT DO NOTHING`,
       [userId, phone, uid]
     );
@@ -289,7 +295,7 @@ class CustomerMutationRepository {
       `SELECT id
        FROM customers
        WHERE id = $1
-         AND id_user = $2
+         AND COALESCE(workspace_owner_id, id_user) = $2
        LIMIT 1`,
       [customerId, userId]
     );
@@ -317,7 +323,7 @@ class CustomerMutationRepository {
          utm_source = COALESCE(utm_source, $6),
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $7
-         AND id_user = $8`,
+         AND COALESCE(workspace_owner_id, id_user) = $8`,
       [fullName, email, phone, phone, uid, utmSource, customerId, userId]
     );
   }
@@ -326,7 +332,7 @@ class CustomerMutationRepository {
     const result = await db.query(
       `SELECT id
        FROM customers
-       WHERE id_user = $1
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
          AND (
            ($2 <> '' AND zalo_id = $2)
            OR ($3 <> '' AND (phone = $3 OR zalo_phone = $3))
@@ -349,9 +355,9 @@ class CustomerMutationRepository {
   }) {
     const result = await db.query(
       `INSERT INTO customers
-         (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source, utm_source, created_at, updated_at)
+         (id_user, workspace_owner_id, email, phone, zalo_id, zalo_phone, full_name, customer_source, utm_source, created_at, updated_at)
        VALUES
-         ($1, NULLIF($2, ''), NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ($1, $1, NULLIF($2, ''), NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [userId, email, phone, uid, phone, fullName, 'uknow_campaign', utmSource]
     );

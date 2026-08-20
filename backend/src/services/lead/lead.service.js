@@ -148,7 +148,7 @@ function buildSharedLeadFilters(config = {}, fieldTypeByKey) {
     interests: normalizeLeadFilterStringArray(config.landingLeadsInterests),
     landingSlugs: normalizeLeadFilterSlugArray(config.landingLeadsSlugs),
     customFilters: normalizeLandingLeadsCustomFilters(config.landingLeadsCustomFilters, { fieldTypeByKey }),
-    idUser: config.idUser || null,
+    workspaceOwnerId: config.workspaceOwnerId || config.idUser || null,
   };
 }
 
@@ -165,11 +165,10 @@ class LeadService {
    */
   async resolveSharedLeadFilters(config = {}) {
     let fieldTypeByKey;
-    if (hasCustomFilterPayload(config.landingLeadsCustomFilters) && (config.idUser || config.userId)) {
+    if (hasCustomFilterPayload(config.landingLeadsCustomFilters) && (config.workspaceOwnerId || config.idUser || config.userId)) {
       const defs = await this.listCustomFieldDefinitions({
-        userId: config.idUser || config.userId,
-        roleCode: config.roleCode,
-        ownerId: config.ownerId,
+        workspaceOwnerId: config.workspaceOwnerId || config.idUser || config.userId,
+        isSuperAdmin: config.isSuperAdmin,
       });
       fieldTypeByKey = new Map(defs.map((d) => [d.key, d.type]));
     }
@@ -266,6 +265,7 @@ class LeadService {
       utmContent,
       utmTerm,
       idUser,
+      workspaceOwnerId: idUser,
       customFields: customFieldsSnapshot,
     });
     if (!row) {
@@ -361,9 +361,8 @@ class LeadService {
 
     const items = rows.map(mapLeadRowToAdminItem);
     const currentSchemas = await this.listCustomFieldDefinitions({
-      userId: config.idUser,
-      roleCode: config.roleCode,
-      ownerId: config.ownerId,
+      workspaceOwnerId: config.workspaceOwnerId || config.idUser,
+      isSuperAdmin: config.isSuperAdmin,
     });
     const buffer = await buildLandingLeadsAdminXlsxBuffer(items, { currentSchemas });
 
@@ -378,14 +377,13 @@ class LeadService {
   /**
    * Schema custom field hiện tại trong workspace (không gồm field đã xóa).
    *
-   * @param {{ userId?: number|string, roleCode?: string, ownerId?: number|string }} scope
+   * @param {{ workspaceOwnerId?: number|string, isSuperAdmin?: boolean }} scope
    * @returns {Promise<object[]>}
    */
   async listCustomFieldDefinitions(scope = {}) {
     const rows = await landingPageRepository.listLeadFormConfigsInScope({
-      userId: scope.userId || scope.idUser,
-      role: scope.roleCode || scope.role,
-      ownerId: scope.ownerId,
+      workspaceOwnerId: scope.workspaceOwnerId || scope.userId || scope.idUser,
+      isSuperAdmin: scope.isSuperAdmin,
     });
     const byKey = new Map();
     for (const row of rows) {
