@@ -471,7 +471,12 @@ class ChatbotRepository {
     const params = [userId];
 
     if (origin) {
-      query += ` AND origin = $2`;
+      // Handle NULL origin as 'self_created' for backward compatibility
+      if (origin === 'self_created') {
+        query += ` AND (origin = $2 OR origin IS NULL)`;
+      } else {
+        query += ` AND origin = $2`;
+      }
       params.push(origin);
     }
 
