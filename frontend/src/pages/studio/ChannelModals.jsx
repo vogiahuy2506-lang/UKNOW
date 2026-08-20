@@ -476,7 +476,7 @@ function ZaloPersonalForm({ chatbot }) {
                   : !isLikelyZaloId(acc.zalo_user_id)
                     ? acc.zalo_user_id
                     : 'Zalo Account';
-            const avatarChar = displayName.charAt(0).toUpperCase();
+            const avatarChar = (displayName || 'Z').charAt(0).toUpperCase();
 
             return (
               <div
@@ -484,7 +484,7 @@ function ZaloPersonalForm({ chatbot }) {
                 className="flex items-center gap-3 px-3 py-2.5 bg-white border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
               >
                 <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-bold">
-                  {acc.avatar ? (
+                  {acc.avatar && typeof acc.avatar === 'string' && acc.avatar.startsWith('http') ? (
                     <img src={acc.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
                   ) : (
                     avatarChar
