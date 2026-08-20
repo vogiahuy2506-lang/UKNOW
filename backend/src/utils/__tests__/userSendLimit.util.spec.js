@@ -307,6 +307,22 @@ describe('userSendLimit.util', () => {
       expect(result.resetAt.toISOString()).toBe('2026-01-31T17:00:00.000Z');
     });
 
+    it('preflight nhiều người nhận chặn trước khi batch vượt daily limit', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [planRow({ daily_email_limit: 10 })] })
+        .mockResolvedValueOnce({ rows: [{ total: 8 }] });
+
+      const result = await checkSendQuota({
+        userId: 10,
+        channel: 'email',
+        requiredCount: 3,
+      });
+
+      expect(result.allowed).toBe(false);
+      expect(result.limitType).toBe('daily');
+      expect(result.currentCount).toBe(8);
+    });
+
     it('monthly deny → resetAt = 00:00 VN mùng 1 tháng sau', async () => {
       jest.useFakeTimers().setSystemTime(new Date('2026-01-15T10:00:00.000Z'));
       mockQuery

@@ -150,3 +150,74 @@ export function requirePermission(permissionKey) {
     return res.status(403).json({ success: false, message: 'Không xác định được quyền hạn' });
   };
 }
+
+/**
+ * Middleware kiểm tra có ít nhất một trong các permissions (OR logic).
+ * Dùng khi một resource có thể được truy cập bởi nhiều quyền (vd: templateLabel cần email_templates HOẶC zalo_templates).
+ *
+ * @param {string[]} permissionKeys - mảng keys trong JSONB permissions
+ */
+export function requireAnyPermission(permissionKeys) {
+  const keys = Array.isArray(permissionKeys) ? permissionKeys : [permissionKeys];
+  return (req, res, next) => {
+    const { role, activeContext } = req.user || {};
+
+    if (isSuperAdmin(role)) {
+      return next();
+    }
+
+    if (isEmployeeContext(activeContext)) {
+      const hasAny = keys.some(k => activeContext.permissions?.[k] === true);
+      if (hasAny) {
+        return next();
+      }
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền thực hiện hành động này',
+        code: 'PERMISSION_DENIED',
+      });
+    }
+
+    // Self context: luôn được phép
+    if (isUserAdmin(role)) {
+      return next();
+    }
+
+    return res.status(403).json({ success: false, message: 'Không xác định được quyền hạn' });
+  };
+}
+
+/**
+ * Middleware kiểm tra có toàn bộ các permissions (AND logic).
+ *
+ * @param {string[]} permissionKeys - mảng keys trong JSONB permissions
+ */
+export function requireAllPermissions(permissionKeys) {
+  const keys = Array.isArray(permissionKeys) ? permissionKeys : [permissionKeys];
+  return (req, res, next) => {
+    const { role, activeContext } = req.user || {};
+
+    if (isSuperAdmin(role)) {
+      return next();
+    }
+
+    if (isEmployeeContext(activeContext)) {
+      const hasAll = keys.every(k => activeContext.permissions?.[k] === true);
+      if (hasAll) {
+        return next();
+      }
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền thực hiện hành động này',
+        code: 'PERMISSION_DENIED',
+      });
+    }
+
+    // Self context: luôn được phép
+    if (isUserAdmin(role)) {
+      return next();
+    }
+
+    return res.status(403).json({ success: false, message: 'Không xác định được quyền hạn' });
+  };
+}

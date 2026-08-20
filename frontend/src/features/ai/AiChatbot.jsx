@@ -2789,7 +2789,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           <textarea
             value={inputText}
             onChange={e => setInputText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend(); } }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isTyping) { e.preventDefault(); handleSend(); } }}
             placeholder={aiBillingBlock
               ? t('aiChatbot.inputBlockedPlaceholder')
               : (isDragging ? t('aiChatbot.dropFilePlaceholder') : (centered ? t('aiChatbot.homeAskAnything') : t('aiChatbot.inputPlaceholder')))}
@@ -2799,7 +2799,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             style={{ WebkitAppearance: 'none', boxShadow: 'none' }}
           />
           <div className={`flex items-center justify-between ${centered ? 'px-3 pb-3' : 'px-2 pb-2'}`}>
-            <button onClick={() => fileInputRef.current?.click()} disabled={isUploading}
+            <button onClick={() => fileInputRef.current?.click()} disabled={isUploading || isTyping}
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all disabled:opacity-50">
               {isUploading
                 ? <div className="w-3.5 h-3.5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
@@ -2807,10 +2807,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {!centered && <span>{t('aiChatbot.attach')}</span>}
             </button>
             <div className="flex items-center gap-2">
-              {!centered && <span className="text-[10px] text-slate-300">{t('aiChatbot.enterToSend')}</span>}
-              <button onClick={handleSend} disabled={Boolean(aiBillingBlock) || (!inputText.trim() && !uploadedFiles.length)}
+              {!centered && <span className="text-[10px] text-slate-300">{isTyping ? t('aiChatbot.processingPrevious') : t('aiChatbot.enterToSend')}</span>}
+              <button onClick={handleSend} disabled={Boolean(aiBillingBlock) || isTyping || (!inputText.trim() && !uploadedFiles.length)}
+                title={isTyping ? t('aiChatbot.processingPreviousTitle') : undefined}
                 className={`flex items-center justify-center bg-slate-800 text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 disabled:text-slate-400 transition-all ${centered ? 'w-9 h-9' : 'w-8 h-8'}`}>
-                <HiOutlineChevronRight className="w-4 h-4" />
+                {isTyping ? (
+                  <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <HiOutlineChevronRight className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>

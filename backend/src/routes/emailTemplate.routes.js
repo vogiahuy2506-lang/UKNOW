@@ -18,6 +18,7 @@ const workspacePromotionCapacityGuard = storageCapacityGuard({
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requireActivePlan);
+router.use(requirePermission('email_templates'));
 
 // Get all — chỉ cần auth
 router.get('/', emailTemplateController.getAll.bind(emailTemplateController));

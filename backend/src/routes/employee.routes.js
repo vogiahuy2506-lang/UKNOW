@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, param } from 'express-validator';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { requireRole, requireActivePlan } from '../middleware/authorization.middleware.js';
+import { requireRole, requireActivePlan, requireSelfContext } from '../middleware/authorization.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import * as employeeController from '../controllers/employee.controller.js';
 
@@ -19,6 +19,11 @@ router.get(
 
 // Chỉ super_admin và user_admin mới quản lý được nhân viên.
 router.use(requireRole('admin', 'user'));
+router.use(requireSelfContext);
+
+// GET /api/employees/permissions/catalog
+// Phải đứng trước /:id để không bị coi "permissions" là employee id.
+router.get('/permissions/catalog', employeeController.getPermissionCatalog);
 
 // GET /api/employees
 router.get('/', employeeController.getEmployees);

@@ -6,7 +6,8 @@ class LandingPageVersionRepository {
    */
   async createVersion({
     landingPageId,
-    userId,
+    workspaceOwnerId,
+    actorUserId = null,
     storageKey,
     title,
     htmlHash,
@@ -15,13 +16,15 @@ class LandingPageVersionRepository {
   }, queryable = db) {
     const { rows } = await queryable.query(
       `INSERT INTO landing_page_versions (
-         id_landing_page, id_user, storage_key, title, html_hash, size_bytes, source, created_at
+         id_landing_page, id_user, workspace_owner_id, created_by,
+         storage_key, title, html_hash, size_bytes, source, created_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, NOW())
        RETURNING *`,
       [
         landingPageId,
-        userId,
+        workspaceOwnerId,
+        actorUserId || workspaceOwnerId,
         storageKey,
         title || null,
         htmlHash,
@@ -39,7 +42,8 @@ class LandingPageVersionRepository {
     const { rows } = await queryable.query(
       `SELECT id, id_landing_page, id_user, storage_key, title, html_hash, size_bytes, source, created_at
        FROM landing_page_versions
-       WHERE id_landing_page = $1 AND id_user = $2
+       WHERE id_landing_page = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2
        ORDER BY created_at DESC, id DESC`,
       [landingPageId, userId]
     );
@@ -53,7 +57,9 @@ class LandingPageVersionRepository {
     const { rows } = await queryable.query(
       `SELECT id, id_landing_page, id_user, storage_key, title, html_hash, size_bytes, source, created_at
        FROM landing_page_versions
-       WHERE id = $1 AND id_landing_page = $2 AND id_user = $3
+       WHERE id = $1
+         AND id_landing_page = $2
+         AND COALESCE(workspace_owner_id, id_user) = $3
        LIMIT 1`,
       [versionId, landingPageId, userId]
     );
@@ -67,7 +73,8 @@ class LandingPageVersionRepository {
     const { rows } = await queryable.query(
       `SELECT id, id_landing_page, id_user, storage_key, title, html_hash, size_bytes, source, created_at
        FROM landing_page_versions
-       WHERE id_landing_page = $1 AND id_user = $2
+       WHERE id_landing_page = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2
        ORDER BY created_at DESC, id DESC
        LIMIT 1`,
       [landingPageId, userId]
@@ -82,7 +89,8 @@ class LandingPageVersionRepository {
     const { rows } = await queryable.query(
       `SELECT id, id_landing_page, id_user, storage_key, size_bytes
        FROM landing_page_versions
-       WHERE id_landing_page = $1 AND id_user = $2
+       WHERE id_landing_page = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2
        ORDER BY created_at DESC, id DESC
        OFFSET $3`,
       [landingPageId, userId, keepCount]
@@ -101,6 +109,17 @@ class LandingPageVersionRepository {
     return result.rows[0] || null;
   }
 
+  async deleteByIdInWorkspace(versionId, workspaceOwnerId, queryable = db) {
+    const result = await queryable.query(
+      `DELETE FROM landing_page_versions
+       WHERE id = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2
+       RETURNING id, storage_key, size_bytes`,
+      [versionId, workspaceOwnerId]
+    );
+    return result.rows[0] || null;
+  }
+
   /**
    * Lấy tổng dung lượng phiên bản của landing page
    */
@@ -108,7 +127,8 @@ class LandingPageVersionRepository {
     const { rows } = await queryable.query(
       `SELECT COALESCE(SUM(size_bytes), 0)::bigint AS total_bytes
        FROM landing_page_versions
-       WHERE id_landing_page = $1 AND id_user = $2`,
+       WHERE id_landing_page = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2`,
       [landingPageId, userId]
     );
     return Number(rows[0]?.total_bytes) || 0;

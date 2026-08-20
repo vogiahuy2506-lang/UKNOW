@@ -21,6 +21,8 @@ import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import sseService from '../sse.service.js';
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import { isZaloAccountChatbotEnabled } from '../../utils/zaloAccountChatbotGate.util.js';
+import inboundReplyDebounceService from './inboundReplyDebounce.service.js';
+import { formatBatchedContent } from '../../utils/chatbotReplyBatch.util.js';
 import {
   drainPendingAccounts,
   markAccountRegistered,
@@ -296,7 +298,7 @@ class ZaloPersonalInboxService {
   /**
    * Xử lý một tin nhắn đến từ Zalo cá nhân
    */
-  async processIncomingMessage(userId, accountId, zaloSettingId, rawMessage) {
+  async processIncomingMessage(userId, accountId, zaloSettingId, rawMessage, saveResult = null) {
     try {
       const messageId = rawMessage?.msgId || rawMessage?.messageId || rawMessage?.id;
       const senderId = rawMessage?.fromUid || rawMessage?.senderId || rawMessage?.uid;
@@ -325,6 +327,14 @@ class ZaloPersonalInboxService {
       // Validate
       if (!messageId) {
         console.warn('[ZaloInbox] Bỏ qua tin nhắn không hợp lệ (no msgId)');
+        return;
+      }
+
+      // The adapter must persist an inbound row before this handler runs. Do
+      // not generate an AI reply for a message that could not be recorded or
+      // assigned a stable history ID.
+      if (!saveResult?.messageId) {
+        console.warn(`[ZaloInbox] Bỏ qua AI routing vì inbound message chưa được persist: msgId=${messageId}`);
         return;
       }
 
@@ -523,21 +533,77 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Unified chatbot settings — account-level is the sole enable gate
+      // Enqueue into debounce bucket for this conversation
+      const debounceKey = `zalo_personal:${zaloSettingId}:${conversation.id}`;
+      inboundReplyDebounceService.enqueue({
+        key: debounceKey,
+        message: {
+          eventId: messageId || rawMessage?.msgId || null,
+          persistedMessageId: saveResult?.messageId || null,
+          receivedAt: timestamp,
+          content: aiContent,
+          metadata: {
+            userId,
+            zaloSettingId,
+            conversationId: conversation.id,
+            senderId,
+            senderName: resolvedSenderName || senderName,
+          },
+        },
+        flushCallback: async (batch) => {
+          await this._processZaloPersonalBatch({
+            userId,
+            zaloSettingId,
+            conversation,
+            senderId,
+            resolvedSenderName: resolvedSenderName || senderName,
+            batch,
+          });
+        },
+      });
+    } catch (err) {
+      console.error(`[ZaloInbox] ERROR in processIncomingMessage:`, err.stack || err.message);
+    }
+  }
+
+  /**
+   * Process a flushed batch of messages for Zalo Personal
+   * @private
+   */
+  async _processZaloPersonalBatch({ userId, zaloSettingId, conversation, senderId, resolvedSenderName, batch }) {
+    const prompt = formatBatchedContent(batch.messages);
+    if (!prompt) return;
+
+    try {
+      // 1. Dynamic check: chatbot & account settings enabled
       const chatbotSettings = await chatbotRepository.getSettings(userId, 'zalo_personal');
       const accountSettings = await chatbotZaloAccountRepository.getSettings(userId, zaloSettingId);
 
-      // Không có dòng / chưa bật cho tài khoản này = TẮT (không fallback cấp kênh)
       if (!isZaloAccountChatbotEnabled(accountSettings)) {
-        console.log(`[ZaloInbox] AI chatbot chưa bật cho account ${zaloSettingId}`);
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
         return;
       }
 
+      // 2. Dynamic check: resource lock and active session. Both must happen
+      // before rate/credit consumption, not only inside sendReply().
+      const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('zalo_accounts', zaloSettingId)) {
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=locked`);
+        return;
+      }
+      const session = await zaloPersonalAdapter.getSessionByAccountId(zaloSettingId);
+      if (!session?.api) {
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
+        return;
+      }
+
+      // 3. Dynamic check: handoff / AI paused
       if (await zaloPersonalRepository.isAiPaused(conversation.id)) {
-        console.log(`[ZaloInbox] AI paused for conversation ${conversation.id} (handoff)`);
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused`);
         return;
       }
 
+      // 4. Dynamic check: rate limit (single check per batch)
       const { default: chatbotRateLimitService } = await import('./chatbotRateLimit.service.js');
       const rate = await chatbotRateLimitService.checkBeforeAi({
         channel: 'zalo_personal',
@@ -565,6 +631,7 @@ class ZaloPersonalInboxService {
             });
           }
         }
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=rate_limited`);
         return;
       }
 
@@ -582,22 +649,30 @@ class ZaloPersonalInboxService {
         mergedSettings.system_instruction = chatbotSettings.system_instruction;
       }
 
+      // 5. Snapshot history and exclude just this batch's visitor rows. A bot
+      // reply from the preceding batch remains visible even if it was stored
+      // after the first message in this batch.
+      const historyThroughMessageId = await zaloPersonalRepository.getLatestMessageId(conversation.id);
       const result = await chatRouterService.routeMessageWithSettings({
         channel: 'zalo_personal',
         userId,
-        message: aiContent,
+        message: prompt,
         conversationId: conversation.id,
         chatbotSettings: mergedSettings,
+        throughMessageId: historyThroughMessageId,
+        excludeMessageIds: batch.messages
+          .map((item) => item.persistedMessageId)
+          .filter((id) => id != null),
         visitorInfo: {
           source: 'zalo_personal',
           senderId,
-          senderName: resolvedSenderName || senderName,
+          senderName: resolvedSenderName,
         },
       });
 
       if (result?.content) {
         // Single persist path: sendReply(persist=true) inserts agent message once.
-        await zaloPersonalAdapter.sendReply({
+        const sent = await zaloPersonalAdapter.sendReply({
           externalId: String(senderId),
           message: result.content,
           userId,
@@ -605,6 +680,10 @@ class ZaloPersonalInboxService {
           persist: true,
           replySource: 'ai_auto_reply',
         });
+        if (sent?.success === false) {
+          console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+          return;
+        }
         sseService.broadcast(String(userId), 'inbox:new_message', {
           conversationId: conversation.id,
           channel: 'zalo_personal',
@@ -614,10 +693,14 @@ class ZaloPersonalInboxService {
           senderName: 'AI',
           timestamp: new Date().toISOString(),
         });
+      } else {
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+        return;
       }
 
+      console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=sent`);
     } catch (err) {
-      console.error(`[ZaloInbox] ERROR in processIncomingMessage:`, err.stack || err.message);
+      console.error(`[ChatbotDebounce] Error processing Zalo Personal batch for conv ${conversation.id}:`, err.stack || err.message);
     }
   }
 
@@ -732,8 +815,8 @@ class ZaloPersonalInboxService {
    * Tạo message handler cho một account
    */
   createMessageHandler(userId, accountId, zaloSettingId) {
-    return async (rawMessage) => {
-      await this.processIncomingMessage(userId, accountId, zaloSettingId, rawMessage);
+    return async (rawMessage, saveResult) => {
+      await this.processIncomingMessage(userId, accountId, zaloSettingId, rawMessage, saveResult);
     };
   }
 

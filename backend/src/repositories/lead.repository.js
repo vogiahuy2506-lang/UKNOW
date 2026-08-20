@@ -191,9 +191,10 @@ class LeadRepository {
    *
    * @param {string|null} dateFrom
    * @param {string|null} dateTo
+   * @param {{ workspaceOwnerId?: number|string, isSuperAdmin?: boolean }} scope
    * @returns {Promise<{ slug: string, submitCount: number }[]>}
    */
-  async aggregateSubmitsBySlug(dateFrom, dateTo) {
+  async aggregateSubmitsBySlug(dateFrom, dateTo, scope = {}) {
     const conditions = [`landing_page_slug IS NOT NULL`, `TRIM(landing_page_slug) <> ''`];
     const params = [];
     let idx = 1;
@@ -205,6 +206,13 @@ class LeadRepository {
     if (dateTo) {
       conditions.push(`created_at <= $${idx}::timestamptz`);
       params.push(`${dateTo}T23:59:59.999Z`);
+      idx += 1;
+    }
+    if (scope?.isSuperAdmin !== true) {
+      const workspaceOwnerId = Number.parseInt(scope?.workspaceOwnerId, 10);
+      if (!Number.isFinite(workspaceOwnerId)) return [];
+      conditions.push(`id_user = $${idx}`);
+      params.push(workspaceOwnerId);
       idx += 1;
     }
     const where = `WHERE ${conditions.join(' AND ')}`;

@@ -10,14 +10,15 @@ const router = express.Router();
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requireActivePlan);
+router.use(requirePermission('email_settings'));
 
-// Get all — chỉ cần auth, không cần permission
+// Get all
 router.get('/', emailSettingsController.getAll.bind(emailSettingsController));
 
 // Get active email settings for selection (must be before /:id)
 router.get('/active', emailSettingsController.getActiveSettings.bind(emailSettingsController));
 
-// Get by id — chỉ cần auth
+// Get by id
 router.get('/:id', emailSettingsController.getById.bind(emailSettingsController));
 
 // Create — cần quyền email_settings

@@ -64,32 +64,50 @@ class LandingPageEventRepository {
    *
    * @param {string|null} dateFrom YYYY-MM-DD
    * @param {string|null} dateTo YYYY-MM-DD
+   * @param {{ workspaceOwnerId?: number|string, isSuperAdmin?: boolean }} scope
    * @returns {Promise<{ slug: string, viewCount: number, clickCount: number }[]>}
    */
-  async aggregateEventsBySlug(dateFrom, dateTo) {
-    const conditions = [`event_type IN ('view', 'click')`];
+  async aggregateEventsBySlug(dateFrom, dateTo, scope = {}) {
+    const conditions = [`lpe.event_type IN ('view', 'click')`];
     const params = [];
     let idx = 1;
     if (dateFrom) {
-      conditions.push(`created_at >= $${idx}::timestamptz`);
+      conditions.push(`lpe.created_at >= $${idx}::timestamptz`);
       params.push(`${dateFrom}T00:00:00.000Z`);
       idx += 1;
     }
     if (dateTo) {
-      conditions.push(`created_at <= $${idx}::timestamptz`);
+      conditions.push(`lpe.created_at <= $${idx}::timestamptz`);
       params.push(`${dateTo}T23:59:59.999Z`);
+      idx += 1;
+    }
+    if (scope?.isSuperAdmin !== true) {
+      const workspaceOwnerId = Number.parseInt(scope?.workspaceOwnerId, 10);
+      if (!Number.isFinite(workspaceOwnerId)) return [];
+      conditions.push(
+        `COALESCE(
+           lpe.id_user,
+           (
+             SELECT MIN(COALESCE(lp.workspace_owner_id, lp.id_user))
+             FROM landing_pages lp
+             WHERE lp.slug = lpe.landing_page_slug
+             HAVING COUNT(*) = 1
+           )
+         ) = $${idx}`
+      );
+      params.push(workspaceOwnerId);
       idx += 1;
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const result = await db.query(
       `SELECT
-         landing_page_slug AS slug,
-         COUNT(*) FILTER (WHERE event_type = 'view')::bigint AS "viewCount",
-         COUNT(*) FILTER (WHERE event_type = 'click')::bigint AS "clickCount"
-       FROM landing_page_events
+         lpe.landing_page_slug AS slug,
+         COUNT(*) FILTER (WHERE lpe.event_type = 'view')::bigint AS "viewCount",
+         COUNT(*) FILTER (WHERE lpe.event_type = 'click')::bigint AS "clickCount"
+       FROM landing_page_events lpe
        ${where}
-       GROUP BY landing_page_slug
-       HAVING landing_page_slug IS NOT NULL AND landing_page_slug <> ''`,
+       GROUP BY lpe.landing_page_slug
+       HAVING lpe.landing_page_slug IS NOT NULL AND lpe.landing_page_slug <> ''`,
       params
     );
     return result.rows.map((r) => ({

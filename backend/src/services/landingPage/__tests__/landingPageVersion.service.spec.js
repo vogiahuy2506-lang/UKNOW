@@ -8,6 +8,7 @@ const mockLandingPageVersionRepository = {
   findLatestByLandingPage: jest.fn(),
   getOldVersionsBeyondLimit: jest.fn(),
   deleteById: jest.fn(),
+  deleteByIdInWorkspace: jest.fn(),
   getTotalSizeBytes: jest.fn(),
 };
 
@@ -44,7 +45,7 @@ describe('landingPageVersion.service', () => {
     it('bỏ qua nếu oldHtml rỗng', async () => {
       const res = await landingPageVersionService.createSnapshotIfChanged({
         landingPageId: 1,
-        userId: 100,
+        workspaceOwnerId: 100,
         oldHtml: '',
       });
       expect(res.snapshotSaved).toBe(false);
@@ -59,7 +60,7 @@ describe('landingPageVersion.service', () => {
 
       const res = await landingPageVersionService.createSnapshotIfChanged({
         landingPageId: 1,
-        userId: 100,
+        workspaceOwnerId: 100,
         oldHtml: 'foo',
       });
 
@@ -78,7 +79,7 @@ describe('landingPageVersion.service', () => {
 
       const res = await landingPageVersionService.createSnapshotIfChanged({
         landingPageId: 1,
-        userId: 100,
+        workspaceOwnerId: 100,
         oldHtml: '<h1>New Content</h1>',
         title: 'Trang bán hàng',
         source: 'ai_edit',
@@ -104,7 +105,7 @@ describe('landingPageVersion.service', () => {
     it('không ném lỗi khi vượt quota dung lượng (StorageQuotaExceededError), rollback row, dọn GCS và trả warning', async () => {
       mockLandingPageVersionRepository.findLatestByLandingPage.mockResolvedValue(null);
       mockLandingPageVersionRepository.createVersion.mockResolvedValue({ id: 12 });
-      mockLandingPageVersionRepository.deleteById.mockResolvedValue({ id: 12 });
+      mockLandingPageVersionRepository.deleteByIdInWorkspace.mockResolvedValue({ id: 12 });
       mockStorageBackend.put.mockResolvedValue(undefined);
       mockStorageBackend.delete.mockResolvedValue(undefined);
 
@@ -120,13 +121,13 @@ describe('landingPageVersion.service', () => {
 
       const res = await landingPageVersionService.createSnapshotIfChanged({
         landingPageId: 1,
-        userId: 100,
+        workspaceOwnerId: 100,
         oldHtml: '<h1>Large Page</h1>',
       });
 
       expect(res.snapshotSaved).toBe(false);
       expect(res.warning).toContain('hết dung lượng');
-      expect(mockLandingPageVersionRepository.deleteById).toHaveBeenCalledWith(12);
+      expect(mockLandingPageVersionRepository.deleteByIdInWorkspace).toHaveBeenCalledWith(12, 100);
       expect(mockStorageBackend.delete).toHaveBeenCalledTimes(1);
     });
   });
@@ -138,7 +139,7 @@ describe('landingPageVersion.service', () => {
         { id: 2, storage_key: 'uploads/landing-versions/100/1/old2.html' },
       ]);
       mockMarkDeletedAfterUnlink.mockResolvedValue(undefined);
-      mockLandingPageVersionRepository.deleteById.mockResolvedValue(undefined);
+      mockLandingPageVersionRepository.deleteByIdInWorkspace.mockResolvedValue(undefined);
 
       await landingPageVersionService.pruneOldVersions(1, 100, 5);
 
@@ -148,8 +149,8 @@ describe('landingPageVersion.service', () => {
       expect(mockMarkDeletedAfterUnlink).toHaveBeenCalledWith({
         storageKey: 'uploads/landing-versions/100/1/old2.html',
       });
-      expect(mockLandingPageVersionRepository.deleteById).toHaveBeenCalledWith(1);
-      expect(mockLandingPageVersionRepository.deleteById).toHaveBeenCalledWith(2);
+      expect(mockLandingPageVersionRepository.deleteByIdInWorkspace).toHaveBeenCalledWith(1, 100);
+      expect(mockLandingPageVersionRepository.deleteByIdInWorkspace).toHaveBeenCalledWith(2, 100);
     });
 
     it('không xóa DB row nếu markDeletedAfterUnlink ném lỗi để lần prune sau còn đầu mối', async () => {
@@ -160,7 +161,7 @@ describe('landingPageVersion.service', () => {
 
       await landingPageVersionService.pruneOldVersions(1, 100, 5);
 
-      expect(mockLandingPageVersionRepository.deleteById).not.toHaveBeenCalled();
+      expect(mockLandingPageVersionRepository.deleteByIdInWorkspace).not.toHaveBeenCalled();
     });
   });
 
@@ -218,7 +219,7 @@ describe('landingPageVersion.service', () => {
         storage_key: 'uploads/landing-versions/100/5/1.html',
       });
       mockMarkDeletedAfterUnlink.mockResolvedValue(undefined);
-      mockLandingPageVersionRepository.deleteById.mockResolvedValue({ id: 1 });
+      mockLandingPageVersionRepository.deleteByIdInWorkspace.mockResolvedValue({ id: 1 });
 
       const res = await landingPageVersionService.deleteVersion(1, 5, 100);
       expect(res.success).toBe(true);
@@ -226,7 +227,7 @@ describe('landingPageVersion.service', () => {
       expect(mockMarkDeletedAfterUnlink).toHaveBeenCalledWith({
         storageKey: 'uploads/landing-versions/100/5/1.html',
       });
-      expect(mockLandingPageVersionRepository.deleteById).toHaveBeenCalledWith(1);
+      expect(mockLandingPageVersionRepository.deleteByIdInWorkspace).toHaveBeenCalledWith(1, 100);
     });
   });
 });

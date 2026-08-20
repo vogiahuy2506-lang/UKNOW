@@ -3241,6 +3241,8 @@ export default {
     dropFilePlaceholder: 'Thả file vào đây...',
     searchCampaignPlaceholder: 'Tìm kiếm chiến dịch...',
     enterToSend: 'Enter để gửi',
+    processingPrevious: 'Đang xử lý…',
+    processingPreviousTitle: 'Đang xử lý câu trước…',
     poweredBy: 'Powered by Gemini • Kéo thả PDF, Word, Excel, ảnh vào đây',
     attach: 'Đính kèm',
     // Category picker

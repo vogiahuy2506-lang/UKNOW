@@ -151,6 +151,70 @@ describe('aiController directRecipients with Zalo contacts UIDs (P0)', () => {
     );
   });
 
+  it('executeCampaign: rejects employee autoRun before campaign creation without campaigns_run', async () => {
+    const req = {
+      body: { autoRun: true },
+      user: {
+        id: 2,
+        activeContext: {
+          type: 'employee',
+          ownerId: 1,
+          permissions: { campaigns_create: true, campaigns_run: false },
+        },
+      },
+    };
+    const res = makeRes();
+
+    await aiController.executeCampaign(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'PERMISSION_DENIED' }));
+    expect(mockCreateCampaign).not.toHaveBeenCalled();
+  });
+
+  it('pushToCampaign: rejects employee autoRun before campaign update without campaigns_run', async () => {
+    const req = {
+      params: { id: 88 },
+      body: { autoRun: true },
+      user: {
+        id: 2,
+        activeContext: {
+          type: 'employee',
+          ownerId: 1,
+          permissions: { campaigns_create: true, campaigns_run: false },
+        },
+      },
+    };
+    const res = makeRes();
+
+    await aiController.pushToCampaign(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'PERMISSION_DENIED' }));
+    expect(mockCreateCampaign).not.toHaveBeenCalled();
+  });
+
+  it('createAndRunCampaign: rejects employee before mutation unless both create and run are granted', async () => {
+    const req = {
+      body: {},
+      user: {
+        id: 2,
+        activeContext: {
+          type: 'employee',
+          ownerId: 1,
+          permissions: { campaigns_create: false, campaigns_run: true },
+        },
+      },
+    };
+    const res = makeRes();
+
+    await aiController.createAndRunCampaign(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'PERMISSION_DENIED' }));
+    expect(mockCreateCampaign).not.toHaveBeenCalled();
+  });
+
   it('createAndRunCampaign: handles wizardDataSource=zalo_contacts and injects UIDs into created campaign', async () => {
     const script = {
       campaignName: 'Zalo Friends Campaign',

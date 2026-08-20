@@ -16,8 +16,9 @@ router.get('/zalo-tracking/click/:token', customerController.trackZaloClick.bind
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requireActivePlan);
+router.use(requirePermission('customers'));
 
-// Get all — chỉ cần auth
+// Get all
 router.get('/', customerController.getAll.bind(customerController));
 router.get(
   '/campaigns/:campaignId/zalo-group/messages',

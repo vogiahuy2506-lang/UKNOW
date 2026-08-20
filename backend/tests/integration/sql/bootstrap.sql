@@ -1108,6 +1108,8 @@ CREATE INDEX idx_dashboard_insights_user ON dashboard_insights(id_user);
 CREATE TABLE landing_pages (
   id            BIGSERIAL PRIMARY KEY,
   id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
   slug          VARCHAR(100) NOT NULL,
   title         VARCHAR(500),
   html_content  TEXT         NOT NULL DEFAULT '',
@@ -1123,6 +1125,9 @@ CREATE TABLE landing_pages (
   updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_landing_pages_user ON landing_pages(id_user);
+CREATE INDEX idx_landing_pages_workspace_owner ON landing_pages(workspace_owner_id);
+CREATE INDEX idx_landing_pages_effective_workspace_owner ON landing_pages((COALESCE(workspace_owner_id, id_user)));
+CREATE INDEX idx_landing_pages_created_by ON landing_pages(created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_landing_pages_slug ON landing_pages(slug);
 
 CREATE TABLE landing_page_domains (
@@ -1990,6 +1995,8 @@ CREATE TABLE IF NOT EXISTS landing_page_versions (
   id BIGSERIAL PRIMARY KEY,
   id_landing_page BIGINT NOT NULL REFERENCES landing_pages(id) ON DELETE CASCADE,
   id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
   storage_key TEXT NOT NULL,
   title VARCHAR(255),
   html_hash VARCHAR(64) NOT NULL,
@@ -2004,5 +2011,11 @@ CREATE INDEX IF NOT EXISTS idx_landing_page_versions_page_created
 CREATE INDEX IF NOT EXISTS idx_landing_page_versions_user
   ON landing_page_versions (id_user);
 
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_workspace_owner
+  ON landing_page_versions (workspace_owner_id);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_created_by
+  ON landing_page_versions (created_by)
+  WHERE created_by IS NOT NULL;
 
 

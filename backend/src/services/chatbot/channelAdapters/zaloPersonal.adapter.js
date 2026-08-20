@@ -393,11 +393,6 @@ class ZaloPersonalAdapter {
           );
         } catch (dbErr) {
           console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
-          if (stored.handler) {
-            stored.handler(msgData).catch((err) => {
-              console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
-            });
-          }
         }
     };
 

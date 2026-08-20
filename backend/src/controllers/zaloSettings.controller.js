@@ -18,6 +18,7 @@ import { ZALO_LISTENER_OPTIONS } from '../utils/zaloListenerOptions.util.js';
 import { addPendingAccount, unmarkAccountRegistered } from '../services/zalo/zaloAccountRegistry.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import zaloPersonalAdapter from '../services/chatbot/channelAdapters/zaloPersonal.adapter.js';
+import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
 import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
 import { classifyZaloSendError } from '../utils/zaloSendErrorClassifier.util.js';
 import {
@@ -27,6 +28,7 @@ import {
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.js';
 import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
+import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 
 
 class ZaloSettingsController {
@@ -36,6 +38,34 @@ class ZaloSettingsController {
     this.defaultZaloUserAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0';
     this.defaultZaloLanguage = 'vi';
+  }
+
+  async assertPreviewSendQuota(req, recipientCount) {
+    const quota = await checkSendQuota({
+      userId: req.user.id,
+      roleCode: req.user?.role,
+      ownerContextId: req.user?.activeContext?.ownerId,
+      channel: 'zalo',
+      requiredCount: recipientCount,
+    });
+    if (!quota.allowed) {
+      const error = new Error(quota.message || 'Đã vượt hạn mức gửi Zalo');
+      error.statusCode = 403;
+      error.code = 'SEND_QUOTA_EXCEEDED';
+      throw error;
+    }
+    return quota;
+  }
+
+  async recordPreviewSendQuota(quota, actorUserId, source) {
+    if (!quota?.billingUserId) return;
+    await recordDirectSendUsage({
+      billingUserId: quota.billingUserId,
+      channel: 'zalo',
+      amount: 1,
+      actorUserId,
+      source,
+    });
   }
 
   /**
@@ -1669,6 +1699,7 @@ class ZaloSettingsController {
       } catch {
         /* ignore */
       }
+      inboundReplyDebounceService.cancelByPrefix(`zalo_personal:${deleted.id}:`);
       try {
         unmarkAccountRegistered(deleted.id);
       } catch {
@@ -2233,6 +2264,7 @@ class ZaloSettingsController {
       const normalizedRecipients = Array.from(new Set(
         recipients.map((item) => String(item || '').trim()).filter(Boolean)
       ));
+      const quota = await this.assertPreviewSendQuota(req, normalizedRecipients.length);
       const { account, api } = await this.resolvePreviewAccountAndApi({
         userId,
         roleCode: req.user?.role,
@@ -2286,6 +2318,7 @@ class ZaloSettingsController {
               attachmentsCount: preparedAttachments.length,
             });
           } else {
+            await this.recordPreviewSendQuota(quota, userId, 'zalo_preview_personal');
             items.push({
               recipient,
               recipientType,
@@ -2342,9 +2375,10 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewSendPersonalMessage error:', error);
-      return res.status(400).json({
+      return res.status(error?.statusCode || 400).json({
         success: false,
         message: error?.message || 'Không thể gửi tin nhắn Zalo preview',
+        ...(error?.code ? { code: error.code } : {}),
       });
     }
   }
@@ -2367,6 +2401,7 @@ class ZaloSettingsController {
       const normalizedRecipients = Array.from(new Set(
         recipients.map((item) => String(item || '').trim()).filter(Boolean)
       ));
+      const quota = await this.assertPreviewSendQuota(req, normalizedRecipients.length);
       const { account, api } = await this.resolvePreviewAccountAndApi({
         userId,
         roleCode: req.user?.role,
@@ -2398,6 +2433,7 @@ class ZaloSettingsController {
             phone,
             message,
           });
+          await this.recordPreviewSendQuota(quota, userId, 'zalo_preview_friend_request');
           items.push({
             phone,
             status: 'success',
@@ -2427,9 +2463,10 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewSendFriendRequest error:', error);
-      return res.status(400).json({
+      return res.status(error?.statusCode || 400).json({
         success: false,
         message: error?.message || 'Không thể gửi lời mời kết bạn preview',
+        ...(error?.code ? { code: error.code } : {}),
       });
     }
   }
@@ -2453,6 +2490,7 @@ class ZaloSettingsController {
       const normalizedGroupIds = Array.from(new Set(
         groupIds.map((item) => String(item || '').trim()).filter(Boolean)
       ));
+      const quota = await this.assertPreviewSendQuota(req, normalizedGroupIds.length);
       const { account, api } = await this.resolvePreviewAccountAndApi({
         userId,
         roleCode: req.user?.role,
@@ -2508,6 +2546,7 @@ class ZaloSettingsController {
               attachmentsCount: preparedAttachments.length,
             });
           } else {
+            await this.recordPreviewSendQuota(quota, userId, 'zalo_preview_group');
             items.push({
               groupId,
               status: 'success',
@@ -2544,9 +2583,10 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewSendGroupMessage error:', error);
-      return res.status(400).json({
+      return res.status(error?.statusCode || 400).json({
         success: false,
         message: error?.message || 'Không thể gửi tin nhắn nhóm preview',
+        ...(error?.code ? { code: error.code } : {}),
       });
     }
   }

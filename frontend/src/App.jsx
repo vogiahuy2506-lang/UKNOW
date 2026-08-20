@@ -375,18 +375,18 @@ function App() {
             <Route path="reports" element={<Dashboard />} />
 
             {/* Campaigns */}
-            <Route path="campaigns" element={<Campaigns />} />
-            <Route path="campaigns/:id" element={<CampaignDetail />} />
-            <Route path="campaigns/:id/builder" element={<CampaignBuilder />} />
-            <Route path="campaigns/new" element={<CampaignBuilder />} />
-            <Route path="campaign-run" element={<CampaignRun />} />
-            <Route path="quick-send" element={<QuickSend />} />
-            <Route path="delivery-monitor" element={<UserDeliveryMonitorPage />} />
+            <Route path="campaigns" element={<PermissionRoute permission="campaigns_view"><Campaigns /></PermissionRoute>} />
+            <Route path="campaigns/:id" element={<PermissionRoute permission="campaigns_view"><CampaignDetail /></PermissionRoute>} />
+            <Route path="campaigns/:id/builder" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
+            <Route path="campaigns/new" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
+            <Route path="campaign-run" element={<PermissionRoute permission="campaigns_run"><CampaignRun /></PermissionRoute>} />
+            <Route path="quick-send" element={<PermissionRoute permission="campaigns_create"><QuickSend /></PermissionRoute>} />
+            <Route path="delivery-monitor" element={<PermissionRoute permission="campaigns_view"><UserDeliveryMonitorPage /></PermissionRoute>} />
 
             {/* Customers */}
-            <Route path="customers" element={<Customers />} />
-            <Route path="customers/:campaignId" element={<CampaignCustomers />} />
-            <Route path="customers/:campaignId/:customerId" element={<CampaignCustomers />} />
+            <Route path="customers" element={<PermissionRoute permission="customers"><Customers /></PermissionRoute>} />
+            <Route path="customers/:campaignId" element={<PermissionRoute permission="customers"><CampaignCustomers /></PermissionRoute>} />
+            <Route path="customers/:campaignId/:customerId" element={<PermissionRoute permission="customers"><CampaignCustomers /></PermissionRoute>} />
 
             {/* Settings — owner only */}
             <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings']}><ChannelSettings /></PermissionRoute>} />
@@ -395,7 +395,7 @@ function App() {
             {/* Admin-only cluster: gác bằng cờ tính năng độc lập */}
             <Route path="settings/landing-featured-courses" element={<FeatureFlagRoute flag="VITE_FEATURE_LANDING_CMS"><OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="settings/landing-testimonials" element={<FeatureFlagRoute flag="VITE_FEATURE_LANDING_CMS"><OwnerRoute><LandingTestimonialsPage /></OwnerRoute></FeatureFlagRoute>} />
-            <Route path="settings/landing-pages" element={<OwnerRoute><LandingPagesAdminPage /></OwnerRoute>} />
+            <Route path="settings/landing-pages" element={<PermissionRoute permission="landing_pages"><LandingPagesAdminPage /></PermissionRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
             <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
             <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
@@ -405,7 +405,7 @@ function App() {
             <Route path="topup" element={<OwnerRoute><TopupPage /></OwnerRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
-            <Route path="settings/templates" element={<ChannelTemplates />} />
+            <Route path="settings/templates" element={<PermissionRoute permission={['email_templates', 'zalo_templates']}><ChannelTemplates /></PermissionRoute>} />
 
             {/* Redirect các route cũ */}
             <Route path="settings/email" element={<Navigate to="/app/settings/channels" replace />} />
@@ -418,9 +418,9 @@ function App() {
             <Route path="settings/chatbot-channels" element={<Navigate to="/app/chatbot-studio" replace />} />
 
             {/* Courses */}
-            <Route path="courses" element={<FeatureFlagRoute flag="VITE_FEATURE_COURSES"><Courses /></FeatureFlagRoute>} />
-            <Route path="products" element={<FeatureFlagRoute flag="VITE_FEATURE_PRODUCTS"><OwnerRoute><Products /></OwnerRoute></FeatureFlagRoute>} />
-            <Route path="landing-leads" element={<LandingLeadsListPage />} />
+            <Route path="courses" element={<FeatureFlagRoute flag="VITE_FEATURE_COURSES"><PermissionRoute permission="courses"><Courses /></PermissionRoute></FeatureFlagRoute>} />
+            <Route path="products" element={<FeatureFlagRoute flag="VITE_FEATURE_PRODUCTS"><PermissionRoute permission="courses"><Products /></PermissionRoute></FeatureFlagRoute>} />
+            <Route path="landing-leads" element={<PermissionRoute permission="leads"><LandingLeadsListPage /></PermissionRoute>} />
 
             {/* Marketplace - unified page with tabs */}
             <Route path="marketplace" element={<Marketplace />} />

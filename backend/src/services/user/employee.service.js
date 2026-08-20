@@ -20,20 +20,12 @@ import {
 } from '../../repositories/user/employee.repository.js';
 import verificationService from '../verification.service.js';
 import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
+import {
+  VALID_PERMISSION_KEYS,
+  normalizePermissions,
+} from '../../config/employeePermissionCatalog.js';
 
-const VALID_PERMISSION_KEYS = [
-  'email_settings',
-  'email_templates',
-  'zalo_settings',
-  'zalo_templates',
-  'courses',
-  'landing_pages',
-  'campaigns_view',
-  'campaigns_create',
-  'campaigns_run',
-  'customers',
-  'leads',
-];
+export { VALID_PERMISSION_KEYS };
 
 async function assertCanAddEmployee(ownerId) {
   const maxEmployees = await findOwnerPlanLimit(ownerId);
@@ -169,15 +161,7 @@ export async function setEmployeePermissions(ownerId, employeeId, permissions) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
   }
 
-  const sanitized = {};
-  for (const key of VALID_PERMISSION_KEYS) {
-    sanitized[key] = permissions[key] === true;
-  }
-
-  // campaigns_view luôn = true nếu campaigns_create hoặc campaigns_run được bật
-  if (sanitized.campaigns_create || sanitized.campaigns_run) {
-    sanitized.campaigns_view = true;
-  }
+  const sanitized = normalizePermissions(permissions);
 
   return updateEmployeePermissions(employeeId, ownerId, sanitized);
 }

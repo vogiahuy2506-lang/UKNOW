@@ -246,6 +246,14 @@ class ZaloPersonalRepository {
     return rows[0] || null;
   }
 
+  async getLatestMessageId(conversationId) {
+    const { rows } = await db.query(
+      `SELECT MAX(id)::integer AS id FROM zalo_personal_messages WHERE id_conversation = $1`,
+      [conversationId]
+    );
+    return rows[0]?.id ?? null;
+  }
+
   /**
    * Pause / resume AI for one Zalo Personal conversation.
    * reason='manual' → ai_paused_at NULL (stay paused until toggle on).
@@ -467,4 +475,3 @@ class ZaloPersonalRepository {
 }
 
 export default new ZaloPersonalRepository();
-

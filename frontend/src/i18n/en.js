@@ -3207,6 +3207,8 @@ export default {
     dropFilePlaceholder: 'Drop file here...',
     searchCampaignPlaceholder: 'Search campaigns...',
     enterToSend: 'Enter to send',
+    processingPrevious: 'Processing…',
+    processingPreviousTitle: 'Processing the previous request…',
     poweredBy: 'Powered by Gemini • Drag and drop PDF, Word, Excel, images here',
     attach: 'Attach',
     // Category picker

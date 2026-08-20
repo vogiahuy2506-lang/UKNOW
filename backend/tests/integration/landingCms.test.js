@@ -18,11 +18,9 @@
  *   - HTML transformation chi tiết trong `prepareLandingHtmlOnSave` (đã có
  *     unit test riêng cho util).
  *
- * Quirks đã pin theo behavior hiện tại:
+ * Contract workspace đã pin:
  *   - Slug `l` bị reject ở `assertNotReservedSlug` (CMS không quản).
- *   - `landingPageAdminService.list/getById/remove` truyền `roleCode:` cho
- *     scope nhưng repository đọc `scope.role` → role admin không được bypass
- *     ở 3 endpoint này (chỉ thấy workspace).
+ *   - Employee context đọc/ghi đúng workspace owner; row mới lưu owner + actor riêng.
  *   - `featuredCourse` / `testimonial` update+remove check owner (cross-user → 404);
  *     superadmin bypass qua `isAdminRole`.
  */
@@ -63,6 +61,16 @@ async function createUserWithPlan({ userOverrides = {}, planOverrides = {} } = {
   const plan = await createPlan(planOverrides);
   await assignPlanToUser(user.id, plan.id);
   return user;
+}
+
+async function addLandingMembership(ownerId, employeeId, permissions = { landing_pages: true }) {
+  const { rows } = await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')
+     RETURNING id`,
+    [ownerId, employeeId, JSON.stringify(permissions)]
+  );
+  return rows[0];
 }
 
 async function insertLandingPage({ idUser, slug, title = 'Title', html = '<p>x</p>', isPublished = true }) {
@@ -183,6 +191,22 @@ describe('GET /api/admin/landing-pages/:id', () => {
     expect(res.body.data.leadFormConfig.fixedFields.occupation.visible).toBe(true);
     expect(res.body.data.customConfig).toBeUndefined();
   });
+
+  it('employee workspace A không đọc được landing workspace B', async () => {
+    const ownerA = await createUserWithPlan({ userOverrides: { username: 'lp-owner-a' } });
+    const ownerB = await createUserWithPlan({ userOverrides: { username: 'lp-owner-b' } });
+    const employee = await createUserWithPlan({ userOverrides: { username: 'lp-employee-a' } });
+    await addLandingMembership(ownerA.id, employee.id);
+    const foreign = await insertLandingPage({ idUser: ownerB.id, slug: 'workspace-b-page' });
+
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .get(`/api/admin/landing-pages/${foreign.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(ownerA.id));
+
+    expect(res.status).toBe(404);
+  });
 });
 
 describe('POST /api/admin/landing-pages', () => {
@@ -247,6 +271,56 @@ describe('POST /api/admin/landing-pages', () => {
       .send({ slug: 'second', title: 't2' });
     expect(r2.status).toBe(400);
     expect(r2.body.message).toMatch(/giới hạn|limit/i);
+  });
+
+  it('employee tạo landing thuộc owner workspace và giữ actor attribution', async () => {
+    const owner = await createUserWithPlan({ userOverrides: { username: 'lp-create-owner' } });
+    const employee = await createUserWithPlan({ userOverrides: { username: 'lp-create-employee' } });
+    await addLandingMembership(owner.id, employee.id);
+    const employeeToken = await loginAs(employee);
+
+    const created = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ slug: 'employee-created', title: 'Employee created' });
+
+    expect(created.status).toBe(201);
+    const { rows } = await db.query(
+      `SELECT id_user, workspace_owner_id, created_by
+       FROM landing_pages
+       WHERE id = $1`,
+      [created.body.data.id]
+    );
+    expect(rows[0]).toMatchObject({
+      id_user: String(owner.id),
+      workspace_owner_id: String(owner.id),
+      created_by: String(employee.id),
+    });
+
+    const ownerToken = await loginAs(owner);
+    const ownerList = await request(app)
+      .get('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(ownerList.body.data.some((row) => row.id === created.body.data.id)).toBe(true);
+  });
+
+  it('employee create bị tính theo quota của owner, không theo self account', async () => {
+    const owner = await createUserWithPlan({ userOverrides: { username: 'lp-quota-owner' } });
+    const employee = await createUserWithPlan({ userOverrides: { username: 'lp-quota-employee' } });
+    await addLandingMembership(owner.id, employee.id);
+    await db.query(`UPDATE users SET max_landing_pages = 1 WHERE id = $1`, [owner.id]);
+    await insertLandingPage({ idUser: owner.id, slug: 'owner-existing' });
+
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ slug: 'over-owner-limit', title: 'Should fail' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.limitReached).toBe(true);
   });
 });
 
@@ -676,9 +750,13 @@ describe('POST /api/public/landing-analytics/view', () => {
       .send({ slug: 'pub-v', utmCampaign: 'launch', visitorId: 'v9' });
     expect(res.status).toBe(201);
     const { rows } = await db.query(
-      `SELECT event_type, utm_campaign FROM landing_page_events WHERE landing_page_slug = 'pub-v'`
+      `SELECT event_type, utm_campaign, id_user FROM landing_page_events WHERE landing_page_slug = 'pub-v'`
     );
-    expect(rows[0]).toMatchObject({ event_type: 'view', utm_campaign: 'launch' });
+    expect(rows[0]).toMatchObject({
+      event_type: 'view',
+      utm_campaign: 'launch',
+      id_user: String(me.id),
+    });
   });
 });
 
@@ -710,9 +788,10 @@ describe('GET /api/public/landing-track/go', () => {
     expect(loc.origin + loc.pathname).toBe('https://uknow.vn/dest');
     expect(loc.searchParams.get('utm_source')).toBe('landing_page');
     expect(loc.searchParams.get('utm_medium')).toBe('pub-go');
-    const evt = await db.query(`SELECT event_type, target_url FROM landing_page_events WHERE landing_page_slug = 'pub-go'`);
+    const evt = await db.query(`SELECT event_type, target_url, id_user FROM landing_page_events WHERE landing_page_slug = 'pub-go'`);
     expect(evt.rows[0].event_type).toBe('click');
     expect(evt.rows[0].target_url).toMatch(/utm_source=landing_page/);
+    expect(evt.rows[0].id_user).toBe(String(me.id));
   });
 
   it('slug=l (cố định) → 302 không cần bản ghi DB', async () => {

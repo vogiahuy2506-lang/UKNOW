@@ -127,7 +127,7 @@ export function runInboxHandlerAfterSave(saveResult, handler, msgData, onHandler
   if (shouldSkipInboxHandler(saveResult)) return false;
   if (typeof handler !== 'function') return false;
   try {
-    const maybePromise = handler(msgData);
+    const maybePromise = handler(msgData, saveResult);
     if (maybePromise && typeof maybePromise.catch === 'function') {
       maybePromise.catch((err) => {
         if (typeof onHandlerError === 'function') onHandlerError(err);

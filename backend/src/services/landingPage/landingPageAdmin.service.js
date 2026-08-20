@@ -12,17 +12,10 @@ import {
   mergeLeadFormIntoCustomConfig,
   toPublicLeadFormConfig,
 } from '../../utils/landingLeadFormConfig.util.js';
+import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 
 /** Slug dành cho landing React cố định `/l` — không quản lý qua bảng `landing_pages`. */
 const RESERVED_SLUG_FIXED_LANDING = 'l';
-
-function buildScopeFromAuthUser(authUser) {
-  return {
-    userId: authUser?.id,
-    roleCode: authUser?.role,
-    ownerId: authUser?.activeContext?.ownerId,
-  };
-}
 
 function toAdminLandingDto(row) {
   if (!row) return null;
@@ -53,11 +46,11 @@ class LandingPageAdminService {
   /**
    * Lấy danh sách landing trong phạm vi quyền của user hiện tại.
    *
-   * @param {{ userId: number|string, roleCode?: string }} scope
+   * @param {object} authUser
    * @returns {Promise<object[]>}
    */
-  async list(scope = {}) {
-    const rows = await landingPageRepository.listByScope(scope);
+  async list(authUser) {
+    const rows = await landingPageRepository.listByScope(getWorkspaceScope(authUser));
     return rows
       .filter((r) => String(r.slug || '').trim().toLowerCase() !== RESERVED_SLUG_FIXED_LANDING)
       .map((r) => toAdminLandingDto(r));
@@ -65,11 +58,11 @@ class LandingPageAdminService {
 
   /**
    * @param {number} id
-   * @param {{ userId: number|string, roleCode?: string }} scope
+   * @param {object} authUser
    * @returns {Promise<object>}
    */
-  async getById(id, scope = {}) {
-    const row = await landingPageRepository.findByIdInScope(id, scope);
+  async getById(id, authUser) {
+    const row = await landingPageRepository.findByIdInScope(id, getWorkspaceScope(authUser));
     if (!row) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
@@ -84,15 +77,10 @@ class LandingPageAdminService {
    * @returns {Promise<object>}
    */
   async create(body, authUser) {
-    const userId = Number.parseInt(authUser?.id, 10);
-    if (!Number.isFinite(userId)) {
-      const err = new Error('Thiếu thông tin người dùng');
-      err.statusCode = 401;
-      throw err;
-    }
+    const context = getWorkspaceContext(authUser);
 
     const limitCheck = await checkUserResourceLimit({
-      userId,
+      userId: context.workspaceOwnerId,
       roleCode: authUser?.role,
       resourceKey: 'landingPages',
     });
@@ -135,7 +123,7 @@ class LandingPageAdminService {
     try {
       await client.query('BEGIN');
       await enforceResourceLimitTx(client, {
-        userId,
+        userId: context.workspaceOwnerId,
         roleCode: authUser?.role,
         resourceKey: 'landingPages',
       });
@@ -144,7 +132,9 @@ class LandingPageAdminService {
         title: body?.title,
         htmlContent,
         isPublished: Boolean(body?.isPublished),
-        idUser: userId,
+        idUser: context.workspaceOwnerId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        createdBy: context.actorUserId,
         domainType,
         domainSubtype,
         customConfig: mergeLeadFormIntoCustomConfig({}, body?.leadFormConfig),
@@ -180,6 +170,8 @@ class LandingPageAdminService {
    * @returns {Promise<object>}
    */
   async update(id, body, authUser) {
+    const context = getWorkspaceContext(authUser);
+    const scope = getWorkspaceScope(authUser);
     const slugRaw = body?.slug;
     const slug = typeof slugRaw === 'string' ? slugRaw.trim().toLowerCase() : null;
     this.assertNotReservedSlug(slug);
@@ -188,12 +180,15 @@ class LandingPageAdminService {
       err.statusCode = 400;
       throw err;
     }
-    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    const current = await landingPageRepository.findByIdInScope(id, scope);
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
       throw err;
     }
+    const resourceOwnerId = context.isSuperAdmin
+      ? Number(current.workspaceOwnerId || current.idUser)
+      : context.workspaceOwnerId;
     if (String(current.slug || '').trim().toLowerCase() === RESERVED_SLUG_FIXED_LANDING) {
       const err = new Error('Không được sửa bản ghi slug "l" — đây là landing hệ thống.');
       err.statusCode = 403;
@@ -227,24 +222,29 @@ class LandingPageAdminService {
       ? mergeLeadFormIntoCustomConfig(current.customConfig, body.leadFormConfig)
       : mergeLeadFormIntoCustomConfig(current.customConfig, undefined);
 
-    const updated = await landingPageRepository.updateById(id, {
+    const updated = await landingPageRepository.updateByIdInScope(id, {
       slug,
       title: body?.title,
       htmlContent,
       isPublished: body?.isPublished !== undefined ? Boolean(body.isPublished) : current.isPublished,
-      idUser: current.idUser,
+      idUser: resourceOwnerId,
       domainType: nextDomainType,
       domainSubtype: nextDomainSubtype,
       customConfig: nextCustomConfig,
-    });
+    }, scope);
+    if (!updated) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
 
     // Nếu HTML thay đổi và bản hiện tại đã có HTML, chụp lại phiên bản cũ lên GCS sau khi update DB thành công
     let snapshotWarning = null;
     if (current.htmlContent && current.htmlContent !== htmlContent) {
       const snapRes = await landingPageVersionService.createSnapshotIfChanged({
         landingPageId: id,
-        userId: current.idUser,
-        actorUserId: authUser?.id,
+        workspaceOwnerId: resourceOwnerId,
+        actorUserId: context.actorUserId,
         oldHtml: current.htmlContent,
         title: current.title,
         source: body?.versionSource || 'manual',
@@ -297,10 +297,11 @@ class LandingPageAdminService {
 
   /**
    * @param {number} id
-   * @param {{ userId: number|string, roleCode?: string }} scope
+   * @param {object} authUser
    * @returns {Promise<boolean>}
    */
-  async remove(id, scope = {}) {
+  async remove(id, authUser) {
+    const scope = getWorkspaceScope(authUser);
     const current = await landingPageRepository.findByIdInScope(id, scope);
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
@@ -317,7 +318,7 @@ class LandingPageAdminService {
       console.warn('[LandingPageAdmin.remove] removeSubdomain failed:', e.message)
     );
 
-    const ok = await landingPageRepository.deleteById(id);
+    const ok = await landingPageRepository.deleteByIdInScope(id, scope);
     if (!ok) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
@@ -330,39 +331,47 @@ class LandingPageAdminService {
    * Lấy danh sách các phiên bản của landing page
    */
   async listVersions(id, authUser) {
-    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    const current = await landingPageRepository.findByIdInScope(id, getWorkspaceScope(authUser));
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
       throw err;
     }
-    return landingPageVersionService.listVersions(id, current.idUser);
+    return landingPageVersionService.listVersions(id, current.workspaceOwnerId || current.idUser);
   }
 
   /**
    * Xem trước nội dung HTML của một phiên bản
    */
   async previewVersion(id, versionId, authUser) {
-    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    const current = await landingPageRepository.findByIdInScope(id, getWorkspaceScope(authUser));
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
       throw err;
     }
-    return landingPageVersionService.getVersionHtml(versionId, id, current.idUser);
+    return landingPageVersionService.getVersionHtml(
+      versionId,
+      id,
+      current.workspaceOwnerId || current.idUser
+    );
   }
 
   /**
    * Khôi phục landing page về phiên bản chỉ định
    */
   async restoreVersion(id, versionId, authUser) {
-    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    const current = await landingPageRepository.findByIdInScope(id, getWorkspaceScope(authUser));
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
       throw err;
     }
-    const versionData = await landingPageVersionService.getVersionHtml(versionId, id, current.idUser);
+    const versionData = await landingPageVersionService.getVersionHtml(
+      versionId,
+      id,
+      current.workspaceOwnerId || current.idUser
+    );
     return this.update(
       id,
       {
@@ -379,13 +388,17 @@ class LandingPageAdminService {
    * Xóa một phiên bản lịch sử
    */
   async deleteVersion(id, versionId, authUser) {
-    const current = await landingPageRepository.findByIdInScope(id, buildScopeFromAuthUser(authUser));
+    const current = await landingPageRepository.findByIdInScope(id, getWorkspaceScope(authUser));
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
       throw err;
     }
-    return landingPageVersionService.deleteVersion(versionId, id, current.idUser);
+    return landingPageVersionService.deleteVersion(
+      versionId,
+      id,
+      current.workspaceOwnerId || current.idUser
+    );
   }
 }
 

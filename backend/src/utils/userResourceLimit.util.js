@@ -50,6 +50,7 @@ const RESOURCE_LIMIT_MAP = {
   landingPages: {
     column: 'max_landing_pages',
     table: 'landing_pages',
+    ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
     label: 'số landing page',
   },
 };
@@ -145,7 +146,7 @@ async function countResourceForUser(queryable, userId, resourceConfig) {
     countResult = await queryable.query(
       `SELECT COUNT(*)::int AS total
        FROM ${resourceConfig.table}
-       WHERE id_user = $1`,
+       WHERE ${resourceConfig.ownerExpression || 'id_user'} = $1`,
       [userId]
     );
   }

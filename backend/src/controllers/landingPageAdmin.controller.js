@@ -1,5 +1,7 @@
 import landingPageAdminService from '../services/landingPage/landingPageAdmin.service.js';
 import landingPageDomainService from '../services/landingPage/landingPageDomain.service.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
 /**
  * API quản trị — CRUD landing page HTML (auth + admin).
@@ -13,11 +15,7 @@ class LandingPageAdminController {
    */
   async list(req, res) {
     try {
-      const rows = await landingPageAdminService.list({
-        userId: req.user?.id,
-        roleCode: req.user?.role,
-        ownerId: req.user.activeContext?.ownerId,
-      });
+      const rows = await landingPageAdminService.list(req.user);
       return res.json({ success: true, data: rows });
     } catch (error) {
       console.error('[LandingPageAdminController.list]', error);
@@ -37,11 +35,7 @@ class LandingPageAdminController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
-      const row = await landingPageAdminService.getById(id, {
-        userId: req.user?.id,
-        roleCode: req.user?.role,
-        ownerId: req.user.activeContext?.ownerId,
-      });
+      const row = await landingPageAdminService.getById(id, req.user);
       return res.json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -65,6 +59,13 @@ class LandingPageAdminController {
         return res.status(401).json({ success: false, message: 'Thiếu thông tin người dùng' });
       }
       const row = await landingPageAdminService.create(req.body || {}, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_PAGE_CREATED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE,
+        row.id,
+        { slug: row.slug, title: row.title, isPublished: row.isPublished }
+      );
       return res.status(201).json({ success: true, data: row });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -90,6 +91,13 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const row = await landingPageAdminService.update(id, req.body || {}, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_PAGE_UPDATED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE,
+        id,
+        { slug: row.slug, title: row.title, isPublished: row.isPublished }
+      );
       const response = { success: true, data: row };
       if (row?.warning) {
         response.warning = row.warning;
@@ -114,11 +122,14 @@ class LandingPageAdminController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
-      await landingPageAdminService.remove(id, {
-        userId: req.user?.id,
-        roleCode: req.user?.role,
-        ownerId: req.user.activeContext?.ownerId,
-      });
+      await landingPageAdminService.remove(id, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_PAGE_DELETED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE,
+        id,
+        {}
+      );
       return res.json({ success: true });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -158,6 +169,13 @@ class LandingPageAdminController {
       const hostname = String(req.body?.hostname || '').trim();
       const isApexDomain = Boolean(req.body?.isApexDomain);
       const data = await landingPageDomainService.setHostname(id, hostname, isApexDomain, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_DOMAIN_UPDATED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE_DOMAIN,
+        id,
+        { hostname: data.hostname || hostname, status: data.status, isApexDomain }
+      );
       return res.json({ success: true, data });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -176,6 +194,13 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const data = await landingPageDomainService.verifyDns(id, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_DOMAIN_VERIFIED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE_DOMAIN,
+        id,
+        { hostname: data.hostname, status: data.status }
+      );
       return res.json({ success: true, data });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -194,6 +219,13 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const data = await landingPageDomainService.provisionSslForDomain(id, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_DOMAIN_SSL_PROVISIONED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE_DOMAIN,
+        id,
+        { hostname: data.hostname, status: data.status }
+      );
       return res.json({ success: true, data });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -212,6 +244,13 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const data = await landingPageDomainService.remove(id, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_DOMAIN_DELETED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE_DOMAIN,
+        id,
+        {}
+      );
       return res.json({ success: true, data });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -268,6 +307,13 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const data = await landingPageAdminService.restoreVersion(id, versionId, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_VERSION_RESTORED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE_VERSION,
+        versionId,
+        { landingPageId: id }
+      );
       return res.json({ success: true, data, message: 'Khôi phục phiên bản thành công' });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -287,6 +333,13 @@ class LandingPageAdminController {
         return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
       }
       const data = await landingPageAdminService.deleteVersion(id, versionId, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_VERSION_DELETED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE_VERSION,
+        versionId,
+        { landingPageId: id }
+      );
       return res.json({ success: true, data, message: 'Đã xóa phiên bản thành công' });
     } catch (error) {
       const status = error.statusCode || 500;

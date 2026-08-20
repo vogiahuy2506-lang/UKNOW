@@ -57,7 +57,9 @@ router.post('/landing-analytics/view', publicLandingAnalyticsLimiter, async (req
     }
 
     const { rows } = await db.query(
-      `SELECT id FROM landing_pages WHERE slug = $1 AND is_published = true`,
+      `SELECT id, COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId"
+       FROM landing_pages
+       WHERE slug = $1 AND is_published = true`,
       [slug]
     );
     if (!rows[0]) {
@@ -69,9 +71,17 @@ router.post('/landing-analytics/view', publicLandingAnalyticsLimiter, async (req
     }
 
     await db.query(
-      `INSERT INTO landing_page_events (landing_page_slug, event_type, visitor_id, utm_source, utm_campaign, utm_medium)
-       VALUES ($1, 'view', $2, $3, $4, $5)`,
-      [slug, visitorId || null, utmSource || null, utmCampaign || null, utmMedium || null]
+      `INSERT INTO landing_page_events
+         (landing_page_slug, event_type, visitor_id, utm_source, utm_campaign, utm_medium, id_user)
+       VALUES ($1, 'view', $2, $3, $4, $5, $6)`,
+      [
+        slug,
+        visitorId || null,
+        utmSource || null,
+        utmCampaign || null,
+        utmMedium || null,
+        rows[0].workspaceOwnerId,
+      ]
     );
     return res.status(201).json({ success: true });
   } catch (error) {
@@ -117,7 +127,9 @@ router.get('/landing-track/go', async (req, res) => {
     }
 
     const { rows } = await db.query(
-      `SELECT id FROM landing_pages WHERE slug = $1 AND is_published = true`,
+      `SELECT id, COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId"
+       FROM landing_pages
+       WHERE slug = $1 AND is_published = true`,
       [normalizedSlug]
     );
     if (!rows[0]) {
@@ -136,9 +148,10 @@ router.get('/landing-track/go', async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO landing_page_events (landing_page_slug, event_type, utm_source, utm_medium, target_url)
-       VALUES ($1, 'click', 'landing_page', $2, $3)`,
-      [normalizedSlug, normalizedSlug, targetUrl.toString()]
+      `INSERT INTO landing_page_events
+         (landing_page_slug, event_type, utm_source, utm_medium, target_url, id_user)
+       VALUES ($1, 'click', 'landing_page', $2, $3, $4)`,
+      [normalizedSlug, normalizedSlug, targetUrl.toString(), rows[0].workspaceOwnerId]
     );
 
     return res.redirect(302, targetUrl.toString());

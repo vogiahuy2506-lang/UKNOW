@@ -67,7 +67,7 @@ class CampaignScheduleRepository {
 
   async findMutableById({ id, userId, isAdmin }) {
     const result = await db.query(
-      `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.run_count, cs.last_run_at::timestamptz AS last_run_at
+      `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.enabled, cs.run_count, cs.last_run_at::timestamptz AS last_run_at
        FROM campaign_schedules cs
        JOIN campaigns c ON cs.id_campaign = c.id
        WHERE cs.id = $1

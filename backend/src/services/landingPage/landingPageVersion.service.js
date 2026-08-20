@@ -16,7 +16,7 @@ class LandingPageVersionService {
    *
    * @param {object} params
    * @param {number} params.landingPageId
-   * @param {number} params.userId
+   * @param {number} params.workspaceOwnerId
    * @param {number|null} [params.actorUserId]
    * @param {string} params.oldHtml
    * @param {string} [params.title]
@@ -25,7 +25,7 @@ class LandingPageVersionService {
    */
   async createSnapshotIfChanged({
     landingPageId,
-    userId,
+    workspaceOwnerId,
     actorUserId = null,
     oldHtml,
     title = null,
@@ -39,7 +39,10 @@ class LandingPageVersionService {
     const htmlHash = computeHtmlHash(rawOldHtml);
 
     // So sánh với hash của phiên bản gần nhất để tránh duplicate khi bấm Save nhiều lần
-    const latestVersion = await landingPageVersionRepository.findLatestByLandingPage(landingPageId, userId);
+    const latestVersion = await landingPageVersionRepository.findLatestByLandingPage(
+      landingPageId,
+      workspaceOwnerId
+    );
     if (latestVersion && latestVersion.html_hash === htmlHash) {
       return { snapshotSaved: false };
     }
@@ -48,7 +51,7 @@ class LandingPageVersionService {
     const sizeBytes = buffer.length;
     const timestamp = Date.now();
     const randSuffix = crypto.randomBytes(4).toString('hex');
-    const storageKey = `uploads/landing-versions/${userId}/${landingPageId}/${timestamp}_${randSuffix}.html`;
+    const storageKey = `uploads/landing-versions/${workspaceOwnerId}/${landingPageId}/${timestamp}_${randSuffix}.html`;
 
     const storageBackend = getStorageBackend();
 
@@ -61,7 +64,8 @@ class LandingPageVersionService {
       // 2. Tạo bản ghi version
       const createdVersion = await landingPageVersionRepository.createVersion({
         landingPageId,
-        userId,
+        workspaceOwnerId,
+        actorUserId,
         storageKey,
         title: title || 'Phiên bản cũ',
         htmlHash,
@@ -73,8 +77,8 @@ class LandingPageVersionService {
       try {
         await registerWrittenStorageObject({
           poolType: 'workspace',
-          ownerUserId: userId,
-          actorUserId: actorUserId || userId,
+          ownerUserId: workspaceOwnerId,
+          actorUserId: actorUserId || workspaceOwnerId,
           storageKey,
           category: 'landing_version',
           state: 'active',
@@ -84,20 +88,27 @@ class LandingPageVersionService {
         });
       } catch (regErr) {
         // Rollback bản ghi version vừa tạo nếu đăng ký quota thất bại
-        await landingPageVersionRepository.deleteById(createdVersion.id).catch((rbErr) => {
+        await landingPageVersionRepository.deleteByIdInWorkspace(
+          createdVersion.id,
+          workspaceOwnerId
+        ).catch((rbErr) => {
           console.warn(`[LandingPageVersionService] Rollback version ${createdVersion.id} failed:`, rbErr.message);
         });
         throw regErr;
       }
 
       // 4. Giới hạn tối đa 5 bản gần nhất — prune các bản cũ vượt quá giới hạn
-      await this.pruneOldVersions(landingPageId, userId, MAX_VERSIONS_PER_LANDING_PAGE);
+      await this.pruneOldVersions(
+        landingPageId,
+        workspaceOwnerId,
+        MAX_VERSIONS_PER_LANDING_PAGE
+      );
 
       return { snapshotSaved: true, version: createdVersion };
     } catch (err) {
       // Bẫy lớn nhất: Hết dung lượng (StorageQuotaExceededError) không được làm hỏng việc lưu trang chính
       if (err instanceof StorageQuotaExceededError || err?.code === 'STORAGE_QUOTA_EXCEEDED') {
-        console.warn(`[LandingPageVersionService] Quota exceeded for user ${userId}, skip snapshot version:`, err.message);
+        console.warn(`[LandingPageVersionService] Quota exceeded for workspace ${workspaceOwnerId}, skip snapshot version:`, err.message);
         // Xóa file rác vừa put lên GCS
         await storageBackend.delete(storageKey).catch((delErr) => {
           console.warn(`[LandingPageVersionService] Cleanup GCS key ${storageKey} failed:`, delErr.message);
@@ -137,7 +148,7 @@ class LandingPageVersionService {
             await markDeletedAfterUnlink({ storageKey: v.storage_key });
           }
           // 2. Chỉ xóa row trong DB khi bước dọn storage trên thành công
-          await landingPageVersionRepository.deleteById(v.id);
+          await landingPageVersionRepository.deleteByIdInWorkspace(v.id, userId);
         } catch (delErr) {
           console.warn(`[LandingPageVersionService] Prune failed for version ${v.id} (key: ${v.storage_key}):`, delErr.message);
           // Giữ lại row để lần prune sau còn đầu mối dọn tiếp
@@ -217,7 +228,7 @@ class LandingPageVersionService {
       await markDeletedAfterUnlink({ storageKey: version.storage_key }).catch(() => {});
     }
 
-    await landingPageVersionRepository.deleteById(version.id);
+    await landingPageVersionRepository.deleteByIdInWorkspace(version.id, userId);
     return { success: true, deletedId: Number(version.id) };
   }
 }

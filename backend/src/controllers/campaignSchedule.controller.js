@@ -4,6 +4,18 @@ import campaignScheduleRepository from '../repositories/campaign/campaignSchedul
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.util.js';
 
+function normalizeOptionalBoolean(value) {
+  if (value === undefined) return undefined;
+  if (value === true || value === 'true' || value === 1 || value === '1') return true;
+  if (value === false || value === 'false' || value === 0 || value === '0') return false;
+  return value;
+}
+
+function employeeCanRunCampaign(req) {
+  const context = req.user?.activeContext;
+  return context?.type !== 'employee' || context.permissions?.campaigns_run === true;
+}
+
 class CampaignScheduleController {
   /**
    * Reject once-schedules whose next fire is a year-rollover (past day/month).
@@ -94,7 +106,8 @@ class CampaignScheduleController {
     try {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user.role);
-      const { campaignId, scheduleName, scheduleType, cronExpression, enabled } = req.body;
+      const { campaignId, scheduleName, scheduleType, cronExpression } = req.body;
+      const enabled = normalizeOptionalBoolean(req.body.enabled);
 
       // Kiểm tra campaign có tồn tại và thuộc về user không
       const campaignExists = await campaignScheduleRepository.checkCampaignExists({ campaignId, userId, isAdmin });
@@ -118,6 +131,16 @@ class CampaignScheduleController {
         return res.status(400).json({
           success: false,
           message: onceTimingError,
+        });
+      }
+
+      // Bật lịch có khả năng gửi thật — yêu cầu campaigns_run trong employee context
+      const isEnabling = enabled !== false;
+      if (isEnabling && !employeeCanRunCampaign(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền bật lịch chạy tự động cho chiến dịch (cần quyền campaigns_run)',
+          code: 'PERMISSION_DENIED',
         });
       }
 
@@ -161,7 +184,8 @@ class CampaignScheduleController {
       const userId = req.user.id;
       const isAdmin = isAdminRole(req.user.role);
       const { id } = req.params;
-      const { scheduleName, scheduleType, cronExpression, enabled } = req.body;
+      const { scheduleName, scheduleType, cronExpression } = req.body;
+      const enabled = normalizeOptionalBoolean(req.body.enabled);
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
       const scheduleData = await campaignScheduleRepository.findMutableById({ id, userId, isAdmin });
@@ -169,6 +193,16 @@ class CampaignScheduleController {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy lịch chạy',
+        });
+      }
+
+      const changesExecution = scheduleType !== undefined || cronExpression !== undefined;
+      const willBeEnabled = enabled === undefined ? scheduleData.enabled === true : enabled === true;
+      if ((enabled === true || (changesExecution && willBeEnabled)) && !employeeCanRunCampaign(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền bật lịch chạy tự động cho chiến dịch (cần quyền campaigns_run)',
+          code: 'PERMISSION_DENIED',
         });
       }
 

@@ -3,6 +3,7 @@ import landingPageEventRepository from '../../repositories/landingPageEvent.repo
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import leadRepository from '../../repositories/lead.repository.js';
 import customerHelperService from '../customer/customerHelper.service.js';
+import { getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 
 class DashboardAnalyticsService {
   /**
@@ -453,18 +454,18 @@ class DashboardAnalyticsService {
 
   /**
    * Thống kê landing page: view/click (bảng events) và submit (bảng leads) theo slug trong khoảng ngày.
-   * Không lọc theo user — dữ liệu marketing dùng chung toàn hệ thống.
+   * Dữ liệu được lọc theo workspace owner; super admin vẫn có thể xem toàn hệ thống.
    *
    * Query:
    * - Mặc định: `startDate` / `endDate` hoặc `period` (7d|30d|90d) — giống các API dashboard khác.
    * - Toàn thời gian: `allTime=1` hoặc `period=all` — không truyền mốc ngày xuống aggregate (mọi bản ghi).
    *
-   * @param {number} _userId
-   * @param {string} _roleCode
+   * @param {object} authUser
    * @param {object} query startDate, endDate, period, allTime
    * @returns {Promise<{ filters: object, rows: { slug: string, title: string, viewCount: number, clickCount: number, submitCount: number, clickThroughRatePct: number, submitRateVsViewsPct: number }[] }>}
    */
-  async getLandingPageStats(_userId, _roleCode, query) {
+  async getLandingPageStats(authUser, query) {
+    const workspaceScope = getWorkspaceScope(authUser);
     const q = query || {};
     const periodRaw = String(q.period ?? '').trim().toLowerCase();
     const allTimeFlag = String(q.allTime ?? '').trim();
@@ -493,8 +494,8 @@ class DashboardAnalyticsService {
     }
 
     const [eventAgg, submitAgg] = await Promise.all([
-      landingPageEventRepository.aggregateEventsBySlug(startDate, endDate),
-      leadRepository.aggregateSubmitsBySlug(startDate, endDate),
+      landingPageEventRepository.aggregateEventsBySlug(startDate, endDate, workspaceScope),
+      leadRepository.aggregateSubmitsBySlug(startDate, endDate, workspaceScope),
     ]);
 
     const bySlug = new Map();
@@ -520,7 +521,7 @@ class DashboardAnalyticsService {
     }
 
     /** Gộp mọi slug đã publish trong CMS để bảng/biểu đồ có dòng dù chưa có view/click (render /lp). */
-    const publishedList = await landingPageRepository.listPublishedSlugsWithTitles();
+    const publishedList = await landingPageRepository.listPublishedSlugsWithTitles(workspaceScope);
     for (const p of publishedList) {
       const key = p.slug;
       if (!key || key === 'l') continue;
@@ -535,7 +536,7 @@ class DashboardAnalyticsService {
     }
 
     const slugKeys = Array.from(bySlug.keys());
-    const titleBySlug = await landingPageRepository.findTitlesBySlugs(slugKeys);
+    const titleBySlug = await landingPageRepository.findTitlesBySlugs(slugKeys, workspaceScope);
     /** Slug landing React cố định `/l` — đồng bộ nhãn với bảng admin khi không có bản ghi CMS. */
     const fixedLandingSlug = 'l';
     const fixedLandingTitle = 'Landing cố định (/l)';
