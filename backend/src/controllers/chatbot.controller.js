@@ -1237,7 +1237,7 @@ class ChatbotController {
       const { origin } = req.query;
       const userId = req.user.id;
 
-      if (origin === 'shared') {
+      if (origin === 'shared' || origin === 'shared_with_me') {
         // Get chatbots received from others (origin = 'shared')
         const chatbots = await chatbotRepository.listChatbotsByUser(userId, 'shared');
         return res.json({ success: true, data: chatbots });
