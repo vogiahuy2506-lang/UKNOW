@@ -474,6 +474,9 @@ class ChatbotRepository {
       // Handle NULL origin as 'self_created' for backward compatibility
       if (origin === 'self_created') {
         query += ` AND (origin = $2 OR origin IS NULL)`;
+      } else if (origin === 'shared' || origin === 'shared_with_me') {
+        // shared and shared_with_me are the same - chatbots shared with the user
+        query += ` AND (origin = 'shared' OR origin = 'shared_with_me')`;
       } else {
         query += ` AND origin = $2`;
       }
