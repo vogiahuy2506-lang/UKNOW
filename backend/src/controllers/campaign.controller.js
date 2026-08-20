@@ -971,6 +971,7 @@ class CampaignController {
    */
   async testSendQuickCampaign(req, res) {
     try {
+      const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
       const channel = String(req.body.channel || 'email').trim().toLowerCase();
       const recipient = String(req.body.recipient || '').trim();
       const message = String(req.body.message || '').trim();
@@ -987,10 +988,10 @@ class CampaignController {
 
       // Kiểm tra quota tài khoản hiện tại
       const quota = await checkSendQuota({
-        userId: req.user.id,
+        userId: actorUserId,
         channel: channel.startsWith('zalo') ? 'zalo' : 'email',
         roleCode: req.user.role,
-        ownerContextId: req.user.activeContext?.ownerId,
+        ownerContextId: workspaceOwnerId,
       });
 
       if (!quota.allowed) {
@@ -1017,7 +1018,7 @@ class CampaignController {
         }
 
         const { account, api } = await zaloSettingsController.resolvePreviewAccountAndApi({
-          userId: req.user.id,
+          userId: workspaceOwnerId,
           roleCode: req.user.role,
           accountId,
         });
@@ -1051,8 +1052,9 @@ class CampaignController {
         });
       } else {
         const emailResult = await emailSettingsSmtpService.sendCustomEmail({
-          userId: req.user.id,
+          userId: actorUserId,
           roleCode: req.user.role,
+          ownerContextId: workspaceOwnerId,
           payload: {
             fromEmailId: accountId,
             to: recipient,

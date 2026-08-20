@@ -120,6 +120,88 @@ const baseSettingBody = (overrides = {}) => ({
   ...overrides,
 });
 
+async function addEmailWorkspaceMembership(ownerId, employeeId) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [ownerId, employeeId, JSON.stringify({
+      email_settings: true,
+      email_templates: true,
+      zalo_templates: true,
+    })]
+  );
+}
+
+describe('Email/template employee workspace ownership', () => {
+  it('employee đọc và tạo settings/templates/labels trong workspace owner', async () => {
+    const ownerA = await createUser({ username: 'email_workspace_a' });
+    const ownerB = await createUser({ username: 'email_workspace_b' });
+    const employee = await createUser({ username: 'email_workspace_employee' });
+    await addEmailWorkspaceMembership(ownerA.id, employee.id);
+    await db.query(
+      `INSERT INTO email_settings (id_user, name, email, smtp_host, smtp_port, smtp_username, smtp_password)
+       VALUES ($1, 'Owner A SMTP', 'a@test.local', 'smtp.a.test', 587, 'a', 'p'),
+              ($2, 'Owner B SMTP', 'b@test.local', 'smtp.b.test', 587, 'b', 'p')`,
+      [ownerA.id, ownerB.id]
+    );
+    await db.query(
+      `INSERT INTO email_templates (id_user, template_name, subject, body_html)
+       VALUES ($1, 'Owner A Template', 'A', '<p>A</p>'),
+              ($2, 'Owner B Template', 'B', '<p>B</p>')`,
+      [ownerA.id, ownerB.id]
+    );
+
+    const token = await loginAs(employee);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'X-Owner-Context': String(ownerA.id),
+    };
+
+    const settingsRes = await request(app).get('/api/email-settings').set(headers);
+    expect(settingsRes.status).toBe(200);
+    expect(settingsRes.body.data.items.map((item) => item.name)).toEqual(['Owner A SMTP']);
+
+    const createSettingRes = await request(app)
+      .post('/api/email-settings')
+      .set(headers)
+      .send(baseSettingBody({ name: 'Employee SMTP', email: 'employee@test.local' }));
+    expect(createSettingRes.status).toBe(201);
+
+    const templatesRes = await request(app).get('/api/email-templates').set(headers);
+    expect(templatesRes.status).toBe(200);
+    expect(templatesRes.body.data.items.map((item) => item.templateName)).toEqual(['Owner A Template']);
+
+    const createTemplateRes = await request(app)
+      .post('/api/email-templates')
+      .set(headers)
+      .send({ templateName: 'Employee Template', subject: 'Employee', bodyHtml: '<p>Employee</p>' });
+    expect(createTemplateRes.status).toBe(201);
+
+    const createLabelRes = await request(app)
+      .post('/api/template-labels')
+      .set(headers)
+      .send({ name: 'employee-label', color: '#123456' });
+    expect(createLabelRes.status).toBe(201);
+
+    const { rows: settingRows } = await db.query(
+      'SELECT id_user FROM email_settings WHERE id = $1',
+      [createSettingRes.body.data.id]
+    );
+    const { rows: templateRows } = await db.query(
+      'SELECT id_user FROM email_templates WHERE id = $1',
+      [createTemplateRes.body.data.id]
+    );
+    const { rows: labelRows } = await db.query(
+      'SELECT workspace_owner_id, created_by FROM template_labels WHERE id = $1',
+      [createLabelRes.body.data.id]
+    );
+    expect(Number(settingRows[0].id_user)).toBe(Number(ownerA.id));
+    expect(Number(templateRows[0].id_user)).toBe(Number(ownerA.id));
+    expect(Number(labelRows[0].workspace_owner_id)).toBe(Number(ownerA.id));
+    expect(Number(labelRows[0].created_by)).toBe(Number(employee.id));
+  });
+});
+
 // ===========================================================================
 // CRUD /api/email-settings
 // ===========================================================================

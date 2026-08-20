@@ -6,6 +6,7 @@ import trackingShortLinkService from '../services/tracking/trackingShortLink.ser
 import emailSettingsCrudService from '../services/email/emailSettingsCrud.service.js';
 import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 class EmailSettingsController {
   /**
@@ -368,8 +369,9 @@ ${linkItems}
 
   async getAll(req, res) {
     try {
+      const { workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await emailSettingsCrudService.getAll({
-        userId: req.user.id,
+        userId: workspaceOwnerId,
         roleCode: req.user?.role,
         page: req.query.page,
         limit: req.query.limit,
@@ -392,8 +394,9 @@ ${linkItems}
 
   async getById(req, res) {
     try {
+      const { workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await emailSettingsCrudService.getById({
-        userId: req.user.id,
+        userId: workspaceOwnerId,
         roleCode: req.user?.role,
         id: req.params.id,
       });
@@ -413,18 +416,16 @@ ${linkItems}
 
   async create(req, res) {
     try {
+      const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await emailSettingsCrudService.create({
-        userId: req.user.id,
+        userId: workspaceOwnerId,
         roleCode: req.user?.role,
         payload: req.body,
       });
 
-      const ownerId = req.user.activeContext?.type === 'employee'
-        ? req.user.activeContext.ownerId
-        : req.user.id;
-      auditService.log({
-        userId: req.user.id,
-        ownerId,
+      await auditService.log({
+        userId: actorUserId,
+        ownerId: workspaceOwnerId,
         category: 'workspace',
         action: AUDIT_ACTIONS.EMAIL_ACCOUNT_CONNECTED,
         entityType: AUDIT_ENTITY_TYPES.EMAIL_SETTING,
@@ -454,8 +455,9 @@ ${linkItems}
 
   async update(req, res) {
     try {
+      const { workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await emailSettingsCrudService.update({
-        userId: req.user.id,
+        userId: workspaceOwnerId,
         roleCode: req.user?.role,
         id: req.params.id,
         payload: req.body,
@@ -477,8 +479,9 @@ ${linkItems}
 
   async delete(req, res) {
     try {
+      const { workspaceOwnerId } = getWorkspaceContext(req.user);
       await emailSettingsCrudService.delete({
-        userId: req.user.id,
+        userId: workspaceOwnerId,
         roleCode: req.user?.role,
         id: req.params.id,
       });
@@ -517,10 +520,11 @@ ${linkItems}
 
   async sendTestEmail(req, res) {
     try {
+      const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await emailSettingsSmtpService.sendTestEmail({
-        userId: req.user.id,
+        userId: actorUserId,
         roleCode: req.user?.role,
-        ownerContextId: req.user?.activeContext?.ownerId,
+        ownerContextId: workspaceOwnerId,
         id: req.params.id,
         payload: req.body,
       }, {
@@ -546,8 +550,9 @@ ${linkItems}
 
   async getActiveSettings(req, res) {
     try {
+      const { workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await emailSettingsCrudService.getActiveSettings({
-        userId: req.user.id,
+        userId: workspaceOwnerId,
         roleCode: req.user?.role,
       });
 
@@ -566,10 +571,11 @@ ${linkItems}
 
   async sendCustomEmail(req, res) {
     try {
+      const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await emailSettingsSmtpService.sendCustomEmail({
-        userId: req.user.id,
+        userId: actorUserId,
         roleCode: req.user?.role,
-        ownerContextId: req.user?.activeContext?.ownerId,
+        ownerContextId: workspaceOwnerId,
         payload: req.body,
         trackingConfig: this.resolveTrackingBaseUrl(req),
       }, {

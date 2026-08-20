@@ -234,7 +234,8 @@ class EmailSettingsSmtpService {
 
   async sendTestEmail({ userId, roleCode, ownerContextId, id, payload }, deps) {
     const { to, subject, content, htmlContent } = payload;
-    const setting = await emailSettingsRepository.getById(userId, id, { roleCode });
+    const workspaceOwnerId = ownerContextId || userId;
+    const setting = await emailSettingsRepository.getById(workspaceOwnerId, id, { roleCode });
     if (!setting) {
       throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
@@ -275,6 +276,7 @@ class EmailSettingsSmtpService {
   }
 
   async sendCustomEmail({ userId, roleCode, ownerContextId, payload, trackingConfig }, deps) {
+    const workspaceOwnerId = ownerContextId || userId;
     const isPreviewMode = this.normalizePreviewMode(payload);
     const isBuilderMode = this.normalizeBuilderMode(payload);
     const {
@@ -306,7 +308,7 @@ class EmailSettingsSmtpService {
 
     // Kiểm tra unsubscribe/hard bounce chỉ cho luồng run thật.
     if (!shouldForcePreviewOnly && to) {
-      const row = await emailSettingsRepository.findEmailDeliveryStatus(userId, to);
+      const row = await emailSettingsRepository.findEmailDeliveryStatus(workspaceOwnerId, to);
       if (row) {
         if (row.email_subscribed === false) {
           throw createServiceError('Người nhận đã hủy đăng ký nhận email', 422, {
@@ -339,7 +341,7 @@ class EmailSettingsSmtpService {
       );
     }
 
-    const setting = await emailSettingsRepository.getActiveById(userId, fromEmailId, { roleCode });
+    const setting = await emailSettingsRepository.getActiveById(workspaceOwnerId, fromEmailId, { roleCode });
     if (!setting) {
       throw createServiceError('Không tìm thấy cấu hình email hoặc email chưa kích hoạt', 404);
     }
@@ -419,7 +421,7 @@ class EmailSettingsSmtpService {
 
       // Hard bounce chỉ cập nhật ở run thật, tránh làm bẩn dữ liệu khi Builder demo.
       if (bounceType === 'hard' && !shouldForcePreviewOnly) {
-        await emailSettingsRepository.markCustomerHardBounced(userId, to)
+        await emailSettingsRepository.markCustomerHardBounced(workspaceOwnerId, to)
           .catch((e) => console.error('[sendCustomEmail] Lỗi cập nhật hard bounce:', e.message));
       }
 
@@ -442,7 +444,7 @@ class EmailSettingsSmtpService {
     if (shouldSaveMessageLog) {
       try {
         await this.logEmailSent({
-          userId,
+          userId: workspaceOwnerId,
           campaignId,
           customerId,
           emailTemplateId,

@@ -40,6 +40,14 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function addZaloSettingsMembership(ownerId, employeeId) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [ownerId, employeeId, JSON.stringify({ zalo_settings: true })]
+  );
+}
+
 /**
  * Tạo account zalo trực tiếp trong DB.
  * @param {object} input
@@ -86,6 +94,24 @@ describe('Authorization — /api/zalo/accounts', () => {
 });
 
 describe('GET /api/zalo/accounts — list', () => {
+  it('employee chỉ thấy account của workspace owner đang chọn', async () => {
+    const ownerA = await createUser({ role: 'user', username: 'zalo_workspace_a' });
+    const ownerB = await createUser({ role: 'user', username: 'zalo_workspace_b' });
+    const employee = await createUser({ role: 'user', username: 'zalo_workspace_employee' });
+    await addZaloSettingsMembership(ownerA.id, employee.id);
+    await createZaloAccount({ ownerId: ownerA.id, displayName: 'Owner A Zalo' });
+    await createZaloAccount({ ownerId: ownerB.id, displayName: 'Owner B Zalo' });
+
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .get('/api/zalo/accounts')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(ownerA.id));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.map((item) => item.displayName)).toEqual(['Owner A Zalo']);
+  });
+
   it('owner chỉ thấy account của chính mình', async () => {
     const ownerA = await createUser({ role: 'user', username: 'owner_a' });
     const ownerB = await createUser({ role: 'user', username: 'owner_b' });

@@ -11,7 +11,7 @@ class ZaloTemplateRepository {
       `SELECT DISTINCT c.id, c.campaign_name
        FROM campaigns c
        INNER JOIN campaign_nodes cn ON cn.id_campaign = c.id
-       WHERE c.id_user = $1
+       WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
          AND c.status = 'active'
          AND cn.node_subtype IN ('send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request')
          AND (
@@ -49,7 +49,7 @@ class ZaloTemplateRepository {
           SELECT 1
           FROM campaigns c
           INNER JOIN campaign_nodes cn ON cn.id_campaign = c.id
-          WHERE c.id_user = zt.id_user
+          WHERE COALESCE(c.workspace_owner_id, c.id_user) = zt.id_user
             AND c.status = 'active'
             AND cn.node_subtype IN ('send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request')
             AND (

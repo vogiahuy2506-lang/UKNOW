@@ -5,6 +5,7 @@ const promoteTempToStorage = jest.fn();
 const createTemplate = jest.fn();
 const syncTemplateFile = jest.fn();
 const enforceResourceLimitTx = jest.fn();
+const auditLog = jest.fn();
 
 jest.unstable_mockModule('../upload.controller.js', () => ({
   default: { promoteTempToStorage },
@@ -22,8 +23,10 @@ jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({
   checkUserResourceLimit: jest.fn(async () => ({ allowed: true })),
   enforceResourceLimitTx,
 }));
-jest.unstable_mockModule('../../services/storage/storageQuota.service.js', () => ({
-  resolveWorkspaceOwnerId: jest.fn(() => 42),
+jest.unstable_mockModule('../../services/audit.service.js', () => ({
+  default: { log: auditLog },
+  AUDIT_ACTIONS: { EMAIL_TEMPLATE_CREATED: 'EMAIL_TEMPLATE_CREATED' },
+  AUDIT_ENTITY_TYPES: { EMAIL_TEMPLATE: 'email_template' },
 }));
 
 const emailTemplateController = (await import('../emailTemplate.controller.js')).default;
@@ -62,7 +65,7 @@ describe('email template storage parent transaction', () => {
 
     await emailTemplateController.create(req, res);
 
-    expect(promoteTempToStorage).toHaveBeenCalledWith(req.body.tempAttachments, 9, expect.objectContaining({
+    expect(promoteTempToStorage).toHaveBeenCalledWith(req.body.tempAttachments, 42, expect.objectContaining({
       ownerUserId: 42,
       actorUserId: 9,
       category: 'email_template',
@@ -70,7 +73,7 @@ describe('email template storage parent transaction', () => {
       parentMutation: expect.any(Function),
     }));
     expect(enforceResourceLimitTx).toHaveBeenCalledWith(transactionClient, expect.objectContaining({
-      userId: 9,
+      userId: 42,
       resourceKey: 'emailTemplates',
     }));
     expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({

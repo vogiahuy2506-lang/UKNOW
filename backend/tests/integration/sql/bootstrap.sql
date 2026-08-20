@@ -538,6 +538,17 @@ CREATE TABLE email_templates (
 );
 CREATE INDEX idx_email_templates_user ON email_templates(id_user);
 
+CREATE TABLE template_labels (
+  id                 BIGSERIAL PRIMARY KEY,
+  name               VARCHAR(100) NOT NULL,
+  color              VARCHAR(20) NOT NULL DEFAULT '#6366f1',
+  workspace_owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_by         BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT template_labels_name_workspace_owner_key UNIQUE (name, workspace_owner_id)
+);
+CREATE INDEX idx_template_labels_workspace_owner ON template_labels(workspace_owner_id);
+
 -- ─── Campaigns module ─────────────────────────────────────────────────
 -- Bảng tối thiểu để test CRUD campaign + publish/pause/duplicate + run
 -- create-record. KHÔNG cover execute (cần BullMQ + email/zalo senders).

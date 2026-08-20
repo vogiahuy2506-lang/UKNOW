@@ -3,9 +3,29 @@ import emailTemplateRepository from '../repositories/email/emailTemplate.reposit
 import db from '../config/database.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
-import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 class EmailTemplateController {
+  async logMutation(req, action, item) {
+    const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
+    return auditService.log({
+      userId: actorUserId,
+      ownerId: workspaceOwnerId,
+      category: 'workspace',
+      action,
+      entityType: AUDIT_ENTITY_TYPES.EMAIL_TEMPLATE,
+      entityId: item?.id ?? null,
+      details: {
+        templateName: item?.template_name || null,
+        templateCode: item?.template_code || null,
+        category: item?.category || null,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get?.('user-agent') || null,
+    });
+  }
+
   /**
    * Lấy danh sách campaign active đang tham chiếu email template.
    *
@@ -25,7 +45,7 @@ class EmailTemplateController {
   // Lấy danh sách email templates
   async getAll(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const { page = 1, limit = 10, category, search } = req.query;
       const offset = (page - 1) * limit;
@@ -83,7 +103,7 @@ class EmailTemplateController {
    */
   async getById(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
 
@@ -152,9 +172,9 @@ class EmailTemplateController {
 
   async create(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const roleCode = req.user?.role;
-      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const ownerUserId = userId;
       const { templateName, templateCode, subject, bodyHtml, bodyText, tempAttachments, variables, category } = req.body;
 
       const emailTemplateLimitCheck = await checkUserResourceLimit({
@@ -181,7 +201,7 @@ class EmailTemplateController {
         try {
           await uploadController.promoteTempToStorage(tempAttachments, userId, {
             ownerUserId,
-            actorUserId: userId,
+            actorUserId,
             category: 'email_template',
             referenceType: 'email_template',
             parentMutation: async (client, movedAttachments) => {
@@ -246,6 +266,7 @@ class EmailTemplateController {
         }
       })();
 
+      await this.logMutation(req, AUDIT_ACTIONS.EMAIL_TEMPLATE_CREATED, item);
       res.status(201).json({
         success: true,
         message: 'Tạo mẫu email thành công',
@@ -283,7 +304,7 @@ class EmailTemplateController {
    */
   async update(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
       const { 
@@ -361,7 +382,7 @@ class EmailTemplateController {
         try {
           await uploadController.promoteTempToStorage(tempAttachments, templateOwnerUserId, {
             ownerUserId: templateOwnerUserId,
-            actorUserId: userId,
+            actorUserId,
             category: 'email_template',
             referenceType: 'email_template',
             referenceId: id,
@@ -427,6 +448,7 @@ class EmailTemplateController {
         await uploadController.deleteFromS3(Array.from(deletedKeys));
       }
 
+      await this.logMutation(req, AUDIT_ACTIONS.EMAIL_TEMPLATE_UPDATED, item);
       res.json({
         success: true,
         message: 'Cập nhật mẫu email thành công',
@@ -457,7 +479,7 @@ class EmailTemplateController {
    */
   async delete(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
 
@@ -475,6 +497,7 @@ class EmailTemplateController {
 
       // Delete template từ database
       await emailTemplateRepository.delete({ id, userId, isAdmin });
+      await this.logMutation(req, AUDIT_ACTIONS.EMAIL_TEMPLATE_DELETED, template);
 
       // Xóa files local nếu có attachments
       if (attachments && attachments.length > 0) {

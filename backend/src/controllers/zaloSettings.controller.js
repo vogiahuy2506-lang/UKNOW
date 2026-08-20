@@ -29,6 +29,7 @@ import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/aud
 import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.js';
 import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 
 class ZaloSettingsController {
@@ -41,10 +42,11 @@ class ZaloSettingsController {
   }
 
   async assertPreviewSendQuota(req, recipientCount) {
+    const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
     const quota = await checkSendQuota({
-      userId: req.user.id,
+      userId: actorUserId,
       roleCode: req.user?.role,
-      ownerContextId: req.user?.activeContext?.ownerId,
+      ownerContextId: workspaceOwnerId,
       channel: 'zalo',
       requiredCount: recipientCount,
     });
@@ -630,8 +632,8 @@ class ZaloSettingsController {
     });
 
     if (account?.id) {
-      auditService.log({
-        userId,
+      await auditService.log({
+        userId: Number.parseInt(input?.actorUserId, 10) || userId,
         ownerId: userId,
         category: 'workspace',
         action: AUDIT_ACTIONS.ZALO_ACCOUNT_CONNECTED,
@@ -1618,7 +1620,7 @@ class ZaloSettingsController {
    */
   async getAccounts(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       // Ép timestamptz để đồng bộ instant với session Asia/Ho_Chi_Minh (tránh +7h khi Node chạy TZ=UTC).
       const rows = await zaloSettingRepository.findAccountsList(isAdmin, userId);
@@ -1681,7 +1683,7 @@ class ZaloSettingsController {
    */
   async deleteAccount(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = parseInt(req.params.id, 10);
 
@@ -1736,7 +1738,7 @@ class ZaloSettingsController {
   async setDefaultAccount(req, res) {
     const client = await db.getClient();
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = parseInt(req.params.id, 10);
 
@@ -1781,7 +1783,7 @@ class ZaloSettingsController {
    */
   async retryRestore(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = Number.parseInt(req.params.id, 10);
       if (!Number.isFinite(accountId)) {
@@ -1870,7 +1872,7 @@ class ZaloSettingsController {
    */
   async restoreAccountSessionByCookie(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = Number.parseInt(req.params.id, 10);
       const accountRow = await zaloSettingRepository.findAccountForRestore(accountId, isAdmin, userId);
@@ -1993,7 +1995,7 @@ class ZaloSettingsController {
    */
   async loginQr(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       this.pruneExpiredLoginSessions();
       const sessionKey = this.createLoginSession(userId);
       const loginTraceId = `session-${sessionKey}`;
@@ -2077,6 +2079,7 @@ class ZaloSettingsController {
             await this.finalizeQrLoginSuccess({
               sessionKey,
               userId,
+              actorUserId,
               roleCode: req.user?.role,
               api,
               loginMeta,
@@ -2111,6 +2114,7 @@ class ZaloSettingsController {
                   await this.finalizeQrLoginSuccess({
                     sessionKey,
                     userId,
+                    actorUserId,
                     roleCode: req.user?.role,
                     api: fallbackApi,
                     loginMeta,
@@ -2201,7 +2205,7 @@ class ZaloSettingsController {
    */
   async getQrLoginStatus(req, res) {
     this.pruneExpiredLoginSessions();
-    const userId = req.user.id;
+    const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
     const sessionKey = String(req.params.sessionKey || '');
     const session = this.loginSessions.get(sessionKey);
 
@@ -2253,7 +2257,7 @@ class ZaloSettingsController {
    */
   async previewSendPersonalMessage(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const accountId = req.body?.accountId;
       const message = String(req.body?.message || '').trim();
       const recipientType = String(req.body?.recipientType || 'phone').trim().toLowerCase() === 'uid'
@@ -2318,7 +2322,7 @@ class ZaloSettingsController {
               attachmentsCount: preparedAttachments.length,
             });
           } else {
-            await this.recordPreviewSendQuota(quota, userId, 'zalo_preview_personal');
+            await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_personal');
             items.push({
               recipient,
               recipientType,
@@ -2394,7 +2398,7 @@ class ZaloSettingsController {
    */
   async previewSendFriendRequest(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const accountId = req.body?.accountId;
       const message = String(req.body?.message || '').trim();
       const recipients = Array.isArray(req.body?.recipients) ? req.body.recipients : [];
@@ -2433,7 +2437,7 @@ class ZaloSettingsController {
             phone,
             message,
           });
-          await this.recordPreviewSendQuota(quota, userId, 'zalo_preview_friend_request');
+          await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_friend_request');
           items.push({
             phone,
             status: 'success',
@@ -2482,7 +2486,7 @@ class ZaloSettingsController {
    */
   async previewSendGroupMessage(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const accountId = req.body?.accountId;
       const message = String(req.body?.message || '').trim();
       const groupIds = Array.isArray(req.body?.groupIds) ? req.body.groupIds : [];
@@ -2546,7 +2550,7 @@ class ZaloSettingsController {
               attachmentsCount: preparedAttachments.length,
             });
           } else {
-            await this.recordPreviewSendQuota(quota, userId, 'zalo_preview_group');
+            await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_group');
             items.push({
               groupId,
               status: 'success',
@@ -2602,7 +2606,7 @@ class ZaloSettingsController {
    */
   async previewGetAllFriends(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const accountId = req.query?.accountId;
       const count = Number.isFinite(parseInt(req.query?.count, 10))
         ? parseInt(req.query.count, 10)
@@ -2647,7 +2651,7 @@ class ZaloSettingsController {
    */
   async previewGetAllGroups(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const accountId = req.query?.accountId;
       const { account, api } = await this.resolvePreviewAccountAndApi({
         userId,

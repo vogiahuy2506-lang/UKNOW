@@ -44,6 +44,14 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function addZaloTemplateMembership(ownerId, employeeId) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [ownerId, employeeId, JSON.stringify({ zalo_templates: true })]
+  );
+}
+
 /**
  * Insert template trực tiếp để arrange nhanh.
  * @param {object} input
@@ -88,6 +96,32 @@ describe('Authorization — /api/zalo-templates', () => {
 });
 
 describe('GET /api/zalo-templates', () => {
+  it('employee đọc và tạo template trong workspace owner', async () => {
+    const ownerA = await createUser({ role: 'user', username: 'zalo_tpl_workspace_a' });
+    const ownerB = await createUser({ role: 'user', username: 'zalo_tpl_workspace_b' });
+    const employee = await createUser({ role: 'user', username: 'zalo_tpl_employee' });
+    await addZaloTemplateMembership(ownerA.id, employee.id);
+    await insertTemplate({ ownerId: ownerA.id, templateName: 'Owner A' });
+    await insertTemplate({ ownerId: ownerB.id, templateName: 'Owner B' });
+
+    const token = await loginAs(employee);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'X-Owner-Context': String(ownerA.id),
+    };
+    const listRes = await request(app).get('/api/zalo-templates').set(headers);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.items.map((item) => item.templateName)).toEqual(['Owner A']);
+
+    const createRes = await request(app)
+      .post('/api/zalo-templates')
+      .set(headers)
+      .send({ templateName: 'Employee Zalo', subject: 'Subject', bodyText: 'Body' });
+    expect(createRes.status).toBe(201);
+    const { rows } = await db.query('SELECT id_user FROM zalo_templates WHERE id = $1', [createRes.body.data.id]);
+    expect(Number(rows[0].id_user)).toBe(Number(ownerA.id));
+  });
+
   it('user thường chỉ thấy template của mình', async () => {
     const a = await createUser({ role: 'user', username: 'oa' });
     const b = await createUser({ role: 'user', username: 'ob' });

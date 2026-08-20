@@ -254,7 +254,7 @@ class EmailSettingsRepository {
     const result = await db.query(
       `SELECT email_subscribed, email_hard_bounced
        FROM customers
-       WHERE id_user = $1 AND LOWER(email) = $2
+       WHERE COALESCE(workspace_owner_id, id_user) = $1 AND LOWER(email) = $2
        LIMIT 1`,
       [userId, String(email || '').trim().toLowerCase()]
     );
@@ -264,13 +264,13 @@ class EmailSettingsRepository {
   async markCustomerHardBounced(userId, email) {
     await db.query(
       `UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP
-       WHERE id_user = $1 AND LOWER(email) = $2`,
+       WHERE COALESCE(workspace_owner_id, id_user) = $1 AND LOWER(email) = $2`,
       [userId, String(email || '').trim().toLowerCase()]
     );
   }
 
   async findCustomerByEmail(client, userId, email) {
-    const result = await client.query('SELECT id FROM customers WHERE id_user = $1 AND email = $2 LIMIT 1', [
+    const result = await client.query('SELECT id FROM customers WHERE COALESCE(workspace_owner_id, id_user) = $1 AND email = $2 LIMIT 1', [
       userId,
       email,
     ]);
@@ -278,7 +278,7 @@ class EmailSettingsRepository {
   }
 
   async getOwnedCampaign(client, campaignId, userId) {
-    const result = await client.query('SELECT id FROM campaigns WHERE id = $1 AND id_user = $2 LIMIT 1', [
+    const result = await client.query('SELECT id FROM campaigns WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 LIMIT 1', [
       campaignId,
       userId,
     ]);
@@ -360,7 +360,7 @@ class EmailSettingsRepository {
   }
 
   async updateCustomerLastEmailSent(client, sentAt, customerId, userId) {
-    await client.query('UPDATE customers SET last_email_sent_at = $1 WHERE id = $2 AND id_user = $3', [
+    await client.query('UPDATE customers SET last_email_sent_at = $1 WHERE id = $2 AND COALESCE(workspace_owner_id, id_user) = $3', [
       sentAt,
       customerId,
       userId,

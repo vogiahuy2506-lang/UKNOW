@@ -3,9 +3,29 @@ import zaloTemplateRepository from '../repositories/zalo/zaloTemplate.repository
 import db from '../config/database.js';
 import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
-import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 
 class ZaloTemplateController {
+  async logMutation(req, action, item) {
+    const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
+    return auditService.log({
+      userId: actorUserId,
+      ownerId: workspaceOwnerId,
+      category: 'workspace',
+      action,
+      entityType: AUDIT_ENTITY_TYPES.ZALO_TEMPLATE,
+      entityId: item?.id ?? null,
+      details: {
+        templateName: item?.template_name || null,
+        templateCode: item?.template_code || null,
+        category: item?.category || null,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get?.('user-agent') || null,
+    });
+  }
+
   /**
    * Lấy danh sách campaign active đang tham chiếu template Zalo.
    *
@@ -58,7 +78,7 @@ class ZaloTemplateController {
    */
   async getAll(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const page = Number.parseInt(req.query.page, 10) || 1;
       const limit = Number.parseInt(req.query.limit, 10) || 10;
@@ -108,7 +128,7 @@ class ZaloTemplateController {
    */
   async getById(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
       const template = await zaloTemplateRepository.findById({ id, userId, isAdmin });
@@ -156,9 +176,9 @@ class ZaloTemplateController {
    */
   async create(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const roleCode = req.user?.role;
-      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const ownerUserId = userId;
       const { templateName, templateCode, subject, bodyText, tempAttachments, variables, category } = req.body;
 
       const zaloTemplateLimitCheck = await checkUserResourceLimit({
@@ -183,7 +203,7 @@ class ZaloTemplateController {
         try {
           await uploadController.promoteTempToStorage(tempAttachments, userId, {
             ownerUserId,
-            actorUserId: userId,
+            actorUserId,
             category: 'zalo_template',
             referenceType: 'zalo_template',
             parentMutation: async (client, movedAttachments) => {
@@ -241,6 +261,7 @@ class ZaloTemplateController {
         }
       })();
 
+      await this.logMutation(req, AUDIT_ACTIONS.ZALO_TEMPLATE_CREATED, template);
       res.status(201).json({
         success: true,
         message: 'Tạo mẫu Zalo thành công',
@@ -276,7 +297,7 @@ class ZaloTemplateController {
    */
   async update(req, res) {
     try {
-      const userId = req.user.id;
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
       const {
@@ -343,7 +364,7 @@ class ZaloTemplateController {
         try {
           await uploadController.promoteTempToStorage(tempAttachments, templateOwnerUserId, {
             ownerUserId: templateOwnerUserId,
-            actorUserId: userId,
+            actorUserId,
             category: 'zalo_template',
             referenceType: 'zalo_template',
             referenceId: id,
@@ -402,6 +423,7 @@ class ZaloTemplateController {
         await uploadController.deleteFromS3(Array.from(deletedKeys));
       }
 
+      await this.logMutation(req, AUDIT_ACTIONS.ZALO_TEMPLATE_UPDATED, template);
       res.json({
         success: true,
         message: 'Cập nhật mẫu Zalo thành công',
@@ -429,7 +451,7 @@ class ZaloTemplateController {
    */
   async delete(req, res) {
     try {
-      const userId = req.user.id;
+      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
       const isAdmin = isAdminRole(req.user?.role);
       const { id } = req.params;
 
@@ -443,6 +465,7 @@ class ZaloTemplateController {
       }
 
       await zaloTemplateRepository.delete({ id, userId, isAdmin });
+      await this.logMutation(req, AUDIT_ACTIONS.ZALO_TEMPLATE_DELETED, template);
 
       const attachments = Array.isArray(template.attachments) ? template.attachments : [];
       const fileKeys = attachments.map((att) => uploadController.normalizeStorageKey(att)).filter(Boolean);

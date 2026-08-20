@@ -79,6 +79,7 @@ export async function truncateAll() {
       zalo_unreachable_phones,
       zalo_settings,
       email_templates,
+      template_labels,
       email_settings,
       contact_submissions,
       login_history,
