@@ -150,7 +150,14 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect 
 
       const settingsMap = {};
       (settingsRes?.data?.data || []).forEach((setting) => {
-        settingsMap[String(setting.id_zalo_setting)] = setting;
+        // Backend có thể trả về id_zalo_setting, id_zalo_setting_id, hoặc id (từ listAccountsForUser).
+        // Chuẩn hoá về string để tra cứu nhất quán theo account.id (đã là string).
+        const accountKey = String(
+          setting.id_zalo_setting ?? setting.id_zalo_setting_id ?? setting.id ?? ''
+        );
+        if (accountKey) {
+          settingsMap[accountKey] = setting;
+        }
       });
       setChatbotSettings(settingsMap);
     } catch (error) {
@@ -169,7 +176,19 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect 
   const handleToggle = async (account, enabled) => {
     try {
       const res = await chatbotApi.toggleZaloAccountChatbot(account.id, enabled);
-      setChatbotSettings((prev) => ({ ...prev, [account.id]: res.data?.data }));
+      const updated = res.data?.data;
+      // Lưu bằng cùng key với list (account.id) và merge trạng thái is_enabled mới nhất
+      // để tránh việc backend trả row với key khác (id_zalo_setting) làm mất state UI.
+      setChatbotSettings((prev) => ({
+        ...prev,
+        [String(account.id)]: {
+          ...(prev[String(account.id)] || {}),
+          ...(updated || {}),
+          id: Number(account.id),
+          is_enabled: enabled,
+          chatbot_enabled: enabled,
+        },
+      }));
       toast.success(enabled ? t('zaloPersonalChatbot.enabled') : t('zaloPersonalChatbot.disabled'));
     } catch (error) {
       console.error('[ZaloPersonalChannelModal] Toggle failed:', error);
@@ -177,7 +196,9 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect 
     }
   };
 
-  const enabledCount = Object.values(chatbotSettings).filter((s) => s?.is_enabled).length;
+  const enabledCount = Object.values(chatbotSettings).filter(
+    (s) => !!(s?.is_enabled ?? s?.chatbot_enabled)
+  ).length;
 
   if (!open || !mounted) return null;
 
@@ -286,7 +307,8 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect 
               <div className="p-3 sm:p-4 space-y-2.5">
                 {accounts.map((account) => {
                   const settings = chatbotSettings[account.id] || {};
-                  const isEnabled = !!settings?.is_enabled;
+                  // Backend trả `chatbot_enabled` (listAccountsForUser) hoặc `is_enabled` (sau khi toggle).
+                  const isEnabled = !!(settings.is_enabled ?? settings.chatbot_enabled);
                   return <AccountRow key={account.id} account={account} isEnabled={isEnabled} onToggle={handleToggle} />;
                 })}
               </div>
