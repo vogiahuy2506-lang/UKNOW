@@ -46,6 +46,37 @@ class ChatbotZaloAccountRepository {
   }
 
   /**
+   * List all Zalo accounts (zalo_settings) of the user with chatbot-enabled flag.
+   * Returns one row per linked account, regardless of whether settings row exists.
+   */
+  async listAccountsForUser(userId) {
+    const { rows } = await db.query(
+      `SELECT zs.id,
+              zs.id_user,
+              zs.display_name,
+              zs.zalo_user_id,
+              zs.zalo_name,
+              zs.zalo_phone,
+              zs.status,
+              zs.is_active,
+              zs.last_connected_at,
+              zs.created_at,
+              czs.is_enabled AS chatbot_enabled,
+              czs.id_chatbot,
+              cb.name AS chatbot_name
+       FROM zalo_settings zs
+       LEFT JOIN chatbot_zalo_account_settings czs
+              ON czs.id_zalo_setting = zs.id AND czs.id_user = zs.id_user
+       LEFT JOIN custom_chatbots cb
+              ON cb.id = czs.id_chatbot AND cb.is_active = true
+       WHERE zs.id_user = $1 AND zs.is_active = true
+       ORDER BY zs.is_default DESC, zs.created_at DESC`,
+      [userId]
+    );
+    return rows;
+  }
+
+  /**
    * Upsert chatbot settings for a Zalo account
    * @param {number} userId
    * @param {number} zaloSettingId

@@ -1,4 +1,4 @@
--- Migration 156: template labels belong to a workspace while retaining their creator.
+-- Migration 157: template labels belong to a workspace while retaining their creator.
 
 ALTER TABLE template_labels
   ADD COLUMN IF NOT EXISTS workspace_owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE;

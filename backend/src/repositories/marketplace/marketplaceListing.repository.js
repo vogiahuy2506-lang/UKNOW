@@ -332,6 +332,20 @@ class MarketplaceListingRepository {
     );
     return rows;
   }
+
+  /**
+   * Find listing by chatbot ID
+   * @param {number} chatbotId
+   * @returns {Promise<object|null>}
+   */
+  async findByChatbotId(chatbotId) {
+    const { rows } = await db.query(
+      `SELECT * FROM marketplace_listings
+       WHERE resource_type = 'chatbot' AND resource_id = $1`,
+      [chatbotId]
+    );
+    return rows[0] || null;
+  }
 }
 
 export default new MarketplaceListingRepository();

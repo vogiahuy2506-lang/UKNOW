@@ -87,7 +87,7 @@ async function evaluateRule(rule) {
       if (m.consecutive >= need) {
         return {
           measuredValue: m.consecutive,
-          message: `Cron ${jobCode}: synced=0 liên tiếp ${m.consecutive} lần`,
+          message: `Cron ${jobCode}: không có dữ liệu để xử lý (noop/failure) liên tiếp ${m.consecutive} lần — kiểm tra tài khoản Zalo`,
           payload: m,
         };
       }

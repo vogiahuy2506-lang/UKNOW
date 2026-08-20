@@ -1,4 +1,4 @@
--- Migration 157: courses/products belong to a workspace and retain their creator.
+-- Migration 158: courses/products belong to a workspace and retain their creator.
 
 ALTER TABLE courses
   ADD COLUMN IF NOT EXISTS workspace_owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,

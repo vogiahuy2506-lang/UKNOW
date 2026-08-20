@@ -162,6 +162,14 @@ router.post('/custom-chatbots/:chatbotId/channels/zalo-oa', chatbotController.co
 router.post('/custom-chatbots/:chatbotId/channels/facebook', chatbotController.connectChatbotFacebook.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId/channels/:channelType', chatbotController.disconnectChatbotChannel.bind(chatbotController));
 
+// Chatbot Sharing (giữ path /share để tương thích client; ngữ nghĩa giờ là clone)
+router.post('/custom-chatbots/:chatbotId/share', chatbotController.shareChatbot.bind(chatbotController));
+// 4 endpoint dưới đã bỏ share-permission; giữ để client cũ không vỡ UI
+router.get('/custom-chatbots/:chatbotId/shares', chatbotController.getChatbotShares.bind(chatbotController));
+router.delete('/custom-chatbots/:chatbotId/shares/:recipientId', chatbotController.revokeShare.bind(chatbotController));
+router.get('/shared-with-me', chatbotController.getSharedWithMe.bind(chatbotController));
+router.get('/shared-by-me', chatbotController.getSharedByMe.bind(chatbotController));
+
 // ── Channel Connections ──────────────────────────────────────────
 
 router.get('/channels', chatbotController.listChannels.bind(chatbotController));

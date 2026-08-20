@@ -92,6 +92,21 @@ class MarketplacePurchaseRepository {
     );
     return parseInt(rows[0].count, 10);
   }
+
+  /**
+   * Check if a chatbot was purchased from marketplace
+   * @param {number} chatbotId
+   * @returns {Promise<boolean>}
+   */
+  async isChatbotPurchased(chatbotId) {
+    const { rows } = await db.query(
+      `SELECT 1 FROM marketplace_purchases
+       WHERE cloned_resource_type = 'chatbot' AND cloned_resource_id = $1
+       LIMIT 1`,
+      [chatbotId]
+    );
+    return rows.length > 0;
+  }
 }
 
 export default new MarketplacePurchaseRepository();

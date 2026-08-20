@@ -154,6 +154,18 @@ class ChatbotRateLimitService {
     if (this.redis) return this.redis;
     if (this.connecting) return this.connecting;
 
+    // Bỏ qua Redis hoàn toàn khi môi trường không cấu hình tường minh.
+    // BULLMQ_REDIS_URL/REDIS_URL/REDIS_HOST đều rỗng ⇒ coi như Redis không tồn tại,
+    // chuyển ngay sang in-memory fallback để không flood log ECONNREFUSED.
+    const hasExplicitRedis =
+      String(process.env.BULLMQ_REDIS_URL || '').trim() ||
+      String(process.env.REDIS_URL || '').trim() ||
+      String(process.env.REDIS_HOST || '').trim();
+    if (!hasExplicitRedis) {
+      this.redisFailed = true;
+      return null;
+    }
+
     this.connecting = (async () => {
       try {
         const connectTimeout = envInt('REDIS_CONNECT_TIMEOUT_MS', 5000);
@@ -163,7 +175,13 @@ class ChatbotRateLimitService {
           connectTimeout,
           lazyConnect: true,
         });
+        // Dedup log: nếu Redis cấu hình nhưng đang down, mỗi reconnect lại phát 'error'.
+        // Chỉ in 1 lần / 60s để tránh tràn log/notification.
+        let lastErrorLogAt = 0;
         client.on('error', (err) => {
+          const now = Date.now();
+          if (now - lastErrorLogAt < 60_000) return;
+          lastErrorLogAt = now;
           console.warn('[ChatbotRateLimit] Redis error:', err.message);
         });
         await client.connect();

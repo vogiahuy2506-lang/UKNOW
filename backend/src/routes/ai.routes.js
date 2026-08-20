@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
@@ -60,7 +60,7 @@ router.put('/business-profile', requireSelfContext, aiController.saveBusinessPro
 router.get('/sessions', aiController.getSessions.bind(aiController));
 router.get('/sessions/:id/messages', aiController.getSessionMessages.bind(aiController));
 router.delete('/sessions/:id', aiController.deleteSession.bind(aiController));
-// Wizard state mutation từ nút bấm (không gọi AI → không aiLimiter, không credit)
+// Wizard state mutation tß╗½ n├║t bß║Ñm (kh├┤ng gß╗ìi AI ΓåÆ kh├┤ng aiLimiter, kh├┤ng credit)
 router.patch('/sessions/:id/wizard-state', aiController.patchWizardState.bind(aiController));
 
 // Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)

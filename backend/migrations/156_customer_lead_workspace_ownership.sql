@@ -1,4 +1,4 @@
--- PR-3A: chuẩn hóa workspace ownership cho Customer và Lead.
+-- Migration 156 / PR-3A: chuẩn hóa workspace ownership cho Customer và Lead.
 --
 -- Dữ liệu customer lịch sử không lưu active employee context tại thời điểm tạo.
 -- Chỉ backfill chắc chắn theo id_user; không suy đoán owner từ membership hiện tại.

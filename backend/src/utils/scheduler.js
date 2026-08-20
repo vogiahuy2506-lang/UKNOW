@@ -820,7 +820,17 @@ export const initScheduler = () => {
               console.error(`[Scheduler] Zalo bg sync account ${accountId} failed:`, err.message);
             }
           }
-          return { synced, totalGroups, errors, skipped, accounts: accounts.length };
+
+          // Phân loại status:
+          //  - 'success' khi không có lỗi (kể cả synced=0 — không có tin nhắn mới là bình thường)
+          //  - 'failure' khi có lỗi thật
+          //  - 'noop' khi không có account nào để sync
+          // Trước đây synced=0 luôn = noop → alert `cron_zalo_bg_sync_noop` bắn sai mỗi 10 phút.
+          let status = 'success';
+          if (errors > 0) status = 'failure';
+          else if (accounts.length === 0) status = 'noop';
+
+          return { synced, totalGroups, errors, skipped, accounts: accounts.length, status };
         });
       } catch (error) {
         console.error('[Scheduler] Lỗi Zalo background group sync:', error.message);

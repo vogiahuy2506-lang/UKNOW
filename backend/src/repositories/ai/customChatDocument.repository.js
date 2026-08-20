@@ -133,6 +133,18 @@ class CustomChatDocumentRepository {
     return rows;
   }
 
+  async getDocumentById(documentId, chatbotId, ownerUserId, queryable = db) {
+    const { rows } = await queryable.query(
+      `SELECT id, title, source_key AS source, source_type AS type, status,
+              content_text, chunk_count, extracted_chars, error_message,
+              created_at, updated_at
+         FROM custom_chatbot_documents
+        WHERE id = $1 AND chatbot_id = $2 AND owner_user_id = $3`,
+      [documentId, chatbotId, ownerUserId]
+    );
+    return rows[0] || null;
+  }
+
   async deleteDocument(documentId, chatbotId, ownerUserId, queryable = db) {
     const { rows } = await queryable.query(
       `DELETE FROM custom_chatbot_documents

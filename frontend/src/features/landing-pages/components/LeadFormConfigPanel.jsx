@@ -7,6 +7,7 @@ import {
   nextUnusedOptionValue,
   normalizeLeadFormConfig,
 } from '../utils/landingLeadFormConfig.js';
+import EmbedSnippetsPanel from './EmbedSnippetsPanel.jsx';
 
 const emptyCustomField = () => ({
   key: generateCustomFieldKey('field'),
@@ -308,6 +309,17 @@ export default function LeadFormConfigPanel({ form, setForm, t }) {
             previewMode
           />
         </div>
+      </div>
+
+      {/* Mã nhúng & Tracking — gộp vào cùng card với form đăng ký */}
+      <div className="pt-2 border-t border-gray-200">
+        <p className="text-xs font-medium text-gray-600 mb-3 flex items-center gap-1.5">
+          <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          </svg>
+          Mã nhúng &amp; Tracking
+        </p>
+        <EmbedSnippetsPanel form={form} t={t} />
       </div>
     </div>
   );

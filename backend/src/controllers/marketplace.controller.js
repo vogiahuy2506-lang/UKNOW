@@ -1,7 +1,9 @@
+import db from '../config/database.js';
 import marketplaceListingService from '../services/marketplace/marketplaceListing.service.js';
 import marketplacePurchaseService from '../services/marketplace/marketplacePurchase.service.js';
 import marketplaceReviewService from '../services/marketplace/marketplaceReview.service.js';
 import marketplaceFavoriteService from '../services/marketplace/marketplaceFavorite.service.js';
+import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import { paginate } from '../helpers.js';
 
 const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
@@ -324,10 +326,10 @@ class MarketplaceController {
         data: result,
       });
     } catch (error) {
-      if (error.code === 'CAMPAIGN_LIMIT_EXCEEDED') {
+      if (error.code === 'CAMPAIGN_LIMIT_EXCEEDED' || error.code === 'CHATBOT_LIMIT_EXCEEDED') {
         return res.status(400).json({
           success: false,
-          code: 'CAMPAIGN_LIMIT_EXCEEDED',
+          code: error.code,
           message: error.message,
           limitReached: true,
         });
@@ -388,6 +390,98 @@ class MarketplaceController {
       res.status(201).json({
         success: true,
         data: review,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get user's chatbots for creating listing
+   * GET /api/marketplace/chatbots
+   */
+  async getMyChatbots(req, res, next) {
+    try {
+      const userId = req.user.id;
+
+      const chatbots = await chatbotRepository.listChatbotsByUser(userId);
+
+      // Get existing listings for these chatbots to mark which ones are already listed
+      const { rows: existingListings } = await db.query(
+        `SELECT resource_id FROM marketplace_listings
+         WHERE resource_type = 'chatbot' AND id_user = $1`,
+        [userId]
+      );
+      const listedChatbotIds = new Set(existingListings.map(l => l.resource_id));
+
+      // Get knowledge base info for each chatbot
+      const chatbotsWithKb = await Promise.all(chatbots.map(async (chatbot) => {
+        const { rows: chunks } = await db.query(
+          `SELECT COUNT(*) as count FROM custom_chatbot_chunks WHERE chatbot_id = $1`,
+          [chatbot.id]
+        );
+        return {
+          ...chatbot,
+          hasKnowledgeBase: parseInt(chunks[0]?.count || 0, 10) > 0,
+          chunkCount: parseInt(chunks[0]?.count || 0, 10),
+          isListed: listedChatbotIds.has(chatbot.id),
+        };
+      }));
+
+      res.json({
+        success: true,
+        data: chatbotsWithKb,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Create listing from chatbot
+   * POST /api/marketplace/chatbots
+   */
+  async createFromChatbot(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { chatbotId, title, description, category, tags, priceCredits, visibility, includeKnowledgeBase } = req.body;
+
+      if (!chatbotId) {
+        return res.status(400).json({
+          success: false,
+          message: 'chatbotId là bắt buộc',
+        });
+      }
+
+      const sanitizedChatbotId = parseInt(chatbotId, 10);
+      if (isNaN(sanitizedChatbotId) || sanitizedChatbotId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'chatbotId không hợp lệ',
+        });
+      }
+
+      const sanitizedTitle = title?.trim().substring(0, 255) || undefined;
+      const sanitizedDescription = description?.trim().substring(0, 2000) || undefined;
+      const sanitizedCategory = VALID_CATEGORIES.includes(category) ? category : undefined;
+      const sanitizedTags = Array.isArray(tags) ? tags.slice(0, 10).map(t => String(t).substring(0, 50)) : undefined;
+      const sanitizedPriceCredits = Math.max(parseInt(priceCredits, 10) || 0, 0);
+      const sanitizedVisibility = VALID_VISIBILITIES.includes(visibility) ? visibility : 'public';
+
+      const listing = await marketplaceListingService.createFromChatbot(userId, {
+        chatbotId: sanitizedChatbotId,
+        title: sanitizedTitle,
+        description: sanitizedDescription,
+        category: sanitizedCategory,
+        tags: sanitizedTags,
+        priceCredits: sanitizedPriceCredits,
+        visibility: sanitizedVisibility,
+        includeKnowledgeBase: !!includeKnowledgeBase,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: listing,
       });
     } catch (error) {
       next(error);

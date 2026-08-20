@@ -1,4 +1,4 @@
-import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
+﻿import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
@@ -9,7 +9,7 @@ import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounc
 import { formatBatchedContent } from '../utils/chatbotReplyBatch.util.js';
 
 class ChatbotChannelWebhookController {
-  // ── Zalo OA Webhook ───────────────────────────────────────────
+  // ΓöÇΓöÇ Zalo OA Webhook ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   /**
    * Verify Zalo OA webhook
@@ -71,7 +71,7 @@ class ChatbotChannelWebhookController {
       }
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       if (!chatbot || !chatbot.is_active) {
-        console.warn(`[ChatbotChannel] Chatbot ${chatbotId} not found or inactive — skipping`);
+        console.warn(`[ChatbotChannel] Chatbot ${chatbotId} not found or inactive ΓÇö skipping`);
         return;
       }
 
@@ -234,7 +234,7 @@ class ChatbotChannelWebhookController {
     }
   }
 
-  // ── Facebook Messenger Webhook ───────────────────────────────
+  // ΓöÇΓöÇ Facebook Messenger Webhook ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   /**
    * Verify Facebook webhook
@@ -292,7 +292,7 @@ class ChatbotChannelWebhookController {
       }
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       if (!chatbot || !chatbot.is_active) {
-        console.warn(`[ChatbotChannel] Chatbot ${chatbotId} not found or inactive — skipping`);
+        console.warn(`[ChatbotChannel] Chatbot ${chatbotId} not found or inactive ΓÇö skipping`);
         return;
       }
 
@@ -315,7 +315,7 @@ class ChatbotChannelWebhookController {
 
         const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
         if (await resourceIsLocked('chatbots', chatbotId)) {
-          console.log(`[Facebook] Chatbot ${chatbotId} locked — message saved, no reply`);
+          console.log(`[Facebook] Chatbot ${chatbotId} locked ΓÇö message saved, no reply`);
           continue;
         }
 
@@ -351,7 +351,7 @@ class ChatbotChannelWebhookController {
         }
 
         if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
-          console.log(`[Facebook] AI paused for conversation ${conv.id} — skipping reply`);
+          console.log(`[Facebook] AI paused for conversation ${conv.id} ΓÇö skipping reply`);
           continue;
         }
 
@@ -388,3 +388,4 @@ class ChatbotChannelWebhookController {
 }
 
 export default new ChatbotChannelWebhookController();
+

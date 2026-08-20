@@ -164,8 +164,11 @@ export async function metricConsecutiveCronNoops(jobCode, limit = 3) {
   if (rows.length < limit) return { consecutive: 0, enough: false };
   let consecutive = 0;
   for (const row of rows) {
-    const synced = Number(row.result?.synced ?? row.result?.totalSynced ?? -1);
-    const isNoop = row.status === 'noop' || synced === 0;
+    // 'noop' = chính thức không có gì để làm (status='noop' do cron set).
+    // Cũng coi như noop khi run kết thúc failure.
+    // KHÔNG coi synced=0 + status='success' là noop — đó là kết quả bình thường
+    // (cron chạy xong, không có tin mới là chuyện thường).
+    const isNoop = row.status === 'noop' || row.status === 'failure';
     if (!isNoop) break;
     consecutive += 1;
   }

@@ -305,9 +305,9 @@ class ZaloPersonalAdapter {
         }
 
         if (isGroup) {
-          console.log(`[ZaloPersonalAdapter] ✅ GROUP message: zaloThreadType=${zaloThreadType}, idTo=${rawData?.idTo}, detectedGroupId=${detectedGroupId}`);
+          console.log(`[ZaloPersonalAdapter] GROUP zaloThreadType=${zaloThreadType} idTo=${rawData?.idTo} detectedGroupId=${detectedGroupId}`);
         } else {
-          console.log(`[ZaloPersonalAdapter] ✅ PERSONAL message: zaloThreadType=${zaloThreadType}, uidFrom=${rawData?.uidFrom}`);
+          console.log(`[ZaloPersonalAdapter] PERSONAL zaloThreadType=${zaloThreadType} uidFrom=${rawData?.uidFrom}`);
         }
         
         // Check if this is a sticker or special message type
@@ -374,7 +374,8 @@ class ZaloPersonalAdapter {
         };
         
         const contentStr = typeof msgData.content === 'string' ? msgData.content : JSON.stringify(msgData.content || '');
-        console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} from ${msgData.fromUid} [msgType=${msgType}] len=${contentStr.length}`);
+        // Log tóm tắt khi nhận message. Bỏ log full content ở đây vì đã có log ở chatbotDebounce.
+        console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} from ${msgData.fromUid} [msgType=${msgType}] len=${contentStr.length} account=${accountId}`);
         
         // Add accountId to msgData for saveMessageToDatabase
         msgData.zaloSettingId = accountId;

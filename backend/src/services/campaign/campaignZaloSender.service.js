@@ -13,6 +13,7 @@ import outboundMessageQueueService, {
 import trackingShortLinkService from '../tracking/trackingShortLink.service.js';
 import { getZaloHttpPolyfillOption } from '../../utils/zaloUndiciFetch.util.js';
 import { restoreZaloSessionFromCookie } from '../../utils/zaloSessionRestore.util.js';
+import zaloRestoreLock from '../../utils/zaloRestoreLock.util.js';
 import {
   classifyZaloDispatchDelivery,
   collectDeliveredZaloMsgIds,
@@ -129,32 +130,42 @@ class CampaignZaloSenderService {
           continue;
         }
 
-        // Check if already has active session in memory
-        if (zaloAccountSessionService.getAccountApi(accountId)) {
-          continue;
-        }
-
-        const cookieText = account.cookie_text;
-        if (!cookieText) {
-          console.warn(`[ZaloRestore] No cookie for account ${accountId}, marking disconnected`);
-          await this.markAccountDisconnected({ accountId, userId });
-          failed++;
-          continue;
-        }
-
-        const restoredApi = await this.tryAutoRestoreSession({
+        // Chạy serial qua mutex shared để chống đua với keep-alive và zaloInbox.
+        // (Dùng for-await thay vì Promise.all để đảm bảo tuần tự & tôn trọng lock.)
+        const restoredApi = await zaloRestoreLock.runExclusive(
           accountId,
-          userId,
-          cookieText,
-          fallbackDisplayName: account.display_name || 'Tài khoản Zalo',
-        });
+          'campaignSender',
+          async () => {
+            // Re-check trong lock — module khác có thể vừa restore xong.
+            if (zaloAccountSessionService.getAccountApi(accountId)) {
+              return zaloAccountSessionService.getAccountApi(accountId);
+            }
+
+            const cookieText = account.cookie_text;
+            if (!cookieText) {
+              console.warn(`[ZaloRestore] No cookie for account ${accountId}, marking disconnected`);
+              await this.markAccountDisconnected({ accountId, userId });
+              return null;
+            }
+
+            return await this.tryAutoRestoreSession({
+              accountId,
+              userId,
+              cookieText,
+              fallbackDisplayName: account.display_name || 'Tài khoản Zalo',
+            });
+          }
+        );
+
+        if (zaloRestoreLock.isLocked(accountId) && !restoredApi) {
+          // Skipped vì module khác đang giữ lock — không tính failed.
+          continue;
+        }
 
         if (restoredApi) {
           restored++;
-          console.log(`[ZaloRestore] Successfully restored account ${accountId}`);
         } else {
           failed++;
-          console.warn(`[ZaloRestore] Failed to restore account ${accountId}`);
           try {
             await campaignZaloSenderRepository.recordRestoreFailure(accountId);
           } catch (recordErr) {

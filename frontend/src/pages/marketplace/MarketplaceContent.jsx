@@ -7,7 +7,6 @@ import {
   HiOutlineViewList,
   HiOutlinePlus,
   HiOutlineSparkles,
-  HiOutlineFilter,
   HiOutlineChevronDown,
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
@@ -23,9 +22,8 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1 });
 
   const [currentTab, setCurrentTab] = useState(activeTab || 'browse');
-  const [filters, setFilters] = useState({ category: '', sort: 'rating', search: '' });
+  const [filters, setFilters] = useState({ type: 'all', sort: 'rating', search: '' });
   const [viewMode, setViewMode] = useState('grid');
-  const [favorites, setFavorites] = useState(new Set());
 
   const TABS = [
     { id: 'browse', label: t('browse.tabBrowse') || 'Khám phá' },
@@ -40,18 +38,14 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
     { value: 'price_desc', label: t('browse.sortPriceDesc') || 'Giá cao → thấp' },
   ];
 
-  const CATEGORIES = [
-    { value: '', label: t('browse.categoryAll') || 'Tất cả' },
-    { value: 'email', label: 'Email' },
-    { value: 'zalo_personal', label: 'Zalo cá nhân' },
-    { value: 'zalo_group', label: 'Zalo nhóm' },
-    { value: 'facebook', label: 'Facebook' },
-    { value: 'telegram', label: 'Telegram' },
-    { value: 'sms', label: 'SMS' },
+  // Filter options - grouped logically
+const TYPE_OPTIONS = [
+    { value: 'all', label: 'Tất cả' },
+    { value: 'campaign', label: 'Chiến dịch' },
+    { value: 'chatbot', label: 'Chatbot' },
   ];
 
   const filterTimeoutRef = useRef(null);
-  const userFavoritesLoadedRef = useRef(false);
   const sentinelRef = useRef(null);
   const loadingMoreRef = useRef(false);
 
@@ -64,7 +58,7 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
   useEffect(() => {
     if (activeTab && activeTab !== currentTab) {
       setCurrentTab(activeTab);
-      setFilters({ category: '', sort: 'rating', search: '' });
+      setFilters({ type: 'all', sort: 'rating', search: '' });
       setPagination((prev) => ({ ...prev, page: 1 }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,7 +78,7 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
         const params = {
           page,
           limit: 12,
-          ...(filterState.category && { category: filterState.category }),
+          ...(filterState.type && filterState.type !== 'all' && { resource_type: filterState.type }),
           ...(filterState.sort && { sort: filterState.sort }),
           ...(filterState.search && { search: filterState.search }),
         };
@@ -135,22 +129,12 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
     }, 300);
     return () => clearTimeout(filterTimeoutRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTab, filters.category, filters.sort, filters.search]);
+  }, [currentTab, filters.type, filters.sort, filters.search]);
 
   useEffect(() => {
-    if (currentTab === 'browse' && !userFavoritesLoadedRef.current) {
-      userFavoritesLoadedRef.current = true;
+    if (currentTab === 'browse') {
       marketplaceService
-        .getMyFavorites({ limit: 100 })
-        .then((res) => {
-          const payload = res.data.data;
-          const rows = Array.isArray(payload)
-            ? payload
-            : Array.isArray(payload?.items)
-              ? payload.items
-              : [];
-          setFavorites(new Set(rows.map((l) => l.id)));
-        })
+        .browse({ page: 1, limit: 1 })
         .catch(() => {});
     }
   }, [currentTab]);
@@ -176,26 +160,6 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page, pagination.totalPages, isLoading, isLoadingMore]);
 
-  const handleFavorite = async (listingId, e) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    try {
-      if (favorites.has(listingId)) {
-        await marketplaceService.removeFavorite(listingId);
-        setFavorites((prev) => {
-          const next = new Set(prev);
-          next.delete(listingId);
-          return next;
-        });
-      } else {
-        await marketplaceService.addFavorite(listingId);
-        setFavorites((prev) => new Set([...prev, listingId]));
-      }
-    } catch (error) {
-      toast.error(t('common.updateError'));
-    }
-  };
-
   const handleListingClick = (id, e) => {
     e?.preventDefault();
     e?.stopPropagation();
@@ -218,10 +182,10 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
   };
 
   const clearFilters = () => {
-    setFilters({ category: '', sort: 'rating', search: '' });
+    setFilters({ type: 'all', sort: 'rating', search: '' });
   };
 
-  const hasActiveFilters = filters.search || filters.category || filters.sort !== 'rating';
+  const hasActiveFilters = filters.search || filters.type !== 'all' || filters.sort !== 'rating';
 
   const showEndOfList =
     !isLoading && !isLoadingMore && listings.length > 0 && pagination.page >= pagination.totalPages;
@@ -287,13 +251,14 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
         <div className="max-w-7xl mx-auto px-6 py-5">
           {/* Search & Filters Bar */}
           <div className="bg-white rounded-xl border border-gray-100 p-4 mb-5">
+            {/* Top row: Search + Actions */}
             <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               {/* Search */}
               <div className="flex-1 relative">
                 <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder={t('browse.searchPlaceholder') || 'Tìm template...'}
+                  placeholder={t('browse.searchPlaceholder') || 'Tìm kiếm template...'}
                   value={filters.search}
                   onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
                   className="h-10 w-full pl-9 pr-9 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all"
@@ -309,26 +274,13 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
                 )}
               </div>
 
-              {/* Filter toggles */}
+              {/* Sort + View */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="relative">
-                  <select
-                    value={filters.category}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, category: e.target.value }))}
-                    className="h-10 pl-3 pr-9 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all appearance-none cursor-pointer min-w-[150px]"
-                  >
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
-                  <HiOutlineChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                </div>
-
                 <div className="relative">
                   <select
                     value={filters.sort}
                     onChange={(e) => setFilters((prev) => ({ ...prev, sort: e.target.value }))}
-                    className="h-10 pl-3 pr-9 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all appearance-none cursor-pointer min-w-[190px]"
+                    className="h-10 pl-3 pr-9 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all appearance-none cursor-pointer min-w-[160px]"
                   >
                     {SORT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -360,35 +312,37 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
               </div>
             </div>
 
-            {/* Active filters */}
-            {hasActiveFilters && (
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-                <HiOutlineFilter className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-500">Đang lọc:</span>
-                {filters.search && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 rounded text-xs font-medium">
-                    "{filters.search}"
-                    <button onClick={() => setFilters((prev) => ({ ...prev, search: '' }))}>
-                      <HiOutlineX className="w-3 h-3" />
-                    </button>
-                  </span>
-                )}
-                {filters.category && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
-                    {CATEGORIES.find(c => c.value === filters.category)?.label}
-                    <button onClick={() => setFilters((prev) => ({ ...prev, category: '' }))}>
-                      <HiOutlineX className="w-3 h-3" />
-                    </button>
-                  </span>
-                )}
+            {/* Filter chips row */}
+            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+              {/* Type filter */}
+              <span className="text-xs text-gray-400 font-medium mr-1">Loại:</span>
+              <div className="flex items-center gap-1">
+                {TYPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setFilters((prev) => ({ ...prev, type: opt.value }))}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
+                      filters.type === opt.value
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Clear filters */}
+              {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="text-sm text-orange-600 hover:text-orange-700 font-medium ml-auto"
+                  className="ml-auto text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
                 >
-                  Xóa tất cả
+                  <HiOutlineX className="w-3.5 h-3.5" />
+                  Xóa lọc
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Results count */}
@@ -430,14 +384,14 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
                 <HiOutlineSparkles className="w-8 h-8 text-orange-500" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">
-                {filters.search || filters.category ? 'Không tìm thấy kết quả' : 'Chưa có template nào'}
+                {filters.search || filters.type !== 'all' ? 'Không tìm thấy kết quả' : 'Chưa có template nào'}
               </h3>
               <p className="text-gray-500 mb-5 max-w-sm mx-auto text-sm">
-                {filters.search || filters.category
+                {filters.search || filters.type !== 'all'
                   ? 'Thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc'
                   : 'Hãy là người đầu tiên chia sẻ template của bạn'}
               </p>
-              {!(filters.search || filters.category) ? (
+              {!(filters.search || filters.type !== 'all') ? (
                 <button onClick={handleCreateListing} className="btn btn-primary">
                   <HiOutlinePlus className="w-4 h-4 mr-2" />
                   Tạo template đầu tiên
@@ -458,13 +412,10 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
                   key={listing.id}
                   listing={listing}
                   view="grid"
-                  isFavorited={favorites.has(listing.id)}
-                  onFavorite={handleFavorite}
                   onClick={handleListingClick}
                   labels={{
                     free: t('browse.priceFree') || 'Miễn phí',
                     creditsShort: t('browse.priceCreditsShort') || 'credits',
-                    favoriteAria: t('browse.favoritesAdd') || 'Yêu thích',
                     viewLabel: t('common.view') || 'Xem',
                   }}
                 />
@@ -480,13 +431,10 @@ const MarketplaceContent = ({ onClose, activeTab, onTabChange, onSelectListing, 
                   <ListingCard
                     listing={listing}
                     view="list"
-                    isFavorited={favorites.has(listing.id)}
-                    onFavorite={handleFavorite}
                     onClick={handleListingClick}
                     labels={{
                       free: t('browse.priceFree') || 'Miễn phí',
                       creditsShort: t('browse.priceCreditsShort') || 'credits',
-                      favoriteAria: t('browse.favoritesAdd') || 'Yêu thích',
                       viewLabel: t('common.view') || 'Xem',
                     }}
                   />

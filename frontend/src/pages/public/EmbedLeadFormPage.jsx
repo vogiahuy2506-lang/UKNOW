@@ -6,6 +6,7 @@ import { useLandingLocale } from '../../features/landing/hooks/useLandingLocale.
 import { useFounderLandingForm } from '../../features/landing/hooks/useFounderLandingForm.js';
 import { fetchPublicLeadFormConfig } from '../../features/landing/services/leadPublicApi.js';
 import { defaultLeadFormConfig } from '../../features/landing-pages/utils/landingLeadFormConfig.js';
+import { LANDING_COPY } from '../../features/landing/constants/landingCopy.js';
 
 /**
  * Form lead nhúng iframe — query `slug` = landing_page_slug gửi kèm POST /api/public/leads.
@@ -15,7 +16,8 @@ export default function EmbedLeadFormPage() {
   const [sp] = useSearchParams();
   const rawSlug = String(sp.get('slug') || '').trim().toLowerCase();
   const slug = rawSlug.replace(/^\/+|\/+$/g, '');
-  const { locale, copy } = useLandingLocale();
+  const { locale } = useLandingLocale();
+  const copy = LANDING_COPY[locale]?.form || LANDING_COPY.vi.form;
   const [configStatus, setConfigStatus] = useState(slug ? 'loading' : 'missing-slug');
   const [leadFormConfig, setLeadFormConfig] = useState(defaultLeadFormConfig());
   const [configError, setConfigError] = useState('');
