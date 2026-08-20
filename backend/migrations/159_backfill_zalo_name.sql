@@ -1,4 +1,4 @@
---- Migration 158: Backfill zalo_name from display_name for existing Zalo accounts
+--- Migration 159: Backfill zalo_name from display_name for existing Zalo accounts
 --- This ensures zalo_name is populated for accounts where it was not set during login
 
 UPDATE zalo_settings
