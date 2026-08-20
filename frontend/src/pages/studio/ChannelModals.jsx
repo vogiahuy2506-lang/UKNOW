@@ -1,5 +1,4 @@
-/* eslint-disable no-unused-vars */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   HiOutlineX,
   HiOutlineCheckCircle,
@@ -381,14 +380,7 @@ function ZaloPersonalForm({ chatbot }) {
   const [loading, setLoading] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
 
-  useEffect(() => {
-    loadAccounts();
-    const onReload = () => loadAccounts();
-    window.addEventListener('zalo-personal:reload', onReload);
-    return () => window.removeEventListener('zalo-personal:reload', onReload);
-  }, []);
-
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     setLoading(true);
     try {
       // Scope the list to this chatbot so toggling one chatbot does not affect
@@ -406,7 +398,14 @@ function ZaloPersonalForm({ chatbot }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [chatbot?.id]);
+
+  useEffect(() => {
+    loadAccounts();
+    const onReload = () => loadAccounts();
+    window.addEventListener('zalo-personal:reload', onReload);
+    return () => window.removeEventListener('zalo-personal:reload', onReload);
+  }, [loadAccounts]);
 
   const handleToggle = async (acc, next) => {
     setTogglingId(acc.id);

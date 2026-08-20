@@ -43,7 +43,7 @@ const GUIDE_STEPS = [
   },
 ];
 
-function isLikelyZaloId(value) {
+function _isLikelyZaloId(value) {
   if (!value) return false;
   const str = String(value);
   // Zalo IDs are typically numeric, often 9-12 digits, may start with 0
@@ -168,7 +168,7 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect,
       setLoading(false);
       setRefreshing(false);
     }
-  }, [t]);
+  }, [t, chatbotId]);
 
   useEffect(() => {
     if (open) fetchData();
