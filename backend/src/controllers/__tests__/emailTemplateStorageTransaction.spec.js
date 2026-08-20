@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const transactionClient = { query: jest.fn() };
-const moveToS3 = jest.fn();
+const promoteTempToStorage = jest.fn();
 const createTemplate = jest.fn();
 const syncTemplateFile = jest.fn();
 const enforceResourceLimitTx = jest.fn();
 
 jest.unstable_mockModule('../upload.controller.js', () => ({
-  default: { moveToS3 },
+  default: { promoteTempToStorage },
 }));
 jest.unstable_mockModule('../../repositories/email/emailTemplate.repository.js', () => ({
   default: {
@@ -33,7 +33,7 @@ describe('email template storage parent transaction', () => {
     jest.clearAllMocks();
     createTemplate.mockResolvedValue({ id: 77, template_name: 'Welcome' });
     syncTemplateFile.mockResolvedValue(undefined);
-    moveToS3.mockImplementation(async (files, userId, options) => {
+    promoteTempToStorage.mockImplementation(async (files, userId, options) => {
       const moved = files.map((file, index) => ({
         tempId: file.tempId,
         key: `uploads/${userId}/file-${index}.pdf`,
@@ -62,7 +62,7 @@ describe('email template storage parent transaction', () => {
 
     await emailTemplateController.create(req, res);
 
-    expect(moveToS3).toHaveBeenCalledWith(req.body.tempAttachments, 9, expect.objectContaining({
+    expect(promoteTempToStorage).toHaveBeenCalledWith(req.body.tempAttachments, 9, expect.objectContaining({
       ownerUserId: 42,
       actorUserId: 9,
       category: 'email_template',

@@ -181,7 +181,7 @@ class ZaloTemplateController {
 
       if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
         try {
-          await uploadController.moveToS3(tempAttachments, userId, {
+          await uploadController.promoteTempToStorage(tempAttachments, userId, {
             ownerUserId,
             actorUserId: userId,
             category: 'zalo_template',
@@ -341,7 +341,7 @@ class ZaloTemplateController {
       let template = null;
       if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
         try {
-          await uploadController.moveToS3(tempAttachments, templateOwnerUserId, {
+          await uploadController.promoteTempToStorage(tempAttachments, templateOwnerUserId, {
             ownerUserId: templateOwnerUserId,
             actorUserId: userId,
             category: 'zalo_template',

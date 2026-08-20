@@ -41,6 +41,10 @@ jest.unstable_mockModule('../storageReference.service.js', () => ({
 }));
 
 const { reconcileStorageObjects } = await import('../storageReconcile.service.js');
+const {
+  setStorageBackendForTest,
+  resetStorageBackendForTest,
+} = await import('../storageBackend.js');
 const originalDeleteUntracked = process.env.STORAGE_RECONCILE_DELETE_UNTRACKED;
 
 describe('storageReconcile.service', () => {
@@ -255,5 +259,80 @@ describe('storageReconcile.service', () => {
     await expect(fs.access(tempFilePath)).resolves.toBeUndefined();
     expect(markStorageObjectDeleted).not.toHaveBeenCalled();
     expect(metrics.expiredTempDeleted).toBe(0);
+  });
+
+  describe('with GCS backend', () => {
+    let mockGcsBackend;
+
+    class GcsStorageBackend {
+      constructor() {
+        this.exists = jest.fn();
+        this.getMetadata = jest.fn();
+        this.delete = jest.fn();
+      }
+    }
+
+    beforeEach(() => {
+      mockGcsBackend = new GcsStorageBackend();
+      setStorageBackendForTest(mockGcsBackend);
+    });
+
+    afterEach(() => {
+      resetStorageBackendForTest();
+    });
+
+    it('does not orphan existing GCS objects and updates size including sidecar if metadata exists', async () => {
+      const rows = [
+        {
+          id: 1, pool_type: 'workspace', owner_user_id: 42, state: 'active',
+          storage_key: 'uploads/42/found.png', temp_key: null, size_bytes: 100,
+        },
+        {
+          id: 2, pool_type: 'workspace', owner_user_id: 42, state: 'active',
+          storage_key: 'uploads/42/missing.png', temp_key: null, size_bytes: 50,
+        },
+      ];
+      listStorageObjectsForReconcile
+        .mockResolvedValueOnce(rows);
+
+      mockGcsBackend.exists.mockImplementation(async (key) => key === 'uploads/42/found.png');
+      mockGcsBackend.getMetadata.mockImplementation(async (key) => {
+        if (key === 'uploads/42/found.png') return { size: 120 };
+        if (key === 'uploads/42/found.png.txt') return { size: 15 };
+        return null;
+      });
+
+      findStorageObjectById.mockImplementation(async (id) => rows.find((r) => r.id === id));
+
+      const metrics = await reconcileStorageObjects({ roots });
+
+      expect(metrics.orphanedCount).toBe(1);
+      expect(markStorageObjectOrphaned).toHaveBeenCalledWith(2, client);
+      expect(markStorageObjectOrphaned).not.toHaveBeenCalledWith(1, client);
+      expect(metrics.driftCount).toBe(1);
+      expect(updateStorageObjectSize).toHaveBeenCalledWith(1, 135, client);
+    });
+
+    it('deletes main file and sidecar from GCS for cleanup_pending rows', async () => {
+      const rows = [
+        {
+          id: 3, pool_type: 'workspace', owner_user_id: 42, state: 'cleanup_pending',
+          storage_key: 'uploads/42/to-cleanup.png', temp_key: null, size_bytes: 80,
+        },
+      ];
+      listStorageObjectsForReconcile
+        .mockResolvedValueOnce(rows);
+
+      mockGcsBackend.delete.mockResolvedValue(undefined);
+
+      const metrics = await reconcileStorageObjects({ roots });
+
+      expect(mockGcsBackend.delete).toHaveBeenCalledWith([
+        'uploads/42/to-cleanup.png',
+        'uploads/42/to-cleanup.png.txt',
+      ]);
+      expect(markStorageObjectDeleted).toHaveBeenCalledWith(3);
+      expect(metrics.cleanupRetryDeleted).toBe(1);
+    });
   });
 });

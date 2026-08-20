@@ -179,7 +179,7 @@ class EmailTemplateController {
       let item = null;
       if (tempAttachments && tempAttachments.length > 0) {
         try {
-          await uploadController.moveToS3(tempAttachments, userId, {
+          await uploadController.promoteTempToStorage(tempAttachments, userId, {
             ownerUserId,
             actorUserId: userId,
             category: 'email_template',
@@ -359,7 +359,7 @@ class EmailTemplateController {
       let item = null;
       if (tempAttachments && tempAttachments.length > 0) {
         try {
-          await uploadController.moveToS3(tempAttachments, templateOwnerUserId, {
+          await uploadController.promoteTempToStorage(tempAttachments, templateOwnerUserId, {
             ownerUserId: templateOwnerUserId,
             actorUserId: userId,
             category: 'email_template',

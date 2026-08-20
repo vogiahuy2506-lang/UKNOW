@@ -43,6 +43,10 @@ const {
   markDeletedAfterUnlink,
   promoteTempStorageObjects,
 } = await import('../storageObject.service.js');
+const {
+  setStorageBackendForTest,
+  resetStorageBackendForTest,
+} = await import('../storageBackend.js');
 
 describe('storageObject.service promote transaction', () => {
   let root;
@@ -150,5 +154,68 @@ describe('storageObject.service promote transaction', () => {
     expect(clearTempKey).toHaveBeenCalledWith(9);
     expect(markStorageObjectDeleted).not.toHaveBeenCalled();
     expect(markStorageObjectCleanupPending).not.toHaveBeenCalled();
+  });
+
+  describe('with GCS backend', () => {
+    let mockGcsBackend;
+
+    class GcsStorageBackend {
+      constructor() {
+        this.put = jest.fn().mockResolvedValue(undefined);
+        this.delete = jest.fn().mockResolvedValue(undefined);
+        this.exists = jest.fn().mockResolvedValue(true);
+      }
+    }
+
+    beforeEach(() => {
+      mockGcsBackend = new GcsStorageBackend();
+      setStorageBackendForTest(mockGcsBackend);
+    });
+
+    afterEach(() => {
+      resetStorageBackendForTest();
+    });
+
+    it('uploads to GCS via storage backend and does not write to local disk', async () => {
+      const items = await createItems();
+      const parentMutation = jest.fn(async () => ({ referenceId: 88 }));
+
+      const objects = await promoteTempStorageObjects({
+        items,
+        ownerUserId: 42,
+        referenceType: 'email_template',
+        parentMutation,
+      });
+
+      expect(objects).toHaveLength(2);
+      expect(mockGcsBackend.put).toHaveBeenCalledTimes(2);
+      expect(mockGcsBackend.put).toHaveBeenNthCalledWith(
+        1,
+        'uploads/42/one.txt',
+        expect.any(Buffer),
+        expect.any(Object),
+      );
+      expect(client.query).toHaveBeenCalledWith('COMMIT');
+      await expect(fs.access(items[0].tempPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('deletes uploaded GCS keys when transaction fails', async () => {
+      const items = await createItems();
+      const parentError = new Error('gcs transaction failed');
+
+      await expect(promoteTempStorageObjects({
+        items,
+        ownerUserId: 42,
+        parentMutation: jest.fn(async () => { throw parentError; }),
+      })).rejects.toBe(parentError);
+
+      expect(mockGcsBackend.put).toHaveBeenCalledTimes(2);
+      expect(mockGcsBackend.delete).toHaveBeenCalledWith([
+        'uploads/42/one.txt',
+        'uploads/42/two.txt',
+      ]);
+      expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+      await expect(fs.access(items[0].tempPath)).resolves.toBeUndefined();
+    });
   });
 });

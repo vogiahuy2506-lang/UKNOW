@@ -32,6 +32,28 @@ function isSafeTempSegment(id) {
     && path.basename(s) === s;
 }
 
+const EXT_MIME_MAP = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.csv': 'text/csv',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+  '.json': 'application/json',
+};
+
+function detectContentType(fileName) {
+  const ext = path.extname(String(fileName || '')).toLowerCase();
+  return EXT_MIME_MAP[ext] || 'application/octet-stream';
+}
+
 class UploadController {
   constructor() {
     this.tempDir = TEMP_DIR;
@@ -261,7 +283,7 @@ class UploadController {
         category: 'help',
       });
 
-      const results = await this.moveToS3(
+      const results = await this.promoteTempToStorage(
         [{
           tempId: fileId,
           originalName,
@@ -300,7 +322,7 @@ class UploadController {
       if (!req.user?.id) return res.status(401).json({ success: false, message: 'Chưa xác thực' });
       const { tempId, originalName } = req.body;
       if (!tempId || !originalName) return res.status(400).json({ success: false, message: 'Thiếu tempId hoặc originalName' });
-      const results = await this.moveToS3([{ tempId, originalName }], req.user.id, {
+      const results = await this.promoteTempToStorage([{ tempId, originalName }], req.user.id, {
         ownerUserId: resolveWorkspaceOwnerId(req.user),
         actorUserId: req.user.id,
       });
@@ -320,7 +342,7 @@ class UploadController {
    * @param {string|number} userId - ID của user
    * @returns {Promise<Array<{key: string, url: string, originalName: string, tempFileName: string}>>}
    */
-  async moveToS3(tempFiles, userId, {
+  async promoteTempToStorage(tempFiles, userId, {
     ownerUserId = userId,
     actorUserId = userId,
     poolType = STORAGE_POOL_TYPES.WORKSPACE,
@@ -348,17 +370,21 @@ class UploadController {
       const ext = path.extname(tempFile.originalName);
       const baseName = this.sanitizeFileBaseName(tempFile.originalName);
       const key = `uploads/${userId}/${Date.now()}_${uuidv4()}_${baseName}${ext}`;
-      const targetPath = this.resolveAbsolutePathFromKey(key);
-      if (!targetPath) throw new Error('Không thể xác định đường dẫn lưu file local');
-
-      items.push({ tempKey, tempPath, storageKey: key, targetPath, category });
+      const contentType = tempFile.contentType || detectContentType(tempFile.originalName);
+      items.push({ 
+        tempKey, 
+        tempPath, 
+        storageKey: key, 
+        category,
+        contentType,
+      });
       results.push({
         tempId: tempFile.tempId,
         key,
         url: this.buildDownloadUrlByKey(key, { preview: true }),
         originalName: tempFile.originalName,
         size: tempFile.size,
-        contentType: tempFile.contentType,
+        contentType,
         storageObjectId: tracked.id,
       });
     }

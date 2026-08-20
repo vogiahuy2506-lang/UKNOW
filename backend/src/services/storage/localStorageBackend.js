@@ -8,6 +8,8 @@ export class LocalStorageBackend {
   constructor({ uploadsRootDir = UPLOADS_ROOT_DIR, tempDir = TEMP_DIR } = {}) {
     this.uploadsRootDir = uploadsRootDir;
     this.tempDir = tempDir;
+    this.type = 'local';
+    this.isRemote = false;
   }
 
   /**
