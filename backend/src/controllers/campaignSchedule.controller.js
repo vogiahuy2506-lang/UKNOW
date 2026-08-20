@@ -1,8 +1,20 @@
 import { serverError } from '../helpers.js';
 import { requestCampaignScheduleRefresh } from '../utils/scheduler.js';
 import campaignScheduleRepository from '../repositories/campaign/campaignSchedule.repository.js';
-import { isAdminRole } from '../utils/roleScope.util.js';
 import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.util.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+
+function normalizeOptionalBoolean(value) {
+  if (value === undefined) return undefined;
+  if (value === true || value === 'true' || value === 1 || value === '1') return true;
+  if (value === false || value === 'false' || value === 0 || value === '0') return false;
+  return value;
+}
+
+function employeeCanRunCampaign(req) {
+  const context = req.user?.activeContext;
+  return context?.type !== 'employee' || context.permissions?.campaigns_run === true;
+}
 
 class CampaignScheduleController {
   /**
@@ -18,10 +30,13 @@ class CampaignScheduleController {
   // Lấy tất cả lịch chạy của user
   async getAll(req, res) {
     try {
-      const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role);
+      const context = getWorkspaceContext(req.user);
 
-      const rows = await campaignScheduleRepository.findAll({ userId, isAdmin });
+      const rows = await campaignScheduleRepository.findAll({
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
+      });
 
       const schedules = rows.map(row => ({
         id: row.id,
@@ -51,11 +66,15 @@ class CampaignScheduleController {
   // Lấy một lịch chạy theo ID
   async getById(req, res) {
     try {
-      const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role);
+      const context = getWorkspaceContext(req.user);
       const { id } = req.params;
 
-      const row = await campaignScheduleRepository.findById({ id, userId, isAdmin });
+      const row = await campaignScheduleRepository.findById({
+        id,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
+      });
 
       if (!row) {
         return res.status(404).json({
@@ -92,13 +111,18 @@ class CampaignScheduleController {
   // Tạo lịch chạy mới
   async create(req, res) {
     try {
-      const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role);
-      const { campaignId, scheduleName, scheduleType, cronExpression, enabled } = req.body;
+      const context = getWorkspaceContext(req.user);
+      const { campaignId, scheduleName, scheduleType, cronExpression } = req.body;
+      const enabled = normalizeOptionalBoolean(req.body.enabled);
 
       // Kiểm tra campaign có tồn tại và thuộc về user không
-      const campaignExists = await campaignScheduleRepository.checkCampaignExists({ campaignId, userId, isAdmin });
-      if (!campaignExists) {
+      const campaign = await campaignScheduleRepository.findCampaignForSchedule({
+        campaignId,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
+      });
+      if (!campaign) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy chiến dịch',
@@ -121,12 +145,24 @@ class CampaignScheduleController {
         });
       }
 
+      // Bật lịch có khả năng gửi thật — yêu cầu campaigns_run trong employee context
+      const isEnabling = enabled !== false;
+      if (isEnabling && !employeeCanRunCampaign(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền bật lịch chạy tự động cho chiến dịch (cần quyền campaigns_run)',
+          code: 'PERMISSION_DENIED',
+        });
+      }
+
       const row = await campaignScheduleRepository.create({
         campaignId,
         scheduleName,
         scheduleType,
         cronExpression,
         enabled,
+        workspaceOwnerId: campaign.workspace_owner_id,
+        createdBy: context.actorUserId,
       });
       const schedule = {
         id: row.id,
@@ -158,17 +194,32 @@ class CampaignScheduleController {
   // Cập nhật lịch chạy
   async update(req, res) {
     try {
-      const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role);
+      const context = getWorkspaceContext(req.user);
       const { id } = req.params;
-      const { scheduleName, scheduleType, cronExpression, enabled } = req.body;
+      const { scheduleName, scheduleType, cronExpression } = req.body;
+      const enabled = normalizeOptionalBoolean(req.body.enabled);
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
-      const scheduleData = await campaignScheduleRepository.findMutableById({ id, userId, isAdmin });
+      const scheduleData = await campaignScheduleRepository.findMutableById({
+        id,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
+      });
       if (!scheduleData) {
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy lịch chạy',
+        });
+      }
+
+      const changesExecution = scheduleType !== undefined || cronExpression !== undefined;
+      const willBeEnabled = enabled === undefined ? scheduleData.enabled === true : enabled === true;
+      if ((enabled === true || (changesExecution && willBeEnabled)) && !employeeCanRunCampaign(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền bật lịch chạy tự động cho chiến dịch (cần quyền campaigns_run)',
+          code: 'PERMISSION_DENIED',
         });
       }
 
@@ -212,6 +263,8 @@ class CampaignScheduleController {
         scheduleType,
         cronExpression,
         enabled,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
       });
       const schedule = {
         id: row.id,
@@ -243,12 +296,16 @@ class CampaignScheduleController {
   // Xóa lịch chạy
   async delete(req, res) {
     try {
-      const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role);
+      const context = getWorkspaceContext(req.user);
       const { id } = req.params;
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
-      const schedule = await campaignScheduleRepository.findMutableById({ id, userId, isAdmin });
+      const schedule = await campaignScheduleRepository.findMutableById({
+        id,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
+      });
       if (!schedule) {
         return res.status(404).json({
           success: false,
@@ -256,7 +313,11 @@ class CampaignScheduleController {
         });
       }
 
-      await campaignScheduleRepository.delete(id);
+      await campaignScheduleRepository.delete({
+        id,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
+      });
 
       return res.json({
         success: true,

@@ -18,10 +18,16 @@ import {
   getIndexedStorageReferences,
   isStorageKeyReferencedByMessage,
 } from './storageReference.service.js';
+import { getStorageBackend } from './storageBackend.js';
 
 export const STORAGE_RECONCILE_JOB_CODE = 'storage_objects_reconcile';
 const LIVE_STATES = new Set(['active', 'temp', 'cleanup_pending']);
 const DEFAULT_UNTRACKED_REPORT_LIMIT = 500;
+
+function isRemoteBackend() {
+  const backend = getStorageBackend();
+  return Boolean(backend?.isRemote || backend?.type === 'gcs' || backend?.constructor?.name === 'GcsStorageBackend');
+}
 
 function positiveInteger(raw, fallback) {
   const parsed = Number.parseInt(raw, 10);
@@ -64,25 +70,66 @@ async function statFile(filePath) {
 }
 
 async function inspectObject(row, roots) {
-  const mainPath = row.storage_key
-    ? resolvePermanentPath(row.storage_key, roots)
-    : resolveTempPath(row.temp_key, roots);
-  if (!mainPath) return { invalid: true, missing: false, sizeBytes: 0, paths: [] };
-
-  const mainStat = await statFile(mainPath);
-  if (!mainStat) return { invalid: false, missing: true, sizeBytes: 0, paths: [mainPath] };
-
-  let sizeBytes = mainStat.size;
-  const paths = [mainPath];
   if (row.storage_key) {
+    if (isRemoteBackend()) {
+      const exists = await getStorageBackend().exists(row.storage_key);
+      if (!exists) return { invalid: false, missing: true, sizeBytes: 0, paths: [] };
+
+      let sizeBytes = Number(row.size_bytes) || 0;
+      const metadata = await getStorageBackend().getMetadata(row.storage_key);
+      if (metadata && metadata.size !== undefined && metadata.size !== null) {
+        sizeBytes = Number(metadata.size);
+        const sidecarMetadata = await getStorageBackend().getMetadata(`${row.storage_key}.txt`);
+        if (sidecarMetadata && sidecarMetadata.size !== undefined && sidecarMetadata.size !== null) {
+          sizeBytes += Number(sidecarMetadata.size);
+        }
+      }
+      return { invalid: false, missing: false, sizeBytes, paths: [] };
+    }
+
+    const mainPath = resolvePermanentPath(row.storage_key, roots);
+    if (!mainPath) return { invalid: true, missing: false, sizeBytes: 0, paths: [] };
+
+    const mainStat = await statFile(mainPath);
+    if (!mainStat) return { invalid: false, missing: true, sizeBytes: 0, paths: [mainPath] };
+
+    let sizeBytes = mainStat.size;
+    const paths = [mainPath];
     const sidecarPath = `${mainPath}.txt`;
     const sidecarStat = await statFile(sidecarPath);
     if (sidecarStat) {
       sizeBytes += sidecarStat.size;
       paths.push(sidecarPath);
     }
+    return { invalid: false, missing: false, sizeBytes, paths };
   }
-  return { invalid: false, missing: false, sizeBytes, paths };
+
+  const mainPath = resolveTempPath(row.temp_key, roots);
+  if (!mainPath) return { invalid: true, missing: false, sizeBytes: 0, paths: [] };
+
+  const mainStat = await statFile(mainPath);
+  if (!mainStat) return { invalid: false, missing: true, sizeBytes: 0, paths: [mainPath] };
+
+  return { invalid: false, missing: false, sizeBytes: mainStat.size, paths: [mainPath] };
+}
+
+async function cleanupStorageRow(row, roots) {
+  if (row.storage_key) {
+    if (isRemoteBackend()) {
+      await getStorageBackend().delete([row.storage_key, `${row.storage_key}.txt`]);
+    } else {
+      const permanent = resolvePermanentPath(row.storage_key, roots);
+      if (permanent) {
+        await unlinkAll([permanent, `${permanent}.txt`]);
+      }
+    }
+  }
+  if (row.temp_key) {
+    const temp = resolveTempPath(row.temp_key, roots);
+    if (temp) {
+      await unlinkAll([temp]);
+    }
+  }
 }
 
 function cleanupPaths(row, roots) {
@@ -156,7 +203,7 @@ async function processLedgerRow(row, roots, metrics, now) {
   if (row.state === 'cleanup_pending') {
     metrics.cleanupRetryScanned += 1;
     try {
-      await unlinkAll(cleanupPaths(row, roots));
+      await cleanupStorageRow(row, roots);
       await markStorageObjectDeleted(row.id);
       metrics.cleanupRetryDeleted += 1;
       metrics.cleanupRetryBytes += Number(row.size_bytes) || 0;
@@ -190,7 +237,7 @@ async function processLedgerRow(row, roots, metrics, now) {
 
     metrics.expiredTempScanned += 1;
     try {
-      await unlinkAll(cleanupPaths(row, roots));
+      await cleanupStorageRow(row, roots);
       await markStorageObjectDeleted(row.id);
       metrics.expiredTempDeleted += 1;
       metrics.expiredTempBytes += Number(row.size_bytes) || 0;

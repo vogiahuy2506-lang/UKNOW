@@ -12,6 +12,7 @@ import { jest } from '@jest/globals';
 
 const queryMock = jest.fn();
 const createCampaignRunRecordMock = jest.fn();
+const executeCampaignMock = jest.fn(() => Promise.resolve());
 
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: queryMock },
@@ -20,7 +21,7 @@ jest.unstable_mockModule('../../config/database.js', () => ({
 jest.unstable_mockModule('../../controllers/campaign.controller.js', () => ({
   default: {
     createCampaignRunRecord: createCampaignRunRecordMock,
-    executeCampaign: jest.fn(),
+    executeCampaign: executeCampaignMock,
   },
 }));
 
@@ -40,6 +41,7 @@ describe('triggerCampaignSchedule — bỏ qua vì campaign đang chạy', () =>
   beforeEach(() => {
     queryMock.mockReset();
     createCampaignRunRecordMock.mockReset();
+    executeCampaignMock.mockClear();
   });
 
   it('lịch once bị bỏ qua → TẮT luôn, không để bắn lại năm sau', async () => {
@@ -67,9 +69,23 @@ describe('triggerCampaignSchedule — bỏ qua vì campaign đang chạy', () =>
     queryMock.mockResolvedValueOnce(NOT_RUNNING).mockResolvedValue({ rows: [] });
     createCampaignRunRecordMock.mockResolvedValue({ id: 500, run_name: 'x' });
 
-    await trigger({ id: 119, id_campaign: 42, id_user: 1, schedule_type: 'once' });
+    await trigger({
+      id: 119,
+      id_campaign: 42,
+      id_user: 1,
+      workspace_owner_id: 9,
+      created_by: 10,
+      schedule_type: 'once',
+    });
 
     expect(createCampaignRunRecordMock).toHaveBeenCalledTimes(1);
+    expect(createCampaignRunRecordMock).toHaveBeenCalledWith(expect.objectContaining({
+      campaignId: 42,
+      workspaceOwnerId: 9,
+      actorUserId: 10,
+      source: 'schedule',
+    }));
+    expect(executeCampaignMock).toHaveBeenCalledWith(42, 500, 9);
     // Vẫn có UPDATE tắt lịch, nhưng đó là đường chạy-xong-thì-tắt của `once`,
     // không phải đường bỏ-qua — phân biệt bằng việc đã tạo lượt chạy.
   });

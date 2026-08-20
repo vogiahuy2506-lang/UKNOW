@@ -81,9 +81,7 @@ class DashboardController {
    */
   async getLandingPageStats(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
-      const data = await dashboardAnalyticsService.getLandingPageStats(userId, roleCode, req.query);
+      const data = await dashboardAnalyticsService.getLandingPageStats(req.user, req.query);
       this.setNoCacheHeaders(res);
       res.json({ success: true, data });
     } catch (error) {

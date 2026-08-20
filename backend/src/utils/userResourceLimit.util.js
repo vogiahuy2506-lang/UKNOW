@@ -7,6 +7,7 @@ const RESOURCE_LIMIT_MAP = {
   campaigns: {
     column: 'max_campaigns',
     table: 'campaigns',
+    ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
     label: 'số chiến dịch',
   },
   zaloCampaigns: {
@@ -14,18 +15,21 @@ const RESOURCE_LIMIT_MAP = {
     table: null,
     label: 'số chiến dịch Zalo cá nhân',
     campaignType: 'zalo',
+    ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
   },
   zaloGroupCampaigns: {
     column: 'max_zalo_group_campaigns',
     table: null,
     label: 'số chiến dịch Zalo nhóm',
     campaignType: 'zalo_group',
+    ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
   },
   emailCampaigns: {
     column: 'max_email_campaigns',
     table: null,
     label: 'số chiến dịch Email',
     campaignType: 'email',
+    ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
   },
   zaloAccounts: {
     column: 'max_zalo_accounts',
@@ -50,6 +54,7 @@ const RESOURCE_LIMIT_MAP = {
   landingPages: {
     column: 'max_landing_pages',
     table: 'landing_pages',
+    ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
     label: 'số landing page',
   },
 };
@@ -138,14 +143,14 @@ async function countResourceForUser(queryable, userId, resourceConfig) {
     countResult = await queryable.query(
       `SELECT COUNT(*)::int AS total
        FROM campaigns
-       WHERE id_user = $1 AND campaign_type = $2`,
+       WHERE ${resourceConfig.ownerExpression || 'id_user'} = $1 AND campaign_type = $2`,
       [userId, resourceConfig.campaignType]
     );
   } else {
     countResult = await queryable.query(
       `SELECT COUNT(*)::int AS total
        FROM ${resourceConfig.table}
-       WHERE id_user = $1`,
+       WHERE ${resourceConfig.ownerExpression || 'id_user'} = $1`,
       [userId]
     );
   }

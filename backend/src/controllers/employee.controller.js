@@ -1,6 +1,7 @@
 import * as employeeService from '../services/user/employee.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { PERMISSION_CATALOG } from '../config/employeePermissionCatalog.js';
 
 /**
  * Lấy owner_id đúng ngữ cảnh:
@@ -20,6 +21,14 @@ function handleServiceError(res, err) {
   }
   console.error('Employee controller error:', err);
   return res.status(500).json({ success: false, message: 'Lỗi server' });
+}
+
+/**
+ * GET /api/employees/permissions/catalog
+ * Catalog được backend quản lý để client không tự suy diễn key/dependency.
+ */
+export function getPermissionCatalog(_req, res) {
+  return res.json({ success: true, data: Object.values(PERMISSION_CATALOG) });
 }
 
 /**

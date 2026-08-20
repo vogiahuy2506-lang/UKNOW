@@ -7,6 +7,7 @@ import landingPageRepository from '../../repositories/landingPage.repository.js'
 import cloudflareService from '../cloudflare.service.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import { resolveFrontendOriginFromEnv } from '../../utils/landingHtmlInjection.util.js';
+import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 
 // Lazy import to avoid circular dependency
 let clearVerifiedDomainsCache = null;
@@ -27,14 +28,6 @@ function isApexDomain(hostname) {
   if (parts.length > 3) return false;
   if (parts.length >= 2 && APEX_SUBDOMAIN_PREFIXES.has(parts[0])) return false;
   return true;
-}
-
-function normalizeAuthScope(authUser) {
-  return {
-    userId: authUser?.id,
-    role: authUser?.role,
-    ownerId: authUser?.activeContext?.ownerId,
-  };
 }
 
 function parseHostnameFromUrl(urlStr) {
@@ -465,7 +458,10 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async getForLanding(landingPageId, authUser) {
-    const lp = await landingPageRepository.findByIdInScope(landingPageId, normalizeAuthScope(authUser));
+    const lp = await landingPageRepository.findByIdInScope(
+      landingPageId,
+      getWorkspaceScope(authUser)
+    );
     if (!lp) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
@@ -493,8 +489,10 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async setHostname(landingPageId, hostname, isApexDomain, authUser) {
+    const context = getWorkspaceContext(authUser);
+    const scope = getWorkspaceScope(authUser);
     const h = assertValidHostname(hostname);
-    const lp = await landingPageRepository.findByIdInScope(landingPageId, normalizeAuthScope(authUser));
+    const lp = await landingPageRepository.findByIdInScope(landingPageId, scope);
     if (!lp) {
       const err = new Error('Không tìm thấy landing page');
       err.statusCode = 404;
@@ -505,14 +503,15 @@ class LandingPageDomainService {
       err.statusCode = 400;
       throw err;
     }
+    const resourceOwnerId = context.isSuperAdmin
+      ? Number(lp.workspaceOwnerId || lp.idUser)
+      : context.workspaceOwnerId;
 
-    const scope = normalizeAuthScope(authUser);
     const existing = await landingPageDomainRepository.findByLandingPageId(landingPageId);
     const count = await landingPageDomainRepository.countPendingOrActiveInScope(scope);
-    const planUserId = authUser?.activeContext?.ownerId ?? authUser.id;
     const limitCheck = await checkUserResourceLimit({
-      userId: planUserId,
-      role: authUser?.role,
+      userId: resourceOwnerId,
+      roleCode: authUser?.role,
       resourceKey: 'landingPages',
     });
     const max = limitCheck.limit;
@@ -575,15 +574,15 @@ class LandingPageDomainService {
 
       // Đồng bộ landing_pages.domain_type = custom để query nhanh.
       try {
-        await landingPageRepository.updateById(landingPageId, {
+        await landingPageRepository.updateByIdInScope(landingPageId, {
           slug: lp.slug,
           title: lp.title,
           htmlContent: lp.htmlContent,
           isPublished: lp.isPublished,
-          idUser: lp.idUser,
+          idUser: resourceOwnerId,
           domainType: 'custom',
           domainSubtype: isApex ? 'apex' : 'subdomain',
-        });
+        }, scope);
       } catch (e) {
         console.warn(`[LandingPageDomainService.setHostname] update domain_type failed: ${e.message}`);
       }
@@ -615,7 +614,7 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async verifyDns(landingPageId, authUser) {
-    const scope = normalizeAuthScope(authUser);
+    const scope = getWorkspaceScope(authUser);
     const row = await landingPageDomainRepository.findByLandingPageIdInScope(landingPageId, scope);
     if (!row) {
       const err = new Error('Chưa cấu hình tên miền cho landing này');
@@ -781,7 +780,18 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async remove(landingPageId, authUser) {
-    const row = await landingPageDomainRepository.findByLandingPageIdInScope(landingPageId, normalizeAuthScope(authUser));
+    const context = getWorkspaceContext(authUser);
+    const scope = getWorkspaceScope(authUser);
+    const landingPage = await landingPageRepository.findByIdInScope(landingPageId, scope);
+    if (!landingPage) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+    const resourceOwnerId = context.isSuperAdmin
+      ? Number(landingPage.workspaceOwnerId || landingPage.idUser)
+      : context.workspaceOwnerId;
+    const row = await landingPageDomainRepository.findByLandingPageIdInScope(landingPageId, scope);
     if (!row) {
       const err = new Error('Chưa cấu hình tên miền');
       err.statusCode = 404;
@@ -796,17 +806,16 @@ class LandingPageDomainService {
     // Reset landing_pages về system nếu trước đó là custom (chỉ set khi row không phải CF-managed).
     if (!row.cfManaged) {
       try {
-        const lp = await landingPageRepository.findById(landingPageId);
-        if (lp && lp.domainType === 'custom') {
-          await landingPageRepository.updateById(landingPageId, {
-            slug: lp.slug,
-            title: lp.title,
-            htmlContent: lp.htmlContent,
-            isPublished: lp.isPublished,
-            idUser: lp.idUser,
+        if (landingPage.domainType === 'custom') {
+          await landingPageRepository.updateByIdInScope(landingPageId, {
+            slug: landingPage.slug,
+            title: landingPage.title,
+            htmlContent: landingPage.htmlContent,
+            isPublished: landingPage.isPublished,
+            idUser: resourceOwnerId,
             domainType: 'system',
             domainSubtype: null,
-          });
+          }, scope);
         }
       } catch (e) {
         console.warn(`[LandingPageDomainService.remove] reset domain_type failed: ${e.message}`);

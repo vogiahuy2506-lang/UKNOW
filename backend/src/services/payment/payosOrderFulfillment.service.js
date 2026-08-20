@@ -39,7 +39,77 @@ export async function fulfillPaidOrder(order, client) {
   const userId = order.user_id
     || (order.user_email ? await findUserIdByEmail(order.user_email) : null);
 
+  const isScheduled = order.note === 'scheduled_change';
+
+  if (isScheduled) {
+    if (userId && order.plan_id) {
+      const { scheduledPlanChangeRepository } = await import('../../repositories/payment/scheduledPlanChange.repository.js');
+      const existing = await scheduledPlanChangeRepository.findByOrderId(order.id, client);
+      const user = await findActiveUserByEmail(order.user_email);
+      const plan = await findPlanById(order.plan_id);
+      const activateAfter = user?.subscription_expires_at ? new Date(user.subscription_expires_at) : new Date();
+
+      if (!existing) {
+        const pendingBefore = await scheduledPlanChangeRepository.findPendingByUserId(userId, client);
+        const previousPaid = pendingBefore ? Number(pendingBefore.amount_paid || 0) : 0;
+        const totalAmountPaid = previousPaid + Number(order.amount || 0);
+
+        await scheduledPlanChangeRepository.supersedePendingByUserId(userId, client);
+        await scheduledPlanChangeRepository.create({
+          userId,
+          planId: order.plan_id,
+          billingPeriod: order.billing_period || 'monthly',
+          orderId: order.id,
+          amountPaid: totalAmountPaid,
+          activateAfter,
+        }, client);
+      }
+
+      let invoiceInfo = order.invoice_info;
+      if (typeof invoiceInfo === 'string') {
+        try { invoiceInfo = JSON.parse(invoiceInfo); } catch { invoiceInfo = null; }
+      }
+      const invoiceUrl = invoiceInfo?.wantInvoice
+        ? `${FRONTEND_URL}/invoices/${order.order_code}`
+        : undefined;
+
+      const email = buildPaymentSuccessEmail({
+        fullName: user?.full_name,
+        email: order.user_email,
+        planName: plan?.name || 'Unknown Plan',
+        amount: order.amount,
+        billingPeriod: order.billing_period || 'monthly',
+        orderCode: order.order_code,
+        paymentMethod: order.payment_method,
+        invoiceUrl,
+        isScheduled: true,
+        activateAfter,
+      });
+      sendSystemEmail({
+        to: order.user_email,
+        subject: email.subject,
+        html: email.html,
+      }).catch((err) => console.error('[PaymentSuccessEmail] Failed to send:', err.message));
+    } else {
+      console.warn(
+        `[FulfillPaidOrder] Không tìm được user cho đơn hẹn ${order.order_code}`
+      );
+    }
+
+    await redeemVoucherForOrder(order, client);
+    return prepareEinvoiceForPaidOrder(order, client);
+  }
+
   if (userId && order.plan_id) {
+    let customConfig = order.custom_plan_config;
+    if (typeof customConfig === 'string') {
+      try { customConfig = JSON.parse(customConfig); } catch { customConfig = null; }
+    }
+    if (customConfig && typeof customConfig === 'object') {
+      const { updateCustomPlanLimits } = await import('../../repositories/payment/customPlan.repository.js');
+      await updateCustomPlanLimits(order.plan_id, customConfig, client);
+    }
+
     await activateUserPlan(userId, order.plan_id, order.billing_period || 'monthly', client);
 
     // Trần vừa tăng trở lại — mở khoá tài nguyên đã bị khoá khi gói hết hạn

@@ -169,6 +169,11 @@ export async function markDeletedAfterUnlink({ storageKey = null, tempKey = null
   return object;
 }
 
+function isRemoteBackend() {
+  const backend = getStorageBackend();
+  return Boolean(backend?.isRemote || backend?.type === 'gcs' || backend?.constructor?.name === 'GcsStorageBackend');
+}
+
 /** Copy a temp batch, commit all ledger rows plus parent work, then remove temp copies. */
 export async function promoteTempStorageObjects({
   items,
@@ -181,17 +186,33 @@ export async function promoteTempStorageObjects({
   parentMutation = null,
 }) {
   if (!Array.isArray(items) || items.length === 0) return [];
-  await assertStorageCapacity({ paths: items.map((item) => item.targetPath), poolType });
+  if (!isRemoteBackend()) {
+    for (const item of items) {
+      item.targetPath = getStorageBackend().resolveAbsolutePathFromKey(item.storageKey);
+    }
+    await assertStorageCapacity({ paths: items.map((item) => item.targetPath), poolType });
+  }
 
   const copiedTargetPaths = [];
+  const copiedStorageKeys = [];
   try {
     for (const item of items) {
-      await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
-      await fs.copyFile(item.tempPath, item.targetPath);
-      copiedTargetPaths.push(item.targetPath);
+      if (isRemoteBackend()) {
+        const buffer = await fs.readFile(item.tempPath);
+        await getStorageBackend().put(item.storageKey, buffer, { contentType: item.contentType });
+        copiedStorageKeys.push(item.storageKey);
+      } else {
+        await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
+        await fs.copyFile(item.tempPath, item.targetPath);
+        copiedTargetPaths.push(item.targetPath);
+      }
     }
   } catch (error) {
-    await unlinkAll(copiedTargetPaths).catch(() => {});
+    if (isRemoteBackend()) {
+      await getStorageBackend().delete(copiedStorageKeys).catch(() => {});
+    } else {
+      await unlinkAll(copiedTargetPaths).catch(() => {});
+    }
     throw error;
   }
 
@@ -235,7 +256,11 @@ export async function promoteTempStorageObjects({
       return activated;
     });
   } catch (error) {
-    await unlinkAll(copiedTargetPaths).catch(() => {});
+    if (isRemoteBackend()) {
+      await getStorageBackend().delete(copiedStorageKeys).catch(() => {});
+    } else {
+      await unlinkAll(copiedTargetPaths).catch(() => {});
+    }
     throw error;
   }
 

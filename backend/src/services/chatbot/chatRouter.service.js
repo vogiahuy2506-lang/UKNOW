@@ -142,7 +142,7 @@ class ChatRouterService {
    * @param {object} [params.visitorInfo] - visitor metadata
    * @param {object} params.chatbotSettings - pre-fetched chatbot settings for this account
    */
-  async routeMessageWithSettings({ channel, userId, message, conversationId, chatbotSettings, visitorInfo = {} }) {
+  async routeMessageWithSettings({ channel, userId, message, conversationId, chatbotSettings, visitorInfo = {}, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [] }) {
     const adapter = ADAPTERS[channel];
     if (!adapter) throw new Error(`Unknown channel: ${channel}`);
 
@@ -161,7 +161,7 @@ class ChatRouterService {
 
     // PARALLEL: Get history, subAssistant, and profileContext (all independent)
     const [history, subAssistant, profileContext] = await Promise.all([
-      this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES),
+      this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES, { beforeMessageId, throughMessageId, excludeMessageIds }),
       chatbotSettings.id_sub_assistant
         ? subAssistantService.getById(chatbotSettings.id_sub_assistant, userId)
         : Promise.resolve(null),
@@ -372,14 +372,14 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     return { text: textResponse };
   }
 
-  async _getHistory(channel, conversationId, limit) {
+  async _getHistory(channel, conversationId, limit, options = {}) {
     if (!conversationId) return [];
     try {
       if (channel === 'web') {
         return chatbotRepository.getWebChatMessages(conversationId, { limit });
       }
       if (channel === 'zalo_personal') {
-        return this._getZaloPersonalHistory(conversationId, limit);
+        return this._getZaloPersonalHistory(conversationId, limit, options);
       }
       return chatbotRepository.getChannelMessages(conversationId, { limit });
     } catch {
@@ -387,26 +387,43 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     }
   }
 
-  async _getZaloPersonalHistory(conversationId, limit = 50) {
+  async _getZaloPersonalHistory(conversationId, limit = 50, options = {}) {
     try {
-      console.log(`[ChatRouter] _getZaloPersonalHistory: convId=${conversationId}, limit=${limit}`);
+      const normalizedOptions = typeof options === 'number' ? { beforeMessageId: options } : (options || {});
+      const { beforeMessageId = null, throughMessageId = null, excludeMessageIds = [] } = normalizedOptions;
+      console.log(`[ChatRouter] _getZaloPersonalHistory: convId=${conversationId}, limit=${limit}, beforeMessageId=${beforeMessageId}, throughMessageId=${throughMessageId}`);
       const db = (await import('../../config/database.js')).default;
-      const { rows } = await db.query(
-        `SELECT id, role, content, metadata, created_at as createdAt
+      let query = `SELECT id, role, content, metadata, created_at as createdAt
          FROM zalo_personal_messages
-         WHERE id_conversation = $1
-         ORDER BY created_at ASC
-         LIMIT $2`,
-        [conversationId, limit]
-      );
+         WHERE id_conversation = $1`;
+      const params = [conversationId];
+
+      if (beforeMessageId) {
+        params.push(beforeMessageId);
+        query += ` AND id < $${params.length}`;
+      }
+      if (throughMessageId) {
+        params.push(throughMessageId);
+        query += ` AND id <= $${params.length}`;
+      }
+      const excludedIds = Array.isArray(excludeMessageIds)
+        ? excludeMessageIds.map(Number).filter(Number.isInteger)
+        : [];
+      if (excludedIds.length > 0) {
+        params.push(excludedIds);
+        query += ` AND id <> ALL($${params.length}::integer[])`;
+      }
+      params.push(limit);
+      query += ` ORDER BY id DESC LIMIT $${params.length}`;
+
+      const { rows } = await db.query(query, params);
       
       console.log(`[ChatRouter] _getZaloPersonalHistory: found ${rows.length} messages`);
       if (rows.length > 0) {
-        console.log(`[ChatRouter] First message: role=${rows[0].role}, content="${String(rows[0].content).substring(0, 50)}"`);
-        console.log(`[ChatRouter] Last message: role=${rows[rows.length-1].role}, content="${String(rows[rows.length-1].content).substring(0, 50)}"`);
+        console.log(`[ChatRouter] History range: oldestRole=${rows[rows.length - 1].role}, newestRole=${rows[0].role}`);
       }
       
-      return rows.map(row => ({
+      return rows.reverse().map(row => ({
         ...row,
         metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata || '{}') : (row.metadata || {}),
       }));
@@ -467,7 +484,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     return 'Xin chao! Toi co the giup gi cho ban?';
   }
 
-  async routeChatbotMessage({ chatbotId, message, conversationId }) {
+  async routeChatbotMessage({ chatbotId, message, conversationId, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [] }) {
     try {
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       if (!chatbot) {
@@ -486,7 +503,11 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         return { content: creditPrep.visitorMessage };
       }
 
-      const historyRows = await chatbotRepository.getConversationHistory(conversationId, MAX_HISTORY_MESSAGES);
+      const historyRows = await chatbotRepository.getConversationHistory(conversationId, MAX_HISTORY_MESSAGES, {
+        beforeMessageId,
+        throughMessageId,
+        excludeMessageIds,
+      });
 
       const chatHistory = (historyRows || []).reverse().map(m => ({
         role: m.role === 'bot' ? 'model' : 'user',

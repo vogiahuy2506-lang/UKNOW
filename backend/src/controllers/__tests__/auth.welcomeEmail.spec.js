@@ -37,6 +37,7 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findMembershipsByEmployeeId: jest.fn(),
   insertRefreshToken: jest.fn(),
   revokeAllRefreshTokensForUser: jest.fn(),
+  findActiveBillingPeriod: jest.fn().mockResolvedValue('monthly'),
 }));
 
 jest.unstable_mockModule('../../services/audit.service.js', () => ({

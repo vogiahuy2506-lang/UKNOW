@@ -10,6 +10,8 @@ export class GcsStorageBackend {
     this.keyFilename = keyFilename ? String(keyFilename).trim() : null;
     this.storage = storageClient || (this.keyFilename ? new Storage({ keyFilename: this.keyFilename }) : new Storage());
     this.bucket = this.storage.bucket(this.bucketName);
+    this.type = 'gcs';
+    this.isRemote = true;
   }
 
   /**
@@ -60,6 +62,23 @@ export class GcsStorageBackend {
     const file = this.bucket.file(cleanKey);
     const [buf] = await file.download();
     return buf;
+  }
+
+  /**
+   * Đọc metadata từ GCS
+   * @param {string} key
+   * @returns {Promise<object|null>}
+   */
+  async getMetadata(key) {
+    const cleanKey = this.normalizeKey(key);
+    if (!cleanKey) return null;
+    try {
+      const file = this.bucket.file(cleanKey);
+      const [metadata] = await file.getMetadata();
+      return metadata;
+    } catch {
+      return null;
+    }
   }
 
   /**

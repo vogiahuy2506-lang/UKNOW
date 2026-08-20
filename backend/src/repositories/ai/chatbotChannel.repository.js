@@ -134,16 +134,37 @@ class ChatbotChannelRepository {
   }
 
   async addMessage(conversationId, { role, content, message_type, external_id }) {
-    await db.query(
+    const { rows } = await db.query(
       `INSERT INTO chatbot_messages (id_conversation, role, content, message_type, external_id)
-       VALUES ($1, $2, $3, $4, $5)`,
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (id_conversation, external_id) WHERE external_id IS NOT NULL DO NOTHING
+       RETURNING *`,
       [conversationId, role, content, message_type || 'text', external_id || null]
     );
+
+    if (!rows[0] && external_id) {
+      const { rows: existingRows } = await db.query(
+        `SELECT * FROM chatbot_messages
+         WHERE id_conversation = $1 AND external_id = $2
+         LIMIT 1`,
+        [conversationId, external_id]
+      );
+      return existingRows[0] ? { ...existingRows[0], isDuplicate: true } : null;
+    }
 
     await db.query(
       `UPDATE chatbot_conversations SET last_message_at = NOW() WHERE id = $1`,
       [conversationId]
     );
+    return rows[0];
+  }
+
+  async getLatestMessageId(conversationId) {
+    const { rows } = await db.query(
+      `SELECT MAX(id)::integer AS id FROM chatbot_messages WHERE id_conversation = $1`,
+      [conversationId]
+    );
+    return rows[0]?.id ?? null;
   }
 
   /**
@@ -167,6 +188,27 @@ class ChatbotChannelRepository {
       [channelId]
     );
     return rows[0]?.access_token ?? null;
+  }
+
+  async getChatbotChannelAccessToken(channelId) {
+    const { rows } = await db.query(
+      `SELECT credentials->>'access_token' AS access_token
+       FROM chatbot_channel_connections
+       WHERE id = $1 AND is_active = true`,
+      [channelId]
+    );
+    return rows[0]?.access_token ?? null;
+  }
+
+  async findActiveChannelById(channelId) {
+    const { rows } = await db.query(
+      `SELECT ccc.*
+       FROM chatbot_channel_connections ccc
+       JOIN custom_chatbots cc ON cc.id = ccc.id_chatbot
+       WHERE ccc.id = $1 AND ccc.is_active = true AND cc.is_active = true`,
+      [channelId]
+    );
+    return rows[0] || null;
   }
 
   async getChannelPageAccessToken(channelId) {

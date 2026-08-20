@@ -353,7 +353,8 @@ describe('GET /api/dashboard/landing-pages-stats', () => {
     );
     // leads (submits)
     await db.query(
-      `INSERT INTO leads (landing_page_slug, email) VALUES ('promo-1', 'l@u.local')`
+      `INSERT INTO leads (landing_page_slug, email, id_user) VALUES ('promo-1', 'l@u.local', $1)`,
+      [user.id]
     );
 
     const token = await loginAs(user);
@@ -365,6 +366,33 @@ describe('GET /api/dashboard/landing-pages-stats', () => {
       clickCount: 1,
       submitCount: 1,
     });
+  });
+
+  it('không trả analytics landing của workspace khác', async () => {
+    const me = await createUser({ username: 'landing-stats-me' });
+    const other = await createUser({ username: 'landing-stats-other' });
+    await db.query(
+      `INSERT INTO landing_pages
+         (id_user, workspace_owner_id, created_by, slug, title, status, is_published, published_at)
+       VALUES
+         ($1, $1, $1, 'mine-stats', 'Mine', 'published', TRUE, NOW()),
+         ($2, $2, $2, 'foreign-stats', 'Foreign', 'published', TRUE, NOW())`,
+      [me.id, other.id]
+    );
+    await db.query(
+      `INSERT INTO landing_page_events (event_type, landing_page_slug, id_user) VALUES
+         ('view', 'mine-stats', $1),
+         ('view', 'foreign-stats', $2)`,
+      [me.id, other.id]
+    );
+
+    const token = await loginAs(me);
+    const res = await request(app)
+      .get('/api/dashboard/landing-pages-stats?allTime=1')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.rows.map((row) => row.slug)).toEqual(['mine-stats']);
   });
 });
 

@@ -115,22 +115,15 @@ export async function debitZaloPersonalInboxIfNeeded(client, { billingUserId, me
     ? null
     : Number.parseInt(rawLimit, 10);
 
-  const { rows: countRows } = await client.query(
-    `SELECT (
-       (SELECT COUNT(*) FROM zalo_messages zm
-        JOIN campaigns c ON c.id = zm.id_campaign
-        WHERE ${CAMPAIGN_OWNER_PREDICATE}
-          AND zm.tracking_metadata->>'status' = 'sent'
-          AND zm.sent_at >= DATE_TRUNC('month', NOW()))
-     + (SELECT COUNT(*) FROM zalo_personal_messages zpm
-        WHERE ${ZPM_OWNER_PREDICATE}
-          AND zpm.role = 'agent'
-          AND zpm.metadata->>'source' = 'manual_inbox'
-          AND zpm.created_at >= DATE_TRUNC('month', NOW()))
-     )::int AS total`,
-    [billingUserId]
+  const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
+  const { countZaloSentThisMonth } = await import('../../utils/userSendLimit.util.js');
+  const cycle = await getBillingCycle(billingUserId, {}, client);
+  const usageCountAfterSend = await countZaloSentThisMonth(
+    billingUserId,
+    cycle?.hasPlan ? cycle.cycleStart : null,
+    cycle?.hasPlan ? cycle.cycleEnd : null,
+    client
   );
-  const usageCountAfterSend = Number(countRows[0]?.total) || 0;
 
   return maybeDebitWalletForSend(client, {
     billingUserId,

@@ -17,6 +17,7 @@ const workspacePromotionCapacityGuard = storageCapacityGuard({
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requireActivePlan);
+router.use(requirePermission('zalo_templates'));
 
 // Get all — chỉ cần auth
 router.get('/', zaloTemplateController.getAll.bind(zaloTemplateController));

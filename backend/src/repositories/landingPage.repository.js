@@ -1,5 +1,5 @@
 import db from '../config/database.js';
-import { isSuperAdmin, isUserAdmin } from '../utils/roleScope.util.js';
+import { isSuperAdmin } from '../utils/roleScope.util.js';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
@@ -8,13 +8,13 @@ const SLUG_RE = /^[a-z0-9][a-z0-9_-]*$/;
  */
 class LandingPageRepository {
   /**
-   * Build điều kiện scope cho landing page theo vai trò.
+   * Build điều kiện scope chính xác theo workspace owner đã được auth xác minh.
    *
    * - super_admin : thấy tất cả.
-   * - user_admin  : thấy trang của mình + trang do employee của mình tạo.
-   * - employee    : thấy trang trong workspace của owner (owner + các employee cùng team).
+   * - owner/self  : thấy trang thuộc workspace của mình.
+   * - employee    : thấy trang thuộc workspace owner đang active.
    *
-   * @param {{ userId: number|string, role?: string, ownerId?: number|string }} scope
+   * @param {{ userId: number|string, workspaceOwnerId?: number|string, role?: string, roleCode?: string, isSuperAdmin?: boolean }} scope
    * @returns {{ clause: string, params: any[] }}
    */
   buildLandingScopeCondition(scope = {}) {
@@ -24,20 +24,20 @@ class LandingPageRepository {
       return { clause: '1 = 0', params: [] };
     }
 
-    if (isSuperAdmin(role)) {
+    if (scope?.isSuperAdmin === true || isSuperAdmin(role)) {
       return { clause: '1 = 1', params: [] };
     }
 
-    // user_admin hoặc employee đều thấy toàn bộ workspace của owner
-    const ownerId = scope?.ownerId ? Number.parseInt(scope.ownerId, 10) : null;
-    const workspaceOwnerId = isUserAdmin(role) ? userId : (ownerId || userId);
+    const workspaceOwnerId = Number.parseInt(
+      scope?.workspaceOwnerId ?? scope?.ownerId ?? userId,
+      10
+    );
+    if (!Number.isFinite(workspaceOwnerId)) {
+      return { clause: '1 = 0', params: [] };
+    }
 
     return {
-      clause: `lp.id_user IN (
-        SELECT $1::bigint
-        UNION
-        SELECT employee_id FROM user_members WHERE owner_id = $1
-      )`,
+      clause: 'COALESCE(lp.workspace_owner_id, lp.id_user) = $1',
       params: [workspaceOwnerId],
     };
   }
@@ -66,6 +66,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId",
+         created_by AS "createdBy",
          custom_config AS "customConfig",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
@@ -95,6 +97,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId",
+         created_by AS "createdBy",
          custom_config AS "customConfig",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
@@ -121,6 +125,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId",
+         created_by AS "createdBy",
          created_at AS "createdAt",
          updated_at AS "updatedAt"
        FROM landing_pages
@@ -143,6 +149,8 @@ class LandingPageRepository {
          lp.title,
          lp.is_published AS "isPublished",
          lp.id_user AS "idUser",
+         COALESCE(lp.workspace_owner_id, lp.id_user) AS "workspaceOwnerId",
+         lp.created_by AS "createdBy",
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
          lp.custom_config AS "customConfig",
@@ -164,12 +172,15 @@ class LandingPageRepository {
    *
    * @returns {Promise<{ slug: string, title: string }[]>}
    */
-  async listPublishedSlugsWithTitles() {
+  async listPublishedSlugsWithTitles(scope = {}) {
+    const { clause, params } = this.buildLandingScopeCondition(scope);
     const result = await db.query(
       `SELECT slug, COALESCE(title, '') AS title
-       FROM landing_pages
+       FROM landing_pages lp
        WHERE is_published = TRUE
+         AND ${clause}
        ORDER BY slug ASC`
+      , params
     );
     return result.rows.map((r) => ({
       slug: String(r.slug || '').trim().toLowerCase(),
@@ -184,7 +195,7 @@ class LandingPageRepository {
    * @param {string[]} slugs
    * @returns {Promise<Map<string, string>>} slug (lowercase) → title (có thể rỗng)
    */
-  async findTitlesBySlugs(slugs) {
+  async findTitlesBySlugs(slugs, scope = {}) {
     const unique = [
       ...new Set(
         (slugs || [])
@@ -193,9 +204,13 @@ class LandingPageRepository {
       ),
     ];
     if (unique.length === 0) return new Map();
+    const { clause, params } = this.buildLandingScopeCondition(scope);
     const result = await db.query(
-      `SELECT slug, title FROM landing_pages WHERE slug = ANY($1::text[])`,
-      [unique]
+      `SELECT lp.slug, lp.title
+       FROM landing_pages lp
+       WHERE lp.slug = ANY($${params.length + 1}::text[])
+         AND ${clause}`,
+      [...params, unique]
     );
     const m = new Map();
     for (const row of result.rows) {
@@ -217,6 +232,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId",
+         created_by AS "createdBy",
          domain_type AS "domainType",
          domain_subtype AS "domainSubtype",
          custom_config AS "customConfig",
@@ -247,6 +264,8 @@ class LandingPageRepository {
          lp.html_content AS "htmlContent",
          lp.is_published AS "isPublished",
          lp.id_user AS "idUser",
+         COALESCE(lp.workspace_owner_id, lp.id_user) AS "workspaceOwnerId",
+         lp.created_by AS "createdBy",
          lp.created_at AS "createdAt",
          lp.updated_at AS "updatedAt",
          lp.domain_type AS "domainType",
@@ -272,13 +291,14 @@ class LandingPageRepository {
   async insert(payload, client = null) {
     const queryable = client || db;
     const result = await queryable.query(
-      `INSERT INTO landing_pages
-         (slug, title, html_content, is_published, id_user, domain_type, domain_subtype, custom_config, created_at, updated_at)
+       `INSERT INTO landing_pages
+         (slug, title, html_content, is_published, id_user, workspace_owner_id, created_by,
+          domain_type, domain_subtype, custom_config, created_at, updated_at)
        VALUES
-         (NULLIF(LOWER(TRIM($1)), ''), $2, $3, COALESCE($4, false), $5,
-          COALESCE($6, 'system'),
-          CASE WHEN $6 = 'custom' THEN $7 ELSE NULL END,
-          COALESCE($8::jsonb, '{}'::jsonb),
+         (NULLIF(LOWER(TRIM($1)), ''), $2, $3, COALESCE($4, false), $5, $6, $7,
+          COALESCE($8, 'system'),
+          CASE WHEN $8 = 'custom' THEN $9 ELSE NULL END,
+          COALESCE($10::jsonb, '{}'::jsonb),
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING
          id,
@@ -287,6 +307,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId",
+         created_by AS "createdBy",
          domain_type AS "domainType",
          domain_subtype AS "domainSubtype",
          custom_config AS "customConfig",
@@ -297,7 +319,9 @@ class LandingPageRepository {
         String(payload.title || '').trim(),
         String(payload.htmlContent ?? ''),
         Boolean(payload.isPublished),
-        payload.idUser ?? null,
+        payload.workspaceOwnerId ?? payload.idUser ?? null,
+        payload.workspaceOwnerId ?? payload.idUser ?? null,
+        payload.createdBy ?? payload.workspaceOwnerId ?? payload.idUser ?? null,
         payload.domainType === 'custom' ? 'custom' : 'system',
         payload.domainType === 'custom' ? (payload.domainSubtype === 'apex' ? 'apex' : 'subdomain') : null,
         JSON.stringify(payload.customConfig && typeof payload.customConfig === 'object' ? payload.customConfig : {}),
@@ -335,6 +359,8 @@ class LandingPageRepository {
          html_content AS "htmlContent",
          is_published AS "isPublished",
          id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId",
+         created_by AS "createdBy",
          domain_type AS "domainType",
          domain_subtype AS "domainSubtype",
          custom_config AS "customConfig",
@@ -356,11 +382,91 @@ class LandingPageRepository {
   }
 
   /**
+   * Update có scope trong chính câu SQL để chặn TOCTOU/cross-workspace mutation.
+   */
+  async updateByIdInScope(id, payload, scope = {}) {
+    if (scope?.isSuperAdmin === true || isSuperAdmin(scope?.role ?? scope?.roleCode)) {
+      return this.updateById(id, payload);
+    }
+
+    const workspaceOwnerId = Number.parseInt(
+      scope?.workspaceOwnerId ?? scope?.ownerId ?? scope?.userId,
+      10
+    );
+    if (!Number.isFinite(workspaceOwnerId)) return null;
+
+    const result = await db.query(
+      `UPDATE landing_pages SET
+         slug = NULLIF(LOWER(TRIM($2)), ''),
+         title = $3,
+         html_content = $4,
+         is_published = $5,
+         id_user = COALESCE($6, id_user),
+         workspace_owner_id = COALESCE(workspace_owner_id, $10),
+         domain_type = COALESCE($7, domain_type),
+         domain_subtype = CASE
+           WHEN $7 = 'custom' THEN $8
+           WHEN $7 = 'system' THEN NULL
+           ELSE domain_subtype
+         END,
+         custom_config = COALESCE($9::jsonb, custom_config),
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND COALESCE(workspace_owner_id, id_user) = $10
+       RETURNING
+         id,
+         slug,
+         title,
+         html_content AS "htmlContent",
+         is_published AS "isPublished",
+         id_user AS "idUser",
+         COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId",
+         created_by AS "createdBy",
+         domain_type AS "domainType",
+         domain_subtype AS "domainSubtype",
+         custom_config AS "customConfig",
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"`,
+      [
+        id,
+        payload.slug,
+        String(payload.title || '').trim(),
+        String(payload.htmlContent ?? ''),
+        Boolean(payload.isPublished),
+        payload.idUser ?? workspaceOwnerId,
+        payload.domainType === 'custom' || payload.domainType === 'system' ? payload.domainType : null,
+        payload.domainType === 'custom' ? (payload.domainSubtype === 'apex' ? 'apex' : 'subdomain') : null,
+        payload.customConfig != null ? JSON.stringify(payload.customConfig) : null,
+        workspaceOwnerId,
+      ]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
    * @param {number} id
    * @returns {Promise<boolean>}
    */
   async deleteById(id) {
     const result = await db.query('DELETE FROM landing_pages WHERE id = $1', [id]);
+    return Number(result.rowCount || 0) > 0;
+  }
+
+  async deleteByIdInScope(id, scope = {}) {
+    if (scope?.isSuperAdmin === true || isSuperAdmin(scope?.role ?? scope?.roleCode)) {
+      return this.deleteById(id);
+    }
+    const workspaceOwnerId = Number.parseInt(
+      scope?.workspaceOwnerId ?? scope?.ownerId ?? scope?.userId,
+      10
+    );
+    if (!Number.isFinite(workspaceOwnerId)) return false;
+    const result = await db.query(
+      `DELETE FROM landing_pages
+       WHERE id = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2`,
+      [id, workspaceOwnerId]
+    );
     return Number(result.rowCount || 0) > 0;
   }
 

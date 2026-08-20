@@ -85,9 +85,12 @@ const renderModal = (content, onClose, cls = MODAL_SM) =>
 const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
   const { t } = useI18n();
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [billingPeriod, setBillingPeriod]   = useState('monthly');
   const [paymentMethod, setPaymentMethod]   = useState('free');
   const [note, setNote]                     = useState('');
   const [isSaving, setIsSaving]             = useState(false);
+
+  const selectedPlan = plans.find((p) => String(p.id) === String(selectedPlanId));
 
   const handleAssign = async () => {
     if (!selectedPlanId) { toast.error(t('adminMembers.selectPlanRequired')); return; }
@@ -96,6 +99,7 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
       await adminPlansApiService.assignPlan(Number(selectedPlanId), member.email, {
         paymentMethod,
         note: note.trim() || null,
+        billingPeriod,
       });
       toast.success(t('adminMembers.assignSuccess'));
       onDone();
@@ -127,11 +131,27 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
           <option value="">{t('adminMembers.selectPlanPlaceholder')}</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name} {p.price > 0 ? `— ${Number(p.price).toLocaleString('vi-VN')} đ` : t('adminMembers.free')}
+              {p.name} {p.price > 0 ? `— ${Number(p.price).toLocaleString('vi-VN')} đ/tháng` : t('adminMembers.free')}
               {!p.is_active ? ` ${t('adminMembers.hidden')}` : ''}
             </option>
           ))}
         </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.billingPeriod')}</label>
+        <select className="input w-full" value={billingPeriod} onChange={(e) => setBillingPeriod(e.target.value)}>
+          <option value="monthly">{t('adminMembers.billingMonthly')}</option>
+          <option value="yearly">{t('adminMembers.billingYearly')}</option>
+        </select>
+        {selectedPlan && (
+          <p className="text-xs text-gray-500 mt-1">
+            {billingPeriod === 'yearly' && selectedPlan.priceYearly
+              ? `${Number(selectedPlan.priceYearly).toLocaleString('vi-VN')} đ/năm`
+              : billingPeriod === 'yearly'
+                ? `${(Number(selectedPlan.price) * 12).toLocaleString('vi-VN')} đ/năm (chưa cấu hình giá năm riêng)`
+                : `${Number(selectedPlan.price).toLocaleString('vi-VN')} đ/tháng`}
+          </p>
+        )}
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.paymentMethod')}</label>

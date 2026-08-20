@@ -1,11 +1,12 @@
 import db from '../../config/database.js';
 
-/** Resource keys in scope for PR-2 (employees excluded). */
+/** Resource keys in scope for resource locking. */
 export const LOCKABLE_RESOURCE_KEYS = Object.freeze([
   'zalo_accounts',
   'email_accounts',
   'landing_pages',
   'chatbots',
+  'employees',
 ]);
 
 const RESOURCE_TABLE = Object.freeze({
@@ -13,6 +14,7 @@ const RESOURCE_TABLE = Object.freeze({
   email_accounts: 'email_settings',
   landing_pages: 'landing_pages',
   chatbots: 'custom_chatbots',
+  employees: 'user_members',
 });
 
 /**
@@ -59,15 +61,25 @@ export async function filterLockedResources(resourceKey, ids, queryable = db) {
 export async function deleteOrphanLocks(userId, resourceKey, queryable = db) {
   const table = RESOURCE_TABLE[resourceKey];
   if (!table) return 0;
-  const { rowCount } = await queryable.query(
-    `DELETE FROM topup_locked_resources tlr
+
+  let deleteSql;
+  if (resourceKey === 'employees') {
+    deleteSql = `DELETE FROM topup_locked_resources tlr
+     WHERE tlr.user_id = $1
+       AND tlr.resource_key = 'employees'
+       AND NOT EXISTS (
+         SELECT 1 FROM user_members r WHERE r.id = tlr.resource_id AND r.status = 'active'
+       )`;
+  } else {
+    deleteSql = `DELETE FROM topup_locked_resources tlr
      WHERE tlr.user_id = $1
        AND tlr.resource_key = $2
        AND NOT EXISTS (
          SELECT 1 FROM ${table} r WHERE r.id = tlr.resource_id
-       )`,
-    [userId, resourceKey]
-  );
+       )`;
+  }
+  const params = resourceKey === 'employees' ? [userId] : [userId, resourceKey];
+  const { rowCount } = await queryable.query(deleteSql, params);
   return rowCount || 0;
 }
 
@@ -77,22 +89,33 @@ export async function deleteOrphanLocks(userId, resourceKey, queryable = db) {
 export async function countValidLocks(userId, resourceKey, queryable = db) {
   const table = RESOURCE_TABLE[resourceKey];
   if (!table) return 0;
-  const { rows } = await queryable.query(
-    `SELECT COUNT(*)::int AS total
+
+  let countSql;
+  if (resourceKey === 'employees') {
+    countSql = `SELECT COUNT(*)::int AS total
+     FROM topup_locked_resources tlr
+     WHERE tlr.user_id = $1
+       AND tlr.resource_key = 'employees'
+       AND EXISTS (
+         SELECT 1 FROM user_members r WHERE r.id = tlr.resource_id AND r.status = 'active'
+       )`;
+  } else {
+    countSql = `SELECT COUNT(*)::int AS total
      FROM topup_locked_resources tlr
      WHERE tlr.user_id = $1
        AND tlr.resource_key = $2
        AND EXISTS (
          SELECT 1 FROM ${table} r WHERE r.id = tlr.resource_id
-       )`,
-    [userId, resourceKey]
-  );
+       )`;
+  }
+  const params = resourceKey === 'employees' ? [userId] : [userId, resourceKey];
+  const { rows } = await queryable.query(countSql, params);
   return Number(rows[0]?.total) || 0;
 }
 
 /**
- * List unlocked resource ids newest-first (for locking).
- * Chatbots: only is_active = true. Others: all rows.
+ * List unlocked resource ids oldest-first (for locking).
+ * Chatbots: only is_active = true. Others: all active rows.
  */
 export async function listUnlockedResourceIds(userId, resourceKey, queryable = db) {
   const table = RESOURCE_TABLE[resourceKey];
@@ -109,7 +132,18 @@ export async function listUnlockedResourceIds(userId, resourceKey, queryable = d
           SELECT 1 FROM topup_locked_resources tlr
           WHERE tlr.resource_key = 'chatbots' AND tlr.resource_id = r.id
         )
-      ORDER BY r.id DESC`;
+      ORDER BY r.id ASC`;
+  } else if (resourceKey === 'employees') {
+    sql = `
+      SELECT r.id
+      FROM user_members r
+      WHERE r.owner_id = $1
+        AND r.status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM topup_locked_resources tlr
+          WHERE tlr.resource_key = 'employees' AND tlr.resource_id = r.id
+        )
+      ORDER BY r.id ASC`;
   } else {
     sql = `
       SELECT r.id
@@ -119,10 +153,10 @@ export async function listUnlockedResourceIds(userId, resourceKey, queryable = d
           SELECT 1 FROM topup_locked_resources tlr
           WHERE tlr.resource_key = $2 AND tlr.resource_id = r.id
         )
-      ORDER BY r.id DESC`;
+      ORDER BY r.id ASC`;
   }
 
-  const params = resourceKey === 'chatbots' ? [userId] : [userId, resourceKey];
+  const params = (resourceKey === 'chatbots' || resourceKey === 'employees') ? [userId] : [userId, resourceKey];
   const { rows } = await queryable.query(sql, params);
   return rows.map((r) => Number(r.id));
 }
@@ -203,6 +237,15 @@ export async function countResourcesInUse(userId, resourceKey, queryable = db) {
       `SELECT COUNT(*)::int AS total
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`,
+      [userId]
+    );
+    return Number(rows[0]?.total) || 0;
+  }
+  if (resourceKey === 'employees') {
+    const { rows } = await queryable.query(
+      `SELECT COUNT(*)::int AS total
+       FROM user_members
+       WHERE owner_id = $1 AND status = 'active'`,
       [userId]
     );
     return Number(rows[0]?.total) || 0;
@@ -294,6 +337,18 @@ export async function listResourcesWithLockStatus(userId, resourceKey, queryable
       LEFT JOIN topup_locked_resources tlr
         ON tlr.resource_key = 'chatbots' AND tlr.resource_id = r.id
       WHERE r.id_user = $1 AND r.is_active = true
+      ORDER BY r.id ASC`;
+  } else if (resourceKey === 'employees') {
+    sql = `
+      SELECT r.id,
+             COALESCE(NULLIF(u.full_name, ''), NULLIF(u.email, ''), 'Nhân viên #' || r.id) AS label,
+             (tlr.id IS NOT NULL) AS is_locked,
+             tlr.locked_at
+      FROM user_members r
+      JOIN users u ON u.id = r.employee_id
+      LEFT JOIN topup_locked_resources tlr
+        ON tlr.resource_key = 'employees' AND tlr.resource_id = r.id
+      WHERE r.owner_id = $1 AND r.status = 'active'
       ORDER BY r.id ASC`;
   } else if (resourceKey === 'zalo_accounts') {
     sql = `

@@ -16,6 +16,7 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
     userResult = await db.query(
       `SELECT u.id, u.username, u.email, u.password_hash, u.full_name, u.avatar_url, u.status, u.role,
               u.active_plan_id, u.subscription_expires_at, u.must_change_password,
+              u.updated_at,
               COALESCE(p.grace_period_days, 0)::int AS grace_period_days
        FROM users u
        LEFT JOIN plans p ON p.id = u.active_plan_id
@@ -26,6 +27,7 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
     userResult = await db.query(
       `SELECT id, username, email, NULL AS password_hash, full_name, avatar_url, status, role, active_plan_id,
               NULL AS subscription_expires_at, FALSE AS must_change_password,
+              updated_at,
               0 AS grace_period_days
        FROM users
        WHERE id = $1 AND status IN ('active', 'pending_activation')`,
@@ -44,9 +46,21 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
 
   if (ownerContextId != null && ownerContextId !== '') {
     const memberResult = await db.query(
-      `SELECT um.permissions, u.active_plan_id AS "ownerPlanId",
+      `SELECT um.id, um.permissions,
+              um.daily_email_limit AS "dailyEmailLimit",
+              um.monthly_email_limit AS "monthlyEmailLimit",
+              um.daily_zalo_limit AS "dailyZaloLimit",
+              um.monthly_zalo_limit AS "monthlyZaloLimit",
+              um.updated_at AS "permissionRevision",
+              u.active_plan_id AS "ownerPlanId",
               u.subscription_expires_at AS "ownerPlanExpiry",
-              COALESCE(p.grace_period_days, 0)::int AS "ownerGraceDays"
+              COALESCE(p.grace_period_days, 0)::int AS "ownerGraceDays",
+              (EXISTS (
+                SELECT 1 FROM topup_locked_resources tlr
+                WHERE tlr.user_id = um.owner_id
+                  AND tlr.resource_key = 'employees'
+                  AND tlr.resource_id = um.id
+              )) AS "isLocked"
        FROM user_members um
        JOIN users u ON u.id = um.owner_id
        LEFT JOIN plans p ON p.id = u.active_plan_id
@@ -66,10 +80,29 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
     }
 
     const member = memberResult.rows[0];
+    if (member.isLocked) {
+      const err = new Error('Tài khoản nhân viên trong workspace này đang bị tạm khoá do vượt quá hạn mức gói của chủ tài khoản.');
+      err.status = 403;
+      err.body = {
+        success: false,
+        message: err.message,
+        code: 'EMPLOYEE_LOCKED',
+      };
+      throw err;
+    }
+
     user.activeContext = {
       type: 'employee',
       ownerId: Number(ownerContextId),
+      membershipId: Number(member.id),
       permissions: member.permissions,
+      limits: {
+        dailyEmail: member.dailyEmailLimit,
+        monthlyEmail: member.monthlyEmailLimit,
+        dailyZalo: member.dailyZaloLimit,
+        monthlyZalo: member.monthlyZaloLimit,
+      },
+      permissionRevision: member.permissionRevision,
       contextPlanId: member.ownerPlanId,
       contextPlanExpiry: member.ownerPlanExpiry,
       contextGraceDays: Number(member.ownerGraceDays) || 0,
@@ -77,6 +110,10 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
   } else {
     user.activeContext = {
       type: 'self',
+      ownerId: Number(user.id),
+      membershipId: null,
+      permissions: {},
+      permissionRevision: user.updated_at,
       contextPlanId: user.active_plan_id,
       contextPlanExpiry: user.subscription_expires_at,
       contextGraceDays: Number(user.grace_period_days) || 0,

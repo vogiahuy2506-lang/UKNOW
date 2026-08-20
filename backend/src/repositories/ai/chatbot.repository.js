@@ -688,13 +688,41 @@ class ChatbotRepository {
     return rows[0]?.id_channel ?? null;
   }
 
-  async getConversationHistory(conversationId, limit) {
+  async getConversationHistory(conversationId, limit, options = {}) {
+    const normalizedOptions = typeof options === 'number'
+      ? { beforeMessageId: options }
+      : (options || {});
+    const {
+      beforeMessageId = null,
+      throughMessageId = null,
+      excludeMessageIds = [],
+    } = normalizedOptions;
+
+    const conditions = ['id_conversation = $1'];
+    const params = [conversationId];
+
+    if (beforeMessageId) {
+      params.push(beforeMessageId);
+      conditions.push(`id < $${params.length}`);
+    }
+    if (throughMessageId) {
+      params.push(throughMessageId);
+      conditions.push(`id <= $${params.length}`);
+    }
+    const excludedIds = Array.isArray(excludeMessageIds)
+      ? excludeMessageIds.map(Number).filter(Number.isInteger)
+      : [];
+    if (excludedIds.length > 0) {
+      params.push(excludedIds);
+      conditions.push(`id <> ALL($${params.length}::integer[])`);
+    }
+
     const { rows } = await db.query(
       `SELECT * FROM chatbot_messages
-       WHERE id_conversation = $1
+       WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
-       LIMIT $2`,
-      [conversationId, limit]
+       LIMIT $${params.length + 1}`,
+      [...params, limit]
     );
     return rows;
   }

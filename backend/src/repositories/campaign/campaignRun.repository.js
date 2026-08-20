@@ -126,7 +126,7 @@ class CampaignRunRepository {
    * @param {number} userId
    * @returns {Promise<{id: number, status: string}[]>}
    */
-  async stopRun(runId, isAdmin, userId) {
+  async stopRun(runId, isAdmin, userId, workspaceOwnerId = userId) {
     const result = await db.query(
       `UPDATE campaign_runs cr
        SET status = 'stopped',
@@ -135,10 +135,13 @@ class CampaignRunRepository {
        FROM campaigns c
        WHERE cr.id = $1
          AND cr.id_campaign = c.id
-         AND ($2::boolean = TRUE OR c.id_user = $3)
+         AND (
+           $2::boolean = TRUE
+           OR COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) = $3
+         )
          AND cr.status = 'running'
        RETURNING cr.id, cr.status`,
-      [runId, isAdmin, userId]
+      [runId, isAdmin, workspaceOwnerId]
     );
     return result.rows;
   }
@@ -151,20 +154,23 @@ class CampaignRunRepository {
    * @param {number} userId
    * @returns {Promise<boolean>}
    */
-  async checkRunExists(runId, isAdmin, userId) {
+  async checkRunExists(runId, isAdmin, userId, workspaceOwnerId = userId) {
     const result = await db.query(
       `SELECT 1
        FROM campaign_runs cr
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.id = $1
-         AND ($2::boolean = TRUE OR c.id_user = $3)
+         AND (
+           $2::boolean = TRUE
+           OR COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) = $3
+         )
        LIMIT 1`,
-      [runId, isAdmin, userId]
+      [runId, isAdmin, workspaceOwnerId]
     );
     return result.rows.length > 0;
   }
 
-  async findRuns({ userId, isAdmin, campaignId = null, scheduleId = null, limit = 50 }) {
+  async findRuns({ userId, workspaceOwnerId = userId, isAdmin, campaignId = null, scheduleId = null, limit = 50 }) {
     const skippedSendsSelect = (await this.hasSkippedSendsColumn())
       ? 'cr.skipped_sends'
       : '0::integer';
@@ -184,6 +190,8 @@ class CampaignRunRepository {
         ${skippedSendsSelect} AS skipped_sends,
         cr.error_message,
         cr.run_metadata,
+        COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+        cr.triggered_by,
         cr.created_at::timestamptz AS created_at,
         cr.run_name,
         c.campaign_name,
@@ -191,9 +199,12 @@ class CampaignRunRepository {
       FROM campaign_runs cr
       JOIN campaigns c ON cr.id_campaign = c.id
       LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
-      WHERE ($1::boolean = TRUE OR c.id_user = $2)
+      WHERE (
+        $1::boolean = TRUE
+        OR COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) = $2
+      )
     `;
-    const params = [isAdmin, userId];
+    const params = [isAdmin, workspaceOwnerId];
     let paramIndex = 3;
 
     if (campaignId) {
@@ -215,7 +226,7 @@ class CampaignRunRepository {
     return result.rows;
   }
 
-  async findRunById({ runId, isAdmin, userId }) {
+  async findRunById({ runId, isAdmin, userId, workspaceOwnerId = userId }) {
     const skippedSendsSelect = (await this.hasSkippedSendsColumn())
       ? 'cr.skipped_sends'
       : '0::integer';
@@ -235,6 +246,8 @@ class CampaignRunRepository {
          ${skippedSendsSelect} AS skipped_sends,
          cr.error_message,
          cr.run_metadata,
+         COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+         cr.triggered_by,
          cr.created_at::timestamptz AS created_at,
          cr.run_name,
          c.campaign_name,
@@ -243,8 +256,11 @@ class CampaignRunRepository {
        JOIN campaigns c ON cr.id_campaign = c.id
        LEFT JOIN campaign_schedules cs ON cr.id_schedule = cs.id
        WHERE cr.id = $1
-         AND ($2::boolean = TRUE OR c.id_user = $3)`,
-      [runId, isAdmin, userId]
+         AND (
+           $2::boolean = TRUE
+           OR COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) = $3
+         )`,
+      [runId, isAdmin, workspaceOwnerId]
     );
     return result.rows[0] || null;
   }
@@ -471,14 +487,21 @@ class CampaignRunRepository {
     );
   }
 
-  async findCampaignForRunTx(client, { campaignId, isAdmin, userId }) {
+  async findCampaignForRunTx(client, {
+    campaignId,
+    isAdmin,
+    userId,
+    workspaceOwnerId = userId,
+  }) {
     const campaignParams = [campaignId];
-    let campaignQuery = `SELECT id, id_user, status, campaign_name
+    let campaignQuery = `SELECT id, id_user,
+         COALESCE(workspace_owner_id, id_user) AS workspace_owner_id,
+         status, campaign_name
        FROM campaigns
        WHERE id = $1`;
     if (!isAdmin) {
-      campaignParams.push(userId);
-      campaignQuery += ` AND id_user = $${campaignParams.length}`;
+      campaignParams.push(workspaceOwnerId);
+      campaignQuery += ` AND COALESCE(workspace_owner_id, id_user) = $${campaignParams.length}`;
     }
     campaignQuery += ' FOR UPDATE';
     const result = await client.query(campaignQuery, campaignParams);
@@ -496,26 +519,43 @@ class CampaignRunRepository {
     return result.rows.length > 0;
   }
 
-  async findResumeSourceRunTx(client, { resumeFromRunId, campaignId, isAdmin, userId }) {
+  async findResumeSourceRunTx(client, {
+    resumeFromRunId,
+    campaignId,
+    isAdmin,
+    userId,
+    workspaceOwnerId = userId,
+  }) {
     const result = await client.query(
       `SELECT cr.id
            FROM campaign_runs cr
            JOIN campaigns c ON c.id = cr.id_campaign
            WHERE cr.id = $1
              AND cr.id_campaign = $2
-             AND ($3::boolean = TRUE OR c.id_user = $4)
+             AND (
+               $3::boolean = TRUE
+               OR COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) = $4
+             )
              AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
            LIMIT 1`,
-      [resumeFromRunId, campaignId, isAdmin, userId]
+      [resumeFromRunId, campaignId, isAdmin, workspaceOwnerId]
     );
     return result.rows[0] || null;
   }
 
-  async insertRunTx(client, { campaignId, scheduleId, runType, runMetadata, triggeredBy = null }) {
+  async insertRunTx(client, {
+    campaignId,
+    scheduleId,
+    runType,
+    runMetadata,
+    workspaceOwnerId,
+    triggeredBy = null,
+  }) {
     const result = await client.query(
       `INSERT INTO campaign_runs
-         (id_campaign, id_schedule, run_type, status, started_at, run_metadata, triggered_by)
-         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, $6)
+         (id_campaign, id_schedule, run_type, status, started_at, run_metadata,
+          workspace_owner_id, triggered_by)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, $6, $7)
          RETURNING *`,
       [
         campaignId,
@@ -523,22 +563,33 @@ class CampaignRunRepository {
         runType,
         'running',
         JSON.stringify(runMetadata),
+        workspaceOwnerId,
         triggeredBy != null ? Number(triggeredBy) : null,
       ]
     );
     return result.rows[0];
   }
 
-  async findRunForContinuousResumeTx(client, { runId, campaignId, isAdmin, userId }) {
+  async findRunForContinuousResumeTx(client, {
+    runId,
+    campaignId,
+    isAdmin,
+    userId,
+    workspaceOwnerId = userId,
+  }) {
     const result = await client.query(
-      `SELECT cr.*, c.id_user
+      `SELECT cr.*, c.id_user,
+              COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS effective_workspace_owner_id
          FROM campaign_runs cr
          JOIN campaigns c ON c.id = cr.id_campaign
          WHERE cr.id = $1
            AND cr.id_campaign = $2
-           AND ($3::boolean = TRUE OR c.id_user = $4)
+           AND (
+             $3::boolean = TRUE
+             OR COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) = $4
+           )
          FOR UPDATE`,
-      [runId, campaignId, isAdmin, userId]
+      [runId, campaignId, isAdmin, workspaceOwnerId]
     );
     return result.rows[0] || null;
   }

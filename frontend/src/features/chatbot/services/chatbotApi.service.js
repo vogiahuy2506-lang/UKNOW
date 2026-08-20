@@ -217,6 +217,27 @@ const chatbotApiService = {
       },
     });
   },
+
+  // AI Activity Daily Report
+  getAiActivityReport({ date, accountId } = {}) {
+    return api.get('/ai/chatbot/inbox/ai-activity', {
+      params: {
+        ...(date ? { date } : {}),
+        ...(accountId != null ? { accountId } : {}),
+      },
+    });
+  },
+
+  // Resume all paused AI conversations
+  resumeAllAi() {
+    return api.post('/ai/chatbot/inbox/ai-activity/resume-all');
+  },
+
+  // Summarize daily conversations with Gemini
+  summarizeAiActivity({ date } = {}) {
+    return api.post('/ai/chatbot/inbox/ai-activity/summarize', { date });
+  },
 };
 
 export default chatbotApiService;
+

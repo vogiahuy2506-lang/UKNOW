@@ -75,9 +75,9 @@ const userMenuItems = (t) => [
   {
     name: t('nav.aiChatbot'), icon: HiOutlineInbox,
     children: [
-      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus },
-      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox },
-      { name: t('nav.mediaLibrary'), path: '/app/settings/media-library', icon: HiOutlinePhotograph },
+      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus, ownerOnly: true },
+      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox, ownerOnly: true },
+      { name: t('nav.mediaLibrary'), path: '/app/settings/media-library', icon: HiOutlinePhotograph, ownerOnly: true },
     ],
   },
   {
@@ -103,10 +103,10 @@ const userMenuItems = (t) => [
   {
     name: t('nav.adminOnlyCluster'), icon: HiOutlineCube,
     children: [
-      { name: t('nav.featuredCourses'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS' },
-      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS' },
+      { name: t('nav.featuredCourses'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
+      { name: t('nav.reviews'), path: '/app/settings/landing-testimonials', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
       { name: t('nav.courseManagement'), path: '/app/courses', icon: HiOutlineAcademicCap, flag: 'VITE_FEATURE_COURSES' },
-      { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList, flag: 'VITE_FEATURE_ORDERS' },
+      { name: t('nav.orders'), path: '/app/orders', icon: HiOutlineClipboardList, flag: 'VITE_FEATURE_ORDERS', ownerOnly: true },
     ],
   },
   {

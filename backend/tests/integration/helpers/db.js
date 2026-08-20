@@ -87,6 +87,7 @@ export async function truncateAll() {
       user_members,
       voucher_redemptions,
       vouchers,
+      scheduled_plan_changes,
       topup_grants,
       help_unanswered,
       help_article_chunks,

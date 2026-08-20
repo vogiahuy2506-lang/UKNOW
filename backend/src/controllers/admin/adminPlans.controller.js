@@ -153,11 +153,13 @@ export async function createCustom(req, res) {
 /** POST /api/admin/plans/:id/assign */
 export async function assign(req, res) {
   try {
-    const { userEmail, paymentMethod = 'free', note = null } = req.body;
+    const { userEmail, paymentMethod = 'free', note = null, billingPeriod = 'monthly' } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     if (!['manual', 'free'].includes(paymentMethod))
       return res.status(400).json({ success: false, message: 'paymentMethod phải là "manual" hoặc "free"' });
-    const user = await adminPlansService.assignPlan(Number(req.params.id), userEmail, { paymentMethod, note });
+    if (!['monthly', 'yearly'].includes(billingPeriod))
+      return res.status(400).json({ success: false, message: 'billingPeriod phải là "monthly" hoặc "yearly"' });
+    const user = await adminPlansService.assignPlan(Number(req.params.id), userEmail, { paymentMethod, note, billingPeriod });
     return res.json({ success: true, message: 'Gán gói cho người dùng thành công', data: user });
   } catch (err) { return handleError(res, err); }
 }

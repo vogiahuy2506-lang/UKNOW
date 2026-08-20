@@ -14,6 +14,7 @@ const mockLandingPageRepo = {
   findByIdInScope: jest.fn(),
   findById: jest.fn(),
   updateById: jest.fn(),
+  updateByIdInScope: jest.fn(),
 };
 
 const mockCloudflareService = {
@@ -84,6 +85,7 @@ describe('landingPageDomain.service SSL provisioning calls', () => {
       domainSubtype: null,
     });
     mockLandingPageRepo.updateById.mockResolvedValue({});
+    mockLandingPageRepo.updateByIdInScope.mockResolvedValue({});
     mockDomainRepo.findByLandingPageId.mockResolvedValue(activeDomainRow);
     mockDomainRepo.findByHostnameLower.mockResolvedValue(null);
     mockDomainRepo.countPendingOrActiveInScope.mockResolvedValue(0);

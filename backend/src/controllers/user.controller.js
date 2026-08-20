@@ -7,6 +7,7 @@ import {
   findProfilePlan,
   findProfilePlanFallback,
   findProfileUsageCounts,
+  findActiveBillingPeriod,
   findRoleAndLimits,
   findRoleAndLimitsFallback,
   findSuccessfulOrdersForUser,
@@ -149,6 +150,7 @@ const mapProfileResponse = (userRow) => ({
   activePlanName: userRow.plan_name ?? null,
   activePlanCode: userRow.plan_code ?? null,
   activePlanPrice: userRow.plan_price ?? null,
+  activeBillingPeriod: userRow.active_billing_period ?? userRow.billing_period ?? 'monthly',
   activePlanIsCustom: Boolean(userRow.plan_is_custom ?? false),
   activePlanFeatures: userRow.plan_features ?? null,
   planMaxEmployees: userRow.plan_max_employees ?? null,
@@ -257,6 +259,8 @@ class UserController {
         console.error('[Profile] getCreditUsageForCycle failed', { userId, message: err.message });
       }
 
+      const activeBillingPeriod = await findActiveBillingPeriod(billingUserId, billingRow.email);
+
       const profileRow = {
         ...userRow,
         ...(employeeCtx ? { subscription_expires_at: billingRow.subscription_expires_at } : {}),
@@ -267,6 +271,7 @@ class UserController {
           ?? null,
         ...(planRow || {}),
         ...usageCounts,
+        active_billing_period: activeBillingPeriod,
         ai_tokens_used: aiTokenUsage.used,
         ai_credits_used: aiCreditUsage.used,
       };

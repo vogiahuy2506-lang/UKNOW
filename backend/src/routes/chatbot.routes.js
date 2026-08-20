@@ -3,11 +3,13 @@ import jwt from 'jsonwebtoken';
 import chatbotController from '../controllers/chatbot.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
 import zaloPersonalSyncController from '../controllers/zaloPersonalSync.controller.js';
+import aiActivityController from '../controllers/chatbot/aiActivity.controller.js';
 import authMiddleware, {
   attachSseUserIdForRateLimit,
   resolveUserContext,
 } from '../middleware/auth.middleware.js';
-import { requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requireActivePlan, requirePasswordChange, requireSelfContext } from '../middleware/authorization.middleware.js';
+import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
 import multer from 'multer';
@@ -58,7 +60,7 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
   }
 
   try {
-    // EventSource cannot send X-Owner-Context — always self context (see plan out-of-scope).
+    // EventSource cannot send X-Owner-Context — always self context.
     req.user = await resolveUserContext(userId);
   } catch (err) {
     if (err.status && err.body) {
@@ -72,6 +74,8 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
   if (!passwordGate.ok) return;
   const planGate = await runGate(requireActivePlan, req, res);
   if (!planGate.ok) return;
+  const selfContextGate = await runGate(requireSelfContext, req, res);
+  if (!selfContextGate.ok) return;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -110,6 +114,8 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requireActivePlan);
+// Chatbot/Inbox delegation will be introduced with dedicated permissions in PR-4.
+router.use(requireSelfContext);
 
 // ── Knowledge Base ───────────────────────────────────────────────
 
@@ -192,6 +198,15 @@ router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.b
 router.delete('/inbox/conversations/:id', unifiedInboxController.deleteConversation.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/ai-pause', unifiedInboxController.setAiPaused.bind(unifiedInboxController));
 router.get('/inbox/unread-count', unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
+
+// ── AI Activity Report & Summaries ──────────────────────────────────
+router.get('/inbox/ai-activity', aiActivityController.getActivityReport.bind(aiActivityController));
+router.post('/inbox/ai-activity/resume-all', aiActivityController.resumeAllAi.bind(aiActivityController));
+router.post(
+  '/inbox/ai-activity/summarize',
+  assertAiCreditAvailable('inbox_ai_summary'),
+  aiActivityController.summarizeActivity.bind(aiActivityController)
+);
 
 // ── Zalo Personal Account Chatbot Settings ─────────────────────────
 

@@ -393,11 +393,6 @@ class ZaloPersonalAdapter {
           );
         } catch (dbErr) {
           console.error(`[ZaloPersonalAdapter] DB save error:`, dbErr.message);
-          if (stored.handler) {
-            stored.handler(msgData).catch((err) => {
-              console.error(`[ZaloPersonalAdapter] Handler error for user ${stored.userId}:`, err.stack || err.message);
-            });
-          }
         }
     };
 
@@ -653,6 +648,8 @@ class ZaloPersonalAdapter {
     forceReply = false,
     persist = true,
     attachments = [],
+    replySource = 'ai_auto_reply',
+    metadata = null,
   }) {
     if (accountId != null) {
       const { resourceIsLocked } = await import('../../../utils/topupLockGate.util.js');
@@ -745,6 +742,10 @@ class ZaloPersonalAdapter {
         const conversation = await zaloPersonalRepository.findConversation(session.accountId, externalId);
 
         if (conversation) {
+          const messageMetadata = metadata && typeof metadata === 'object'
+            ? metadata
+            : { source: replySource || 'ai_auto_reply' };
+
           await zaloPersonalRepository.insertAgentMessage({
             conversationId: conversation.id,
             userId,
@@ -752,6 +753,7 @@ class ZaloPersonalAdapter {
             content: message,
             now,
             externalId: outboundMsgId,
+            metadata: messageMetadata,
           });
           await zaloPersonalRepository.touchConversation(conversation.id, now);
         }

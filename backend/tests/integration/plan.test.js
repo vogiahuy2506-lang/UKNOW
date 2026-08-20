@@ -67,7 +67,8 @@ describe('GET /api/plans', () => {
     });
     const res = await request(app).get('/api/plans');
     expect(res.status).toBe(200);
-    const plan = res.body.plans[0];
+    const plan = res.body.plans.find((p) => p.code === 'biz');
+    expect(plan).toBeDefined();
     // price là BIGINT → pg trả về string
     expect(plan).toMatchObject({
       code: 'biz',

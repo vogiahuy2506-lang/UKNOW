@@ -40,6 +40,22 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function addCampaignMembership(ownerId, employeeId) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [
+      ownerId,
+      employeeId,
+      JSON.stringify({
+        campaigns_view: true,
+        campaigns_create: true,
+        campaigns_run: true,
+      }),
+    ]
+  );
+}
+
 async function insertCampaign({ ownerId, status = 'active', campaignName = 'C' }) {
   const { rows } = await db.query(
     `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, $2, $3) RETURNING *`,
@@ -144,6 +160,61 @@ describe('GET /api/campaign-schedules', () => {
     const t = await loginAs(o);
     const res = await request(app).get('/api/campaign-schedules').set('Authorization', `Bearer ${t}`);
     expect(res.body.data[0].lastRunStatus).toBeNull();
+  });
+});
+
+describe('Campaign schedule employee workspace ownership', () => {
+  it('list/create scope theo owner, persist owner + actor và chặn schedule tenant khác', async () => {
+    const ownerA = await createUser({ role: 'user', username: 'schedule_owner_a' });
+    const ownerB = await createUser({ role: 'user', username: 'schedule_owner_b' });
+    const employee = await createUser({ role: 'user', username: 'schedule_employee' });
+    await addCampaignMembership(ownerA.id, employee.id);
+
+    const campaignA = await insertCampaign({ ownerId: ownerA.id, campaignName: 'Campaign A' });
+    const campaignB = await insertCampaign({ ownerId: ownerB.id, campaignName: 'Campaign B' });
+    await insertSchedule({ campaignId: campaignA.id, scheduleName: 'Schedule A' });
+    const scheduleB = await insertSchedule({ campaignId: campaignB.id, scheduleName: 'Schedule B' });
+
+    const token = await loginAs(employee);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'X-Owner-Context': String(ownerA.id),
+    };
+    const listRes = await request(app).get('/api/campaign-schedules').set(headers);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.map((item) => item.scheduleName)).toEqual(['Schedule A']);
+
+    const createRes = await request(app)
+      .post('/api/campaign-schedules')
+      .set(headers)
+      .send({
+        campaignId: campaignA.id,
+        scheduleName: 'Created by employee',
+        scheduleType: 'daily',
+        cronExpression: '0 10 * * *',
+        enabled: true,
+      });
+    expect(createRes.status).toBe(201);
+
+    const { rows } = await db.query(
+      `SELECT workspace_owner_id, created_by
+       FROM campaign_schedules
+       WHERE id = $1`,
+      [createRes.body.data.id]
+    );
+    expect(Number(rows[0].workspace_owner_id)).toBe(Number(ownerA.id));
+    expect(Number(rows[0].created_by)).toBe(Number(employee.id));
+
+    const crossTenantRead = await request(app)
+      .get(`/api/campaign-schedules/${scheduleB.id}`)
+      .set(headers);
+    expect(crossTenantRead.status).toBe(404);
+
+    const crossTenantUpdate = await request(app)
+      .patch(`/api/campaign-schedules/${scheduleB.id}`)
+      .set(headers)
+      .send({ scheduleName: 'Hijack' });
+    expect(crossTenantUpdate.status).toBe(404);
   });
 });
 

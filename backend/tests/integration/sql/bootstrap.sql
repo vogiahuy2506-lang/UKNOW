@@ -39,6 +39,8 @@ CREATE TABLE users (
   ),
   preferred_ai_model      VARCHAR(80),
   subscription_expires_at TIMESTAMPTZ,
+  plan_activated_at       TIMESTAMPTZ,
+  overage_grace_until     TIMESTAMPTZ,
   -- Resource limits (migration 005-006)
   max_employees           INTEGER,
   max_campaigns           INTEGER,
@@ -312,6 +314,7 @@ CREATE TABLE orders (
   discount_label VARCHAR(160),
   topup_config JSONB,
   invoice_info JSONB,
+  custom_plan_config JSONB,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT orders_order_code_key UNIQUE (order_code)
@@ -346,7 +349,7 @@ CREATE TABLE einvoices (
   email_status     VARCHAR(24)
     CHECK (
       email_status IS NULL
-      OR email_status IN ('pending', 'sending', 'sent', 'failed')
+      OR email_status IN ('pending', 'sending', 'sent', 'failed', 'skipped')
     ),
   email_attempt_count INTEGER NOT NULL DEFAULT 0,
   email_last_attempt_at TIMESTAMPTZ,
@@ -367,6 +370,25 @@ CREATE INDEX idx_einvoices_worker_claim
 
 CREATE INDEX idx_einvoices_email_worker
   ON einvoices (email_status, email_next_attempt_at, email_last_attempt_at);
+
+-- Scheduled plan changes (migration 149)
+CREATE TABLE scheduled_plan_changes (
+  id            BIGSERIAL PRIMARY KEY,
+  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id       BIGINT NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
+  billing_period VARCHAR(10) NOT NULL CHECK (billing_period IN ('monthly','yearly')),
+  order_id      BIGINT REFERENCES orders(id) ON DELETE SET NULL,
+  amount_paid   BIGINT NOT NULL DEFAULT 0,
+  status        VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','activated','superseded')),
+  activate_after TIMESTAMPTZ NOT NULL,
+  activated_at  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX uq_scheduled_plan_change_pending
+  ON scheduled_plan_changes (user_id) WHERE status = 'pending';
 
 -- ─── Top-up pricing & grants (migration 099) ───────────────────────────
 CREATE TABLE topup_pricing (
@@ -523,6 +545,8 @@ CREATE INDEX idx_email_templates_user ON email_templates(id_user);
 CREATE TABLE campaigns (
   id                    BIGSERIAL PRIMARY KEY,
   id_user               BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id    BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  created_by            BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   campaign_name         VARCHAR(255) NOT NULL,
   description           TEXT,
   campaign_type         VARCHAR(30)  NOT NULL DEFAULT 'email'
@@ -548,6 +572,9 @@ CREATE TABLE campaigns (
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaigns_user ON campaigns(id_user);
+CREATE INDEX idx_campaigns_workspace_owner ON campaigns(workspace_owner_id);
+CREATE INDEX idx_campaigns_effective_workspace_owner ON campaigns((COALESCE(workspace_owner_id, id_user)));
+CREATE INDEX idx_campaigns_created_by ON campaigns(created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_campaigns_status ON campaigns(status);
 
 CREATE TABLE campaign_nodes (
@@ -584,6 +611,7 @@ CREATE INDEX idx_campaign_connections_campaign ON campaign_connections(id_campai
 CREATE TABLE campaign_runs (
   id                BIGSERIAL PRIMARY KEY,
   id_campaign       BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT      REFERENCES users(id) ON DELETE CASCADE,
   id_schedule       BIGINT,
   run_name          VARCHAR(255),
   run_type          VARCHAR(20)  NOT NULL DEFAULT 'manual'
@@ -602,6 +630,7 @@ CREATE TABLE campaign_runs (
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaign_runs_campaign ON campaign_runs(id_campaign);
+CREATE INDEX idx_campaign_runs_workspace_owner ON campaign_runs(workspace_owner_id);
 CREATE INDEX idx_campaign_runs_status ON campaign_runs(status);
 CREATE INDEX idx_campaign_runs_triggered_by ON campaign_runs (triggered_by) WHERE triggered_by IS NOT NULL;
 
@@ -634,6 +663,8 @@ CREATE INDEX idx_campaign_executions_run ON campaign_executions(id_run);
 CREATE TABLE campaign_schedules (
   id              BIGSERIAL PRIMARY KEY,
   id_campaign     BIGINT       NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT    REFERENCES users(id) ON DELETE CASCADE,
+  created_by      BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   schedule_name   VARCHAR(255) NOT NULL,
   schedule_type   VARCHAR(20)  NOT NULL
     CHECK (schedule_type IN ('once', 'daily', 'weekly', 'monthly', 'custom')),
@@ -646,6 +677,8 @@ CREATE TABLE campaign_schedules (
   updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_campaign_schedules_campaign ON campaign_schedules(id_campaign);
+CREATE INDEX idx_campaign_schedules_workspace_owner ON campaign_schedules(workspace_owner_id);
+CREATE INDEX idx_campaign_schedules_created_by ON campaign_schedules(created_by) WHERE created_by IS NOT NULL;
 
 -- ─── Zalo module (settings + templates) ────────────────────────────────
 -- Schema tối thiểu để CRUD zalo_settings (chỉ cột mà controller truy vấn)
@@ -1086,6 +1119,8 @@ CREATE INDEX idx_dashboard_insights_user ON dashboard_insights(id_user);
 CREATE TABLE landing_pages (
   id            BIGSERIAL PRIMARY KEY,
   id_user       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
   slug          VARCHAR(100) NOT NULL,
   title         VARCHAR(500),
   html_content  TEXT         NOT NULL DEFAULT '',
@@ -1101,6 +1136,9 @@ CREATE TABLE landing_pages (
   updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_landing_pages_user ON landing_pages(id_user);
+CREATE INDEX idx_landing_pages_workspace_owner ON landing_pages(workspace_owner_id);
+CREATE INDEX idx_landing_pages_effective_workspace_owner ON landing_pages((COALESCE(workspace_owner_id, id_user)));
+CREATE INDEX idx_landing_pages_created_by ON landing_pages(created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_landing_pages_slug ON landing_pages(slug);
 
 CREATE TABLE landing_page_domains (
@@ -1947,4 +1985,47 @@ CREATE TABLE IF NOT EXISTS zalo_friends (
 );
 CREATE INDEX IF NOT EXISTS idx_zalo_friends_setting ON zalo_friends(id_zalo_setting);
 CREATE INDEX IF NOT EXISTS idx_zalo_friends_search ON zalo_friends(id_zalo_setting, display_name);
+
+-- ─── AI activity summaries cache (mirrors 146) ───────────────────────────
+CREATE TABLE IF NOT EXISTS ai_activity_summaries (
+  id BIGSERIAL PRIMARY KEY,
+  id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day_key VARCHAR(10) NOT NULL,
+  last_message_at TIMESTAMPTZ,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uniq_ai_activity_user_day UNIQUE (id_user, day_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_activity_summaries_user_day
+  ON ai_activity_summaries (id_user, day_key);
+
+-- ─── Landing page versions (mirrors 147) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS landing_page_versions (
+  id BIGSERIAL PRIMARY KEY,
+  id_landing_page BIGINT NOT NULL REFERENCES landing_pages(id) ON DELETE CASCADE,
+  id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  storage_key TEXT NOT NULL,
+  title VARCHAR(255),
+  html_hash VARCHAR(64) NOT NULL,
+  size_bytes BIGINT NOT NULL DEFAULT 0,
+  source VARCHAR(32) NOT NULL DEFAULT 'manual',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_page_created
+  ON landing_page_versions (id_landing_page, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_user
+  ON landing_page_versions (id_user);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_workspace_owner
+  ON landing_page_versions (workspace_owner_id);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_versions_created_by
+  ON landing_page_versions (created_by)
+  WHERE created_by IS NOT NULL;
 

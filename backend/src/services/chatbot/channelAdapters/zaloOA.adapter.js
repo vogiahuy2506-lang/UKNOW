@@ -19,7 +19,7 @@ class ZaloOAAdapter {
       // Get credentials from database
       let accessToken;
       if (channelId) {
-        accessToken = await chatbotChannelRepository.getChannelAccessToken(channelId);
+        accessToken = await chatbotChannelRepository.getChatbotChannelAccessToken(channelId);
       }
 
       if (!accessToken) {

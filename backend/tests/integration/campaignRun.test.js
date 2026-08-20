@@ -44,6 +44,18 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+async function addCampaignMembership(ownerId, employeeId) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status)
+     VALUES ($1, $2, $3::jsonb, 'active')`,
+    [
+      ownerId,
+      employeeId,
+      JSON.stringify({ campaigns_view: true, campaigns_run: true }),
+    ]
+  );
+}
+
 async function insertCampaign({ ownerId, status = 'active', campaignName = 'C' }) {
   const { rows } = await db.query(
     `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, $2, $3) RETURNING *`,
@@ -204,6 +216,44 @@ describe('GET /api/campaign-runs', () => {
     const t = await loginAs(o);
     const res = await request(app).get('/api/campaign-runs').set('Authorization', `Bearer ${t}`);
     expect(res.body.data[0].scheduleName).toBeNull();
+  });
+});
+
+describe('Campaign run employee workspace scope', () => {
+  it('employee chỉ list/read/stop run thuộc owner context, tenant khác trả 404', async () => {
+    const ownerA = await createUser({ role: 'user', username: 'run_owner_a' });
+    const ownerB = await createUser({ role: 'user', username: 'run_owner_b' });
+    const employee = await createUser({ role: 'user', username: 'run_employee' });
+    await addCampaignMembership(ownerA.id, employee.id);
+
+    const campaignA = await insertCampaign({ ownerId: ownerA.id, campaignName: 'Campaign A' });
+    const campaignB = await insertCampaign({ ownerId: ownerB.id, campaignName: 'Campaign B' });
+    const runA = await insertRun({ campaignId: campaignA.id, runName: 'Run A' });
+    const runB = await insertRun({ campaignId: campaignB.id, runName: 'Run B' });
+
+    const token = await loginAs(employee);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'X-Owner-Context': String(ownerA.id),
+    };
+    const listRes = await request(app).get('/api/campaign-runs').set(headers);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.map((item) => item.runName)).toEqual(['Run A']);
+
+    const crossTenantRead = await request(app)
+      .get(`/api/campaign-runs/${runB.id}`)
+      .set(headers);
+    expect(crossTenantRead.status).toBe(404);
+
+    const stopRes = await request(app)
+      .post(`/api/campaign-runs/${runA.id}/stop`)
+      .set(headers);
+    expect(stopRes.status).toBe(200);
+
+    const crossTenantStop = await request(app)
+      .post(`/api/campaign-runs/${runB.id}/stop`)
+      .set(headers);
+    expect(crossTenantStop.status).toBe(404);
   });
 });
 

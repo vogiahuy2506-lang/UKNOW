@@ -14,6 +14,7 @@ import { useI18n } from '../../../i18n';
 import { useDebouncedCallback } from '../../../hooks/useDebounce.js';
 import {
   deleteLandingCustomDomain,
+  editLandingHtmlWithAi,
   fetchLandingCustomDomain,
   generateLandingHtmlWithAi,
   postLandingCustomDomainVerify,
@@ -27,6 +28,7 @@ import { normalizeLandingLpTrackApiBase } from '../utils/normalizeLandingLpTrack
 import TemplateGallery from './TemplateGallery.jsx';
 import VisualBlockEditor from './VisualBlockEditor.jsx';
 import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
+import LandingVersionModal from './LandingVersionModal.jsx';
 import { getAiQuotaErrorMessage } from '../../../utils/aiLimitError.util';
 
 const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
@@ -824,13 +826,17 @@ export default function LandingPageFullEditor({
   }, [form.slug, t]);
 
   const [aiOpen, setAiOpen] = useState(false);
-  const [aiMode, setAiMode] = useState('select'); // 'select' | 'custom'
+  const [aiMode, setAiMode] = useState('select'); // 'edit' | 'select' | 'custom'
   const [aiTemplate, setAiTemplate] = useState('saas');
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  // Ảnh chụp HTML ngay trước khi AI / template ghi đè, để hoàn tác 1 chạm.
+  // AI luôn sinh lại TOÀN BỘ trang nên người dùng dễ mất giao diện đang có.
+  const [htmlBeforeOverwrite, setHtmlBeforeOverwrite] = useState(null);
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
   const [visualEditorOpen, setVisualEditorOpen] = useState(false);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
+  const [versionModalOpen, setVersionModalOpen] = useState(false);
 
   const [editorSplit, setEditorSplit] = useState(50);
   const [isResizing, setIsResizing] = useState(false);
@@ -874,13 +880,82 @@ export default function LandingPageFullEditor({
       setAiOpen(false);
       setAiPrompt('');
       setAiBusy(false);
-      setAiMode('select');
       setAiTemplate('saas');
       setTemplateGalleryOpen(false);
       setVisualEditorOpen(false);
       setSaveTemplateModalOpen(false);
+      setHtmlBeforeOverwrite(null);
     }
   }, [open]);
+
+  /**
+   * Ghi đè toàn bộ HTML trang, nhưng giữ lại bản cũ để hoàn tác.
+   * Dùng chung cho AI (tạo nhanh / tạo theo mô tả) và chọn template.
+   */
+  const overwriteHtmlWithSnapshot = (nextHtml, nextTitle = '', extraForm = {}) => {
+    setForm((prev) => {
+      const previousHtml = String(prev.htmlContent || '');
+      setHtmlBeforeOverwrite(previousHtml.trim() ? previousHtml : null);
+      return {
+        ...prev,
+        htmlContent: nextHtml,
+        ...(nextTitle ? { title: nextTitle } : {}),
+        ...extraForm,
+      };
+    });
+  };
+
+  const undoHtmlOverwrite = () => {
+    if (htmlBeforeOverwrite == null) return;
+    setForm((prev) => ({ ...prev, htmlContent: htmlBeforeOverwrite }));
+    setHtmlBeforeOverwrite(null);
+    toast.success('Đã khôi phục giao diện trước đó');
+  };
+
+  const openAiModal = () => {
+    const hasContent = Boolean(String(form.htmlContent || '').trim());
+    setAiMode(hasContent ? 'edit' : 'select');
+    setAiPrompt('');
+    setAiOpen(true);
+  };
+
+  const runAiEdit = async () => {
+    const p = String(aiPrompt || '').trim();
+    if (!p) {
+      toast.error('Vui lòng nhập mô tả phần bạn muốn chỉnh sửa');
+      return;
+    }
+    const currentHtml = String(form.htmlContent || '').trim();
+    if (!currentHtml) {
+      toast.error('Không có nội dung HTML hiện tại để chỉnh sửa');
+      return;
+    }
+
+    setAiBusy(true);
+    try {
+      const res = await editLandingHtmlWithAi({
+        instruction: p,
+        currentHtml,
+      });
+      if (!res?.success || !res?.data?.html) {
+        throw new Error(res?.message || t('landingPageEditor.invalidResponse'));
+      }
+      let html = String(res.data.html);
+      const nextTitle = String(res.data.title || '').trim();
+      if (snippetContext.iframeBlock && html.includes(LP_FORM_MARKER)) {
+        html = html.split(LP_FORM_MARKER).join(snippetContext.iframeBlock);
+      }
+      overwriteHtmlWithSnapshot(html, nextTitle);
+      toast.success('Đã chỉnh sửa landing page bằng AI thành công!');
+      setAiOpen(false);
+      setAiPrompt('');
+      setAiMode('edit');
+    } catch (e) {
+      toast.error(getAiErrorMessage(e, t, 'landingPageEditor.htmlFailed'));
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const runAiGenerate = async () => {
     const p = String(aiPrompt || '').trim();
@@ -906,11 +981,7 @@ export default function LandingPageFullEditor({
       } else if (!snippetContext.iframeBlock) {
         toast(t('landingPageEditor.enterSlugForEmbed'), { icon: 'ℹ️' });
       }
-      setForm((prev) => ({
-        ...prev,
-        htmlContent: html,
-        ...(nextTitle ? { title: nextTitle } : {}),
-      }));
+      overwriteHtmlWithSnapshot(html, nextTitle);
       toast.success(t('landingPageEditor.htmlGenerated'));
       setAiOpen(false);
       setAiPrompt('');
@@ -946,15 +1017,10 @@ export default function LandingPageFullEditor({
       } else if (!snippetContext.iframeBlock) {
         toast(t('landingPageEditor.enterSlugForEmbed'), { icon: 'ℹ️' });
       }
-      setForm((prev) => ({
-        ...prev,
-        htmlContent: html,
-        ...(nextTitle ? { title: nextTitle } : {}),
-      }));
+      overwriteHtmlWithSnapshot(html, nextTitle);
       toast.success(t('landingPageEditor.htmlGenerated'));
       setAiOpen(false);
       setAiPrompt('');
-      setAiMode('select');
       setAiTemplate('saas');
     } catch (e) {
       toast.error(getAiErrorMessage(e, t, 'landingPageEditor.htmlFailed'));
@@ -968,12 +1034,10 @@ export default function LandingPageFullEditor({
     if (!finalHtml.includes(LP_FORM_MARKER) && snippetContext?.iframeBlock) {
       finalHtml += `\n${LP_FORM_MARKER}`;
     }
-    setForm((prev) => ({
-      ...prev,
-      htmlContent: finalHtml,
+    overwriteHtmlWithSnapshot(finalHtml, '', {
       templateId: template.id,
       templateName: template.name,
-    }));
+    });
     toast.success(t('landingPageEditor.templateUsed'));
   };
 
@@ -1302,9 +1366,33 @@ export default function LandingPageFullEditor({
             </svg>
             Template
           </button>
+          {htmlBeforeOverwrite != null && (
+            <button
+              type="button"
+              onClick={undoHtmlOverwrite}
+              className="btn btn-secondary text-sm flex items-center gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+              title="Khôi phục giao diện trước khi AI / template ghi đè"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4" />
+              </svg>
+              Hoàn tác
+            </button>
+          )}
+          {Boolean(editingId) && (
+            <button
+              type="button"
+              onClick={() => setVersionModalOpen(true)}
+              className="btn btn-secondary text-sm flex items-center gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+              title="Lịch sử các phiên bản của trang"
+            >
+              <HiOutlineClock className="w-4 h-4 text-indigo-600" />
+              <span>Lịch sử</span>
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setAiOpen(true)}
+            onClick={openAiModal}
             className="btn btn-secondary text-sm flex items-center gap-1.5"
             title={t('landingPageEditor.generateWithAI')}
           >
@@ -1632,11 +1720,49 @@ export default function LandingPageFullEditor({
 
           {/* Modal Content */}
           <div className="flex-1 overflow-y-auto p-6">
+            {Boolean(String(form.htmlContent || '').trim()) && aiMode !== 'edit' && (
+              <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-medium text-amber-900">
+                  Lưu ý: Chế độ này sẽ tạo lại TOÀN BỘ trang mới, không giữ giao diện hiện tại.
+                </p>
+                <p className="text-xs text-amber-800 mt-1">
+                  Nếu chỉ muốn chỉnh sửa một phần (đổi màu nút, sửa chữ, thêm mục), vui lòng chọn tab <strong>"Sửa trang hiện tại"</strong>.
+                  Nếu lỡ chạy ghi đè, bạn có thể bấm nút <strong>Hoàn tác</strong> trên thanh công cụ.
+                </p>
+              </div>
+            )}
+
+            {Boolean(String(form.htmlContent || '').trim()) && aiMode === 'edit' && (
+              <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                <p className="text-sm font-medium text-blue-900">
+                  Chế độ chỉnh sửa thông minh: AI chỉ thay đổi đúng phần bạn yêu cầu.
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Toàn bộ cấu trúc, nội dung chữ, form đăng ký và thiết kế sẵn có sẽ được giữ nguyên văn.
+                </p>
+              </div>
+            )}
+
             {/* Mode Tabs */}
             <div className="flex items-center gap-1 mb-6 bg-gray-100 p-1 rounded-lg">
+              {Boolean(String(form.htmlContent || '').trim()) && (
+                <button
+                  type="button"
+                  onClick={() => setAiMode('edit')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    aiMode === 'edit'
+                      ? 'bg-white shadow text-orange-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <HiOutlinePencilAlt className="w-4 h-4" />
+                  Sửa trang hiện tại
+                </button>
+              )}
               <button
+                type="button"
                 onClick={() => setAiMode('select')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   aiMode === 'select'
                     ? 'bg-white shadow text-orange-600'
                     : 'text-gray-600 hover:text-gray-900'
@@ -1646,8 +1772,9 @@ export default function LandingPageFullEditor({
                 Chọn mẫu có sẵn
               </button>
               <button
+                type="button"
                 onClick={() => setAiMode('custom')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   aiMode === 'custom'
                     ? 'bg-white shadow text-orange-600'
                     : 'text-gray-600 hover:text-gray-900'
@@ -1656,11 +1783,33 @@ export default function LandingPageFullEditor({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Mô tả tùy chỉnh
+                Tạo mới theo mô tả
               </button>
             </div>
 
-            {aiMode === 'select' ? (
+            {aiMode === 'edit' ? (
+              <>
+                {/* Edit Mode Prompt */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Mô tả phần cần sửa
+                  </label>
+                  <textarea
+                    className="w-full min-h-[160px] rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
+                    placeholder={`Ví dụ: Đổi nút "Đăng ký ngay" sang màu xanh lá và thêm một mục Câu hỏi thường gặp (FAQ) gồm 3 câu hỏi phía trên footer.`}
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    disabled={aiBusy}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Chỉ cần mô tả những gì cần thêm, bớt hoặc đổi màu/chữ. AI sẽ giữ nguyên mọi phần còn lại.
+                  </p>
+                </div>
+              </>
+            ) : aiMode === 'select' ? (
               <>
                 {/* Template Selection */}
                 <div className="mb-4">
@@ -1671,6 +1820,7 @@ export default function LandingPageFullEditor({
                     {Object.entries(AI_TEMPLATES).map(([key, template]) => (
                       <button
                         key={key}
+                        type="button"
                         onClick={() => setAiTemplate(key)}
                         className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
                           aiTemplate === key
@@ -1726,7 +1876,7 @@ export default function LandingPageFullEditor({
                 {/* Custom Prompt */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Mô tả landing page bạn muốn tạo
+                    Mô tả landing page bạn muốn tạo mới
                   </label>
                   <textarea
                     className="w-full min-h-[160px] rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
@@ -1745,11 +1895,12 @@ export default function LandingPageFullEditor({
 
                 {/* Quick Templates */}
                 <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Hoặc chọn nhanh:</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Hoặc chọn nhanh mẫu tạo mới:</h4>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(AI_TEMPLATES).map(([key, template]) => (
                       <button
                         key={key}
+                        type="button"
                         onClick={() => setAiPrompt(template.prompt)}
                         className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-orange-50 text-gray-600 hover:text-orange-600 rounded-lg text-xs font-medium border border-gray-200 hover:border-orange-200 transition-colors"
                       >
@@ -1775,21 +1926,21 @@ export default function LandingPageFullEditor({
             </button>
             <button
               type="button"
-              onClick={aiMode === 'select' ? runQuickAiGenerate : runAiGenerate}
-              disabled={aiBusy || (aiMode === 'custom' && !aiPrompt.trim())}
+              onClick={aiMode === 'edit' ? runAiEdit : aiMode === 'select' ? runQuickAiGenerate : runAiGenerate}
+              disabled={aiBusy || (aiMode !== 'select' && !aiPrompt.trim())}
               className="btn btn-primary text-sm flex items-center gap-2"
             >
               {aiBusy ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Đang tạo...
+                  {aiMode === 'edit' ? 'Đang sửa...' : 'Đang tạo...'}
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  {aiMode === 'select' ? 'Tạo nhanh' : 'Tạo với AI'}
+                  {aiMode === 'edit' ? 'Sửa với AI' : aiMode === 'select' ? 'Tạo nhanh' : 'Tạo mới với AI'}
                 </>
               )}
             </button>
@@ -1811,7 +1962,7 @@ export default function LandingPageFullEditor({
         onSelect={handleTemplateSelect}
         onGenerateWithAi={() => {
           setTemplateGalleryOpen(false);
-          setAiOpen(true);
+          openAiModal();
         }}
       />
 
@@ -1833,6 +1984,16 @@ export default function LandingPageFullEditor({
         landingPageTitle={form.title}
         onSuccess={() => {
           // Refresh template list if template gallery is open
+        }}
+      />
+
+      {/* Landing Page Version History Modal */}
+      <LandingVersionModal
+        open={versionModalOpen}
+        onClose={() => setVersionModalOpen(false)}
+        landingPageId={editingId}
+        onRestoreVersion={(htmlContent) => {
+          overwriteHtmlWithSnapshot(htmlContent, '');
         }}
       />
     </>

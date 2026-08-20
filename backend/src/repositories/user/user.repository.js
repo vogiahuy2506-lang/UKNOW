@@ -54,6 +54,16 @@ const PROFILE_PLAN_WHERE = `
   )
 `;
 
+export async function findUserById(userId, queryable = db) {
+  if (!userId) return null;
+  const result = await queryable.query(
+    `SELECT id, email, full_name, role, active_plan_id, subscription_expires_at, plan_activated_at
+     FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
 export async function findProfileBase(userId) {
   const { rows } = await db.query(
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
@@ -116,6 +126,25 @@ export async function findProfilePlanByUserId(userId) {
     [userId]
   );
   return rows[0] || null;
+}
+
+export async function findActiveBillingPeriod(userId, email) {
+  try {
+    const { rows } = await db.query(
+      `SELECT billing_period FROM orders
+       WHERE (user_id = $1 OR user_email = $2)
+         AND status IN ('paid', 'success', 'completed')
+         AND note IS DISTINCT FROM 'topup'
+         AND note IS DISTINCT FROM 'scheduled_change'
+         AND topup_config IS NULL
+         AND plan_id IS NOT NULL
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId || null, email || null]
+    );
+    return rows[0]?.billing_period || 'monthly';
+  } catch {
+    return 'monthly';
+  }
 }
 
 export async function findProfilePlanByUserIdFallback(userId) {
@@ -467,7 +496,13 @@ export async function findMembershipsByEmployeeId(employeeId) {
             um.daily_email_limit AS "dailyEmailLimit",
             um.monthly_email_limit AS "monthlyEmailLimit",
             um.daily_zalo_limit AS "dailyZaloLimit",
-            um.monthly_zalo_limit AS "monthlyZaloLimit"
+            um.monthly_zalo_limit AS "monthlyZaloLimit",
+            (EXISTS (
+              SELECT 1 FROM topup_locked_resources tlr
+              WHERE tlr.user_id = um.owner_id
+                AND tlr.resource_key = 'employees'
+                AND tlr.resource_id = um.id
+            )) AS "isLocked"
      FROM user_members um
      JOIN users u ON u.id = um.owner_id
      WHERE um.employee_id = $1 AND um.status = 'active'

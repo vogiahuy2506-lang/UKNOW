@@ -546,8 +546,11 @@ class CampaignRunService {
    */
   async createCampaignRunRecord({
     campaignId,
-    userId,
+    userId = null,
+    workspaceOwnerId = userId,
+    actorUserId = userId,
     roleCode,
+    isAdmin = isAdminRole(roleCode),
     source,
     scheduleId = null,
     runName = '',
@@ -559,12 +562,11 @@ class CampaignRunService {
 
     try {
       await client.query('BEGIN');
-      const isAdmin = isAdminRole(roleCode);
-
       const campaignData = await campaignRunRepository.findCampaignForRunTx(client, {
         campaignId,
         isAdmin,
-        userId,
+        userId: actorUserId,
+        workspaceOwnerId,
       });
 
       if (!campaignData) {
@@ -605,7 +607,8 @@ class CampaignRunService {
           resumeFromRunId,
           campaignId,
           isAdmin,
-          userId,
+          userId: actorUserId,
+          workspaceOwnerId,
         });
         if (!resumeRunCheck) {
           const error = new Error('Lượt continuous cũ để chạy tiếp không hợp lệ');
@@ -614,7 +617,7 @@ class CampaignRunService {
         }
       }
       const runMetadata = {
-        triggeredBy: userId,
+        triggeredBy: actorUserId,
         source,
         runName: finalRunName,
         ...(adjacentZaloNodeDelayMs !== null ? { adjacentZaloNodeDelayMs } : {}),
@@ -631,13 +634,14 @@ class CampaignRunService {
         scheduleId,
         runType,
         runMetadata,
+        workspaceOwnerId: campaignData.workspace_owner_id,
         // Manual click → actor; scheduled → NULL (plan 0a)
-        triggeredBy: runType === 'manual' ? userId : null,
+        triggeredBy: runType === 'manual' ? actorUserId : null,
       });
 
       runRecord = {
         ...runResult,
-        campaign_owner_id: campaignData.id_user,
+        campaign_owner_id: campaignData.workspace_owner_id,
       };
       await client.query('COMMIT');
     } catch (error) {
@@ -666,12 +670,27 @@ class CampaignRunService {
    * @param {number} input.userId owner identifier
    * @returns {Promise<{found: boolean, stopped: boolean}>}
    */
-  async stopCampaignRun({ runId, userId, roleCode }) {
-    const isAdmin = isAdminRole(roleCode);
-    const stoppedRows = await campaignRunRepository.stopRun(runId, isAdmin, userId);
+  async stopCampaignRun({
+    runId,
+    userId = null,
+    workspaceOwnerId = userId,
+    roleCode,
+    isAdmin = isAdminRole(roleCode),
+  }) {
+    const stoppedRows = await campaignRunRepository.stopRun(
+      runId,
+      isAdmin,
+      userId,
+      workspaceOwnerId
+    );
 
     if (stoppedRows.length === 0) {
-      const found = await campaignRunRepository.checkRunExists(runId, isAdmin, userId);
+      const found = await campaignRunRepository.checkRunExists(
+        runId,
+        isAdmin,
+        userId,
+        workspaceOwnerId
+      );
       return {
         found,
         stopped: false,
@@ -701,21 +720,23 @@ class CampaignRunService {
    */
   async resumeContinuousRunRecord({
     campaignId,
-    userId,
+    userId = null,
+    workspaceOwnerId = userId,
+    actorUserId = userId,
     roleCode,
+    isAdmin = isAdminRole(roleCode),
     runId,
     runOptions = {},
   }) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
-      const isAdmin = isAdminRole(roleCode);
-
       const currentRun = await campaignRunRepository.findRunForContinuousResumeTx(client, {
         runId,
         campaignId,
         isAdmin,
-        userId,
+        userId: actorUserId,
+        workspaceOwnerId,
       });
       if (!currentRun) {
         const error = new Error('Không tìm thấy lượt continuous cũ để chạy tiếp');
@@ -752,7 +773,7 @@ class CampaignRunService {
 
       const mergedMetadata = {
         ...(currentRun.run_metadata || {}),
-        triggeredBy: userId,
+        triggeredBy: actorUserId,
         source: 'campaign_run',
         continuousMode: true,
       };
@@ -774,7 +795,7 @@ class CampaignRunService {
       await client.query('COMMIT');
       return {
         ...updatedRun,
-        campaign_owner_id: currentRun.id_user || null,
+        campaign_owner_id: currentRun.effective_workspace_owner_id || null,
       };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -2389,9 +2410,7 @@ class CampaignRunService {
         return insertResultId || null;
       };
 
-      const ZALO_OWNER_PREDICATE = `(c.id_user = $1 OR c.id_user IN (
-         SELECT um.employee_id FROM user_members um
-         WHERE um.owner_id = $1 AND um.status = 'active'))`;
+      const ZALO_OWNER_PREDICATE = 'COALESCE(c.workspace_owner_id, c.id_user) = $1';
 
       const updateZaloMessageTrackingMeta = async (zaloMessageId, metadata = {}) => {
         if (!Number.isFinite(Number.parseInt(zaloMessageId, 10))) return;
@@ -2416,24 +2435,15 @@ class CampaignRunService {
           const planLimit = rawLimit == null || rawLimit === ''
             ? null
             : Number.parseInt(rawLimit, 10);
-          const { rows: countRows } = await client.query(
-            `SELECT (
-               (SELECT COUNT(*) FROM zalo_messages zm
-                JOIN campaigns c ON c.id = zm.id_campaign
-                WHERE ${ZALO_OWNER_PREDICATE}
-                  AND zm.tracking_metadata->>'status' = 'sent'
-                  AND zm.sent_at >= DATE_TRUNC('month', NOW()))
-             + (SELECT COUNT(*) FROM zalo_personal_messages zpm
-                WHERE (zpm.id_user = $1 OR zpm.id_user IN (
-                  SELECT um.employee_id FROM user_members um
-                  WHERE um.owner_id = $1 AND um.status = 'active'))
-                  AND zpm.role = 'agent'
-                  AND zpm.metadata->>'source' = 'manual_inbox'
-                  AND zpm.created_at >= DATE_TRUNC('month', NOW()))
-             )::int AS total`,
-            [billingUserId]
+          const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
+          const { countZaloSentThisMonth } = await import('../../utils/userSendLimit.util.js');
+          const cycle = await getBillingCycle(billingUserId, {}, client);
+          const usageCountAfterSend = await countZaloSentThisMonth(
+            billingUserId,
+            cycle?.hasPlan ? cycle.cycleStart : null,
+            cycle?.hasPlan ? cycle.cycleEnd : null,
+            client
           );
-          const usageCountAfterSend = Number(countRows[0]?.total) || 0;
           await maybeDebitWalletForSend(client, {
             billingUserId,
             itemKey: 'zalo_messages',

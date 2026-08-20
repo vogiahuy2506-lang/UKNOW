@@ -12,6 +12,7 @@ import help from '../../services/help.service';
 import RichTextEditor from '../../components/editor/RichTextEditor';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml';
 import { HELP_FEATURE_KEY_LIST, helpFeatureKeyLabel } from '../../constants/helpFeatureKeys';
+import { HELP_ARTICLE_BODY_RICH_CLASS } from '../../constants/helpArticleBodyStyle';
 
 const EMPTY_FORM = {
   title: '',
@@ -343,39 +344,67 @@ export default function AdminHelpArticleEditPage() {
           />
         </div>
 
-        <div>
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <label className="block text-sm font-medium text-gray-700">
-              {useRichEditor ? t('adminHelp.fieldBodyHtml') : t('adminHelp.fieldBody')}
-            </label>
-            {!useRichEditor && (
-              <button
-                type="button"
-                onClick={handleConvertToRich}
-                className="text-xs font-medium text-primary-600 hover:text-primary-700"
-              >
-                {t('adminHelp.convertToRich')}
-              </button>
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          <div>
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-gray-700">
+                {useRichEditor ? t('adminHelp.fieldBodyHtml') : t('adminHelp.fieldBody')}
+              </label>
+              {!useRichEditor && (
+                <button
+                  type="button"
+                  onClick={handleConvertToRich}
+                  className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                >
+                  {t('adminHelp.convertToRich')}
+                </button>
+              )}
+            </div>
+            {useRichEditor ? (
+              <RichTextEditor
+                value={form.body_html}
+                onChange={(html) => setField('body_html', html)}
+                disabled={isSaving}
+              />
+            ) : (
+              <>
+                <textarea
+                  className="input font-mono text-xs"
+                  rows={16}
+                  value={form.body_md}
+                  onChange={(e) => setField('body_md', e.target.value)}
+                  placeholder={'# Tiêu đề\n\nNội dung hướng dẫn...\n\n- Bước 1\n- Bước 2'}
+                />
+                <p className="mt-1 text-xs text-slate-400">{t('adminHelp.bodyHint')}</p>
+              </>
             )}
           </div>
-          {useRichEditor ? (
-            <RichTextEditor
-              value={form.body_html}
-              onChange={(html) => setField('body_html', html)}
-              disabled={isSaving}
-            />
-          ) : (
-            <>
-              <textarea
-                className="input font-mono text-xs"
-                rows={16}
-                value={form.body_md}
-                onChange={(e) => setField('body_md', e.target.value)}
-                placeholder={'# Tiêu đề\n\nNội dung hướng dẫn...\n\n- Bước 1\n- Bước 2'}
-              />
-              <p className="mt-1 text-xs text-slate-400">{t('adminHelp.bodyHint')}</p>
-            </>
-          )}
+
+          <div className="lg:sticky lg:top-4">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-gray-700">
+                {t('adminHelp.previewLabel')}
+              </label>
+            </div>
+            <p className="mb-1 text-xs text-slate-400">{t('adminHelp.previewHint')}</p>
+            <div className="rounded-lg border border-slate-200 bg-white p-4 min-h-[280px] max-h-[600px] overflow-y-auto overflow-x-auto">
+              {useRichEditor ? (
+                hasHtmlBody(form.body_html) ? (
+                  <div className={HELP_ARTICLE_BODY_RICH_CLASS}>
+                    <div dangerouslySetInnerHTML={{ __html: form.body_html }} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">{t('adminHelp.previewEmpty')}</p>
+                )
+              ) : form.body_md.trim() ? (
+                <div className={HELP_ARTICLE_BODY_RICH_CLASS}>
+                  <div dangerouslySetInnerHTML={{ __html: miniMarkdownToHtml(form.body_md) }} />
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">{t('adminHelp.previewEmpty')}</p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Route chính đã ẩn: không giao diện nào đọc primary_route (link bài viết

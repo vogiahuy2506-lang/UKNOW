@@ -72,7 +72,7 @@ export async function moveTempUploadToPermanent(
   userId,
   { actorUserId = userId, parentMutation = null } = {}
 ) {
-  const moved = await uploadController.moveToS3([{ tempId, originalName }], userId, {
+  const moved = await uploadController.promoteTempToStorage([{ tempId, originalName }], userId, {
     ownerUserId: userId,
     actorUserId,
     category: 'landing',

@@ -2,17 +2,23 @@ import { serverError } from '../helpers.js';
 import customerHelperService from '../services/customer/customerHelper.service.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
-import { isAdminRole } from '../utils/roleScope.util.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 class CampaignRunController {
   // Lấy lịch sử chạy chiến dịch
   async getAll(req, res) {
     try {
-      const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role);
+      const context = getWorkspaceContext(req.user);
       const { campaignId, scheduleId, limit = 50 } = req.query;
 
-      const rows = await campaignRunRepository.findRuns({ userId, isAdmin, campaignId, scheduleId, limit });
+      const rows = await campaignRunRepository.findRuns({
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        isAdmin: context.isSuperAdmin,
+        campaignId,
+        scheduleId,
+        limit,
+      });
 
       const runs = rows.map(row => ({
         id: row.id,
@@ -52,8 +58,7 @@ class CampaignRunController {
    */
   async getById(req, res) {
     try {
-      const userId = req.user.id;
-      const isAdmin = isAdminRole(req.user.role);
+      const context = getWorkspaceContext(req.user);
       const { id } = req.params;
       const {
         executionLogsLimit: execLimitRaw,
@@ -93,7 +98,12 @@ class CampaignRunController {
           ? String(execUpdatedAfterRaw).trim()
           : null;
 
-      const row = await campaignRunRepository.findRunById({ runId: id, isAdmin, userId });
+      const row = await campaignRunRepository.findRunById({
+        runId: id,
+        isAdmin: context.isSuperAdmin,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+      });
 
       if (!row) {
         return res.status(404).json({
@@ -210,8 +220,7 @@ class CampaignRunController {
    */
   async stopById(req, res) {
     try {
-      const userId = req.user.id;
-      const roleCode = req.user.role;
+      const context = getWorkspaceContext(req.user);
       const runId = Number.parseInt(req.params.id, 10);
 
       if (!Number.isFinite(runId)) {
@@ -223,8 +232,10 @@ class CampaignRunController {
 
       const stopResult = await campaignRunService.stopCampaignRun({
         runId,
-        userId,
-        roleCode,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        roleCode: context.roleCode,
+        isAdmin: context.isSuperAdmin,
       });
 
       if (!stopResult.found) {

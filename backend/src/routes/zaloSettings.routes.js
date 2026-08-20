@@ -9,8 +9,9 @@ const router = express.Router();
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requireActivePlan);
+router.use(requirePermission('zalo_settings'));
 
-// Get accounts — chỉ cần auth
+// Get accounts
 router.get('/accounts', zaloSettingsController.getAccounts.bind(zaloSettingsController));
 
 // Create account — cần quyền zalo_settings

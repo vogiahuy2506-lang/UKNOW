@@ -5,6 +5,7 @@ import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
 import { resolveFromAddress, extractBrandDomain } from '../../utils/emailFromAddress.util.js';
 import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from '../../utils/billingCycle.util.js';
 import { maybeDebitWalletForSend } from '../payment/topupWallet.service.js';
+import { checkSendQuota, recordDirectSendUsage } from '../../utils/userSendLimit.util.js';
 
 const EMAIL_OWNER_PREDICATE = `(c.id_user = $1 OR c.id_user IN (
    SELECT um.employee_id FROM user_members um
@@ -18,6 +19,33 @@ function createServiceError(message, statusCode, extra = {}) {
 }
 
 class EmailSettingsSmtpService {
+  async assertDirectEmailQuota({ userId, roleCode, ownerContextId, recipientCount }) {
+    const quota = await checkSendQuota({
+      userId,
+      roleCode,
+      ownerContextId,
+      channel: 'email',
+      requiredCount: recipientCount,
+    });
+    if (!quota.allowed) {
+      throw createServiceError(quota.message || 'Đã vượt hạn mức gửi email', 403, {
+        code: 'SEND_QUOTA_EXCEEDED',
+      });
+    }
+    return quota;
+  }
+
+  async recordDirectEmailQuota({ quota, userId, recipientCount, source }) {
+    if (!quota?.billingUserId) return;
+    await recordDirectSendUsage({
+      billingUserId: quota.billingUserId,
+      channel: 'email',
+      amount: recipientCount,
+      actorUserId: userId,
+      source,
+    });
+  }
+
   /**
    * Chuẩn hóa cờ preview từ nhiều biến thể payload để tương thích ngược FE/BE.
    *
@@ -165,16 +193,15 @@ class EmailSettingsSmtpService {
           const planLimitNum = planLimit == null || planLimit === ''
             ? null
             : Number.parseInt(planLimit, 10);
-          const { rows: countRows } = await client.query(
-            `SELECT COUNT(*)::int AS total
-             FROM email_messages em
-             INNER JOIN campaigns c ON c.id = em.id_campaign
-             WHERE ${EMAIL_OWNER_PREDICATE}
-               AND em.status IN ('sent', 'delivered', 'bounced')
-               AND em.sent_at >= DATE_TRUNC('month', NOW())`,
-            [billingUserId]
+          const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
+          const { countEmailSentThisMonth } = await import('../../utils/userSendLimit.util.js');
+          const cycle = await getBillingCycle(billingUserId, {}, client);
+          const usageCountAfterSend = await countEmailSentThisMonth(
+            billingUserId,
+            cycle?.hasPlan ? cycle.cycleStart : null,
+            cycle?.hasPlan ? cycle.cycleEnd : null,
+            client
           );
-          const usageCountAfterSend = Number(countRows[0]?.total) || 0;
           await maybeDebitWalletForSend(client, {
             billingUserId,
             itemKey: 'emails',
@@ -205,12 +232,18 @@ class EmailSettingsSmtpService {
     }
   }
 
-  async sendTestEmail({ userId, roleCode, id, payload }, deps) {
+  async sendTestEmail({ userId, roleCode, ownerContextId, id, payload }, deps) {
     const { to, subject, content, htmlContent } = payload;
     const setting = await emailSettingsRepository.getById(userId, id, { roleCode });
     if (!setting) {
       throw createServiceError('Không tìm thấy cấu hình email', 404);
     }
+    const quota = await this.assertDirectEmailQuota({
+      userId,
+      roleCode,
+      ownerContextId,
+      recipientCount: 1,
+    });
 
     const transporter = deps.createSmtpTransporter({
       host: setting.smtp_host,
@@ -228,6 +261,12 @@ class EmailSettingsSmtpService {
     });
 
     await emailSettingsRepository.incrementSentCount(id);
+    await this.recordDirectEmailQuota({
+      quota,
+      userId,
+      recipientCount: 1,
+      source: 'email_test',
+    });
     return {
       messageId: info.messageId,
       to,
@@ -235,7 +274,7 @@ class EmailSettingsSmtpService {
     };
   }
 
-  async sendCustomEmail({ userId, roleCode, payload, trackingConfig }, deps) {
+  async sendCustomEmail({ userId, roleCode, ownerContextId, payload, trackingConfig }, deps) {
     const isPreviewMode = this.normalizePreviewMode(payload);
     const isBuilderMode = this.normalizeBuilderMode(payload);
     const {
@@ -284,6 +323,13 @@ class EmailSettingsSmtpService {
 
     const ccList = deps.normalizeEmailList(cc);
     const bccList = deps.normalizeEmailList(bcc);
+    const recipientCount = 1 + ccList.length + bccList.length;
+    const quota = await this.assertDirectEmailQuota({
+      userId,
+      roleCode,
+      ownerContextId,
+      recipientCount,
+    });
     const trackingToken = uuidv4();
     const { baseUrl: trackingBaseUrl, isPublic, source } = trackingConfig;
     const trackingWarnings = [];
@@ -416,6 +462,20 @@ class EmailSettingsSmtpService {
       } catch (logError) {
         console.error('Log email message error:', logError);
       }
+    }
+
+    // Luồng campaign đã có email_messages cho người nhận chính. CC/BCC không có
+    // row riêng nên ghi phần chênh lệch vào usage_logs để quota/ví đếm đúng.
+    const directUsageCount = shouldSaveMessageLog
+      ? ccList.length + bccList.length
+      : recipientCount;
+    if (directUsageCount > 0) {
+      await this.recordDirectEmailQuota({
+        quota,
+        userId,
+        recipientCount: directUsageCount,
+        source: shouldForcePreviewOnly ? 'email_preview' : 'email_direct',
+      });
     }
 
     return {

@@ -131,6 +131,9 @@ describe('userResourceLimit.util', () => {
 
       expect(result.allowed).toBe(false);
       expect(result.message).toContain('số landing page');
+      expect(String(mockQuery.mock.calls[1][0])).toContain(
+        'COALESCE(workspace_owner_id, id_user) = $1'
+      );
     });
 
     it('DB lỗi 42703 (thiếu cột giới hạn) → fallback không giới hạn', async () => {

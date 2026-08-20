@@ -2,6 +2,7 @@ import express from 'express';
 import dashboardController, { validateDashboardInsightsPayload } from '../controllers/dashboard.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
+import { requireSelfContext } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
@@ -23,7 +24,7 @@ router.get('/analytics', dashboardController.getAnalytics.bind(dashboardControll
 router.get('/runs', dashboardController.getRuns.bind(dashboardController));
 
 // Get orders list
-router.get('/orders', dashboardController.getOrdersList.bind(dashboardController));
+router.get('/orders', requireSelfContext, dashboardController.getOrdersList.bind(dashboardController));
 
 // Get top lists (top courses by orders, top campaigns by orders/clicks)
 router.get('/top-lists', dashboardController.getTopLists.bind(dashboardController));

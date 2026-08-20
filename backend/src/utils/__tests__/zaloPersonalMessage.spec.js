@@ -232,11 +232,14 @@ describe('inbox handler gate (D3+D4)', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('successful save → handler runs (owner/visitor path)', () => {
+  it('successful save → handler runs with msgData and saveResult (owner/visitor path)', () => {
     const handler = jest.fn();
-    const ran = runInboxHandlerAfterSave({ conversationId: 9, messageId: 3 }, handler, { msgId: 'ok' });
+    const saveResult = { conversationId: 9, messageId: 3 };
+    const msgData = { msgId: 'ok' };
+    const ran = runInboxHandlerAfterSave(saveResult, handler, msgData);
     expect(ran).toBe(true);
     expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(msgData, saveResult);
   });
 
   it('shouldSkipInboxHandler requires BOTH isDuplicate and skippedEcho branches', () => {

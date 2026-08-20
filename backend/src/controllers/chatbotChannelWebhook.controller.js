@@ -5,6 +5,8 @@ import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.servic
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
+import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
+import { formatBatchedContent } from '../utils/chatbotReplyBatch.util.js';
 
 class ChatbotChannelWebhookController {
   // ── Zalo OA Webhook ───────────────────────────────────────────
@@ -59,7 +61,7 @@ class ChatbotChannelWebhookController {
         return;
       }
 
-      const { message, senderId, messageId } = event;
+      const { message, senderId, messageId, timestamp } = event;
       const chatbotId = channel.id_chatbot;
 
       // Guard: chatbot must exist and be active
@@ -81,20 +83,82 @@ class ChatbotChannelWebhookController {
         source: 'zalo_oa',
       });
 
-      // Log visitor message
-      await chatbotChannelRepository.addMessage(conv.id, {
+      // Log visitor message immediately
+      const savedMessage = await chatbotChannelRepository.addMessage(conv.id, {
         role: 'visitor',
         content: message,
         message_type: 'text',
         external_id: messageId,
       });
 
-      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
-      if (await resourceIsLocked('chatbots', chatbotId)) {
-        console.log(`[ZaloOA] Chatbot ${chatbotId} locked — message saved, no reply`);
+      if (savedMessage?.isDuplicate) {
         return;
       }
 
+      // Update last activity
+      await chatbotChannelRepository.updateLastActivity(channel.id);
+
+      // Enqueue message into conversation debounce bucket
+      inboundReplyDebounceService.enqueue({
+        key: `zalo_oa:${channel.id}:${conv.id}`,
+        message: {
+          eventId: messageId || null,
+          persistedMessageId: savedMessage?.id || null,
+          receivedAt: timestamp,
+          content: message,
+        },
+        flushCallback: async (batch) => {
+          await this._processZaloOaBatch({
+            channel,
+            chatbotId,
+            conv,
+            senderId,
+            batch,
+          });
+        },
+      });
+    } catch (err) {
+      console.error('[ZaloOA Webhook] Handle error:', err.message);
+    }
+  }
+
+  /**
+   * Process a flushed batch of messages for Zalo OA
+   * @private
+   */
+  async _processZaloOaBatch({ channel, chatbotId, conv, senderId, batch }) {
+    const prompt = formatBatchedContent(batch.messages);
+    if (!prompt) return;
+
+    try {
+      // 1. Check channel and chatbot still exist and remain active. A webhook
+      // may have been queued just before the owner disconnects the channel.
+      const activeChannel = await chatbotChannelRepository.findActiveChannelById(channel.id);
+      if (!activeChannel || Number(activeChannel.id_chatbot) !== Number(chatbotId)) {
+        console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
+        return;
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || !chatbot.is_active) {
+        console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
+        return;
+      }
+
+      // 2. Check resource lock
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbotId)) {
+        console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=locked`);
+        return;
+      }
+
+      // 3. Check handoff (AI paused)
+      if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+        console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused`);
+        return;
+      }
+
+      // 4. Rate limit check (single check per batch)
       const rate = await chatbotRateLimitService.checkBeforeAi({
         channel: 'zalo_oa',
         ownerUserId: chatbot.id_user,
@@ -124,43 +188,49 @@ class ChatbotChannelWebhookController {
             });
           }
         }
+        console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=rate_limited`);
         return;
       }
 
-      // Handoff: owner paused AI for this conversation — save visitor msg only, no AI.
-      if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
-        console.log(`[ZaloOA] AI paused for conversation ${conv.id} — skipping reply`);
-        return;
-      }
-
-      // Route to chatbot AI
+      // 5. Snapshot the history boundary, excluding only this batch's already
+      // persisted visitor rows. This retains a bot reply that completed after a
+      // visitor message was queued for the next batch.
+      const historyThroughMessageId = await chatbotChannelRepository.getLatestMessageId(conv.id);
       const result = await chatRouterService.routeChatbotMessage({
         chatbotId,
-        message,
+        message: prompt,
         conversationId: conv.id,
+        throughMessageId: historyThroughMessageId,
+        excludeMessageIds: batch.messages
+          .map((item) => item.persistedMessageId)
+          .filter((id) => id != null),
       });
 
-      if (result.content) {
-        // Send reply
-        await zaloOAAdapter.sendReply({
+      if (result?.content) {
+        const sent = await zaloOAAdapter.sendReply({
           conversationId: conv.id,
           message: result.content,
           channelId: channel.id,
           externalId: senderId,
         });
 
-        // Log bot response
+        if (sent?.success === false) {
+          console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+          return;
+        }
         await chatbotChannelRepository.addMessage(conv.id, {
           role: 'bot',
           content: result.content,
           message_type: 'text',
         });
+      } else {
+        console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+        return;
       }
 
-      // Update last activity
-      await chatbotChannelRepository.updateLastActivity(channel.id);
+      console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=sent`);
     } catch (err) {
-      console.error('[ZaloOA Webhook] Handle error:', err.message);
+      console.error(`[ChatbotDebounce] Error processing Zalo OA batch for conv ${conv.id}:`, err.stack || err.message);
     }
   }
 

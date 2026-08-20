@@ -15,7 +15,7 @@ class CampaignCrudRepository {
    * @param {number} params.offset
    * @returns {Promise<object[]>}
    */
-  async findCampaigns({ userId, isAdmin, status, type, search, origin, limit, offset }) {
+  async findCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, limit, offset }) {
     let query = `
       SELECT c.id, c.campaign_name, c.description, c.campaign_type, c.status,
              c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
@@ -23,12 +23,13 @@ class CampaignCrudRepository {
              c.total_opened, c.total_clicked, c.total_converted, c.total_revenue,
              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
              c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
-             c.id_user, c.origin, c.marketplace_purchase_id,
+             c.id_user, COALESCE(c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+             c.created_by, c.origin, c.marketplace_purchase_id,
              COALESCE(u.full_name, u.username) AS creator_name,
              COALESCE(run_stats.running_count, 0)::INTEGER AS running_count,
              COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count
       FROM campaigns c
-      LEFT JOIN users u ON c.id_user = u.id
+      LEFT JOIN users u ON COALESCE(c.created_by, c.id_user) = u.id
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*) FILTER (WHERE cr.status = 'running') AS running_count,
@@ -41,8 +42,8 @@ class CampaignCrudRepository {
     const params = [];
 
     if (!isAdmin) {
-      params.push(userId);
-      query += ` AND c.id_user = $${params.length}`;
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(c.workspace_owner_id, c.id_user) = $${params.length}`;
     }
 
     if (status) {
@@ -81,13 +82,13 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.origin
    * @returns {Promise<number>}
    */
-  async countCampaigns({ userId, isAdmin, status, type, search, origin }) {
+  async countCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin }) {
     let countQuery = 'SELECT COUNT(*) FROM campaigns WHERE 1=1';
     const countParams = [];
 
     if (!isAdmin) {
-      countParams.push(userId);
-      countQuery += ` AND id_user = $${countParams.length}`;
+      countParams.push(workspaceOwnerId);
+      countQuery += ` AND COALESCE(workspace_owner_id, id_user) = $${countParams.length}`;
     }
     if (status) {
       countParams.push(status);
@@ -119,33 +120,51 @@ class CampaignCrudRepository {
    * @param {number} params.userId
    * @returns {Promise<object|null>}
    */
-  async findCampaignById({ campaignId, isAdmin, userId }) {
-    const params = isAdmin ? [campaignId] : [campaignId, userId];
+  async findCampaignById({
+    campaignId,
+    isAdmin,
+    userId,
+    workspaceOwnerId = userId,
+    actorUserId = userId,
+    allowShared = true,
+  }) {
+    const params = isAdmin ? [campaignId] : [campaignId, workspaceOwnerId];
     let query = `
-      SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+      SELECT c.id, c.id_user, COALESCE(c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+             c.created_by, c.campaign_name, c.description, c.campaign_type, c.status,
              c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
              c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
              c.timezone,
              c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
              c.total_converted, c.total_revenue,
              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
+             c.origin, c.marketplace_purchase_id
       FROM campaigns c
       WHERE c.id = $1`;
     if (!isAdmin) {
+      const canReadShared = allowShared && Number.isFinite(Number.parseInt(actorUserId, 10));
+      if (canReadShared) params.push(actorUserId);
       query = `
-      SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+      SELECT c.id, c.id_user, COALESCE(c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+             c.created_by, c.campaign_name, c.description, c.campaign_type, c.status,
              c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
              c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
              c.timezone,
              c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
              c.total_converted, c.total_revenue,
              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+             c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
+             c.origin, c.marketplace_purchase_id
       FROM campaigns c
-      LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $2
-      WHERE c.id = $1 AND (c.id_user = $2 OR cs.id IS NOT NULL)
-        AND (c.id_user = $2 OR cs.share_type IN ('edit', 'view'))`;
+      ${canReadShared
+        ? 'LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $3'
+        : ''}
+      WHERE c.id = $1
+        AND (
+          COALESCE(c.workspace_owner_id, c.id_user) = $2
+          ${canReadShared ? "OR cs.share_type IN ('edit', 'view')" : ''}
+        )`;
     }
     const result = await db.query(query, params);
     return result.rows[0] || null;
@@ -189,38 +208,41 @@ class CampaignCrudRepository {
    * @param {number} params.userId
    * @returns {Promise<object|null>}
    */
-  async findCampaignByIdTx(client, { campaignId, isAdmin, userId }) {
+  async findCampaignByIdTx(client, { campaignId, isAdmin, userId, workspaceOwnerId = userId }) {
     let campaignQuery;
     if (isAdmin) {
       // Admin có thể xem campaign của bất kỳ user nào — chỉ cần filter theo id.
       // Tham số truyền vào: [campaignId] để tránh mismatch với placeholder.
       campaignQuery = `
-        SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+        SELECT c.id, c.id_user, COALESCE(c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+               c.created_by, c.campaign_name, c.description, c.campaign_type, c.status,
                c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
                c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
                c.timezone,
                c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
                c.total_converted, c.total_revenue,
                c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-               c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+               c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
+               c.origin, c.marketplace_purchase_id
         FROM campaigns c
         WHERE c.id = $1`;
     } else {
       campaignQuery = `
-        SELECT c.id, c.id_user, c.campaign_name, c.description, c.campaign_type, c.status,
+        SELECT c.id, c.id_user, COALESCE(c.workspace_owner_id, c.id_user) AS workspace_owner_id,
+               c.created_by, c.campaign_name, c.description, c.campaign_type, c.status,
                c.id_data_source, c.flow_json, c.landing_page_url, c.landing_page_form_id,
                c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
                c.timezone,
                c.total_customers, c.total_sent, c.total_delivered, c.total_opened, c.total_clicked,
                c.total_converted, c.total_revenue,
                c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
-               c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at
+               c.published_at::timestamptz AS published_at, c.last_run_at::timestamptz AS last_run_at,
+               c.origin, c.marketplace_purchase_id
         FROM campaigns c
-        LEFT JOIN campaign_shares cs ON cs.id_campaign = c.id AND cs.id_recipient = $2
-        WHERE c.id = $1 AND (c.id_user = $2 OR cs.id IS NOT NULL)
-          AND (c.id_user = $2 OR cs.share_type IN ('edit', 'view'))`;
+        WHERE c.id = $1
+          AND COALESCE(c.workspace_owner_id, c.id_user) = $2`;
     }
-    const campaignParams = isAdmin ? [campaignId] : [campaignId, userId];
+    const campaignParams = isAdmin ? [campaignId] : [campaignId, workspaceOwnerId];
     const campaignResult = await client.query(campaignQuery, campaignParams);
     return campaignResult.rows[0] || null;
   }
@@ -232,14 +254,39 @@ class CampaignCrudRepository {
    * @param {object} params
    * @returns {Promise<object>} inserted row
    */
-  async insertCampaignTx(client, { userId, campaignName, description, campaignType, landingPageUrl, startDate, endDate, timezone, flowJson }) {
+  async insertCampaignTx(client, {
+    userId,
+    workspaceOwnerId = userId,
+    createdBy = workspaceOwnerId,
+    campaignName,
+    description,
+    campaignType,
+    landingPageUrl,
+    startDate,
+    endDate,
+    timezone,
+    flowJson,
+  }) {
     const newCampaignResult = await client.query(
       `INSERT INTO campaigns (
-          id_user, campaign_name, description, campaign_type, landing_page_url,
+          id_user, workspace_owner_id, created_by,
+          campaign_name, description, campaign_type, landing_page_url,
           start_date, end_date, timezone, flow_json, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft')
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'draft')
         RETURNING *`,
-      [userId, campaignName, description, campaignType, landingPageUrl, startDate, endDate, timezone, flowJson]
+      [
+        workspaceOwnerId,
+        workspaceOwnerId,
+        createdBy,
+        campaignName,
+        description,
+        campaignType,
+        landingPageUrl,
+        startDate,
+        endDate,
+        timezone,
+        flowJson,
+      ]
     );
     return newCampaignResult.rows[0];
   }
@@ -377,6 +424,7 @@ class CampaignCrudRepository {
     campaignId,
     isAdmin,
     userId,
+    workspaceOwnerId = userId,
     campaignName,
     description,
     campaignType,
@@ -412,8 +460,8 @@ class CampaignCrudRepository {
         updated_at = CURRENT_TIMESTAMP
        WHERE id = $10`;
     if (!isAdmin) {
-      updateParams.push(userId);
-      updateQuery += ` AND id_user = $${updateParams.length}`;
+      updateParams.push(workspaceOwnerId);
+      updateQuery += ` AND COALESCE(workspace_owner_id, id_user) = $${updateParams.length}`;
     }
     updateQuery += ' RETURNING *';
     const result = await client.query(updateQuery, updateParams);
@@ -441,11 +489,11 @@ class CampaignCrudRepository {
    * @param {object} params
    * @returns {Promise<object[]|null>}
    */
-  async findEmailTemplateAttachmentsTx(client, { templateId, isAdmin, userId }) {
+  async findEmailTemplateAttachmentsTx(client, { templateId, isAdmin, userId, workspaceOwnerId = userId }) {
     const params = [templateId];
     let query = 'SELECT attachments FROM email_templates WHERE id = $1';
     if (!isAdmin) {
-      params.push(userId);
+      params.push(workspaceOwnerId);
       query += ` AND id_user = $${params.length}`;
     }
     const result = await client.query(query, params);
@@ -456,12 +504,12 @@ class CampaignCrudRepository {
    * @param {object} client
    * @param {object} params
    */
-  async deleteCampaignTx(client, { campaignId, isAdmin, userId }) {
+  async deleteCampaignTx(client, { campaignId, isAdmin, userId, workspaceOwnerId = userId }) {
     const params = [campaignId];
     let query = 'DELETE FROM campaigns WHERE id = $1';
     if (!isAdmin) {
-      params.push(userId);
-      query += ` AND id_user = $${params.length}`;
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(workspace_owner_id, id_user) = $${params.length}`;
     }
     await client.query(query, params);
   }
@@ -475,7 +523,7 @@ class CampaignCrudRepository {
    * @param {number} params.userId
    * @returns {Promise<object|null>}
    */
-  async publishCampaign({ campaignId, isAdmin, userId }) {
+  async publishCampaign({ campaignId, isAdmin, userId, workspaceOwnerId = userId }) {
     const params = [campaignId];
     let query = `UPDATE campaigns SET
       status = 'active',
@@ -484,8 +532,8 @@ class CampaignCrudRepository {
      WHERE id = $1
        AND status IN ('draft', 'paused')`;
     if (!isAdmin) {
-      params.push(userId);
-      query += ` AND id_user = $${params.length}`;
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(workspace_owner_id, id_user) = $${params.length}`;
     }
     query += ' RETURNING *';
 
@@ -502,15 +550,15 @@ class CampaignCrudRepository {
    * @param {number} params.userId
    * @returns {Promise<object|null>}
    */
-  async pauseCampaign({ campaignId, isAdmin, userId }) {
+  async pauseCampaign({ campaignId, isAdmin, userId, workspaceOwnerId = userId }) {
     const params = [campaignId];
     let query = `UPDATE campaigns SET
       status = 'paused',
       updated_at = CURRENT_TIMESTAMP
      WHERE id = $1 AND status = 'active'`;
     if (!isAdmin) {
-      params.push(userId);
-      query += ` AND id_user = $${params.length}`;
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(workspace_owner_id, id_user) = $${params.length}`;
     }
     query += ' RETURNING *';
 

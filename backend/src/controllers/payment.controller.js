@@ -5,6 +5,10 @@ import {
   getInvoiceForOwner,
   streamInvoicePdfForOwner,
 } from '../services/payment/einvoiceView.service.js';
+import { findPlanByCode, findPlanById, getPlanByUserId } from '../repositories/payment/plan.repository.js';
+import { findUserById, findActiveUserByEmail, findActiveBillingPeriod } from '../repositories/user/user.repository.js';
+import { scheduledPlanChangeRepository } from '../repositories/payment/scheduledPlanChange.repository.js';
+import { resolvePlanChange } from '../utils/planChange.util.js';
 
 export const createPayment = async (req, res) => {
     try {
@@ -203,5 +207,57 @@ export const downloadInvoicePdf = async (req, res) => {
     } catch (err) {
         console.error('[InvoicePdf]', err?.message || err);
         return res.status(502).json({ success: false, message: 'Không tải được PDF hóa đơn' });
+    }
+};
+
+export const resolvePlanChangePreview = async (req, res) => {
+    try {
+        const {
+            planCode = null,
+            planId = null,
+            billingPeriod = 'monthly',
+            targetPrice = null,
+        } = req.body || {};
+
+        let targetPlan = null;
+        if (planCode) {
+            targetPlan = await findPlanByCode(planCode);
+        } else if (planId) {
+            targetPlan = await findPlanById(planId);
+        }
+
+        if (!targetPlan && targetPrice === null) {
+            return res.status(400).json({ success: false, message: 'Thiếu thông tin gói đích' });
+        }
+
+        const userId = req.user?.id || null;
+        const userEmail = req.user?.email || null;
+
+        let user = null;
+        if (userId) {
+            user = await findUserById(userId);
+        } else if (userEmail) {
+            user = await findActiveUserByEmail(userEmail);
+        }
+
+        const currentPlan = user ? await getPlanByUserId(user.id) : null;
+        const currentBillingPeriod = user ? await findActiveBillingPeriod(user.id, user.email) : 'monthly';
+        const pendingChange = user ? await scheduledPlanChangeRepository.findPendingByUserId(user.id) : null;
+
+        const resolution = resolvePlanChange({
+            currentPlan,
+            currentBillingPeriod,
+            subscriptionExpiresAt: user?.subscription_expires_at || null,
+            targetPlan: targetPlan || { id: null, price: targetPrice, price_yearly: targetPrice },
+            targetBillingPeriod: billingPeriod,
+            pendingChange,
+            targetPlanPrice: targetPrice !== null ? Number(targetPrice) : undefined,
+            now: new Date(),
+        });
+
+        return res.json({ success: true, resolution });
+    } catch (err) {
+        console.error('resolvePlanChangePreview error:', err);
+        return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
 };

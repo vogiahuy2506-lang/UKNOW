@@ -53,6 +53,13 @@ const PLAN_CEILING = Object.freeze({
     const plan = await getPlanByUserId(userId, queryable);
     return Number(plan?.max_chatbots) || 0;
   },
+  employees: async (userId, queryable) => {
+    const { rows } = await queryable.query(
+      `SELECT max_employees FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+    return Number(rows[0]?.max_employees) || 0;
+  },
 });
 
 /** Nhãn tiếng Việt cho email nhắc / báo khoá — không in item_key thô. */
@@ -83,17 +90,25 @@ export async function resolveEffectiveCeiling(userId, resourceKey, queryable = d
 }
 
 /**
- * Bidirectional reconcile: lock excess newest-first; unlock most-recently-locked first.
+ * Bidirectional reconcile: lock excess oldest-first; unlock most-recently-locked first.
  * Must pass transaction `client` when called from webhook fulfillTopupOrder.
  *
  * @param {number|string} userId
  * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
  * @param {{ unlockOnly?: boolean }} [options] — payment paths set unlockOnly=true (never lock on pay)
- * @returns {Promise<{ locked: Array<{resourceKey:string, resourceId:number}>, unlocked: Array<{resourceKey:string, resourceId:number}> }>}
+ * @returns {Promise<{ locked: Array<{resourceKey:string, resourceId:number}>, unlocked: Array<{resourceKey:string, resourceId:number}>, isGraceActive?: boolean, graceUntil?: Date|null }>}
  */
 export async function reconcileResourceLocks(userId, queryable = db, { unlockOnly = false } = {}) {
   const locked = [];
   const unlocked = [];
+
+  const { rows: userRows } = await queryable.query(
+    `SELECT overage_grace_until FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  const graceUntil = userRows[0]?.overage_grace_until ? new Date(userRows[0].overage_grace_until) : null;
+  const isGraceActive = graceUntil && graceUntil.getTime() > Date.now();
+  const shouldLock = !unlockOnly && !isGraceActive;
 
   for (const resourceKey of LOCKABLE_RESOURCE_KEYS) {
     await deleteOrphanLocks(userId, resourceKey, queryable);
@@ -103,7 +118,7 @@ export async function reconcileResourceLocks(userId, queryable = db, { unlockOnl
     const lockedCount = await countValidLocks(userId, resourceKey, queryable);
     const running = inUse - lockedCount;
 
-    if (!unlockOnly && running > effective) {
+    if (shouldLock && running > effective) {
       const need = running - effective;
       const candidates = await listUnlockedResourceIds(userId, resourceKey, queryable);
       for (const resourceId of candidates.slice(0, need)) {
@@ -120,7 +135,7 @@ export async function reconcileResourceLocks(userId, queryable = db, { unlockOnl
     }
   }
 
-  return { locked, unlocked };
+  return { locked, unlocked, isGraceActive: Boolean(isGraceActive), graceUntil };
 }
 
 /**
@@ -158,6 +173,13 @@ export async function reconcileAllDueUsers(queryable = db) {
  * B4: list lock status + ceilings per resource key.
  */
 export async function getLockOverview(userId, queryable = db) {
+  const { rows: userRows } = await queryable.query(
+    `SELECT overage_grace_until FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  const graceUntil = userRows[0]?.overage_grace_until ? new Date(userRows[0].overage_grace_until) : null;
+  const isGraceActive = graceUntil && graceUntil.getTime() > Date.now();
+
   const overview = {};
   for (const resourceKey of LOCKABLE_RESOURCE_KEYS) {
     const [items, effectiveCeiling, planCeiling, grants] = await Promise.all([
@@ -173,7 +195,11 @@ export async function getLockOverview(userId, queryable = db) {
       activeGrants: Math.max(0, Number(grants) || 0),
     };
   }
-  return overview;
+  return {
+    ...overview,
+    overageGraceUntil: graceUntil,
+    isGraceActive: Boolean(isGraceActive),
+  };
 }
 
 /**

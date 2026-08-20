@@ -1,6 +1,6 @@
 import express from 'express';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { requireRole, requireActivePlan } from '../middleware/authorization.middleware.js';
+import { requireRole, requireActivePlan, requireSelfContext } from '../middleware/authorization.middleware.js';
 import landingFeaturedCourseAdminController from '../controllers/landingFeaturedCourseAdmin.controller.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
 import { getStoragePaths } from '../utils/storageCapacity.util.js';
@@ -15,6 +15,7 @@ const workspacePromotionCapacityGuard = storageCapacityGuard({
 router.use(authMiddleware);
 router.use(requireRole('admin', 'user'));
 router.use(requireActivePlan);
+router.use(requireSelfContext);
 
 router.get('/', landingFeaturedCourseAdminController.list.bind(landingFeaturedCourseAdminController));
 router.post('/', workspacePromotionCapacityGuard, landingFeaturedCourseAdminController.create.bind(landingFeaturedCourseAdminController));

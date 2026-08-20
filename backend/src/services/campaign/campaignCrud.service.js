@@ -4,6 +4,7 @@ import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
 import uploadController from '../../controllers/upload.controller.js';
+import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 
 function createNotFoundError(message = 'Không tìm thấy chiến dịch') {
   const err = new Error(message);
@@ -17,6 +18,17 @@ function createConflictError(message) {
   return err;
 }
 
+function resolveCampaignContext({ authUser = null, userId = null, roleCode = null, workspaceOwnerId = null } = {}) {
+  if (authUser) return getWorkspaceContext(authUser);
+  return {
+    actorUserId: Number(userId),
+    workspaceOwnerId: Number(workspaceOwnerId ?? userId),
+    contextType: 'self',
+    roleCode,
+    isSuperAdmin: isAdminRole(roleCode),
+  };
+}
+
 class CampaignCrudService {
   /**
    * Get campaigns list with filters and pagination.
@@ -24,12 +36,18 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object>}
    */
-  async getAllCampaigns({ userId, roleCode, page = 1, limit = 10, status, type, search, origin }) {
+  async getAllCampaigns({ authUser, userId, roleCode, workspaceOwnerId, page = 1, limit = 10, status, type, search, origin }) {
     const offset = (page - 1) * limit;
-    const isAdmin = isAdminRole(roleCode);
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    const isAdmin = context.isSuperAdmin;
 
-    const rows = await campaignCrudRepository.findCampaigns({ userId, isAdmin, status, type, search, origin, limit, offset });
-    const total = await campaignCrudRepository.countCampaigns({ userId, isAdmin, status, type, search, origin });
+    const scope = {
+      userId: context.actorUserId,
+      workspaceOwnerId: context.workspaceOwnerId,
+      isAdmin,
+    };
+    const rows = await campaignCrudRepository.findCampaigns({ ...scope, status, type, search, origin, limit, offset });
+    const total = await campaignCrudRepository.countCampaigns({ ...scope, status, type, search, origin });
 
     return {
       items: rows.map((item) => ({
@@ -71,10 +89,18 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async getCampaignById({ userId, roleCode, campaignId }) {
-    const isAdmin = isAdminRole(roleCode);
+  async getCampaignById({ authUser, userId, roleCode, workspaceOwnerId, campaignId }) {
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    const isAdmin = context.isSuperAdmin;
 
-    const campaign = await campaignCrudRepository.findCampaignById({ campaignId, isAdmin, userId });
+    const campaign = await campaignCrudRepository.findCampaignById({
+      campaignId,
+      isAdmin,
+      userId: context.actorUserId,
+      actorUserId: context.actorUserId,
+      workspaceOwnerId: context.workspaceOwnerId,
+      allowShared: context.contextType === 'self',
+    });
     if (!campaign) return null;
 
     const nodesRows = await campaignCrudRepository.findNodesByCampaignId(campaignId);
@@ -131,8 +157,10 @@ class CampaignCrudService {
    * @returns {Promise<object>}
    */
   async createCampaign({
+    authUser,
     userId,
     roleCode,
+    workspaceOwnerId,
     campaignName,
     description,
     campaignType,
@@ -144,6 +172,7 @@ class CampaignCrudService {
     nodes,
     connections,
   }) {
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
     const typeResourceKey = campaignType === 'email'
       ? 'emailCampaigns'
       : campaignType === 'zalo_group'
@@ -156,13 +185,23 @@ class CampaignCrudService {
     try {
       await client.query('BEGIN');
 
-      await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: 'campaigns' });
+      await enforceResourceLimitTx(client, {
+        userId: context.workspaceOwnerId,
+        roleCode: context.roleCode,
+        resourceKey: 'campaigns',
+      });
       if (typeResourceKey) {
-        await enforceResourceLimitTx(client, { userId, roleCode, resourceKey: typeResourceKey });
+        await enforceResourceLimitTx(client, {
+          userId: context.workspaceOwnerId,
+          roleCode: context.roleCode,
+          resourceKey: typeResourceKey,
+        });
       }
 
       const campaign = await campaignCrudRepository.insertCampaignTx(client, {
-        userId,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        createdBy: context.actorUserId,
         campaignName,
         description,
         campaignType,
@@ -268,9 +307,11 @@ class CampaignCrudService {
    * @returns {Promise<{ id: number, campaignName: string, status: string }>}
    */
   async updateCampaign({
+    authUser,
     campaignId,
     userId,
     roleCode,
+    workspaceOwnerId,
     isContentUpdate,
     campaignName,
     description,
@@ -284,7 +325,8 @@ class CampaignCrudService {
     nodes,
     connections,
   }) {
-    const isAdmin = isAdminRole(roleCode);
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    const isAdmin = context.isSuperAdmin;
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
@@ -292,7 +334,8 @@ class CampaignCrudService {
       const existing = await campaignCrudRepository.findCampaignByIdTx(client, {
         campaignId,
         isAdmin,
-        userId,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
       });
       if (!existing) {
         throw createNotFoundError();
@@ -310,7 +353,8 @@ class CampaignCrudService {
       const updated = await campaignCrudRepository.updateCampaignFieldsTx(client, {
         campaignId,
         isAdmin,
-        userId,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
         campaignName,
         description,
         campaignType,
@@ -411,8 +455,9 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<{ fileKeysToDelete: string[] }>}
    */
-  async deleteCampaign({ campaignId, userId, roleCode }) {
-    const isAdmin = isAdminRole(roleCode);
+  async deleteCampaign({ campaignId, authUser, userId, roleCode, workspaceOwnerId }) {
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    const isAdmin = context.isSuperAdmin;
     const client = await db.getClient();
     const allFileKeysToDelete = [];
 
@@ -422,7 +467,8 @@ class CampaignCrudService {
       const existing = await campaignCrudRepository.findCampaignByIdTx(client, {
         campaignId,
         isAdmin,
-        userId,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
       });
       if (!existing) {
         throw createNotFoundError();
@@ -436,7 +482,10 @@ class CampaignCrudService {
             const attachments = await campaignCrudRepository.findEmailTemplateAttachmentsTx(client, {
               templateId: config.emailTemplateId,
               isAdmin,
-              userId,
+              userId: context.actorUserId,
+              workspaceOwnerId: isAdmin
+                ? Number(existing.workspace_owner_id || existing.id_user)
+                : context.workspaceOwnerId,
             });
             if (attachments && attachments.length > 0) {
               const fileKeys = attachments
@@ -456,7 +505,12 @@ class CampaignCrudService {
         }
       }
 
-      await campaignCrudRepository.deleteCampaignTx(client, { campaignId, isAdmin, userId });
+      await campaignCrudRepository.deleteCampaignTx(client, {
+        campaignId,
+        isAdmin,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+      });
       await client.query('COMMIT');
 
       return { fileKeysToDelete: allFileKeysToDelete };
@@ -474,20 +528,26 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async duplicateCampaign({ userId, roleCode, campaignId, campaignName }) {
+  async duplicateCampaign({ authUser, userId, roleCode, workspaceOwnerId, campaignId, campaignName }) {
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
-      const isAdmin = isAdminRole(roleCode);
+      const isAdmin = context.isSuperAdmin;
 
-      const originalCampaign = await campaignCrudRepository.findCampaignByIdTx(client, { campaignId, isAdmin, userId });
+      const originalCampaign = await campaignCrudRepository.findCampaignByIdTx(client, {
+        campaignId,
+        isAdmin,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+      });
       if (!originalCampaign) {
         await client.query('ROLLBACK');
         return null;
       }
 
       // Only owner can duplicate (not shared campaigns)
-      if (originalCampaign.id_user !== userId && !isAdmin) {
+      if (Number(originalCampaign.workspace_owner_id || originalCampaign.id_user) !== context.workspaceOwnerId && !isAdmin) {
         await client.query('ROLLBACK');
         const error = new Error('Chỉ chủ sở hữu mới có thể nhân bản chiến dịch');
         error.statusCode = 403;
@@ -503,13 +563,15 @@ class CampaignCrudService {
       }
 
       await enforceResourceLimitTx(client, {
-        userId,
-        roleCode,
+        userId: context.workspaceOwnerId,
+        roleCode: context.roleCode,
         resourceKey: 'campaigns',
       });
 
       const newCampaign = await campaignCrudRepository.insertCampaignTx(client, {
-        userId,
+        userId: context.actorUserId,
+        workspaceOwnerId: context.workspaceOwnerId,
+        createdBy: context.actorUserId,
         campaignName,
         description: originalCampaign.description,
         campaignType: originalCampaign.campaign_type,
@@ -574,9 +636,14 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async publishCampaign({ userId, roleCode, campaignId }) {
-    const isAdmin = isAdminRole(roleCode);
-    return campaignCrudRepository.publishCampaign({ campaignId, isAdmin, userId });
+  async publishCampaign({ authUser, userId, roleCode, workspaceOwnerId, campaignId }) {
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    return campaignCrudRepository.publishCampaign({
+      campaignId,
+      isAdmin: context.isSuperAdmin,
+      userId: context.actorUserId,
+      workspaceOwnerId: context.workspaceOwnerId,
+    });
   }
 
   /**
@@ -585,9 +652,14 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object|null>}
    */
-  async pauseCampaign({ userId, roleCode, campaignId }) {
-    const isAdmin = isAdminRole(roleCode);
-    return campaignCrudRepository.pauseCampaign({ campaignId, isAdmin, userId });
+  async pauseCampaign({ authUser, userId, roleCode, workspaceOwnerId, campaignId }) {
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    return campaignCrudRepository.pauseCampaign({
+      campaignId,
+      isAdmin: context.isSuperAdmin,
+      userId: context.actorUserId,
+      workspaceOwnerId: context.workspaceOwnerId,
+    });
   }
 }
 

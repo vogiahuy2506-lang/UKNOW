@@ -110,6 +110,7 @@ class LandingPagePublicService {
    */
   async recordView(body, req) {
     const slug = String(body?.slug || '').trim().toLowerCase();
+    let workspaceOwnerId = null;
     if (!landingPageRepository.isValidSlug(slug)) {
       const err = new Error('Slug không hợp lệ');
       err.statusCode = 400;
@@ -130,6 +131,7 @@ class LandingPagePublicService {
         err.code = 'RESOURCE_LOCKED';
         throw err;
       }
+      workspaceOwnerId = published.workspaceOwnerId || published.idUser || null;
     }
     await landingPageEventRepository.insert({
       eventType: 'view',
@@ -143,6 +145,7 @@ class LandingPagePublicService {
       visitorId: body?.visitorId,
       referrer: body?.referrer,
       userAgent: req.headers['user-agent'],
+      idUser: workspaceOwnerId,
     });
     return { ok: true };
   }
@@ -156,6 +159,7 @@ class LandingPagePublicService {
    */
   async buildRedirectUrlForClick(query, req) {
     const slug = String(query.slug || '').trim().toLowerCase();
+    let workspaceOwnerId = null;
     const rawU = String(query.u || query.url || '').trim();
     if (!landingPageRepository.isValidSlug(slug)) {
       const err = new Error('Tham số slug không hợp lệ');
@@ -188,6 +192,7 @@ class LandingPagePublicService {
         err.code = 'RESOURCE_LOCKED';
         throw err;
       }
+      workspaceOwnerId = published.workspaceOwnerId || published.idUser || null;
     }
 
     const u = new URL(dest);
@@ -216,6 +221,7 @@ class LandingPagePublicService {
       visitorId: query.visitor_id || query.visitorId,
       referrer: query.referrer,
       userAgent: req.headers['user-agent'],
+      idUser: workspaceOwnerId,
     });
 
     return finalUrl;
