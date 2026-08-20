@@ -2,7 +2,7 @@
  * Utility functions for batched chatbot replies
  */
 
-export const DEFAULT_DEBOUNCE_MS = 4000;
+export const DEFAULT_DEBOUNCE_MS = 6000;
 export const DEFAULT_MAX_WAIT_MS = 10000;
 export const MIN_DEBOUNCE_MS = 500;
 export const MAX_DEBOUNCE_MS = 10000;

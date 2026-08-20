@@ -374,7 +374,7 @@ class ZaloPersonalAdapter {
         };
         
         const contentStr = typeof msgData.content === 'string' ? msgData.content : JSON.stringify(msgData.content || '');
-        // Log tóm tắt khi nhận message. Bỏ log full content ở đây vì đã có log ở chatbotDebounce.
+        // Log tóm tắt khi nhận message. Bỏ log full content ở đây vì đã có log ở inboundReplyDebounce.
         console.log(`[ZaloPersonalAdapter] Incoming ${isGroup ? 'GROUP' : 'PERSONAL'} from ${msgData.fromUid} [msgType=${msgType}] len=${contentStr.length} account=${accountId}`);
         
         // Add accountId to msgData for saveMessageToDatabase

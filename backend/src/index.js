@@ -18,7 +18,6 @@ import { decryptZaloCookieRows } from './utils/zaloCookieCrypto.util.js';
 import { validateActivePlanKbLimits } from './services/storage/kbQuota.service.js';
 import { validateStorageEnv } from './utils/storageStartupConfig.util.js';
 import { validateInvoiceEnv } from './utils/invoiceStartupConfig.util.js';
-import chatbotDebounceService from './services/chatbot/chatbotDebounce.service.js';
 // Import webhook controller to register debounce processors
 import './controllers/chatbotChannelWebhook.controller.js';
 
@@ -120,7 +119,6 @@ const gracefulShutdown = async (signal) => {
   try {
     await outboundMessageQueueService.close();
     await kbDocumentQueue.close();
-    await chatbotDebounceService.shutdown();
   } catch (error) {
     console.error(`[Server] Lỗi khi đóng BullMQ: ${error?.message || error}`);
   }
@@ -217,10 +215,5 @@ app.listen(PORT, async () => {
       console.error('[Startup] Failed to restore Zalo sessions:', error.message);
     });
     await zaloInboxService.start();
-
-    // Initialize chatbot debounce service (Redis-based message batching)
-    await chatbotDebounceService.init().catch((err) => {
-      console.error('[Startup] Failed to initialize chatbot debounce service:', err.message);
-    });
   }, 3000);
 });

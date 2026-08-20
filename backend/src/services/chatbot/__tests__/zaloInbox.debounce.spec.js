@@ -72,6 +72,9 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
     jest.useFakeTimers();
     inboundReplyDebounceService._resetForTests();
     jest.clearAllMocks();
+    // Pin debounce config so the 6s/10s timing model is deterministic regardless of host env.
+    process.env.CHATBOT_INBOUND_DEBOUNCE_MS = '6000';
+    process.env.CHATBOT_INBOUND_MAX_WAIT_MS = '10000';
 
     mockFindConversation.mockResolvedValue({ id: 200, visitor_info: {} });
     mockIsAiPaused.mockResolvedValue(false);
@@ -89,6 +92,8 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
   afterEach(() => {
     inboundReplyDebounceService._resetForTests();
     jest.useRealTimers();
+    delete process.env.CHATBOT_INBOUND_DEBOUNCE_MS;
+    delete process.env.CHATBOT_INBOUND_MAX_WAIT_MS;
   });
 
   it('aggregates burst of personal 1-1 messages into 1 AI response with history exclusion', async () => {
@@ -100,17 +105,17 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
       { conversationId: 200, messageId: 501 }
     );
 
-    // Advance 2000ms
-    jest.advanceTimersByTime(2000);
+    // Advance 3000ms
+    jest.advanceTimersByTime(3000);
 
-    // Message 2 arrives
+    // Message 2 arrives at t=3000ms (resets quiet timer to t=9000ms)
     await handler(
       { msgId: 'zmsg_2', fromUid: 'visitor_99', content: 'Có size M không', type: 0 },
       { conversationId: 200, messageId: 502 }
     );
 
-    // Advance 4000ms to trigger debounce flush
-    await jest.advanceTimersByTimeAsync(4000);
+    // Advance 6000ms more (t=9000ms since msg2) to trigger debounce flush
+    await jest.advanceTimersByTimeAsync(6000);
 
     // Should call rate limit once
     expect(mockCheckBeforeAi).toHaveBeenCalledTimes(1);
@@ -168,7 +173,7 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
       { msgId: 'locked_1', fromUid: 'visitor_99', content: 'Alo', type: 0 },
       { conversationId: 200, messageId: 601 }
     );
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
 
     expect(mockCheckBeforeAi).not.toHaveBeenCalled();
     expect(mockRouteMessageWithSettings).not.toHaveBeenCalled();
@@ -184,7 +189,7 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
       { msgId: 'send_fail_1', fromUid: 'visitor_99', content: 'Alo', type: 0 },
       { conversationId: 200, messageId: 601 }
     );
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
 
     expect(mockSendReply).toHaveBeenCalledTimes(1);
     expect(mockBroadcast).toHaveBeenCalledTimes(1); // inbound visitor SSE only

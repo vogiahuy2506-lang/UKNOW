@@ -69,11 +69,15 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
     jest.useFakeTimers();
     inboundReplyDebounceService._resetForTests();
     jest.clearAllMocks();
+    process.env.CHATBOT_INBOUND_DEBOUNCE_MS = '6000';
+    process.env.CHATBOT_INBOUND_MAX_WAIT_MS = '10000';
   });
 
   afterEach(() => {
     inboundReplyDebounceService._resetForTests();
     jest.useRealTimers();
+    delete process.env.CHATBOT_INBOUND_DEBOUNCE_MS;
+    delete process.env.CHATBOT_INBOUND_MAX_WAIT_MS;
   });
 
   it('responds ok immediately, saves visitor message, and aggregates burst into 1 AI reply', async () => {
@@ -112,10 +116,10 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
       external_id: 'oa_msg_1',
     }));
 
-    // Advance 2s
-    jest.advanceTimersByTime(2000);
+    // Advance 4000ms
+    jest.advanceTimersByTime(4000);
 
-    // 2. Message 2 arrives
+    // 2. Message 2 arrives at t=4000ms (resets quiet timer to t=10000ms)
     mockParseWebhookEvent.mockReturnValueOnce({
       message: 'Áo này còn size M không',
       senderId: 'user_123',
@@ -125,8 +129,8 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
     await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, res2);
     expect(res2.send).toHaveBeenCalledWith('ok');
 
-    // Advance 5s -> flush debounce
-    await jest.advanceTimersByTimeAsync(5000);
+    // Advance 6000ms more (t=10000ms since msg2) to trigger debounce flush
+    await jest.advanceTimersByTimeAsync(6000);
     await Promise.resolve();
 
     // Should call rate limit exactly once
@@ -181,7 +185,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
     const res = { send: jest.fn() };
     await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, res);
 
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
 
     expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
     expect(mockSendReply).not.toHaveBeenCalled();
@@ -219,7 +223,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
     mockFindActiveChannelById.mockResolvedValue(null);
 
     await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, { send: jest.fn() });
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
 
     expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
     expect(mockSendReply).not.toHaveBeenCalled();
@@ -243,7 +247,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
     mockParseWebhookEvent.mockReturnValue({ message: 'Alo', senderId: 'user_123', messageId: 'oa_msg_1' });
 
     await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, { send: jest.fn() });
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
 
     expect(mockAddMessage).toHaveBeenCalledTimes(1);
   });

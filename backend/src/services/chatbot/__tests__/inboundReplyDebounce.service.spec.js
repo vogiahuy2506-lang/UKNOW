@@ -27,7 +27,7 @@ describe('chatbotReplyBatch.util', () => {
     try {
       delete process.env.CHATBOT_INBOUND_DEBOUNCE_MS;
       delete process.env.CHATBOT_INBOUND_MAX_WAIT_MS;
-      expect(getDebounceConfig()).toEqual({ debounceMs: 4000, maxWaitMs: 10000 });
+      expect(getDebounceConfig()).toEqual({ debounceMs: 6000, maxWaitMs: 10000 });
 
       process.env.CHATBOT_INBOUND_DEBOUNCE_MS = '2000';
       process.env.CHATBOT_INBOUND_MAX_WAIT_MS = '8000';
@@ -35,9 +35,9 @@ describe('chatbotReplyBatch.util', () => {
 
       // Out of bounds debounce
       process.env.CHATBOT_INBOUND_DEBOUNCE_MS = '100'; // below 500
-      expect(getDebounceConfig().debounceMs).toBe(4000);
+      expect(getDebounceConfig().debounceMs).toBe(6000);
       process.env.CHATBOT_INBOUND_DEBOUNCE_MS = '20000'; // above 10000
-      expect(getDebounceConfig().debounceMs).toBe(4000);
+      expect(getDebounceConfig().debounceMs).toBe(6000);
     } finally {
       if (originalDebounce !== undefined) process.env.CHATBOT_INBOUND_DEBOUNCE_MS = originalDebounce;
       else delete process.env.CHATBOT_INBOUND_DEBOUNCE_MS;
@@ -53,15 +53,21 @@ describe('InboundReplyDebounceService', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     service = new InboundReplyDebounceService();
+    // Pin debounce config so timing assertions below are deterministic regardless
+    // of host environment (default in chatbotReplyBatch.util is 6000/10000).
+    process.env.CHATBOT_INBOUND_DEBOUNCE_MS = '6000';
+    process.env.CHATBOT_INBOUND_MAX_WAIT_MS = '10000';
   });
 
   afterEach(() => {
     service._resetForTests();
     inboundReplyDebounceService._resetForTests();
     jest.useRealTimers();
+    delete process.env.CHATBOT_INBOUND_DEBOUNCE_MS;
+    delete process.env.CHATBOT_INBOUND_MAX_WAIT_MS;
   });
 
-  it('flushes a single message after 4000ms quiet window', async () => {
+  it('flushes a single message after 6000ms quiet window', async () => {
     const flushCallback = jest.fn();
     service.enqueue({
       key: 'zalo_oa:1:conv_1',
@@ -71,11 +77,11 @@ describe('InboundReplyDebounceService', () => {
 
     expect(flushCallback).not.toHaveBeenCalled();
 
-    // Advance 3999ms -> not yet
-    jest.advanceTimersByTime(3999);
+    // Advance 5999ms -> not yet
+    jest.advanceTimersByTime(5999);
     expect(flushCallback).not.toHaveBeenCalled();
 
-    // Advance 1ms -> 4000ms -> should flush
+    // Advance 1ms -> 6000ms -> should flush
     await jest.advanceTimersByTimeAsync(1);
     expect(flushCallback).toHaveBeenCalledTimes(1);
     expect(flushCallback).toHaveBeenCalledWith(expect.objectContaining({
@@ -95,23 +101,23 @@ describe('InboundReplyDebounceService', () => {
       flushCallback,
     });
 
-    // Advance 2000ms
-    jest.advanceTimersByTime(2000);
+    // Advance 3000ms
+    jest.advanceTimersByTime(3000);
     expect(flushCallback).not.toHaveBeenCalled();
 
-    // Second message arrives at t=2000ms
+    // Second message arrives at t=3000ms
     service.enqueue({
       key: 'zalo_oa:1:conv_1',
       message: { eventId: 'msg_2', persistedMessageId: 102, content: 'Áo này còn không' },
       flushCallback,
     });
 
-    // At t=4000ms (original due time), should NOT flush because timer reset to t=6000ms
-    jest.advanceTimersByTime(2000);
+    // At t=6000ms (original due time), should NOT flush because timer reset to t=9000ms
+    jest.advanceTimersByTime(3000);
     expect(flushCallback).not.toHaveBeenCalled();
 
-    // At t=6000ms (2000ms after 2nd message), should flush both
-    await jest.advanceTimersByTimeAsync(2000);
+    // At t=9000ms (3000ms after 2nd message), should flush both
+    await jest.advanceTimersByTimeAsync(3000);
     expect(flushCallback).toHaveBeenCalledTimes(1);
     expect(flushCallback).toHaveBeenCalledWith(expect.objectContaining({
       messages: [
@@ -127,7 +133,7 @@ describe('InboundReplyDebounceService', () => {
   it('forces flush at max-wait (10000ms) when user sends continuous messages', async () => {
     const flushCallback = jest.fn();
 
-    // Send a message every 2000ms (t=0, 2000, 4000, 6000, 8000, 10000)
+    // Send a message every 2000ms (t=0, 2000, 4000, 6000, 8000) — at t=10000 the cap hits
     for (let i = 0; i < 5; i += 1) {
       service.enqueue({
         key: 'zalo_oa:1:conv_1',
@@ -159,7 +165,7 @@ describe('InboundReplyDebounceService', () => {
       flushCallback: cb1,
     });
 
-    jest.advanceTimersByTime(2000);
+    jest.advanceTimersByTime(3000);
 
     service.enqueue({
       key: 'zalo_oa:1:conv_B',
@@ -167,13 +173,13 @@ describe('InboundReplyDebounceService', () => {
       flushCallback: cb2,
     });
 
-    // At t=4000ms: conv_A flushes, conv_B still waiting
-    await jest.advanceTimersByTimeAsync(2000);
+    // At t=6000ms: conv_A flushes, conv_B still waiting
+    await jest.advanceTimersByTimeAsync(3000);
     expect(cb1).toHaveBeenCalledTimes(1);
     expect(cb2).not.toHaveBeenCalled();
 
-    // At t=6000ms: conv_B flushes
-    await jest.advanceTimersByTimeAsync(2000);
+    // At t=9000ms: conv_B flushes
+    await jest.advanceTimersByTimeAsync(3000);
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
@@ -195,7 +201,7 @@ describe('InboundReplyDebounceService', () => {
     expect(res2.enqueued).toBe(false);
     expect(res2.duplicate).toBe(true);
 
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
     expect(flushCallback).toHaveBeenCalledTimes(1);
     expect(flushCallback.mock.calls[0][0].messages).toHaveLength(1);
     expect(flushCallback.mock.calls[0][0].messages[0].content).toBe('First');
@@ -216,8 +222,8 @@ describe('InboundReplyDebounceService', () => {
       flushCallback,
     });
 
-    // Trigger first flush at t=4000ms
-    jest.advanceTimersByTime(4000);
+    // Trigger first flush at t=6000ms
+    jest.advanceTimersByTime(6000);
     expect(flushCallback).toHaveBeenCalledTimes(1);
 
     // While batch 1 is executing, message 2 arrives
@@ -232,8 +238,8 @@ describe('InboundReplyDebounceService', () => {
     resolveFirstBatch();
     await Promise.resolve();
 
-    // Now batch 2 is scheduled; advance timers by 4000ms
-    await jest.advanceTimersByTimeAsync(4000);
+    // Now batch 2 is scheduled; advance timers by 6000ms
+    await jest.advanceTimersByTimeAsync(6000);
     expect(flushCallback).toHaveBeenCalledTimes(2);
     expect(flushCallback.mock.calls[1][0].messages[0].content).toBe('Batch 2 Msg');
   });
@@ -248,7 +254,7 @@ describe('InboundReplyDebounceService', () => {
       message: { eventId: 'same_event', content: 'Original' },
       flushCallback,
     });
-    jest.advanceTimersByTime(4000);
+    jest.advanceTimersByTime(6000);
     expect(flushCallback).toHaveBeenCalledTimes(1);
 
     const retried = service.enqueue({
@@ -275,7 +281,7 @@ describe('InboundReplyDebounceService', () => {
       message: { eventId: 'first', content: 'First' },
       flushCallback: firstCallback,
     });
-    jest.advanceTimersByTime(4000);
+    jest.advanceTimersByTime(6000);
     expect(firstCallback).toHaveBeenCalledTimes(1);
 
     service.cancel('zalo_oa:1:conv_1');
@@ -287,7 +293,7 @@ describe('InboundReplyDebounceService', () => {
 
     releaseFirstBatch();
     await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
     expect(replacementCallback).toHaveBeenCalledTimes(1);
   });
 
@@ -304,7 +310,7 @@ describe('InboundReplyDebounceService', () => {
       flushCallback,
     });
 
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
     expect(flushCallback.mock.calls[0][0].messages.map((message) => message.content))
       .toEqual(['Earlier', 'Later']);
   });
@@ -318,7 +324,7 @@ describe('InboundReplyDebounceService', () => {
       flushCallback: errorCallback,
     });
 
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
     expect(errorCallback).toHaveBeenCalledTimes(1);
 
     // Subsequent message should work normally
@@ -329,7 +335,7 @@ describe('InboundReplyDebounceService', () => {
       flushCallback: successCallback,
     });
 
-    await jest.advanceTimersByTimeAsync(4000);
+    await jest.advanceTimersByTimeAsync(6000);
     expect(successCallback).toHaveBeenCalledTimes(1);
   });
 
