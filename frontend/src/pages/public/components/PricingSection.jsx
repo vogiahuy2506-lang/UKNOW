@@ -620,6 +620,9 @@ const isEmployee = activeContext?.type === 'employee';
               && Number(plan.id) === Number(currentPlanId)
               && billingPeriod === activeBillingPeriod;
             const isCurrentPlan = isCurrentCustom || isCurrentStandard || isOwnerCustomForEmployee || isCurrentStandardPlan;
+            const planCode = String(plan.code || '').toLowerCase();
+            const promotion = promotionsByPlanCode[planCode];
+            const hasPromotion = !isCustom && promotion?.discountAmount > 0;
 
             const resolution = (!isAuthenticated || isEmployee || isCustom)
               ? { action: 'upgrade_now', amountToPay: 0, code: null, daysRemaining: 0 }
@@ -677,9 +680,6 @@ const isEmployee = activeContext?.type === 'employee';
               : JSON.parse(plan.features || '[]');
             const planName = getTranslatedPlanName(plan, t);
             const planDescription = getTranslatedPlanDescription(plan, t);
-            const planCode = String(plan.code || '').toLowerCase();
-            const promotion = promotionsByPlanCode[planCode];
-            const hasPromotion = !isCustom && promotion?.discountAmount > 0;
             const rawPlanPrice = billingPeriod === 'yearly' && plan.price_yearly
               ? Number(plan.price_yearly)
               : Number(plan.price || 0);
