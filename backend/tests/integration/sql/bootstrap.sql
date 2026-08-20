@@ -1372,9 +1372,17 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   allow_attachments   BOOLEAN NOT NULL DEFAULT FALSE,
   reply_limit_config  JSONB NOT NULL DEFAULT '{"version":1,"windows":{}}'::jsonb
     CHECK (jsonb_typeof(reply_limit_config) = 'object'),
+  -- Migration 155: chatbot origin tracking (self_created, marketplace_purchased, shared)
+  origin VARCHAR(50) DEFAULT 'self_created',
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration 155: Index for filtering by origin
+CREATE INDEX IF NOT EXISTS idx_custom_chatbots_origin ON custom_chatbots(origin) WHERE is_active = true;
+
+-- Migration 155: Update existing chatbots to self_created
+UPDATE custom_chatbots SET origin = 'self_created' WHERE origin IS NULL OR origin = '';
 
 CREATE TABLE IF NOT EXISTS knowledge_bases (
   id               BIGSERIAL PRIMARY KEY,
