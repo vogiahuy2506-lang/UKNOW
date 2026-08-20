@@ -383,7 +383,8 @@ export async function claimNextEinvoiceJob({ limit = 1 } = {}, queryable = db) {
 
 export async function findEinvoiceJobWithOrder(einvoiceId, queryable = db) {
   const { rows } = await queryable.query(
-    `SELECT e.*, o.order_code, o.invoice_info, o.amount, o.note, o.user_email, o.user_id
+    `SELECT e.*, o.order_code, o.invoice_info, o.amount, o.note, o.user_email, o.user_id,
+            o.updated_at AS paid_at, o.created_at
      FROM einvoices e
      JOIN orders o ON o.id = e.order_id
      WHERE e.id = $1

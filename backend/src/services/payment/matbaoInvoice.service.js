@@ -66,6 +66,25 @@ export function formatMatbaoNLap(now = new Date()) {
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
+/** Human-readable payment time for the non-monetary invoice detail line. */
+export function formatMatbaoPaymentTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: HANOI_TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (t) => parts.find((p) => p.type === t)?.value;
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 function parseInvoiceInfo(order) {
   let info = order?.invoice_info;
   if (typeof info === 'string') {
@@ -118,6 +137,7 @@ export function buildCreateInvoicePayload(order, info) {
   const mtchieu = buildMTChieu(order.order_code);
   const accountEmail = String(order.user_email || '').trim();
   const buyerEmail = accountEmail || String(info.email || '').trim();
+  const paymentTime = formatMatbaoPaymentTime(order.paid_at || order.updated_at || order.created_at);
 
   const isCompany = info.buyerType !== 'personal' && info.buyerType !== 'consumer';
   const isConsumer = info.buyerType === 'consumer';
@@ -177,6 +197,13 @@ export function buildCreateInvoicePayload(order, info) {
         TSuat: vatRate,
         TThue: vatAmount,
         TgTien: gross,
+      },
+      // TChat=4 is a note/detail row: it is rendered on the invoice but never
+      // contributes to the monetary totals.
+      {
+        TChat: 4,
+        STT: 2,
+        THHDVu: `KH:\n${buyerEmail}\nThời gian TT: ${paymentTime}\nNote:`,
       },
     ],
     TgThTien: net,
@@ -290,6 +317,8 @@ export async function dispatchPreparedEinvoice(einvoiceId) {
     amount: job.amount,
     note: job.note,
     user_email: job.user_email,
+    paid_at: job.paid_at,
+    created_at: job.created_at,
   };
   if (!hasInvoiceIntent(order)) return { skipped: true, reason: 'no_intent' };
   const info = parseInvoiceInfo(order);

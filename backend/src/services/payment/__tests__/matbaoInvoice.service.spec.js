@@ -64,6 +64,7 @@ const {
   buildMaTraCuu,
   buildMTChieu,
   formatMatbaoNLap,
+  formatMatbaoPaymentTime,
   hasInvoiceIntent,
   issueInvoiceForOrder,
   shouldIssueInvoiceForOrder,
@@ -113,6 +114,7 @@ describe('matbaoInvoice.service', () => {
     order_code: 172300000000001,
     note: 'custom_self_serve',
     user_email: 'buyer@example.com',
+    paid_at: '2026-08-17T03:58:37.000Z',
     invoice_info: {
       wantInvoice: true,
       taxType: 'KCT',
@@ -160,6 +162,17 @@ describe('matbaoInvoice.service', () => {
     expect(formatMatbaoNLap(new Date('2026-08-10T01:30:00.000Z'))).toBe('2026-08-10T08:30:00');
     expect(formatMatbaoNLap(new Date('2026-08-09T18:00:00.000Z'))).toBe('2026-08-10T01:00:00');
     expect(formatMatbaoNLap(new Date('2026-08-09T16:30:00.000Z'))).toBe('2026-08-09T23:30:00');
+  });
+
+  it('formats payment time in Vietnam time for the invoice detail row', () => {
+    expect(formatMatbaoPaymentTime('2026-08-17T03:58:37.000Z')).toBe('17/08/2026 10:58:37');
+
+    const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
+    expect(payload[0].DSHHDVu[1]).toEqual({
+      TChat: 4,
+      STT: 2,
+      THHDVu: 'KH:\nbuyer@example.com\nThời gian TT: 17/08/2026 10:58:37\nNote:',
+    });
   });
 
   it('payload line totals match net/vat/gross with TSuat=-1 (KCT)', () => {
