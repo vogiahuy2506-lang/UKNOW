@@ -105,7 +105,7 @@ function readAccount(acc) {
   };
 }
 
-export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect }) {
+export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect, chatbotId }) {
   const { t } = useI18n();
   const [accounts, setAccounts] = useState([]);
   const [chatbotSettings, setChatbotSettings] = useState({});
@@ -130,10 +130,11 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect 
   const fetchData = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true); else setLoading(true);
     try {
-      // Parallel fetch
+      // Parallel fetch — pass chatbotId when available so the settings row is
+      // scoped to (user, zalo, chatbot) and won't leak from a sibling chatbot.
       const [accountsRes, settingsRes] = await Promise.all([
         zaloSettingsApiService.listAccounts(),
-        chatbotApi.listZaloAccountsWithChatbotSettings().catch(() => ({ data: { data: [] } })),
+        chatbotApi.listZaloAccountsWithChatbotSettings(chatbotId).catch(() => ({ data: { data: [] } })),
       ]);
 
       const rawAccounts = accountsRes?.data?.data?.items
@@ -175,7 +176,7 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect 
 
   const handleToggle = async (account, enabled) => {
     try {
-      const res = await chatbotApi.toggleZaloAccountChatbot(account.id, enabled);
+      const res = await chatbotApi.toggleZaloAccountChatbot(account.id, enabled, chatbotId);
       const updated = res.data?.data;
       // Lưu bằng cùng key với list (account.id) và merge trạng thái is_enabled mới nhất
       // để tránh việc backend trả row với key khác (id_zalo_setting) làm mất state UI.

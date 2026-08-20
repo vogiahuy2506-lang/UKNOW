@@ -7,15 +7,30 @@ class ChatbotZaloAccountRepository {
    * @param {number} zaloSettingId
    * @returns {Promise<object|null>}
    */
-  async getSettings(userId, zaloSettingId) {
+  /**
+   * Get chatbot settings for a specific Zalo account.
+   *
+   * @param {number} userId
+   * @param {number} zaloSettingId
+   * @param {object} [opts]
+   * @param {number|null} [opts.idChatbot] - If provided, returns the row for this
+   *   (user, zalo, chatbot) tuple. If omitted, returns the most recently updated
+   *   row (legacy behavior — backwards compat for callers that haven't been
+   *   migrated to the per-chatbot model).
+   * @returns {Promise<object|null>}
+   */
+  async getSettings(userId, zaloSettingId, { idChatbot } = {}) {
     const { rows } = await db.query(
       `SELECT czs.*, sa.name AS sub_assistant_name, sa.greeting_msg,
               cb.name AS chatbot_name, cb.system_instruction AS chatbot_system_instruction
        FROM chatbot_zalo_account_settings czs
        LEFT JOIN sub_assistants sa ON sa.id = czs.id_sub_assistant
        LEFT JOIN custom_chatbots cb ON cb.id = czs.id_chatbot AND cb.is_active = true
-       WHERE czs.id_user = $1 AND czs.id_zalo_setting = $2`,
-      [userId, zaloSettingId]
+       WHERE czs.id_user = $1 AND czs.id_zalo_setting = $2
+         AND ($3::bigint IS NULL OR czs.id_chatbot = $3::bigint)
+       ORDER BY czs.id_chatbot NULLS LAST, czs.updated_at DESC NULLS LAST
+       LIMIT 1`,
+      [userId, zaloSettingId, idChatbot ?? null]
     );
     return rows[0] || null;
   }
@@ -48,8 +63,28 @@ class ChatbotZaloAccountRepository {
   /**
    * List all Zalo accounts (zalo_settings) of the user with chatbot-enabled flag.
    * Returns one row per linked account, regardless of whether settings row exists.
+   *
+   * @param {number} userId
+   * @param {number|null} [chatbotId] - If provided, the chatbot_enabled flag reflects
+   *   the row matching this chatbot. If omitted/null, the flag reflects the most
+   *   recently updated row for that (user, zalo) pair (legacy behavior).
    */
-  async listAccountsForUser(userId) {
+  async listAccountsForUser(userId, chatbotId = null) {
+    // When chatbotId is given, only LEFT JOIN the matching row for that chatbot.
+    // Otherwise use a subquery to pick the most recent row per (user, zalo), so
+    // a zalo linked to multiple chatbots shows ONE consistent state.
+    const chatbotJoinClause = chatbotId == null
+      ? `LEFT JOIN LATERAL (
+           SELECT is_enabled, id_chatbot
+           FROM chatbot_zalo_account_settings
+           WHERE id_zalo_setting = zs.id AND id_user = zs.id_user
+           ORDER BY updated_at DESC NULLS LAST, id DESC
+           LIMIT 1
+         ) czs ON true`
+      : `LEFT JOIN chatbot_zalo_account_settings czs
+           ON czs.id_zalo_setting = zs.id AND czs.id_user = zs.id_user
+              AND czs.id_chatbot = $2`;
+
     const { rows } = await db.query(
       `SELECT zs.id,
               zs.id_user,
@@ -65,13 +100,12 @@ class ChatbotZaloAccountRepository {
               czs.id_chatbot,
               cb.name AS chatbot_name
        FROM zalo_settings zs
-       LEFT JOIN chatbot_zalo_account_settings czs
-              ON czs.id_zalo_setting = zs.id AND czs.id_user = zs.id_user
+       ${chatbotJoinClause}
        LEFT JOIN custom_chatbots cb
               ON cb.id = czs.id_chatbot AND cb.is_active = true
        WHERE zs.id_user = $1 AND zs.is_active = true
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
-      [userId]
+      chatbotId == null ? [userId] : [userId, chatbotId]
     );
     return rows;
   }
@@ -90,7 +124,7 @@ class ChatbotZaloAccountRepository {
           ai_model, temperature, max_tokens, response_style, system_instruction, settings,
           id_chatbot)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       ON CONFLICT (id_user, id_zalo_setting) DO UPDATE SET
+       ON CONFLICT (id_user, id_zalo_setting, id_chatbot) DO UPDATE SET
          is_enabled = EXCLUDED.is_enabled,
          id_sub_assistant = EXCLUDED.id_sub_assistant,
          welcome_message = EXCLUDED.welcome_message,
@@ -122,22 +156,27 @@ class ChatbotZaloAccountRepository {
   }
 
   /**
-   * Enable/disable chatbot for a Zalo account
+   * Enable/disable chatbot for a Zalo account linked to a specific chatbot.
+   * Each (user, zalo, chatbot) tuple is independent — toggling chatbot A does not
+   * affect chatbot B sharing the same Zalo account.
+   *
    * @param {number} userId
    * @param {number} zaloSettingId
+   * @param {number|null} idChatbot - chatbot the row belongs to. Pass null for the
+   *   "default" row that is not yet linked to any specific chatbot.
    * @param {boolean} enabled
    * @returns {Promise<object>}
    */
-  async setEnabled(userId, zaloSettingId, enabled) {
+  async setEnabled(userId, zaloSettingId, idChatbot, enabled) {
     const { rows } = await db.query(
       `INSERT INTO chatbot_zalo_account_settings
-         (id_user, id_zalo_setting, is_enabled)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (id_user, id_zalo_setting) DO UPDATE SET
+         (id_user, id_zalo_setting, id_chatbot, is_enabled)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (id_user, id_zalo_setting, id_chatbot) DO UPDATE SET
          is_enabled = EXCLUDED.is_enabled,
          updated_at = NOW()
        RETURNING *`,
-      [userId, zaloSettingId, enabled]
+      [userId, zaloSettingId, idChatbot, enabled]
     );
     return rows[0];
   }

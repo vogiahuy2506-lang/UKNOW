@@ -142,14 +142,21 @@ const chatbotApiService = {
     return api.put(`/ai/chatbot/zalo-account/${zaloSettingId}/chatbot`, data);
   },
 
-  // Toggle chatbot for a Zalo account
-  toggleZaloAccountChatbot(zaloSettingId, enabled) {
-    return api.post(`/ai/chatbot/zalo-account/${zaloSettingId}/chatbot/toggle`, { enabled });
+  // List all Zalo accounts with chatbot settings, optionally scoped to one chatbot
+  listZaloAccountsWithChatbotSettings(chatbotId) {
+    const params = chatbotId == null || chatbotId === ''
+      ? null
+      : { chatbot_id: chatbotId };
+    return api.get('/ai/chatbot/zalo-accounts/chatbot', { params });
   },
 
-  // List all Zalo accounts with chatbot settings
-  listZaloAccountsWithChatbotSettings() {
-    return api.get('/ai/chatbot/zalo-accounts/chatbot');
+  // Toggle chatbot for a Zalo account + chatbot combination.
+  // If idChatbot is omitted, the toggle applies to the default (unlinked) row.
+  toggleZaloAccountChatbot(zaloSettingId, enabled, idChatbot) {
+    return api.post(
+      `/ai/chatbot/zalo-account/${zaloSettingId}/chatbot/toggle`,
+      { enabled, id_chatbot: idChatbot ?? null }
+    );
   },
 
   // Delete a conversation

@@ -505,24 +505,40 @@ class ChatbotController {
   }
 
   /**
-   * Toggle chatbot for a specific Zalo account
+   * Toggle chatbot for a specific Zalo account + chatbot combination.
    * POST /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot/toggle
+   *
+   * Body: { enabled: boolean, id_chatbot?: number }
+   *
+   * If `id_chatbot` is omitted the toggle applies to the "default" row
+   * (id_chatbot = NULL). Each (user, zalo, chatbot) tuple is independent,
+   * so toggling one chatbot does NOT affect other chatbots sharing the same
+   * Zalo account.
    */
   async toggleZaloAccountChatbot(req, res) {
     try {
-      const zaloSettingId = parseInt(req.params.zaloSettingId);
+      const zaloSettingId = parseInt(req.params.zaloSettingId, 10);
       if (!zaloSettingId) {
         return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
       }
-      const { enabled } = req.body;
+      const { enabled, id_chatbot } = req.body || {};
       if (typeof enabled !== 'boolean') {
         return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
       }
-      const settings = await chatbotZaloAccountRepository.setEnabled(req.user.id, zaloSettingId, enabled);
-      
+      // id_chatbot may be null/undefined — fall back to NULL row.
+      const normalizedChatbotId = id_chatbot == null || id_chatbot === ''
+        ? null
+        : parseInt(id_chatbot, 10);
+      if (normalizedChatbotId != null && !Number.isFinite(normalizedChatbotId)) {
+        return res.status(400).json({ success: false, message: 'id_chatbot must be a number or null' });
+      }
+      const settings = await chatbotZaloAccountRepository.setEnabled(
+        req.user.id, zaloSettingId, normalizedChatbotId, enabled
+      );
+
       // Invalidate cache to apply toggle immediately
       zaloInboxService.invalidateAccountCache();
-      
+
       return res.json({ success: true, data: settings });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -532,10 +548,21 @@ class ChatbotController {
   /**
    * List all Zalo accounts with their chatbot settings for current user
    * GET /api/ai/chatbot/zalo-accounts/chatbot
+   *
+   * Query: ?chatbot_id=123 (optional). When provided, returns the chatbot_enabled
+   * flag for that chatbot only — so toggling one chatbot does not bleed into
+   * another chatbot that shares the same Zalo account.
    */
   async listZaloAccountsWithChatbotSettings(req, res) {
     try {
-      const accounts = await chatbotZaloAccountRepository.listAccountsForUser(req.user.id);
+      const rawChatbotId = req.query?.chatbot_id;
+      const chatbotId = rawChatbotId == null || rawChatbotId === ''
+        ? null
+        : parseInt(rawChatbotId, 10);
+      if (chatbotId != null && !Number.isFinite(chatbotId)) {
+        return res.status(400).json({ success: false, message: 'chatbot_id must be a number or empty' });
+      }
+      const accounts = await chatbotZaloAccountRepository.listAccountsForUser(req.user.id, chatbotId);
       return res.json({ success: true, data: accounts });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });

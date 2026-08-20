@@ -391,7 +391,9 @@ function ZaloPersonalForm({ chatbot }) {
   const loadAccounts = async () => {
     setLoading(true);
     try {
-      const res = await chatbotApi.listZaloAccountsWithChatbotSettings();
+      // Scope the list to this chatbot so toggling one chatbot does not affect
+      // other chatbots that share the same Zalo account.
+      const res = await chatbotApi.listZaloAccountsWithChatbotSettings(chatbot?.id);
       // Backend response shape: { success: true, data: [accounts] }
       // Axios unwraps the HTTP body into res.data, so the array lives at res.data.data.
       const list = res?.data?.data || res?.data?.accounts || res?.accounts || res?.data || [];
@@ -411,7 +413,7 @@ function ZaloPersonalForm({ chatbot }) {
     // Optimistic update
     setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, chatbot_enabled: next } : a)));
     try {
-      await chatbotApi.toggleZaloAccountChatbot(acc.id, next);
+      await chatbotApi.toggleZaloAccountChatbot(acc.id, next, chatbot?.id);
       toast.success(next ? `Đã bật chatbot cho ${acc.name || acc.phone || acc.zalo_user_id}` : 'Đã tắt chatbot');
     } catch {
       // rollback
