@@ -1,30 +1,49 @@
+/* eslint-disable no-unused-vars */
 import { useState, useEffect } from 'react';
 import {
   HiOutlinePlus,
   HiOutlineTrash,
   HiOutlineSparkles,
   HiOutlineX,
-  HiOutlineAdjustments,
-  HiOutlineStatusOnline,
-  HiOutlineChevronRight,
-  HiOutlineDocumentText,
+  HiOutlineChevronDoubleLeft,
+  HiOutlineChevronDoubleRight,
+  HiOutlineShoppingCart,
+  HiOutlineShare,
+  HiOutlineDotsHorizontal,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import marketplaceService from '../../services/marketplace.service';
 import { useI18n } from '../../i18n';
 
-function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery = '' }) {
+const ORIGIN_TABS = [
+  { id: 'self_created', label: 'Tự tạo', icon: HiOutlineSparkles },
+  { id: 'marketplace_purchased', label: 'Mua', icon: HiOutlineShoppingCart },
+  { id: 'shared', label: 'Chia sẻ', icon: HiOutlineShare },
+];
+
+function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchChange, collapsed = false, onToggleCollapse }) {
   const { t } = useI18n();
+  const [internalSearch, setInternalSearch] = useState(searchQuery);
   const [chatbots, setChatbots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [filterActive, setFilterActive] = useState(true);
-  const [sortBy, setSortBy] = useState('recent'); // recent | name | created
+  const [originTab, setOriginTab] = useState('self_created');
+  const [contextMenu, setContextMenu] = useState(null);
 
   const STORAGE_KEY = 'uknow_chatbots';
+
+  useEffect(() => {
+    setInternalSearch(searchQuery);
+  }, [searchQuery]);
+
+  const handleSearchChange = (value) => {
+    setInternalSearch(value);
+    onSearchChange?.(value);
+  };
 
   const loadFromStorage = () => {
     try {
@@ -43,7 +62,6 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
     }
   };
 
-  // Listen for create event from studio page
   useEffect(() => {
     const handler = () => setShowCreate(true);
     document.addEventListener('studio:create-new', handler);
@@ -53,31 +71,28 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
   useEffect(() => {
     const loadChatbots = async () => {
       try {
-        const res = await chatbotApi.listChatbots();
+        // All tabs use the same API with origin filter
+        const params = { origin: originTab };
+        const res = await chatbotApi.listChatbots(params);
         if (res.success && res.data) {
           setChatbots(res.data);
-          saveToStorage(res.data); // Sync to localStorage
-          if (res.data.length > 0 && !selectedBot) {
-            onSelectBot(res.data[0]);
-          }
+          saveToStorage(res.data);
+          if (res.data.length > 0 && !selectedBot) onSelectBot(res.data[0]);
         } else {
           throw new Error('Invalid response');
         }
       } catch (apiError) {
-        // Fallback to localStorage if API fails
         console.warn('[ChatListSidebar] API load failed, using localStorage:', apiError.message);
         const bots = loadFromStorage();
         setChatbots(bots);
-        if (bots.length > 0 && !selectedBot) {
-          onSelectBot(bots[0]);
-        }
+        if (bots.length > 0 && !selectedBot) onSelectBot(bots[0]);
       } finally {
         setLoading(false);
       }
     };
     loadChatbots();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [originTab]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -94,14 +109,10 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
           description: '',
           greeting_msg: 'Xin chào! Tôi có thể giúp gì cho bạn?',
         });
-        if (res.success && res.data) {
-          newBot = res.data;
-        } else {
-          throw new Error(res.message);
-        }
+        if (res.success && res.data) newBot = res.data;
+        else throw new Error(res.message);
       } catch (apiError) {
-        // Fallback: create locally
-        console.warn('[ChatListSidebar] API create failed, using localStorage:', apiError.message);
+        console.warn('[ChatListSidebar] API create failed:', apiError.message);
         newBot = {
           id: Date.now(),
           name: newName.trim(),
@@ -111,13 +122,13 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
           documents: [],
           channels: [],
           widget_settings: {
-            theme_color: '#6366F1',
+            theme_color: '#ee7518',
             position: 'bottom-right',
             welcome_message: '',
-            primary_color: '#6366F1',
+            primary_color: '#ee7518',
             background_color: '#FFFFFF',
             text_color: '#1F2937',
-            accent_color: '#818CF8',
+            accent_color: '#f19342',
             logo_url: '',
             show_avatar: true,
             suggested_questions: [],
@@ -150,139 +161,142 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
     if (!confirm(t('chatbot.studio.confirmDelete', { name: bot.name }))) return;
     setDeletingId(bot.id);
     try {
-      // Must delete via API successfully before removing locally
       await chatbotApi.deleteChatbot(bot.id);
-      
       const bots = chatbots.filter(b => b.id !== bot.id);
       setChatbots(bots);
       saveToStorage(bots);
-      if (selectedBot?.id === bot.id) {
-        onSelectBot(bots[0] || null);
-      }
+      if (selectedBot?.id === bot.id) onSelectBot(bots[0] || null);
       toast.success(t('common.success'));
     } catch (apiError) {
-      console.warn('[ChatListSidebar] API delete failed:', apiError.message);
       toast.error('Không thể xóa chatbot: ' + apiError.message);
     } finally {
       setDeletingId(null);
+      setContextMenu(null);
     }
   };
 
-  // Filter & sort
   const filteredBots = chatbots
     .filter(b => {
-      if (!filterActive && !b.is_active) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return b.name.toLowerCase().includes(q) || b.description?.toLowerCase().includes(q);
       }
       return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'created') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-      return new Date(b.id) - new Date(a.id);
     });
 
-  const activeCount = chatbots.filter(b => b.is_active).length;
-
-  return (
-    <div className="h-full flex flex-col bg-white overflow-hidden">
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="pl-4 pr-14 pt-4 pb-3 border-b border-slate-100 shrink-0">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-primary-500 rounded-lg flex items-center justify-center shadow-sm">
-              <HiOutlineSparkles className="w-3.5 h-3.5 text-white" />
-            </div>
-            <h2 className="text-sm font-bold text-slate-800">Chatbots</h2>
-            <span className="text-[11px] bg-primary-50 text-primary-600 font-semibold px-1.5 py-0.5 rounded-full">
-              {filteredBots.length}
-            </span>
-          </div>
+  // ── COLLAPSED MODE: chỉ icon vertical strip ──────────────────────────────
+  if (collapsed) {
+    return (
+      <div className="h-full w-full flex flex-col bg-white">
+        <div className="flex flex-col items-center py-4 gap-1">
           <button
-            onClick={() => setShowCreate(true)}
-            className="w-7 h-7 bg-primary-500 hover:bg-primary-600 active:scale-95 text-white rounded-lg flex items-center justify-center transition-all shadow-sm"
-            title={t('chatbot.studio.createNew')}
+            onClick={onToggleCollapse}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Mở rộng"
           >
-            <HiOutlinePlus className="w-4 h-4" />
+            <HiOutlineChevronDoubleRight className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Stats Row - ẩn trên mobile để tiết kiệm chiều cao */}
-        <div className="hidden sm:flex items-center gap-3 mt-2">
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-            <span>{activeCount} đang hoạt động</span>
-          </div>
-          {chatbots.length - activeCount > 0 && (
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-              <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-              <span>{chatbots.length - activeCount} tạm dừng</span>
-            </div>
+          <div className="w-8 h-px bg-slate-200 my-1" />
+          {ORIGIN_TABS.map(tab => {
+            const Icon = tab.icon;
+            const isActive = originTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setOriginTab(tab.id)}
+                className={`relative w-10 h-10 rounded-lg flex items-center justify-center transition-colors group ${
+                  isActive ? 'bg-primary-50 text-primary-600' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+                }`}
+                title={tab.label}
+              >
+                <Icon className="w-4 h-4" />
+                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary-500 rounded-r-full" />}
+              </button>
+            );
+          })}
+          <div className="w-8 h-px bg-slate-200 my-1" />
+          {originTab === 'self_created' && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-500 text-white hover:bg-primary-600 transition-colors shadow-sm shadow-primary-500/30"
+              title="Tạo chatbot"
+            >
+              <HiOutlinePlus className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>
+    );
+  }
 
-      {/* ── Filter Bar ─────────────────────────────────────────────── */}
-      <div className="px-3 py-2.5 border-b border-slate-100 shrink-0 space-y-2">
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setFilterActive(!filterActive)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-              filterActive
-                ? 'bg-green-50 text-green-600 border border-green-200'
-                : 'bg-slate-50 text-slate-500 border border-slate-200 hover:border-primary-300'
-            }`}
-          >
-            <HiOutlineStatusOnline className="w-3.5 h-3.5" />
-            Đang hoạt động
-          </button>
-          <div className="relative ml-auto">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="appearance-none bg-slate-50 border border-slate-200 text-slate-600 text-[11px] rounded-lg pl-2 pr-6 py-1.5 outline-none focus:border-primary-400 cursor-pointer"
-            >
-              <option value="recent">Mới nhất</option>
-              <option value="name">A → Z</option>
-              <option value="created">Ngày tạo</option>
-            </select>
-            <HiOutlineChevronRight className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90 pointer-events-none" />
+  // ── EXPANDED MODE ─────────────────────────────────────────────────────────
+  return (
+    <div className="h-full flex flex-col bg-white">
+      {/* Header */}
+      <div className="px-5 pt-5 pb-4 shrink-0">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-primary-500 flex items-center justify-center">
+              <HiOutlineSparkles className="w-3.5 h-3.5 text-white" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-900 tracking-tight">Chatbots</h2>
           </div>
+          <button
+            onClick={onToggleCollapse}
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Thu gọn"
+          >
+            <HiOutlineChevronDoubleLeft className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Origin Tabs */}
+        <div className="flex items-center gap-1 p-0.5 bg-slate-100/80 rounded-lg">
+          {ORIGIN_TABS.map(tab => {
+            const Icon = tab.icon;
+            const isActive = originTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setOriginTab(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  isActive ? 'bg-white text-slate-900 shadow-sm shadow-slate-200/60' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* ── Bot List ───────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      {/* Search */}
+      <div className="px-5 pb-3 shrink-0">
+        <div className="relative">
+          <input
+            type="text"
+            value={internalSearch}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Tìm chatbot..."
+            className="w-full pl-3 pr-3 py-2 text-sm bg-slate-50 border border-slate-200/60 rounded-lg outline-none focus:bg-white focus:border-primary-400 focus:ring-2 focus:ring-primary-500/10 transition-all placeholder:text-slate-400"
+          />
+        </div>
+      </div>
+
+      {/* Bot List */}
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <div className="w-8 h-8 border-2 border-primary-200 border-t-primary-500 rounded-full animate-spin mb-3" />
-            <p className="text-xs text-slate-400">{t('common.loading')}</p>
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-slate-200 border-t-primary-500 rounded-full animate-spin" />
           </div>
         ) : filteredBots.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mb-3">
-              <HiOutlineSparkles className="w-7 h-7 text-slate-300" />
-            </div>
-            <p className="text-sm font-medium text-slate-600 mb-1">
-              {chatbots.length === 0 ? 'Chưa có chatbot nào' : 'Không tìm thấy'}
-            </p>
-            <p className="text-[11px] text-slate-400 mb-4">
-              {chatbots.length === 0 ? 'Tạo chatbot đầu tiên để bắt đầu' : 'Thử thay đổi bộ lọc'}
-            </p>
-            {chatbots.length === 0 && (
-              <button
-                onClick={() => setShowCreate(true)}
-                className="text-xs text-primary-600 font-semibold hover:text-primary-700 hover:underline"
-              >
-                Tạo chatbot đầu tiên
-              </button>
-            )}
-          </div>
+          <EmptyState
+            originTab={originTab}
+            onCreate={() => setShowCreate(true)}
+          />
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {filteredBots.map(bot => (
               <BotCard
                 key={bot.id}
@@ -290,6 +304,10 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
                 isSelected={selectedBot?.id === bot.id}
                 onSelect={() => onSelectBot(bot)}
                 onDelete={(e) => handleDelete(bot, e)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ botId: bot.id, x: e.clientX, y: e.clientY });
+                }}
                 deletingId={deletingId}
               />
             ))}
@@ -297,113 +315,122 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
         )}
       </div>
 
-      {/* ── Footer ─────────────────────────────────────────────────── */}
-      <div className="px-3 py-2.5 border-t border-slate-100 shrink-0 bg-slate-50/50">
-        <div className="text-[11px] text-slate-400">
-          <span>{chatbots.length} chatbot(s)</span>
-        </div>
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-slate-100 shrink-0">
+        {originTab === 'self_created' ? (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors shadow-sm shadow-primary-500/20"
+          >
+            <HiOutlinePlus className="w-4 h-4" />
+            Chatbot mới
+          </button>
+        ) : (
+          <div className="text-[11px] text-center text-slate-400 px-2">
+            {originTab === 'marketplace_purchased'
+              ? 'Chatbot mua từ Marketplace — không thể tạo mới tại đây'
+              : 'Chatbot được chia sẻ với bạn — không thể tạo mới tại đây'}
+          </div>
+        )}
       </div>
 
-      {/* ── Create Modal (bottom-sheet trên mobile, centered trên md+) ── */}
+      {/* Context menu */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-50 w-44 bg-white rounded-lg shadow-lg shadow-slate-900/10 border border-slate-200/80 py-1"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const bot = chatbots.find(b => b.id === contextMenu.botId);
+                if (bot) handleDelete(bot, e);
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <HiOutlineTrash className="w-3.5 h-3.5 text-red-500" />
+              Xóa chatbot
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Create Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-t-3xl md:rounded-2xl shadow-2xl w-full md:max-w-sm md:mx-4 max-h-[92dvh] md:max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="relative px-5 md:px-6 pt-5 md:pt-6 pb-4 bg-primary-500 shrink-0">
-              <div className="absolute inset-0 bg-white/10" />
-              <div className="relative flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                    <HiOutlineSparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-bold text-base">Tạo Chatbot mới</h3>
-                    <p className="text-primary-100 text-xs mt-0.5">Thiết lập trong vài giây</p>
-                  </div>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl md:rounded-xl shadow-xl w-full md:max-w-md md:mx-4 max-h-[92dvh] md:max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 pt-6 pb-5 border-b border-slate-100 shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Tạo Chatbot</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Thiết lập trong vài giây</p>
                 </div>
                 <button
                   onClick={() => { setShowCreate(false); setNewName(''); }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                 >
-                  <HiOutlineX className="w-5 h-5" />
+                  <HiOutlineX className="w-4 h-4" />
                 </button>
               </div>
-              {/* Drag handle hint cho mobile */}
-              <div className="md:hidden absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-white/40 rounded-full" />
             </div>
 
-            {/* Modal Body */}
-            <form onSubmit={handleCreate} className="px-5 md:px-6 py-4 md:py-5 space-y-4 md:space-y-5 overflow-y-auto">
+            <form onSubmit={handleCreate} className="px-6 py-5 space-y-5 overflow-y-auto">
               <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Tên Chatbot *
+                <label className="text-xs font-medium text-slate-700 mb-1.5 block">
+                  Tên Chatbot
                 </label>
                 <input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="VD: Hỗ trợ khách hàng, Tư vấn sản phẩm..."
+                  placeholder="VD: Hỗ trợ khách hàng"
                   autoFocus
-                  className="mt-2 w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-base md:text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-primary-400 transition-colors"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
               </div>
 
-              {/* Quick Templates */}
               <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 block">
-                  Chọn mẫu nhanh
+                <label className="text-xs font-medium text-slate-700 mb-2 block">
+                  Mẫu nhanh
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { label: 'Hỗ trợ khách hàng', emoji: '💬', desc: 'Trả lời FAQ, hỗ trợ' },
-                    { label: 'Tư vấn bán hàng', emoji: '🛒', desc: 'Giới thiệu sản phẩm' },
-                    { label: 'Giáo dục', emoji: '📚', desc: 'Hỏi đáp kiến thức' },
-                    { label: 'Tùy chỉnh', emoji: '✨', desc: 'Bắt đầu trắng' },
+                    { label: 'Hỗ trợ khách hàng', emoji: '💬' },
+                    { label: 'Tư vấn bán hàng', emoji: '🛒' },
+                    { label: 'Giáo dục', emoji: '📚' },
+                    { label: 'Tùy chỉnh', emoji: '✨' },
                   ].map(tpl => (
                     <button
                       key={tpl.label}
                       type="button"
                       onClick={() => setNewName(tpl.label)}
-                      className={`text-left p-3 rounded-xl border-2 transition-all hover:border-primary-300 ${
-                        newName === tpl.label
-                          ? 'border-primary-400 bg-primary-50'
-                          : 'border-slate-200 hover:border-primary-200'
+                      className={`text-left p-3 rounded-lg border transition-colors ${
+                        newName === tpl.label ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5 mb-1.5">
-                        <span className="text-base shrink-0">{tpl.emoji}</span>
-                        <span className="text-xs font-semibold text-slate-700">{tpl.label}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 pl-7">{tpl.desc}</p>
+                      <span className="text-base mr-2">{tpl.emoji}</span>
+                      <span className="text-xs font-medium text-slate-700">{tpl.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => { setShowCreate(false); setNewName(''); }}
-                  className="px-4 py-2.5 text-sm text-slate-500 hover:text-slate-700 font-medium"
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={creating || !newName.trim()}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white text-sm font-bold rounded-xl hover:bg-primary-600 disabled:opacity-50 shadow-lg shadow-primary-500/30 transition-all active:scale-95"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm font-semibold rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {creating ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Đang tạo...
-                    </>
-                  ) : (
-                    <>
-                      <HiOutlinePlus className="w-4 h-4" />
-                      Tạo ngay
-                    </>
-                  )}
+                  {creating ? 'Đang tạo...' : 'Tạo ngay'}
                 </button>
               </div>
             </form>
@@ -414,118 +441,110 @@ function ChatListSidebar({ selectedBot, onSelectBot, _onCreateNew, searchQuery =
   );
 }
 
-function BotCard({ bot, isSelected, onSelect, onDelete, deletingId }) {
-  const [showMenu, setShowMenu] = useState(false);
+function EmptyState({ originTab, onCreate }) {
+  const isSearch = false; // nếu muốn phân biệt search-empty vs list-empty có thể truyền prop riêng
+  const config = (() => {
+    if (originTab === 'marketplace_purchased') {
+      return {
+        icon: HiOutlineShoppingCart,
+        title: 'Chưa mua chatbot nào',
+        desc: 'Khám phá Marketplace để mua chatbot mẫu và dùng ngay.',
+      };
+    }
+    if (originTab === 'shared') {
+      return {
+        icon: HiOutlineShare,
+        title: 'Chưa được chia sẻ chatbot',
+        desc: 'Khi có ai đó chia sẻ chatbot cho bạn, nó sẽ hiện ở đây.',
+      };
+    }
+    return {
+      icon: HiOutlineSparkles,
+      title: isSearch ? 'Không tìm thấy' : 'Chưa có chatbot',
+      desc: isSearch ? 'Thử bỏ bộ lọc' : 'Tạo chatbot đầu tiên của bạn',
+    };
+  })();
+  const Icon = config.icon;
+
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+      <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+        <Icon className="w-5 h-5 text-slate-400" />
+      </div>
+      <p className="text-sm font-medium text-slate-700 mb-1">{config.title}</p>
+      <p className="text-xs text-slate-400 mb-4">{config.desc}</p>
+      {originTab === 'self_created' && (
+        <button
+          onClick={onCreate}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-primary-500 hover:bg-primary-600 px-3.5 py-2 rounded-lg transition-colors"
+        >
+          <HiOutlinePlus className="w-3.5 h-3.5" />
+          Tạo chatbot
+        </button>
+      )}
+    </div>
+  );
+}
+
+function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu, deletingId }) {
+  const isMarketplaceBot = bot.widget_key?.startsWith('chatbot_');
   const docCount = bot.documents?.length || 0;
-  const channelCount = bot.channels?.length || 0;
 
   return (
     <div
       onClick={onSelect}
-      className={`group relative rounded-xl cursor-pointer transition-all duration-200 ${
-        isSelected
-          ? 'bg-primary-50 border-2 border-primary-300 shadow-sm'
-          : 'border-2 border-transparent hover:bg-slate-50 hover:border-slate-200'
+      onContextMenu={onContextMenu}
+      className={`group relative px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+        isSelected ? 'bg-primary-50/60' : 'hover:bg-slate-50'
       }`}
     >
-      <div className="p-3 flex items-start gap-3">
+      <div className="flex items-start gap-2.5">
         {/* Avatar */}
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-semibold transition-colors ${
           isSelected
-            ? 'bg-primary-500'
-            : 'bg-gradient-to-br from-slate-100 to-slate-200 group-hover:from-slate-200 group-hover:to-slate-300'
+            ? 'bg-primary-500 text-white'
+            : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
         }`}>
           {bot.avatar_url ? (
-            <img src={bot.avatar_url} alt="" className="w-full h-full rounded-xl object-cover" />
+            <img src={bot.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" />
           ) : (
-            <span className={`text-lg font-bold ${isSelected ? 'text-white' : 'text-slate-500'}`}>
-              {bot.name?.[0]?.toUpperCase() || '?'}
-            </span>
+            bot.name?.[0]?.toUpperCase() || '?'
           )}
         </div>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-slate-800 truncate">{bot.name}</p>
-            {bot.is_active ? (
-              <div className="w-2 h-2 rounded-full bg-green-400 shadow-sm" />
-            ) : (
-              <div className="w-2 h-2 rounded-full bg-slate-300" />
+          <div className="flex items-center gap-1.5">
+            <p className={`text-sm font-medium truncate ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
+              {bot.name}
+            </p>
+            {isMarketplaceBot && (
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-primary-600 bg-primary-50 px-1 rounded">
+                MP
+              </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-400 truncate mt-0.5">
-            {bot.description || 'Chưa có mô tả'}
-          </p>
-
-          {/* Stats */}
-          <div className="flex items-center gap-3 mt-1.5">
-            {docCount > 0 && (
-              <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                <HiOutlineDocumentText className="w-3 h-3" />
-                <span>{docCount} tài liệu</span>
-              </div>
-            )}
-            {channelCount > 0 && (
-              <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-                <span>{channelCount} kênh</span>
-              </div>
-            )}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${bot.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            <span className="text-[11px] text-slate-400">
+              {docCount > 0 ? `${docCount} tài liệu` : 'Chưa có dữ liệu'}
+            </span>
           </div>
         </div>
 
-        {/* Menu Button */}
-        <div className="relative">
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
-              isSelected
-                ? 'text-primary-600 hover:bg-primary-100'
-                : 'text-slate-300 opacity-0 group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-500'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <circle cx="5" cy="12" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="19" cy="12" r="1.5" />
-            </svg>
-          </button>
-
-          {showMenu && (
-            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-50">
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowMenu(false); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
-              >
-                <HiOutlineAdjustments className="w-3.5 h-3.5" />
-                Chỉnh sửa
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(e); setShowMenu(false); }}
-                disabled={deletingId === bot.id}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-              >
-                {deletingId === bot.id ? (
-                  <div className="w-3.5 h-3.5 border-2 border-red-200 border-t-red-500 rounded-full animate-spin" />
-                ) : (
-                  <HiOutlineTrash className="w-3.5 h-3.5" />
-                )}
-                Xóa chatbot
-              </button>
-            </div>
-          )}
-        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+          className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
+            isSelected ? 'text-slate-500 hover:bg-slate-200/60' : 'text-slate-300 opacity-0 group-hover:opacity-100 hover:bg-slate-200/60 hover:text-slate-600'
+          }`}
+        >
+          <HiOutlineDotsHorizontal className="w-3.5 h-3.5" />
+        </button>
       </div>
 
-      {/* Selection Indicator */}
+      {/* Selection indicator */}
       {isSelected && (
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary-500 rounded-r-full" />
       )}
-
-      {showMenu && <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />}
     </div>
   );
 }

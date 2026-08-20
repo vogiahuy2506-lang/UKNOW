@@ -57,6 +57,11 @@ const RESOURCE_LIMIT_MAP = {
     ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
     label: 'số landing page',
   },
+  chatbots: {
+    column: 'max_chatbots',
+    table: 'custom_chatbots',
+    label: 'số chatbot',
+  },
 };
 
 const isMissingLimitColumnsError = (error) => error?.code === '42703';

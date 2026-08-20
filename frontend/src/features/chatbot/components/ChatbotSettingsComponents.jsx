@@ -9,6 +9,7 @@ import {
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineClipboardCopy,
+  HiOutlineCog,
   HiOutlineCode,
   HiOutlineDocumentText,
   HiOutlineDownload,
@@ -19,6 +20,7 @@ import {
   HiOutlinePlus,
   HiOutlineQrcode,
   HiOutlineRefresh,
+  HiOutlineSparkles,
   HiOutlineTrash,
   HiOutlineUpload,
   HiOutlineX,
@@ -58,10 +60,74 @@ export function SectionCard({ icon: Icon, title, subtitle, children, accent = 's
 // Model AI do super admin chọn ở cấp hệ thống (Quản lý model AI) — user không
 // thấy và không chọn model, backend luôn resolve về model hệ thống.
 
+// 6 preset phong cách trả lời — click chọn là tự set temperature + welcome_message
 const RESPONSE_STYLES = [
-  { value: 'friendly', label: 'Thân thiện', desc: 'Gần gũi, dùng emoji phù hợp' },
-  { value: 'professional', label: 'Chuyên nghiệp', desc: 'Ngắn gọn, súc tích' },
-  { value: 'casual', label: 'Thoải mái', desc: 'Như trò chuyện bạn bè' },
+  {
+    value: 'friendly',
+    emoji: '😊',
+    label: 'Thân thiện',
+    desc: 'Gần gũi, dùng emoji phù hợp',
+    accent: 'from-orange-50 to-amber-50',
+    ring: 'ring-orange-300',
+    temperature: 0.7,
+    max_tokens: 2048,
+    welcome: 'Xin chào! Tôi có thể giúp gì cho bạn hôm nay? 😊',
+  },
+  {
+    value: 'professional',
+    emoji: '🎯',
+    label: 'Chuyên nghiệp',
+    desc: 'Ngắn gọn, súc tích, lịch sự',
+    accent: 'from-slate-50 to-blue-50',
+    ring: 'ring-blue-300',
+    temperature: 0.3,
+    max_tokens: 1024,
+    welcome: 'Xin chào. Tôi là trợ lý ảo, xin phép hỗ trợ bạn.',
+  },
+  {
+    value: 'casual',
+    emoji: '💬',
+    label: 'Thoải mái',
+    desc: 'Như trò chuyện với bạn bè',
+    accent: 'from-violet-50 to-fuchsia-50',
+    ring: 'ring-violet-300',
+    temperature: 0.8,
+    max_tokens: 2048,
+    welcome: 'Ê chào bạn! Đang cần hỗ trợ gì nè?',
+  },
+  {
+    value: 'empathetic',
+    emoji: '🤝',
+    label: 'Đồng cảm',
+    desc: 'Thấu hiểu, ân cần, chu đáo',
+    accent: 'from-rose-50 to-pink-50',
+    ring: 'ring-rose-300',
+    temperature: 0.6,
+    max_tokens: 2048,
+    welcome: 'Chào bạn, mình ở đây để lắng nghe và hỗ trợ bạn nhé 💗',
+  },
+  {
+    value: 'concise',
+    emoji: '⚡',
+    label: 'Ngắn gọn',
+    desc: 'Trả lời đúng trọng tâm, ít thừa',
+    accent: 'from-cyan-50 to-sky-50',
+    ring: 'ring-cyan-300',
+    temperature: 0.2,
+    max_tokens: 512,
+    welcome: 'Chào bạn. Bạn cần hỗ trợ gì?',
+  },
+  {
+    value: 'creative',
+    emoji: '✨',
+    label: 'Sáng tạo',
+    desc: 'Ý tưởng mới, gợi mở, đa dạng',
+    accent: 'from-amber-50 to-yellow-50',
+    ring: 'ring-amber-300',
+    temperature: 0.95,
+    max_tokens: 4096,
+    welcome: 'Chào bạn! Hôm nay mình có thể cùng bạn khám phá điều gì thú vị? ✨',
+  },
 ];
 
 /**
@@ -78,98 +144,191 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
     onChange?.({ ...config, [key]: value });
   };
 
+  // Khi chọn preset phong cách → áp dụng temperature/max_tokens/welcome mặc định
+  const handlePickStyle = (style) => {
+    onChange?.({
+      ...config,
+      response_style: style.value,
+      temperature: style.temperature,
+      max_tokens: style.max_tokens,
+      welcome_message: style.welcome,
+      __custom: { pickedStyle: style.value },
+    });
+  };
+
+  const isStyleModified = () => {
+    const picked = config.__custom?.pickedStyle || config.response_style;
+    const preset = RESPONSE_STYLES.find((s) => s.value === picked);
+    if (!preset) return false;
+    return (
+      Number(config.temperature ?? 0.7) !== Number(preset.temperature) ||
+      Number(config.max_tokens || 2048) !== Number(preset.max_tokens) ||
+      (config.welcome_message || '') !== preset.welcome
+    );
+  };
+
+  const resetToPreset = () => {
+    const picked = config.__custom?.pickedStyle || config.response_style;
+    const preset = RESPONSE_STYLES.find((s) => s.value === picked) || RESPONSE_STYLES[0];
+    onChange?.({
+      ...config,
+      response_style: preset.value,
+      temperature: preset.temperature,
+      max_tokens: preset.max_tokens,
+      welcome_message: preset.welcome,
+      __custom: { pickedStyle: preset.value },
+    });
+  };
+
+  const markCustom = (key, value) => {
+    const picked = config.__custom?.pickedStyle || config.response_style;
+    const custom = { ...(config.__custom || {}), pickedStyle: picked, [key]: value };
+    onChange?.({ ...config, [key]: value, __custom: custom });
+  };
+
   return (
     <div className={`space-y-${compact ? '4' : '5'}`}>
-      {/* Response Style */}
-      <div>
-        <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 mb-2 block`}>
-          Phong cách trả lời
-        </label>
-        <div className="grid grid-cols-3 gap-2">
-          {RESPONSE_STYLES.map(style => (
-            <button
-              key={style.value}
-              type="button"
-              onClick={() => update('response_style', style.value)}
-              className={`p-2.5 rounded-lg border text-left transition-all ${
-                config.response_style === style.value
-                  ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <div className={`text-xs font-medium ${config.response_style === style.value ? 'text-primary-700' : 'text-slate-700'}`}>
-                {style.label}
-              </div>
-              {!compact && (
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{style.desc}</div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Temperature */}
+      {/* ── Phong cách trả lời (gộp 6 preset) ───────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700`}>
-            Độ sáng tạo
-          </label>
-          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-            {config.temperature ?? 0.7}
-          </span>
+          <div>
+            <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 block`}>
+              Phong cách trả lời
+            </label>
+            {!compact && (
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Chọn 1 phong cách — AI sẽ tự động điều chỉnh giọng điệu & tin nhắn chào
+              </p>
+            )}
+          </div>
+          {isStyleModified() && (
+            <button
+              type="button"
+              onClick={resetToPreset}
+              className="text-[11px] text-primary-600 hover:text-primary-700 font-medium"
+            >
+              Khôi phục mặc định
+            </button>
+          )}
         </div>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={config.temperature ?? 0.7}
-          onChange={e => update('temperature', parseFloat(e.target.value))}
-          className="w-full accent-primary-600"
-        />
-        <div className="flex justify-between text-xs text-slate-400 mt-1">
-          <span>Chính xác</span>
-          <span>Sáng tạo</span>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {RESPONSE_STYLES.map((style) => {
+            const active = (config.__custom?.pickedStyle || config.response_style) === style.value;
+            return (
+              <button
+                key={style.value}
+                type="button"
+                onClick={() => handlePickStyle(style)}
+                className={`relative p-2.5 rounded-xl border text-left transition-all bg-gradient-to-br ${
+                  active
+                    ? `border-primary-500 ${style.accent} ring-2 ${style.ring}`
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-base leading-none">{style.emoji}</span>
+                  <span
+                    className={`text-xs font-semibold ${
+                      active ? 'text-primary-700' : 'text-slate-800'
+                    }`}
+                  >
+                    {style.label}
+                  </span>
+                </div>
+                {!compact && (
+                  <div className="text-[10px] text-slate-500 leading-tight">{style.desc}</div>
+                )}
+                {active && (
+                  <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full bg-primary-500 flex items-center justify-center">
+                    <HiOutlineCheck className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Max Tokens */}
-      <div>
-        <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 mb-2 block`}>
-          Giới hạn độ dài phản hồi
-        </label>
-        <select
-          value={config.max_tokens || 2048}
-          onChange={e => update('max_tokens', parseInt(e.target.value))}
-          className="input w-full"
-        >
-          <option value={512}>Ngắn gọn (512 tokens)</option>
-          <option value={1024}>Vừa phải (1024 tokens)</option>
-          <option value={2048}>Tiêu chuẩn (2048 tokens)</option>
-          <option value={4096}>Dài (4096 tokens)</option>
-        </select>
-      </div>
+      {/* ── Tuỳ chỉnh nâng cao (collapsible) ──────────────────────────── */}
+      <details className="group border border-slate-200 rounded-xl overflow-hidden">
+        <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors list-none">
+          <div className="flex items-center gap-2">
+            <HiOutlineCog className="w-4 h-4 text-slate-500" />
+            <span className="text-xs font-medium text-slate-700">Tuỳ chỉnh nâng cao</span>
+            {isStyleModified() && (
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
+                Đã chỉnh
+              </span>
+            )}
+          </div>
+          <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="p-3 space-y-4 bg-white">
+          {/* Temperature */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-slate-700">Độ sáng tạo</label>
+              <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                {config.temperature ?? 0.7}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={config.temperature ?? 0.7}
+              onChange={(e) => markCustom('temperature', parseFloat(e.target.value))}
+              className="w-full accent-primary-600"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+              <span>Chính xác</span>
+              <span>Sáng tạo</span>
+            </div>
+          </div>
 
-      {/* Welcome Message */}
-      <div>
-        <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 mb-2 block`}>
-          Tin nhắn chào mở đầu
-        </label>
-        <textarea
-          value={config.welcome_message || ''}
-          onChange={e => update('welcome_message', e.target.value)}
-          placeholder="VD: Chào bạn! Tôi có thể giúp gì cho bạn?"
-          rows={compact ? 2 : 3}
-          className="input resize-y min-h-[60px]"
-        />
-        <p className="text-[10px] text-slate-400 mt-1">Tin nhắn này sẽ được gửi khi người dùng bắt đầu cuộc trò chuyện</p>
-      </div>
+          {/* Max Tokens */}
+          <div>
+            <label className="text-xs font-medium text-slate-700 mb-1.5 block">
+              Giới hạn độ dài phản hồi
+            </label>
+            <select
+              value={config.max_tokens || 2048}
+              onChange={(e) => markCustom('max_tokens', parseInt(e.target.value))}
+              className="input w-full"
+            >
+              <option value={512}>Ngắn gọn (512 tokens)</option>
+              <option value={1024}>Vừa phải (1024 tokens)</option>
+              <option value={2048}>Tiêu chuẩn (2048 tokens)</option>
+              <option value={4096}>Dài (4096 tokens)</option>
+            </select>
+          </div>
+
+          {/* Welcome Message */}
+          <div>
+            <label className="text-xs font-medium text-slate-700 mb-1.5 block">
+              Tin nhắn chào mở đầu
+            </label>
+            <textarea
+              value={config.welcome_message || ''}
+              onChange={(e) => markCustom('welcome_message', e.target.value)}
+              placeholder="VD: Chào bạn! Tôi có thể giúp gì cho bạn?"
+              rows={2}
+              className="input resize-y min-h-[60px]"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">
+              Tin nhắn này sẽ được gửi khi người dùng bắt đầu cuộc trò chuyện
+            </p>
+          </div>
+        </div>
+      </details>
 
       {/* System Instruction */}
       {showSystemInstruction && (
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700`}>
+              <HiOutlineSparkles className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-violet-500" />
               Hướng dẫn AI
             </label>
             <span className="text-[10px] text-slate-400">
@@ -178,12 +337,14 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
           </div>
           <textarea
             value={config.system_instruction || ''}
-            onChange={e => update('system_instruction', e.target.value)}
+            onChange={(e) => update('system_instruction', e.target.value)}
             placeholder="VD: Bạn là một trợ lý ảo thân thiện của công ty ABC, chuyên tư vấn về sản phẩm..."
             rows={compact ? 3 : 5}
             className="input resize-y"
           />
-          <p className="text-[10px] text-slate-400 mt-1">Không giới hạn độ dài. Hướng dẫn chi tiết giúp AI hiểu rõ vai trò và phong cách trả lời.</p>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Không giới hạn độ dài. Hướng dẫn chi tiết giúp AI hiểu rõ vai trò và phong cách trả lời.
+          </p>
         </div>
       )}
     </div>
@@ -441,6 +602,14 @@ export function ZaloChannelCard({ channel, onConnect, onDisconnect, onOpenGuide,
         </div>
       </div>
 
+      <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span className="font-medium">Tính năng đang phát triển.</span>
+        <span>Kết nối Zalo OA hiện chưa khả dụng. Bạn có thể xem trước giao diện, chúng tôi sẽ thông báo khi ra mắt.</span>
+      </div>
+
       {isConnected ? (
         <div className="space-y-4">
           <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
@@ -521,6 +690,14 @@ export function FacebookChannelCard({ channel, onConnect, onDisconnect, onOpenGu
             Kết nối chatbot với Facebook Fanpage để tự động trả lời tin nhắn Messenger.
           </p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span className="font-medium">Tính năng đang phát triển.</span>
+        <span>Kết nối Facebook Messenger hiện chưa khả dụng. Bạn có thể xem trước giao diện, chúng tôi sẽ thông báo khi ra mắt.</span>
       </div>
 
       {isConnected ? (
@@ -1337,171 +1514,6 @@ const colorClasses = {
   purple: { bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200' },
   indigo: { bg: 'bg-indigo-100', text: 'text-indigo-600', border: 'border-indigo-200' },
 };
-
-export function DeployMethodModal({ open, currentTab, onSelect, onClose }) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h3 className="text-base font-semibold text-slate-800">Chọn phương thức triển khai</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors"
-          >
-            <HiOutlineX className="w-5 h-5 text-slate-400" />
-          </button>
-        </div>
-
-        {/* Options List */}
-        <div className="p-3 space-y-2 overflow-y-auto max-h-[60vh]">
-          {deployOptionsConfig.map((option) => {
-            const colors = colorClasses[option.color];
-            const isSelected = currentTab === option.id;
-
-            return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => onSelect(option.id)}
-                className={`w-full flex items-start gap-4 p-4 rounded-xl border transition-all text-left ${
-                  isSelected
-                    ? `${colors.border} bg-${option.color === 'emerald' ? 'emerald-50' : option.color === 'blue' ? 'blue-50' : option.color === 'purple' ? 'purple-50' : 'indigo-50'} shadow-sm`
-                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-xl ${colors.bg} ${colors.text} flex items-center justify-center shrink-0`}>
-                  {option.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-800">{option.label}</p>
-                    {isSelected && (
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${colors.text}`}>
-                        <HiOutlineCheckCircle className="w-3.5 h-3.5" />
-                        Đang chọn
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">{option.desc}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Deploy Tab Content ────────────────────────────────────────────────────────
-
-export function DeployTabContent({
-  deployTab, chatbot, form, zaloChannel, facebookChannel,
-  zaloWebhookUrl, facebookWebhookUrl, facebookVerifyToken,
-  setShowZaloConnectModal, setShowFacebookConnectModal,
-  setShowChannelGuideModal, handleDisconnectChannel,
-  copyWidgetCode, copyIframeCode, widgetCopied,
-}) {
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-
-  if (deployTab === 'script') {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 min-w-0 w-full space-y-3">
-        <p className="text-xs text-slate-500">
-          Copy đoạn mã bên dưới và dán vào thẻ <code className="bg-slate-100 px-1 rounded">&#x3C;head&#x3E;</code> hoặc trước thẻ đóng <code className="bg-slate-100 px-1 rounded">&#x3C;/body&#x3E;</code> trên website.
-        </p>
-        <div className="relative">
-          <pre className="bg-slate-900 text-green-400 p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">
-            {`<script>
-  window.customChatbotConfig = {
-    token: '${chatbot.widget_key || chatbot.id}',
-    baseUrl: '${baseUrl}',
-    primaryColor: '${form.primary_color}',
-    backgroundColor: '${form.background_color}',
-    textColor: '${form.text_color}',
-    accentColor: '${form.accent_color}',
-    position: '${form.position}',
-    welcomeMessage: '${form.greeting_msg || 'Xin chào!'}'
-  };
-</script>
-<script src="${baseUrl}/widget.js" defer></script>`}
-          </pre>
-          <button type="button" onClick={copyWidgetCode}
-            className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-            {widgetCopied
-              ? <><HiOutlineCheck className="w-3.5 h-3.5" /> Đã copy</>
-              : <><HiOutlineCode className="w-3.5 h-3.5" /> Copy code</>
-            }
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (deployTab === 'iframe') {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 min-w-0 w-full space-y-3">
-        <p className="text-xs text-slate-500">
-          Sử dụng iFrame để nhúng giao diện chat vào một trang cố định trên website.
-        </p>
-        <div className="relative">
-          <pre className="bg-slate-900 text-blue-400 p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">
-            {`<iframe
-  src="${baseUrl}/chat/${chatbot.id}"
-  width="100%" height="600"
-  style="border:none;border-radius:12px;"
-  allow="microphone;camera"
-></iframe>`}
-          </pre>
-          <button type="button" onClick={copyIframeCode}
-            className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-            <HiOutlineCode className="w-3.5 h-3.5" /> Copy code
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (deployTab === 'publicLink') {
-    return <PublicLinkCard chatbot={chatbot} form={form} />;
-  }
-
-  if (deployTab === 'zalo') {
-    return (
-      <ZaloChannelCard
-        channel={zaloChannel}
-        onConnect={() => setShowZaloConnectModal(true)}
-        onDisconnect={() => handleDisconnectChannel('zalo_oa')}
-        onOpenGuide={() => setShowChannelGuideModal('zalo')}
-        webhookUrl={zaloWebhookUrl}
-        chatbotId={chatbot.id}
-      />
-    );
-  }
-
-  if (deployTab === 'facebook') {
-    return (
-      <FacebookChannelCard
-        channel={facebookChannel}
-        onConnect={() => setShowFacebookConnectModal(true)}
-        onDisconnect={() => handleDisconnectChannel('facebook')}
-        onOpenGuide={() => setShowChannelGuideModal('facebook')}
-        webhookUrl={facebookWebhookUrl}
-        verifyToken={facebookVerifyToken}
-      />
-    );
-  }
-
-  return null;
-}
 
 // ── Deploy Script Modal ────────────────────────────────────────────────────────
 

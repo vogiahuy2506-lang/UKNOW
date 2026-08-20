@@ -5,6 +5,8 @@ import aiCreditMeter, { AI_CREDIT_RESOURCE } from '../ai/aiCreditMeter.service.j
 import campaignCrudService from '../campaign/campaignCrud.service.js';
 import db from '../../config/database.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
+import { getWalletBalance } from '../../repositories/payment/topup.repository.js';
+import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
 
 class MarketplacePurchaseService {
   /**
@@ -19,8 +21,8 @@ class MarketplacePurchaseService {
 
     // For billOnly context (no plan limit), check wallet only
     if (ctx.billOnly) {
-      const wallet = await aiCreditMeter.resolveCreditContext(userId, {});
-      const walletRemaining = Number(ctx.walletRemaining || 0);
+      const wallet = await getWalletBalance(ctx.billingUserId, 'ai_credits');
+      const walletRemaining = Number(wallet?.remaining || 0);
       const hasEnough = walletRemaining >= amount;
       return { hasEnough, available: walletRemaining, limit: 0, walletRemaining, ctx };
     }
@@ -86,6 +88,20 @@ class MarketplacePurchaseService {
         }
       }
 
+      // 4b. Check chatbot limit BEFORE cloning (chỉ kiểm tra nếu listing là chatbot)
+      if (listing.resource_type === 'chatbot') {
+        const limitCheck = await checkUserResourceLimit({
+          userId: buyerId,
+          resourceKey: 'chatbots',
+        });
+        if (!limitCheck.allowed) {
+          const error = new Error(limitCheck.message);
+          error.status = 400;
+          error.code = 'CHATBOT_LIMIT_EXCEEDED';
+          throw error;
+        }
+      }
+
       // 5. Process credits if price > 0 (sau khi check limit)
       if (listing.price_credits > 0) {
         const amount = listing.price_credits;
@@ -144,6 +160,14 @@ class MarketplacePurchaseService {
         await client.query(
           `UPDATE campaigns SET marketplace_purchase_id = $1 WHERE id = $2`,
           [purchaseRecord.id, clonedResource.id]
+        );
+      }
+
+      // 7b. Link cloned chatbot to purchase record (for marketplace_purchased tracking)
+      if (listing.resource_type === 'chatbot') {
+        await client.query(
+          `UPDATE custom_chatbots SET widget_key = $1 WHERE id = $2`,
+          [`chatbot_${clonedResource.id}`, clonedResource.id]
         );
       }
 
@@ -237,62 +261,13 @@ class MarketplacePurchaseService {
   }
 
   /**
-   * Clone chatbot from listing snapshot
-   * Snapshot phải chứa toàn bộ config của chatbot_settings (channel, settings,
-   * system_instruction, welcome_message, ai_model, ...). Mọi field quan trọng
-   * đều phải được copy sang bản ghi mới, không chỉ vào `settings` JSONB.
+   * Clone chatbot từ listing snapshot.
+   * Ủy quyền cho chatbotCloneRepository.cloneFromSnapshot để đảm bảo 1 đường
+   * clone duy nhất giữa marketplace purchase và share.
    * @private
    */
   async _cloneChatbot(client, userId, listing) {
-    const snapshot = listing.snapshot_data || {};
-    const settings = snapshot.settings || {};
-
-    // Channel whitelist — chỉ nhận các channel đã biết, fallback webchat
-    const VALID_CHANNELS = ['webchat', 'zalo', 'messenger', 'web'];
-    const channel = VALID_CHANNELS.includes(snapshot.channel) ? snapshot.channel : 'webchat';
-
-    const { rows } = await client.query(
-      `INSERT INTO chatbot_settings
-       (id_user, channel, id_sub_assistant, is_enabled, welcome_message,
-        ai_model, temperature, max_tokens, response_style, system_instruction, settings)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING *`,
-      [
-        userId,
-        channel,
-        snapshot.id_sub_assistant ?? null,
-        snapshot.is_enabled !== undefined ? snapshot.is_enabled : true,
-        snapshot.welcome_message ?? null,
-        snapshot.ai_model || 'gemini-2.5-flash',
-        snapshot.temperature ?? 0.7,
-        snapshot.max_tokens ?? 2048,
-        snapshot.response_style || 'friendly',
-        snapshot.system_instruction ?? null,
-        JSON.stringify(settings),
-      ]
-    );
-
-    const newChatbot = rows[0];
-
-    // Clone knowledge base chunks nếu snapshot có
-    const chunks = Array.isArray(snapshot.chunks) ? snapshot.chunks : [];
-    for (const chunk of chunks) {
-      if (!chunk || typeof chunk.chunk_text !== 'string') continue;
-      await client.query(
-        `INSERT INTO custom_chatbot_chunks
-         (chatbot_id, chunk_text, source, chunk_index, metadata)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          newChatbot.id,
-          chunk.chunk_text,
-          chunk.source || null,
-          Number.isFinite(chunk.chunk_index) ? chunk.chunk_index : null,
-          chunk.metadata ? JSON.stringify(chunk.metadata) : null,
-        ]
-      );
-    }
-
-    return { id: newChatbot.id, type: 'chatbot' };
+    return chatbotCloneRepository.cloneFromSnapshot(client, userId, listing?.snapshot_data || {});
   }
 
   /**

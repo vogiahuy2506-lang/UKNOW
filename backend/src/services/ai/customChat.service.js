@@ -2,6 +2,7 @@ import customChatDocumentRepository from '../../repositories/ai/customChatDocume
 import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
+import { scrapeUrlWithJs } from '../../utils/puppeteerScraper.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
@@ -382,6 +383,16 @@ QUY TẮC TRẢ LỜI:
     return customChatDocumentRepository.listDocuments(chatbotId, ownerUserId);
   }
 
+  async getDocumentById(chatbotId, ownerUserId, documentId) {
+    const doc = await customChatDocumentRepository.getDocumentById(documentId, chatbotId, ownerUserId);
+    if (!doc) {
+      const error = new Error('Document not found');
+      error.status = 404;
+      throw error;
+    }
+    return doc;
+  }
+
   async deleteDocument(chatbotId, ownerUserId, docId) {
     const { withKbQuotaLock } = await import('../storage/kbQuota.service.js');
     const decodedDocId = decodeURIComponent(docId);
@@ -430,6 +441,182 @@ QUY TẮC TRẢ LỜI:
       message: `Đã xử lý ${chunks.length} đoạn từ văn bản`,
       chunks: chunks.length,
     };
+  }
+
+  /**
+   * Scrape URL and extract content
+   * Uses Puppeteer for JavaScript-rendered sites, falls back to simple fetch
+   */
+  async scrapeUrl({ chatbotId, userId, url }) {
+    if (!url || !url.trim()) {
+      const error = new Error('URL is required');
+      error.status = 400;
+      throw error;
+    }
+
+    // Validate URL
+    let normalizedUrl;
+    try {
+      normalizedUrl = new URL(url);
+    } catch {
+      const err = new Error('URL không hợp lệ');
+      err.status = 400;
+      throw err;
+    }
+
+    // Only allow http/https
+    if (!['http:', 'https:'].includes(normalizedUrl.protocol)) {
+      const err = new Error('Chỉ hỗ trợ URL http:// hoặc https://');
+      err.status = 400;
+      throw err;
+    }
+
+    let text;
+    let title;
+    let pages = 1;
+    let usedPuppeteer = false;
+
+    // Try Puppeteer first for JS-rendered content
+    try {
+      console.log(`[KB] Scraping with Puppeteer: ${url}`);
+      const result = await scrapeUrlWithJs(url, {
+        waitForTimeout: 2000,
+      });
+
+      text = result.content;
+      title = result.title || '';
+      usedPuppeteer = true;
+      console.log(`[KB] Puppeteer extracted ${text?.length || 0} chars`);
+    } catch (puppeteerErr) {
+      console.warn(`[KB] Puppeteer failed for ${url}: ${puppeteerErr.message}, falling back to simple fetch`);
+      usedPuppeteer = false;
+
+      // Fallback to simple fetch
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; UKnowBot/1.0; +https://uknow.vn)',
+            'Accept': 'text/html,application/xhtml+xml',
+          },
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const err = new Error(`Không thể truy cập URL: HTTP ${response.status}`);
+          err.status = 502;
+          throw err;
+        }
+
+        const html = await response.text();
+        text = this.extractTextFromHtml(html);
+        title = normalizedUrl.hostname.replace(/^www\./, '');
+      } catch (fetchErr) {
+        if (fetchErr.name === 'AbortError') {
+          const error = new Error('Yêu cầu hết thời gian (15 giây)');
+          error.status = 504;
+          throw error;
+        }
+        if (fetchErr.status) throw fetchErr;
+        const error = new Error(`Không thể truy cập URL: ${fetchErr.message}`);
+        error.status = 502;
+        throw error;
+      }
+    }
+
+    if (!text || text.trim().length < 50) {
+      const err = new Error('Không tìm thấy nội dung văn bản trong URL này');
+      err.status = 422;
+      throw err;
+    }
+
+    // Generate title if not set by Puppeteer
+    if (!title) {
+      const hostname = normalizedUrl.hostname.replace(/^www\./, '');
+      const path = normalizedUrl.pathname.replace(/\/$/, '').split('/').pop() || '';
+      title = path ? `${hostname} - ${path}` : hostname;
+    }
+
+    const chunks = await this._replaceKnowledgeDocument({
+      chatbotId,
+      ownerUserId: userId,
+      sourceType: 'url',
+      sourceKey: url,
+      title: title.substring(0, 200),
+      text: text.trim(),
+    });
+
+    return {
+      message: `Đã xử lý ${chunks.length} đoạn từ URL${usedPuppeteer ? ' (rendered JS)' : ''}`,
+      chunks: chunks.length,
+      pages,
+    };
+  }
+
+  /**
+   * Extract clean text from HTML
+   */
+  extractTextFromHtml(html) {
+    if (!html) return '';
+
+    let text = html
+      // Remove scripts and styles first
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
+
+    // Extract text from various HTML elements - keep content from common text containers
+    // Handle meta tags for descriptions
+    const metaDescription = text.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+    let metaText = metaDescription ? metaDescription[1] + '. ' : '';
+
+    // Handle data attributes that might contain text
+    text = text.replace(/data-value=["']([^"']+)["']/gi, ' $1 ')
+               .replace(/data-text=["']([^"']+)["']/gi, ' $1 ')
+               .replace(/alt=["']([^"']+)["']/gi, ' $1 ')
+               .replace(/title=["']([^"']+)["']/gi, ' $1 ')
+               .replace(/aria-label=["']([^"']+)["']/gi, ' $1 ')
+               .replace(/placeholder=["']([^"']+)["']/gi, ' $1 ');
+
+    // Replace block elements with newlines (expanded list)
+    text = text
+      .replace(/<\/(p|div|h[1-6]|li|tr|th|td|article|section|header|footer|main|aside|blockquote|pre|ul|ol|table|nav|figure|figcaption)>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<p[^>]*>/gi, '\n')
+      .replace(/<h[1-6][^>]*>/gi, '\n');
+
+    // Replace inline elements with spaces
+    text = text.replace(/<\/(span|a|strong|b|em|i|u|mark|small|sub|sup|code|var)>/gi, ' ');
+
+    // Remove all remaining HTML tags
+    text = text.replace(/<[^>]+>/g, ' ');
+
+    // Decode HTML entities
+    text = text
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&[a-z]+;/gi, ' ')
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+
+    // Clean up whitespace - be more aggressive
+    text = text
+      .replace(/\n{3,}/g, '\n\n')  // Max 2 newlines
+      .replace(/[ \t]{2,}/g, ' ')  // Max 1 space
+      .replace(/[ \t]*\n[ \t]*/g, '\n')  // Trim around newlines
+      .trim();
+
+    // Combine meta description with extracted text for more content
+    text = metaText + text;
+
+    return text;
   }
 
   async _replaceKnowledgeDocument({ chatbotId, ownerUserId, sourceType, sourceKey, title, text }) {

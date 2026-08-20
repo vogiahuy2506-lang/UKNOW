@@ -110,6 +110,10 @@ const chatbotApiService = {
 
   // ── Knowledge Base ────────────────────────────────────────────────────────
 
+  getDocument(chatbotId, docId) {
+    return api.get(`/ai/custom-chat/documents/${chatbotId}/${docId}`);
+  },
+
   deleteDocument(chatbotId, docId) {
     // encode twice because the server decodes it once automatically by Express,
     // and if there are special chars like '/', a double encode prevents routing errors.
@@ -118,6 +122,12 @@ const chatbotApiService = {
 
   addCustomChatTextDocument(chatbotId, data) {
     return api.post(`/ai/custom-chat/text/${chatbotId}`, data);
+  },
+
+  scrapeCustomChatWebsite(chatbotId, payload) {
+    return api.post(`/ai/custom-chat/scrape/${chatbotId}`, payload, {
+      timeout: AI_CHAT_TIMEOUT_MS,
+    });
   },
 
   // ── Zalo Personal Account Chatbot Settings ─────────────────────────────────

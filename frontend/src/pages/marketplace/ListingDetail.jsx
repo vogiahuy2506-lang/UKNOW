@@ -40,17 +40,6 @@ const RESOURCE_VISUAL = {
   },
 };
 
-const CATEGORY_LABELS = {
-  email: 'Email',
-  zalo_personal: 'Zalo cá nhân',
-  zalo_group: 'Zalo nhóm',
-  facebook: 'Facebook',
-  telegram: 'Telegram',
-  sms: 'SMS',
-  marketing: 'Marketing',
-  automation: 'Automation',
-};
-
 const formatNumber = (n) => {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n ?? 0);
@@ -873,11 +862,6 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium ${visual.bg} ${visual.text}`}>
                   {visual.label}
                 </span>
-                {listing.category && (
-                  <span className="px-2.5 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                    {CATEGORY_LABELS[listing.category] || listing.category}
-                  </span>
-                )}
                 {listing.hasPurchased && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
                     <HiOutlineCheckCircle className="w-3.5 h-3.5" />

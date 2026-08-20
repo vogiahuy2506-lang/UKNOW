@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { HiOutlineStar, HiOutlineEye, HiOutlineShoppingCart, HiOutlineHeart, HiOutlineClock, HiOutlineMail, HiOutlineChat, HiOutlineTemplate } from 'react-icons/hi';
+import { HiOutlineStar, HiOutlineEye, HiOutlineShoppingCart, HiOutlineClock, HiOutlineMail, HiOutlineChat, HiOutlineTemplate } from 'react-icons/hi';
 
 export const CATEGORY_STYLES = {
   email: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Email' },
@@ -8,7 +8,6 @@ export const CATEGORY_STYLES = {
   facebook: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Facebook' },
   telegram: { bg: 'bg-sky-100', text: 'text-sky-700', label: 'Telegram' },
   sms: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'SMS' },
-  automation: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Automation' },
   default: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Khác' },
 };
 
@@ -39,7 +38,6 @@ const renderStars = (rating) => {
 const defaultLabels = {
   free: 'Miễn phí',
   creditsShort: 'credits',
-  favoriteAria: 'Yêu thích',
   noDescription: 'Không có mô tả',
   viewLabel: 'Xem chi tiết',
 };
@@ -47,12 +45,9 @@ const defaultLabels = {
 const ListingCard = ({
   listing,
   view = 'grid',
-  isFavorited = false,
-  onFavorite,
   onClick,
   labels = {},
 }) => {
-  const categoryStyle = CATEGORY_STYLES[listing.category] || CATEGORY_STYLES.default;
   const typeStyle = TYPE_STYLES[listing.resource_type] || TYPE_STYLES.campaign;
   const TypeIcon = typeStyle.Icon || HiOutlineTemplate;
   const l = { ...defaultLabels, ...labels };
@@ -64,12 +59,6 @@ const ListingCard = ({
     onClick(listing.id, e);
   };
 
-  const handleFavoriteClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onFavorite?.(listing.id, e);
-  };
-
   // Grid view
   if (view === 'grid') {
     return (
@@ -79,31 +68,12 @@ const ListingCard = ({
       >
         {/* Header */}
         <div className="p-5 bg-gradient-to-br from-gray-50 to-white flex flex-col flex-1">
-          {/* Type & Category badges */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${typeStyle.bg} ${typeStyle.text}`}>
-                <TypeIcon className="w-3.5 h-3.5" />
-                {typeStyle.label}
-              </span>
-              {listing.category && listing.category !== listing.resource_type && (
-                <span className={`px-2 py-0.5 text-xs font-medium rounded-md ${categoryStyle.bg} ${categoryStyle.text}`}>
-                  {categoryStyle.label}
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleFavoriteClick}
-              className={`p-2 rounded-lg transition-colors ${
-                isFavorited
-                  ? 'text-red-500 bg-red-50 hover:bg-red-100'
-                  : 'text-gray-400 bg-white/80 hover:text-red-500 hover:bg-red-50'
-              }`}
-              aria-label={l.favoriteAria}
-            >
-              <HiOutlineHeart className={`w-4 h-4 ${isFavorited ? 'fill-red-500' : ''}`} />
-            </button>
+          {/* Type badge */}
+          <div className="mb-3">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${typeStyle.bg} ${typeStyle.text}`}>
+              <TypeIcon className="w-3.5 h-3.5" />
+              {typeStyle.label}
+            </span>
           </div>
 
           {/* Title */}
@@ -186,11 +156,6 @@ const ListingCard = ({
             <span className={`px-2 py-0.5 text-xs font-medium rounded ${typeStyle.bg} ${typeStyle.text}`}>
               {typeStyle.label}
             </span>
-            {listing.category && listing.category !== listing.resource_type && (
-              <span className={`px-2 py-0.5 text-xs font-medium rounded ${categoryStyle.bg} ${categoryStyle.text}`}>
-                {categoryStyle.label}
-              </span>
-            )}
           </div>
           <h3 className="font-semibold text-gray-900 line-clamp-1 group-hover:text-orange-600 transition-colors">
             {listing.title}
@@ -233,18 +198,6 @@ const ListingCard = ({
 
         {/* Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            type="button"
-            onClick={handleFavoriteClick}
-            className={`p-2 rounded-lg transition-colors ${
-              isFavorited
-                ? 'text-red-500 bg-red-50'
-                : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
-            }`}
-            aria-label={l.favoriteAria}
-          >
-            <HiOutlineHeart className={`w-5 h-5 ${isFavorited ? 'fill-red-500' : ''}`} />
-          </button>
           <button
             onClick={handleCardClick}
             className="btn btn-sm btn-outline"

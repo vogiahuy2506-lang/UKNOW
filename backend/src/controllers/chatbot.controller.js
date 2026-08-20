@@ -1,3 +1,4 @@
+import db from '../config/database.js';
 import knowledgeBaseService from '../services/chatbot/knowledgeBase.service.js';
 import subAssistantService from '../services/chatbot/subAssistant.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
@@ -534,8 +535,8 @@ class ChatbotController {
    */
   async listZaloAccountsWithChatbotSettings(req, res) {
     try {
-      const settings = await chatbotZaloAccountRepository.getAllSettingsForUser(req.user.id);
-      return res.json({ success: true, data: settings });
+      const accounts = await chatbotZaloAccountRepository.listAccountsForUser(req.user.id);
+      return res.json({ success: true, data: accounts });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -1212,10 +1213,19 @@ class ChatbotController {
   async getCustomChatbot(req, res) {
     try {
       const { chatbotId } = req.params;
+      const userId = req.user.id;
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
+
+      // Sau khi chuyển share sang dạng clone, chỉ owner mới có quyền xem/sửa chatbot
+      // (người được nhận share đã sở hữu bản clone độc lập).
+      if (chatbot.id_user !== userId) {
+        return res.status(403).json({ success: false, message: 'Bạn không có quyền xem chatbot này' });
+      }
+
       return res.json({ success: true, data: chatbot });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -1224,7 +1234,29 @@ class ChatbotController {
 
   async listCustomChatbots(req, res) {
     try {
-      const chatbots = await chatbotRepository.listChatbotsByUser(req.user.id);
+      const { origin } = req.query;
+      const userId = req.user.id;
+
+      if (origin === 'shared') {
+        // Get chatbots received from others (origin = 'shared')
+        const chatbots = await chatbotRepository.listChatbotsByUser(userId, 'shared');
+        return res.json({ success: true, data: chatbots });
+      }
+
+      if (origin === 'marketplace_purchased') {
+        // Get chatbots purchased from marketplace (origin = 'marketplace_purchased')
+        const chatbots = await chatbotRepository.listChatbotsByUser(userId, 'marketplace_purchased');
+        return res.json({ success: true, data: chatbots });
+      }
+
+      if (origin === 'self_created') {
+        // Get self-created chatbots (origin = 'self_created')
+        const chatbots = await chatbotRepository.listChatbotsByUser(userId, 'self_created');
+        return res.json({ success: true, data: chatbots });
+      }
+
+      // Default: return all chatbots
+      const chatbots = await chatbotRepository.listChatbotsByUser(userId);
       return res.json({ success: true, data: chatbots });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -1267,9 +1299,19 @@ class ChatbotController {
     try {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
+      const userId = req.user.id;
 
       if (isNaN(id)) {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      // Sau khi share chuyển sang clone, chỉ owner mới có quyền chỉnh sửa.
+      const existing = await chatbotRepository.findChatbotById(id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+      if (existing.id_user !== userId) {
+        return res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa chatbot này' });
       }
 
       const updatePayload = { ...req.body };
@@ -1345,12 +1387,19 @@ class ChatbotController {
     try {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
+      const userId = req.user.id;
 
       if (isNaN(id)) {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
-      const deleted = await chatbotRepository.deleteChatbot(id, req.user.id);
+      // Only owner can delete
+      const chatbot = await chatbotRepository.findChatbotById(id);
+      if (!chatbot || Number(chatbot.id_user) !== Number(userId)) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const deleted = await chatbotRepository.deleteChatbot(id, userId);
 
       if (!deleted) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
@@ -2020,6 +2069,67 @@ class ChatbotController {
       console.error('[ChatbotChannel] Disconnect error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
+  }
+
+  /**
+   * Sao chép toàn bộ chatbot (config + knowledge + embedding) cho người nhận.
+   * Người nhận phải có tài khoản trong hệ thống; sau khi clone họ sở hữu bản độc lập.
+   * POST /ai/chatbot/custom-chatbots/:chatbotId/share (giữ path cũ để client không phải đổi)
+   */
+  async shareChatbot(req, res, next) {
+    try {
+      const { chatbotId } = req.params;
+      const userId = req.user.id;
+      const { recipientEmail } = req.body || {};
+
+      if (!recipientEmail) {
+        return res.status(400).json({ success: false, message: 'Email người nhận là bắt buộc' });
+      }
+
+      const chatbotShareService = (await import('../services/ai/chatbotShare.service.js')).default;
+      const result = await chatbotShareService.shareChatbot({
+        chatbotId: parseInt(chatbotId),
+        ownerId: userId,
+        recipientEmail,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Đã sao chép chatbot cho người nhận',
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * @deprecated Tính năng share-permission đã được thay bằng clone. Endpoint này
+   * chỉ tồn tại để client cũ không bị 404 lúc render danh sách.
+   */
+  async getSharedWithMe(req, res) {
+    return res.json({ success: true, data: { items: [], pagination: { page: 1, limit: 0, total: 0, totalPages: 0 } } });
+  }
+
+  /**
+   * @deprecated Xem getSharedWithMe.
+   */
+  async getSharedByMe(req, res) {
+    return res.json({ success: true, data: { items: [], pagination: { page: 1, limit: 0, total: 0, totalPages: 0 } } });
+  }
+
+  /**
+   * @deprecated Không còn khái niệm "danh sách người được share" sau khi chuyển sang clone.
+   */
+  async getChatbotShares(req, res) {
+    return res.json({ success: true, data: [] });
+  }
+
+  /**
+   * @deprecated Không có gì để revoke — bản clone là tài sản độc lập của người nhận.
+   */
+  async revokeShare(req, res) {
+    return res.json({ success: true, message: 'Tính năng đã ngừng sử dụng' });
   }
 }
 

@@ -570,20 +570,6 @@ const Campaigns = () => {
                                   {t('campaigns.activate')}
                                 </button>
                               )}
-                              {/* Publish to Marketplace - only for self-created campaigns (not shared) */}
-                              {campaign.origin === 'self_created' && (
-                                <button
-                                  onClick={() => {
-                                    // TODO: Implement publish to marketplace
-                                    toast.success('Tính năng đang phát triển');
-                                    setActiveMenu(null);
-                                  }}
-                                  className="w-full flex items-center px-4 py-2 text-sm text-purple-600 hover:bg-purple-50"
-                                >
-                                  <HiOutlineMail className="w-4 h-4 mr-3" />
-                                  {t('campaigns.publishToMarketplace') || 'Đăng Marketplace'}
-                                </button>
-                              )}
                               {/* Share - only for self-created campaigns */}
                               {campaign.origin === 'self_created' && (
                                 <button

@@ -27,6 +27,17 @@ router.post('/listings',
   marketplaceController.create.bind(marketplaceController)
 );
 
+// Chatbot listing management
+router.get('/chatbots', marketplaceController.getMyChatbots.bind(marketplaceController));
+router.post('/chatbots',
+  requirePermission('campaigns_create'),
+  [
+    body('chatbotId').notEmpty().withMessage('chatbotId là bắt buộc'),
+  ],
+  handleValidationErrors,
+  marketplaceController.createFromChatbot.bind(marketplaceController)
+);
+
 router.get('/listings/:id', marketplaceController.getById.bind(marketplaceController));
 
 router.put('/listings/:id',

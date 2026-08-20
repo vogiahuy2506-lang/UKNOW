@@ -454,19 +454,29 @@ class ChatbotRepository {
 
   // ── Custom Chatbots (Public) ─────────────────────────────────────
 
-  async listChatbotsByUser(userId) {
-    const { rows } = await db.query(
-      `SELECT id, id_user, name, description, system_instruction, greeting_msg,
+  /**
+   * List chatbots for user with optional origin filter.
+   * @param {number} userId
+   * @param {string|null} origin - 'self_created', 'shared', 'marketplace_purchased', or null for all
+   */
+  async listChatbotsByUser(userId, origin = null) {
+    let query = `SELECT id, id_user, name, description, system_instruction, greeting_msg,
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key, allow_attachments, reply_limit_config,
+              suggested_questions, widget_key, origin,
               created_at, updated_at
        FROM custom_chatbots
-       WHERE id_user = $1 AND is_active = true
-       ORDER BY created_at DESC`,
-      [userId]
-    );
+       WHERE id_user = $1 AND is_active = true`;
+    const params = [userId];
+
+    if (origin) {
+      query += ` AND origin = $2`;
+      params.push(origin);
+    }
+
+    query += ` ORDER BY created_at DESC`;
+    const { rows } = await db.query(query, params);
     return rows;
   }
 

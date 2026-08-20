@@ -194,26 +194,26 @@ class LeadService {
     const phone = normalizePhone(body?.phone);
     const marketingConsent = Boolean(body?.marketingConsent ?? body?.marketing_consent);
 
-    if (!lastName || !firstName) {
-      const err = new Error('Vui lòng nhập đầy đủ Họ và Tên');
+    if (!lastName && !firstName) {
+      const err = new Error('Vui lòng nhập Họ và Tên');
       err.statusCode = 400;
       throw err;
     }
+    // Nếu chỉ có lastName hoặc firstName (form cũ dùng field "name" chung) → dùng giá trị có được
+    const effectiveLastName  = lastName  || firstName;
+    const effectiveFirstName = firstName || lastName;
     if (!email || !EMAIL_RE.test(email)) {
       const err = new Error('Email không hợp lệ');
       err.statusCode = 400;
       throw err;
     }
-    if (!phone || phone.replace(/\D/g, '').length < 8) {
+    if (phone && phone.replace(/\D/g, '').length < 7) {
       const err = new Error('Số điện thoại không hợp lệ');
       err.statusCode = 400;
       throw err;
     }
-    if (!marketingConsent) {
-      const err = new Error('Cần đồng ý nhận thông tin từ Founder AI');
-      err.statusCode = 400;
-      throw err;
-    }
+    // Nếu marketingConsent không được gửi hoặc undefined/null → coi như đồng ý (opt-in mềm)
+    const effectiveConsent = marketingConsent !== false;
 
     const landingPageSlug = canonicalLandingPageSlug(
       body?.landingPageSlug ?? body?.landing_page_slug ?? ''
@@ -252,13 +252,13 @@ class LeadService {
     const utmTerm = body?.utmTerm != null ? String(body.utmTerm).trim().slice(0, 255) || null : null;
 
     const row = await leadRepository.insertLead({
-      lastName,
-      firstName,
+      lastName:       effectiveLastName,
+      firstName:      effectiveFirstName,
       email,
       phone,
       occupation,
       interestArea,
-      marketingConsent,
+      marketingConsent: effectiveConsent,
       landingPageSlug,
       utmSource,
       utmMedium,

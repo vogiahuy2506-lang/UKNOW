@@ -88,6 +88,15 @@ export const marketplaceService = {
   voteReviewHelpful(reviewId) {
     return api.post(`${MARKETPLACE_URL}/reviews/${reviewId}/helpful`);
   },
+
+  // Chatbot listings
+  getMyChatbots() {
+    return api.get(`${MARKETPLACE_URL}/chatbots`);
+  },
+
+  createChatbotListing(data) {
+    return api.post(`${MARKETPLACE_URL}/chatbots`, data);
+  },
 };
 
 export default marketplaceService;

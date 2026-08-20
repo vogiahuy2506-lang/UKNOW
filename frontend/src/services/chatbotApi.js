@@ -177,8 +177,8 @@ const chatbotApi = {
   // ── Custom Chatbots (Studio) ────────────────────────────────────────
 
   // List all chatbots for current user
-  listChatbots: async () => {
-    const response = await api.get('/ai/chatbot/custom-chatbots');
+  listChatbots: async (params = {}) => {
+    const response = await api.get('/ai/chatbot/custom-chatbots', { params });
     return response.data;
   },
 
@@ -229,6 +229,13 @@ const chatbotApi = {
   // Disconnect channel from chatbot
   disconnectChatbotChannel: async (chatbotId, channelType) => {
     const response = await api.delete(`/ai/chatbot/custom-chatbots/${chatbotId}/channels/${channelType}`);
+    return response.data;
+  },
+
+  // Sao chép toàn bộ chatbot (config + knowledge + embedding) cho người nhận.
+  // Người nhận phải tồn tại trong hệ thống; sau khi clone họ sở hữu bản độc lập.
+  shareChatbot: async (chatbotId, { recipientEmail } = {}) => {
+    const response = await api.post(`/ai/chatbot/custom-chatbots/${chatbotId}/share`, { recipientEmail });
     return response.data;
   },
 

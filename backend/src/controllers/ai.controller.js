@@ -1270,6 +1270,35 @@ class AiController {
     }
   }
 
+  /**
+   * Get single document by ID
+   */
+  async getCustomChatbotDocument(req, res) {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId, 10);
+      const docId = parseInt(req.params.docId, 10);
+      if (Number.isNaN(chatbotId) || Number.isNaN(docId)) {
+        return res.status(400).json({ success: false, message: 'Invalid ID' });
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const document = await customChatService.getDocumentById(chatbotId, ownerUserId, docId);
+
+      return res.json({
+        success: true,
+        document,
+      });
+    } catch (error) {
+      console.error('[CustomChat] Get document error:', error);
+      return res.status(error.status || 500).json({ success: false, message: error.message });
+    }
+  }
+
   async deleteCustomChatbotDocument(req, res) {
     try {
       const chatbotId = parseInt(req.params.chatbotId, 10);
@@ -1327,6 +1356,42 @@ class AiController {
       });
     } catch (error) {
       console.error('[CustomChat] Add text document error:', error);
+      return res.status(error.status || 500).json(buildAiErrorPayload(error));
+    }
+  }
+
+  /**
+   * Scrape URL and extract content for Custom AI Chatbot
+   */
+  async scrapeCustomChatbotUrl(req, res) {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId, 10) || 0;
+      const { url } = req.body;
+
+      if (!url || !url.trim()) {
+        return res.status(400).json({ success: false, message: 'URL is required' });
+      }
+
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const result = await customChatService.scrapeUrl({
+        chatbotId,
+        userId: ownerUserId,
+        url: url.trim(),
+      });
+
+      return res.json({
+        success: true,
+        message: `Đã trích xuất: ${result.chunks} đoạn từ ${result.pages || 1} trang`,
+        chunks: result.chunks,
+        pages: result.pages,
+      });
+    } catch (error) {
+      console.error('[CustomChat] Scrape URL error:', error);
       return res.status(error.status || 500).json(buildAiErrorPayload(error));
     }
   }

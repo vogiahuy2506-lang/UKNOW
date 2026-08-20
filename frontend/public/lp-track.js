@@ -166,22 +166,71 @@
     }
   }
 
-  /** Đọc giá trị các trường lead từ form. */
-  function collectLeadData(form) {
-    function val(name) {
-      var el = form.querySelector('[name="' + name + '"]');
-      return el ? (el.value || '').trim() : '';
+  /** Tìm giá trị input theo name hoặc id, case-insensitive, fallback sang `name` chung. */
+  function val(form, name) {
+    // Thử đúng case
+    var el = form.querySelector('[name="' + name + '"]');
+    if (el) return (el.value || '').trim();
+
+    // Thử input có attribute `id` (thay vì name)
+    var byId = form.querySelector('#' + name);
+    if (byId) return (byId.value || '').trim();
+
+    // Thử input text gần label chứa text (fallback cho form thuần HTML)
+    var labels = form.querySelectorAll('label');
+    for (var i = 0; i < labels.length; i++) {
+      var lbl = labels[i];
+      var lblText = lbl.textContent || '';
+      var normalizedLbl = lblText.replace(/[*:\s]/g, '').toLowerCase();
+      if (
+        (normalizedLbl.includes('họ') && normalizedLbl.includes('tên')) ||
+        normalizedLbl.includes('hoten') ||
+        normalizedLbl.includes('name')
+      ) {
+        var nxt = lbl.nextElementSibling;
+        if (nxt && (nxt.tagName === 'INPUT' || nxt.tagName === 'TEXTAREA')) {
+          return (nxt.value || '').trim();
+        }
+      }
     }
-    var consent = form.querySelector('[name="marketingConsent"]');
+
+    return '';
+  }
+
+  /** Tìm input theo name (giống val) nhưng trả về element. */
+  function el(form, name) {
+    var e = form.querySelector('[name="' + name + '"]');
+    if (e) return e;
+    return form.querySelector('#' + name) || null;
+  }
+
+  /** Đọc giá trị các trường lead từ form — nhận cả firstName/lastName lẫn name chung. */
+  function collectLeadData(form) {
+    var firstName = val(form, 'firstName') || val(form, 'first_name') || val(form, 'firstname');
+    var lastName  = val(form, 'lastName')  || val(form, 'last_name')  || val(form, 'lastname');
+    // Nếu form dùng field "name" chung (không phân tách Họ/Tên)
+    var rawName = val(form, 'name');
+    if (rawName && !firstName && !lastName) {
+      var parts = rawName.split(/\s+/);
+      lastName  = parts[0] || '';
+      firstName = parts.slice(1).join(' ') || '';
+    }
+
+    var email = val(form, 'email');
+    var phone = val(form, 'phone');
+    var occupation   = val(form, 'occupation');
+    var interestArea = val(form, 'interestArea') || val(form, 'interest_area');
+    var consent      = el(form, 'marketingConsent') || el(form, 'consent') || form.querySelector('[name="consent"]');
+    // Nếu không có checkbox consent, mặc định true (submit form = đồng ý)
+    var marketingConsent = consent ? consent.checked : true;
     return {
-      firstName: val('firstName'),
-      lastName: val('lastName'),
-      email: val('email'),
-      phone: val('phone'),
-      occupation: val('occupation'),
-      interestArea: val('interestArea'),
-      // Nếu không có checkbox thì mặc định true (việc submit form = đồng ý)
-      marketingConsent: consent ? consent.checked : true,
+      firstName:       firstName,
+      lastName:        lastName,
+      email:           email,
+      phone:           phone,
+      occupation:      occupation,
+      interestArea:    interestArea,
+      marketingConsent: marketingConsent,
       landingPageSlug: slug,
     };
   }
