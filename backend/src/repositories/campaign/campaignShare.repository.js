@@ -4,14 +4,21 @@ class CampaignShareRepository {
   /**
    * Create a new share record
    */
-  async create({ idCampaign, idOwner, idRecipient, recipientEmail, shareType = 'view', canRun = false }) {
+  async create({ idCampaign, workspaceOwnerId, idRecipient, recipientEmail, shareType = 'view', canRun = false }) {
     const { rows } = await db.query(
       `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       SELECT c.id, $2, $3, $4, $5, $6
+       FROM campaigns c
+       WHERE c.id = $1
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2
        ON CONFLICT (id_campaign, id_recipient)
-       DO UPDATE SET share_type = $5, can_run = $6, updated_at = NOW()
+       DO UPDATE SET id_owner = EXCLUDED.id_owner,
+                     recipient_email = EXCLUDED.recipient_email,
+                     share_type = EXCLUDED.share_type,
+                     can_run = EXCLUDED.can_run,
+                     updated_at = NOW()
        RETURNING *`,
-      [idCampaign, idOwner, idRecipient, recipientEmail, shareType, canRun]
+      [idCampaign, workspaceOwnerId, idRecipient, recipientEmail, shareType, canRun]
     );
     return rows[0];
   }
@@ -76,8 +83,10 @@ class CampaignShareRepository {
     const { rows } = await db.query(
       `SELECT cs.*, u.full_name as recipient_name, u.email as recipient_email
        FROM campaign_shares cs
+       JOIN campaigns c ON c.id = cs.id_campaign
        JOIN users u ON cs.id_recipient = u.id
-       WHERE cs.id_campaign = $1 AND cs.id_owner = $2
+       WHERE cs.id_campaign = $1
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2
        ORDER BY cs.created_at DESC`,
       [idCampaign, ownerId]
     );
@@ -87,7 +96,7 @@ class CampaignShareRepository {
   /**
    * Get campaigns that user has shared with others
    */
-  async findSharedByUser({ userId, page = 1, limit = 10 }) {
+  async findSharedByUser({ workspaceOwnerId, page = 1, limit = 10 }) {
     const offset = (page - 1) * limit;
     const { rows } = await db.query(
       `SELECT c.*, c.share_count,
@@ -101,10 +110,10 @@ class CampaignShareRepository {
          FROM campaign_runs cr
          WHERE cr.id_campaign = c.id
        ) run_stats ON TRUE
-       WHERE c.id_user = $1 AND c.share_count > 0
+       WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1 AND c.share_count > 0
        ORDER BY c.updated_at DESC
        LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
+      [workspaceOwnerId, limit, offset]
     );
     return rows;
   }
@@ -112,10 +121,11 @@ class CampaignShareRepository {
   /**
    * Count campaigns shared by user
    */
-  async countSharedByUser(userId) {
+  async countSharedByUser(workspaceOwnerId) {
     const { rows } = await db.query(
-      `SELECT COUNT(*) FROM campaigns WHERE id_user = $1 AND share_count > 0`,
-      [userId]
+      `SELECT COUNT(*) FROM campaigns
+       WHERE COALESCE(workspace_owner_id, id_user) = $1 AND share_count > 0`,
+      [workspaceOwnerId]
     );
     return parseInt(rows[0].count, 10);
   }
@@ -123,10 +133,15 @@ class CampaignShareRepository {
   /**
    * Delete a share
    */
-  async delete(idCampaign, idOwner, idRecipient) {
+  async delete(idCampaign, workspaceOwnerId, idRecipient) {
     const { rowCount } = await db.query(
-      `DELETE FROM campaign_shares WHERE id_campaign = $1 AND id_owner = $2 AND id_recipient = $3`,
-      [idCampaign, idOwner, idRecipient]
+      `DELETE FROM campaign_shares cs
+       USING campaigns c
+       WHERE cs.id_campaign = $1
+         AND cs.id_recipient = $3
+         AND c.id = cs.id_campaign
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2`,
+      [idCampaign, workspaceOwnerId, idRecipient]
     );
     return rowCount > 0;
   }
@@ -142,13 +157,26 @@ class CampaignShareRepository {
     return rows[0] || null;
   }
 
+  async isCampaignOwnedByWorkspace(campaignId, workspaceOwnerId) {
+    const { rows } = await db.query(
+      `SELECT 1
+       FROM campaigns
+       WHERE id = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2
+       LIMIT 1`,
+      [campaignId, workspaceOwnerId]
+    );
+    return rows.length > 0;
+  }
+
   /**
    * Check if user has edit permission for a campaign
    */
   async hasEditPermission(campaignId, userId) {
     // Owner has edit permission
     const { rows: ownerRows } = await db.query(
-      `SELECT id FROM campaigns WHERE id = $1 AND id_user = $2`,
+      `SELECT id FROM campaigns
+       WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2`,
       [campaignId, userId]
     );
     if (ownerRows.length > 0) return true;
@@ -167,7 +195,8 @@ class CampaignShareRepository {
   async canRun(campaignId, userId) {
     // Owner can always run
     const { rows: ownerRows } = await db.query(
-      `SELECT id FROM campaigns WHERE id = $1 AND id_user = $2`,
+      `SELECT id FROM campaigns
+       WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2`,
       [campaignId, userId]
     );
     if (ownerRows.length > 0) return true;

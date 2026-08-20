@@ -357,6 +357,96 @@ describe('Campaign employee workspace ownership', () => {
 });
 
 // ===========================================================================
+// CAMPAIGN SHARING OWNERSHIP
+// ===========================================================================
+
+describe('Campaign sharing workspace ownership', () => {
+  it('owner chỉ share/list/revoke campaign của chính workspace và dùng campaign id từ path', async () => {
+    const ownerA = await createUser({ role: 'user', username: 'share_owner_a' });
+    const ownerB = await createUser({ role: 'user', username: 'share_owner_b' });
+    const recipient = await createUser({
+      role: 'user',
+      username: 'share_recipient',
+      email: 'share-recipient@test.local',
+    });
+    const campaignA = await insertCampaign({ ownerId: ownerA.id, campaignName: 'Share A' });
+    const campaignB = await insertCampaign({ ownerId: ownerB.id, campaignName: 'Share B' });
+    const tokenA = await loginAs(ownerA);
+    const tokenB = await loginAs(ownerB);
+
+    const crossTenantShare = await request(app)
+      .post(`/api/campaigns/${campaignB.id}/share`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ recipientEmail: recipient.email, shareType: 'view' });
+    expect(crossTenantShare.status).toBe(404);
+
+    const shareRes = await request(app)
+      .post(`/api/campaigns/${campaignA.id}/share`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ recipientEmail: recipient.email, shareType: 'edit', canRun: true });
+    expect(shareRes.status).toBe(200);
+
+    const { rows: shareRows } = await db.query(
+      `SELECT id_owner, id_recipient, share_type, can_run
+       FROM campaign_shares
+       WHERE id_campaign = $1`,
+      [campaignA.id]
+    );
+    expect(shareRows).toHaveLength(1);
+    expect(Number(shareRows[0].id_owner)).toBe(Number(ownerA.id));
+    expect(Number(shareRows[0].id_recipient)).toBe(Number(recipient.id));
+    expect(shareRows[0].share_type).toBe('edit');
+    expect(shareRows[0].can_run).toBe(true);
+
+    const listRes = await request(app)
+      .get(`/api/campaigns/${campaignA.id}/shares`)
+      .set('Authorization', `Bearer ${tokenA}`);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data).toHaveLength(1);
+    expect(Number(listRes.body.data[0].recipient.id)).toBe(Number(recipient.id));
+
+    const crossTenantList = await request(app)
+      .get(`/api/campaigns/${campaignA.id}/shares`)
+      .set('Authorization', `Bearer ${tokenB}`);
+    expect(crossTenantList.status).toBe(404);
+
+    const revokeRes = await request(app)
+      .delete(`/api/campaigns/${campaignA.id}/share`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ recipientId: recipient.id });
+    expect(revokeRes.status).toBe(200);
+
+    const { rows: remaining } = await db.query(
+      'SELECT id FROM campaign_shares WHERE id_campaign = $1',
+      [campaignA.id]
+    );
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('employee context không được quản lý external campaign sharing', async () => {
+    const owner = await createUser({ role: 'user', username: 'share_workspace_owner' });
+    const employee = await createUser({ role: 'user', username: 'share_workspace_employee' });
+    const recipient = await createUser({
+      role: 'user',
+      username: 'share_workspace_recipient',
+      email: 'share-workspace-recipient@test.local',
+    });
+    await addCampaignMembership(owner.id, employee.id);
+    const campaign = await insertCampaign({ ownerId: owner.id, campaignName: 'Owner only share' });
+    const token = await loginAs(employee);
+
+    const res = await request(app)
+      .post(`/api/campaigns/${campaign.id}/share`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ recipientEmail: recipient.email, shareType: 'view' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('OWNER_ONLY');
+  });
+});
+
+// ===========================================================================
 // GET /api/campaigns/:id (detail)
 // ===========================================================================
 

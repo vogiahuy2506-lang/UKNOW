@@ -4,7 +4,7 @@ class CampaignShareService {
   /**
    * Share a campaign with another user by email
    */
-  async shareCampaign({ campaignId, ownerId, recipientEmail, shareType = 'view', canRun = false }) {
+  async shareCampaign({ campaignId, workspaceOwnerId, recipientEmail, shareType = 'view', canRun = false }) {
     // Find recipient by email
     const recipient = await campaignShareRepository.findUserByEmail(recipientEmail);
     if (!recipient) {
@@ -14,7 +14,7 @@ class CampaignShareService {
     }
 
     // Cannot share with yourself
-    if (recipient.id === ownerId) {
+    if (Number(recipient.id) === Number(workspaceOwnerId)) {
       const error = new Error('Bạn không thể chia sẻ chiến dịch với chính mình');
       error.status = 400;
       throw error;
@@ -23,12 +23,17 @@ class CampaignShareService {
     // Create share record
     const share = await campaignShareRepository.create({
       idCampaign: campaignId,
-      idOwner: ownerId,
+      workspaceOwnerId,
       idRecipient: recipient.id,
       recipientEmail,
       shareType,
       canRun,
     });
+    if (!share) {
+      const error = new Error('Không tìm thấy chiến dịch trong workspace');
+      error.status = 404;
+      throw error;
+    }
 
     return {
       success: true,
@@ -92,9 +97,9 @@ class CampaignShareService {
   /**
    * Get campaigns shared by the current user (to see who they shared with)
    */
-  async getSharedByMe({ userId, page = 1, limit = 10 }) {
-    const rows = await campaignShareRepository.findSharedByUser({ userId, page, limit });
-    const total = await campaignShareRepository.countSharedByUser(userId);
+  async getSharedByMe({ workspaceOwnerId, page = 1, limit = 10 }) {
+    const rows = await campaignShareRepository.findSharedByUser({ workspaceOwnerId, page, limit });
+    const total = await campaignShareRepository.countSharedByUser(workspaceOwnerId);
 
     return {
       items: rows.map((item) => ({
@@ -119,6 +124,12 @@ class CampaignShareService {
    * Get all shares for a campaign (for owner)
    */
   async getCampaignShares(campaignId, ownerId) {
+    const owned = await campaignShareRepository.isCampaignOwnedByWorkspace(campaignId, ownerId);
+    if (!owned) {
+      const error = new Error('Không tìm thấy chiến dịch trong workspace');
+      error.status = 404;
+      throw error;
+    }
     const shares = await campaignShareRepository.findByCampaign(campaignId, ownerId);
 
     return shares.map((share) => ({
@@ -138,8 +149,8 @@ class CampaignShareService {
   /**
    * Revoke a share
    */
-  async revokeShare({ campaignId, ownerId, recipientId }) {
-    const deleted = await campaignShareRepository.delete(campaignId, ownerId, recipientId);
+  async revokeShare({ campaignId, workspaceOwnerId, recipientId }) {
+    const deleted = await campaignShareRepository.delete(campaignId, workspaceOwnerId, recipientId);
 
     if (!deleted) {
       const error = new Error('Không tìm thấy chia sẻ để xóa');

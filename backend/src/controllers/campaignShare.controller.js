@@ -1,4 +1,5 @@
 import campaignShareService from '../services/campaign/campaignShare.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 class CampaignShareController {
   /**
@@ -6,7 +7,7 @@ class CampaignShareController {
    */
   async share(req, res) {
     try {
-      const userId = req.user.id;
+      const context = getWorkspaceContext(req.user);
       const campaignId = parseInt(req.params.id, 10);
       const { recipientEmail, shareType = 'view', canRun = false } = req.body;
 
@@ -19,7 +20,7 @@ class CampaignShareController {
 
       const result = await campaignShareService.shareCampaign({
         campaignId,
-        ownerId: userId,
+        workspaceOwnerId: context.workspaceOwnerId,
         recipientEmail,
         shareType,
         canRun,
@@ -43,11 +44,11 @@ class CampaignShareController {
    */
   async getSharedWithMe(req, res) {
     try {
-      const userId = req.user.id;
+      const context = getWorkspaceContext(req.user);
       const { page = 1, limit = 10 } = req.query;
 
       const result = await campaignShareService.getSharedWithMe({
-        userId,
+        userId: context.actorUserId,
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
       });
@@ -70,11 +71,11 @@ class CampaignShareController {
    */
   async getSharedByMe(req, res) {
     try {
-      const userId = req.user.id;
+      const context = getWorkspaceContext(req.user);
       const { page = 1, limit = 10 } = req.query;
 
       const result = await campaignShareService.getSharedByMe({
-        userId,
+        workspaceOwnerId: context.workspaceOwnerId,
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
       });
@@ -97,12 +98,19 @@ class CampaignShareController {
    */
   async getCampaignShares(req, res) {
     try {
-      const userId = req.user.id;
-      const { campaignId } = req.params;
+      const context = getWorkspaceContext(req.user);
+      const campaignId = parseInt(req.params.id, 10);
+
+      if (!campaignId) {
+        return res.status(400).json({
+          success: false,
+          message: 'campaignId không hợp lệ',
+        });
+      }
 
       const shares = await campaignShareService.getCampaignShares(
-        parseInt(campaignId, 10),
-        userId
+        campaignId,
+        context.workspaceOwnerId
       );
 
       res.json({
@@ -111,9 +119,9 @@ class CampaignShareController {
       });
     } catch (error) {
       console.error('Get campaign shares error:', error);
-      res.status(500).json({
+      res.status(error.status || 500).json({
         success: false,
-        message: 'Lỗi server',
+        message: error.status ? error.message : 'Lỗi server',
       });
     }
   }
@@ -123,8 +131,9 @@ class CampaignShareController {
    */
   async revokeShare(req, res) {
     try {
-      const userId = req.user.id;
-      const { campaignId, recipientId } = req.body;
+      const context = getWorkspaceContext(req.user);
+      const campaignId = parseInt(req.params.id, 10);
+      const { recipientId } = req.body;
 
       if (!campaignId || !recipientId) {
         return res.status(400).json({
@@ -135,7 +144,7 @@ class CampaignShareController {
 
       await campaignShareService.revokeShare({
         campaignId: parseInt(campaignId, 10),
-        ownerId: userId,
+        workspaceOwnerId: context.workspaceOwnerId,
         recipientId: parseInt(recipientId, 10),
       });
 

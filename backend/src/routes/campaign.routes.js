@@ -5,7 +5,12 @@ import campaignShareController from '../controllers/campaignShare.controller.js'
 import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import {
+  requirePermission,
+  requireActivePlan,
+  requirePasswordChange,
+  requireSelfContext,
+} from '../middleware/authorization.middleware.js';
 import { campaignRunLimiter, quickSendTestLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
@@ -78,6 +83,7 @@ router.post('/:id/sync-founderai', requirePermission('campaigns_view'), foundera
 
 // Share a campaign with another user
 router.post('/:id/share',
+  requireSelfContext,
   requirePermission('campaigns_view'),
   [
     body('recipientEmail').isEmail().withMessage('Email không hợp lệ'),
@@ -89,24 +95,28 @@ router.post('/:id/share',
 
 // Get campaigns shared with me
 router.get('/shared/with-me',
+  requireSelfContext,
   requirePermission('campaigns_view'),
   campaignShareController.getSharedWithMe.bind(campaignShareController)
 );
 
 // Get campaigns I've shared with others
 router.get('/shared/by-me',
+  requireSelfContext,
   requirePermission('campaigns_view'),
   campaignShareController.getSharedByMe.bind(campaignShareController)
 );
 
 // Get all shares for a campaign (owner only)
 router.get('/:id/shares',
+  requireSelfContext,
   requirePermission('campaigns_view'),
   campaignShareController.getCampaignShares.bind(campaignShareController)
 );
 
 // Revoke a share
 router.delete('/:id/share',
+  requireSelfContext,
   requirePermission('campaigns_view'),
   campaignShareController.revokeShare.bind(campaignShareController)
 );
