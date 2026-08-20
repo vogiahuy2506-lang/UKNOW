@@ -225,12 +225,13 @@ export async function findUserAdminByEmail(email) {
 }
 
 /** Gán gói trực tiếp cho user — sync resource limits từ plan vào users.max_* ngay lập tức.
- *  Thời hạn tính từ duration_days của plan; fallback 30 ngày nếu chưa set. */
-export async function assignPlanToUser(userId, planId) {
+ *  billingPeriod 'yearly' → thời hạn +12 tháng; 'monthly' (mặc định) → theo duration_days của plan,
+ *  fallback 30 ngày nếu chưa set — cùng công thức với activateUserPlan (payment.repository.js). */
+export async function assignPlanToUser(userId, planId, billingPeriod = 'monthly') {
   const { rows } = await db.query(
     `UPDATE users u
      SET active_plan_id            = p.id,
-         subscription_expires_at   = NOW() + (COALESCE(p.duration_days, 30) || ' days')::INTERVAL,
+         subscription_expires_at   = NOW() + (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END),
          plan_activated_at         = NOW(),
          subscription_reminder_count = 0,
          max_landing_pages         = p.max_landing_pages,
@@ -249,7 +250,7 @@ export async function assignPlanToUser(userId, planId) {
      WHERE p.id = $1 AND u.id = $2
      RETURNING u.id, u.username, u.email, u.full_name AS "fullName",
                u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt"`,
-    [planId, userId]
+    [planId, userId, billingPeriod]
   );
   return rows[0] || null;
 }

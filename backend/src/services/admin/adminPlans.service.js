@@ -379,26 +379,31 @@ export async function searchUsers(query, excludeWithPlan = false) {
  * Gán gói trực tiếp cho user theo email (super_admin override, bỏ qua thanh toán).
  * @param {number} planId
  * @param {string} userEmail
- * @param {{ paymentMethod?: 'manual'|'free', note?: string }} [opts]
+ * @param {{ paymentMethod?: 'manual'|'free', note?: string, billingPeriod?: 'monthly'|'yearly' }} [opts]
  *   paymentMethod: 'manual' = thu tiền ngoài (cộng doanh thu), 'free' = miễn phí (không tính)
+ *   billingPeriod: kỳ hạn gán — quyết định thời hạn (+30 ngày hay +12 tháng) và giá khi thu tiền ngoài
  */
-export async function assignPlan(planId, userEmail, { paymentMethod = 'free', note = null } = {}) {
+export async function assignPlan(planId, userEmail, { paymentMethod = 'free', note = null, billingPeriod = 'monthly' } = {}) {
   const plan = await findPlanById(planId);
   if (!plan) throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
 
   const user = await findUserAdminByEmail(userEmail.trim().toLowerCase());
   if (!user) throw { status: 404, message: 'Không tìm thấy tài khoản với email này' };
 
-  const result = await assignPlanToUser(user.id, planId);
+  const result = await assignPlanToUser(user.id, planId, billingPeriod);
 
   const orderCode = Date.now();
-  const amount = paymentMethod === 'manual' ? Number(plan.price) : 0;
+  const planPrice = billingPeriod === 'yearly' && plan.price_yearly
+    ? Number(plan.price_yearly)
+    : Number(plan.price);
+  const amount = paymentMethod === 'manual' ? planPrice : 0;
   await createOrder({
     orderCode,
     planId: plan.id,
     amount,
     userEmail: user.email,
     userId: user.id,
+    billingPeriod,
     status: 'success',
     paymentMethod,
     note,
