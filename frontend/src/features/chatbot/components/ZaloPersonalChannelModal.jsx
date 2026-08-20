@@ -63,9 +63,16 @@ function readAccount(acc) {
   const zaloPhone = acc?.zalo_phone || acc?.zaloPhone || '';
   const zaloUserId = acc?.zalo_user_id || acc?.zaloUserId || '';
 
+  // Check if displayName looks like a Zalo ID (numeric string 9-15 digits)
+  const isLikelyZaloIdValue = (value) => {
+    if (!value) return false;
+    const str = String(value).replace(/[\s-]/g, '');
+    return /^\d{9,15}$/.test(str);
+  };
+
   // Prefer zaloName if displayName looks like a Zalo ID or is empty
   let displayName = displayNameRaw;
-  if (isEmptyOrInvalid(displayName) || isLikelyZaloId(displayName)) {
+  if (isEmptyOrInvalid(displayName) || isLikelyZaloIdValue(displayName)) {
     if (!isEmptyOrInvalid(zaloName)) {
       displayName = zaloName;
     } else if (!isEmptyOrInvalid(zaloPhone)) {
@@ -75,8 +82,8 @@ function readAccount(acc) {
     }
   }
 
-  // Final fallback if still empty
-  if (isEmptyOrInvalid(displayName) || isLikelyZaloId(displayName)) {
+  // Final fallback - never show Zalo ID as name
+  if (isEmptyOrInvalid(displayName) || isLikelyZaloIdValue(displayName)) {
     displayName = 'Zalo Account';
   }
 

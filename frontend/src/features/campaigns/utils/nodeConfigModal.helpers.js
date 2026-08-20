@@ -125,15 +125,27 @@ export const fetchInterestedCustomerCoursesLocal = async ({ config = {} } = {}) 
 export const fetchZaloAccountOptions = async () => {
   const response = await campaignBuilderApiService.getZaloAccounts();
   const items = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
+
+  const isLikelyZaloId = (v) => {
+    if (!v) return false;
+    const str = String(v).replace(/[\s-]/g, '');
+    return /^\d{9,15}$/.test(str);
+  };
+
   return items
     .filter((account) => !account.isLocked)
-    .map((account) => ({
-      id: String(account.id || ''),
-      displayName: String(account.displayName || account.name || account.zaloName || 'Tài khoản Zalo'),
-      status: String(account.status || 'disconnected'),
-      isActive: account.isActive !== false,
-      isDefault: account.isDefault === true,
-    }));
+    .map((account) => {
+      // Prefer displayName if it's not a Zalo ID, otherwise fall back to zaloName, then name, then phone, then zaloUserId
+      const raw = account.displayName || account.name || account.zaloName || account.phone || account.zaloUserId || '';
+      const displayName = isLikelyZaloId(raw) ? (account.zaloName || account.phone || 'Tài khoản Zalo') : raw;
+      return {
+        id: String(account.id || ''),
+        displayName: displayName || 'Tài khoản Zalo',
+        status: String(account.status || 'disconnected'),
+        isActive: account.isActive !== false,
+        isDefault: account.isDefault === true,
+      };
+    });
 };
 
 /**

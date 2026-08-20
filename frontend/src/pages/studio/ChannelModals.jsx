@@ -460,6 +460,24 @@ function ZaloPersonalForm({ chatbot }) {
           accounts.map((acc) => {
             const isOn = !!acc.chatbot_enabled;
             const busy = togglingId === acc.id;
+
+            // Helper to get display name, avoiding Zalo ID
+            const isLikelyZaloId = (v) => {
+              if (!v) return false;
+              const str = String(v).replace(/[\s-]/g, '');
+              return /^\d{9,15}$/.test(str);
+            };
+            const displayName = !isLikelyZaloId(acc.name) && acc.name
+              ? acc.name
+              : !isLikelyZaloId(acc.display_name) && acc.display_name
+                ? acc.display_name
+                : acc.phone && !isLikelyZaloId(acc.phone)
+                  ? acc.phone
+                  : !isLikelyZaloId(acc.zalo_user_id)
+                    ? acc.zalo_user_id
+                    : 'Zalo Account';
+            const avatarChar = displayName.charAt(0).toUpperCase();
+
             return (
               <div
                 key={acc.id}
@@ -469,15 +487,15 @@ function ZaloPersonalForm({ chatbot }) {
                   {acc.avatar ? (
                     <img src={acc.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
                   ) : (
-                    (acc.name || acc.phone || acc.zalo_user_id || 'Z').charAt(0).toUpperCase()
+                    avatarChar
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-900 truncate">
-                    {acc.name || acc.display_name || acc.phone || `Zalo #${acc.id}`}
+                    {displayName}
                   </p>
                   <p className="text-[11px] text-slate-400 truncate">
-                    {acc.phone || acc.zalo_user_id || `ID: ${acc.id}`}
+                    {acc.phone && !isLikelyZaloId(acc.phone) ? acc.phone : acc.zalo_user_id || `ID: ${acc.id}`}
                   </p>
                 </div>
                 <Toggle checked={isOn} disabled={busy} onChange={(v) => handleToggle(acc, v)} />

@@ -616,7 +616,7 @@ const QuickSend = () => {
                   <p className="text-base font-semibold text-gray-900 truncate mt-1">
                     {selectedChannel === CHANNEL_TYPES.EMAIL
                       ? (selectedEmailAccount?.name || selectedEmailAccount?.email || '-')
-                      : (selectedZaloAccount?.name || selectedZaloAccount?.display_name || '-')}
+                      : (selectedZaloAccount?.name || selectedZaloAccount?.display_name || selectedZaloAccount?.zaloName || 'Tài khoản Zalo')}
                   </p>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">

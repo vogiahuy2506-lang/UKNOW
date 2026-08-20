@@ -97,7 +97,7 @@ export default function EmbedLeadFormPage() {
       <FounderLeadFormCard
         variant="embed"
         locale={locale}
-        formCopy={copy.form}
+        formCopy={copy}
         form={form}
         setField={setField}
         submitting={submitting}
