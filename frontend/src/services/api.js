@@ -1,13 +1,20 @@
 import axios from 'axios';
 import React from 'react';
 import toast from 'react-hot-toast';
-import { useAuthStore } from '../stores/authStore';
 import { getStoredLocale } from '../utils/i18n';
 import vi from '../i18n/vi';
 import en from '../i18n/en';
 import { notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+// Injected by authStore after it is created. Keeping this dependency one-way
+// prevents the authStore <-> api ES module cycle, which can surface as a TDZ
+// error in production bundles.
+let authStore = null;
+export const setAuthStore = (store) => {
+  authStore = store;
+};
 
 // Request deduplication - prevent duplicate concurrent requests
 const pendingRequests = new Map();
@@ -95,7 +102,7 @@ const forceLogoutAndRedirect = async () => {
   try {
     // Dọn local auth state khi interceptor bắt phiên hết hạn, không gọi lại API logout
     // để tránh vòng lặp 401 -> logout -> 401 -> logout.
-    await useAuthStore.getState().logout({ skipServer: true });
+    await authStore?.getState().logout({ skipServer: true });
   } catch {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
@@ -129,7 +136,7 @@ api.interceptors.request.use(
     }
 
     // Tự động gắn X-Owner-Context khi user đang ở ngữ cảnh employee
-    const { activeContext } = useAuthStore.getState();
+    const { activeContext } = authStore?.getState() || {};
     if (activeContext?.type === 'employee' && activeContext.ownerId) {
       config.headers['X-Owner-Context'] = String(activeContext.ownerId);
     }
@@ -217,7 +224,7 @@ api.interceptors.response.use(
             {
               onClick: () => {
                 toast.dismiss(tst.id);
-                const isEmployee = useAuthStore.getState().activeContext?.type === 'employee';
+                const isEmployee = authStore?.getState().activeContext?.type === 'employee';
                 window.location.href = isEmployee ? '/pricing' : '/app/billing';
               },
               style: {

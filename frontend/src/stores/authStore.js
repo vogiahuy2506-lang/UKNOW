@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import api from '../services/api';
+import api, { setAuthStore } from '../services/api';
 import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
 import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 
@@ -390,6 +390,8 @@ export const useAuthStore = create((set, get) => ({
   /** Xác định user hiện tại có phải admin hay không. */
   isAdmin: () => String(get().user?.roleCode || '').trim().toLowerCase() === 'admin',
 }));
+
+setAuthStore(useAuthStore);
 
 // Khởi tạo auth khi app load
 useAuthStore.getState().initialize();

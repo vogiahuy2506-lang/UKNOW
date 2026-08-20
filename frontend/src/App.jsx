@@ -232,7 +232,7 @@ const MarketplaceModalRoot = () => {
   );
 };
 
-function App() {
+function AppContent() {
   const { t } = useI18n();
   const toaster = (
     <Toaster
@@ -252,23 +252,20 @@ function App() {
 
   if (typeof window !== 'undefined' && !isPrimaryAppHostname(window.location.hostname)) {
     return (
-      <I18nProvider>
-        <>
-          {toaster}
-          <LpRendererByHost />
-          {createPortal(<div id="modal-root"></div>, document.body)}
-        </>
-      </I18nProvider>
+      <>
+        {toaster}
+        <LpRendererByHost />
+        {createPortal(<div id="modal-root"></div>, document.body)}
+      </>
     );
   }
 
   return (
     <>
-      <I18nProvider>
-        <MarketplaceModalProvider>
-          <Router>
-            <RouteAnalytics />
-            {toaster}
+      <MarketplaceModalProvider>
+        <Router>
+          <RouteAnalytics />
+          {toaster}
           <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={
@@ -476,10 +473,17 @@ function App() {
         </Routes>
         <MarketplaceModalRoot />
         </Router>
-        </MarketplaceModalProvider>
-      </I18nProvider>
+      </MarketplaceModalProvider>
       {createPortal(<div id="modal-root"></div>, document.body)}
     </>
+  );
+}
+
+function App() {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   );
 }
 
