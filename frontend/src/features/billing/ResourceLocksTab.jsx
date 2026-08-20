@@ -6,7 +6,16 @@ const RESOURCE_LABEL_KEYS = {
   email_accounts: 'resourceLocks.emailAccounts',
   landing_pages: 'resourceLocks.landingPages',
   chatbots: 'resourceLocks.chatbots',
+  employees: 'resourceLocks.employees',
 };
+
+const VALID_RESOURCE_KEYS = [
+  'zalo_accounts',
+  'email_accounts',
+  'landing_pages',
+  'chatbots',
+  'employees',
+];
 
 /**
  * B4 — chọn tài nguyên giữ khi vượt trần hiệu dụng.
@@ -27,7 +36,8 @@ const ResourceLocksTab = ({ t }) => {
       setOverview(data);
       const nextDraft = {};
       for (const [key, block] of Object.entries(data)) {
-        nextDraft[key] = (block.items || [])
+        if (!VALID_RESOURCE_KEYS.includes(key)) continue;
+        nextDraft[key] = (block?.items || [])
           .filter((item) => !item.isLocked)
           .map((item) => item.id);
       }
@@ -68,7 +78,8 @@ const ResourceLocksTab = ({ t }) => {
       setOverview(data);
       const nextDraft = {};
       for (const [key, block] of Object.entries(data)) {
-        nextDraft[key] = (block.items || [])
+        if (!VALID_RESOURCE_KEYS.includes(key)) continue;
+        nextDraft[key] = (block?.items || [])
           .filter((item) => !item.isLocked)
           .map((item) => item.id);
       }
@@ -84,11 +95,22 @@ const ResourceLocksTab = ({ t }) => {
     return <p className="text-sm text-slate-500">{t('common.loading')}</p>;
   }
 
-  const keys = Object.keys(overview || {});
+  const keys = Object.keys(overview || {}).filter((k) => VALID_RESOURCE_KEYS.includes(k));
   const hasAny = keys.some((k) => (overview[k]?.items || []).length > 0);
 
   return (
     <div className="space-y-6">
+      {overview?.isGraceActive && overview?.overageGraceUntil && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">{t('resourceLocks.graceTitle') || 'Thời gian ân hạn hạ gói (7 ngày)'}</p>
+          <p className="mt-1 text-xs text-amber-700">
+            {t('resourceLocks.graceNotice', {
+              date: new Date(overview.overageGraceUntil).toLocaleDateString('vi-VN'),
+            })}
+          </p>
+        </div>
+      )}
+
       <p className="text-sm text-slate-600">{t('resourceLocks.help')}</p>
       {error && (
         <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
@@ -120,6 +142,7 @@ const ResourceLocksTab = ({ t }) => {
             <ul className="space-y-2">
               {block.items.map((item) => {
                 const checked = keep.has(item.id);
+                const isAboutToLock = overview?.isGraceActive && !checked && !item.isLocked;
                 return (
                   <li key={item.id} className="flex items-center gap-3 text-sm">
                     <input
@@ -129,12 +152,17 @@ const ResourceLocksTab = ({ t }) => {
                       disabled={!checked && keep.size >= ceiling}
                       className="h-4 w-4 rounded border-slate-300 text-primary-600"
                     />
-                    <span className={item.isLocked && !checked ? 'text-slate-400 line-through' : 'text-slate-800'}>
+                    <span className={item.isLocked && !checked ? 'text-slate-400 line-through' : isAboutToLock ? 'text-rose-700 font-medium' : 'text-slate-800'}>
                       {item.label}
                     </span>
                     {item.isLocked && !checked && (
                       <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-700">
                         {t('resourceLocks.locked')}
+                      </span>
+                    )}
+                    {isAboutToLock && (
+                      <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-rose-700">
+                        {t('resourceLocks.aboutToLock')}
                       </span>
                     )}
                   </li>

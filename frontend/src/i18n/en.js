@@ -4261,7 +4261,7 @@ export default {
   },
 
   resourceLocks: {
-    help: 'When add-on slots expire, the newest resources are locked first. Pick which ones to keep within your effective ceiling (plan + active add-ons). Locked resources still count toward create limits — delete a locked one before creating a replacement.',
+    help: 'When add-on slots expire or plan is downgraded, the oldest resources are locked first. Pick which ones to keep within your effective ceiling (plan + active add-ons). Locked resources still count toward create limits — delete a locked one before creating a replacement.',
     loadFailed: 'Could not load lock list',
     saveFailed: 'Could not save selection',
     empty: 'No resources in these categories yet.',
@@ -4269,8 +4269,12 @@ export default {
     emailAccounts: 'Email accounts',
     landingPages: 'Landing pages',
     chatbots: 'Chatbots',
+    employees: 'Employees',
     ceiling: 'Keeping {keep}/{max} (includes {grants} active add-on slots)',
     locked: 'Locked',
+    aboutToLock: 'About to be locked',
+    graceTitle: 'Plan downgrade grace period (7 days)',
+    graceNotice: 'Your plan was downgraded. Excess resources are in a 7-day grace period (until {date}). Please select which resources to keep or delete unneeded ones before they are locked automatically.',
     save: 'Save selection',
   },
 

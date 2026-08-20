@@ -47,6 +47,12 @@ export async function processDueScheduledPlanChanges() {
       // 1. Activate plan for user
       await activateUserPlan(item.user_id, item.plan_id, item.billing_period || 'monthly', client);
 
+      // Set 7-day grace period for resource locking on downgrade
+      await client.query(
+        `UPDATE users SET overage_grace_until = NOW() + INTERVAL '7 days' WHERE id = $1`,
+        [item.user_id]
+      );
+
       // 2. Mark scheduled change as activated
       await scheduledPlanChangeRepository.markActivated(item.id, client);
 

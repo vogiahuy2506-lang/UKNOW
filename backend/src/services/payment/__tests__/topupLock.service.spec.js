@@ -19,7 +19,7 @@ jest.unstable_mockModule('../../../repositories/payment/plan.repository.js', () 
 }));
 
 jest.unstable_mockModule('../../../repositories/payment/topupLock.repository.js', () => ({
-  LOCKABLE_RESOURCE_KEYS: ['zalo_accounts', 'email_accounts', 'landing_pages', 'chatbots'],
+  LOCKABLE_RESOURCE_KEYS: ['zalo_accounts', 'email_accounts', 'landing_pages', 'chatbots', 'employees'],
   isResourceLocked: jest.fn(),
   filterLockedResources: jest.fn(),
   deleteOrphanLocks: mockDeleteOrphan,
@@ -39,6 +39,9 @@ jest.unstable_mockModule('../../../repositories/payment/topupLock.repository.js'
 
 const mockQueryable = {
   query: jest.fn(async (sql) => {
+    if (String(sql).includes('overage_grace_until')) {
+      return { rows: [{ overage_grace_until: null }] };
+    }
     if (String(sql).includes('max_zalo_accounts')) {
       return { rows: [{ max_zalo_accounts: 1 }] };
     }
@@ -48,6 +51,9 @@ const mockQueryable = {
     if (String(sql).includes('max_landing_pages')) {
       return { rows: [{ max_landing_pages: 1 }] };
     }
+    if (String(sql).includes('max_employees')) {
+      return { rows: [{ max_employees: 1 }] };
+    }
     return { rows: [] };
   }),
 };
@@ -56,7 +62,7 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
   default: mockQueryable,
 }));
 
-const { reconcileResourceLocks } = await import('../topupLock.service.js');
+const { reconcileResourceLocks, getLockOverview } = await import('../topupLock.service.js');
 
 describe('reconcileResourceLocks', () => {
   beforeEach(() => {
@@ -68,20 +74,90 @@ describe('reconcileResourceLocks', () => {
     mockCountValid.mockResolvedValue(0);
     mockListUnlocked.mockResolvedValue([]);
     mockListLocked.mockResolvedValue([]);
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('overage_grace_until')) {
+        return { rows: [{ overage_grace_until: null }] };
+      }
+      if (String(sql).includes('max_zalo_accounts')) {
+        return { rows: [{ max_zalo_accounts: 1 }] };
+      }
+      if (String(sql).includes('max_email_accounts')) {
+        return { rows: [{ max_email_accounts: 1 }] };
+      }
+      if (String(sql).includes('max_landing_pages')) {
+        return { rows: [{ max_landing_pages: 1 }] };
+      }
+      if (String(sql).includes('max_employees')) {
+        return { rows: [{ max_employees: 1 }] };
+      }
+      return { rows: [] };
+    });
   });
 
-  it('locks newest excess zalo accounts when over ceiling', async () => {
+  it('locks oldest excess zalo accounts when over ceiling', async () => {
     mockCountInUse.mockImplementation(async (_uid, key) => (key === 'zalo_accounts' ? 2 : 0));
     mockCountValid.mockResolvedValue(0);
     mockListUnlocked.mockImplementation(async (_uid, key) => (
-      key === 'zalo_accounts' ? [20, 10] : []
+      key === 'zalo_accounts' ? [10, 20] : []
     ));
 
     const result = await reconcileResourceLocks(42, mockQueryable);
 
-    expect(mockInsertLock).toHaveBeenCalledWith(42, 'zalo_accounts', 20, mockQueryable);
+    expect(mockInsertLock).toHaveBeenCalledWith(42, 'zalo_accounts', 10, mockQueryable);
     expect(mockInsertLock).toHaveBeenCalledTimes(1);
-    expect(result.locked).toEqual([{ resourceKey: 'zalo_accounts', resourceId: 20 }]);
+    expect(result.locked).toEqual([{ resourceKey: 'zalo_accounts', resourceId: 10 }]);
+  });
+
+  it('skips locking when overage_grace_until is active (7-day grace period)', async () => {
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('overage_grace_until')) {
+        return { rows: [{ overage_grace_until: new Date(Date.now() + 5 * 86400 * 1000).toISOString() }] };
+      }
+      if (String(sql).includes('max_zalo_accounts')) {
+        return { rows: [{ max_zalo_accounts: 1 }] };
+      }
+      return { rows: [] };
+    });
+
+    mockCountInUse.mockImplementation(async (_uid, key) => (key === 'zalo_accounts' ? 3 : 0));
+    mockCountValid.mockResolvedValue(0);
+    mockListUnlocked.mockImplementation(async (_uid, key) => (
+      key === 'zalo_accounts' ? [10, 20, 30] : []
+    ));
+
+    const result = await reconcileResourceLocks(42, mockQueryable);
+
+    expect(mockInsertLock).not.toHaveBeenCalled();
+    expect(result.locked).toEqual([]);
+    expect(result.isGraceActive).toBe(true);
+  });
+
+  it('locks employees when exceeding employee ceiling', async () => {
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('overage_grace_until')) {
+        return { rows: [{ overage_grace_until: null }] };
+      }
+      if (String(sql).includes('max_employees')) {
+        return { rows: [{ max_employees: 1 }] };
+      }
+      return { rows: [] };
+    });
+
+    mockCountInUse.mockImplementation(async (_uid, key) => (key === 'employees' ? 3 : 0));
+    mockCountValid.mockResolvedValue(0);
+    mockListUnlocked.mockImplementation(async (_uid, key) => (
+      key === 'employees' ? [101, 102, 103] : []
+    ));
+
+    const result = await reconcileResourceLocks(42, mockQueryable);
+
+    expect(mockInsertLock).toHaveBeenCalledWith(42, 'employees', 101, mockQueryable);
+    expect(mockInsertLock).toHaveBeenCalledWith(42, 'employees', 102, mockQueryable);
+    expect(mockInsertLock).toHaveBeenCalledTimes(2);
+    expect(result.locked).toEqual([
+      { resourceKey: 'employees', resourceId: 101 },
+      { resourceKey: 'employees', resourceId: 102 },
+    ]);
   });
 
   it('unlocks most-recently-locked when under ceiling after grant', async () => {
@@ -122,13 +198,16 @@ describe('reconcileResourceLocks', () => {
       key === 'landing_pages' ? 1 : 0
     ));
     mockListUnlocked.mockImplementation(async (_uid, key) => (
-      key === 'zalo_accounts' ? [30, 20, 10] : []
+      key === 'zalo_accounts' ? [10, 20, 30] : []
     ));
     mockListLocked.mockImplementation(async (_uid, key) => (
       key === 'landing_pages' ? [99] : []
     ));
     // plan landing 1 + grant 1 = effective 2; inUse 0 locked 1 → running -1 < 2 → unlock
     mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('overage_grace_until')) {
+        return { rows: [{ overage_grace_until: null }] };
+      }
       if (String(sql).includes('max_zalo_accounts')) {
         return { rows: [{ max_zalo_accounts: 1 }] };
       }
@@ -137,6 +216,9 @@ describe('reconcileResourceLocks', () => {
       }
       if (String(sql).includes('max_landing_pages')) {
         return { rows: [{ max_landing_pages: 1 }] };
+      }
+      if (String(sql).includes('max_employees')) {
+        return { rows: [{ max_employees: 1 }] };
       }
       return { rows: [] };
     });

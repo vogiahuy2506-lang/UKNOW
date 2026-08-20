@@ -4295,7 +4295,7 @@ export default {
   },
 
   resourceLocks: {
-    help: 'Khi slot mua thêm hết hạn, hệ thống khoá bớt tài nguyên mới nhất. Bạn có thể chọn giữ cái nào trong hạn mức còn hiệu lực (gói + mua thêm còn hạn). Tài nguyên bị khoá vẫn chiếm chỗ — muốn tạo mới thì xoá cái bị khoá trước.',
+    help: 'Khi slot mua thêm hết hạn hoặc hạ gói, hệ thống khoá bớt tài nguyên cũ nhất trước. Bạn có thể chọn giữ cái nào trong hạn mức còn hiệu lực (gói + mua thêm còn hạn). Tài nguyên bị khoá vẫn chiếm chỗ — muốn tạo mới thì xoá cái bị khoá trước.',
     loadFailed: 'Không tải được danh sách khoá',
     saveFailed: 'Không lưu được lựa chọn',
     empty: 'Chưa có tài nguyên nào trong các mục này.',
@@ -4303,8 +4303,12 @@ export default {
     emailAccounts: 'Tài khoản Email',
     landingPages: 'Landing page',
     chatbots: 'Chatbot',
+    employees: 'Nhân viên',
     ceiling: 'Đang giữ {keep}/{max} (gồm {grants} slot mua thêm còn hạn)',
     locked: 'Đã khoá',
+    aboutToLock: 'Sắp bị khoá',
+    graceTitle: 'Thời gian ân hạn hạ gói (7 ngày)',
+    graceNotice: 'Gói dịch vụ vừa được hạ. Các tài nguyên vượt hạn mức đang trong thời gian ân hạn 7 ngày (đến {date}). Vui lòng chọn tài nguyên giữ lại hoặc xoá bớt trước khi bị khoá tự động.',
     save: 'Lưu lựa chọn',
   },
 

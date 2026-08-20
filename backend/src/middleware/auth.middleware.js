@@ -44,9 +44,15 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
 
   if (ownerContextId != null && ownerContextId !== '') {
     const memberResult = await db.query(
-      `SELECT um.permissions, u.active_plan_id AS "ownerPlanId",
+      `SELECT um.id, um.permissions, u.active_plan_id AS "ownerPlanId",
               u.subscription_expires_at AS "ownerPlanExpiry",
-              COALESCE(p.grace_period_days, 0)::int AS "ownerGraceDays"
+              COALESCE(p.grace_period_days, 0)::int AS "ownerGraceDays",
+              (EXISTS (
+                SELECT 1 FROM topup_locked_resources tlr
+                WHERE tlr.user_id = um.owner_id
+                  AND tlr.resource_key = 'employees'
+                  AND tlr.resource_id = um.id
+              )) AS "isLocked"
        FROM user_members um
        JOIN users u ON u.id = um.owner_id
        LEFT JOIN plans p ON p.id = u.active_plan_id
@@ -66,6 +72,17 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
     }
 
     const member = memberResult.rows[0];
+    if (member.isLocked) {
+      const err = new Error('Tài khoản nhân viên trong workspace này đang bị tạm khoá do vượt quá hạn mức gói của chủ tài khoản.');
+      err.status = 403;
+      err.body = {
+        success: false,
+        message: err.message,
+        code: 'EMPLOYEE_LOCKED',
+      };
+      throw err;
+    }
+
     user.activeContext = {
       type: 'employee',
       ownerId: Number(ownerContextId),

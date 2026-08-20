@@ -496,7 +496,13 @@ export async function findMembershipsByEmployeeId(employeeId) {
             um.daily_email_limit AS "dailyEmailLimit",
             um.monthly_email_limit AS "monthlyEmailLimit",
             um.daily_zalo_limit AS "dailyZaloLimit",
-            um.monthly_zalo_limit AS "monthlyZaloLimit"
+            um.monthly_zalo_limit AS "monthlyZaloLimit",
+            (EXISTS (
+              SELECT 1 FROM topup_locked_resources tlr
+              WHERE tlr.user_id = um.owner_id
+                AND tlr.resource_key = 'employees'
+                AND tlr.resource_id = um.id
+            )) AS "isLocked"
      FROM user_members um
      JOIN users u ON u.id = um.owner_id
      WHERE um.employee_id = $1 AND um.status = 'active'

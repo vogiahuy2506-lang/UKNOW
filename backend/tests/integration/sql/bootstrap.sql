@@ -40,6 +40,7 @@ CREATE TABLE users (
   preferred_ai_model      VARCHAR(80),
   subscription_expires_at TIMESTAMPTZ,
   plan_activated_at       TIMESTAMPTZ,
+  overage_grace_until     TIMESTAMPTZ,
   -- Resource limits (migration 005-006)
   max_employees           INTEGER,
   max_campaigns           INTEGER,
