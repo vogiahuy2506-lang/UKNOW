@@ -78,7 +78,7 @@ function readAccount(acc) {
     } else if (!isEmptyOrInvalid(zaloPhone)) {
       displayName = zaloPhone;
     } else if (!isEmptyOrInvalid(zaloUserId)) {
-      displayName = `Zalo ${zaloUserId}`;
+      displayName = zaloUserId;
     }
   }
 

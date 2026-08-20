@@ -196,6 +196,8 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
 
   const filteredBots = chatbots
     .filter(b => {
+      // Filter by origin tab - ensure only matching origin is shown
+      if (b.origin !== originTab) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return b.name.toLowerCase().includes(q) || b.description?.toLowerCase().includes(q);
