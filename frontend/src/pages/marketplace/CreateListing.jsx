@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlineX,
@@ -100,7 +100,7 @@ const CreateListing = ({ onClose, onSuccess }) => {
     }
   };
 
-  const fetchChatbots = async () => {
+  const fetchChatbots = useCallback(async () => {
     setIsLoadingChatbots(true);
     try {
       const response = await marketplaceService.getMyChatbots();
@@ -110,7 +110,7 @@ const CreateListing = ({ onClose, onSuccess }) => {
     } finally {
       setIsLoadingChatbots(false);
     }
-  };
+  }, [t]);
 
   const validateField = (field, value) => {
     if (field === 'campaignId' && !value && resourceType === 'campaign') return 'Vui lòng chọn chiến dịch';

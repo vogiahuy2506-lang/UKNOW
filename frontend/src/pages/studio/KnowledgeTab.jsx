@@ -71,11 +71,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange }) {
     }
   };
 
-  useEffect(() => {
-    if (chatbot?.id) loadDocuments();
-  }, [chatbot?.id]);
-
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     if (!chatbot?.id) return;
     try {
       const res = await chatbotApi.listCustomChatDocuments(chatbot.id);
@@ -84,7 +80,11 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange }) {
     } catch {
       setDocuments(chatbot.documents || []);
     }
-  };
+  }, [chatbot]);
+
+  useEffect(() => {
+    if (chatbot?.id) loadDocuments();
+  }, [chatbot?.id, loadDocuments]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];

@@ -88,7 +88,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
     setForm(loadedForm);
     setInitialSnapshot(loadedForm);
     setHydrated(true);
-  }, [open, chatbot?.id]);
+  }, [open, chatbot]);
 
   if (!open || !chatbot) return null;
 
