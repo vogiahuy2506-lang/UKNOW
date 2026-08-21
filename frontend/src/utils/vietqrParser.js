@@ -54,15 +54,6 @@ function readTLV(str, offset) {
   return { tag, value, next: offset + 4 + len };
 }
 
-/** Đọc 2 ký tự length tại offset (là length-of-length, không phải value length). */
-function readLLV(str, offset) {
-  if (offset + 2 > str.length) return null;
-  const len = parseInt(str.slice(offset, offset + 2), 10);
-  if (!Number.isFinite(len) || offset + 2 + len > str.length) return null;
-  const value = str.slice(offset + 2, offset + 2 + len);
-  return { value, next: offset + 2 + len };
-}
-
 /** Parse phần VietQR template nằm trong tag 38. */
 function parseVietQRTemplate(raw) {
   // raw = "0010A00000072701LL<...>0208QRIBFTTA"

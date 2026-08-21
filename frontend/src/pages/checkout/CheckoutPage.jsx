@@ -10,7 +10,6 @@ import {
     HiOutlineClipboardList,
     HiOutlineClock,
     HiOutlineExclamationCircle,
-    HiOutlineExternalLink,
 } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import { useI18n } from '../../i18n';
