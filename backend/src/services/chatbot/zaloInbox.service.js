@@ -1,15 +1,15 @@
-﻿/**
+/**
  * Zalo Personal Inbox Service
  *
- * Xß╗¡ l├╜ tin nhß║»n ─æß║┐n tß╗½ Zalo c├í nh├ón qua zca-js event listener.
+ * Xử lý tin nhắn đến từ Zalo cá nhân qua zca-js event listener.
  *
- * Luß╗ông hoß║ít ─æß╗Öng:
- * 1. User login/connect Zalo c├í nh├ón ΓåÆ ─æ─âng k├╜ listener
- * 2. Khi c├│ tin nhß║»n ─æß║┐n ΓåÆ xß╗¡ l├╜ qua event handler
- * 3. L╞░u tin nhß║»n visitor v├áo zalo_personal_messages vß╗¢i role='visitor'
- * 4. Tß║ío conversation nß║┐u ch╞░a c├│
- * 5. Route ─æß║┐n AI chatbot (nß║┐u c├│ cß║Ñu h├¼nh cho t├ái khoß║ún n├áy)
- * 6. L╞░u response cß╗ºa AI (role='bot')
+ * Luồng hoạt động:
+ * 1. User login/connect Zalo cá nhân → đăng ký listener
+ * 2. Khi có tin nhắn đến → xử lý qua event handler
+ * 3. Lưu tin nhắn visitor vào zalo_personal_messages với role='visitor'
+ * 4. Tạo conversation nếu chưa có
+ * 5. Route đến AI chatbot (nếu có cấu hình cho tài khoản này)
+ * 6. Lưu response của AI (role='bot')
  */
 import zaloInboxRepository from '../../repositories/chatbot/zaloInbox.repository.js';
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
@@ -42,24 +42,24 @@ import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
 
 class ZaloPersonalInboxService {
   constructor() {
-    // Map accountId ΓåÆ zalo_setting_id cache
+    // Map accountId → zalo_setting_id cache
     this.zaloSettingCache = new Map();
-    // Cache danh s├ích active accounts (tr├ính query DB mß╗ùi 5 ph├║t)
+    // Cache danh sách active accounts (tránh query DB mỗi 5 phút)
     this._accountCache = {
       data: [],
       timestamp: 0,
-      ttlMs: 5 * 60 * 1000, // 5 ph├║t
+      ttlMs: 5 * 60 * 1000, // 5 phút
     };
-    // Track accounts ─æ├ú ─æ─âng k├╜ (─æß╗â tr├ính duplicate log)
+    // Track accounts đã đăng ký (để tránh duplicate log)
     this._registeredAccounts = new Set();
-    // Mutex ─æß╗â tr├ính race condition khi nhiß╗üu cron chß║íy ─æß╗ông thß╗¥i
+    // Mutex để tránh race condition khi nhiều cron chạy đồng thời
     this._isRefreshing = false;
-    // Cache group info ─æß╗â tr├ính gß╗ìi API nhiß╗üu lß║ºn
+    // Cache group info để tránh gọi API nhiều lần
     this._groupNameCache = new Map();
   }
 
   /**
-   * Lß║Ñy t├¬n nh├│m tß╗½ Zalo API (c├│ cache)
+   * Lấy tên nhóm từ Zalo API (có cache)
    */
   async getGroupName(accountId, groupId) {
     const { bare, raw } = normalizeZaloGroupId(groupId);
@@ -103,7 +103,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Lß║Ñy th├┤ng tin user profile tß╗½ uid (c├│ cache)
+   * Lấy thông tin user profile từ uid (có cache)
    */
   async getUserProfile(accountId, uid) {
     const cacheKey = `user_${accountId}_${uid}`;
@@ -131,8 +131,8 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Kh├┤i phß╗Ñc zca-js session tß╗½ DB (cookie_text) cho c├íc connected accounts
-   * Cß║ºn gß╗ìi khi startup ─æß╗â ─æß║úm bß║úo session ─æ╞░ß╗úc restore sau restart
+   * Khôi phục zca-js session từ DB (cookie_text) cho các connected accounts
+   * Cần gọi khi startup để đảm bảo session được restore sau restart
    */
   async restoreSessionsFromDb() {
     console.log('[ZaloInbox] restoreSessionsFromDb: STARTING');
@@ -162,13 +162,13 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Import zaloSettingsController ─æß╗â gß╗ìi restore
+      // Import zaloSettingsController để gọi restore
       console.log('[ZaloInbox] Importing zaloSettingsController...');
       const { default: zaloSettingsController } = await import('../../controllers/zaloSettings.controller.js');
       console.log('[ZaloInbox] zaloSettingsController imported successfully');
       
       for (const account of accounts) {
-        // Skip nß║┐u ─æ├ú c├│ session
+        // Skip nếu đã có session
         if (zaloAccountSessionService.getAccountApi(account.account_id)) {
           console.log(`[ZaloInbox] Account ${account.account_id} already has active session`);
           continue;
@@ -176,10 +176,10 @@ class ZaloPersonalInboxService {
 
         try {
           console.log(`[ZaloInbox] Restoring session for account ${account.account_id}...`);
-          // Tß║ío mock request/response ─æß╗â gß╗ìi restoreAccountSessionByCookie
-          // skipMarkDisconnectedOnFail: true ΓåÆ nß║┐u cookie hß╗Ång tho├íng qua th├¼ KH├öNG mark
-          // disconnected trong DB; giß╗» nguy├¬n 'connected' ─æß╗â cron retry sau 5 ph├║t.
-          // Chß╗ë mark disconnected khi user chß╗º ─æß╗Öng restore tß╗½ UI.
+          // Tạo mock request/response để gọi restoreAccountSessionByCookie
+          // skipMarkDisconnectedOnFail: true → nếu cookie hỏng thoáng qua thì KHÔNG mark
+          // disconnected trong DB; giữ nguyên 'connected' để cron retry sau 5 phút.
+          // Chỉ mark disconnected khi user chủ động restore từ UI.
           const mockReq = {
             user: { id: account.id_user, role: 'user' },
             params: { id: String(account.account_id) },
@@ -189,9 +189,9 @@ class ZaloPersonalInboxService {
             status: () => mockRes,
             json: (data) => {
               if (data.success) {
-                console.log(`[ZaloInbox] Γ£à Restored session for account ${account.account_id}`);
+                console.log(`[ZaloInbox] ✅ Restored session for account ${account.account_id}`);
               } else {
-                console.log(`[ZaloInbox] Γ¥î Failed to restore session for account ${account.account_id}: ${data.message}`);
+                console.log(`[ZaloInbox] ❌ Failed to restore session for account ${account.account_id}: ${data.message}`);
               }
             }
           };
@@ -202,11 +202,11 @@ class ZaloPersonalInboxService {
         }
       }
 
-      // Log tß╗òng kß║┐t
+      // Log tổng kết
       const successCount = accounts.filter(a => zaloAccountSessionService.getAccountApi(a.account_id)).length;
       if (successCount < accounts.length) {
-        console.log(`[ZaloInbox] ΓÜá∩╕Å ${accounts.length - successCount}/${accounts.length} accounts need QR re-scan (cookie expired)`);
-        console.log(`[ZaloInbox] ≡ƒÆí Go to Zalo Settings to scan QR code for affected accounts`);
+        console.log(`[ZaloInbox] ⚠️ ${accounts.length - successCount}/${accounts.length} accounts need QR re-scan (cookie expired)`);
+        console.log(`[ZaloInbox] 💡 Go to Zalo Settings to scan QR code for affected accounts`);
       }
     } catch (error) {
       console.error('[ZaloInbox] Error in restoreSessionsFromDb:', error.message, error.stack);
@@ -215,7 +215,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Lß║Ñy danh s├ích accounts tß╗½ cache, chß╗ë query DB khi cache hß║┐t hß║ín
+   * Lấy danh sách accounts từ cache, chỉ query DB khi cache hết hạn
    */
   async getActiveZaloPersonalAccounts(forceRefresh = false) {
     const now = Date.now();
@@ -229,7 +229,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Invalidate cache khi c├│ account connect/disconnect
+   * Invalidate cache khi có account connect/disconnect
    */
   invalidateAccountCache() {
     this._accountCache.timestamp = 0;
@@ -237,7 +237,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Dß╗ìn dß║╣p cache v├á trß║íng th├íi khi t├ái khoß║ún Zalo bß╗ï x├│a
+   * Dọn dẹp cache và trạng thái khi tài khoản Zalo bị xóa
    */
   forgetAccount(userId, accountId) {
     if (userId && accountId) {
@@ -267,7 +267,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * X├íc ─æß╗ïnh message type tß╗½ Zalo msgType
+   * Xác định message type từ Zalo msgType
    */
   getMessageType(msgType) {
     const typeMap = {
@@ -288,7 +288,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Kiß╗âm tra tin nhß║»n ─æ├ú ─æ╞░ß╗úc l╞░u ch╞░a
+   * Kiểm tra tin nhắn đã được lưu chưa
    */
   async isMessageProcessed(externalId, zaloSettingId) {
     if (!externalId || !zaloSettingId) return false;
@@ -296,7 +296,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Xß╗¡ l├╜ mß╗Öt tin nhß║»n ─æß║┐n tß╗½ Zalo c├í nh├ón
+   * Xử lý một tin nhắn đến từ Zalo cá nhân
    */
   async processIncomingMessage(userId, accountId, zaloSettingId, rawMessage, saveResult = null) {
     try {
@@ -319,19 +319,19 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Extract groupId for group messages ΓÇö lu├┤n chuß║⌐n ho├í qua resolveConversationExternalId
+      // Extract groupId for group messages — luôn chuẩn hoá qua resolveConversationExternalId
       let groupId = null;
       if (isGroup) {
         groupId = rawData?.clientGroupId || rawData?.threadId || rawData?.idTo || null;
       }
 
-      // Lß║Ñy t├¬n sender tß╗½ raw message
+      // Lấy tên sender từ raw message
       const senderName = rawMessage?.senderName || rawMessage?.dName || null;
       const groupName = rawMessage?.groupName || null;
 
       // Validate
       if (!messageId) {
-        console.warn('[ZaloInbox] Bß╗Å qua tin nhß║»n kh├┤ng hß╗úp lß╗ç (no msgId)');
+        console.warn('[ZaloInbox] Bỏ qua tin nhắn không hợp lệ (no msgId)');
         return;
       }
 
@@ -339,7 +339,7 @@ class ZaloPersonalInboxService {
       // not generate an AI reply for a message that could not be recorded or
       // assigned a stable history ID.
       if (!saveResult?.messageId) {
-        console.warn(`[ZaloInbox] Bß╗Å qua AI routing v├¼ inbound message ch╞░a ─æ╞░ß╗úc persist: msgId=${messageId}`);
+        console.warn(`[ZaloInbox] Bỏ qua AI routing vì inbound message chưa được persist: msgId=${messageId}`);
         return;
       }
 
@@ -405,7 +405,7 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      // Determine externalId ΓÇö c├╣ng c├┤ng thß╗⌐c vß╗¢i adapter.saveMessageToDatabase
+      // Determine externalId — cùng công thức với adapter.saveMessageToDatabase
       const externalId = resolveConversationExternalId({
         isGroup,
         groupId,
@@ -471,7 +471,7 @@ class ZaloPersonalInboxService {
       // Display name:
       // - For groups: use group name (resolved or from message)
       // - For personal: use sender name (resolved or from message)
-      // IMPORTANT: Don't use "Nh├│m group_XXX" format - use "Nh├│m" + short ID
+      // IMPORTANT: Don't use "Nhóm group_XXX" format - use "Nhóm" + short ID
       let displayName;
       if (isGroup) {
         if (resolvedGroupName || groupName) {
@@ -528,10 +528,10 @@ class ZaloPersonalInboxService {
       // Build AI content
       let aiContent = content?.trim() || '';
       if (messageType === 'sticker') {
-        aiContent = `[Sticker] Ng╞░ß╗¥i d├╣ng gß╗¡i mß╗Öt sticker`;
+        aiContent = `[Sticker] Người dùng gửi một sticker`;
       }
       if (messageType === 'image') {
-        aiContent = '[H├¼nh ß║únh] Ng╞░ß╗¥i d├╣ng gß╗¡i mß╗Öt h├¼nh ß║únh';
+        aiContent = '[Hình ảnh] Người dùng gửi một hình ảnh';
       }
 
       if (!aiContent && messageType !== 'sticker' && messageType !== 'image') {
@@ -719,7 +719,7 @@ class ZaloPersonalInboxService {
     const conv = await zaloInboxRepository.findConversation(zaloSettingId, externalId);
 
     if (conv) {
-      // For groups: update visitor_name if we have a resolved group name (better than "Nh├│m X")
+      // For groups: update visitor_name if we have a resolved group name (better than "Nhóm X")
       // For personal: always update visitor_name if changed
       const isExistingGroup = conv.visitor_info?.is_group === true ||
         (typeof conv.visitor_info === 'string' && conv.visitor_info.includes('"is_group":true'));
@@ -728,7 +728,7 @@ class ZaloPersonalInboxService {
       // For personal: update name if changed
       let newName = null;
       if (isExistingGroup) {
-        // For groups: update if current name is just "Nh├│m X" (not real name) and we have resolved name
+        // For groups: update if current name is just "Nhóm X" (not real name) and we have resolved name
         if (visitorName && conv.visitor_name !== visitorName && isPlaceholderGroupName(conv.visitor_name, visitorInfo?.group_id || conv.external_id)) {
           newName = visitorName;
           console.log(`[ZaloInbox] Updating group conversation name: ${conv.visitor_name} -> ${visitorName}`);
@@ -769,7 +769,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Backfill t├¬n cho tß║Ñt cß║ú conversations c┼⌐ ch╞░a c├│ t├¬n
+   * Backfill tên cho tất cả conversations cũ chưa có tên
    */
   async backfillConversationNames(userId, accountId, zaloSettingId) {
     const conversations = await zaloInboxRepository.findConversationsForBackfill(userId, zaloSettingId);
@@ -817,7 +817,7 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Tß║ío message handler cho mß╗Öt account
+   * Tạo message handler cho một account
    */
   createMessageHandler(userId, accountId, zaloSettingId) {
     return async (rawMessage, saveResult) => {
@@ -826,8 +826,8 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Force detach + ─æ─âng k├╜ lß║íi inbox handler tr├¬n session hiß╗çn tß║íi.
-   * D├╣ng khi user bß║Ñm ─æß╗ông bß╗Ö chat 1-1 (zca-js kh├┤ng c├│ API lß╗ïch sß╗¡ c├í nh├ón).
+   * Force detach + đăng ký lại inbox handler trên session hiện tại.
+   * Dùng khi user bấm đồng bộ chat 1-1 (zca-js không có API lịch sử cá nhân).
    * @param {number|string} accountId
    * @returns {Promise<boolean>}
    */
@@ -842,20 +842,20 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Register listener cho mß╗Öt account cß╗Ñ thß╗â (public API ΓÇö delegates to internal).
+   * Register listener cho một account cụ thể (public API — delegates to internal).
    * No mutex here; callers (start, refreshListeners) manage concurrency.
    * @param {number} accountId
-   * @param {object|null} accountRow - pass sß║╡n ─æß╗â tr├ính query lß║íi zalo_settings
+   * @param {object|null} accountRow - pass sẵn để tránh query lại zalo_settings
    */
   async registerAccountListener(accountId, accountRow = null) {
     return this._registerSingleListener(accountId, accountRow);
   }
 
   /**
-   * Register listeners cho tß║Ñt cß║ú active accounts (d├╣ng cache, parallel)
+   * Register listeners cho tất cả active accounts (dùng cache, parallel)
    */
   async registerAllListeners() {
-    // Skip nß║┐u ─æang refresh
+    // Skip nếu đang refresh
     if (this._isRefreshing) {
       console.log('[ZaloInbox] Skipping registerAll (already refreshing)');
       return;
@@ -863,8 +863,8 @@ class ZaloPersonalInboxService {
     this._isRefreshing = true;
 
     try {
-      // QUAN TRß╗îNG: Kh├┤i phß╗Ñc sessions tß╗½ DB tr╞░ß╗¢c khi ─æ─âng k├╜ listeners
-      // ─Éiß╗üu n├áy cß║ºn thiß║┐t sau restart v├¼ session zca-js chß╗ë l╞░u trong memory
+      // QUAN TRỌNG: Khôi phục sessions từ DB trước khi đăng ký listeners
+      // Điều này cần thiết sau restart vì session zca-js chỉ lưu trong memory
       await this.restoreSessionsFromDb();
 
       const accounts = await this.getActiveZaloPersonalAccounts(true); // force refresh
@@ -873,7 +873,7 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      console.log(`[ZaloInbox] ─É─âng k├╜ listeners cho ${accounts.length} Zalo personal accounts`);
+      console.log(`[ZaloInbox] Đăng ký listeners cho ${accounts.length} Zalo personal accounts`);
 
       // Parallel register - use internal method without mutex
       const results = await Promise.allSettled(
@@ -887,7 +887,7 @@ class ZaloPersonalInboxService {
         }
       });
     } catch (error) {
-      console.error('[ZaloInbox] Lß╗ùi khi ─æ─âng k├╜ listeners:', error.message);
+      console.error('[ZaloInbox] Lỗi khi đăng ký listeners:', error.message);
     } finally {
       this._isRefreshing = false;
     }
@@ -914,9 +914,9 @@ class ZaloPersonalInboxService {
 
       const session = await zaloPersonalAdapter.getSessionByAccountId(accountId);
       const currentListener = session?.api?.listener || null;
-      // Chß╗ë skip khi handler c├▓n gß║»n ─æ├║ng listener cß╗ºa session HIß╗åN Tß║áI.
-      // Sau websocket close + restore API mß╗¢i, cß╗¥ registered c┼⌐ tß╗½ng khiß║┐n skip
-      // ΓåÆ gß╗¡i tß╗½ web vß║½n ─æ╞░ß╗úc (api.sendMessage) nh╞░ng tin bß║ín b├¿ kh├┤ng vß╗ü hß╗Öp th╞░.
+      // Chỉ skip khi handler còn gắn đúng listener của session HIỆN TẠI.
+      // Sau websocket close + restore API mới, cờ registered cũ từng khiến skip
+      // → gửi từ web vẫn được (api.sendMessage) nhưng tin bạn bè không về hộp thư.
       if (
         isAccountRegistered(accountId)
         && currentListener
@@ -928,7 +928,7 @@ class ZaloPersonalInboxService {
 
       const zaloSettingId = await this.getZaloSettingId(userId, accountId);
       if (!zaloSettingId) {
-        console.warn(`[ZaloInbox] Kh├┤ng t├¼m thß║Ñy zalo_setting cho account ${accountId}`);
+        console.warn(`[ZaloInbox] Không tìm thấy zalo_setting cho account ${accountId}`);
         return false;
       }
 
@@ -943,9 +943,9 @@ class ZaloPersonalInboxService {
 
       if (success) {
         markAccountRegistered(accountId);
-        console.log(`[ZaloInbox] Γ£à Successfully registered listener for account ${accountId}`);
+        console.log(`[ZaloInbox] ✅ Successfully registered listener for account ${accountId}`);
       } else {
-        console.warn(`[ZaloInbox] Γ¥î Failed to register listener for account ${accountId}`);
+        console.warn(`[ZaloInbox] ❌ Failed to register listener for account ${accountId}`);
       }
 
       return success;
@@ -963,15 +963,15 @@ class ZaloPersonalInboxService {
   }
 
   /**
-   * Start service - xß╗¡ l├╜ pending accounts v├á ─æ─âng k├╜ tß║Ñt cß║ú listeners
+   * Start service - xử lý pending accounts và đăng ký tất cả listeners
    */
   async start() {
     console.log('[ZaloInbox] Starting service...');
     
-    // Kh├┤i phß╗Ñc sessions tß╗½ DB (cookie_text) - cß║ºn thiß║┐t sau restart
+    // Khôi phục sessions từ DB (cookie_text) - cần thiết sau restart
     await this.restoreSessionsFromDb();
     
-    // Xß╗¡ l├╜ c├íc accounts mß╗¢i login (query DB v├¼ c├│ thß╗â ch╞░a c├│ trong cache)
+    // Xử lý các accounts mới login (query DB vì có thể chưa có trong cache)
     const pendingAccountIds = drainPendingAccounts();
     console.log(`[ZaloInbox] Pending accounts: ${JSON.stringify(pendingAccountIds)}`);
     
@@ -979,21 +979,21 @@ class ZaloPersonalInboxService {
       await this.registerAccountListener(accountId);
     }
 
-    // ─É─âng k├╜ tß║Ñt cß║ú active accounts (d├╣ng cache nß║┐u c├▓n hß║ín)
+    // Đăng ký tất cả active accounts (dùng cache nếu còn hạn)
     await this.registerAllListeners();
     console.log('[ZaloInbox] Service started');
   }
 
   /**
-   * Refresh listeners vß╗¢i force refresh (d├╣ng khi account connect/disconnect)
+   * Refresh listeners với force refresh (dùng khi account connect/disconnect)
    */
   async refreshListeners(forceAccountRefresh = false) {
     if (this._isRefreshing) return;
     this._isRefreshing = true;
 
     try {
-      // QUAN TRß╗îNG: Kh├┤i phß╗Ñc sessions tß╗½ DB tr╞░ß╗¢c khi ─æ─âng k├╜ listeners
-      // ─Éiß╗üu n├áy cß║ºn thiß║┐t sau restart v├¼ session zca-js chß╗ë l╞░u trong memory
+      // QUAN TRỌNG: Khôi phục sessions từ DB trước khi đăng ký listeners
+      // Điều này cần thiết sau restart vì session zca-js chỉ lưu trong memory
       await this.restoreSessionsFromDb();
 
       const accounts = await this.getActiveZaloPersonalAccounts(forceAccountRefresh);

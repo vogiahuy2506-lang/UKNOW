@@ -1,4 +1,4 @@
-﻿import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
+import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.repository.js';
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import ragEngineService from './ragEngine.service.js';
@@ -107,7 +107,7 @@ class ChatRouterService {
       shouldChargeCredit = true;
     } catch (error) {
       // Quota/credit limits and transient AI failures both return a static visitor message.
-      // Do not rethrow ΓÇö public/channel callers must not see HTTP 500.
+      // Do not rethrow — public/channel callers must not see HTTP 500.
       if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) {
         console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}):`, error.message);
       }
@@ -250,10 +250,10 @@ class ChatRouterService {
       casual: 'Than thien nhung thoai mai, co the dung tieng long nhe.',
     };
 
-    let prompt = `Ban la ${name} ΓÇö mot tro li AI thong minh.
+    let prompt = `Ban la ${name} — mot tro li AI thong minh.
 
 ## CACH HOAT DONG
-- Tra loi cau hoi dua tren Knowledge Base duoc huß║Ñn luyen ben duoi
+- Tra loi cau hoi dua tren Knowledge Base duoc huấn luyen ben duoi
 - Luon uu tien thong tin tu Knowledge Base
 - Neu cau hoi khong lien quan den Knowledge Base, tra loi dua tren Business Profile hoac kien thuc chung
 - KHONG bia dat thong tin khong co trong Knowledge Base hoac Business Profile
@@ -262,7 +262,7 @@ class ChatRouterService {
 ## PHONG CACH TRA LOI
 ${styleInstructions[style] || styleInstructions.friendly}`;
 
-    // Nß║┐u l├á tin nhß║»n ─æß║ºu ti├¬n, th├¬m lß╗¥i ch├áo v├áo prompt
+    // Nếu là tin nhắn đầu tiên, thêm lời chào vào prompt
     if (isFirstMessage) {
       prompt += `
 
@@ -273,10 +273,10 @@ Khi nguoi dung bat dau cuoc tro chuyen, hay bat dau bang loi chao sau: "${welcom
     prompt += `
 
 ## XU LY TIN NHAN DAC BIET
-- Khi nhan duoc tin nhan "[Sticker] Ng╞░ß╗¥i d├╣ng gß╗¡i mß╗Öt sticker": H├úy phß║ún hß╗ôi mß╗Öt c├ích th├ón thiß╗çn nh╞░ thß╗â ng╞░ß╗¥i d├╣ng ─æang gß╗¡i biß╗âu cß║úm cß║úm x├║c. V├¡ dß╗Ñ: "├öi bß║ín dß╗à th╞░╞íng qu├í ≡ƒÿä", "M├¼nh hiß╗âu rß╗ôi, bß║ín c├│ g├¼ muß╗æn hß╗Åi kh├┤ng?", "Sticker ─æß║╣p qu├í! Bß║ín cß║ºn m├¼nh gi├║p g├¼ kh├┤ng?"
-- Khi nhan duoc tin nhan "[H├¼nh ß║únh] Ng╞░ß╗¥i d├╣ng gß╗¡i mß╗Öt h├¼nh ß║únh": Phß║ún hß╗ôi lß╗ïch sß╗▒, cho biß║┐t bß║ín ─æ├ú nhß║¡n ─æ╞░ß╗úc h├¼nh ß║únh v├á hß╗Åi ng╞░ß╗¥i d├╣ng cß║ºn hß╗ù trß╗ú g├¼ vß╗ü nß╗Öi dung h├¼nh ß║únh ─æ├│.
-- Nß║┐u tin nhß║»n l├á emoji thuß║ºn t├║y: Trß║ú lß╗¥i tß╗▒ nhi├¬n nh╞░ ─æang tr├▓ chuyß╗çn th├┤ng th╞░ß╗¥ng.
-- Vß╗¢i mß╗ìi loß║íi tin nhß║»n ─æß║╖c biß╗çt, h├úy phß║ún hß╗ôi mß╗Öt c├ích tß╗▒ nhi├¬n v├á th├ón thiß╗çn, kh├┤ng cß║ºn ph├ón t├¡ch s├óu.
+- Khi nhan duoc tin nhan "[Sticker] Người dùng gửi một sticker": Hãy phản hồi một cách thân thiện như thể người dùng đang gửi biểu cảm cảm xúc. Ví dụ: "Ôi bạn dễ thương quá 😄", "Mình hiểu rồi, bạn có gì muốn hỏi không?", "Sticker đẹp quá! Bạn cần mình giúp gì không?"
+- Khi nhan duoc tin nhan "[Hình ảnh] Người dùng gửi một hình ảnh": Phản hồi lịch sự, cho biết bạn đã nhận được hình ảnh và hỏi người dùng cần hỗ trợ gì về nội dung hình ảnh đó.
+- Nếu tin nhắn là emoji thuần túy: Trả lời tự nhiên như đang trò chuyện thông thường.
+- Với mọi loại tin nhắn đặc biệt, hãy phản hồi một cách tự nhiên và thân thiện, không cần phân tích sâu.
 
 ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\n' : ''}
 ## QUY TAC QUAN TRONG
@@ -286,12 +286,12 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 - Neu can danh sach, chi dung dau gach ngang (-) hoac so thu tu (1, 2, 3)
 - Neu can nhan manh thong tin quan trong, chi CAN VIET HOA hoac THEM DAU HAI CHAM
 - So dien thoai / email: format chuan Viet Nam
-- Tra loi ngß║»n gß╗ìn, r├╡ r├áng, dß╗à ─æß╗ìc
+- Tra loi ngắn gọn, rõ ràng, dễ đọc
 - Neu co link, HIEN THI LINK URL day du dang van ban thuan (VD: Ten trang: https://example.com)
 - Khong dung link markdown dang [ten](https://example.com)
-- Neu khong biet, noi "Toi khong chß║»c chß║»n, vui long lien he ho tro"`;
+- Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
-    // Th├¬m custom system instruction neu co
+    // Thêm custom system instruction neu co
     if (settings.system_instruction?.trim()) {
       prompt += `\n\n## HUONG DAN TUY CHINH\n${settings.system_instruction.trim()}`;
     }
@@ -301,8 +301,8 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 
   async _callAI({ userId, systemPrompt, history, message, model, temperature, maxTokens }) {
     // Map DB role to Gemini role:
-    // - 'visitor' (user message) ΓåÆ 'user'
-    // - 'bot' or 'agent' (AI/bot response) ΓåÆ 'model'
+    // - 'visitor' (user message) → 'user'
+    // - 'bot' or 'agent' (AI/bot response) → 'model'
     const chatHistory = history.map(m => ({
       role: (m.role === 'bot' || m.role === 'agent') ? 'model' : 'user',
       parts: [{ text: m.content }],
@@ -459,7 +459,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     }
   }
 
-  // ΓöÇΓöÇ Public helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Public helpers ──────────────────────────────────────────────
 
   async _getLinkedKbId(subAssistant, userId) {
     try {
