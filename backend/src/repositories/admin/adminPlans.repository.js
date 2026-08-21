@@ -123,15 +123,18 @@ export async function createPlan({ code, name, price, priceYearly, description, 
   return rows[0];
 }
 
-export async function updatePlan(id, { name, price, priceYearly, description, features, maxEmployees, isActive,
+export async function updatePlan(id, { code, name, price, priceYearly, description, features, maxEmployees, isActive,
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
   maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes }) {
+  // code: CHỈ điền được khi đang NULL (vá gói lỡ tạo thiếu code). Không cho đổi code đã có
+  // vì voucher gán theo planCode và đơn cũ tham chiếu tới nó.
   const { rows } = await db.query(
     `UPDATE plans
-     SET name = $1, price = $2, price_yearly = $3, description = $4, features = $5,
+     SET code = COALESCE(code, NULLIF($31, '')),
+         name = $1, price = $2, price_yearly = $3, description = $4, features = $5,
          max_employees = $6, is_active = $7,
          duration_days = $8,
          daily_email_limit = $9, monthly_email_limit = $10,
@@ -156,7 +159,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
      maxEmailTemplates ?? null, maxZaloTemplates ?? null,
      maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
-     gracePeriodDays ?? 0, storageLimitBytes, id]
+     gracePeriodDays ?? 0, storageLimitBytes, id, String(code || '').trim().toLowerCase()]
   );
   return rows[0] || null;
 }

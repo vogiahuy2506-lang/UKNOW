@@ -135,6 +135,7 @@ export async function editPlan(id, payload) {
   if (!payload.name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (payload.price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
   return updatePlan(id, {
+    code:         payload.code,
     name:         payload.name.trim(),
     price:        payload.price,
     priceYearly:  parseOptionalMoneyField(payload.priceYearly, 'Giá năm', { emptyWhenZero: true }),

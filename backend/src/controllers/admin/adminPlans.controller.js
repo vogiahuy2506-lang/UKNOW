@@ -58,6 +58,15 @@ export async function create(req, res) {
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays, storageLimitBytes } = req.body;
+    // Gói công khai BẮT BUỘC có code: checkout gửi planCode lên (payment.controller.js:23),
+    // voucher cũng gán theo planCode. Thiếu code = gói hiện trên bảng giá nhưng bấm mua
+    // luôn trả 400 "Thiếu planCode", và updatePlan không sửa được code nên hỏng vĩnh viễn.
+    if (!String(code || '').trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu mã gói (code). Gói công khai bắt buộc có mã để khách thanh toán được.',
+      });
+    }
     const plan = await adminPlansService.createNewPlan({
       code, name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
@@ -75,14 +84,14 @@ export async function create(req, res) {
 /** PATCH /api/admin/plans/:id */
 export async function update(req, res) {
   try {
-    const { name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
+    const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays, storageLimitBytes } = req.body;
     const plan = await adminPlansService.editPlan(Number(req.params.id), {
-      name, price: Number(price), priceYearly, description, features,
+      code, name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
