@@ -45,7 +45,7 @@ const isTrialOrFreePlan = (plan) => {
     return plan.code === trialCode || Number(plan.price) === 0;
 };
 
-const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
+const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail, queryable = db }) => {
     // Rule: Mọi gói dùng thử / miễn phí chỉ được đăng ký 1 lần / tài khoản.
     if (!isTrialOrFreePlan(plan)) return;
 
@@ -53,6 +53,7 @@ const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail }) => {
         planId: plan.id,
         userId,
         userEmail,
+        queryable,
     });
     if (alreadyRegistered) {
         throw { status: 409, message: 'Gói dùng thử chỉ được đăng ký một lần cho mỗi tài khoản' };
@@ -65,12 +66,12 @@ const validatePlanChange = async ({ targetPlan, targetBillingPeriod = 'monthly',
     if (userId) {
         user = await findUserById(userId, queryable);
     } else if (userEmail) {
-        user = await findActiveUserByEmail(userEmail);
+        user = await findActiveUserByEmail(userEmail, queryable);
     }
     if (!user) return { action: 'upgrade_now' };
 
     const currentPlan = await getPlanByUserId(user.id, queryable);
-    const currentBillingPeriod = await findActiveBillingPeriod(user.id, user.email);
+    const currentBillingPeriod = await findActiveBillingPeriod(user.id, user.email, queryable);
     const pendingChange = await scheduledPlanChangeRepository.findPendingByUserId(user.id, queryable);
 
     const price = targetPrice !== null ? targetPrice : (
@@ -358,15 +359,16 @@ export const handleWebhook = async (body) => {
     return webhookData;
 };
 
-export const activateFreePlan = async ({ planCode, userId, userEmail, billingPeriod = 'monthly' }) => {
-    const plan = await findPlanByCode(planCode);
+export const activateFreePlan = async ({ planCode, userId, userEmail, billingPeriod = 'monthly', queryable = db }) => {
+    const plan = await findPlanByCode(planCode, queryable);
     if (!plan) throw new Error('Gói không tồn tại');
-    await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
+    await assertTrialNotRegisteredTwice({ plan, userId, userEmail, queryable });
     await validatePlanChange({
         targetPlan: plan,
         targetBillingPeriod: billingPeriod,
         userId,
         userEmail,
+        queryable,
     });
 
     const amount = billingPeriod === 'yearly' && plan.price_yearly
@@ -386,12 +388,12 @@ export const activateFreePlan = async ({ planCode, userId, userEmail, billingPer
         status: 'success',
         paymentMethod: 'free',
         billingPeriod,
-    });
+    }, queryable);
 
     if (userId) {
-        await activateUserPlan(userId, plan.id, billingPeriod);
+        await activateUserPlan(userId, plan.id, billingPeriod, queryable);
         const { reconcileResourceLocks } = await import('./topupLock.service.js');
-        await reconcileResourceLocks(userId, undefined, { unlockOnly: true });
+        await reconcileResourceLocks(userId, queryable, { unlockOnly: true });
     }
 
     return { orderCode };

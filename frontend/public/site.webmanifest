@@ -1,0 +1,44 @@
+{
+  "name": "Founder AI",
+  "short_name": "Founder AI",
+  "description": "Đồng sáng lập cho doanh nghiệp một người — nền tảng AI tạo trang đích, quản lý khách hàng tiềm năng và chăm sóc khách hàng tự động qua Email/Zalo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#f97316",
+  "lang": "vi",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "marketing"],
+  "icons": [
+    {
+      "src": "/favicon.png?v=2",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/og-cover.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Tạo chiến dịch",
+      "short_name": "Chiến dịch",
+      "description": "Tạo chiến dịch email hoặc Zalo mới",
+      "url": "/campaigns",
+      "icons": [{ "src": "/favicon.png?v=2", "sizes": "32x32", "type": "image/png" }]
+    },
+    {
+      "name": "Marketplace",
+      "short_name": "Marketplace",
+      "description": "Khám phá chatbot & landing page mẫu",
+      "url": "/marketplace",
+      "icons": [{ "src": "/favicon.png?v=2", "sizes": "32x32", "type": "image/png" }]
+    }
+  ]
+}

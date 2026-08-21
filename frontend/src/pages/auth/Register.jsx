@@ -125,6 +125,10 @@ const OtpStep = ({ email, formData, onBack }) => {
       const result = await registerUser({ ...formData, emailVerificationCode: code });
       trackEvent('sign_up', { method: 'email' });
       toast.success(t('auth.registerSuccess'));
+      const trialDays = result?.data?.trial?.durationDays;
+      if (trialDays) {
+        toast.success(t('register.trialGranted', { days: trialDays }));
+      }
       navigate(getPostAuthPath(result?.data?.user));
     } catch (err) {
       const msg = err?.response?.data?.message || t('auth.verificationFailed');
@@ -364,6 +368,10 @@ const Register = () => {
     try {
       const result = await googleLogin({ access_token: pendingGoogleToken.access_token });
       toast.success(t('register.googleLoginSuccess'));
+      const trialDays = result?.data?.trial?.durationDays;
+      if (trialDays) {
+        toast.success(t('register.trialGranted', { days: trialDays }));
+      }
       setShowGoogleConsent(false);
       navigate(getPostAuthPath(result?.data?.user));
     } catch (error) {

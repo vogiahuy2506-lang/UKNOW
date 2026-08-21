@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     HiArrowLeft,
@@ -7,6 +7,10 @@ import {
     HiOutlineShieldCheck,
     HiOutlineLightningBolt,
     HiOutlineChatAlt2,
+    HiOutlineClipboardList,
+    HiOutlineClock,
+    HiOutlineExclamationCircle,
+    HiOutlineExternalLink,
 } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
 import { useI18n } from '../../i18n';
@@ -16,6 +20,8 @@ import checkoutApiService from '../../features/checkout/services/checkoutApi.ser
 import InvoiceVatForm, { computeDisplayVat, isInvoiceInfoValid } from '../../features/checkout/components/InvoiceVatForm';
 import { isInvoiceVatUiEnabled } from '../../constants/invoiceVat';
 import { trackEvent } from '../../utils/analytics';
+import { parseVietQR, formatCountdown } from '../../utils/vietqrParser';
+import { lookupBankByBin, formatAccountNumber } from '../../utils/payosBankBinMap';
 import QRCode from 'qrcode';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
@@ -47,6 +53,56 @@ const voucherErrorKeyMap = {
     'Lỗi server': 'checkout.voucherServerError',
 };
 
+/** Compact copy cell: txt + button copy. Toast + 1.5s checkmark feedback. */
+function CopyRow({ label, value, displayValue, onCopied, t, hint }) {
+    const [copied, setCopied] = useState(false);
+    const handle = () => {
+        if (!value) return;
+        try {
+            navigator.clipboard.writeText(String(value));
+            setCopied(true);
+            toast.success(t('checkout.copied'));
+            onCopied?.();
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            toast.error('Copy failed');
+        }
+    };
+    return (
+        <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg bg-white border border-slate-200/80 hover:border-orange-200 transition-colors">
+            <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    {label}
+                </div>
+                <div className="text-sm font-mono font-bold text-slate-800 truncate">
+                    {displayValue || '—'}
+                </div>
+                {hint && (
+                    <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{hint}</div>
+                )}
+            </div>
+            <button
+                type="button"
+                onClick={handle}
+                disabled={!value}
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:text-orange-700 px-2.5 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+                {copied ? (
+                    <>
+                        <HiOutlineCheck className="w-3.5 h-3.5" />
+                        <span>{t('checkout.copiedField')}</span>
+                    </>
+                ) : (
+                    <>
+                        <HiOutlineDuplicate className="w-3.5 h-3.5" />
+                        <span>{t('checkout.copyField')}</span>
+                    </>
+                )}
+            </button>
+        </div>
+    );
+}
+
 const CheckoutPage = () => {
     const { t } = useI18n();
     const location = useLocation();
@@ -72,12 +128,14 @@ const CheckoutPage = () => {
 
     const [currentStep, setCurrentStep] = useState('info'); // 'info' | 'qr'
     const [orderCode, setOrderCode] = useState(null);
+    const [qrRawCode, setQrRawCode] = useState(null); // raw EMVCo string from PayOS
+    const [expiredAt, setExpiredAt] = useState(null); // unix seconds
+    const [secondsLeft, setSecondsLeft] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const user = useAuthStore((state) => state.user);
     const isAuthLoading = useAuthStore((state) => state.isLoading);
     const [qrImageUrl, setQrImageUrl] = useState(null);
-    const [copied, setCopied] = useState(false);
     const [autoPromotion, setAutoPromotion] = useState(null);
     const [manualVoucher, setManualVoucher] = useState(null);
     const [codeVouchers, setCodeVouchers] = useState([]);
@@ -100,12 +158,27 @@ const CheckoutPage = () => {
     const payableAmount = Number(authoritativePayment?.amount ?? vatBreakdown.gross);
     const isInvoiceValid = !invoiceVatUiEnabled || finalAmount <= 0 || isInvoiceInfoValid(invoiceInfo);
 
-    const handleCopy = (text) => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        toast.success(t('checkout.copied'));
-        setTimeout(() => setCopied(false), 2000);
-    };
+    // Parse VietQR một lần khi raw code đổi
+    const qrInfo = useMemo(() => (qrRawCode ? parseVietQR(qrRawCode) : null), [qrRawCode]);
+    const bank = useMemo(() => (qrInfo?.bin ? lookupBankByBin(qrInfo.bin) : null), [qrInfo]);
+
+    // Countdown tới expiredAt
+    useEffect(() => {
+        if (!expiredAt) {
+            setSecondsLeft(null);
+            return undefined;
+        }
+        const tick = () => {
+            const now = Math.floor(Date.now() / 1000);
+            const left = Math.max(0, expiredAt - now);
+            setSecondsLeft(left);
+        };
+        tick();
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+    }, [expiredAt]);
+
+    const qrExpired = expiredAt !== null && secondsLeft !== null && secondsLeft <= 0;
 
     const applyAuthoritativePayment = (result) => {
         const serverDiscount = result?.discount || null;
@@ -165,7 +238,7 @@ const CheckoutPage = () => {
         if (changed) toast(t('checkout.discountUpdated'));
     };
 
-    const createPayment = async () => {
+    const createPayment = async ({ regenerate = false } = {}) => {
         if (!isCustomPlan && !plan) {
             navigate('/pricing', { replace: true });
             return;
@@ -181,11 +254,13 @@ const CheckoutPage = () => {
                 return;
             }
             setLoading(true);
-            trackEvent('begin_checkout', {
-                currency: 'VND',
-                value: payableAmount,
-                items: [{ item_id: voucherPlanCode, item_name: planName }],
-            });
+            if (!regenerate) {
+                trackEvent('begin_checkout', {
+                    currency: 'VND',
+                    value: payableAmount,
+                    items: [{ item_id: voucherPlanCode, item_name: planName }],
+                });
+            }
             const userEmail = location.state?.userEmail || user?.email;
             if (!userEmail) {
                 if (isAuthLoading) {
@@ -218,6 +293,8 @@ const CheckoutPage = () => {
                 }
 
                 setOrderCode(data.result.orderCode);
+                setQrRawCode(data.result.qrCode);
+                setExpiredAt(data.result.expiredAt || null);
                 const qrDataUrl = await QRCode.toDataURL(data.result.qrCode, { width: 240, margin: 1 });
                 setQrImageUrl(qrDataUrl);
                 setError(null);
@@ -258,6 +335,8 @@ const CheckoutPage = () => {
             }
 
             setOrderCode(data.result.orderCode);
+            setQrRawCode(data.result.qrCode);
+            setExpiredAt(data.result.expiredAt || null);
             const qrDataUrl = await QRCode.toDataURL(data.result.qrCode, { width: 240, margin: 1 });
             setQrImageUrl(qrDataUrl);
             setError(null);
@@ -534,7 +613,7 @@ const CheckoutPage = () => {
                                 {/* Nút CTA Tiếp tục thanh toán */}
                                 <button
                                     type="button"
-                                    onClick={createPayment}
+                                    onClick={() => createPayment()}
                                     disabled={loading || !isInvoiceValid}
                                     title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : undefined}
                                     className="w-full btn btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.01]"
@@ -559,32 +638,61 @@ const CheckoutPage = () => {
                         </div>
                     </div>
                 ) : (
-                    /* Step 2: Màn hình quét mã QR thanh toán */
-                    <div className="bg-white/85 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-5 md:p-8">
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                    /* Step 2: Màn hình QR + thông tin thanh toán */
+                    <div className="bg-white/85 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-4 md:p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
 
-                            {/* Cột Trái (5/12): QR Code lớn & Trạng thái */}
-                            <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-gradient-to-b from-orange-500/5 to-transparent rounded-2xl border border-orange-200/50">
-                                <div className="bg-white p-3.5 rounded-2xl shadow-md border border-slate-100 flex flex-col items-center mb-3">
-                                    {qrImageUrl ? (
-                                        <img src={qrImageUrl} alt="Mã QR thanh toán PayOS" className="w-52 h-52 object-contain rounded-lg" />
-                                    ) : (
-                                        <div className="w-52 h-52 flex items-center justify-center text-slate-400 text-xs">
-                                            {t('checkout.checkingTransaction')}
+                            {/* Cột Trái (5/12): QR + countdown */}
+                            <div className="md:col-span-5 flex flex-col items-center">
+                                <div className="bg-gradient-to-b from-orange-500/5 to-transparent border border-orange-200/50 rounded-2xl p-4 w-full flex flex-col items-center">
+                                    <div className="bg-white p-3 rounded-2xl shadow-md border border-slate-100 mb-3">
+                                        {qrExpired ? (
+                                            <div className="w-52 h-52 flex flex-col items-center justify-center text-center text-slate-500 gap-2 px-2">
+                                                <HiOutlineExclamationCircle className="w-10 h-10 text-red-500" />
+                                                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                                                    {t('checkout.qrExpired')}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => createPayment({ regenerate: true })}
+                                                    disabled={loading}
+                                                    className="mt-1 text-[10px] font-bold text-orange-600 hover:text-orange-700 underline disabled:opacity-50"
+                                                >
+                                                    {loading ? t('checkout.qrRegenerating') : t('checkout.qrRegenerate')}
+                                                </button>
+                                            </div>
+                                        ) : qrImageUrl ? (
+                                            <img src={qrImageUrl} alt="Mã QR thanh toán PayOS" className="w-52 h-52 object-contain rounded-lg" />
+                                        ) : (
+                                            <div className="w-52 h-52 flex items-center justify-center text-slate-400 text-xs">
+                                                {t('checkout.checkingTransaction')}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Countdown */}
+                                    {!qrExpired && secondsLeft !== null && (
+                                        <div className={`inline-flex items-center gap-1.5 text-[11px] font-bold bg-white/80 px-3 py-1.5 rounded-full border shadow-sm ${
+                                            secondsLeft <= 60
+                                                ? 'text-red-600 border-red-200 animate-pulse'
+                                                : 'text-slate-700 border-orange-200'
+                                        }`}>
+                                            <HiOutlineClock className="w-3.5 h-3.5" />
+                                            <span>{t('checkout.qrExpiresIn')}</span>
+                                            <span className="font-mono">{formatCountdown(secondsLeft)}</span>
                                         </div>
                                     )}
-                                </div>
 
-                                <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold bg-white/80 px-3 py-1.5 rounded-full border border-orange-200 shadow-sm">
-                                    <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
-                                    <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse [animation-delay:0.2s]" />
-                                    <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse [animation-delay:0.4s]" />
-                                    <span className="ml-1 text-[11px]">{t('checkout.checkingTransaction')}</span>
+                                    {/* Auto redirect hint */}
+                                    <p className="text-[10px] text-slate-400 mt-3 text-center leading-tight">
+                                        {t('checkout.autoRedirect')}
+                                    </p>
                                 </div>
                             </div>
 
-                            {/* Cột Phải (7/12): Chi tiết số tiền, Mã đơn, 3 Bước */}
+                            {/* Cột Phải (7/12): Số tiền, Order Code, Bank info, Manual transfer guide */}
                             <div className="md:col-span-7 space-y-4">
+
                                 {/* Box Số tiền cần thanh toán */}
                                 <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl p-4 shadow-lg shadow-orange-500/20 flex items-center justify-between">
                                     <div>
@@ -607,28 +715,91 @@ const CheckoutPage = () => {
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => handleCopy(String(orderCode))}
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(String(orderCode));
+                                                toast.success(t('checkout.copied'));
+                                            }}
                                             className="btn btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
                                         >
-                                            {copied ? <HiOutlineCheck className="w-4 h-4 text-emerald-600" /> : <HiOutlineDuplicate className="w-4 h-4" />}
-                                            <span>{copied ? t('checkout.copied') : t('checkout.copy')}</span>
+                                            <HiOutlineDuplicate className="w-4 h-4" />
+                                            <span>{t('checkout.copy')}</span>
                                         </button>
                                     </div>
                                 )}
 
-                                {/* 3 Bước thanh toán */}
-                                <div className="space-y-2">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                        {t('checkout.paymentGuide')}
+                                {/* Bank info block */}
+                                <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-3.5 space-y-2.5">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <HiOutlineClipboardList className="w-4 h-4 text-orange-500 shrink-0" />
+                                        <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                                            {t('checkout.bankInfoTitle')}
+                                        </p>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 leading-snug">
+                                        {t('checkout.bankInfoSubtitle')}
                                     </p>
-                                    {[t('checkout.step1'), t('checkout.step2'), t('checkout.step3')].map((step, i) => (
-                                        <div key={step} className="flex items-center gap-3 text-xs text-slate-700 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+
+                                    {!qrInfo?.valid ? (
+                                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                                            <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <p className="text-[11px] text-amber-700 leading-snug">
+                                                {qrInfo?.error ? t('checkout.qrCorrupted') : t('checkout.checkingTransaction')}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-1.5 mt-1">
+                                            <CopyRow
+                                                label={t('checkout.bankNameLabel')}
+                                                value={bank?.name || qrInfo.bin}
+                                                displayValue={bank ? `${bank.name} (${bank.short})` : qrInfo.bin}
+                                                t={t}
+                                            />
+                                            <CopyRow
+                                                label={t('checkout.accountNumberLabel')}
+                                                value={qrInfo.accountNumber}
+                                                displayValue={qrInfo.accountNumber ? formatAccountNumber(qrInfo.accountNumber) : '—'}
+                                                t={t}
+                                            />
+                                            <CopyRow
+                                                label={t('checkout.accountNameLabel')}
+                                                value={qrInfo.merchantName}
+                                                displayValue={qrInfo.merchantName || '—'}
+                                                hint={qrInfo.merchantName ? t('checkout.accountNameDisclaimer') : null}
+                                                t={t}
+                                            />
+                                            <CopyRow
+                                                label={t('checkout.amountLabel')}
+                                                value={String(payableAmount)}
+                                                displayValue={fmtVnd(payableAmount)}
+                                                t={t}
+                                            />
+                                            <CopyRow
+                                                label={t('checkout.descriptionLabel')}
+                                                value={qrInfo.description || (orderCode ? `TT ${orderCode}` : null)}
+                                                displayValue={qrInfo.description || (orderCode ? `TT ${orderCode}` : '—')}
+                                                hint={t('checkout.descriptionHint')}
+                                                t={t}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Manual transfer guide */}
+                                <div className="bg-gradient-to-br from-orange-50/60 to-transparent border border-orange-200/70 rounded-2xl p-3.5 space-y-2">
+                                    <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                                        {t('checkout.manualTransferTitle')}
+                                    </p>
+                                    {[t('checkout.manualTransferStep1'), t('checkout.manualTransferStep2'), t('checkout.manualTransferStep3')].map((step, i) => (
+                                        <div key={i} className="flex items-center gap-3 text-xs text-slate-700 bg-white/80 p-2.5 rounded-xl border border-white">
                                             <span className="shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
                                                 {i + 1}
                                             </span>
-                                            <span className="font-medium">{step}</span>
+                                            <span className="font-medium leading-snug">{step}</span>
                                         </div>
                                     ))}
+                                    <p className="text-[10px] text-slate-500 italic leading-tight pt-1 border-t border-orange-200/40">
+                                        {t('checkout.manualTransferCaveat')}
+                                    </p>
                                 </div>
 
                                 {/* Footer support */}

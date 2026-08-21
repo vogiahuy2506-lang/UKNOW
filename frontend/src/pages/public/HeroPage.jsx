@@ -474,14 +474,15 @@ function CampaignFlowLauncher({ t }) {
       title: t('heroPage.campaignDemo.emailTitle') || 'Email Marketing',
       desc: t('heroPage.campaignDemo.emailDesc') || 'Gửi email hàng loạt, theo dõi mở/click/chuyển đổi',
       icon: HiOutlineMail,
-      gradient: 'from-blue-500 to-blue-600',
-      lightBg: 'bg-blue-50',
-      border: 'border-blue-200',
-      hoverBorder: 'hover:border-blue-400',
-      textColor: 'text-blue-700',
-      iconBg: 'bg-blue-100',
-      iconColor: 'text-blue-600',
-      btnBg: 'bg-blue-500 hover:bg-blue-600',
+      gradient: 'from-orange-400 via-orange-500 to-amber-500',
+      lightBg: 'bg-orange-50',
+      border: 'border-orange-200',
+      hoverBorder: 'hover:border-orange-400',
+      textColor: 'text-orange-900',
+      iconBg: 'bg-orange-100',
+      iconColor: 'text-orange-600',
+      btnBg: 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600',
+      chipBg: 'bg-orange-50 text-orange-700',
       stats: ['1.250 khách', '8 node', '~12 phút'],
     },
     {
@@ -489,14 +490,15 @@ function CampaignFlowLauncher({ t }) {
       title: t('heroPage.campaignDemo.zaloPersonalTitle') || 'Zalo cá nhân',
       desc: t('heroPage.campaignDemo.zaloPersonalDesc') || 'Gửi tin nhắn qua Zalo OA đến từng khách hàng',
       icon: HiOutlineChatAlt2,
-      gradient: 'from-emerald-500 to-emerald-600',
-      lightBg: 'bg-emerald-50',
-      border: 'border-emerald-200',
-      hoverBorder: 'hover:border-emerald-400',
-      textColor: 'text-emerald-700',
-      iconBg: 'bg-emerald-100',
-      iconColor: 'text-emerald-600',
-      btnBg: 'bg-emerald-500 hover:bg-emerald-600',
+      gradient: 'from-orange-500 to-red-500',
+      lightBg: 'bg-orange-50',
+      border: 'border-orange-200',
+      hoverBorder: 'hover:border-red-400',
+      textColor: 'text-slate-900',
+      iconBg: 'bg-orange-100',
+      iconColor: 'text-red-500',
+      btnBg: 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600',
+      chipBg: 'bg-orange-50 text-orange-700',
       stats: ['480 khách', '8 node', '~14 phút'],
     },
     {
@@ -504,14 +506,15 @@ function CampaignFlowLauncher({ t }) {
       title: t('heroPage.campaignDemo.zaloGroupTitle') || 'Zalo nhóm',
       desc: t('heroPage.campaignDemo.zaloGroupDesc') || 'Đăng bài vào các nhóm Zalo đã tham gia',
       icon: HiOutlineUserGroup,
-      gradient: 'from-violet-500 to-violet-600',
-      lightBg: 'bg-violet-50',
-      border: 'border-violet-200',
-      hoverBorder: 'hover:border-violet-400',
-      textColor: 'text-violet-700',
-      iconBg: 'bg-violet-100',
-      iconColor: 'text-violet-600',
-      btnBg: 'bg-violet-500 hover:bg-violet-600',
+      gradient: 'from-red-500 to-rose-600',
+      lightBg: 'bg-red-50',
+      border: 'border-red-200',
+      hoverBorder: 'hover:border-rose-400',
+      textColor: 'text-red-900',
+      iconBg: 'bg-red-100',
+      iconColor: 'text-red-600',
+      btnBg: 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700',
+      chipBg: 'bg-red-50 text-red-700',
       stats: ['25 nhóm', '7 node', '~16 phút'],
     },
   ];
@@ -547,19 +550,22 @@ function CampaignFlowLauncher({ t }) {
               onClick={() => openFlow(c.key)}
               onMouseEnter={() => setHovered(c.key)}
               onMouseLeave={() => setHovered(null)}
-              className={`group text-left bg-white rounded-2xl border-2 ${c.border} ${c.hoverBorder} p-6 transition-all hover:shadow-xl hover:-translate-y-1`}
+              className={`group relative text-left bg-white rounded-2xl border-2 ${c.border} ${c.hoverBorder} p-6 transition-all hover:shadow-xl hover:-translate-y-1 overflow-hidden`}
             >
+              {/* Decorative gradient strip */}
+              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${c.gradient}`} />
+
               <div className={`w-14 h-14 rounded-xl ${c.iconBg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                 <Icon className={`w-7 h-7 ${c.iconColor}`} />
               </div>
-              <h3 className={`text-lg font-bold ${c.textColor} mb-2`}>{c.title}</h3>
+              <h3 className={`text-lg font-bold text-slate-900 mb-2`}>{c.title}</h3>
               <p className="text-sm text-slate-600 leading-relaxed mb-4 min-h-[3rem]">
                 {c.desc}
               </p>
 
               <div className="flex items-center gap-2 text-[10px] text-slate-500 mb-4">
                 {c.stats.map((s, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-slate-50 rounded-md font-medium">
+                  <span key={i} className={`px-2 py-0.5 ${c.chipBg} rounded-md font-medium`}>
                     {s}
                   </span>
                 ))}
