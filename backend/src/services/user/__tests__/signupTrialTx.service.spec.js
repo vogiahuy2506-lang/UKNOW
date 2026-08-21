@@ -58,13 +58,30 @@ describe('signupTrialTx.grantSignupTrialInTx', () => {
     expect(result).toBeNull();
   });
 
-  it('transient infra error (pg error with .code) is rethrown so the caller rolls back registration', async () => {
+  it('transient infra error (whitelisted pg code) is rethrown so the caller rolls back registration', async () => {
     const pgErr = new Error('connection terminated');
     pgErr.code = '57P01';
     mockActivateFreePlan.mockRejectedValueOnce(pgErr);
     const client = fakeClient();
     await expect(grantSignupTrialInTx(client, { userId: 1, userEmail: 'a@b.com' }))
       .rejects.toThrow('connection terminated');
+  });
+
+  // Regression (code review 22/08): "has .code" was used as a proxy for "transient",
+  // which is wrong — Postgres constraint violations and Node's own module-resolution
+  // errors both carry .code but are permanent, not transient.
+  it.each([
+    ['23505 unique_violation (e.g. trial already granted race)', '23505'],
+    ['23503 foreign_key_violation', '23503'],
+    ['23514 check_violation', '23514'],
+    ['ERR_MODULE_NOT_FOUND (deploy/path bug in the dynamic import itself)', 'ERR_MODULE_NOT_FOUND'],
+  ])('%s is NOT transient — swallowed, does not block registration', async (_label, code) => {
+    const err = new Error(`boom (${code})`);
+    err.code = code;
+    mockActivateFreePlan.mockRejectedValueOnce(err);
+    const client = fakeClient();
+    const result = await grantSignupTrialInTx(client, { userId: 1, userEmail: 'a@b.com' });
+    expect(result).toBeNull();
   });
 
   it('missing userId/userEmail throws regardless (programmer error, not a trial-config issue)', async () => {
