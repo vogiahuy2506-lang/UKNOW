@@ -16,7 +16,7 @@ import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser, createPlan, assignPlanToUser } from './helpers/db.js';
+import { truncateAll, createUser, createPlan, assignPlanToUser, createOrder, createVerificationCode } from './helpers/db.js';
 
 let app;
 
@@ -476,5 +476,269 @@ describe('GET /api/admin/members?role=admin — admin listing', () => {
     expect(usernames).toContain('sa');
     expect(usernames).toContain('sa2');
     expect(usernames).not.toContain('cust1');
+  });
+});
+
+describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
+  it('giải phóng email/username, status=deleted, thu hồi refresh token', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'user', username: 'stuck_user', email: 'stuck@test.local' });
+    const targetToken = await loginAs(target); // tạo refresh token còn sống cho target
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${target.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'stuck@test.local' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain('stuck@test.local');
+
+    const { rows } = await db.query(
+      'SELECT email, username, status FROM users WHERE id = $1',
+      [target.id]
+    );
+    expect(rows[0].email).toBe(`freed+${target.id}@deleted.local`);
+    expect(rows[0].username).toBe(`stuck_user_freed_${target.id}`);
+    expect(rows[0].status).toBe('deleted');
+
+    // Refresh token của target phải bị thu hồi
+    const tokenRow = await db.query(
+      `SELECT is_revoked FROM refresh_tokens WHERE id_user = $1`,
+      [target.id]
+    );
+    expect(tokenRow.rows.every((r) => r.is_revoked)).toBe(true);
+    void targetToken; // chỉ cần token được tạo ra trong DB, không dùng lại giá trị
+
+    // Không đụng đơn hàng/dữ liệu khác — chỉ verify không lỗi khi chưa có gì để giữ
+  });
+
+  it('confirmEmail không khớp → 400, không đổi gì', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'user', username: 'target', email: 'real@test.local' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${target.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'wrong@test.local' });
+
+    expect(res.status).toBe(400);
+    const { rows } = await db.query('SELECT email FROM users WHERE id = $1', [target.id]);
+    expect(rows[0].email).toBe('real@test.local');
+  });
+
+  it('tự gỡ email chính mình → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa', email: 'sa@test.local' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${admin.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'sa@test.local' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('chính');
+  });
+
+  it('gỡ email của Super Admin khác → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const otherAdmin = await createUser({ role: 'admin', username: 'sa2', email: 'sa2@test.local' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${otherAdmin.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'sa2@test.local' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('Super Admin');
+  });
+
+  it('gỡ email 2 lần liên tiếp → lần 2 báo 400 "đã được gỡ trước đó"', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'user', username: 'target', email: 'twice@test.local' });
+    const token = await loginAs(admin);
+
+    const first = await request(app)
+      .patch(`/api/admin/members/${target.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'twice@test.local' });
+    expect(first.status).toBe(200);
+
+    const freedEmail = `freed+${target.id}@deleted.local`;
+    const second = await request(app)
+      .patch(`/api/admin/members/${target.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: freedEmail });
+    expect(second.status).toBe(400);
+    expect(second.body.message).toContain('trước đó');
+  });
+
+  it('404 khi không tìm thấy', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch('/api/admin/members/999999/detach-email')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'x@x.com' });
+    expect(res.status).toBe(404);
+  });
+
+  it('403 khi caller không phải admin', async () => {
+    const target = await createUser({ role: 'user', username: 'target', email: 't@test.local' });
+    const regular = await createUser({ role: 'user', username: 'caller' });
+    const callerToken = await loginAs(regular);
+    const res = await request(app)
+      .patch(`/api/admin/members/${target.id}/detach-email`)
+      .set('Authorization', `Bearer ${callerToken}`)
+      .send({ confirmEmail: 't@test.local' });
+    expect(res.status).toBe(403);
+  });
+
+  it('BẰNG CHỨNG TÍNH NĂNG HOẠT ĐỘNG: sau khi gỡ email, đăng ký lại đúng email gốc → tạo user MỚI, được cấp trial', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const original = await createUser({ role: 'user', username: 'stuck_google', email: 'canfree@test.local' });
+    const trialPlan = await createPlan({ code: 'trial', name: 'Dùng thử', price: 0, durationDays: 14 });
+
+    const token = await loginAs(admin);
+    const detachRes = await request(app)
+      .patch(`/api/admin/members/${original.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'canfree@test.local' });
+    expect(detachRes.status).toBe(200);
+
+    // Đăng ký lại đúng email gốc — trước khi gỡ, endpoint register sẽ báo email đã dùng
+    await createVerificationCode({ email: 'canfree@test.local', code: '123456' });
+    const registerRes = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'canfreenew',
+        email: 'canfree@test.local',
+        password: 'Passw0rd!',
+        emailVerificationCode: '123456',
+      });
+
+    expect(registerRes.status).toBe(201);
+    expect(registerRes.body.data.user.email).toBe('canfree@test.local');
+    expect(registerRes.body.data.user.id).not.toBe(original.id); // user MỚI, không phải cùng row
+    expect(registerRes.body.data.trial).not.toBeNull();
+    expect(registerRes.body.data.trial.planCode).toBe('trial');
+
+    void trialPlan;
+  });
+});
+
+describe('DELETE /api/admin/members/:id/purge — Mức 2 (P1-6)', () => {
+  it('tài khoản sạch (không đơn hàng/marketplace) → xoá cứng thành công', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'user', username: 'clean_user', email: 'clean@test.local', withPlan: false });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/members/${target.id}/purge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'clean@test.local' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain('clean@test.local');
+
+    const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [target.id]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('có đơn hàng thành công → 409, KHÔNG xoá', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const plan = await createPlan({ code: 'pro', price: 100000 });
+    const target = await createUser({ role: 'user', username: 'paying_user', email: 'paying@test.local' });
+    await createOrder({ planId: plan.id, userId: target.id, userEmail: target.email, status: 'success' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/members/${target.id}/purge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'paying@test.local' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toContain('đơn hàng');
+    expect(res.body.message).toContain('Gỡ email');
+
+    const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [target.id]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('có dữ liệu marketplace (đã bán) → 409, KHÔNG xoá', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'user', username: 'seller_user', email: 'seller@test.local', withPlan: false });
+    await db.query(
+      `INSERT INTO marketplace_listings (id_user, resource_type, resource_id, title, snapshot_data)
+       VALUES ($1, 'chatbot', 1, 'My bot', '{}'::jsonb)`,
+      [target.id]
+    );
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/members/${target.id}/purge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'seller@test.local' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toContain('marketplace');
+
+    const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [target.id]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('confirmEmail không khớp → 400, không xoá', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'user', username: 'target', email: 'real2@test.local', withPlan: false });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/members/${target.id}/purge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'wrong@test.local' });
+
+    expect(res.status).toBe(400);
+    const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [target.id]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('tự xoá chính mình → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa', email: 'sa3@test.local' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/members/${admin.id}/purge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'sa3@test.local' });
+    expect(res.status).toBe(400);
+  });
+
+  it('xoá Super Admin khác → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const otherAdmin = await createUser({ role: 'admin', username: 'sa4', email: 'sa4@test.local' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/members/${otherAdmin.id}/purge`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'sa4@test.local' });
+    expect(res.status).toBe(400);
+  });
+
+  it('404 khi không tìm thấy', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete('/api/admin/members/999999/purge')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'x@x.com' });
+    expect(res.status).toBe(404);
+  });
+
+  it('403 khi caller không phải admin', async () => {
+    const target = await createUser({ role: 'user', username: 'target', email: 't2@test.local', withPlan: false });
+    const regular = await createUser({ role: 'user', username: 'caller' });
+    const callerToken = await loginAs(regular);
+    const res = await request(app)
+      .delete(`/api/admin/members/${target.id}/purge`)
+      .set('Authorization', `Bearer ${callerToken}`)
+      .send({ confirmEmail: 't2@test.local' });
+    expect(res.status).toBe(403);
   });
 });

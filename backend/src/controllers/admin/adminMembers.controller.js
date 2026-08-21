@@ -34,7 +34,7 @@ export async function updateRole(req, res) {
     }
     const result = await adminMembersService.updateMemberRole(Number(req.params.id), role);
     if (!result) return res.status(404).json({ success: false, message: 'Không tìm thấy thành viên' });
-    return res.json({ success: true, message: `�ã cập nhật role thành ${role}`, data: result });
+    return res.json({ success: true, message: `Đã cập nhật role thành ${role}`, data: result });
   } catch (err) { return handleError(res, err); }
 }
 
@@ -65,5 +65,35 @@ export async function demote(req, res) {
       { from: 'admin', to: 'user', email: result.email }
     );
     return res.json({ success: true, message: `Đã hạ ${result.email} xuống người dùng thường`, data: result });
+  } catch (err) { return handleError(res, err); }
+}
+
+/** PATCH /api/admin/members/:id/detach-email — Mức 1: giải phóng email, giữ dữ liệu */
+export async function detachEmail(req, res) {
+  try {
+    const result = await adminMembersService.detachMemberEmail(Number(req.params.id), req.user.id, req.body.confirmEmail);
+    await logSystem(
+      getSystemAuditContext(req),
+      AUDIT_ACTIONS.USER_EMAIL_DETACHED,
+      AUDIT_ENTITY_TYPES.USER,
+      result.id,
+      { originalEmail: result.originalEmail, newEmail: result.email }
+    );
+    return res.json({ success: true, message: `Đã gỡ email khỏi tài khoản (email gốc: ${result.originalEmail})`, data: result });
+  } catch (err) { return handleError(res, err); }
+}
+
+/** DELETE /api/admin/members/:id/purge — Mức 2: xoá cứng, chỉ tài khoản sạch */
+export async function purge(req, res) {
+  try {
+    const result = await adminMembersService.purgeMember(Number(req.params.id), req.user.id, req.body.confirmEmail);
+    await logSystem(
+      getSystemAuditContext(req),
+      AUDIT_ACTIONS.USER_PURGED,
+      AUDIT_ENTITY_TYPES.USER,
+      result.id,
+      { originalEmail: result.originalEmail }
+    );
+    return res.json({ success: true, message: `Đã xoá vĩnh viễn tài khoản ${result.originalEmail}`, data: result });
   } catch (err) { return handleError(res, err); }
 }

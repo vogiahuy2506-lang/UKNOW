@@ -148,3 +148,61 @@ export async function setMemberRole(id, role) {
   );
   return rows[0] || null;
 }
+
+/**
+ * Giải phóng email/username của user (Mức 1 — "gỡ email khỏi tài khoản"), giữ
+ * nguyên mọi dữ liệu liên quan (đơn hàng, hoá đơn...). Sau thao tác này, email gốc
+ * đăng ký lại được như tài khoản hoàn toàn mới.
+ *
+ * username có UNIQUE + VARCHAR(50) — cắt phần username gốc nếu cần để hậu tố
+ * "_freed_<id>" không tràn quá 50 ký tự.
+ */
+export async function detachMemberEmail(id) {
+  const { rows } = await db.query(
+    `UPDATE users
+       SET email = 'freed+' || id || '@deleted.local',
+           username = LEFT(username, 50 - LENGTH('_freed_' || id)) || '_freed_' || id,
+           status = 'deleted',
+           updated_at = NOW()
+     WHERE id = $1 AND status != 'deleted'
+     RETURNING id, email, username, status`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Kiểm tra user có dữ liệu "sống" chặn xoá cứng (Mức 2) không — đơn hàng thành
+ * công, hoặc bất kỳ dòng marketplace nào (mua/bán/review/yêu thích).
+ * @returns {Promise<string[]>} danh sách lý do chặn, rỗng = xoá được
+ */
+export async function findPurgeBlockers(id) {
+  const { rows } = await db.query(
+    `SELECT
+       EXISTS(SELECT 1 FROM orders WHERE user_id = $1 AND status = 'success') AS "hasOrders",
+       EXISTS(
+         SELECT 1 FROM marketplace_listings WHERE id_user = $1
+         UNION ALL
+         SELECT 1 FROM marketplace_purchases WHERE id_user = $1 OR seller_id = $1
+         UNION ALL
+         SELECT 1 FROM marketplace_reviews WHERE id_user = $1
+         UNION ALL
+         SELECT 1 FROM marketplace_favorites WHERE id_user = $1
+       ) AS "hasMarketplace"`,
+    [id]
+  );
+  const row = rows[0] || {};
+  const reasons = [];
+  if (row.hasOrders) reasons.push('đơn hàng thành công');
+  if (row.hasMarketplace) reasons.push('dữ liệu marketplace (đã đăng bán/mua/đánh giá/yêu thích)');
+  return reasons;
+}
+
+/** Xoá cứng user (Mức 2). Caller phải tự kiểm findPurgeBlockers trước. */
+export async function purgeMember(id) {
+  const { rows } = await db.query(
+    `DELETE FROM users WHERE id = $1 RETURNING id, email, username`,
+    [id]
+  );
+  return rows[0] || null;
+}

@@ -24,7 +24,7 @@ CREATE TABLE users (
   avatar_url              TEXT,
   phone                   VARCHAR(20),
   status                  VARCHAR(20)  NOT NULL DEFAULT 'active'
-    CHECK (status IN ('active', 'inactive', 'pending_activation')),
+    CHECK (status IN ('active', 'inactive', 'pending_activation', 'deleted')),
   role                    VARCHAR(20)  NOT NULL DEFAULT 'user'
     CHECK (role IN ('admin', 'user', 'employee')),
   is_verified             BOOLEAN      NOT NULL DEFAULT FALSE,
