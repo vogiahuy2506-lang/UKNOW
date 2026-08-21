@@ -4164,7 +4164,7 @@ export default {
       contact: 'Gói Tùy chọn',
     },
     planDescriptions: {
-      starter: 'Dùng thử miễn phí với tính năng cơ bản',
+      starter: 'Gói cơ bản dành cho cá nhân và freelancer quản lý khách hàng',
       trial: 'Dùng thử miễn phí với tính năng cơ bản',
       basic: 'Dành cho cá nhân bắt đầu tự động hóa',
       pro: 'Cho doanh nghiệp đang tăng trưởng',

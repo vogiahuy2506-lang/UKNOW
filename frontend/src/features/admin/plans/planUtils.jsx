@@ -17,6 +17,10 @@ export const getPlanTranslationKey = (plan) => {
 };
 
 export const getTranslatedPlanDescription = (plan, t) => {
+  // Mô tả admin nhập trong DB luôn thắng — bản dịch cứng chỉ là fallback cho gói
+  // chưa có mô tả riêng. Đảo ngược thứ tự này (ưu tiên bản dịch) khiến ô "Mô tả"
+  // trong trang quản trị vô tác dụng với mọi gói có mã quen thuộc.
+  if (String(plan?.description || '').trim()) return plan.description;
   const key = getPlanTranslationKey(plan);
   const translated = key ? t(`pricing.planDescriptions.${key}`) : '';
   return translated && translated !== `pricing.planDescriptions.${key}` ? translated : plan.description;

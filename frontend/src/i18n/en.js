@@ -4130,7 +4130,7 @@ export default {
       contact: 'Custom Plan',
     },
     planDescriptions: {
-      starter: 'Free trial with essential features',
+      starter: 'Essential plan for individuals and freelancers managing customers',
       trial: 'Free trial with essential features',
       basic: 'For individuals starting with automation',
       pro: 'For growing businesses',
