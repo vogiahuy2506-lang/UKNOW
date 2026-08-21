@@ -148,6 +148,27 @@ describe('fulfillPaidOrder', () => {
     );
   });
 
+  it('PR-D1 regression: invoice_info: null (e.g. INVOICE_VAT_ENABLED=false) must NOT produce an invoiceUrl', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'A' });
+    mockFindPlanById.mockResolvedValue({ name: 'Starter', duration_days: 30 });
+
+    await fulfillPaidOrder({
+      order_code: 6,
+      user_id: 9,
+      plan_id: 3,
+      user_email: 'a@test.com',
+      billing_period: 'monthly',
+      amount: 99000,
+      payment_method: 'payos',
+      invoice_info: null,
+    }, client);
+
+    expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceUrl: undefined }),
+    );
+  });
+
   it('gia hạn gói mở khoá tài nguyên bị khoá lúc gói hết hạn', async () => {
     mockFindUserIdByEmail.mockResolvedValue(null);
     mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'A' });
@@ -250,6 +271,30 @@ describe('fulfillPaidOrder', () => {
       payment_method: 'payos',
       note: 'scheduled_change',
       invoice_info: { wantInvoice: true, deliverEmail: false, buyerType: 'consumer' },
+    }, client);
+
+    expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceUrl: undefined }),
+    );
+  });
+
+  it('PR-D1 regression: scheduled-order branch — invoice_info: null must NOT produce an invoiceUrl', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'Scheduled User', subscription_expires_at: new Date('2026-09-01') });
+    mockFindPlanById.mockResolvedValue({ name: 'Basic Plan', duration_days: 30 });
+    mockScheduledPlanChangeRepo.findByOrderId.mockResolvedValue(null);
+
+    await fulfillPaidOrder({
+      id: 90,
+      order_code: 557,
+      user_id: 10,
+      plan_id: 1,
+      user_email: 'scheduled@test.com',
+      billing_period: 'monthly',
+      amount: 299000,
+      payment_method: 'payos',
+      note: 'scheduled_change',
+      invoice_info: null,
     }, client);
 
     expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(

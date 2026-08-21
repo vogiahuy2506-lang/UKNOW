@@ -499,10 +499,14 @@ describe('POST /api/admin/plans/:id/assign', () => {
     expect(daysAhead).toBeLessThan(95);
 
     const orderRow = await db.query(
-      'SELECT amount FROM orders WHERE user_id = $1 AND plan_id = $2',
+      'SELECT amount, billing_period, note FROM orders WHERE user_id = $1 AND plan_id = $2',
       [customer.id, plan.id]
     );
     expect(Number(orderRow.rows[0].amount)).toBe(1500000); // 500000 x 3
+    // orders có billing_period nhưng không có cột số kỳ — billing_period vẫn 'monthly'
+    // dù đã gán 3 tháng, nên số kỳ phải được ghi vào note để không mất thông tin.
+    expect(orderRow.rows[0].billing_period).toBe('monthly');
+    expect(orderRow.rows[0].note).toMatch(/3 kỳ/);
   });
 
   it('quantity=0 hoặc quantity=37 (ngoài 1-36) → 400', async () => {

@@ -115,8 +115,10 @@ function lineDescription(order) {
   const rawPlanName = String(order?.plan_name || '').trim();
   if (!rawPlanName) return 'Gói dịch vụ Founder AI';
   // Một số gói được đặt tên sẵn có chữ "Gói" ở đầu (vd gói tạo tay để test) — bỏ
-  // tiền tố đó trước khi ghép, tránh in ra "Gói Gói X" trên hoá đơn thật.
-  const planName = rawPlanName.replace(/^gói\s+/i, '').trim() || rawPlanName;
+  // tiền tố đó trước khi ghép, tránh in ra "Gói Gói X" trên hoá đơn thật. Nếu tên
+  // gói chỉ đúng là "Gói" (không còn gì sau khi bỏ), rơi vào "dịch vụ" thay vì
+  // fallback lại rawPlanName — fallback đó sẽ tái tạo đúng lỗi lặp đang tránh.
+  const planName = rawPlanName.replace(/^gói\b\s*/i, '').trim() || 'dịch vụ';
   const periodLabel = order?.billing_period === 'yearly' ? 'năm' : 'tháng';
   return `Phần mềm FounderAI - Gói ${planName} ${periodLabel}`;
 }

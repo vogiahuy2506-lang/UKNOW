@@ -249,6 +249,12 @@ describe('matbaoInvoice.service', () => {
     expect(upperPayload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói Enterprise năm');
   });
 
+  it('plan_name that is literally just "Gói" falls back to "dịch vụ" instead of re-duplicating (edge case)', () => {
+    const edgeOrder = { ...order, note: null, plan_name: 'Gói', billing_period: 'monthly' };
+    const { payload } = buildCreateInvoicePayload(edgeOrder, edgeOrder.invoice_info);
+    expect(payload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói dịch vụ tháng');
+  });
+
   it('HTTToan is a readable free-text label, not the raw "CK" code (accounting feedback on order 897)', () => {
     const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
     expect(payload[0].HTTToan).toBe('Tiền mặt/Chuyển khoản');

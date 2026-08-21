@@ -16,6 +16,11 @@ import {
   getPlanUserCounts,
 } from '../../repositories/admin/adminPlans.repository.js';
 import { createOrder, deleteOrderByCode } from '../../repositories/payment/payment.repository.js';
+import { findUserById } from '../../repositories/user/user.repository.js';
+import { expireUserPlan } from '../../repositories/subscription/subscription.repository.js';
+import { scheduledPlanChangeRepository } from '../../repositories/payment/scheduledPlanChange.repository.js';
+import { reconcileResourceLocks } from '../payment/topupLock.service.js';
+import db from '../../config/database.js';
 import payosClient from '../../utils/payos.util.js';
 
 const assertPaymentEnv = () => {
@@ -403,6 +408,12 @@ export async function assignPlan(planId, userEmail, {
     ? Number(plan.price_yearly)
     : Number(plan.price);
   const amount = paymentMethod === 'manual' ? planPrice * qty : 0;
+  // orders có billing_period nhưng không có cột số kỳ — qty>1 vẫn ghi billing_period
+  // gốc ('monthly'/'yearly') nên amount đúng (đã nhân qty ở trên) nhưng ai chỉ đọc
+  // billing_period sẽ hiểu nhầm là 1 kỳ. Ghi rõ vào note để không mất thông tin.
+  const noteWithQuantity = qty > 1
+    ? `${note ? `${note} ` : ''}(gán ${qty} kỳ liên tiếp)`.trim()
+    : note;
   await createOrder({
     orderCode,
     planId: plan.id,
@@ -412,7 +423,7 @@ export async function assignPlan(planId, userEmail, {
     billingPeriod,
     status: 'success',
     paymentMethod,
-    note,
+    note: noteWithQuantity,
   });
 
   return result;
@@ -427,12 +438,6 @@ export async function assignPlan(planId, userEmail, {
  * @param {number} userId
  */
 export async function removeUserPlan(userId) {
-  const { findUserById } = await import('../../repositories/user/user.repository.js');
-  const { expireUserPlan } = await import('../../repositories/subscription/subscription.repository.js');
-  const { scheduledPlanChangeRepository } = await import('../../repositories/payment/scheduledPlanChange.repository.js');
-  const { reconcileResourceLocks } = await import('../payment/topupLock.service.js');
-  const db = (await import('../../config/database.js')).default;
-
   const user = await findUserById(userId);
   if (!user) throw { status: 404, message: 'Không tìm thấy tài khoản' };
   if (!user.active_plan_id) throw { status: 400, message: 'Tài khoản này hiện không có gói nào để gỡ' };

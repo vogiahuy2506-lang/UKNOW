@@ -69,10 +69,11 @@ export async function fulfillPaidOrder(order, client) {
       if (typeof invoiceInfo === 'string') {
         try { invoiceInfo = JSON.parse(invoiceInfo); } catch { invoiceInfo = null; }
       }
-      // deliverEmail, not wantInvoice: khách "không lấy hoá đơn" (consumer) vẫn có
-      // wantInvoice: true (chỉ deliverEmail: false) — dùng wantInvoice ở đây từng làm
-      // họ nhận nhầm khối "xem hoá đơn" dù không hề yêu cầu.
-      const invoiceUrl = invoiceInfo?.deliverEmail !== false
+      // Cần CẢ wantInvoice === true (có ý định lấy hoá đơn — invoice_info null/thiếu
+      // trường này thì không có) LẪN deliverEmail !== false (không phải diện consumer
+      // "không lấy hoá đơn"). Chỉ check deliverEmail từng cho invoiceUrl xuất hiện khi
+      // invoice_info là null (vd INVOICE_VAT_ENABLED=false) vì undefined !== false → true.
+      const invoiceUrl = (invoiceInfo?.wantInvoice === true && invoiceInfo?.deliverEmail !== false)
         ? `${FRONTEND_URL}/invoices/${order.order_code}`
         : undefined;
 
@@ -128,8 +129,9 @@ export async function fulfillPaidOrder(order, client) {
     if (typeof invoiceInfo === 'string') {
       try { invoiceInfo = JSON.parse(invoiceInfo); } catch { invoiceInfo = null; }
     }
-    // deliverEmail, not wantInvoice — see comment on the scheduled-order branch above.
-    const invoiceUrl = invoiceInfo?.deliverEmail !== false
+    // wantInvoice === true AND deliverEmail !== false — see comment on the
+    // scheduled-order branch above (null invoice_info must not leak invoiceUrl).
+    const invoiceUrl = (invoiceInfo?.wantInvoice === true && invoiceInfo?.deliverEmail !== false)
       ? `${FRONTEND_URL}/invoices/${order.order_code}`
       : undefined;
 
