@@ -4947,7 +4947,7 @@ export default {
     planName: 'Tên gói',
     planNamePlaceholder: 'Gói Pro',
     planCodeLabel: 'Mã gói (code)',
-    planCodePlaceholder: 'pro',
+    planCodePlaceholder: 'vd: starter',
     priceLabel: 'Giá (VNĐ) *',
     pricePlaceholder: '0',
     employeesLabel: 'Số nhân viên tối đa',

@@ -4914,7 +4914,7 @@ export default {
     planName: 'Plan Name',
     planNamePlaceholder: 'Pro Plan',
     planCodeLabel: 'Plan code',
-    planCodePlaceholder: 'pro',
+    planCodePlaceholder: 'e.g. starter',
     priceLabel: 'Price (VND) *',
     pricePlaceholder: '0',
     employeesLabel: 'Maximum employees',

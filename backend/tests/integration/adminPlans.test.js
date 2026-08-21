@@ -234,6 +234,7 @@ describe('POST /api/admin/plans', () => {
       .post('/api/admin/plans')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        code: 'unlimited',
         name: 'Unlimited',
         price: 0,
         maxEmployees: -1,
@@ -241,6 +242,21 @@ describe('POST /api/admin/plans', () => {
       });
     expect(res.status).toBe(201);
     expect(res.body.data.max_employees).toBe(-1);
+  });
+
+  it('thiếu code → 400 (PR-B: gói công khai bắt buộc có code để khách thanh toán được)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post('/api/admin/plans')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'No Code Plan',
+        price: 100000,
+        maxEmployees: 1,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
+    expect(res.status).toBe(400);
   });
 });
 
@@ -288,6 +304,46 @@ describe('PATCH /api/admin/plans/:id', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'X', price: 100, maxEmployees: 0 });
     expect(res.status).toBe(400);
+  });
+
+  it('gói đang thiếu code (NULL) → điền được qua PATCH (vá gói lỡ tạo thiếu code, PR-B)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: null, name: 'No Code Yet', price: 100000 });
+    const token = await loginAs(admin);
+
+    const res = await request(app)
+      .patch(`/api/admin/plans/${plan.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        code: 'backfilled',
+        name: 'No Code Yet',
+        price: 100000,
+        maxEmployees: 1,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe('backfilled');
+  });
+
+  it('gói đã có code → PATCH với code khác KHÔNG đổi (voucher/đơn cũ tham chiếu theo code cũ, PR-B)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'original', name: 'Has Code', price: 100000 });
+    const token = await loginAs(admin);
+
+    const res = await request(app)
+      .patch(`/api/admin/plans/${plan.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        code: 'attempted-override',
+        name: 'Has Code',
+        price: 100000,
+        maxEmployees: 1,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe('original');
   });
 });
 
