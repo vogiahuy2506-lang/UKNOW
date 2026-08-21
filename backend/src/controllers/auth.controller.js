@@ -62,12 +62,15 @@ class AuthController {
       const { username, email, password, fullName, phone, emailVerificationCode } = req.body;
 
       // Xác minh OTP email trước khi tạo tài khoản
+      // Mọi kiểm tra dưới đây throw (thay vì return trực tiếp) để luôn đi qua catch
+      // bên dưới — sau BEGIN, return thẳng sẽ bỏ qua COMMIT/ROLLBACK, để lại transaction
+      // dang dở trên connection lúc release() về pool, làm hỏng connection cho lượt sau.
       if (!emailVerificationCode) {
-        return res.status(400).json({ success: false, message: 'Vui lòng xác minh email trước khi đăng ký' });
+        throw { status: 400, message: 'Vui lòng xác minh email trước khi đăng ký' };
       }
       const verification = await verificationService.verifyCode(email, emailVerificationCode);
       if (!verification) {
-        return res.status(400).json({ success: false, message: 'Mã xác minh email không đúng hoặc đã hết hạn' });
+        throw { status: 400, message: 'Mã xác minh email không đúng hoặc đã hết hạn' };
       }
 
       const existingEmail = await client.query(
@@ -75,7 +78,7 @@ class AuthController {
         [email]
       );
       if (existingEmail.rows.length > 0) {
-        return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
+        throw { status: 400, message: 'Email đã được sử dụng' };
       }
 
       const existingUsername = await client.query(
@@ -83,7 +86,7 @@ class AuthController {
         [username]
       );
       if (existingUsername.rows.length > 0) {
-        return res.status(400).json({ success: false, message: 'Tên đăng nhập đã được sử dụng' });
+        throw { status: 400, message: 'Tên đăng nhập đã được sử dụng' };
       }
 
       const passwordHash = await bcrypt.hash(password, 10);
@@ -161,8 +164,9 @@ class AuthController {
         }
       }
 
-      // Lỗi từ trial grant (vd: không tìm thấy plan 'trial', race unique order_code, v.v.)
-      if (error.status === 409 && typeof error.message === 'string') {
+      // Lỗi đã gắn status (validation OTP/email/username phía trên throw kiểu này,
+      // hoặc lỗi từ trial grant như race unique order_code — status 409)
+      if (error.status && typeof error.message === 'string') {
         return res.status(error.status).json({ success: false, message: error.message });
       }
 
