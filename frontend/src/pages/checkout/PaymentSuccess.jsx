@@ -1,24 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { HiOutlineCheckCircle, HiArrowRight, HiOutlineDocumentText } from 'react-icons/hi';
+import {
+    HiOutlineCheckCircle,
+    HiArrowRight,
+    HiOutlineDocumentText,
+    HiOutlineClipboardList,
+    HiOutlineShieldCheck,
+    HiOutlineDuplicate,
+    HiOutlineCheck,
+} from 'react-icons/hi';
+import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
 import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
 import { trackEvent } from '../../utils/analytics';
-
-const GLASS_CARD = 'bg-white/70 border border-white/90 backdrop-blur-md rounded-2xl shadow-xl shadow-orange-500/10';
 
 const INVOICE_POLL_INTERVAL_MS = 3000;
 const INVOICE_POLL_MAX_MS = 30000;
 
 /** Map owner invoice DTO → delivery note key (or null = hide). */
 function resolveInvoiceDeliveryKey(invoice) {
-  if (!invoice || invoice.hasInvoice === false) return null;
-  const status = invoice.emailStatus;
-  if (status === 'sent') return 'sent';
-  if (status === 'failed') return 'failed';
-  // pending | sending | null (legacy / not yet emailed)
-  return 'pending';
+    if (!invoice || invoice.hasInvoice === false) return null;
+    const status = invoice.emailStatus;
+    if (status === 'sent') return 'sent';
+    if (status === 'failed') return 'failed';
+    // pending | sending | null (legacy / not yet emailed)
+    return 'pending';
 }
 
 const PaymentSuccessPage = () => {
@@ -33,7 +40,6 @@ const PaymentSuccessPage = () => {
     const [loading, setLoading] = useState(true);
     const [orderCode, setOrderCode] = useState(null);
     const [needsLogin, setNeedsLogin] = useState(false);
-    /** null | 'login' | 'pending' | 'sent' | 'failed' */
     const [invoiceDelivery, setInvoiceDelivery] = useState(null);
 
     useEffect(() => {
@@ -49,7 +55,6 @@ const PaymentSuccessPage = () => {
                 if (data.status === 'success') {
                     setVerified(true);
                     setNeedsLogin(false);
-                    // transaction_id = mã đơn → GA4 tự loại trùng khi khách F5 trang này.
                     trackEvent('purchase', {
                         transaction_id: String(code),
                         currency: 'VND',
@@ -58,13 +63,11 @@ const PaymentSuccessPage = () => {
                 } else if (data.status === 'failed') {
                     navigate('/checkout', { replace: true });
                 } else {
-                    // pending — keep showing spinner briefly then allow dashboard login
                     navigate('/checkout', { replace: true });
                 }
             } catch (err) {
                 const status = err?.response?.status;
                 if (status === 401) {
-                    // Token missing (e.g. bank in-app browser) — do not bounce to home.
                     setNeedsLogin(true);
                 } else {
                     navigate('/', { replace: true });
@@ -77,7 +80,6 @@ const PaymentSuccessPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // After success: authenticated → poll invoice delivery; unauthenticated → login CTA only.
     useEffect(() => {
         if (!verified || !orderCode) return undefined;
 
@@ -105,7 +107,6 @@ const PaymentSuccessPage = () => {
                 if (key === null || key === 'sent') return;
             } catch {
                 if (cancelled) return;
-                // Keep last known state; do not invent invoice facts on error.
             }
 
             scheduleNext();
@@ -121,7 +122,7 @@ const PaymentSuccessPage = () => {
 
     if (loading) {
         return (
-            <div className="relative min-h-[60vh] flex items-center justify-center">
+            <div className="min-h-[60vh] flex items-center justify-center">
                 <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
             </div>
         );
@@ -129,16 +130,28 @@ const PaymentSuccessPage = () => {
 
     if (needsLogin && !verified) {
         return (
-            <div className="relative min-h-screen flex items-center justify-center px-4">
-                <div className={`${GLASS_CARD} p-8 max-w-md w-full text-center`}>
-                    <h1 className="text-xl font-bold text-slate-900 mb-2">{t('paymentSuccess.confirmTitle')}</h1>
-                    <p className="text-sm text-slate-600 mb-6">{t('paymentSuccess.confirmLoginHint')}</p>
+            <div className="min-h-screen flex items-center justify-center px-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-slate-50 to-slate-100">
+                <div className="bg-white/80 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-6 md:p-8 max-w-md w-full text-center">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-orange-600 mb-4">
+                        Founder AI
+                    </p>
+                    <div className="flex justify-center mb-5">
+                        <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-400/40 flex items-center justify-center">
+                            <HiOutlineShieldCheck className="text-3xl text-amber-500" />
+                        </div>
+                    </div>
+                    <h1 className="text-xl font-black text-slate-900 mb-2">
+                        {t('paymentSuccess.confirmTitle')}
+                    </h1>
+                    <p className="text-sm text-slate-600 mb-4">
+                        {t('paymentSuccess.confirmLoginHint')}
+                    </p>
                     {orderCode && (
                         <p className="font-mono text-sm text-slate-500 mb-6">#{orderCode}</p>
                     )}
                     <Link
                         to={`/login?redirect=${encodeURIComponent(`/payment-success?orderCode=${orderCode || ''}`)}`}
-                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold"
+                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-sm hover:shadow-lg hover:shadow-orange-500/30 transition-all"
                     >
                         {t('paymentSuccess.loginToConfirm')}
                     </Link>
@@ -149,11 +162,6 @@ const PaymentSuccessPage = () => {
 
     if (!verified) return null;
 
-    const features = [
-        t('paymentSuccess.feature1'),
-        t('paymentSuccess.feature2'),
-    ];
-
     const invoiceNoteKey = {
         pending: 'paymentSuccess.invoicePending',
         sent: 'paymentSuccess.invoiceSent',
@@ -161,52 +169,94 @@ const PaymentSuccessPage = () => {
         login: 'paymentSuccess.invoiceLoginHint',
     }[invoiceDelivery];
 
+    const handleCopyOrderCode = () => {
+        if (!orderCode) return;
+        navigator.clipboard.writeText(String(orderCode));
+        toast.success(t('checkout.copied'));
+    };
+
     return (
-        <div className="relative min-h-screen">
-            <div className="relative pt-4 pb-20 px-4 sm:px-6">
-                <div className="text-center px-4 pt-8 pb-10 max-w-2xl mx-auto">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-1.5">
-                        Founder AI
-                    </p>
-                    <div className="flex justify-center mb-5">
-                        <div className="w-20 h-20 rounded-full bg-emerald-500/20 border border-emerald-400/40 backdrop-blur-sm flex items-center justify-center">
-                            <HiOutlineCheckCircle className="text-5xl text-emerald-400" />
-                        </div>
-                    </div>
-                    <h1
-                        className="font-black text-white mb-2"
-                        style={{ fontSize: 'clamp(28px, 4vw, 44px)', lineHeight: 1.05, letterSpacing: '-0.02em' }}
+        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-slate-50 to-slate-100 py-6 md:py-10 px-4 flex flex-col justify-center">
+            <div className="max-w-2xl mx-auto w-full">
+
+                {/* Top header navigation */}
+                <div className="flex items-center justify-between mb-3 px-1">
+                    <Link
+                        to="/pricing"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-600 transition-colors"
                     >
-                        {t('paymentSuccess.pageTitle')}
-                    </h1>
-                    <p className="text-sm md:text-base text-white/70">{t('paymentSuccess.pageSubtitle')}</p>
+                        <HiOutlineClipboardList className="w-4 h-4" />
+                        {t('paymentSuccess.backToHome')}
+                    </Link>
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            {t('paymentSuccess.pageTitle')}
+                        </span>
+                    </div>
                 </div>
 
-                <div className="w-full max-w-md mx-auto">
-                    <div className={`${GLASS_CARD} p-6 mb-5`}>
-                        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80">
-                            <div className="flex items-center gap-2 text-slate-600">
-                                <HiOutlineDocumentText className="text-base text-orange-500" />
-                                <span className="font-semibold uppercase tracking-wider text-[11px]">
-                                    {t('paymentSuccess.orderCode')}
-                                </span>
+                {/* Hero */}
+                <div className="bg-white/80 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-5 md:p-8 mb-4">
+                    <div className="text-center mb-5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-orange-600 mb-3">
+                            Founder AI
+                        </p>
+                        <div className="flex justify-center mb-4">
+                            <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center">
+                                <HiOutlineCheckCircle className="text-4xl text-emerald-500" />
                             </div>
-                            <span className="font-mono font-bold text-slate-900 text-sm">#{orderCode}</span>
                         </div>
+                        <h1 className="font-black text-slate-900 mb-2" style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                            {t('paymentSuccess.pageTitle')}
+                        </h1>
+                        <p className="text-sm text-slate-600 max-w-md mx-auto">
+                            {t('paymentSuccess.pageSubtitle')}
+                        </p>
+                    </div>
 
-                        <div className="space-y-3">
-                            {features.map((item) => (
-                                <div key={item} className="flex items-center gap-3 text-sm text-slate-700">
-                                    <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    </div>
-                                    <span>{item}</span>
+                    {/* Order code + amount */}
+                    <div className="space-y-2.5">
+                        {orderCode && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                        {t('paymentSuccess.orderCode')}
+                                    </span>
+                                    <p className="text-sm font-mono font-bold text-slate-800">#{orderCode}</p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                        {t('paymentSuccess.orderCodeHint')}
+                                    </p>
                                 </div>
-                            ))}
+                                <button
+                                    type="button"
+                                    onClick={handleCopyOrderCode}
+                                    className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200/60 transition-colors"
+                                >
+                                    <HiOutlineDuplicate className="w-4 h-4" />
+                                    <span>{t('checkout.copy')}</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Unlocked features */}
+                        <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-2xl p-3.5 space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-emerald-700">
+                                <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                    <HiOutlineCheck className="w-3 h-3 text-emerald-600" />
+                                </div>
+                                <span className="font-medium">{t('paymentSuccess.feature1')}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-emerald-700">
+                                <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                    <HiOutlineCheck className="w-3 h-3 text-emerald-600" />
+                                </div>
+                                <span className="font-medium">{t('paymentSuccess.feature2')}</span>
+                            </div>
                             {invoiceNoteKey && (
-                                <div className="flex items-start gap-3 text-sm text-slate-700">
+                                <div className="flex items-start gap-2 text-xs text-slate-600">
                                     <div className="w-4 h-4 mt-0.5 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                        <HiOutlineDocumentText className="w-3 h-3 text-orange-600" />
                                     </div>
                                     <span>{t(invoiceNoteKey)}</span>
                                 </div>
@@ -214,26 +264,50 @@ const PaymentSuccessPage = () => {
                             {invoiceDelivery === 'login' && (
                                 <Link
                                     to={`/login?redirect=${encodeURIComponent(`/payment-success?orderCode=${orderCode || ''}`)}`}
-                                    className="inline-flex text-sm font-semibold text-orange-600 hover:underline"
+                                    className="inline-flex text-xs font-semibold text-orange-600 hover:underline ml-6"
                                 >
                                     {t('paymentSuccess.loginToViewInvoice')}
                                 </Link>
                             )}
                         </div>
                     </div>
+                </div>
 
+                {/* Next steps */}
+                <div className="bg-white/80 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-4 md:p-5 mb-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">
+                        {t('paymentSuccess.nextStepsTitle')}
+                    </p>
+                    <div className="space-y-2">
+                        {[t('paymentSuccess.nextStep1'), t('paymentSuccess.nextStep2'), t('paymentSuccess.nextStep3')].map((step, i) => (
+                            <div key={i} className="flex items-center gap-3 text-xs text-slate-700 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+                                <span className="shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                    {i + 1}
+                                </span>
+                                <span className="font-medium leading-snug">{step}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* CTA */}
+                <div className="space-y-2">
                     <button
                         type="button"
                         onClick={async () => { await initialize(); navigate('/app'); }}
-                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-base hover:shadow-lg hover:shadow-orange-500/30 transition-all group"
+                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-sm hover:shadow-lg hover:shadow-orange-500/30 transition-all group"
                     >
                         {isAuthenticated ? t('paymentSuccess.goToDashboard') : t('paymentSuccess.loginToConfirm')}
                         <HiArrowRight className="group-hover:translate-x-0.5 transition-transform" />
                     </button>
+                    <p className="text-[10px] text-center text-slate-400 font-medium">
+                        🔒 {t('checkout.securityBadge')}
+                    </p>
                 </div>
             </div>
         </div>
     );
 };
 
+// Hook helpers — gom lại để giữ JSX chính ngắn gọn
 export default PaymentSuccessPage;

@@ -258,8 +258,8 @@ export const findUserIdByEmail = async (email) => {
     return rows[0]?.id || null;
 };
 
-export const hasSuccessfulOrderForPlanByUser = async ({ planId, userId = null, userEmail = null }) => {
-    const { rows } = await db.query(
+export const hasSuccessfulOrderForPlanByUser = async ({ planId, userId = null, userEmail = null, queryable = db }) => {
+    const { rows } = await queryable.query(
         `SELECT 1
          FROM orders
          WHERE plan_id = $1

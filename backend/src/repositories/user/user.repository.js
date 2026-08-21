@@ -128,9 +128,9 @@ export async function findProfilePlanByUserId(userId) {
   return rows[0] || null;
 }
 
-export async function findActiveBillingPeriod(userId, email) {
+export async function findActiveBillingPeriod(userId, email, queryable = db) {
   try {
-    const { rows } = await db.query(
+    const { rows } = await queryable.query(
       `SELECT billing_period FROM orders
        WHERE (user_id = $1 OR user_email = $2)
          AND status IN ('paid', 'success', 'completed')
@@ -455,8 +455,8 @@ export async function clearInvoiceProfile(userId, queryable = db) {
   return rows[0]?.invoice_profile || null;
 }
 
-export async function findActiveUserByEmail(email) {
-  const { rows } = await db.query(
+export async function findActiveUserByEmail(email, queryable = db) {
+  const { rows } = await queryable.query(
     `SELECT id FROM users WHERE email = $1 AND status = 'active'`,
     [email]
   );
