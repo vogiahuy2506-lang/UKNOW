@@ -476,6 +476,54 @@ describe('POST /api/admin/plans/:id/assign', () => {
     expect(orderRow.rows[0].note).toBe('CK MB 12/05');
   });
 
+  it('quantity=3 (PR-C1) → hạn 3 tháng thay vì 1, amount manual nhân theo quantity', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000, durationDays: 30 });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com' });
+
+    const before = Date.now();
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post(`/api/admin/plans/${plan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userEmail: customer.email, paymentMethod: 'manual', quantity: 3 });
+
+    expect(res.status).toBe(200);
+
+    const userRow = await db.query(
+      'SELECT subscription_expires_at FROM users WHERE id = $1',
+      [customer.id]
+    );
+    const daysAhead = (new Date(userRow.rows[0].subscription_expires_at) - before) / (1000 * 60 * 60 * 24);
+    expect(daysAhead).toBeGreaterThan(85); // ~90 ngày (3 x 30), chừa biên cho thời gian chạy test
+    expect(daysAhead).toBeLessThan(95);
+
+    const orderRow = await db.query(
+      'SELECT amount FROM orders WHERE user_id = $1 AND plan_id = $2',
+      [customer.id, plan.id]
+    );
+    expect(Number(orderRow.rows[0].amount)).toBe(1500000); // 500000 x 3
+  });
+
+  it('quantity=0 hoặc quantity=37 (ngoài 1-36) → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000 });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com' });
+    const token = await loginAs(admin);
+
+    const zero = await request(app)
+      .post(`/api/admin/plans/${plan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userEmail: customer.email, quantity: 0 });
+    expect(zero.status).toBe(400);
+
+    const tooMany = await request(app)
+      .post(`/api/admin/plans/${plan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userEmail: customer.email, quantity: 37 });
+    expect(tooMany.status).toBe(400);
+  });
+
   it('paymentMethod không hợp lệ → 400', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000 });
@@ -522,6 +570,87 @@ describe('POST /api/admin/plans/:id/assign', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ userEmail: 'not-an-email' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('DELETE /api/admin/plans/user/:userId — gỡ gói của 1 user (PR-C2)', () => {
+  it('user đang có gói → gỡ thành công: active_plan_id NULL, max_* về 0', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000, maxCampaigns: 20, maxEmployees: 5 });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com', withPlan: false });
+    await assignPlanToUser(customer.id, plan.id);
+    // assignPlanToUser (test helper) chỉ set active_plan_id — production copy hạn mức
+    // sang cột users lúc kích hoạt gói thật, test phải tự set để có giá trị khác 0
+    // trước khi gỡ, nếu không assertion "về 0" sẽ pass giả (vốn đã là 0 từ đầu).
+    await db.query(
+      'UPDATE users SET max_campaigns = 20, max_landing_pages = 10 WHERE id = $1',
+      [customer.id]
+    );
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/plans/user/${customer.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBe(customer.email);
+
+    const userRow = await db.query(
+      'SELECT active_plan_id, max_campaigns, max_landing_pages FROM users WHERE id = $1',
+      [customer.id]
+    );
+    expect(userRow.rows[0].active_plan_id).toBeNull();
+    expect(userRow.rows[0].max_campaigns).toBe(0);
+    expect(userRow.rows[0].max_landing_pages).toBe(0);
+  });
+
+  it('user có lệnh hẹn đổi gói đang pending → bị supersede để cron không tự kích hoạt lại', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'pro', name: 'Pro', price: 500000 });
+    const nextPlan = await createPlan({ code: 'plus', name: 'Plus', price: 900000 });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com', withPlan: false });
+    await assignPlanToUser(customer.id, plan.id);
+
+    const { rows: [scheduled] } = await db.query(
+      `INSERT INTO scheduled_plan_changes (user_id, plan_id, billing_period, amount_paid, status, activate_after)
+       VALUES ($1, $2, 'monthly', 900000, 'pending', NOW() + INTERVAL '10 days')
+       RETURNING id`,
+      [customer.id, nextPlan.id]
+    );
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/plans/user/${customer.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+
+    const row = await db.query('SELECT status FROM scheduled_plan_changes WHERE id = $1', [scheduled.id]);
+    expect(row.rows[0].status).toBe('superseded');
+  });
+
+  it('user không có gói nào → 400', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com', withPlan: false });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/plans/user/${customer.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('user không tồn tại → 404', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete('/api/admin/plans/user/999999')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('không có token → 401', async () => {
+    const res = await request(app).delete('/api/admin/plans/user/1');
+    expect(res.status).toBe(401);
   });
 });
 

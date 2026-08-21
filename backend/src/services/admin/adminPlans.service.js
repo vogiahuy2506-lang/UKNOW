@@ -380,24 +380,29 @@ export async function searchUsers(query, excludeWithPlan = false) {
  * Gán gói trực tiếp cho user theo email (super_admin override, bỏ qua thanh toán).
  * @param {number} planId
  * @param {string} userEmail
- * @param {{ paymentMethod?: 'manual'|'free', note?: string, billingPeriod?: 'monthly'|'yearly' }} [opts]
+ * @param {{ paymentMethod?: 'manual'|'free', note?: string, billingPeriod?: 'monthly'|'yearly', quantity?: number }} [opts]
  *   paymentMethod: 'manual' = thu tiền ngoài (cộng doanh thu), 'free' = miễn phí (không tính)
  *   billingPeriod: kỳ hạn gán — quyết định thời hạn (+30 ngày hay +12 tháng) và giá khi thu tiền ngoài
+ *   quantity: số lượng kỳ hạn gán liền (vd 3 = 3 tháng hoặc 3 năm); nhân thẳng vào thời hạn VÀ
+ *     amount khi paymentMethod='manual' — không nhân thì báo cáo doanh thu thiếu so với số kỳ thật đã gán
  */
-export async function assignPlan(planId, userEmail, { paymentMethod = 'free', note = null, billingPeriod = 'monthly' } = {}) {
+export async function assignPlan(planId, userEmail, {
+  paymentMethod = 'free', note = null, billingPeriod = 'monthly', quantity = 1,
+} = {}) {
   const plan = await findPlanById(planId);
   if (!plan) throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
 
   const user = await findUserAdminByEmail(userEmail.trim().toLowerCase());
   if (!user) throw { status: 404, message: 'Không tìm thấy tài khoản với email này' };
 
-  const result = await assignPlanToUser(user.id, planId, billingPeriod);
+  const qty = Math.max(1, Math.min(36, Math.floor(Number(quantity) || 1)));
+  const result = await assignPlanToUser(user.id, planId, billingPeriod, qty);
 
   const orderCode = Date.now();
   const planPrice = billingPeriod === 'yearly' && plan.price_yearly
     ? Number(plan.price_yearly)
     : Number(plan.price);
-  const amount = paymentMethod === 'manual' ? planPrice : 0;
+  const amount = paymentMethod === 'manual' ? planPrice * qty : 0;
   await createOrder({
     orderCode,
     planId: plan.id,
@@ -411,4 +416,44 @@ export async function assignPlan(planId, userEmail, { paymentMethod = 'free', no
   });
 
   return result;
+}
+
+/**
+ * Gỡ gói của 1 user (super_admin override) — khác `unassignPlanFromUsers` (gỡ HÀNG LOẠT khi
+ * ẩn/xoá 1 plan). Dùng lại `expireUserPlan` (đã đặt max_* = 0 đúng cách), rồi:
+ *   - supersede mọi lệnh hẹn đổi gói đang pending — nếu không, cron 08:00 sẽ tự kích hoạt lại
+ *     gói cho người vừa bị gỡ.
+ *   - reconcileResourceLocks (unlockOnly mặc định false) để KHOÁ tài nguyên vượt trần mới (0).
+ * @param {number} userId
+ */
+export async function removeUserPlan(userId) {
+  const { findUserById } = await import('../../repositories/user/user.repository.js');
+  const { expireUserPlan } = await import('../../repositories/subscription/subscription.repository.js');
+  const { scheduledPlanChangeRepository } = await import('../../repositories/payment/scheduledPlanChange.repository.js');
+  const { reconcileResourceLocks } = await import('../payment/topupLock.service.js');
+  const db = (await import('../../config/database.js')).default;
+
+  const user = await findUserById(userId);
+  if (!user) throw { status: 404, message: 'Không tìm thấy tài khoản' };
+  if (!user.active_plan_id) throw { status: 400, message: 'Tài khoản này hiện không có gói nào để gỡ' };
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await expireUserPlan(userId, client);
+    await scheduledPlanChangeRepository.supersedePendingByUserId(userId, client);
+    const lockResult = await reconcileResourceLocks(userId, client);
+    await client.query('COMMIT');
+    return {
+      userId,
+      email: user.email,
+      fullName: user.full_name,
+      locked: lockResult.locked,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

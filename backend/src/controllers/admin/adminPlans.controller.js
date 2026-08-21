@@ -162,14 +162,30 @@ export async function createCustom(req, res) {
 /** POST /api/admin/plans/:id/assign */
 export async function assign(req, res) {
   try {
-    const { userEmail, paymentMethod = 'free', note = null, billingPeriod = 'monthly' } = req.body;
+    const { userEmail, paymentMethod = 'free', note = null, billingPeriod = 'monthly', quantity = 1 } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     if (!['manual', 'free'].includes(paymentMethod))
       return res.status(400).json({ success: false, message: 'paymentMethod phải là "manual" hoặc "free"' });
     if (!['monthly', 'yearly'].includes(billingPeriod))
       return res.status(400).json({ success: false, message: 'billingPeriod phải là "monthly" hoặc "yearly"' });
-    const user = await adminPlansService.assignPlan(Number(req.params.id), userEmail, { paymentMethod, note, billingPeriod });
+    const qty = Number(quantity);
+    if (!Number.isInteger(qty) || qty < 1 || qty > 36)
+      return res.status(400).json({ success: false, message: 'quantity phải là số nguyên từ 1 đến 36' });
+    const user = await adminPlansService.assignPlan(Number(req.params.id), userEmail, { paymentMethod, note, billingPeriod, quantity: qty });
     return res.json({ success: true, message: 'Gán gói cho người dùng thành công', data: user });
+  } catch (err) { return handleError(res, err); }
+}
+
+/** DELETE /api/admin/plans/user/:userId — gỡ gói của 1 user (super_admin override) */
+export async function removeUserPlan(req, res) {
+  try {
+    const userId = Number(req.params.userId);
+    const result = await adminPlansService.removeUserPlan(userId);
+    await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_UNASSIGNED, AUDIT_ENTITY_TYPES.USER, userId, {
+      email: result.email,
+      lockedResources: result.locked,
+    });
+    return res.json({ success: true, message: `Đã gỡ gói của ${result.email}`, data: result });
   } catch (err) { return handleError(res, err); }
 }
 
