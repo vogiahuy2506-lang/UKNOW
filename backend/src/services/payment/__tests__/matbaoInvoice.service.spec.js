@@ -239,6 +239,21 @@ describe('matbaoInvoice.service', () => {
     expect(payload[0].DSHHDVu[0].THHDVu).toBe('Gói dịch vụ Founder AI');
   });
 
+  it('strips a redundant leading "Gói" from plan_name so the line item does not read "Gói Gói X" (accounting feedback on order 897)', () => {
+    const dupOrder = { ...order, note: null, plan_name: 'Gói test', billing_period: 'monthly' };
+    const { payload } = buildCreateInvoicePayload(dupOrder, dupOrder.invoice_info);
+    expect(payload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói test tháng');
+
+    const upperOrder = { ...order, note: null, plan_name: 'GÓI Enterprise', billing_period: 'yearly' };
+    const { payload: upperPayload } = buildCreateInvoicePayload(upperOrder, upperOrder.invoice_info);
+    expect(upperPayload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói Enterprise năm');
+  });
+
+  it('HTTToan is a readable free-text label, not the raw "CK" code (accounting feedback on order 897)', () => {
+    const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
+    expect(payload[0].HTTToan).toBe('Tiền mặt/Chuyển khoản');
+  });
+
   it('skips when feature flag off', () => {
     process.env.INVOICE_VAT_ENABLED = 'false';
     expect(shouldIssueInvoiceForOrder(order)).toBe(false);

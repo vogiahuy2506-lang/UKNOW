@@ -112,8 +112,11 @@ export function shouldIssueInvoiceForOrder(order) {
 function lineDescription(order) {
   if (order?.note === 'topup') return 'Mua thêm hạn mức Founder AI';
   if (order?.note === 'custom_self_serve') return 'Gói tự chọn Founder AI';
-  const planName = String(order?.plan_name || '').trim();
-  if (!planName) return 'Gói dịch vụ Founder AI';
+  const rawPlanName = String(order?.plan_name || '').trim();
+  if (!rawPlanName) return 'Gói dịch vụ Founder AI';
+  // Một số gói được đặt tên sẵn có chữ "Gói" ở đầu (vd gói tạo tay để test) — bỏ
+  // tiền tố đó trước khi ghép, tránh in ra "Gói Gói X" trên hoá đơn thật.
+  const planName = rawPlanName.replace(/^gói\s+/i, '').trim() || rawPlanName;
   const periodLabel = order?.billing_period === 'yearly' ? 'năm' : 'tháng';
   return `Phần mềm FounderAI - Gói ${planName} ${periodLabel}`;
 }
@@ -191,7 +194,9 @@ export function buildCreateInvoicePayload(order, info) {
     TCHDon: 0,
     DVTTe: 704,
     TGia: 1,
-    HTTToan: 'CK',
+    // HTTToan không có enum trong tài liệu Mắt Bão (field "string" tự do, PDF in ra
+    // đúng nguyên văn) — dùng nhãn khớp hoá đơn mẫu thật thay vì mã "CK" khó hiểu.
+    HTTToan: 'Tiền mặt/Chuyển khoản',
     ...buyer,
     DSHHDVu: [
       {
