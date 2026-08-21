@@ -172,6 +172,7 @@ describe('matbaoInvoice.service', () => {
       TChat: 4,
       STT: 2,
       THHDVu: 'KH:\nbuyer@example.com\nThời gian TT: 17/08/2026 10:58:37\nNote:',
+      TSuat: -1,
     });
   });
 

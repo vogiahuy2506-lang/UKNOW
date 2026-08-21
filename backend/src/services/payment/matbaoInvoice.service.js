@@ -204,6 +204,7 @@ export function buildCreateInvoicePayload(order, info) {
         TChat: 4,
         STT: 2,
         THHDVu: `KH:\n${buyerEmail}\nThời gian TT: ${paymentTime}\nNote:`,
+        TSuat: vatRate,
       },
     ],
     TgThTien: net,
