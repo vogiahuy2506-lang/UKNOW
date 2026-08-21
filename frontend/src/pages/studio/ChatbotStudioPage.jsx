@@ -26,6 +26,7 @@ import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import useMediaQuery from '../../hooks/useMediaQuery';
+import { useAuthStore } from '../../stores/authStore';
 
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
@@ -132,7 +133,7 @@ function ConversationCard({ conv, onSelect, onDelete }) {
 }
 
 // ── Chat Message Area ────────────────────────────────────────────────────────
-function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
+function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
   const { t } = useI18n();
   const { usage: storageQuota } = useStorageQuota();
   const [conversations, setConversations] = useState([]);
@@ -597,6 +598,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       {/* Floating Composer */}
       <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-2 bg-white">
         <div className="max-w-3xl mx-auto">
+          {canUseAi ? <>
           {pendingAttachments.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {pendingAttachments.map((att, idx) => (
@@ -663,6 +665,11 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
               )}
             </button>
           </div>
+          </> : (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">
+              Chủ workspace chưa cấp quyền sử dụng AI cho nhân viên. Bạn vẫn có thể cấu hình chatbot và kho kiến thức.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -671,6 +678,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 function ChatbotStudioPage() {
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const isEmployeeContext = activeContext?.type === 'employee';
   const [selectedBot, setSelectedBot] = useState(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, _setRightCollapsed] = useState(false);
@@ -752,7 +761,7 @@ function ChatbotStudioPage() {
                   <PlaygroundHeader
                     bot={selectedBot}
                     onConfig={() => setShowConfigModal(true)}
-                    onShare={() => setShowShareModal(true)}
+                    onShare={isEmployeeContext ? undefined : () => setShowShareModal(true)}
                     onDelete={handleCreateNew}
                   />
                 </div>
@@ -760,6 +769,7 @@ function ChatbotStudioPage() {
                   key={`chat-${selectedBot.id}`}
                   chatbot={selectedBot}
                   onUpdate={handleUpdateBot}
+                  canUseAi={!isEmployeeContext}
                 />
               </>
             ) : (
@@ -797,6 +807,7 @@ function ChatbotStudioPage() {
                   key={`chat-${selectedBot.id}`}
                   chatbot={selectedBot}
                   onUpdate={handleUpdateBot}
+                  canUseAi={!isEmployeeContext}
                 />
               ) : (
                 <EmptyState chatbot={selectedBot} />
@@ -833,11 +844,13 @@ function ChatbotStudioPage() {
         onClose={() => setShowConfigModal(false)}
         onUpdate={handleUpdateBot}
       />
-      <ShareChatbotModal
-        open={showShareModal}
-        chatbot={selectedBot}
-        onClose={() => setShowShareModal(false)}
-      />
+      {!isEmployeeContext && (
+        <ShareChatbotModal
+          open={showShareModal}
+          chatbot={selectedBot}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
       <WidgetSettingsModal
         open={!!widgetModalKind}
         embedKind={widgetModalKind}

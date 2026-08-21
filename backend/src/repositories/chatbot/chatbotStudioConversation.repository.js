@@ -16,12 +16,14 @@ class ChatbotStudioConversationRepository {
     // Create new conversation
     const result = await db.query(
       `INSERT INTO chatbot_studio_conversations (id_user, id_chatbot, session_id, title, last_message_at)
-       VALUES ($1, $2, $3, 'Cuộc trò chuyện mới', NOW())
+       SELECT $1, cb.id, $3, 'Cuộc trò chuyện mới', NOW()
+       FROM custom_chatbots cb
+       WHERE cb.id = $2 AND cb.id_user = $1 AND cb.is_active = true
        RETURNING *`,
       [userId, chatbotId, sessionId]
     );
     
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
   async getConversationsByUser(userId, chatbotId, { limit = 20, offset = 0, status = 'active' } = {}) {

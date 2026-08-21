@@ -42,6 +42,36 @@ describe('authorization.middleware & employeePermissionCatalog', () => {
       expect(normalizedRun.campaigns_run).toBe(true);
       expect(normalizedRun.campaigns_view).toBe(true);
     });
+
+    it('auto-resolves Chatbot, Inbox, and Media permission dependencies', () => {
+      const chatbot = normalizePermissions({ chatbot_channels_manage: true });
+      expect(chatbot.chatbot_channels_manage).toBe(true);
+      expect(chatbot.chatbots_manage).toBe(true);
+
+      const inboxReply = normalizePermissions({ inbox_reply: true });
+      expect(inboxReply.inbox_reply).toBe(true);
+      expect(inboxReply.inbox_view).toBe(true);
+
+      const inboxManage = normalizePermissions({ inbox_manage: true });
+      expect(inboxManage.inbox_manage).toBe(true);
+      expect(inboxManage.inbox_view).toBe(true);
+
+      const media = normalizePermissions({ media_library_manage: true });
+      expect(media.media_library_manage).toBe(true);
+      expect(media.media_library_view).toBe(true);
+    });
+
+    it('exposes every PR-4 key in the permission catalog', () => {
+      expect(VALID_PERMISSION_KEYS).toEqual(expect.arrayContaining([
+        'chatbots_manage',
+        'chatbot_channels_manage',
+        'inbox_view',
+        'inbox_reply',
+        'inbox_manage',
+        'media_library_view',
+        'media_library_manage',
+      ]));
+    });
   });
 
   describe('requirePermission', () => {

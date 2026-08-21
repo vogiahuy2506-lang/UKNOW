@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
@@ -69,7 +69,7 @@ router.post('/custom-chat', requireSelfContext, aiLimiter, assertAiCreditAvailab
 // Chat attachment for Studio (per-turn; NOT knowledge base)
 router.post(
   '/chat-attachment',
-  requireSelfContext,
+  requirePermission('chatbots_manage'),
   uploadLimiter,
   workspaceUploadCapacityGuard,
   upload.single('file'),
@@ -77,31 +77,31 @@ router.post(
 );
 router.delete(
   '/chat-attachment',
-  requireSelfContext,
+  requirePermission('chatbots_manage'),
   aiLimiter,
   aiController.deleteChatAttachment.bind(aiController)
 );
 
 // Chatbot Studio Conversations
-router.get('/chatbot-studio/conversations', requireSelfContext, aiController.getChatbotStudioConversations.bind(aiController));
-router.get('/chatbot-studio/conversations/:id', requireSelfContext, aiController.getChatbotStudioConversation.bind(aiController));
-router.get('/chatbot-studio/conversations/:id/messages', requireSelfContext, aiController.getChatbotStudioMessages.bind(aiController));
-router.post('/chatbot-studio/conversations', requireSelfContext, aiController.createChatbotStudioConversation.bind(aiController));
-router.post('/chatbot-studio/conversations/:id/messages', requireSelfContext, aiController.addChatbotStudioMessage.bind(aiController));
-router.delete('/chatbot-studio/conversations/:id', requireSelfContext, aiController.deleteChatbotStudioConversation.bind(aiController));
-router.delete('/chatbot-studio/conversations/:id/messages', requireSelfContext, aiController.clearChatbotStudioConversation.bind(aiController));
+router.get('/chatbot-studio/conversations', requirePermission('chatbots_manage'), aiController.getChatbotStudioConversations.bind(aiController));
+router.get('/chatbot-studio/conversations/:id', requirePermission('chatbots_manage'), aiController.getChatbotStudioConversation.bind(aiController));
+router.get('/chatbot-studio/conversations/:id/messages', requirePermission('chatbots_manage'), aiController.getChatbotStudioMessages.bind(aiController));
+router.post('/chatbot-studio/conversations', requirePermission('chatbots_manage'), aiController.createChatbotStudioConversation.bind(aiController));
+router.post('/chatbot-studio/conversations/:id/messages', requirePermission('chatbots_manage'), aiController.addChatbotStudioMessage.bind(aiController));
+router.delete('/chatbot-studio/conversations/:id', requirePermission('chatbots_manage'), aiController.deleteChatbotStudioConversation.bind(aiController));
+router.delete('/chatbot-studio/conversations/:id/messages', requirePermission('chatbots_manage'), aiController.clearChatbotStudioConversation.bind(aiController));
 
 // Custom AI - Document upload (extract, chunk, embed)
-router.post('/custom-chat/upload', requireSelfContext, upload.single('file'), aiController.customChatUpload.bind(aiController));
+router.post('/custom-chat/upload', requirePermission('chatbots_manage'), upload.single('file'), aiController.customChatUpload.bind(aiController));
 
 // Custom AI - Logo image upload
-router.post('/custom-chat/logo', requireSelfContext, upload.single('file'), aiController.customChatLogoUpload.bind(aiController));
+router.post('/custom-chat/logo', requirePermission('chatbots_manage'), upload.single('file'), aiController.customChatLogoUpload.bind(aiController));
 
 // Custom AI - Get documents
-router.get('/custom-chat/documents/:chatbotId', requireSelfContext, aiController.getCustomChatbotDocuments.bind(aiController));
-router.get('/custom-chat/documents/:chatbotId/:docId', requireSelfContext, aiController.getCustomChatbotDocument.bind(aiController));
-router.delete('/custom-chat/documents/:chatbotId/:docId', requireSelfContext, aiController.deleteCustomChatbotDocument.bind(aiController));
-router.post('/custom-chat/text/:chatbotId', requireSelfContext, aiController.addCustomChatTextDocument.bind(aiController));
-router.post('/custom-chat/scrape/:chatbotId', requireSelfContext, aiController.scrapeCustomChatbotUrl.bind(aiController));
+router.get('/custom-chat/documents/:chatbotId', requirePermission('chatbots_manage'), aiController.getCustomChatbotDocuments.bind(aiController));
+router.get('/custom-chat/documents/:chatbotId/:docId', requirePermission('chatbots_manage'), aiController.getCustomChatbotDocument.bind(aiController));
+router.delete('/custom-chat/documents/:chatbotId/:docId', requirePermission('chatbots_manage'), aiController.deleteCustomChatbotDocument.bind(aiController));
+router.post('/custom-chat/text/:chatbotId', requirePermission('chatbots_manage'), aiController.addCustomChatTextDocument.bind(aiController));
+router.post('/custom-chat/scrape/:chatbotId', requirePermission('chatbots_manage'), aiController.scrapeCustomChatbotUrl.bind(aiController));
 
 export default router;

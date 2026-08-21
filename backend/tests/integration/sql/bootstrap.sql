@@ -1301,6 +1301,8 @@ CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
   visitor_name     VARCHAR(255),
   visitor_info     JSONB DEFAULT '{}',
   status           VARCHAR(20) DEFAULT 'active',
+  ai_paused        BOOLEAN NOT NULL DEFAULT false,
+  ai_paused_at     TIMESTAMPTZ,
   started_at       TIMESTAMPTZ DEFAULT NOW(),
   last_message_at  TIMESTAMPTZ DEFAULT NOW(),
   created_at       TIMESTAMPTZ DEFAULT NOW(),
@@ -1340,9 +1342,13 @@ CREATE TABLE IF NOT EXISTS sub_assistants (
   id           BIGSERIAL PRIMARY KEY,
   id_user      BIGINT REFERENCES users(id) ON DELETE CASCADE,
   name         VARCHAR(255),
+  description  TEXT,
   greeting_msg TEXT,
   avatar_url   TEXT,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  is_active    BOOLEAN DEFAULT true,
+  settings     JSONB DEFAULT '{}',
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS custom_chatbots (

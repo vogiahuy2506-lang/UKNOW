@@ -1,6 +1,28 @@
 import db from '../../config/database.js';
 
 class ChatbotZaloAccountRepository {
+  async assertOwnedConfiguration(userId, zaloSettingId, data = {}) {
+    const { rows } = await db.query(
+      `SELECT 1
+       FROM zalo_settings zs
+       WHERE zs.id = $1 AND zs.id_user = $2 AND zs.is_active = true
+         AND ($3::bigint IS NULL OR EXISTS (
+           SELECT 1 FROM custom_chatbots cb
+           WHERE cb.id = $3 AND cb.id_user = $2 AND cb.is_active = true
+         ))
+         AND ($4::bigint IS NULL OR EXISTS (
+           SELECT 1 FROM sub_assistants sa
+           WHERE sa.id = $4 AND sa.id_user = $2 AND sa.is_active = true
+         ))`,
+      [zaloSettingId, userId, data.id_chatbot || null, data.id_sub_assistant || null]
+    );
+    if (!rows[0]) {
+      const error = new Error('Không tìm thấy tài khoản Zalo hoặc cấu hình chatbot trong workspace');
+      error.status = 404;
+      throw error;
+    }
+  }
+
   /**
    * Get chatbot settings for a specific Zalo account
    * @param {number} userId
@@ -23,9 +45,10 @@ class ChatbotZaloAccountRepository {
     const { rows } = await db.query(
       `SELECT czs.*, sa.name AS sub_assistant_name, sa.greeting_msg,
               cb.name AS chatbot_name, cb.system_instruction AS chatbot_system_instruction
-       FROM chatbot_zalo_account_settings czs
-       LEFT JOIN sub_assistants sa ON sa.id = czs.id_sub_assistant
-       LEFT JOIN custom_chatbots cb ON cb.id = czs.id_chatbot AND cb.is_active = true
+       LEFT JOIN sub_assistants sa
+              ON sa.id = czs.id_sub_assistant AND sa.id_user = czs.id_user
+       LEFT JOIN custom_chatbots cb
+              ON cb.id = czs.id_chatbot AND cb.id_user = czs.id_user AND cb.is_active = true
        WHERE czs.id_user = $1 AND czs.id_zalo_setting = $2
          AND ($3::bigint IS NULL OR czs.id_chatbot = $3::bigint)
        ORDER BY czs.id_chatbot NULLS LAST, czs.updated_at DESC NULLS LAST
@@ -51,8 +74,10 @@ class ChatbotZaloAccountRepository {
               cb.system_instruction AS chatbot_system_instruction
        FROM chatbot_zalo_account_settings czs
        JOIN zalo_settings zs ON zs.id = czs.id_zalo_setting
-       LEFT JOIN sub_assistants sa ON sa.id = czs.id_sub_assistant
-       LEFT JOIN custom_chatbots cb ON cb.id = czs.id_chatbot AND cb.is_active = true
+       LEFT JOIN sub_assistants sa
+              ON sa.id = czs.id_sub_assistant AND sa.id_user = czs.id_user
+       LEFT JOIN custom_chatbots cb
+              ON cb.id = czs.id_chatbot AND cb.id_user = czs.id_user AND cb.is_active = true
        WHERE czs.id_user = $1
        ORDER BY czs.created_at DESC`,
       [userId]
@@ -102,7 +127,7 @@ class ChatbotZaloAccountRepository {
        FROM zalo_settings zs
        ${chatbotJoinClause}
        LEFT JOIN custom_chatbots cb
-              ON cb.id = czs.id_chatbot AND cb.is_active = true
+              ON cb.id = czs.id_chatbot AND cb.id_user = zs.id_user AND cb.is_active = true
        WHERE zs.id_user = $1 AND zs.is_active = true
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
       chatbotId == null ? [userId] : [userId, chatbotId]
@@ -118,6 +143,7 @@ class ChatbotZaloAccountRepository {
    * @returns {Promise<object>}
    */
   async upsertSettings(userId, zaloSettingId, data) {
+    await this.assertOwnedConfiguration(userId, zaloSettingId, data);
     const { rows } = await db.query(
       `INSERT INTO chatbot_zalo_account_settings
          (id_user, id_zalo_setting, is_enabled, id_sub_assistant, welcome_message,
@@ -168,6 +194,7 @@ class ChatbotZaloAccountRepository {
    * @returns {Promise<object>}
    */
   async setEnabled(userId, zaloSettingId, idChatbot, enabled) {
+    await this.assertOwnedConfiguration(userId, zaloSettingId, { id_chatbot: idChatbot });
     const { rows } = await db.query(
       `INSERT INTO chatbot_zalo_account_settings
          (id_user, id_zalo_setting, id_chatbot, is_enabled)

@@ -251,6 +251,7 @@ export async function persistChatBlob({
     mime,
     textExtracted,
     _key: key,
+    _storageObjectId: storageObject.id,
     expiresAt,
     source: resolvedSource,
   };
@@ -266,6 +267,7 @@ export async function storeChatFile({
   originalName,
   mimetype,
   ownerUserId,
+  actorUserId = ownerUserId,
   chatbotId,
   bind = {},
   source,
@@ -275,6 +277,7 @@ export async function storeChatFile({
     originalName,
     mimetype,
     ownerUserId,
+    actorUserId,
     source: resolveSource({ source, bind }),
   });
 
@@ -294,6 +297,7 @@ export async function storeChatFile({
     ref,
     textExtracted: persisted.textExtracted,
     _key: persisted._key,
+    _storageObjectId: persisted._storageObjectId,
   };
 }
 

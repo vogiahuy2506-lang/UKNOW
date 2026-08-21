@@ -1,6 +1,20 @@
 import db from '../../config/database.js';
 
 class KnowledgeBaseRepository {
+  async assertOwnedSubAssistant(userId, subAssistantId) {
+    if (!subAssistantId) return;
+    const { rows } = await db.query(
+      `SELECT 1 FROM sub_assistants
+       WHERE id = $1 AND id_user = $2 AND is_active = true`,
+      [subAssistantId, userId]
+    );
+    if (!rows[0]) {
+      const error = new Error('Sub-assistant not found in workspace');
+      error.status = 404;
+      throw error;
+    }
+  }
+
   // ── Knowledge Bases ─────────────────────────────────────────────
 
   async findAllByUser(userId) {
@@ -9,7 +23,7 @@ class KnowledgeBaseRepository {
               (SELECT COUNT(*) FROM kb_documents WHERE id_kb = kb.id) AS document_count,
               (SELECT COALESCE(SUM(chunk_count), 0) FROM kb_documents WHERE id_kb = kb.id) AS total_chunks
        FROM knowledge_bases kb
-       LEFT JOIN sub_assistants sa ON sa.id = kb.id_sub_assistant
+       LEFT JOIN sub_assistants sa ON sa.id = kb.id_sub_assistant AND sa.id_user = kb.id_user
        WHERE kb.id_user = $1
        ORDER BY kb.created_at DESC`,
       [userId]
@@ -21,7 +35,7 @@ class KnowledgeBaseRepository {
     const { rows } = await queryable.query(
       `SELECT kb.*, sa.name AS sub_assistant_name
        FROM knowledge_bases kb
-       LEFT JOIN sub_assistants sa ON sa.id = kb.id_sub_assistant
+       LEFT JOIN sub_assistants sa ON sa.id = kb.id_sub_assistant AND sa.id_user = kb.id_user
        WHERE kb.id = $1 AND kb.id_user = $2${forUpdate ? ' FOR UPDATE OF kb' : ''}`,
       [id, userId]
     );
@@ -46,6 +60,7 @@ class KnowledgeBaseRepository {
   }
 
   async create(userId, { name, description, id_sub_assistant, chunking_mode, chunk_size, settings }) {
+    await this.assertOwnedSubAssistant(userId, id_sub_assistant);
     const { rows } = await db.query(
       `INSERT INTO knowledge_bases (id_user, name, description, id_sub_assistant, chunking_mode, chunk_size, settings)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -57,6 +72,7 @@ class KnowledgeBaseRepository {
   }
 
   async update(id, userId, { name, description, id_sub_assistant, is_active, chunking_mode, chunk_size, settings }) {
+    await this.assertOwnedSubAssistant(userId, id_sub_assistant);
     const { rows } = await db.query(
       `UPDATE knowledge_bases SET
          name = COALESCE($3, name),

@@ -22,6 +22,12 @@ import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.j
 import { normalizeChatbotReplyLimitConfig } from '../utils/chatbotReplyLimit.util.js';
 import { consumeWidgetUploadBytes } from '../services/storage/widgetUploadCap.service.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_ENTITY_TYPES,
+  logWorkspace,
+} from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
@@ -145,7 +151,7 @@ class ChatbotController {
       const kbs = await knowledgeBaseService.getKBs(resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, data: kbs });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -162,9 +168,10 @@ class ChatbotController {
   async createKB(req, res) {
     try {
       const kb = await knowledgeBaseService.createKB(resolveWorkspaceOwnerId(req.user), req.body);
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_BASE_CREATED, AUDIT_ENTITY_TYPES.KNOWLEDGE_BASE, kb.id, { name: kb.name });
       return res.status(201).json({ success: true, data: kb });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -172,9 +179,10 @@ class ChatbotController {
     try {
       const kb = await knowledgeBaseService.updateKB(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user), req.body);
       if (!kb) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_BASE_UPDATED, AUDIT_ENTITY_TYPES.KNOWLEDGE_BASE, kb.id, { name: kb.name });
       return res.json({ success: true, data: kb });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -182,6 +190,7 @@ class ChatbotController {
     try {
       const deleted = await knowledgeBaseService.deleteKB(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user));
       if (!deleted) return res.status(404).json({ success: false, message: 'Knowledge base not found' });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_BASE_DELETED, AUDIT_ENTITY_TYPES.KNOWLEDGE_BASE, Number(req.params.id), {});
       return res.json({ success: true, message: 'Knowledge base deleted' });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -212,6 +221,7 @@ class ChatbotController {
 
       const title = req.body.title || file.originalname;
       const doc = await knowledgeBaseService.addFileDocument(kbId, ownerUserId, { title, file });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED, AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT, doc.id, { knowledgeBaseId: kbId, sourceType: 'file' });
 
       // Process asynchronously via queue (non-blocking)
       knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, ownerUserId, {
@@ -246,6 +256,7 @@ class ChatbotController {
         source_type: 'text',
         content_text: content,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED, AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT, doc.id, { knowledgeBaseId: kbId, sourceType: 'text' });
 
       knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, ownerUserId, {
         chunkSize: kb.chunk_size,
@@ -328,6 +339,7 @@ class ChatbotController {
         source_url: url,
         content_text: content || `⚠️ Failed to extract content from ${url}. Status: ${scrapeStatus}`,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED, AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT, doc.id, { knowledgeBaseId: kbId, sourceType: 'url' });
 
       knowledgeBaseService.enqueueDocumentProcessing(doc.id, kbId, ownerUserId, {
         chunkSize: kb.chunk_size,
@@ -353,6 +365,7 @@ class ChatbotController {
       const docId = parseInt(req.params.docId);
       const deleted = await knowledgeBaseService.deleteDocument(docId, resolveWorkspaceOwnerId(req.user));
       if (!deleted) return res.status(404).json({ success: false, message: 'Document not found' });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_DELETED, AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT, docId, { knowledgeBaseId: Number(req.params.kbId) });
       return res.json({ success: true, message: 'Document deleted' });
     } catch (err) {
       console.error('[Chatbot] Delete document error:', err);
@@ -370,6 +383,7 @@ class ChatbotController {
         chunkSize: kb.chunk_size,
         chunkingMode: kb.chunking_mode,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_REPROCESSED, AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT, Number(req.params.docId), { knowledgeBaseId: Number(req.params.kbId) });
 
       return res.json({ success: true, message: 'Document reprocessed' });
     } catch (err) {
@@ -382,7 +396,7 @@ class ChatbotController {
     try {
       const chunks = await knowledgeBaseService.getChunks(
         parseInt(req.params.kbId),
-        req.user.id,
+        resolveWorkspaceOwnerId(req.user),
         { limit: parseInt(req.query.limit) || 100, offset: parseInt(req.query.offset) || 0 }
       );
       return res.json({ success: true, data: chunks });
@@ -396,7 +410,7 @@ class ChatbotController {
 
   async listSubAssistants(req, res) {
     try {
-      const assistants = await subAssistantService.getAll(req.user.id);
+      const assistants = await subAssistantService.getAll(resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, data: assistants });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -405,7 +419,7 @@ class ChatbotController {
 
   async getSubAssistant(req, res) {
     try {
-      const assistant = await subAssistantService.getById(parseInt(req.params.id), req.user.id);
+      const assistant = await subAssistantService.getById(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user));
       if (!assistant) return res.status(404).json({ success: false, message: 'Sub-assistant not found' });
       return res.json({ success: true, data: assistant });
     } catch (err) {
@@ -415,7 +429,7 @@ class ChatbotController {
 
   async createSubAssistant(req, res) {
     try {
-      const assistant = await subAssistantService.create(req.user.id, req.body);
+      const assistant = await subAssistantService.create(resolveWorkspaceOwnerId(req.user), req.body);
       return res.status(201).json({ success: true, data: assistant });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -424,7 +438,7 @@ class ChatbotController {
 
   async updateSubAssistant(req, res) {
     try {
-      const assistant = await subAssistantService.update(parseInt(req.params.id), req.user.id, req.body);
+      const assistant = await subAssistantService.update(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user), req.body);
       if (!assistant) return res.status(404).json({ success: false, message: 'Sub-assistant not found' });
       return res.json({ success: true, data: assistant });
     } catch (err) {
@@ -434,7 +448,7 @@ class ChatbotController {
 
   async deleteSubAssistant(req, res) {
     try {
-      const deleted = await subAssistantService.delete(parseInt(req.params.id), req.user.id);
+      const deleted = await subAssistantService.delete(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user));
       if (!deleted) return res.status(404).json({ success: false, message: 'Sub-assistant not found' });
       return res.json({ success: true, message: 'Sub-assistant deleted' });
     } catch (err) {
@@ -446,7 +460,7 @@ class ChatbotController {
 
   async getChatbotSettings(req, res) {
     try {
-      const settings = await chatbotRepository.getSettings(req.user.id, req.params.channel);
+      const settings = await chatbotRepository.getSettings(resolveWorkspaceOwnerId(req.user), req.params.channel);
       return res.json({ success: true, data: settings });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -455,10 +469,10 @@ class ChatbotController {
 
   async updateChatbotSettings(req, res) {
     try {
-      const settings = await chatbotRepository.upsertSettings(req.user.id, req.params.channel, req.body);
+      const settings = await chatbotRepository.upsertSettings(resolveWorkspaceOwnerId(req.user), req.params.channel, req.body);
       return res.json({ success: true, data: settings });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -474,10 +488,12 @@ class ChatbotController {
       if (!zaloSettingId) {
         return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
       }
-      const settings = await chatbotZaloAccountRepository.getSettings(req.user.id, zaloSettingId);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      await chatbotZaloAccountRepository.assertOwnedConfiguration(ownerUserId, zaloSettingId);
+      const settings = await chatbotZaloAccountRepository.getSettings(ownerUserId, zaloSettingId);
       return res.json({ success: true, data: settings });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -494,13 +510,14 @@ class ChatbotController {
       }
       // Save all AI settings including system_instruction
       const settings = await chatbotZaloAccountRepository.upsertSettings(
-        req.user.id,
+        resolveWorkspaceOwnerId(req.user),
         zaloSettingId,
         req.body
       );
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, settings.id, { channelType: 'zalo_personal', zaloSettingId });
       return res.json({ success: true, data: settings });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -525,6 +542,7 @@ class ChatbotController {
       if (typeof enabled !== 'boolean') {
         return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
       }
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
       // id_chatbot may be null/undefined — fall back to NULL row.
       const normalizedChatbotId = id_chatbot == null || id_chatbot === ''
         ? null
@@ -533,15 +551,16 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'id_chatbot must be a number or null' });
       }
       const settings = await chatbotZaloAccountRepository.setEnabled(
-        req.user.id, zaloSettingId, normalizedChatbotId, enabled
+        ownerUserId, zaloSettingId, normalizedChatbotId, enabled
       );
 
       // Invalidate cache to apply toggle immediately
       zaloInboxService.invalidateAccountCache();
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, settings.id, { channelType: 'zalo_personal', zaloSettingId, enabled });
 
       return res.json({ success: true, data: settings });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
@@ -562,7 +581,7 @@ class ChatbotController {
       if (chatbotId != null && !Number.isFinite(chatbotId)) {
         return res.status(400).json({ success: false, message: 'chatbot_id must be a number or empty' });
       }
-      const accounts = await chatbotZaloAccountRepository.listAccountsForUser(req.user.id, chatbotId);
+      const accounts = await chatbotZaloAccountRepository.listAccountsForUser(resolveWorkspaceOwnerId(req.user), chatbotId);
       return res.json({ success: true, data: accounts });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -575,7 +594,7 @@ class ChatbotController {
    */
   async getSubAssistantsForChatbot(req, res) {
     try {
-      const subAssistants = await chatbotZaloAccountRepository.getSubAssistants(req.user.id);
+      const subAssistants = await chatbotZaloAccountRepository.getSubAssistants(resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, data: subAssistants });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -586,7 +605,7 @@ class ChatbotController {
 
   async listChannels(req, res) {
     try {
-      const channels = await chatbotRepository.findAllChannelsByUser(req.user.id);
+      const channels = await chatbotRepository.findAllChannelsByUser(resolveWorkspaceOwnerId(req.user));
       // Strip credentials before sending
       const sanitized = channels.map(ch => ({
         ...ch,
@@ -632,7 +651,7 @@ class ChatbotController {
       const webhookToken = crypto.randomBytes(32).toString('hex');
       const verifyToken = crypto.randomBytes(16).toString('hex');
 
-      const channel = await chatbotRepository.upsertChannel(req.user.id, 'zalo_oa', {
+      const channel = await chatbotRepository.upsertChannel(resolveWorkspaceOwnerId(req.user), 'zalo_oa', {
         display_name: display_name || 'Zalo OA',
         credentials: { 
           zalo_app_id, 
@@ -645,6 +664,7 @@ class ChatbotController {
         webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/zalo-oa/${webhookToken}`,
         webhook_token: webhookToken,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_CONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, channel.id, { channelType: 'zalo_oa' });
 
       return res.json({ 
         success: true, 
@@ -671,7 +691,7 @@ class ChatbotController {
       const webhookToken = crypto.randomBytes(32).toString('hex');
       const verifyToken = crypto.randomBytes(16).toString('hex');
 
-      const channel = await chatbotRepository.upsertChannel(req.user.id, 'facebook', {
+      const channel = await chatbotRepository.upsertChannel(resolveWorkspaceOwnerId(req.user), 'facebook', {
         display_name: page_name || page_id || 'Facebook Page',
         credentials: { 
           page_access_token, 
@@ -682,6 +702,7 @@ class ChatbotController {
         webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/facebook/${webhookToken}`,
         webhook_token: webhookToken,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_CONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, channel.id, { channelType: 'facebook' });
 
       return res.json({ 
         success: true, 
@@ -700,7 +721,8 @@ class ChatbotController {
 
   async disconnectChannel(req, res) {
     try {
-      await chatbotRepository.deactivateChannel(req.user.id, req.params.channel);
+      await chatbotRepository.deactivateChannel(resolveWorkspaceOwnerId(req.user), req.params.channel);
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_DISCONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, null, { channelType: req.params.channel });
       return res.json({ success: true, message: `Channel ${req.params.channel} disconnected` });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -809,7 +831,7 @@ class ChatbotController {
 
   async listWidgets(req, res) {
     try {
-      const widgets = await chatbotRepository.findWidgetsByUser(req.user.id);
+      const widgets = await chatbotRepository.findWidgetsByUser(resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, data: widgets });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -818,34 +840,34 @@ class ChatbotController {
 
   async createWidget(req, res) {
     try {
-      console.log('[createWidget] req.body:', req.body);
       const crypto = await import('crypto');
       const widgetKey = crypto.randomUUID().split('-')[0];
-      const widget = await chatbotRepository.createWidget(req.user.id, {
+      const widget = await chatbotRepository.createWidget(resolveWorkspaceOwnerId(req.user), {
         ...req.body,
         widget_key: widgetKey,
       });
-      console.log('[createWidget] Success:', widget);
       return res.status(201).json({ success: true, data: widget });
     } catch (err) {
-      console.error('[createWidget] Error:', err);
-      return res.status(500).json({ success: false, message: err.message });
+      if (!err.status || err.status >= 500) {
+        console.error('[createWidget] Error:', err);
+      }
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
   async updateWidget(req, res) {
     try {
-      const widget = await chatbotRepository.updateWidget(parseInt(req.params.id), req.user.id, req.body);
+      const widget = await chatbotRepository.updateWidget(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user), req.body);
       if (!widget) return res.status(404).json({ success: false, message: 'Widget not found' });
       return res.json({ success: true, data: widget });
     } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 
   async deleteWidget(req, res) {
     try {
-      await chatbotRepository.deleteWidget(parseInt(req.params.id), req.user.id);
+      await chatbotRepository.deleteWidget(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, message: 'Widget deleted' });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -1240,17 +1262,11 @@ class ChatbotController {
   async getCustomChatbot(req, res) {
     try {
       const { chatbotId } = req.params;
-      const userId = req.user.id;
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, userId);
 
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
-      }
-
-      // Sau khi chuyển share sang dạng clone, chỉ owner mới có quyền xem/sửa chatbot
-      // (người được nhận share đã sở hữu bản clone độc lập).
-      if (chatbot.id_user !== userId) {
-        return res.status(403).json({ success: false, message: 'Bạn không có quyền xem chatbot này' });
       }
 
       return res.json({ success: true, data: chatbot });
@@ -1262,7 +1278,7 @@ class ChatbotController {
   async listCustomChatbots(req, res) {
     try {
       const { origin } = req.query;
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       if (origin === 'shared' || origin === 'shared_with_me') {
         // Get chatbots received from others (origin = 'shared')
@@ -1292,12 +1308,13 @@ class ChatbotController {
 
   async createCustomChatbot(req, res) {
     try {
-      const plan = await getPlanByUserId(req.user.id);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const plan = await getPlanByUserId(ownerUserId);
       const planMax = Number(plan?.max_chatbots || 0);
-      const topupSlots = await sumActiveTopupGrants(req.user.id, 'chatbots');
+      const topupSlots = await sumActiveTopupGrants(ownerUserId, 'chatbots');
       const maxChatbots = planMax + Math.max(0, Number(topupSlots) || 0);
       if (maxChatbots > 0) {
-        const currentChatbots = await chatbotRepository.countActiveChatbotsByUser(req.user.id);
+        const currentChatbots = await chatbotRepository.countActiveChatbotsByUser(ownerUserId);
         if (currentChatbots >= maxChatbots) {
           return res.status(403).json({
             success: false,
@@ -1312,10 +1329,11 @@ class ChatbotController {
 
       const crypto = await import('crypto');
       const widgetKey = crypto.randomUUID().split('-')[0];
-      const chatbot = await chatbotRepository.createChatbot(req.user.id, {
+      const chatbot = await chatbotRepository.createChatbot(ownerUserId, {
         ...req.body,
         widget_key: widgetKey,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CREATED, AUDIT_ENTITY_TYPES.CHATBOT, chatbot.id, { name: chatbot.name });
       return res.status(201).json({ success: true, data: chatbot });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -1326,21 +1344,17 @@ class ChatbotController {
     try {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       if (isNaN(id)) {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
       // Sau khi share chuyển sang clone, chỉ owner mới có quyền chỉnh sửa.
-      const existing = await chatbotRepository.findChatbotById(id);
+      const existing = await chatbotRepository.findChatbotById(id, userId);
       if (!existing) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
-      if (existing.id_user !== userId) {
-        return res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa chatbot này' });
-      }
-
       const updatePayload = { ...req.body };
       if (req.body.reply_limit_config !== undefined) {
         try {
@@ -1357,11 +1371,12 @@ class ChatbotController {
         }
       }
 
-      const updated = await chatbotRepository.updateChatbot(id, req.user.id, updatePayload);
+      const updated = await chatbotRepository.updateChatbot(id, userId, updatePayload);
 
       if (!updated) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT, id, { name: updated.name });
 
       if (updatePayload.reply_limit_config !== undefined) {
         chatbotRateLimitService.invalidateChatbotConfigCache(id);
@@ -1377,7 +1392,7 @@ class ChatbotController {
           req.body.welcome_message !== undefined ||
           req.body.is_active !== undefined) {
         const clampedModel = req.body.ai_model !== undefined
-          ? await resolveAllowedModel(req.user.id, req.body.ai_model)
+          ? await resolveAllowedModel(userId, req.body.ai_model)
           : undefined;
         const aiSettings = {
           system_instruction: req.body.system_instruction,
@@ -1392,7 +1407,7 @@ class ChatbotController {
         try {
           await Promise.all(
             channels.map(channel =>
-              chatbotRepository.upsertSettings(req.user.id, channel, aiSettings)
+              chatbotRepository.upsertSettings(userId, channel, aiSettings)
             )
           );
         } catch (syncErr) {
@@ -1414,15 +1429,15 @@ class ChatbotController {
     try {
       const { chatbotId } = req.params;
       const id = parseInt(chatbotId);
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       if (isNaN(id)) {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
       // Only owner can delete
-      const chatbot = await chatbotRepository.findChatbotById(id);
-      if (!chatbot || Number(chatbot.id_user) !== Number(userId)) {
+      const chatbot = await chatbotRepository.findChatbotById(id, userId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
@@ -1431,13 +1446,14 @@ class ChatbotController {
       if (!deleted) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_DELETED, AUDIT_ENTITY_TYPES.CHATBOT, id, {});
 
       await chatbotChannelRepository.deactivateAllForChatbot(id);
 
-      const remainingActive = await chatbotRepository.countActiveChatbotsByUser(req.user.id);
+      const remainingActive = await chatbotRepository.countActiveChatbotsByUser(userId);
       if (remainingActive === 0) {
-        await chatbotRepository.disableAllSettingsForUser(req.user.id);
-        await chatbotZaloAccountRepository.disableAllForUser(req.user.id);
+        await chatbotRepository.disableAllSettingsForUser(userId);
+        await chatbotZaloAccountRepository.disableAllForUser(userId);
       }
 
       return res.json({
@@ -1461,12 +1477,13 @@ class ChatbotController {
 
       // pg trả BIGINT dưới dạng chuỗi → phải so sánh qua Number, nếu không chủ
       // sở hữu hợp lệ cũng bị 404 ("3" !== 3).
-      const chatbot = await chatbotRepository.findChatbotById(id);
-      if (!chatbot || Number(chatbot.id_user) !== Number(req.user?.id)) {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(id, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
-      const documents = await chatbotRepository.getCustomChatbotDocuments(id);
+      const documents = await chatbotRepository.getCustomChatbotDocuments(id, ownerUserId);
 
       return res.json({
         success: true,
@@ -1918,7 +1935,7 @@ class ChatbotController {
       }
 
       // Verify chatbot belongs to user
-      const chatbot = await chatbotRepository.findChatbotById(id);
+      const chatbot = await chatbotRepository.findChatbotById(id, resolveWorkspaceOwnerId(req.user));
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
@@ -1957,6 +1974,11 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
+      const chatbot = await chatbotRepository.findChatbotById(id, resolveWorkspaceOwnerId(req.user));
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
       const { zalo_app_id, zalo_app_secret, display_name } = req.body;
       if (!zalo_app_id || !zalo_app_secret) {
         return res.status(400).json({ success: false, message: 'App ID và App Secret là bắt buộc' });
@@ -1975,8 +1997,6 @@ class ChatbotController {
 
       const data = await response.json();
       
-      console.log('[Zalo OA] Token response:', JSON.stringify(data));
-
       if (data.error || !data.access_token) {
         return res.status(400).json({
           success: false,
@@ -2005,6 +2025,7 @@ class ChatbotController {
         webhook_token: webhookToken,
         webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/chatbot/zalo-oa/${webhookToken}`,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_CONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, channel.id, { chatbotId: id, channelType: 'zalo_oa' });
 
       return res.json({
         success: true,
@@ -2035,6 +2056,11 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
+      const chatbot = await chatbotRepository.findChatbotById(id, resolveWorkspaceOwnerId(req.user));
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
       const { page_access_token, page_id, page_name } = req.body;
       if (!page_access_token || !page_id) {
         return res.status(400).json({ success: false, message: 'Page Access Token và Page ID là bắt buộc' });
@@ -2057,6 +2083,7 @@ class ChatbotController {
         webhook_token: webhookToken,
         webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/chatbot/facebook/${webhookToken}`,
       });
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_CONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, channel.id, { chatbotId: id, channelType: 'facebook' });
 
       return res.json({
         success: true,
@@ -2086,10 +2113,17 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'Invalid channel type' });
       }
 
-      const deactivated = await chatbotChannelRepository.deactivateChannel(parseInt(chatbotId), channelType);
+      const id = parseInt(chatbotId, 10);
+      const chatbot = await chatbotRepository.findChatbotById(id, resolveWorkspaceOwnerId(req.user));
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const deactivated = await chatbotChannelRepository.deactivateChannel(id, channelType);
       if (deactivated?.id) {
         inboundReplyDebounceService.cancelByPrefix(`zalo_oa:${deactivated.id}:`);
       }
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_DISCONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, deactivated?.id || null, { chatbotId: id, channelType });
 
       return res.json({ success: true, message: 'Channel đã được ngắt kết nối' });
     } catch (err) {

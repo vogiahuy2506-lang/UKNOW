@@ -29,6 +29,7 @@ import {
 } from '../utils/assistantLocale.util.js';
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits.util.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -52,6 +53,18 @@ function denyCampaignRun(res) {
     success: false,
     message: 'Bạn không có quyền kích hoạt chạy chiến dịch (cần quyền campaigns_run)',
     code: 'PERMISSION_DENIED',
+  });
+}
+
+async function logWorkspaceMutation(req, action, entityType, entityId, details = {}) {
+  const context = getWorkspaceAuditContext(req);
+  await auditService.log({
+    ...context,
+    category: 'workspace',
+    action,
+    entityType,
+    entityId,
+    details,
   });
 }
 
@@ -1185,8 +1198,8 @@ class AiController {
     try {
       const chatbotId = parseInt(req.body.chatbot_id, 10) || 0;
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
-      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
       const data = await customChatService.uploadDocument({
@@ -1194,6 +1207,14 @@ class AiController {
         userId: ownerUserId,
         file: req.file,
       });
+
+      await logWorkspaceMutation(
+        req,
+        AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED,
+        AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT,
+        null,
+        { chatbotId, sourceType: 'file', chunks: data.chunks }
+      );
 
       return res.json({
         success: true,
@@ -1233,6 +1254,14 @@ class AiController {
         stream.end(req.file.buffer);
       });
 
+      await logWorkspaceMutation(
+        req,
+        AUDIT_ACTIONS.MEDIA_UPLOADED,
+        AUDIT_ENTITY_TYPES.MEDIA_OBJECT,
+        null,
+        { source: 'chatbot_logo', size: req.file.size, mime: req.file.mimetype }
+      );
+
       return res.json({ success: true, data: { url: result.secure_url } });
     } catch (error) {
       console.error('[CustomChatLogoUpload] Error:', error);
@@ -1252,9 +1281,9 @@ class AiController {
 
       // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
       // hợp lệ cũng bị 404 ("3" !== 3).
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
@@ -1281,9 +1310,9 @@ class AiController {
         return res.status(400).json({ success: false, message: 'Invalid ID' });
       }
 
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
@@ -1308,14 +1337,21 @@ class AiController {
 
       // pg trả BIGINT dưới dạng chuỗi → so sánh qua Number, nếu không chủ sở hữu
       // hợp lệ cũng bị 404 ("3" !== 3).
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
       const docId = decodeURIComponent(req.params.docId);
       await customChatService.deleteDocument(chatbotId, ownerUserId, docId);
+      await logWorkspaceMutation(
+        req,
+        AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_DELETED,
+        AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT,
+        Number.isSafeInteger(Number(docId)) ? Number(docId) : null,
+        { chatbotId }
+      );
       return res.json({ success: true, message: 'Document deleted' });
     } catch (error) {
       console.error('[CustomChat] Delete document error:', error);
@@ -1337,8 +1373,8 @@ class AiController {
       }
 
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
-      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
@@ -1348,6 +1384,14 @@ class AiController {
         title: title || 'Text Document',
         content: content.trim(),
       });
+
+      await logWorkspaceMutation(
+        req,
+        AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED,
+        AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT,
+        null,
+        { chatbotId, sourceType: 'text', chunks: result.chunks }
+      );
 
       return res.json({
         success: true,
@@ -1373,8 +1417,8 @@ class AiController {
       }
 
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
-      if (!chatbot || Number(chatbot.id_user) !== ownerUserId) {
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
@@ -1383,6 +1427,14 @@ class AiController {
         userId: ownerUserId,
         url: url.trim(),
       });
+
+      await logWorkspaceMutation(
+        req,
+        AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED,
+        AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT,
+        null,
+        { chatbotId, sourceType: 'url', chunks: result.chunks, pages: result.pages || 1 }
+      );
 
       return res.json({
         success: true,
@@ -1405,7 +1457,7 @@ class AiController {
     try {
       const { limit = 20, offset = 0, status = 'active', chatbot_id } = req.query;
       const result = await chatbotStudioConversationService.getConversations({
-        userId: req.user.id,
+        userId: resolveWorkspaceOwnerId(req.user),
         chatbotId: chatbot_id ? parseInt(chatbot_id, 10) : null,
         limit: parseInt(limit, 10),
         offset: parseInt(offset, 10),
@@ -1424,7 +1476,7 @@ class AiController {
   async getChatbotStudioConversation(req, res) {
     try {
       const conversation = await chatbotStudioConversationService.getConversation({
-        userId: req.user.id,
+        userId: resolveWorkspaceOwnerId(req.user),
         conversationId: req.params.id,
       });
       return res.json({ success: true, data: conversation });
@@ -1448,8 +1500,9 @@ class AiController {
         return res.status(400).json({ success: false, message: 'chatbot_id is required' });
       }
 
-      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
-      if (!chatbot || Number(chatbot.id_user) !== Number(req.user.id)) {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId, ownerUserId);
+      if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
@@ -1457,13 +1510,21 @@ class AiController {
         buffer: req.file.buffer,
         originalName: req.file.originalname,
         mimetype: req.file.mimetype,
-        ownerUserId: req.user.id,
+        ownerUserId,
+        actorUserId: req.user.id,
         chatbotId,
-        bind: { uid: req.user.id },
+        bind: { uid: ownerUserId },
         source: chatAttachmentService.CHAT_ATTACHMENT_SOURCES.STUDIO,
       });
 
-      const { _key, ...clientPayload } = stored;
+      const { _key, _storageObjectId, ...clientPayload } = stored;
+      await logWorkspaceMutation(
+        req,
+        AUDIT_ACTIONS.MEDIA_UPLOADED,
+        AUDIT_ENTITY_TYPES.MEDIA_OBJECT,
+        _storageObjectId,
+        { source: 'chatbot_studio', chatbotId, size: stored.size, mime: stored.mime }
+      );
       return res.status(201).json({ success: true, data: clientPayload });
     } catch (error) {
       console.error('[ChatAttachment] upload error:', error);
@@ -1489,9 +1550,17 @@ class AiController {
       await chatAttachmentService.deleteChatAttachment({
         ref,
         chatbotId,
-        bind: { uid: req.user.id },
-        ownerUserId: req.user.id,
+        bind: { uid: resolveWorkspaceOwnerId(req.user) },
+        ownerUserId: resolveWorkspaceOwnerId(req.user),
       });
+
+      await logWorkspaceMutation(
+        req,
+        AUDIT_ACTIONS.MEDIA_DELETED,
+        AUDIT_ENTITY_TYPES.MEDIA_OBJECT,
+        null,
+        { source: 'chatbot_studio', chatbotId: chatbotId || null }
+      );
 
       return res.json({ success: true, message: 'Đã xóa tệp đính kèm' });
     } catch (error) {
@@ -1510,7 +1579,7 @@ class AiController {
     try {
       const { limit = 30, beforeId = null } = req.query;
       const page = await chatbotStudioConversationService.getMessages({
-        userId: req.user.id,
+        userId: resolveWorkspaceOwnerId(req.user),
         conversationId: req.params.id,
         limit: parseInt(limit, 10),
         beforeId,
@@ -1539,13 +1608,13 @@ class AiController {
         return res.status(400).json({ success: false, message: 'chatbot_id is required' });
       }
       const conversation = await chatbotStudioConversationService.createOrGetConversation({
-        userId: req.user.id,
+        userId: resolveWorkspaceOwnerId(req.user),
         chatbotId: chatbot_id,
       });
       return res.status(201).json({ success: true, data: conversation });
     } catch (error) {
       console.error('[ChatbotStudio] Create conversation error:', error);
-      return res.status(500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json({ success: false, message: error.message });
     }
   }
 
@@ -1556,7 +1625,7 @@ class AiController {
     try {
       const { role, content, message_type, ai_model, ai_tokens_used, ai_latency_ms, attachments, metadata } = req.body;
       const message = await chatbotStudioConversationService.addMessage({
-        userId: req.user.id,
+        userId: resolveWorkspaceOwnerId(req.user),
         conversationId: req.params.id,
         role,
         content,
@@ -1580,7 +1649,7 @@ class AiController {
   async deleteChatbotStudioConversation(req, res) {
     try {
       await chatbotStudioConversationService.deleteConversation({
-        userId: req.user.id,
+        userId: resolveWorkspaceOwnerId(req.user),
         conversationId: req.params.id,
       });
       return res.json({ success: true, message: 'Đã xóa cuộc hội thoại' });
@@ -1596,7 +1665,7 @@ class AiController {
   async clearChatbotStudioConversation(req, res) {
     try {
       await chatbotStudioConversationService.clearConversation({
-        userId: req.user.id,
+        userId: resolveWorkspaceOwnerId(req.user),
         conversationId: req.params.id,
       });
       return res.json({ success: true, message: 'Đã xóa tin nhắn' });

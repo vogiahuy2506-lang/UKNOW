@@ -11,6 +11,7 @@ import MessageAttachments, { FileTypeIcon } from '../../components/MessageAttach
 import { useI18n } from '../../i18n';
 import { formatBytes } from '../../features/storage/storageUtils';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
+import { useAuthStore } from '../../stores/authStore';
 
 function daysRemaining(expiresAt) {
   if (!expiresAt) return null;
@@ -123,14 +124,14 @@ function StorageObjectCard({ item, onDeleteClick, t }) {
         ) : (
           <span />
         )}
-        <button
+        {onDeleteClick && <button
           type="button"
           onClick={() => onDeleteClick(item)}
           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           title={t('mediaLibrary.deleteBtn')}
         >
           <HiOutlineTrash className="w-4 h-4" />
-        </button>
+        </button>}
       </div>
     </div>
   );
@@ -202,6 +203,9 @@ function ChannelCard({ item, t }) {
 
 export default function MediaLibraryPage() {
   const { t } = useI18n();
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const canManage = activeContext?.type !== 'employee'
+    || activeContext?.permissions?.media_library_manage === true;
   const [tab, setTab] = useState('all'); // all | owned | channels
   const [category, setCategory] = useState('');
   const [source, setSource] = useState('');
@@ -476,7 +480,7 @@ export default function MediaLibraryPage() {
               <StorageObjectCard
                 key={item.id}
                 item={item}
-                onDeleteClick={(target) => setDeletingItem(target)}
+                onDeleteClick={canManage ? (target) => setDeletingItem(target) : undefined}
                 t={t}
               />
             ))

@@ -60,6 +60,7 @@ jest.unstable_mockModule('../../services/audit.service.js', () => ({
   default: {},
   AUDIT_ACTIONS: {},
   AUDIT_ENTITY_TYPES: {},
+  logWorkspace: jest.fn(),
 }));
 jest.unstable_mockModule('../../services/chatbot/zaloInbox.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/chatbot/channelAdapters/zaloOA.adapter.js', () => ({ default: {} }));

@@ -20,6 +20,7 @@ import useDesktopNotifications from '../../hooks/useDesktopNotifications';
 import useIsMobile from '../../hooks/useIsMobile';
 import { useLocalStorageState } from '../../hooks/useLocalStorageState';
 import { getMessagePreviewText } from '../../features/inbox/utils/normalizeMessageContent';
+import { useAuthStore } from '../../stores/authStore';
 
 const getConversationKey = (conv) => (conv ? `${conv.type || ''}:${conv.id}` : '');
 
@@ -124,6 +125,12 @@ const mergeUniqueMessages = (baseMessages, nextMessages, markAsRead = false) => 
 
 const InboxPage = () => {
   const { t } = useI18n();
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const isEmployeeContext = activeContext?.type === 'employee';
+  const permissions = activeContext?.permissions || {};
+  const canReply = !isEmployeeContext || permissions.inbox_reply === true;
+  const canManage = !isEmployeeContext || permissions.inbox_manage === true;
+  const canManageChannels = !isEmployeeContext || permissions.chatbot_channels_manage === true;
   
   const { isEnabled: notificationsEnabled, toggleNotifications, showNotification } = useDesktopNotifications();
   
@@ -847,6 +854,8 @@ const InboxPage = () => {
                 selectedAccountId={selectedAccountId}
                 onAccountChange={setSelectedAccountId}
                 refreshTrigger={sessionStatus.connected}
+                canSync={canManage}
+                canManageChannels={canManageChannels}
                 onSyncComplete={() => {
                   fetchSessionStatus();
                   fetchConversations(true);
@@ -868,7 +877,7 @@ const InboxPage = () => {
             onSelect={handleSelectConversation}
             onLoadMore={handleLoadMore}
             hasMore={hasMore}
-            onDelete={handleDeleteConversation}
+            onDelete={canManage ? handleDeleteConversation : undefined}
             sortBy={filters.sort}
           />
         </div>
@@ -896,6 +905,8 @@ const InboxPage = () => {
           <AiActivityReport
             selectedAccountId={selectedAccountId}
             onSelectConversation={handleOpenConversationFromReport}
+            canManage={canManage}
+            canSummarize={!isEmployeeContext}
           />
         ) : selectedConversation ? (
           <>
@@ -940,7 +951,7 @@ const InboxPage = () => {
                     type="button"
                     role="switch"
                     aria-checked={selectedConversation.chatbotEnabled !== false && !isGroupConversation(selectedConversation) && !selectedConversation.aiPaused}
-                    disabled={selectedConversation.chatbotEnabled === false || isGroupConversation(selectedConversation)}
+                    disabled={!canManage || selectedConversation.chatbotEnabled === false || isGroupConversation(selectedConversation)}
                     onClick={async () => {
                       if (selectedConversation.chatbotEnabled === false || isGroupConversation(selectedConversation)) return;
                       try {
@@ -1020,7 +1031,7 @@ const InboxPage = () => {
                   ) : null}
               </div>
 
-              <button
+              {canManage && <button
                 type="button"
                 disabled={isSyncingThread}
                 onClick={async () => {
@@ -1076,7 +1087,7 @@ const InboxPage = () => {
                 title={t('inbox.syncNow') || 'Đồng bộ'}
               >
                 <HiOutlineRefresh className={`w-5 h-5 ${isSyncingThread ? 'animate-spin' : ''}`} />
-              </button>
+              </button>}
 
               <button
                 onClick={() => setShowDetails(!showDetails)}
@@ -1097,8 +1108,8 @@ const InboxPage = () => {
                 messages={messages} 
                 isLoading={isLoadingMessages}
                 conversation={selectedConversation}
-                onReply={handleReply}
-                onRetry={handleRetryMessage}
+                onReply={canReply ? handleReply : undefined}
+                onRetry={canManage ? handleRetryMessage : undefined}
                 retryingMessageId={retryingMessageId}
                 replyingTo={replyingTo}
               />
@@ -1111,13 +1122,15 @@ const InboxPage = () => {
               />
             )}
 
-            <ReplyInput
-              onSend={handleSendMessage}
-              disabled={isSending}
-              placeholder={t('inbox.typeMessage')}
-              replyingTo={replyingTo}
-              onCancelReply={handleCancelReply}
-            />
+            {canReply && (
+              <ReplyInput
+                onSend={handleSendMessage}
+                disabled={isSending}
+                placeholder={t('inbox.typeMessage')}
+                replyingTo={replyingTo}
+                onCancelReply={handleCancelReply}
+              />
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">

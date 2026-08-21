@@ -75,9 +75,9 @@ const userMenuItems = (t) => [
   {
     name: t('nav.aiChatbot'), icon: HiOutlineInbox,
     children: [
-      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus, ownerOnly: true },
-      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox, ownerOnly: true },
-      { name: t('nav.mediaLibrary'), path: '/app/settings/media-library', icon: HiOutlinePhotograph, ownerOnly: true },
+      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus, permission: ['chatbots_manage'] },
+      { name: t('nav.inbox'), path: '/app/settings/inbox', icon: HiOutlineInbox, permission: ['inbox_view'] },
+      { name: t('nav.mediaLibrary'), path: '/app/settings/media-library', icon: HiOutlinePhotograph, permission: ['media_library_view'] },
     ],
   },
   {

@@ -27,6 +27,13 @@ const PERMISSION_FIELDS = (t) => [
   { keys: ['campaigns_run'],    label: t('employee.permissions.campaignRun') },
   { keys: ['customers'],        label: t('employee.permissions.customers') },
   { keys: ['leads'],            label: t('employee.permissions.leads') },
+  { keys: ['chatbots_manage'],  label: t('employee.permissions.chatbotsManage') },
+  { keys: ['chatbot_channels_manage'], label: t('employee.permissions.chatbotChannelsManage') },
+  { keys: ['inbox_view'],       label: t('employee.permissions.inboxView') },
+  { keys: ['inbox_reply'],      label: t('employee.permissions.inboxReply') },
+  { keys: ['inbox_manage'],     label: t('employee.permissions.inboxManage') },
+  { keys: ['media_library_view'], label: t('employee.permissions.mediaLibraryView') },
+  { keys: ['media_library_manage'], label: t('employee.permissions.mediaLibraryManage') },
 ];
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';

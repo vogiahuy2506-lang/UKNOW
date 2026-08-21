@@ -25,6 +25,7 @@ jest.unstable_mockModule('../../middleware/auth.middleware.js', () => ({
 jest.unstable_mockModule('../../middleware/rateLimiter.middleware.js', () => ({
   aiLimiter: (req, res, next) => next(),
   uploadLimiter: (req, res, next) => next(),
+  sseLimiter: (req, res, next) => next(),
   campaignRunLimiter: (req, res, next) => next(),
   quickSendTestLimiter: (req, res, next) => next(),
 }));
@@ -96,6 +97,36 @@ jest.unstable_mockModule('../../controllers/founderai.controller.js', () => ({
   default: makeMockController('founderai'),
 }));
 
+jest.unstable_mockModule('../../controllers/chatbot.controller.js', () => ({
+  default: makeMockController('chatbot'),
+}));
+
+jest.unstable_mockModule('../../controllers/unifiedInbox.controller.js', () => ({
+  default: makeMockController('unifiedInbox'),
+}));
+
+jest.unstable_mockModule('../../controllers/chatbot/aiActivity.controller.js', () => ({
+  default: makeMockController('aiActivity'),
+}));
+
+jest.unstable_mockModule('../../controllers/zaloPersonalSync.controller.js', () => ({
+  default: makeMockController('zaloPersonalSync'),
+}));
+
+jest.unstable_mockModule('../../controllers/mediaLibrary.controller.js', () => {
+  const controller = makeMockController('mediaLibrary');
+  return {
+    listMediaLibrary: controller.listMediaLibrary,
+    listChannelMedia: controller.listChannelMedia,
+    listStorageObjects: controller.listStorageObjects,
+    deleteStorageObject: controller.deleteStorageObject,
+  };
+});
+
+jest.unstable_mockModule('../../controllers/upload.controller.js', () => ({
+  default: makeMockController('upload'),
+}));
+
 // Import routes after mocking
 const { default: adminLandingPageRoutes } = await import('../adminLandingPage.routes.js');
 const { default: customerRoutes } = await import('../customer.routes.js');
@@ -108,6 +139,9 @@ const { default: campaignScheduleRoutes } = await import('../campaignSchedule.ro
 const { default: aiRoutes } = await import('../ai.routes.js');
 const { default: googleSheetsRoutes } = await import('../googleSheets.routes.js');
 const { default: founderaiRoutes } = await import('../founderai.routes.js');
+const { default: chatbotRoutes } = await import('../chatbot.routes.js');
+const { default: mediaLibraryRoutes } = await import('../mediaLibrary.routes.js');
+const { default: uploadRoutes } = await import('../upload.routes.js');
 
 const app = express();
 app.use(express.json());
@@ -122,6 +156,9 @@ app.use('/api/campaign-schedules', campaignScheduleRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/google-sheets', googleSheetsRoutes);
 app.use('/api/founderai', founderaiRoutes);
+app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/media-library', mediaLibraryRoutes);
+app.use('/api/uploads', uploadRoutes);
 
 describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   const selfUser = {
@@ -298,6 +335,98 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       expect(customerAllowed.status).toBe(200);
       const courseBlocked = await request(app).post('/api/founderai/sync/courses');
       expect(courseBlocked.status).toBe(403);
+    });
+  });
+
+  describe('8. Chatbot, Inbox, and Media delegation', () => {
+    it('guards Chatbot Studio and KB routes with chatbots_manage', async () => {
+      currentTestUser = createEmployee({ chatbots_manage: false });
+      const studioBlocked = await request(app).get('/api/ai/chatbot-studio/conversations');
+      const kbBlocked = await request(app).get('/api/chatbot/kb');
+      expect(studioBlocked.status).toBe(403);
+      expect(kbBlocked.status).toBe(403);
+
+      currentTestUser = createEmployee({ chatbots_manage: true });
+      const studioAllowed = await request(app).get('/api/ai/chatbot-studio/conversations');
+      const kbAllowed = await request(app).get('/api/chatbot/kb');
+      expect(studioAllowed.status).toBe(200);
+      expect(kbAllowed.status).toBe(200);
+    });
+
+    it('keeps share and AI-credit summary operations owner-only', async () => {
+      currentTestUser = createEmployee({
+        chatbots_manage: true,
+        inbox_view: true,
+        inbox_manage: true,
+      });
+      const share = await request(app).post('/api/chatbot/custom-chatbots/10/share');
+      const summary = await request(app).post('/api/chatbot/inbox/ai-activity/summarize');
+      expect(share.status).toBe(403);
+      expect(share.body.code).toBe('OWNER_ONLY');
+      expect(summary.status).toBe(403);
+      expect(summary.body.code).toBe('OWNER_ONLY');
+    });
+
+    it('separates chatbot channel management from chatbot CRUD', async () => {
+      currentTestUser = createEmployee({
+        chatbots_manage: true,
+        chatbot_channels_manage: false,
+      });
+      const blocked = await request(app).get('/api/chatbot/channels');
+      expect(blocked.status).toBe(403);
+
+      currentTestUser = createEmployee({ chatbot_channels_manage: true });
+      const allowed = await request(app).get('/api/chatbot/channels');
+      expect(allowed.status).toBe(200);
+    });
+
+    it('separates inbox view, reply, and destructive management', async () => {
+      currentTestUser = createEmployee({
+        inbox_view: true,
+        inbox_reply: false,
+        inbox_manage: false,
+      });
+      const list = await request(app).get('/api/chatbot/inbox/conversations');
+      const replyBlocked = await request(app)
+        .post('/api/chatbot/inbox/conversations/10/messages')
+        .send({ content: 'hello' });
+      const deleteBlocked = await request(app).delete('/api/chatbot/inbox/conversations/10');
+      expect(list.status).toBe(200);
+      expect(replyBlocked.status).toBe(403);
+      expect(deleteBlocked.status).toBe(403);
+
+      currentTestUser = createEmployee({
+        inbox_view: true,
+        inbox_reply: true,
+        inbox_manage: true,
+      });
+      const replyAllowed = await request(app)
+        .post('/api/chatbot/inbox/conversations/10/messages')
+        .send({ content: 'hello' });
+      const deleteAllowed = await request(app).delete('/api/chatbot/inbox/conversations/10');
+      expect(replyAllowed.status).toBe(200);
+      expect(deleteAllowed.status).toBe(200);
+    });
+
+    it('separates media view and management, including generic upload routes', async () => {
+      currentTestUser = createEmployee({
+        media_library_view: true,
+        media_library_manage: false,
+      });
+      const list = await request(app).get('/api/media-library/objects');
+      const deleteBlocked = await request(app).delete('/api/media-library/objects/10');
+      const promoteBlocked = await request(app).post('/api/uploads/promote').send({});
+      const signedAllowed = await request(app).get('/api/uploads/signed-url/uploads%2F1%2Ffile.png');
+      expect(list.status).toBe(200);
+      expect(deleteBlocked.status).toBe(403);
+      expect(promoteBlocked.status).toBe(403);
+      expect(signedAllowed.status).toBe(200);
+
+      currentTestUser = createEmployee({ media_library_manage: true });
+      const deleteAllowed = await request(app).delete('/api/media-library/objects/10');
+      const promoteAllowed = await request(app).post('/api/uploads/promote').send({});
+      expect(deleteAllowed.status).toBe(200);
+      expect(promoteAllowed.status).toBe(200);
     });
   });
 });

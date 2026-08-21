@@ -6,6 +6,7 @@ const mockMarkDeletedAfterUnlink = jest.fn();
 const mockMarkStorageObjectDeleted = jest.fn();
 const mockIsReferenceAlive = jest.fn();
 const mockResolveAbsolutePathFromKey = jest.fn();
+const mockLogWorkspace = jest.fn();
 
 jest.unstable_mockModule('../../repositories/mediaLibrary.repository.js', () => ({
   listOwnedAttachments: jest.fn(),
@@ -24,6 +25,12 @@ jest.unstable_mockModule('../../services/storage/storageObject.service.js', () =
 
 jest.unstable_mockModule('../../services/storage/storageReference.service.js', () => ({
   isReferenceAlive: mockIsReferenceAlive,
+}));
+
+jest.unstable_mockModule('../../services/audit.service.js', () => ({
+  AUDIT_ACTIONS: { MEDIA_DELETED: 'media.deleted' },
+  AUDIT_ENTITY_TYPES: { MEDIA_OBJECT: 'media_object' },
+  logWorkspace: mockLogWorkspace,
 }));
 
 const mockResolveTempFilePath = jest.fn((tempKey) => `/tmp/test_uploads/${tempKey}`);
@@ -76,6 +83,32 @@ describe('mediaLibrary.controller storage_objects', () => {
       data: [{ id: 1, displayName: 'test.png', sizeBytes: 1000 }],
       categorySummary: [{ category: 'zalo_template', count: 1, totalBytes: 1000 }],
     }));
+  });
+
+  it('lists the owner workspace when the actor is an employee', async () => {
+    mockListWorkspaceStorageObjects.mockResolvedValueOnce({
+      items: [],
+      categorySummary: [],
+      pagination: { total: 0, page: 1, limit: 24, pages: 0 },
+    });
+
+    const req = {
+      user: {
+        id: 99,
+        role: 'user',
+        activeContext: { type: 'employee', ownerId: 42, membershipId: 7 },
+      },
+      query: {},
+      headers: {},
+    };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    };
+
+    await listStorageObjects(req, res);
+
+    expect(mockListWorkspaceStorageObjects).toHaveBeenCalledWith(42, {});
   });
 
   it('returns 404 when object not found or belongs to another user', async () => {
@@ -167,6 +200,13 @@ describe('mediaLibrary.controller storage_objects', () => {
       success: true,
       message: 'Đã xóa tệp thành công',
     }));
+    expect(mockLogWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 42, ownerId: 42 }),
+      'media.deleted',
+      'media_object',
+      50,
+      expect.objectContaining({ category: 'zalo_template' })
+    );
   });
 
   it('allows deletion of expired temp files without reference check', async () => {

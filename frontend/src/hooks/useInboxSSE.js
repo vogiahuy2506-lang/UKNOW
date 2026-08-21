@@ -6,16 +6,29 @@ import {
   nextSseBackoffMs,
 } from './sseBackoff.util';
 
+export const buildInboxSseConnection = (token, activeContext) => {
+  const ownerContext = activeContext?.type === 'employee' ? activeContext.ownerId : null;
+  const params = new URLSearchParams({ token });
+  if (ownerContext) params.set('ownerContext', String(ownerContext));
+  return {
+    connectionKey: `${token}:${ownerContext || 'self'}`,
+    url: `/api/ai/chatbot/inbox/stream?${params.toString()}`,
+  };
+};
+
 /**
  * @returns {{ status: 'connecting'|'connected'|'disconnected', retry: Function, reconnect: Function, disconnect: Function }}
  */
 export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
-  const { user } = useAuthStore();
+  const { user, activeContext } = useAuthStore();
+  const contextType = activeContext?.type;
+  const contextOwnerId = activeContext?.ownerId;
   const eventSourceRef = useRef(null);
   const connectRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const heartbeatTimeoutRef = useRef(null);
   const tokenRef = useRef(null);
+  const connectionKeyRef = useRef(null);
   const failureCountRef = useRef(0);
   const [status, setStatus] = useState('connecting');
 
@@ -34,7 +47,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     }
   }, []);
 
-  const scheduleReconnect = useCallback((tokenAtFail) => {
+  const scheduleReconnect = useCallback((connectionKeyAtFail) => {
     failureCountRef.current += 1;
     if (failureCountRef.current > SSE_MAX_FAILURES) {
       console.error('[SSE] Max reconnect attempts reached — stopped');
@@ -44,7 +57,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     const delay = nextSseBackoffMs(failureCountRef.current);
     console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${failureCountRef.current})...`);
     reconnectTimeoutRef.current = setTimeout(() => {
-      if (tokenRef.current === tokenAtFail && connectRef.current) {
+      if (connectionKeyRef.current === connectionKeyAtFail && connectRef.current) {
         connectRef.current();
       }
     }, delay);
@@ -57,7 +70,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     heartbeatTimeoutRef.current = setTimeout(() => {
       console.log('[SSE] Heartbeat timeout - reconnecting via backoff');
       cleanup();
-      scheduleReconnect(tokenRef.current);
+      scheduleReconnect(connectionKeyRef.current);
     }, SSE_HEARTBEAT_TIMEOUT);
   }, [cleanup, scheduleReconnect]);
 
@@ -71,11 +84,16 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
       return;
     }
 
-    const tokenChanged = tokenRef.current !== null && tokenRef.current !== newToken;
+    const { connectionKey, url } = buildInboxSseConnection(newToken, {
+      type: contextType,
+      ownerId: contextOwnerId,
+    });
+    const connectionChanged = connectionKeyRef.current !== null
+      && connectionKeyRef.current !== connectionKey;
 
     if (eventSourceRef.current) {
-      if (tokenChanged) {
-        console.log('[SSE] Token changed, closing existing connection');
+      if (connectionChanged) {
+        console.log('[SSE] Authentication context changed, closing existing connection');
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       } else {
@@ -84,9 +102,8 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     }
 
     tokenRef.current = newToken;
+    connectionKeyRef.current = connectionKey;
     setStatus('connecting');
-
-    const url = `/api/ai/chatbot/inbox/stream?token=${encodeURIComponent(newToken)}`;
 
     try {
       const eventSource = new EventSource(url);
@@ -101,15 +118,14 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
       eventSource.onerror = (error) => {
         console.error('[SSE] Connection error:', error);
         cleanup();
-        if (tokenRef.current === newToken) {
-          scheduleReconnect(newToken);
+        if (connectionKeyRef.current === connectionKey) {
+          scheduleReconnect(connectionKey);
         }
       };
 
       eventSource.addEventListener('inbox:new_message', (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[SSE] New message:', data);
           resetHeartbeat();
           if (onNewMessage) onNewMessage(data);
         } catch (e) {
@@ -120,7 +136,6 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
       eventSource.addEventListener('inbox:unread_change', (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[SSE] Unread change:', data);
           resetHeartbeat();
           if (onUnreadCountChange) onUnreadCountChange(data);
         } catch (e) {
@@ -138,9 +153,9 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
       eventSourceRef.current = eventSource;
     } catch (error) {
       console.error('[SSE] Failed to create EventSource:', error);
-      scheduleReconnect(newToken);
+      scheduleReconnect(connectionKey);
     }
-  }, [cleanup, resetHeartbeat, scheduleReconnect, user?.id, onNewMessage, onUnreadCountChange]);
+  }, [cleanup, resetHeartbeat, scheduleReconnect, user?.id, contextType, contextOwnerId, onNewMessage, onUnreadCountChange]);
 
   connectRef.current = connect;
 
@@ -153,15 +168,20 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
   useEffect(() => {
     if (user?.id) {
       const currentToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
-      if (tokenRef.current !== null && tokenRef.current !== currentToken) {
-        console.log('[SSE] User/token changed, reconnecting...');
+      const { connectionKey: currentConnectionKey } = buildInboxSseConnection(currentToken, {
+        type: contextType,
+        ownerId: contextOwnerId,
+      });
+      if (connectionKeyRef.current !== null && connectionKeyRef.current !== currentConnectionKey) {
+        console.log('[SSE] User/token/context changed, reconnecting...');
         cleanup();
         tokenRef.current = currentToken;
+        connectionKeyRef.current = currentConnectionKey;
         failureCountRef.current = 0;
         connect();
       }
     }
-  }, [user?.id, connect, cleanup]);
+  }, [user?.id, contextType, contextOwnerId, connect, cleanup]);
 
   useEffect(() => {
     connect();

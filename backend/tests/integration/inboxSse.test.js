@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import http from 'http';
+import db from '../../src/config/database.js';
 
 const { createApp } = await import('../../src/app.js');
 const {
@@ -31,6 +32,34 @@ function httpGet(path) {
     });
     req.on('error', reject);
   });
+}
+
+async function addMembership(ownerId, employeeId, permissions, status = 'active') {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status, created_at, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, NOW(), NOW())`,
+    [ownerId, employeeId, JSON.stringify(permissions), status]
+  );
+}
+
+async function readResponseBody(res) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    res.on('data', (c) => chunks.push(c));
+    res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+  });
+}
+
+async function closeSse(req) {
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 500);
+    req.once('close', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    req.destroy();
+  });
+  sseService._resetForTests();
 }
 
 describe('Inbox SSE stream', () => {
@@ -81,24 +110,59 @@ describe('Inbox SSE stream', () => {
     expect(firstChunk).toMatch(/event:\s*connected/);
 
     // Wait for server-side close so the 30s heartbeat interval is cleared
-    await new Promise((resolve) => {
-      const timer = setTimeout(resolve, 500);
-      req.once('close', () => {
-        clearTimeout(timer);
-        resolve();
-      });
-      req.destroy();
-    });
-    sseService._resetForTests();
+    await closeSse(req);
+  });
+
+  it('employee có inbox_view kết nối stream trong workspace owner', async () => {
+    const owner = await createUser({ username: 'sse_owner' });
+    const employee = await createUser({ username: 'sse_employee' });
+    await addMembership(owner.id, employee.id, { inbox_view: true });
+    const token = signAccessToken(employee);
+
+    const { req, res } = await httpGet(
+      `/api/ai/chatbot/inbox/stream?token=${encodeURIComponent(token)}&ownerContext=${owner.id}`
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(String(res.headers['content-type'] || '')).toMatch(/text\/event-stream/);
+    await closeSse(req);
+  });
+
+  it('employee thiếu inbox_view bị từ chối ngay trên stream', async () => {
+    const owner = await createUser({ username: 'sse_owner_denied' });
+    const employee = await createUser({ username: 'sse_employee_denied' });
+    await addMembership(owner.id, employee.id, { inbox_view: false });
+    const token = signAccessToken(employee);
+
+    const { req, res } = await httpGet(
+      `/api/ai/chatbot/inbox/stream?token=${encodeURIComponent(token)}&ownerContext=${owner.id}`
+    );
+    const body = await readResponseBody(res);
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(body).code).toBe('PERMISSION_DENIED');
+    req.destroy();
+  });
+
+  it('ownerContext giả hoặc membership không active bị INVALID_CONTEXT', async () => {
+    const owner = await createUser({ username: 'sse_owner_invalid' });
+    const employee = await createUser({ username: 'sse_employee_invalid' });
+    await addMembership(owner.id, employee.id, { inbox_view: true }, 'inactive');
+    const token = signAccessToken(employee);
+
+    const { req, res } = await httpGet(
+      `/api/ai/chatbot/inbox/stream?token=${encodeURIComponent(token)}&ownerContext=${owner.id}`
+    );
+    const body = await readResponseBody(res);
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(body).code).toBe('INVALID_CONTEXT');
+    req.destroy();
   });
 
   it('invalid token → 401', async () => {
     const { req, res } = await httpGet('/api/ai/chatbot/inbox/stream?token=bad.token.here');
-    const body = await new Promise((resolve) => {
-      const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    });
+    const body = await readResponseBody(res);
     expect(res.statusCode).toBe(401);
     expect(body).toMatch(/Invalid token|Unauthorized/i);
     req.destroy();
@@ -106,11 +170,7 @@ describe('Inbox SSE stream', () => {
 
   it('missing token → 401', async () => {
     const { req, res } = await httpGet('/api/ai/chatbot/inbox/stream');
-    const body = await new Promise((resolve) => {
-      const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    });
+    const body = await readResponseBody(res);
     expect(res.statusCode).toBe(401);
     req.destroy();
     void body;
@@ -122,11 +182,7 @@ describe('Inbox SSE stream', () => {
     const { req, res } = await httpGet(
       `/api/ai/chatbot/inbox/stream?token=${encodeURIComponent(token)}`
     );
-    const body = await new Promise((resolve) => {
-      const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    });
+    const body = await readResponseBody(res);
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(body).code).toBe('NO_ACTIVE_PLAN');
     req.destroy();

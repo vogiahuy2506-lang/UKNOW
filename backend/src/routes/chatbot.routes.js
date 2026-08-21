@@ -8,7 +8,12 @@ import authMiddleware, {
   attachSseUserIdForRateLimit,
   resolveUserContext,
 } from '../middleware/auth.middleware.js';
-import { requireActivePlan, requirePasswordChange, requireSelfContext } from '../middleware/authorization.middleware.js';
+import {
+  requireActivePlan,
+  requirePasswordChange,
+  requirePermission,
+  requireSelfContext,
+} from '../middleware/authorization.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
@@ -49,7 +54,7 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
   try {
     decoded = jwt.verify(String(token), process.env.JWT_SECRET);
   } catch (err) {
-    console.error('[SSE] JWT verify failed:', err.message, 'token prefix:', String(token).substring(0, 50));
+    console.error('[SSE] JWT verify failed:', err.message);
     return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 
@@ -60,8 +65,11 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
   }
 
   try {
-    // EventSource cannot send X-Owner-Context — always self context.
-    req.user = await resolveUserContext(userId);
+    // EventSource cannot send custom headers. The requested owner is still
+    // validated against an active membership by resolveUserContext.
+    req.user = await resolveUserContext(userId, {
+      ownerContextId: req.query.ownerContext || null,
+    });
   } catch (err) {
     if (err.status && err.body) {
       return res.status(err.status).json(err.body);
@@ -74,17 +82,21 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
   if (!passwordGate.ok) return;
   const planGate = await runGate(requireActivePlan, req, res);
   if (!planGate.ok) return;
-  const selfContextGate = await runGate(requireSelfContext, req, res);
-  if (!selfContextGate.ok) return;
+  const permissionGate = await runGate(requirePermission('inbox_view'), req, res);
+  if (!permissionGate.ok) return;
+
+  const workspaceOwnerId = req.user.activeContext?.type === 'employee'
+    ? req.user.activeContext.ownerId
+    : req.user.id;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
 
-  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', userId: String(userId) })}\n\n`);
+  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`);
 
-  sseService.addClient(userId, res);
+  sseService.addClient(workspaceOwnerId, res);
 
   const heartbeat = setInterval(() => {
     try {
@@ -106,7 +118,7 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 
   req.on('close', () => {
     clearHeartbeat();
-    sseService.removeClient(userId, res);
+    sseService.removeClient(workspaceOwnerId, res);
   });
   res.on('close', clearHeartbeat);
 });
@@ -114,131 +126,131 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requireActivePlan);
-// Chatbot/Inbox delegation will be introduced with dedicated permissions in PR-4.
-router.use(requireSelfContext);
 
 // ── Knowledge Base ───────────────────────────────────────────────
 
-router.get('/kb', chatbotController.listKBs.bind(chatbotController));
-router.post('/kb', chatbotController.createKB.bind(chatbotController));
-router.get('/kb/:id', chatbotController.getKB.bind(chatbotController));
-router.put('/kb/:id', chatbotController.updateKB.bind(chatbotController));
-router.delete('/kb/:id', chatbotController.deleteKB.bind(chatbotController));
+router.get('/kb', requirePermission('chatbots_manage'), chatbotController.listKBs.bind(chatbotController));
+router.post('/kb', requirePermission('chatbots_manage'), chatbotController.createKB.bind(chatbotController));
+router.get('/kb/:id', requirePermission('chatbots_manage'), chatbotController.getKB.bind(chatbotController));
+router.put('/kb/:id', requirePermission('chatbots_manage'), chatbotController.updateKB.bind(chatbotController));
+router.delete('/kb/:id', requirePermission('chatbots_manage'), chatbotController.deleteKB.bind(chatbotController));
 
 // KB Documents
-router.get('/kb/:kbId/documents', chatbotController.listDocuments.bind(chatbotController));
-router.post('/kb/:kbId/documents/upload', upload.single('file'), chatbotController.uploadDocument.bind(chatbotController));
-router.post('/kb/:kbId/documents/text', chatbotController.addTextDocument.bind(chatbotController));
-router.post('/kb/:kbId/documents/url', chatbotController.addUrlDocument.bind(chatbotController));
-router.delete('/kb/:kbId/documents/:docId', chatbotController.deleteDocument.bind(chatbotController));
-router.post('/kb/:kbId/documents/:docId/reprocess', chatbotController.reprocessDocument.bind(chatbotController));
-router.get('/kb/:kbId/chunks', chatbotController.getChunks.bind(chatbotController));
+router.get('/kb/:kbId/documents', requirePermission('chatbots_manage'), chatbotController.listDocuments.bind(chatbotController));
+router.post('/kb/:kbId/documents/upload', requirePermission('chatbots_manage'), upload.single('file'), chatbotController.uploadDocument.bind(chatbotController));
+router.post('/kb/:kbId/documents/text', requirePermission('chatbots_manage'), chatbotController.addTextDocument.bind(chatbotController));
+router.post('/kb/:kbId/documents/url', requirePermission('chatbots_manage'), chatbotController.addUrlDocument.bind(chatbotController));
+router.delete('/kb/:kbId/documents/:docId', requirePermission('chatbots_manage'), chatbotController.deleteDocument.bind(chatbotController));
+router.post('/kb/:kbId/documents/:docId/reprocess', requirePermission('chatbots_manage'), chatbotController.reprocessDocument.bind(chatbotController));
+router.get('/kb/:kbId/chunks', requirePermission('chatbots_manage'), chatbotController.getChunks.bind(chatbotController));
 
 // ── Sub-Assistant ────────────────────────────────────────────────
 
-router.get('/sub-assistants', chatbotController.listSubAssistants.bind(chatbotController));
-router.post('/sub-assistants', chatbotController.createSubAssistant.bind(chatbotController));
-router.get('/sub-assistants/:id', chatbotController.getSubAssistant.bind(chatbotController));
-router.put('/sub-assistants/:id', chatbotController.updateSubAssistant.bind(chatbotController));
-router.delete('/sub-assistants/:id', chatbotController.deleteSubAssistant.bind(chatbotController));
+router.get('/sub-assistants', requirePermission('chatbots_manage'), chatbotController.listSubAssistants.bind(chatbotController));
+router.post('/sub-assistants', requirePermission('chatbots_manage'), chatbotController.createSubAssistant.bind(chatbotController));
+router.get('/sub-assistants/:id', requirePermission('chatbots_manage'), chatbotController.getSubAssistant.bind(chatbotController));
+router.put('/sub-assistants/:id', requirePermission('chatbots_manage'), chatbotController.updateSubAssistant.bind(chatbotController));
+router.delete('/sub-assistants/:id', requirePermission('chatbots_manage'), chatbotController.deleteSubAssistant.bind(chatbotController));
 
 // ── Chatbot Settings ────────────────────────────────────────────
 
-router.get('/chatbot/settings/:channel', chatbotController.getChatbotSettings.bind(chatbotController));
-router.put('/chatbot/settings/:channel', chatbotController.updateChatbotSettings.bind(chatbotController));
+router.get('/chatbot/settings/:channel', requirePermission('chatbots_manage'), chatbotController.getChatbotSettings.bind(chatbotController));
+router.put('/chatbot/settings/:channel', requirePermission('chatbots_manage'), chatbotController.updateChatbotSettings.bind(chatbotController));
 
 // ── Custom Chatbots (Studio) ──────────────────────────────────────
 
-router.get('/custom-chatbots', chatbotController.listCustomChatbots.bind(chatbotController));
-router.post('/custom-chatbots', chatbotController.createCustomChatbot.bind(chatbotController));
-router.get('/custom-chatbots/:chatbotId', chatbotController.getCustomChatbot.bind(chatbotController));
-router.put('/custom-chatbots/:chatbotId', chatbotController.updateCustomChatbot.bind(chatbotController));
-router.delete('/custom-chatbots/:chatbotId', chatbotController.deleteCustomChatbot.bind(chatbotController));
-router.get('/custom-chatbots/:chatbotId/documents', chatbotController.getCustomChatbotDocuments.bind(chatbotController));
+router.get('/custom-chatbots', requirePermission('chatbots_manage'), chatbotController.listCustomChatbots.bind(chatbotController));
+router.post('/custom-chatbots', requirePermission('chatbots_manage'), chatbotController.createCustomChatbot.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.getCustomChatbot.bind(chatbotController));
+router.put('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.updateCustomChatbot.bind(chatbotController));
+router.delete('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.deleteCustomChatbot.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId/documents', requirePermission('chatbots_manage'), chatbotController.getCustomChatbotDocuments.bind(chatbotController));
 
 // Chatbot Channel Connections
-router.get('/custom-chatbots/:chatbotId/channels', chatbotController.getChatbotChannels.bind(chatbotController));
-router.post('/custom-chatbots/:chatbotId/channels/zalo-oa', chatbotController.connectChatbotZaloOA.bind(chatbotController));
-router.post('/custom-chatbots/:chatbotId/channels/facebook', chatbotController.connectChatbotFacebook.bind(chatbotController));
-router.delete('/custom-chatbots/:chatbotId/channels/:channelType', chatbotController.disconnectChatbotChannel.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId/channels', requirePermission('chatbot_channels_manage'), chatbotController.getChatbotChannels.bind(chatbotController));
+router.post('/custom-chatbots/:chatbotId/channels/zalo-oa', requirePermission('chatbot_channels_manage'), chatbotController.connectChatbotZaloOA.bind(chatbotController));
+router.post('/custom-chatbots/:chatbotId/channels/facebook', requirePermission('chatbot_channels_manage'), chatbotController.connectChatbotFacebook.bind(chatbotController));
+router.delete('/custom-chatbots/:chatbotId/channels/:channelType', requirePermission('chatbot_channels_manage'), chatbotController.disconnectChatbotChannel.bind(chatbotController));
 
 // Chatbot Sharing (giữ path /share để tương thích client; ngữ nghĩa giờ là clone)
-router.post('/custom-chatbots/:chatbotId/share', chatbotController.shareChatbot.bind(chatbotController));
+router.post('/custom-chatbots/:chatbotId/share', requireSelfContext, chatbotController.shareChatbot.bind(chatbotController));
 // 4 endpoint dưới đã bỏ share-permission; giữ để client cũ không vỡ UI
-router.get('/custom-chatbots/:chatbotId/shares', chatbotController.getChatbotShares.bind(chatbotController));
-router.delete('/custom-chatbots/:chatbotId/shares/:recipientId', chatbotController.revokeShare.bind(chatbotController));
-router.get('/shared-with-me', chatbotController.getSharedWithMe.bind(chatbotController));
-router.get('/shared-by-me', chatbotController.getSharedByMe.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId/shares', requireSelfContext, chatbotController.getChatbotShares.bind(chatbotController));
+router.delete('/custom-chatbots/:chatbotId/shares/:recipientId', requireSelfContext, chatbotController.revokeShare.bind(chatbotController));
+router.get('/shared-with-me', requireSelfContext, chatbotController.getSharedWithMe.bind(chatbotController));
+router.get('/shared-by-me', requireSelfContext, chatbotController.getSharedByMe.bind(chatbotController));
 
 // ── Channel Connections ──────────────────────────────────────────
 
-router.get('/channels', chatbotController.listChannels.bind(chatbotController));
-router.post('/channels/connect/zalo-oa', chatbotController.connectZaloOA.bind(chatbotController));
-router.post('/channels/connect/facebook', chatbotController.connectFacebook.bind(chatbotController));
-router.delete('/channels/:channel', chatbotController.disconnectChannel.bind(chatbotController));
-router.post('/channels/test/zalo-oa', chatbotController.testZaloOAConnection.bind(chatbotController));
-router.post('/channels/test/facebook', chatbotController.testFacebookConnection.bind(chatbotController));
+router.get('/channels', requirePermission('chatbot_channels_manage'), chatbotController.listChannels.bind(chatbotController));
+router.post('/channels/connect/zalo-oa', requirePermission('chatbot_channels_manage'), chatbotController.connectZaloOA.bind(chatbotController));
+router.post('/channels/connect/facebook', requirePermission('chatbot_channels_manage'), chatbotController.connectFacebook.bind(chatbotController));
+router.delete('/channels/:channel', requirePermission('chatbot_channels_manage'), chatbotController.disconnectChannel.bind(chatbotController));
+router.post('/channels/test/zalo-oa', requirePermission('chatbot_channels_manage'), chatbotController.testZaloOAConnection.bind(chatbotController));
+router.post('/channels/test/facebook', requirePermission('chatbot_channels_manage'), chatbotController.testFacebookConnection.bind(chatbotController));
 
 // ── Web Widget ──────────────────────────────────────────────────
 
-router.get('/widgets', chatbotController.listWidgets.bind(chatbotController));
-router.post('/widgets', chatbotController.createWidget.bind(chatbotController));
-router.put('/widgets/:id', chatbotController.updateWidget.bind(chatbotController));
-router.delete('/widgets/:id', chatbotController.deleteWidget.bind(chatbotController));
+router.get('/widgets', requirePermission('chatbots_manage'), chatbotController.listWidgets.bind(chatbotController));
+router.post('/widgets', requirePermission('chatbots_manage'), chatbotController.createWidget.bind(chatbotController));
+router.put('/widgets/:id', requirePermission('chatbots_manage'), chatbotController.updateWidget.bind(chatbotController));
+router.delete('/widgets/:id', requirePermission('chatbots_manage'), chatbotController.deleteWidget.bind(chatbotController));
 
 // NOTE: visitor webchat start/messages routes removed (orphan + cross-tenant IDOR).
 // Inbox uses /inbox/*; public widget uses /api/chatbot-public/custom-chatbot/*.
 
 // ── Unified Inbox ────────────────────────────────────────────────
 
-router.get('/inbox/conversations', unifiedInboxController.getConversations.bind(unifiedInboxController));
-router.get('/inbox/conversations/:id', unifiedInboxController.getConversation.bind(unifiedInboxController));
-router.get('/inbox/conversations/:id/messages', unifiedInboxController.getMessages.bind(unifiedInboxController));
+router.get('/inbox/conversations', requirePermission('inbox_view'), unifiedInboxController.getConversations.bind(unifiedInboxController));
+router.get('/inbox/conversations/:id', requirePermission('inbox_view'), unifiedInboxController.getConversation.bind(unifiedInboxController));
+router.get('/inbox/conversations/:id/messages', requirePermission('inbox_view'), unifiedInboxController.getMessages.bind(unifiedInboxController));
 router.post(
   '/inbox/attachments',
+  requirePermission('inbox_reply'),
   workspaceUploadCapacityGuard,
   upload.single('file'),
   unifiedInboxController.uploadInboxAttachment.bind(unifiedInboxController)
 );
-router.post('/inbox/conversations/:id/messages', unifiedInboxController.sendMessage.bind(unifiedInboxController));
-router.post('/inbox/messages/:messageId/retry', unifiedInboxController.retryMessage.bind(unifiedInboxController));
-router.post('/inbox/conversations/:id/read', unifiedInboxController.markAsRead.bind(unifiedInboxController));
-router.delete('/inbox/conversations/:id', unifiedInboxController.deleteConversation.bind(unifiedInboxController));
-router.post('/inbox/conversations/:id/ai-pause', unifiedInboxController.setAiPaused.bind(unifiedInboxController));
-router.get('/inbox/unread-count', unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
+router.post('/inbox/conversations/:id/messages', requirePermission('inbox_reply'), unifiedInboxController.sendMessage.bind(unifiedInboxController));
+router.post('/inbox/messages/:messageId/retry', requirePermission('inbox_manage'), unifiedInboxController.retryMessage.bind(unifiedInboxController));
+router.post('/inbox/conversations/:id/read', requirePermission('inbox_view'), unifiedInboxController.markAsRead.bind(unifiedInboxController));
+router.delete('/inbox/conversations/:id', requirePermission('inbox_manage'), unifiedInboxController.deleteConversation.bind(unifiedInboxController));
+router.post('/inbox/conversations/:id/ai-pause', requirePermission('inbox_manage'), unifiedInboxController.setAiPaused.bind(unifiedInboxController));
+router.get('/inbox/unread-count', requirePermission('inbox_view'), unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
 
 // ── AI Activity Report & Summaries ──────────────────────────────────
-router.get('/inbox/ai-activity', aiActivityController.getActivityReport.bind(aiActivityController));
-router.post('/inbox/ai-activity/resume-all', aiActivityController.resumeAllAi.bind(aiActivityController));
+router.get('/inbox/ai-activity', requirePermission('inbox_view'), aiActivityController.getActivityReport.bind(aiActivityController));
+router.post('/inbox/ai-activity/resume-all', requirePermission('inbox_manage'), aiActivityController.resumeAllAi.bind(aiActivityController));
 router.post(
   '/inbox/ai-activity/summarize',
+  requireSelfContext,
   assertAiCreditAvailable('inbox_ai_summary'),
   aiActivityController.summarizeActivity.bind(aiActivityController)
 );
 
 // ── Zalo Personal Account Chatbot Settings ─────────────────────────
 
-router.get('/zalo-account/:zaloSettingId/chatbot', chatbotController.getZaloAccountChatbotSettings.bind(chatbotController));
-router.put('/zalo-account/:zaloSettingId/chatbot', chatbotController.updateZaloAccountChatbotSettings.bind(chatbotController));
-router.post('/zalo-account/:zaloSettingId/chatbot/toggle', chatbotController.toggleZaloAccountChatbot.bind(chatbotController));
-router.get('/zalo-accounts/chatbot', chatbotController.listZaloAccountsWithChatbotSettings.bind(chatbotController));
+router.get('/zalo-account/:zaloSettingId/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.getZaloAccountChatbotSettings.bind(chatbotController));
+router.put('/zalo-account/:zaloSettingId/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.updateZaloAccountChatbotSettings.bind(chatbotController));
+router.post('/zalo-account/:zaloSettingId/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleZaloAccountChatbot.bind(chatbotController));
+router.get('/zalo-accounts/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.listZaloAccountsWithChatbotSettings.bind(chatbotController));
 
 // ── Outbox ───────────────────────────────────────────────────────
 
-router.get('/inbox/outbox', unifiedInboxController.getOutboxMessages.bind(unifiedInboxController));
-router.get('/inbox/outbox/:id', unifiedInboxController.getOutboxMessage.bind(unifiedInboxController));
+router.get('/inbox/outbox', requirePermission('inbox_view'), unifiedInboxController.getOutboxMessages.bind(unifiedInboxController));
+router.get('/inbox/outbox/:id', requirePermission('inbox_view'), unifiedInboxController.getOutboxMessage.bind(unifiedInboxController));
 
 // ── Zalo Personal Sync ───────────────────────────────────────────
 
-router.get('/zalo-personal/sync', zaloPersonalSyncController.sync.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/sync/contacts', zaloPersonalSyncController.syncContacts.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/sync/groups', zaloPersonalSyncController.syncGroups.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/sync/status', zaloPersonalSyncController.getSyncStatus.bind(zaloPersonalSyncController));
-router.post('/zalo-personal/sync/chat-history', zaloPersonalSyncController.syncChatHistory.bind(zaloPersonalSyncController));
-router.post('/zalo-personal/sync/group-history', zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/history', zaloPersonalSyncController.getChatHistory.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/friends', zaloPersonalSyncController.getFriends.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/group-members', zaloPersonalSyncController.getGroupMembers.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/group-senders', zaloPersonalSyncController.getGroupSenders.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/sync', requirePermission('inbox_manage'), zaloPersonalSyncController.sync.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/sync/contacts', requirePermission('inbox_manage'), zaloPersonalSyncController.syncContacts.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/sync/groups', requirePermission('inbox_manage'), zaloPersonalSyncController.syncGroups.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/sync/status', requirePermission('inbox_view'), zaloPersonalSyncController.getSyncStatus.bind(zaloPersonalSyncController));
+router.post('/zalo-personal/sync/chat-history', requirePermission('inbox_manage'), zaloPersonalSyncController.syncChatHistory.bind(zaloPersonalSyncController));
+router.post('/zalo-personal/sync/group-history', requirePermission('inbox_manage'), zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/history', requirePermission('inbox_view'), zaloPersonalSyncController.getChatHistory.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/friends', requirePermission('inbox_view'), zaloPersonalSyncController.getFriends.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/group-members', requirePermission('inbox_view'), zaloPersonalSyncController.getGroupMembers.bind(zaloPersonalSyncController));
+router.get('/zalo-personal/group-senders', requirePermission('inbox_view'), zaloPersonalSyncController.getGroupSenders.bind(zaloPersonalSyncController));
 
 export default router;

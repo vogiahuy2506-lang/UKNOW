@@ -17,7 +17,14 @@ function pickDefaultAccount(accounts, savedId) {
   return accounts[0]?.id ?? null;
 }
 
-const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplete, refreshTrigger }) => {
+const ZaloAccountSelector = ({
+  selectedAccountId,
+  onAccountChange,
+  onSyncComplete,
+  refreshTrigger,
+  canSync = true,
+  canManageChannels = true,
+}) => {
   const navigate = useNavigate();
   const { t } = useI18n();
   const userId = useAuthStore((s) => s.user?.id);
@@ -165,6 +172,14 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
   }
 
   if (accounts.length === 0) {
+    if (!canManageChannels) {
+      return (
+        <div className="w-full flex items-center gap-2 px-2 py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-left">
+          <HiExclamationCircle className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          <span className="text-[11px] text-gray-600 flex-1">{t('inbox.noZaloAccount')}</span>
+        </div>
+      );
+    }
     return (
       <button
         type="button"
@@ -211,7 +226,7 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
             <HiChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          <button
+          {canSync && <button
             type="button"
             onClick={handleSync}
             disabled={isSyncing || !selectedAccountId}
@@ -223,7 +238,7 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
             ) : (
               <HiRefresh className="w-3.5 h-3.5" />
             )}
-          </button>
+          </button>}
         </div>
 
         {isOpen && (
@@ -267,19 +282,19 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
                 </button>
               ))}
             </div>
-            <button
+            {canManageChannels && <button
               type="button"
               onClick={() => navigate('/app/settings/channels')}
               className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-primary-700 border-t border-gray-100 hover:bg-primary-50"
             >
               <HiExternalLink className="w-3.5 h-3.5" />
               {t('inbox.manageZaloAccounts') || 'Quản lý tài khoản Zalo'}
-            </button>
+            </button>}
           </div>
         )}
       </div>
 
-      <div className="flex items-start gap-1 text-[10px] text-gray-500 px-0.5">
+      {canSync && <div className="flex items-start gap-1 text-[10px] text-gray-500 px-0.5">
         <button
           type="button"
           className="mt-px text-gray-400 hover:text-gray-600 shrink-0"
@@ -296,7 +311,7 @@ const ZaloAccountSelector = ({ selectedAccountId, onAccountChange, onSyncComplet
             </span>
           )}
         </p>
-      </div>
+      </div>}
     </div>
   );
 };

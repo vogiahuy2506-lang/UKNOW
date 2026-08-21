@@ -325,6 +325,8 @@ class UnifiedInboxService {
    * Send a message as agent
    * @param {object} [options]
    * @param {number|string|null} [options.ownerContextId]
+   * @param {number|string|null} [options.actorUserId]
+   * @param {number|string|null} [options.membershipId]
    */
   async sendMessage(userId, conversationId, conversationType, content, attachments = [], options = {}) {
     const ownedAttachments = sanitizeOwnedInboxAttachments(attachments, userId);
@@ -359,7 +361,11 @@ class UnifiedInboxService {
       role: 'agent',
       content: String(content || '').trim(),
       attachments: ownedAttachments,
-      metadata: { source: 'manual_inbox' },
+      metadata: {
+        source: 'manual_inbox',
+        actor_user_id: options.actorUserId || userId,
+        membership_id: options.membershipId || null,
+      },
     };
 
     // Zalo Personal: insert + trừ ví cùng transaction (đếm vào hạn mức tháng)
