@@ -315,6 +315,7 @@ CREATE TABLE orders (
   topup_config JSONB,
   invoice_info JSONB,
   custom_plan_config JSONB,
+  paid_at     TIMESTAMPTZ,
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT orders_order_code_key UNIQUE (order_code)

@@ -112,7 +112,10 @@ export function shouldIssueInvoiceForOrder(order) {
 function lineDescription(order) {
   if (order?.note === 'topup') return 'Mua thêm hạn mức Founder AI';
   if (order?.note === 'custom_self_serve') return 'Gói tự chọn Founder AI';
-  return 'Gói dịch vụ Founder AI';
+  const planName = String(order?.plan_name || '').trim();
+  if (!planName) return 'Gói dịch vụ Founder AI';
+  const periodLabel = order?.billing_period === 'yearly' ? 'năm' : 'tháng';
+  return `Phần mềm FounderAI - Gói ${planName} ${periodLabel}`;
 }
 
 function backoffMs(attemptCount) {
@@ -141,20 +144,25 @@ export function buildCreateInvoicePayload(order, info) {
 
   const isCompany = info.buyerType !== 'personal' && info.buyerType !== 'consumer';
   const isConsumer = info.buyerType === 'consumer';
-  
+
+  // NMua_Ten = "Tên khách hàng hoặc tên đơn vị mua hàng" (PDF: ô "Tên đơn vị").
+  // NMua_HVTNMHang = "Họ và tên người mua hàng" (PDF: ô "Họ tên người mua hàng").
+  // Công ty dùng NMua_Ten; cá nhân/không lấy hoá đơn dùng NMua_HVTNMHang — nhét
+  // chung một ô làm tên cá nhân từng in nhầm vào "Tên đơn vị" trên hoá đơn thật.
   let nMuaTen = '';
   let nMuaMst = '';
   let nMuaDchi = '';
   let nMuaCccd = '';
+  let nMuaHVTNMHang = '';
 
   if (isConsumer) {
-    nMuaTen = 'Bán cho người tiêu dùng';
+    nMuaHVTNMHang = 'Bán cho người tiêu dùng';
   } else if (isCompany) {
     nMuaTen = info.companyName;
     nMuaMst = info.taxCode || '';
     nMuaDchi = info.companyAddress || info.address || '';
   } else {
-    nMuaTen = info.fullName;
+    nMuaHVTNMHang = String(info.fullName || '').slice(0, 100);
     nMuaDchi = info.address || '';
     if (info.idNumber) nMuaCccd = String(info.idNumber).slice(0, 12);
   }
@@ -168,6 +176,9 @@ export function buildCreateInvoicePayload(order, info) {
   };
   if (nMuaCccd) {
     buyer.NMua_CCCDan = nMuaCccd;
+  }
+  if (nMuaHVTNMHang) {
+    buyer.NMua_HVTNMHang = nMuaHVTNMHang;
   }
 
   const invoice = {
@@ -320,6 +331,8 @@ export async function dispatchPreparedEinvoice(einvoiceId) {
     user_email: job.user_email,
     paid_at: job.paid_at,
     created_at: job.created_at,
+    billing_period: job.billing_period,
+    plan_name: job.plan_name,
   };
   if (!hasInvoiceIntent(order)) return { skipped: true, reason: 'no_intent' };
   const info = parseInvoiceInfo(order);

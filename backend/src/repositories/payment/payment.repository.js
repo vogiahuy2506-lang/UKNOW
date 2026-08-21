@@ -71,12 +71,13 @@ export const updateOrderStatus = async (orderCode, status) => {
 export const claimOrderSuccess = async (orderCode, queryable = db) => {
     const { rows } = await queryable.query(
         `UPDATE orders
-         SET status = 'success', updated_at = NOW()
+         SET status = 'success', paid_at = NOW(), updated_at = NOW()
          WHERE order_code = $1
            AND status NOT IN ('success', 'cancelled', 'failed')
          RETURNING id, user_id, plan_id, user_email, billing_period,
                    amount, voucher_id, voucher_code, discount_amount,
-                   note, topup_config, invoice_info, custom_plan_config, order_code, payment_method`,
+                   note, topup_config, invoice_info, custom_plan_config, order_code, payment_method,
+                   paid_at`,
         [orderCode]
     );
     return rows[0] || null;
