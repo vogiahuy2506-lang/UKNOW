@@ -270,7 +270,7 @@ export const createPaymentLink = async ({
         const paymentLink = await payosClient.paymentRequests.create({
             orderCode: Number(orderCode),
             amount,
-            description: `TT ${planCode}`.substring(0, 25),
+            description: `FOUNDERAI ${String(planCode || '').toUpperCase()}`.substring(0, 25),
             returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
             cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
             expiredAt,
@@ -682,7 +682,7 @@ export const createCustomPaymentLink = async ({
         const paymentLink = await payosClient.paymentRequests.create({
             orderCode: Number(orderCode),
             amount,
-            description: `TT custom`.substring(0, 25),
+            description: `FOUNDERAI CUSTOM`.substring(0, 25),
             returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
             cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
             expiredAt,

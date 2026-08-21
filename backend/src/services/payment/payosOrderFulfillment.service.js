@@ -69,7 +69,10 @@ export async function fulfillPaidOrder(order, client) {
       if (typeof invoiceInfo === 'string') {
         try { invoiceInfo = JSON.parse(invoiceInfo); } catch { invoiceInfo = null; }
       }
-      const invoiceUrl = invoiceInfo?.wantInvoice
+      // deliverEmail, not wantInvoice: khách "không lấy hoá đơn" (consumer) vẫn có
+      // wantInvoice: true (chỉ deliverEmail: false) — dùng wantInvoice ở đây từng làm
+      // họ nhận nhầm khối "xem hoá đơn" dù không hề yêu cầu.
+      const invoiceUrl = invoiceInfo?.deliverEmail !== false
         ? `${FRONTEND_URL}/invoices/${order.order_code}`
         : undefined;
 
@@ -125,7 +128,8 @@ export async function fulfillPaidOrder(order, client) {
     if (typeof invoiceInfo === 'string') {
       try { invoiceInfo = JSON.parse(invoiceInfo); } catch { invoiceInfo = null; }
     }
-    const invoiceUrl = invoiceInfo?.wantInvoice
+    // deliverEmail, not wantInvoice — see comment on the scheduled-order branch above.
+    const invoiceUrl = invoiceInfo?.deliverEmail !== false
       ? `${FRONTEND_URL}/invoices/${order.order_code}`
       : undefined;
 
