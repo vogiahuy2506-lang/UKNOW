@@ -99,7 +99,9 @@ router.post('/custom-chat/logo', requireSelfContext, upload.single('file'), aiCo
 
 // Custom AI - Get documents
 router.get('/custom-chat/documents/:chatbotId', requireSelfContext, aiController.getCustomChatbotDocuments.bind(aiController));
+router.get('/custom-chat/documents/:chatbotId/:docId', requireSelfContext, aiController.getCustomChatbotDocument.bind(aiController));
 router.delete('/custom-chat/documents/:chatbotId/:docId', requireSelfContext, aiController.deleteCustomChatbotDocument.bind(aiController));
 router.post('/custom-chat/text/:chatbotId', requireSelfContext, aiController.addCustomChatTextDocument.bind(aiController));
+router.post('/custom-chat/scrape/:chatbotId', requireSelfContext, aiController.scrapeCustomChatbotUrl.bind(aiController));
 
 export default router;
