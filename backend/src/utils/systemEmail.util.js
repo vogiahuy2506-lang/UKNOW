@@ -597,7 +597,7 @@ export function buildPaymentSuccessEmail({
 
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
-      Nếu có thắc mắc về thanh toán, liên hệ <a href="mailto:billing@digiso.vn" style="color:#f97316;text-decoration:none">billing@digiso.vn</a>.
+      Nếu có thắc mắc về thanh toán, liên hệ <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">billing@digiso.vn</a>.
     </p>
   `;
 
