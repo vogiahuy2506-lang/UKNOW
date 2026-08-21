@@ -2905,6 +2905,7 @@ export default {
 
   chatbot: {
     cloneTitle: 'Chia sẻ Chatbot',
+    cloneSuccess: 'Đã chia sẻ chatbot cho {name}. Họ có thể tìm thấy trong danh sách chatbot của mình.',
     zaloOaDescription: 'Kết nối Zalo Official Account để nhận tin nhắn khách hàng qua Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',

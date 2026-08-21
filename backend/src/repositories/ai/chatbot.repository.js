@@ -464,19 +464,18 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key, origin, reply_limit_config,
+              suggested_questions, widget_key,
+              COALESCE(origin, 'self_created') as origin, reply_limit_config,
               created_at, updated_at
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`;
     const params = [userId];
 
     if (origin) {
-      // Handle NULL origin as 'self_created' for backward compatibility
       if (origin === 'self_created') {
-        query += ` AND (origin = $2 OR origin IS NULL)`;
+        query += ` AND (origin = $2 OR origin IS NULL OR NOT origin IN ('shared', 'marketplace_purchased'))`;
       } else if (origin === 'shared' || origin === 'shared_with_me') {
-        // shared and shared_with_me are the same - chatbots shared with the user
-        query += ` AND (origin = 'shared' OR origin = 'shared_with_me')`;
+        query += ` AND origin = 'shared'`;
       } else {
         query += ` AND origin = $2`;
       }

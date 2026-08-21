@@ -2870,6 +2870,8 @@ export default {
   },
 
   chatbot: {
+    cloneTitle: 'Share Chatbot',
+    cloneSuccess: 'Chatbot shared with {name}. They can find it in their chatbot list.',
     zaloOaDescription: 'Connect Zalo Official Account to receive customer messages via Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',
