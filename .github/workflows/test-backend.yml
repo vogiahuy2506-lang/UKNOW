@@ -2,6 +2,12 @@ name: Test Backend
 
 on:
   workflow_call:
+    inputs:
+      skip_integration:
+        description: 'Bỏ qua integration test matrix (fast-path cho hotfix deploy — mặc định vẫn chạy đủ)'
+        type: boolean
+        required: false
+        default: false
   pull_request:
     branches: [main]
   push:
@@ -138,8 +144,14 @@ jobs:
         run: npm run lint
 
   integration:
-    name: Jest integration (backend)
+    name: Jest integration (backend) — shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_integration }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -175,7 +187,6 @@ jobs:
 
     steps:
       - name: Checkout code
-        id: checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -188,34 +199,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Jest (integration + coverage)
-        run: npm run test:coverage -- --ci
-
-      - name: Coverage summary trên PR
-        if: always() && steps.checkout.outcome == 'success'
-        run: |
-          if [ -f coverage/coverage-summary.json ]; then
-            echo "### 📊 Coverage backend" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            node -e "
-              const c = require('./coverage/coverage-summary.json').total;
-              const fmt = (m) => \`\${m.pct.toString().padStart(6)}%  (\${m.covered}/\${m.total})\`;
-              console.log('Statements:', fmt(c.statements));
-              console.log('Branches  :', fmt(c.branches));
-              console.log('Functions :', fmt(c.functions));
-              console.log('Lines     :', fmt(c.lines));
-            " >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "(coverage-summary.json không tồn tại — kiểm tra config Jest)" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Upload coverage artifact
-        if: always() && steps.checkout.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend/coverage/
-          retention-days: 7
-          if-no-files-found: warn
+      # Mỗi shard chạy trên Postgres service riêng của chính job đó (matrix = VM
+      # riêng), không đụng shard khác. --shard chia theo SỐ LƯỢNG file test (không
+      # cân theo thời gian chạy thật), nên 4 shard có thể lệch nhau vài phút —
+      # chấp nhận được, vẫn nhanh hơn hẳn 1 lần chạy ~26 phút.
+      #
+      # Không sinh coverage ở đây nữa (trước đây integration job chạy test:coverage,
+      # gộp cả unit lẫn integration coverage qua scripts/mergeCoverage.js). Gộp
+      # coverage từ 4 shard song song cần thêm 1 job download-artifact + merge —
+      # coverage report chỉ mang tính tham khảo trên PR summary, không gate gì,
+      # nên đánh đổi lấy tốc độ + đơn giản. Cần lại thì xem lịch sử file này.
+      - name: Run Jest (integration, shard ${{ matrix.shard }}/4)
+        run: npm run test:integration -- --ci --shard=${{ matrix.shard }}/4
