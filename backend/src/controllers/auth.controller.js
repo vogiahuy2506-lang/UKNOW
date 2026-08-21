@@ -18,6 +18,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getSystemAuditContext } from '../utils/auditContext.util.js';
 import { grantSignupTrial } from '../services/user/signupTrial.service.js';
+import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -57,6 +58,7 @@ class AuthController {
     const client = await db.getClient();
 
     try {
+      await client.query('BEGIN');
       const { username, email, password, fullName, phone, emailVerificationCode } = req.body;
 
       // Xác minh OTP email trước khi tạo tài khoản
@@ -98,7 +100,8 @@ class AuthController {
       // Đánh dấu mã xác minh đã dùng
       await verificationService.markCodeAsUsed(verification.id);
 
-      const trial = await grantSignupTrial({ userId: user.id, userEmail: user.email });
+      // Auto-grant trial INSIDE cùng transaction. Nếu lỗi → throw → handler ROLLBACK cả INSERT user.
+      const trial = await grantSignupTrialInTx(client, { userId: user.id, userEmail: user.email });
       if (trial) {
         user.active_plan_id = trial.activePlanId;
         user.subscription_expires_at = trial.expiresAt;
@@ -108,6 +111,8 @@ class AuthController {
           expiresAt: trial.expiresAt,
         });
       }
+
+      await client.query('COMMIT');
 
       const accessToken = this.generateAccessToken(user);
       const refreshToken = await this.generateRefreshToken(user, req);
@@ -139,7 +144,12 @@ class AuthController {
       });
     } catch (error) {
       console.error('Register error:', error);
-      
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('Register rollback failed:', rollbackErr?.message || rollbackErr);
+      }
+
       // Xử lý lỗi unique constraint từ DB (nếu manual check bị lọt do race condition)
       if (error.code === '23505') {
         const detail = error.detail || '';
@@ -149,6 +159,11 @@ class AuthController {
         if (detail.includes('username')) {
           return res.status(400).json({ success: false, message: 'Tên đăng nhập đã được sử dụng' });
         }
+      }
+
+      // Lỗi từ trial grant (vd: không tìm thấy plan 'trial', race unique order_code, v.v.)
+      if (error.status === 409 && typeof error.message === 'string') {
+        return res.status(error.status).json({ success: false, message: error.message });
       }
 
       return res.status(500).json({ success: false, message: 'Lỗi server' });
@@ -365,7 +380,7 @@ class AuthController {
         );
         user = insertResult.rows[0];
 
-        trial = await grantSignupTrial({ userId: user.id, userEmail: user.email });
+        trial = await grantSignupTrial({ userId: user.id, userEmail: user.email, req });
         if (trial) {
           user.active_plan_id = trial.activePlanId;
           user.subscription_expires_at = trial.expiresAt;
