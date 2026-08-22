@@ -7263,6 +7263,9 @@ Feel free to ask me anything!`,
     testing: 'Sending test...',
     testSendSuccess: 'Test message sent successfully',
     testSendFailed: 'Failed to send test message',
+    attachments: 'Attachments',
+    templateLoadDetailFailed: 'Failed to load template details (including attachments). Please re-select the template.',
+    loadingTemplateDetail: 'Loading template details...',
   },
 
   helpDocs: {

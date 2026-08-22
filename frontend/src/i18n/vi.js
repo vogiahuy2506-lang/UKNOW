@@ -7218,6 +7218,9 @@ export default {
     testing: 'Đang gửi thử...',
     testSendSuccess: 'Gửi thử nghiệm thành công',
     testSendFailed: 'Gửi thử nghiệm thất bại',
+    attachments: 'Tệp đính kèm',
+    templateLoadDetailFailed: 'Không thể tải chi tiết mẫu tin (kèm đính kèm). Vui lòng chọn lại mẫu.',
+    loadingTemplateDetail: 'Đang tải chi tiết mẫu...',
   },
 
   helpDocs: {

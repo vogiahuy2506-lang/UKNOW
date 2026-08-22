@@ -36,6 +36,7 @@ const zaloSettingsApiService = {
       recipients: [payload.phone],
       recipientType: 'phone',
       message: payload.message || '',
+      attachments: Array.isArray(payload.attachments) ? payload.attachments : [],
     });
   },
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
@@ -21,7 +21,20 @@ import {
   HiOutlineMoon,
   HiOutlinePaperAirplane,
   HiOutlineRefresh,
+  HiOutlinePaperClip,
 } from 'react-icons/hi';
+
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let unitIndex = 0;
+  let size = bytes;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+}
 
 const QUICK_SEND_STEPS = {
   RECIPIENTS: 'recipients',
@@ -127,6 +140,9 @@ const QuickSend = () => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [templateContent, setTemplateContent] = useState({ subject: '', body: '' });
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
+  const [templateDetailError, setTemplateDetailError] = useState(false);
+  const activeTemplateSelectionIdRef = useRef(null);
 
   // Send state
   const [isSending, setIsSending] = useState(false);
@@ -237,30 +253,46 @@ const QuickSend = () => {
     return input.trim().length > 0;
   };
 
-  // Select template — when the user picks a template card we only have the
-  // lightweight list payload (id/name/subject, no body). Fetch the full
-  // template via getById so subject + bodyHtml/bodyText are populated before
-  // the preview / send steps run. Without this, both `templateContent.body`
-  // and `selectedTemplate.bodyHtml` stay empty and the email goes out blank.
+  // Select template
   const handleSelectTemplate = async (template) => {
-    const hasFullBody = typeof template?.bodyHtml === 'string'
-      || typeof template?.body_text === 'string'
-      || typeof template?.bodyText === 'string';
-    if (!hasFullBody && template?.id) {
-      try {
-        const res = await emailTemplateApiService.getTemplateById(template.id);
-        const full = res?.data?.data;
-        if (full) {
-          setSelectedTemplate(full);
-          applyTemplateBody(full);
-          return;
+    if (!template?.id) return;
+    const templateId = template.id;
+    activeTemplateSelectionIdRef.current = templateId;
+    setSelectedTemplate(template);
+    setTemplateDetailError(false);
+    setIsLoadingTemplateDetail(true);
+
+    try {
+      let fullTemplate = template;
+      if (selectedChannel === CHANNEL_TYPES.EMAIL) {
+        const res = await emailTemplateApiService.getTemplateById(templateId);
+        if (activeTemplateSelectionIdRef.current !== templateId) return;
+        const data = res?.data?.data || res?.data;
+        if (data) {
+          fullTemplate = data;
         }
-      } catch (err) {
-        console.error('Failed to load template body:', err);
+        setSelectedTemplate(fullTemplate);
+        applyTemplateBody(fullTemplate);
+      } else {
+        const res = await zaloTemplateApiService.getTemplateById(templateId);
+        if (activeTemplateSelectionIdRef.current !== templateId) return;
+        const data = res?.data?.data || res?.data;
+        if (data) {
+          fullTemplate = data;
+        }
+        setSelectedTemplate(fullTemplate);
+        applyTemplateBody(fullTemplate);
+      }
+    } catch (err) {
+      if (activeTemplateSelectionIdRef.current !== templateId) return;
+      console.error('Failed to fetch template detail:', err);
+      setTemplateDetailError(true);
+      toast.error(t('quickSend.templateLoadDetailFailed'));
+    } finally {
+      if (activeTemplateSelectionIdRef.current === templateId) {
+        setIsLoadingTemplateDetail(false);
       }
     }
-    setSelectedTemplate(template);
-    applyTemplateBody(template);
   };
 
   const applyTemplateBody = (template) => {
@@ -294,6 +326,14 @@ const QuickSend = () => {
 
   // Test send to a single address
   const handleTestSend = async () => {
+    if (isLoadingTemplateDetail) {
+      toast.error(t('quickSend.loadingTemplateDetail'));
+      return;
+    }
+    if (templateDetailError) {
+      toast.error(t('quickSend.templateLoadDetailFailed'));
+      return;
+    }
     const cleanRecipient = testRecipient.trim();
     if (!cleanRecipient) {
       toast.error(
@@ -310,6 +350,7 @@ const QuickSend = () => {
         ? selectedEmailAccount?.id
         : selectedZaloAccount?.id;
 
+      const attachments = Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : [];
       if (selectedChannel === CHANNEL_TYPES.EMAIL) {
         const { html, text } = resolveEmailBody();
         const res = await campaignApiService.testSendQuickCampaign({
@@ -319,6 +360,7 @@ const QuickSend = () => {
           message: text,
           htmlContent: html,
           accountId,
+          attachments,
         });
         toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
       } else {
@@ -328,6 +370,7 @@ const QuickSend = () => {
           subject: templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW',
           message: resolveZaloBody(),
           accountId,
+          attachments,
         });
         toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
       }
@@ -344,6 +387,7 @@ const QuickSend = () => {
   // `recipients` list of previously-failed recipients).
   const runSendLoop = useCallback(async (recipients) => {
     const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
+    const attachments = Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : [];
     let successCount = 0;
     let failCount = 0;
     const failureSamples = new Map();
@@ -361,6 +405,7 @@ const QuickSend = () => {
             subject,
             content: text,
             htmlContent: html,
+            attachments,
           });
           successCount++;
         } catch (err) {
@@ -388,6 +433,7 @@ const QuickSend = () => {
             accountId: selectedZaloAccount.id,
             phone: recipient.phone,
             message,
+            attachments,
           });
           successCount++;
         } catch (err) {
@@ -440,6 +486,14 @@ const QuickSend = () => {
     }
     if (!selectedTemplate && !templateContent.body) {
       toast.error(t('quickSend.noTemplate'));
+      return;
+    }
+    if (isLoadingTemplateDetail) {
+      toast.error(t('quickSend.loadingTemplateDetail'));
+      return;
+    }
+    if (templateDetailError) {
+      toast.error(t('quickSend.templateLoadDetailFailed'));
       return;
     }
 
@@ -817,8 +871,33 @@ const QuickSend = () => {
 
               {selectedTemplate && (
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-700 mb-2">{t('quickSend.selectedTemplate')}</p>
-                  <p className="text-gray-900">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700">{t('quickSend.selectedTemplate')}</p>
+                    {isLoadingTemplateDetail && (
+                      <span className="text-xs text-orange-600 flex items-center gap-1.5 font-medium">
+                        <span className="w-3.5 h-3.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                        {t('quickSend.loadingTemplateDetail')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                  {selectedTemplate.attachments && selectedTemplate.attachments.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+                        <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
+                        {t('quickSend.attachments')} ({selectedTemplate.attachments.length})
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTemplate.attachments.map((att, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded border border-gray-200 text-xs text-gray-700">
+                            <HiOutlinePaperClip className="w-3 h-3 text-gray-400" />
+                            <span className="truncate max-w-[200px]">{att.originalName || att.name || att.filename || att.key}</span>
+                            {att.size ? <span className="text-gray-400">({formatFileSize(att.size)})</span> : null}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -907,7 +986,24 @@ const QuickSend = () => {
               {selectedTemplate && (
                 <div className="p-4 bg-gray-50 rounded-lg mb-4">
                   <p className="text-sm font-medium text-gray-700">{t('quickSend.template')}</p>
-                  <p className="text-gray-900 mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                  <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                  {selectedTemplate.attachments && selectedTemplate.attachments.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+                        <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
+                        {t('quickSend.attachments')} ({selectedTemplate.attachments.length})
+                      </p>
+                      <div className="space-y-1.5">
+                        {selectedTemplate.attachments.map((att, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs text-gray-700 bg-white px-3 py-1.5 rounded border border-gray-200">
+                            <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="font-medium truncate">{att.originalName || att.name || att.filename || att.key}</span>
+                            {att.size ? <span className="text-gray-400 shrink-0">({formatFileSize(att.size)})</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

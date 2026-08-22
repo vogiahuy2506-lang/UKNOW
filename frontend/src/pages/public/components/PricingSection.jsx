@@ -67,6 +67,7 @@ const CARD_STYLES = [
  * - embedded (boolean): ẩn phần hero (badge + heading + subtitle) để nhúng vào trang có hero riêng.
  * - compact  (boolean): thu nhỏ padding/spacing để fit trong 1 viewport.
  */
+// ĐÃ kèm sẵn 'đ' — đừng nối thêm <span>đ</span> ở JSX, sẽ ra "299.000đđ".
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + 'đ';
 
 const calcSavings = (monthly, yearly) => {
@@ -660,7 +661,6 @@ const isEmployee = activeContext?.type === 'employee';
                                 <span className={`text-3xl font-black ${style.price}`}>
                                   {fmtVnd(myCustomPlan.priceYearly)}
                                 </span>
-                                <span className={`text-base ${style.unit}`}>đ</span>
                               </div>
                               <div className={`text-xs ${style.unit}`}>{t('pricing.perYear')}</div>
                               <div className="flex items-center gap-1.5 mt-1">
@@ -675,7 +675,6 @@ const isEmployee = activeContext?.type === 'employee';
                                 <span className={`text-3xl font-black ${style.price}`}>
                                   {fmtVnd(activePlanPrice || myCustomPlan?.price || 0)}
                                 </span>
-                                <span className={`text-base ${style.unit}`}>đ</span>
                                 <span className={`text-xs ml-1 ${style.unit}`}>{t('pricing.perMonth')}</span>
                               </div>
                             </div>
@@ -699,7 +698,6 @@ const isEmployee = activeContext?.type === 'employee';
                         </div>
                         <div className="flex items-baseline gap-0.5">
                           <span className={`text-3xl font-black ${style.price}`}>{fmtVnd(promotedPrice)}</span>
-                          <span className={`text-base ${style.unit}`}>đ</span>
                         </div>
                         <div className={`text-xs ${style.unit}`}>
                           {billingPeriod === 'yearly' ? t('pricing.perYear') : t('pricing.perMonth')}
@@ -709,7 +707,6 @@ const isEmployee = activeContext?.type === 'employee';
                       <div>
                         <div className="flex items-baseline gap-0.5">
                           <span className={`text-3xl font-black ${style.price}`}>{fmtVnd(plan.price_yearly)}</span>
-                          <span className={`text-base ${style.unit}`}>đ</span>
                         </div>
                         <div className={`text-xs ${style.unit}`}>{t('pricing.perYear')}</div>
                         <div className="flex items-center gap-1.5 mt-1">
@@ -726,7 +723,6 @@ const isEmployee = activeContext?.type === 'employee';
                     ) : (
                       <div className="flex items-baseline gap-0.5">
                         <span className={`text-3xl font-black ${style.price}`}>{fmtVnd(plan.price)}</span>
-                        <span className={`text-base ${style.unit}`}>đ</span>
                         <span className={`text-xs ml-1 ${style.unit}`}>{t('pricing.perMonth')}</span>
                       </div>
                     )}
