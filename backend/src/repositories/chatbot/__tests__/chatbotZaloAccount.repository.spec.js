@@ -84,13 +84,16 @@ describe('chatbotZaloAccount.repository.setEnabled (per-chatbot)', () => {
     // custom_chatbots.id_sub_assistant into chatbot_zalo_account_settings.
     // That indirection was removed; setEnabled() should now stay focused on
     // toggling the is_enabled flag with no sub_assistant side effect.
+    // 1st query: assertOwnedConfiguration (added upstream)
+    query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+    // 2nd query: INSERT ... RETURNING *
     query.mockResolvedValueOnce({
       rows: [{ id_user: 1, id_zalo_setting: 10, id_chatbot: 5, is_enabled: true, id_sub_assistant: null }],
     });
 
     await repository.setEnabled(1, 10, 5, true);
 
-    const [upsertSql, upsertParams] = query.mock.calls[0];
+    const [upsertSql, upsertParams] = query.mock.calls[1];
     expect(String(upsertSql)).toMatch(/INSERT INTO chatbot_zalo_account_settings/i);
     expect(upsertParams).toEqual([1, 10, 5, true]);
     expect(String(upsertSql)).not.toMatch(/id_sub_assistant\s*=\s*EXCLUDED\.id_sub_assistant/i);

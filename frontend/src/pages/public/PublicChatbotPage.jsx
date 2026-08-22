@@ -13,7 +13,7 @@ const ACCEPTED = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACH = 3;
 
 function FormattedMessage({ text, textColor }) {
-  // Replace the previous dangerouslySetInnerHTML inline regex with the shared
+  // Replace the previous inline regex with the shared
   // helper so we get the same "Label: url" / bare-url handling as the Studio
   // preview. (Bug 4 — duplicate / unclickable links.)
   const segments = formatMessageSegments(text);
