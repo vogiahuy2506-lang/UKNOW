@@ -1,6 +1,20 @@
 import db from '../../config/database.js';
 
 class ChatbotRepository {
+  async assertOwnedSubAssistant(userId, subAssistantId) {
+    if (!subAssistantId) return;
+    const { rows } = await db.query(
+      `SELECT 1 FROM sub_assistants
+       WHERE id = $1 AND id_user = $2 AND is_active = true`,
+      [subAssistantId, userId]
+    );
+    if (!rows[0]) {
+      const error = new Error('Sub-assistant not found in workspace');
+      error.status = 404;
+      throw error;
+    }
+  }
+
   // ── Chatbot Settings ────────────────────────────────────────────
 
   async getSettings(userId, channel) {
@@ -15,6 +29,7 @@ class ChatbotRepository {
   }
 
   async upsertSettings(userId, channel, data) {
+    await this.assertOwnedSubAssistant(userId, data.id_sub_assistant);
     const { rows } = await db.query(
       `INSERT INTO chatbot_settings
          (id_user, channel, id_sub_assistant, is_enabled, welcome_message,
@@ -159,6 +174,7 @@ class ChatbotRepository {
     allowed_domains, settings, logo_url, primary_color, background_color, text_color, 
     accent_color, suggested_questions, border_radius, show_avatar, chat_height 
   }) {
+    await this.assertOwnedSubAssistant(userId, id_sub_assistant);
     const { rows } = await db.query(
       `INSERT INTO web_widget_configs
          (id_user, id_sub_assistant, widget_key, display_name, theme_color, position, 
@@ -535,7 +551,7 @@ class ChatbotRepository {
     return rows[0];
   }
 
-  async findChatbotById(chatbotId) {
+  async findChatbotById(chatbotId, userId = null) {
     const { rows } = await db.query(
       `SELECT id, id_user, name, description, system_instruction, greeting_msg,
               avatar_url, is_active, theme_color, position, welcome_message,
@@ -544,8 +560,9 @@ class ChatbotRepository {
               suggested_questions, widget_key, allow_attachments,
               created_at, updated_at
        FROM custom_chatbots
-       WHERE id = $1 AND is_active = true`,
-      [chatbotId]
+       WHERE id = $1 AND is_active = true
+         AND ($2::bigint IS NULL OR id_user = $2::bigint)`,
+      [chatbotId, userId ?? null]
     );
     return rows[0] || null;
   }

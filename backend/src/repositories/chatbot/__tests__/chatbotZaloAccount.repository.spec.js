@@ -14,6 +14,9 @@ describe('chatbotZaloAccount.repository.setEnabled (per-chatbot)', () => {
   });
 
   it('uses ON CONFLICT (id_user, id_zalo_setting, id_chatbot) so it scopes the toggle to ONE chatbot', async () => {
+    // 1st query: assertOwnedConfiguration
+    query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+    // 2nd query: INSERT ... RETURNING *
     query.mockResolvedValueOnce({
       rows: [{
         id: 100,
@@ -34,7 +37,7 @@ describe('chatbotZaloAccount.repository.setEnabled (per-chatbot)', () => {
       is_enabled: true,
     });
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[1];
     // Regression guard: the old UNIQUE used only (id_user, id_zalo_setting). The fix
     // adds id_chatbot so toggling chatbot A never bleeds into chatbot B.
     expect(String(sql)).toMatch(/ON CONFLICT\s*\(id_user,\s*id_zalo_setting,\s*id_chatbot\)/i);
@@ -44,28 +47,31 @@ describe('chatbotZaloAccount.repository.setEnabled (per-chatbot)', () => {
   });
 
   it('accepts null id_chatbot for the default unlinked row', async () => {
+    query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
     query.mockResolvedValueOnce({
       rows: [{ id_user: 1, id_zalo_setting: 10, id_chatbot: null, is_enabled: true }],
     });
 
     await repository.setEnabled(1, 10, null, true);
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[1];
     expect(String(sql)).toMatch(/INSERT INTO chatbot_zalo_account_settings/i);
     expect(String(sql)).not.toMatch(/UPDATE\s+chatbot_zalo_account_settings/i);
     expect(params).toEqual([1, 10, null, true]);
   });
 
   it('toggling chatbot A never touches chatbot B (different id_chatbot params)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
     query.mockResolvedValueOnce({ rows: [{ id_user: 1, id_zalo_setting: 10, id_chatbot: 5, is_enabled: true }] });
     await repository.setEnabled(1, 10, 5, true);
 
+    query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
     query.mockResolvedValueOnce({ rows: [{ id_user: 1, id_zalo_setting: 10, id_chatbot: 6, is_enabled: false }] });
     await repository.setEnabled(1, 10, 6, false);
 
     // Two distinct calls, two distinct (id_user, zalo, id_chatbot) tuples.
-    const callA = query.mock.calls[0];
-    const callB = query.mock.calls[1];
+    const callA = query.mock.calls[1];
+    const callB = query.mock.calls[3];
     expect(callA[1]).toEqual([1, 10, 5, true]);
     expect(callB[1]).toEqual([1, 10, 6, false]);
     // Both must use the per-chatbot UNIQUE — never the old (user, zalo) one.
