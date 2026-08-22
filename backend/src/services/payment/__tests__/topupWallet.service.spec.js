@@ -67,6 +67,17 @@ describe('topupWallet.service', () => {
         if (String(sql).includes('monthly_zalo_limit')) {
           return { rows: [{ monthly_zalo_limit: 10 }] };
         }
+        if (String(sql).includes('effective_plan_id') || String(sql).includes('active_plan_id')) {
+          return {
+            rows: [{
+              active_plan_id: 'pro',
+              effective_plan_id: 'pro',
+              plan_activated_at: new Date('2026-01-01T00:00:00Z'),
+              subscription_expires_at: new Date('2099-01-01T00:00:00Z'),
+              duration_days: 30,
+            }],
+          };
+        }
         if (String(sql).includes('COUNT(*)')) {
           return { rows: [{ total: 11 }] };
         }

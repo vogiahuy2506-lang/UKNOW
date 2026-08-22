@@ -14,6 +14,8 @@ import {
   HiOutlineDuplicate,
   HiOutlineMail,
   HiOutlineChat,
+  HiOutlineCheckCircle,
+  HiOutlineXCircle,
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
@@ -36,6 +38,7 @@ const Campaigns = () => {
   const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
   const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
+  const isOwner = !user?.activeContext || user.activeContext.type === 'self';
   const navigate = useNavigate();
   const location = useLocation();
   const [campaigns, setCampaigns] = useState([]);
@@ -56,6 +59,10 @@ const Campaigns = () => {
   const [showShareModal, setShowShareModal] = useState({ show: false, campaign: null });
   const [isSharing, setIsSharing] = useState(false);
   const [shareForm, setShareForm] = useState({ email: '', shareType: 'view', canRun: false });
+  const [approveModal, setApproveModal] = useState({ show: false, campaign: null });
+  const [isApproving, setIsApproving] = useState(false);
+  const [rejectModal, setRejectModal] = useState({ show: false, campaign: null, reason: '' });
+  const [isRejecting, setIsRejecting] = useState(false);
   const [createCampaignForm, setCreateCampaignForm] = useState({
     campaignName: '',
     campaignType: 'email',
@@ -227,6 +234,38 @@ const Campaigns = () => {
     }
   };
 
+  const handleApprove = async () => {
+    if (!approveModal.campaign) return;
+    setIsApproving(true);
+    try {
+      await campaignApiService.approveCampaign(approveModal.campaign.id);
+      toast.success(t('campaigns.approveSuccess'));
+      setApproveModal({ show: false, campaign: null });
+      fetchCampaigns();
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('campaigns.approveFailed'));
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectModal.campaign) return;
+    setIsRejecting(true);
+    try {
+      await campaignApiService.rejectCampaign(rejectModal.campaign.id, {
+        reason: rejectModal.reason?.trim() || undefined,
+      });
+      toast.success(t('campaigns.rejectSuccess'));
+      setRejectModal({ show: false, campaign: null, reason: '' });
+      fetchCampaigns();
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('campaigns.rejectFailed'));
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
   const openCreateModal = () => {
     setCreateCampaignForm({
       campaignName: '',
@@ -367,6 +406,7 @@ const Campaigns = () => {
             className="input w-auto"
           >
             <option value="">{t('campaigns.allStatuses')}</option>
+            <option value="pending_owner_approval">{t('campaigns.pendingOwnerApproval')}</option>
             <option value="draft">{t('campaigns.draft')}</option>
             <option value="active">{t('campaigns.active')}</option>
             <option value="paused">{t('campaigns.paused')}</option>
@@ -459,6 +499,8 @@ const Campaigns = () => {
                             ? 'badge-gray'
                             : campaign.status === 'paused'
                             ? 'badge-warning'
+                            : campaign.status === 'pending_owner_approval'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
                             : 'badge-info'
                         }`}
                       >
@@ -468,6 +510,8 @@ const Campaigns = () => {
                           ? t('campaigns.draft')
                           : campaign.status === 'paused'
                           ? t('campaigns.paused')
+                          : campaign.status === 'pending_owner_approval'
+                          ? t('campaigns.pendingOwnerApproval')
                           : campaign.status}
                       </span>
                     </td>
@@ -503,104 +547,150 @@ const Campaigns = () => {
                     </td>
                     <td className="text-center">{campaign.completedCount ?? 0}</td>
                     <td>
-                      <div className="relative inline-block">
-                        <button
-                          ref={(el) => { menuButtonRefs.current[campaign.id] = el; }}
-                          onClick={(e) => {
-                            const id = campaign.id;
-                            if (activeMenu === id) {
-                              setActiveMenu(null);
-                              return;
-                            }
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setMenuPosition({
-                              top: rect.bottom + 4,
-                              left: Math.min(rect.right - 192, window.innerWidth - 208),
-                            });
-                            setActiveMenu(id);
-                          }}
-                          className="p-1 rounded hover:bg-gray-100 transition-colors"
-                        >
-                          <HiOutlineDotsVertical className="w-5 h-5 text-gray-400" />
-                        </button>
-
-                        {activeMenu === campaign.id && createPortal(
-                          <>
-                            <div
-                              className="fixed inset-0 z-[99]"
-                              aria-hidden
-                              onClick={() => setActiveMenu(null)}
-                            />
-                            <div
-                              className="fixed w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[100]"
-                              style={{ top: menuPosition.top, left: menuPosition.left }}
-                              onClick={(e) => e.stopPropagation()}
+                      <div className="flex items-center justify-end">
+                        {campaign.status === 'pending_owner_approval' && isOwner && (
+                          <div className="flex items-center gap-1.5 mr-2">
+                            <button
+                              type="button"
+                              onClick={() => setApproveModal({ show: true, campaign })}
+                              className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                              title={t('campaigns.approve')}
                             >
-                              <button
-                                onClick={() => navigate(`/app/campaigns/${campaign.id}/builder`)}
-                                className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              {t('campaigns.approve')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRejectModal({ show: true, campaign, reason: '' })}
+                              className="px-2.5 py-1 text-xs font-semibold rounded bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
+                              title={t('campaigns.reject')}
+                            >
+                              {t('campaigns.reject')}
+                            </button>
+                          </div>
+                        )}
+                        <div className="relative inline-block">
+                          <button
+                            ref={(el) => { menuButtonRefs.current[campaign.id] = el; }}
+                            onClick={(e) => {
+                              const id = campaign.id;
+                              if (activeMenu === id) {
+                                setActiveMenu(null);
+                                return;
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setMenuPosition({
+                                top: rect.bottom + 4,
+                                left: Math.min(rect.right - 192, window.innerWidth - 208),
+                              });
+                              setActiveMenu(id);
+                            }}
+                            className="p-1 rounded hover:bg-gray-100 transition-colors"
+                          >
+                            <HiOutlineDotsVertical className="w-5 h-5 text-gray-400" />
+                          </button>
+
+                          {activeMenu === campaign.id && createPortal(
+                            <>
+                              <div
+                                className="fixed inset-0 z-[99]"
+                                aria-hidden
+                                onClick={() => setActiveMenu(null)}
+                              />
+                              <div
+                                className="fixed w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[100]"
+                                style={{ top: menuPosition.top, left: menuPosition.left }}
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <HiOutlinePencil className="w-4 h-4 mr-3" />
-                                {t('common.edit')}
-                              </button>
-                              {campaign.status === 'draft' && (
+                                {campaign.status === 'pending_owner_approval' && isOwner && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setActiveMenu(null);
+                                        setApproveModal({ show: true, campaign });
+                                      }}
+                                      className="w-full flex items-center px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50"
+                                    >
+                                      <HiOutlineCheckCircle className="w-4 h-4 mr-3" />
+                                      {t('campaigns.approve')}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setActiveMenu(null);
+                                        setRejectModal({ show: true, campaign, reason: '' });
+                                      }}
+                                      className="w-full flex items-center px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                                    >
+                                      <HiOutlineXCircle className="w-4 h-4 mr-3" />
+                                      {t('campaigns.reject')}
+                                    </button>
+                                  </>
+                                )}
                                 <button
-                                  onClick={() => handlePublish(campaign.id)}
-                                  className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
-                                >
-                                  <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                  {t('campaigns.activate')}
-                                </button>
-                              )}
-                              {campaign.status === 'active' && (
-                                <button
-                                  onClick={() => handlePause(campaign.id)}
-                                  className="w-full flex items-center px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-50"
-                                >
-                                  <HiOutlinePause className="w-4 h-4 mr-3" />
-                                  {t('campaigns.pause')}
-                                </button>
-                              )}
-                              {campaign.status === 'paused' && (
-                                <button
-                                  onClick={() => handlePublish(campaign.id)}
-                                  className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
-                                >
-                                  <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                  {t('campaigns.activate')}
-                                </button>
-                              )}
-                              {/* Share - only for self-created campaigns */}
-                              {campaign.origin === 'self_created' && (
-                                <button
-                                  onClick={() => openShareModal(campaign)}
-                                  className="w-full flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
-                                >
-                                  <HiOutlineMail className="w-4 h-4 mr-3" />
-                                  {t('campaigns.share') || 'Chia sẻ'}
-                                </button>
-                              )}
-                              {/* Duplicate - only for self-created campaigns (not marketplace, not shared) */}
-                              {originTab !== 'shared_with_me' && (!campaign.origin || campaign.origin === 'self_created') && (
-                                <button
-                                  onClick={() => openDuplicateModal(campaign)}
+                                  onClick={() => navigate(`/app/campaigns/${campaign.id}/builder`)}
                                   className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                 >
-                                  <HiOutlineDuplicate className="w-4 h-4 mr-3" />
-                                  {t('campaigns.duplicate')}
+                                  <HiOutlinePencil className="w-4 h-4 mr-3" />
+                                  {t('common.edit')}
                                 </button>
-                              )}
-                              <button
-                                onClick={() => handleDelete(campaign.id)}
-                                className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                              >
-                                <HiOutlineTrash className="w-4 h-4 mr-3" />
-                                {t('common.delete')}
-                              </button>
-                            </div>
-                          </>,
-                          document.body
-                        )}
+                                {campaign.status === 'draft' && (
+                                  <button
+                                    onClick={() => handlePublish(campaign.id)}
+                                    className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
+                                  >
+                                    <HiOutlinePlay className="w-4 h-4 mr-3" />
+                                    {t('campaigns.activate')}
+                                  </button>
+                                )}
+                                {campaign.status === 'active' && (
+                                  <button
+                                    onClick={() => handlePause(campaign.id)}
+                                    className="w-full flex items-center px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-50"
+                                  >
+                                    <HiOutlinePause className="w-4 h-4 mr-3" />
+                                    {t('campaigns.pause')}
+                                  </button>
+                                )}
+                                {campaign.status === 'paused' && (
+                                  <button
+                                    onClick={() => handlePublish(campaign.id)}
+                                    className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
+                                  >
+                                    <HiOutlinePlay className="w-4 h-4 mr-3" />
+                                    {t('campaigns.activate')}
+                                  </button>
+                                )}
+                                {/* Share - only for self-created campaigns */}
+                                {campaign.origin === 'self_created' && (
+                                  <button
+                                    onClick={() => openShareModal(campaign)}
+                                    className="w-full flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                                  >
+                                    <HiOutlineMail className="w-4 h-4 mr-3" />
+                                    {t('campaigns.share') || 'Chia sẻ'}
+                                  </button>
+                                )}
+                                {/* Duplicate - only for self-created campaigns (not marketplace, not shared) */}
+                                {originTab !== 'shared_with_me' && (!campaign.origin || campaign.origin === 'self_created') && (
+                                  <button
+                                    onClick={() => openDuplicateModal(campaign)}
+                                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                  >
+                                    <HiOutlineDuplicate className="w-4 h-4 mr-3" />
+                                    {t('campaigns.duplicate')}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDelete(campaign.id)}
+                                  className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                >
+                                  <HiOutlineTrash className="w-4 h-4 mr-3" />
+                                  {t('common.delete')}
+                                </button>
+                              </div>
+                            </>,
+                            document.body
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -855,6 +945,110 @@ const Campaigns = () => {
                 ) : (
                   t('campaigns.share')
                 )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal Duyệt chiến dịch */}
+      {approveModal.show && approveModal.campaign && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => !isApproving && setApproveModal({ show: false, campaign: null })}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <HiOutlineCheckCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {t('campaigns.approveConfirmTitle')}
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600">
+              {t('campaigns.approveConfirmMessage', {
+                name: approveModal.campaign.campaignName,
+                count: (approveModal.campaign.totalCustomers ?? 0).toLocaleString('vi-VN'),
+              })}
+            </p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+              ⚠️ Số người nhận: <strong>{(approveModal.campaign.totalCustomers ?? 0).toLocaleString('vi-VN')}</strong>. Khi duyệt, chiến dịch sẽ bắt đầu chạy và gửi tin ngay lập tức.
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setApproveModal({ show: false, campaign: null })}
+                disabled={isApproving}
+                className="btn btn-secondary"
+              >
+                {t('campaigns.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={isApproving}
+                className="btn btn-primary bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600"
+              >
+                {isApproving ? t('common.processing') || 'Đang xử lý...' : t('campaigns.confirmApproveAndSend')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal Từ chối chiến dịch */}
+      {rejectModal.show && rejectModal.campaign && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => !isRejecting && setRejectModal({ show: false, campaign: null, reason: '' })}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <HiOutlineXCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {t('campaigns.rejectConfirmTitle')}
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600">
+              {t('campaigns.rejectConfirmMessage', {
+                name: rejectModal.campaign.campaignName,
+              })}
+            </p>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Lý do từ chối (tùy chọn)
+              </label>
+              <input
+                type="text"
+                value={rejectModal.reason}
+                onChange={(e) => setRejectModal((prev) => ({ ...prev, reason: e.target.value }))}
+                placeholder={t('campaigns.rejectReasonPlaceholder')}
+                className="input w-full text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRejectModal({ show: false, campaign: null, reason: '' })}
+                disabled={isRejecting}
+                className="btn btn-secondary"
+              >
+                {t('campaigns.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleReject}
+                disabled={isRejecting}
+                className="btn btn-primary bg-red-600 hover:bg-red-700 text-white border-red-600"
+              >
+                {isRejecting ? t('common.processing') || 'Đang xử lý...' : t('campaigns.confirmReject')}
               </button>
             </div>
           </div>

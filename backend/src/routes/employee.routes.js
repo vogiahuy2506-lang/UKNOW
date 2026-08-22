@@ -25,6 +25,10 @@ router.use(requireSelfContext);
 // Phải đứng trước /:id để không bị coi "permissions" là employee id.
 router.get('/permissions/catalog', employeeController.getPermissionCatalog);
 
+// GET & PATCH /api/employees/campaign-approval-threshold
+router.get('/campaign-approval-threshold', employeeController.getCampaignApprovalThreshold);
+router.patch('/campaign-approval-threshold', employeeController.updateCampaignApprovalThreshold);
+
 // GET /api/employees
 router.get('/', employeeController.getEmployees);
 

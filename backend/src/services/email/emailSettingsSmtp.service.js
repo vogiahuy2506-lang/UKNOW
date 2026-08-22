@@ -196,12 +196,14 @@ class EmailSettingsSmtpService {
           const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
           const { countEmailSentThisMonth } = await import('../../utils/userSendLimit.util.js');
           const cycle = await getBillingCycle(billingUserId, {}, client);
-          const usageCountAfterSend = await countEmailSentThisMonth(
-            billingUserId,
-            cycle?.hasPlan ? cycle.cycleStart : null,
-            cycle?.hasPlan ? cycle.cycleEnd : null,
-            client
-          );
+          const usageCountAfterSend = (cycle?.hasPlan && cycle.cycleStart && cycle.cycleEnd)
+            ? await countEmailSentThisMonth(
+                billingUserId,
+                cycle.cycleStart,
+                cycle.cycleEnd,
+                client
+              )
+            : 0;
           await maybeDebitWalletForSend(client, {
             billingUserId,
             itemKey: 'emails',

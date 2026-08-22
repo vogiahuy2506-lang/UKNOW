@@ -146,6 +146,44 @@ describe('Campaign Approval Threshold in campaign.controller.js', () => {
     expect(mockExecuteCampaign).not.toHaveBeenCalled();
   });
 
+  // Ràng buộc quan trọng nhất của tính năng: chủ workspace CHƯA bật ngưỡng thì mọi thứ
+  // phải chạy y hệt trước khi có tính năng. Hiện có nhân viên thật đang chạy chiến dịch —
+  // nếu ngưỡng rỗng bị hiểu thành "cần duyệt" thì chiến dịch của họ đứng im mà không ai biết.
+  // Hai ca dưới khoá cả hai cách "tắt": NULL (chưa từng đặt) và 0 (đặt rồi tắt đi).
+  it.each([
+    ['NULL — chủ chưa từng đặt ngưỡng', null],
+    ['0 — chủ đặt rồi tắt đi', 0],
+  ])('ngưỡng %s → nhân viên chạy campaign 150 người vẫn gửi luôn, KHÔNG chờ duyệt', async (_label, threshold) => {
+    const req = {
+      params: { id: '10' },
+      body: { source: 'campaign_run' },
+      user: {
+        id: 2,
+        role: 'user',
+        activeContext: { type: 'employee', ownerId: 1 },
+      },
+    };
+    const res = createRes();
+
+    // 1. SELECT employee_campaign_approval_threshold → tắt
+    mockDbQuery.mockResolvedValueOnce({
+      rows: [{ employee_campaign_approval_threshold: threshold }],
+    });
+    mockCreateCampaignRunRecord.mockResolvedValueOnce({ id: 77 });
+    mockExecuteCampaign.mockResolvedValueOnce({});
+
+    await campaignController.run(req, res);
+
+    // Ngưỡng tắt thì thậm chí KHÔNG được đếm người nhận — chỉ có đúng 1 truy vấn ngưỡng.
+    expect(mockDbQuery.mock.calls.filter((c) => /FROM campaign_customers/i.test(c[0]))).toHaveLength(0);
+    expect(mockExecuteCampaign).toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ requiresApproval: true }),
+      })
+    );
+  });
+
   it('nhân viên chạy campaign có 50 người nhận với threshold 100 → chạy bình thường', async () => {
     const req = {
       params: { id: '10' },

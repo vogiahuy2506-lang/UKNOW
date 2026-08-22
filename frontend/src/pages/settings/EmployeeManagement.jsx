@@ -148,6 +148,11 @@ const EmployeeManagement = () => {
   const [teamOverview, setTeamOverview] = useState([]);
   const [overviewLoading, setOverviewLoading] = useState(false);
 
+  // Approval threshold (workspace level)
+  const [approvalThreshold, setApprovalThreshold] = useState('');
+  const [thresholdLoading, setThresholdLoading] = useState(false);
+  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
+
   // Inline actions
   const [statusUpdatingId, setStatusUpdatingId]   = useState(null);
   const [resetConfirmEmp, setResetConfirmEmp]     = useState(null);
@@ -217,9 +222,44 @@ const EmployeeManagement = () => {
     }
   };
 
+  const fetchApprovalThreshold = async () => {
+    setThresholdLoading(true);
+    try {
+      const res = await userManagementApiService.getCampaignApprovalThreshold();
+      const val = res.data?.data?.threshold;
+      setApprovalThreshold(val != null ? String(val) : '');
+    } catch (err) {
+      console.error('Failed to fetch approval threshold:', err);
+    } finally {
+      setThresholdLoading(false);
+    }
+  };
+
+  const handleSaveThreshold = async (e) => {
+    e?.preventDefault?.();
+    try {
+      setIsSavingThreshold(true);
+      const trimmed = approvalThreshold.trim();
+      const val = trimmed === '' || trimmed === '0' ? null : Number(trimmed);
+      if (val !== null && (!Number.isInteger(val) || val < 0)) {
+        toast.error(t('employee.approvalThreshold.inputPlaceholder') || 'Vui lòng nhập số nguyên dương hợp lệ');
+        return;
+      }
+      const res = await userManagementApiService.updateCampaignApprovalThreshold(val);
+      const updatedVal = res.data?.data?.threshold;
+      setApprovalThreshold(updatedVal != null ? String(updatedVal) : '');
+      toast.success(t('employee.approvalThreshold.saveSuccess'));
+    } catch (err) {
+      toast.error(err.response?.data?.message || t('employee.approvalThreshold.saveFailed'));
+    } finally {
+      setIsSavingThreshold(false);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchTeamOverview();
+    fetchApprovalThreshold();
     getMyProfile().then((res) => {
       const d = res?.data;
       if (!d) return;
@@ -478,6 +518,46 @@ const EmployeeManagement = () => {
             </table>
           </div>
         )}
+      </div>
+
+      {/* ── Thiết lập duyệt chiến dịch lớn (Workspace Level) ── */}
+      <div className="card p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-gray-900">
+              {t('employee.approvalThreshold.title')}
+            </h2>
+            <p className="text-sm text-gray-500 max-w-2xl">
+              {t('employee.approvalThreshold.description')}
+            </p>
+          </div>
+          <form onSubmit={handleSaveThreshold} className="flex items-center gap-3 shrink-0">
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={approvalThreshold}
+                onChange={(e) => setApprovalThreshold(e.target.value)}
+                placeholder={t('employee.approvalThreshold.inputPlaceholder')}
+                disabled={thresholdLoading || isSavingThreshold}
+                className="input w-40 text-sm font-medium"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={thresholdLoading || isSavingThreshold}
+              className="btn btn-primary"
+            >
+              {isSavingThreshold ? t('employee.saving') : t('employee.save')}
+            </button>
+          </form>
+        </div>
+        <div className="mt-3 text-xs text-gray-400">
+          {approvalThreshold && Number(approvalThreshold) > 0
+            ? t('employee.approvalThreshold.enabledTip', { count: Number(approvalThreshold).toLocaleString('vi-VN') })
+            : t('employee.approvalThreshold.disabledTip')}
+        </div>
       </div>
 
       {/* ── Hoạt động team (tháng này) ───────────────────────────────────────── */}

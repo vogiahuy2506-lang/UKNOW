@@ -17,6 +17,8 @@ import {
   updateEmployeeSendLimits,
   removeEmployee,
   resetEmployeePassword as resetPasswordInDb,
+  findCampaignApprovalThreshold,
+  updateCampaignApprovalThreshold as updateCampaignApprovalThresholdInDb,
 } from '../../repositories/user/employee.repository.js';
 import verificationService from '../verification.service.js';
 import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
@@ -254,4 +256,22 @@ export async function getMyContribution({ userId, activeContext }) {
 
   const rows = await findTeamOverview(ownerId, { employeeId });
   return rows[0] || null;
+}
+
+export async function getCampaignApprovalThreshold(ownerId) {
+  return findCampaignApprovalThreshold(ownerId);
+}
+
+export async function setCampaignApprovalThreshold(ownerId, threshold) {
+  let normalizedThreshold = null;
+  if (threshold !== null && threshold !== undefined && threshold !== '' && threshold !== 0 && threshold !== '0') {
+    const num = Number(threshold);
+    if (!Number.isInteger(num) || num < 0) {
+      throw { status: 400, message: 'Ngưỡng số lượng người nhận phải là số nguyên dương hoặc để trống / 0 để tắt' };
+    }
+    normalizedThreshold = num === 0 ? null : num;
+  }
+  const before = await findCampaignApprovalThreshold(ownerId);
+  const after = await updateCampaignApprovalThresholdInDb(ownerId, normalizedThreshold);
+  return { before, after };
 }

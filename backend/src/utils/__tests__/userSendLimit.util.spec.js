@@ -30,6 +30,8 @@ const {
   checkUserEmailSendLimit,
   checkUserZaloSendLimit,
   checkSendQuota,
+  countEmailSentThisMonth,
+  countZaloSentThisMonth,
   nextVnMidnight,
   nextVnMonthStart,
   _clearQuotaCache,
@@ -61,6 +63,12 @@ describe('userSendLimit.util', () => {
     mockGetBillingCycle.mockReset();
     mockGetSubscriptionStatus.mockResolvedValue(activeSubscription);
     mockResolveBillingUserId.mockImplementation(async (userId) => userId);
+    mockGetBillingCycle.mockResolvedValue({
+      hasPlan: true,
+      cycleStart: new Date('2025-12-31T17:00:00.000Z'),
+      cycleEnd: new Date('2026-01-31T17:00:00.000Z'),
+      billingUserId: 10,
+    });
     _clearQuotaCache();
   });
 
@@ -486,6 +494,32 @@ describe('userSendLimit.util', () => {
         expect(result.limitType).toBe('daily');
         expect(result.limit).toBe(200);
       });
+    });
+  });
+
+  describe('countEmailSentThisMonth & countZaloSentThisMonth', () => {
+    it('countEmailSentThisMonth ném lỗi khi thiếu cycleStart hoặc cycleEnd', async () => {
+      await expect(countEmailSentThisMonth(10, null, null)).rejects.toThrow(
+        /countEmailSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+      await expect(countEmailSentThisMonth(10, new Date(), null)).rejects.toThrow(
+        /countEmailSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+    });
+
+    it('countZaloSentThisMonth ném lỗi khi thiếu cycleStart hoặc cycleEnd', async () => {
+      await expect(countZaloSentThisMonth(10, null, null)).rejects.toThrow(
+        /countZaloSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+      await expect(countZaloSentThisMonth(10, null, new Date())).rejects.toThrow(
+        /countZaloSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+    });
+
+    it('gọi với cycleStart và cycleEnd hợp lệ → đếm qua SQL cycle', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 42 }] });
+      const count = await countEmailSentThisMonth(10, new Date('2026-01-01'), new Date('2026-02-01'));
+      expect(count).toBe(42);
     });
   });
 });

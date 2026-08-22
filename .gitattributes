@@ -3,6 +3,11 @@
 *.sh        text eol=lf
 .husky/*    text eol=lf
 
+# Explicit UTF-8 encoding to prevent CP437 mojibake
+*.js        text eol=lf working-tree-encoding=UTF-8
+*.jsx       text eol=lf working-tree-encoding=UTF-8
+*.sql       text eol=lf working-tree-encoding=UTF-8
+
 # Code files: dùng auto để git tự xử text/binary
 *           text=auto
 backend/src/services/campaign/campaignRun.service.js whitespace=cr-at-eol

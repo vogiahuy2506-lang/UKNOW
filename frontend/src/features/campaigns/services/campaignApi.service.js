@@ -41,6 +41,14 @@ export const campaignApiService = {
     return api.post(`/campaigns/${campaignId}/resume`);
   },
 
+  approveCampaign(campaignId) {
+    return api.post(`/campaigns/${campaignId}/approve`);
+  },
+
+  rejectCampaign(campaignId, payload = {}) {
+    return api.post(`/campaigns/${campaignId}/reject`, payload);
+  },
+
   duplicateCampaign(campaignId, payload) {
     return api.post(`/campaigns/${campaignId}/duplicate`, payload);
   },

@@ -302,3 +302,49 @@ export async function myContribution(req, res) {
     return handleServiceError(res, err);
   }
 }
+
+/**
+ * GET /api/employees/campaign-approval-threshold
+ * Lấy ngưỡng số người nhận cần duyệt chiến dịch của workspace.
+ */
+export async function getCampaignApprovalThreshold(req, res) {
+  try {
+    const ownerId = resolveOwnerId(req);
+    if (!ownerId) {
+      return res.status(400).json({ success: false, message: 'Thiếu ownerId' });
+    }
+    const threshold = await employeeService.getCampaignApprovalThreshold(ownerId);
+    return res.json({ success: true, data: { threshold } });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
+ * PATCH /api/employees/campaign-approval-threshold
+ * Cập nhật ngưỡng số người nhận cần duyệt chiến dịch của workspace.
+ */
+export async function updateCampaignApprovalThreshold(req, res) {
+  try {
+    const ownerId = resolveOwnerId(req);
+    if (!ownerId) {
+      return res.status(400).json({ success: false, message: 'Thiếu ownerId' });
+    }
+    const { threshold } = req.body;
+    const { before, after } = await employeeService.setCampaignApprovalThreshold(ownerId, threshold);
+    await logWorkspace(
+      getWorkspaceAuditContext(req),
+      AUDIT_ACTIONS.CAMPAIGN_APPROVAL_THRESHOLD_UPDATED,
+      AUDIT_ENTITY_TYPES.WORKSPACE,
+      ownerId,
+      { before, after }
+    );
+    return res.json({
+      success: true,
+      data: { threshold: after },
+      message: 'Cập nhật ngưỡng duyệt chiến dịch thành công',
+    });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}

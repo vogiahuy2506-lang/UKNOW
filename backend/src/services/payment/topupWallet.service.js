@@ -118,12 +118,14 @@ export async function debitZaloPersonalInboxIfNeeded(client, { billingUserId, me
   const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
   const { countZaloSentThisMonth } = await import('../../utils/userSendLimit.util.js');
   const cycle = await getBillingCycle(billingUserId, {}, client);
-  const usageCountAfterSend = await countZaloSentThisMonth(
-    billingUserId,
-    cycle?.hasPlan ? cycle.cycleStart : null,
-    cycle?.hasPlan ? cycle.cycleEnd : null,
-    client
-  );
+  const usageCountAfterSend = (cycle?.hasPlan && cycle.cycleStart && cycle.cycleEnd)
+    ? await countZaloSentThisMonth(
+        billingUserId,
+        cycle.cycleStart,
+        cycle.cycleEnd,
+        client
+      )
+    : 0;
 
   return maybeDebitWalletForSend(client, {
     billingUserId,

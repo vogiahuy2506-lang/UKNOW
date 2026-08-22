@@ -245,18 +245,18 @@ class UserController {
         console.error('[Profile] findProfileUsageCounts failed', { userId, message: err.message });
       }
 
-      let aiTokenUsage = { used: 0 };
-      try {
-        aiTokenUsage = await usageTrackingService.getResourceUsage(userId, 'ai_token');
-      } catch (err) {
-        console.error('[Profile] getResourceUsage(ai_token) failed', { userId, message: err.message });
-      }
-
       let aiCreditUsage = { used: 0 };
       try {
         aiCreditUsage = await usageTrackingService.getCreditUsageForCycle(userId, null, billingOptions);
       } catch (err) {
         console.error('[Profile] getCreditUsageForCycle failed', { userId, message: err.message });
+      }
+
+      let aiTokenUsage = { used: 0 };
+      try {
+        aiTokenUsage = await usageTrackingService.getResourceUsage(userId, 'ai_token', { cycle: aiCreditUsage?.cycle });
+      } catch (err) {
+        console.error('[Profile] getResourceUsage(ai_token) failed', { userId, message: err.message });
       }
 
       const activeBillingPeriod = await findActiveBillingPeriod(billingUserId, billingRow.email);

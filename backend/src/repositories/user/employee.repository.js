@@ -334,3 +334,27 @@ export async function resetEmployeePassword(employeeId, ownerId, passwordHash) {
   );
   return result.rows[0] || null;
 }
+
+export async function findCampaignApprovalThreshold(ownerId) {
+  const result = await db.query(
+    `SELECT employee_campaign_approval_threshold
+     FROM users
+     WHERE id = $1`,
+    [ownerId]
+  );
+  const val = result.rows[0]?.employee_campaign_approval_threshold;
+  return val != null ? Number(val) : null;
+}
+
+export async function updateCampaignApprovalThreshold(ownerId, threshold) {
+  const result = await db.query(
+    `UPDATE users
+     SET employee_campaign_approval_threshold = $1,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2
+     RETURNING employee_campaign_approval_threshold`,
+    [threshold, ownerId]
+  );
+  const val = result.rows[0]?.employee_campaign_approval_threshold;
+  return val != null ? Number(val) : null;
+}

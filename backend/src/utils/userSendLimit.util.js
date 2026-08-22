@@ -327,23 +327,7 @@ export async function countEmailSentThisMonth(billingUserId, cycleStart = null, 
   if (cycleStart && cycleEnd) {
     return countEmailSentInCycle(billingUserId, cycleStart, cycleEnd, queryable);
   }
-  return cached(`${billingUserId}:email_month`, async () => {
-    const { rows } = await queryable.query(
-      `SELECT (
-         (SELECT COUNT(*) FROM email_messages em
-          INNER JOIN campaigns c ON c.id = em.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
-            AND em.status IN ('sent', 'delivered', 'bounced')
-            AND em.sent_at >= DATE_TRUNC('month', NOW()))
-         + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
-            WHERE ul.id_user = $1
-              AND ul.resource_type = 'email_direct_send'
-              AND ul.created_at >= DATE_TRUNC('month', NOW()))
-       )::int AS total`,
-      [billingUserId]
-    );
-    return toCount(rows[0]?.total);
-  });
+  throw new Error(`countEmailSentThisMonth requires explicit cycleStart and cycleEnd for user ${billingUserId}`);
 }
 
 async function countZaloSentToday(billingUserId) {
@@ -402,28 +386,7 @@ export async function countZaloSentThisMonth(billingUserId, cycleStart = null, c
   if (cycleStart && cycleEnd) {
     return countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, queryable);
   }
-  return cached(`${billingUserId}:zalo_month`, async () => {
-    const { rows } = await queryable.query(
-      `SELECT (
-         (SELECT COUNT(*) FROM zalo_messages zm
-          JOIN campaigns c ON c.id = zm.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
-            AND zm.tracking_metadata->>'status' = 'sent'
-            AND zm.sent_at >= DATE_TRUNC('month', NOW()))
-       + (SELECT COUNT(*) FROM zalo_personal_messages zpm
-          WHERE ${ZPM_OWNER_PREDICATE}
-            AND zpm.role = 'agent'
-            AND zpm.metadata->>'source' = 'manual_inbox'
-            AND zpm.created_at >= DATE_TRUNC('month', NOW()))
-       + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
-          WHERE ul.id_user = $1
-            AND ul.resource_type = 'zalo_direct_send'
-            AND ul.created_at >= DATE_TRUNC('month', NOW()))
-       )::int AS total`,
-      [billingUserId]
-    );
-    return toCount(rows[0]?.total);
-  });
+  throw new Error(`countZaloSentThisMonth requires explicit cycleStart and cycleEnd for user ${billingUserId}`);
 }
 
 /**
@@ -774,9 +737,11 @@ export async function recordDirectSendUsage({
     const cycle = await getBillingCycle(billingUserId, {}, client);
     const cycleStart = cycle?.hasPlan ? cycle.cycleStart : null;
     const cycleEnd = cycle?.hasPlan ? cycle.cycleEnd : null;
-    const usageAfter = channel === 'email'
-      ? await countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd, client)
-      : await countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd, client);
+    const usageAfter = (cycleStart && cycleEnd)
+      ? (channel === 'email'
+          ? await countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd, client)
+          : await countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd, client))
+      : 0;
     const planLimit = toInt(channel === 'email' ? limits?.monthly_email_limit : limits?.monthly_zalo_limit);
     const usageBefore = Math.max(0, usageAfter - quantity);
     const coveredByPlan = planLimit === null ? quantity : Math.max(0, planLimit - usageBefore);
