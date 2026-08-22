@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /**
- * Vá danh sách đánh số bị cắt rời trong body_html của bài hướng dẫn ĐANG NẰM
- * TRONG DB, giữ nguyên ảnh admin đã chèn.
+ * Vá body_html của bài hướng dẫn ĐANG NẰM TRONG DB, giữ nguyên ảnh admin đã chèn.
  *
- * Dùng khi nào: bài hướng dẫn hiện số thứ tự 1 / 1 / 1 thay vì 1 / 2 / 3 vì mỗi
- * chú thích ảnh cắt <ol> làm đôi. Bộ chuyển Markdown→HTML đã được sửa, nhưng
- * HTML sinh ra trước đó thì đã nằm sẵn trong DB.
+ * Vá hai thứ, cả hai đều do bộ chuyển Markdown→HTML cũ sinh ra:
+ *   1. Danh sách đánh số bị cắt rời — bài hiện 1 / 1 / 1 thay vì 1 / 2 / 3 vì mỗi
+ *      chú thích ảnh cắt <ol> làm đôi.
+ *   2. Link nội bộ dạng slug trần (href="quick-send") — chỉ đúng khi đứng ở
+ *      /huong-dan/..., bấm từ ô Xem trước trong trang admin sẽ trỏ sang
+ *      /admin/help-articles/quick-send và báo lỗi id không hợp lệ.
+ *
+ * Bộ chuyển đã được sửa, nhưng HTML sinh ra trước đó thì đã nằm sẵn trong DB.
  *
  * Vì sao KHÔNG chạy seed cho xong: seed ghi đè cả body_md lẫn body_html của toàn
  * bộ 19 bài bằng bản trong repo → xoá sạch ảnh thật admin đã chèn. Script này
@@ -17,8 +21,9 @@
 import 'dotenv/config';
 import db from '../src/config/database.js';
 import {
-  repairSplitOrderedLists,
+  repairHelpArticleHtml,
   countOrderedLists,
+  countBareSlugLinks,
   stripTags,
 } from '../src/utils/helpArticleListRepair.util.js';
 
@@ -34,7 +39,7 @@ async function main() {
 
   const changed = [];
   for (const row of rows) {
-    const repaired = repairSplitOrderedLists(row.body_html);
+    const repaired = repairHelpArticleHtml(row.body_html);
     if (repaired === row.body_html) continue;
 
     // Chốt chặn: bản vá chỉ được phép di chuyển thẻ, tuyệt đối không đổi chữ.
@@ -52,9 +57,14 @@ async function main() {
 
   console.log(`Đã quét ${rows.length} bài, ${changed.length} bài cần vá:\n`);
   for (const { row, repaired } of changed) {
-    const before = countOrderedLists(row.body_html);
-    const after = countOrderedLists(repaired);
-    console.log(`  #${row.id} ${row.slug} (${row.locale}) — số khối <ol>: ${before} -> ${after}`);
+    const parts = [];
+    const olBefore = countOrderedLists(row.body_html);
+    const olAfter = countOrderedLists(repaired);
+    if (olBefore !== olAfter) parts.push(`khối <ol>: ${olBefore} -> ${olAfter}`);
+    const linkBefore = countBareSlugLinks(row.body_html);
+    const linkAfter = countBareSlugLinks(repaired);
+    if (linkBefore !== linkAfter) parts.push(`link slug trần: ${linkBefore} -> ${linkAfter}`);
+    console.log(`  #${row.id} ${row.slug} (${row.locale}) — ${parts.join(', ')}`);
   }
 
   if (!apply) {

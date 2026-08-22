@@ -46,12 +46,60 @@ export function repairSplitOrderedLists(html) {
 }
 
 /**
+ * Nở link nội bộ dạng slug trần thành đường dẫn tuyệt đối /huong-dan/<slug>.
+ *
+ * HTML cũ trong DB trỏ sang bài khác bằng slug trần (href="quick-send"). Dạng
+ * này chỉ đúng khi người đọc đang đứng ở /huong-dan/... — mở đúng nội dung đó
+ * trong ô Xem trước của trang admin (/admin/help-articles/<id>) thì trình duyệt
+ * giải ra /admin/help-articles/quick-send, tức trang sửa bài với id không phải
+ * số. Bộ chuyển Markdown→HTML đã sinh dạng tuyệt đối, hàm này vá nốt HTML đã lưu.
+ *
+ * Không đụng: đường dẫn tuyệt đối (/app/...), neo (#muc-2), link ngoài
+ * (http/https/mailto).
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+export function repairBareSlugLinks(html) {
+  if (typeof html !== 'string' || !html) return html;
+  return html.replace(
+    /(<a\b[^>]*\bhref=")([^"]+)(")/g,
+    (match, head, href, tail) => {
+      const isBareSlug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(href);
+      return isBareSlug ? `${head}/huong-dan/${href}${tail}` : match;
+    },
+  );
+}
+
+/**
+ * Chạy toàn bộ các bước vá cho body_html của một bài.
+ * @param {string} html
+ * @returns {string}
+ */
+export function repairHelpArticleHtml(html) {
+  return repairBareSlugLinks(repairSplitOrderedLists(html));
+}
+
+/**
  * Đếm số thẻ <ol> — dùng để báo cáo trước/sau khi vá.
  * @param {string} html
  * @returns {number}
  */
 export function countOrderedLists(html) {
   return (String(html || '').match(/<ol>/g) || []).length;
+}
+
+/**
+ * Đếm link còn ở dạng slug trần — dùng để báo cáo.
+ * @param {string} html
+ * @returns {number}
+ */
+export function countBareSlugLinks(html) {
+  const matches = String(html || '').match(/<a\b[^>]*\bhref="[^"]+"/g) || [];
+  return matches.filter((m) => {
+    const href = m.match(/href="([^"]+)"/)?.[1] || '';
+    return /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(href);
+  }).length;
 }
 
 /**

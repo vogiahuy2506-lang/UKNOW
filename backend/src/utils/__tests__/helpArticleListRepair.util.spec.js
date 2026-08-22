@@ -1,7 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   repairSplitOrderedLists,
+  repairBareSlugLinks,
+  repairHelpArticleHtml,
   countOrderedLists,
+  countBareSlugLinks,
   stripTags,
 } from '../helpArticleListRepair.util.js';
 
@@ -55,5 +58,51 @@ describe('helpArticleListRepair.repairSplitOrderedLists', () => {
     expect(repairSplitOrderedLists('')).toBe('');
     expect(repairSplitOrderedLists(null)).toBeNull();
     expect(repairSplitOrderedLists(undefined)).toBeUndefined();
+  });
+});
+
+describe('helpArticleListRepair.repairBareSlugLinks', () => {
+  it('nở slug trần thành /huong-dan/<slug>', () => {
+    expect(repairBareSlugLinks('<a href="quick-send">Gửi nhanh</a>'))
+      .toBe('<a href="/huong-dan/quick-send">Gửi nhanh</a>');
+  });
+
+  it('không đụng đường dẫn tuyệt đối, neo, hay link ngoài', () => {
+    const untouched = [
+      '<a href="/app/campaigns">Chiến dịch</a>',
+      '<a href="#muc-2">Mục 2</a>',
+      '<a href="https://a.com/x-y" target="_blank">Ngoài</a>',
+      '<a href="mailto:a@b.com">Thư</a>',
+      '<a href="/huong-dan/quick-send">Đã đúng sẵn</a>',
+    ];
+    for (const html of untouched) expect(repairBareSlugLinks(html)).toBe(html);
+  });
+
+  it('giữ nguyên các thuộc tính khác của thẻ <a>', () => {
+    expect(repairBareSlugLinks('<a href="doi-goi" rel="noopener">X</a>'))
+      .toBe('<a href="/huong-dan/doi-goi" rel="noopener">X</a>');
+  });
+
+  it('countBareSlugLinks đếm đúng và về 0 sau khi vá', () => {
+    const html = '<a href="a-b">1</a><a href="/app/x">2</a><a href="c">3</a>';
+    expect(countBareSlugLinks(html)).toBe(2);
+    expect(countBareSlugLinks(repairBareSlugLinks(html))).toBe(0);
+  });
+
+  it('an toàn với đầu vào rỗng / không phải chuỗi', () => {
+    expect(repairBareSlugLinks('')).toBe('');
+    expect(repairBareSlugLinks(null)).toBeNull();
+  });
+});
+
+describe('helpArticleListRepair.repairHelpArticleHtml', () => {
+  it('vá cả danh sách lẫn link trong một lượt, không đổi chữ', () => {
+    const html = '<ol><li>Xem <a href="quick-send">Gửi nhanh</a></li></ol>'
+      + '<p>[ẢNH: a]</p><ol><li>Bước hai</li></ol>';
+    const out = repairHelpArticleHtml(html);
+    expect(countOrderedLists(out)).toBe(1);
+    expect(countBareSlugLinks(out)).toBe(0);
+    expect(out).toContain('href="/huong-dan/quick-send"');
+    expect(stripTags(out)).toBe(stripTags(html));
   });
 });
