@@ -1,4 +1,4 @@
--- Migration 162: Kéo dài gói "Dùng thử" từ 10 ngày → 14 ngày cho user mới đăng ký.
+-- Migration 163: Kéo dài gói "Dùng thử" từ 10 ngày → 14 ngày cho user mới đăng ký.
 --
 -- Idempotent: chỉ UPDATE row có code='trial'. An toàn chạy nhiều lần.
 -- KHÔNG update subscription_expires_at của user đã được cấp trial trước thời điểm
