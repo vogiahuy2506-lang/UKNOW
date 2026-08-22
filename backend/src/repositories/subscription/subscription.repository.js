@@ -48,8 +48,8 @@ export async function findExpiredUsers() {
  * Hết hạn gói: set active_plan_id = NULL.
  * max_* = 0 (cấm) — không NULL (NULL từng bị hiểu là vô hạn ở resource/send limit).
  */
-export async function expireUserPlan(userId) {
-  await db.query(
+export async function expireUserPlan(userId, queryable = db) {
+  await queryable.query(
     `UPDATE users
      SET active_plan_id          = NULL,
          subscription_reminder_count = 0,

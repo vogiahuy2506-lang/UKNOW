@@ -72,8 +72,8 @@ git push --no-verify
 ## CI/CD pipeline
 
 ```
-Push branch ──► test-backend.yml ──► CI run: unit + integration
-Mở PR  ──────► test-backend.yml ──► CI run: unit + integration
+Push branch ──► test-backend.yml ──► CI run: unit + integration (4 shard song song)
+Mở PR  ──────► test-backend.yml ──► CI run: unit + integration (4 shard song song)
                                      │
                                      └► Merge bị block nếu fail (cần
                                         bật branch protection trên GitHub)
@@ -83,6 +83,15 @@ Push main ──► deploy-backend.yml ──► unit + integration  ──► B
                                                                 ▼
                                               SSH deploy VPS (chỉ khi tests xanh)
 ```
+
+Integration test chạy theo **matrix 4 shard song song** (mỗi shard = VM + Postgres
+service riêng), thay vì 1 lần chạy tuần tự — giảm thời gian chờ deploy đáng kể so
+với chạy dồn 1 job.
+
+**Fast-path hotfix:** `workflow_dispatch` của Deploy Backend có input
+`skip_integration` (mặc định `false`). Bật input này khi vá gấp để deploy chỉ chờ
+schema-sync + unit + lint (~1-2 phút) thay vì đợi integration. **Chỉ dùng khi thật
+sự gấp** — đường đi thường ngày vẫn chạy đủ test.
 
 **GitHub Secrets** (Settings → Secrets and variables → Actions):
 

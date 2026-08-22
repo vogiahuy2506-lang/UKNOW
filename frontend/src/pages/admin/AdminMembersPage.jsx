@@ -16,7 +16,7 @@ const Tooltip = ({ label, children }) => (
 import {
   HiOutlineRefresh, HiOutlineSearch,
   HiOutlineLockClosed, HiOutlineLockOpen, HiOutlineShieldCheck, HiOutlineShieldExclamation,
-  HiOutlineCurrencyDollar,
+  HiOutlineCurrencyDollar, HiOutlineXCircle,
 } from 'react-icons/hi';
 import adminMembersApiService from '../../features/admin/services/adminMembersApi.service';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
@@ -88,6 +88,7 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
   const [billingPeriod, setBillingPeriod]   = useState('monthly');
   const [paymentMethod, setPaymentMethod]   = useState('free');
   const [note, setNote]                     = useState('');
+  const [quantity, setQuantity]             = useState(1);
   const [isSaving, setIsSaving]             = useState(false);
 
   const selectedPlan = plans.find((p) => String(p.id) === String(selectedPlanId));
@@ -100,6 +101,7 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
         paymentMethod,
         note: note.trim() || null,
         billingPeriod,
+        quantity,
       });
       toast.success(t('adminMembers.assignSuccess'));
       onDone();
@@ -154,6 +156,18 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
         )}
       </div>
       <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.quantityLabel')}</label>
+        <input
+          type="number"
+          className="input w-full"
+          min={1}
+          max={36}
+          value={quantity}
+          onChange={(e) => setQuantity(Math.max(1, Math.min(36, Number(e.target.value) || 1)))}
+        />
+        <p className="text-xs text-gray-500 mt-1">{t('adminMembers.quantityHint')}</p>
+      </div>
+      <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.paymentMethod')}</label>
         <select className="input w-full" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
           <option value="free">{t('adminMembers.freeDemo')}</option>
@@ -201,8 +215,10 @@ const AdminMembersPage = () => {
   const [assignMember, setAssignMember]   = useState(null);
   const [promoteConfirm, setPromoteConfirm] = useState(null);
   const [demoteConfirm, setDemoteConfirm] = useState(null);
+  const [unassignConfirm, setUnassignConfirm] = useState(null);
   const [isPromoting, setIsPromoting]     = useState(false);
   const [isDemoting, setIsDemoting]       = useState(false);
+  const [isUnassigning, setIsUnassigning] = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
 
   const fetchMembers = async (overrides = {}) => {
@@ -281,6 +297,20 @@ const AdminMembersPage = () => {
       toast.error(err?.response?.data?.message || t('adminMembers.demoteFailed'));
     } finally {
       setIsDemoting(false);
+    }
+  };
+
+  const handleUnassign = async () => {
+    try {
+      setIsUnassigning(true);
+      const res = await adminPlansApiService.removeUserPlan(unassignConfirm.id);
+      toast.success(res.data.message || t('adminMembers.unassignSuccess'));
+      setUnassignConfirm(null);
+      fetchMembers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminMembers.unassignFailed'));
+    } finally {
+      setIsUnassigning(false);
     }
   };
 
@@ -466,6 +496,18 @@ const AdminMembersPage = () => {
                             </button>
                           </Tooltip>
 
+                          {/* Gỡ gói — chỉ hiện khi đang có gói */}
+                          {m.activePlanId && (
+                            <Tooltip label={t('adminMembers.unassignPlan')}>
+                              <button
+                                onClick={() => setUnassignConfirm(m)}
+                                className="p-2 rounded hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600"
+                              >
+                                <HiOutlineXCircle className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
+                          )}
+
                           {/* Khóa / Mở khóa */}
                           <Tooltip label={isActive ? t('adminMembers.lockAccount') : t('adminMembers.unlockAccount')}>
                             <button
@@ -585,6 +627,37 @@ const AdminMembersPage = () => {
           </div>
         </div>,
         () => { if (!isDemoting) setDemoteConfirm(null); }
+      )}
+
+      {/* Modal confirm gỡ gói */}
+      {unassignConfirm && renderModal(
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+              <HiOutlineXCircle className="w-5 h-5 text-red-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.unassignConfirmTitle')}</h2>
+          </div>
+          <p className="text-sm text-gray-600">
+            {t('adminMembers.unassignWarning')}
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            <strong>{unassignConfirm.fullName || unassignConfirm.username}</strong> ({unassignConfirm.email})
+            {unassignConfirm.planName && <> — {t('adminMembers.currentPlan')}: <strong>{unassignConfirm.planName}</strong></>}
+          </p>
+          <div className="flex justify-end gap-2 mt-6">
+            <button type="button" className="btn btn-secondary" onClick={() => setUnassignConfirm(null)} disabled={isUnassigning}>{t('common.cancel')}</button>
+            <button
+              type="button"
+              className="btn btn-primary bg-red-600 hover:bg-red-700 border-red-600"
+              onClick={handleUnassign}
+              disabled={isUnassigning}
+            >
+              {isUnassigning ? t('adminMembers.confirming') : t('adminMembers.unassignConfirmBtn')}
+            </button>
+          </div>
+        </div>,
+        () => { if (!isUnassigning) setUnassignConfirm(null); }
       )}
     </div>
   );

@@ -123,15 +123,18 @@ export async function createPlan({ code, name, price, priceYearly, description, 
   return rows[0];
 }
 
-export async function updatePlan(id, { name, price, priceYearly, description, features, maxEmployees, isActive,
+export async function updatePlan(id, { code, name, price, priceYearly, description, features, maxEmployees, isActive,
   durationDays, dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit,
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
   maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes }) {
+  // code: CHỈ điền được khi đang NULL (vá gói lỡ tạo thiếu code). Không cho đổi code đã có
+  // vì voucher gán theo planCode và đơn cũ tham chiếu tới nó.
   const { rows } = await db.query(
     `UPDATE plans
-     SET name = $1, price = $2, price_yearly = $3, description = $4, features = $5,
+     SET code = COALESCE(code, NULLIF($31, '')),
+         name = $1, price = $2, price_yearly = $3, description = $4, features = $5,
          max_employees = $6, is_active = $7,
          duration_days = $8,
          daily_email_limit = $9, monthly_email_limit = $10,
@@ -156,7 +159,7 @@ export async function updatePlan(id, { name, price, priceYearly, description, fe
      maxZaloAccounts ?? null, maxEmailAccounts ?? null,
      maxEmailTemplates ?? null, maxZaloTemplates ?? null,
      maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
-     gracePeriodDays ?? 0, storageLimitBytes, id]
+     gracePeriodDays ?? 0, storageLimitBytes, id, String(code || '').trim().toLowerCase()]
   );
   return rows[0] || null;
 }
@@ -227,11 +230,11 @@ export async function findUserAdminByEmail(email) {
 /** Gán gói trực tiếp cho user — sync resource limits từ plan vào users.max_* ngay lập tức.
  *  billingPeriod 'yearly' → thời hạn +12 tháng; 'monthly' (mặc định) → theo duration_days của plan,
  *  fallback 30 ngày nếu chưa set — cùng công thức với activateUserPlan (payment.repository.js). */
-export async function assignPlanToUser(userId, planId, billingPeriod = 'monthly') {
+export async function assignPlanToUser(userId, planId, billingPeriod = 'monthly', quantity = 1) {
   const { rows } = await db.query(
     `UPDATE users u
      SET active_plan_id            = p.id,
-         subscription_expires_at   = NOW() + (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END),
+         subscription_expires_at   = NOW() + ($4::int * (CASE WHEN $3 = 'yearly' THEN INTERVAL '12 months' ELSE (COALESCE(p.duration_days, 30) || ' days')::INTERVAL END)),
          plan_activated_at         = NOW(),
          subscription_reminder_count = 0,
          max_landing_pages         = p.max_landing_pages,
@@ -250,7 +253,7 @@ export async function assignPlanToUser(userId, planId, billingPeriod = 'monthly'
      WHERE p.id = $1 AND u.id = $2
      RETURNING u.id, u.username, u.email, u.full_name AS "fullName",
                u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt"`,
-    [planId, userId, billingPeriod]
+    [planId, userId, billingPeriod, Math.max(1, Math.floor(Number(quantity) || 1))]
   );
   return rows[0] || null;
 }

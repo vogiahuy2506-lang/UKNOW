@@ -8,6 +8,12 @@ on:
       - 'server/scripts/**'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
+    inputs:
+      skip_integration:
+        description: 'Bỏ qua integration test (fast-path cho hotfix) — MẶC ĐỊNH chạy đủ, chỉ bật khi thật sự gấp'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: deploy-backend-${{ github.ref }}
@@ -16,6 +22,8 @@ concurrency:
 jobs:
   test:
     uses: ./.github/workflows/test-backend.yml
+    with:
+      skip_integration: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_integration || false }}
 
   deploy:
     name: Build & Deploy Backend

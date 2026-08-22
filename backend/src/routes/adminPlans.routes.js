@@ -136,9 +136,17 @@ router.post('/:id/assign',
   [
     param('id').isInt({ min: 1 }),
     body('userEmail').trim().isEmail().withMessage('Email không hợp lệ'),
+    body('quantity').optional().isInt({ min: 1, max: 36 }).withMessage('quantity phải là số nguyên từ 1 đến 36'),
   ],
   handleValidationErrors,
   ctrl.assign
+);
+
+// Gỡ gói của 1 user cụ thể (super_admin override) — khác xoá/ẩn cả plan
+router.delete('/user/:userId',
+  [param('userId').isInt({ min: 1 })],
+  handleValidationErrors,
+  ctrl.removeUserPlan
 );
 
 router.post('/translate-features',

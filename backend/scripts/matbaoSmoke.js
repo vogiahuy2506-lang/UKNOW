@@ -160,7 +160,7 @@ async function runCreate() {
   console.log(`  - MaTraCuu: ${inv.MaTraCuu}`);
   console.log(`  - MTChieu:  ${inv.MTChieu}`);
   console.log(`  - KHHDon / KHMSHDon: ${inv.KHHDon} / ${inv.KHMSHDon}`);
-  console.log(`  - Buyer:    ${inv.NMua_Ten} (MST: "${inv.NMua_MST}" | CCCD: "${inv.NMua_CCCDan || ''}")`);
+  console.log(`  - Buyer:    NMua_Ten="${inv.NMua_Ten}" NMua_HVTNMHang="${inv.NMua_HVTNMHang || ''}" (MST: "${inv.NMua_MST}" | CCCD: "${inv.NMua_CCCDan || ''}")`);
   console.log(`  - TgThTien: ${inv.TgThTien} đ`);
   console.log(`  - TTCKTMai: ${inv.TTCKTMai} đ, TGTKhac: ${inv.TGTKhac} đ`);
   console.log(`  - TgTThue:  ${inv.TgTThue} đ`);

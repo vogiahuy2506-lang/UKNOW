@@ -55,6 +55,10 @@ const getTranslatedPlanName = (plan, t) => {
 };
 
 const getTranslatedPlanDescription = (plan, t) => {
+  // Mô tả admin nhập trong DB luôn thắng — bản dịch cứng chỉ là fallback cho gói
+  // chưa có mô tả riêng. Bản copy y hệt cũng có ở features/admin/plans/planUtils.jsx —
+  // sửa lỗi thì sửa cả hai chỗ.
+  if (String(plan?.description || '').trim()) return plan.description;
   const key = getPlanTranslationKey(plan);
   const translated = key ? t(`pricing.planDescriptions.${key}`) : '';
   return translated && translated !== `pricing.planDescriptions.${key}` ? translated : plan.description;
@@ -180,7 +184,7 @@ const calcSavings = (monthly, yearly) => {
 export default function PricingSection({ embedded = false, compact = false, glass = false }) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
-  const { isAuthenticated, user, activeContext } = useAuthStore();
+  const { isAuthenticated, user, activeContext, updateUser } = useAuthStore();
 const isEmployee = activeContext?.type === 'employee';
   const activePlanId = user?.activePlanId;
   const activePlanIsCustom = Boolean(user?.activePlanIsCustom);
@@ -289,6 +293,31 @@ const isEmployee = activeContext?.type === 'employee';
   useEffect(() => {
     getPlansData();
   }, []);
+
+  // Store `user` chỉ được nạp lúc đăng nhập — nếu admin gán/đổi gói trong lúc khách
+  // đang có phiên đăng nhập cũ, active_plan_id trong store bị cũ (badge "Gói hiện tại"
+  // trên thẻ gói sai) cho tới khi họ đăng nhập lại. Banner trên cùng luôn đúng vì nó
+  // tự gọi getMyProfile() riêng (effect bên dưới) — hai nguồn lệch nhau gây ra hiện
+  // tượng "F5 một lần chưa thấy, F5 lần hai mới thấy". Làm mới store 1 lần khi vào
+  // trang để cả hai nơi hiển thị cùng một nguồn ngay từ lần F5 đầu.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getMyProfile();
+        if (cancelled) return;
+        const profile = data?.data || data;
+        // Gộp chứ không ghi đè: /users/profile không trả `memberships` — updateUser(profile)
+        // trần sẽ bị normalizeUser mặc định về [] và xoá mất danh sách workspace nhân viên.
+        if (profile) updateUser({ ...user, ...profile });
+      } catch {
+        // im lặng — không phải lỗi chặn, trang vẫn dùng dữ liệu store cũ
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   // Nếu user đã có plan mà plan đó không có trong list public (gói custom / gói cũ
   // đã bị soft-delete), fetch /users/profile để biết tên gói và hiển thị banner

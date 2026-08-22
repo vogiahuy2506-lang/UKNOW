@@ -194,7 +194,7 @@ describe('matbaoInvoice.service', () => {
     expect(inv.TgTTTBChu).toMatch(/đồng$/i);
   });
 
-  it('personal buyer sets NMua_CCCDan', () => {
+  it('personal buyer puts full name in NMua_HVTNMHang, not NMua_Ten (PR-A1)', () => {
     const info = {
       ...order.invoice_info,
       buyerType: 'personal',
@@ -204,9 +204,60 @@ describe('matbaoInvoice.service', () => {
       companyName: undefined,
     };
     const { payload } = buildCreateInvoicePayload(order, info);
-    expect(payload[0].NMua_Ten).toBe('Nguyen Van A');
+    expect(payload[0].NMua_HVTNMHang).toBe('Nguyen Van A');
+    expect(payload[0].NMua_Ten).toBe('');
     expect(payload[0].NMua_CCCDan).toBe('001099012345');
     expect(payload[0].NMua_MST).toBe('');
+  });
+
+  it('consumer (no invoice wanted) puts "Bán cho người tiêu dùng" in NMua_HVTNMHang (PR-A1)', () => {
+    const info = { ...order.invoice_info, buyerType: 'consumer' };
+    const { payload } = buildCreateInvoicePayload(order, info);
+    expect(payload[0].NMua_HVTNMHang).toBe('Bán cho người tiêu dùng');
+    expect(payload[0].NMua_Ten).toBe('');
+  });
+
+  it('company buyer keeps name in NMua_Ten and leaves NMua_HVTNMHang unset (PR-A1)', () => {
+    const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
+    expect(payload[0].NMua_Ten).toBe('Cong Ty ABC');
+    expect(payload[0].NMua_HVTNMHang).toBeUndefined();
+  });
+
+  it('line description includes plan name and billing period when present (PR-A2)', () => {
+    const planOrder = { ...order, note: null, plan_name: 'Starter', billing_period: 'monthly' };
+    const { payload } = buildCreateInvoicePayload(planOrder, planOrder.invoice_info);
+    expect(payload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói Starter tháng');
+
+    const yearlyOrder = { ...order, note: null, plan_name: 'Starter', billing_period: 'yearly' };
+    const { payload: yearlyPayload } = buildCreateInvoicePayload(yearlyOrder, yearlyOrder.invoice_info);
+    expect(yearlyPayload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói Starter năm');
+  });
+
+  it('line description falls back to generic label when plan name is missing (PR-A2)', () => {
+    const noPlanOrder = { ...order, note: null, plan_name: null };
+    const { payload } = buildCreateInvoicePayload(noPlanOrder, noPlanOrder.invoice_info);
+    expect(payload[0].DSHHDVu[0].THHDVu).toBe('Gói dịch vụ Founder AI');
+  });
+
+  it('strips a redundant leading "Gói" from plan_name so the line item does not read "Gói Gói X" (accounting feedback on order 897)', () => {
+    const dupOrder = { ...order, note: null, plan_name: 'Gói test', billing_period: 'monthly' };
+    const { payload } = buildCreateInvoicePayload(dupOrder, dupOrder.invoice_info);
+    expect(payload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói test tháng');
+
+    const upperOrder = { ...order, note: null, plan_name: 'GÓI Enterprise', billing_period: 'yearly' };
+    const { payload: upperPayload } = buildCreateInvoicePayload(upperOrder, upperOrder.invoice_info);
+    expect(upperPayload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói Enterprise năm');
+  });
+
+  it('plan_name that is literally just "Gói" falls back to "dịch vụ" instead of re-duplicating (edge case)', () => {
+    const edgeOrder = { ...order, note: null, plan_name: 'Gói', billing_period: 'monthly' };
+    const { payload } = buildCreateInvoicePayload(edgeOrder, edgeOrder.invoice_info);
+    expect(payload[0].DSHHDVu[0].THHDVu).toBe('Phần mềm FounderAI - Gói dịch vụ tháng');
+  });
+
+  it('HTTToan is a readable free-text label, not the raw "CK" code (accounting feedback on order 897)', () => {
+    const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
+    expect(payload[0].HTTToan).toBe('Tiền mặt/Chuyển khoản');
   });
 
   it('skips when feature flag off', () => {
@@ -275,6 +326,26 @@ describe('matbaoInvoice.service', () => {
     expect(result.ok).toBe(false);
     expect(result.errorCode).toBe('327');
     expect(mockMarkFailed).toHaveBeenCalled();
+  });
+
+  it('dispatch reads plan_name/billing_period from the job row into the line description (PR-A2)', async () => {
+    mockClaimByIdForIssue.mockResolvedValueOnce({ id: 7, status: 'processing' });
+    mockFindJobWithOrder.mockResolvedValueOnce(jobFromOrder(order, {
+      note: null,
+      plan_name: 'Professional',
+      billing_period: 'yearly',
+    }));
+    mockCreateInvoices.mockResolvedValueOnce({ ok: true, status: 200, body: POSTMAN_SUCCESS_BODY });
+    mockMarkIssued.mockResolvedValueOnce({ id: 7, status: 'issued' });
+
+    await dispatchPreparedEinvoice(7);
+    expect(mockCreateInvoices).toHaveBeenCalledWith([
+      expect.objectContaining({
+        DSHHDVu: expect.arrayContaining([
+          expect.objectContaining({ THHDVu: 'Phần mềm FounderAI - Gói Professional năm' }),
+        ]),
+      }),
+    ]);
   });
 
   it('skips create when claim loses race (already issued)', async () => {

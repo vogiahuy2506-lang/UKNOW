@@ -50,9 +50,11 @@ jest.unstable_mockModule('../topupLock.service.js', () => ({
   reconcileResourceLocks: mockReconcileResourceLocks,
 }));
 
+const mockBuildPaymentSuccessEmail = jest.fn((p) => ({ subject: 'ok', html: 'ok', ...p }));
+
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
-  buildPaymentSuccessEmail: (p) => ({ subject: 'ok', html: 'ok', ...p }),
+  buildPaymentSuccessEmail: mockBuildPaymentSuccessEmail,
 }));
 
 jest.unstable_mockModule('../matbaoInvoice.service.js', () => ({
@@ -101,6 +103,69 @@ describe('fulfillPaidOrder', () => {
     expect(mockRedeemVoucher).toHaveBeenCalledTimes(1);
     expect(mockSendSystemEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'a@test.com' }),
+    );
+  });
+
+  it('PR-D1: consumer buyer (wantInvoice:true, deliverEmail:false) does NOT get invoiceUrl in the payment email', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'A' });
+    mockFindPlanById.mockResolvedValue({ name: 'Starter', duration_days: 30 });
+
+    await fulfillPaidOrder({
+      order_code: 4,
+      user_id: 9,
+      plan_id: 3,
+      user_email: 'a@test.com',
+      billing_period: 'monthly',
+      amount: 99000,
+      payment_method: 'payos',
+      invoice_info: { wantInvoice: true, deliverEmail: false, buyerType: 'consumer' },
+    }, client);
+
+    expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceUrl: undefined }),
+    );
+  });
+
+  it('PR-D1: buyer who wants the invoice emailed (deliverEmail not false) gets invoiceUrl', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'A' });
+    mockFindPlanById.mockResolvedValue({ name: 'Starter', duration_days: 30 });
+
+    await fulfillPaidOrder({
+      order_code: 5,
+      user_id: 9,
+      plan_id: 3,
+      user_email: 'a@test.com',
+      billing_period: 'monthly',
+      amount: 99000,
+      payment_method: 'payos',
+      invoice_info: { wantInvoice: true, buyerType: 'personal' },
+    }, client);
+
+    expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceUrl: expect.stringContaining('/invoices/5') }),
+    );
+  });
+
+  it('PR-D1 regression: invoice_info: null (e.g. INVOICE_VAT_ENABLED=false) must NOT produce an invoiceUrl', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'A' });
+    mockFindPlanById.mockResolvedValue({ name: 'Starter', duration_days: 30 });
+
+    await fulfillPaidOrder({
+      order_code: 6,
+      user_id: 9,
+      plan_id: 3,
+      user_email: 'a@test.com',
+      billing_period: 'monthly',
+      amount: 99000,
+      payment_method: 'payos',
+      invoice_info: null,
+    }, client);
+
+    expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceUrl: undefined }),
     );
   });
 
@@ -186,6 +251,54 @@ describe('fulfillPaidOrder', () => {
       expect.objectContaining({
         to: 'scheduled@test.com',
       })
+    );
+  });
+
+  it('PR-D1: scheduled-order branch also uses deliverEmail, not wantInvoice', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'Scheduled User', subscription_expires_at: new Date('2026-09-01') });
+    mockFindPlanById.mockResolvedValue({ name: 'Basic Plan', duration_days: 30 });
+    mockScheduledPlanChangeRepo.findByOrderId.mockResolvedValue(null);
+
+    await fulfillPaidOrder({
+      id: 89,
+      order_code: 556,
+      user_id: 10,
+      plan_id: 1,
+      user_email: 'scheduled@test.com',
+      billing_period: 'monthly',
+      amount: 299000,
+      payment_method: 'payos',
+      note: 'scheduled_change',
+      invoice_info: { wantInvoice: true, deliverEmail: false, buyerType: 'consumer' },
+    }, client);
+
+    expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceUrl: undefined }),
+    );
+  });
+
+  it('PR-D1 regression: scheduled-order branch — invoice_info: null must NOT produce an invoiceUrl', async () => {
+    mockFindUserIdByEmail.mockResolvedValue(null);
+    mockFindActiveUserByEmail.mockResolvedValue({ full_name: 'Scheduled User', subscription_expires_at: new Date('2026-09-01') });
+    mockFindPlanById.mockResolvedValue({ name: 'Basic Plan', duration_days: 30 });
+    mockScheduledPlanChangeRepo.findByOrderId.mockResolvedValue(null);
+
+    await fulfillPaidOrder({
+      id: 90,
+      order_code: 557,
+      user_id: 10,
+      plan_id: 1,
+      user_email: 'scheduled@test.com',
+      billing_period: 'monthly',
+      amount: 299000,
+      payment_method: 'payos',
+      note: 'scheduled_change',
+      invoice_info: null,
+    }, client);
+
+    expect(mockBuildPaymentSuccessEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceUrl: undefined }),
     );
   });
 

@@ -187,7 +187,7 @@ describe('POST /api/payments/create-payment', () => {
     const payosArgs = mockPaymentRequestsCreate.mock.calls[0][0];
     expect(payosArgs.amount).toBe(199000);
     expect(payosArgs.orderCode).toBe(res.body.result.orderCode);
-    expect(payosArgs.description).toMatch(/^TT pro_test/);
+    expect(payosArgs.description).toBe('FOUNDERAI PRO_TEST');
     expect(payosArgs.returnUrl).toContain('/payment-success');
     expect(payosArgs.cancelUrl).toContain('/checkout');
     expect(payosArgs.expiredAt).toEqual(expect.any(Number));

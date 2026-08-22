@@ -61,6 +61,8 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
     e.preventDefault();
     if (!form.name.trim()) { toast.error(t('adminPlans.planNameRequired')); return; }
     const normalizedCode = String(form.code || '').trim().toLowerCase();
+    // Bắt buộc có code: checkout gửi planCode lên, thiếu code là khách không mua được.
+    if (!normalizedCode) { toast.error(t('adminPlans.planCodeRequired')); return; }
     if (!isEdit && normalizedCode && existingCodeSet.has(normalizedCode)) {
       toast.error(t('adminPlans.planCodeExists', { code: form.code.trim() }));
       return;
@@ -134,9 +136,16 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
             <input type="text" className="input h-11 w-full" value={form.name}
               onChange={(e) => set('name', e.target.value)} placeholder={t('planInputs.planNamePlaceholder')} />
           </Field>
-          <Field label={t('planInputs.planCodeLabel')} note={isEdit ? t('adminPlans.codeCannotChange') : null}>
+          {/* Gói đã có code thì khoá (voucher + đơn cũ tham chiếu theo code).
+              Gói lỡ tạo thiếu code thì cho điền bổ sung — nếu không sẽ hỏng vĩnh viễn:
+              hiện trên bảng giá nhưng bấm mua luôn trả 400 "Thiếu planCode". */}
+          <Field
+            label={t('planInputs.planCodeLabel')}
+            note={isEdit && plan?.code ? t('adminPlans.codeCannotChange') : null}
+          >
             <input type="text" className="input h-11 w-full" value={form.code}
-              onChange={(e) => set('code', e.target.value)} placeholder={t('planInputs.planCodePlaceholder')} disabled={isEdit} />
+              onChange={(e) => set('code', e.target.value)} placeholder={t('planInputs.planCodePlaceholder')}
+              disabled={isEdit && Boolean(plan?.code)} />
           </Field>
           <Field label={t('planInputs.durationLabel')}>
             <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />
