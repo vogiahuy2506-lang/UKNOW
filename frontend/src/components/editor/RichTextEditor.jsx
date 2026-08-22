@@ -12,6 +12,19 @@ import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents'
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml';
 import { HELP_ARTICLE_BODY_RICH_CLASS } from '../../constants/helpArticleBodyStyle';
 
+/**
+ * Class cho vùng soạn thảo — CÙNG bộ style với trang /huong-dan và ô Xem trước.
+ *
+ * BẮT BUỘC gom khoảng trắng về một dấu cách: HELP_ARTICLE_BODY_RICH_CLASS là
+ * template string nhiều dòng. React nhận className kiểu đó vô tư, nhưng
+ * ProseMirror đẩy chuỗi này qua `classList.add()`, mà DOMTokenList từ chối mọi
+ * token chứa ký tự khoảng trắng — để nguyên là ném "Failed to execute 'add' on
+ * 'DOMTokenList'" và hỏng nguyên trang sửa bài.
+ */
+const EDITOR_BODY_CLASS = `${HELP_ARTICLE_BODY_RICH_CLASS} max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800`
+  .replace(/\s+/g, ' ')
+  .trim();
+
 async function uploadHelpImageFile(file) {
   const fd = new FormData();
   fd.append('file', file);
@@ -127,7 +140,7 @@ export default function RichTextEditor({
         // font-size của h2/h3/h4 về như chữ thường. Hệ quả: trong khung soạn
         // thảo mọi thứ trông như đoạn văn phẳng — không thấy bullet, số thứ tự
         // hay cấp tiêu đề — phải liếc sang ô Xem trước mới biết mình đang sửa gì.
-        class: `${HELP_ARTICLE_BODY_RICH_CLASS} max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800`,
+        class: EDITOR_BODY_CLASS,
         'data-placeholder': placeholder,
       },
       handleDrop: (_view, event) => {
