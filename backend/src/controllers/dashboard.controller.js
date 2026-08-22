@@ -2,6 +2,7 @@ import dashboardAnalyticsService from '../services/dashboard/dashboardAnalytics.
 import dashboardInsightsService from '../services/dashboard/dashboardInsights.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import dashboardRepository from '../repositories/dashboard/dashboard.repository.js';
+import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
 const INSIGHTS_MISSING_DATA_MESSAGE =
   'Thiếu dữ liệu dashboard để phân tích (overview/analytics/topListsData)';
@@ -52,7 +53,7 @@ class DashboardController {
    */
   async getOverview(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getOverview(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
@@ -105,7 +106,7 @@ class DashboardController {
    */
   async getAnalytics(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getAnalytics(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
@@ -139,7 +140,7 @@ class DashboardController {
    */
   async getRuns(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getRuns(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
@@ -176,7 +177,7 @@ class DashboardController {
    */
   async getOrdersList(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getOrdersList(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
@@ -214,7 +215,7 @@ class DashboardController {
    */
   async getTopLists(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const roleCode = req.user.role;
       const data = await dashboardAnalyticsService.getTopLists(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
@@ -240,7 +241,7 @@ class DashboardController {
    */
   async compareCampaigns(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const roleCode = req.user.role;
       const { campaignIds } = req.query;
 
@@ -288,7 +289,7 @@ class DashboardController {
    */
   async getSavedInsights(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const data = await dashboardInsightsService.getSavedInsightForUser(userId);
       this.setNoCacheHeaders(res);
       return res.json({
@@ -333,8 +334,9 @@ class DashboardController {
         });
       }
 
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
       const result = await dashboardInsightsService.generateInsights({
-        userId: req.user.id,
+        userId: ownerUserId,
         overview,
         analytics,
         topListsData,
@@ -343,7 +345,7 @@ class DashboardController {
       });
 
       try {
-        await dashboardInsightsService.persistInsightIfUsable(req.user.id, result.data, filters);
+        await dashboardInsightsService.persistInsightIfUsable(ownerUserId, result.data, filters);
       } catch (persistErr) {
         console.error('Persist dashboard insight error:', persistErr);
       }

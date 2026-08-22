@@ -10,10 +10,9 @@ router.use(requirePasswordChange);
 router.use(requireActivePlan);
 
 // Preview rows from a Google Sheet (public/anyone-with-link)
-router.post('/preview', requirePermission('campaigns_view'), googleSheetsController.preview.bind(googleSheetsController));
+router.post('/preview', requirePermission('integrations_manage'), googleSheetsController.preview.bind(googleSheetsController));
 // Check connection and return column names
-router.post('/check', requirePermission('campaigns_view'), googleSheetsController.check.bind(googleSheetsController));
+router.post('/check', requirePermission('integrations_manage'), googleSheetsController.check.bind(googleSheetsController));
 
 
 export default router;
-

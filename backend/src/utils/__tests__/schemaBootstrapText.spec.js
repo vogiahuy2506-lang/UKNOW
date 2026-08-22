@@ -102,4 +102,13 @@ describe('bootstrap.sql text parity (S-2)', () => {
     expect(bootstrapSql).toMatch(/CREATE TABLE IF NOT EXISTS kb_documents\s*\([\s\S]*?extracted_chars/i);
     expect(bootstrapSql).toMatch(/custom_chatbot_chunks\s*\([\s\S]*?document_id/i);
   });
+
+  it('bootstrap declares employee AI limits and approval threshold (migration 166)', () => {
+    const userMembersBody = tableBody(bootstrapSql, 'user_members');
+    expect(userMembersBody).toMatch(/daily_ai_credit_limit\s+INTEGER/i);
+    expect(userMembersBody).toMatch(/period_ai_credit_limit\s+INTEGER/i);
+
+    const usersBody = tableBody(bootstrapSql, 'users');
+    expect(usersBody).toMatch(/employee_campaign_approval_threshold\s+INTEGER/i);
+  });
 });

@@ -412,5 +412,80 @@ describe('userSendLimit.util', () => {
       // 1 query limits (cached on 2nd call)
       expect(mockQuery).toHaveBeenCalledTimes(1);
     });
+
+    describe('Employee send limits (Tier 1)', () => {
+      it('nhân viên bị khóa (status != active) → chặn gửi (limitType: employee_inactive)', async () => {
+        mockResolveBillingUserId.mockResolvedValueOnce(1); // ownerId = 1
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ id: 5, status: 'inactive', daily_email_limit: 100, monthly_email_limit: 1000 }],
+        });
+
+        const result = await checkSendQuota({
+          userId: 2,
+          channel: 'email',
+          ownerContextId: 1,
+        });
+
+        expect(result.allowed).toBe(false);
+        expect(result.limitType).toBe('employee_inactive');
+        expect(result.message).toMatch(/tạm khóa/i);
+      });
+
+      it('nhân viên vượt daily_email_limit của riêng mình → chặn với limitType: employee', async () => {
+        mockResolveBillingUserId.mockResolvedValueOnce(1); // ownerId = 1
+        // 1. query user_members limits
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ id: 5, status: 'active', daily_email_limit: 50, monthly_email_limit: 500 }],
+        });
+        // 2. query employee daily count
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ total: 50 }],
+        });
+
+        const result = await checkSendQuota({
+          userId: 2,
+          channel: 'email',
+          ownerContextId: 1,
+          requiredCount: 1,
+        });
+
+        expect(result.allowed).toBe(false);
+        expect(result.limitType).toBe('employee');
+        expect(result.limit).toBe(50);
+        expect(result.currentCount).toBe(50);
+        expect(result.message).toMatch(/giới hạn gửi email trong ngày của nhân viên/i);
+      });
+
+      it('nhân viên chưa vượt limit của mình nhưng workspace hết quota → chặn với limitType của workspace', async () => {
+        mockResolveBillingUserId.mockResolvedValueOnce(1); // ownerId = 1
+        // 1. query user_members limits
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ id: 5, status: 'active', daily_email_limit: 100, monthly_email_limit: null }],
+        });
+        // 2. query employee daily count
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ total: 10 }],
+        });
+        // 3. query workspace plan limits
+        mockQuery.mockResolvedValueOnce({
+          rows: [planRow({ daily_email_limit: 200 })],
+        });
+        // 4. query workspace daily count
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ total: 200 }],
+        });
+
+        const result = await checkSendQuota({
+          userId: 2,
+          channel: 'email',
+          ownerContextId: 1,
+          requiredCount: 1,
+        });
+
+        expect(result.allowed).toBe(false);
+        expect(result.limitType).toBe('daily');
+        expect(result.limit).toBe(200);
+      });
+    });
   });
 });

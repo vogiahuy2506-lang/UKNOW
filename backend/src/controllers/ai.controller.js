@@ -435,7 +435,8 @@ class AiController {
 
   async getSessions(req, res) {
     try {
-      const sessions = await aiSessionRepo.getUserSessions(req.user.id);
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const sessions = await aiSessionRepo.getUserSessions(userId);
       return res.json({ success: true, data: sessions });
     } catch (error) {
       console.error('Get AI sessions error:', error);
@@ -445,7 +446,8 @@ class AiController {
 
   async getSessionMessages(req, res) {
     try {
-      const result = await aiSessionRepo.getSessionMessages(Number(req.params.id), req.user.id);
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const result = await aiSessionRepo.getSessionMessages(Number(req.params.id), userId);
       if (result === null) {
         return res.status(404).json({ success: false, message: 'Session không tồn tại' });
       }
@@ -469,8 +471,9 @@ class AiController {
         return res.status(400).json({ success: false, message: 'Session id không hợp lệ' });
       }
       const { action, payload } = req.body || {};
+      const userId = resolveWorkspaceOwnerId(req.user);
 
-      const row = await aiSessionRepo.getSessionWizardState(sessionId, req.user.id);
+      const row = await aiSessionRepo.getSessionWizardState(sessionId, userId);
       if (!row) {
         return res.status(404).json({ success: false, message: 'Session không tồn tại' });
       }
@@ -497,7 +500,7 @@ class AiController {
       }
 
       result.state.meta.updatedAt = new Date().toISOString();
-      const saved = await aiSessionRepo.writeWizardState(sessionId, req.user.id, result.state);
+      const saved = await aiSessionRepo.writeWizardState(sessionId, userId, result.state);
       return res.json({ success: true, data: { wizardState: saved, changed: true } });
     } catch (error) {
       console.error('Patch wizard state error:', error);
@@ -507,7 +510,8 @@ class AiController {
 
   async deleteSession(req, res) {
     try {
-      const deleted = await aiSessionRepo.deleteSession(Number(req.params.id), req.user.id);
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const deleted = await aiSessionRepo.deleteSession(Number(req.params.id), userId);
       if (!deleted) return res.status(404).json({ success: false, message: 'Session không tồn tại' });
       return res.json({ success: true });
     } catch (error) {

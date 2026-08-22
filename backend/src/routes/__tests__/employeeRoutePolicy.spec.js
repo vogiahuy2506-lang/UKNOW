@@ -28,6 +28,9 @@ jest.unstable_mockModule('../../middleware/rateLimiter.middleware.js', () => ({
   sseLimiter: (req, res, next) => next(),
   campaignRunLimiter: (req, res, next) => next(),
   quickSendTestLimiter: (req, res, next) => next(),
+  marketplacePurchaseLimiter: (req, res, next) => next(),
+  webhookLimiter: (req, res, next) => next(),
+  publicLeadLimiter: (req, res, next) => next(),
 }));
 
 // Mock AI credit check
@@ -127,6 +130,45 @@ jest.unstable_mockModule('../../controllers/upload.controller.js', () => ({
   default: makeMockController('upload'),
 }));
 
+jest.unstable_mockModule('../../controllers/dashboard.controller.js', () => ({
+  default: makeMockController('dashboard'),
+  validateDashboardInsightsPayload: (req, res, next) => next(),
+}));
+
+jest.unstable_mockModule('../../controllers/marketplace.controller.js', () => ({
+  default: makeMockController('marketplace'),
+}));
+
+jest.unstable_mockModule('../../controllers/payment.controller.js', () => {
+  const controller = makeMockController('payment');
+  return {
+    activateFree: controller.activateFree,
+    createPayment: controller.createPayment,
+    createCustomPayment: controller.createCustomPayment,
+    getPaymentStatus: controller.getPaymentStatus,
+    webhook: controller.webhook,
+    einvoiceWebhook: controller.einvoiceWebhook,
+    getInvoiceForOrder: controller.getInvoiceForOrder,
+    downloadInvoicePdf: controller.downloadInvoicePdf,
+    resolvePlanChangePreview: controller.resolvePlanChangePreview,
+  };
+});
+
+jest.unstable_mockModule('../../controllers/campaign.controller.js', () => ({
+  default: makeMockController('campaign'),
+}));
+
+jest.unstable_mockModule('../../controllers/campaignShare.controller.js', () => ({
+  default: makeMockController('campaignShare'),
+}));
+
+jest.unstable_mockModule('../../controllers/scheduledPlanChange.controller.js', () => {
+  const controller = makeMockController('scheduledPlanChange');
+  return {
+    getScheduledPlanChange: controller.getScheduledPlanChange,
+  };
+});
+
 // Import routes after mocking
 const { default: adminLandingPageRoutes } = await import('../adminLandingPage.routes.js');
 const { default: customerRoutes } = await import('../customer.routes.js');
@@ -136,12 +178,16 @@ const { default: emailTemplateRoutes } = await import('../emailTemplate.routes.j
 const { default: zaloTemplateRoutes } = await import('../zaloTemplate.routes.js');
 const { default: templateLabelRoutes } = await import('../templateLabel.routes.js');
 const { default: campaignScheduleRoutes } = await import('../campaignSchedule.routes.js');
+const { default: campaignRoutes } = await import('../campaign.routes.js');
 const { default: aiRoutes } = await import('../ai.routes.js');
 const { default: googleSheetsRoutes } = await import('../googleSheets.routes.js');
 const { default: founderaiRoutes } = await import('../founderai.routes.js');
 const { default: chatbotRoutes } = await import('../chatbot.routes.js');
 const { default: mediaLibraryRoutes } = await import('../mediaLibrary.routes.js');
 const { default: uploadRoutes } = await import('../upload.routes.js');
+const { default: dashboardRoutes } = await import('../dashboard.routes.js');
+const { default: marketplaceRoutes } = await import('../marketplace.routes.js');
+const { default: paymentRoutes } = await import('../payment.routes.js');
 
 const app = express();
 app.use(express.json());
@@ -153,12 +199,16 @@ app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/zalo-templates', zaloTemplateRoutes);
 app.use('/api/template-labels', templateLabelRoutes);
 app.use('/api/campaign-schedules', campaignScheduleRoutes);
+app.use('/api/campaigns', campaignRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/google-sheets', googleSheetsRoutes);
 app.use('/api/founderai', founderaiRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/media-library', mediaLibraryRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/payments', paymentRoutes);
 
 describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   const selfUser = {
@@ -313,14 +363,18 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   });
 
   describe('7. Workspace integrations', () => {
-    it('guards Google Sheets preview with campaigns_view', async () => {
-      currentTestUser = createEmployee({ campaigns_view: false });
-      const blocked = await request(app).post('/api/google-sheets/preview').send({});
-      expect(blocked.status).toBe(403);
+    it('guards Google Sheets preview and check with integrations_manage', async () => {
+      currentTestUser = createEmployee({ integrations_manage: false });
+      const previewBlocked = await request(app).post('/api/google-sheets/preview').send({});
+      const checkBlocked = await request(app).post('/api/google-sheets/check').send({});
+      expect(previewBlocked.status).toBe(403);
+      expect(checkBlocked.status).toBe(403);
 
-      currentTestUser = createEmployee({ campaigns_view: true });
-      const allowed = await request(app).post('/api/google-sheets/preview').send({});
-      expect(allowed.status).toBe(200);
+      currentTestUser = createEmployee({ integrations_manage: true });
+      const previewAllowed = await request(app).post('/api/google-sheets/preview').send({});
+      const checkAllowed = await request(app).post('/api/google-sheets/check').send({});
+      expect(previewAllowed.status).toBe(200);
+      expect(checkAllowed.status).toBe(200);
     });
 
     it('guards FounderAI customer and course sync by matching resource permission', async () => {
@@ -427,6 +481,214 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       const promoteAllowed = await request(app).post('/api/uploads/promote').send({});
       expect(deleteAllowed.status).toBe(200);
       expect(promoteAllowed.status).toBe(200);
+    });
+  });
+
+  describe('9. Dashboard & Reports (/api/dashboard)', () => {
+    it('blocks dashboard endpoints when reports_view permission is missing (403)', async () => {
+      currentTestUser = createEmployee({ reports_view: false });
+      const overview = await request(app).get('/api/dashboard/overview');
+      const analytics = await request(app).get('/api/dashboard/analytics');
+      const runs = await request(app).get('/api/dashboard/runs');
+      const topLists = await request(app).get('/api/dashboard/top-lists');
+      const compare = await request(app).get('/api/dashboard/compare');
+      const insights = await request(app).get('/api/dashboard/insights/saved');
+
+      expect(overview.status).toBe(403);
+      expect(overview.body.code).toBe('PERMISSION_DENIED');
+      expect(analytics.status).toBe(403);
+      expect(runs.status).toBe(403);
+      expect(topLists.status).toBe(403);
+      expect(compare.status).toBe(403);
+      expect(insights.status).toBe(403);
+    });
+
+    it('allows dashboard endpoints when reports_view permission is true (200)', async () => {
+      currentTestUser = createEmployee({ reports_view: true });
+      const overview = await request(app).get('/api/dashboard/overview');
+      const analytics = await request(app).get('/api/dashboard/analytics');
+      const runs = await request(app).get('/api/dashboard/runs');
+      const topLists = await request(app).get('/api/dashboard/top-lists');
+      const compare = await request(app).get('/api/dashboard/compare');
+      const insights = await request(app).get('/api/dashboard/insights/saved');
+
+      expect(overview.status).toBe(200);
+      expect(analytics.status).toBe(200);
+      expect(runs.status).toBe(200);
+      expect(topLists.status).toBe(200);
+      expect(compare.status).toBe(200);
+      expect(insights.status).toBe(200);
+    });
+
+    it('keeps /orders self-only (blocked for employees even with reports_view)', async () => {
+      currentTestUser = createEmployee({ reports_view: true });
+      const res = await request(app).get('/api/dashboard/orders');
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('OWNER_ONLY');
+
+      currentTestUser = selfUser;
+      const ownerRes = await request(app).get('/api/dashboard/orders');
+      expect(ownerRes.status).toBe(200);
+    });
+  });
+
+  describe('10. AI Assistant & Sessions (/api/ai)', () => {
+    it('blocks AI chat and sessions when ai_assistant_use permission is missing (403)', async () => {
+      currentTestUser = createEmployee({ ai_assistant_use: false });
+      const chat = await request(app).post('/api/ai/chat').send({ message: 'hi' });
+      const chatV2 = await request(app).post('/api/ai/chat-v2').send({ message: 'hi' });
+      const sessions = await request(app).get('/api/ai/sessions');
+      const sessionMsg = await request(app).get('/api/ai/sessions/1/messages');
+      const delSession = await request(app).delete('/api/ai/sessions/1');
+      const patchState = await request(app).patch('/api/ai/sessions/1/wizard-state').send({});
+
+      expect(chat.status).toBe(403);
+      expect(chat.body.code).toBe('PERMISSION_DENIED');
+      expect(chatV2.status).toBe(403);
+      expect(sessions.status).toBe(403);
+      expect(sessionMsg.status).toBe(403);
+      expect(delSession.status).toBe(403);
+      expect(patchState.status).toBe(403);
+    });
+
+    it('allows AI chat and sessions when ai_assistant_use permission is true (200)', async () => {
+      currentTestUser = createEmployee({ ai_assistant_use: true });
+      const chat = await request(app).post('/api/ai/chat').send({ message: 'hi' });
+      const chatV2 = await request(app).post('/api/ai/chat-v2').send({ message: 'hi' });
+      const sessions = await request(app).get('/api/ai/sessions');
+      const sessionMsg = await request(app).get('/api/ai/sessions/1/messages');
+      const delSession = await request(app).delete('/api/ai/sessions/1');
+      const patchState = await request(app).patch('/api/ai/sessions/1/wizard-state').send({});
+
+      expect(chat.status).toBe(200);
+      expect(chatV2.status).toBe(200);
+      expect(sessions.status).toBe(200);
+      expect(sessionMsg.status).toBe(200);
+      expect(delSession.status).toBe(200);
+      expect(patchState.status).toBe(200);
+    });
+
+    it('keeps business-profile self-only', async () => {
+      currentTestUser = createEmployee({ ai_assistant_use: true });
+      const res = await request(app).get('/api/ai/business-profile');
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('OWNER_ONLY');
+
+      currentTestUser = selfUser;
+      const ownerRes = await request(app).get('/api/ai/business-profile');
+      expect(ownerRes.status).toBe(200);
+    });
+  });
+
+  describe('11. Marketplace (/api/marketplace)', () => {
+    it('allows public browsing without special permission', async () => {
+      currentTestUser = createEmployee({});
+      const browse = await request(app).get('/api/marketplace/browse');
+      const featured = await request(app).get('/api/marketplace/featured');
+      const categories = await request(app).get('/api/marketplace/categories');
+
+      expect(browse.status).toBe(200);
+      expect(featured.status).toBe(200);
+      expect(categories.status).toBe(200);
+    });
+
+    it('separates marketplace_manage and marketplace_purchase', async () => {
+      currentTestUser = createEmployee({
+        marketplace_manage: true,
+        marketplace_purchase: false,
+      });
+
+      const getListings = await request(app).get('/api/marketplace/listings');
+      const getChatbots = await request(app).get('/api/marketplace/chatbots');
+      const purchaseBlocked = await request(app).post('/api/marketplace/purchase/1');
+      const purchasesBlocked = await request(app).get('/api/marketplace/purchases');
+
+      expect(getListings.status).toBe(200);
+      expect(getChatbots.status).toBe(200);
+      expect(purchaseBlocked.status).toBe(403);
+      expect(purchaseBlocked.body.code).toBe('PERMISSION_DENIED');
+      expect(purchasesBlocked.status).toBe(403);
+
+      currentTestUser = createEmployee({
+        marketplace_manage: false,
+        marketplace_purchase: true,
+      });
+
+      const getListingsBlocked = await request(app).get('/api/marketplace/listings');
+      const purchaseAllowed = await request(app).post('/api/marketplace/purchase/1');
+      const purchasesAllowed = await request(app).get('/api/marketplace/purchases');
+
+      expect(getListingsBlocked.status).toBe(403);
+      expect(purchaseAllowed.status).toBe(200);
+      expect(purchasesAllowed.status).toBe(200);
+    });
+  });
+
+  describe('12. Payment & Subscriptions (/api/payments)', () => {
+    it('blocks employee from payment creation, plan change, free activation, and invoice download', async () => {
+      currentTestUser = createEmployee({ reports_view: true, marketplace_purchase: true });
+
+      const scheduledChange = await request(app).get('/api/payments/scheduled-change');
+      const createPayment = await request(app).post('/api/payments/create-payment');
+      const createCustom = await request(app).post('/api/payments/create-custom-payment');
+      const activateFree = await request(app).post('/api/payments/activate-free');
+      const invoice = await request(app).get('/api/payments/invoice/ORDER123');
+      const invoicePdf = await request(app).get('/api/payments/invoice/ORDER123/pdf');
+
+      expect(scheduledChange.status).toBe(403);
+      expect(scheduledChange.body.code).toBe('OWNER_ONLY');
+      expect(createPayment.status).toBe(403);
+      expect(createPayment.body.code).toBe('OWNER_ONLY');
+      expect(createCustom.status).toBe(403);
+      expect(createCustom.body.code).toBe('OWNER_ONLY');
+      expect(activateFree.status).toBe(403);
+      expect(activateFree.body.code).toBe('OWNER_ONLY');
+      expect(invoice.status).toBe(403);
+      expect(invoice.body.code).toBe('OWNER_ONLY');
+      expect(invoicePdf.status).toBe(403);
+      expect(invoicePdf.body.code).toBe('OWNER_ONLY');
+    });
+
+    it('allows owner in self context for payment operations', async () => {
+      currentTestUser = selfUser;
+
+      const scheduledChange = await request(app).get('/api/payments/scheduled-change');
+      const createPayment = await request(app).post('/api/payments/create-payment');
+      const createCustom = await request(app).post('/api/payments/create-custom-payment');
+      const activateFree = await request(app).post('/api/payments/activate-free');
+      const invoice = await request(app).get('/api/payments/invoice/ORDER123');
+      const invoicePdf = await request(app).get('/api/payments/invoice/ORDER123/pdf');
+
+      expect(scheduledChange.status).toBe(200);
+      expect(createPayment.status).toBe(200);
+      expect(createCustom.status).toBe(200);
+      expect(activateFree.status).toBe(200);
+      expect(invoice.status).toBe(200);
+      expect(invoicePdf.status).toBe(200);
+    });
+  });
+
+  describe('13. Campaign Approval (/api/campaigns/:id/approve & reject)', () => {
+    it('blocks employee from approving or rejecting campaigns (owner-only)', async () => {
+      currentTestUser = createEmployee({ campaigns_run: true, campaigns_create: true });
+
+      const approveRes = await request(app).post('/api/campaigns/1/approve');
+      const rejectRes = await request(app).post('/api/campaigns/1/reject');
+
+      expect(approveRes.status).toBe(403);
+      expect(approveRes.body.code).toBe('OWNER_ONLY');
+      expect(rejectRes.status).toBe(403);
+      expect(rejectRes.body.code).toBe('OWNER_ONLY');
+    });
+
+    it('allows owner in self context to approve or reject campaigns', async () => {
+      currentTestUser = selfUser;
+
+      const approveRes = await request(app).post('/api/campaigns/1/approve');
+      const rejectRes = await request(app).post('/api/campaigns/1/reject');
+
+      expect(approveRes.status).toBe(200);
+      expect(rejectRes.status).toBe(200);
     });
   });
 });

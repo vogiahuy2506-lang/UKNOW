@@ -147,14 +147,30 @@ export async function updateInfo(req, res) {
 export async function updateLimits(req, res) {
   try {
     const ownerId = req.user.id;
-    const { dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit } = req.body;
+    const {
+      dailyEmailLimit,
+      monthlyEmailLimit,
+      dailyZaloLimit,
+      monthlyZaloLimit,
+      dailyAiCreditLimit,
+      periodAiCreditLimit,
+    } = req.body;
     const updated = await employeeService.setEmployeeSendLimits(ownerId, Number(req.params.id), {
       dailyEmailLimit,
       monthlyEmailLimit,
       dailyZaloLimit,
       monthlyZaloLimit,
+      dailyAiCreditLimit,
+      periodAiCreditLimit,
     });
-    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_LIMITS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_LIMITS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), {
+      dailyEmailLimit,
+      monthlyEmailLimit,
+      dailyZaloLimit,
+      monthlyZaloLimit,
+      dailyAiCreditLimit,
+      periodAiCreditLimit,
+    });
     return res.json({ success: true, message: 'Cập nhật giới hạn lượt gửi thành công', data: updated });
   } catch (err) {
     return handleServiceError(res, err);

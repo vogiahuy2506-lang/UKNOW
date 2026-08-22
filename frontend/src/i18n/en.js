@@ -1,4 +1,4 @@
-﻿// English translations for UKNOW platform
+// English translations for UKNOW platform
 
 export default {
   common: {
@@ -1016,6 +1016,7 @@ export default {
     searchPlaceholder: 'Search by name, email...',
     limitPerDay: 'Limit / day',
     limitPerMonth: 'Limit / month',
+    limitPerPeriod: 'Limit / period',
     placeholderNote: 'e.g., Transfer MB Bank 12/05/2026...',
     infoTab: 'Information',
     permissionsTab: 'Permissions',
@@ -1028,9 +1029,12 @@ export default {
     email: 'Email',
     emailLabel: 'Email',
     zaloLabel: 'Zalo',
+    aiCreditsLabel: 'AI Credits',
     status: 'Status',
     emailLimit: 'Email Limit',
     zaloLimit: 'Zalo Limit',
+    aiLimit: 'AI Limit',
+    noPermissionsAssigned: 'No feature permissions assigned yet',
     dateAdded: 'Date Added',
     pendingActivation: 'Pending Activation',
     perDay: '/day',
@@ -1071,6 +1075,11 @@ export default {
       inboxManage: 'Inbox — manage/delete',
       mediaLibraryView: 'Media Library — view',
       mediaLibraryManage: 'Media Library — upload/delete',
+      reportsView: 'Reports & Analytics',
+      aiAssistantUse: 'Use AI Assistant',
+      marketplaceManage: 'Manage Marketplace',
+      marketplacePurchase: 'Purchase from Marketplace',
+      integrationsManage: 'Manage Integrations',
     },
     teamActivity: 'Team Activity',
     teamActivityPeriod: 'This month',

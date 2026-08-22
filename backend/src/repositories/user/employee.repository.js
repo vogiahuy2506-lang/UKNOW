@@ -4,7 +4,8 @@ const EMPLOYEE_SELECT = `
   u.id, u.username, u.email, u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
   um.permissions, um.status AS "memberStatus", um.created_at AS "joinedAt",
   um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
-  um.daily_zalo_limit AS "dailyZaloLimit",  um.monthly_zalo_limit AS "monthlyZaloLimit"
+  um.daily_zalo_limit AS "dailyZaloLimit",  um.monthly_zalo_limit AS "monthlyZaloLimit",
+  um.daily_ai_credit_limit AS "dailyAiCreditLimit", um.period_ai_credit_limit AS "periodAiCreditLimit"
 `;
 
 export async function findEmployeesByOwner(ownerId) {
@@ -174,18 +175,23 @@ export async function updateEmployeeSendLimits(employeeId, ownerId, {
   monthlyEmailLimit,
   dailyZaloLimit,
   monthlyZaloLimit,
+  dailyAiCreditLimit = null,
+  periodAiCreditLimit = null,
 }) {
   const result = await db.query(
     `UPDATE user_members
-     SET daily_email_limit   = $1,
-         monthly_email_limit = $2,
-         daily_zalo_limit    = $3,
-         monthly_zalo_limit  = $4,
-         updated_at          = CURRENT_TIMESTAMP
-     WHERE employee_id = $5 AND owner_id = $6
+     SET daily_email_limit     = $1,
+         monthly_email_limit   = $2,
+         daily_zalo_limit      = $3,
+         monthly_zalo_limit    = $4,
+         daily_ai_credit_limit = $5,
+         period_ai_credit_limit = $6,
+         updated_at            = CURRENT_TIMESTAMP
+     WHERE employee_id = $7 AND owner_id = $8
      RETURNING daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
-               daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
-    [dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, employeeId, ownerId]
+               daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit",
+               daily_ai_credit_limit AS "dailyAiCreditLimit", period_ai_credit_limit AS "periodAiCreditLimit"`,
+    [dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, dailyAiCreditLimit, periodAiCreditLimit, employeeId, ownerId]
   );
   return result.rows[0] || null;
 }

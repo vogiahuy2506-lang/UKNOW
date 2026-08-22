@@ -48,6 +48,62 @@ class AiCreditMeterService {
 
     const cycle = await getBillingCycle(userId, billingOptions);
     const billingUserId = cycle.billingUserId || userId;
+
+    // Check employee AI limits if in employee context
+    if (ownerContextId != null && String(ownerContextId) !== String(userId)) {
+      const { rows: memberRows } = await db.query(
+        `SELECT id, status, daily_ai_credit_limit, period_ai_credit_limit
+         FROM user_members
+         WHERE owner_id = $1 AND employee_id = $2
+         LIMIT 1`,
+        [billingUserId, userId]
+      );
+      const member = memberRows[0];
+      if (member) {
+        if (member.status !== 'active') {
+          const error = new Error('Tài khoản nhân viên đang tạm khóa hoặc không còn trong workspace.');
+          error.status = 403;
+          error.code = 'EMPLOYEE_INACTIVE';
+          throw error;
+        }
+
+        const dailyLimit = member.daily_ai_credit_limit != null ? Number(member.daily_ai_credit_limit) : null;
+        const periodLimit = member.period_ai_credit_limit != null ? Number(member.period_ai_credit_limit) : null;
+
+        if (dailyLimit !== null) {
+          const { rows: dailyRows } = await db.query(
+            `SELECT COALESCE(SUM(quantity), 0)::int AS used
+             FROM usage_logs
+             WHERE id_user = $1
+               AND resource_type = $2
+               AND (metadata->>'actorUserId')::bigint = $3
+               AND created_at >= CURRENT_DATE`,
+            [billingUserId, AI_CREDIT_RESOURCE, userId]
+          );
+          const dailyUsed = Number(dailyRows[0]?.used) || 0;
+          if (dailyUsed >= dailyLimit) {
+            throw this._employeeLimitExhausted({ used: dailyUsed, limit: dailyLimit, limitType: 'daily' });
+          }
+        }
+
+        if (periodLimit !== null && cycle?.cycleStart && cycle?.cycleEnd) {
+          const { rows: periodRows } = await db.query(
+            `SELECT COALESCE(SUM(quantity), 0)::int AS used
+             FROM usage_logs
+             WHERE id_user = $1
+               AND resource_type = $2
+               AND (metadata->>'actorUserId')::bigint = $3
+               AND created_at >= $4 AND created_at < $5`,
+            [billingUserId, AI_CREDIT_RESOURCE, userId, cycle.cycleStart, cycle.cycleEnd]
+          );
+          const periodUsed = Number(periodRows[0]?.used) || 0;
+          if (periodUsed >= periodLimit) {
+            throw this._employeeLimitExhausted({ used: periodUsed, limit: periodLimit, limitType: 'period' });
+          }
+        }
+      }
+    }
+
     const limits = await usageTrackingService.getUserPlanLimits(billingUserId);
     const baseLimit = Number(limits?.ai_credits_per_period) || 0;
     const creditUsage = await usageTrackingService.getCreditUsageForCycle(billingUserId, cycle);
@@ -163,6 +219,18 @@ class AiCreditMeterService {
     error.used = used;
     error.limit = limit;
     error.upgradeRequired = true;
+    return error;
+  }
+
+  _employeeLimitExhausted({ used = 0, limit = 0, limitType = 'daily' } = {}) {
+    const periodLabel = limitType === 'daily' ? 'ngày' : 'kỳ';
+    const error = new Error(`Bạn đã dùng hết hạn mức AI trong ${periodLabel} (${used}/${limit}) do chủ workspace thiết lập.`);
+    error.status = 403;
+    error.code = 'EMPLOYEE_AI_LIMIT_EXCEEDED';
+    error.resource = AI_CREDIT_RESOURCE;
+    error.limitType = 'employee';
+    error.used = used;
+    error.limit = limit;
     return error;
   }
 

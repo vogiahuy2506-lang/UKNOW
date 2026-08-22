@@ -65,6 +65,8 @@ CREATE TABLE users (
   auth_provider           VARCHAR(16)  NOT NULL DEFAULT 'local' CHECK (auth_provider IN ('local', 'google')),
   -- migration 141: hồ sơ xuất hoá đơn điền sẵn
   invoice_profile         JSONB,
+  -- migration 166: ngưỡng duyệt chiến dịch nhân viên
+  employee_campaign_approval_threshold INTEGER,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -84,6 +86,9 @@ CREATE TABLE user_members (
   monthly_email_limit  INTEGER,
   daily_zalo_limit     INTEGER,
   monthly_zalo_limit   INTEGER,
+  -- AI credit limits (migration 166)
+  daily_ai_credit_limit   INTEGER,
+  period_ai_credit_limit  INTEGER,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_owner_employee UNIQUE (owner_id, employee_id),

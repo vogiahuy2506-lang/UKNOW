@@ -16,10 +16,10 @@ router.get('/featured', marketplaceController.getFeatured.bind(marketplaceContro
 router.get('/categories', marketplaceController.getCategories.bind(marketplaceController));
 
 // My listings management
-router.get('/listings', requirePermission('campaigns_view'), marketplaceController.getMyListings.bind(marketplaceController));
+router.get('/listings', requirePermission('marketplace_manage'), marketplaceController.getMyListings.bind(marketplaceController));
 
 router.post('/listings',
-  requirePermission('campaigns_create'),
+  requirePermission('marketplace_manage'),
   [
     body('campaignId').notEmpty().withMessage('campaignId là bắt buộc'),
   ],
@@ -28,9 +28,9 @@ router.post('/listings',
 );
 
 // Chatbot listing management
-router.get('/chatbots', marketplaceController.getMyChatbots.bind(marketplaceController));
+router.get('/chatbots', requirePermission('marketplace_manage'), marketplaceController.getMyChatbots.bind(marketplaceController));
 router.post('/chatbots',
-  requirePermission('campaigns_create'),
+  requirePermission('marketplace_manage'),
   [
     body('chatbotId').notEmpty().withMessage('chatbotId là bắt buộc'),
   ],
@@ -41,28 +41,28 @@ router.post('/chatbots',
 router.get('/listings/:id', marketplaceController.getById.bind(marketplaceController));
 
 router.put('/listings/:id',
-  requirePermission('campaigns_create'),
+  requirePermission('marketplace_manage'),
   marketplaceController.update.bind(marketplaceController)
 );
 
 router.delete('/listings/:id',
-  requirePermission('campaigns_create'),
+  requirePermission('marketplace_manage'),
   marketplaceController.delete.bind(marketplaceController)
 );
 
 router.post('/listings/:id/publish',
-  requirePermission('campaigns_create'),
+  requirePermission('marketplace_manage'),
   marketplaceController.publish.bind(marketplaceController)
 );
 
 router.post('/listings/:id/pause',
-  requirePermission('campaigns_create'),
+  requirePermission('marketplace_manage'),
   marketplaceController.pause.bind(marketplaceController)
 );
 
 // Purchase - với rate limiting
-router.post('/purchase/:id', marketplacePurchaseLimiter, marketplaceController.purchase.bind(marketplaceController));
-router.get('/purchases', marketplaceController.getMyPurchases.bind(marketplaceController));
+router.post('/purchase/:id', requirePermission('marketplace_purchase'), marketplacePurchaseLimiter, marketplaceController.purchase.bind(marketplaceController));
+router.get('/purchases', requirePermission('marketplace_purchase'), marketplaceController.getMyPurchases.bind(marketplaceController));
 
 // Reviews
 router.post('/listings/:id/reviews',

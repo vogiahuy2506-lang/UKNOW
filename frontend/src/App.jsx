@@ -369,7 +369,7 @@ function AppContent() {
             </ProtectedRoute>
           }>
             <Route index element={<AiHomePage />} />
-            <Route path="reports" element={<Dashboard />} />
+            <Route path="reports" element={<PermissionRoute permission="reports_view"><Dashboard /></PermissionRoute>} />
 
             {/* Campaigns */}
             <Route path="campaigns" element={<PermissionRoute permission="campaigns_view"><Campaigns /></PermissionRoute>} />

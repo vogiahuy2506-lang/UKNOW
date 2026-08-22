@@ -109,6 +109,178 @@ async function getUserPlanSendLimits(billingUserId) {
   });
 }
 
+async function getEmployeeSendLimits(ownerId, employeeId) {
+  return cached(`emp:${ownerId}:${employeeId}:limits`, async () => {
+    const { rows } = await db.query(
+      `SELECT id, status, daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit
+       FROM user_members
+       WHERE owner_id = $1 AND employee_id = $2
+       LIMIT 1`,
+      [ownerId, employeeId]
+    );
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      membershipId: row.id,
+      status: row.status,
+      daily_email_limit: toInt(row.daily_email_limit),
+      monthly_email_limit: toInt(row.monthly_email_limit),
+      daily_zalo_limit: toInt(row.daily_zalo_limit),
+      monthly_zalo_limit: toInt(row.monthly_zalo_limit),
+    };
+  });
+}
+
+async function countEmployeeEmailSentToday(ownerId, employeeId) {
+  return cached(`emp:${ownerId}:${employeeId}:email_today`, async () => {
+    const { rows } = await db.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM email_messages em
+          INNER JOIN campaigns c ON c.id = em.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND c.created_by = $2
+            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.sent_at >= CURRENT_DATE)
+         + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+            WHERE ul.id_user = $1
+              AND (ul.metadata->>'actorUserId')::bigint = $2
+              AND ul.resource_type = 'email_direct_send'
+              AND ul.created_at >= CURRENT_DATE)
+       )::int AS total`,
+      [ownerId, employeeId]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
+
+async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart = null, cycleEnd = null, queryable = db) {
+  if (cycleStart && cycleEnd) {
+    const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+    const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+    return cached(`emp:${ownerId}:${employeeId}:email_cycle:${startIso}:${endIso}`, async () => {
+      const { rows } = await queryable.query(
+        `SELECT (
+           (SELECT COUNT(*) FROM email_messages em
+            INNER JOIN campaigns c ON c.id = em.id_campaign
+            WHERE ${CAMPAIGN_OWNER_PREDICATE}
+              AND c.created_by = $2
+              AND em.status IN ('sent', 'delivered', 'bounced')
+              AND em.sent_at >= $3 AND em.sent_at < $4)
+           + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+              WHERE ul.id_user = $1
+                AND (ul.metadata->>'actorUserId')::bigint = $2
+                AND ul.resource_type = 'email_direct_send'
+                AND ul.created_at >= $3 AND ul.created_at < $4)
+         )::int AS total`,
+        [ownerId, employeeId, startIso, endIso]
+      );
+      return toCount(rows[0]?.total);
+    });
+  }
+  return cached(`emp:${ownerId}:${employeeId}:email_month`, async () => {
+    const { rows } = await queryable.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM email_messages em
+          INNER JOIN campaigns c ON c.id = em.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND c.created_by = $2
+            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.sent_at >= DATE_TRUNC('month', NOW()))
+         + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+            WHERE ul.id_user = $1
+              AND (ul.metadata->>'actorUserId')::bigint = $2
+              AND ul.resource_type = 'email_direct_send'
+              AND ul.created_at >= DATE_TRUNC('month', NOW()))
+       )::int AS total`,
+      [ownerId, employeeId]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
+
+async function countEmployeeZaloSentToday(ownerId, employeeId) {
+  return cached(`emp:${ownerId}:${employeeId}:zalo_today`, async () => {
+    const { rows } = await db.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM zalo_messages zm
+          JOIN campaigns c ON c.id = zm.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND c.created_by = $2
+            AND zm.tracking_metadata->>'status' = 'sent'
+            AND zm.sent_at >= CURRENT_DATE)
+         + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+            WHERE zpm.id_user = $2
+              AND zpm.role = 'agent'
+              AND zpm.metadata->>'source' = 'manual_inbox'
+              AND zpm.created_at >= CURRENT_DATE)
+         + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+            WHERE ul.id_user = $1
+              AND (ul.metadata->>'actorUserId')::bigint = $2
+              AND ul.resource_type = 'zalo_direct_send'
+              AND ul.created_at >= CURRENT_DATE)
+       )::int AS total`,
+      [ownerId, employeeId]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
+
+async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = null, cycleEnd = null, queryable = db) {
+  if (cycleStart && cycleEnd) {
+    const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+    const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+    return cached(`emp:${ownerId}:${employeeId}:zalo_cycle:${startIso}:${endIso}`, async () => {
+      const { rows } = await queryable.query(
+        `SELECT (
+           (SELECT COUNT(*) FROM zalo_messages zm
+            JOIN campaigns c ON c.id = zm.id_campaign
+            WHERE ${CAMPAIGN_OWNER_PREDICATE}
+              AND c.created_by = $2
+              AND zm.tracking_metadata->>'status' = 'sent'
+              AND zm.sent_at >= $3 AND zm.sent_at < $4)
+           + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+              WHERE zpm.id_user = $2
+                AND zpm.role = 'agent'
+                AND zpm.metadata->>'source' = 'manual_inbox'
+                AND zpm.created_at >= $3 AND zpm.created_at < $4)
+           + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+              WHERE ul.id_user = $1
+                AND (ul.metadata->>'actorUserId')::bigint = $2
+                AND ul.resource_type = 'zalo_direct_send'
+                AND ul.created_at >= $3 AND ul.created_at < $4)
+         )::int AS total`,
+        [ownerId, employeeId, startIso, endIso]
+      );
+      return toCount(rows[0]?.total);
+    });
+  }
+  return cached(`emp:${ownerId}:${employeeId}:zalo_month`, async () => {
+    const { rows } = await queryable.query(
+      `SELECT (
+         (SELECT COUNT(*) FROM zalo_messages zm
+          JOIN campaigns c ON c.id = zm.id_campaign
+          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            AND c.created_by = $2
+            AND zm.tracking_metadata->>'status' = 'sent'
+            AND zm.sent_at >= DATE_TRUNC('month', NOW()))
+         + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+            WHERE zpm.id_user = $2
+              AND zpm.role = 'agent'
+              AND zpm.metadata->>'source' = 'manual_inbox'
+              AND zpm.created_at >= DATE_TRUNC('month', NOW()))
+         + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+            WHERE ul.id_user = $1
+              AND (ul.metadata->>'actorUserId')::bigint = $2
+              AND ul.resource_type = 'zalo_direct_send'
+              AND ul.created_at >= DATE_TRUNC('month', NOW()))
+       )::int AS total`,
+      [ownerId, employeeId]
+    );
+    return toCount(rows[0]?.total);
+  });
+}
+
 async function countEmailSentToday(billingUserId) {
   return cached(`${billingUserId}:email_today`, async () => {
     const { rows } = await db.query(
@@ -328,6 +500,7 @@ export async function checkSendQuota({
   roleCode,
   ownerContextId,
   requiredCount = 1,
+  actorUserId = null,
 } = {}) {
   if (isAdminRole(roleCode)) {
     return okResult(null);
@@ -343,6 +516,95 @@ export async function checkSendQuota({
     return okResult(null);
   }
 
+  const isEmail = channel === 'email';
+  const requestedCount = Math.max(1, Number.parseInt(requiredCount, 10) || 1);
+  const channelLabel = isEmail ? 'email' : 'Zalo';
+  const unitLabel = isEmail ? 'email' : 'tin';
+
+  // 1. Employee limits check (Tier 1)
+  const isEmployee = (ownerContextId != null && String(ownerContextId) !== String(userId))
+    || (billingUserId != null && String(billingUserId) !== String(userId));
+  const effectiveActorUserId = isEmployee ? (actorUserId || userId) : null;
+
+  if (isEmployee && effectiveActorUserId) {
+    const empLimits = await getEmployeeSendLimits(billingUserId, effectiveActorUserId);
+    if (empLimits) {
+      if (empLimits.status !== 'active') {
+        return denyResult({
+          limitType: 'employee_inactive',
+          limit: 0,
+          currentCount: 0,
+          resetAt: null,
+          message: 'Tài khoản nhân viên đang tạm khóa hoặc không còn trong workspace.',
+          billingUserId,
+        });
+      }
+
+      const empDailyLimit = toInt(isEmail ? empLimits.daily_email_limit : empLimits.daily_zalo_limit);
+      const empMonthlyLimit = toInt(isEmail ? empLimits.monthly_email_limit : empLimits.monthly_zalo_limit);
+
+      if (empDailyLimit !== null) {
+        if (empDailyLimit === 0) {
+          return denyResult({
+            limitType: 'employee',
+            limit: 0,
+            currentCount: 0,
+            resetAt: null,
+            message: `Hạn mức gửi ${channelLabel} trong ngày của bạn là 0. Vui lòng liên hệ chủ workspace.`,
+            billingUserId,
+          });
+        }
+        const empDailyCount = isEmail
+          ? await countEmployeeEmailSentToday(billingUserId, effectiveActorUserId)
+          : await countEmployeeZaloSentToday(billingUserId, effectiveActorUserId);
+        if (empDailyCount + requestedCount > empDailyLimit) {
+          return denyResult({
+            limitType: 'employee',
+            limit: empDailyLimit,
+            currentCount: empDailyCount,
+            resetAt: nextVnMidnight(),
+            message: `Đã đạt giới hạn gửi ${channelLabel} trong ngày của nhân viên (${empDailyCount}/${empDailyLimit} ${unitLabel}). Hạn mức sẽ reset vào 00:00 ngày mai.`,
+            billingUserId,
+          });
+        }
+      }
+
+      if (empMonthlyLimit !== null) {
+        if (empMonthlyLimit === 0) {
+          return denyResult({
+            limitType: 'employee',
+            limit: 0,
+            currentCount: 0,
+            resetAt: null,
+            message: `Hạn mức gửi ${channelLabel} trong tháng của bạn là 0. Vui lòng liên hệ chủ workspace.`,
+            billingUserId,
+          });
+        }
+        const cycle = await cached(
+          `${billingUserId}:cycle`,
+          () => getBillingCycle(billingUserId)
+        );
+        const cycleStart = cycle?.hasPlan ? cycle.cycleStart : null;
+        const cycleEnd = cycle?.hasPlan ? cycle.cycleEnd : null;
+
+        const empMonthlyCount = isEmail
+          ? await countEmployeeEmailSentThisMonth(billingUserId, effectiveActorUserId, cycleStart, cycleEnd)
+          : await countEmployeeZaloSentThisMonth(billingUserId, effectiveActorUserId, cycleStart, cycleEnd);
+        if (empMonthlyCount + requestedCount > empMonthlyLimit) {
+          return denyResult({
+            limitType: 'employee',
+            limit: empMonthlyLimit,
+            currentCount: empMonthlyCount,
+            resetAt: cycleEnd instanceof Date ? cycleEnd : (cycleEnd ? new Date(cycleEnd) : nextVnMonthStart()),
+            message: `Đã đạt giới hạn gửi ${channelLabel} trong tháng của nhân viên (${empMonthlyCount}/${empMonthlyLimit} ${unitLabel}). Vui lòng liên hệ chủ workspace.`,
+            billingUserId,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Workspace plan limits check (Tier 2)
   const subscription = await cached(
     `${billingUserId}:subscription`,
     () => getSubscriptionStatus(billingUserId)
@@ -371,12 +633,8 @@ export async function checkSendQuota({
     });
   }
 
-  const isEmail = channel === 'email';
-  const requestedCount = Math.max(1, Number.parseInt(requiredCount, 10) || 1);
   const dailyLimit = toInt(isEmail ? limits.daily_email_limit : limits.daily_zalo_limit);
   const monthlyLimit = toInt(isEmail ? limits.monthly_email_limit : limits.monthly_zalo_limit);
-  const channelLabel = isEmail ? 'email' : 'Zalo';
-  const unitLabel = isEmail ? 'email' : 'tin';
 
   if (dailyLimit !== null) {
     if (dailyLimit === 0) {

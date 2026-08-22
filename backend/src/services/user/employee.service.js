@@ -192,10 +192,12 @@ export async function setEmployeeSendLimits(ownerId, employeeId, limits) {
   };
 
   return updateEmployeeSendLimits(employeeId, ownerId, {
-    dailyEmailLimit:   parse(limits.dailyEmailLimit),
-    monthlyEmailLimit: parse(limits.monthlyEmailLimit),
-    dailyZaloLimit:    parse(limits.dailyZaloLimit),
-    monthlyZaloLimit:  parse(limits.monthlyZaloLimit),
+    dailyEmailLimit:     parse(limits.dailyEmailLimit),
+    monthlyEmailLimit:   parse(limits.monthlyEmailLimit),
+    dailyZaloLimit:      parse(limits.dailyZaloLimit),
+    monthlyZaloLimit:    parse(limits.monthlyZaloLimit),
+    dailyAiCreditLimit:  parse(limits.dailyAiCreditLimit),
+    periodAiCreditLimit: parse(limits.periodAiCreditLimit),
   });
 }
 

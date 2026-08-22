@@ -18,10 +18,10 @@ router.use(requirePasswordChange);
 router.use(requireActivePlan);
 
 // Smart interactive chat
-router.post('/chat', aiLimiter, assertAiCreditAvailable('ai_assistant_chat'), aiController.chat.bind(aiController));
+router.post('/chat', aiLimiter, requirePermission('ai_assistant_use'), assertAiCreditAvailable('ai_assistant_chat'), aiController.chat.bind(aiController));
 
 // Smart interactive chat V2 - multi-step support
-router.post('/chat-v2', aiLimiter, assertAiCreditAvailable('ai_assistant_chat_v2'), aiController.chatV2.bind(aiController));
+router.post('/chat-v2', aiLimiter, requirePermission('ai_assistant_use'), assertAiCreditAvailable('ai_assistant_chat_v2'), aiController.chatV2.bind(aiController));
 
 // Generate campaign script from AI (legacy)
 router.post('/generate-campaign', aiLimiter, requirePermission('campaigns_create'), assertAiCreditAvailable('ai_generate_campaign'), aiController.generateCampaign.bind(aiController));
@@ -57,11 +57,11 @@ router.get('/business-profile', requireSelfContext, aiController.getBusinessProf
 router.put('/business-profile', requireSelfContext, aiController.saveBusinessProfile.bind(aiController));
 
 // Chat sessions (multi-session history)
-router.get('/sessions', aiController.getSessions.bind(aiController));
-router.get('/sessions/:id/messages', aiController.getSessionMessages.bind(aiController));
-router.delete('/sessions/:id', aiController.deleteSession.bind(aiController));
-// Wizard state mutation tß╗½ n├║t bß║Ñm (kh├┤ng gß╗ìi AI ΓåÆ kh├┤ng aiLimiter, kh├┤ng credit)
-router.patch('/sessions/:id/wizard-state', aiController.patchWizardState.bind(aiController));
+router.get('/sessions', requirePermission('ai_assistant_use'), aiController.getSessions.bind(aiController));
+router.get('/sessions/:id/messages', requirePermission('ai_assistant_use'), aiController.getSessionMessages.bind(aiController));
+router.delete('/sessions/:id', requirePermission('ai_assistant_use'), aiController.deleteSession.bind(aiController));
+// Wizard state mutation từ nút bấm (không gọi AI → không aiLimiter, không credit)
+router.patch('/sessions/:id/wizard-state', requirePermission('ai_assistant_use'), aiController.patchWizardState.bind(aiController));
 
 // Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)
 router.post('/custom-chat', requireSelfContext, aiLimiter, assertAiCreditAvailable('ai_custom_chat'), aiController.customChat.bind(aiController));

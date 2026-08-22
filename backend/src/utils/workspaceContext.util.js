@@ -72,4 +72,17 @@ export function getWorkspaceScope(authUser) {
   };
 }
 
+/**
+ * Trả về ID của workspace owner (nếu là nhân viên thì lấy ownerId, ngược lại lấy user.id).
+ *
+ * @param {object} user
+ * @returns {number}
+ */
+export function resolveWorkspaceOwnerId(user) {
+  if (user?.activeContext?.type === 'employee' && user?.activeContext?.ownerId) {
+    return user.activeContext.ownerId;
+  }
+  return user?.workspaceOwnerId || user?.id;
+}
+
 export default getWorkspaceContext;

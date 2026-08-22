@@ -34,6 +34,11 @@ const PERMISSION_FIELDS = (t) => [
   { keys: ['inbox_manage'],     label: t('employee.permissions.inboxManage') },
   { keys: ['media_library_view'], label: t('employee.permissions.mediaLibraryView') },
   { keys: ['media_library_manage'], label: t('employee.permissions.mediaLibraryManage') },
+  { keys: ['reports_view'],     label: t('employee.permissions.reportsView') },
+  { keys: ['ai_assistant_use'], label: t('employee.permissions.aiAssistantUse') },
+  { keys: ['marketplace_manage'], label: t('employee.permissions.marketplaceManage') },
+  { keys: ['marketplace_purchase'], label: t('employee.permissions.marketplacePurchase') },
+  { keys: ['integrations_manage'], label: t('employee.permissions.integrationsManage') },
 ];
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';
@@ -235,10 +240,12 @@ const EmployeeManagement = () => {
     editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
     setPermState(emp.permissions || {});
     setLimitsState({
-      dailyEmailLimit:   emp.dailyEmailLimit   ?? null,
-      monthlyEmailLimit: emp.monthlyEmailLimit ?? null,
-      dailyZaloLimit:    emp.dailyZaloLimit    ?? null,
-      monthlyZaloLimit:  emp.monthlyZaloLimit  ?? null,
+      dailyEmailLimit:     emp.dailyEmailLimit     ?? null,
+      monthlyEmailLimit:   emp.monthlyEmailLimit   ?? null,
+      dailyZaloLimit:      emp.dailyZaloLimit      ?? null,
+      monthlyZaloLimit:    emp.monthlyZaloLimit    ?? null,
+      dailyAiCreditLimit:  emp.dailyAiCreditLimit  ?? null,
+      periodAiCreditLimit: emp.periodAiCreditLimit ?? null,
     });
   };
 
@@ -745,6 +752,27 @@ const EmployeeManagement = () => {
                       value={limitsState.monthlyZaloLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, monthlyZaloLimit: v }))}
                       max={planLimits.monthlyZalo ?? undefined}
+                    />
+                  </div>
+                </div>
+                <div className="border-t border-gray-100" />
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <HiOutlineKey className="w-5 h-5 text-purple-500" />
+                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{t('employee.aiCreditsLabel')}</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <LimitField
+                      t={t}
+                      label={t('employee.limitPerDay')}
+                      value={limitsState.dailyAiCreditLimit}
+                      onChange={(v) => setLimitsState((p) => ({ ...p, dailyAiCreditLimit: v }))}
+                    />
+                    <LimitField
+                      t={t}
+                      label={t('employee.limitPerPeriod')}
+                      value={limitsState.periodAiCreditLimit}
+                      onChange={(v) => setLimitsState((p) => ({ ...p, periodAiCreditLimit: v }))}
                     />
                   </div>
                 </div>

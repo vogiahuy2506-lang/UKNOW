@@ -70,8 +70,8 @@ const superAdminMenuItems = (t) => [
 ];
 
 const userMenuItems = (t) => [
-  { name: t('nav.aiAssistant'), path: '/app', icon: HiOutlineSparkles, end: true },
-  { name: t('nav.dashboard'), path: '/app/reports', icon: HiOutlineHome },
+  { name: t('nav.aiAssistant'), path: '/app', icon: HiOutlineSparkles, end: true, permission: ['ai_assistant_use'] },
+  { name: t('nav.dashboard'), path: '/app/reports', icon: HiOutlineHome, permission: ['reports_view'] },
   {
     name: t('nav.aiChatbot'), icon: HiOutlineInbox,
     children: [
@@ -389,6 +389,11 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                 </div>
               );
             })}
+            {visibleMenuItems.length === 0 && (
+              <div className={`py-8 text-center text-gray-400 text-xs ${isOpen || isMobile ? 'px-2' : 'hidden'}`}>
+                {t('employee.noPermissionsAssigned')}
+              </div>
+            )}
           </div>
         </nav>
 

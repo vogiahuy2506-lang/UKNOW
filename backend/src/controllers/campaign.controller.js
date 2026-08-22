@@ -1,3 +1,4 @@
+import db from '../config/database.js';
 import uploadController from './upload.controller.js';
 import { serverError, paginate } from '../helpers.js';
 import campaignFlowService from '../services/campaign/campaignFlow.service.js';
@@ -574,6 +575,67 @@ class CampaignController {
         });
       }
 
+      // Kiểm tra ngưỡng phê duyệt nếu là nhân viên chạy
+      if (workspaceContext.contextType === 'employee') {
+        const { rows: ownerRows } = await db.query(
+          `SELECT employee_campaign_approval_threshold FROM users WHERE id = $1`,
+          [workspaceContext.workspaceOwnerId]
+        );
+        const threshold = ownerRows[0]?.employee_campaign_approval_threshold;
+        if (threshold != null && threshold > 0) {
+          const { rows: countRows } = await db.query(
+            `SELECT COUNT(*)::int AS count FROM campaign_customers WHERE id_campaign = $1`,
+            [campaignId]
+          );
+          let totalCustomers = Number(countRows[0]?.count) || 0;
+
+          if (totalCustomers === 0) {
+            const { rows: nodeRows } = await db.query(
+              `SELECT node_type, node_subtype, config FROM campaign_nodes WHERE id_campaign = $1`,
+              [campaignId]
+            );
+            for (const n of nodeRows) {
+              const cfg = typeof n.config === 'string' ? JSON.parse(n.config || '{}') : (n.config || {});
+              if (Array.isArray(cfg.customers)) {
+                totalCustomers += cfg.customers.length;
+              } else if (Array.isArray(cfg.selectedCustomerIds)) {
+                totalCustomers += cfg.selectedCustomerIds.length;
+              } else if (Array.isArray(cfg.phoneNumbers)) {
+                totalCustomers += cfg.phoneNumbers.length;
+              } else if (Array.isArray(cfg.recipients)) {
+                totalCustomers += cfg.recipients.length;
+              }
+            }
+          }
+          if (totalCustomers >= threshold) {
+            await db.query(
+              `UPDATE campaigns SET status = 'pending_owner_approval', updated_at = NOW() WHERE id = $1`,
+              [campaignId]
+            );
+            try {
+              await logWorkspace(
+                getWorkspaceAuditContext(req),
+                AUDIT_ACTIONS.CAMPAIGN_APPROVAL_REQUESTED,
+                AUDIT_ENTITY_TYPES.CAMPAIGN,
+                campaignId,
+                { threshold, totalCustomers, actorUserId: workspaceContext.actorUserId }
+              );
+            } catch (auditErr) {
+              console.warn('[Campaign] CAMPAIGN_APPROVAL_REQUESTED audit failed:', auditErr?.message);
+            }
+            return res.json({
+              success: true,
+              message: `Chiến dịch có ${totalCustomers} người nhận, vượt ngưỡng yêu cầu phê duyệt (${threshold}). Vui lòng chờ chủ workspace duyệt.`,
+              data: {
+                campaignId,
+                status: 'pending_owner_approval',
+                requiresApproval: true,
+              },
+            });
+          }
+        }
+      }
+
       let runRecord;
       if (continueRunId !== null) {
         runRecord = await campaignRunService.resumeContinuousRunRecord({
@@ -1071,6 +1133,7 @@ class CampaignController {
           formatUtc7: () => emailSettingsController.formatUtc7(),
         });
 
+
         return res.json({
           success: true,
           message: `Đã gửi email thử nghiệm thành công tới ${recipient}`,
@@ -1082,6 +1145,125 @@ class CampaignController {
       return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || 'Lỗi server khi gửi thử nghiệm',
+      });
+    }
+  }
+
+  /**
+   * Phê duyệt chiến dịch đang chờ duyệt (owner-only).
+   * POST /api/campaigns/:id/approve
+   */
+  async approve(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const campaignId = Number(req.params.id);
+
+      const { rows } = await db.query(
+        `SELECT id, status, campaign_name, workspace_owner_id, id_user FROM campaigns
+         WHERE id = $1 AND (workspace_owner_id = $2 OR id_user = $2)`,
+        [campaignId, workspaceContext.workspaceOwnerId]
+      );
+      const campaign = rows[0];
+      if (!campaign) {
+        return res.status(404).json({ success: false, message: 'Chiến dịch không tồn tại' });
+      }
+
+      await db.query(
+        `UPDATE campaigns SET status = 'active', updated_at = NOW() WHERE id = $1`,
+        [campaignId]
+      );
+
+      // Tạo run record và chạy chiến dịch
+      const runRecord = await this.createCampaignRunRecord({
+        campaignId,
+        workspaceOwnerId: workspaceContext.workspaceOwnerId,
+        actorUserId: workspaceContext.actorUserId,
+        roleCode: workspaceContext.roleCode,
+        isAdmin: workspaceContext.isSuperAdmin,
+        source: 'manual',
+        runName: `${campaign.campaign_name} (Approved)`,
+      });
+
+      this.executeCampaign(campaignId, runRecord.id, workspaceContext.workspaceOwnerId, workspaceContext.roleCode).catch(err => {
+        console.error('Execute approved campaign error:', err);
+      });
+
+      try {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.CAMPAIGN_APPROVAL_APPROVED,
+          AUDIT_ENTITY_TYPES.CAMPAIGN,
+          campaignId,
+          { runId: runRecord.id }
+        );
+      } catch (auditErr) {
+        console.warn('[Campaign] CAMPAIGN_APPROVAL_APPROVED audit failed:', auditErr?.message);
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã phê duyệt và bắt đầu chạy chiến dịch',
+        data: {
+          runId: runRecord.id,
+          campaignId,
+          status: 'running',
+        },
+      });
+    } catch (error) {
+      console.error('Approve campaign error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi phê duyệt chiến dịch',
+      });
+    }
+  }
+
+  /**
+   * Từ chối chiến dịch đang chờ duyệt (owner-only).
+   * POST /api/campaigns/:id/reject
+   */
+  async reject(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const campaignId = Number(req.params.id);
+      const { reason = '' } = req.body || {};
+
+      const { rows } = await db.query(
+        `SELECT id, status FROM campaigns
+         WHERE id = $1 AND (workspace_owner_id = $2 OR id_user = $2)`,
+        [campaignId, workspaceContext.workspaceOwnerId]
+      );
+      if (!rows.length) {
+        return res.status(404).json({ success: false, message: 'Chiến dịch không tồn tại' });
+      }
+
+      await db.query(
+        `UPDATE campaigns SET status = 'draft', updated_at = NOW() WHERE id = $1`,
+        [campaignId]
+      );
+
+      try {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.CAMPAIGN_APPROVAL_REJECTED,
+          AUDIT_ENTITY_TYPES.CAMPAIGN,
+          campaignId,
+          { reason }
+        );
+      } catch (auditErr) {
+        console.warn('[Campaign] CAMPAIGN_APPROVAL_REJECTED audit failed:', auditErr?.message);
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã từ chối chiến dịch và chuyển về bản nháp',
+        data: { campaignId, status: 'draft' },
+      });
+    } catch (error) {
+      console.error('Reject campaign error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi từ chối chiến dịch',
       });
     }
   }
