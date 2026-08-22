@@ -17,8 +17,22 @@
  * Không ảnh hưởng số thứ tự, chỉ khác chút về canh lề.
  */
 
-/** Một khối <p>…</p> không chứa thẻ mở/đóng của list, heading hay bảng. */
-const CAPTION_BLOCK = '(?:<p>(?:(?!<\\/?(?:ol|ul|h[1-6]|table)\\b)[\\s\\S])*?<\\/p>)+';
+/**
+ * Một khối "chú thích" đứng giữa hai <ol>. Gồm ba dạng, vì ảnh xuất hiện khác
+ * nhau tuỳ nguồn:
+ *   - <p>…</p>            — bản sinh từ Markdown (chú thích "[ẢNH: …]")
+ *   - <img …>             — ảnh admin chèn bằng trình soạn thảo: extension Image
+ *                           cấu hình `inline: false` nên TipTap ghi <img> thành
+ *                           node CẤP KHỐI, KHÔNG bọc trong <p>. Thiếu nhánh này
+ *                           thì đúng những bài đã chèn ảnh lại không vá được.
+ *   - <figure>…</figure>  — phòng khi ảnh kèm chú thích
+ * Không cho lọt thẻ mở/đóng của list, heading hay bảng vào giữa.
+ */
+const CAPTION_BLOCK = '(?:'
+  + '<p>(?:(?!<\\/?(?:ol|ul|h[1-6]|table)\\b)[\\s\\S])*?<\\/p>'
+  + '|<img\\b[^>]*>'
+  + '|<figure\\b[^>]*>[\\s\\S]*?<\\/figure>'
+  + ')+';
 const SPLIT_PATTERN = new RegExp(`</li></ol>(${CAPTION_BLOCK})<ol>`, 'g');
 
 /**
@@ -109,4 +123,19 @@ export function countBareSlugLinks(html) {
  */
 export function stripTags(html) {
   return String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Danh sách src của mọi <img>, GIỮ NGUYÊN THỨ TỰ.
+ *
+ * Cần riêng hàm này vì `stripTags` mù với ảnh: <img> không có nội dung chữ nên
+ * một tấm ảnh biến mất vẫn cho ra chuỗi chữ y hệt. Muốn chốt "không mất ảnh"
+ * thì phải so trực tiếp danh sách src.
+ *
+ * @param {string} html
+ * @returns {string[]}
+ */
+export function extractImageSrcs(html) {
+  const tags = String(html || '').match(/<img\b[^>]*>/g) || [];
+  return tags.map((tag) => tag.match(/\bsrc="([^"]*)"/)?.[1] ?? '');
 }

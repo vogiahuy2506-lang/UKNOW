@@ -6,6 +6,7 @@ import {
   countOrderedLists,
   countBareSlugLinks,
   stripTags,
+  extractImageSrcs,
 } from '../helpArticleListRepair.util.js';
 
 describe('helpArticleListRepair.repairSplitOrderedLists', () => {
@@ -28,6 +29,28 @@ describe('helpArticleListRepair.repairSplitOrderedLists', () => {
     const out = repairSplitOrderedLists(html);
     expect(out).toContain('<img src="/uploads/a.png" alt="">');
     expect(countOrderedLists(out)).toBe(1);
+  });
+
+  // TipTap cấu hình Image `inline: false` nên ảnh admin chèn là node CẤP KHỐI,
+  // không bọc trong <p>. Bỏ sót dạng này thì đúng những bài đã chèn ảnh — thứ
+  // người dùng quan tâm nhất — lại là những bài không được vá.
+  it('gộp được khi ảnh là <img> cấp khối (dạng trình soạn thảo thật sự ghi ra)', () => {
+    const html = '<ol><li>Bước một</li></ol><img src="/uploads/a.png" alt="x"><ol><li>Bước hai</li></ol>';
+    const out = repairSplitOrderedLists(html);
+    expect(countOrderedLists(out)).toBe(1);
+    expect(out).toBe('<ol><li>Bước một<img src="/uploads/a.png" alt="x"></li><li>Bước hai</li></ol>');
+  });
+
+  it('gộp được khi ảnh nằm trong <figure>', () => {
+    const html = '<ol><li>A</li></ol><figure><img src="/u/b.png"><figcaption>chú</figcaption></figure><ol><li>B</li></ol>';
+    expect(countOrderedLists(repairSplitOrderedLists(html))).toBe(1);
+  });
+
+  it('gộp được khi trộn <p> và <img> cấp khối liền nhau', () => {
+    const html = '<ol><li>A</li></ol><p>ghi chú</p><img src="/u/c.png"><ol><li>B</li></ol>';
+    const out = repairSplitOrderedLists(html);
+    expect(countOrderedLists(out)).toBe(1);
+    expect(extractImageSrcs(out)).toEqual(['/u/c.png']);
   });
 
   it('gộp được nhiều đoạn <p> liền nhau giữa hai mục', () => {
@@ -92,6 +115,28 @@ describe('helpArticleListRepair.repairBareSlugLinks', () => {
   it('an toàn với đầu vào rỗng / không phải chuỗi', () => {
     expect(repairBareSlugLinks('')).toBe('');
     expect(repairBareSlugLinks(null)).toBeNull();
+  });
+});
+
+describe('helpArticleListRepair.extractImageSrcs', () => {
+  // stripTags mù với ảnh (<img> không có chữ), nên chốt "không mất ảnh" phải
+  // dựa vào danh sách src chứ không dựa vào so sánh chữ.
+  it('lấy đúng src theo thứ tự, cả <img> cấp khối lẫn trong <p>', () => {
+    const html = '<p><img src="/u/1.png"></p><img src="/u/2.png" alt="x"><p>chữ</p>';
+    expect(extractImageSrcs(html)).toEqual(['/u/1.png', '/u/2.png']);
+  });
+
+  it('chứng minh vì sao cần nó: mất ảnh KHÔNG làm đổi chuỗi chữ', () => {
+    const withImg = '<ol><li>A<img src="/u/a.png"></li></ol>';
+    const lostImg = '<ol><li>A</li></ol>';
+    expect(stripTags(withImg)).toBe(stripTags(lostImg));      // chốt cũ không thấy gì
+    expect(extractImageSrcs(withImg)).not.toEqual(extractImageSrcs(lostImg)); // chốt mới bắt được
+  });
+
+  it('trả mảng rỗng khi không có ảnh / đầu vào rỗng', () => {
+    expect(extractImageSrcs('<p>chữ</p>')).toEqual([]);
+    expect(extractImageSrcs('')).toEqual([]);
+    expect(extractImageSrcs(null)).toEqual([]);
   });
 });
 
