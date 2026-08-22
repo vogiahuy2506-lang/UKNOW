@@ -112,7 +112,12 @@ function buildListNodes(items) {
     while (stack.length > 1 && item.indent <= stack[stack.length - 1].indent) {
       stack.pop();
     }
-    const node = { content: item.content, ordered: item.ordered, children: [] };
+    const node = {
+      content: item.content,
+      ordered: item.ordered,
+      paras: item.paras || [],
+      children: [],
+    };
     stack[stack.length - 1].node.children.push(node);
     stack.push({ indent: item.indent, node });
   }
@@ -135,7 +140,10 @@ function renderListNodes(nodes) {
     while (i < nodes.length && nodes[i].ordered === ordered) {
       const node = nodes[i];
       const childHtml = node.children.length ? renderListNodes(node.children) : '';
-      group += `<li>${inline(node.content)}${childHtml}</li>`;
+      // Continuation paragraphs live INSIDE the <li> — moving them out would
+      // split the surrounding <ol>, restarting its numbering at 1.
+      const paraHtml = (node.paras || []).map((p) => `<p>${inline(p)}</p>`).join('');
+      group += `<li>${inline(node.content)}${paraHtml}${childHtml}</li>`;
       i += 1;
     }
     html += `<${tag}>${group}</${tag}>`;
@@ -180,7 +188,10 @@ export function miniMarkdownToHtml(md) {
   let inCodeBlock = false;
   let codeLines = [];
 
-  let listItems = []; // { indent, ordered, content } — flat buffer, nested at flush time
+  let listItems = []; // { indent, ordered, content, paras } — flat buffer, nested at flush time
+  // Đã gặp dòng trống khi list đang mở. Chưa đóng list vội: dòng trống có thể chỉ
+  // đang ngăn cách mục với đoạn con thụt lề của chính nó (vd chú thích ảnh).
+  let pendingListBlank = false;
   let quoteLines = [];
   let tableLines = [];
   let paraLines = [];
@@ -193,6 +204,7 @@ export function miniMarkdownToHtml(md) {
   };
 
   const flushList = () => {
+    pendingListBlank = false;
     if (!listItems.length) return;
     blocks.push(renderListNodes(buildListNodes(listItems)));
     listItems = [];
@@ -258,6 +270,15 @@ export function miniMarkdownToHtml(md) {
 
     // 2. Empty line
     if (!trimmed) {
+      // List đang mở: giữ nguyên, chờ xem dòng kế tiếp có phải đoạn con thụt lề
+      // của mục hiện tại không. Nếu không phải, nhánh 7 bên dưới sẽ đóng list.
+      if (listItems.length) {
+        flushPara();
+        flushQuote();
+        flushTable();
+        pendingListBlank = true;
+        continue;
+      }
       flushAll();
       continue;
     }
@@ -299,7 +320,23 @@ export function miniMarkdownToHtml(md) {
       flushTable();
       const indent = listMatch[1].length;
       const ordered = /^\d+\.$/.test(listMatch[2]);
-      listItems.push({ indent, ordered, content: listMatch[3] });
+      pendingListBlank = false;
+      listItems.push({ indent, ordered, content: listMatch[3], paras: [] });
+      continue;
+    }
+
+    // 7. Đoạn con thụt lề của mục list đang mở (continuation paragraph).
+    // Nhờ nhánh này mà chú thích ảnh nằm giữa các mục không cắt đôi <ol>, số thứ
+    // tự chạy liền 1..n thay vì reset về 1 sau mỗi ảnh.
+    if (listItems.length && /^\s{2,}/.test(raw)) {
+      const lastItem = listItems[listItems.length - 1];
+      if (pendingListBlank) {
+        lastItem.paras.push(trimmed);
+        pendingListBlank = false;
+      } else {
+        // Không có dòng trống ngăn cách → vẫn là cùng một đoạn với nội dung mục.
+        lastItem.content += ` ${trimmed}`;
+      }
       continue;
     }
     flushList();

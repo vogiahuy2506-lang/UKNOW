@@ -151,6 +151,41 @@ describe('miniMarkdownToHtml', () => {
       expect(html).toBe('<ol><li>Cài đặt môi trường</li><li>Cấu hình biến</li><li>Chạy ứng dụng</li></ol>');
     });
 
+    it('keeps one <ol> when an indented paragraph separates items, so numbering does not restart', () => {
+      // Bài hướng dẫn có chú thích ảnh thụt lề giữa các bước. Trước đây mỗi chú
+      // thích cắt <ol> làm đôi nên số hiển thị 1 / 1 / 1 thay vì 1 / 2 / 3.
+      const md = '1. Bước một\n\n   [ẢNH: minh hoạ bước một]\n\n2. Bước hai\n\n   [ẢNH: minh hoạ bước hai]\n\n3. Bước ba';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ol><li>Bước một<p>[ẢNH: minh hoạ bước một]</p></li>'
+        + '<li>Bước hai<p>[ẢNH: minh hoạ bước hai]</p></li>'
+        + '<li>Bước ba</li></ol>',
+      );
+      expect(html.match(/<ol>/g)).toHaveLength(1);
+    });
+
+    it('closes the list when the paragraph after a blank line is NOT indented', () => {
+      const md = '1. Bước một\n2. Bước hai\n\nĐoạn văn bình thường sau danh sách.';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ol><li>Bước một</li><li>Bước hai</li></ol><p>Đoạn văn bình thường sau danh sách.</p>',
+      );
+    });
+
+    it('attaches multiple continuation paragraphs to the same list item', () => {
+      const md = '1. Bước một\n\n   Ghi chú đầu.\n\n   Ghi chú sau.\n\n2. Bước hai';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ol><li>Bước một<p>Ghi chú đầu.</p><p>Ghi chú sau.</p></li><li>Bước hai</li></ol>',
+      );
+    });
+
+    it('treats an indented line with no blank line before it as part of the same item text', () => {
+      const md = '1. Bước một\n   nối tiếp cùng câu\n2. Bước hai';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe('<ol><li>Bước một nối tiếp cùng câu</li><li>Bước hai</li></ol>');
+    });
+
     it('converts blockquotes into <blockquote><p>', () => {
       const md = `> Lưu ý: Đây là tài liệu bảo mật nội bộ.\n> Vui lòng không chia sẻ ra ngoài.`;
       const html = miniMarkdownToHtml(md);
