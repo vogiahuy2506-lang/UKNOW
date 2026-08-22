@@ -13,6 +13,12 @@ const adminMembersApiService = {
   demote(id) {
     return api.patch(`/admin/members/${id}/demote`);
   },
+  detachEmail(id, confirmEmail) {
+    return api.patch(`/admin/members/${id}/detach-email`, { confirmEmail });
+  },
+  purge(id, confirmEmail) {
+    return api.delete(`/admin/members/${id}/purge`, { data: { confirmEmail } });
+  },
 };
 
 export default adminMembersApiService;

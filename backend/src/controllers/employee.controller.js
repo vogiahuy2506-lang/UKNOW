@@ -147,14 +147,30 @@ export async function updateInfo(req, res) {
 export async function updateLimits(req, res) {
   try {
     const ownerId = req.user.id;
-    const { dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit } = req.body;
+    const {
+      dailyEmailLimit,
+      monthlyEmailLimit,
+      dailyZaloLimit,
+      monthlyZaloLimit,
+      dailyAiCreditLimit,
+      periodAiCreditLimit,
+    } = req.body;
     const updated = await employeeService.setEmployeeSendLimits(ownerId, Number(req.params.id), {
       dailyEmailLimit,
       monthlyEmailLimit,
       dailyZaloLimit,
       monthlyZaloLimit,
+      dailyAiCreditLimit,
+      periodAiCreditLimit,
     });
-    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_LIMITS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_LIMITS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), {
+      dailyEmailLimit,
+      monthlyEmailLimit,
+      dailyZaloLimit,
+      monthlyZaloLimit,
+      dailyAiCreditLimit,
+      periodAiCreditLimit,
+    });
     return res.json({ success: true, message: 'Cập nhật giới hạn lượt gửi thành công', data: updated });
   } catch (err) {
     return handleServiceError(res, err);
@@ -282,6 +298,52 @@ export async function myContribution(req, res) {
       activeContext: req.user.activeContext,
     });
     return res.json({ success: true, data });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
+ * GET /api/employees/campaign-approval-threshold
+ * Lấy ngưỡng số người nhận cần duyệt chiến dịch của workspace.
+ */
+export async function getCampaignApprovalThreshold(req, res) {
+  try {
+    const ownerId = resolveOwnerId(req);
+    if (!ownerId) {
+      return res.status(400).json({ success: false, message: 'Thiếu ownerId' });
+    }
+    const threshold = await employeeService.getCampaignApprovalThreshold(ownerId);
+    return res.json({ success: true, data: { threshold } });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
+ * PATCH /api/employees/campaign-approval-threshold
+ * Cập nhật ngưỡng số người nhận cần duyệt chiến dịch của workspace.
+ */
+export async function updateCampaignApprovalThreshold(req, res) {
+  try {
+    const ownerId = resolveOwnerId(req);
+    if (!ownerId) {
+      return res.status(400).json({ success: false, message: 'Thiếu ownerId' });
+    }
+    const { threshold } = req.body;
+    const { before, after } = await employeeService.setCampaignApprovalThreshold(ownerId, threshold);
+    await logWorkspace(
+      getWorkspaceAuditContext(req),
+      AUDIT_ACTIONS.CAMPAIGN_APPROVAL_THRESHOLD_UPDATED,
+      AUDIT_ENTITY_TYPES.WORKSPACE,
+      ownerId,
+      { before, after }
+    );
+    return res.json({
+      success: true,
+      data: { threshold: after },
+      message: 'Cập nhật ngưỡng duyệt chiến dịch thành công',
+    });
   } catch (err) {
     return handleServiceError(res, err);
   }

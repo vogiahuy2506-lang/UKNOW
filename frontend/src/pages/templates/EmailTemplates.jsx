@@ -24,6 +24,8 @@ import {
   resolveAttachmentKey,
   wrapEmailSrcDoc,
 } from '../../features/templates/utils/emailTemplateEditor.helpers';
+import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
+import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
 
 const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = null, activeChannel = null, onChannelChange = null }) => {
   const { t } = useI18n();
@@ -260,10 +262,24 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = 
       const namedTemp = namedAll.filter(att => att.isTemp && att.tempId);
       const namedExisting = namedAll.filter(att => !att.isTemp);
 
+      // Đồng bộ bodyHtml ↔ bodyText trước khi gửi để 2 field không bị lệch.
+      // - Nếu user đang edit HTML nhưng bodyText trống → sinh plain text từ HTML.
+      // - Nếu user đang edit Text nhưng bodyHtml trống → build HTML từ plain text
+      //   (markdown-style `**bold**`, `---`, links) thay vì strip ngược.
+      // - Nếu cả 2 đều có → giữ nguyên (user đã chỉnh cả 2).
+      const finalBodyHtml = isZaloTemplate
+        ? ''
+        : (contentTab === 'html'
+            ? formData.bodyHtml
+            : (formData.bodyHtml || miniMarkdownToHtml(formData.bodyText || '')));
+      const finalBodyText = isZaloTemplate
+        ? formData.bodyText
+        : (formData.bodyText || htmlToPlainText(formData.bodyHtml || ''));
+
       const payload = {
         ...formData,
-        bodyHtml: isZaloTemplate ? '' : (contentTab === 'html' ? formData.bodyHtml : ''),
-        bodyText: isZaloTemplate ? formData.bodyText : (contentTab === 'text' ? formData.bodyText : ''),
+        bodyHtml: finalBodyHtml,
+        bodyText: finalBodyText,
         variables,
         // Gửi temp attachments riêng để backend xử lý
         tempAttachments: namedTemp.map(att => ({

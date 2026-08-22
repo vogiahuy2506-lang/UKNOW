@@ -5,6 +5,7 @@ import marketplaceReviewService from '../services/marketplace/marketplaceReview.
 import marketplaceFavoriteService from '../services/marketplace/marketplaceFavorite.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import { paginate } from '../helpers.js';
+import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
 const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
 const VALID_VISIBILITIES = ['public', 'team'];
@@ -16,7 +17,7 @@ class MarketplaceController {
    */
   async getMyListings(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { status, page = 1, limit = 20 } = req.query;
 
       // Sanitize pagination params
@@ -46,7 +47,7 @@ class MarketplaceController {
    */
   async create(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { campaignId, title, description, category, tags, priceCredits, visibility } = req.body;
 
       if (!campaignId) {
@@ -98,7 +99,7 @@ class MarketplaceController {
   async getById(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user?.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const listing = await marketplaceListingService.getById(parseInt(id, 10), userId);
       if (!listing) {
@@ -133,7 +134,7 @@ class MarketplaceController {
   async update(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { title, description, category, tags, priceCredits, visibility } = req.body;
 
       const listing = await marketplaceListingService.update(parseInt(id, 10), userId, {
@@ -168,7 +169,7 @@ class MarketplaceController {
   async delete(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const deleted = await marketplaceListingService.delete(parseInt(id, 10), userId);
       if (!deleted) {
@@ -194,7 +195,7 @@ class MarketplaceController {
   async publish(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const listing = await marketplaceListingService.publish(parseInt(id, 10), userId);
       if (!listing) {
@@ -220,7 +221,7 @@ class MarketplaceController {
   async pause(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const listing = await marketplaceListingService.pause(parseInt(id, 10), userId);
       if (!listing) {
@@ -316,7 +317,7 @@ class MarketplaceController {
   async purchase(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const result = await marketplacePurchaseService.purchase(parseInt(id, 10), userId);
 
@@ -344,7 +345,7 @@ class MarketplaceController {
    */
   async getMyPurchases(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { page = 1, limit = 20 } = req.query;
 
       const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -402,7 +403,7 @@ class MarketplaceController {
    */
   async getMyChatbots(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const chatbots = await chatbotRepository.listChatbotsByUser(userId);
 
@@ -443,7 +444,7 @@ class MarketplaceController {
    */
   async createFromChatbot(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { chatbotId, title, description, category, tags, priceCredits, visibility, includeKnowledgeBase } = req.body;
 
       if (!chatbotId) {

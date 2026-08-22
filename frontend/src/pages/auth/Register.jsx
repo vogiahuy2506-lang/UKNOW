@@ -125,6 +125,11 @@ const OtpStep = ({ email, formData, onBack }) => {
       const result = await registerUser({ ...formData, emailVerificationCode: code });
       trackEvent('sign_up', { method: 'email' });
       toast.success(t('auth.registerSuccess'));
+      // TẠM GIỮ LẠI (đã gỡ rồi phục hồi 22/08): lẽ ra TrialWelcomeModal thay được
+      // toast này, nhưng P2-1 (modal không hiện ở luồng Google) chưa xác nhận là
+      // đã hết — không có bằng chứng modal chạy đúng ở CẢ HAI luồng. Gỡ toast lúc
+      // modal còn nghi vấn = không ai được báo trial nào cả. Chỉ gỡ lại sau khi
+      // test tay xác nhận modal hiện đúng (xem P2-1 trong plan 22/08).
       const trialDays = result?.data?.trial?.durationDays;
       if (trialDays) {
         toast.success(t('register.trialGranted', { days: trialDays }));
@@ -368,6 +373,8 @@ const Register = () => {
     try {
       const result = await googleLogin({ access_token: pendingGoogleToken.access_token });
       toast.success(t('register.googleLoginSuccess'));
+      // TẠM GIỮ LẠI — đây chính xác là luồng bị nghi TrialWelcomeModal không hiện
+      // (P2-1, 22/08). Xem comment đầy đủ ở handleSubmit phía trên.
       const trialDays = result?.data?.trial?.durationDays;
       if (trialDays) {
         toast.success(t('register.trialGranted', { days: trialDays }));

@@ -66,6 +66,12 @@ router.post('/:id/pause', requirePermission('campaigns_run'), campaignController
 // Run campaign — cần quyền chạy; rate limit sau auth (key theo user)
 router.post('/:id/run', campaignRunLimiter, requirePermission('campaigns_run'), campaignController.run.bind(campaignController));
 
+// Approve campaign (owner-only)
+router.post('/:id/approve', requireSelfContext, requirePermission('campaigns_run'), campaignController.approve.bind(campaignController));
+
+// Reject campaign (owner-only)
+router.post('/:id/reject', requireSelfContext, requirePermission('campaigns_run'), campaignController.reject.bind(campaignController));
+
 // Duplicate — cần quyền tạo
 router.post('/:id/duplicate',
   requirePermission('campaigns_create'),

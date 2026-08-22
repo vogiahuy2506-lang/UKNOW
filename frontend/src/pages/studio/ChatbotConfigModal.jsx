@@ -8,11 +8,13 @@ import {
   HiOutlineQuestionMarkCircle,
   HiOutlineShieldCheck,
   HiOutlinePlus,
+  HiOutlineChevronDown,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChatbotReplyLimitsCard from '../../features/chatbot/components/ChatbotReplyLimitsCard';
 import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
+import ImageUrlInput from '../../features/chatbot/components/AvatarUploader';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import {
   SectionCard,
@@ -44,6 +46,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
   const [form, setForm] = useState({
     name: '',
     description: '',
+    avatar_url: '',
     system_instruction: '',
     ai_model: 'gemini-2.5-flash',
     temperature: 0.7,
@@ -74,6 +77,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
     const loadedForm = {
       name: chatbot.name || '',
       description: chatbot.description || '',
+      avatar_url: chatbot.avatar_url || chatbot.logo_url || '',
       system_instruction: chatbot.system_instruction || '',
       ai_model: chatbot.ai_model || 'gemini-2.5-flash',
       temperature: chatbot.temperature || 0.7,
@@ -104,6 +108,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
       const updateData = {
         name: form.name,
         description: form.description,
+        avatar_url: form.avatar_url || null,
         system_instruction: form.system_instruction,
         ai_model: form.ai_model,
         temperature: form.temperature,
@@ -243,6 +248,27 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
             })}
           </nav>
 
+          <div className="md:hidden border-b border-slate-100 bg-white px-4 py-2 shrink-0">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              Cấu hình
+            </label>
+            <div className="relative">
+              <select
+                value={activeAnchor}
+                onChange={(e) => scrollToAnchor(e.target.value)}
+                className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-9 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
+                aria-label="Chuyển nhanh đến mục cấu hình"
+              >
+                {ANCHOR_SECTIONS.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              <HiOutlineChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
           <div ref={contentRef} className="flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
             <div className="p-6 md:p-8 space-y-5 max-w-3xl mx-auto">
               {/* Thông tin cơ bản */}
@@ -250,23 +276,36 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
                 <SectionCard
                   icon={HiOutlineChatAlt2}
                   title="Thông tin cơ bản"
-                  subtitle="Tên và mô tả chatbot"
+                  subtitle="Tên, mô tả và ảnh đại diện chatbot"
                   accent="purple"
                 >
                   <div className="space-y-4">
-                    <FieldRow label="Tên chatbot" hint="Tên hiển thị của chatbot">
-                      <TextInput
-                        value={form.name}
-                        onChange={(e) => update({ name: e.target.value })}
-                        placeholder="VD: Trợ lý AI"
-                      />
-                    </FieldRow>
+                    <div className="flex items-start gap-5 pb-4 border-b border-slate-100">
+                      <div className="shrink-0">
+                        <ImageUrlInput
+                          value={form.avatar_url}
+                          onChange={(url) => update({ avatar_url: url })}
+                          label="Ảnh đại diện"
+                          placeholder="https://example.com/avatar.png"
+                          help="Hiển thị trong danh sách chatbot và tiện ích chat nhúng."
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-3">
+                        <FieldRow label="Tên chatbot" hint="Tên hiển thị của chatbot">
+                          <TextInput
+                            value={form.name}
+                            onChange={(e) => update({ name: e.target.value })}
+                            placeholder="VD: Trợ lý AI"
+                          />
+                        </FieldRow>
+                      </div>
+                    </div>
                     <FieldRow label="Mô tả" hint="Mô tả ngắn về chatbot">
                       <Textarea
                         value={form.description}
                         onChange={(e) => update({ description: e.target.value })}
                         placeholder="VD: Hỗ trợ tư vấn sản phẩm..."
-                        rows={3}
+                        rows={2}
                       />
                     </FieldRow>
                     <div className="flex items-center justify-between py-2">

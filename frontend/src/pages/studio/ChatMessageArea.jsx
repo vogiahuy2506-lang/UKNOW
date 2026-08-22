@@ -9,8 +9,36 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import { formatMessageSegments } from '../../utils/formatMessage.util';
 import { useI18n } from '../../i18n';
 import { getAiQuotaErrorMessage } from '../../utils/aiLimitError.util';
+
+function FormattedBotContent({ text }) {
+  const segments = formatMessageSegments(text);
+  return (
+    <div className="text-sm whitespace-pre-wrap break-words">
+      {segments.map((seg, idx) => {
+        if (seg.type === 'link') {
+          return (
+            <a
+              key={idx}
+              href={seg.value}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 hover:text-primary-700 underline break-all"
+            >
+              {seg.value}
+            </a>
+          );
+        }
+        // Preserve newlines as actual <br /> for visual line breaks while
+        // keeping the container's whitespace-pre-wrap for spacing.
+        if (seg.value === '\n') return <br key={idx} />;
+        return <span key={idx}>{seg.value}</span>;
+      })}
+    </div>
+  );
+}
 
 function ChatMessageArea({ chatbot }) {
   const { t } = useI18n();
@@ -292,7 +320,11 @@ function ChatMessageArea({ chatbot }) {
                     ? { background: gradientStyle }
                     : { backgroundColor: '#fff', color: '#374151' }}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+{msg.role === 'user' ? (
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  ) : (
+                    <FormattedBotContent text={msg.content} />
+                  )}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1 px-1">
                   {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}

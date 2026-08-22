@@ -16,7 +16,7 @@ const Tooltip = ({ label, children }) => (
 import {
   HiOutlineRefresh, HiOutlineSearch,
   HiOutlineLockClosed, HiOutlineLockOpen, HiOutlineShieldCheck, HiOutlineShieldExclamation,
-  HiOutlineCurrencyDollar, HiOutlineXCircle,
+  HiOutlineCurrencyDollar, HiOutlineXCircle, HiOutlineMailOpen, HiOutlineTrash,
 } from 'react-icons/hi';
 import adminMembersApiService from '../../features/admin/services/adminMembersApi.service';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
@@ -195,6 +195,57 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
   );
 };
 
+// ── TypeToConfirmModal — bắt gõ lại email mới cho bấm, dùng cho thao tác không
+// hoàn tác được (gỡ email / xoá vĩnh viễn) ─────────────────────────────────────
+const TypeToConfirmModal = ({ member, titleKey, warningKey, confirmBtnKey, danger, isBusy, onConfirm, onClose }) => {
+  const { t } = useI18n();
+  const [typed, setTyped] = useState('');
+  const matches = typed.trim().toLowerCase() === (member.email || '').trim().toLowerCase();
+  const iconBg = danger ? 'bg-red-100' : 'bg-amber-100';
+  const iconColor = danger ? 'text-red-600' : 'text-amber-600';
+  const btnClass = danger ? 'btn-primary bg-red-600 hover:bg-red-700 border-red-600' : 'btn-primary bg-amber-600 hover:bg-amber-700 border-amber-600';
+
+  return renderModal(
+    <div>
+      <div className="flex items-center gap-3 mb-4">
+        <div className={`w-10 h-10 rounded-full ${iconBg} flex items-center justify-center shrink-0`}>
+          {danger ? <HiOutlineTrash className={`w-5 h-5 ${iconColor}`} /> : <HiOutlineMailOpen className={`w-5 h-5 ${iconColor}`} />}
+        </div>
+        <h2 className="text-xl font-semibold text-gray-900">{t(titleKey)}</h2>
+      </div>
+      <p className="text-sm text-gray-600 mb-1">
+        <strong>{member.fullName || member.username}</strong> ({member.email})
+      </p>
+      <p className="text-sm text-gray-600">{t(warningKey)}</p>
+      <div className="mt-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {t('adminMembers.typeEmailToConfirm', { email: member.email })}
+        </label>
+        <input
+          type="text"
+          className="input w-full"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder={member.email}
+          autoComplete="off"
+        />
+      </div>
+      <div className="flex justify-end gap-2 mt-6">
+        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isBusy}>{t('common.cancel')}</button>
+        <button
+          type="button"
+          className={`btn ${btnClass}`}
+          onClick={() => onConfirm(typed.trim())}
+          disabled={isBusy || !matches}
+        >
+          {isBusy ? t('adminMembers.confirming') : t(confirmBtnKey)}
+        </button>
+      </div>
+    </div>,
+    () => { if (!isBusy) onClose(); }
+  );
+};
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const AdminMembersPage = () => {
   const { t } = useI18n();
@@ -216,9 +267,13 @@ const AdminMembersPage = () => {
   const [promoteConfirm, setPromoteConfirm] = useState(null);
   const [demoteConfirm, setDemoteConfirm] = useState(null);
   const [unassignConfirm, setUnassignConfirm] = useState(null);
+  const [detachEmailConfirm, setDetachEmailConfirm] = useState(null);
+  const [purgeConfirm, setPurgeConfirm]   = useState(null);
   const [isPromoting, setIsPromoting]     = useState(false);
   const [isDemoting, setIsDemoting]       = useState(false);
   const [isUnassigning, setIsUnassigning] = useState(false);
+  const [isDetaching, setIsDetaching]     = useState(false);
+  const [isPurging, setIsPurging]         = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
 
   const fetchMembers = async (overrides = {}) => {
@@ -311,6 +366,34 @@ const AdminMembersPage = () => {
       toast.error(err?.response?.data?.message || t('adminMembers.unassignFailed'));
     } finally {
       setIsUnassigning(false);
+    }
+  };
+
+  const handleDetachEmail = async (typedEmail) => {
+    try {
+      setIsDetaching(true);
+      const res = await adminMembersApiService.detachEmail(detachEmailConfirm.id, typedEmail);
+      toast.success(res.data.message || t('adminMembers.detachEmailSuccess'));
+      setDetachEmailConfirm(null);
+      fetchMembers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminMembers.detachEmailFailed'));
+    } finally {
+      setIsDetaching(false);
+    }
+  };
+
+  const handlePurge = async (typedEmail) => {
+    try {
+      setIsPurging(true);
+      const res = await adminMembersApiService.purge(purgeConfirm.id, typedEmail);
+      toast.success(res.data.message || t('adminMembers.purgeSuccess'));
+      setPurgeConfirm(null);
+      fetchMembers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminMembers.purgeFailed'));
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -547,6 +630,30 @@ const AdminMembersPage = () => {
                               </button>
                             </Tooltip>
                           )}
+
+                          {/* Gỡ email — chỉ tab Người dùng, ẩn nếu đã gỡ rồi */}
+                          {!isAdminView && m.status !== 'deleted' && (
+                            <Tooltip label={t('adminMembers.detachEmail')}>
+                              <button
+                                onClick={() => setDetachEmailConfirm(m)}
+                                className="p-2 rounded hover:bg-amber-50 transition-colors text-gray-400 hover:text-amber-600"
+                              >
+                                <HiOutlineMailOpen className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
+                          )}
+
+                          {/* Xoá vĩnh viễn — chỉ tab Người dùng; backend tự chặn nếu còn dữ liệu */}
+                          {!isAdminView && (
+                            <Tooltip label={t('adminMembers.purge')}>
+                              <button
+                                onClick={() => setPurgeConfirm(m)}
+                                className="p-2 rounded hover:bg-red-50 transition-colors text-gray-400 hover:text-red-700"
+                              >
+                                <HiOutlineTrash className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -658,6 +765,34 @@ const AdminMembersPage = () => {
           </div>
         </div>,
         () => { if (!isUnassigning) setUnassignConfirm(null); }
+      )}
+
+      {/* Modal gỡ email khỏi tài khoản (Mức 1) */}
+      {detachEmailConfirm && (
+        <TypeToConfirmModal
+          member={detachEmailConfirm}
+          titleKey="adminMembers.detachEmailConfirmTitle"
+          warningKey="adminMembers.detachEmailWarning"
+          confirmBtnKey="adminMembers.detachEmailConfirmBtn"
+          danger={false}
+          isBusy={isDetaching}
+          onConfirm={handleDetachEmail}
+          onClose={() => setDetachEmailConfirm(null)}
+        />
+      )}
+
+      {/* Modal xoá vĩnh viễn (Mức 2) */}
+      {purgeConfirm && (
+        <TypeToConfirmModal
+          member={purgeConfirm}
+          titleKey="adminMembers.purgeConfirmTitle"
+          warningKey="adminMembers.purgeWarning"
+          confirmBtnKey="adminMembers.purgeConfirmBtn"
+          danger
+          isBusy={isPurging}
+          onConfirm={handlePurge}
+          onClose={() => setPurgeConfirm(null)}
+        />
       )}
     </div>
   );

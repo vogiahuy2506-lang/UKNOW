@@ -385,7 +385,12 @@ export async function findEinvoiceJobWithOrder(einvoiceId, queryable = db) {
   const { rows } = await queryable.query(
     `SELECT e.*, o.order_code, o.invoice_info, o.amount, o.note, o.user_email, o.user_id,
             o.billing_period, p.name AS plan_name,
-            COALESCE(o.paid_at, o.updated_at) AS paid_at, o.created_at
+            -- orders.updated_at là TIMESTAMP *không* múi giờ, chứa giờ VN dạng trần
+            -- (pool đặt timezone Asia/Ho_Chi_Minh). Container chạy UTC nên node-pg đọc
+            -- chuỗi đó thành UTC → hoá đơn từng in lệch +7 tiếng. Phải quy về mốc thật
+            -- trước khi COALESCE, đừng bỏ AT TIME ZONE đi.
+            COALESCE(o.paid_at, o.updated_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS paid_at,
+            o.created_at
      FROM einvoices e
      JOIN orders o ON o.id = e.order_id
      LEFT JOIN plans p ON p.id = o.plan_id

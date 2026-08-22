@@ -197,15 +197,19 @@ class ZaloInboxRepository {
    * @param {string} externalId
    * @param {string} visitorName
    * @param {object} visitorInfo
+   * @param {number|null} [idChatbot] - Chatbot this conversation belongs to.
+   *   Required when the (user, zalo) pair is shared by multiple chatbots: each
+   *   conversation must be pinned to exactly one chatbot so toggling one
+   *   doesn't affect the others (see migration 164).
    * @returns {Promise<object>} the created row
    */
-  async createConversation(userId, zaloSettingId, externalId, visitorName, visitorInfo) {
+  async createConversation(userId, zaloSettingId, externalId, visitorName, visitorInfo, idChatbot = null) {
     const result = await db.query(
       `INSERT INTO zalo_personal_conversations
-       (id_user, id_zalo_setting, external_id, visitor_name, visitor_info, last_message_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+       (id_user, id_zalo_setting, external_id, visitor_name, visitor_info, id_chatbot, last_message_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        RETURNING *`,
-      [userId, zaloSettingId, externalId, visitorName, JSON.stringify(visitorInfo)]
+      [userId, zaloSettingId, externalId, visitorName, JSON.stringify(visitorInfo), idChatbot]
     );
     return result.rows[0];
   }

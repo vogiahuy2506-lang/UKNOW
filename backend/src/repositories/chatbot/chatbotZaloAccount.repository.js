@@ -1,6 +1,28 @@
 import db from '../../config/database.js';
 
 class ChatbotZaloAccountRepository {
+  async assertOwnedConfiguration(userId, zaloSettingId, data = {}) {
+    const { rows } = await db.query(
+      `SELECT 1
+       FROM zalo_settings zs
+       WHERE zs.id = $1 AND zs.id_user = $2 AND zs.is_active = true
+         AND ($3::bigint IS NULL OR EXISTS (
+           SELECT 1 FROM custom_chatbots cb
+           WHERE cb.id = $3 AND cb.id_user = $2 AND cb.is_active = true
+         ))
+         AND ($4::bigint IS NULL OR EXISTS (
+           SELECT 1 FROM sub_assistants sa
+           WHERE sa.id = $4 AND sa.id_user = $2 AND sa.is_active = true
+         ))`,
+      [zaloSettingId, userId, data.id_chatbot || null, data.id_sub_assistant || null]
+    );
+    if (!rows[0]) {
+      const error = new Error('Không tìm thấy tài khoản Zalo hoặc cấu hình chatbot trong workspace');
+      error.status = 404;
+      throw error;
+    }
+  }
+
   /**
    * Get chatbot settings for a specific Zalo account
    * @param {number} userId
@@ -23,9 +45,10 @@ class ChatbotZaloAccountRepository {
     const { rows } = await db.query(
       `SELECT czs.*, sa.name AS sub_assistant_name, sa.greeting_msg,
               cb.name AS chatbot_name, cb.system_instruction AS chatbot_system_instruction
-       FROM chatbot_zalo_account_settings czs
-       LEFT JOIN sub_assistants sa ON sa.id = czs.id_sub_assistant
-       LEFT JOIN custom_chatbots cb ON cb.id = czs.id_chatbot AND cb.is_active = true
+       LEFT JOIN sub_assistants sa
+              ON sa.id = czs.id_sub_assistant AND sa.id_user = czs.id_user
+       LEFT JOIN custom_chatbots cb
+              ON cb.id = czs.id_chatbot AND cb.id_user = czs.id_user AND cb.is_active = true
        WHERE czs.id_user = $1 AND czs.id_zalo_setting = $2
          AND ($3::bigint IS NULL OR czs.id_chatbot = $3::bigint)
        ORDER BY czs.id_chatbot NULLS LAST, czs.updated_at DESC NULLS LAST
@@ -51,8 +74,10 @@ class ChatbotZaloAccountRepository {
               cb.system_instruction AS chatbot_system_instruction
        FROM chatbot_zalo_account_settings czs
        JOIN zalo_settings zs ON zs.id = czs.id_zalo_setting
-       LEFT JOIN sub_assistants sa ON sa.id = czs.id_sub_assistant
-       LEFT JOIN custom_chatbots cb ON cb.id = czs.id_chatbot AND cb.is_active = true
+       LEFT JOIN sub_assistants sa
+              ON sa.id = czs.id_sub_assistant AND sa.id_user = czs.id_user
+       LEFT JOIN custom_chatbots cb
+              ON cb.id = czs.id_chatbot AND cb.id_user = czs.id_user AND cb.is_active = true
        WHERE czs.id_user = $1
        ORDER BY czs.created_at DESC`,
       [userId]
@@ -102,7 +127,7 @@ class ChatbotZaloAccountRepository {
        FROM zalo_settings zs
        ${chatbotJoinClause}
        LEFT JOIN custom_chatbots cb
-              ON cb.id = czs.id_chatbot AND cb.is_active = true
+              ON cb.id = czs.id_chatbot AND cb.id_user = zs.id_user AND cb.is_active = true
        WHERE zs.id_user = $1 AND zs.is_active = true
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
       chatbotId == null ? [userId] : [userId, chatbotId]
@@ -118,6 +143,7 @@ class ChatbotZaloAccountRepository {
    * @returns {Promise<object>}
    */
   async upsertSettings(userId, zaloSettingId, data) {
+    await this.assertOwnedConfiguration(userId, zaloSettingId, data);
     const { rows } = await db.query(
       `INSERT INTO chatbot_zalo_account_settings
          (id_user, id_zalo_setting, is_enabled, id_sub_assistant, welcome_message,
@@ -160,6 +186,13 @@ class ChatbotZaloAccountRepository {
    * Each (user, zalo, chatbot) tuple is independent — toggling chatbot A does not
    * affect chatbot B sharing the same Zalo account.
    *
+   * Bug 2.3 revised: the auto-fill that copied `custom_chatbots.id_sub_assistant`
+   * into `chatbot_zalo_account_settings.id_sub_assistant` was removed because the
+   * sub_assistant indirection itself is being removed from the custom_chatbot path
+   * (see migration 166). Channel-level config still owns the per-account
+   * sub_assistant (used by kb_chunks RAG); custom_chatbot RAG now queries
+   * `custom_chatbot_chunks` directly by chatbot_id.
+   *
    * @param {number} userId
    * @param {number} zaloSettingId
    * @param {number|null} idChatbot - chatbot the row belongs to. Pass null for the
@@ -168,6 +201,7 @@ class ChatbotZaloAccountRepository {
    * @returns {Promise<object>}
    */
   async setEnabled(userId, zaloSettingId, idChatbot, enabled) {
+    await this.assertOwnedConfiguration(userId, zaloSettingId, { id_chatbot: idChatbot });
     const { rows } = await db.query(
       `INSERT INTO chatbot_zalo_account_settings
          (id_user, id_zalo_setting, id_chatbot, is_enabled)
@@ -219,6 +253,44 @@ class ChatbotZaloAccountRepository {
       [userId]
     );
     return rows;
+  }
+
+  /**
+   * Pick the chatbot a NEW Zalo personal conversation should be pinned to.
+   *
+   * Picker order:
+   *   1. If a chatbot has already handled this (user, zalo) before, prefer it
+   *      (round-robin by conversation.id mod chat.length) so successive new
+   *      conversations spread across chatbots fairly instead of all piling on
+   *      the most-recently-enabled one.
+   *   2. Fall back to deterministic order: the active chatbot with the lowest
+   *      custom_chatbots.id — this is stable across restarts and easy to reason
+   *      about ("the first chatbot you created handles this").
+   *   3. If no chatbots are enabled, returns null and the caller should treat
+   *      the row as the "default" (id_chatbot=NULL) channel-level config.
+   *
+   * @param {number} userId
+   * @param {number} zaloSettingId
+   * @param {number} roundRobinSeed - any stable number per call site
+   *   (e.g. conversation.id) used to spread load evenly.
+   * @returns {Promise<number|null>}
+   */
+  async pickEnabledChatbotForZalo(userId, zaloSettingId, roundRobinSeed = 0) {
+    const { rows } = await db.query(
+      `SELECT czs.id_chatbot
+         FROM chatbot_zalo_account_settings czs
+         JOIN custom_chatbots cb
+           ON cb.id = czs.id_chatbot AND cb.is_active = true
+        WHERE czs.id_user = $1
+          AND czs.id_zalo_setting = $2
+          AND czs.id_chatbot IS NOT NULL
+          AND czs.is_enabled = true
+        ORDER BY czs.id_chatbot ASC`,
+      [userId, zaloSettingId]
+    );
+    if (rows.length === 0) return null;
+    const idx = ((Number(roundRobinSeed) || 0) % rows.length + rows.length) % rows.length;
+    return Number(rows[idx].id_chatbot);
   }
 
   /**

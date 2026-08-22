@@ -7,9 +7,42 @@ import { useParams } from 'react-router-dom';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import MessageAttachments, { formatFileSize } from '../../components/MessageAttachments';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { formatMessageSegments } from '../../utils/formatMessage.util';
 
 const ACCEPTED = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACH = 3;
+
+function FormattedMessage({ text, textColor }) {
+  // Replace the previous dangerouslySetInnerHTML inline regex with the shared
+  // helper so we get the same "Label: url" / bare-url handling as the Studio
+  // preview. (Bug 4 — duplicate / unclickable links.)
+  const segments = formatMessageSegments(text);
+  return (
+    <div
+      className="text-[15px] whitespace-pre-wrap break-words leading-relaxed"
+      style={{ overflowWrap: 'anywhere', color: textColor }}
+    >
+      {segments.map((seg, idx) => {
+        if (seg.type === 'link') {
+          return (
+            <a
+              key={idx}
+              href={seg.value}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium hover:opacity-80"
+              style={{ color: 'inherit' }}
+            >
+              {seg.value}
+            </a>
+          );
+        }
+        if (seg.value === '\n') return <br key={idx} />;
+        return <span key={idx}>{seg.value}</span>;
+      })}
+    </div>
+  );
+}
 
 export default function PublicChatbotPage() {
   const { chatbotId } = useParams();
@@ -42,6 +75,8 @@ export default function PublicChatbotPage() {
 
   useEffect(() => {
     loadChatbot();
+    // loadChatbot is intentionally only re-run when chatbotId changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatbotId]);
 
   useEffect(() => {
@@ -207,10 +242,29 @@ export default function PublicChatbotPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor }}>
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: `${primaryColor} transparent transparent transparent` }}></div>
-          <p style={{ color: textColor, opacity: 0.6 }}>Đang tải chatbot...</p>
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor }}>
+        {/* Header skeleton */}
+        <div
+          className="shadow-lg"
+          style={{
+            background: `linear-gradient(135deg, ${primaryColor || '#6366f1'}, ${accentColor || '#60A5FA'})`,
+          }}
+        >
+          <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-white/30 animate-pulse" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-32 bg-white/30 rounded animate-pulse" />
+              <div className="h-3 w-20 bg-white/20 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        {/* Messages skeleton */}
+        <div className="flex-1 overflow-hidden p-4">
+          <div className="max-w-lg mx-auto flex flex-col gap-3">
+            <div className="self-start max-w-[80%] px-4 py-3 rounded-2xl rounded-bl-md bg-white shadow-sm animate-pulse h-16 w-64" />
+            <div className="self-end max-w-[60%] px-4 py-3 rounded-2xl rounded-br-md bg-slate-200 animate-pulse h-10 w-40" />
+            <div className="self-start max-w-[70%] px-4 py-3 rounded-2xl rounded-bl-md bg-white shadow-sm animate-pulse h-20 w-56" />
+          </div>
         </div>
       </div>
     );
@@ -218,13 +272,29 @@ export default function PublicChatbotPage() {
 
   if (error || !chatbot) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor }}>
-        <div className="text-center p-8 rounded-2xl shadow-lg" style={{ backgroundColor: '#fff' }}>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center text-3xl" style={{ backgroundColor: `${primaryColor}15` }}>
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor }}>
+        <div className="text-center p-8 max-w-md rounded-2xl shadow-lg bg-white">
+          <div
+            className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center text-3xl"
+            style={{ backgroundColor: `${primaryColor}15` }}
+            aria-hidden="true"
+          >
             🤖
           </div>
-          <h2 className="text-xl font-semibold mb-2" style={{ color: textColor }}>Chatbot không tồn tại</h2>
-          <p style={{ color: textColor, opacity: 0.6 }}>{error || 'Vui lòng kiểm tra lại đường dẫn.'}</p>
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Chatbot không tồn tại</h2>
+          <p className="text-slate-600 mb-6">{error || 'Vui lòng kiểm tra lại đường dẫn.'}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              loadChatbot();
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white font-medium text-sm hover:opacity-90 transition-opacity"
+            style={{ backgroundColor: primaryColor }}
+          >
+            Thử lại
+          </button>
         </div>
       </div>
     );
@@ -302,13 +372,7 @@ export default function PublicChatbotPage() {
                 }
               >
                 {msg.content ? (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: String(msg.content)
-                        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">$1</a>')
-                        .replace(/\n/g, '<br/>'),
-                    }}
-                  />
+                  <FormattedMessage text={msg.content} textColor={textColor} />
                 ) : null}
                 <MessageAttachments attachments={msg.attachments} messageRole={msg.role} />
               </div>

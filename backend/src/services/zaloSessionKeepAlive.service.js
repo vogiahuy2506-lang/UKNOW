@@ -1,15 +1,15 @@
-﻿/**
+/**
  * Zalo Session Keep-Alive Service
  *
- * C╞í chß║┐ giß╗» session Zalo LU├öN hoß║ít ─æß╗Öng:
- * 1. Kiß╗âm tra session ─æß╗ïnh kß╗│ mß╗ùi 5 ph├║t
- * 2. Nß║┐u session bß╗ï mß║Ñt hoß║╖c lß╗ùi, tß╗▒ ─æß╗Öng restore tß╗½ cookie
- * 3. Kh├┤ng ─æ├ính dß║Ñu disconnected trß╗½ khi cookie c┼⌐ng hß║┐t hß║ín
+ * Cơ chế giữ session Zalo LUÔN hoạt động:
+ * 1. Kiểm tra session định kỳ mỗi 5 phút
+ * 2. Nếu session bị mất hoặc lỗi, tự động restore từ cookie
+ * 3. Không đánh dấu disconnected trừ khi cookie cũng hết hạn
  *
- * ─Éiß╗üu n├áy ─æß║úm bß║úo:
- * - Kh├┤ng bß╗ï out khi update code
- * - Kh├┤ng bß╗ï out khi Zalo revoke session
- * - Lu├┤n thß╗¡ restore tr╞░ß╗¢c khi b├ío disconnected
+ * Điều này đảm bảo:
+ * - Không bị out khi update code
+ * - Không bị out khi Zalo revoke session
+ * - Luôn thử restore trước khi báo disconnected
  */
 
 import zaloAccountSessionService from './zalo/zaloAccountSession.service.js';
@@ -28,11 +28,11 @@ import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 const refreshingAccounts = new Set();
 
 /**
- * Kiß╗âm tra session c├│ THß╗░C Sß╗░ c├▓n nhß║¡n ─æ╞░ß╗úc tin ─æß║┐n kh├┤ng.
+ * Kiểm tra session có THỰC SỰ còn nhận được tin đến không.
  *
- * Tr╞░ß╗¢c ─æ├óy h├ám n├áy lu├┤n trß║ú true khi c├│ object api trong memory ΓåÆ websocket chß║┐t
- * ├óm thß║ºm (kh├┤ng ph├ít sß╗▒ kiß╗çn `closed`) kh├┤ng bao giß╗¥ ─æ╞░ß╗úc ph├ít hiß╗çn, hß╗Öp th╞░ ─æiß║┐c
- * cho tß╗¢i khi restart backend. Nay soi thß║│ng readyState cß╗ºa websocket zca-js.
+ * Trước đây hàm này luôn trả true khi có object api trong memory → websocket chết
+ * âm thầm (không phát sự kiện `closed`) không bao giờ được phát hiện, hộp thư điếc
+ * cho tới khi restart backend. Nay soi thẳng readyState của websocket zca-js.
  *
  * @param {any} api
  * @param {number|string} accountId
@@ -42,17 +42,17 @@ function isSessionAlive(api, accountId) {
   const health = getListenerSocketState(api);
   if (!health.healthy) {
     console.warn(
-      `[ZaloKeepAlive] Account ${accountId}: listener KH├öNG sß╗æng `
-      + `(reason=${health.reason}, readyState=${health.readyState ?? 'null'}) ΓåÆ sß║╜ restore`
+      `[ZaloKeepAlive] Account ${accountId}: listener KHÔNG sống `
+      + `(reason=${health.reason}, readyState=${health.readyState ?? 'null'}) → sẽ restore`
     );
   }
   return health.healthy;
 }
 
 /**
- * Socket c├▓n sß╗æng nh╞░ng handler hß╗Öp th╞░ c├│ thß╗â ─æ├ú rß╗¢t khß╗Åi listener
- * (rebind lß╗ùi, ─æß╗ông bß╗Ö thß╗º c├┤ng, listener bß╗ï thay). Khi ─æ├│ vß║½n gß╗¡i ─æ╞░ß╗úc tin ra
- * nh╞░ng bß║ín b├¿ nhß║»n v├áo KH├öNG v├áo hß╗Öp th╞░ v├á AI kh├┤ng trß║ú lß╗¥i.
+ * Socket còn sống nhưng handler hộp thư có thể đã rớt khỏi listener
+ * (rebind lỗi, đồng bộ thủ công, listener bị thay). Khi đó vẫn gửi được tin ra
+ * nhưng bạn bè nhắn vào KHÔNG vào hộp thư và AI không trả lời.
  *
  * @param {number|string} accountId
  * @param {any} api
@@ -64,21 +64,21 @@ async function ensureInboxHandlerAttached(accountId, api) {
       return true;
     }
     console.warn(
-      `[ZaloKeepAlive] Account ${accountId}: socket sß╗æng nh╞░ng inbox handler ch╞░a gß║»n ΓåÆ ─æ─âng k├╜ lß║íi`
+      `[ZaloKeepAlive] Account ${accountId}: socket sống nhưng inbox handler chưa gắn → đăng ký lại`
     );
     return await zaloPersonalInboxService.registerAccountListener(accountId);
   } catch (error) {
     console.warn(
-      `[ZaloKeepAlive] Account ${accountId}: rebind inbox handler thß║Ñt bß║íi: ${error.message}`
+      `[ZaloKeepAlive] Account ${accountId}: rebind inbox handler thất bại: ${error.message}`
     );
     return false;
   }
 }
 
 /**
- * Dß╗ìn session chß║┐t tr╞░ß╗¢c khi restore: bß╗Å api khß╗Åi memory (k├¿m unmark registered)
- * rß╗ôi ─æ├│ng socket zombie, tr├ính chß║íy song song 2 socket cho c├╣ng t├ái khoß║ún
- * (Zalo sß║╜ ─æ├í kß║┐t nß╗æi tr├╣ng bß║▒ng m├ú 3000).
+ * Dọn session chết trước khi restore: bỏ api khỏi memory (kèm unmark registered)
+ * rồi đóng socket zombie, tránh chạy song song 2 socket cho cùng tài khoản
+ * (Zalo sẽ đá kết nối trùng bằng mã 3000).
  *
  * @param {number|string} accountId
  * @param {any} api
@@ -88,17 +88,17 @@ function discardDeadSession(accountId, api) {
   try {
     zaloAccountSessionService.clearAccountApi(accountId, api);
   } catch (error) {
-    console.warn(`[ZaloKeepAlive] Account ${accountId}: clearAccountApi lß╗ùi: ${error.message}`);
+    console.warn(`[ZaloKeepAlive] Account ${accountId}: clearAccountApi lỗi: ${error.message}`);
   }
   try {
     api?.listener?.stop?.();
   } catch (error) {
-    console.warn(`[ZaloKeepAlive] Account ${accountId}: stop listener c┼⌐ lß╗ùi: ${error.message}`);
+    console.warn(`[ZaloKeepAlive] Account ${accountId}: stop listener cũ lỗi: ${error.message}`);
   }
 }
 
 /**
- * Lß║Ñy danh s├ích tß║Ñt cß║ú accounts c├│ cookie ─æß╗â restore nß║┐u cß║ºn
+ * Lấy danh sách tất cả accounts có cookie để restore nếu cần
  */
 async function getAccountsWithCookies() {
   try {
@@ -125,7 +125,7 @@ async function getAccountsWithCookies() {
 }
 
 /**
- * Refresh mß╗Öt account - restore session nß║┐u cß║ºn
+ * Refresh một account - restore session nếu cần
  */
 async function refreshAccountSession(account) {
   const accountId = Number(account.id);
@@ -134,7 +134,7 @@ async function refreshAccountSession(account) {
 
   console.log(`[ZaloKeepAlive] Processing account ${accountId} (userId=${userId})...`);
 
-  // Skip nß║┐u ─æang ─æ╞░ß╗úc refresh bß╗ƒi process kh├íc
+  // Skip nếu đang được refresh bởi process khác
   if (refreshingAccounts.has(accountKey)) {
     console.log(`[ZaloKeepAlive] Account ${accountId} is already being refreshed, skipping`);
     return { accountId, status: 'skipped', reason: 'already_refreshing' };
@@ -143,15 +143,15 @@ async function refreshAccountSession(account) {
   refreshingAccounts.add(accountKey);
 
   try {
-    // Kiß╗âm tra session hiß╗çn tß║íi trong memory
+    // Kiểm tra session hiện tại trong memory
     const currentApi = zaloAccountSessionService.getAccountApi(accountId);
     console.log(`[ZaloKeepAlive] Account ${accountId}: currentApi in memory = ${!!currentApi}`);
 
     if (currentApi) {
-      // Kiß╗âm tra xem session c├│ thß╗▒c sß╗▒ hoß║ít ─æß╗Öng kh├┤ng
+      // Kiểm tra xem session có thực sự hoạt động không
       const isAlive = isSessionAlive(currentApi, accountId);
       if (isAlive) {
-        console.log(`[ZaloKeepAlive] Account ${accountId}: session is alive Γ£à`);
+        console.log(`[ZaloKeepAlive] Account ${accountId}: session is alive ✅`);
         await ensureInboxHandlerAttached(accountId, currentApi);
         refreshingAccounts.delete(accountKey);
         return { accountId, status: 'alive', reason: 'session_valid' };
@@ -162,7 +162,7 @@ async function refreshAccountSession(account) {
       console.log(`[ZaloKeepAlive] Account ${accountId}: no session in memory, will try restore`);
     }
 
-    // Session kh├┤ng c├│ hoß║╖c kh├┤ng hoß║ít ─æß╗Öng - thß╗¡ restore
+    // Session không có hoặc không hoạt động - thử restore
     console.log(`[ZaloKeepAlive] Account ${accountId}: attempting session restore...`);
 
     const cookieText = String(account.cookie_text || '').trim();
@@ -174,7 +174,7 @@ async function refreshAccountSession(account) {
       return { accountId, status: 'failed', reason: 'no_cookie' };
     }
 
-    // Thß╗¡ restore session trß╗▒c tiß║┐p vß╗¢i retry
+    // Thử restore session trực tiếp với retry
     let restoredApi = null;
     try {
       console.log(`[ZaloKeepAlive] Account ${accountId}: calling restoreZaloSessionFromCookie...`);
@@ -192,9 +192,9 @@ async function refreshAccountSession(account) {
     }
 
     if (restoredApi) {
-      console.log(`[ZaloKeepAlive] Account ${accountId}: Γ£à Session restored successfully!`);
+      console.log(`[ZaloKeepAlive] Account ${accountId}: ✅ Session restored successfully!`);
 
-      // L╞░u API v├áo memory
+      // Lưu API vào memory
       zaloAccountSessionService.setAccountApi(accountId, restoredApi);
       console.log(`[ZaloKeepAlive] Account ${accountId}: API saved to memory`);
 
@@ -206,7 +206,7 @@ async function refreshAccountSession(account) {
       });
       console.log(`[ZaloKeepAlive] Account ${accountId}: Listener started`);
 
-      // Cß║¡p nhß║¡t trß║íng th├íi connected trong DB + backfill zalo_user_id nß║┐u thiß║┐u
+      // Cập nhật trạng thái connected trong DB + backfill zalo_user_id nếu thiếu
       try {
         let zaloUserId = String(account.zalo_user_id || '').trim();
         if (!zaloUserId && typeof restoredApi?.getOwnId === 'function') {
@@ -228,16 +228,16 @@ async function refreshAccountSession(account) {
           campaignZaloSenderRepository.markAccountConnected({
             accountId,
             userId,
-            displayName: account.display_name || 'T├ái khoß║ún Zalo',
+            displayName: account.display_name || 'Tài khoản Zalo',
             cookieText,
             now: new Date(),
           })
         );
-        console.log(`[ZaloKeepAlive] Account ${accountId}: marked as connected in DB Γ£à`);
+        console.log(`[ZaloKeepAlive] Account ${accountId}: marked as connected in DB ✅`);
       } catch (dbError) {
         if (dbError?.statusCode === 409 || dbError?.code === ZALO_LIVE_ELSEWHERE_CODE) {
           console.warn(
-            `[ZaloKeepAlive] Account ${accountId}: Zalo user already live elsewhere ΓÇö disconnecting this row`
+            `[ZaloKeepAlive] Account ${accountId}: Zalo user already live elsewhere — disconnecting this row`
           );
           try {
             await campaignZaloSenderRepository.markAccountDisconnected(accountId, userId);
@@ -251,11 +251,11 @@ async function refreshAccountSession(account) {
         console.warn(`[ZaloKeepAlive] Account ${accountId}: Failed to update DB status: ${dbError.message}`);
       }
 
-      // ─É─âng k├╜ listener cho inbox
+      // Đăng ký listener cho inbox
       try {
         zaloPersonalInboxService.invalidateAccountCache();
         await zaloPersonalInboxService.refreshListeners(true);
-        console.log(`[ZaloKeepAlive] Account ${accountId}: inbox listeners refreshed Γ£à`);
+        console.log(`[ZaloKeepAlive] Account ${accountId}: inbox listeners refreshed ✅`);
       } catch (inboxError) {
         console.warn(`[ZaloKeepAlive] Account ${accountId}: Failed to refresh inbox listeners: ${inboxError.message}`);
       }
@@ -281,7 +281,7 @@ async function refreshAccountSession(account) {
 }
 
 /**
- * Main keep-alive function - chß║íy ─æß╗ïnh kß╗│ ─æß╗â giß╗» tß║Ñt cß║ú sessions alive
+ * Main keep-alive function - chạy định kỳ để giữ tất cả sessions alive
  */
 async function performKeepAlive() {
   console.log('[ZaloKeepAlive] Starting keep-alive check...');
@@ -332,7 +332,7 @@ async function performKeepAlive() {
 
 /**
  * Start the keep-alive scheduler
- * Chß║íy mß╗ùi 5 ph├║t ─æß╗â giß╗» sessions alive
+ * Chạy mỗi 5 phút để giữ sessions alive
  */
 let keepAliveInterval = null;
 
@@ -342,10 +342,10 @@ export function startKeepAliveScheduler() {
     return;
   }
 
-  // Chß║íy ngay lß║ºn ─æß║ºu
+  // Chạy ngay lần đầu
   performKeepAlive();
 
-  // Sau ─æ├│ chß║íy mß╗ùi 5 ph├║t
+  // Sau đó chạy mỗi 5 phút
   const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   keepAliveInterval = setInterval(performKeepAlive, INTERVAL_MS);
 
@@ -361,7 +361,7 @@ export function stopKeepAliveScheduler() {
 }
 
 /**
- * Force refresh all sessions (d├╣ng khi cß║ºn thiß║┐t)
+ * Force refresh all sessions (dùng khi cần thiết)
  */
 export async function forceRefreshAllSessions() {
   return performKeepAlive();

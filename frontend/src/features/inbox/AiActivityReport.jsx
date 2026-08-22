@@ -29,6 +29,8 @@ export default function AiActivityReport({
   onSelectConversation,
   selectedAccountId = null,
   className = '',
+  canManage = true,
+  canSummarize = true,
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [reportData, setReportData] = useState(null);
@@ -169,7 +171,7 @@ export default function AiActivityReport({
               <HiOutlineRefresh className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
 
-            <button
+            {canSummarize && <button
               type="button"
               onClick={handleSummarize}
               disabled={isSummarizing || conversations.length === 0}
@@ -177,12 +179,12 @@ export default function AiActivityReport({
             >
               <HiOutlineSparkles className={`w-4 h-4 ${isSummarizing ? 'animate-spin' : ''}`} />
               <span>{isSummarizing ? 'Đang tóm tắt...' : 'Tóm tắt ý chính (AI)'}</span>
-            </button>
+            </button>}
           </div>
         </div>
 
         {/* Stale Paused Warning Banner */}
-        {stats.stalePausedCount > 0 && (
+        {canManage && stats.stalePausedCount > 0 && (
           <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-amber-800">
               <HiOutlineExclamationCircle className="w-5 h-5 text-amber-500 shrink-0" />

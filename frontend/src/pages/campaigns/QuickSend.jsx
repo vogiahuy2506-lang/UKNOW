@@ -6,6 +6,9 @@ import zaloTemplateApiService from '../../features/templates/services/zaloTempla
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
+import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
+import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
+import { pickTemplateContent } from './quickSend.util';
 import {
   HiOutlinePlus,
   HiOutlineMail,
@@ -17,6 +20,7 @@ import {
   HiOutlineClock,
   HiOutlineMoon,
   HiOutlinePaperAirplane,
+  HiOutlineRefresh,
 } from 'react-icons/hi';
 
 const QUICK_SEND_STEPS = {
@@ -31,6 +35,75 @@ const CHANNEL_TYPES = {
   EMAIL: 'email',
   ZALO: 'zalo',
 };
+
+/**
+ * Map an axios/fetch error from /email-settings/send-email and
+ * /zalo-settings/send-message into one of a small fixed set of error
+ * categories the UI can act on. Backend distinguishes "SEND_QUOTA_EXCEEDED"
+ * (HTTP 403) and `errorType: 'smtp_config'` (HTTP 422); everything else
+ * collapses into a generic "unknown" bucket.
+ *
+ * @param {object} err - axios error
+ * @returns {{ errorType: string, message: string, statusCode: number|null }}
+ */
+function classifySendError(err) {
+  const status = err?.response?.status || null;
+  const data = err?.response?.data || {};
+  const code = data?.code || null;
+  const errorType = data?.data?.errorType || null;
+  const rawMessage = data?.message || err?.message || 'Send failed';
+
+  if (code === 'SEND_QUOTA_EXCEEDED' || /hạn mức|quota/i.test(rawMessage)) {
+    return { errorType: 'quota_exceeded', message: rawMessage, statusCode: status };
+  }
+  if (errorType === 'smtp_config' || /cấu hình SMTP|SMTP config/i.test(rawMessage)) {
+    return { errorType: 'smtp_config', message: rawMessage, statusCode: status };
+  }
+  if (status === 401 || /unauthor|đăng nhập/i.test(rawMessage)) {
+    return { errorType: 'auth', message: rawMessage, statusCode: status };
+  }
+  if (status === 422 || /validation|invalid/i.test(rawMessage)) {
+    return { errorType: 'validation', message: rawMessage, statusCode: status };
+  }
+  if (status >= 500) {
+    return { errorType: 'server', message: rawMessage, statusCode: status };
+  }
+  return { errorType: 'unknown', message: rawMessage, statusCode: status };
+}
+
+/**
+ * Pick a single representative toast message from a Map of failure samples
+ * collected across the per-recipient loop. Keeps the user from seeing N
+ * stacked toasts when the same underlying issue fanned out to every
+ * recipient.
+ */
+function buildFailureToast(failureSamples, isEmail) {
+  if (!failureSamples || failureSamples.size === 0) {
+    return 'Gửi thất bại';
+  }
+  const order = ['quota_exceeded', 'smtp_config', 'auth', 'validation', 'server', 'unknown'];
+  for (const key of order) {
+    const sample = failureSamples.get(key);
+    if (!sample) continue;
+    switch (key) {
+      case 'quota_exceeded':
+        return 'Đã vượt hạn mức gửi email. Vui lòng nâng cấp gói hoặc mua thêm lượt gửi.';
+      case 'smtp_config':
+        return `Lỗi cấu hình SMTP tài khoản gửi: ${sample.message}`;
+      case 'auth':
+        return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+      case 'validation':
+        return `Dữ liệu gửi không hợp lệ: ${sample.message}`;
+      case 'server':
+        return `Máy chủ gặp lỗi (HTTP ${sample.statusCode || '?'}). Vui lòng thử lại sau.`;
+      default:
+        return isEmail
+          ? `Gửi email thất bại: ${sample.message}`
+          : `Gửi Zalo thất bại: ${sample.message}`;
+    }
+  }
+  return 'Gửi thất bại';
+}
 
 const QuickSend = () => {
   const { t } = useI18n();
@@ -58,6 +131,10 @@ const QuickSend = () => {
   // Send state
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+  // Retry state — `failedRecipients` lets the user resend only to recipients
+  // that previously failed (e.g. transient SMTP / Zalo session errors).
+  const [failedRecipients, setFailedRecipients] = useState([]);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Estimation & test send state
   const [estimate, setEstimate] = useState(null);
@@ -98,9 +175,13 @@ const QuickSend = () => {
 
       // Auto-select default account if exists
       const emailItems = emailRes?.data?.data?.items || [];
-      const defaultEmail = emailItems.find((a) => a.isDefault || a.is_active);
+      if (emailItems.length === 0) {
+        console.warn('[QuickSend] No email accounts returned from API. Response:', emailRes?.data);
+      } else if (emailItems.length === 1) {
+        // Single account — auto-select it so the user doesn't have to pick
+        setSelectedEmailAccount(emailItems[0]);
+      }
       const defaultZalo = zaloItems.find((a) => a.isDefault || a.is_default);
-      if (defaultEmail) setSelectedEmailAccount(defaultEmail);
       if (defaultZalo) setSelectedZaloAccount(defaultZalo);
     } catch (error) {
       console.error('Failed to fetch accounts:', error);
@@ -116,6 +197,29 @@ const QuickSend = () => {
       fetchTemplates();
     }
   }, [currentStep, fetchTemplates, fetchAccounts]);
+
+  // Resolve the email body as { html, text }. Always sends both so SMTP can
+  // pick the right part per recipient — sending only `content` (HTML) made the
+  // text/plain fallback show raw `<p>` tags in mail clients that disable HTML.
+  //
+  // Edge case: legacy templates saved from the "Text" tab have an empty
+  // `bodyHtml` and a markdown-ish `bodyText`. `templateContent.body` then
+  // resolves to the plain-text fallback. Build a real HTML body from it so
+  // Gmail renders paragraph structure instead of a single run-on line.
+  const resolveEmailBody = useCallback(() => {
+    const raw = templateContent.body || selectedTemplate?.bodyHtml || '';
+    const isLikelyHtml = /<\s*(p|div|h[1-6]|br|hr|strong|em|ul|ol|li|table|span|a)\b/i.test(raw);
+    const html = isLikelyHtml ? raw : miniMarkdownToHtml(raw);
+    return {
+      html,
+      text: htmlToPlainText(html),
+    };
+  }, [templateContent.body, selectedTemplate]);
+
+  // Resolve the Zalo body as plain text only. Zalo OA does not render HTML.
+  const resolveZaloBody = useCallback(() => {
+    return templateContent.body || selectedTemplate?.bodyText || '';
+  }, [templateContent.body, selectedTemplate]);
 
   // Get final recipients from manual input only
   const finalRecipients = useCallback(() => {
@@ -133,19 +237,34 @@ const QuickSend = () => {
     return input.trim().length > 0;
   };
 
-  // Select template
-  const handleSelectTemplate = (template) => {
-    setSelectedTemplate(template);
-    if (selectedChannel === CHANNEL_TYPES.EMAIL) {
-      setTemplateContent({
-        subject: template.subject || '',
-        body: template.bodyHtml || template.body_text || '',
-      });
-    } else {
-      setTemplateContent({
-        body: template.bodyText || template.body_text || '',
-      });
+  // Select template — when the user picks a template card we only have the
+  // lightweight list payload (id/name/subject, no body). Fetch the full
+  // template via getById so subject + bodyHtml/bodyText are populated before
+  // the preview / send steps run. Without this, both `templateContent.body`
+  // and `selectedTemplate.bodyHtml` stay empty and the email goes out blank.
+  const handleSelectTemplate = async (template) => {
+    const hasFullBody = typeof template?.bodyHtml === 'string'
+      || typeof template?.body_text === 'string'
+      || typeof template?.bodyText === 'string';
+    if (!hasFullBody && template?.id) {
+      try {
+        const res = await emailTemplateApiService.getTemplateById(template.id);
+        const full = res?.data?.data;
+        if (full) {
+          setSelectedTemplate(full);
+          applyTemplateBody(full);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to load template body:', err);
+      }
     }
+    setSelectedTemplate(template);
+    applyTemplateBody(template);
+  };
+
+  const applyTemplateBody = (template) => {
+    setTemplateContent(pickTemplateContent(template, selectedChannel));
   };
 
   // Fetch estimated completion time from backend policy when entering PREVIEW
@@ -191,17 +310,27 @@ const QuickSend = () => {
         ? selectedEmailAccount?.id
         : selectedZaloAccount?.id;
 
-      const res = await campaignApiService.testSendQuickCampaign({
-        channel: selectedChannel,
-        recipient: cleanRecipient,
-        subject: templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW',
-        message: selectedChannel === CHANNEL_TYPES.EMAIL
-          ? (templateContent.body || selectedTemplate?.bodyHtml || '')
-          : (templateContent.body || selectedTemplate?.bodyText || ''),
-        accountId,
-      });
-
-      toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
+      if (selectedChannel === CHANNEL_TYPES.EMAIL) {
+        const { html, text } = resolveEmailBody();
+        const res = await campaignApiService.testSendQuickCampaign({
+          channel: selectedChannel,
+          recipient: cleanRecipient,
+          subject: templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW',
+          message: text,
+          htmlContent: html,
+          accountId,
+        });
+        toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
+      } else {
+        const res = await campaignApiService.testSendQuickCampaign({
+          channel: selectedChannel,
+          recipient: cleanRecipient,
+          subject: templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW',
+          message: resolveZaloBody(),
+          accountId,
+        });
+        toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
+      }
     } catch (err) {
       const msg = err.response?.data?.message || t('quickSend.testSendFailed');
       toast.error(msg);
@@ -210,11 +339,103 @@ const QuickSend = () => {
     }
   };
 
+  // Run the per-recipient send loop. Returns aggregate stats; works for both
+  // initial send and the post-failure retry (which calls it with the smaller
+  // `recipients` list of previously-failed recipients).
+  const runSendLoop = useCallback(async (recipients) => {
+    const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
+    let successCount = 0;
+    let failCount = 0;
+    const failureSamples = new Map();
+    let quotaExceededEarly = false;
+    const failed = [];
+
+    if (isEmail) {
+      const { html, text } = resolveEmailBody();
+      const subject = templateContent.subject || selectedTemplate?.subject || 'Không có tiêu đề';
+      for (const recipient of recipients) {
+        try {
+          await emailSettingsApiService.sendEmail({
+            fromEmailId: parseInt(selectedEmailAccount.id, 10),
+            to: recipient.email,
+            subject,
+            content: text,
+            htmlContent: html,
+          });
+          successCount++;
+        } catch (err) {
+          console.error('Send email error to:', recipient.email, err);
+          failCount++;
+          failed.push(recipient);
+          const info = classifySendError(err);
+          if (info.errorType === 'quota_exceeded') {
+            quotaExceededEarly = true;
+          }
+          if (!failureSamples.has(info.errorType)) {
+            failureSamples.set(info.errorType, {
+              ...info,
+              firstRecipient: recipient.email,
+            });
+          }
+          if (quotaExceededEarly) break;
+        }
+      }
+    } else {
+      const message = resolveZaloBody();
+      for (const recipient of recipients) {
+        try {
+          await zaloSettingsApiService.sendMessage({
+            accountId: selectedZaloAccount.id,
+            phone: recipient.phone,
+            message,
+          });
+          successCount++;
+        } catch (err) {
+          console.error('Send Zalo error to:', recipient.phone, err);
+          failCount++;
+          failed.push(recipient);
+          const info = classifySendError(err);
+          if (!failureSamples.has(info.errorType)) {
+            failureSamples.set(info.errorType, {
+              ...info,
+              firstRecipient: recipient.phone,
+            });
+          }
+        }
+      }
+    }
+    return { isEmail, successCount, failCount, failureSamples, failed };
+  }, [
+    selectedChannel,
+    selectedEmailAccount,
+    selectedZaloAccount,
+    resolveEmailBody,
+    resolveZaloBody,
+    templateContent.subject,
+    selectedTemplate,
+  ]);
+
   // Send quick campaign - gửi trực tiếp không cần tạo campaign
   const handleSend = async () => {
     const recipients = finalRecipients();
     if (recipients.length === 0) {
       toast.error(t('quickSend.noRecipients'));
+      return;
+    }
+    // Validate body — accept a chosen template even if its body fields are both
+    // blank (rare but possible for a freshly imported template). We treat a
+    // template selection as proof that the user *intended* to send it; let
+    // the backend reject empty bodies with its own clearer error otherwise.
+    const resolvedBody = resolveEmailBody();
+    const resolvedZaloBody = resolveZaloBody();
+    const hasEmailBody = selectedChannel !== CHANNEL_TYPES.EMAIL
+      || Boolean((resolvedBody.html || resolvedBody.text || '').trim())
+      || Boolean(selectedTemplate);
+    const hasZaloBody = selectedChannel !== CHANNEL_TYPES.ZALO
+      || Boolean(resolvedZaloBody.trim())
+      || Boolean(selectedTemplate);
+    if (!hasEmailBody || !hasZaloBody) {
+      toast.error(t('quickSend.noTemplate'));
       return;
     }
     if (!selectedTemplate && !templateContent.body) {
@@ -240,55 +461,34 @@ const QuickSend = () => {
     setCurrentStep(QUICK_SEND_STEPS.SENDING);
 
     try {
-      const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
-      let successCount = 0;
-      let failCount = 0;
-
-      if (isEmail) {
-        // Gửi email trực tiếp cho từng người nhận
-        for (const recipient of recipients) {
-          try {
-            await emailSettingsApiService.sendEmail({
-              fromEmailId: parseInt(selectedEmailAccount.id, 10),
-              to: recipient.email,
-              subject: templateContent.subject || selectedTemplate?.subject || 'Không có tiêu đề',
-              content: templateContent.body || selectedTemplate?.bodyHtml || '',
-            });
-            successCount++;
-          } catch (err) {
-            console.error('Send email error to:', recipient.email, err);
-            failCount++;
-          }
-        }
-      } else {
-        // Gửi Zalo trực tiếp cho từng người nhận
-        const message = templateContent.body || selectedTemplate?.bodyText || '';
-        for (const recipient of recipients) {
-          try {
-            await zaloSettingsApiService.sendMessage({
-              accountId: selectedZaloAccount.id,
-              phone: recipient.phone,
-              message: message,
-            });
-            successCount++;
-          } catch (err) {
-            console.error('Send Zalo error to:', recipient.phone, err);
-            failCount++;
-          }
-        }
-      }
+      const totalRecipients = recipients.length;
+      const result = await runSendLoop(recipients);
+      const { isEmail, successCount, failCount, failureSamples, failed } = result;
 
       if (successCount === 0) {
-        toast.error(t('quickSend.sendFailed'));
-        setSendResult({ success: false, failCount });
-        setCurrentStep(QUICK_SEND_STEPS.DONE);
-      } else {
+        toast.error(buildFailureToast(failureSamples, isEmail));
         setSendResult({
-          success: true,
-          recipientsCount: recipients.length,
+          success: false,
+          recipientsCount: totalRecipients,
           successCount,
           failCount,
+          failureTypes: Array.from(failureSamples.keys()),
         });
+        setFailedRecipients(failed);
+        setCurrentStep(QUICK_SEND_STEPS.DONE);
+      } else {
+        if (failCount > 0 && failureSamples.size > 0) {
+          // Partial success — show why some failed (single toast, not one per recipient).
+          toast.error(buildFailureToast(failureSamples, isEmail));
+        }
+        setSendResult({
+          success: true,
+          recipientsCount: totalRecipients,
+          successCount,
+          failCount,
+          failureTypes: Array.from(failureSamples.keys()),
+        });
+        setFailedRecipients(failed);
         setCurrentStep(QUICK_SEND_STEPS.DONE);
         toast.success(t('quickSend.sendSuccess'));
       }
@@ -301,6 +501,49 @@ const QuickSend = () => {
     }
   };
 
+  // Retry the send only to the previously-failed recipients (best-effort —
+  // we don't re-pick a different sender account, etc.). Only available when
+  // the failure wasn't caused by quota exhaustion, since that would never
+  // succeed on the same sender anyway.
+  const handleRetryFailed = async () => {
+    if (failedRecipients.length === 0) return;
+    if ((sendResult?.failureTypes || []).includes('quota_exceeded')) {
+      toast.error(t('quickSend.retryQuotaBlocked') || 'Đã vượt hạn mức — không thể gửi lại.');
+      return;
+    }
+    setIsRetrying(true);
+    try {
+      const result = await runSendLoop(failedRecipients);
+      const { successCount, failCount, failureSamples, failed } = result;
+      const previouslySucceeded = (sendResult?.successCount || 0);
+      const totalSuccess = previouslySucceeded + successCount;
+      const totalRecipients = sendResult?.recipientsCount || failedRecipients.length;
+
+      if (failCount > 0 && failureSamples.size > 0) {
+        toast.error(buildFailureToast(failureSamples, selectedChannel === CHANNEL_TYPES.EMAIL));
+      }
+      setSendResult({
+        success: totalSuccess > 0,
+        recipientsCount: totalRecipients,
+        successCount: totalSuccess,
+        failCount,
+        failureTypes: Array.from(failureSamples.keys()),
+      });
+      setFailedRecipients(failed);
+      if (successCount > 0) {
+        toast.success(
+          t('quickSend.retrySuccess', { count: successCount }) ||
+          `Đã gửi lại thành công ${successCount} người.`,
+        );
+      }
+    } catch (error) {
+      console.error('Retry error:', error);
+      toast.error(error?.response?.data?.message || t('quickSend.sendFailed'));
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   // Reset and start over
   const handleStartOver = () => {
     setCurrentStep(QUICK_SEND_STEPS.RECIPIENTS);
@@ -309,6 +552,7 @@ const QuickSend = () => {
     setManualEmails('');
     setManualPhones('');
     setSendResult(null);
+    setFailedRecipients([]);
   };
 
   // Step indicators
@@ -788,10 +1032,30 @@ const QuickSend = () => {
                 <p className="text-gray-500 mb-4">{t('quickSend.sendAllFailedDesc')}</p>
               </>
             )}
-            <div className="flex justify-center gap-4">
+            {failedRecipients.length > 0 && !isRetrying && (
+              <p className="text-xs text-gray-400 mb-3">
+                {t('quickSend.failedRecipientCount', { count: failedRecipients.length }) ||
+                  `${failedRecipients.length} người nhận bị lỗi`}
+              </p>
+            )}
+            <div className="flex justify-center gap-3 flex-wrap">
+              {failedRecipients.length > 0 && (
+                <button
+                  onClick={handleRetryFailed}
+                  disabled={isRetrying}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                >
+                  <HiOutlineRefresh className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+                  {isRetrying
+                    ? (t('quickSend.retrying') || 'Đang gửi lại…')
+                    : (t('quickSend.retryFailed', { count: failedRecipients.length }) ||
+                       `Gửi lại cho ${failedRecipients.length} người`)}
+                </button>
+              )}
               <button
                 onClick={handleStartOver}
-                className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                disabled={isRetrying}
+                className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-60 transition"
               >
                 {t('quickSend.sendAnother')}
               </button>

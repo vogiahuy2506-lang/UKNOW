@@ -3,11 +3,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     HiArrowLeft,
     HiOutlineDuplicate,
-    HiOutlineCheck,
     HiOutlineShieldCheck,
     HiOutlineLightningBolt,
     HiOutlineChatAlt2,
-    HiOutlineClipboardList,
     HiOutlineClock,
     HiOutlineExclamationCircle,
 } from 'react-icons/hi';
@@ -17,6 +15,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { getAvailableVouchers, getVoucherCodeSuggestions, validateVoucher } from '../../services/voucher.service';
 import checkoutApiService from '../../features/checkout/services/checkoutApi.service';
 import InvoiceVatForm, { computeDisplayVat, isInvoiceInfoValid } from '../../features/checkout/components/InvoiceVatForm';
+import PayOSInstructions from '../../features/checkout/components/PayOSInstructions';
+import ManualTransferSteps from '../../features/checkout/components/ManualTransferSteps';
 import { isInvoiceVatUiEnabled } from '../../constants/invoiceVat';
 import { trackEvent } from '../../utils/analytics';
 import { parseVietQR, formatCountdown } from '../../utils/vietqrParser';
@@ -51,56 +51,6 @@ const voucherErrorKeyMap = {
     'Gói không tồn tại': 'checkout.planNotFound',
     'Lỗi server': 'checkout.voucherServerError',
 };
-
-/** Compact copy cell: txt + button copy. Toast + 1.5s checkmark feedback. */
-function CopyRow({ label, value, displayValue, onCopied, t, hint }) {
-    const [copied, setCopied] = useState(false);
-    const handle = () => {
-        if (!value) return;
-        try {
-            navigator.clipboard.writeText(String(value));
-            setCopied(true);
-            toast.success(t('checkout.copied'));
-            onCopied?.();
-            setTimeout(() => setCopied(false), 1500);
-        } catch {
-            toast.error('Copy failed');
-        }
-    };
-    return (
-        <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg bg-white border border-slate-200/80 hover:border-orange-200 transition-colors">
-            <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    {label}
-                </div>
-                <div className="text-sm font-mono font-bold text-slate-800 truncate">
-                    {displayValue || '—'}
-                </div>
-                {hint && (
-                    <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{hint}</div>
-                )}
-            </div>
-            <button
-                type="button"
-                onClick={handle}
-                disabled={!value}
-                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:text-orange-700 px-2.5 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-                {copied ? (
-                    <>
-                        <HiOutlineCheck className="w-3.5 h-3.5" />
-                        <span>{t('checkout.copiedField')}</span>
-                    </>
-                ) : (
-                    <>
-                        <HiOutlineDuplicate className="w-3.5 h-3.5" />
-                        <span>{t('checkout.copyField')}</span>
-                    </>
-                )}
-            </button>
-        </div>
-    );
-}
 
 const CheckoutPage = () => {
     const { t } = useI18n();
@@ -726,80 +676,27 @@ const CheckoutPage = () => {
                                     </div>
                                 )}
 
-                                {/* Bank info block */}
-                                <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-3.5 space-y-2.5">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <HiOutlineClipboardList className="w-4 h-4 text-orange-500 shrink-0" />
-                                        <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                                            {t('checkout.bankInfoTitle')}
-                                        </p>
-                                    </div>
-                                    <p className="text-[11px] text-slate-500 leading-snug">
-                                        {t('checkout.bankInfoSubtitle')}
-                                    </p>
-
-                                    {!qrInfo?.valid ? (
-                                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-                                            <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                            <p className="text-[11px] text-amber-700 leading-snug">
-                                                {qrInfo?.error ? t('checkout.qrCorrupted') : t('checkout.checkingTransaction')}
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 gap-1.5 mt-1">
-                                            <CopyRow
-                                                label={t('checkout.bankNameLabel')}
-                                                value={bank?.name || qrInfo.bin}
-                                                displayValue={bank ? `${bank.name} (${bank.short})` : qrInfo.bin}
-                                                t={t}
-                                            />
-                                            <CopyRow
-                                                label={t('checkout.accountNumberLabel')}
-                                                value={qrInfo.accountNumber}
-                                                displayValue={qrInfo.accountNumber ? formatAccountNumber(qrInfo.accountNumber) : '—'}
-                                                t={t}
-                                            />
-                                            <CopyRow
-                                                label={t('checkout.accountNameLabel')}
-                                                value={qrInfo.merchantName}
-                                                displayValue={qrInfo.merchantName || '—'}
-                                                hint={qrInfo.merchantName ? t('checkout.accountNameDisclaimer') : null}
-                                                t={t}
-                                            />
-                                            <CopyRow
-                                                label={t('checkout.amountLabel')}
-                                                value={String(payableAmount)}
-                                                displayValue={fmtVnd(payableAmount)}
-                                                t={t}
-                                            />
-                                            <CopyRow
-                                                label={t('checkout.descriptionLabel')}
-                                                value={qrInfo.description || (orderCode ? `TT ${orderCode}` : null)}
-                                                displayValue={qrInfo.description || (orderCode ? `TT ${orderCode}` : '—')}
-                                                hint={t('checkout.descriptionHint')}
-                                                t={t}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
+                                {/* PayOS bank info + copyable fields */}
+                                <PayOSInstructions
+                                    t={t}
+                                    qrInfo={qrInfo}
+                                    qrImageUrl={qrImageUrl}
+                                    bank={bank}
+                                    orderCode={orderCode}
+                                    payableAmount={payableAmount}
+                                    fmtVnd={fmtVnd}
+                                    formatAccountNumber={formatAccountNumber}
+                                />
 
                                 {/* Manual transfer guide */}
-                                <div className="bg-gradient-to-br from-orange-50/60 to-transparent border border-orange-200/70 rounded-2xl p-3.5 space-y-2">
-                                    <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                                        {t('checkout.manualTransferTitle')}
-                                    </p>
-                                    {[t('checkout.manualTransferStep1'), t('checkout.manualTransferStep2'), t('checkout.manualTransferStep3')].map((step, i) => (
-                                        <div key={i} className="flex items-center gap-3 text-xs text-slate-700 bg-white/80 p-2.5 rounded-xl border border-white">
-                                            <span className="shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
-                                                {i + 1}
-                                            </span>
-                                            <span className="font-medium leading-snug">{step}</span>
-                                        </div>
-                                    ))}
-                                    <p className="text-[10px] text-slate-500 italic leading-tight pt-1 border-t border-orange-200/40">
-                                        {t('checkout.manualTransferCaveat')}
-                                    </p>
-                                </div>
+                                <ManualTransferSteps
+                                    t={t}
+                                    stepKeys={[
+                                        'checkout.manualTransferStep1',
+                                        'checkout.manualTransferStep2',
+                                        'checkout.manualTransferStep3',
+                                    ]}
+                                />
 
                                 {/* Footer support */}
                                 <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between text-xs text-slate-500">

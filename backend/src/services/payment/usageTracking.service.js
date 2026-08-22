@@ -1,15 +1,7 @@
-import db from '../../config/database.js';
 import usageTrackingRepository from '../../repositories/payment/usageTracking.repository.js';
 import * as planRepository from '../../repositories/payment/plan.repository.js';
 import { getBillingCycle } from '../../utils/billingCycle.util.js';
 import { getSubscriptionStatus } from '../../utils/subscriptionStatus.util.js';
-
-async function acquireUsageTrackingLock(client, userId, resourceType) {
-  await client.query(
-    `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2))`,
-    [`usage:${userId}`, String(resourceType)]
-  );
-}
 
 class UsageTrackingService {
   /**
@@ -58,14 +50,27 @@ class UsageTrackingService {
   }
 
   /**
-   * Get usage for a specific resource
+   * Get usage for a specific resource, optionally scoped to a billing cycle or date range.
+   * @param {number|string} userId
+   * @param {string} resourceType
+   * @param {object} [options]
    */
-  async getResourceUsage(userId, resourceType) {
-    const [currentUsage, limits] = await Promise.all([
-      usageTrackingRepository.getCurrentUsage(userId, resourceType),
-      usageTrackingRepository.getUserPlanLimits(userId),
-    ]);
+  async getResourceUsage(userId, resourceType, options = {}) {
+    let currentUsage;
+    if (options.cycle?.cycleStart || (options.from && options.to)) {
+      const start = options.cycle?.cycleStart || options.from;
+      const end = options.cycle?.cycleEnd || options.to || new Date();
+      currentUsage = await usageTrackingRepository.getUsageInRange(
+        options.cycle?.billingUserId || userId,
+        resourceType,
+        start,
+        end
+      );
+    } else {
+      currentUsage = await usageTrackingRepository.getCurrentUsage(userId, resourceType);
+    }
 
+    const limits = await usageTrackingRepository.getUserPlanLimits(userId);
     const limit = this._getLimitForResource(limits, resourceType);
     const percentage = limit > 0 ? (currentUsage / limit) * 100 : 0;
 
@@ -115,70 +120,6 @@ class UsageTrackingService {
       allowed: !usage.isExceeded,
       ...usage,
     };
-  }
-
-  /**
-   * Increment usage (and check limit) atomically within a transaction.
-   */
-  async incrementUsage(userId, resourceType, delta = 1) {
-    const client = await db.getClient();
-    try {
-      await client.query('BEGIN');
-      await acquireUsageTrackingLock(client, userId, resourceType);
-      const limits = await usageTrackingRepository.getUserPlanLimits(userId, client);
-      const limit = this._getLimitForResource(limits, resourceType);
-      const currentUsage = await usageTrackingRepository.getCurrentUsage(userId, resourceType, client);
-      if (limit > 0 && currentUsage + delta > limit) {
-        const error = new Error(`Đã vượt quá giới hạn sử dụng cho ${resourceType}`);
-        error.status = 403;
-        error.code = 'RESOURCE_LIMIT_EXCEEDED';
-        error.resource = resourceType;
-        throw error;
-      }
-      await usageTrackingRepository.trackUsage(userId, resourceType, delta, {}, client);
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-
-    return this.getResourceUsage(userId, resourceType);
-  }
-
-  async ensureAvailable(userId, resourceType, delta = 1) {
-    const client = await db.getClient();
-    try {
-      await client.query('BEGIN');
-      await acquireUsageTrackingLock(client, userId, resourceType);
-      const limits = await usageTrackingRepository.getUserPlanLimits(userId, client);
-      const limit = this._getLimitForResource(limits, resourceType);
-      const used = await usageTrackingRepository.getCurrentUsage(userId, resourceType, client);
-      if (limit > 0 && used + delta > limit) {
-        const error = new Error(`Đã hết ${resourceType} trong gói dịch vụ hiện tại`);
-        error.status = 403;
-        error.code = 'RESOURCE_LIMIT_EXCEEDED';
-        error.resource = resourceType;
-        error.used = used;
-        error.limit = limit;
-        throw error;
-      }
-      await client.query('COMMIT');
-      return {
-        used,
-        limit,
-        remaining: Math.max(0, limit - used),
-        percentage: limit > 0 ? Math.min(100, (used / limit) * 100) : 0,
-        isExceeded: limit > 0 && used >= limit,
-        isWarning: limit > 0 && (used / limit) * 100 >= 80 && (used / limit) * 100 < 100,
-      };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
   }
 
   /**

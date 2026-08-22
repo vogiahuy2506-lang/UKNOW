@@ -84,12 +84,20 @@ describe('miniMarkdownToHtml', () => {
       expect(appLink).toBe('<a href="/app/settings/channels">Kênh gửi</a>');
       expect(appLink).not.toContain('target=');
 
+      // Slug trần được nở thành đường dẫn tuyệt đối — dạng tương đối chỉ đúng khi
+      // đứng ở /huong-dan/..., mở trong ô Xem trước của admin sẽ trỏ sai chỗ.
       const articleLink = inline('[Thêm tài khoản Email](email-account)');
-      expect(articleLink).toBe('<a href="email-account">Thêm tài khoản Email</a>');
+      expect(articleLink).toBe('<a href="/huong-dan/email-account">Thêm tài khoản Email</a>');
       expect(articleLink).not.toContain('target=');
 
       // mailto vẫn mở ứng dụng thư ngoài
       expect(inline('[Gửi thư](mailto:a@b.com)')).toContain('target="_blank"');
+    });
+
+    it('does not touch absolute, anchor or external hrefs when expanding slugs', () => {
+      expect(inline('[Trang app](/app/campaigns)')).toBe('<a href="/app/campaigns">Trang app</a>');
+      expect(inline('[Mục dưới](#phan-2)')).toBe('<a href="#phan-2">Mục dưới</a>');
+      expect(inline('[Ngoài](https://a.com/x-y)')).toContain('href="https://a.com/x-y"');
     });
 
     it('parses inline bold and italic correctly', () => {
@@ -149,6 +157,41 @@ describe('miniMarkdownToHtml', () => {
       const md = `1. Cài đặt môi trường\n2. Cấu hình biến\n3. Chạy ứng dụng`;
       const html = miniMarkdownToHtml(md);
       expect(html).toBe('<ol><li>Cài đặt môi trường</li><li>Cấu hình biến</li><li>Chạy ứng dụng</li></ol>');
+    });
+
+    it('keeps one <ol> when an indented paragraph separates items, so numbering does not restart', () => {
+      // Bài hướng dẫn có chú thích ảnh thụt lề giữa các bước. Trước đây mỗi chú
+      // thích cắt <ol> làm đôi nên số hiển thị 1 / 1 / 1 thay vì 1 / 2 / 3.
+      const md = '1. Bước một\n\n   [ẢNH: minh hoạ bước một]\n\n2. Bước hai\n\n   [ẢNH: minh hoạ bước hai]\n\n3. Bước ba';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ol><li>Bước một<p>[ẢNH: minh hoạ bước một]</p></li>'
+        + '<li>Bước hai<p>[ẢNH: minh hoạ bước hai]</p></li>'
+        + '<li>Bước ba</li></ol>',
+      );
+      expect(html.match(/<ol>/g)).toHaveLength(1);
+    });
+
+    it('closes the list when the paragraph after a blank line is NOT indented', () => {
+      const md = '1. Bước một\n2. Bước hai\n\nĐoạn văn bình thường sau danh sách.';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ol><li>Bước một</li><li>Bước hai</li></ol><p>Đoạn văn bình thường sau danh sách.</p>',
+      );
+    });
+
+    it('attaches multiple continuation paragraphs to the same list item', () => {
+      const md = '1. Bước một\n\n   Ghi chú đầu.\n\n   Ghi chú sau.\n\n2. Bước hai';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe(
+        '<ol><li>Bước một<p>Ghi chú đầu.</p><p>Ghi chú sau.</p></li><li>Bước hai</li></ol>',
+      );
+    });
+
+    it('treats an indented line with no blank line before it as part of the same item text', () => {
+      const md = '1. Bước một\n   nối tiếp cùng câu\n2. Bước hai';
+      const html = miniMarkdownToHtml(md);
+      expect(html).toBe('<ol><li>Bước một nối tiếp cùng câu</li><li>Bước hai</li></ol>');
     });
 
     it('converts blockquotes into <blockquote><p>', () => {

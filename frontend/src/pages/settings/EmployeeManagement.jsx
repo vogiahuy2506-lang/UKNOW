@@ -27,6 +27,18 @@ const PERMISSION_FIELDS = (t) => [
   { keys: ['campaigns_run'],    label: t('employee.permissions.campaignRun') },
   { keys: ['customers'],        label: t('employee.permissions.customers') },
   { keys: ['leads'],            label: t('employee.permissions.leads') },
+  { keys: ['chatbots_manage'],  label: t('employee.permissions.chatbotsManage') },
+  { keys: ['chatbot_channels_manage'], label: t('employee.permissions.chatbotChannelsManage') },
+  { keys: ['inbox_view'],       label: t('employee.permissions.inboxView') },
+  { keys: ['inbox_reply'],      label: t('employee.permissions.inboxReply') },
+  { keys: ['inbox_manage'],     label: t('employee.permissions.inboxManage') },
+  { keys: ['media_library_view'], label: t('employee.permissions.mediaLibraryView') },
+  { keys: ['media_library_manage'], label: t('employee.permissions.mediaLibraryManage') },
+  { keys: ['reports_view'],     label: t('employee.permissions.reportsView') },
+  { keys: ['ai_assistant_use'], label: t('employee.permissions.aiAssistantUse') },
+  { keys: ['marketplace_manage'], label: t('employee.permissions.marketplaceManage') },
+  { keys: ['marketplace_purchase'], label: t('employee.permissions.marketplacePurchase') },
+  { keys: ['integrations_manage'], label: t('employee.permissions.integrationsManage') },
 ];
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';
@@ -136,6 +148,11 @@ const EmployeeManagement = () => {
   const [teamOverview, setTeamOverview] = useState([]);
   const [overviewLoading, setOverviewLoading] = useState(false);
 
+  // Approval threshold (workspace level)
+  const [approvalThreshold, setApprovalThreshold] = useState('');
+  const [thresholdLoading, setThresholdLoading] = useState(false);
+  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
+
   // Inline actions
   const [statusUpdatingId, setStatusUpdatingId]   = useState(null);
   const [resetConfirmEmp, setResetConfirmEmp]     = useState(null);
@@ -205,9 +222,44 @@ const EmployeeManagement = () => {
     }
   };
 
+  const fetchApprovalThreshold = async () => {
+    setThresholdLoading(true);
+    try {
+      const res = await userManagementApiService.getCampaignApprovalThreshold();
+      const val = res.data?.data?.threshold;
+      setApprovalThreshold(val != null ? String(val) : '');
+    } catch (err) {
+      console.error('Failed to fetch approval threshold:', err);
+    } finally {
+      setThresholdLoading(false);
+    }
+  };
+
+  const handleSaveThreshold = async (e) => {
+    e?.preventDefault?.();
+    try {
+      setIsSavingThreshold(true);
+      const trimmed = approvalThreshold.trim();
+      const val = trimmed === '' || trimmed === '0' ? null : Number(trimmed);
+      if (val !== null && (!Number.isInteger(val) || val < 0)) {
+        toast.error(t('employee.approvalThreshold.inputPlaceholder') || 'Vui lòng nhập số nguyên dương hợp lệ');
+        return;
+      }
+      const res = await userManagementApiService.updateCampaignApprovalThreshold(val);
+      const updatedVal = res.data?.data?.threshold;
+      setApprovalThreshold(updatedVal != null ? String(updatedVal) : '');
+      toast.success(t('employee.approvalThreshold.saveSuccess'));
+    } catch (err) {
+      toast.error(err.response?.data?.message || t('employee.approvalThreshold.saveFailed'));
+    } finally {
+      setIsSavingThreshold(false);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchTeamOverview();
+    fetchApprovalThreshold();
     getMyProfile().then((res) => {
       const d = res?.data;
       if (!d) return;
@@ -228,10 +280,12 @@ const EmployeeManagement = () => {
     editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
     setPermState(emp.permissions || {});
     setLimitsState({
-      dailyEmailLimit:   emp.dailyEmailLimit   ?? null,
-      monthlyEmailLimit: emp.monthlyEmailLimit ?? null,
-      dailyZaloLimit:    emp.dailyZaloLimit    ?? null,
-      monthlyZaloLimit:  emp.monthlyZaloLimit  ?? null,
+      dailyEmailLimit:     emp.dailyEmailLimit     ?? null,
+      monthlyEmailLimit:   emp.monthlyEmailLimit   ?? null,
+      dailyZaloLimit:      emp.dailyZaloLimit      ?? null,
+      monthlyZaloLimit:    emp.monthlyZaloLimit    ?? null,
+      dailyAiCreditLimit:  emp.dailyAiCreditLimit  ?? null,
+      periodAiCreditLimit: emp.periodAiCreditLimit ?? null,
     });
   };
 
@@ -464,6 +518,46 @@ const EmployeeManagement = () => {
             </table>
           </div>
         )}
+      </div>
+
+      {/* ── Thiết lập duyệt chiến dịch lớn (Workspace Level) ── */}
+      <div className="card p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-gray-900">
+              {t('employee.approvalThreshold.title')}
+            </h2>
+            <p className="text-sm text-gray-500 max-w-2xl">
+              {t('employee.approvalThreshold.description')}
+            </p>
+          </div>
+          <form onSubmit={handleSaveThreshold} className="flex items-center gap-3 shrink-0">
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={approvalThreshold}
+                onChange={(e) => setApprovalThreshold(e.target.value)}
+                placeholder={t('employee.approvalThreshold.inputPlaceholder')}
+                disabled={thresholdLoading || isSavingThreshold}
+                className="input w-40 text-sm font-medium"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={thresholdLoading || isSavingThreshold}
+              className="btn btn-primary"
+            >
+              {isSavingThreshold ? t('employee.saving') : t('employee.save')}
+            </button>
+          </form>
+        </div>
+        <div className="mt-3 text-xs text-gray-400">
+          {approvalThreshold && Number(approvalThreshold) > 0
+            ? t('employee.approvalThreshold.enabledTip', { count: Number(approvalThreshold).toLocaleString('vi-VN') })
+            : t('employee.approvalThreshold.disabledTip')}
+        </div>
       </div>
 
       {/* ── Hoạt động team (tháng này) ───────────────────────────────────────── */}
@@ -738,6 +832,27 @@ const EmployeeManagement = () => {
                       value={limitsState.monthlyZaloLimit}
                       onChange={(v) => setLimitsState((p) => ({ ...p, monthlyZaloLimit: v }))}
                       max={planLimits.monthlyZalo ?? undefined}
+                    />
+                  </div>
+                </div>
+                <div className="border-t border-gray-100" />
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <HiOutlineKey className="w-5 h-5 text-purple-500" />
+                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{t('employee.aiCreditsLabel')}</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <LimitField
+                      t={t}
+                      label={t('employee.limitPerDay')}
+                      value={limitsState.dailyAiCreditLimit}
+                      onChange={(v) => setLimitsState((p) => ({ ...p, dailyAiCreditLimit: v }))}
+                    />
+                    <LimitField
+                      t={t}
+                      label={t('employee.limitPerPeriod')}
+                      value={limitsState.periodAiCreditLimit}
+                      onChange={(v) => setLimitsState((p) => ({ ...p, periodAiCreditLimit: v }))}
                     />
                   </div>
                 </div>

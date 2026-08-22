@@ -143,6 +143,16 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Check encoding artifacts (CP437 Mojibake)
+        run: |
+          set -euo pipefail
+          echo "Scanning source code for CP437 encoding corruption artifacts..."
+          if grep -rnE "ΓÇ|≡ƒ|╞░|ß╗|┬·|├©" src ../frontend/src; then
+            echo "::error::Found CP437 mojibake encoding corruption in source files. Please ensure files are encoded in UTF-8."
+            exit 1
+          fi
+          echo "No CP437 encoding corruption found."
+
   integration:
     name: Jest integration (backend) — shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest

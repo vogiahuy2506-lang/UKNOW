@@ -39,4 +39,24 @@ router.patch('/:id/demote',
   ctrl.demote
 );
 
+// Mức 1 — giải phóng email/username, giữ nguyên dữ liệu (đơn hàng, hoá đơn...)
+router.patch('/:id/detach-email',
+  [
+    param('id').isInt({ min: 1 }),
+    body('confirmEmail').trim().isEmail().withMessage('confirmEmail phải là email hợp lệ'),
+  ],
+  handleValidationErrors,
+  ctrl.detachEmail
+);
+
+// Mức 2 — xoá cứng, chỉ cho tài khoản không có đơn hàng/marketplace
+router.delete('/:id/purge',
+  [
+    param('id').isInt({ min: 1 }),
+    body('confirmEmail').trim().isEmail().withMessage('confirmEmail phải là email hợp lệ'),
+  ],
+  handleValidationErrors,
+  ctrl.purge
+);
+
 export default router;

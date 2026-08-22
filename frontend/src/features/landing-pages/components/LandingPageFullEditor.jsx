@@ -1440,7 +1440,7 @@ export default function LandingPageFullEditor({
               {t('landingPageEditor.publish')}
             </label>
 
-            <SectionCard title={t('leadFormConfig.title')} icon={HiOutlinePencilAlt} defaultOpen={false}>
+            <SectionCard title={t('leadFormConfig.title')} icon={HiOutlinePencilAlt} defaultOpen={true}>
               <LeadFormConfigPanel form={form} setForm={setForm} t={t} />
             </SectionCard>
 

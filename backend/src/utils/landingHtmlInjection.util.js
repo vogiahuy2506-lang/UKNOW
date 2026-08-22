@@ -2,15 +2,56 @@
  * Gỡ các khối do hệ thống tự chèn trước đó (để lần lưu sau idempotent, tránh nhân đôi iframe/script).
  *
  * Luồng:
- * 1. Xóa `<section data-founder-lp-embed>` (iframe form).
+ * 1. Xóa `<section data-founder-lp-embed>` (iframe form) — nhưng giữ lại
+ *    nếu section chứa `<!-- UKNOW_LP_FORM -->` (marker placeholder do admin
+ *    dán tay): khi đó chỉ strip phần iframe bên trong để idempotent
+ *    `autoInjectLeadFormIfMissing` chèn lại. Nếu strip nguyên section, vòng
+ *    lặp save sẽ mất form.
  * 2. Xóa `<div data-founder-lp-injected>` và `<script ... lp-track.js ...>`.
  *
  * @param {string} html
  * @returns {string}
  */
+import { LANDING_FORM_PLACEHOLDER } from './landingEditGuard.util.js';
+
 export function stripFounderLandingAutoBlocks(html) {
   let out = String(html ?? '');
-  out = out.replace(/<section\s[^>]*data-founder-lp-embed\s*=[^>]*>[\s\S]*?<\/section>\s*/gi, '');
+  // Section auto-injected có marker placeholder (do chính autoInject chèn)
+  // → chỉ xóa phần iframe bên trong, giữ lại khung + marker.
+  // Pattern: tìm `<section ... data-founder-lp-embed="..." ...>` ... `</section>`,
+  // trong đó có chuỗi LANDING_FORM_PLACEHOLDER. Thay phần giữa (từ sau marker
+  // đến `</section>`) bằng `</section>` (giữ khung + marker, bỏ iframe cũ).
+  const marker = LANDING_FORM_PLACEHOLDER;
+  const sectionStartRe = /<section\s[^>]*data-founder-lp-embed\s*=[^>]*>/gi;
+  let cursor = 0;
+  let next = out;
+  let result = '';
+  let match;
+  while ((match = sectionStartRe.exec(next)) !== null) {
+    result += next.slice(cursor, match.index);
+    const startIdx = match.index;
+    const openTagEnd = sectionStartRe.lastIndex;
+    const closeIdx = next.indexOf('</section>', openTagEnd);
+    if (closeIdx === -1) {
+      result += next.slice(startIdx);
+      cursor = next.length;
+      break;
+    }
+    const sectionBody = next.slice(openTagEnd, closeIdx);
+    if (sectionBody.includes(marker)) {
+      // Section chứa marker placeholder → giữ khung + toàn bộ nội dung từ
+      // đầu section đến hết marker, bỏ phần sau marker (iframe cũ + tag đóng
+      // h2 nếu có).
+      const markerIdx = sectionBody.indexOf(marker);
+      result += next.slice(startIdx, openTagEnd + markerIdx + marker.length) + '</section>';
+      cursor = closeIdx + '</section>'.length;
+    } else {
+      // Section không có marker (admin dán iframe raw) → xóa nguyên section.
+      cursor = closeIdx + '</section>'.length;
+    }
+  }
+  result += next.slice(cursor);
+  out = result;
   out = out.replace(/<div\s[^>]*data-founder-lp-injected\s*=[^>]*>[\s\S]*?<\/div>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*\/>\s*/gi, '');
@@ -81,7 +122,11 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
 }
 
 /**
- * Chuẩn hóa HTML trước khi lưu DB: gỡ khối cũ → rewrite link tracking → chỉ chèn script `lp-track.js` (form iframe do admin copy/dán tay).
+ * Chuẩn hóa HTML trước khi lưu DB:
+ *   1. Gỡ khối cũ (iframe/script đã chèn ở lần save trước — idempotent).
+ *   2. Rewrite link tracking trên `<a href>`.
+ *   3. Auto-inject iframe form nếu HTML đã strip không còn form đăng ký.
+ *   4. Chèn script `lp-track.js` (idempotent).
  *
  * @param {string} html
  * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
@@ -92,8 +137,64 @@ export function prepareLandingHtmlOnSave(html, { slug, frontendOrigin, apiBase }
   if (!s) return String(html ?? '');
   let out = stripFounderLandingAutoBlocks(html);
   out = rewriteHttpAnchorsToTrack(out, { slug: s, apiBase });
+  out = autoInjectLeadFormIfMissing(out, { slug: s, frontendOrigin });
   out = injectLandingEnhancements(out, { slug: s, frontendOrigin, apiBase });
   return out;
+}
+
+/**
+ * Idempotent: đảm bảo iframe form tồn tại trong HTML.
+ *
+ * 2 trường hợp:
+ *  - HTML đã có iframe thật (`/embed/lead-form`): giữ nguyên.
+ *  - HTML có section rỗng với marker placeholder (do `stripFounderLandingAutoBlocks`
+ *    giữ lại ở lần save trước): chèn iframe vào ngay sau marker trong section đó.
+ *  - HTML không có gì: chèn wrapped mới (section + marker + iframe) trước `</body>`.
+ *
+ * Marker placeholder giúp AI Edit guard nhận diện và bảo vệ form khỏi bị
+ * xóa khi AI tái cấu trúc trang (đồng bộ `LANDING_FORM_PLACEHOLDER`).
+ *
+ * @param {string} html
+ * @param {{ slug: string, frontendOrigin: string }} opts
+ * @returns {string}
+ */
+export function autoInjectLeadFormIfMissing(html, { slug, frontendOrigin }) {
+  const s = String(slug || '').trim().toLowerCase();
+  const origin = String(frontendOrigin || '').replace(/\/+$/, '');
+  if (!s || !origin) return String(html ?? '');
+  let out = String(html ?? '');
+  if (!out) return out;
+  // Đã có iframe thật → xong.
+  if (out.includes('/embed/lead-form')) return out;
+
+  const embedUrl = `${origin}/embed/lead-form?slug=${encodeURIComponent(s)}`;
+  const iframeBlock = `<iframe src="${embedUrl}" width="430" height="720" style="border:0;display:block;width:430px;max-width:100%;vertical-align:top;overflow:hidden" title="Đăng ký Founder AI" loading="lazy"></iframe>\n`;
+
+  // Trường hợp 1: section rỗng có marker placeholder → chèn iframe vào section đó.
+  // Tìm vị trí `</section>` ngay sau marker, chèn iframe trước đó (cùng format
+  // với wrapped mới để idempotent).
+  const markerIdx = out.indexOf(LANDING_FORM_PLACEHOLDER);
+  if (markerIdx !== -1) {
+    const closeIdx = out.indexOf('</section>', markerIdx);
+    if (closeIdx !== -1) {
+      // Tìm vị trí bắt đầu dòng chứa </section> để chèn iframe ở đầu dòng đó,
+      // khớp format của wrapped (mỗi thẻ 1 dòng).
+      const beforeClose = out.slice(0, closeIdx);
+      const lineStart = beforeClose.lastIndexOf('\n') + 1;
+      const indent = out.slice(lineStart, closeIdx).match(/^\s*/)?.[0] || '';
+      return `${beforeClose}\n${indent}${iframeBlock.trimEnd()}\n${out.slice(closeIdx)}`;
+    }
+  }
+
+  // Trường hợp 2: chưa có gì → chèn wrapped mới.
+  const wrapped = `\n<section data-founder-lp-embed="1" class="py-8 px-4 max-w-3xl mx-auto">\n  <h2 class="text-xl font-semibold text-gray-900 mb-4">Đăng ký tư vấn</h2>\n  ${LANDING_FORM_PLACEHOLDER}\n  ${iframeBlock}</section>\n`;
+  if (/<\/body>/i.test(out)) {
+    return out.replace(/<\/body>/i, `${wrapped}</body>`);
+  }
+  if (/<\/html>/i.test(out)) {
+    return out.replace(/<\/html>/i, `${wrapped}</html>`);
+  }
+  return `${out}${wrapped}`;
 }
 
 /**

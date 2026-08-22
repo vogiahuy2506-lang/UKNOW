@@ -247,14 +247,16 @@ describe('landingHtmlInjection.util', () => {
       apiBase: 'http://localhost:5001/api',
     };
 
-    it('chạy đủ pipeline: strip → rewrite link → inject script', () => {
+    it('chạy đủ pipeline: strip → rewrite link → auto-inject form (khi thiếu) → inject script', () => {
       const html =
         '<html><body>' +
         '<section data-founder-lp-embed="1">old</section>' +
         '<a href="https://target.com">click</a>' +
         '</body></html>';
       const out = prepareLandingHtmlOnSave(html, opts);
-      expect(out).not.toContain('data-founder-lp-embed');
+      // Khối auto cũ đã bị strip, form mới được tự chèn → vẫn còn 1 section.
+      expect(out).toMatch(/data-founder-lp-embed="1"/);
+      expect(out).toContain('/embed/lead-form?slug=promo');
       expect(out).toContain('landing-track/go');
       expect(out).toContain('lp-track.js');
       expect(out).toContain('data-slug="promo"');
@@ -264,10 +266,20 @@ describe('landingHtmlInjection.util', () => {
       const html = '<html><body><a href="https://target.com">L</a></body></html>';
       const once = prepareLandingHtmlOnSave(html, opts);
       const twice = prepareLandingHtmlOnSave(once, opts);
-      // Sau lần 2: script đã có, marker đã có → injectLandingEnhancements skip;
-      //            khối auto đã bị strip → giữ nguyên;
-      //            link đã được rewrite → rewrite nội bộ skip vì URL chứa /go.
+      // Sau lần 1: đã có iframe + marker → auto-inject skip;
+      //           đã có script → injectLandingEnhancements skip;
+      //           link đã rewrite → rewrite nội bộ skip vì URL chứa /go.
       expect(twice).toBe(once);
+    });
+
+    it('HTML đã có iframe form → không chèn thêm', () => {
+      const html =
+        '<html><body>' +
+        '<iframe src="http://localhost:5174/embed/lead-form?slug=promo"></iframe>' +
+        '</body></html>';
+      const out = prepareLandingHtmlOnSave(html, opts);
+      const matches = out.match(/\/embed\/lead-form\?/g) || [];
+      expect(matches).toHaveLength(1);
     });
 
     it('slug rỗng → trả nguyên HTML không xử lý', () => {

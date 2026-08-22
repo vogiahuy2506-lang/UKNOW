@@ -369,7 +369,7 @@ function AppContent() {
             </ProtectedRoute>
           }>
             <Route index element={<AiHomePage />} />
-            <Route path="reports" element={<Dashboard />} />
+            <Route path="reports" element={<PermissionRoute permission="reports_view"><Dashboard /></PermissionRoute>} />
 
             {/* Campaigns */}
             <Route path="campaigns" element={<PermissionRoute permission="campaigns_view"><Campaigns /></PermissionRoute>} />
@@ -394,9 +394,9 @@ function AppContent() {
             <Route path="settings/landing-testimonials" element={<FeatureFlagRoute flag="VITE_FEATURE_LANDING_CMS"><OwnerRoute><LandingTestimonialsPage /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="settings/landing-pages" element={<PermissionRoute permission="landing_pages"><LandingPagesAdminPage /></PermissionRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
-            <Route path="chatbot-studio" element={<OwnerRoute><ChatbotStudioPage /></OwnerRoute>} />
-            <Route path="settings/inbox" element={<OwnerRoute><InboxOutboxPage /></OwnerRoute>} />
-            <Route path="settings/media-library" element={<OwnerRoute><MediaLibraryPage /></OwnerRoute>} />
+            <Route path="chatbot-studio" element={<PermissionRoute permission="chatbots_manage"><ChatbotStudioPage /></PermissionRoute>} />
+            <Route path="settings/inbox" element={<PermissionRoute permission="inbox_view"><InboxOutboxPage /></PermissionRoute>} />
+            <Route path="settings/media-library" element={<PermissionRoute permission="media_library_view"><MediaLibraryPage /></PermissionRoute>} />
             <Route path="orders" element={<FeatureFlagRoute flag="VITE_FEATURE_ORDERS"><OwnerRoute><Orders /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="billing" element={<OwnerRoute><BillingHubPage /></OwnerRoute>} />
             <Route path="topup" element={<OwnerRoute><TopupPage /></OwnerRoute>} />

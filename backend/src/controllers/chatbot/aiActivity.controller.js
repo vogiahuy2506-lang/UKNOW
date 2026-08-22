@@ -1,5 +1,12 @@
 import aiActivityService from '../../services/chatbot/aiActivity.service.js';
 import { chargeAiCredit } from '../../middleware/aiCredit.middleware.js';
+import { resolveWorkspaceOwnerId } from '../../services/storage/storageQuota.service.js';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_ENTITY_TYPES,
+  logWorkspace,
+} from '../../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../../utils/auditContext.util.js';
 
 class AiActivityController {
   /**
@@ -7,7 +14,7 @@ class AiActivityController {
    */
   async getActivityReport(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { date, accountId } = req.query;
       const data = await aiActivityService.getActivityReport({
         userId,
@@ -29,8 +36,15 @@ class AiActivityController {
    */
   async resumeAllAi(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const data = await aiActivityService.resumeAllAi({ userId });
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.INBOX_AI_PAUSE_UPDATED,
+        AUDIT_ENTITY_TYPES.INBOX_CONVERSATION,
+        null,
+        { paused: false, scope: 'all', resumedCount: data.resumedCount }
+      );
       return res.json({ success: true, data });
     } catch (err) {
       console.error('[AiActivityController] resumeAllAi error:', err);
@@ -46,7 +60,7 @@ class AiActivityController {
    */
   async summarizeActivity(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const date = req.body?.date || req.query?.date || null;
       const data = await aiActivityService.summarizeDailyActivity({
         userId,

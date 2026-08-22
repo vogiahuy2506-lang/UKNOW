@@ -15,6 +15,10 @@ import {
   StorageQuotaExceededError,
 } from '../services/storage/storageQuota.service.js';
 import { getStorageBackend } from '../services/storage/storageBackend.js';
+import {
+  findStorageObjectByKey,
+  findStorageObjectByTempKey,
+} from '../repositories/storage.repository.js';
 
 // Resolve temp_uploads directory relative to project root (where the process starts)
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
@@ -322,8 +326,9 @@ class UploadController {
       if (!req.user?.id) return res.status(401).json({ success: false, message: 'Chưa xác thực' });
       const { tempId, originalName } = req.body;
       if (!tempId || !originalName) return res.status(400).json({ success: false, message: 'Thiếu tempId hoặc originalName' });
-      const results = await this.promoteTempToStorage([{ tempId, originalName }], req.user.id, {
-        ownerUserId: resolveWorkspaceOwnerId(req.user),
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const results = await this.promoteTempToStorage([{ tempId, originalName }], ownerUserId, {
+        ownerUserId,
         actorUserId: req.user.id,
       });
       if (!results.length) return res.status(500).json({ success: false, message: 'Không thể lưu file' });
@@ -556,11 +561,24 @@ class UploadController {
         });
       }
 
+      if (!isSafeTempSegment(tempId)) {
+        return res.status(400).json({ success: false, message: 'Temp ID không hợp lệ' });
+      }
+
       // Tìm và xóa temp file
       const files = await fs.readdir(this.tempDir);
-      const tempFile = files.find(file => file.startsWith(tempId));
+      const tempFile = files.find(file => file === tempId || file.startsWith(`${tempId}.`));
       
       if (tempFile) {
+        const tracked = await findStorageObjectByTempKey(tempFile);
+        const ownerUserId = resolveWorkspaceOwnerId(req.user);
+        if (
+          !tracked
+          || tracked.pool_type !== STORAGE_POOL_TYPES.WORKSPACE
+          || Number(tracked.owner_user_id) !== Number(ownerUserId)
+        ) {
+          return res.status(404).json({ success: false, message: 'Không tìm thấy tệp tạm' });
+        }
         const tempFilePath = path.join(this.tempDir, tempFile);
         await markDeletedAfterUnlink({ tempKey: tempFile, physicalPaths: [tempFilePath] });
       }
@@ -601,6 +619,16 @@ class UploadController {
           success: false,
           message: 'Key của file không hợp lệ'
         });
+      }
+      const tracked = await findStorageObjectByKey(normalizedKey);
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      if (
+        !tracked
+        || tracked.pool_type !== STORAGE_POOL_TYPES.WORKSPACE
+        || Number(tracked.owner_user_id) !== Number(ownerUserId)
+        || tracked.state === 'deleted'
+      ) {
+        return res.status(404).json({ success: false, message: 'File không tồn tại' });
       }
       const exists = await getStorageBackend().exists(normalizedKey);
       if (!exists) {

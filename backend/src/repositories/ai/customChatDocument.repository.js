@@ -1,5 +1,39 @@
 import db from '../../config/database.js';
 
+function parseEmbedding(raw) {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== 'string') {
+    if (Buffer.isBuffer(raw)) {
+      try { return parseEmbedding(raw.toString('utf8')); } catch { return null; }
+    }
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function cosineSimilarity(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || a.length !== b.length) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    const x = Number(a[i]);
+    const y = Number(b[i]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+    dot += x * y;
+    normA += x * x;
+    normB += y * y;
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
 class CustomChatDocumentRepository {
   async findChunkTexts({ chatbotId, userId }, queryable = db) {
     const result = await queryable.query(
@@ -16,6 +50,41 @@ class CustomChatDocumentRepository {
   async searchByEmbedding() {
     console.warn('[CustomChatDocument] JSONB embedding search not supported, using keyword fallback');
     return [];
+  }
+
+  /**
+   * Cosine similarity search over a chatbot's own KB chunks.
+   * `custom_chatbot_chunks.embedding` is stored as JSONB (number array).
+   * Returns the top-K chunks ordered by similarity, filtered by `minSimilarity`.
+   */
+  async searchChunksByChatbot(chatbotId, userId, queryEmbedding, { limit = 5, minSimilarity = 0.3 } = {}, queryable = db) {
+    if (!chatbotId || !Array.isArray(queryEmbedding) || queryEmbedding.length === 0) return [];
+    const { rows } = await queryable.query(
+      `SELECT c.id, c.chunk_text, c.chunk_index, c.source, c.embedding
+         FROM custom_chatbot_chunks c
+         JOIN custom_chatbot_documents d ON d.id = c.document_id
+        WHERE c.chatbot_id = $1 AND d.owner_user_id = $2 AND d.status = 'ready'
+          AND c.embedding IS NOT NULL`,
+      [chatbotId, userId]
+    );
+    if (rows.length === 0) return [];
+
+    const scored = [];
+    for (const row of rows) {
+      const vec = parseEmbedding(row.embedding);
+      if (!vec || vec.length !== queryEmbedding.length) continue;
+      const similarity = cosineSimilarity(vec, queryEmbedding);
+      if (similarity >= minSimilarity) {
+        scored.push({
+          chunk_text: row.chunk_text,
+          chunk_index: row.chunk_index,
+          source: row.source,
+          similarity,
+        });
+      }
+    }
+    scored.sort((a, b) => b.similarity - a.similarity);
+    return scored.slice(0, limit);
   }
 
   async findDocumentBySource(chatbotId, ownerUserId, sourceKey, queryable = db, { forUpdate = false } = {}) {

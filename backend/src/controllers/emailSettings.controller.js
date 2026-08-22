@@ -243,7 +243,6 @@ class EmailSettingsController {
     <a href="${privacyPolicyUrl}" style="color:#6b7280;text-decoration:underline;">Privacy Policy</a>.
   </div>
   <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;line-height:1.65;color:#6b7280;">
-    <div style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Tên công ty · Company name</div>
     <div style="font-weight:600;color:#374151;margin-bottom:6px;">CÔNG TY TNHH GIẢI PHÁP SỐ DIGISO</div>
     <div style="margin-bottom:2px;">DIGISO DIGITAL SOLUTION COMPANY LIMITED</div>
     <div style="margin-top:8px;margin-bottom:3px;">Địa chỉ: Đ. Võ Trường Toản, Phường Linh Trung, Linh Xuân, Hồ Chí Minh</div>

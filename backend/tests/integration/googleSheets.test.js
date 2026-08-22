@@ -45,11 +45,18 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
-async function addGoogleSheetsMembership(ownerId, employeeId, campaignsView) {
+// PR-5: Google Sheets tách khỏi `campaigns_view` sang key riêng `integrations_manage`
+// (googleSheets.routes.js:13,15). Vẫn cấp `campaigns_view` để chứng minh key cũ KHÔNG
+// còn mở được endpoint này nữa — nếu ai đó lỡ đổi guard về campaigns_view, test âm
+// tính bên dưới sẽ đỏ.
+async function addGoogleSheetsMembership(ownerId, employeeId, integrationsManage) {
   await db.query(
     `INSERT INTO user_members (owner_id, employee_id, permissions, status)
      VALUES ($1, $2, $3::jsonb, 'active')`,
-    [ownerId, employeeId, JSON.stringify({ campaigns_view: campaignsView })]
+    [ownerId, employeeId, JSON.stringify({
+      campaigns_view: true,
+      integrations_manage: integrationsManage,
+    })]
   );
 }
 
@@ -72,7 +79,7 @@ describe('POST /api/google-sheets/check', () => {
     expect(res.status).toBe(401);
   });
 
-  it('employee thiếu campaigns_view → 403 trước khi tải sheet', async () => {
+  it('employee chỉ có campaigns_view, thiếu integrations_manage → 403 trước khi tải sheet', async () => {
     const owner = await createUser({ username: 'gs-permission-owner' });
     const employee = await createUser({ username: 'gs-permission-employee' });
     await addGoogleSheetsMembership(owner.id, employee.id, false);
@@ -86,7 +93,7 @@ describe('POST /api/google-sheets/check', () => {
     expect(mockAxiosGet).not.toHaveBeenCalled();
   });
 
-  it('employee có campaigns_view → được kiểm tra sheet', async () => {
+  it('employee có integrations_manage → được kiểm tra sheet', async () => {
     const owner = await createUser({ username: 'gs-allowed-owner' });
     const employee = await createUser({ username: 'gs-allowed-employee' });
     await addGoogleSheetsMembership(owner.id, employee.id, true);

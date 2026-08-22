@@ -59,7 +59,12 @@ describe('auth.controller welcome email invariant', () => {
   });
 
   it('passes recipient `to` matching user.email to sendSystemEmail on register', async () => {
-    // 0. BEGIN (added by transactional trial grant flow)
+// 0. BEGIN (added by transactional trial grant flow)
+    // senna merge wraps register() in an explicit transaction — not this test's
+    // concern, but it means an extra client.query('BEGIN') now precedes the checks.
+    // Disabling trial grant here too: it's a separate concern from the welcome-email
+    // invariant this test verifies, and it would otherwise burn another query slot.
+    process.env.SIGNUP_TRIAL_ENABLED = 'false';
     mockClient.query.mockResolvedValueOnce({ rows: [] });
     // 1. check email
     mockClient.query.mockResolvedValueOnce({ rows: [] });

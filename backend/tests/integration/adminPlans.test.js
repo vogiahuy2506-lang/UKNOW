@@ -345,6 +345,68 @@ describe('PATCH /api/admin/plans/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.code).toBe('original');
   });
+
+  it('bật gói công khai đang thiếu mã (isActive=true, code=null) → 400 yêu cầu điền mã', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: null, name: 'Inactive No Code', price: 100000, isActive: false });
+    const token = await loginAs(admin);
+
+    const res = await request(app)
+      .patch(`/api/admin/plans/${plan.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Inactive No Code',
+        price: 100000,
+        isActive: true,
+        maxEmployees: 1,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('Gói phải có mã trước khi bật hiển thị');
+  });
+
+  it('điền mã và bật gói công khai cùng lúc → 200 thành công', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: null, name: 'No Code Yet', price: 100000, isActive: false });
+    const token = await loginAs(admin);
+
+    const res = await request(app)
+      .patch(`/api/admin/plans/${plan.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        code: 'now-active',
+        name: 'Now Active Plan',
+        price: 100000,
+        isActive: true,
+        maxEmployees: 1,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe('now-active');
+    expect(res.body.data.is_active).toBe(true);
+  });
+
+  it('bật gói custom thiếu mã (isCustom=true, code=null) → 200 thành công (không áp ràng buộc)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: null, name: 'Custom No Code', price: 500000, isCustom: true, isActive: false });
+    const token = await loginAs(admin);
+
+    const res = await request(app)
+      .patch(`/api/admin/plans/${plan.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Custom No Code',
+        price: 500000,
+        isActive: true,
+        maxEmployees: 1,
+        storageLimitBytes: 100 * 1024 * 1024,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.is_active).toBe(true);
+  });
 });
 
 describe('DELETE /api/admin/plans/:id — smart delete', () => {

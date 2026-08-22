@@ -4,19 +4,17 @@ import uploadController from './upload.controller.js';
 import { findStorageObjectById, markStorageObjectDeleted } from '../repositories/storage.repository.js';
 import { markDeletedAfterUnlink } from '../services/storage/storageObject.service.js';
 import { isReferenceAlive } from '../services/storage/storageReference.service.js';
-import { resolveBillingUserId } from '../utils/billingCycle.util.js';
-
-async function resolveOwnerId(req) {
-  const ownerContextId = req.user?.activeContext?.type === 'employee'
-    ? req.user.activeContext.ownerId
-    : (req.headers['x-owner-context'] || null);
-  const billingId = await resolveBillingUserId(req.user.id, { ownerContextId });
-  return billingId || req.user.id;
-}
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_ENTITY_TYPES,
+  logWorkspace,
+} from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
 export async function listMediaLibrary(req, res) {
   try {
-    const ownerUserId = await resolveOwnerId(req);
+    const ownerUserId = getWorkspaceContext(req.user).workspaceOwnerId;
     const result = await mediaLibraryRepo.listOwnedAttachments(ownerUserId, req.query);
     return res.json({ success: true, data: result.items, pagination: result.pagination });
   } catch (err) {
@@ -27,7 +25,7 @@ export async function listMediaLibrary(req, res) {
 
 export async function listChannelMedia(req, res) {
   try {
-    const ownerUserId = await resolveOwnerId(req);
+    const ownerUserId = getWorkspaceContext(req.user).workspaceOwnerId;
     const result = await mediaLibraryRepo.listChannelAttachments(ownerUserId, req.query);
     return res.json({ success: true, data: result.items, pagination: result.pagination });
   } catch (err) {
@@ -38,7 +36,7 @@ export async function listChannelMedia(req, res) {
 
 export async function listStorageObjects(req, res) {
   try {
-    const ownerUserId = await resolveOwnerId(req);
+    const ownerUserId = getWorkspaceContext(req.user).workspaceOwnerId;
     const result = await mediaLibraryRepo.listWorkspaceStorageObjects(ownerUserId, req.query);
     return res.json({
       success: true,
@@ -54,7 +52,7 @@ export async function listStorageObjects(req, res) {
 
 export async function deleteStorageObject(req, res) {
   try {
-    const ownerUserId = await resolveOwnerId(req);
+    const ownerUserId = getWorkspaceContext(req.user).workspaceOwnerId;
     const objectId = Number(req.params.id);
     if (!Number.isSafeInteger(objectId) || objectId <= 0) {
       return res.status(400).json({ success: false, message: 'ID tệp không hợp lệ' });
@@ -112,10 +110,11 @@ export async function deleteStorageObject(req, res) {
       await markStorageObjectDeleted(object.id);
     }
 
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.MEDIA_DELETED, AUDIT_ENTITY_TYPES.MEDIA_OBJECT, object.id, { category: object.category, referenceType: object.reference_type || null });
+
     return res.json({ success: true, message: 'Đã xóa tệp thành công' });
   } catch (err) {
     console.error('[MediaLibrary] deleteStorageObject error:', err);
     return res.status(500).json({ success: false, message: err.message || 'Không thể xóa tệp' });
   }
 }
-

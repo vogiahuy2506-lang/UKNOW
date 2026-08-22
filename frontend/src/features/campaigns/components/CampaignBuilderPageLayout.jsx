@@ -205,6 +205,10 @@ const CampaignBuilderPageLayout = ({
   const [isNodeMenuCollapsed, setIsNodeMenuCollapsed] = useState(false);
   const effectiveBuilderSidebarWidth = isNodeMenuCollapsed ? 52 : builderSidebarWidth;
   const NODE_ORDER_INDEX = buildNodeOrderIndex(campaignType);
+  const normalizedCampaignType = String(campaignType || '').trim().toLowerCase();
+  // Campaign Email không có node Zalo → ẩn cả section Zalo để palette không
+  // hiển thị category rỗng / gây hiểu nhầm.
+  const showZaloSection = normalizedCampaignType !== 'email';
 
   return (
     <div className="h-full min-h-0 w-full min-w-0 overflow-hidden flex flex-col">
@@ -346,6 +350,7 @@ const CampaignBuilderPageLayout = ({
               )}
             </div>
 
+            {showZaloSection && (
             <div className="mb-2">
               <button
                 onClick={() => toggleCategory('Zalo')}
@@ -371,6 +376,7 @@ const CampaignBuilderPageLayout = ({
                 </div>
               )}
             </div>
+            )}
 
             <div className="mb-2">
               <button

@@ -12,122 +12,15 @@ import { toast } from 'react-hot-toast';
 import checkoutApiService from '../../../features/checkout/services/checkoutApi.service';
 import { getMyCustomPlan } from '../../../services/customPlan.service';
 import { resolvePlanChange } from '../../../utils/planChange.util';
-
-const isContactPlan = (plan) => {
-  const code = String(plan?.code || '').trim().toLowerCase();
-  const name = String(plan?.name || '').trim().toLowerCase();
-  return code === 'custom' || code === 'contact' || name.includes('tùy chọn') || name.includes('tuỳ chọn');
-};
-
-const isFreePlan = (plan) => Number(plan?.price || 0) <= 0 && !isContactPlan(plan);
-
-const getPlanCtaLabel = (plan, t, isCurrentCustom = false) => {
-  if (isCurrentCustom) return t('pricing.editCustomPlan');
-  if (isContactPlan(plan)) return t('customPlan.cardCta');
-  if (isFreePlan(plan)) return t('pricing.startTrial');
-  return t('pricing.choosePlan');
-};
-
-const normalizeText = (value) => String(value || '').trim().toLowerCase();
-
-const PLAN_ALIASES = { professional: 'pro' };
-
-const getPlanTranslationKey = (plan) => {
-  const code = normalizeText(plan?.code);
-  if (code) return PLAN_ALIASES[code] || code;
-
-  const name = normalizeText(plan?.name)
-    .replace(/^gói\s+/, '')
-    .replace(/\s+plan$/, '');
-
-  const resolved = PLAN_ALIASES[name] || name;
-  if (['starter', 'trial', 'basic', 'pro', 'team', 'business', 'enterprise', 'custom'].includes(resolved)) {
-    return resolved;
-  }
-  if (name.includes('tùy chọn') || name.includes('tuỳ chọn')) return 'custom';
-  return '';
-};
-
-const getTranslatedPlanName = (plan, t) => {
-  const key = getPlanTranslationKey(plan);
-  const translated = key ? t(`pricing.planNames.${key}`) : '';
-  return translated && translated !== `pricing.planNames.${key}` ? translated : plan.name;
-};
-
-const getTranslatedPlanDescription = (plan, t) => {
-  // Mô tả admin nhập trong DB luôn thắng — bản dịch cứng chỉ là fallback cho gói
-  // chưa có mô tả riêng. Bản copy y hệt cũng có ở features/admin/plans/planUtils.jsx —
-  // sửa lỗi thì sửa cả hai chỗ.
-  if (String(plan?.description || '').trim()) return plan.description;
-  const key = getPlanTranslationKey(plan);
-  const translated = key ? t(`pricing.planDescriptions.${key}`) : '';
-  return translated && translated !== `pricing.planDescriptions.${key}` ? translated : plan.description;
-};
-
-const getTranslatedFeature = (feature, t) => {
-  const text = String(feature || '').trim();
-  const normalized = normalizeText(text);
-
-  // Email per month: "500 email/tháng" or "500 emails/month"
-  const emailMonthVi = text.match(/^([\d.,]+)\s*emails?\s*\/\s*tháng$/i);
-  if (emailMonthVi) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonthVi[1] });
-  const emailMonthEn = text.match(/^([\d.,]+)\s*emails?\s*\/\s*month$/i);
-  if (emailMonthEn) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonthEn[1] });
-
-  // Zalo per month: "1,000 tin Zalo/tháng" or "1,000 tin nhắn Zalo/tháng"
-  const zaloMonth = text.match(/^([\d.,]+)\s*(?:tin(?:\s*nhắn)?\s*)?zalo\s*\/\s*tháng$/i);
-  if (zaloMonth) return t('pricing.featureTemplates.zaloPerMonth', { n: zaloMonth[1] });
-
-  // Members: "5 thành viên"
-  const members = text.match(/^([\d.,]+)\s*thành viên(?:\s*tham gia)?$/i);
-  if (members) return t('pricing.featureTemplates.members', { n: members[1] });
-
-  // Campaigns: "3 chiến dịch"
-  const campaigns = text.match(/^([\d.,]+)\s*chiến dịch$/i);
-  if (campaigns) return t('pricing.featureTemplates.campaigns', { n: campaigns[1] });
-
-  // Landing pages: "2 Landing pages" or "2 landing pages"
-  const landingPages = text.match(/^([\d.,]+)\s*landing pages?$/i);
-  if (landingPages) return t('pricing.featureTemplates.landingPages', { n: landingPages[1] });
-
-  // Zalo OA accounts: "1 tài khoản Zalo OA"
-  const zaloAccounts = text.match(/^([\d.,]+)\s*tài khoản\s*zalo(?:\s*oa)?$/i);
-  if (zaloAccounts) return t('pricing.featureTemplates.zaloAccounts', { n: zaloAccounts[1] });
-
-  // Email accounts: "1 tài khoản Email"
-  const emailAccounts = text.match(/^([\d.,]+)\s*tài khoản\s*email$/i);
-  if (emailAccounts) return t('pricing.featureTemplates.emailAccounts', { n: emailAccounts[1] });
-
-  const knownFeatureKeys = {
-    'ai viết content nâng cao': 'advancedAiWriting',
-    'hỗ trợ ưu tiên 24/7': 'prioritySupport247',
-    'hỗ trợ 24/7': 'support247',
-    'hỗ trợ qua email': 'emailSupport',
-    'multi_language': 'multiLanguage',
-    'không giới hạn': 'unlimited',
-    'không hỗ trợ': 'notSupported',
-    'nhắn tin zalo oa không giới hạn': 'unlimitedZaloMessages',
-    'nhắn tin zalo không giới hạn': 'unlimitedZaloMessages',
-    'không giới hạn tin zalo': 'unlimitedZalo',
-    'gửi email không giới hạn': 'unlimitedEmailSending',
-    'không giới hạn email': 'unlimitedEmail',
-    'không giới hạn chiến dịch': 'unlimitedCampaigns',
-    'không giới hạn landing pages': 'unlimitedLandingPages',
-    'không giới hạn landing page': 'unlimitedLandingPages',
-    'không giới hạn tài khoản': 'unlimitedAccounts',
-    'tạo chiến dịch zalo & email': 'zaloEmailCampaigns',
-    'hỗ trợ qua chat': 'chatSupport',
-    'báo cáo chi tiết': 'detailedReports',
-    'tự động hoá zalo': 'zaloAutomation',
-    'tự động hóa zalo': 'zaloAutomation',
-    'api truy cập': 'apiAccess',
-    'ưu tiên hỗ trợ': 'prioritySupport',
-    'hỗ trợ ưu tiên': 'prioritySupport',
-  };
-
-  const key = knownFeatureKeys[normalized];
-  return key ? t(`pricing.features.${key}`) : text;
-};
+import {
+  isContactPlan,
+  isFreePlan,
+  getPlanCtaLabel,
+  getPlanTranslationKey,
+  getTranslatedPlanName,
+  getTranslatedPlanDescription,
+  getTranslatedFeature,
+} from '../../../utils/planTranslation.util';
 
 // Solid styles — đồng bộ với giao diện tổng thể (ContactPage, HeroPage)
 // Tất cả card cùng style border trắng, không có "phổ biến nhất" nổi bật riêng.

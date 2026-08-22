@@ -30,6 +30,8 @@ const {
   checkUserEmailSendLimit,
   checkUserZaloSendLimit,
   checkSendQuota,
+  countEmailSentThisMonth,
+  countZaloSentThisMonth,
   nextVnMidnight,
   nextVnMonthStart,
   _clearQuotaCache,
@@ -61,6 +63,12 @@ describe('userSendLimit.util', () => {
     mockGetBillingCycle.mockReset();
     mockGetSubscriptionStatus.mockResolvedValue(activeSubscription);
     mockResolveBillingUserId.mockImplementation(async (userId) => userId);
+    mockGetBillingCycle.mockResolvedValue({
+      hasPlan: true,
+      cycleStart: new Date('2025-12-31T17:00:00.000Z'),
+      cycleEnd: new Date('2026-01-31T17:00:00.000Z'),
+      billingUserId: 10,
+    });
     _clearQuotaCache();
   });
 
@@ -411,6 +419,107 @@ describe('userSendLimit.util', () => {
       await checkSendQuota({ userId: 10, channel: 'email' });
       // 1 query limits (cached on 2nd call)
       expect(mockQuery).toHaveBeenCalledTimes(1);
+    });
+
+    describe('Employee send limits (Tier 1)', () => {
+      it('nhân viên bị khóa (status != active) → chặn gửi (limitType: employee_inactive)', async () => {
+        mockResolveBillingUserId.mockResolvedValueOnce(1); // ownerId = 1
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ id: 5, status: 'inactive', daily_email_limit: 100, monthly_email_limit: 1000 }],
+        });
+
+        const result = await checkSendQuota({
+          userId: 2,
+          channel: 'email',
+          ownerContextId: 1,
+        });
+
+        expect(result.allowed).toBe(false);
+        expect(result.limitType).toBe('employee_inactive');
+        expect(result.message).toMatch(/tạm khóa/i);
+      });
+
+      it('nhân viên vượt daily_email_limit của riêng mình → chặn với limitType: employee', async () => {
+        mockResolveBillingUserId.mockResolvedValueOnce(1); // ownerId = 1
+        // 1. query user_members limits
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ id: 5, status: 'active', daily_email_limit: 50, monthly_email_limit: 500 }],
+        });
+        // 2. query employee daily count
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ total: 50 }],
+        });
+
+        const result = await checkSendQuota({
+          userId: 2,
+          channel: 'email',
+          ownerContextId: 1,
+          requiredCount: 1,
+        });
+
+        expect(result.allowed).toBe(false);
+        expect(result.limitType).toBe('employee');
+        expect(result.limit).toBe(50);
+        expect(result.currentCount).toBe(50);
+        expect(result.message).toMatch(/giới hạn gửi email trong ngày của nhân viên/i);
+      });
+
+      it('nhân viên chưa vượt limit của mình nhưng workspace hết quota → chặn với limitType của workspace', async () => {
+        mockResolveBillingUserId.mockResolvedValueOnce(1); // ownerId = 1
+        // 1. query user_members limits
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ id: 5, status: 'active', daily_email_limit: 100, monthly_email_limit: null }],
+        });
+        // 2. query employee daily count
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ total: 10 }],
+        });
+        // 3. query workspace plan limits
+        mockQuery.mockResolvedValueOnce({
+          rows: [planRow({ daily_email_limit: 200 })],
+        });
+        // 4. query workspace daily count
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ total: 200 }],
+        });
+
+        const result = await checkSendQuota({
+          userId: 2,
+          channel: 'email',
+          ownerContextId: 1,
+          requiredCount: 1,
+        });
+
+        expect(result.allowed).toBe(false);
+        expect(result.limitType).toBe('daily');
+        expect(result.limit).toBe(200);
+      });
+    });
+  });
+
+  describe('countEmailSentThisMonth & countZaloSentThisMonth', () => {
+    it('countEmailSentThisMonth ném lỗi khi thiếu cycleStart hoặc cycleEnd', async () => {
+      await expect(countEmailSentThisMonth(10, null, null)).rejects.toThrow(
+        /countEmailSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+      await expect(countEmailSentThisMonth(10, new Date(), null)).rejects.toThrow(
+        /countEmailSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+    });
+
+    it('countZaloSentThisMonth ném lỗi khi thiếu cycleStart hoặc cycleEnd', async () => {
+      await expect(countZaloSentThisMonth(10, null, null)).rejects.toThrow(
+        /countZaloSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+      await expect(countZaloSentThisMonth(10, null, new Date())).rejects.toThrow(
+        /countZaloSentThisMonth requires explicit cycleStart and cycleEnd/
+      );
+    });
+
+    it('gọi với cycleStart và cycleEnd hợp lệ → đếm qua SQL cycle', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 42 }] });
+      const count = await countEmailSentThisMonth(10, new Date('2026-01-01'), new Date('2026-02-01'));
+      expect(count).toBe(42);
     });
   });
 });

@@ -1,10 +1,12 @@
 import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.repository.js';
 import businessProfileRepository from '../../repositories/ai/businessProfile.repository.js';
+import customChatDocumentRepository from '../../repositories/ai/customChatDocument.repository.js';
 import { embedText } from '../../utils/embeddingClient.util.js';
 
 const MAX_KB_CHUNKS = 5;
 const MAX_PROFILE_CHUNKS = 3;
 const MIN_SIMILARITY = 0.45;
+const CUSTOM_CHATBOT_MIN_SIMILARITY = 0.3;
 
 class RagEngineService {
   /**
@@ -14,7 +16,10 @@ class RagEngineService {
    * @param {number} userId
    * @param {string} userQuery
    * @param {object} options
-   * @param {number} [options.kbId] - restrict to specific KB
+   * @param {number} [options.kbId] - restrict to specific KB (channel settings path)
+   * @param {number} [options.customChatbotId] - when set, query the chatbot's own KB
+   *   (custom_chatbot_chunks) instead of the channel-level knowledge_bases tables.
+   *   Used by chatRouter.routeChatbotMessage (Studio path).
    * @param {number} [options.maxKbChunks=5]
    * @param {number} [options.maxProfileChunks=3]
    * @param {number} [options.minSimilarity=0.45]
@@ -23,6 +28,7 @@ class RagEngineService {
   async buildContext(userId, userQuery, options = {}) {
     const {
       kbId = null,
+      customChatbotId = null,
       maxKbChunks = MAX_KB_CHUNKS,
       maxProfileChunks = MAX_PROFILE_CHUNKS,
       minSimilarity = MIN_SIMILARITY,
@@ -35,47 +41,13 @@ class RagEngineService {
         feature: 'embedding_rag_query',
       });
 
-      // 2. Search KB chunks + business profile chunks in PARALLEL
-      // Both searches only depend on queryEmbedding, so they can run concurrently
-      const [kbChunks, profileChunks] = await Promise.all([
-        knowledgeBaseRepository.searchChunks(
-          userId, queryEmbedding,
-          { kbId, limit: maxKbChunks, minSimilarity }
-        ),
-        businessProfileRepository.searchSimilarChunks(
-          userId, queryEmbedding, maxProfileChunks
-        ),
-      ]);
-
-      // 3. Format KB context
-      let kbContext = '';
-      if (kbChunks.length > 0) {
-        const sources = [...new Set(kbChunks.map(c => c.metadata?.source || 'Document'))];
-        kbContext = [
-          `=== KNOWLEDGE BASE (trained data) ===`,
-          `Sources: ${sources.join(', ')}`,
-          '',
-          ...kbChunks.map(c => `[${(c.similarity * 100).toFixed(0)}%] ${c.chunk_text}`),
-          '',
-        ].join('\n');
-      }
-
-      // 4. Format profile context
-      let profileContext = '';
-      if (profileChunks.length > 0) {
-        profileContext = [
-          `=== BUSINESS PROFILE CONTEXT ===`,
-          ...profileChunks
-            .filter(c => c.similarity > minSimilarity)
-            .map(c => `- ${c.chunk_text}`),
-        ].join('\n');
-      }
-
-      const parts = [];
-      if (kbContext) parts.push(kbContext);
-      if (profileContext) parts.push(profileContext);
-
-      return parts.join('\n\n');
+      return await this._buildContextInternal(userId, queryEmbedding, {
+        kbId,
+        customChatbotId,
+        maxKbChunks,
+        maxProfileChunks,
+        minSimilarity,
+      });
     } catch (e) {
       console.warn('[RAG Engine] Failed to build context, continuing without RAG:', e.message);
       return '';
@@ -94,53 +66,81 @@ class RagEngineService {
   async buildContextWithEmbedding(userId, queryEmbedding, options = {}) {
     const {
       kbId = null,
+      customChatbotId = null,
       maxKbChunks = MAX_KB_CHUNKS,
       maxProfileChunks = MAX_PROFILE_CHUNKS,
       minSimilarity = MIN_SIMILARITY,
     } = options;
 
     try {
-      const [kbChunks, profileChunks] = await Promise.all([
-        knowledgeBaseRepository.searchChunks(
-          userId, queryEmbedding,
-          { kbId, limit: maxKbChunks, minSimilarity }
-        ),
-        businessProfileRepository.searchSimilarChunks(
-          userId, queryEmbedding, maxProfileChunks
-        ),
-      ]);
-
-      let kbContext = '';
-      if (kbChunks.length > 0) {
-        const sources = [...new Set(kbChunks.map(c => c.metadata?.source || 'Document'))];
-        kbContext = [
-          `=== KNOWLEDGE BASE (trained data) ===`,
-          `Sources: ${sources.join(', ')}`,
-          '',
-          ...kbChunks.map(c => `[${(c.similarity * 100).toFixed(0)}%] ${c.chunk_text}`),
-          '',
-        ].join('\n');
-      }
-
-      let profileContext = '';
-      if (profileChunks.length > 0) {
-        profileContext = [
-          `=== BUSINESS PROFILE CONTEXT ===`,
-          ...profileChunks
-            .filter(c => c.similarity > minSimilarity)
-            .map(c => `- ${c.chunk_text}`),
-        ].join('\n');
-      }
-
-      const parts = [];
-      if (kbContext) parts.push(kbContext);
-      if (profileContext) parts.push(profileContext);
-
-      return parts.join('\n\n');
+      return await this._buildContextInternal(userId, queryEmbedding, {
+        kbId,
+        customChatbotId,
+        maxKbChunks,
+        maxProfileChunks,
+        minSimilarity,
+      });
     } catch (e) {
       console.warn('[RAG Engine] Failed to build context with embedding:', e.message);
       return '';
     }
+  }
+
+  async _buildContextInternal(userId, queryEmbedding, {
+    kbId,
+    customChatbotId,
+    maxKbChunks,
+    maxProfileChunks,
+    minSimilarity,
+  }) {
+    // Two KB scopes live side by side:
+    //   1) channel settings path  (chatbot_settings -> knowledge_bases via sub_assistant,
+    //      chatbot_zalo_account_settings, web_widget_configs): use kbId + knowledgeBaseRepository.searchChunks
+    //   2) Studio custom_chatbot path (custom_chatbot_chunks owned per chatbot): use customChatDocumentRepository.searchChunksByChatbot
+    // When customChatbotId is provided, prefer it and skip kb_chunks entirely.
+    const kbPromise = customChatbotId
+      ? customChatDocumentRepository.searchChunksByChatbot(
+          customChatbotId, userId, queryEmbedding,
+          { limit: maxKbChunks, minSimilarity: CUSTOM_CHATBOT_MIN_SIMILARITY }
+        ).then((rows) => rows.map((r) => ({ ...r, metadata: { source: r.source } })))
+      : knowledgeBaseRepository.searchChunks(
+          userId, queryEmbedding,
+          { kbId, limit: maxKbChunks, minSimilarity }
+        );
+
+    const profilePromise = businessProfileRepository.searchSimilarChunks(
+      userId, queryEmbedding, maxProfileChunks
+    );
+
+    const [kbChunks, profileChunks] = await Promise.all([kbPromise, profilePromise]);
+
+    let kbContext = '';
+    if (kbChunks.length > 0) {
+      const sources = [...new Set(kbChunks.map(c => c.metadata?.source || 'Document'))];
+      kbContext = [
+        `=== KNOWLEDGE BASE (trained data) ===`,
+        `Sources: ${sources.join(', ')}`,
+        '',
+        ...kbChunks.map(c => `[${(c.similarity * 100).toFixed(0)}%] ${c.chunk_text}`),
+        '',
+      ].join('\n');
+    }
+
+    let profileContext = '';
+    if (profileChunks.length > 0) {
+      profileContext = [
+        `=== BUSINESS PROFILE CONTEXT ===`,
+        ...profileChunks
+          .filter(c => c.similarity > minSimilarity)
+          .map(c => `- ${c.chunk_text}`),
+      ].join('\n');
+    }
+
+    const parts = [];
+    if (kbContext) parts.push(kbContext);
+    if (profileContext) parts.push(profileContext);
+
+    return parts.join('\n\n');
   }
 
   /**

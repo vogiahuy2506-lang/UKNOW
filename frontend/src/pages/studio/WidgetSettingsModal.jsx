@@ -11,6 +11,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import ImageUrlInput from '../../features/chatbot/components/AvatarUploader';
 
 const TABS = [
   { id: 'script', label: 'Chat Widget', icon: HiOutlineChat, desc: 'Widget nổi góc màn hình' },
@@ -139,8 +140,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     size: 'medium',
     show_header: true,
     show_avatar: true,
+    logo_url: '',
     border_radius: 12,
-    show_branding: true,
   });
 
   const [publicLink, setPublicLink] = useState({
@@ -152,8 +153,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     size: 'medium',
     show_header: true,
     show_avatar: true,
+    logo_url: '',
     border_radius: 12,
-    show_branding: true,
     show_suggested: true,
     require_name: false,
   });
@@ -187,8 +188,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         size: iw.size || 'medium',
         show_header: iw.show_header !== false,
         show_avatar: iw.show_avatar !== false,
+        logo_url: iw.logo_url || ws.logo_url || '',
         border_radius: iw.border_radius ?? 12,
-        show_branding: iw.show_branding !== false,
       }));
       const pw = chatbot.public_link_settings || {};
       setPublicLink((s) => ({
@@ -201,8 +202,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         size: pw.size || 'medium',
         show_header: pw.show_header !== false,
         show_avatar: pw.show_avatar !== false,
+        logo_url: pw.logo_url || ws.logo_url || '',
         border_radius: pw.border_radius ?? 12,
-        show_branding: pw.show_branding !== false,
         show_suggested: pw.show_suggested !== false,
         require_name: pw.require_name === true,
       }));
@@ -353,7 +354,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 Preview
               </p>
               {activeTab === 'script' && (
-                <ScriptPreview cfg={script} />
+                <ScriptPreview cfg={script} chatbot={chatbot} />
               )}
               {activeTab === 'iframe' && (
                 <IframePreview cfg={iframe} chatbot={chatbot} />
@@ -441,6 +442,18 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       onChange={(e) => updateScript({ launcher_label: e.target.value })}
                       placeholder="Chat với chúng tôi"
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
+                    />
+                  </section>
+
+                  {/* Logo URL */}
+                  <section className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
+                    <ImageUrlInput
+                      value={script.logo_url}
+                      onChange={(url) => updateScript({ logo_url: url || '' })}
+                      label=""
+                      placeholder="https://example.com/logo.png"
+                      help="Logo thay thế avatar mặc định của bot khi nhúng widget."
                     />
                   </section>
 
@@ -543,6 +556,18 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                   </section>
 
+                  {/* Logo URL */}
+                  <section className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
+                    <ImageUrlInput
+                      value={iframe.logo_url}
+                      onChange={(url) => updateIframe({ logo_url: url || '' })}
+                      label=""
+                      placeholder="https://example.com/logo.png"
+                      help="Logo thay thế avatar mặc định của bot."
+                    />
+                  </section>
+
                   {/* Toggles */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
                     <div className="flex items-center justify-between">
@@ -558,13 +583,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                         <p className="text-xs text-slate-400">Avatar bên cạnh tin nhắn bot</p>
                       </div>
                       <Toggle checked={iframe.show_avatar} onChange={(v) => updateIframe({ show_avatar: v })} />
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">Hiển thị branding</p>
-                        <p className="text-xs text-slate-400">"Powered by UKNOW" ở footer</p>
-                      </div>
-                      <Toggle checked={iframe.show_branding} onChange={(v) => updateIframe({ show_branding: v })} />
                     </div>
                   </section>
                 </>
@@ -649,6 +667,18 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                   </section>
 
+                  {/* Logo URL */}
+                  <section className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
+                    <ImageUrlInput
+                      value={publicLink.logo_url}
+                      onChange={(url) => updatePublic({ logo_url: url || '' })}
+                      label=""
+                      placeholder="https://example.com/logo.png"
+                      help="Logo thay thế avatar mặc định của bot."
+                    />
+                  </section>
+
                   {/* Toggles */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
                     <div className="flex items-center justify-between">
@@ -678,13 +708,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                         <p className="text-xs text-slate-400">Hỏi tên trước khi chat</p>
                       </div>
                       <Toggle checked={publicLink.require_name} onChange={(v) => updatePublic({ require_name: v })} />
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">Hiển thị branding</p>
-                        <p className="text-xs text-slate-400">"Powered by UKNOW"</p>
-                      </div>
-                      <Toggle checked={publicLink.show_branding} onChange={(v) => updatePublic({ show_branding: v })} />
                     </div>
                   </section>
                 </>
@@ -734,24 +757,30 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
 
 /* ─── Live preview components ─────────────────────────────────────────── */
 
-function ScriptPreview({ cfg }) {
+function ScriptPreview({ cfg, chatbot }) {
   const pos = cfg.position || 'bottom-right';
   const isRight = pos.includes('right');
   const isBottom = pos.includes('bottom');
+  const avatarSrc = cfg.logo_url || chatbot?.avatar_url;
+
   return (
     <div className="relative h-44 bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
       <div className="absolute inset-0 p-2">
         <div className="w-full h-full bg-white rounded-md border border-slate-100" />
       </div>
       <div
-        className="absolute w-10 h-10 rounded-full shadow-lg flex items-center justify-center text-white"
+        className="absolute w-10 h-10 rounded-full shadow-lg overflow-hidden flex items-center justify-center text-white"
         style={{
-          background: `linear-gradient(135deg, ${cfg.primary_color}, ${cfg.accent_color})`,
+          background: avatarSrc ? 'transparent' : `linear-gradient(135deg, ${cfg.primary_color}, ${cfg.accent_color})`,
           [isBottom ? 'bottom' : 'top']: 12,
           [isRight ? 'right' : 'left']: 12,
         }}
       >
-        <HiOutlineChat className="w-5 h-5" />
+        {avatarSrc ? (
+          <img src={avatarSrc} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement.style.background = `linear-gradient(135deg, ${cfg.primary_color}, ${cfg.accent_color})`; }} />
+        ) : (
+          <HiOutlineChat className="w-5 h-5" />
+        )}
       </div>
       <div
         className="absolute w-44 rounded-xl shadow-xl border border-slate-200 overflow-hidden"
@@ -778,6 +807,10 @@ function ScriptPreview({ cfg }) {
 function IframePreview({ cfg, chatbot }) {
   const sizeMap = { small: { w: 200, h: 130 }, medium: { w: 240, h: 160 }, large: { w: 280, h: 190 } };
   const sz = sizeMap[cfg.size] || sizeMap.medium;
+
+  // Determine avatar: logo_url > chatbot.avatar_url > placeholder
+  const avatarSrc = cfg.logo_url || chatbot.avatar_url;
+
   return (
     <div className="bg-slate-100 rounded-lg p-3 border border-slate-200">
       <div
@@ -789,21 +822,26 @@ function IframePreview({ cfg, chatbot }) {
             className="px-2 py-1.5 text-[10px] font-semibold text-white flex items-center gap-1"
             style={{ background: cfg.primary_color }}
           >
-            <span className="w-3 h-3 rounded-full bg-white/30" />
+            {avatarSrc ? (
+              <img src={avatarSrc} alt="" className="w-3 h-3 rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            ) : (
+              <span className="w-3 h-3 rounded-full bg-white/30" />
+            )}
             {chatbot.name}
           </div>
         )}
         <div className="p-2 text-[10px] space-y-1">
           <div className="flex items-start gap-1">
-            {cfg.show_avatar && <span className="w-3 h-3 rounded-full bg-slate-200 shrink-0" />}
+            {cfg.show_avatar && (
+              avatarSrc ? (
+                <img src={avatarSrc} alt="" className="w-3 h-3 rounded-full object-cover shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              ) : (
+                <span className="w-3 h-3 rounded-full bg-slate-200 shrink-0" />
+              )
+            )}
             <div className="px-2 py-1 rounded-md bg-slate-100 text-[9px]">Xin chào!</div>
           </div>
         </div>
-        {cfg.show_branding && (
-          <div className="text-center text-[8px] text-slate-400 py-0.5 border-t border-slate-100">
-            Powered by Founder AI
-          </div>
-        )}
       </div>
     </div>
   );

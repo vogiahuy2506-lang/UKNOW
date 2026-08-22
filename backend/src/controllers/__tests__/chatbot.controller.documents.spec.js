@@ -29,6 +29,7 @@ jest.unstable_mockModule('../../services/audit.service.js', () => ({
   default: {},
   AUDIT_ACTIONS: {},
   AUDIT_ENTITY_TYPES: {},
+  logWorkspace: jest.fn(),
 }));
 
 const { default: chatbotController } = await import('../chatbot.controller.js');
@@ -48,7 +49,7 @@ describe('chatbot.controller getCustomChatbotDocuments ownership', () => {
   });
 
   it('returns 404 when chatbot belongs to another user', async () => {
-    findChatbotById.mockResolvedValue({ id: 5, id_user: 1 });
+    findChatbotById.mockResolvedValue(null);
     const req = { params: { chatbotId: '5' }, user: { id: 99 } };
     const res = makeRes();
 
@@ -66,7 +67,8 @@ describe('chatbot.controller getCustomChatbotDocuments ownership', () => {
 
     await chatbotController.getCustomChatbotDocuments(req, res);
 
-    expect(getCustomChatbotDocuments).toHaveBeenCalledWith(5);
+    expect(findChatbotById).toHaveBeenCalledWith(5, 42);
+    expect(getCustomChatbotDocuments).toHaveBeenCalledWith(5, 42);
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       documents: [{ title: 'a.pdf', chunk_count: 2 }],
@@ -84,11 +86,11 @@ describe('chatbot.controller getCustomChatbotDocuments ownership', () => {
     await chatbotController.getCustomChatbotDocuments(req, res);
 
     expect(res.status).not.toHaveBeenCalledWith(404);
-    expect(getCustomChatbotDocuments).toHaveBeenCalledWith(5);
+    expect(getCustomChatbotDocuments).toHaveBeenCalledWith(5, 42);
   });
 
   it('vẫn chặn người khác khi id_user là chuỗi', async () => {
-    findChatbotById.mockResolvedValue({ id: '5', id_user: '1' });
+    findChatbotById.mockResolvedValue(null);
     const req = { params: { chatbotId: '5' }, user: { id: 99 } };
     const res = makeRes();
 

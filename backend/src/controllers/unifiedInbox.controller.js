@@ -5,6 +5,12 @@ import {
 } from '../services/chatbot/chatAttachment.service.js';
 import { checkSendQuota } from '../utils/userSendLimit.util.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_ENTITY_TYPES,
+  logWorkspace,
+} from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
 function normalizeInboxQueryFilters(query = {}) {
   const rawStatus = String(query.status || '').trim().toLowerCase();
@@ -35,7 +41,7 @@ class UnifiedInboxController {
    */
   async getConversations(req, res) {
     try {
-      const result = await unifiedInboxService.getConversations(req.user.id, normalizeInboxQueryFilters(req.query));
+      const result = await unifiedInboxService.getConversations(resolveWorkspaceOwnerId(req.user), normalizeInboxQueryFilters(req.query));
 
       return res.json({
         success: true,
@@ -60,7 +66,7 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      const conversation = await unifiedInboxService.getConversation(req.user.id, id, type);
+      const conversation = await unifiedInboxService.getConversation(resolveWorkspaceOwnerId(req.user), id, type);
 
       return res.json({
         success: true,
@@ -88,7 +94,7 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      const messages = await unifiedInboxService.getMessages(req.user.id, id, type, {
+      const messages = await unifiedInboxService.getMessages(resolveWorkspaceOwnerId(req.user), id, type, {
         limit: parseInt(limit),
         beforeId: before ? parseInt(before) : null,
       });
@@ -119,7 +125,7 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      await unifiedInboxService.markAsRead(req.user.id, id, type);
+      await unifiedInboxService.markAsRead(resolveWorkspaceOwnerId(req.user), id, type);
 
       return res.json({
         success: true,
@@ -140,7 +146,7 @@ class UnifiedInboxController {
    */
   async getUnreadCount(req, res) {
     try {
-      const counts = await unifiedInboxService.getUnreadCount(req.user.id);
+      const counts = await unifiedInboxService.getUnreadCount(resolveWorkspaceOwnerId(req.user));
 
       return res.json({
         success: true,
@@ -171,7 +177,8 @@ class UnifiedInboxController {
         source: CHAT_ATTACHMENT_SOURCES.INBOX_OUTBOUND,
       });
 
-      const { _key, ...clientPayload } = stored;
+      const { _key, _storageObjectId, ...clientPayload } = stored;
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.MEDIA_UPLOADED, AUDIT_ENTITY_TYPES.MEDIA_OBJECT, _storageObjectId, { source: CHAT_ATTACHMENT_SOURCES.INBOX_OUTBOUND, size: stored.size, mime: stored.mime });
       return res.status(201).json({ success: true, data: clientPayload });
     } catch (err) {
       console.error('[UnifiedInbox] Upload attachment error:', err);
@@ -226,7 +233,7 @@ class UnifiedInboxController {
       }
 
       const result = await unifiedInboxService.sendMessage(
-        req.user.id,
+        resolveWorkspaceOwnerId(req.user),
         id,
         type,
         content,
@@ -235,8 +242,11 @@ class UnifiedInboxController {
           ownerContextId: req.user.activeContext?.type === 'employee'
             ? req.user.activeContext.ownerId
             : null,
+          actorUserId: req.user.id,
+          membershipId: req.user.activeContext?.membershipId || null,
         }
       );
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_REPLY_SENT, AUDIT_ENTITY_TYPES.INBOX_MESSAGE, result.messageId, { conversationId: Number(id), conversationType: type, attachmentCount: Array.isArray(attachments) ? attachments.length : 0 });
 
       return res.json({
         success: true,
@@ -278,7 +288,8 @@ class UnifiedInboxController {
         });
       }
 
-      const result = await unifiedInboxService.retryMessage(req.user.id, messageId, type);
+      const result = await unifiedInboxService.retryMessage(resolveWorkspaceOwnerId(req.user), messageId, type);
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_REPLY_RETRIED, AUDIT_ENTITY_TYPES.INBOX_MESSAGE, Number(messageId), { conversationType: type, sendStatus: result.sendStatus });
       return res.json({
         success: true,
         messageId: result.messageId,
@@ -311,7 +322,8 @@ class UnifiedInboxController {
       if (typeof paused !== 'boolean') {
         return res.status(400).json({ success: false, message: 'paused (boolean) is required' });
       }
-      const result = await unifiedInboxService.setConversationAiPaused(req.user.id, id, type, paused);
+      const result = await unifiedInboxService.setConversationAiPaused(resolveWorkspaceOwnerId(req.user), id, type, paused);
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_AI_PAUSE_UPDATED, AUDIT_ENTITY_TYPES.INBOX_CONVERSATION, Number(id), { conversationType: type, paused });
       return res.json({ success: true, data: result });
     } catch (err) {
       console.error('[UnifiedInbox] setAiPaused error:', err);
@@ -330,7 +342,7 @@ class UnifiedInboxController {
     try {
       const { channel, search, startDate, endDate, limit = 20, offset = 0 } = req.query;
 
-      const result = await unifiedInboxService.getOutboxMessages(req.user.id, {
+      const result = await unifiedInboxService.getOutboxMessages(resolveWorkspaceOwnerId(req.user), {
         channel,
         search,
         startDate,
@@ -361,7 +373,7 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Message ID is required' });
       }
 
-      const message = await unifiedInboxService.getOutboxMessage(req.user.id, id);
+      const message = await unifiedInboxService.getOutboxMessage(resolveWorkspaceOwnerId(req.user), id);
 
       return res.json({
         success: true,
@@ -389,7 +401,8 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      await unifiedInboxService.deleteConversation(req.user.id, id, type);
+      await unifiedInboxService.deleteConversation(resolveWorkspaceOwnerId(req.user), id, type);
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_CONVERSATION_DELETED, AUDIT_ENTITY_TYPES.INBOX_CONVERSATION, Number(id), { conversationType: type });
 
       return res.json({
         success: true,

@@ -71,8 +71,10 @@ const EmailTemplatePreviewModal = ({
             ) : previewTemplate.bodyText ? (
               <div
                 className="w-full h-full p-6 text-gray-800"
-                dangerouslySetInnerHTML={{ __html: previewTemplate.bodyText }}
-              />
+                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
+                {previewTemplate.bodyText}
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center text-gray-400">
                 Template này chưa có nội dung

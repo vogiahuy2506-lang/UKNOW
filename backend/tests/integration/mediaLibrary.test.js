@@ -14,13 +14,24 @@ const db = (await import('../../src/config/database.js')).default;
 
 let app;
 
-function authHeader(user) {
+function authHeader(user, ownerContextId = null) {
   const token = jwt.sign(
     { userId: user.id, email: user.email, role: user.role || 'user' },
     process.env.JWT_SECRET,
     { expiresIn: '1h' }
   );
-  return { Authorization: `Bearer ${token}` };
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(ownerContextId ? { 'X-Owner-Context': String(ownerContextId) } : {}),
+  };
+}
+
+async function addMediaMembership(ownerId, employeeId, permissions = { media_library_view: true }) {
+  await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status, created_at, updated_at)
+     VALUES ($1, $2, $3::jsonb, 'active', NOW(), NOW())`,
+    [ownerId, employeeId, JSON.stringify(permissions)]
+  );
 }
 
 async function insertAttachment(userId, { source = 'chatbot_web', key, name = 'a.pdf' }) {
@@ -97,5 +108,27 @@ describe('media library API', () => {
     expect(filtered.body.data).toHaveLength(2);
     expect(filtered.body.pagination.total).toBe(3);
     expect(filtered.body.data.every((x) => x.source === 'chatbot_studio')).toBe(true);
+  });
+
+  it('employee with media view sees only the active owner workspace', async () => {
+    const owner = await createUser({ email: 'owner-employee-media@test.local' });
+    const otherOwner = await createUser({ email: 'other-employee-media@test.local' });
+    const employee = await createUser({ email: 'employee-media@test.local' });
+    await addMediaMembership(owner.id, employee.id);
+    await insertAttachment(owner.id, {
+      key: `uploads/${owner.id}/chat/owner.pdf`,
+      name: 'owner.pdf',
+    });
+    await insertAttachment(otherOwner.id, {
+      key: `uploads/${otherOwner.id}/chat/other.pdf`,
+      name: 'other.pdf',
+    });
+
+    const response = await request(app)
+      .get('/api/media-library')
+      .set(authHeader(employee, owner.id))
+      .expect(200);
+
+    expect(response.body.data.map((item) => item.displayName)).toEqual(['owner.pdf']);
   });
 });

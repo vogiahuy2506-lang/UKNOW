@@ -196,12 +196,14 @@ class EmailSettingsSmtpService {
           const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
           const { countEmailSentThisMonth } = await import('../../utils/userSendLimit.util.js');
           const cycle = await getBillingCycle(billingUserId, {}, client);
-          const usageCountAfterSend = await countEmailSentThisMonth(
-            billingUserId,
-            cycle?.hasPlan ? cycle.cycleStart : null,
-            cycle?.hasPlan ? cycle.cycleEnd : null,
-            client
-          );
+          const usageCountAfterSend = (cycle?.hasPlan && cycle.cycleStart && cycle.cycleEnd)
+            ? await countEmailSentThisMonth(
+                billingUserId,
+                cycle.cycleStart,
+                cycle.cycleEnd,
+                client
+              )
+            : 0;
           await maybeDebitWalletForSend(client, {
             billingUserId,
             itemKey: 'emails',
@@ -353,8 +355,27 @@ class EmailSettingsSmtpService {
       password: decryptSmtpSecret(setting.smtp_password),
     });
 
-    const plainTextContent = content || 'Đây là email từ hệ thống Founder AI';
-    const rawHtml = htmlContent || `<p>${plainTextContent}</p>`;
+    // BUGFIX (Bug — Quick Send empty body fallback): previously this method
+    // silently substituted "Đây là email từ hệ thống Founder AI" for an
+    // empty `content` field. That string then went out to real recipients
+    // when the user picked a template with no body. Reject empty bodies
+    // up-front so the caller (QuickSend / Campaign Run) gets a clear 422
+    // instead of silently shipping a placeholder email.
+    const hasContent = (val) => typeof val === 'string' && val.trim().length > 0;
+    if (!hasContent(content) && !hasContent(htmlContent)) {
+      throw createServiceError(
+        'Nội dung email đang trống. Hãy chọn template có nội dung hoặc nhập nội dung trước khi gửi.',
+        422,
+        { code: 'EMPTY_EMAIL_BODY' }
+      );
+    }
+    const plainTextContent = content || '';
+    // Convert plain text paragraphs (separated by \n\n) to HTML <p> tags
+    const rawHtml = htmlContent
+      || plainTextContent
+          .split(/\n\n+/)
+          .map((para) => (para.trim() ? `<p>${para.trim()}</p>` : ''))
+          .join('');
     // Luôn giữ body gốc, không thêm block link tài liệu đính kèm.
     /**
      * Luôn thêm footer hủy đăng ký/chính sách bảo mật cho cả Build và Run để email nhất quán.

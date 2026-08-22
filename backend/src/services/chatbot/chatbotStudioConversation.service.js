@@ -19,11 +19,17 @@ function parseAttachments(raw) {
 class ChatbotStudioConversationService {
   async createOrGetConversation({ userId, chatbotId }) {
     const sessionId = uuidv4();
-    return await chatbotStudioConversationRepository.createOrGetConversation({
+    const conversation = await chatbotStudioConversationRepository.createOrGetConversation({
       userId,
       chatbotId,
       sessionId,
     });
+    if (!conversation) {
+      const error = new Error('Không tìm thấy chatbot trong workspace');
+      error.status = 404;
+      throw error;
+    }
+    return conversation;
   }
 
   async getConversations({ userId, chatbotId, limit, offset, status }) {

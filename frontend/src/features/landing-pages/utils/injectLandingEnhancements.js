@@ -86,6 +86,51 @@ export function getLandingManualInsertSnippets({ slug, frontendOrigin, apiBase }
 }
 
 /**
+ * Marker giữ vị trí form đăng ký. Khi render, runtime replace bằng iframe thật
+ * (đồng bộ backend `LANDING_FORM_PLACEHOLDER`). Giữ nguyên tên này để tương
+ * thích ngược với template/AI Edit đã lưu trong DB.
+ */
+export const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
+
+/**
+ * Idempotent: đảm bảo iframe form tồn tại trong HTML.
+ *
+ * 3 trường hợp:
+ *  - HTML đã có iframe thật: giữ nguyên.
+ *  - HTML đã có section với marker placeholder: chèn iframe vào section đó.
+ *  - HTML không có gì: chèn wrapped mới trước `</body>`.
+ */
+export function insertLeadFormIntoHtml(html, { iframeBlock }) {
+  const src = String(html ?? '');
+  const block = String(iframeBlock || '').trim();
+  if (!src || !block) return src;
+  if (src.includes('/embed/lead-form')) return src;
+
+  // Đã có section với marker placeholder → chèn iframe vào section đó.
+  const markerIdx = src.indexOf(LP_FORM_MARKER);
+  if (markerIdx !== -1) {
+    const closeIdx = src.indexOf('</section>', markerIdx);
+    if (closeIdx !== -1) {
+      return src.slice(0, closeIdx) + block + '\n' + src.slice(closeIdx);
+    }
+  }
+
+  // Marker placeholder đặt TRONG `<section>` (nhưng NGOÀI `<h2>`) để cờ này
+  // bị strip pattern của `stripFounderLandingAutoBlocks` xóa cùng section ở
+  // lần save sau (đồng bộ BE), đồng thời vẫn giữ `</h2>` đúng vị trí khi
+  // strip phần sau marker.
+  const wrapped = `\n<section data-founder-lp-embed="1" class="py-8 px-4 max-w-3xl mx-auto">\n  <h2 class="text-xl font-semibold text-gray-900 mb-4">Đăng ký tư vấn</h2>\n  ${LP_FORM_MARKER}\n  ${block}\n</section>\n`;
+
+  if (/<\/body>/i.test(src)) {
+    return src.replace(/<\/body>/i, `${wrapped}</body>`);
+  }
+  if (/<\/html>/i.test(src)) {
+    return src.replace(/<\/html>/i, `${wrapped}</html>`);
+  }
+  return `${src}${wrapped}`;
+}
+
+/**
  * Giống backend `landingHtmlInjection.util.js`: chỉ chèn `lp-track.js` (iframe form dán tay).
  *
  * @param {string} html

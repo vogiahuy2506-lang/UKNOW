@@ -116,7 +116,7 @@ const Login = () => {
         >
           <p className="text-amber-700 font-medium text-sm">{t('auth.accountActivated')}</p>
           <p className="text-amber-600 text-xs mt-1">
-            {t('auth.email')}: <strong>{activatedUsername}</strong> · {t('auth.password')}: <strong>digiso@2026</strong>
+            {t('auth.email')}: <strong>{activatedUsername}</strong> · {t('auth.checkEmailForPassword')}
           </p>
         </div>
       )}

@@ -105,6 +105,17 @@ async function insertTemplateFile({
   return rows[0];
 }
 
+async function insertTrackedWorkspaceFile({ ownerUserId, actorUserId = ownerUserId, storageKey, sizeBytes = 1 }) {
+  const { rows } = await db.query(
+    `INSERT INTO storage_objects
+       (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+     VALUES ('workspace', $1, $2, $3, 'other', 'active', $4)
+     RETURNING *`,
+    [ownerUserId, actorUserId, storageKey, sizeBytes]
+  );
+  return rows[0];
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // GET /file/:token  (handleView — render HTML viewer)
 // ═══════════════════════════════════════════════════════════════════════
@@ -452,6 +463,28 @@ describe('DELETE /api/uploads/temp/:tempId', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
   });
+
+  it('employee/user khác không thể xóa temp file không thuộc workspace của mình', async () => {
+    const owner = await createUser({ username: 'del-owner' });
+    const attacker = await createUser({ username: 'del-attacker' });
+    const ownerToken = await loginAs(owner);
+    const attackerToken = await loginAs(attacker);
+    const up = await request(app)
+      .post('/api/uploads/temp')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .attach('file', Buffer.from('private'), { filename: 'private.txt', contentType: 'text/plain' });
+    const tempId = up.body.data.tempId;
+
+    const blocked = await request(app)
+      .delete(`/api/uploads/temp/${tempId}`)
+      .set('Authorization', `Bearer ${attackerToken}`);
+    expect(blocked.status).toBe(404);
+    await expect(fs.stat(path.join(TEST_TEMP_DIR, `${tempId}.txt`))).resolves.toBeDefined();
+
+    await request(app)
+      .delete(`/api/uploads/temp/${tempId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -487,6 +520,7 @@ describe('GET /api/uploads/signed-url/:key', () => {
       content: 'PNG',
     });
     const user = await createUser({ username: 'sig-3' });
+    await insertTrackedWorkspaceFile({ ownerUserId: user.id, storageKey, sizeBytes: 3 });
     const token = await loginAs(user);
     const res = await request(app)
       .get(`/api/uploads/signed-url/${encodeURIComponent(storageKey)}`)
@@ -497,5 +531,22 @@ describe('GET /api/uploads/signed-url/:key', () => {
     const expires = new Date(res.body.data.expires).getTime();
     expect(expires).toBeGreaterThan(Date.now() + 50 * 60 * 1000);
     expect(expires).toBeLessThan(Date.now() + 70 * 60 * 1000);
+  });
+
+  it('không cấp signed URL cho file thuộc workspace khác', async () => {
+    const owner = await createUser({ username: 'sig-owner' });
+    const attacker = await createUser({ username: 'sig-attacker' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${owner.id}/private.png`,
+      content: 'PRIVATE',
+    });
+    await insertTrackedWorkspaceFile({ ownerUserId: owner.id, storageKey, sizeBytes: 7 });
+    const attackerToken = await loginAs(attacker);
+
+    const res = await request(app)
+      .get(`/api/uploads/signed-url/${encodeURIComponent(storageKey)}`)
+      .set('Authorization', `Bearer ${attackerToken}`);
+
+    expect(res.status).toBe(404);
   });
 });

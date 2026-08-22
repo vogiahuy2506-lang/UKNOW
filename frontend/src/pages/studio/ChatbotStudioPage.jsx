@@ -8,7 +8,6 @@ import {
   HiOutlinePaperClip,
   HiOutlineX,
   HiOutlineCog,
-  HiOutlineSparkles,
   HiOutlineArrowSmRight,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
@@ -20,87 +19,24 @@ import PlaygroundHeader from './PlaygroundHeader';
 import RightPanel from './RightPanel';
 import WidgetSettingsModal from './WidgetSettingsModal';
 import ShareChatbotModal from '../../components/marketplace/ShareChatbotModal';
-import { MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
+import { clientValidateFile, getChatbotTheme } from './studio.util';
+import { StudioEmptyState } from './StudioEmptyState';
 import { useI18n } from '../../i18n';
 import useStorageQuota from '../../features/storage/useStorageQuota';
+import RenderTextWithLinks from '../../utils/renderTextWithLinks';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import useMediaQuery from '../../hooks/useMediaQuery';
+import { useAuthStore } from '../../stores/authStore';
 
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
-const MAX_FILE_MB = MAX_UPLOAD_FILE_MB;
 
 const MOBILE_PANELS = [
   { id: 'list',     label: 'Danh sách',  icon: HiOutlineViewBoards },
   { id: 'chat',     label: 'Trò chuyện', icon: HiOutlineChatAlt2 },
   { id: 'settings', label: 'Cấu hình',   icon: HiOutlineCog },
 ];
-
-function clientValidateFile(file) {
-  const name = file.name || '';
-  const lower = name.toLowerCase();
-  if (lower.endsWith('.doc') && !lower.endsWith('.docx')) {
-    return 'Chỉ nhận .docx, hãy Lưu thành .docx rồi gửi lại';
-  }
-  if (lower.endsWith('.svg')) {
-    return 'Không nhận file SVG';
-  }
-  const maxBytes = MAX_FILE_MB * 1024 * 1024;
-  if (file.size > maxBytes) {
-    return `File vượt dung lượng tối đa ${MAX_FILE_MB} MB`;
-  }
-  return null;
-}
-
-function getChatbotTheme(chatbot) {
-  const primaryColor = chatbot?.primary_color || '#ee7518';
-  const accentColor = chatbot?.accent_color || '#f19342';
-  const bgColor = chatbot?.background_color || '#FFFFFF';
-  const textColor = chatbot?.text_color || '#0f172a';
-  const gradientStyle = `linear-gradient(135deg, ${primaryColor}, ${accentColor})`;
-  return { primaryColor, accentColor, bgColor, textColor, gradientStyle };
-}
-
-// ── Empty State ──────────────────────────────────────────────────────────────
-function EmptyState({ chatbot }) {
-  const { primaryColor, gradientStyle } = getChatbotTheme(chatbot);
-  const suggestedQuestions = chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full blur-3xl opacity-10" style={{ background: primaryColor }} />
-      <div className="absolute bottom-1/4 right-1/4 w-72 h-72 rounded-full blur-3xl opacity-10" style={{ background: primaryColor }} />
-
-      <div className="relative flex flex-col items-center max-w-md text-center">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
-          style={{ background: gradientStyle }}
-        >
-          <HiOutlineSparkles className="w-8 h-8 text-white" />
-        </div>
-        <h2 className="text-lg font-semibold text-slate-900 mb-2 tracking-tight">
-          Chào bạn, tôi có thể giúp gì?
-        </h2>
-        <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-          Chọn một chatbot từ danh sách bên trái hoặc tạo chatbot mới để bắt đầu trò chuyện thử nghiệm.
-        </p>
-        {suggestedQuestions.length > 0 && (
-          <div className="flex flex-wrap gap-2 justify-center">
-            {suggestedQuestions.map((q, i) => (
-              <span
-                key={i}
-                className="px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                {q}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ── Conversation Card (recent) ───────────────────────────────────────────────
 function ConversationCard({ conv, onSelect, onDelete }) {
@@ -132,7 +68,7 @@ function ConversationCard({ conv, onSelect, onDelete }) {
 }
 
 // ── Chat Message Area ────────────────────────────────────────────────────────
-function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
+function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
   const { t } = useI18n();
   const { usage: storageQuota } = useStorageQuota();
   const [conversations, setConversations] = useState([]);
@@ -558,7 +494,14 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
                 }`}
                 style={msg.role === 'user' ? { background: gradientStyle } : {}}
               >
-                {msg.content ? <p className="whitespace-pre-wrap">{msg.content}</p> : null}
+                {msg.content ? (
+                  <p className="whitespace-pre-wrap">
+                    <RenderTextWithLinks
+                      text={msg.content}
+                      linkClassName={`underline break-all font-medium hover:opacity-80 ${msg.role === 'user' ? 'text-white' : 'text-primary-600'}`}
+                    />
+                  </p>
+                ) : null}
                 <MessageAttachments attachments={msg.attachments} messageRole={msg.role} />
               </div>
               <span className="text-[10px] mt-1 px-1 text-slate-400">
@@ -597,6 +540,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
       {/* Floating Composer */}
       <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-2 bg-white">
         <div className="max-w-3xl mx-auto">
+          {canUseAi ? <>
           {pendingAttachments.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {pendingAttachments.map((att, idx) => (
@@ -663,6 +607,11 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
               )}
             </button>
           </div>
+          </> : (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">
+              Chủ workspace chưa cấp quyền sử dụng AI cho nhân viên. Bạn vẫn có thể cấu hình chatbot và kho kiến thức.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -671,6 +620,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 function ChatbotStudioPage() {
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const isEmployeeContext = activeContext?.type === 'employee';
   const [selectedBot, setSelectedBot] = useState(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, _setRightCollapsed] = useState(false);
@@ -752,7 +703,7 @@ function ChatbotStudioPage() {
                   <PlaygroundHeader
                     bot={selectedBot}
                     onConfig={() => setShowConfigModal(true)}
-                    onShare={() => setShowShareModal(true)}
+                    onShare={isEmployeeContext ? undefined : () => setShowShareModal(true)}
                     onDelete={handleCreateNew}
                   />
                 </div>
@@ -760,10 +711,11 @@ function ChatbotStudioPage() {
                   key={`chat-${selectedBot.id}`}
                   chatbot={selectedBot}
                   onUpdate={handleUpdateBot}
+                  canUseAi={!isEmployeeContext}
                 />
               </>
             ) : (
-              <EmptyState chatbot={selectedBot} />
+              <StudioEmptyState chatbot={selectedBot} />
             )}
           </div>
 
@@ -797,9 +749,10 @@ function ChatbotStudioPage() {
                   key={`chat-${selectedBot.id}`}
                   chatbot={selectedBot}
                   onUpdate={handleUpdateBot}
+                  canUseAi={!isEmployeeContext}
                 />
               ) : (
-                <EmptyState chatbot={selectedBot} />
+                <StudioEmptyState chatbot={selectedBot} />
               )}
             </div>
           </div>
@@ -833,11 +786,13 @@ function ChatbotStudioPage() {
         onClose={() => setShowConfigModal(false)}
         onUpdate={handleUpdateBot}
       />
-      <ShareChatbotModal
-        open={showShareModal}
-        chatbot={selectedBot}
-        onClose={() => setShowShareModal(false)}
-      />
+      {!isEmployeeContext && (
+        <ShareChatbotModal
+          open={showShareModal}
+          chatbot={selectedBot}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
       <WidgetSettingsModal
         open={!!widgetModalKind}
         embedKind={widgetModalKind}

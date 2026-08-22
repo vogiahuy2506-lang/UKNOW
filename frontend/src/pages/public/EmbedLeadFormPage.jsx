@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FounderLeadFormCard } from '../../features/landing/components/FounderLeadFormCard.jsx';
 import { useEmbedLeadFormResize } from '../../features/landing/hooks/useEmbedLeadFormResize.js';
@@ -21,39 +21,46 @@ export default function EmbedLeadFormPage() {
   const [configStatus, setConfigStatus] = useState(slug ? 'loading' : 'missing-slug');
   const [leadFormConfig, setLeadFormConfig] = useState(defaultLeadFormConfig());
   const [configError, setConfigError] = useState('');
+  const [retryNonce, setRetryNonce] = useState(0);
 
-  useEffect(() => {
-    if (!slug) return undefined;
+  const fetchConfig = useCallback(async () => {
+    if (!slug) return;
     let cancelled = false;
     setConfigStatus('loading');
-    fetchPublicLeadFormConfig(slug)
-      .then((res) => {
-        if (cancelled) return;
-        const cfg = res.data?.data?.leadFormConfig;
-        if (!cfg) {
-          setConfigStatus('error');
-          setConfigError(locale === 'en' ? 'Form is unavailable.' : 'Không tải được cấu hình form.');
-          return;
-        }
-        setLeadFormConfig(cfg);
-        setConfigStatus('ready');
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const status = err?.response?.status;
-        if (status === 503) {
-          setConfigError(locale === 'en' ? 'This page is temporarily paused.' : 'Landing page tạm ngừng.');
-        } else if (status === 404) {
-          setConfigError(locale === 'en' ? 'Landing page not found.' : 'Không tìm thấy landing page.');
-        } else {
-          setConfigError(err?.response?.data?.message || (locale === 'en' ? 'Could not load form.' : 'Không tải được form.'));
-        }
+    setConfigError('');
+    try {
+      const res = await fetchPublicLeadFormConfig(slug);
+      if (cancelled) return;
+      const cfg = res.data?.data?.leadFormConfig;
+      if (!cfg) {
         setConfigStatus('error');
-      });
+        setConfigError(locale === 'en' ? 'Form is unavailable.' : 'Không tải được cấu hình form.');
+        return;
+      }
+      setLeadFormConfig(cfg);
+      setConfigStatus('ready');
+    } catch (err) {
+      if (cancelled) return;
+      const status = err?.response?.status;
+      if (status === 503) {
+        setConfigError(locale === 'en' ? 'This page is temporarily paused.' : 'Landing page tạm ngừng.');
+      } else if (status === 404) {
+        setConfigError(locale === 'en' ? 'Landing page not found.' : 'Không tìm thấy landing page.');
+      } else {
+        setConfigError(err?.response?.data?.message || (locale === 'en' ? 'Could not load form.' : 'Không tải được form.'));
+      }
+      setConfigStatus('error');
+    }
     return () => {
       cancelled = true;
     };
   }, [slug, locale]);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig, retryNonce]);
+
+  const handleRetry = () => setRetryNonce((n) => n + 1);
 
   const { form, setField, submitting, error, success, submit } = useFounderLandingForm(locale, {
     landingPageSlug: slug || null,
@@ -84,7 +91,16 @@ export default function EmbedLeadFormPage() {
   if (configStatus !== 'ready') {
     return (
       <div ref={resizeRootRef} className="box-border inline-block w-max max-w-full min-h-0 m-0 bg-white p-6 font-landing text-sm text-red-600">
-        {configError || (locale === 'en' ? 'Form is unavailable.' : 'Không tải được form.')}
+        <p className="mb-3">
+          {configError || (locale === 'en' ? 'Form is unavailable.' : 'Không tải được form.')}
+        </p>
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="inline-flex items-center px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
+        >
+          {locale === 'en' ? 'Retry' : 'Thử lại'}
+        </button>
       </div>
     );
   }

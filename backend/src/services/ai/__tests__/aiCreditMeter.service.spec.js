@@ -159,4 +159,51 @@ describe('aiCreditMeter.service', () => {
     await aiCreditMeter.consume(5, { feature: 'ai_chat' });
     expect(mockTrackUsageRepo).not.toHaveBeenCalled();
   });
+
+  describe('Employee AI Credit limits', () => {
+    it('employee inactive throws EMPLOYEE_INACTIVE', async () => {
+      mockDbQuery
+        .mockResolvedValueOnce({ rows: [{ role: 'user' }] }) // getUserRole
+        .mockResolvedValueOnce({ rows: [{ id: 1, status: 'inactive' }] }); // user_members
+
+      await expect(
+        aiCreditMeter.resolveCreditContext(2, { ownerContextId: 5 })
+      ).rejects.toMatchObject({
+        status: 403,
+        code: 'EMPLOYEE_INACTIVE',
+      });
+    });
+
+    it('employee daily AI limit reached throws EMPLOYEE_AI_LIMIT_EXCEEDED', async () => {
+      mockDbQuery
+        .mockResolvedValueOnce({ rows: [{ role: 'user' }] }) // getUserRole
+        .mockResolvedValueOnce({ rows: [{ id: 1, status: 'active', daily_ai_credit_limit: 5 }] }) // user_members
+        .mockResolvedValueOnce({ rows: [{ used: 5 }] }); // daily usage
+
+      await expect(
+        aiCreditMeter.resolveCreditContext(2, { ownerContextId: 5 })
+      ).rejects.toMatchObject({
+        status: 403,
+        code: 'EMPLOYEE_AI_LIMIT_EXCEEDED',
+        limit: 5,
+        used: 5,
+      });
+    });
+
+    it('employee period AI limit reached throws EMPLOYEE_AI_LIMIT_EXCEEDED', async () => {
+      mockDbQuery
+        .mockResolvedValueOnce({ rows: [{ role: 'user' }] }) // getUserRole
+        .mockResolvedValueOnce({ rows: [{ id: 1, status: 'active', daily_ai_credit_limit: null, period_ai_credit_limit: 20 }] }) // user_members
+        .mockResolvedValueOnce({ rows: [{ used: 20 }] }); // period usage
+
+      await expect(
+        aiCreditMeter.resolveCreditContext(2, { ownerContextId: 5 })
+      ).rejects.toMatchObject({
+        status: 403,
+        code: 'EMPLOYEE_AI_LIMIT_EXCEEDED',
+        limit: 20,
+        used: 20,
+      });
+    });
+  });
 });

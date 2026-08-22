@@ -192,7 +192,13 @@ class EmailTemplateController {
 
       const hasBodyHtml = Object.prototype.hasOwnProperty.call(req.body, 'bodyHtml');
       const hasBodyText = Object.prototype.hasOwnProperty.call(req.body, 'bodyText');
-      const normalizedBodyHtml = hasBodyHtml && typeof bodyHtml === 'string' && bodyHtml.trim() ? bodyHtml : null;
+      // Strip markdown bold/italic markers from bodyHtml before saving
+      const stripMarkdown = (str) => String(str || '')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') // **bold** → <strong>bold</strong>
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')             // *italic* → <em>italic</em>
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')     // __bold__ → <strong>bold</strong>
+        .replace(/_(.+?)_/g, '<em>$1</em>');              // _italic_ → <em>italic</em>
+      const normalizedBodyHtml = hasBodyHtml && typeof bodyHtml === 'string' && bodyHtml.trim() ? stripMarkdown(bodyHtml) : null;
       const normalizedBodyText = hasBodyText && typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
 
       let storedAttachments = [];
@@ -323,7 +329,13 @@ class EmailTemplateController {
 
       const hasBodyHtml = Object.prototype.hasOwnProperty.call(req.body, 'bodyHtml');
       const hasBodyText = Object.prototype.hasOwnProperty.call(req.body, 'bodyText');
-      const normalizedBodyHtml = hasBodyHtml && typeof bodyHtml === 'string' && bodyHtml.trim() ? bodyHtml : null;
+      // Strip markdown bold/italic markers from bodyHtml before saving
+      const stripMarkdown = (str) => String(str || '')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') // **bold** → <strong>bold</strong>
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')             // *italic* → <em>italic</em>
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')     // __bold__ → <strong>bold</strong>
+        .replace(/_(.+?)_/g, '<em>$1</em>');              // _italic_ → <em>italic</em>
+      const normalizedBodyHtml = hasBodyHtml && typeof bodyHtml === 'string' && bodyHtml.trim() ? stripMarkdown(bodyHtml) : null;
       const normalizedBodyText = hasBodyText && typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
 
       // Kiểm tra template tồn tại và lấy current attachments

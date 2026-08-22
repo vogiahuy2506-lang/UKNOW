@@ -10,6 +10,20 @@ import { useI18n } from '../../i18n';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml';
+import { HELP_ARTICLE_BODY_RICH_CLASS } from '../../constants/helpArticleBodyStyle';
+
+/**
+ * Class cho vùng soạn thảo — CÙNG bộ style với trang /huong-dan và ô Xem trước.
+ *
+ * BẮT BUỘC gom khoảng trắng về một dấu cách: HELP_ARTICLE_BODY_RICH_CLASS là
+ * template string nhiều dòng. React nhận className kiểu đó vô tư, nhưng
+ * ProseMirror đẩy chuỗi này qua `classList.add()`, mà DOMTokenList từ chối mọi
+ * token chứa ký tự khoảng trắng — để nguyên là ném "Failed to execute 'add' on
+ * 'DOMTokenList'" và hỏng nguyên trang sửa bài.
+ */
+const EDITOR_BODY_CLASS = `${HELP_ARTICLE_BODY_RICH_CLASS} max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800`
+  .replace(/\s+/g, ' ')
+  .trim();
 
 async function uploadHelpImageFile(file) {
   const fd = new FormData();
@@ -119,8 +133,14 @@ export default function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class:
-          'prose prose-sm max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_td]:border [&_th]:border-slate-200 [&_td]:border-slate-200 [&_th]:bg-slate-50 [&_th]:p-2 [&_td]:p-2',
+        // Dùng CHUNG bộ style với trang /huong-dan và ô Xem trước, thay vì
+        // `prose` của @tailwindcss/typography — plugin đó không được cài
+        // (tailwind.config.js: plugins: []), nên `prose` không sinh CSS nào,
+        // trong khi preflight của Tailwind lại reset list-style về none và
+        // font-size của h2/h3/h4 về như chữ thường. Hệ quả: trong khung soạn
+        // thảo mọi thứ trông như đoạn văn phẳng — không thấy bullet, số thứ tự
+        // hay cấp tiêu đề — phải liếc sang ô Xem trước mới biết mình đang sửa gì.
+        class: EDITOR_BODY_CLASS,
         'data-placeholder': placeholder,
       },
       handleDrop: (_view, event) => {

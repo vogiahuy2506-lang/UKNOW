@@ -6,6 +6,7 @@
 import zaloPersonalSyncService from '../services/chatbot/zaloPersonalSync.service.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import zaloSettingRepository from '../repositories/zalo/zaloSetting.repository.js';
+import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 class ZaloPersonalSyncController {
   _requestedAccountId(req) {
@@ -19,7 +20,7 @@ class ZaloPersonalSyncController {
    */
   async sync(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const requestedAccountId = this._requestedAccountId(req);
       console.log('[ZaloPersonalSync] sync called for userId:', userId, 'accountId:', requestedAccountId);
 
@@ -92,7 +93,7 @@ class ZaloPersonalSyncController {
    */
   async syncContacts(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
         userId,
@@ -127,7 +128,7 @@ class ZaloPersonalSyncController {
    */
   async getFriends(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const accountId = Number(req.query.accountId || req.params.accountId);
       if (!accountId) {
         return res.status(400).json({
@@ -165,7 +166,7 @@ class ZaloPersonalSyncController {
    */
   async syncGroups(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
         userId,
@@ -201,7 +202,7 @@ class ZaloPersonalSyncController {
    */
   async getSyncStatus(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
 
       const accounts = await zaloSettingRepository.findActiveConnectedAccountsByUser(userId);
 
@@ -266,7 +267,7 @@ class ZaloPersonalSyncController {
    */
   async syncChatHistory(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { externalId, isGroup, limit, beforeMsgId } = req.body;
 
       if (!externalId) {
@@ -315,7 +316,7 @@ class ZaloPersonalSyncController {
    */
   async syncAllGroupHistory(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { limit = 50 } = req.query;
 
       const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
@@ -379,7 +380,7 @@ class ZaloPersonalSyncController {
    */
   async getChatHistory(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { conversationId, limit = 50 } = req.query;
 
       if (!conversationId) {
@@ -390,7 +391,7 @@ class ZaloPersonalSyncController {
       }
 
       // Import repository to get messages
-      const { ZaloPersonalRepository } = await import('../../repositories/chatbot/zaloPersonal.repository.js');
+      const { ZaloPersonalRepository } = await import('../repositories/chatbot/zaloPersonal.repository.js');
       const zaloRepo = ZaloPersonalRepository;
 
       // Verify conversation belongs to user and get zaloSettingId
@@ -441,7 +442,7 @@ class ZaloPersonalSyncController {
    */
   async getGroupMembers(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { groupId } = req.query;
 
       if (!groupId) {
@@ -486,7 +487,7 @@ class ZaloPersonalSyncController {
    */
   async getGroupSenders(req, res) {
     try {
-      const userId = req.user.id;
+      const userId = resolveWorkspaceOwnerId(req.user);
       const { groupId } = req.query;
 
       if (!groupId) {

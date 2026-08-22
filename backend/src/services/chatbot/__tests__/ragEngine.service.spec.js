@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 const mockEmbedText = jest.fn();
 const mockSearchChunks = jest.fn();
 const mockSearchSimilarChunks = jest.fn();
+const mockSearchChunksByChatbot = jest.fn();
 
 jest.unstable_mockModule('../../../utils/embeddingClient.util.js', () => ({
   embedText: (...args) => mockEmbedText(...args),
@@ -20,6 +21,12 @@ jest.unstable_mockModule('../../../repositories/ai/businessProfile.repository.js
   },
 }));
 
+jest.unstable_mockModule('../../../repositories/ai/customChatDocument.repository.js', () => ({
+  default: {
+    searchChunksByChatbot: (...args) => mockSearchChunksByChatbot(...args),
+  },
+}));
+
 const { default: ragEngine } = await import('../ragEngine.service.js');
 
 describe('ragEngine.service', () => {
@@ -27,6 +34,7 @@ describe('ragEngine.service', () => {
     mockEmbedText.mockClear();
     mockSearchChunks.mockClear();
     mockSearchSimilarChunks.mockClear();
+    mockSearchChunksByChatbot.mockClear();
     jest.resetModules();
 
     mockEmbedText.mockResolvedValue([0.1, 0.2, 0.3]);
@@ -36,6 +44,7 @@ describe('ragEngine.service', () => {
     mockSearchSimilarChunks.mockResolvedValue([
       { chunk_text: 'Profile chunk 1', similarity: 0.7 },
     ]);
+    mockSearchChunksByChatbot.mockResolvedValue([]);
   });
 
   describe('buildContext', () => {
@@ -101,6 +110,34 @@ describe('ragEngine.service', () => {
         expect.any(Array),
         expect.objectContaining({ kbId: 42 })
       );
+    });
+
+    // Bug 2.3 revised: custom_chatbot path queries custom_chatbot_chunks
+    // directly by chatbot_id, bypassing the channel-level knowledge_bases
+    // (kb_chunks) entirely.
+    it('routes to searchChunksByChatbot when customChatbotId is provided', async () => {
+      mockSearchChunksByChatbot.mockResolvedValue([
+        { chunk_text: 'studio doc 1', similarity: 0.7, source: 'studio source' },
+      ]);
+
+      const context = await ragEngine.buildContext(1, 'test query', { customChatbotId: 5 });
+
+      expect(mockSearchChunksByChatbot).toHaveBeenCalledWith(
+        5, 1, expect.any(Array),
+        expect.objectContaining({ limit: 5 })
+      );
+      // kb_chunks path must be skipped entirely when customChatbotId is set.
+      expect(mockSearchChunks).not.toHaveBeenCalled();
+      expect(context).toContain('KNOWLEDGE BASE');
+      expect(context).toContain('Sources: studio source');
+      expect(context).toContain('[70%] studio doc 1');
+    });
+
+    it('falls back to kb_chunks when customChatbotId is not provided', async () => {
+      await ragEngine.buildContext(1, 'test query');
+
+      expect(mockSearchChunks).toHaveBeenCalled();
+      expect(mockSearchChunksByChatbot).not.toHaveBeenCalled();
     });
   });
 

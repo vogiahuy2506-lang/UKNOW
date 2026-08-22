@@ -319,7 +319,7 @@ export default function LeadFormConfigPanel({ form, setForm, t }) {
           </svg>
           Mã nhúng &amp; Tracking
         </p>
-        <EmbedSnippetsPanel form={form} t={t} />
+        <EmbedSnippetsPanel form={form} t={t} setForm={setForm} />
       </div>
     </div>
   );

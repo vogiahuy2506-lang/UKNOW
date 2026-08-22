@@ -54,6 +54,14 @@ export const userManagementApiService = {
   getMyContribution() {
     return api.get('/employees/contribution/me');
   },
+
+  getCampaignApprovalThreshold() {
+    return api.get('/employees/campaign-approval-threshold');
+  },
+
+  updateCampaignApprovalThreshold(threshold) {
+    return api.patch('/employees/campaign-approval-threshold', { threshold });
+  },
 };
 
 export default userManagementApiService;

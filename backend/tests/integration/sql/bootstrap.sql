@@ -24,7 +24,7 @@ CREATE TABLE users (
   avatar_url              TEXT,
   phone                   VARCHAR(20),
   status                  VARCHAR(20)  NOT NULL DEFAULT 'active'
-    CHECK (status IN ('active', 'inactive', 'pending_activation')),
+    CHECK (status IN ('active', 'inactive', 'pending_activation', 'deleted')),
   role                    VARCHAR(20)  NOT NULL DEFAULT 'user'
     CHECK (role IN ('admin', 'user', 'employee')),
   is_verified             BOOLEAN      NOT NULL DEFAULT FALSE,
@@ -65,6 +65,8 @@ CREATE TABLE users (
   auth_provider           VARCHAR(16)  NOT NULL DEFAULT 'local' CHECK (auth_provider IN ('local', 'google')),
   -- migration 141: hồ sơ xuất hoá đơn điền sẵn
   invoice_profile         JSONB,
+  -- migration 166: ngưỡng duyệt chiến dịch nhân viên
+  employee_campaign_approval_threshold INTEGER,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -84,6 +86,9 @@ CREATE TABLE user_members (
   monthly_email_limit  INTEGER,
   daily_zalo_limit     INTEGER,
   monthly_zalo_limit   INTEGER,
+  -- AI credit limits (migration 166)
+  daily_ai_credit_limit   INTEGER,
+  period_ai_credit_limit  INTEGER,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_owner_employee UNIQUE (owner_id, employee_id),
@@ -1293,19 +1298,27 @@ CREATE INDEX idx_audit_logs_action     ON audit_logs(action);
 
 -- ─── Zalo personal unified inbox (migration 045) ───────────────────────
 -- Khớp migration 045: is_group/group_id nằm trong visitor_info JSONB, không phải cột.
+-- Migration 164: id_chatbot được gắn vào conversation để cô lập per-chatbot khi 1 zalo share nhiều chatbot.
 CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
   id               BIGSERIAL PRIMARY KEY,
   id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  id_chatbot       BIGINT REFERENCES custom_chatbots(id) ON DELETE SET NULL,
   external_id      VARCHAR(255) NOT NULL,
   visitor_name     VARCHAR(255),
   visitor_info     JSONB DEFAULT '{}',
   status           VARCHAR(20) DEFAULT 'active',
+  ai_paused        BOOLEAN NOT NULL DEFAULT false,
+  ai_paused_at     TIMESTAMPTZ,
   started_at       TIMESTAMPTZ DEFAULT NOW(),
   last_message_at  TIMESTAMPTZ DEFAULT NOW(),
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT uq_zalo_personal_conv UNIQUE (id_zalo_setting, external_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_zalo_personal_conv_chatbot
+  ON zalo_personal_conversations (id_user, id_zalo_setting, id_chatbot)
+  WHERE id_chatbot IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS zalo_personal_messages (
   id               BIGSERIAL PRIMARY KEY,
@@ -1340,9 +1353,13 @@ CREATE TABLE IF NOT EXISTS sub_assistants (
   id           BIGSERIAL PRIMARY KEY,
   id_user      BIGINT REFERENCES users(id) ON DELETE CASCADE,
   name         VARCHAR(255),
+  description  TEXT,
   greeting_msg TEXT,
   avatar_url   TEXT,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  is_active    BOOLEAN DEFAULT true,
+  settings     JSONB DEFAULT '{}',
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS custom_chatbots (
