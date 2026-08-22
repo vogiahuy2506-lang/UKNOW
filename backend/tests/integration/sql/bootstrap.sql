@@ -1296,59 +1296,14 @@ CREATE INDEX idx_audit_logs_category   ON audit_logs(category);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX idx_audit_logs_action     ON audit_logs(action);
 
--- ─── Zalo personal unified inbox (migration 045) ───────────────────────
--- Khớp migration 045: is_group/group_id nằm trong visitor_info JSONB, không phải cột.
--- Migration 164: id_chatbot được gắn vào conversation để cô lập per-chatbot khi 1 zalo share nhiều chatbot.
-CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
-  id               BIGSERIAL PRIMARY KEY,
-  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
-  id_chatbot       BIGINT REFERENCES custom_chatbots(id) ON DELETE SET NULL,
-  external_id      VARCHAR(255) NOT NULL,
-  visitor_name     VARCHAR(255),
-  visitor_info     JSONB DEFAULT '{}',
-  status           VARCHAR(20) DEFAULT 'active',
-  ai_paused        BOOLEAN NOT NULL DEFAULT false,
-  ai_paused_at     TIMESTAMPTZ,
-  started_at       TIMESTAMPTZ DEFAULT NOW(),
-  last_message_at  TIMESTAMPTZ DEFAULT NOW(),
-  created_at       TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT uq_zalo_personal_conv UNIQUE (id_zalo_setting, external_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_zalo_personal_conv_chatbot
-  ON zalo_personal_conversations (id_user, id_zalo_setting, id_chatbot)
-  WHERE id_chatbot IS NOT NULL;
-
-CREATE TABLE IF NOT EXISTS zalo_personal_messages (
-  id               BIGSERIAL PRIMARY KEY,
-  id_conversation  BIGINT NOT NULL REFERENCES zalo_personal_conversations(id) ON DELETE CASCADE,
-  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
-  role             VARCHAR(20) NOT NULL,
-  content          TEXT NOT NULL,
-  message_type     VARCHAR(20) DEFAULT 'text',
-  external_id      VARCHAR(255),
-  external_ts      TIMESTAMPTZ,
-  attachments      JSONB DEFAULT '[]',
-  metadata         JSONB DEFAULT '{}',
-  is_read          BOOLEAN DEFAULT false,
-  read_at          TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
-  ON zalo_personal_messages (id_user, created_at)
-  WHERE role = 'agent' AND (metadata->>'source') = 'manual_inbox';
--- Migration 101: prevent duplicate inbound / sync rows (and bot echo after restart)
-CREATE UNIQUE INDEX IF NOT EXISTS uniq_zalo_personal_msg_external
-  ON zalo_personal_messages (id_zalo_setting, external_id)
-  WHERE external_id IS NOT NULL;
-
 -- ─── Web chat / custom chatbot ─────────────────────────────────────────
 -- Cần cho test widget + hội thoại web chat. Phải khớp migration 031/041/095/098:
 -- nếu lệch thì test xanh giả (đúng bài học lệch schema đã dính hai lần).
 
 -- Chỉ dựng cột tối thiểu mà repository JOIN tới.
+-- Di chuyển LÊN TRƯỚC zalo_personal_conversations (migration 168 thêm FK tới
+-- custom_chatbots.id trong CREATE TABLE) — nếu để sau, Postgres báo
+-- "relation custom_chatbots does not exist" khi bootstrap.sql chạy.
 CREATE TABLE IF NOT EXISTS sub_assistants (
   id           BIGSERIAL PRIMARY KEY,
   id_user      BIGINT REFERENCES users(id) ON DELETE CASCADE,
@@ -1401,6 +1356,54 @@ CREATE INDEX IF NOT EXISTS idx_custom_chatbots_origin ON custom_chatbots(origin)
 
 -- Migration 155: Update existing chatbots to self_created
 UPDATE custom_chatbots SET origin = 'self_created' WHERE origin IS NULL OR origin = '';
+
+-- ─── Zalo personal unified inbox (migration 045) ───────────────────────
+-- Khớp migration 045: is_group/group_id nằm trong visitor_info JSONB, không phải cột.
+-- Migration 168: id_chatbot được gắn vào conversation để cô lập per-chatbot khi 1 zalo share nhiều chatbot.
+CREATE TABLE IF NOT EXISTS zalo_personal_conversations (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  id_chatbot       BIGINT REFERENCES custom_chatbots(id) ON DELETE SET NULL,
+  external_id      VARCHAR(255) NOT NULL,
+  visitor_name     VARCHAR(255),
+  visitor_info     JSONB DEFAULT '{}',
+  status           VARCHAR(20) DEFAULT 'active',
+  ai_paused        BOOLEAN NOT NULL DEFAULT false,
+  ai_paused_at     TIMESTAMPTZ,
+  started_at       TIMESTAMPTZ DEFAULT NOW(),
+  last_message_at  TIMESTAMPTZ DEFAULT NOW(),
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_zalo_personal_conv UNIQUE (id_zalo_setting, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_zalo_personal_conv_chatbot
+  ON zalo_personal_conversations (id_user, id_zalo_setting, id_chatbot)
+  WHERE id_chatbot IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS zalo_personal_messages (
+  id               BIGSERIAL PRIMARY KEY,
+  id_conversation  BIGINT NOT NULL REFERENCES zalo_personal_conversations(id) ON DELETE CASCADE,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  role             VARCHAR(20) NOT NULL,
+  content          TEXT NOT NULL,
+  message_type     VARCHAR(20) DEFAULT 'text',
+  external_id      VARCHAR(255),
+  external_ts      TIMESTAMPTZ,
+  attachments      JSONB DEFAULT '[]',
+  metadata         JSONB DEFAULT '{}',
+  is_read          BOOLEAN DEFAULT false,
+  read_at          TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
+  ON zalo_personal_messages (id_user, created_at)
+  WHERE role = 'agent' AND (metadata->>'source') = 'manual_inbox';
+-- Migration 101: prevent duplicate inbound / sync rows (and bot echo after restart)
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_zalo_personal_msg_external
+  ON zalo_personal_messages (id_zalo_setting, external_id)
+  WHERE external_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS knowledge_bases (
   id               BIGSERIAL PRIMARY KEY,
