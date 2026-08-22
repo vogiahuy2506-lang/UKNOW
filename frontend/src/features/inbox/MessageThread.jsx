@@ -7,6 +7,7 @@ import {
   getNormalizedMessageText,
   normalizeMessageContent,
 } from './utils/normalizeMessageContent';
+import RenderTextWithLinks from '../../utils/renderTextWithLinks';
 
 const RETRYING_STALE_MS = 2 * 60 * 1000;
 
@@ -121,21 +122,10 @@ const MessageBubble = ({
       className="text-[15px] whitespace-pre-wrap break-words leading-relaxed"
       style={{ overflowWrap: 'anywhere' }}
     >
-      {String(text).split(/(https?:\/\/[^\s]+)/g).map((part, i) => 
-        part.match(/^https?:\/\//) ? (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`break-all underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600'}`}
-          >
-            {part}
-          </a>
-        ) : (
-          part
-        )
-      )}
+      <RenderTextWithLinks
+        text={text}
+        linkClassName={`break-all underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600'}`}
+      />
     </p>
   );
 

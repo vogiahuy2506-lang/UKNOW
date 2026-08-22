@@ -324,6 +324,62 @@
     }
   }
 
+  /**
+   * Render text with clickable links safely using DOM APIs (no innerHTML).
+   * Logic synchronized with frontend/src/utils/renderTextWithLinks.jsx.
+   */
+  function appendTextWithLinks(container, text) {
+    if (!text) return;
+    const regex = /(https?:\/\/[^\s"<>]+)/g;
+    const rawParts = String(text).split(regex);
+
+    for (let i = 0; i < rawParts.length; i++) {
+      const part = rawParts[i];
+      if (!part) continue;
+
+      if (part.startsWith('http://') || part.startsWith('https://')) {
+        let url = part;
+        let trailing = '';
+
+        while (url.length > 0) {
+          const lastChar = url[url.length - 1];
+          if (/[.,!?:;"'>»]/.test(lastChar)) {
+            trailing = lastChar + trailing;
+            url = url.slice(0, -1);
+          } else if (lastChar === ')' && (url.split(')').length - 1) > (url.split('(').length - 1)) {
+            trailing = lastChar + trailing;
+            url = url.slice(0, -1);
+          } else if (lastChar === ']' && (url.split(']').length - 1) > (url.split('[').length - 1)) {
+            trailing = lastChar + trailing;
+            url = url.slice(0, -1);
+          } else if (lastChar === '}' && (url.split('}').length - 1) > (url.split('{').length - 1)) {
+            trailing = lastChar + trailing;
+            url = url.slice(0, -1);
+          } else {
+            break;
+          }
+        }
+
+        if (url) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.textContent = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.style.textDecoration = 'underline';
+          a.style.wordBreak = 'break-all';
+          a.style.color = 'inherit';
+          container.appendChild(a);
+        }
+        if (trailing) {
+          container.appendChild(document.createTextNode(trailing));
+        }
+      } else {
+        container.appendChild(document.createTextNode(part));
+      }
+    }
+  }
+
   function addMessage(role, content, save = true) {
     const msgArea = document.getElementById('uknow-messages');
     if (!msgArea) return;
@@ -341,7 +397,7 @@
         ? `background: linear-gradient(135deg, ${PRIMARY_COLOR}, ${ACCENT_COLOR}); color: white; align-self: flex-end; border-bottom-right-radius: 6px;`
         : `background: #f5f5f5; color: ${TEXT_COLOR}; align-self: flex-start; border-bottom-left-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);`}
     `;
-    msg.textContent = content;
+    appendTextWithLinks(msg, content);
     msgArea.appendChild(msg);
     msgArea.scrollTop = msgArea.scrollHeight;
 

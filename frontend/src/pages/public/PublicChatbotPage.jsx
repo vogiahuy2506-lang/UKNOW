@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import MessageAttachments, { formatFileSize } from '../../components/MessageAttachments';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import RenderTextWithLinks from '../../utils/renderTextWithLinks';
 
 const ACCEPTED = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACH = 3;
@@ -302,13 +303,13 @@ export default function PublicChatbotPage() {
                 }
               >
                 {msg.content ? (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: String(msg.content)
-                        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">$1</a>')
-                        .replace(/\n/g, '<br/>'),
-                    }}
-                  />
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    <RenderTextWithLinks
+                      text={msg.content}
+                      linkClassName="underline break-all font-medium hover:opacity-80"
+                      linkStyle={msg.role === 'user' ? { color: 'white' } : { color: primaryColor }}
+                    />
+                  </p>
                 ) : null}
                 <MessageAttachments attachments={msg.attachments} messageRole={msg.role} />
               </div>

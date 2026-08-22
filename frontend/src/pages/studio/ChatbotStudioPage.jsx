@@ -23,6 +23,7 @@ import ShareChatbotModal from '../../components/marketplace/ShareChatbotModal';
 import { MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
 import { useI18n } from '../../i18n';
 import useStorageQuota from '../../features/storage/useStorageQuota';
+import RenderTextWithLinks from '../../utils/renderTextWithLinks';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import useMediaQuery from '../../hooks/useMediaQuery';
@@ -559,7 +560,14 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
                 }`}
                 style={msg.role === 'user' ? { background: gradientStyle } : {}}
               >
-                {msg.content ? <p className="whitespace-pre-wrap">{msg.content}</p> : null}
+                {msg.content ? (
+                  <p className="whitespace-pre-wrap">
+                    <RenderTextWithLinks
+                      text={msg.content}
+                      linkClassName={`underline break-all font-medium hover:opacity-80 ${msg.role === 'user' ? 'text-white' : 'text-primary-600'}`}
+                    />
+                  </p>
+                ) : null}
                 <MessageAttachments attachments={msg.attachments} messageRole={msg.role} />
               </div>
               <span className="text-[10px] mt-1 px-1 text-slate-400">

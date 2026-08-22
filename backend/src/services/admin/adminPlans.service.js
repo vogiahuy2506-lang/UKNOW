@@ -139,6 +139,14 @@ export async function editPlan(id, payload) {
   if (!plan) throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
   if (!payload.name?.trim()) throw { status: 400, message: 'Tên gói không được để trống' };
   if (payload.price < 0) throw { status: 400, message: 'Giá tiền không hợp lệ' };
+
+  const targetIsActive = payload.isActive !== undefined ? Boolean(payload.isActive) : Boolean(plan.is_active);
+  const effectiveCode = payload.code !== undefined ? (payload.code?.trim() || null) : (plan.code?.trim() || null);
+
+  if (targetIsActive && !plan.is_custom && !effectiveCode) {
+    throw { status: 400, message: 'Gói phải có mã trước khi bật hiển thị. Vui lòng điền mã gói.' };
+  }
+
   return updatePlan(id, {
     code:         payload.code,
     name:         payload.name.trim(),

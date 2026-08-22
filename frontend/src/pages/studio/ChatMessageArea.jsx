@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { useI18n } from '../../i18n';
 import { getAiQuotaErrorMessage } from '../../utils/aiLimitError.util';
+import RenderTextWithLinks from '../../utils/renderTextWithLinks';
 
 function ChatMessageArea({ chatbot }) {
   const { t } = useI18n();
@@ -292,7 +293,12 @@ function ChatMessageArea({ chatbot }) {
                     ? { background: gradientStyle }
                     : { backgroundColor: '#fff', color: '#374151' }}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-sm whitespace-pre-wrap">
+                    <RenderTextWithLinks
+                      text={msg.content}
+                      linkClassName={`underline break-all font-medium hover:opacity-80 ${msg.role === 'user' ? 'text-white' : 'text-primary-600'}`}
+                    />
+                  </p>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1 px-1">
                   {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
