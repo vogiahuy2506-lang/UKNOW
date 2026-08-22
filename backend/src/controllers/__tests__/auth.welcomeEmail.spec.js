@@ -46,6 +46,10 @@ jest.unstable_mockModule('../../services/audit.service.js', () => ({
   AUDIT_ENTITY_TYPES: { USER: 'USER' },
 }));
 
+jest.unstable_mockModule('../../services/user/signupTrialTx.service.js', () => ({
+  grantSignupTrialInTx: jest.fn().mockResolvedValue(null),
+}));
+
 const authController = (await import('../auth.controller.js')).default;
 
 describe('auth.controller welcome email invariant', () => {
@@ -55,6 +59,8 @@ describe('auth.controller welcome email invariant', () => {
   });
 
   it('passes recipient `to` matching user.email to sendSystemEmail on register', async () => {
+    // 0. BEGIN (added by transactional trial grant flow)
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
     // 1. check email
     mockClient.query.mockResolvedValueOnce({ rows: [] });
     // 2. check username
@@ -72,6 +78,8 @@ describe('auth.controller welcome email invariant', () => {
         },
       ],
     });
+    // 4. COMMIT
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
 
     const req = {
       body: {

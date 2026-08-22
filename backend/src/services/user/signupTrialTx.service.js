@@ -1,5 +1,3 @@
-import { activateFreePlan } from '../payment/payment.service.js';
-
 const isEnabled = () =>
   String(process.env.SIGNUP_TRIAL_ENABLED ?? 'true') !== 'false';
 const trialPlanCode = () => process.env.SIGNUP_TRIAL_PLAN_CODE || 'trial';
@@ -27,6 +25,13 @@ export async function grantSignupTrialInTx(client, { userId, userEmail }) {
   if (!userId || !userEmail) {
     throw new Error('grantSignupTrialInTx: missing userId/userEmail');
   }
+
+  // Dynamic import so Jest ESM `unstable_mockModule('payment/payment.service')`
+  // applied at call-time takes effect. Static import would resolve the real
+  // module graph (which pulls in `user.repository.js` exports like
+  // `saveInvoiceProfile`) before the test mock could intercept it, breaking
+  // `controllers/__tests__/auth.welcomeEmail.spec.js`.
+  const { activateFreePlan } = await import('../payment/payment.service.js');
 
   await activateFreePlan({
     planCode: trialPlanCode(),
