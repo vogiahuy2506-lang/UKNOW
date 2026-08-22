@@ -55,7 +55,7 @@ export async function grantSignupTrialInTx(client, { userId, userEmail }) {
     throw new Error('grantSignupTrialInTx: missing userId/userEmail');
   }
 
-  try {
+try {
     // Dynamic import, không static ở đầu file: payment.service.js kéo theo cả PayOS
     // client, matbaoInvoice, einvoice... — một cây import rất nặng. auth.controller.js
     // (caller tĩnh của hàm này) sẽ kéo cả cây đó vào graph của nó nếu import tĩnh,

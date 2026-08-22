@@ -80,6 +80,8 @@ describe('auth.controller welcome email invariant', () => {
         },
       ],
     });
+    // 4. COMMIT
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
 
     const req = {
       body: {
