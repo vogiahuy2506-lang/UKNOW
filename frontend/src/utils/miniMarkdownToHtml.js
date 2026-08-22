@@ -81,7 +81,14 @@ export function inline(text) {
     const formattedLabel = formatInlineText(label);
     const isExternal = /^(https?:|mailto:)/i.test(safeUrl);
     const attrs = isExternal ? ' rel="noopener noreferrer" target="_blank"' : '';
-    return stashToken(`<a href="${safeUrl}"${attrs}>${formattedLabel}</a>`);
+    // Slug trần (vd "quick-send") = trỏ sang bài hướng dẫn khác. Phải đổi sang
+    // đường dẫn tuyệt đối: để nguyên dạng tương đối thì nó chỉ đúng khi người
+    // đọc đang đứng ở /huong-dan/... — mở cùng nội dung đó trong ô Xem trước
+    // của trang admin (/admin/help-articles/<id>) sẽ trỏ nhầm sang
+    // /admin/help-articles/quick-send, tức trang sửa bài với id không phải số.
+    const isBareSlug = !isExternal && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(safeUrl);
+    const href = isBareSlug ? `/huong-dan/${safeUrl}` : safeUrl;
+    return stashToken(`<a href="${href}"${attrs}>${formattedLabel}</a>`);
   });
 
   // 4. Bold, Italic, Strikethrough on the surrounding text

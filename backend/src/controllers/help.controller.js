@@ -48,9 +48,26 @@ export async function adminList(req, res) {
   }
 }
 
+/**
+ * Ép :id về số nguyên dương. Ném 404 có thông điệp đọc được thay vì để `NaN`
+ * chạy tới Postgres — ở đó nó bung ra `invalid input syntax for type bigint:
+ * "NaN"`, vừa lộ chi tiết DB vừa không cho admin biết thật ra họ đã mở nhầm
+ * đường dẫn (vd dán slug vào chỗ chờ id).
+ *
+ * @param {string} raw req.params.id
+ * @returns {number}
+ */
+function parseArticleId(raw) {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw { status: 404, message: `Không tìm thấy bài viết với id "${raw}". Đường dẫn sửa bài dùng id dạng số, không phải slug.` };
+  }
+  return id;
+}
+
 export async function adminGet(req, res) {
   try {
-    const result = await adminGetArticle(Number(req.params.id));
+    const result = await adminGetArticle(parseArticleId(req.params.id));
     res.json({ success: true, result });
   } catch (err) {
     console.error(err);
@@ -70,7 +87,7 @@ export async function adminCreate(req, res) {
 
 export async function adminUpdate(req, res) {
   try {
-    const result = await adminUpdateArticle(Number(req.params.id), req.body || {}, {
+    const result = await adminUpdateArticle(parseArticleId(req.params.id), req.body || {}, {
       actorUserId: req.user.id,
     });
     res.json({ success: true, result });
@@ -82,7 +99,7 @@ export async function adminUpdate(req, res) {
 
 export async function adminRemove(req, res) {
   try {
-    await adminDeleteArticle(Number(req.params.id));
+    await adminDeleteArticle(parseArticleId(req.params.id));
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -92,7 +109,7 @@ export async function adminRemove(req, res) {
 
 export async function adminReindex(req, res) {
   try {
-    const result = await reindexArticle(Number(req.params.id), { actorUserId: req.user.id });
+    const result = await reindexArticle(parseArticleId(req.params.id), { actorUserId: req.user.id });
     res.json({ success: true, result });
   } catch (err) {
     console.error(err);
@@ -117,7 +134,7 @@ export async function adminReindexPending(req, res) {
 export async function adminTranslate(req, res) {
   try {
     const locale = String(req.body?.locale || 'en').trim().toLowerCase() || 'en';
-    const result = await translateHelpArticle(Number(req.params.id), {
+    const result = await translateHelpArticle(parseArticleId(req.params.id), {
       locale,
       actorUserId: req.user.id,
     });

@@ -84,12 +84,20 @@ describe('miniMarkdownToHtml', () => {
       expect(appLink).toBe('<a href="/app/settings/channels">Kênh gửi</a>');
       expect(appLink).not.toContain('target=');
 
+      // Slug trần được nở thành đường dẫn tuyệt đối — dạng tương đối chỉ đúng khi
+      // đứng ở /huong-dan/..., mở trong ô Xem trước của admin sẽ trỏ sai chỗ.
       const articleLink = inline('[Thêm tài khoản Email](email-account)');
-      expect(articleLink).toBe('<a href="email-account">Thêm tài khoản Email</a>');
+      expect(articleLink).toBe('<a href="/huong-dan/email-account">Thêm tài khoản Email</a>');
       expect(articleLink).not.toContain('target=');
 
       // mailto vẫn mở ứng dụng thư ngoài
       expect(inline('[Gửi thư](mailto:a@b.com)')).toContain('target="_blank"');
+    });
+
+    it('does not touch absolute, anchor or external hrefs when expanding slugs', () => {
+      expect(inline('[Trang app](/app/campaigns)')).toBe('<a href="/app/campaigns">Trang app</a>');
+      expect(inline('[Mục dưới](#phan-2)')).toBe('<a href="#phan-2">Mục dưới</a>');
+      expect(inline('[Ngoài](https://a.com/x-y)')).toContain('href="https://a.com/x-y"');
     });
 
     it('parses inline bold and italic correctly', () => {
