@@ -519,6 +519,77 @@ export async function seedCampaigns(client, { userId }) {
 }
 
 /**
+ * Dựng một luồng hoàn chỉnh cho chiến dịch nháp: Khởi chạy → Đọc Sheet → Gửi Email.
+ *
+ * Vì sao cần: trình dựng chiến dịch mở ra một khung TRẮNG nếu chiến dịch chưa có
+ * node nào. Bài hướng dẫn "Tạo chiến dịch" cần ảnh của khối đã nối, bảng cài đặt
+ * của khối đọc dữ liệu, và thanh công cụ — không có node thì chẳng chụp được gì.
+ *
+ * Chọn `read_sheet` chứ không phải khối đọc dữ liệu khác: nút "Kiểm tra kết nối"
+ * mà bài viết chỉ đích danh chỉ nằm trong bảng cài đặt của khối Sheet
+ * (NodeConfigModalReadSheetSection). Nút hiện ra không cần Sheet thật — bấm vào
+ * mới cần, mà ảnh chụp thì không bấm.
+ */
+export async function seedCampaignFlow(client, { userId }) {
+  const { rows: campaigns } = await client.query(
+    `SELECT id FROM campaigns
+     WHERE id_user = $1 AND status = 'draft'
+     ORDER BY id LIMIT 1`,
+    [userId],
+  );
+  if (!campaigns.length) return 0;
+  const campaignId = campaigns[0].id;
+
+  const { rows: templates } = await client.query(
+    'SELECT id FROM email_templates WHERE id_user = $1 ORDER BY id LIMIT 1',
+    [userId],
+  );
+  const templateId = templates[0]?.id || null;
+
+  const nodes = [
+    {
+      type: 'trigger', subtype: 'manual_trigger', name: 'Khởi chạy',
+      x: 120, y: 220, order: 1, config: {},
+    },
+    {
+      type: 'data', subtype: 'read_sheet', name: 'Đọc dữ liệu Sheet',
+      x: 460, y: 220, order: 2,
+      config: { sheetUrl: 'https://docs.google.com/spreadsheets/d/DEMO_SHEET_ID/edit#gid=0' },
+    },
+    {
+      type: 'action', subtype: 'send_email', name: 'Gửi email chào mừng',
+      x: 800, y: 220, order: 3,
+      config: templateId ? { templateId: String(templateId) } : {},
+    },
+  ];
+
+  const ids = [];
+  for (const node of nodes) {
+    const { rows } = await client.query(
+      `INSERT INTO campaign_nodes (
+         id_campaign, node_type, node_subtype, node_name,
+         position_x, position_y, config, execution_order, id_email_template
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [
+        campaignId, node.type, node.subtype, node.name,
+        node.x, node.y, JSON.stringify(node.config), node.order,
+        node.subtype === 'send_email' ? templateId : null,
+      ],
+    );
+    ids.push(rows[0].id);
+  }
+
+  for (let i = 0; i < ids.length - 1; i += 1) {
+    await client.query(
+      `INSERT INTO campaign_connections (id_campaign, source_node_id, target_node_id, connection_type)
+       VALUES ($1, $2, $3, 'default')`,
+      [campaignId, ids[i], ids[i + 1]],
+    );
+  }
+  return ids.length;
+}
+
+/**
  * 5. E2E_SEED_CHATBOT: 2 chatbot + 3 tài liệu (ready, processing, error)
  */
 export async function seedChatbot(client, { userId }) {
@@ -1330,6 +1401,7 @@ export async function seedDemoData(client, { userId }) {
   // 4. Chiến dịch
   if (isFlagOn('E2E_SEED_CAMPAIGNS')) {
     await seedCampaigns(client, { userId });
+    await seedCampaignFlow(client, { userId });
     // Mẫu bị khoá cần CẢ mẫu lẫn chiến dịch đang chạy — chỉ nối khi có đủ hai bên.
     if (isFlagOn('E2E_SEED_TEMPLATES')) await seedLockedTemplateUsage(client, { userId });
     // Nối khách vào chiến dịch — cần cả hai bên đã có.
