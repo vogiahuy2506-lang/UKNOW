@@ -232,6 +232,7 @@ export default function HeroChatWidget() {
     return (
       <button
         onClick={handleOpen}
+        data-help-shot-hide
         className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-full p-3 shadow-2xl hover:shadow-orange-500/30 transition-all duration-300 flex items-center gap-2 group"
         aria-label="Open chat"
       >
@@ -245,7 +246,9 @@ export default function HeroChatWidget() {
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-48px)] transition-all duration-300 ${isMinimized ? 'h-0 opacity-0 overflow-hidden' : 'h-[520px] opacity-100'}`}>
+    // data-help-shot-hide: bộ chụp ảnh minh hoạ (e2e/screenshots) ẩn widget này đi,
+    // nếu không nó nổi ở góc phải mọi ảnh chụp trang công khai.
+    <div data-help-shot-hide className={`fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-48px)] transition-all duration-300 ${isMinimized ? 'h-0 opacity-0 overflow-hidden' : 'h-[520px] opacity-100'}`}>
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 h-full flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3 flex items-center justify-between">

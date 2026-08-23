@@ -54,6 +54,63 @@ export async function hideVolatileChrome(page) {
       }
     `,
   });
+
+  // Widget nổi ở góc dưới phải (bong bóng "Chat tư vấn" trên trang công khai) lọt
+  // vào mọi ảnh. Đánh dấu data-help-shot-hide trong mã nguồn là cách sạch nhất,
+  // nhưng chỉ có tác dụng sau khi deploy — nên ẩn thêm theo hình dạng để chụp
+  // được ngay trên bản đang chạy. Điều kiện chặt (nhỏ, dính sát góc dưới phải)
+  // để không ẩn nhầm nội dung thật.
+  await page.evaluate(() => {
+    for (const el of document.body.querySelectorAll('div, button, iframe')) {
+      if (window.getComputedStyle(el).position !== 'fixed') continue;
+      const box = el.getBoundingClientRect();
+      const inCorner = box.bottom > window.innerHeight - 140 && box.right > window.innerWidth - 140;
+      if (inCorner && box.width < 500 && box.height < 700) {
+        el.style.visibility = 'hidden';
+      }
+    }
+  });
+}
+
+/**
+ * Chụp một phần tử nhưng CẮT BỎ khoảng trắng thừa ở dưới và bên phải.
+ *
+ * Vùng cần chụp thường cao hơn nội dung thật rất nhiều: thanh menu trái cao hết
+ * màn hình dù chỉ có mươi mục, khối bảng giá chừa sẵn chỗ cho gói chưa có. Chụp
+ * nguyên khối thì gần nửa ảnh là nền trắng, chèn vào bài trông rất hụt.
+ *
+ * Đo bằng vị trí thật của các phần tử con đang hiển thị, rồi cắt tới đó.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} locator
+ * @returns {Promise<{screenshot: (options?: object) => Promise<Buffer>}>}
+ */
+export async function contentShot(page, locator, { pad = 16 } = {}) {
+  const clip = await locator.first().evaluate((el, padding) => {
+    const root = el.getBoundingClientRect();
+    let bottom = root.top;
+    let right = root.left;
+    for (const child of el.querySelectorAll('*')) {
+      const style = window.getComputedStyle(child);
+      if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') continue;
+      const box = child.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      bottom = Math.max(bottom, Math.min(box.bottom, root.bottom));
+      right = Math.max(right, Math.min(box.right, root.right));
+    }
+    return {
+      // Toạ độ TRANG (cộng scroll) vì chụp kèm fullPage — vùng cần chụp có thể
+      // cao hơn màn hình, Playwright phải cuộn và ghép lại.
+      x: root.left + window.scrollX,
+      y: root.top + window.scrollY,
+      width: Math.max(Math.min(root.width, right - root.left + padding), 40),
+      height: Math.max(Math.min(root.height, bottom - root.top + padding), 40),
+    };
+  }, pad);
+
+  return {
+    screenshot: (options = {}) => page.screenshot({ ...options, clip, fullPage: true }),
+  };
 }
 
 /**
@@ -97,7 +154,7 @@ export async function sidebarShot(page, { groupName, itemName, baseURL }) {
 
   await highlight(item);
   await page.waitForTimeout(150);   // chờ outline vẽ xong
-  return sidebar;
+  return contentShot(page, sidebar);
 }
 
 /**
@@ -117,7 +174,7 @@ export async function regionShot(page, { path, clip, mark, waitFor }) {
   await hideVolatileChrome(page);
   if (mark) await highlight(page.locator(mark));
   await page.waitForTimeout(150);
-  return target;
+  return contentShot(page, target);
 }
 
 function escapeRegExp(text) {
