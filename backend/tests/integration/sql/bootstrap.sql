@@ -2611,3 +2611,22 @@ ALTER TABLE webchat_messages
 
 ALTER TABLE webchat_messages
   ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+
+-- ─── zalo_messages: bộ cột đời sau ────────────────────────────────────────
+-- Bảng này trong file đang ở HÌNH DẠNG CŨ (message_content / recipient_phone /
+-- recipient_uid). Mã hiện tại lại đọc-ghi bộ cột khác: message_text,
+-- recipient_type, recipient_value, uid, tracking_base_url, id_node.
+--
+-- Bộ mới có trên production từ TRƯỚC hệ thống migration nên không nằm trong
+-- migrations/ lẫn schema.sql — không phép kiểm nào trong repo phát hiện được.
+-- Thiếu chúng thì "Hành trình khách hàng" trả 500 với hint
+-- 'Perhaps you meant to reference the column "zm.recipient_name"'.
+--
+-- Giữ cả hai bộ: cột cũ có thể còn chỗ khác dùng, và thừa cột thì vô hại.
+ALTER TABLE zalo_messages
+  ADD COLUMN IF NOT EXISTS message_text       TEXT,
+  ADD COLUMN IF NOT EXISTS recipient_type     VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS recipient_value    VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS uid                VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS tracking_base_url  VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS id_node            BIGINT;

@@ -83,22 +83,26 @@ export default {
         await journeyButton.click();
         await page.waitForTimeout(1800);
 
-        // Hành trình dựng từ bảng `email_messages`; seed hiện chưa tạo bảng này
-        // nên hộp thoại mở ra rỗng. Thà báo lỗi còn hơn cho ra một ảnh trống mà
-        // vẫn tính là thành công — đúng bài học đã lặp lại nhiều lần ở đây.
-        const empty = page.getByText(/Chưa có email nào|Chưa có dữ liệu/i).first();
-        if (await empty.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        // Hộp thoại này dùng class `modal-overlay`, KHÔNG phải `fixed inset-0`
+        // như các hộp thoại khác trong app — bám nhầm thì tưởng không có modal.
+        const overlay = page.locator('.modal-overlay').last();
+        if (!(await overlay.isVisible({ timeout: 10_000 }).catch(() => false))) {
+          throw new Error('Bấm "Hành trình" nhưng không thấy hộp thoại nào mở ra');
+        }
+
+        // Kiểm chữ TRONG hộp thoại, không kiểm cả trang: nền phía sau cũng có
+        // những câu "Chưa có …" khác, bắt nhầm thì báo lỗi oan.
+        const problem = overlay.getByText(/Không thể tải|Chưa có email nào/i).first();
+        if (await problem.isVisible().catch(() => false)) {
           throw new Error(
-            'Hành trình khách rỗng — cần seed bảng email_messages (tin đã gửi cho từng khách\n'
-            + 'trong chiến dịch). campaign_customers chỉ nối khách vào chiến dịch, không sinh tin.',
+            `Hành trình không tải được: "${(await problem.innerText()).trim()}".\n`
+            + 'Cần email_messages/zalo_messages cho khách trong chiến dịch, và schema test\n'
+            + 'phải có đủ cột đời sau của zalo_messages (message_text, recipient_value…).',
           );
         }
 
         await hideVolatileChrome(page);
-        const panel = page.locator('div.fixed.inset-0').last().locator('> div').last();
-        return (await panel.isVisible().catch(() => false))
-          ? panel
-          : contentShot(page, page.locator('main').first());
+        return overlay.locator('> div').filter({ hasText: /./ }).last();
       },
     },
   ],
