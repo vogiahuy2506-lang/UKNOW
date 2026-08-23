@@ -108,6 +108,19 @@ export default function AdminHelpArticlesPage() {
   };
 
   const seed = async () => {
+    // Seed GHI ĐÈ cả body_md lẫn body_html của mọi bài trong bộ mẫu bằng bản
+    // trong repo — ảnh admin đã chèn tay bị thay lại bằng chú thích "[ẢNH: ...]"
+    // và KHÔNG khôi phục được (vị trí ảnh chỉ tồn tại trong body_html).
+    // Đã xảy ra thật ngày 22/08/2026: mất toàn bộ ảnh của nhiều bài chỉ vì một
+    // cú bấm nhầm, do nút này trước đây chạy thẳng không hỏi lại.
+    // Bắt gõ đúng chữ xác nhận, không dùng confirm() thường — nút nằm cạnh các
+    // nút vô hại nên quá dễ bấm nhầm rồi Enter cho qua.
+    const typed = window.prompt(t('adminHelp.seedConfirmPrompt'));
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== 'SEED') {
+      toast.error(t('adminHelp.seedConfirmMismatch'));
+      return;
+    }
     setSeeding(true);
     try {
       const res = await help.adminSeedHelpArticles(true);
