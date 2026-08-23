@@ -59,19 +59,43 @@ async function api(pathname, options = {}) {
   let payload;
   try { payload = JSON.parse(text); } catch { payload = { raw: text }; }
   if (!res.ok) {
-    throw new Error(`${options.method || 'GET'} ${pathname} → ${res.status}: ${payload.message || text.slice(0, 200)}`);
+    const error = new Error(`${options.method || 'GET'} ${pathname} → ${res.status}: ${payload.message || text.slice(0, 200)}`);
+    error.status = res.status;
+    // express-rate-limit (standardHeaders) trả RateLimit-Reset = số giây còn lại.
+    error.retryAfterSec = Number(res.headers.get('retry-after'))
+      || Number(res.headers.get('ratelimit-reset'))
+      || null;
+    throw error;
   }
   return payload;
 }
 
-async function uploadImage(filePath) {
+/**
+ * Tải một ảnh lên, tự chờ khi đụng trần tải lên.
+ *
+ * `/uploads/help-image` giới hạn 20 file / 15 phút. Một lô ảnh minh hoạ dễ chạm
+ * trần khi chèn liền mấy bài, và hỏng giữa chừng thì những ảnh đã lên nằm lại
+ * trong kho mà không bài nào trỏ tới — chạy lại là đẻ thêm một lứa mồ côi nữa.
+ * Chờ hết cửa sổ rồi đi tiếp rẻ hơn nhiều so với dọn rác.
+ */
+async function uploadImage(filePath, { onWait } = {}) {
   const buffer = await fs.readFile(filePath);
-  const form = new FormData();
-  form.append('file', new Blob([buffer], { type: 'image/png' }), path.basename(filePath));
-  const payload = await api('/uploads/help-image', { method: 'POST', body: form });
-  const url = payload?.data?.url || payload?.result?.url || payload?.url;
-  if (!url) throw new Error(`không lấy được URL sau khi tải ảnh: ${JSON.stringify(payload).slice(0, 200)}`);
-  return url;
+
+  for (let attempt = 0; ; attempt += 1) {
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: 'image/png' }), path.basename(filePath));
+    try {
+      const payload = await api('/uploads/help-image', { method: 'POST', body: form });
+      const url = payload?.data?.url || payload?.result?.url || payload?.url;
+      if (!url) throw new Error(`không lấy được URL sau khi tải ảnh: ${JSON.stringify(payload).slice(0, 200)}`);
+      return url;
+    } catch (error) {
+      if (error.status !== 429 || attempt >= 2) throw error;
+      const waitSec = Math.min(error.retryAfterSec || 15 * 60, 16 * 60) + 5;
+      onWait?.(waitSec);
+      await new Promise((resolve) => { setTimeout(resolve, waitSec * 1000); });
+    }
+  }
 }
 
 async function main() {
@@ -135,7 +159,12 @@ async function main() {
   }
 
   for (const shot of planned) {
-    const url = await uploadImage(path.join(inputDir, shot.file));
+    const url = await uploadImage(path.join(inputDir, shot.file), {
+      onWait: (sec) => console.log(
+        `  … chạm trần tải lên (20 file/15 phút) — chờ ${Math.ceil(sec / 60)} phút rồi tải tiếp.`
+        + ' Đừng tắt: bài viết chỉ được ghi sau khi tải xong hết.',
+      ),
+    });
     const out = replaceCaptionWithImage(html, shot.caption, url);
     if (!out.ok) throw new Error(`${shot.name}: ${out.reason} (lẽ ra vòng kiểm đã bắt được)`);
     html = out.html;
