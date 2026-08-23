@@ -29,6 +29,24 @@ describe('helpImageRecovery.tokenizeTags', () => {
     expect(tokenizeTags(withInline).map((t) => t.key)).toEqual(['0:p', '0:/p']);
   });
 
+  // Bản VI và bản EN trong DB do hai bộ chuyển Markdown khác nhau sinh ra: một
+  // bên ghi <li>A</li>, bên kia ghi <li><p>A</p></li>. Đo thật trên production:
+  // zalo-account có 15 <p> bên VI so với 39 bên EN, trong khi số <li> trùng khít.
+  it('bỏ lớp <p> mà bộ chuyển bọc quanh nội dung <li>/<td>', () => {
+    const loose = '<ul><li><p>A</p></li></ul><table><tbody><tr><td><p>B</p></td></tr></tbody></table>';
+    const tight = '<ul><li>A</li></ul><table><tbody><tr><td>B</td></tr></tbody></table>';
+    expect(tokenizeTags(loose).map((t) => t.key)).toEqual(tokenizeTags(tight).map((t) => t.key));
+  });
+
+  it('KHÔNG bỏ đoạn chú thích ảnh đứng ngay đầu <li> — đó là chỗ cần nhận ra', () => {
+    const keys = tokenizeTags('<ul><li><p>[ẢNH: nút]</p></li></ul>').map((t) => t.key);
+    expect(keys).toEqual(['0:ul', '1:li', '2:p', '2:/p', '1:/li', '0:/ul']);
+  });
+
+  it('không đụng <p> đứng độc lập ngoài danh sách', () => {
+    expect(tokenizeTags('<p>A</p>').map((t) => t.key)).toEqual(['0:p', '0:/p']);
+  });
+
   it('giữ <li>, <td> trong khung để định vị được ảnh nằm lồng bên trong', () => {
     const html = '<table><tbody><tr><td><img src="/u/a.png"></td></tr></tbody></table>';
     expect(tokenizeTags(html).map((t) => t.name)).toEqual(
@@ -224,6 +242,47 @@ describe('helpImageRecovery — bài mẫu thật', () => {
     expect(plan.restored).toHaveLength(extractImageSrcs(en).length);
     expect(stripTags(plan.html)).toBe(stripTags(plan.textReference));
     expect(plan.html).not.toMatch(captionPattern);
+  });
+
+  /**
+   * Dựng lại đúng bản EN thật trong DB, theo chuỗi thẻ đã dump từ production:
+   * bọc nội dung <li>/<td>/<th> trong <p>, bỏ <thead>, thay chú thích bằng ảnh,
+   * dịch chữ và xáo trộn <strong>/<a>. Đây là ca đã làm hỏng cả ba lần chạy thật.
+   */
+  const toEnglishVariant = (source, slug) => {
+    let i = 0;
+    let out = source.replace(captionPattern, () => `<img src="/u/${slug}-${i++}.png" alt="image.png" />`);
+    out = out.replace(/<(li|td|th)>([\s\S]*?)<\/\1>/g, (m, tag, inner) => (
+      inner.includes('<p>') || inner.includes('<img') ? m : `<${tag}><p>${inner}</p></${tag}>`
+    ));
+    out = out.replace(/<thead>([\s\S]*?)<\/thead><tbody>/, '<tbody>$1');
+    return translate(out)
+      .replace(/<\/?strong>/g, (m, at) => (at % 3 === 0 ? '' : m))
+      .replace(/<a\b[^>]*>|<\/a>/g, '');
+  };
+
+  it('cứu đủ ảnh khi bản EN dùng danh sách "loose" và bỏ <thead> (bản thật)', () => {
+    const en = toEnglishVariant(vi, 'zalo-account');
+    const plan = planImageRecovery(vi, en);
+    expect(plan.ok).toBe(true);
+    expect(plan.coverage).toBeGreaterThan(0.95);
+    expect(plan.restored).toHaveLength(extractImageSrcs(en).length);
+    expect(plan.skipped).toEqual([]);
+    expect(plan.html).not.toMatch(captionPattern);
+    expect(stripTags(plan.html)).toBe(stripTags(plan.textReference));
+    expect(extractImageSrcs(plan.html)).toEqual(plan.restored.map((r) => r.src));
+  });
+
+  it('cứu được ảnh ở MỌI bài mẫu có chú thích, không riêng một bài', () => {
+    const articles = HELP_SEED_ARTICLES.filter((a) => captionPattern.test(a.body_html ?? ''));
+    expect(articles.length).toBeGreaterThan(10);
+    for (const art of articles) {
+      const en = toEnglishVariant(art.body_html, art.slug);
+      const plan = planImageRecovery(art.body_html, en);
+      expect({ slug: art.slug, restored: plan.restored.length })
+        .toEqual({ slug: art.slug, restored: extractImageSrcs(en).length });
+      expect(stripTags(plan.html)).toBe(stripTags(plan.textReference));
+    }
   });
 
   it('cứu đủ ảnh khi bản VI đã được seed lại bằng bản mới hơn bản EN từng dịch', () => {

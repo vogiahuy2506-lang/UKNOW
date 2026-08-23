@@ -100,7 +100,46 @@ export function tokenizeTags(html) {
       key: `${tokenDepth}:${closing ? '/' : ''}${name}`,
     });
   }
-  return tokens;
+  return dropListItemWrappers(html, tokens);
+}
+
+/** Thẻ mà nội dung bên trong có thể bị bộ chuyển Markdown bọc thêm một lớp <p>. */
+const WRAPPABLE_CONTAINERS = new Set(['li', 'td', 'th']);
+
+/**
+ * Bỏ lớp <p> mà bộ chuyển Markdown bọc quanh nội dung của <li>/<td>/<th>.
+ *
+ * Markdown gọi đây là danh sách "loose": cùng một bài, bộ chuyển này ghi
+ * `<li>Bước một</li>`, bộ chuyển kia ghi `<li><p>Bước một</p></li>`. Bản VI và
+ * bản EN trong DB được sinh bởi hai bộ chuyển khác nhau, nên bản EN có gấp đôi
+ * tới gấp ba số <p> trong khi số <li>, <td> trùng khít — đo thật trên production:
+ * zalo-account 15/39, channels 11/35. Không bỏ lớp này thì hai bản chỉ khớp
+ * 64–77%, dưới ngưỡng, và không bài nào cứu được.
+ *
+ * KHÔNG bỏ nếu đoạn đó là chú thích ảnh: bên VI chú thích có thể đứng ngay đầu
+ * <li>, mà chú thích chính là chỗ cần nhận ra để đặt ảnh vào.
+ *
+ * @param {string} html
+ * @param {ReturnType<typeof tokenizeTags>} tokens
+ * @returns {ReturnType<typeof tokenizeTags>}
+ */
+function dropListItemWrappers(html, tokens) {
+  const dropped = new Set();
+  for (let i = 1; i < tokens.length; i += 1) {
+    const open = tokens[i];
+    if (open.name !== 'p' || open.closing) continue;
+    const container = tokens[i - 1];
+    if (container.closing || !WRAPPABLE_CONTAINERS.has(container.name)) continue;
+    if (html.slice(container.end, open.start).trim() !== '') continue;
+
+    const close = tokens.findIndex((t, j) => j > i && t.name === 'p');
+    if (close < 0 || !tokens[close].closing) continue;
+    if (CAPTION_LIKE.test(html.slice(open.end, tokens[close].start))) continue;
+
+    dropped.add(i);
+    dropped.add(close);
+  }
+  return dropped.size ? tokens.filter((_, i) => !dropped.has(i)) : tokens;
 }
 
 /**
@@ -231,6 +270,17 @@ function matchKeys(html, tokens, markCaptions) {
   if (!markCaptions) return tokens.map((token) => token.key);
   const captions = placeholderTokenIndices(html, tokens, CAPTION_LIKE);
   return tokens.map((token, i) => (captions.has(i) ? `${token.key}#anh` : token.key));
+}
+
+/**
+ * Chữ nhìn thấy được trong một đoạn HTML.
+ *
+ * Bỏ thẻ trước khi kiểm vì thẻ inline và lớp <p> bọc <li> không nằm trong khung —
+ * chúng lọt vào khoảng giữa hai thẻ khung dưới dạng chuỗi thô. Coi `</p>` là
+ * "có chữ" sẽ khiến ảnh đứng ngay sau nó bị bỏ oan.
+ */
+function visibleText(html) {
+  return String(html).replace(/<[^>]*>/g, '').trim();
 }
 
 /** Số đoạn chú thích còn sót lại — dùng để chấm điểm hai cách khớp. */
@@ -385,8 +435,10 @@ function buildPlan(context, markCaptions) {
     return {
       ...empty,
       coverage,
+      // Kẹp trần khi in: mẫu số phía VI đã trừ đi các đoạn chú thích nên tỉ lệ
+      // có thể vượt 100%, in ra "105%" chỉ làm người đọc log rối.
       reason: `khung hai bản lệch quá nhiều (khớp ${Math.round(coverage * 100)}% phía EN,`
-        + ` ${Math.round(coverageVi * 100)}% phía VI)`,
+        + ` ${Math.round(Math.min(1, coverageVi) * 100)}% phía VI)`,
     };
   }
 
@@ -420,14 +472,14 @@ function buildPlan(context, markCaptions) {
     let contiguous = true;
     for (let k = 1; k < gapUnits.length; k += 1) {
       const between = enHtml.slice(enTokens[gapUnits[k - 1].to].end, enTokens[gapUnits[k].from].start);
-      if (between.trim() !== '') contiguous = false;
+      if (visibleText(between) !== '') contiguous = false;
     }
     if (!contiguous) {
       skip('các ảnh bên EN bị chữ chen giữa — không đặt lại được cả cụm');
       continue;
     }
-    const enTextBefore = enHtml.slice(enGapStart, unitsStart).trim();
-    const enTextAfter = enHtml.slice(unitsEnd, enGapEnd).trim();
+    const enTextBefore = visibleText(enHtml.slice(enGapStart, unitsStart));
+    const enTextAfter = visibleText(enHtml.slice(unitsEnd, enGapEnd));
     if (enTextBefore !== '' && enTextAfter !== '') {
       skip('ảnh nằm giữa câu bên EN — không xác định được chỗ đặt');
       continue;
