@@ -185,6 +185,19 @@ describe('chatbotZaloAccount.repository.getSettings (per-chatbot)', () => {
     const [, params] = query.mock.calls[0];
     expect(params).toEqual([1, 10, null]);
   });
+
+  it('declares a FROM clause on the chatbot_zalo_account_settings alias', async () => {
+    // Regression: a prior version of getSettings omitted the FROM clause entirely,
+    // so Postgres raised `syntax error at or near "LEFT"` and `accountSettings`
+    // came back as null. That turned `isZaloAccountChatbotEnabled(null)` into
+    // `false` and silently disabled every Zalo personal auto-reply.
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await repository.getSettings(1, 10, { idChatbot: 5 });
+
+    const [sql] = query.mock.calls[0];
+    expect(String(sql)).toMatch(/FROM\s+chatbot_zalo_account_settings\s+czs/i);
+  });
 });
 
 describe('chatbotZaloAccount.repository.pickEnabledChatbotForZalo', () => {

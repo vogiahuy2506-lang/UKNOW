@@ -173,9 +173,15 @@ class ChatRouterService {
     // Get linked KB id (depends on subAssistant, but fast)
     const linkedKbId = subAssistant ? await this._getLinkedKbId(subAssistant, userId) : null;
 
-    // Build RAG context (uses cached embeddings, ~100-200ms typically)
+    // Build RAG context (uses cached embeddings, ~100-200ms typically).
+    // When this is a per-chatbot call (chatbotId provided), prefer the chatbot's
+    // local KB (custom_chatbot_chunks) — matches web path behaviour after the
+    // sub_assistant indirection was dropped from custom_chatbots. Fall back to
+    // the channel-level KB for legacy rows that still wire through
+    // sub_assistants.
     const ragContext = await ragEngineService.buildContext(userId, message, {
       kbId: linkedKbId,
+      customChatbotId: chatbotId,
     });
 
     // Build system prompt with per-account settings
