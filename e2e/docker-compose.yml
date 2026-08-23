@@ -11,7 +11,10 @@ services:
       TZ: Asia/Ho_Chi_Minh
       PGTZ: Asia/Ho_Chi_Minh
     ports:
-      - '5433:5432'
+      # Cổng máy chủ đổi được, phòng khi đã có Postgres cài thẳng chiếm 5433:
+      #   E2E_PG_PORT=5434 docker compose up -d
+      # Đổi thì nhớ sửa DB_PORT trong e2e/.env.test cho khớp.
+      - '${E2E_PG_PORT:-5433}:5432'
     volumes:
       - uknow-pg-e2e-data:/var/lib/postgresql/data
     healthcheck:

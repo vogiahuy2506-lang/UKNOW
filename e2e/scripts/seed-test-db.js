@@ -43,6 +43,47 @@ function isDemoSeedEnabled() {
   return flags.some((flag) => ['1', 'true', 'yes'].includes(String(process.env[flag] || '').toLowerCase()));
 }
 
+/**
+ * Đánh dấu MỌI migration là đã chạy, ngay sau khi dựng schema từ bootstrap.sql.
+ *
+ * VÌ SAO: bộ chạy migration (src/utils/migrationRunner.util.js) cố định baseline
+ * 001–009 rồi replay 010 trở đi. Đúng cho DB production đã đi qua đủ lịch sử,
+ * nhưng SAI cho DB test — bootstrap.sql là ảnh chụp schema ở trạng thái muộn,
+ * replay lại migration cũ trên đó là replay ngược lịch sử.
+ *
+ * Cụ thể đã vỡ ở 013_unified_role: nó đổi role sang bộ tên trung gian
+ * ('super_admin','user_admin'), rồi 014 đổi lại về ('user','admin'). Seed tạo
+ * user với tên CUỐI nên 013 báo vi phạm ràng buộc và chặn toàn bộ phần sau.
+ *
+ * Trước đây không ai thấy vì migration chết sớm hơn ở 010 (thiếu pgvector).
+ *
+ * GIỚI HẠN: schema test = đúng những gì bootstrap.sql có. Hiện bootstrap.sql
+ * thiếu 23 bảng mà migration tạo ra (channel_conversations, chatbot_messages,
+ * notifications, custom_domains…), nên các màn hình phụ thuộc chúng chưa dùng
+ * được ở máy. Muốn có thì phải bổ sung DDL vào bootstrap.sql.
+ */
+async function baselineAllMigrations(client) {
+  const dir = path.resolve(__dirname, '..', '..', 'backend', 'migrations');
+  if (!fs.existsSync(dir)) {
+    console.warn('[e2e-seed] Không thấy thư mục migrations — bỏ qua baseline.');
+    return;
+  }
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      filename  VARCHAR(255) PRIMARY KEY,
+      ran_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  for (const file of files) {
+    await client.query(
+      'INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING',
+      [file],
+    );
+  }
+  console.log(`[e2e-seed] Baseline ${files.length} migration (schema đã do bootstrap.sql dựng).`);
+}
+
 function assertTestDbName(name) {
   if (!name) {
     throw new Error('[e2e-seed] Thiếu DB_NAME trong e2e/.env.test');
@@ -101,6 +142,8 @@ async function main() {
     await client.query('DROP SCHEMA IF EXISTS public CASCADE');
     await client.query('CREATE SCHEMA public');
     await client.query(bootstrapSql);
+
+    await baselineAllMigrations(client);
 
     const planResult = await client.query(
       `INSERT INTO plans (code, name, price, description, is_active, max_employees, daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit)

@@ -2086,3 +2086,19 @@ CREATE INDEX IF NOT EXISTS idx_landing_page_versions_workspace_owner
 CREATE INDEX IF NOT EXISTS idx_landing_page_versions_created_by
   ON landing_page_versions (created_by)
   WHERE created_by IS NOT NULL;
+
+-- ─── roles / users.id_role ────────────────────────────────────────────────
+-- Bảng này có trên production từ TRƯỚC khi có hệ thống migration, nên không
+-- nằm trong migrations/ lẫn schema.sql. Thiếu nó thì findProfileBase()
+-- (LEFT JOIN roles ON u.id_role = r.id) ném lỗi, controller rơi vào nhánh dự
+-- phòng và trả hồ sơ KHÔNG có trường gói — trang Tổng quan gói hiện
+-- "Tài khoản chưa được gán gói dịch vụ" dù tài khoản có gói hẳn hoi.
+-- Để rỗng là đủ: đây là LEFT JOIN, chỉ cần bảng tồn tại.
+CREATE TABLE IF NOT EXISTS roles (
+  id         SERIAL PRIMARY KEY,
+  role_code  VARCHAR(50) UNIQUE,
+  role_name  VARCHAR(100),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS id_role INTEGER REFERENCES roles(id);
