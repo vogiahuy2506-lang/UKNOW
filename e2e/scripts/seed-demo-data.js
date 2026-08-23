@@ -3,13 +3,10 @@
  *
  * VÌ SAO TÁCH RIÊNG VÀ BẬT BẰNG CỜ: bộ test e2e đang dựa vào trạng thái rỗng
  * (danh sách chưa có gì, "Bạn chưa có chiến dịch nào"…). Đổ dữ liệu mẫu vào seed
- * mặc định sẽ làm đỏ hàng loạt test không liên quan. Chỉ chạy khi E2E_SEED_DEMO=1.
- *
- * Điểm mấu chốt của môi trường này: ở đây BẤM GÌ CŨNG ĐƯỢC. Tạo đơn, xác nhận
- * nâng gói, hẹn hạ gói, để vượt hạn mức — những thứ trên production tuyệt đối
- * không đụng vào. Nhờ vậy chụp được đúng các màn hình mà bài hướng dẫn cần mà
- * chạy trên tài khoản thật thì không dựng nổi.
+ * mặc định sẽ làm đỏ hàng loạt test không liên quan. Chỉ chạy khi E2E_SEED_DEMO=1
+ * hoặc các cờ cụ thể được bật (E2E_SEED_ALL=1, E2E_SEED_CHANNELS=1,...).
  */
+import bcrypt from 'bcryptjs';
 import { DEMO_PLANS } from './demo-plans.js';
 
 /** Gói mà tài khoản mẫu đang dùng — ở giữa bậc thang để thấy cả nâng lẫn hạ gói. */
@@ -17,13 +14,6 @@ const DEFAULT_ACTIVE_PLAN_CODE = 'basic';
 
 const PLAN_COLUMNS = Object.keys(DEMO_PLANS[0]);
 
-/**
- * Các cột số nguyên trong bảng `plans`.
- *
- * API trả tiền về dạng chuỗi thập phân ("299000.00") vì driver Postgres giữ
- * nguyên kiểu NUMERIC, trong khi cột là BIGINT/INTEGER — nhét thẳng vào là lỗi
- * `invalid input syntax for type bigint`.
- */
 const NUMERIC_PLAN_COLUMNS = new Set(PLAN_COLUMNS.filter((column) => (
   !['code', 'name', 'description', 'features', 'ai_model', 'is_active', 'is_fup_enabled', 'is_custom'].includes(column)
 )));
@@ -40,10 +30,6 @@ function coercePlanValue(column, value) {
 
 /**
  * Nạp bộ gói giống production và gán một gói cho tài khoản mẫu.
- *
- * @param {import('pg').Client} client
- * @param {{ userId: number|string, activePlanCode?: string }} options
- * @returns {Promise<{planIds: Record<string, number>, activePlanId: number}>}
  */
 export async function seedDemoPlans(client, { userId, activePlanCode = DEFAULT_ACTIVE_PLAN_CODE }) {
   const planIds = {};
@@ -51,7 +37,6 @@ export async function seedDemoPlans(client, { userId, activePlanCode = DEFAULT_A
   for (const plan of DEMO_PLANS) {
     const columns = PLAN_COLUMNS.filter((c) => plan[c] !== undefined);
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-    // features là JSONB — pg gửi mảng JS thành mảng Postgres nếu không tự chuỗi hoá.
     const values = columns.map((c) => coercePlanValue(c, plan[c]));
     const { rows } = await client.query(
       `INSERT INTO plans (${columns.join(', ')}) VALUES (${placeholders})
@@ -62,15 +47,10 @@ export async function seedDemoPlans(client, { userId, activePlanCode = DEFAULT_A
     planIds[plan.code] = rows[0].id;
   }
 
-  // Gói giữ chỗ của bộ e2e cũng đang is_active nên sẽ hiện thành một thẻ giá 0đ
-  // lạc lõng trên bảng giá. Tắt đi cho ảnh chụp sạch; bộ test e2e không đụng tới
-  // bảng giá nên không ảnh hưởng.
   await client.query("UPDATE plans SET is_active = FALSE WHERE code = 'e2e_test_plan'");
 
   const activePlanId = planIds[activePlanCode] ?? Object.values(planIds)[0];
 
-  // Chép hạn mức của gói sang tài khoản, đúng như assignPlanToUser() làm — không
-  // chép thì trang Tổng quan gói hiện hạn mức rỗng và ảnh chụp ra vô nghĩa.
   await client.query(
     `UPDATE users u
         SET active_plan_id           = p.id,
@@ -98,25 +78,16 @@ export async function seedDemoPlans(client, { userId, activePlanCode = DEFAULT_A
 
 /**
  * Dựng sẵn một lệnh hẹn hạ gói đang chờ.
- *
- * Không dựng được bằng cách bấm trong giao diện: theo chính sách đổi gói, hạ gói
- * phải TRẢ TIỀN TRƯỚC rồi mới hẹn — mà ở máy mình thì PayOS không có khoá nên
- * không đi hết luồng thanh toán được. Ghi thẳng vào bảng là cách duy nhất.
- *
- * @param {import('pg').Client} client
- * @param {{ userId: number|string, targetPlanId: number }} options
  */
 export async function seedPendingDowngrade(client, { userId, targetPlanId }) {
   await client.query(
     `INSERT INTO scheduled_plan_changes (user_id, plan_id, billing_period, amount_paid, status, activate_after)
      SELECT $1, $2, 'monthly', 0, 'pending', COALESCE(u.subscription_expires_at, NOW() + INTERVAL '30 days')
-       FROM users u WHERE u.id = $1
-     ON CONFLICT DO NOTHING`,
+       FROM users u WHERE u.id = $1`,
     [userId, targetPlanId],
   );
 }
 
-/** Tên landing page mẫu — đặt như thật để ảnh minh hoạ không lộ ra là dữ liệu giả. */
 const DEMO_LANDING_PAGES = [
   'Khoá học Marketing cơ bản',
   'Ưu đãi tháng 9 — giảm 30%',
@@ -126,13 +97,6 @@ const DEMO_LANDING_PAGES = [
 
 /**
  * Dựng trạng thái VƯỢT HẠN MỨC cho landing page.
- *
- * Cách làm giống hệt điều xảy ra thật khi khách hạ gói: tài nguyên vẫn còn đó
- * nhưng trần của gói mới thấp hơn số đang có. Ở đây tạo sẵn mấy trang rồi hạ
- * `max_landing_pages` xuống, thay vì phải đi hết luồng hạ gói có thanh toán.
- *
- * @param {import('pg').Client} client
- * @param {{ userId: number|string, mode: 'grace'|'locked' }} options
  */
 export async function seedLandingPageOverage(client, { userId, mode }) {
   const ids = [];
@@ -146,11 +110,9 @@ export async function seedLandingPageOverage(client, { userId, mode }) {
     ids.push(rows[0].id);
   }
 
-  // Trần 1 trang trong khi đang có 4 → thừa 3, đủ để thấy rõ trong ảnh.
   await client.query('UPDATE users SET max_landing_pages = 1 WHERE id = $1', [userId]);
 
   if (mode === 'grace') {
-    // Còn ân hạn: các trang thừa hiện "Sắp bị khoá", kèm dải nhắc chọn giữ lại.
     await client.query(
       `UPDATE users SET overage_grace_until = NOW() + INTERVAL '5 days' WHERE id = $1`,
       [userId],
@@ -158,7 +120,6 @@ export async function seedLandingPageOverage(client, { userId, mode }) {
     return { ids, locked: [] };
   }
 
-  // Hết ân hạn: hệ thống đã khoá các trang thừa, giữ lại trang cũ nhất.
   await client.query(
     `UPDATE users SET overage_grace_until = NOW() - INTERVAL '2 days' WHERE id = $1`,
     [userId],
@@ -175,8 +136,764 @@ export async function seedLandingPageOverage(client, { userId, mode }) {
   return { ids, locked };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Các module seed dữ liệu mẫu mở rộng (E2E_SEED_*)
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Đổ toàn bộ dữ liệu mẫu.
+ * 1. E2E_SEED_CHANNELS: 1 Email cấu hình sẵn + 1 Zalo OA connected
+ */
+export async function seedChannels(client, { userId }) {
+  await client.query(
+    `INSERT INTO email_settings (
+      id_user, name, email, reply_to, smtp_host, smtp_port,
+      smtp_username, smtp_password, email_mode, use_tls, daily_limit,
+      is_verified, status, created_at, updated_at
+    ) VALUES (
+      $1, 'Email CSKH UKNOW', 'cskh@uknow.vn', 'support@uknow.vn', 'smtp.gmail.com', 587,
+      'cskh@uknow.vn', 'demo_smtp_password_123', 'custom_smtp', TRUE, 1000,
+      TRUE, 'active', NOW() - INTERVAL '20 days', NOW()
+    )`,
+    [userId],
+  );
+
+  await client.query(
+    `INSERT INTO zalo_settings (
+      id_user, display_name, zalo_user_id, zalo_name, zalo_phone,
+      login_method, cookie_text, status, is_active, is_default,
+      last_connected_at, created_at, updated_at
+    ) VALUES (
+      $1, 'Zalo Official Account UKNOW', '2847192837482910', 'UKNOW Campaign OA', '0988123456',
+      'qr', 'demo_zalo_cookie_session', 'connected', TRUE, TRUE,
+      NOW() - INTERVAL '1 hour', NOW() - INTERVAL '20 days', NOW()
+    )`,
+    [userId],
+  );
+
+  await client.query(
+    `INSERT INTO zalo_accounts (
+      id_user, is_active, status, created_at, updated_at
+    ) VALUES (
+      $1, TRUE, 'connected', NOW() - INTERVAL '20 days', NOW()
+    )`,
+    [userId],
+  );
+}
+
+/**
+ * 2. E2E_SEED_TEMPLATES: 3 nhãn, 6 mẫu Email, 4 mẫu Zalo
+ */
+export async function seedTemplates(client, { userId }) {
+  await client.query(
+    `INSERT INTO template_labels (name, color, workspace_owner_id, created_by, created_at)
+     VALUES
+       ('Khuyến mãi', '#ef4444', $1, $1, NOW() - INTERVAL '25 days'),
+       ('Chăm sóc', '#3b82f6', $1, $1, NOW() - INTERVAL '25 days'),
+       ('Nhắc lịch', '#10b981', $1, $1, NOW() - INTERVAL '25 days')
+     ON CONFLICT (name, workspace_owner_id) DO NOTHING`,
+    [userId],
+  );
+
+  const emailTemplates = [
+    {
+      name: 'Chào mừng thành viên mới',
+      code: 'welcome_member',
+      subject: 'Chào mừng bạn gia nhập cộng đồng UKNOW Campaign!',
+      category: 'Chăm sóc',
+      bodyHtml: '<p>Xin chào <strong>{{customer_name}}</strong>,</p><p>Cảm ơn bạn đã đăng ký tài khoản tại <strong>UKNOW Campaign</strong>. Hãy bắt đầu tạo chiến dịch đầu tiên ngay hôm nay để bứt phá doanh số!</p>',
+      bodyText: 'Xin chào {{customer_name}}, Cảm ơn bạn đã đăng ký tài khoản tại UKNOW Campaign.',
+      isActive: true,
+      usageCount: 145,
+    },
+    {
+      name: 'Ưu đãi sinh nhật thành viên VIP',
+      code: 'birthday_vip_30',
+      subject: '🎉 Chúc mừng sinh nhật {{customer_name}} — Quà tặng giảm 30% dành riêng cho bạn',
+      category: 'Khuyến mãi',
+      bodyHtml: '<p>Kính gửi <strong>{{customer_name}}</strong>,</p><p>Nhân dịp sinh nhật, UKNOW trân trọng gửi tặng bạn mã giảm giá <strong>VIP30</strong> giảm 30% toàn bộ dịch vụ.</p>',
+      bodyText: 'Kính gửi {{customer_name}}, Nhân dịp sinh nhật, UKNOW gửi tặng bạn mã giảm giá VIP30 giảm 30% toàn bộ dịch vụ.',
+      isActive: true,
+      usageCount: 82,
+    },
+    {
+      name: 'Nhắc lịch hẹn tư vấn giải pháp',
+      code: 'meeting_reminder',
+      subject: 'Nhắc lịch hẹn tư vấn giải pháp tự động hoá marketing ngày mai',
+      category: 'Nhắc lịch',
+      bodyHtml: '<p>Chào <strong>{{customer_name}}</strong>,</p><p>UKNOW xin nhắc bạn về buổi hẹn tư vấn trực tuyến vào lúc <strong>14:00 ngày mai</strong>.</p>',
+      bodyText: 'Chào {{customer_name}}, UKNOW xin nhắc bạn về buổi hẹn tư vấn trực tuyến vào lúc 14:00 ngày mai.',
+      isActive: true,
+      usageCount: 64,
+    },
+    {
+      name: 'Thông báo nâng cấp hệ thống & bảo trì',
+      code: 'system_upgrade',
+      subject: 'Thông báo nâng cấp hệ thống định kỳ — UKNOW',
+      category: 'Chăm sóc',
+      bodyHtml: '<p>Kính gửi quý khách,</p><p>Hệ thống sẽ bảo trì nâng cấp hiệu năng vào lúc <strong>00:00 - 02:00 ngày 25/08</strong>.</p>',
+      bodyText: 'Kính gửi quý khách, Hệ thống sẽ bảo trì nâng cấp hiệu năng vào lúc 00:00 - 02:00 ngày 25/08.',
+      isActive: true,
+      usageCount: 12,
+    },
+    {
+      name: 'Khảo sát mức độ hài lòng khách hàng',
+      code: 'csat_survey',
+      subject: 'Ý kiến đóng góp của bạn giúp UKNOW hoàn thiện hơn',
+      category: 'Chăm sóc',
+      bodyHtml: '<p>Chào <strong>{{customer_name}}</strong>,</p><p>Bạn đánh giá trải nghiệm dịch vụ gần đây như thế nào? Vui lòng dành 1 phút để cho chúng tôi biết nhé.</p>',
+      bodyText: 'Chào {{customer_name}}, Bạn đánh giá trải nghiệm dịch vụ gần đây như thế nào?',
+      isActive: true,
+      usageCount: 95,
+    },
+    {
+      name: 'Mẫu thông báo nội bộ (Hệ thống khoá)',
+      code: 'system_locked_notice',
+      subject: '[HỆ THỐNG] Mẫu tin nhắn hệ thống được bảo vệ',
+      category: null,
+      bodyHtml: '<p>Mẫu tin nhắn hệ thống được bảo vệ và khoá chỉnh sửa trực tiếp.</p>',
+      bodyText: 'Mẫu tin nhắn hệ thống được bảo vệ.',
+      isActive: false,
+      usageCount: 0,
+    },
+  ];
+
+  for (const t of emailTemplates) {
+    await client.query(
+      `INSERT INTO email_templates (
+        id_user, template_name, template_code, subject, body_html, body_text,
+        category, is_active, usage_count, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW() - INTERVAL '15 days', NOW())`,
+      [userId, t.name, t.code, t.subject, t.bodyHtml, t.bodyText, t.category, t.isActive, t.usageCount],
+    );
+  }
+
+  const zaloTemplates = [
+    {
+      name: 'Xác nhận đăng ký tư vấn qua Zalo',
+      code: 'zalo_confirm_lead',
+      bodyText: 'Chào {{customer_name}}, chuyên viên tư vấn của UKNOW đã nhận được yêu cầu của bạn và sẽ liên hệ trong ít phút nữa nhé!',
+      category: 'Chăm sóc',
+      isActive: true,
+      usageCount: 210,
+    },
+    {
+      name: 'Gửi mã voucher giảm giá 20%',
+      code: 'zalo_voucher_20',
+      bodyText: '🎁 Ưu đãi đặc biệt: Tặng bạn mã ZALO20 giảm 20% khi nâng cấp gói dịch vụ UKNOW trong tuần này!',
+      category: 'Khuyến mãi',
+      isActive: true,
+      usageCount: 340,
+    },
+    {
+      name: 'Nhắc lịch hẹn demo trực tiếp',
+      code: 'zalo_demo_reminder',
+      bodyText: 'UKNOW xin nhắc lịch: Bạn có buổi demo giải pháp marketing tự động vào lúc 10h00 sáng mai ạ.',
+      category: 'Nhắc lịch',
+      isActive: true,
+      usageCount: 78,
+    },
+    {
+      name: 'Cảm ơn quý khách đã mua hàng',
+      code: 'zalo_thank_you',
+      bodyText: 'Cảm ơn {{customer_name}} đã tin tưởng lựa chọn dịch vụ của UKNOW. Chúc bạn có trải nghiệm tuyệt vời!',
+      category: 'Chăm sóc',
+      isActive: true,
+      usageCount: 156,
+    },
+  ];
+
+  for (const t of zaloTemplates) {
+    await client.query(
+      `INSERT INTO zalo_templates (
+        id_user, template_name, template_code, body_text,
+        category, is_active, usage_count, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() - INTERVAL '15 days', NOW())`,
+      [userId, t.name, t.code, t.bodyText, t.category, t.isActive, t.usageCount],
+    );
+  }
+}
+
+/**
+ * 3. E2E_SEED_CUSTOMERS: 25 khách hàng thực tế + dòng thời gian sự kiện
+ */
+export async function seedCustomers(client, { userId }) {
+  const customerData = [
+    { name: 'Nguyễn Văn An', email: 'an.nguyen@gmail.com', phone: '0901234501', source: 'landing_page', purchased: true, orders: 3, spent: 4500000 },
+    { name: 'Trần Thị Bích', email: 'bich.tran@yahoo.com', phone: '0901234502', source: 'zalo', purchased: true, orders: 1, spent: 899000 },
+    { name: 'Lê Hoàng Cường', email: 'cuong.le@outlook.com', phone: '0901234503', source: 'facebook', purchased: false, orders: 0, spent: 0 },
+    { name: 'Phạm Thu Dung', email: 'dung.pham@gmail.com', phone: '0901234504', source: 'landing_page', purchased: true, orders: 2, spent: 1798000 },
+    { name: 'Hoàng Minh Đức', email: 'duc.hoang@company.vn', phone: '0901234505', source: 'manual', purchased: true, orders: 5, spent: 12500000 },
+    { name: 'Vũ Hải Yến', email: 'yen.vu@gmail.com', phone: '0901234506', source: 'google', purchased: false, orders: 0, spent: 0 },
+    { name: 'Đặng Quốc Huy', email: 'huy.dang@fpt.com.vn', phone: '0901234507', source: 'landing_page', purchased: true, orders: 2, spent: 2990000 },
+    { name: 'Bùi Mai Linh', email: 'linh.bui@viettel.vn', phone: '0901234508', source: 'zalo', purchased: false, orders: 0, spent: 0 },
+    { name: 'Ngô Quang Khải', email: 'khai.ngo@gmail.com', phone: '0901234509', source: 'facebook', purchased: true, orders: 1, spent: 299000 },
+    { name: 'Dương Thảo Nhi', email: 'nhi.duong@gmail.com', phone: '0901234510', source: 'landing_page', purchased: true, orders: 4, spent: 6800000 },
+    { name: 'Đỗ Thành Nam', email: 'nam.do@techcombank.vn', phone: '0901234511', source: 'manual', purchased: false, orders: 0, spent: 0 },
+    { name: 'Hồ Ngọc Hà', email: 'ha.ho@vng.com.vn', phone: '0901234512', source: 'google', purchased: true, orders: 2, spent: 3400000 },
+    { name: 'Phan Thanh Tùng', email: 'tung.phan@gmail.com', phone: '0901234513', source: 'facebook', purchased: false, orders: 0, spent: 0 },
+    { name: 'Lý Gia Hân', email: 'han.ly@shopee.vn', phone: '0901234514', source: 'landing_page', purchased: true, orders: 1, spent: 899000 },
+    { name: 'Trịnh Quốc Việt', email: 'viet.trinh@gmail.com', phone: '0901234515', source: 'zalo', purchased: false, orders: 0, spent: 0 },
+    { name: 'Trương Mỹ Duyên', email: 'duyen.truong@tiki.vn', phone: '0901234516', source: 'landing_page', purchased: true, orders: 3, spent: 5100000 },
+    { name: 'Lương Thế Vinh', email: 'vinh.luong@vinamilk.com.vn', phone: '0901234517', source: 'manual', purchased: true, orders: 6, spent: 18000000 },
+    { name: 'Võ Hoài An', email: 'an.vo@gmail.com', phone: '0901234518', source: 'google', purchased: false, orders: 0, spent: 0 },
+    { name: 'Tạ Minh Quân', email: 'quan.ta@vpbank.com.vn', phone: '0901234519', source: 'facebook', purchased: false, orders: 0, spent: 0 },
+    { name: 'Đoàn Bảo Châu', email: 'chau.doan@gmail.com', phone: '0901234520', source: 'landing_page', purchased: true, orders: 1, spent: 599000 },
+    { name: 'Mai Văn Phước', email: 'phuoc.mai@mbpost.vn', phone: '0901234521', source: 'zalo', purchased: false, orders: 0, spent: 0 },
+    { name: 'Đinh Phương Thảo', email: 'thao.dinh@gmail.com', phone: '0901234522', source: 'google', purchased: true, orders: 2, spent: 1990000 },
+    { name: 'Cao Tiến Dũng', email: 'dung.cao@hust.edu.vn', phone: '0901234523', source: 'landing_page', purchased: false, orders: 0, spent: 0 },
+    { name: 'Lâm Thanh Vân', email: 'van.lam@gmail.com', phone: '0901234524', source: 'facebook', purchased: true, orders: 2, spent: 2400000 },
+    { name: 'Nguyễn Trọng Hưng', email: 'hung.nguyen@vinschool.edu.vn', phone: '0901234525', source: 'manual', purchased: true, orders: 1, spent: 899000 },
+  ];
+
+  const customerIds = [];
+  for (const [idx, c] of customerData.entries()) {
+    const daysAgo = 28 - Math.floor((idx / customerData.length) * 25);
+    const { rows } = await client.query(
+      `INSERT INTO customers (
+        id_user, workspace_owner_id, created_by, full_name, email, phone,
+        customer_source, has_purchased, total_orders, total_spent,
+        last_order_at, email_subscribed, created_at, updated_at
+      ) VALUES (
+        $1, $1, $1, $2, $3, $4, $5, $6, $7, $8,
+        CASE WHEN $6 THEN NOW() - ($9 || ' days')::INTERVAL ELSE NULL END,
+        TRUE, NOW() - ($10 || ' days')::INTERVAL, NOW()
+      ) RETURNING id`,
+      [userId, c.name, c.email, c.phone, c.source, c.purchased, c.orders, c.spent, Math.max(1, daysAgo - 2), daysAgo],
+    );
+    customerIds.push(rows[0].id);
+  }
+
+  const journeyEvents = [
+    { type: 'visit_landing', channel: 'web', data: { page: '/khoa-hoc-marketing' } },
+    { type: 'submit_form', channel: 'landing_page', data: { form: 'Đăng ký tư vấn khoá học' } },
+    { type: 'receive_email', channel: 'email', data: { subject: 'Chào mừng bạn gia nhập cộng đồng UKNOW Campaign!' } },
+    { type: 'open_email', channel: 'email', data: { opened_at: '2026-08-15 10:30' } },
+    { type: 'click_email', channel: 'email', data: { link: 'https://uknow.vn/pricing' } },
+    { type: 'receive_zalo', channel: 'zalo', data: { message: 'Xác nhận đăng ký tư vấn qua Zalo' } },
+    { type: 'purchase', channel: 'web', data: { amount: 899000, plan: 'Gói Chuyên Nghiệp' } },
+  ];
+
+  for (let i = 0; i < Math.min(10, customerIds.length); i++) {
+    const cid = customerIds[i];
+    for (let j = 0; j < journeyEvents.length; j++) {
+      const ev = journeyEvents[j];
+      const hoursAgo = (10 - i) * 24 + (journeyEvents.length - j) * 4;
+      await client.query(
+        `INSERT INTO customer_journey (
+          id_customer, event_type, event_channel, event_data, event_at, created_at
+        ) VALUES ($1, $2, $3, $4, NOW() - ($5 || ' hours')::INTERVAL, NOW() - ($5 || ' hours')::INTERVAL)`,
+        [cid, ev.type, ev.channel, JSON.stringify(ev.data), hoursAgo],
+      );
+    }
+  }
+}
+
+/**
+ * 4. E2E_SEED_CAMPAIGNS: 4 chiến dịch (draft, running Zalo, completed, failed) + runs + node steps
+ */
+export async function seedCampaigns(client, { userId }) {
+  // Campaign 1: Draft Email
+  await client.query(
+    `INSERT INTO campaigns (
+      id_user, workspace_owner_id, created_by, campaign_name, description,
+      campaign_type, status, total_customers, created_at, updated_at
+    ) VALUES (
+      $1, $1, $1, 'Chiến dịch Email Chào mừng Khách hàng mới', 'Gửi chuỗi email onboarding cho khách đăng ký từ landing page',
+      'email', 'draft', 0, NOW() - INTERVAL '10 days', NOW()
+    )`,
+    [userId],
+  );
+
+  // Campaign 2: Running Zalo
+  const res2 = await client.query(
+    `INSERT INTO campaigns (
+      id_user, workspace_owner_id, created_by, campaign_name, description,
+      campaign_type, status, total_customers, total_sent, total_delivered,
+      total_opened, total_clicked, published_at, start_date, last_run_at, created_at, updated_at
+    ) VALUES (
+      $1, $1, $1, 'Gửi ưu đãi Zalo Khách hàng thân thiết', 'Chiến dịch gửi mã giảm giá 20% qua Zalo OA',
+      'zalo', 'active', 500, 320, 310, 280, 145,
+      NOW() - INTERVAL '1 hour', NOW() - INTERVAL '45 minutes', NOW() - INTERVAL '15 minutes',
+      NOW() - INTERVAL '7 days', NOW()
+    ) RETURNING id`,
+    [userId],
+  );
+  const camp2Id = res2.rows[0].id;
+
+  const run2Res = await client.query(
+    `INSERT INTO campaign_runs (
+      id_campaign, workspace_owner_id, run_name, run_type, status,
+      started_at, total_recipients, successful_sends, failed_sends, skipped_sends, created_at
+    ) VALUES (
+      $1, $2, 'Đợt gửi 1 — Nhóm khách hàng VIP', 'manual', 'running',
+      NOW() - INTERVAL '45 minutes', 500, 310, 10, 0, NOW() - INTERVAL '45 minutes'
+    ) RETURNING id`,
+    [camp2Id, userId],
+  );
+  const run2Id = run2Res.rows[0].id;
+
+  const sampleSteps = [
+    { phone: '0901234501', status: 'completed', error: null, step: 2 },
+    { phone: '0901234502', status: 'completed', error: null, step: 2 },
+    { phone: '0901234503', status: 'failed', error: 'Số điện thoại chưa đăng ký Zalo hoặc chặn nhận tin từ OA', step: 1 },
+    { phone: '0901234504', status: 'completed', error: null, step: 2 },
+    { phone: '0901234505', status: 'failed', error: 'Vượt hạn mức tương tác ngoài khung giờ quy định', step: 1 },
+    { phone: '0901234506', status: 'completed', error: null, step: 2 },
+    { phone: '0901234507', status: 'completed', error: null, step: 2 },
+    { phone: '0901234508', status: 'failed', error: 'Tài khoản người nhận tạm thời bị khoá bởi Zalo', step: 1 },
+  ];
+
+  for (const [idx, s] of sampleSteps.entries()) {
+    await client.query(
+      `INSERT INTO campaign_run_recipient_steps (
+        id_campaign_run, id_run, id_campaign, id_node, channel,
+        recipient_key, last_completed_step, is_fully_completed, meta, last_sent_at, updated_at
+      ) VALUES (
+        $1, $1, $2, 'node_send_zalo_1', 'zalo',
+        $3, $4, $5, $6, NOW() - ($7 || ' minutes')::INTERVAL, NOW()
+      )`,
+      [
+        run2Id, camp2Id, s.phone, s.step, s.status === 'completed',
+        JSON.stringify({ error: s.error, status: s.status }),
+        Math.max(1, 40 - idx * 4),
+      ],
+    );
+  }
+
+  // Campaign 3: Completed Mixed
+  const res3 = await client.query(
+    `INSERT INTO campaigns (
+      id_user, workspace_owner_id, created_by, campaign_name, description,
+      campaign_type, status, total_customers, total_sent, total_delivered,
+      total_opened, total_clicked, total_converted, total_revenue,
+      published_at, start_date, end_date, last_run_at, created_at, updated_at
+    ) VALUES (
+      $1, $1, $1, 'Chương trình Tri ân Khách hàng VIP Quý 3', 'Kết hợp Email thông báo và Zalo gửi thiệp cảm ơn',
+      'mixed', 'completed', 250, 250, 248, 195, 120, 45, 67500000,
+      NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days', NOW() - INTERVAL '4 days',
+      NOW() - INTERVAL '4 days', NOW() - INTERVAL '15 days', NOW()
+    ) RETURNING id`,
+    [userId],
+  );
+  const camp3Id = res3.rows[0].id;
+
+  await client.query(
+    `INSERT INTO campaign_runs (
+      id_campaign, workspace_owner_id, run_name, run_type, status,
+      started_at, completed_at, total_recipients, successful_sends, failed_sends, skipped_sends, created_at
+    ) VALUES (
+      $1, $2, 'Toàn bộ danh sách VIP 250 khách', 'scheduled', 'completed',
+      NOW() - INTERVAL '5 days', NOW() - INTERVAL '4 days', 250, 248, 2, 0, NOW() - INTERVAL '5 days'
+    )`,
+    [camp3Id, userId],
+  );
+
+  // Campaign 4: Failed Email
+  const res4 = await client.query(
+    `INSERT INTO campaigns (
+      id_user, workspace_owner_id, created_by, campaign_name, description,
+      campaign_type, status, total_customers, total_sent, total_delivered,
+      total_opened, start_date, last_run_at, created_at, updated_at
+    ) VALUES (
+      $1, $1, $1, 'Thông báo Khuyến mãi Đột xuất Flash Sale', 'Gửi email hàng loạt sự kiện flash sale 24h',
+      'email', 'failed', 100, 15, 10, 5,
+      NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day', NOW() - INTERVAL '3 days', NOW()
+    ) RETURNING id`,
+    [userId],
+  );
+  const camp4Id = res4.rows[0].id;
+
+  await client.query(
+    `INSERT INTO campaign_runs (
+      id_campaign, workspace_owner_id, run_name, run_type, status,
+      started_at, total_recipients, successful_sends, failed_sends, skipped_sends,
+      error_message, created_at
+    ) VALUES (
+      $1, $2, 'Đợt 1 — 100 khách hàng tiềm năng', 'manual', 'failed',
+      NOW() - INTERVAL '1 day', 100, 10, 5, 0,
+      'Tài khoản SMTP bị gián đoạn kết nối do vượt ngưỡng gửi hàng loạt (535 Authentication Failed)',
+      NOW() - INTERVAL '1 day'
+    )`,
+    [camp4Id, userId],
+  );
+}
+
+/**
+ * 5. E2E_SEED_CHATBOT: 2 chatbot + 3 tài liệu (ready, processing, error)
+ */
+export async function seedChatbot(client, { userId }) {
+  const res1 = await client.query(
+    `INSERT INTO custom_chatbots (
+      id_user, name, description, theme_color, position, greeting_msg,
+      welcome_message, is_active, ai_model, temperature, suggested_questions,
+      created_at, updated_at
+    ) VALUES (
+      $1, 'Trợ lý CSKH & Tư vấn Bán hàng 24/7', 'Tự động trả lời thắc mắc của khách hàng về sản phẩm, dịch vụ và bảng giá',
+      '#ee7518', 'bottom-right', 'Xin chào! Em là trợ lý AI UKNOW, em có thể giúp gì cho anh/chị ạ?',
+      'Xin chào! Em là trợ lý AI UKNOW, em có thể giúp gì cho anh/chị ạ?', TRUE, 'gemini-2.5-flash', 0.7,
+      ARRAY['Bảng giá các gói dịch vụ?', 'Cách tích hợp Zalo OA?', 'Chính sách bảo hành & hoàn tiền?'],
+      NOW() - INTERVAL '15 days', NOW()
+    ) RETURNING id`,
+    [userId],
+  );
+  const bot1Id = res1.rows[0].id;
+
+  await client.query(
+    `INSERT INTO custom_chatbots (
+      id_user, name, description, theme_color, position, greeting_msg,
+      welcome_message, is_active, ai_model, temperature, suggested_questions,
+      created_at, updated_at
+    ) VALUES (
+      $1, 'Chatbot Hỗ trợ Kỹ thuật & HDSD', 'Hướng dẫn sử dụng chi tiết các tính năng trên hệ thống UKNOW Campaign',
+      '#2563eb', 'bottom-right', 'Chào bạn! Mình sẵn sàng giải đáp mọi thắc mắc kỹ thuật về nền tảng.',
+      'Chào bạn! Mình sẵn sàng giải đáp mọi thắc mắc kỹ thuật về nền tảng.', TRUE, 'gemini-2.5-flash', 0.5,
+      ARRAY['Làm sao kết nối SMTP?', 'Cách tạo kịch bản gửi tự động?'],
+      NOW() - INTERVAL '10 days', NOW()
+    )`,
+    [userId],
+  );
+
+  const docs = [
+    {
+      title: 'Chính sách bán hàng & Bảng giá dịch vụ 2026.pdf',
+      type: 'file',
+      key: 'uploads/docs/chinh-sach-2026.pdf',
+      status: 'ready',
+      error: null,
+      chars: 15400,
+      chunks: 12,
+      createdDaysAgo: 10,
+    },
+    {
+      title: 'Tài liệu Hướng dẫn Thiết lập Chiến dịch Đa kênh.docx',
+      type: 'file',
+      key: 'uploads/docs/hdsd-chien-dich.docx',
+      status: 'processing',
+      error: null,
+      chars: 0,
+      chunks: 0,
+      createdDaysAgo: 1,
+    },
+    {
+      title: 'Quy định bảo mật và điều khoản thanh toán.pdf',
+      type: 'file',
+      key: 'uploads/docs/dieu-khoan.pdf',
+      status: 'error',
+      error: 'Tệp tin bị khoá mật khẩu hoặc định dạng hỏng không thể trích xuất văn bản',
+      chars: 0,
+      chunks: 0,
+      createdDaysAgo: 3,
+    },
+  ];
+
+  for (const d of docs) {
+    await client.query(
+      `INSERT INTO custom_chatbot_documents (
+        chatbot_id, owner_user_id, source_type, source_key, title,
+        status, error_message, extracted_chars, chunk_count, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9,
+        NOW() - ($10 || ' days')::INTERVAL, NOW()
+      )`,
+      [bot1Id, userId, d.type, d.key, d.title, d.status, d.error, d.chars, d.chunks, d.createdDaysAgo],
+    );
+  }
+}
+
+/**
+ * 6. E2E_SEED_INBOX: Widget + 8 hội thoại (mỗi cái 4-10 tin nhắn, 1 hội thoại ai_paused = true)
+ */
+export async function seedInbox(client, { userId }) {
+  const widgetRes = await client.query(
+    `INSERT INTO web_widget_configs (
+      id_user, widget_key, display_name, theme_color, is_active,
+      created_at, updated_at
+    ) VALUES (
+      $1, 'uknow_demo_inbox_widget', 'Hộp thư Website UKNOW', '#ee7518', TRUE,
+      NOW() - INTERVAL '20 days', NOW()
+    ) ON CONFLICT (widget_key) DO UPDATE SET display_name = EXCLUDED.display_name
+    RETURNING id`,
+    [userId],
+  );
+  const widgetId = widgetRes.rows[0].id;
+
+  const visitors = [
+    { name: 'Nguyễn Văn An', email: 'an.nguyen@gmail.com', aiPaused: false },
+    { name: 'Trần Thị Mai', email: 'mai.tran@gmail.com', aiPaused: true },
+    { name: 'Lê Hoàng Long', email: 'long.le@gmail.com', aiPaused: false },
+    { name: 'Phạm Thu Trang', email: 'trang.pham@gmail.com', aiPaused: false },
+    { name: 'Vũ Đức Thắng', email: 'thang.vu@gmail.com', aiPaused: false },
+    { name: 'Đỗ Minh Châu', email: 'chau.do@gmail.com', aiPaused: false },
+    { name: 'Hoàng Yến Nhi', email: 'nhi.hoang@gmail.com', aiPaused: false },
+    { name: 'Bùi Quốc Hưng', email: 'hung.bui@gmail.com', aiPaused: false },
+  ];
+
+  for (const [idx, v] of visitors.entries()) {
+    const hoursAgo = 72 - idx * 8;
+    const convRes = await client.query(
+      `INSERT INTO webchat_conversations (
+        id_user, id_widget_config, widget_key, session_id,
+        visitor_name, visitor_email, started_at, last_message_at, status,
+        ai_paused, ai_paused_at, created_at
+      ) VALUES (
+        $1, $2, 'uknow_demo_inbox_widget', $3,
+        $4, $5, NOW() - ($6 || ' hours')::INTERVAL, NOW() - ($7 || ' hours')::INTERVAL, 'active',
+        $8, CASE WHEN $8 THEN NOW() - INTERVAL '1 hour' ELSE NULL END,
+        NOW() - ($6 || ' hours')::INTERVAL
+      ) RETURNING id`,
+      [
+        userId, widgetId, `session_demo_${idx + 1}`,
+        v.name, v.email, hoursAgo, Math.max(1, hoursAgo - 4), v.aiPaused,
+      ],
+    );
+    const convId = convRes.rows[0].id;
+
+    const messages = [
+      { role: 'visitor', content: `Xin chào, mình là ${v.name}, cho mình hỏi gói Pro có những tính năng gì?` },
+      { role: 'bot', content: 'Dạ chào bạn! Gói Pro bao gồm 10.000 tin nhắn Zalo, 50.000 Email, không giới hạn chiến dịch và tích hợp đầy đủ Chatbot AI ạ.' },
+      { role: 'visitor', content: 'Gói này có hỗ trợ xuất hoá đơn VAT công ty không bạn?' },
+      { role: 'bot', content: 'Dạ có ạ, UKNOW hỗ trợ xuất hoá đơn điện tử hợp lệ đầy đủ theo thông tin doanh nghiệp của bạn.' },
+      { role: 'agent', content: 'Chào bạn, mình là tư vấn viên của UKNOW. Mình có thể hỗ trợ trực tiếp thêm thông tin gì cho bạn không ạ?' },
+      { role: 'visitor', content: 'Cảm ơn bạn nhé, mình đang cân nhắc đăng ký gói năm.' },
+    ];
+
+    for (const [mIdx, m] of messages.entries()) {
+      const msgHoursAgo = Math.max(1, hoursAgo - mIdx);
+      await client.query(
+        `INSERT INTO webchat_messages (
+          id_conversation, id_user, role, content, created_at
+        ) VALUES (
+          $1, $2, $3, $4, NOW() - ($5 || ' hours')::INTERVAL
+        )`,
+        [convId, userId, m.role, m.content, msgHoursAgo],
+      );
+    }
+  }
+}
+
+/**
+ * 7. E2E_SEED_LANDING: Bổ sung 1 trang published có form + 1 trang có custom domain
+ */
+export async function seedLandingPages(client, { userId }) {
+  await client.query(
+    `INSERT INTO landing_pages (
+      id_user, workspace_owner_id, created_by, slug, title,
+      status, is_published, published_at, created_at, updated_at
+    ) VALUES (
+      $1, $1, $1, 'khoa-hoc-marketing-tu-dong-hoa', 'Khoá học Marketing Tự Động Hoá Thực Chiến',
+      'published', TRUE, NOW() - INTERVAL '15 days', NOW() - INTERVAL '15 days', NOW()
+    )`,
+    [userId],
+  );
+
+  const res2 = await client.query(
+    `INSERT INTO landing_pages (
+      id_user, workspace_owner_id, created_by, slug, title,
+      status, is_published, published_at, created_at, updated_at
+    ) VALUES (
+      $1, $1, $1, 'dich-vu-doanh-nghiep-vip', 'Trang Giới Thiệu Dịch Vụ Doanh Nghiệp VIP',
+      'published', TRUE, NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days', NOW()
+    ) RETURNING id`,
+    [userId],
+  );
+  const landing2Id = res2.rows[0].id;
+
+  await client.query(
+    `INSERT INTO landing_page_domains (
+      landing_page_id, hostname, domain_type, is_apex_domain,
+      verification_token, status, cf_managed, verified_at, created_at, updated_at
+    ) VALUES (
+      $1, 'dangky.doanhnghiep.vn', 'subdomain', FALSE,
+      'token_demo_verify_domain', 'active', TRUE, NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days', NOW()
+    )`,
+    [landing2Id],
+  );
+}
+
+/**
+ * 8. E2E_SEED_ORDERS: 5 đơn hàng các trạng thái, có order_code, invoice_info
+ */
+export async function seedOrders(client, { userId, planIds }) {
+  const basicId = planIds?.basic || 1;
+  const proId = planIds?.pro || 2;
+  const starterId = planIds?.starter || 3;
+  const enterpriseId = planIds?.enterprise || 4;
+
+  const orders = [
+    {
+      code: 26082301,
+      planId: basicId,
+      amount: 299000,
+      status: 'success',
+      period: 'monthly',
+      daysAgo: 20,
+      paid: true,
+      invoice: null,
+    },
+    {
+      code: 26082302,
+      planId: proId,
+      amount: 899000,
+      status: 'success',
+      period: 'monthly',
+      daysAgo: 5,
+      paid: true,
+      invoice: {
+        company_name: 'Công ty TNHH Giải Pháp Công Nghệ Á Châu',
+        tax_code: '0312345678',
+        company_address: '123 Nguyễn Thị Minh Khai, Quận 1, TP.HCM',
+        recipient_email: 'ke-toan@achau-tech.com',
+      },
+    },
+    {
+      code: 26082303,
+      planId: enterpriseId,
+      amount: 2490000,
+      status: 'pending',
+      period: 'monthly',
+      daysAgo: 2,
+      paid: false,
+      invoice: null,
+    },
+    {
+      code: 26082304,
+      planId: starterId,
+      amount: 99000,
+      status: 'cancelled',
+      period: 'monthly',
+      daysAgo: 12,
+      paid: false,
+      invoice: null,
+    },
+    {
+      code: 26082305,
+      planId: proId,
+      amount: 8990000,
+      status: 'success',
+      period: 'yearly',
+      daysAgo: 60,
+      paid: true,
+      invoice: {
+        company_name: 'Công ty Cổ Phần Thương Mại Dịch Vụ Sao Mai',
+        tax_code: '0109876543',
+        company_address: '456 Lê Duẩn, Quận Hoàn Kiếm, Hà Nội',
+        recipient_email: 'finance@saomai.vn',
+      },
+    },
+  ];
+
+  for (const o of orders) {
+    await client.query(
+      `INSERT INTO orders (
+        order_code, plan_id, amount, user_id, status, payment_method,
+        billing_period, invoice_info, paid_at, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, 'payos',
+        $6, $7, CASE WHEN $8 THEN NOW() - ($9 || ' days')::INTERVAL ELSE NULL END,
+        NOW() - ($9 || ' days')::INTERVAL, NOW()
+      ) ON CONFLICT (order_code) DO NOTHING`,
+      [
+        o.code, o.planId, o.amount, userId, o.status,
+        o.period, o.invoice ? JSON.stringify(o.invoice) : null, o.paid, o.daysAgo,
+      ],
+    );
+  }
+}
+
+/**
+ * 9. E2E_SEED_EMPLOYEES: 3 nhân viên với bộ quyền khác nhau
+ */
+export async function seedEmployees(client, { userId }) {
+  const defaultPasswordHash = await bcrypt.hash('Test@1234', 10);
+
+  const staff = [
+    {
+      username: 'nv_marketing',
+      email: 'marketing@uknow.test',
+      fullName: 'Nguyễn Thu Hà (Marketing Lead)',
+      permissions: {
+        campaigns_view: true,
+        campaigns_create: true,
+        campaigns_run: true,
+        landing_pages: true,
+        email_templates: true,
+        zalo_templates: true,
+      },
+      dailyEmail: 1000,
+      monthlyEmail: 20000,
+      dailyZalo: 500,
+      monthlyZalo: 10000,
+    },
+    {
+      username: 'nv_cskh',
+      email: 'cskh@uknow.test',
+      fullName: 'Trần Quốc Bảo (CSKH & Chăm sóc)',
+      permissions: {
+        customers: true,
+        leads: true,
+        email_settings: true,
+        zalo_settings: true,
+        email_templates: true,
+        zalo_templates: true,
+      },
+      dailyEmail: 500,
+      monthlyEmail: 10000,
+      dailyZalo: 200,
+      monthlyZalo: 5000,
+    },
+    {
+      username: 'nv_intern',
+      email: 'intern@uknow.test',
+      fullName: 'Lê Thảo My (Thực tập sinh)',
+      permissions: {
+        campaigns_view: true,
+        customers: true,
+        leads: true,
+      },
+      dailyEmail: 100,
+      monthlyEmail: 1000,
+      dailyZalo: 50,
+      monthlyZalo: 500,
+    },
+  ];
+
+  for (const s of staff) {
+    const userRes = await client.query(
+      `INSERT INTO users (
+        username, email, password_hash, full_name, status, role, is_verified, verified_at, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, 'active', 'user', TRUE, NOW(), NOW() - INTERVAL '15 days', NOW()
+      ) ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name
+      RETURNING id`,
+      [s.username, s.email, defaultPasswordHash, s.fullName],
+    );
+    const empId = userRes.rows[0].id;
+
+    await client.query(
+      `INSERT INTO user_members (
+        owner_id, employee_id, permissions, status,
+        daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, 'active',
+        $4, $5, $6, $7,
+        NOW() - INTERVAL '15 days', NOW()
+      ) ON CONFLICT (owner_id, employee_id) DO UPDATE SET
+        permissions = EXCLUDED.permissions,
+        daily_email_limit = EXCLUDED.daily_email_limit,
+        monthly_email_limit = EXCLUDED.monthly_email_limit,
+        daily_zalo_limit = EXCLUDED.daily_zalo_limit,
+        monthly_zalo_limit = EXCLUDED.monthly_zalo_limit`,
+      [
+        userId, empId, JSON.stringify(s.permissions),
+        s.dailyEmail, s.monthlyEmail, s.dailyZalo, s.monthlyZalo,
+      ],
+    );
+  }
+}
+
+/**
+ * Đổ toàn bộ dữ liệu mẫu theo cờ môi trường.
  *
  * @param {import('pg').Client} client
  * @param {{ userId: number|string }} options
@@ -185,9 +902,55 @@ export async function seedDemoData(client, { userId }) {
   const { planIds, activePlanId } = await seedDemoPlans(client, { userId });
   const activeName = Object.entries(planIds).find(([, id]) => id === activePlanId)?.[0];
 
-  // Lệnh hẹn hạ gói phải BẬT RIÊNG vì nó KHOÁ luồng nâng gói ("Đã có lệnh hẹn"),
-  // mà ảnh "hộp cảnh báo trước khi xác nhận nâng gói" lại cần luồng đó mở. Hai
-  // trạng thái loại trừ nhau và không có API huỷ lệnh hẹn, nên phải chụp hai lượt.
+  const seedAll = ['1', 'true', 'yes'].includes(String(process.env.E2E_SEED_ALL || '').toLowerCase());
+  const isFlagOn = (name) => seedAll || ['1', 'true', 'yes'].includes(String(process.env[name] || '').toLowerCase());
+
+  // 1. Kênh gửi
+  if (isFlagOn('E2E_SEED_CHANNELS')) {
+    await seedChannels(client, { userId });
+  }
+
+  // 2. Mẫu tin nhắn & nhãn
+  if (isFlagOn('E2E_SEED_TEMPLATES')) {
+    await seedTemplates(client, { userId });
+  }
+
+  // 3. Khách hàng
+  if (isFlagOn('E2E_SEED_CUSTOMERS')) {
+    await seedCustomers(client, { userId });
+  }
+
+  // 4. Chiến dịch
+  if (isFlagOn('E2E_SEED_CAMPAIGNS')) {
+    await seedCampaigns(client, { userId });
+  }
+
+  // 5. Chatbot
+  if (isFlagOn('E2E_SEED_CHATBOT')) {
+    await seedChatbot(client, { userId });
+  }
+
+  // 6. Inbox & Web widget
+  if (isFlagOn('E2E_SEED_INBOX')) {
+    await seedInbox(client, { userId });
+  }
+
+  // 7. Landing pages
+  if (isFlagOn('E2E_SEED_LANDING')) {
+    await seedLandingPages(client, { userId });
+  }
+
+  // 8. Đơn hàng
+  if (isFlagOn('E2E_SEED_ORDERS')) {
+    await seedOrders(client, { userId, planIds });
+  }
+
+  // 9. Nhân viên
+  if (isFlagOn('E2E_SEED_EMPLOYEES')) {
+    await seedEmployees(client, { userId });
+  }
+
+  // Lệnh hẹn hạ gói (bật riêng vì nó khoá luồng nâng gói)
   const withPending = ['1', 'true', 'yes'].includes(
     String(process.env.E2E_SEED_PENDING_CHANGE || '').toLowerCase(),
   );
@@ -195,9 +958,7 @@ export async function seedDemoData(client, { userId }) {
     await seedPendingDowngrade(client, { userId, targetPlanId: planIds.starter });
   }
 
-  // Vượt hạn mức landing page — hai trạng thái loại trừ nhau nên chọn một:
-  //   E2E_SEED_OVERAGE=grace   → còn ân hạn, các trang thừa "Sắp bị khoá"
-  //   E2E_SEED_OVERAGE=locked  → hết ân hạn, các trang thừa "Đã khoá"
+  // Vượt hạn mức landing page (grace | locked)
   const overageMode = String(process.env.E2E_SEED_OVERAGE || '').toLowerCase();
   let overage = null;
   if (overageMode === 'grace' || overageMode === 'locked') {
@@ -205,12 +966,19 @@ export async function seedDemoData(client, { userId }) {
   }
 
   console.log(
-    `[e2e-seed] Dữ liệu mẫu: ${Object.keys(planIds).length} gói,`
-    + ` tài khoản đang dùng "${activeName}"`
-    + (withPending ? ', có 1 lệnh hẹn hạ xuống "starter"' : ', chưa có lệnh hẹn đổi gói')
-    + (overage
-      ? `, ${overage.ids.length} landing page vượt hạn mức (${overageMode === 'grace' ? 'còn ân hạn' : `đã khoá ${overage.locked.length}`})`
-      : ''),
+    `[e2e-seed] Dữ liệu mẫu: ${Object.keys(planIds).length} gói, tài khoản đang dùng "${activeName}"`
+    + (isFlagOn('E2E_SEED_CHANNELS') ? ' | Channels: ON' : '')
+    + (isFlagOn('E2E_SEED_TEMPLATES') ? ' | Templates: ON' : '')
+    + (isFlagOn('E2E_SEED_CUSTOMERS') ? ' | Customers: ON' : '')
+    + (isFlagOn('E2E_SEED_CAMPAIGNS') ? ' | Campaigns: ON' : '')
+    + (isFlagOn('E2E_SEED_CHATBOT') ? ' | Chatbot: ON' : '')
+    + (isFlagOn('E2E_SEED_INBOX') ? ' | Inbox: ON' : '')
+    + (isFlagOn('E2E_SEED_LANDING') ? ' | Landing: ON' : '')
+    + (isFlagOn('E2E_SEED_ORDERS') ? ' | Orders: ON' : '')
+    + (isFlagOn('E2E_SEED_EMPLOYEES') ? ' | Employees: ON' : '')
+    + (withPending ? ' | Pending Downgrade: ON' : '')
+    + (overage ? ` | Overage: ${overageMode}` : ''),
   );
+
   return { planIds, activePlanId };
 }

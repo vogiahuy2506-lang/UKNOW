@@ -25,7 +25,22 @@ dotenv.config({ path: ENV_FILE });
 
 /** Có đổ dữ liệu mẫu (bộ gói giống production) hay không. */
 function isDemoSeedEnabled() {
-  return ['1', 'true', 'yes'].includes(String(process.env.E2E_SEED_DEMO || '').toLowerCase());
+  const flags = [
+    'E2E_SEED_DEMO',
+    'E2E_SEED_ALL',
+    'E2E_SEED_CHANNELS',
+    'E2E_SEED_TEMPLATES',
+    'E2E_SEED_CUSTOMERS',
+    'E2E_SEED_CAMPAIGNS',
+    'E2E_SEED_CHATBOT',
+    'E2E_SEED_INBOX',
+    'E2E_SEED_LANDING',
+    'E2E_SEED_ORDERS',
+    'E2E_SEED_EMPLOYEES',
+    'E2E_SEED_PENDING_CHANGE',
+    'E2E_SEED_OVERAGE',
+  ];
+  return flags.some((flag) => ['1', 'true', 'yes'].includes(String(process.env[flag] || '').toLowerCase()));
 }
 
 function assertTestDbName(name) {
