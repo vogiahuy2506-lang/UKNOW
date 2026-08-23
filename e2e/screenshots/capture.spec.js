@@ -20,6 +20,7 @@ const OUT_DIR = path.join(__dirname, 'out');
 const SHEETS = [
   'doi-goi', 'nhan-vien', 'mau-tin-nhan', 'inbox', 'khach-hang',
   'campaign-theo-doi', 'chatbot', 'landing-page', 'plan-and-billing',
+  'faq-billing',
 ];
 
 for (const slugToCapture of SHEETS) {
