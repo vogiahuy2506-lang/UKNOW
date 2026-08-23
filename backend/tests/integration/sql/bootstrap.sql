@@ -1197,6 +1197,111 @@ CREATE TABLE landing_page_domains (
 CREATE UNIQUE INDEX uq_landing_page_domains_landing_page_id ON landing_page_domains(landing_page_id);
 CREATE UNIQUE INDEX uq_landing_page_domains_hostname_lower ON landing_page_domains(LOWER(hostname));
 
+-- ─── Custom domains & SSL (migration 019) ──────────────────────────────
+CREATE TABLE IF NOT EXISTS custom_domains (
+  id                  SERIAL PRIMARY KEY,
+  user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  landing_page_id     BIGINT REFERENCES landing_pages(id) ON DELETE SET NULL,
+  domain              VARCHAR(255) NOT NULL,
+  subdomain           VARCHAR(128),
+  status              VARCHAR(30) DEFAULT 'pending',
+  verification_status VARCHAR(20) DEFAULT 'pending',
+  verification_token  VARCHAR(255),
+  verification_method VARCHAR(20) DEFAULT 'txt',
+  ssl_status          VARCHAR(20) DEFAULT 'pending',
+  ssl_cert_arn        VARCHAR(255),
+  ssl_expires_at      TIMESTAMPTZ,
+  dns_config          JSONB DEFAULT '{}',
+  cname_target        VARCHAR(255),
+  is_primary          BOOLEAN DEFAULT true,
+  is_verified         BOOLEAN DEFAULT false,
+  is_active           BOOLEAN DEFAULT true,
+  error_message       TEXT,
+  last_checked_at     TIMESTAMPTZ,
+  verified_at         TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_user_domain UNIQUE (user_id, domain)
+);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_user ON custom_domains(user_id);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_status ON custom_domains(status);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_landing_page ON custom_domains(landing_page_id);
+
+CREATE TABLE IF NOT EXISTS custom_domain_verifications (
+  id                 SERIAL PRIMARY KEY,
+  domain_id          BIGINT NOT NULL REFERENCES custom_domains(id) ON DELETE CASCADE,
+  verification_type  VARCHAR(20) NOT NULL,
+  verification_token VARCHAR(255),
+  status             VARCHAR(20) NOT NULL,
+  checked_at         TIMESTAMPTZ DEFAULT NOW(),
+  response_data      JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_domain_verifications_domain ON custom_domain_verifications(domain_id);
+
+CREATE TABLE IF NOT EXISTS custom_domain_ssl (
+  id                 SERIAL PRIMARY KEY,
+  domain_id          BIGINT NOT NULL REFERENCES custom_domains(id) ON DELETE CASCADE,
+  cert_arn           VARCHAR(255),
+  cert_type          VARCHAR(20) DEFAULT 'letsencrypt',
+  status             VARCHAR(20) DEFAULT 'pending',
+  issued_at          TIMESTAMPTZ,
+  expires_at         TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_domain_ssl_domain ON custom_domain_ssl(domain_id);
+
+ALTER TABLE landing_pages ADD COLUMN IF NOT EXISTS custom_domain_id INTEGER REFERENCES custom_domains(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_landing_pages_custom_domain ON landing_pages(custom_domain_id);
+
+-- ─── Landing page templates, overrides & sections (migration 018, 082, 084) ───
+CREATE TABLE IF NOT EXISTS landing_page_templates (
+  id             SERIAL PRIMARY KEY,
+  name           VARCHAR(200) NOT NULL,
+  category       VARCHAR(50) NOT NULL,
+  thumbnail_url  TEXT,
+  description    TEXT,
+  html_structure TEXT NOT NULL,
+  css_variables  JSONB DEFAULT '{}',
+  default_config JSONB DEFAULT '{}',
+  is_active      BOOLEAN DEFAULT true,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_lp_templates_category ON landing_page_templates(category);
+CREATE INDEX IF NOT EXISTS idx_lp_templates_active ON landing_page_templates(is_active);
+
+CREATE TABLE IF NOT EXISTS landing_page_overrides (
+  id         SERIAL PRIMARY KEY,
+  page       VARCHAR(50) NOT NULL CHECK (page IN ('hero', 'contact', 'pricing')),
+  section    VARCHAR(100) NOT NULL,
+  key        VARCHAR(100) NOT NULL,
+  value_vi   TEXT,
+  value_en   TEXT,
+  extra_data JSONB,
+  is_active  BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(page, section, key)
+);
+CREATE INDEX IF NOT EXISTS idx_landing_overrides_page ON landing_page_overrides(page);
+CREATE INDEX IF NOT EXISTS idx_landing_overrides_active ON landing_page_overrides(is_active);
+
+CREATE TABLE IF NOT EXISTS landing_page_sections (
+  id           SERIAL PRIMARY KEY,
+  page         VARCHAR(50) NOT NULL,
+  section      VARCHAR(50) NOT NULL,
+  html_content TEXT,
+  css_content  TEXT,
+  config       JSONB DEFAULT '{}',
+  is_active    BOOLEAN DEFAULT true,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(page, section)
+);
+CREATE INDEX IF NOT EXISTS idx_landing_sections_page ON landing_page_sections(page);
+CREATE INDEX IF NOT EXISTS idx_landing_sections_page_section ON landing_page_sections(page, section);
+
 -- ─── Landing featured courses (Batch C CMS) ────────────────────────────
 CREATE TABLE landing_featured_courses (
   id            BIGSERIAL PRIMARY KEY,
@@ -1405,6 +1510,87 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_zalo_personal_msg_external
   ON zalo_personal_messages (id_zalo_setting, external_id)
   WHERE external_id IS NOT NULL;
 
+-- ─── Chatbot settings (migration 031) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS chatbot_settings (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_sub_assistant BIGINT REFERENCES sub_assistants(id) ON DELETE SET NULL,
+  channel          VARCHAR(20) NOT NULL,
+  is_enabled       BOOLEAN DEFAULT true,
+  welcome_message  TEXT,
+  ai_model         VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  temperature      DECIMAL(3,2) DEFAULT 0.7,
+  max_tokens       INTEGER DEFAULT 2048,
+  response_style   VARCHAR(20) DEFAULT 'friendly',
+  settings         JSONB DEFAULT '{}',
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_chatbot_user_channel UNIQUE (id_user, channel)
+);
+
+-- ─── Channel connections (migration 031, 042) ──────────────────────────
+CREATE TABLE IF NOT EXISTS channel_connections (
+  id                  BIGSERIAL PRIMARY KEY,
+  id_user             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel             VARCHAR(20) NOT NULL,
+  display_name        VARCHAR(255),
+  is_active           BOOLEAN DEFAULT true,
+  credentials         JSONB DEFAULT '{}',
+  webhook_url         TEXT,
+  settings            JSONB DEFAULT '{}',
+  webhook_token       VARCHAR(64) UNIQUE,
+  external_channel_id VARCHAR(128),
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_channel_user_channel UNIQUE (id_user, channel)
+);
+CREATE INDEX IF NOT EXISTS idx_channel_conn_user ON channel_connections(id_user);
+CREATE INDEX IF NOT EXISTS idx_channel_conn_channel ON channel_connections(channel);
+CREATE INDEX IF NOT EXISTS idx_channel_connections_webhook_token ON channel_connections(webhook_token) WHERE webhook_token IS NOT NULL;
+
+-- ─── Channel conversations & messages (migration 031, 032, 095) ────────
+CREATE TABLE IF NOT EXISTS channel_conversations (
+  id              BIGSERIAL PRIMARY KEY,
+  id_user         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_channel      BIGINT NOT NULL REFERENCES channel_connections(id) ON DELETE CASCADE,
+  channel         VARCHAR(20) DEFAULT NULL,
+  external_id     VARCHAR(255),
+  visitor_name    VARCHAR(255),
+  visitor_info    JSONB DEFAULT '{}',
+  status          VARCHAR(20) DEFAULT 'active',
+  ai_paused       BOOLEAN NOT NULL DEFAULT false,
+  ai_paused_at    TIMESTAMPTZ,
+  started_at      TIMESTAMPTZ DEFAULT NOW(),
+  last_message_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_channel_external_id UNIQUE (id_channel, external_id)
+);
+CREATE INDEX IF NOT EXISTS idx_channel_conv_user ON channel_conversations(id_user);
+CREATE INDEX IF NOT EXISTS idx_channel_conv_channel ON channel_conversations(id_channel);
+CREATE INDEX IF NOT EXISTS idx_channel_conversations_status ON channel_conversations(status);
+CREATE INDEX IF NOT EXISTS idx_channel_conversations_last_message ON channel_conversations(last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_channel_conv_user_status ON channel_conversations(id_user, status);
+
+CREATE TABLE IF NOT EXISTS channel_messages (
+  id              BIGSERIAL PRIMARY KEY,
+  id_conversation BIGINT NOT NULL REFERENCES channel_conversations(id) ON DELETE CASCADE,
+  id_user         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_channel      BIGINT NOT NULL REFERENCES channel_connections(id) ON DELETE CASCADE,
+  role            VARCHAR(20) NOT NULL,
+  content         TEXT NOT NULL,
+  message_type    VARCHAR(20) DEFAULT 'text',
+  external_id     VARCHAR(255),
+  external_ts     TIMESTAMPTZ,
+  attachments     JSONB DEFAULT '[]',
+  metadata        JSONB DEFAULT '{}',
+  raw_data        JSONB DEFAULT NULL,
+  is_read         BOOLEAN DEFAULT false,
+  read_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_channel_messages_conv ON channel_messages(id_conversation);
+CREATE INDEX IF NOT EXISTS idx_channel_messages_channel ON channel_messages(id_channel);
+
 CREATE TABLE IF NOT EXISTS knowledge_bases (
   id               BIGSERIAL PRIMARY KEY,
   id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1529,6 +1715,89 @@ CREATE INDEX IF NOT EXISTS idx_studio_msg_conv
   ON chatbot_studio_messages(id_conversation);
 CREATE INDEX IF NOT EXISTS idx_studio_msg_created
   ON chatbot_studio_messages(id_conversation, created_at DESC);
+
+-- ─── Chatbot channel connections (migration 043) ───────────────────────
+CREATE TABLE IF NOT EXISTS chatbot_channel_connections (
+  id                  SERIAL PRIMARY KEY,
+  id_chatbot          INTEGER NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  channel_type        VARCHAR(32) NOT NULL CHECK (channel_type IN ('zalo_oa', 'facebook')),
+  credentials         JSONB NOT NULL DEFAULT '{}',
+  webhook_token       VARCHAR(64) UNIQUE NOT NULL,
+  webhook_url         TEXT,
+  display_name        VARCHAR(255),
+  external_channel_id VARCHAR(128),
+  is_active           BOOLEAN DEFAULT true,
+  connected_at        TIMESTAMPTZ DEFAULT NOW(),
+  last_activity_at    TIMESTAMPTZ,
+  settings            JSONB DEFAULT '{}',
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(id_chatbot, channel_type)
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_channels_chatbot ON chatbot_channel_connections(id_chatbot);
+CREATE INDEX IF NOT EXISTS idx_chatbot_channels_token ON chatbot_channel_connections(webhook_token);
+CREATE INDEX IF NOT EXISTS idx_chatbot_channels_type ON chatbot_channel_connections(channel_type);
+CREATE INDEX IF NOT EXISTS idx_chatbot_channels_active ON chatbot_channel_connections(id_chatbot, channel_type, is_active) WHERE is_active = true;
+
+-- ─── Chatbot conversations & messages (migration 044) ──────────────────
+CREATE TABLE IF NOT EXISTS chatbot_conversations (
+  id              SERIAL PRIMARY KEY,
+  id_chatbot      INTEGER NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  id_channel      INTEGER REFERENCES chatbot_channel_connections(id) ON DELETE SET NULL,
+  channel_type    VARCHAR(32) DEFAULT 'web',
+  external_id     VARCHAR(128),
+  source          VARCHAR(32),
+  visitor_name    VARCHAR(255),
+  visitor_info    JSONB DEFAULT '{}',
+  status          VARCHAR(32) DEFAULT 'active',
+  unread_count    INTEGER DEFAULT 0,
+  last_message_at TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(id_channel, external_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_conv_chatbot ON chatbot_conversations(id_chatbot);
+CREATE INDEX IF NOT EXISTS idx_chatbot_conv_channel ON chatbot_conversations(id_channel);
+CREATE INDEX IF NOT EXISTS idx_chatbot_conv_external ON chatbot_conversations(external_id) WHERE external_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_chatbot_conv_status ON chatbot_conversations(id_chatbot, status);
+
+CREATE TABLE IF NOT EXISTS chatbot_messages (
+  id              SERIAL PRIMARY KEY,
+  id_conversation INTEGER NOT NULL REFERENCES chatbot_conversations(id) ON DELETE CASCADE,
+  role            VARCHAR(32) NOT NULL,
+  content         TEXT,
+  message_type    VARCHAR(32) DEFAULT 'text',
+  external_id     VARCHAR(128),
+  external_ts     TIMESTAMPTZ,
+  attachments     JSONB DEFAULT '[]',
+  metadata        JSONB DEFAULT '{}',
+  ai_model        VARCHAR(64),
+  ai_tokens_used  INTEGER,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_msg_conv ON chatbot_messages(id_conversation);
+CREATE INDEX IF NOT EXISTS idx_chatbot_msg_created ON chatbot_messages(id_conversation, created_at DESC);
+
+-- ─── Chatbot Zalo account settings (migration 052) ─────────────────────
+CREATE TABLE IF NOT EXISTS chatbot_zalo_account_settings (
+  id                 BIGSERIAL PRIMARY KEY,
+  id_user            BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_zalo_setting    BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  is_enabled         BOOLEAN DEFAULT false,
+  id_sub_assistant   BIGINT REFERENCES sub_assistants(id) ON DELETE SET NULL,
+  welcome_message    TEXT,
+  ai_model           VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  temperature        DECIMAL(3,2) DEFAULT 0.7,
+  max_tokens         INTEGER DEFAULT 2048,
+  response_style     VARCHAR(20) DEFAULT 'friendly',
+  system_instruction TEXT,
+  settings           JSONB DEFAULT '{}',
+  created_at         TIMESTAMPTZ DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_chatbot_zalo_account UNIQUE (id_user, id_zalo_setting)
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_zalo_account_user ON chatbot_zalo_account_settings(id_user);
+CREATE INDEX IF NOT EXISTS idx_chatbot_zalo_account_setting ON chatbot_zalo_account_settings(id_zalo_setting);
 
 CREATE TABLE IF NOT EXISTS web_widget_configs (
   id               BIGSERIAL PRIMARY KEY,
@@ -2102,3 +2371,193 @@ CREATE TABLE IF NOT EXISTS roles (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS id_role INTEGER REFERENCES roles(id);
+
+-- ─── Notifications & Email Logs (migration 083) ────────────────────────
+DO $$ BEGIN
+  CREATE TYPE notification_type AS ENUM (
+    'maintenance', 'announcement', 'promotion', 'warning', 'reminder', 'security'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE notification_priority AS ENUM ('low', 'normal', 'high', 'urgent');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE schedule_type AS ENUM ('now', 'scheduled', 'recurring');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE recurrence_pattern AS ENUM ('daily', 'weekly', 'monthly');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE notification_status AS ENUM ('draft', 'scheduled', 'sending', 'sent', 'failed', 'cancelled');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id                  SERIAL PRIMARY KEY,
+  type                notification_type NOT NULL DEFAULT 'announcement',
+  title               VARCHAR(255) NOT NULL,
+  title_en            VARCHAR(255),
+  message             TEXT NOT NULL,
+  message_en          TEXT,
+  html_content        TEXT,
+  html_content_en     TEXT,
+  metadata            JSONB DEFAULT '{}',
+  priority            notification_priority DEFAULT 'normal',
+  target_roles        TEXT[] DEFAULT NULL,
+  target_plans        TEXT[] DEFAULT NULL,
+  target_statuses     TEXT[] DEFAULT NULL,
+  target_user_ids     INTEGER[] DEFAULT NULL,
+  target_emails       TEXT[] DEFAULT NULL,
+  registered_before   TIMESTAMP,
+  registered_after    TIMESTAMP,
+  schedule_type       schedule_type DEFAULT 'now',
+  scheduled_at        TIMESTAMP,
+  recurrence_pattern  VARCHAR(20),
+  recurrence_end_date TIMESTAMP,
+  is_recurring        BOOLEAN DEFAULT false,
+  recipient_count     INTEGER DEFAULT 0,
+  sent_count          INTEGER DEFAULT 0,
+  failed_count        INTEGER DEFAULT 0,
+  delivered_count     INTEGER DEFAULT 0,
+  opened_count        INTEGER DEFAULT 0,
+  open_rate           DECIMAL(5,2) DEFAULT 0,
+  status              notification_status DEFAULT 'draft',
+  sent_at             TIMESTAMP,
+  created_by          INTEGER REFERENCES users(id),
+  created_at          TIMESTAMP DEFAULT NOW(),
+  updated_at          TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
+CREATE INDEX IF NOT EXISTS idx_notifications_scheduled ON notifications(scheduled_at) WHERE status = 'scheduled';
+CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_type_status ON notifications(type, status);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_by ON notifications(created_by);
+
+CREATE TABLE IF NOT EXISTS notification_email_logs (
+  id              SERIAL PRIMARY KEY,
+  notification_id INTEGER REFERENCES notifications(id) ON DELETE CASCADE,
+  user_id         INTEGER REFERENCES users(id),
+  email           VARCHAR(255) NOT NULL,
+  message_id      VARCHAR(255),
+  status          VARCHAR(20) DEFAULT 'pending',
+  sent_at         TIMESTAMP,
+  delivered_at    TIMESTAMP,
+  opened_at       TIMESTAMP,
+  bounced_at      TIMESTAMP,
+  error_message   TEXT,
+  retry_count     INTEGER DEFAULT 0,
+  created_at      TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_email_logs_notification ON notification_email_logs(notification_id);
+CREATE INDEX IF NOT EXISTS idx_email_logs_user ON notification_email_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_email_logs_email ON notification_email_logs(email);
+CREATE INDEX IF NOT EXISTS idx_email_logs_status ON notification_email_logs(status);
+CREATE INDEX IF NOT EXISTS idx_email_logs_created ON notification_email_logs(created_at);
+
+-- ─── AI Chat Sessions & Messages (migration 029) ───────────────────────
+CREATE TABLE IF NOT EXISTS ai_chat_sessions (
+  id         BIGSERIAL PRIMARY KEY,
+  id_user    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title      VARCHAR(255) NOT NULL DEFAULT 'Cuộc trò chuyện mới',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_user ON ai_chat_sessions(id_user, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS ai_chat_messages (
+  id             BIGSERIAL PRIMARY KEY,
+  session_id     BIGINT NOT NULL REFERENCES ai_chat_sessions(id) ON DELETE CASCADE,
+  role           VARCHAR(10) NOT NULL CHECK (role IN ('user', 'assistant')),
+  content        TEXT NOT NULL DEFAULT '',
+  type           VARCHAR(50),
+  data           JSONB,
+  missing_fields JSONB,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session ON ai_chat_messages(session_id, id ASC);
+
+-- ─── Business Profiles & Chunks (migration 010) ────────────────────────
+-- Production dùng pgvector (migration 010). Bootstrap test dùng JSONB để
+-- chạy được trên postgres thuần (không cần extension pgvector).
+CREATE TABLE IF NOT EXISTS business_profiles (
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_name    VARCHAR(255),
+  industry        VARCHAR(100),
+  products        TEXT,
+  target_audience TEXT,
+  tone            VARCHAR(50) DEFAULT 'professional',
+  brand_color     VARCHAR(7),
+  extra_context   TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_business_profile_user UNIQUE (user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_business_profiles_user ON business_profiles(user_id);
+
+CREATE TABLE IF NOT EXISTS business_profile_chunks (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chunk_text  TEXT NOT NULL,
+  embedding   JSONB,
+  metadata    JSONB DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_bpc_user ON business_profile_chunks(user_id);
+
+-- ─── Zalo Groups (migration 062) ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS zalo_groups (
+  id               BIGSERIAL PRIMARY KEY,
+  id_zalo_setting  BIGINT NOT NULL REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  group_id         VARCHAR(100) NOT NULL,
+  group_name       VARCHAR(255),
+  member_count     INTEGER DEFAULT 0,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_zalo_groups_setting ON zalo_groups(id_zalo_setting);
+
+-- ─── Diagnostic Runs & Messages (migration 047) ────────────────────────
+CREATE TABLE IF NOT EXISTS diagnostic_runs (
+  id                     BIGSERIAL    PRIMARY KEY,
+  channel                VARCHAR(30)  NOT NULL,
+  account_id             BIGINT       REFERENCES zalo_settings(id) ON DELETE SET NULL,
+  message_text           TEXT         NOT NULL,
+  inter_message_delay_ms INT          NOT NULL DEFAULT 5000,
+  status                 VARCHAR(20)  NOT NULL DEFAULT 'running',
+  total_count            INT          NOT NULL DEFAULT 0,
+  sent_count             INT          NOT NULL DEFAULT 0,
+  failed_count           INT          NOT NULL DEFAULT 0,
+  created_by             BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  completed_at           TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS diagnostic_messages (
+  id            BIGSERIAL    PRIMARY KEY,
+  run_id        BIGINT       NOT NULL REFERENCES diagnostic_runs(id) ON DELETE CASCADE,
+  seq           INT          NOT NULL,
+  recipient     VARCHAR(100) NOT NULL,
+  status        VARCHAR(20)  NOT NULL DEFAULT 'pending',
+  sent_at       TIMESTAMPTZ,
+  delay_ms      INT,
+  error_code    VARCHAR(100),
+  error_message TEXT,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_messages_run ON diagnostic_messages(run_id, seq);
+

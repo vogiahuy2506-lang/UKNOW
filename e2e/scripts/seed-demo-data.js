@@ -601,9 +601,25 @@ export async function seedChatbot(client, { userId }) {
 }
 
 /**
- * 6. E2E_SEED_INBOX: Widget + 8 hội thoại (mỗi cái 4-10 tin nhắn, 1 hội thoại ai_paused = true)
+ * 6. E2E_SEED_INBOX: Channel connection + 8 channel conversations + messages (1 ai_paused = true)
+ *    và Widget + 8 webchat conversations
  */
 export async function seedInbox(client, { userId }) {
+  // 1. Kênh Zalo OA trong channel_connections (phục vụ /app/settings/inbox)
+  const channelRes = await client.query(
+    `INSERT INTO channel_connections (
+      id_user, channel, display_name, is_active, webhook_token, external_channel_id,
+      created_at, updated_at
+    ) VALUES (
+      $1, 'zalo_oa', 'Zalo Official Account UKNOW', TRUE, 'token_demo_inbox_zalo_oa', '2847192837482910',
+      NOW() - INTERVAL '20 days', NOW()
+    ) ON CONFLICT (id_user, channel) DO UPDATE SET display_name = EXCLUDED.display_name
+    RETURNING id`,
+    [userId],
+  );
+  const channelId = channelRes.rows[0].id;
+
+  // 2. Web widget config
   const widgetRes = await client.query(
     `INSERT INTO web_widget_configs (
       id_user, widget_key, display_name, theme_color, is_active,
@@ -618,19 +634,41 @@ export async function seedInbox(client, { userId }) {
   const widgetId = widgetRes.rows[0].id;
 
   const visitors = [
-    { name: 'Nguyễn Văn An', email: 'an.nguyen@gmail.com', aiPaused: false },
-    { name: 'Trần Thị Mai', email: 'mai.tran@gmail.com', aiPaused: true },
-    { name: 'Lê Hoàng Long', email: 'long.le@gmail.com', aiPaused: false },
-    { name: 'Phạm Thu Trang', email: 'trang.pham@gmail.com', aiPaused: false },
-    { name: 'Vũ Đức Thắng', email: 'thang.vu@gmail.com', aiPaused: false },
-    { name: 'Đỗ Minh Châu', email: 'chau.do@gmail.com', aiPaused: false },
-    { name: 'Hoàng Yến Nhi', email: 'nhi.hoang@gmail.com', aiPaused: false },
-    { name: 'Bùi Quốc Hưng', email: 'hung.bui@gmail.com', aiPaused: false },
+    { name: 'Nguyễn Văn An', email: 'an.nguyen@gmail.com', phone: '0901234501', aiPaused: false },
+    { name: 'Trần Thị Mai', email: 'mai.tran@gmail.com', phone: '0901234502', aiPaused: true },
+    { name: 'Lê Hoàng Long', email: 'long.le@gmail.com', phone: '0901234503', aiPaused: false },
+    { name: 'Phạm Thu Trang', email: 'trang.pham@gmail.com', phone: '0901234504', aiPaused: false },
+    { name: 'Vũ Đức Thắng', email: 'thang.vu@gmail.com', phone: '0901234505', aiPaused: false },
+    { name: 'Đỗ Minh Châu', email: 'chau.do@gmail.com', phone: '0901234506', aiPaused: false },
+    { name: 'Hoàng Yến Nhi', email: 'nhi.hoang@gmail.com', phone: '0901234507', aiPaused: false },
+    { name: 'Bùi Quốc Hưng', email: 'hung.bui@gmail.com', phone: '0901234508', aiPaused: false },
   ];
 
   for (const [idx, v] of visitors.entries()) {
     const hoursAgo = 72 - idx * 8;
-    const convRes = await client.query(
+
+    // Seed channel_conversations (Hộp thư hợp nhất)
+    const chConvRes = await client.query(
+      `INSERT INTO channel_conversations (
+        id_user, id_channel, channel, external_id,
+        visitor_name, visitor_info, started_at, last_message_at, status,
+        ai_paused, ai_paused_at, created_at
+      ) VALUES (
+        $1, $2, 'zalo_oa', $3,
+        $4, $5, NOW() - ($6 || ' hours')::INTERVAL, NOW() - ($7 || ' hours')::INTERVAL, 'active',
+        $8, CASE WHEN $8 THEN NOW() - INTERVAL '1 hour' ELSE NULL END,
+        NOW() - ($6 || ' hours')::INTERVAL
+      ) RETURNING id`,
+      [
+        userId, channelId, `zalo_user_demo_${idx + 1}`,
+        v.name, JSON.stringify({ email: v.email, phone: v.phone }),
+        hoursAgo, Math.max(1, hoursAgo - 4), v.aiPaused,
+      ],
+    );
+    const chConvId = chConvRes.rows[0].id;
+
+    // Seed webchat_conversations (Webchat widget)
+    const webConvRes = await client.query(
       `INSERT INTO webchat_conversations (
         id_user, id_widget_config, widget_key, session_id,
         visitor_name, visitor_email, started_at, last_message_at, status,
@@ -646,7 +684,7 @@ export async function seedInbox(client, { userId }) {
         v.name, v.email, hoursAgo, Math.max(1, hoursAgo - 4), v.aiPaused,
       ],
     );
-    const convId = convRes.rows[0].id;
+    const webConvId = webConvRes.rows[0].id;
 
     const messages = [
       { role: 'visitor', content: `Xin chào, mình là ${v.name}, cho mình hỏi gói Pro có những tính năng gì?` },
@@ -659,13 +697,25 @@ export async function seedInbox(client, { userId }) {
 
     for (const [mIdx, m] of messages.entries()) {
       const msgHoursAgo = Math.max(1, hoursAgo - mIdx);
+
+      // channel_messages
+      await client.query(
+        `INSERT INTO channel_messages (
+          id_conversation, id_user, id_channel, role, content, is_read, read_at, created_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, TRUE, NOW() - ($6 || ' hours')::INTERVAL, NOW() - ($6 || ' hours')::INTERVAL
+        )`,
+        [chConvId, userId, channelId, m.role, m.content, msgHoursAgo],
+      );
+
+      // webchat_messages
       await client.query(
         `INSERT INTO webchat_messages (
           id_conversation, id_user, role, content, created_at
         ) VALUES (
           $1, $2, $3, $4, NOW() - ($5 || ' hours')::INTERVAL
         )`,
-        [convId, userId, m.role, m.content, msgHoursAgo],
+        [webConvId, userId, m.role, m.content, msgHoursAgo],
       );
     }
   }
