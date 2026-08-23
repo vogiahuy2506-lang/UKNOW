@@ -23,7 +23,23 @@
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { replaceCaptionWithImage, listCaptionSlots } from '../src/utils/helpCaptionReplace.util.js';
+import {
+  replaceCaptionWithImage,
+  listCaptionSlots,
+  normalizeCaption,
+} from '../src/utils/helpCaptionReplace.util.js';
+
+/**
+ * Ô này đã được thay bằng ảnh ở lần chạy trước chưa?
+ *
+ * Nhận ra qua thuộc tính alt: script chèn lấy chính chú thích làm alt, nên ảnh
+ * đã chèn vẫn mang dấu vết của ô nó thay thế.
+ */
+function isAlreadyInserted(html, captionKey) {
+  const key = normalizeCaption(captionKey);
+  const tags = String(html).match(/<img\b[^>]*\balt="([^"]*)"/g) || [];
+  return tags.some((tag) => normalizeCaption(tag.match(/alt="([^"]*)"/)?.[1] ?? '').includes(key));
+}
 
 const API_URL = (process.env.HELP_API_URL || 'https://founderai.biz/api').replace(/\/$/, '');
 const TOKEN = process.env.HELP_API_TOKEN;
@@ -81,9 +97,18 @@ async function main() {
   // phát hiện khoá sai thì ảnh đã nằm trong kho, tính vào dung lượng, mà không
   // bài nào dùng tới.
   let probe = html;
+  let alreadyDone = 0;
   for (const shot of manifest.shots) {
     const trial = replaceCaptionWithImage(probe, shot.caption, 'https://example.invalid/probe.png');
     if (!trial.ok) {
+      // Ô đã được thay bằng ảnh ở lần chạy trước thì không còn chú thích để khớp
+      // nữa. Báo "không tìm thấy" ở đây khiến người chạy tưởng khoá sai và đi sửa
+      // file shots — trong khi thực ra chẳng có gì phải làm.
+      if (isAlreadyInserted(html, shot.caption)) {
+        console.log(`  · ${shot.name}: đã chèn từ trước, bỏ qua`);
+        alreadyDone += 1;
+        continue;
+      }
       console.log(`  ✗ ${shot.name}: ${trial.reason}`);
       console.log(`      khoá: "${shot.caption}"`);
       continue;
@@ -93,11 +118,16 @@ async function main() {
     console.log(`  ✓ ${shot.name} → ô "${trial.caption.slice(0, 60)}…"`);
   }
 
+  const doneNote = alreadyDone ? ` (${alreadyDone} ảnh đã chèn từ trước)` : '';
   if (!planned.length) {
-    console.log('\nKhông ô nào khớp — sửa lại `caption` trong file shots/ rồi chạy lại.');
+    console.log(
+      alreadyDone === manifest.shots.length
+        ? `\nKhông còn gì để làm — cả ${alreadyDone} ảnh đều đã chèn từ trước.`
+        : `\nKhông ô nào khớp${doneNote} — sửa lại \`caption\` trong file shots/ rồi chạy lại.`,
+    );
     return;
   }
-  console.log(`\n${planned.length}/${manifest.shots.length} ảnh sẽ được chèn.`);
+  console.log(`\n${planned.length}/${manifest.shots.length} ảnh sẽ được chèn${doneNote}.`);
 
   if (!apply) {
     console.log('Mới chỉ kiểm tra, CHƯA tải ảnh và CHƯA ghi gì. Thêm --apply để thực hiện.');

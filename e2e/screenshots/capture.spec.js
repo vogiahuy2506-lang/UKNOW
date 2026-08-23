@@ -30,12 +30,27 @@ for (const slugToCapture of SHEETS) {
     });
 
     test.afterAll(async () => {
-      if (!manifest.length) return;
+      // Ghi manifest theo ẢNH ĐANG CÓ TRÊN ĐĨA, không theo lượt chạy vừa rồi.
+      //
+      // Nhiều ô cần trạng thái loại trừ nhau nên phải chụp nhiều lượt; ghi đè
+      // theo từng lượt sẽ làm mất tên các ảnh chụp ở lượt trước, và bước chèn
+      // chỉ thấy phần của lượt cuối.
+      const dir = path.join(OUT_DIR, slugToCapture);
+      if (!fs.existsSync(dir)) return;
+      const shots = sheet.shots
+        .filter((shot) => fs.existsSync(path.join(dir, `${shot.name}.png`)))
+        .map((shot) => ({ name: shot.name, file: `${shot.name}.png`, caption: shot.caption }));
+      if (!shots.length) return;
+
       fs.writeFileSync(
-        path.join(OUT_DIR, slugToCapture, 'manifest.json'),
-        `${JSON.stringify({ slug: slugToCapture, shots: manifest }, null, 2)}\n`,
+        path.join(dir, 'manifest.json'),
+        `${JSON.stringify({ slug: slugToCapture, shots }, null, 2)}\n`,
       );
-      console.log(`\n[shots] ${manifest.length} ảnh → e2e/screenshots/out/${slugToCapture}/`);
+      const fresh = manifest.length;
+      console.log(
+        `\n[shots] ${shots.length} ảnh trong e2e/screenshots/out/${slugToCapture}/`
+        + (fresh === shots.length ? '' : ` (${fresh} chụp lượt này, còn lại từ lượt trước)`),
+      );
     });
 
     // Chạy tuần tự: các ảnh dùng chung một trang và có bước mở menu.
