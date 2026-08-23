@@ -116,8 +116,8 @@ export async function hideVolatileChrome(page) {
  * @param {import('@playwright/test').Locator} locator
  * @returns {Promise<{screenshot: (options?: object) => Promise<Buffer>}>}
  */
-export async function contentShot(page, locator, { pad = 16 } = {}) {
-  const clip = await locator.first().evaluate((el, padding) => {
+export async function contentShot(page, locator, { pad = 16, maxHeight = 0 } = {}) {
+  const clip = await locator.first().evaluate((el, [padding, cap]) => {
     const root = el.getBoundingClientRect();
     let bottom = root.top;
     let right = root.left;
@@ -129,15 +129,19 @@ export async function contentShot(page, locator, { pad = 16 } = {}) {
       bottom = Math.max(bottom, Math.min(box.bottom, root.bottom));
       right = Math.max(right, Math.min(box.right, root.right));
     }
+    let height = Math.max(Math.min(root.height, bottom - root.top + padding), 40);
+    // `cap` để chụp phần ĐẦU của một khối cao — ví dụ "đầu trang, khoanh đỏ 2 thẻ":
+    // chụp cả trang thì thứ cần chỉ ra chìm nghỉm, chụp riêng 2 thẻ thì mất ngữ cảnh.
+    if (cap > 0) height = Math.min(height, cap);
     return {
       // Toạ độ TRANG (cộng scroll) vì chụp kèm fullPage — vùng cần chụp có thể
       // cao hơn màn hình, Playwright phải cuộn và ghép lại.
       x: root.left + window.scrollX,
       y: root.top + window.scrollY,
       width: Math.max(Math.min(root.width, right - root.left + padding), 40),
-      height: Math.max(Math.min(root.height, bottom - root.top + padding), 40),
+      height,
     };
-  }, pad);
+  }, [pad, maxHeight]);
 
   return {
     screenshot: (options = {}) => page.screenshot({ ...options, clip, fullPage: true }),

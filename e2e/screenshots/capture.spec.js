@@ -17,7 +17,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, 'out');
 
 // Thêm bài mới: tạo shots/<slug>.js rồi khai báo ở đây.
-const SHEETS = ['doi-goi'];
+const SHEETS = ['doi-goi', 'nhan-vien', 'mau-tin-nhan'];
 
 for (const slugToCapture of SHEETS) {
   test.describe(`ảnh minh hoạ — ${slugToCapture}`, () => {

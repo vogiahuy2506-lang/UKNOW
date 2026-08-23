@@ -943,6 +943,48 @@ export async function seedEmployees(client, { userId }) {
 }
 
 /**
+ * Nối một mẫu email vào chiến dịch ĐANG CHẠY, để mẫu đó bị khoá không cho sửa.
+ *
+ * Đặt tên mẫu là "(Hệ thống khoá)" KHÔNG làm nó bị khoá — cơ chế thật nằm ở
+ * findActiveCampaignUsages(): mẫu bị khoá khi có chiến dịch `status='active'`
+ * với node `send_email` trỏ tới nó. Bài hướng dẫn cũng mô tả đúng như vậy
+ * ("đang được dùng bởi chiến dịch đã kích hoạt"), nên phải dựng đúng trạng thái
+ * đó thay vì giả bằng cách đặt tên.
+ */
+export async function seedLockedTemplateUsage(client, { userId }) {
+  const { rows: templates } = await client.query(
+    'SELECT id FROM email_templates WHERE id_user = $1 ORDER BY id LIMIT 1',
+    [userId],
+  );
+  if (!templates.length) return null;
+
+  // Cần một chiến dịch EMAIL đang chạy; bộ seed chỉ có chiến dịch Zalo ở trạng
+  // thái active, nên tạo thêm một cái.
+  const { rows: campaigns } = await client.query(
+    `INSERT INTO campaigns (
+       id_user, workspace_owner_id, created_by, campaign_name, description,
+       campaign_type, status, total_customers, published_at, created_at, updated_at
+     ) VALUES (
+       $1, $1, $1, 'Chuỗi email chăm sóc khách mới (đang chạy)',
+       'Chiến dịch đang kích hoạt — mẫu email nó dùng sẽ bị khoá không cho sửa',
+       'email', 'active', 40, NOW() - INTERVAL '2 days',
+       NOW() - INTERVAL '3 days', NOW()
+     ) RETURNING id`,
+    [userId],
+  );
+
+  await client.query(
+    `INSERT INTO campaign_nodes (
+       id_campaign, node_type, node_subtype, node_name, id_email_template,
+       config, execution_order
+     ) VALUES ($1, 'action', 'send_email', 'Gửi email chăm sóc', $2, $3, 1)`,
+    [campaigns[0].id, templates[0].id, JSON.stringify({ templateId: String(templates[0].id) })],
+  );
+
+  return { campaignId: campaigns[0].id, templateId: templates[0].id };
+}
+
+/**
  * Đổ toàn bộ dữ liệu mẫu theo cờ môi trường.
  *
  * @param {import('pg').Client} client
@@ -973,6 +1015,8 @@ export async function seedDemoData(client, { userId }) {
   // 4. Chiến dịch
   if (isFlagOn('E2E_SEED_CAMPAIGNS')) {
     await seedCampaigns(client, { userId });
+    // Mẫu bị khoá cần CẢ mẫu lẫn chiến dịch đang chạy — chỉ nối khi có đủ hai bên.
+    if (isFlagOn('E2E_SEED_TEMPLATES')) await seedLockedTemplateUsage(client, { userId });
   }
 
   // 5. Chatbot
