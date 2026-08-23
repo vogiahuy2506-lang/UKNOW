@@ -117,7 +117,9 @@ export async function hideVolatileChrome(page) {
  * @returns {Promise<{screenshot: (options?: object) => Promise<Buffer>}>}
  */
 export async function contentShot(page, locator, { pad = 16, maxHeight = 0 } = {}) {
-  const clip = await locator.first().evaluate((el, [padding, cap]) => {
+  const target = locator.first();
+
+  const measure = () => target.evaluate((el, [padding, cap]) => {
     const root = el.getBoundingClientRect();
     let bottom = root.top;
     let right = root.left;
@@ -130,22 +132,94 @@ export async function contentShot(page, locator, { pad = 16, maxHeight = 0 } = {
       right = Math.max(right, Math.min(box.right, root.right));
     }
     let height = Math.max(Math.min(root.height, bottom - root.top + padding), 40);
-    // `cap` để chụp phần ĐẦU của một khối cao — ví dụ "đầu trang, khoanh đỏ 2 thẻ":
-    // chụp cả trang thì thứ cần chỉ ra chìm nghỉm, chụp riêng 2 thẻ thì mất ngữ cảnh.
     if (cap > 0) height = Math.min(height, cap);
     return {
-      // Toạ độ TRANG (cộng scroll) vì chụp kèm fullPage — vùng cần chụp có thể
-      // cao hơn màn hình, Playwright phải cuộn và ghép lại.
-      x: root.left + window.scrollX,
-      y: root.top + window.scrollY,
+      // Toạ độ theo KHUNG NHÌN. Trang này cuộn bên trong <main> chứ không cuộn
+      // cửa sổ, nên cộng window.scrollY như trước cho ra khung sai với phần nằm
+      // dưới màn hình — Playwright báo "Clipped area is either empty".
+      x: root.left,
+      y: root.top,
       width: Math.max(Math.min(root.width, right - root.left + padding), 40),
       height,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
     };
   }, [pad, maxHeight]);
 
   return {
-    screenshot: (options = {}) => page.screenshot({ ...options, clip, fullPage: true }),
+    screenshot: async (options = {}) => {
+      // Cuộn tới rồi mới đo: phần tử nằm ngoài màn hình có toạ độ âm hoặc vượt
+      // đáy, cắt theo đó ra ảnh rỗng.
+      await target.scrollIntoViewIfNeeded().catch(() => {});
+      await page.waitForTimeout(150);
+      const box = await measure();
+
+      const fitsInViewport = box.y >= 0
+        && box.x >= 0
+        && box.y + box.height <= box.viewportHeight
+        && box.x + box.width <= box.viewportWidth;
+
+      if (fitsInViewport) {
+        return page.screenshot({
+          ...options,
+          clip: { x: box.x, y: box.y, width: box.width, height: box.height },
+        });
+      }
+      // Cao hơn màn hình thì để Playwright tự lo: nó cuộn và ghép, chỉ mất phần
+      // cắt bớt khoảng trắng.
+      return target.screenshot(options);
+    },
   };
+}
+
+/**
+ * Từ một phần tử con, đi ngược lên cha cho tới khi gặp khối đủ lớn để ôm trọn
+ * mục, rồi trả về locator trỏ đúng khối đó.
+ *
+ * Đếm cứng số cấp cha (`ancestor::*[2]`) không dùng được: mỗi trang lồng khác
+ * nhau, ra khối quá nhỏ (ảnh cụt) hoặc quá lớn (ảnh cả trang). Tệ hơn là trúng
+ * phần tử có kích thước 0 — Playwright báo "Clipped area is either empty".
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} child
+ * @param {{minHeight?: number, minWidth?: number}} [options]
+ */
+export async function enclosingSection(page, child, { minWidth = 400 } = {}) {
+  const marker = `help-shot-section-${Date.now()}`;
+  const ok = await child.first().evaluate((el, [attr, minW]) => {
+    // Ưu tiên "thẻ": khối gần nhất có bo góc hoặc viền. Các mục trên trang này
+    // đều là thẻ, nên đây là ranh giới đúng của mục.
+    //
+    // Đi theo NGƯỠNG CHIỀU CAO thì hỏng: mục "Tình trạng tài khoản" chỉ cao
+    // 162px, dưới ngưỡng, nên vòng lặp đi quá và vớ phải khối bao ngoài —
+    // ảnh phình từ 324 lên 3152 pixel.
+    let node = el;
+    for (let i = 0; i < 8 && node; i += 1) {
+      const box = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      const isCard = parseFloat(style.borderRadius) > 2
+        || parseFloat(style.borderTopWidth) > 0
+        || style.boxShadow !== 'none';
+      if (isCard && box.width >= minW && box.height > 60) {
+        node.setAttribute(attr, '1');
+        return true;
+      }
+      node = node.parentElement;
+    }
+    // Không thấy thẻ nào thì lấy khối đầu tiên rộng bằng yêu cầu.
+    node = el;
+    for (let i = 0; i < 8 && node; i += 1) {
+      const box = node.getBoundingClientRect();
+      if (box.width >= minW && box.height > 60) {
+        node.setAttribute(attr, '1');
+        return true;
+      }
+      node = node.parentElement;
+    }
+    return false;
+  }, [marker, minWidth]);
+
+  return ok ? page.locator(`[${marker}]`).first() : child.first();
 }
 
 /**
