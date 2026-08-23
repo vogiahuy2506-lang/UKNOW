@@ -116,6 +116,65 @@ export async function seedPendingDowngrade(client, { userId, targetPlanId }) {
   );
 }
 
+/** Tên landing page mẫu — đặt như thật để ảnh minh hoạ không lộ ra là dữ liệu giả. */
+const DEMO_LANDING_PAGES = [
+  'Khoá học Marketing cơ bản',
+  'Ưu đãi tháng 9 — giảm 30%',
+  'Đăng ký tư vấn miễn phí',
+  'Webinar: Tự động hoá bán hàng',
+];
+
+/**
+ * Dựng trạng thái VƯỢT HẠN MỨC cho landing page.
+ *
+ * Cách làm giống hệt điều xảy ra thật khi khách hạ gói: tài nguyên vẫn còn đó
+ * nhưng trần của gói mới thấp hơn số đang có. Ở đây tạo sẵn mấy trang rồi hạ
+ * `max_landing_pages` xuống, thay vì phải đi hết luồng hạ gói có thanh toán.
+ *
+ * @param {import('pg').Client} client
+ * @param {{ userId: number|string, mode: 'grace'|'locked' }} options
+ */
+export async function seedLandingPageOverage(client, { userId, mode }) {
+  const ids = [];
+  for (const [index, title] of DEMO_LANDING_PAGES.entries()) {
+    const { rows } = await client.query(
+      `INSERT INTO landing_pages (id_user, workspace_owner_id, created_by, slug, title, status, is_published, published_at)
+       VALUES ($1, $1, $1, $2, $3, 'published', TRUE, NOW() - ($4 || ' days')::INTERVAL)
+       RETURNING id`,
+      [userId, `demo-landing-${index + 1}`, title, String(DEMO_LANDING_PAGES.length - index)],
+    );
+    ids.push(rows[0].id);
+  }
+
+  // Trần 1 trang trong khi đang có 4 → thừa 3, đủ để thấy rõ trong ảnh.
+  await client.query('UPDATE users SET max_landing_pages = 1 WHERE id = $1', [userId]);
+
+  if (mode === 'grace') {
+    // Còn ân hạn: các trang thừa hiện "Sắp bị khoá", kèm dải nhắc chọn giữ lại.
+    await client.query(
+      `UPDATE users SET overage_grace_until = NOW() + INTERVAL '5 days' WHERE id = $1`,
+      [userId],
+    );
+    return { ids, locked: [] };
+  }
+
+  // Hết ân hạn: hệ thống đã khoá các trang thừa, giữ lại trang cũ nhất.
+  await client.query(
+    `UPDATE users SET overage_grace_until = NOW() - INTERVAL '2 days' WHERE id = $1`,
+    [userId],
+  );
+  const locked = ids.slice(1);
+  for (const resourceId of locked) {
+    await client.query(
+      `INSERT INTO topup_locked_resources (user_id, resource_key, resource_id)
+       VALUES ($1, 'landing_pages', $2)
+       ON CONFLICT (resource_key, resource_id) DO NOTHING`,
+      [userId, resourceId],
+    );
+  }
+  return { ids, locked };
+}
+
 /**
  * Đổ toàn bộ dữ liệu mẫu.
  *
@@ -136,10 +195,22 @@ export async function seedDemoData(client, { userId }) {
     await seedPendingDowngrade(client, { userId, targetPlanId: planIds.starter });
   }
 
+  // Vượt hạn mức landing page — hai trạng thái loại trừ nhau nên chọn một:
+  //   E2E_SEED_OVERAGE=grace   → còn ân hạn, các trang thừa "Sắp bị khoá"
+  //   E2E_SEED_OVERAGE=locked  → hết ân hạn, các trang thừa "Đã khoá"
+  const overageMode = String(process.env.E2E_SEED_OVERAGE || '').toLowerCase();
+  let overage = null;
+  if (overageMode === 'grace' || overageMode === 'locked') {
+    overage = await seedLandingPageOverage(client, { userId, mode: overageMode });
+  }
+
   console.log(
     `[e2e-seed] Dữ liệu mẫu: ${Object.keys(planIds).length} gói,`
     + ` tài khoản đang dùng "${activeName}"`
-    + (withPending ? ', có 1 lệnh hẹn hạ xuống "starter"' : ', chưa có lệnh hẹn đổi gói'),
+    + (withPending ? ', có 1 lệnh hẹn hạ xuống "starter"' : ', chưa có lệnh hẹn đổi gói')
+    + (overage
+      ? `, ${overage.ids.length} landing page vượt hạn mức (${overageMode === 'grace' ? 'còn ân hạn' : `đã khoá ${overage.locked.length}`})`
+      : ''),
   );
   return { planIds, activePlanId };
 }

@@ -13,7 +13,9 @@
  *   - "một mục đã bị khoá sau khi hết ân hạn" → cần tài khoản đã hết ân hạn.
  * Ba cái sau dựng được nếu chụp trên môi trường test có seed sẵn các trạng thái đó.
  */
-import { sidebarShot, regionShot, highlight, hideVolatileChrome, settle } from '../lib/shotHelpers.js';
+import {
+  sidebarShot, regionShot, highlight, hideVolatileChrome, settle, contentShot,
+} from '../lib/shotHelpers.js';
 
 export default {
   slug: 'doi-goi',
@@ -64,7 +66,15 @@ export default {
         // cảnh báo, chưa tạo đơn — đơn chỉ sinh ra nếu bấm tiếp "Đồng ý nâng cấp",
         // và ta cố ý dừng lại trước bước đó.
         const proCard = page.locator('#pricing .grid > *').filter({ hasText: 'Gói Pro' }).first();
-        await proCard.getByRole('button', { name: /Đăng ký gói|Nâng cấp ngay/ }).click();
+        const cta = proCard.getByRole('button', { name: /Đăng ký gói|Nâng cấp ngay/ });
+        if (!(await cta.isVisible().catch(() => false))) {
+          throw new Error(
+            'Nút nâng gói đang bị khoá — thường là do tài khoản đã có lệnh hẹn đổi gói.\n'
+            + 'Nạp lại DB KHÔNG kèm E2E_SEED_PENDING_CHANGE rồi chạy lại:\n'
+            + '  E2E_SEED_DEMO=1 node scripts/seed-test-db.js',
+          );
+        }
+        await cta.click();
 
         const dialog = page.locator('div.fixed.inset-0').filter({ hasText: 'Xác nhận nâng cấp gói' }).first();
         await dialog.waitFor({ state: 'visible', timeout: 15_000 });
@@ -99,5 +109,68 @@ export default {
         return box;
       },
     },
+    {
+      name: 'landing-page-vuot-han-muc',
+      caption: 'danh sách landing page trong thời gian ân hạn',
+      localOnly: true,
+      async take(page) {
+        return resourceLockShot(page, {
+          expect: 'Sắp bị khoá',
+          dropExtras: true,
+          seedHint: 'E2E_SEED_DEMO=1 E2E_SEED_OVERAGE=grace node scripts/seed-test-db.js',
+        });
+      },
+    },
+    {
+      name: 'muc-bi-khoa',
+      caption: 'một mục đã bị khoá sau khi hết ân hạn',
+      localOnly: true,
+      async take(page) {
+        return resourceLockShot(page, {
+          expect: 'Đã khoá',
+          seedHint: 'E2E_SEED_DEMO=1 E2E_SEED_OVERAGE=locked node scripts/seed-test-db.js',
+        });
+      },
+    },
   ],
 };
+
+/**
+ * Mở trang Tổng quan gói → tab "Tài nguyên khoá", tìm khối Landing page, khoanh
+ * đỏ các dòng mang nhãn `expect` rồi chụp cả khối.
+ *
+ * Hai nhãn "Sắp bị khoá" và "Đã khoá" ứng với hai trạng thái LOẠI TRỪ NHAU (còn
+ * ân hạn / hết ân hạn), nên mỗi lượt seed chỉ dựng được một cái.
+ *
+ * `dropExtras` mô phỏng đúng thao tác của người dùng thật: nhãn "Sắp bị khoá"
+ * chỉ hiện với mục BỊ BỎ CHỌN, mà mặc định giao diện tích sẵn tất cả — người
+ * dùng phải tự chọn giữ lại cái nào. Chỉ đổi trạng thái tại chỗ, KHÔNG bấm
+ * "Lưu lựa chọn" nên không ghi gì xuống DB.
+ */
+async function resourceLockShot(page, { expect: expectedLabel, seedHint, dropExtras = false }) {
+  await page.goto('/app/billing');
+  await page.getByRole('button', { name: 'Tài nguyên khoá' }).click();
+
+  const section = page.locator('section').filter({ hasText: 'Landing page' }).first();
+  await section.waitFor({ state: 'visible', timeout: 20_000 });
+
+  if (dropExtras) {
+    const boxes = await section.locator('input[type="checkbox"]').all();
+    for (const box of boxes.slice(1)) {
+      if (await box.isChecked()) await box.uncheck();
+    }
+  }
+
+  const badges = section.getByText(expectedLabel, { exact: true });
+  if (!(await badges.first().isVisible({ timeout: 10_000 }).catch(() => false))) {
+    throw new Error(
+      `Không thấy landing page nào mang nhãn "${expectedLabel}". Nạp lại DB rồi chạy riêng ảnh này:\n  ${seedHint}`,
+    );
+  }
+
+  await settle(page);
+  await hideVolatileChrome(page);
+  for (const badge of await badges.all()) await highlight(badge);
+  await page.waitForTimeout(200);
+  return contentShot(page, section);
+}

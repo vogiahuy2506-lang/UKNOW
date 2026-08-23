@@ -88,22 +88,40 @@ Frontend không cần mở tay — trỏ vào localhost thì Playwright tự d�
 Cờ `E2E_SEED_DEMO` là tuỳ chọn vì bộ test e2e dựa vào trạng thái rỗng — bật mặc
 định sẽ làm đỏ hàng loạt test không liên quan.
 
-### Hai trạng thái loại trừ nhau
+### Có những trạng thái loại trừ nhau
 
-Lệnh hẹn hạ gói **khoá** luồng nâng gói (nút đổi thành "Đã có lệnh hẹn"), mà ảnh
-`canh-bao-mat-ngay` lại cần luồng đó mở. Không có API huỷ lệnh hẹn, nên phải chụp
-hai lượt:
+Một tài khoản không thể vừa "chưa có lệnh hẹn" vừa "đang có lệnh hẹn", cũng không
+thể vừa còn ân hạn vừa đã hết ân hạn. Mà không có API huỷ lệnh hẹn, nên phải nạp
+lại DB và chụp nhiều lượt. Với bài `doi-goi` là **ba lượt**:
 
 ```bash
 E2E_SEED_DEMO=1 node scripts/seed-test-db.js
 npx playwright test --config=screenshots/playwright.config.js
 
-E2E_SEED_DEMO=1 E2E_SEED_PENDING_CHANGE=1 node scripts/seed-test-db.js
+E2E_SEED_DEMO=1 E2E_SEED_PENDING_CHANGE=1 E2E_SEED_OVERAGE=grace node scripts/seed-test-db.js
+npx playwright test --config=screenshots/playwright.config.js
+
+E2E_SEED_DEMO=1 E2E_SEED_OVERAGE=locked node scripts/seed-test-db.js
 npx playwright test --config=screenshots/playwright.config.js
 ```
 
-Lượt đầu ra `canh-bao-mat-ngay`, lượt sau ra `lenh-hen-doi-goi`. Ảnh của lượt
-trước vẫn nằm nguyên trong `out/`, ảnh nào hỏng thì báo rõ lý do và không đè lên.
+| Lượt | Ảnh thu được |
+|---|---|
+| 1 | `topbar-nang-cap`, `bang-gia`, `menu-mua-them-han-muc`, `canh-bao-mat-ngay` |
+| 2 | `lenh-hen-doi-goi`, `landing-page-vuot-han-muc` |
+| 3 | `muc-bi-khoa` |
+
+Ảnh của lượt trước vẫn nằm nguyên trong `out/`. Ảnh nào thiếu trạng thái thì báo
+đúng lệnh cần chạy chứ không để bạn đoán, và không đè lên ảnh đã có.
+
+Các cờ seed:
+
+| Cờ | Dựng ra |
+|---|---|
+| `E2E_SEED_DEMO=1` | 6 gói giống production, tài khoản ở gói Basic |
+| `E2E_SEED_PENDING_CHANGE=1` | một lệnh hẹn hạ xuống Starter — **khoá luồng nâng gói** |
+| `E2E_SEED_OVERAGE=grace` | 4 landing page, trần 1, còn ân hạn 5 ngày |
+| `E2E_SEED_OVERAGE=locked` | như trên nhưng đã hết ân hạn, 3 trang bị khoá |
 
 ## Thêm một bài mới
 
