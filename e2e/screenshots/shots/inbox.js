@@ -124,12 +124,14 @@ export default {
       },
     },
     {
-      // BÀI VIẾT MÔ TẢ SAI: chú thích nói nhãn là "AI đang tạm dừng". Giao diện
-      // thật ghi "AI tự động trả lời" kèm công tắc; chuỗi 'inbox.aiPausedHint'
+      // Bài viết từng nói nhãn là "AI đang tạm dừng". Giao diện thật ghi
+      // "AI tự động trả lời" kèm công tắc; chuỗi 'inbox.aiPausedHint'
       // ("AI đang tạm dừng") có trong i18n nhưng KHÔNG được dùng ở đâu trong mã.
-      // Chụp đúng thứ có thật; câu chữ trong bài cần sửa lại cho khớp.
+      // Câu chữ trong bài đã sửa lại cho khớp — xem
+      // _internal/patch-inbox-2026-08-24.json. KHOÁ DƯỚI ĐÂY PHẢI CHẠY SAU bản
+      // vá đó, chạy trước thì không khớp ô nào.
       name: 'cong-tac-ai',
-      caption: 'khoanh đỏ nhãn "AI đang tạm dừng" và công tắc AI bên cạnh',
+      caption: 'khoanh đỏ dòng "AI tự động trả lời" và công tắc AI bên cạnh',
       localOnly: true,
       async take(page) {
         await page.goto(INBOX_PATH);
