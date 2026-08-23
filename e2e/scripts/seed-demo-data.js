@@ -646,9 +646,13 @@ export async function seedInbox(client, { userId }) {
 
   for (const [idx, v] of visitors.entries()) {
     const hoursAgo = 72 - idx * 8;
+    // MỖI khách chỉ đi qua MỘT kênh. Tạo cả hai thì hộp thư hợp nhất gộp hai
+    // nguồn lại và cùng một người hiện hai lần — ảnh minh hoạ trông như lỗi.
+    // Chia đôi cũng đúng tinh thần bài viết: hộp thư gom nhiều kênh về một chỗ.
+    const viaZaloOa = idx % 2 === 0;
 
-    // Seed channel_conversations (Hộp thư hợp nhất)
-    const chConvRes = await client.query(
+    // Seed channel_conversations (kênh Zalo OA)
+    const chConvRes = viaZaloOa ? await client.query(
       `INSERT INTO channel_conversations (
         id_user, id_channel, channel, external_id,
         visitor_name, visitor_info, started_at, last_message_at, status,
@@ -664,11 +668,11 @@ export async function seedInbox(client, { userId }) {
         v.name, JSON.stringify({ email: v.email, phone: v.phone }),
         hoursAgo, Math.max(1, hoursAgo - 4), v.aiPaused,
       ],
-    );
-    const chConvId = chConvRes.rows[0].id;
+    ) : null;
+    const chConvId = chConvRes?.rows[0].id ?? null;
 
-    // Seed webchat_conversations (Webchat widget)
-    const webConvRes = await client.query(
+    // Seed webchat_conversations (widget trên website)
+    const webConvRes = viaZaloOa ? null : await client.query(
       `INSERT INTO webchat_conversations (
         id_user, id_widget_config, widget_key, session_id,
         visitor_name, visitor_email, started_at, last_message_at, status,
@@ -684,7 +688,7 @@ export async function seedInbox(client, { userId }) {
         v.name, v.email, hoursAgo, Math.max(1, hoursAgo - 4), v.aiPaused,
       ],
     );
-    const webConvId = webConvRes.rows[0].id;
+    const webConvId = webConvRes?.rows[0].id ?? null;
 
     const messages = [
       { role: 'visitor', content: `Xin chào, mình là ${v.name}, cho mình hỏi gói Pro có những tính năng gì?` },
@@ -699,7 +703,7 @@ export async function seedInbox(client, { userId }) {
       const msgHoursAgo = Math.max(1, hoursAgo - mIdx);
 
       // channel_messages
-      await client.query(
+      if (chConvId) await client.query(
         `INSERT INTO channel_messages (
           id_conversation, id_user, id_channel, role, content, is_read, read_at, created_at
         ) VALUES (
@@ -709,7 +713,7 @@ export async function seedInbox(client, { userId }) {
       );
 
       // webchat_messages
-      await client.query(
+      if (webConvId) await client.query(
         `INSERT INTO webchat_messages (
           id_conversation, id_user, role, content, created_at
         ) VALUES (
@@ -719,6 +723,53 @@ export async function seedInbox(client, { userId }) {
       );
     }
   }
+}
+
+/**
+ * Nối khách hàng vào các chiến dịch đã seed.
+ *
+ * Thiếu bảng nối `campaign_customers` thì trang "Khách hàng từ chiến dịch" mở ra
+ * chỉ có dòng "Không có khách hàng nào trong chiến dịch này", dù chiến dịch ghi
+ * hàng trăm tin đã gửi — số đó nằm ở cột trên bảng campaigns, không phải quan hệ.
+ *
+ * Chỉ nối vào chiến dịch ĐÃ CHẠY (active/completed/failed); chiến dịch nháp thì
+ * đúng ra chưa có ai tham gia.
+ */
+export async function seedCampaignCustomers(client, { userId }) {
+  const { rows: campaigns } = await client.query(
+    `SELECT id FROM campaigns
+      WHERE COALESCE(workspace_owner_id, id_user) = $1
+        AND status IN ('active', 'completed', 'failed')
+      ORDER BY id`,
+    [userId],
+  );
+  const { rows: customers } = await client.query(
+    'SELECT id FROM customers WHERE COALESCE(workspace_owner_id, id_user) = $1 ORDER BY id',
+    [userId],
+  );
+  if (!campaigns.length || !customers.length) return 0;
+
+  let linked = 0;
+  for (const [index, campaign] of campaigns.entries()) {
+    // Mỗi chiến dịch lấy một lát khách khác nhau, để các trang không giống hệt nhau.
+    const slice = customers.slice(index * 3, index * 3 + 12);
+    for (const [position, customer] of slice.entries()) {
+      await client.query(
+        `INSERT INTO campaign_customers (
+           id_campaign, id_customer, has_opened, has_clicked,
+           email_received_count, email_opened_count, created_at
+         ) VALUES ($1, $2, $3, $4, 1, $5, NOW() - ($6 || ' days')::INTERVAL)
+         ON CONFLICT DO NOTHING`,
+        [
+          campaign.id, customer.id,
+          position % 2 === 0, position % 4 === 0,
+          position % 2 === 0 ? 1 : 0, 3 + (position % 5),
+        ],
+      );
+      linked += 1;
+    }
+  }
+  return linked;
 }
 
 /**
@@ -1017,6 +1068,8 @@ export async function seedDemoData(client, { userId }) {
     await seedCampaigns(client, { userId });
     // Mẫu bị khoá cần CẢ mẫu lẫn chiến dịch đang chạy — chỉ nối khi có đủ hai bên.
     if (isFlagOn('E2E_SEED_TEMPLATES')) await seedLockedTemplateUsage(client, { userId });
+    // Nối khách vào chiến dịch — cần cả hai bên đã có.
+    if (isFlagOn('E2E_SEED_CUSTOMERS')) await seedCampaignCustomers(client, { userId });
   }
 
   // 5. Chatbot
