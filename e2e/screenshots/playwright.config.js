@@ -23,6 +23,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env.shots') });
 
 const BASE_URL = process.env.HELP_SHOT_BASE_URL || 'https://founderai.biz';
+const IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(BASE_URL);
 
 export default defineConfig({
   testDir: '.',
@@ -65,4 +66,21 @@ export default defineConfig({
       },
     },
   ],
+
+  // Trỏ vào máy mình thì tự dựng frontend luôn, đỡ phải mở tay thêm một cửa sổ.
+  // KHÔNG tự dựng backend: nó cần e2e/.env.test và phải reset DB test, để người
+  // chạy tự quyết thay vì lỡ tay xoá dữ liệu.
+  webServer: IS_LOCAL
+    ? [{
+      command: 'npm run dev -- --port 5174 --host',
+      // Chỉ định thẳng thay vì `cd ../frontend`: đường dẫn tương đối tính từ thư
+      // mục chứa file config này (e2e/screenshots/), không phải từ e2e/.
+      cwd: path.join(__dirname, '..', '..', 'frontend'),
+      url: BASE_URL,
+      reuseExistingServer: true,
+      timeout: 120_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    }]
+    : undefined,
 });

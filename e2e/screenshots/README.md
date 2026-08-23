@@ -38,15 +38,55 @@ Mặc định trỏ vào `https://founderai.biz`. Đổi bằng `HELP_SHOT_BASE_
 Nên dùng **tài khoản chủ workspace** — nhiều màn hình trong bài chỉ chủ tài khoản
 mới thấy (nhóm Gói & Thanh toán, Hồ sơ doanh nghiệp, Nhân viên).
 
-## Quy tắc: chỉ đọc
+## Hai môi trường
 
-Script chạy trên **tài khoản thật ở production**. Chỉ được điều hướng, mở menu,
-mở hộp thoại xem. Tuyệt đối không bấm nút tạo đơn, xác nhận thanh toán hay lưu
-dữ liệu — một cú bấm nhầm là một đơn hàng thật.
+| | Production | Máy mình |
+|---|---|---|
+| Dựng | không cần gì | phải chạy backend + DB test |
+| Dữ liệu | thật, trông có sức sống | seed sẵn, cố định giữa các lượt |
+| Bấm nút thay đổi dữ liệu | **cấm tuyệt đối** | thoải mái |
+| Bảng giá | đủ 6 gói | đủ 6 gói (bản sao production) |
+| Danh sách chiến dịch, mẫu, hộp thư | có dữ liệu | rỗng |
+| Trạng thái đặc biệt (hẹn hạ gói, vượt hạn mức, bị khoá) | không dựng được | **chỉ ở đây mới làm được** |
 
-Vì vậy những ô chú thích mô tả trạng thái đặc biệt (hộp cảnh báo trước khi xác
-nhận nâng gói, tài khoản đang trong ân hạn, mục đã bị khoá) **cố ý không tự động
-hoá**. Chúng cần môi trường test có seed sẵn các trạng thái đó, hoặc chụp tay.
+Trên **production**, script chạy bằng tài khoản thật: chỉ được điều hướng, mở
+menu, mở hộp thoại xem. Một cú bấm nhầm là một đơn hàng thật.
+
+Trên **máy mình** thì ngược lại — cứ bấm. Tạo đơn, xác nhận nâng gói, hẹn hạ gói,
+để vượt hạn mức. Đó là cách duy nhất chụp được những màn hình mà bài hướng dẫn
+cần nhưng tài khoản thật không dựng nổi.
+
+Phần chụp và phần chèn vốn tách rời, nên **chụp ở máy mình rồi chèn thẳng vào bài
+trên production** là chạy được, không phải sửa gì.
+
+### Dựng môi trường ở máy
+
+```bash
+cp e2e/.env.test.example e2e/.env.test        # một lần
+
+# cửa sổ 1 — backend đọc e2e/.env.test, nối DB test cổng 5433
+cd backend && npm run dev:e2e
+
+# cửa sổ 2 — nạp lại DB test kèm dữ liệu mẫu (6 gói giống production)
+cd e2e && E2E_SEED_DEMO=1 node scripts/seed-test-db.js
+```
+
+Rồi đặt trong `.env.shots`:
+
+```
+HELP_SHOT_USERNAME=e2etest
+HELP_SHOT_PASSWORD=Test@1234
+HELP_SHOT_BASE_URL=http://localhost:5174
+```
+
+Frontend không cần mở tay — trỏ vào localhost thì Playwright tự dựng.
+
+> `seed-test-db.js` chạy `DROP SCHEMA` trên `uknow_campaign_test`, **cùng DB mà
+> `npm run test:integration` dùng**. Bộ integration tự dựng lại schema mỗi lượt
+> nên không mất gì lâu dài, nhưng đừng chạy song song hai thứ.
+
+Cờ `E2E_SEED_DEMO` là tuỳ chọn vì bộ test e2e dựa vào trạng thái rỗng — bật mặc
+định sẽ làm đỏ hàng loạt test không liên quan.
 
 ## Thêm một bài mới
 

@@ -23,6 +23,11 @@ const BOOTSTRAP_SQL = path.resolve(
 
 dotenv.config({ path: ENV_FILE });
 
+/** Có đổ dữ liệu mẫu (bộ gói giống production) hay không. */
+function isDemoSeedEnabled() {
+  return ['1', 'true', 'yes'].includes(String(process.env.E2E_SEED_DEMO || '').toLowerCase());
+}
+
 function assertTestDbName(name) {
   if (!name) {
     throw new Error('[e2e-seed] Thiếu DB_NAME trong e2e/.env.test');
@@ -94,11 +99,19 @@ async function main() {
     const password = process.env.E2E_PASSWORD || 'Test@1234';
     const passwordHash = await bcrypt.hash(password, 10);
 
-    await client.query(
+    const userResult = await client.query(
       `INSERT INTO users (username, email, password_hash, full_name, status, role, is_verified, verified_at, active_plan_id, subscription_expires_at)
-       VALUES ($1, $2, $3, $4, 'active', 'user', TRUE, NOW(), $5, NOW() + INTERVAL '1 year')`,
+       VALUES ($1, $2, $3, $4, 'active', 'user', TRUE, NOW(), $5, NOW() + INTERVAL '1 year')
+       RETURNING id`,
       [username, email, passwordHash, 'E2E Test User', planId]
     );
+
+    // Dữ liệu mẫu để chụp ảnh minh hoạ — CHỈ khi được yêu cầu. Bộ test e2e dựa
+    // vào trạng thái rỗng, bật mặc định sẽ làm đỏ hàng loạt test không liên quan.
+    if (isDemoSeedEnabled()) {
+      const { seedDemoData } = await import('./seed-demo-data.js');
+      await seedDemoData(client, { userId: userResult.rows[0].id });
+    }
 
     console.log(`[e2e-seed] OK — user ${username} / plan id=${planId}`);
   } finally {
