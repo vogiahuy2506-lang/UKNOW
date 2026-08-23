@@ -2,61 +2,23 @@
 /**
  * Khôi phục ảnh cho bài hướng dẫn tiếng Việt bằng cách lấy lại từ bản tiếng Anh.
  *
- * Bối cảnh (22/08/2026): nút "Seed" ghi đè body_html của mọi bài mẫu bằng bản
- * trong repo, xoá sạch ảnh admin đã chèn tay. Nhưng seedHelpArticles() chỉ đụng
- * `locale = 'vi'` — bản 'en' (dịch từ bản VI SAU khi đã chèn ảnh) vẫn còn nguyên
- * thẻ <img> ở đúng vị trí. Đây là nguồn duy nhất còn lưu "ảnh nào nằm ở bước nào",
- * vì storage_objects không giữ liên kết ảnh ↔ bài (nó dò ngược từ body_html).
+ * Bối cảnh và cách ghép: xem đầu file src/utils/helpImageRecovery.util.js.
+ * Tóm tắt: nút "Seed" ghi đè body_html bản 'vi' và xoá sạch ảnh admin đã chèn;
+ * bản 'en' không bị đụng nên vẫn giữ cả ảnh lẫn vị trí của chúng.
  *
- * Cách ghép: cắt cả hai bản thành dãy khối cấp cao nhất rồi so theo chỉ số. Hai
- * bản cùng một khung HTML (bản EN dịch từ bản VI) nên khối thứ N của hai bên là
- * cùng một vị trí trong bài. Chỗ nào bản EN là <img> thì chèn đúng thẻ đó vào
- * bản VI, thay cho khối chú thích "[ẢNH: ...]" tương ứng.
- *
- *   node scripts/recoverHelpImagesFromEn.js           # chỉ chẩn đoán, KHÔNG ghi
- *   node scripts/recoverHelpImagesFromEn.js --apply   # ghi vào DB
+ *   node scripts/recoverHelpImagesFromEn.js            # chỉ chẩn đoán, KHÔNG ghi
+ *   node scripts/recoverHelpImagesFromEn.js -v         # kèm chi tiết từng tấm ảnh
+ *   node scripts/recoverHelpImagesFromEn.js --apply    # ghi vào DB
  */
 import 'dotenv/config';
 import db from '../src/config/database.js';
 import { stripTags, extractImageSrcs } from '../src/utils/helpArticleListRepair.util.js';
+import { planImageRecovery } from '../src/utils/helpImageRecovery.util.js';
 
 const apply = process.argv.includes('--apply');
+const verbose = process.argv.includes('-v') || process.argv.includes('--verbose');
 
-/** Cắt HTML thành dãy khối cấp cao nhất (không đi vào bên trong khối). */
-function splitTopLevelBlocks(html) {
-  const blocks = [];
-  const re = /<(h[1-6]|p|ol|ul|table|blockquote|pre|figure|img|hr)\b[^>]*>/gi;
-  let match;
-  let cursor = 0;
-  while ((match = re.exec(html)) !== null) {
-    if (match.index < cursor) continue;
-    const tag = match[1].toLowerCase();
-    let end;
-    if (tag === 'img' || tag === 'hr') {
-      end = match.index + match[0].length;
-    } else {
-      // Tìm thẻ đóng tương ứng, có tính lồng nhau cùng tên thẻ.
-      const nested = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi');
-      nested.lastIndex = match.index;
-      let depth = 0;
-      let m2;
-      end = html.length;
-      while ((m2 = nested.exec(html)) !== null) {
-        depth += m2[1] === '/' ? -1 : 1;
-        if (depth === 0) { end = m2.index + m2[0].length; break; }
-      }
-    }
-    blocks.push({ tag, html: html.slice(match.index, end) });
-    cursor = end;
-    re.lastIndex = end;
-  }
-  return blocks;
-}
-
-/** Khối này là chú thích ảnh chờ được thay? (vd <p>[ẢNH: ...]</p>) */
-function isPlaceholderBlock(block) {
-  return block.tag === 'p' && /\[ẢNH:/i.test(block.html);
-}
+const shortSrc = (src) => String(src || '').split('/').pop() || '(không có src)';
 
 async function main() {
   const { rows } = await db.query(
@@ -66,70 +28,68 @@ async function main() {
   );
 
   const bySlug = new Map();
-  for (const r of rows) {
-    if (!bySlug.has(r.slug)) bySlug.set(r.slug, {});
-    bySlug.get(r.slug)[r.locale] = r;
+  for (const row of rows) {
+    if (!bySlug.has(row.slug)) bySlug.set(row.slug, {});
+    bySlug.get(row.slug)[row.locale] = row;
   }
 
   const planned = [];
+  let totalSkipped = 0;
+
   for (const [slug, pair] of bySlug) {
-    const vi = pair.vi;
-    const en = pair.en;
+    const { vi, en } = pair;
     if (!vi || !en) continue;
-    if (extractImageSrcs(vi.body_html).length > 0) continue;   // VI còn ảnh — bỏ qua
+    if (extractImageSrcs(vi.body_html).length > 0) continue;   // VI còn ảnh — không đụng
     const enImages = extractImageSrcs(en.body_html);
     if (enImages.length === 0) continue;                        // EN cũng không có gì để lấy
 
-    const viBlocks = splitTopLevelBlocks(vi.body_html);
-    const enBlocks = splitTopLevelBlocks(en.body_html);
+    const plan = planImageRecovery(vi.body_html, en.body_html);
 
-    if (viBlocks.length !== enBlocks.length) {
-      console.log(`  ✗ ${slug}: KHUNG LỆCH (vi ${viBlocks.length} khối, en ${enBlocks.length} khối) — không ghép tự động được`);
+    if (!plan.ok) {
+      console.log(`  ✗ ${slug}: ${plan.reason} (bản EN có ${enImages.length} ảnh)`);
+      totalSkipped += enImages.length;
+      if (verbose) {
+        for (const item of plan.skipped) console.log(`        · ${shortSrc(item.src)} — ${item.reason}`);
+      }
       continue;
     }
 
-    // Chỗ nào bản EN là <img> thì lấy thẻ đó đặt vào đúng chỉ số bên VI.
-    let replaced = 0;
-    let mismatched = 0;
-    const outBlocks = viBlocks.map((vb, i) => {
-      const eb = enBlocks[i];
-      if (eb.tag !== 'img') return vb.html;
-      // Bên VI vị trí đó phải là chú thích ảnh (hoặc cũng là <img>) mới hợp lý.
-      if (!isPlaceholderBlock(vb) && vb.tag !== 'img') { mismatched += 1; return vb.html; }
-      replaced += 1;
-      return eb.html;
-    });
-
-    if (mismatched > 0) {
-      console.log(`  ✗ ${slug}: ${mismatched} vị trí ảnh bên EN không khớp chú thích bên VI — bỏ qua cho an toàn`);
-      continue;
-    }
-    if (replaced !== enImages.length) {
-      console.log(`  ✗ ${slug}: chỉ ghép được ${replaced}/${enImages.length} ảnh (ảnh nằm lồng trong khối khác) — bỏ qua`);
-      continue;
-    }
-
-    const newHtml = outBlocks.join('');
-    if (stripTags(newHtml) !== stripTags(vi.body_html)) {
+    // Hai chốt chặn trước khi cho ghi: chữ tiếng Việt không đổi (ngoài các chú
+    // thích "[ẢNH: …]" bị thay bằng chính tấm ảnh đó), và danh sách ảnh sau khi
+    // ghép đúng bằng những tấm đã nhận. stripTags mù với <img> nên phải kiểm cả hai.
+    if (stripTags(plan.html) !== stripTags(plan.textReference)) {
       console.log(`  ✗ ${slug}: chữ tiếng Việt bị đổi — bỏ qua`);
+      totalSkipped += enImages.length;
       continue;
     }
-    const newSrcs = extractImageSrcs(newHtml);
-    if (newSrcs.join(' ') !== enImages.join(' ')) {
-      console.log(`  ✗ ${slug}: danh sách ảnh sau khi ghép không khớp bản EN — bỏ qua`);
+    const expected = plan.restored.map((r) => r.src);
+    if (extractImageSrcs(plan.html).join(' ') !== expected.join(' ')) {
+      console.log(`  ✗ ${slug}: danh sách ảnh sau khi ghép không khớp dự kiến — bỏ qua`);
+      totalSkipped += enImages.length;
       continue;
     }
 
-    console.log(`  ✓ ${slug}: ghép được ${replaced} ảnh vào bản tiếng Việt`);
-    planned.push({ id: vi.id, slug, newHtml, count: replaced });
+    const captionsReplaced = plan.restored.filter((r) => r.replacedCaption).length;
+    const note = plan.skipped.length ? `, còn ${plan.skipped.length} tấm chưa đặt được` : '';
+    console.log(
+      `  ✓ ${slug}: đặt lại ${plan.restored.length}/${enImages.length} ảnh`
+      + ` (${captionsReplaced} tấm thay chỗ chú thích, khung khớp ${Math.round(plan.coverage * 100)}%)${note}`,
+    );
+    if (verbose) {
+      for (const item of plan.restored) console.log(`        ✓ ${shortSrc(item.src)}`);
+      for (const item of plan.skipped) console.log(`        · ${shortSrc(item.src)} — ${item.reason}`);
+    }
+    totalSkipped += plan.skipped.length;
+    planned.push({ id: vi.id, slug, newHtml: plan.html, count: plan.restored.length });
   }
 
   if (!planned.length) {
-    console.log('\nKhông có bài nào ghép được tự động.');
+    console.log(`\nKhông có bài nào ghép được tự động (${totalSkipped} ảnh chưa đặt lại được).`);
     return;
   }
-  const total = planned.reduce((n, p) => n + p.count, 0);
+  const total = planned.reduce((sum, item) => sum + item.count, 0);
   console.log(`\n${planned.length} bài / ${total} ảnh sẵn sàng khôi phục.`);
+  if (totalSkipped) console.log(`${totalSkipped} ảnh phải chèn tay (lý do in ở trên, chạy kèm -v để xem từng tấm).`);
 
   if (!apply) {
     console.log('Mới chỉ chẩn đoán, CHƯA ghi gì. Chạy lại kèm --apply để ghi vào DB.');
@@ -139,10 +99,10 @@ async function main() {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
-    for (const p of planned) {
+    for (const item of planned) {
       await client.query(
         'UPDATE help_articles SET body_html = $1, updated_at = NOW() WHERE id = $2',
-        [p.newHtml, p.id],
+        [item.newHtml, item.id],
       );
     }
     await client.query('COMMIT');
