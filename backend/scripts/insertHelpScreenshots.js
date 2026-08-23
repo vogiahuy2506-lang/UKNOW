@@ -92,14 +92,57 @@ async function uploadImage(filePath, { onWait } = {}) {
     } catch (error) {
       if (error.status !== 429 || attempt >= 2) throw error;
       const waitSec = Math.min(error.retryAfterSec || 15 * 60, 16 * 60) + 5;
+
+      // Chờ xong mới phát hiện token chết là mất trắng cả quãng chờ. Biết trước
+      // thì dừng ngay để người chạy đi lấy token mới.
+      const left = tokenSecondsLeft();
+      if (left !== null && left < waitSec) {
+        throw new Error(
+          `chạm trần tải lên, phải chờ ${Math.ceil(waitSec / 60)} phút, nhưng token chỉ còn `
+          + `${Math.max(0, Math.floor(left / 60))} phút. Lấy token mới rồi chạy lại — `
+          + 'bài viết chưa bị ghi gì.',
+        );
+      }
       onWait?.(waitSec);
       await new Promise((resolve) => { setTimeout(resolve, waitSec * 1000); });
     }
   }
 }
 
+/**
+ * Còn bao nhiêu giây nữa token hết hạn, đọc từ chính JWT (`exp`).
+ *
+ * Chỉ giải mã phần payload, KHÔNG kiểm chữ ký — ở đây chỉ cần biết hạn để
+ * cảnh báo sớm, việc xác thực thật là của server.
+ *
+ * @returns {number|null} null nếu không đọc được hạn.
+ */
+function tokenSecondsLeft() {
+  try {
+    const payload = JSON.parse(Buffer.from(String(TOKEN).split('.')[1], 'base64url').toString('utf8'));
+    if (!payload?.exp) return null;
+    return Math.round(payload.exp - Date.now() / 1000);
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   if (!TOKEN) throw new Error('Thiếu HELP_API_TOKEN — xem hướng dẫn ở đầu file.');
+
+  // Chờ hết cửa sổ tải lên có thể kéo tới 15 phút. Token sắp hết hạn mà cứ chờ
+  // thì đợi xong lại chết vì 401 — mất trắng thời gian chờ. Báo trước.
+  const secondsLeft = tokenSecondsLeft();
+  if (secondsLeft !== null && secondsLeft <= 0) {
+    throw new Error('HELP_API_TOKEN đã hết hạn — lấy token mới rồi chạy lại.');
+  }
+  if (apply && secondsLeft !== null && secondsLeft < 20 * 60) {
+    console.log(
+      `⚠ Token chỉ còn ${Math.floor(secondsLeft / 60)} phút. Trần tải lên là 20 file/15 phút,`
+      + ' chạm trần là phải chờ — token có thể chết giữa chừng.\n'
+      + '  Lấy token mới trước cho chắc.\n',
+    );
+  }
   if (!inputDir) throw new Error('Thiếu đường dẫn thư mục ảnh, ví dụ: e2e/screenshots/out/doi-goi');
 
   const manifest = JSON.parse(await fs.readFile(path.join(inputDir, 'manifest.json'), 'utf8'));
