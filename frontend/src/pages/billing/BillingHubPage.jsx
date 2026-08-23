@@ -23,11 +23,29 @@ const BillingHubPage = () => {
 
   useEffect(() => {
     let cancelled = false;
+
+    // MainLayout gọi GET /users/profile (fetchAiCredits) đúng lúc trang này cũng
+    // gọi. Interceptor gộp request trong services/api.js huỷ request trùng URL
+    // đang bay, nên khi mở thẳng /app/billing thì lần tải đầu bị huỷ oan và
+    // trang báo "Không tải được thông tin gói" dù API vẫn trả 200. Thử lại một
+    // nhịp là qua; sửa gốc nằm ở interceptor — nên dùng chung promise đang bay
+    // thay vì huỷ cái cũ.
+    const loadProfile = async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await getMyProfile();
+        } catch (err) {
+          if (cancelled || err?.code !== 'ERR_CANCELED' || attempt >= 2) throw err;
+          await new Promise((resolve) => { setTimeout(resolve, 300); });
+        }
+      }
+    };
+
     (async () => {
       setIsLoading(true);
       setError('');
       try {
-        const response = await getMyProfile();
+        const response = await loadProfile();
         const nextProfile = response?.data || null;
         if (cancelled || !nextProfile) return;
         setProfileData(nextProfile);

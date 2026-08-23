@@ -944,18 +944,61 @@ export async function seedCampaignCustomers(client, { userId }) {
 }
 
 /**
+ * HTML mẫu cho trang landing đã xuất bản.
+ *
+ * Phải có nội dung THẬT chứ không để rỗng: trình sửa ẩn tab "Sửa trang hiện tại"
+ * trong cửa sổ AI khi `html_content` rỗng (xem LandingPageFullEditor.jsx —
+ * điều kiện `Boolean(String(form.htmlContent).trim())`), nên trang rỗng thì cửa
+ * sổ AI chỉ hiện 2 tab thay vì 3.
+ *
+ * `<!-- UKNOW_LP_FORM -->` là mốc đánh dấu chỗ hệ thống nhét iframe form đăng ký
+ * vào; xoá mốc này là trang mất chỗ thu thông tin khách.
+ */
+const DEMO_LANDING_HTML = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Khoá học Marketing Tự Động Hoá Thực Chiến</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-slate-800">
+  <section class="bg-gradient-to-b from-orange-50 to-white py-20 px-4 text-center">
+    <h1 class="text-4xl font-bold text-slate-900">Marketing Tự Động Hoá Thực Chiến</h1>
+    <p class="mt-4 max-w-2xl mx-auto text-lg text-slate-600">
+      8 buổi học kèm bộ mẫu chiến dịch dùng được ngay. Học xong là chạy được chiến dịch đầu tiên.
+    </p>
+    <a href="#dang-ky" class="mt-8 inline-block rounded-xl bg-orange-500 px-8 py-4 font-semibold text-white">Đăng ký ngay</a>
+  </section>
+
+  <section class="py-16 px-4 max-w-5xl mx-auto grid gap-8 md:grid-cols-3">
+    <div><h3 class="font-semibold text-lg">Học theo dự án thật</h3><p class="mt-2 text-slate-600">Mỗi buổi dựng một phần của chiến dịch thật, không học chay.</p></div>
+    <div><h3 class="font-semibold text-lg">Bộ mẫu có sẵn</h3><p class="mt-2 text-slate-600">Nhận trọn bộ mẫu email và Zalo đã kiểm chứng.</p></div>
+    <div><h3 class="font-semibold text-lg">Hỗ trợ 3 tháng</h3><p class="mt-2 text-slate-600">Hỏi đáp trong nhóm riêng suốt 3 tháng sau khoá.</p></div>
+  </section>
+
+  <section id="dang-ky" class="py-16 px-4 bg-slate-50">
+    <h2 class="text-2xl font-bold text-center text-slate-900">Để lại thông tin để nhận tư vấn</h2>
+    <!-- UKNOW_LP_FORM -->
+  </section>
+
+  <footer class="py-10 text-center text-sm text-slate-500">© 2026 Founder AI</footer>
+</body>
+</html>`;
+
+/**
  * 7. E2E_SEED_LANDING: Bổ sung 1 trang published có form + 1 trang có custom domain
  */
 export async function seedLandingPages(client, { userId }) {
   await client.query(
     `INSERT INTO landing_pages (
-      id_user, workspace_owner_id, created_by, slug, title,
+      id_user, workspace_owner_id, created_by, slug, title, html_content,
       status, is_published, published_at, created_at, updated_at
     ) VALUES (
-      $1, $1, $1, 'khoa-hoc-marketing-tu-dong-hoa', 'Khoá học Marketing Tự Động Hoá Thực Chiến',
+      $1, $1, $1, 'khoa-hoc-marketing-tu-dong-hoa', 'Khoá học Marketing Tự Động Hoá Thực Chiến', $2,
       'published', TRUE, NOW() - INTERVAL '15 days', NOW() - INTERVAL '15 days', NOW()
     )`,
-    [userId],
+    [userId, DEMO_LANDING_HTML],
   );
 
   const res2 = await client.query(
@@ -970,24 +1013,47 @@ export async function seedLandingPages(client, { userId }) {
   );
   const landing2Id = res2.rows[0].id;
 
+  // cf_managed = FALSE + status pending_verification: chỉ ở trạng thái này trình
+  // sửa mới in ra bảng bản ghi DNS cần thêm. Để Cloudflare tự quản (cf_managed)
+  // thì màn hình chỉ báo "đang chờ hệ thống cấp DNS", không có hướng dẫn nào.
   await client.query(
     `INSERT INTO landing_page_domains (
       landing_page_id, hostname, domain_type, is_apex_domain,
       verification_token, status, cf_managed, verified_at, created_at, updated_at
     ) VALUES (
       $1, 'dangky.doanhnghiep.vn', 'subdomain', FALSE,
-      'token_demo_verify_domain', 'active', TRUE, NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days', NOW()
+      'token_demo_verify_domain', 'pending_verification', FALSE, NULL, NOW() - INTERVAL '5 days', NOW()
     )`,
     [landing2Id],
   );
+
+  // Thư viện mẫu công khai. Không có mẫu nào thì nút "Template" mở ra một
+  // gallery rỗng, và nút "Hoàn tác" trên thanh công cụ không bao giờ xuất hiện —
+  // nó chỉ hiện sau khi mẫu hoặc AI ghi đè giao diện (`htmlBeforeOverwrite`).
+  const templates = [
+    ['Trang bán khoá học', 'course', 'Bố cục hero + lợi ích + form đăng ký, hợp cho khoá học online.'],
+    ['Giới thiệu dịch vụ', 'service', 'Trang một cột giới thiệu dịch vụ kèm bảng giá và form liên hệ.'],
+    ['Đăng ký sự kiện', 'event', 'Trang đăng ký hội thảo: thời gian, diễn giả, form ghi danh.'],
+  ];
+  for (const [name, category, description] of templates) {
+    await client.query(
+      `INSERT INTO landing_page_templates (
+        name, category, description, html_structure, is_active, is_public, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, TRUE, TRUE, NOW(), NOW())`,
+      [name, category, description, DEMO_LANDING_HTML],
+    );
+  }
 }
 
 /**
  * 8. E2E_SEED_ORDERS: 5 đơn hàng các trạng thái, có order_code, invoice_info
  */
 export async function seedOrders(client, { userId, planIds }) {
+  // Mã gói phải khớp demo-plans.js: trial | custom | starter | basic |
+  // professional | enterprise. Gọi nhầm `planIds.pro` thì rơi vào số dự phòng
+  // và đơn 899.000đ hiện tên "Dùng thử" — ảnh chụp ra là sai giá.
   const basicId = planIds?.basic || 1;
-  const proId = planIds?.pro || 2;
+  const proId = planIds?.professional || 2;
   const starterId = planIds?.starter || 3;
   const enterpriseId = planIds?.enterprise || 4;
 
@@ -1016,6 +1082,7 @@ export async function seedOrders(client, { userId, planIds }) {
         company_address: '123 Nguyễn Thị Minh Khai, Quận 1, TP.HCM',
         recipient_email: 'ke-toan@achau-tech.com',
       },
+      einvoice: { status: 'cqt_ok', soHdon: '00000128' },
     },
     {
       code: 26082303,
@@ -1051,11 +1118,12 @@ export async function seedOrders(client, { userId, planIds }) {
         company_address: '456 Lê Duẩn, Quận Hoàn Kiếm, Hà Nội',
         recipient_email: 'finance@saomai.vn',
       },
+      einvoice: { status: 'issued', soHdon: '00000097' },
     },
   ];
 
   for (const o of orders) {
-    await client.query(
+    const inserted = await client.query(
       `INSERT INTO orders (
         order_code, plan_id, amount, user_id, status, payment_method,
         billing_period, invoice_info, paid_at, created_at, updated_at
@@ -1063,12 +1131,37 @@ export async function seedOrders(client, { userId, planIds }) {
         $1, $2, $3, $4, $5, 'payos',
         $6, $7, CASE WHEN $8 THEN NOW() - ($9 || ' days')::INTERVAL ELSE NULL END,
         NOW() - ($9 || ' days')::INTERVAL, NOW()
-      ) ON CONFLICT (order_code) DO NOTHING`,
+      ) ON CONFLICT (order_code) DO NOTHING
+      RETURNING id`,
       [
         o.code, o.planId, o.amount, userId, o.status,
         o.period, o.invoice ? JSON.stringify(o.invoice) : null, o.paid, o.daysAgo,
       ],
     );
+
+    // Cột `invoice_info` chỉ là thông tin khách khai. Trạng thái hoá đơn mà mục
+    // "Lịch sử đơn" hiển thị (và link "Xem hoá đơn") đọc từ bảng `einvoices` —
+    // thiếu bảng này thì mọi đơn đều hiện "Không xuất hoá đơn".
+    if (o.einvoice && inserted.rows[0]?.id) {
+      await client.query(
+        `INSERT INTO einvoices (
+          order_id, ma_tra_cuu, mtchieu, khmshdon, khhdon, so_hdon,
+          status, cqt_code, issued_at, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, '1', 'C26TAA', $4,
+          $5, $6, NOW() - ($7 || ' days')::INTERVAL, NOW() - ($7 || ' days')::INTERVAL, NOW()
+        )`,
+        [
+          inserted.rows[0].id,
+          `TRACUU${o.code}`,
+          `MT${o.code}`,
+          o.einvoice.soHdon,
+          o.einvoice.status,
+          o.einvoice.status === 'cqt_ok' ? `M1-26-C26TAA-${o.code}` : null,
+          o.daysAgo,
+        ],
+      );
+    }
   }
 }
 

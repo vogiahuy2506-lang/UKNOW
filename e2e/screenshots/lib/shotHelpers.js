@@ -93,12 +93,31 @@ export async function hideVolatileChrome(page) {
   // để không ẩn nhầm nội dung thật.
   await page.evaluate(() => {
     for (const el of document.body.querySelectorAll('div, button, iframe')) {
-      if (window.getComputedStyle(el).position !== 'fixed') continue;
+      const style = window.getComputedStyle(el);
+      if (style.position !== 'fixed') continue;
       const box = el.getBoundingClientRect();
+
       const inCorner = box.bottom > window.innerHeight - 140 && box.right > window.innerWidth - 140;
       if (inCorner && box.width < 500 && box.height < 700) {
         el.style.visibility = 'hidden';
+        continue;
       }
+
+      // Khay đựng thông báo của react-hot-toast: một lớp phủ gần kín khung nhìn,
+      // không nhận chuột, KHÔNG có id hay class nào để bám. Nó trong suốt lúc
+      // rảnh nên chỉ lộ ra khi vừa có thao tác sinh toast — ảnh dính một dải đen
+      // ở đỉnh. Nhận diện theo hình dạng là cách duy nhất.
+      const coversViewport = box.width > window.innerWidth * 0.8
+        && box.height > window.innerHeight * 0.8;
+      if (coversViewport && style.pointerEvents === 'none') {
+        el.style.visibility = 'hidden';
+        continue;
+      }
+
+      // Tay nắm bảng trợ lý AI khi đang thu: một mẩu hẹp dán vào mép phải, cao
+      // giữa màn hình nên không lọt điều kiện "góc dưới phải" ở trên.
+      const onRightEdge = box.right > window.innerWidth - 10 && box.width <= 60 && box.height >= 40;
+      if (onRightEdge) el.style.visibility = 'hidden';
     }
   });
 }
@@ -220,6 +239,43 @@ export async function enclosingSection(page, child, { minWidth = 400 } = {}) {
   }, [marker, minWidth]);
 
   return ok ? page.locator(`[${marker}]`).first() : child.first();
+}
+
+/**
+ * Chụp một khối CAO HƠN KHUNG NHÌN bằng cách nới tạm khung nhìn cho nó lọt trọn.
+ *
+ * Cách mặc định của Playwright — cuộn rồi ghép nhiều ảnh — chỉ đúng khi trang
+ * cuộn theo cửa sổ. Ở đây phần lớn màn hình cuộn bên trong một cột `overflow-auto`
+ * riêng, nên nó cuộn cửa sổ (không nhúc nhích) rồi ghép ra ảnh vỡ: nửa dưới là
+ * thứ nằm sau lưng khối cần chụp.
+ *
+ * Khung nhìn phải còn cao TỚI LÚC bấm máy: contentShot đo lại ngay trước khi
+ * chụp, mà việc chụp do capture.spec.js gọi sau khi `take` đã trả về. Vì vậy
+ * hàm này trả một vỏ bọc, tự trả khung nhìn về cũ sau khi chụp xong.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {number} height chiều cao tạm của khung nhìn
+ * @param {() => Promise<{screenshot: Function}>} build dựng ảnh trong lúc khung nhìn còn cao
+ */
+export async function tallViewportShot(page, height, build) {
+  const viewport = page.viewportSize();
+  const restore = () => page.setViewportSize(viewport);
+  await page.setViewportSize({ width: viewport.width, height });
+  try {
+    const shot = await build();
+    return {
+      screenshot: async (options = {}) => {
+        try {
+          return await shot.screenshot(options);
+        } finally {
+          await restore();
+        }
+      },
+    };
+  } catch (error) {
+    await restore();
+    throw error;
+  }
 }
 
 /**
