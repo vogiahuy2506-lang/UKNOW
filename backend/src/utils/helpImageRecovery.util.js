@@ -28,6 +28,26 @@
 
 const VOID_TAGS = new Set(['br', 'img', 'hr']);
 
+/**
+ * Thẻ được tính là "khung" của bài. Mọi thẻ INLINE (<strong>, <em>, <a>, <br>,
+ * <code>, <u>, <s>) cố tình bị bỏ qua, coi như chữ.
+ *
+ * Vì sao: máy dịch xáo trộn thẻ in đậm và link rất nhiều — cùng một câu, bản EN
+ * có thể bôi đậm khác chỗ hoặc gộp hai <strong> làm một. Các bài hướng dẫn này
+ * lại dày đặc <strong>. Đo thử trên production khi còn tính cả thẻ inline: hai
+ * bản chỉ khớp 51–72%, tất cả 8 bài đều bị loại — trong khi ở mức khối chúng
+ * gần như trùng khít (21 khối so với 22).
+ *
+ * Vẫn giữ <li>, <td>… trong khung, nên ảnh nằm lồng bên trong chúng vẫn định vị
+ * được — đó là điểm khác cốt lõi so với cách so khối cấp cao nhất.
+ */
+const STRUCTURAL_TAGS = new Set([
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'blockquote', 'pre',
+  'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+  'figure', 'figcaption', 'img', 'hr', 'div', 'section',
+]);
+
 /** Chú thích chỗ-này-từng-có-ảnh do bộ chuyển Markdown sinh ra. */
 const PLACEHOLDER_TEXT = /\[(?:ẢNH|ANH|IMAGE)\s*:/i;
 
@@ -43,9 +63,9 @@ const MIN_COVERAGE_EN = 0.85;
 const MIN_COVERAGE_VI = 0.6;
 
 /**
- * Cắt HTML thành dãy thẻ, kèm độ sâu lồng nhau và vị trí trong chuỗi gốc.
- * Text nằm giữa các thẻ không thành token — nội dung hai bản khác ngôn ngữ nên
- * không so được, chỉ khung thẻ mới so được.
+ * Cắt HTML thành dãy thẻ KHUNG (xem `STRUCTURAL_TAGS`), kèm độ sâu lồng nhau và
+ * vị trí trong chuỗi gốc. Chữ và thẻ inline không thành token — nội dung hai bản
+ * khác ngôn ngữ nên không so được, chỉ khung mới so được.
  *
  * @param {string} html
  * @returns {Array<{name:string,closing:boolean,raw:string,start:number,end:number,depth:number,key:string}>}
@@ -58,6 +78,7 @@ export function tokenizeTags(html) {
   while ((match = re.exec(html)) !== null) {
     const closing = match[1] === '/';
     const name = match[2].toLowerCase();
+    if (!STRUCTURAL_TAGS.has(name)) continue;
     const selfClosing = VOID_TAGS.has(name) || /\/\s*$/.test(match[3]);
     let tokenDepth;
     if (selfClosing) {
@@ -252,6 +273,38 @@ function describeViGap(viHtml, viTokens, prevIdx, nextIdx) {
     placeholders += 1;
   }
   return { start, end, placeholders, span: { start: spanStart, end: spanEnd } };
+}
+
+/**
+ * Đếm thẻ khung theo tên — để báo cáo khi hai bản không khớp.
+ * @param {string} html
+ * @returns {Map<string, number>}
+ */
+export function structuralTagCounts(html) {
+  const counts = new Map();
+  for (const token of tokenizeTags(html)) {
+    if (token.closing) continue;
+    counts.set(token.name, (counts.get(token.name) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Liệt kê các thẻ khung có số lượng khác nhau giữa hai bản, dạng `p 34/31`.
+ * In ra khi từ chối ghép để biết hai bản lệch ở đâu mà không phải dump cả HTML.
+ *
+ * @param {string} viHtml
+ * @param {string} enHtml
+ * @returns {string}
+ */
+export function describeStructureMismatch(viHtml, enHtml) {
+  const vi = structuralTagCounts(viHtml);
+  const en = structuralTagCounts(enHtml);
+  const names = [...new Set([...vi.keys(), ...en.keys()])].sort();
+  const diffs = names
+    .filter((name) => (vi.get(name) ?? 0) !== (en.get(name) ?? 0))
+    .map((name) => `${name} ${vi.get(name) ?? 0}/${en.get(name) ?? 0}`);
+  return diffs.length ? `vi/en: ${diffs.join(', ')}` : 'số thẻ khung hai bên bằng nhau';
 }
 
 /**

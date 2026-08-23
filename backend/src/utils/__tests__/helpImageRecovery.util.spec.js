@@ -1,5 +1,12 @@
 import { describe, expect, it } from '@jest/globals';
-import { tokenizeTags, findImageUnits, alignSequences, planImageRecovery } from '../helpImageRecovery.util.js';
+import {
+  tokenizeTags,
+  findImageUnits,
+  alignSequences,
+  planImageRecovery,
+  structuralTagCounts,
+  describeStructureMismatch,
+} from '../helpImageRecovery.util.js';
 import { stripTags, extractImageSrcs } from '../helpArticleListRepair.util.js';
 import { HELP_SEED_ARTICLES } from '../../services/help/helpSeed.data.js';
 
@@ -13,6 +20,36 @@ describe('helpImageRecovery.tokenizeTags', () => {
     const html = '<p>xin chào</p>';
     const [open, close] = tokenizeTags(html);
     expect(html.slice(open.end, close.start)).toBe('xin chào');
+  });
+
+  // Máy dịch xáo trộn <strong>/<a> rất nhiều. Tính cả chúng vào khung thì hai bản
+  // chỉ khớp 51–72% và mọi bài đều bị loại — đo thật trên production.
+  it('bỏ qua thẻ inline, chỉ giữ thẻ khung', () => {
+    const withInline = '<p>xin <strong>chào</strong> <a href="/x">bạn</a><br>ạ</p>';
+    expect(tokenizeTags(withInline).map((t) => t.key)).toEqual(['0:p', '0:/p']);
+  });
+
+  it('giữ <li>, <td> trong khung để định vị được ảnh nằm lồng bên trong', () => {
+    const html = '<table><tbody><tr><td><img src="/u/a.png"></td></tr></tbody></table>';
+    expect(tokenizeTags(html).map((t) => t.name)).toEqual(
+      ['table', 'tbody', 'tr', 'td', 'img', 'td', 'tr', 'tbody', 'table'],
+    );
+  });
+});
+
+describe('helpImageRecovery.describeStructureMismatch', () => {
+  it('chỉ ra thẻ nào lệch số lượng, bỏ qua thẻ inline', () => {
+    const vi = '<p>a</p><p>[ẢNH: x]</p><p><strong>b</strong></p>';
+    const en = '<p>a</p><img src="/u/x.png"><p>b</p>';
+    expect(describeStructureMismatch(vi, en)).toBe('vi/en: img 0/1, p 3/2');
+  });
+
+  it('nói rõ khi hai bên bằng nhau', () => {
+    expect(describeStructureMismatch('<p>a</p>', '<p><em>b</em></p>')).toBe('số thẻ khung hai bên bằng nhau');
+  });
+
+  it('structuralTagCounts chỉ đếm thẻ mở', () => {
+    expect([...structuralTagCounts('<ol><li>a</li><li>b</li></ol>')]).toEqual([['ol', 1], ['li', 2]]);
   });
 });
 
@@ -172,6 +209,21 @@ describe('helpImageRecovery — bài mẫu thật', () => {
     expect(plan.ok).toBe(true);
     expect(plan.restored).toHaveLength(extractImageSrcs(en).length);
     expect(stripTags(plan.html)).toBe(stripTags(vi));   // chú thích còn nguyên
+  });
+
+  // Chốt chặn cho đúng thứ đã làm hỏng lần chạy thật thứ hai: bản dịch bôi đậm
+  // khác chỗ, bỏ link, gộp <strong> — khung khối thì vẫn y nguyên.
+  it('cứu đủ ảnh dù bản dịch xáo trộn hết thẻ in đậm và link', () => {
+    let i = 0;
+    const en = translate(vi.replace(captionPattern, () => `<img src="/u/${i++}.png">`))
+      .replace(/<\/?strong>/g, (m, at) => (at % 3 === 0 ? '' : m))
+      .replace(/<a\b[^>]*>|<\/a>/g, '');
+    const plan = planImageRecovery(vi, en);
+    expect(plan.ok).toBe(true);
+    expect(plan.coverage).toBe(1);
+    expect(plan.restored).toHaveLength(extractImageSrcs(en).length);
+    expect(stripTags(plan.html)).toBe(stripTags(plan.textReference));
+    expect(plan.html).not.toMatch(captionPattern);
   });
 
   it('cứu đủ ảnh khi bản VI đã được seed lại bằng bản mới hơn bản EN từng dịch', () => {

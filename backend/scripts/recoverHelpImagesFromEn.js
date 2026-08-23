@@ -13,7 +13,7 @@
 import 'dotenv/config';
 import db from '../src/config/database.js';
 import { stripTags, extractImageSrcs } from '../src/utils/helpArticleListRepair.util.js';
-import { planImageRecovery } from '../src/utils/helpImageRecovery.util.js';
+import { planImageRecovery, describeStructureMismatch } from '../src/utils/helpImageRecovery.util.js';
 
 const apply = process.argv.includes('--apply');
 const verbose = process.argv.includes('-v') || process.argv.includes('--verbose');
@@ -49,6 +49,7 @@ async function main() {
       console.log(`  ✗ ${slug}: ${plan.reason} (bản EN có ${enImages.length} ảnh)`);
       totalSkipped += enImages.length;
       if (verbose) {
+        console.log(`        khung: ${describeStructureMismatch(vi.body_html, en.body_html)}`);
         for (const item of plan.skipped) console.log(`        · ${shortSrc(item.src)} — ${item.reason}`);
       }
       continue;
