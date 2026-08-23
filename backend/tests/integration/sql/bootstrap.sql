@@ -904,6 +904,19 @@ CREATE INDEX idx_courses_created_by ON courses(created_by) WHERE created_by IS N
 CREATE INDEX idx_courses_code       ON courses(course_code);
 CREATE INDEX idx_courses_product_id ON courses(product_id);
 
+-- ─── Course relations ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS course_relations (
+  id                BIGSERIAL PRIMARY KEY,
+  id_course         BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  id_related_course BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  relation_type     VARCHAR(50) DEFAULT 'related',
+  priority          INTEGER DEFAULT 1,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT chk_no_self_relation CHECK (id_course <> id_related_course)
+);
+CREATE INDEX IF NOT EXISTS idx_course_relations_course ON course_relations(id_course);
+CREATE INDEX IF NOT EXISTS idx_course_relations_related ON course_relations(id_related_course);
+
 -- ─── Products (user-managed) ─────────────────────────────────────────
 CREATE TABLE products (
   id              SERIAL PRIMARY KEY,
@@ -1122,6 +1135,22 @@ CREATE TABLE file_access_events (
   occurred_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_file_access_events_file ON file_access_events(file_id);
+
+-- ─── File download events ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS file_download_events (
+  id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  file_id     UUID,
+  campaign_id INTEGER REFERENCES campaigns(id) ON DELETE SET NULL,
+  customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+  storage_key TEXT,
+  email       TEXT,
+  ip_address  VARCHAR(50),
+  user_agent  TEXT,
+  clicked_at  TIMESTAMPTZ DEFAULT NOW(),
+  id_run      INTEGER REFERENCES campaign_runs(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_file_download_events_campaign ON file_download_events(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_file_download_events_customer ON file_download_events(customer_id);
 
 -- ─── Usage tracking (migration 033) ───────────────────────────────────
 CREATE TABLE usage_logs (
@@ -1509,6 +1538,26 @@ CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_zalo_personal_msg_external
   ON zalo_personal_messages (id_zalo_setting, external_id)
   WHERE external_id IS NOT NULL;
+
+-- ─── Zalo personal sender bindings ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS zalo_personal_sender_bindings (
+  id               BIGSERIAL PRIMARY KEY,
+  id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_campaign_run  BIGINT NOT NULL REFERENCES campaign_runs(id) ON DELETE CASCADE,
+  phone_normalized VARCHAR(20) NOT NULL,
+  id_zalo_account  BIGINT REFERENCES zalo_settings(id) ON DELETE CASCADE,
+  error            TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at       TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  CONSTRAINT chk_zalo_sender_binding_account_xor_error CHECK (
+    ((id_zalo_account IS NOT NULL) AND (error IS NULL))
+    OR ((id_zalo_account IS NULL) AND (error IS NOT NULL))
+  ),
+  CONSTRAINT uq_zalo_sender_binding_user_run_phone UNIQUE (id_user, id_campaign_run, phone_normalized)
+);
+CREATE INDEX IF NOT EXISTS idx_zalo_sender_bindings_user ON zalo_personal_sender_bindings(id_user);
+CREATE INDEX IF NOT EXISTS idx_zalo_sender_bindings_account ON zalo_personal_sender_bindings(id_zalo_account);
+CREATE INDEX IF NOT EXISTS idx_zalo_sender_bindings_campaign_run ON zalo_personal_sender_bindings(id_campaign_run);
 
 -- ─── Chatbot settings (migration 031) ──────────────────────────────────
 CREATE TABLE IF NOT EXISTS chatbot_settings (
@@ -2630,3 +2679,63 @@ ALTER TABLE zalo_messages
   ADD COLUMN IF NOT EXISTS uid                VARCHAR(255),
   ADD COLUMN IF NOT EXISTS tracking_base_url  VARCHAR(500),
   ADD COLUMN IF NOT EXISTS id_node            BIGINT;
+
+-- ─── Cột từ schema production gốc (uknow_campaign_schema.sql) & migrations ───
+ALTER TABLE campaign_customers
+  ADD COLUMN IF NOT EXISTS source_node_id BIGINT;
+
+ALTER TABLE campaign_nodes
+  ADD COLUMN IF NOT EXISTS parallel_group_id VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS id_message_sequence BIGINT,
+  ADD COLUMN IF NOT EXISTS id_email_setting BIGINT,
+  ADD COLUMN IF NOT EXISTS id_zalo_setting BIGINT,
+  ADD COLUMN IF NOT EXISTS id_zalo_group BIGINT,
+  ADD COLUMN IF NOT EXISTS total_entered INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_completed INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_failed INTEGER DEFAULT 0;
+
+ALTER TABLE campaign_run_recipient_steps
+  ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS first_step_sent_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS next_due_at TIMESTAMPTZ;
+
+ALTER TABLE email_messages
+  ADD COLUMN IF NOT EXISTS id_execution BIGINT,
+  ADD COLUMN IF NOT EXISTS id_sequence BIGINT,
+  ADD COLUMN IF NOT EXISTS id_enrollment BIGINT,
+  ADD COLUMN IF NOT EXISTS queued_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS bounced_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS bounce_reason TEXT,
+  ADD COLUMN IF NOT EXISTS error_message TEXT;
+
+ALTER TABLE login_history
+  ADD COLUMN IF NOT EXISTS device_type VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS browser VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS os VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS country VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+
+ALTER TABLE refresh_tokens
+  ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
+
+ALTER TABLE template_files
+  ADD COLUMN IF NOT EXISTS template_id INTEGER;
+
+ALTER TABLE zalo_settings
+  ADD COLUMN IF NOT EXISTS zalo_personal_outbound_per_hour_limit INTEGER,
+  ADD COLUMN IF NOT EXISTS zalo_personal_outbound_delay_min_ms INTEGER,
+  ADD COLUMN IF NOT EXISTS zalo_personal_outbound_delay_max_ms INTEGER;
+
+ALTER TABLE zalo_unreachable_phones
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE verification_codes
+  ADD COLUMN IF NOT EXISTS user_id BIGINT;
+
+ALTER TABLE knowledge_bases
+  ADD COLUMN IF NOT EXISTS embedding_model VARCHAR(50) DEFAULT 'gemini-embedding-004';
+
+ALTER TABLE ai_models
+  ADD COLUMN IF NOT EXISTS tier_rank INTEGER DEFAULT 1;
+
