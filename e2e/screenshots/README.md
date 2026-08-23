@@ -88,6 +88,23 @@ Frontend không cần mở tay — trỏ vào localhost thì Playwright tự d�
 Cờ `E2E_SEED_DEMO` là tuỳ chọn vì bộ test e2e dựa vào trạng thái rỗng — bật mặc
 định sẽ làm đỏ hàng loạt test không liên quan.
 
+### Hai trạng thái loại trừ nhau
+
+Lệnh hẹn hạ gói **khoá** luồng nâng gói (nút đổi thành "Đã có lệnh hẹn"), mà ảnh
+`canh-bao-mat-ngay` lại cần luồng đó mở. Không có API huỷ lệnh hẹn, nên phải chụp
+hai lượt:
+
+```bash
+E2E_SEED_DEMO=1 node scripts/seed-test-db.js
+npx playwright test --config=screenshots/playwright.config.js
+
+E2E_SEED_DEMO=1 E2E_SEED_PENDING_CHANGE=1 node scripts/seed-test-db.js
+npx playwright test --config=screenshots/playwright.config.js
+```
+
+Lượt đầu ra `canh-bao-mat-ngay`, lượt sau ra `lenh-hen-doi-goi`. Ảnh của lượt
+trước vẫn nằm nguyên trong `out/`, ảnh nào hỏng thì báo rõ lý do và không đè lên.
+
 ## Thêm một bài mới
 
 1. Xem bài đó có những ô chú thích nào:

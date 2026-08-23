@@ -97,6 +97,26 @@ export async function seedDemoPlans(client, { userId, activePlanCode = DEFAULT_A
 }
 
 /**
+ * Dựng sẵn một lệnh hẹn hạ gói đang chờ.
+ *
+ * Không dựng được bằng cách bấm trong giao diện: theo chính sách đổi gói, hạ gói
+ * phải TRẢ TIỀN TRƯỚC rồi mới hẹn — mà ở máy mình thì PayOS không có khoá nên
+ * không đi hết luồng thanh toán được. Ghi thẳng vào bảng là cách duy nhất.
+ *
+ * @param {import('pg').Client} client
+ * @param {{ userId: number|string, targetPlanId: number }} options
+ */
+export async function seedPendingDowngrade(client, { userId, targetPlanId }) {
+  await client.query(
+    `INSERT INTO scheduled_plan_changes (user_id, plan_id, billing_period, amount_paid, status, activate_after)
+     SELECT $1, $2, 'monthly', 0, 'pending', COALESCE(u.subscription_expires_at, NOW() + INTERVAL '30 days')
+       FROM users u WHERE u.id = $1
+     ON CONFLICT DO NOTHING`,
+    [userId, targetPlanId],
+  );
+}
+
+/**
  * Đổ toàn bộ dữ liệu mẫu.
  *
  * @param {import('pg').Client} client
@@ -105,6 +125,21 @@ export async function seedDemoPlans(client, { userId, activePlanCode = DEFAULT_A
 export async function seedDemoData(client, { userId }) {
   const { planIds, activePlanId } = await seedDemoPlans(client, { userId });
   const activeName = Object.entries(planIds).find(([, id]) => id === activePlanId)?.[0];
-  console.log(`[e2e-seed] Dữ liệu mẫu: ${Object.keys(planIds).length} gói, tài khoản đang dùng "${activeName}"`);
+
+  // Lệnh hẹn hạ gói phải BẬT RIÊNG vì nó KHOÁ luồng nâng gói ("Đã có lệnh hẹn"),
+  // mà ảnh "hộp cảnh báo trước khi xác nhận nâng gói" lại cần luồng đó mở. Hai
+  // trạng thái loại trừ nhau và không có API huỷ lệnh hẹn, nên phải chụp hai lượt.
+  const withPending = ['1', 'true', 'yes'].includes(
+    String(process.env.E2E_SEED_PENDING_CHANGE || '').toLowerCase(),
+  );
+  if (withPending) {
+    await seedPendingDowngrade(client, { userId, targetPlanId: planIds.starter });
+  }
+
+  console.log(
+    `[e2e-seed] Dữ liệu mẫu: ${Object.keys(planIds).length} gói,`
+    + ` tài khoản đang dùng "${activeName}"`
+    + (withPending ? ', có 1 lệnh hẹn hạ xuống "starter"' : ', chưa có lệnh hẹn đổi gói'),
+  );
   return { planIds, activePlanId };
 }

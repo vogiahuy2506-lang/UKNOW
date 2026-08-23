@@ -42,8 +42,15 @@ for (const slugToCapture of SHEETS) {
     test(`chụp ${slugToCapture}`, async ({ page, baseURL }) => {
       const sheetDef = (await import(`./shots/${slugToCapture}.js`)).default;
       const failures = [];
+      // Ảnh nào phải BẤM vào luồng đổi gói / cần trạng thái do seed dựng sẵn thì
+      // chỉ chạy khi trỏ vào máy mình. Trên tài khoản thật, bấm nhầm là đơn thật.
+      const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(String(baseURL || ''));
 
       for (const shot of sheetDef.shots) {
+        if (shot.localOnly && !isLocal) {
+          console.log(`  – ${shot.name} (bỏ qua: chỉ chạy ở máy mình)`);
+          continue;
+        }
         const file = `${shot.name}.png`;
         try {
           const target = await shot.take(page, { baseURL });

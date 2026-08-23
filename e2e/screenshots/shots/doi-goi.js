@@ -50,5 +50,54 @@ export default {
         });
       },
     },
+
+    // Từ đây trở xuống chỉ chạy ở máy mình: phải BẤM vào luồng đổi gói, và cần
+    // trạng thái do seed dựng sẵn. Trên tài khoản thật thì không đụng vào.
+    {
+      name: 'canh-bao-mat-ngay',
+      caption: 'hộp cảnh báo trước khi xác nhận nâng gói',
+      localOnly: true,
+      async take(page) {
+        await regionShot(page, { path: '/pricing', clip: '#pricing', waitFor: '#pricing' });
+
+        // Bấm nút của một gói CAO HƠN gói đang dùng. Nút này chỉ mở hộp thoại
+        // cảnh báo, chưa tạo đơn — đơn chỉ sinh ra nếu bấm tiếp "Đồng ý nâng cấp",
+        // và ta cố ý dừng lại trước bước đó.
+        const proCard = page.locator('#pricing .grid > *').filter({ hasText: 'Gói Pro' }).first();
+        await proCard.getByRole('button', { name: /Đăng ký gói|Nâng cấp ngay/ }).click();
+
+        const dialog = page.locator('div.fixed.inset-0').filter({ hasText: 'Xác nhận nâng cấp gói' }).first();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await hideVolatileChrome(page);
+        await highlight(dialog.locator('p').filter({ hasText: 'ngày sử dụng' }));
+        await page.waitForTimeout(200);
+        return dialog.locator('div.bg-white').first();
+      },
+    },
+    {
+      name: 'lenh-hen-doi-goi',
+      // GHI CHÚ: chú thích trong bài nói dải này nằm ở trang "Tổng quan gói",
+      // nhưng BillingHubPage không hề có nó — dải chỉ hiện trên trang bảng giá.
+      // Chụp đúng chỗ nó thật sự nằm; phần chữ trong bài cần sửa lại cho khớp.
+      caption: 'lệnh hẹn đổi gói kèm ngày hiệu lực',
+      localOnly: true,
+      async take(page) {
+        await page.goto('/pricing');
+        const banner = page.locator('#pricing').getByText('Lệnh hẹn đổi gói đang chờ kích hoạt').first();
+        if (!(await banner.isVisible({ timeout: 20_000 }).catch(() => false))) {
+          throw new Error(
+            'Chưa có lệnh hẹn đổi gói. Nạp lại DB kèm cờ rồi chạy riêng ảnh này:\n'
+            + '  E2E_SEED_DEMO=1 E2E_SEED_PENDING_CHANGE=1 node scripts/seed-test-db.js\n'
+            + 'Lưu ý: bật cờ đó thì ảnh "canh-bao-mat-ngay" sẽ hỏng, vì lệnh hẹn khoá luồng nâng gói.',
+          );
+        }
+        await settle(page);
+        await hideVolatileChrome(page);
+        const box = page.locator('#pricing div').filter({ hasText: 'Lệnh hẹn đổi gói đang chờ kích hoạt' }).last();
+        await highlight(box);
+        await page.waitForTimeout(200);
+        return box;
+      },
+    },
   ],
 };
