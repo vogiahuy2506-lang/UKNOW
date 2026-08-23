@@ -86,9 +86,9 @@ export default {
     },
     {
       name: 'lenh-hen-doi-goi',
-      // GHI CHÚ: chú thích trong bài nói dải này nằm ở trang "Tổng quan gói",
-      // nhưng BillingHubPage không hề có nó — dải chỉ hiện trên trang bảng giá.
-      // Chụp đúng chỗ nó thật sự nằm; phần chữ trong bài cần sửa lại cho khớp.
+      // Bài viết từng nói dải này nằm ở trang "Tổng quan gói", nhưng
+      // BillingHubPage không hề có nó — dải chỉ hiện trên trang bảng giá. Câu chữ
+      // đã được sửa lại cho khớp (xem scripts/patchHelpArticleText.js).
       caption: 'lệnh hẹn đổi gói kèm ngày hiệu lực',
       localOnly: true,
       async take(page) {
