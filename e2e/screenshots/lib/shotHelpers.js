@@ -24,6 +24,20 @@ export async function forceSidebarExpanded(page, baseURL) {
 }
 
 /**
+ * Chờ trang ổn định đủ để chụp.
+ *
+ * KHÔNG dùng `waitForLoadState('networkidle')`: site thật giữ kết nối SSE cho
+ * hộp thư nên mạng không bao giờ rảnh, chờ kiểu đó luôn hết giờ. Thay bằng chờ
+ * DOM dựng xong, chờ font tải xong (font chưa xong thì chữ nhảy sau khi chụp),
+ * rồi nghỉ một nhịp ngắn cho hoạt ảnh chạy nốt.
+ */
+export async function settle(page) {
+  await page.waitForLoadState('domcontentloaded');
+  await page.evaluate(() => document.fonts?.ready).catch(() => {});
+  await page.waitForTimeout(400);
+}
+
+/**
  * Ẩn những thứ động làm ảnh chụp mỗi lần một khác: bảng trợ lý AI nổi, các
  * thông báo toast, dải cảnh báo hết hạn mức. Không xoá khỏi DOM (có thể làm vỡ
  * bố cục) mà chỉ ẩn.
@@ -68,11 +82,11 @@ export async function highlight(locator) {
 export async function sidebarShot(page, { groupName, itemName, baseURL }) {
   await forceSidebarExpanded(page, baseURL);
   await page.goto('/app');
-  await page.waitForLoadState('networkidle');
-  await hideVolatileChrome(page);
 
   const sidebar = page.locator('aside').first();
-  await sidebar.waitFor({ state: 'visible' });
+  await sidebar.waitFor({ state: 'visible', timeout: 30_000 });
+  await settle(page);
+  await hideVolatileChrome(page);
 
   // Mở nhóm nếu mục con chưa hiện. Bấm lại khi đang mở sẽ đóng nhóm lại.
   const item = sidebar.getByRole('link', { name: itemName, exact: true });
@@ -95,12 +109,12 @@ export async function sidebarShot(page, { groupName, itemName, baseURL }) {
  */
 export async function regionShot(page, { path, clip, mark, waitFor }) {
   await page.goto(path);
-  await page.waitForLoadState('networkidle');
-  if (waitFor) await page.locator(waitFor).first().waitFor({ state: 'visible' });
-  await hideVolatileChrome(page);
+  if (waitFor) await page.locator(waitFor).first().waitFor({ state: 'visible', timeout: 30_000 });
 
   const target = page.locator(clip).first();
-  await target.waitFor({ state: 'visible' });
+  await target.waitFor({ state: 'visible', timeout: 30_000 });
+  await settle(page);
+  await hideVolatileChrome(page);
   if (mark) await highlight(page.locator(mark));
   await page.waitForTimeout(150);
   return target;

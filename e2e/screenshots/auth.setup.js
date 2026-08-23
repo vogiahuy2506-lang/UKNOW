@@ -25,12 +25,17 @@ setup('đăng nhập để chụp ảnh', async ({ page }) => {
 
   fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
   await page.goto('/login');
-  await page.waitForLoadState('networkidle', { timeout: 20_000 });
-  await page.locator('input[autocomplete="username"]').fill(username);
+
+  // KHÔNG chờ 'networkidle': site thật giữ kết nối SSE cho hộp thư nên mạng không
+  // bao giờ rảnh, chờ kiểu đó luôn hết giờ. Chờ đúng ô nhập là chắc chắn nhất.
+  const usernameBox = page.locator('input[autocomplete="username"]');
+  await usernameBox.waitFor({ state: 'visible', timeout: 30_000 });
+
+  await usernameBox.fill(username);
   await page.locator('input[autocomplete="current-password"]').fill(password);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await page.waitForURL(/\/app(\/|$)/, { timeout: 20_000 });
-  await expect(page.locator('aside').first()).toBeVisible();
+  await page.waitForURL(/\/app(\/|$)/, { timeout: 30_000 });
+  await expect(page.locator('aside').first()).toBeVisible({ timeout: 30_000 });
 
   await page.context().storageState({ path: AUTH_FILE });
 });

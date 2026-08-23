@@ -13,7 +13,7 @@
  *   - "một mục đã bị khoá sau khi hết ân hạn" → cần tài khoản đã hết ân hạn.
  * Ba cái sau dựng được nếu chụp trên môi trường test có seed sẵn các trạng thái đó.
  */
-import { sidebarShot, regionShot, highlight, hideVolatileChrome } from '../lib/shotHelpers.js';
+import { sidebarShot, regionShot, highlight, hideVolatileChrome, settle } from '../lib/shotHelpers.js';
 
 export default {
   slug: 'doi-goi',
@@ -23,10 +23,10 @@ export default {
       caption: 'thanh ngang trên cùng, khoanh đỏ nút "Nâng cấp"',
       async take(page) {
         await page.goto('/app');
-        await page.waitForLoadState('networkidle');
-        await hideVolatileChrome(page);
         const header = page.locator('header').first();
-        await header.waitFor({ state: 'visible' });
+        await header.waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
         await highlight(header.getByRole('button', { name: 'Nâng cấp', exact: true }));
         return header;
       },
