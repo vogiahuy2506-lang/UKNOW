@@ -34,7 +34,35 @@ export async function forceSidebarExpanded(page, baseURL) {
 export async function settle(page) {
   await page.waitForLoadState('domcontentloaded');
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
+  await revealOnScrollContent(page);
   await page.waitForTimeout(400);
+}
+
+/**
+ * Cuộn chậm hết trang rồi quay lại đầu, để các khối "hiện dần khi cuộn tới" kịp
+ * hiện ra.
+ *
+ * Component AnimatedSection giữ opacity 0 cho tới khi IntersectionObserver báo
+ * phần tử lọt vào khung nhìn. Cuộn NHẢY một phát (điều Playwright làm khi chụp
+ * fullPage) thì phần tử không bao giờ được lấy mẫu ở trạng thái đang hiện —
+ * quan sát viên không kích hoạt và khối đó chụp ra trắng trơn.
+ *
+ * Đã đo trên trang bảng giá thật: mới tải `1 1 1 0 0 0`, cuộn nhảy vẫn
+ * `1 1 1 0 0 0`, cuộn từng nhịp thì `1 1 1 1 1 1`. Nửa dưới bảng giá biến mất
+ * khỏi ảnh chụp chính vì chỗ này.
+ */
+export async function revealOnScrollContent(page) {
+  await page.evaluate(async () => {
+    const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+    const step = Math.max(200, Math.round(window.innerHeight * 0.6));
+    const bottom = document.documentElement.scrollHeight;
+    for (let y = 0; y <= bottom; y += step) {
+      window.scrollTo(0, y);
+      await wait(120);
+    }
+    window.scrollTo(0, 0);
+    await wait(250);
+  });
 }
 
 /**
@@ -48,6 +76,9 @@ export async function hideVolatileChrome(page) {
       [data-testid="ai-assistant-panel"],
       .Toastify, [class*="toast"],
       [data-help-shot-hide] { visibility: hidden !important; }
+      /* Chốt chặn cuối cho khối hiện-dần-khi-cuộn nào vẫn còn ẩn sau khi đã cuộn
+         qua: AnimatedSection đặt style trực tiếp nên phải !important mới đè được. */
+      [style*="translateY(50px)"] { opacity: 1 !important; transform: none !important; }
       *, *::before, *::after {
         animation-duration: 0s !important;
         transition-duration: 0s !important;
@@ -154,7 +185,13 @@ export async function sidebarShot(page, { groupName, itemName, baseURL }) {
 
   await highlight(item);
   await page.waitForTimeout(150);   // chờ outline vẽ xong
-  return contentShot(page, sidebar);
+
+  // Chụp riêng <nav> (danh sách mục) chứ không chụp cả <aside>: thanh menu cao
+  // hết màn hình và có nút thu gọn GHIM Ở ĐÁY, nên cắt theo nội dung không ăn
+  // thua — vẫn thừa gần nửa ảnh nền trắng ở giữa.
+  const list = sidebar.locator('nav').first();
+  const target = (await list.count()) ? list : sidebar;
+  return contentShot(page, target);
 }
 
 /**
