@@ -13,27 +13,33 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AUTH_FILE = path.join(__dirname, '.auth', 'help-shots.json');
 
-/** Những chuỗi chỉ là chỗ điền trong lệnh mẫu, không phải tài khoản thật. */
-const PLACEHOLDERS = new Set([
-  '...', '…', 'tài_khoản_của_bạn', 'mật_khẩu', 'tên_đăng_nhập', 'username', 'password',
-]);
+/**
+ * Nhận ra chuỗi chỉ là chỗ điền trong lệnh mẫu.
+ *
+ * Không liệt kê từng chuỗi cụ thể nữa — đã thử và vẫn lọt ('tên_đăng_nhập_thật'
+ * không nằm trong danh sách). Bắt theo hình dạng: dấu ba chấm, hoặc chuỗi có
+ * gạch dưới mà lại chứa chữ tiếng Việt có dấu — tên đăng nhập thật không viết vậy.
+ */
+const PLACEHOLDER_SHAPE = /^(\.{3}|…)$|^[^\s]*_[^\s]*$/u;
+const VIETNAMESE_DIACRITICS = /[àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i;
+
+function looksLikePlaceholder(value) {
+  const text = String(value).trim();
+  if (text === '...' || text === '…') return true;
+  return PLACEHOLDER_SHAPE.test(text) && VIETNAMESE_DIACRITICS.test(text);
+}
 
 setup('đăng nhập để chụp ảnh', async ({ page }) => {
   const username = process.env.HELP_SHOT_USERNAME;
   const password = process.env.HELP_SHOT_PASSWORD;
-  if (!username || !password) {
+  const SETUP_HINT = 'Điền tài khoản vào e2e/screenshots/.env.shots:\n'
+    + '  cp screenshots/.env.shots.example screenshots/.env.shots\n'
+    + '  rồi mở file đó điền HELP_SHOT_USERNAME và HELP_SHOT_PASSWORD.';
+
+  if (!username || !password) throw new Error(`Chưa có tài khoản.\n${SETUP_HINT}`);
+  if (looksLikePlaceholder(username) || looksLikePlaceholder(password)) {
     throw new Error(
-      'Thiếu tài khoản. Chạy:\n'
-      + "  HELP_SHOT_USERNAME='tên_đăng_nhập' HELP_SHOT_PASSWORD='mật_khẩu' \\\n"
-      + '    npx playwright test --config=screenshots/playwright.config.js',
-    );
-  }
-  // Trong lệnh mẫu chỗ điền viết là '...'. Dán nguyên si thì Playwright vẫn chạy,
-  // vẫn điền, vẫn bấm — rồi chết ở một cái timeout chẳng liên quan gì tới nguyên nhân.
-  if (PLACEHOLDERS.has(username) || PLACEHOLDERS.has(password)) {
-    throw new Error(
-      'HELP_SHOT_USERNAME / HELP_SHOT_PASSWORD vẫn đang là chỗ điền trong lệnh mẫu.\n'
-      + 'Thay bằng tài khoản thật (nên dùng tài khoản chủ workspace).',
+      `Tài khoản đang là chuỗi mẫu ("${username}") chứ không phải tài khoản thật.\n${SETUP_HINT}`,
     );
   }
 

@@ -13,23 +13,30 @@ một lệnh thay vì ngồi chụp lại từng tấm.
 ```bash
 cd e2e
 
-# 1. Chụp — tài khoản do bạn tự đặt, không lưu vào file nào
-HELP_SHOT_USERNAME='...' HELP_SHOT_PASSWORD='...' \
-  npx playwright test --config=screenshots/playwright.config.js
+# 1. Điền tài khoản — chỉ làm một lần, file này đã gitignore
+cp screenshots/.env.shots.example screenshots/.env.shots
+$EDITOR screenshots/.env.shots
+
+# 2. Chụp
+npx playwright test --config=screenshots/playwright.config.js
 
 # Ảnh ra ở screenshots/out/<slug>/ kèm manifest.json
 open screenshots/out/doi-goi/
 
-# 2. Chèn vào bài — chạy thử trước, không ghi gì
+# 3. Chèn vào bài — chạy thử trước, không ghi gì
 cd ..
 export HELP_API_TOKEN='...'   # xem cách lấy ở đầu backend/scripts/insertHelpScreenshots.js
 node backend/scripts/insertHelpScreenshots.js e2e/screenshots/out/doi-goi
 
-# 3. Ưng thì mới ghi
+# 4. Ưng thì mới ghi
 node backend/scripts/insertHelpScreenshots.js e2e/screenshots/out/doi-goi --apply
 ```
 
-Mặc định trỏ vào `https://founderai.biz`. Đổi bằng `HELP_SHOT_BASE_URL`.
+Mặc định trỏ vào `https://founderai.biz`. Đổi bằng `HELP_SHOT_BASE_URL` trong
+`.env.shots`.
+
+Nên dùng **tài khoản chủ workspace** — nhiều màn hình trong bài chỉ chủ tài khoản
+mới thấy (nhóm Gói & Thanh toán, Hồ sơ doanh nghiệp, Nhân viên).
 
 ## Quy tắc: chỉ đọc
 

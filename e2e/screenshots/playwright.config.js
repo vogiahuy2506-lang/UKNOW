@@ -7,10 +7,20 @@
  *  2. Bộ e2e tự dựng frontend dev server; ở đây không cần vì trỏ vào site đã chạy.
  *
  * Chạy (từ thư mục e2e/):
- *   HELP_SHOT_USERNAME=... HELP_SHOT_PASSWORD=... \
- *     npx playwright test --config=screenshots/playwright.config.js
+ *   cp screenshots/.env.shots.example screenshots/.env.shots   # điền tài khoản
+ *   npx playwright test --config=screenshots/playwright.config.js
  */
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Tài khoản đọc từ file thay vì gõ vào dòng lệnh: gõ tay dễ dán nhầm chuỗi mẫu,
+// và mật khẩu gõ trong dòng lệnh thì nằm lại trong lịch sử shell.
+// Biến môi trường đặt sẵn vẫn được ưu tiên (dotenv không ghi đè).
+dotenv.config({ path: path.join(__dirname, '.env.shots') });
 
 const BASE_URL = process.env.HELP_SHOT_BASE_URL || 'https://founderai.biz';
 

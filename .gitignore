@@ -83,6 +83,7 @@ e2e/test-results/
 e2e/playwright-report/
 # Phiên đăng nhập + ảnh chụp minh hoạ: chứa dữ liệu tài khoản thật, không commit
 e2e/screenshots/.auth/
+e2e/screenshots/.env.shots
 e2e/screenshots/out/
 
 ####################
