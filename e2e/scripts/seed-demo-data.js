@@ -735,37 +735,208 @@ export async function seedInbox(client, { userId }) {
  * Chỉ nối vào chiến dịch ĐÃ CHẠY (active/completed/failed); chiến dịch nháp thì
  * đúng ra chưa có ai tham gia.
  */
+/**
+ * Nối khách hàng vào các chiến dịch đã seed và tạo tin nhắn gửi mẫu (email_messages / zalo_messages).
+ *
+ * Thiếu bảng nối `campaign_customers` thì trang "Khách hàng từ chiến dịch" mở ra
+ * chỉ có dòng "Không có khách hàng nào trong chiến dịch này", dù chiến dịch ghi
+ * hàng trăm tin đã gửi — số đó nằm ở cột trên bảng campaigns, không phải quan hệ.
+ *
+ * Đồng thời seed `email_messages` và `customer_journey` (có `id_run` và `id_campaign`)
+ * để hộp thoại "Hành trình khách hàng" (`chi-tiet-khach`) hiển thị đầy đủ dòng thời gian
+ * các sự kiện đã gửi, đã mở, đã bấm link.
+ */
 export async function seedCampaignCustomers(client, { userId }) {
   const { rows: campaigns } = await client.query(
-    `SELECT id FROM campaigns
+    `SELECT id, campaign_name, campaign_type FROM campaigns
       WHERE COALESCE(workspace_owner_id, id_user) = $1
         AND status IN ('active', 'completed', 'failed')
       ORDER BY id`,
     [userId],
   );
   const { rows: customers } = await client.query(
-    'SELECT id FROM customers WHERE COALESCE(workspace_owner_id, id_user) = $1 ORDER BY id',
+    'SELECT id, full_name, email, phone FROM customers WHERE COALESCE(workspace_owner_id, id_user) = $1 ORDER BY id',
     [userId],
   );
   if (!campaigns.length || !customers.length) return 0;
 
+  const { rows: emailTemplates } = await client.query(
+    'SELECT id, template_name, body_html, body_text FROM email_templates WHERE id_user = $1 ORDER BY id LIMIT 1',
+    [userId],
+  );
+  const defaultTemplate = emailTemplates[0] || null;
+
   let linked = 0;
   for (const [index, campaign] of campaigns.entries()) {
+    // Tìm đợt chạy (run) tương ứng của chiến dịch
+    const { rows: runs } = await client.query(
+      'SELECT id, run_name FROM campaign_runs WHERE id_campaign = $1 ORDER BY id DESC LIMIT 1',
+      [campaign.id],
+    );
+    const runId = runs[0]?.id || null;
+
     // Mỗi chiến dịch lấy một lát khách khác nhau, để các trang không giống hệt nhau.
     const slice = customers.slice(index * 3, index * 3 + 12);
     for (const [position, customer] of slice.entries()) {
+      const daysAgo = 3 + (position % 5);
+      const isOpened = position % 2 === 0;
+      const isClicked = position % 4 === 0;
+      const openCount = isOpened ? (isClicked ? 3 : 1) : 0;
+      const clickCount = isClicked ? 1 : 0;
+
       await client.query(
         `INSERT INTO campaign_customers (
            id_campaign, id_customer, has_opened, has_clicked,
-           email_received_count, email_opened_count, created_at
-         ) VALUES ($1, $2, $3, $4, 1, $5, NOW() - ($6 || ' days')::INTERVAL)
+           email_received_count, email_opened_count, email_clicked_count,
+           first_email_sent_at, last_email_sent_at,
+           first_email_opened_at, last_email_opened_at,
+           first_email_clicked_at, last_email_clicked_at,
+           created_at
+         ) VALUES (
+           $1, $2, $3, $4,
+           1, $5, $6,
+           NOW() - ($7 || ' days')::INTERVAL, NOW() - ($7 || ' days')::INTERVAL,
+           CASE WHEN $5 > 0 THEN NOW() - ($7 || ' days')::INTERVAL + INTERVAL '1 hour' ELSE NULL END,
+           CASE WHEN $5 > 0 THEN NOW() - ($7 || ' days')::INTERVAL + INTERVAL '2 hours' ELSE NULL END,
+           CASE WHEN $6 > 0 THEN NOW() - ($7 || ' days')::INTERVAL + INTERVAL '3 hours' ELSE NULL END,
+           CASE WHEN $6 > 0 THEN NOW() - ($7 || ' days')::INTERVAL + INTERVAL '3 hours' ELSE NULL END,
+           NOW() - ($7 || ' days')::INTERVAL
+         )
          ON CONFLICT DO NOTHING`,
         [
           campaign.id, customer.id,
-          position % 2 === 0, position % 4 === 0,
-          position % 2 === 0 ? 1 : 0, 3 + (position % 5),
+          isOpened, isClicked,
+          openCount, clickCount, daysAgo,
         ],
       );
+
+      // Seed email_messages (tin gửi qua Email)
+      if (runId) {
+        const subject = `[UKNOW] Tri ân khách hàng thân thiết — Ưu đãi đặc biệt Quý 3`;
+        const bodyHtml = defaultTemplate?.body_html || `<p>Xin chào <strong>${customer.full_name || 'Quý khách'}</strong>,</p><p>Cảm ơn bạn đã luôn đồng hành cùng UKNOW. Chúng tôi gửi tặng bạn mã giảm giá đặc quyền.</p><p><a href="https://uknow.vn/pricing">Xem chi tiết ưu đãi tại đây</a></p>`;
+        const bodyText = defaultTemplate?.body_text || `Xin chào ${customer.full_name || 'Quý khách'}, cảm ơn bạn đã đồng hành cùng UKNOW.`;
+
+        const emailRes = await client.query(
+          `INSERT INTO email_messages (
+             id_user, id_campaign, id_run, id_customer, id_email_template,
+             recipient_email, recipient_name, sender_email, sender_name,
+             from_address, reply_to, subject, body_html, body_text,
+             status, open_count, click_count,
+             first_opened_at, last_opened_at, first_clicked_at, last_clicked_at,
+             sent_at, delivered_at, created_at, updated_at
+           ) VALUES (
+             $1, $2, $3, $4, $5,
+             $6, $7, 'cskh@uknow.vn', 'CSKH UKNOW',
+             'CSKH UKNOW <cskh@uknow.vn>', 'support@uknow.vn', $8, $9, $10,
+             'delivered', $11, $12,
+             CASE WHEN $11 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '1 hour' ELSE NULL END,
+             CASE WHEN $11 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '2 hours' ELSE NULL END,
+             CASE WHEN $12 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '3 hours' ELSE NULL END,
+             CASE WHEN $12 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '3 hours' ELSE NULL END,
+             NOW() - ($13 || ' days')::INTERVAL,
+             NOW() - ($13 || ' days')::INTERVAL,
+             NOW() - ($13 || ' days')::INTERVAL,
+             NOW() - ($13 || ' days')::INTERVAL
+           ) RETURNING id`,
+          [
+            userId, campaign.id, runId, customer.id, defaultTemplate?.id || null,
+            customer.email, customer.full_name || 'Khách hàng',
+            subject, bodyHtml, bodyText,
+            openCount, clickCount, daysAgo,
+          ],
+        );
+        const emailMsgId = emailRes.rows[0].id;
+
+        // Hành trình dòng thời gian: email_sent
+        await client.query(
+          `INSERT INTO customer_journey (
+             id_customer, id_campaign, id_run, id_email_message,
+             event_type, event_channel, event_data, event_at, created_at
+           ) VALUES
+             ($1, $2, $3, $4, 'email_sent', 'email', $5, NOW() - ($6 || ' days')::INTERVAL, NOW() - ($6 || ' days')::INTERVAL)`,
+          [
+            customer.id, campaign.id, runId, emailMsgId,
+            JSON.stringify({ subject }),
+            daysAgo,
+          ],
+        );
+
+        // Hành trình dòng thời gian: email_opened
+        if (isOpened) {
+          await client.query(
+            `INSERT INTO customer_journey (
+               id_customer, id_campaign, id_run, id_email_message,
+               event_type, event_channel, event_data, event_at, created_at
+             ) VALUES
+               ($1, $2, $3, $4, 'email_opened', 'email', $5, NOW() - ($6 || ' days')::INTERVAL + INTERVAL '1 hour', NOW() - ($6 || ' days')::INTERVAL + INTERVAL '1 hour')`,
+            [
+              customer.id, campaign.id, runId, emailMsgId,
+              JSON.stringify({ subject }),
+              daysAgo,
+            ],
+          );
+        }
+
+        // Hành trình dòng thời gian: email_clicked
+        if (isClicked) {
+          await client.query(
+            `INSERT INTO customer_journey (
+               id_customer, id_campaign, id_run, id_email_message,
+               event_type, event_channel, event_data, event_at, created_at
+             ) VALUES
+               ($1, $2, $3, $4, 'email_clicked', 'email', $5, NOW() - ($6 || ' days')::INTERVAL + INTERVAL '3 hours', NOW() - ($6 || ' days')::INTERVAL + INTERVAL '3 hours')`,
+            [
+              customer.id, campaign.id, runId, emailMsgId,
+              JSON.stringify({
+                subject,
+                targetUrl: 'https://uknow.vn/pricing',
+                label: 'Xem chi tiết ưu đãi tại đây',
+              }),
+              daysAgo,
+            ],
+          );
+        }
+
+        // Nếu là chiến dịch Zalo hoặc Mixed: thêm tin Zalo tương ứng
+        if (campaign.campaign_type === 'zalo' || campaign.campaign_type === 'mixed') {
+          const zaloMsgContent = `Chào ${customer.full_name || 'bạn'}, UKNOW gửi tặng bạn mã giảm giá 20% khi gia hạn dịch vụ trong tháng này!`;
+          const zaloRes = await client.query(
+            `INSERT INTO zalo_messages (
+               id_user, id_campaign, id_run, id_customer,
+               recipient_phone, recipient_name, channel,
+               message_content, status, click_count,
+               sent_at, created_at, updated_at
+             ) VALUES (
+               $1, $2, $3, $4,
+               $5, $6, 'zalo_oa',
+               $7, 'delivered', $8,
+               NOW() - ($9 || ' days')::INTERVAL,
+               NOW() - ($9 || ' days')::INTERVAL,
+               NOW() - ($9 || ' days')::INTERVAL
+             ) RETURNING id`,
+            [
+              userId, campaign.id, runId, customer.id,
+              customer.phone || '0901234501', customer.full_name || 'Khách hàng',
+              zaloMsgContent, clickCount, daysAgo,
+            ],
+          );
+          const zaloMsgId = zaloRes.rows[0].id;
+
+          await client.query(
+            `INSERT INTO customer_journey (
+               id_customer, id_campaign, id_run, id_zalo_message,
+               event_type, event_channel, event_data, event_at, created_at
+             ) VALUES
+               ($1, $2, $3, $4, 'zalo_sent', 'zalo', $5, NOW() - ($6 || ' days')::INTERVAL, NOW() - ($6 || ' days')::INTERVAL)`,
+            [
+              customer.id, campaign.id, runId, zaloMsgId,
+              JSON.stringify({ message: zaloMsgContent }),
+              daysAgo,
+            ],
+          );
+        }
+      }
+
       linked += 1;
     }
   }
