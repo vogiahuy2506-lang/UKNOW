@@ -2561,3 +2561,53 @@ CREATE TABLE IF NOT EXISTS diagnostic_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_diagnostic_messages_run ON diagnostic_messages(run_id, seq);
 
+-- ─── Cột do ALTER TABLE trong migration thêm vào ─────────────────────────
+-- bootstrap.sql dựng bảng theo hình dạng BAN ĐẦU của chúng; những cột được
+-- thêm bằng ALTER TABLE ở migration sau đó thì không có. Bảng tồn tại nhưng
+-- thiếu cột là kiểu lỗi khó thấy: đếm bảng thấy đủ, mà truy vấn vẫn vỡ.
+--
+-- Đã gặp thật: hộp thư trả 500 "column wm.is_read does not exist" dù
+-- webchat_messages đã có sẵn trong file này.
+--
+-- Danh sách dưới đây do scripts/checkBootstrapColumns.js dò ra bằng cách quét
+-- mọi ALTER TABLE ... ADD COLUMN trong migrations/ rồi đối chiếu với DB test.
+-- Thêm cột mới cho bảng cũ ở migration thì nhớ chạy lại script đó.
+
+ALTER TABLE ai_chat_sessions
+  ADD COLUMN IF NOT EXISTS wizard_state JSONB;
+
+ALTER TABLE business_profiles
+  ADD COLUMN logo_url TEXT;
+
+ALTER TABLE chatbot_settings
+  ADD COLUMN IF NOT EXISTS system_instruction TEXT;
+
+ALTER TABLE chatbot_zalo_account_settings
+  ADD COLUMN IF NOT EXISTS id_chatbot BIGINT REFERENCES custom_chatbots(id) ON DELETE SET NULL;
+
+ALTER TABLE diagnostic_messages
+  ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE diagnostic_messages
+  ADD COLUMN IF NOT EXISTS wait_ms INT, ADD COLUMN IF NOT EXISTS wait_reason VARCHAR(40), ADD COLUMN IF NOT EXISTS lookup_ms INT, ADD COLUMN IF NOT EXISTS send_ms INT, ADD COLUMN IF NOT EXISTS attempts INT, ADD COLUMN IF NOT EXISTS error_category VARCHAR(60), ADD COLUMN IF NOT EXISTS resolved_uid VARCHAR(64), ADD COLUMN IF NOT EXISTS zalo_name VARCHAR(255);
+
+ALTER TABLE diagnostic_runs
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) NOT NULL DEFAULT 'fast', ADD COLUMN IF NOT EXISTS policy_snapshot JSONB, ADD COLUMN IF NOT EXISTS skipped_count INT NOT NULL DEFAULT 0;
+
+ALTER TABLE landing_page_templates
+  ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
+
+ALTER TABLE landing_page_templates
+  ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE landing_pages
+  ADD COLUMN IF NOT EXISTS template_id INTEGER REFERENCES landing_page_templates(id);
+
+ALTER TABLE topup_grants
+  ADD COLUMN IF NOT EXISTS reminder_count INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE webchat_messages
+  ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT false;
+
+ALTER TABLE webchat_messages
+  ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
