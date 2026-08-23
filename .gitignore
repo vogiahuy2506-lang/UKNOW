@@ -81,6 +81,9 @@ e2e/.env.test
 e2e/.auth/
 e2e/test-results/
 e2e/playwright-report/
+# Phiên đăng nhập + ảnh chụp minh hoạ: chứa dữ liệu tài khoản thật, không commit
+e2e/screenshots/.auth/
+e2e/screenshots/out/
 
 ####################
 # OS / EDITOR
