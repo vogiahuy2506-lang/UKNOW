@@ -54,8 +54,14 @@ class UnifiedInboxService {
   async _loadZaloAccountChatbotEnabledMap(userId) {
     const rows = await chatbotZaloAccountRepository.getAllSettingsForUser(userId);
     const map = new Map();
-    for (const row of rows) {
-      map.set(Number(row.id_zalo_setting), row.is_enabled === true);
+    // Reverse so newest (created_at DESC in repo) wins for the default fallback
+    const reversedRows = [...rows].reverse();
+    for (const row of reversedRows) {
+      const isEnabled = row.is_enabled === true;
+      map.set(Number(row.id_zalo_setting), isEnabled);
+      if (row.id_chatbot != null) {
+        map.set(`${row.id_zalo_setting}:${row.id_chatbot}`, isEnabled);
+      }
     }
     return map;
   }
@@ -75,7 +81,15 @@ class UnifiedInboxService {
       if (!isAccountActive) {
         return { enabled: false, reason: 'account_disconnected' };
       }
-      const enabled = zaloEnabledMap.get(settingId) === true;
+      
+      const chatbotId = conversation.idChatbot || conversation.id_chatbot;
+      let enabled;
+      if (chatbotId != null && zaloEnabledMap.has(`${settingId}:${chatbotId}`)) {
+        enabled = zaloEnabledMap.get(`${settingId}:${chatbotId}`);
+      } else {
+        enabled = zaloEnabledMap.get(settingId) === true;
+      }
+      
       return { enabled, reason: enabled ? null : 'chatbot_off' };
     }
     return { enabled: true, reason: null };
