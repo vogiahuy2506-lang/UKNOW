@@ -22,6 +22,13 @@ jest.unstable_mockModule('../../../repositories/chatbot/zaloPersonal.repository.
   },
 }));
 
+jest.unstable_mockModule('../../../repositories/chatbot/zaloInbox.repository.js', () => ({
+  default: {
+    findConversation: mockFindConversation,
+    maybeResetSession: jest.fn().mockResolvedValue(false),
+  },
+}));
+
 jest.unstable_mockModule('../../../repositories/ai/chatbot.repository.js', () => ({
   default: {
     getSettings: mockGetChatbotSettings,

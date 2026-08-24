@@ -123,6 +123,34 @@ class ZaloInboxRepository {
   }
 
   /**
+   * Conditionally reset the AI conversation context.
+   *
+   * If the time gap since the conversation's last message exceeds
+   * SESSION_GAP_HOURS (default 8), the visitor is starting a new session and
+   * session_reset_at is set to now. The AI will only read messages newer than
+   * session_reset_at, effectively giving a clean context.
+   *
+   * @param {number} conversationId
+   * @param {Date|string} lastMessageAt - when the last visitor message arrived
+   * @param {number} gapHours - threshold in hours (default 8)
+   * @returns {Promise<boolean>} true if session was reset, false if gap is short
+   */
+  async maybeResetSession(conversationId, lastMessageAt, gapHours = 8) {
+    const gapMs = gapHours * 60 * 60 * 1000;
+    const gap = Date.now() - new Date(lastMessageAt).getTime();
+    if (gap < gapMs) return false;
+
+    await db.query(
+      `UPDATE zalo_personal_conversations
+          SET session_reset_at = NOW(),
+              last_message_at = NOW()
+        WHERE id = $1`,
+      [conversationId]
+    );
+    return true;
+  }
+
+  /**
    * Insert a bot response message.
    *
    * @param {number} conversationId

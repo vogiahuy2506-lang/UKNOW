@@ -142,11 +142,11 @@ class ChatRouterService {
    * @param {object} [params.visitorInfo] - visitor metadata
    * @param {object} params.chatbotSettings - pre-fetched chatbot settings for this account
    */
-  async routeMessageWithSettings({ channel, userId, message, conversationId, chatbotSettings, visitorInfo = {}, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [], chatbotId = null }) {
+  async routeMessageWithSettings({ channel, userId, message, conversationId, chatbotSettings, visitorInfo = {}, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [], chatbotId = null, sessionResetAt = null }) {
     const adapter = ADAPTERS[channel];
     if (!adapter) throw new Error(`Unknown channel: ${channel}`);
 
-    console.log(`[ChatRouter] routeMessageWithSettings: channel=${channel}, userId=${userId}, chatbotId=${chatbotId ?? 'null'}, conversationId=${conversationId}`);
+    console.log(`[ChatRouter] routeMessageWithSettings: channel=${channel}, userId=${userId}, chatbotId=${chatbotId ?? 'null'}, conversationId=${conversationId}, sessionResetAt=${sessionResetAt}`);
 
     // Skip if chatbot is disabled
     if (!chatbotSettings?.is_enabled) {
@@ -161,7 +161,7 @@ class ChatRouterService {
 
     // PARALLEL: Get history, subAssistant, and profileContext (all independent)
     const [history, subAssistant, profileContext] = await Promise.all([
-      this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES, { beforeMessageId, throughMessageId, excludeMessageIds }),
+      this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES, { beforeMessageId, throughMessageId, excludeMessageIds, sessionResetAt }),
       chatbotSettings.id_sub_assistant
         ? subAssistantService.getById(chatbotSettings.id_sub_assistant, userId)
         : Promise.resolve(null),
@@ -396,14 +396,18 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
   async _getZaloPersonalHistory(conversationId, limit = 50, options = {}) {
     try {
       const normalizedOptions = typeof options === 'number' ? { beforeMessageId: options } : (options || {});
-      const { beforeMessageId = null, throughMessageId = null, excludeMessageIds = [] } = normalizedOptions;
-      console.log(`[ChatRouter] _getZaloPersonalHistory: convId=${conversationId}, limit=${limit}, beforeMessageId=${beforeMessageId}, throughMessageId=${throughMessageId}`);
+      const { beforeMessageId = null, throughMessageId = null, excludeMessageIds = [], sessionResetAt = null } = normalizedOptions;
+      console.log(`[ChatRouter] _getZaloPersonalHistory: convId=${conversationId}, limit=${limit}, beforeMessageId=${beforeMessageId}, throughMessageId=${throughMessageId}, sessionResetAt=${sessionResetAt}`);
       const db = (await import('../../config/database.js')).default;
       let query = `SELECT id, role, content, metadata, created_at as createdAt
          FROM zalo_personal_messages
          WHERE id_conversation = $1`;
       const params = [conversationId];
 
+      if (sessionResetAt) {
+        params.push(sessionResetAt);
+        query += ` AND created_at >= $${params.length}`;
+      }
       if (beforeMessageId) {
         params.push(beforeMessageId);
         query += ` AND id < $${params.length}`;

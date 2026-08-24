@@ -543,6 +543,26 @@ class ZaloPersonalInboxService {
         idChatbotForConv
       );
 
+      // ── Session gap detection ──────────────────────────────────────────────
+      // If the visitor's last message was more than 8 hours ago, reset the
+      // AI context so the new message starts a fresh session. This prevents
+      // the AI from replying to messages sent hours/days earlier.
+      // sessionResetAt is passed to the AI router so it only reads messages
+      // newer than this timestamp.
+      let sessionResetAt = null;
+      try {
+        const wasReset = await zaloInboxRepository.maybeResetSession(
+          conversation.id,
+          conversation.last_message_at
+        );
+        if (wasReset) {
+          sessionResetAt = new Date().toISOString();
+          console.log(`[ZaloInbox] Session reset for conversation ${conversation.id} — AI will start from new context`);
+        }
+      } catch (sessionErr) {
+        console.warn('[ZaloInbox] maybeResetSession failed:', sessionErr.message);
+      }
+
       // Broadcast SSE
       sseService.broadcast(String(userId), 'inbox:new_message', {
         conversationId: conversation.id,
@@ -605,6 +625,7 @@ class ZaloPersonalInboxService {
             senderId,
             resolvedSenderName: resolvedSenderName || senderName,
             batch,
+            sessionResetAt,
           });
         },
       });
@@ -616,8 +637,10 @@ class ZaloPersonalInboxService {
   /**
    * Process a flushed batch of messages for Zalo Personal
    * @private
+   * @param {object} params
+   * @param {string} [params.sessionResetAt] - ISO timestamp; if set, AI reads only messages >= this
    */
-  async _processZaloPersonalBatch({ userId, zaloSettingId, conversation, senderId, resolvedSenderName, batch }) {
+  async _processZaloPersonalBatch({ userId, zaloSettingId, conversation, senderId, resolvedSenderName, batch, sessionResetAt = null }) {
     const prompt = formatBatchedContent(batch.messages);
     if (!prompt) return;
 
@@ -748,6 +771,7 @@ class ZaloPersonalInboxService {
       // 5. Snapshot history and exclude just this batch's visitor rows. A bot
       // reply from the preceding batch remains visible even if it was stored
       // after the first message in this batch.
+      // sessionResetAt: if set, only read messages newer than this (new session).
       const historyThroughMessageId = await zaloPersonalRepository.getLatestMessageId(conversation.id);
       const result = await chatRouterService.routeMessageWithSettings({
         channel: 'zalo_personal',
@@ -765,6 +789,7 @@ class ZaloPersonalInboxService {
           senderId,
           senderName: resolvedSenderName,
         },
+        sessionResetAt,
       });
 
       if (result?.content) {
