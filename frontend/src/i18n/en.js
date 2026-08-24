@@ -5665,10 +5665,16 @@ export default {
     copyCode: 'Copy code',
     download: 'Download',
     viewFullscreen: 'View fullscreen',
-    editAndSave: 'Edit & Save',
+    editAndSave: 'Open Full Editor',
+    editWithAi: 'Edit with AI',
     createNew: 'Create new',
     desktop: 'Desktop',
     mobile: 'Mobile',
+    editBoxTitle: 'Ask AI to edit this page',
+    editBoxPlaceholder: 'e.g. Change background color to purple, update heading, add CTA button...',
+    applyEdit: 'Apply edit',
+    editing: 'Editing...',
+    cancelEdit: 'Cancel',
   },
 
   // Campaign Run Modals
