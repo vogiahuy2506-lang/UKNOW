@@ -5704,10 +5704,16 @@ export default {
     copyCode: 'Copy code',
     download: 'Download',
     viewFullscreen: 'Xem toàn màn hình',
-    editAndSave: 'Chỉnh sửa & Lưu',
-    createNew: 'Tạo mới',
+    editAndSave: 'Mở trình soạn thảo',
+    editWithAi: 'Sửa trang này với AI',
+    createNew: 'Tạo trang mới',
     desktop: 'Desktop',
     mobile: 'Mobile',
+    editBoxTitle: 'Yêu cầu AI chỉnh sửa trang này',
+    editBoxPlaceholder: 'Ví dụ: Đổi nền sang màu tím, đổi tiêu đề thành Workshop Thực Chiến, thêm lời kêu gọi hành động...',
+    applyEdit: 'Áp dụng sửa',
+    editing: 'Đang sửa...',
+    cancelEdit: 'Hủy',
   },
 
   // Campaign Run Modals

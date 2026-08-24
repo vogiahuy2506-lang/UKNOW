@@ -10,12 +10,22 @@ import { useI18n } from '../../../i18n';
 /**
  * Enhanced Landing Page Card with preview, code view, and export options.
  */
-const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
+const LandingPageCard = ({
+  page,
+  onSaveToLibrary,
+  onGenerateNew,
+  onEditWithAi,
+  isEditing = false,
+  messageIndex,
+}) => {
   const t = useI18n('landingPageCard');
   const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'code'
   const [device, setDevice] = useState('desktop');
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showEditBox, setShowEditBox] = useState(false);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
   const iframeRef = useRef(null);
 
   const rawHtml = page.html || '';
@@ -78,12 +88,38 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
     URL.revokeObjectURL(url);
   };
 
+  const handleSubmitEdit = async (e) => {
+    e?.preventDefault?.();
+    const text = editInstruction.trim();
+    if (!text || isEditing || isSubmittingLocal) return;
+
+    setIsSubmittingLocal(true);
+    try {
+      if (onEditWithAi) {
+        await onEditWithAi(page, text, messageIndex);
+        setShowEditBox(false);
+        setEditInstruction('');
+      }
+    } finally {
+      setIsSubmittingLocal(false);
+    }
+  };
+
+  const isBusy = isEditing || isSubmittingLocal;
   const deviceWidth = device === 'mobile' ? 'w-[375px]' : 'w-full';
   const deviceHeight = device === 'mobile' ? 'h-[667px]' : 'h-full';
 
   return (
     <>
-      <div className="mt-4 bg-slate-50 rounded-2xl p-4 border border-slate-200 overflow-hidden">
+      <div className="mt-4 bg-slate-50 rounded-2xl p-4 border border-slate-200 overflow-hidden relative">
+        {/* Busy Overlay */}
+        {isBusy && (
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-2">
+            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-bold text-slate-700">{t('editing')}</p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-2 mb-3 text-slate-600">
           <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
@@ -199,6 +235,51 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
           </div>
         )}
 
+        {/* AI Inline Edit Box */}
+        {showEditBox && (
+          <div className="mt-3 bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-3 border border-orange-200 space-y-2">
+            <div className="flex items-center gap-1.5 text-orange-800 font-bold text-xs">
+              <HiOutlineSparkles className="w-3.5 h-3.5 text-orange-500" />
+              <span>{t('editBoxTitle')}</span>
+            </div>
+            <textarea
+              value={editInstruction}
+              onChange={(e) => setEditInstruction(e.target.value)}
+              placeholder={t('editBoxPlaceholder')}
+              rows={2}
+              className="w-full text-xs rounded-lg border border-orange-200 bg-white p-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+              disabled={isBusy}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  handleSubmitEdit(e);
+                }
+              }}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditBox(false);
+                  setEditInstruction('');
+                }}
+                disabled={isBusy}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg transition"
+              >
+                {t('cancelEdit')}
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitEdit}
+                disabled={!editInstruction.trim() || isBusy}
+                className="px-4 py-1.5 text-xs font-bold bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm"
+              >
+                <HiOutlineSparkles className="w-3.5 h-3.5" />
+                {isBusy ? t('editing') : t('applyEdit')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="mt-4 space-y-2">
           <button
@@ -208,17 +289,28 @@ const LandingPageCard = ({ page, onSaveToLibrary, onGenerateNew }) => {
             <HiOutlineExternalLink className="w-4 h-4 text-orange-400" />
             {t('viewFullscreen')}
           </button>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => setShowEditBox((prev) => !prev)}
+              className={`py-2.5 border font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-1 transition-all ${
+                showEditBox
+                  ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
+                  : 'bg-white border-orange-200 text-orange-700 hover:bg-orange-50'
+              }`}
+            >
+              <HiOutlineSparkles className="w-3.5 h-3.5" />
+              {t('editWithAi')}
+            </button>
             <button
               onClick={() => onSaveToLibrary?.(page)}
-              className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1.5"
+              className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1"
             >
-              <HiOutlinePencilAlt className="w-3.5 h-3.5 text-orange-500" />
+              <HiOutlinePencilAlt className="w-3.5 h-3.5 text-slate-500" />
               {t('editAndSave')}
             </button>
             <button
               onClick={() => onGenerateNew?.()}
-              className="py-2.5 bg-orange-50 border border-orange-200 text-orange-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-orange-100 flex items-center justify-center gap-1.5"
+              className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1"
             >
               <HiOutlineSparkles className="w-3.5 h-3.5" />
               {t('createNew')}

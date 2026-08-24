@@ -47,6 +47,8 @@ const PLAN_APPROVE_REGEX =
   /^\s*(đồng ý|dong y|duyệt|duyet|ok|okay|oke|tạo đi|tao di|tạo luôn|tao luon|chốt|chot|yes|approve|go)\s*$/i;
 const PLAN_CANCEL_REGEX =
   /^\s*(huỷ|hủy|huy|cancel|dừng|dung|thôi|thoi|stop)\s*$/i;
+const IS_NEW_LANDING_REQ_RE =
+  /^(?:tạo|làm|sinh|viết|thiết kế|build|generate|create|make)\s+(?:lại\s+)?(?:landing\s*page|trang\s*landing|trang\s*đích|trang\s*mới|trang\s*khác)|(?:tạo|làm|thiết kế)\s+mới|tạo\s+lại|làm\s+lại/i;
 
 const normalizeChannel = (channel) => {
   const lower = String(channel || '').trim().toLowerCase();
@@ -486,6 +488,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
   const [pendingLandingData, setPendingLandingData] = useState(null);
+  const [editingLandingPageIndex, setEditingLandingPageIndex] = useState(null);
   const [_creatingCampaign, setCreatingCampaign] = useState(false);
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
   const [generatingDay, setGeneratingDay] = useState(null);
@@ -1920,6 +1923,26 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       return;
     }
 
+    // Tự động điều hướng sang luồng sửa landing page nếu ngữ cảnh gần nhất là landing page
+    const recentLanding = isRecentLandingPageContext();
+    if (
+      trimmedInput
+      && uploadedFiles.length === 0
+      && recentLanding
+      && !hasActiveWizard
+      && !IS_NEW_LANDING_REQ_RE.test(trimmedInput)
+    ) {
+      isSendingRef.current = true;
+      setInputText('');
+      setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
+      try {
+        await handleEditLandingPageWithAi(recentLanding.message.data, trimmedInput, recentLanding.index);
+      } finally {
+        isSendingRef.current = false;
+      }
+      return;
+    }
+
     const files = [...uploadedFiles];
     setInputText('');
     setUploadedFiles([]);
@@ -2749,6 +2772,104 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }]);
   };
 
+  const handleUpdateLandingPage = (updatedData, messageIndex) => {
+    setMessages((prev) => prev.map((msg, i) => {
+      if (i === messageIndex) {
+        return {
+          ...msg,
+          data: {
+            ...msg.data,
+            ...updatedData,
+          },
+        };
+      }
+      return msg;
+    }));
+  };
+
+  const getLastLandingPageMessage = (msgList = messages) => {
+    for (let i = msgList.length - 1; i >= 0; i -= 1) {
+      if (msgList[i]?.type === 'landing_page' && msgList[i]?.data?.html) {
+        return { index: i, message: msgList[i] };
+      }
+    }
+    return null;
+  };
+
+  const getLastLandingPageMessageIndex = () => {
+    const res = getLastLandingPageMessage();
+    return res ? res.index : -1;
+  };
+
+  const isRecentLandingPageContext = (msgList = messages) => {
+    for (let i = msgList.length - 1; i >= Math.max(0, msgList.length - 4); i -= 1) {
+      if (msgList[i]?.role === 'assistant' && msgList[i]?.type === 'landing_page' && msgList[i]?.data?.html) {
+        return { index: i, message: msgList[i] };
+      }
+    }
+    return null;
+  };
+
+  const handleEditLandingPageWithAi = async (pageData, instruction, messageIndex = null) => {
+    const rawHtml = pageData?.html;
+    const trimmedInstr = String(instruction || '').trim();
+    if (!rawHtml || !trimmedInstr) {
+      toast.error(t('aiChatbot.missingLandingSourceOrInstruction') || 'Thiếu mã nguồn trang hoặc yêu cầu chỉnh sửa.');
+      return;
+    }
+
+    const targetIndex = messageIndex != null
+      ? messageIndex
+      : getLastLandingPageMessageIndex();
+
+    setEditingLandingPageIndex(targetIndex);
+    setIsTyping(true);
+
+    try {
+      const response = await aiApi.editLandingHtml({
+        instruction: trimmedInstr,
+        currentHtml: rawHtml,
+        locale,
+      });
+
+      if (response?.success && response?.data) {
+        refreshAiCredits();
+        const { title, html } = response.data;
+        const updatedPage = {
+          ...pageData,
+          title: title || pageData.title,
+          html,
+        };
+
+        if (targetIndex != null && targetIndex >= 0) {
+          handleUpdateLandingPage(updatedPage, targetIndex);
+        }
+
+        toast.success(t('landingPageCard.updateSuccess') || 'Đã cập nhật landing page theo yêu cầu!');
+
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          content: locale === 'en'
+            ? `I have updated the landing page "${title || pageData.title}" according to your request: "${trimmedInstr}". Check the preview above!`
+            : `Mình đã cập nhật landing page "${title || pageData.title}" theo yêu cầu: "${trimmedInstr}". Bạn xem lại giao diện bên trên nhé!`,
+        }]);
+      } else {
+        throw new Error(response?.message || 'Không nhận được kết quả chỉnh sửa từ AI');
+      }
+    } catch (err) {
+      console.error('Error editing landing page with AI:', err);
+      const errMsg = getAiRequestErrorMessage(err);
+      toast.error(errMsg, { duration: 5000 });
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: `⚠️ Có lỗi khi chỉnh sửa landing page: ${errMsg}`,
+      }]);
+    } finally {
+      setIsTyping(false);
+      setEditingLandingPageIndex(null);
+    }
+  };
+
   const getLastContentPlanMessageIndex = () => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       if (messages[i]?.type === 'content_plan') return i;
@@ -3515,8 +3636,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {msg.type === 'landing_page' && msg.data && (
                 <LandingPageCard
                   page={msg.data}
+                  messageIndex={idx}
                   onSaveToLibrary={handleSaveLandingPage}
                   onGenerateNew={handleGenerateNewLandingPage}
+                  onEditWithAi={handleEditLandingPageWithAi}
+                  isEditing={editingLandingPageIndex === idx}
                 />
               )}
 
