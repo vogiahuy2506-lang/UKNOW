@@ -604,6 +604,13 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  /**
+   * Tài khoản có bạn bè hay không, KHÔNG phụ thuộc từ khoá đang gõ.
+   * `totalCount` là số kết quả của lượt tải hiện tại nên tìm không ra là về 0 — dùng nó
+   * để quyết định hiển thị sẽ làm ô tìm kiếm biến mất đúng lúc người dùng cần sửa từ khoá.
+   */
+  const [hasAnyFriend, setHasAnyFriend] = useState(false);
+  const searchTimerRef = useRef(null);
 
   const loadFriends = async (targetPage = 1, searchQuery = '') => {
     if (!accountId) return;
@@ -621,6 +628,10 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
       setTotalPages(payload.totalPages || 1);
       setTotalCount(payload.total || 0);
       setPage(payload.page || targetPage);
+      // Chỉ lượt tải KHÔNG lọc mới nói lên được danh bạ có người hay không.
+      if (!String(searchQuery || '').trim() && (payload.total || 0) > 0) {
+        setHasAnyFriend(true);
+      }
       if (payload.lastSyncedAt) {
         setLastSyncedAt(payload.lastSyncedAt);
       }
@@ -636,11 +647,20 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
+  /**
+   * Gõ tới đâu gọi API tới đó thì mỗi phím là một request, và phản hồi về không đúng thứ
+   * tự nên kết quả cuối cùng chưa chắc ứng với từ khoá cuối cùng. Hoãn 300ms.
+   */
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearch(val);
-    loadFriends(1, val);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => loadFriends(1, val), 300);
   };
+
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  }, []);
 
   const handleSyncContacts = async () => {
     if (!accountId || syncing) return;
@@ -648,7 +668,10 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
     try {
       await chatbotApiService.syncZaloContacts(accountId);
       toast.success(t('aiChatbot.wizardZaloSyncSuccess') || 'Đồng bộ danh bạ thành công.');
-      await loadFriends(1, search);
+      // Đồng bộ xong mà vẫn lọc theo từ khoá cũ thì người dùng thấy danh bạ "vẫn trống"
+      // dù vừa tải về đủ bạn bè. Xoá từ khoá rồi mới tải lại.
+      setSearch('');
+      await loadFriends(1, '');
     } catch (err) {
       toast.error(err?.response?.data?.message || t('aiChatbot.wizardZaloSyncFailed') || 'Đồng bộ danh bạ thất bại.');
     } finally {
@@ -717,7 +740,6 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
         </p>
       )}
 
-      {loading && <p className="text-xs text-slate-500">{t('common.loading') || 'Loading...'}</p>}
       {error && (
         <div className="rounded-xl bg-white p-3">
           <p className="mb-2 text-xs text-red-600">{error}</p>
@@ -727,7 +749,32 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
         </div>
       )}
 
-      {!loading && !error && totalCount === 0 && (
+      {/*
+        Ô tìm kiếm phải nằm NGOÀI mọi nhánh `loading` / `totalCount`.
+        Trước 25/08/2026 nó nằm trong `{!loading && !error && totalCount > 0 && (...)}`:
+        gõ một ký tự → loadFriends → setLoading(true) → cả khối chứa input bị gỡ khỏi DOM
+        → xong request thì input được dựng lại mới tinh, con trỏ mất. Người dùng chỉ gõ
+        được đúng ký tự đầu rồi thấy ô nháy liên tục.
+        Điều kiện `totalCount > 0` còn làm ô tìm kiếm biến mất khi không ai khớp từ khoá,
+        nên không sửa lại được từ khoá vừa gõ sai.
+      */}
+      {!error && (hasAnyFriend || search) && (
+        <div className="relative mb-2">
+          <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={handleSearchChange}
+            placeholder={t('aiChatbot.wizardFriendSearchPlaceholder') || 'Tìm bạn bè theo tên hoặc SĐT...'}
+            className="w-full rounded-xl border border-blue-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+        </div>
+      )}
+
+      {loading && <p className="text-xs text-slate-500">{t('common.loading') || 'Loading...'}</p>}
+
+      {/* Danh bạ trống thật — khác hẳn "tìm không ra", nên nút Đồng bộ mới có nghĩa ở đây. */}
+      {!loading && !error && totalCount === 0 && !search && (
         <div className="rounded-xl bg-white p-4 text-center">
           <p className="text-xs text-slate-600 mb-2">
             {t('aiChatbot.wizardNoFriendsFound') || 'Chưa có bạn bè nào trong danh bạ đã đồng bộ.'}
@@ -743,19 +790,25 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
         </div>
       )}
 
+      {/* Có danh bạ nhưng từ khoá không khớp ai — đừng bảo người ta đi đồng bộ lại. */}
+      {!loading && !error && totalCount === 0 && search && (
+        <div className="rounded-xl bg-white p-4 text-center">
+          <p className="text-xs text-slate-600 mb-2">
+            {t('aiChatbot.wizardFriendSearchEmpty', { keyword: search })
+              || `Không tìm thấy bạn bè nào khớp "${search}".`}
+          </p>
+          <button
+            type="button"
+            onClick={() => { setSearch(''); loadFriends(1, ''); }}
+            className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-black text-blue-700"
+          >
+            {t('aiChatbot.wizardClearSearch') || 'Xoá từ khoá'}
+          </button>
+        </div>
+      )}
+
       {!loading && !error && totalCount > 0 && (
         <>
-          <div className="relative mb-2">
-            <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={handleSearchChange}
-              placeholder={t('aiChatbot.wizardFriendSearchPlaceholder') || 'Tìm bạn bè theo tên hoặc SĐT...'}
-              className="w-full rounded-xl border border-blue-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
-          </div>
-
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
@@ -772,7 +825,8 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
 
           {friends.length === 0 ? (
             <p className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500">
-              {t('aiChatbot.wizardFriendSearchEmpty') || 'Không tìm thấy bạn bè phù hợp.'}
+              {t('aiChatbot.wizardFriendSearchEmpty', { keyword: search })
+                || 'Không tìm thấy bạn bè phù hợp.'}
             </p>
           ) : (
             <div className="max-h-60 space-y-2 overflow-y-auto">

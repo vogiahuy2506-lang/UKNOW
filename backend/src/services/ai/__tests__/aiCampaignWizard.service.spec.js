@@ -152,6 +152,42 @@ describe('aiCampaignWizard.service', () => {
     expect(merged.schedule).toMatchObject({ mode: 'drip', days: 5 });
   });
 
+  /**
+   * Lỗi thật ngày 25/08/2026: chọn xong bạn bè trong danh bạ Zalo thì thẻ chọn hiện lại,
+   * lặp vô hạn. `extractWizardState` ghi đúng `zaloFriendIds`, nhưng object `merged`
+   * của `mergeWizardState` chỉ liệt kê `zaloGroupIds` — thiếu hẳn `zaloFriendIds`, nên
+   * giá trị trả về là `undefined` và cổng zaloFriends thấy mảng rỗng.
+   *
+   * Đây là lần thứ tư cùng một họ lỗi (lịch gửi, attached_file, và lần này) — một trường
+   * có trong derived nhưng bị đánh rơi lúc hợp nhất. Thêm trường mới vào state thì nhớ
+   * thêm cả vào `merged`, và thêm một ca như dưới đây.
+   */
+  it('mergeWizardState giữ lại zaloFriendIds — không đánh rơi lựa chọn danh bạ', () => {
+    const derived = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo cá nhân' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":5}\nTK 5' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"zalo_contacts"}\nDanh bạ Zalo' },
+      { role: 'user', content: '[wizard]{"gate":"zaloFriends","accountId":5,"friendIds":["uid-1","uid-2"]}\nChọn 2 bạn' },
+    ]);
+    expect(derived.zaloFriendIds).toEqual(['uid-1', 'uid-2']);
+
+    const merged = mergeWizardState({}, derived, { lastUserText: 'Chọn 2 bạn' });
+    expect(merged.zaloFriendIds).toEqual(['uid-1', 'uid-2']);
+  });
+
+  it('đã chọn bạn bè rồi thì cổng zaloFriends KHÔNG hỏi lại', () => {
+    const derived = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo cá nhân' },
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo","accountId":5}\nTK 5' },
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"zalo_contacts"}\nDanh bạ Zalo' },
+      { role: 'user', content: '[wizard]{"gate":"zaloFriends","accountId":5,"friendIds":["uid-1"]}\nChọn 1 bạn' },
+    ]);
+    const merged = mergeWizardState({}, derived, { lastUserText: 'Chọn 1 bạn' });
+    const gate = evaluateNextGate({ ...merged, brief: derived.brief }, { zaloAccounts: [], courses: [] });
+
+    expect(gate?.gate).not.toBe('zaloFriends');
+  });
+
   it('marker-only history leaves latestIntentIsQuickSend null', () => {
     const state = extractWizardState([
       { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },

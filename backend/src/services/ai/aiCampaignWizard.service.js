@@ -995,6 +995,15 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
       p.zaloGroupIds,
       (v) => Array.isArray(v) && v.length > 0
     ),
+    // Thiếu dòng này thì lựa chọn bạn bè bị đánh rơi ngay sau khi người dùng chọn xong:
+    // derived có ["uid-1","uid-2"] nhưng merged trả undefined, cổng zaloFriends (:834)
+    // thấy mảng rỗng nên mở lại picker → lặp vô hạn. Giữ song song với zaloGroupIds.
+    zaloFriendIds: pick(
+      'zaloFriends',
+      Array.isArray(d.zaloFriendIds) ? d.zaloFriendIds : [],
+      p.zaloFriendIds,
+      (v) => Array.isArray(v) && v.length > 0
+    ),
     // Latest free-text intent schedule beats sticky persisted only when that intent set schedule.
     schedule: (() => {
       if (markerGates.includes('schedule') || channelSwitched || hasAbandonMark) return d.schedule ?? null;
