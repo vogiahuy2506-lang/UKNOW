@@ -14,8 +14,8 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 
-const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx'];
-const ALLOWED_ACCEPT = '.pdf,.docx,.txt,.md,.csv,.json,.html,.htm';
+const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx', 'xlsx', 'xls'];
+const ALLOWED_ACCEPT = '.pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.htm,.xlsx,.xls';
 const MAX_FILE_MB = 10;
 
 function formatBytes(bytes) {

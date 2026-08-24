@@ -27,6 +27,10 @@ export async function extractTextFromBuffer(buffer, filename) {
       case 'docx':
         return await extractTextFromDocx(buffer);
 
+      case 'xlsx':
+      case 'xls':
+        return await extractTextFromExcel(buffer);
+
       default:
         // Try to read as text
         return buffer.toString('utf-8');
@@ -49,22 +53,14 @@ function extractTextFromHtml(html) {
 }
 
 async function extractTextFromPdf(buffer) {
-  // Simple PDF text extraction (basic implementation)
-  // For production, use pdf-parse library
-  const text = buffer.toString('latin1');
-  const lines = text.split('\n');
-  const content = [];
-
-  for (const line of lines) {
-    // Extract text between stream content markers
-    if (line.includes('BT') || line.includes('ET')) continue;
-    const cleaned = line.replace(/[^\x20-\x7E\n]/g, ' ').trim();
-    if (cleaned.length > 5) {
-      content.push(cleaned);
-    }
+  try {
+    const pdfParse = (await import('pdf-parse')).default;
+    const data = await pdfParse(buffer);
+    return data.text || '';
+  } catch (err) {
+    console.error('[FileExtractor] PDF parse error:', err);
+    return '';
   }
-
-  return content.join('\n');
 }
 
 async function extractTextFromDocx(buffer) {
@@ -80,6 +76,33 @@ async function extractTextFromDocx(buffer) {
     return extractTextFromHtml(content);
   } catch (e) {
     console.error('[FileExtractor] DOCX error:', e.message);
+    return '';
+  }
+}
+
+async function extractTextFromExcel(buffer) {
+  try {
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    let text = '';
+    workbook.eachSheet((sheet) => {
+      text += `--- Sheet: ${sheet.name} ---\n`;
+      sheet.eachRow((row, rowNumber) => {
+        const values = Array.isArray(row.values) ? row.values : Object.values(row);
+        const rowText = values
+          .slice(1) // Skip first empty cell
+          .map(v => (v != null ? String(v) : ''))
+          .filter(v => v.trim())
+          .join(' | ');
+        if (rowText.trim()) {
+          text += `Row ${rowNumber}: ${rowText}\n`;
+        }
+      });
+    });
+    return text.trim();
+  } catch (e) {
+    console.error('[FileExtractor] Excel error:', e.message);
     return '';
   }
 }
