@@ -4,6 +4,7 @@ import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck, HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt, HiOutlinePaperClip,
+  HiOutlineDocumentText,
 } from 'react-icons/hi';
 import api from '../../../services/api';
 import templateLabelApiService from '../../templates/services/templateLabelApi.service';
@@ -673,7 +674,16 @@ export const AskCampaignTypeCard = ({ data, onSelect, onDismiss, isActive = true
 };
 
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
-export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClick, isActive = true, t }) => {
+export const AskCampaignDetailsCard = ({
+  data,
+  onSubmit,
+  onDismiss,
+  onAttachClick,
+  uploadedFiles = [],
+  onRemoveFile,
+  isActive = true,
+  t,
+}) => {
   const [answers, setAnswers] = useState(() => {
     const preferred = data?.preferredContentMode;
     return preferred ? { campaignBrief: preferred } : {};
@@ -938,6 +948,26 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClic
                 <HiOutlinePaperClip className="w-4 h-4" />
                 Chọn file đính kèm
               </button>
+              {uploadedFiles && uploadedFiles.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                  {uploadedFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-orange-200 rounded-lg text-xs text-orange-900 font-medium shadow-xs">
+                      <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                      <span className="truncate max-w-[180px]">{f.name || f.originalName}</span>
+                      {onRemoveFile && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onRemoveFile(i); }}
+                          className="text-orange-400 hover:text-red-500 ml-1 p-0.5 rounded transition-colors"
+                          title="Gỡ file"
+                        >
+                          <HiOutlineX className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {q.id === 'dataSource' && answers[q.id] === 'sheet' && (
@@ -953,6 +983,26 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClic
                 <HiOutlinePaperClip className="w-4 h-4" />
                 Chọn file đính kèm
               </button>
+              {uploadedFiles && uploadedFiles.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                  {uploadedFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-orange-200 rounded-lg text-xs text-orange-900 font-medium shadow-xs">
+                      <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                      <span className="truncate max-w-[180px]">{f.name || f.originalName}</span>
+                      {onRemoveFile && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onRemoveFile(i); }}
+                          className="text-orange-400 hover:text-red-500 ml-1 p-0.5 rounded transition-colors"
+                          title="Gỡ file"
+                        >
+                          <HiOutlineX className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (

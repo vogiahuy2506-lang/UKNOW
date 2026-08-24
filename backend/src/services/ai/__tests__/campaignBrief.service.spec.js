@@ -87,6 +87,17 @@ describe('campaignBrief.service', () => {
       });
     });
 
+    it('parses attached_file', () => {
+      const brief = parseCampaignBriefMarker({
+        gate: 'campaignBrief',
+        contentMode: 'attached_file',
+      });
+      expect(brief).toMatchObject({
+        contentMode: 'attached_file',
+        productMode: 'attached_file',
+      });
+    });
+
     it('rejects contentMode=context from client', () => {
       expect(() => parseCampaignBriefMarker({
         gate: 'campaignBrief',
@@ -131,6 +142,21 @@ describe('campaignBrief.service', () => {
       expect(isCampaignBriefReady({
         contentMode: 'custom_topic',
         topicText: 'ok',
+      })).toBe(true);
+      expect(isCampaignBriefReady({
+        contentMode: 'attached_file',
+      })).toBe(false);
+      expect(isCampaignBriefReady({
+        contentMode: 'attached_file',
+        hasAttachedFile: false,
+      })).toBe(false);
+      expect(isCampaignBriefReady({
+        contentMode: 'attached_file',
+        hasAttachedFile: true,
+      })).toBe(true);
+      expect(isCampaignBriefReady({
+        contentMode: 'attached_file',
+        files: [{ tempId: '1' }],
       })).toBe(true);
     });
 
@@ -368,6 +394,21 @@ describe('campaignBrief.service', () => {
       });
       expect(ctx).toContain('Cảm ơn sau mua');
       expect(ctx).toContain('Do not force product promotion');
+    });
+
+    it('resolves and builds context for attached_file', async () => {
+      const resolved = await resolveCampaignBrief({
+        brief: {
+          contentMode: 'attached_file',
+          productMode: 'attached_file',
+          flowMode: 'standard',
+        },
+        ownerUserId: 1,
+      });
+      expect(resolved.brief.contentMode).toBe('attached_file');
+      expect(resolved.brief.productMode).toBe('attached_file');
+      expect(resolved.briefContext).toContain('contentMode=attached_file');
+      expect(resolved.briefContext).toContain('attached file');
     });
   });
 });

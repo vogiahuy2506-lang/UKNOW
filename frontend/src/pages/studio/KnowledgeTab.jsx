@@ -16,6 +16,17 @@ import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 
 const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'webp'];
 const ALLOWED_ACCEPT = '.pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.htm,.xlsx,.xls,.png,.jpg,.jpeg,.webp';
+const ALLOWED_FORMATS_LABEL = [...new Set(
+  ALLOWED_ACCEPT.split(',')
+    .map((ext) => ext.replace(/^\./, '').toUpperCase())
+    .map((ext) => {
+      if (ext === 'HTM') return 'HTML';
+      if (ext === 'DOC') return 'DOCX';
+      if (ext === 'XLS') return 'XLSX';
+      if (ext === 'JPEG') return 'JPG';
+      return ext;
+    })
+)].join(', ');
 const MAX_FILE_MB = 10;
 
 function formatBytes(bytes) {
@@ -383,7 +394,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         >
           <HiOutlineUpload className="w-5 h-5 text-slate-400 mx-auto mb-1.5" />
           <p className="text-xs font-medium text-slate-500">Kéo thả file vào đây hoặc bấm để chọn</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">PDF, DOCX, TXT, MD, CSV, JSON, HTML • Tối đa 10MB</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">{ALLOWED_FORMATS_LABEL} • Tối đa {MAX_FILE_MB}MB</p>
         </div>
         <input
           ref={fileInputRef}
@@ -404,7 +415,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
               <HiOutlineUpload className="w-6 h-6 text-primary-600 animate-bounce" />
             </div>
             <p className="text-sm font-semibold text-primary-700">Thả file để upload</p>
-            <p className="text-xs text-primary-600 mt-1">PDF, DOCX, TXT, MD, CSV, JSON, HTML, PNG, JPG, WEBP</p>
+            <p className="text-xs text-primary-600 mt-1">{ALLOWED_FORMATS_LABEL}</p>
           </div>
         </div>
       )}
@@ -463,7 +474,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                   </div>
                 )}
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Hỗ trợ: PDF, DOCX, TXT, MD, CSV, JSON, HTML
+                  Hỗ trợ: {ALLOWED_FORMATS_LABEL}
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-2">

@@ -589,9 +589,13 @@ QUY TẮC:
       routeSaysActionRequest,
       intent,
       abandonedAtMessageCount: persistedState.gates?.abandonedAtMessageCount,
+      files,
     });
     const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
     const isRevision = isContentPlanRevisionText(lastUserText);
+
+    const hasAnyAttachedFile = Boolean(derivedState.hasAttachedFile);
+    const hasAnyAttachedSpreadsheet = Boolean(derivedState.hasAttachedSpreadsheet);
 
     const campaignBriefContentLocale = isLandingOrientedTurn(history)
       ? null
@@ -642,6 +646,10 @@ QUY TẮC:
         mergedBrief.contentLocale = defaultContentLocale;
       }
       briefForState = mergedBrief;
+    }
+
+    if (hasAnyAttachedFile && briefForState) {
+      briefForState = { ...briefForState, hasAttachedFile: true };
     }
 
     // Explicit artifact-language directive updates brief content locale before resolve/gates.
@@ -743,7 +751,12 @@ QUY TẮC:
       gatesForPersist.planApproved = false;
     }
 
-    const gateState = { ...gatesForPersist, brief: briefForState };
+    const gateState = {
+      ...gatesForPersist,
+      brief: briefForState,
+      hasAttachedFile: hasAnyAttachedFile,
+      hasAttachedSpreadsheet: hasAnyAttachedSpreadsheet,
+    };
 
     // Đóng gói state cho controller persist (field nội bộ, bị strip trước khi trả client)
     const buildWizard = (gateAsked, planChange = null) => ({
@@ -761,6 +774,8 @@ QUY TẮC:
       ...wizardResources,
       briefStale,
       briefPreferredContentMode: briefForState?.contentMode || null,
+      hasAttachedFile: hasAnyAttachedFile,
+      hasAttachedSpreadsheet: hasAnyAttachedSpreadsheet,
     };
 
     // Free-text cancel must beat deterministic re-ask (dead-end nudge says "gõ huỷ").
@@ -1322,17 +1337,19 @@ GOOGLE SHEET — URL đã có sẵn:
 - Nếu message của user chứa URL https://docs.google.com/spreadsheets/... → KHÔNG hỏi lại, dùng luôn URL đó cho read_sheet
 - Format mặc định: headerRow=1, dataStartRow=2 (sheetName để trống = tab đầu tiên). Thêm vào nodeDescription: "(Nếu sheet của bạn có tab hoặc cấu trúc khác, hãy chỉnh trong Campaign Builder sau khi tạo)"
 
-GOOGLE SHEET — CHƯA có URL:
-- Chỉ áp dụng khi user đã nói rõ "Google Sheet" / "Excel" / "file" / "file sheet" hoặc đã chọn dataSource="sheet". Nếu chưa chọn nguồn dữ liệu, KHÔNG hỏi URL; hãy type="ask_campaign_details" và hỏi dataSource.
-- Khi user đã chọn hoặc nói rõ Google Sheet/Excel/file NHƯNG không có URL trong message → BẮT BUỘC type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? URL có dạng: https://docs.google.com/spreadsheets/d/..."
-- Chỉ tạo node read_sheet khi đã có URL hợp lệ (bắt đầu bằng https://docs.google.com/spreadsheets/)
+GOOGLE SHEET / FILE EXCEL — CHƯA có URL và CHƯA có File:
+- Chỉ áp dụng khi user đã chọn dataSource="sheet" nhưng CHƯA dán link Google Sheet và CHƯA tải file lên:
+  Nhắc người dùng đính kèm file Excel/CSV hoặc dán link Google Sheet (URL https://docs.google.com/spreadsheets/...) để tiếp tục.
 
 UPLOADED FILE (CSV / Excel) — user tải file lên chat:
 - Nội dung file đã được trích xuất thành text và gắn trong message → AI CÓ THỂ đọc được các cột và dữ liệu
-- Kiểm tra xem file có cột email hoặc phone/sdt không:
-  • Nếu CÓ đủ → tạo read_sheet node với sheetUrl="" (placeholder), ghi rõ trong nodeDescription: "(Danh sách lấy từ file tải lên — bạn cần upload file này lên Google Sheet rồi dán URL vào Campaign Builder)" và mention điều này trong content trả về
-  • Nếu THIẾU cột quan trọng (không có email/phone) → type: "ask_more", content: "File của bạn không có cột email hoặc số điện thoại. Hệ thống cần ít nhất 1 trong 2 trường này để gửi tin nhắn. Bạn có thể chia sẻ file có đủ thông tin không?"
-- KHÔNG dùng dữ liệu trong file trực tiếp như danh sách liên hệ trong campaign (campaign cần URL Google Sheet để fetch khi chạy)
+- Phân tích các cột trong file:
+  • Xác định cột email (hoặc số điện thoại cho Zalo).
+  • Báo rõ cho người dùng: cột nào được chọn làm người nhận và số lượng người nhận hợp lệ.
+  • Nếu file có nhiều cột, thông báo cột đang dùng để người dùng có thể đổi nếu muốn.
+  • Kiểm tra số lượng: tối đa 1000 người nhận. Nếu file > 1000 dòng, thông báo vượt hạn mức (không tự ý cắt bớt).
+  • Nếu có dòng không hợp lệ, chỉ rõ dòng lỗi cho người dùng.
+  • Khi đã có dữ liệu file hợp lệ, KHÔNG đòi link Google Sheet nữa, tiếp tục hoàn thiện chiến dịch.
 
 ### Sau khi user trả lời ask_campaign_details, build campaign dựa vào:
 - channel: email/zalo/zalo_group → chọn đúng action node

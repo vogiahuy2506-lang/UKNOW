@@ -1106,6 +1106,7 @@ class AiController {
         currentHtml,
         instruction,
         locale = 'vi',
+        sessionId = null,
       } = req.body || {};
 
       if (!String(currentHtml || '').trim()) {
@@ -1136,6 +1137,25 @@ class AiController {
       });
 
       await chargeAiCredit(req);
+
+      if (sessionId) {
+        const sid = Number(sessionId);
+        if (Number.isInteger(sid) && sid > 0) {
+          await aiSessionRepo.updateLatestLandingPageMessage(sid, req.user.id, {
+            title: data.title,
+            html: data.html,
+          }).catch((err) => console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message));
+
+          const confirmMsg = contentLocale === 'en'
+            ? `I have updated the landing page "${data.title}" according to your request: "${String(instruction).trim()}".`
+            : `Mình đã cập nhật landing page "${data.title}" theo yêu cầu: "${String(instruction).trim()}".`;
+
+          await aiSessionRepo.saveMessages(sid, req.user.id, String(instruction).trim(), {
+            content: confirmMsg,
+            type: 'text',
+          }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save edit chat messages:', err.message));
+        }
+      }
 
       return res.json({ success: true, data });
     } catch (error) {

@@ -624,5 +624,114 @@ describe('aiCampaignWizard.service', () => {
       expect(state.schedule).toEqual({ mode: 'drip', days: 3, slotsPerDay: 4 });
     });
   });
+
+  describe('attached_file brief & spreadsheet dataSource gates', () => {
+    it('asks campaignBrief with reminder to attach file when attached_file chosen without file (auto-infers preferredMode from brief)', () => {
+      const state = {
+        isCampaignFlow: true,
+        channel: 'email',
+        senderAccountId: 1,
+        dataSource: 'db',
+        brief: {
+          contentMode: 'attached_file',
+          productMode: 'attached_file',
+        },
+        hasAttachedFile: false,
+      };
+
+      // Even without passing briefPreferredContentMode in resources, evaluateNextGate infers from state.brief
+      const gate = evaluateNextGate(state, {});
+
+      expect(gate.gate).toBe('campaignBrief');
+      expect(gate.response.content).toBe('Bạn đính kèm file (Excel, Word, PDF...) rồi bấm Tiếp tục nhé.');
+      expect(gate.response.data.preferredContentMode).toBe('attached_file');
+    });
+
+    it('advances to schedule when attached_file chosen and file is attached', () => {
+      const state = {
+        isCampaignFlow: true,
+        channel: 'email',
+        senderAccountId: 1,
+        dataSource: 'db',
+        brief: {
+          contentMode: 'attached_file',
+          productMode: 'attached_file',
+          hasAttachedFile: true,
+        },
+        hasAttachedFile: true,
+      };
+
+      const gate = evaluateNextGate(state, {});
+      expect(gate.gate).toBe('schedule');
+    });
+
+    it('dataSource sheet stops when no sheetUrl and no file attached', () => {
+      const state = {
+        isCampaignFlow: true,
+        channel: 'email',
+        senderAccountId: 1,
+        dataSource: 'sheet',
+        sheetUrl: null,
+        hasAttachedSpreadsheet: false,
+        hasAttachedFile: false,
+      };
+
+      const gate = evaluateNextGate(state, {});
+      expect(gate).toBeNull();
+    });
+
+    it('dataSource sheet advances to campaignBrief when spreadsheet file is attached', () => {
+      const state = {
+        isCampaignFlow: true,
+        channel: 'email',
+        senderAccountId: 1,
+        dataSource: 'sheet',
+        sheetUrl: null,
+        hasAttachedSpreadsheet: true,
+        hasAttachedFile: true,
+      };
+
+      const gate = evaluateNextGate(state, {
+        courses: [{ id: 1, name: 'Khóa A' }, { id: 2, name: 'Khóa B' }],
+      });
+      expect(gate.gate).toBe('campaignBrief');
+    });
+
+    it('extractWizardState detects spreadsheet files from message history or options during campaign flow', () => {
+      const state = extractWizardState([
+        {
+          role: 'user',
+          content: 'Gửi danh sách từ file',
+          files: [{ originalName: 'recipients.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }],
+        },
+      ]);
+      expect(state.hasAttachedFile).toBe(true);
+      expect(state.hasAttachedSpreadsheet).toBe(true);
+    });
+
+    it('extractWizardState ignores files uploaded before the campaign flow started', () => {
+      const history = [
+        {
+          role: 'user',
+          content: 'Đọc giúp tôi tài liệu này',
+          files: [{ originalName: 'doc.pdf', contentType: 'application/pdf' }],
+        },
+        {
+          role: 'assistant',
+          content: 'Tôi đã đọc tài liệu.',
+        },
+        {
+          role: 'user',
+          content: 'Tạo chiến dịch email',
+        },
+      ];
+
+      const state = extractWizardState(history);
+      expect(state.isCampaignFlow).toBe(true);
+      // File attached at index 0 (before campaign started at index 2) must NOT leak into campaign state
+      expect(state.hasAttachedFile).toBe(false);
+      expect(state.hasAttachedSpreadsheet).toBe(false);
+    });
+  });
 });
 

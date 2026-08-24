@@ -49,6 +49,13 @@ describe('campaignBrief helpers', () => {
       contentMode: 'custom_topic',
       topicText: 'Email cảm ơn',
     });
+    expect(buildCampaignBriefMarker({
+      campaignBrief: 'attached_file',
+    })).toEqual({
+      gate: 'campaignBrief',
+      contentMode: 'attached_file',
+      productMode: 'attached_file',
+    });
   });
 
   it('validates answers for submit', () => {
@@ -67,5 +74,6 @@ describe('campaignBrief helpers', () => {
       { campaignBrief: 'multiple_products' },
       { courseOptions: [{ value: '1' }, { value: '2' }, { value: 'other' }] },
     )).toBe(true);
+    expect(isCampaignBriefAnswersValid({ campaignBrief: 'attached_file' })).toBe(true);
   });
 });

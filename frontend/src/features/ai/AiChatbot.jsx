@@ -1718,7 +1718,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const emitWizardAnswer = async (payload, readableText) => {
-    await sendChatMessage(buildWizardMarkerText(payload, readableText));
+    const filesToSend = [...uploadedFiles];
+    setUploadedFiles([]);
+    await sendChatMessage(buildWizardMarkerText(payload, readableText), filesToSend);
   };
 
   const handleWizardSenderSelect = async (account, channel = null, options = {}) => {
@@ -2477,13 +2479,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
 
     try {
+      const filesToSend = [...uploadedFiles];
+      setUploadedFiles([]);
       const enrichedHistory = [
         ...messages,
         { role: 'user', content: pendingCampaignPrompt },
         { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
         { role: 'user', content: summaryText + emailTemplateContext },
       ];
-      const response = await aiApi.chat(enrichedHistory, uploadedFiles, null, locale);
+      const response = await aiApi.chat(enrichedHistory, filesToSend, null, locale);
       if (response.success) {
         refreshAiCredits();
         const { type, content, data } = response.data;
@@ -2527,10 +2531,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     });
 
     try {
+      const filesToSend = [...uploadedFiles];
+      setUploadedFiles([]);
       const response = await aiApi.generateLandingPage(
         pendingLandingPrompt,
         null,
-        uploadedFiles,
+        filesToSend,
         currentSessionId,
         summaryText,
         landingBrief,
@@ -3370,6 +3376,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onSubmit={handleCampaignDetailsSubmit}
                   onDismiss={handleDismissWizardCard}
                   onAttachClick={() => fileInputRef.current?.click()}
+                  uploadedFiles={uploadedFiles}
+                  onRemoveFile={(fileIndex) => setUploadedFiles((prev) => prev.filter((_, i) => i !== fileIndex))}
                   isActive={idx === latestInteractiveIndex}
                   t={t}
                 />

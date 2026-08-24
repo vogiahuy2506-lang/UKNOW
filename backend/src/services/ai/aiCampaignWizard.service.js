@@ -207,6 +207,19 @@ export function withDeadEndNudge(response, meta = {}, gateAsked = null, locale =
 
 const getAssistantData = (message) => message?.data || null;
 
+const isSpreadsheetFile = (f) => {
+  const name = String(f?.originalName || f?.name || f?.filename || '').toLowerCase();
+  const mime = String(f?.contentType || f?.mimeType || '').toLowerCase();
+  return (
+    name.endsWith('.xlsx')
+    || name.endsWith('.xls')
+    || name.endsWith('.csv')
+    || mime.includes('spreadsheet')
+    || mime.includes('excel')
+    || mime.includes('csv')
+  );
+};
+
 export function extractWizardState(history = [], options = {}) {
   const {
     routeSaysActionRequest = false,
@@ -226,6 +239,8 @@ export function extractWizardState(history = [], options = {}) {
     senderAccountName: null,
     dataSource: null,
     sheetUrl: null,
+    hasAttachedFile: false,
+    hasAttachedSpreadsheet: false,
     zaloGroupIds: [],
     zaloFriendIds: [],
     schedule: null,
@@ -418,6 +433,25 @@ export function extractWizardState(history = [], options = {}) {
     state.dataSource ||= inferDataSourceFromText(lastContent);
   }
 
+  // Chỉ tính các file được đính kèm từ khi bắt đầu luồng chiến dịch hiện tại (hoặc trong options.files)
+  const minCampaignFileIndex = Math.max(
+    abandonMark ?? 0,
+    state.lastChannelMarkerIndex >= 0 ? state.lastChannelMarkerIndex : 0,
+    state.latestCampaignMessageIndex ?? 0
+  );
+
+  const campaignFiles = [
+    ...(Array.isArray(options?.files) ? options.files : []),
+    ...messages
+      .filter((m, idx) => m?.role === 'user' && Array.isArray(m?.files) && (state.isCampaignFlow ? idx >= minCampaignFileIndex : true))
+      .flatMap((m) => m.files),
+  ];
+
+  state.hasAttachedFile = Boolean(options?.hasAttachedFile || campaignFiles.length > 0);
+  state.hasAttachedSpreadsheet = Boolean(
+    options?.hasAttachedSpreadsheet || campaignFiles.some(isSpreadsheetFile)
+  );
+
   // After channel switch clears schedule: re-apply once only if LATEST free-text intent is still quick-send.
   if (
     latestFreeTextCampaign
@@ -605,6 +639,10 @@ export function buildCampaignBriefQuestion(courses = [], locale = 'vi', {
     content = isEnglish
       ? 'That product is no longer available. Please choose again.'
       : 'Sản phẩm đó không còn khả dụng. Bạn chọn lại nhé.';
+  } else if (preferredContentMode === 'attached_file') {
+    content = isEnglish
+      ? 'Please attach a file (Excel, Word, PDF...), then click Continue.'
+      : 'Bạn đính kèm file (Excel, Word, PDF...) rồi bấm Tiếp tục nhé.';
   } else {
     content = isEnglish
       ? 'What should this campaign promote or talk about?'
@@ -783,7 +821,13 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     return { gate: 'dataSource', response: buildDataSourceQuestion(locale, state) };
   }
 
-  if (state.dataSource === 'sheet' && !state.sheetUrl) {
+  const hasSpreadsheetSource = Boolean(
+    state.sheetUrl
+    || state.hasAttachedSpreadsheet
+    || resources.hasAttachedSpreadsheet
+    || (state.dataSource === 'sheet' && (state.hasAttachedFile || resources.hasAttachedFile))
+  );
+  if (state.dataSource === 'sheet' && !hasSpreadsheetSource) {
     return null; // Dừng wizard để AI (thông qua LLM) hỏi người dùng link Google Sheet trước khi qua bước schedule
   }
 
@@ -791,12 +835,18 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     return { gate: 'zaloFriends', response: buildFriendPickerCard(state.senderAccountId, locale) };
   }
 
-  if (!isCampaignBriefReady(state.brief || resources.brief)) {
+  const briefCandidate = state.brief || resources.brief;
+  const effectiveBrief = (briefCandidate?.contentMode === 'attached_file' && (state.hasAttachedFile || resources.hasAttachedFile))
+    ? { ...briefCandidate, hasAttachedFile: true }
+    : briefCandidate;
+
+  if (!isCampaignBriefReady(effectiveBrief)) {
+    const preferredMode = resources.briefPreferredContentMode || effectiveBrief?.contentMode || null;
     return {
       gate: 'campaignBrief',
       response: buildCampaignBriefQuestion(resources.courses || [], locale, {
         stale: Boolean(resources.briefStale),
-        preferredContentMode: resources.briefPreferredContentMode || null,
+        preferredContentMode: preferredMode,
       }),
     };
   }
@@ -958,6 +1008,8 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
     planApproved: (channelSwitched || hasAbandonMark)
       ? Boolean(d.planApproved)
       : Boolean(d.planApproved || p.planApproved),
+    hasAttachedFile: Boolean(d.hasAttachedFile || p.hasAttachedFile),
+    hasAttachedSpreadsheet: Boolean(d.hasAttachedSpreadsheet || p.hasAttachedSpreadsheet),
     abandonedAtMessageCount: (hasAbandonMark && !isReactivated) ? abandonedMark : null,
   };
 

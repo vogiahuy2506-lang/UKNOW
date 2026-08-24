@@ -165,3 +165,26 @@ export async function deleteSession(sessionId, userId) {
   );
   return rowCount > 0;
 }
+
+export async function updateLatestLandingPageMessage(sessionId, userId, updatedData) {
+  const { rowCount } = await db.query(
+    `UPDATE ai_chat_messages
+     SET data = $3::jsonb
+     WHERE id = (
+       SELECT m.id
+       FROM ai_chat_messages m
+       JOIN ai_chat_sessions s ON s.id = m.session_id
+       WHERE m.session_id = $1 AND s.id_user = $2 AND m.type = 'landing_page'
+       ORDER BY m.id DESC
+       LIMIT 1
+     )`,
+    [sessionId, userId, JSON.stringify(updatedData)]
+  );
+  if (!rowCount) return false;
+  await db.query(
+    `UPDATE ai_chat_sessions SET updated_at = NOW() WHERE id = $1 AND id_user = $2`,
+    [sessionId, userId]
+  );
+  return true;
+}
+

@@ -178,8 +178,8 @@ const aiApi = {
    * Chỉnh sửa landing page HTML bằng AI (Tailwind + giữ nguyên cấu trúc/số liệu).
    * @param {{ instruction: string, currentHtml: string, locale?: string }} params
    */
-  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi' }) => {
-    const response = await api.post('/ai/edit-landing-html', { instruction, currentHtml, locale }, {
+  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi', sessionId = null }) => {
+    const response = await api.post('/ai/edit-landing-html', { instruction, currentHtml, locale, sessionId }, {
       timeout: 120000
     });
     return response.data;

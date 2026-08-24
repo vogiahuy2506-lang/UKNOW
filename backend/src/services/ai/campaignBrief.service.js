@@ -1,5 +1,5 @@
-const CONTENT_MODES = new Set(['single_product', 'multiple_products', 'custom_topic', 'context']);
-const PRODUCT_MODES = new Set(['catalog', 'other', 'catalog_set', 'context']);
+const CONTENT_MODES = new Set(['single_product', 'multiple_products', 'custom_topic', 'context', 'attached_file']);
+const PRODUCT_MODES = new Set(['catalog', 'other', 'catalog_set', 'context', 'attached_file']);
 const FLOW_MODES = new Set(['standard', 'quick_send']);
 const CONTENT_LOCALES = new Set(['vi', 'en']);
 
@@ -163,6 +163,8 @@ export function parseCampaignBriefMarker(marker) {
       code: 'CAMPAIGN_TOPIC_REQUIRED',
       field: 'Chủ đề / mục đích',
     });
+  } else if (contentMode === 'attached_file') {
+    productMode = 'attached_file';
   }
 
   return {
@@ -247,6 +249,14 @@ export function isCampaignBriefReady(brief) {
   if (mode === 'custom_topic') {
     const topic = String(brief.topicText || '').trim();
     return topic.length >= TOPIC_MIN && topic.length <= TOPIC_MAX;
+  }
+  if (mode === 'attached_file') {
+    return Boolean(
+      brief.hasAttachedFile
+      || brief.hasFile
+      || (Array.isArray(brief.files) && brief.files.length > 0)
+      || (Number.isFinite(brief.attachedFilesCount) && brief.attachedFilesCount > 0)
+    );
   }
   if (mode === 'context') {
     return brief.productMode === 'context';
@@ -392,6 +402,12 @@ export async function resolveCampaignBrief({
     next.productIds = [];
     next.productName = null;
     next.productDescription = null;
+  } else if (next.contentMode === 'attached_file') {
+    next.productMode = 'attached_file';
+    next.productIds = [];
+    next.productName = null;
+    next.productDescription = null;
+    next.topicText = null;
   } else if (next.contentMode === 'context') {
     next.productMode = 'context';
     next.productIds = [];
@@ -445,6 +461,8 @@ export function buildCampaignBriefContext({ brief, resolvedProducts = [] } = {})
   } else if (brief.contentMode === 'custom_topic') {
     lines.push(`topicText: """${escapeForPrompt(brief.topicText, 500)}"""`);
     lines.push('GROUNDING: Write about this topic/purpose. Do not force product promotion.');
+  } else if (brief.contentMode === 'attached_file') {
+    lines.push('GROUNDING: contentMode=attached_file. Use the product or campaign details provided in the attached file(s) and user prompt. Do not invent products outside the attached files.');
   } else {
     lines.push('GROUNDING: contentMode=context. Only use product/offer facts that already appear in the user prompt, files, or business profile. If missing, write neutrally — do NOT invent.');
   }
