@@ -445,9 +445,9 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 transition-all hover:bg-slate-50"
         >
-          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+          {t('common.cancel') || 'Huỷ'}
         </button>
       )}
     </div>

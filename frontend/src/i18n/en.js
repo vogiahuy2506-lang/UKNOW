@@ -3293,6 +3293,8 @@ export default {
     newConversation: 'New conversation',
     confirmDeleteSessionTitle: 'Delete chat',
     confirmDeleteSessionMessage: 'Are you sure you want to delete this chat?',
+    // Wizards
+    wizardDismiss: 'No, I am just asking',
     // Quick actions
     quickActions: 'Quick actions',
     createCampaign: 'Create Campaign',

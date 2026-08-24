@@ -16,6 +16,8 @@ export default {
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7,"accountName":"Sales"}\nTôi chọn email sender "Sales".' } },
     { expectGate: 'dataSource' },
     { push: { role: 'user', content: '[wizard]{"gate":"dataSource","value":"sheet"}\nFile Excel / Google Sheet' } },
+    { expectNoGate: true }, // Wizard stops here to let LLM ask for sheetUrl
+    { push: { role: 'user', content: 'https://docs.google.com/spreadsheets/d/abc123/edit?usp=sharing' } },
     { expectGate: 'campaignBrief' },
     { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Ra mắt sản phẩm mới"}\nChủ đề' } },
     { expectGate: 'schedule' },
@@ -42,8 +44,6 @@ export default {
     { push: { role: 'assistant', type: 'template_draft', content: 'Email 1', data: { channel: 'email', templateName: 'Email 1' } } },
     { push: { role: 'assistant', type: 'template_draft', content: 'Email 2', data: { channel: 'email', templateName: 'Email 2' } } },
     { push: { role: 'assistant', type: 'template_draft', content: 'Email 3', data: { channel: 'email', templateName: 'Email 3' } } },
-    { push: { role: 'user', content: 'https://docs.google.com/spreadsheets/d/abc123/edit?usp=sharing' } },
-    { expectNoGate: true },
     {
       expectState: {
         channel: 'email',

@@ -3327,6 +3327,8 @@ export default {
     newConversation: 'Cuộc trò chuyện mới',
     confirmDeleteSessionTitle: 'Xóa đoạn chat',
     confirmDeleteSessionMessage: 'Bạn có chắc muốn xoá đoạn chat này không?',
+    // Wizards
+    wizardDismiss: 'Không phải, tôi chỉ hỏi thôi',
     // Quick actions
     quickActions: 'Thao tác nhanh',
     createCampaign: 'Tạo Campaign',

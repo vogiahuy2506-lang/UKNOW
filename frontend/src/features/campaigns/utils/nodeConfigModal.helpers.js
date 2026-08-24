@@ -635,5 +635,28 @@ export const handleNodeConfigSaveClick = async ({
     return;
   }
 
+  if (nodeType === 'send_email') {
+    if (formData.recipientSource === 'manual') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const emails = String(formData.recipientEmails || '')
+        .split(/[\n,;]/g)
+        .map((e) => e.trim())
+        .filter(Boolean);
+      
+      if (emails.length === 0) {
+        toastNotifier.error('Vui lòng nhập ít nhất 1 địa chỉ email.');
+        return;
+      }
+      
+      const invalidEmails = emails.filter((e) => !emailRegex.test(e));
+      if (invalidEmails.length > 0) {
+        toastNotifier.error(`Sai định dạng email: ${invalidEmails.slice(0, 3).join(', ')}${invalidEmails.length > 3 ? '...' : ''}`);
+        return;
+      }
+    }
+    onSave(formData);
+    return;
+  }
+
   onSave(formData);
 };

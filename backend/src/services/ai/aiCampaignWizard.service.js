@@ -779,6 +779,10 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     return { gate: 'dataSource', response: buildDataSourceQuestion(locale, state) };
   }
 
+  if (state.dataSource === 'sheet' && !state.sheetUrl) {
+    return null; // Dừng wizard để AI (thông qua LLM) hỏi người dùng link Google Sheet trước khi qua bước schedule
+  }
+
   if (state.channel === 'zalo' && state.dataSource === 'zalo_contacts' && (!Array.isArray(state.zaloFriendIds) || state.zaloFriendIds.length === 0)) {
     return { gate: 'zaloFriends', response: buildFriendPickerCard(state.senderAccountId, locale) };
   }

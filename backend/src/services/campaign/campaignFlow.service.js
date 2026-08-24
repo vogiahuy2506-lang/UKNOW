@@ -78,10 +78,11 @@ class CampaignFlowService {
    * @returns {string[]}
    */
   parseEmailList(text) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return String(text || '')
       .split(/[\n,;]/g)
       .map((item) => item.trim())
-      .filter(Boolean);
+      .filter((item) => item && emailRegex.test(item));
   }
 
   /**
