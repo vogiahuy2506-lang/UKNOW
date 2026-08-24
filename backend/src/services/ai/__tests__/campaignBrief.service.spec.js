@@ -24,6 +24,8 @@ const {
   resolveCampaignBrief,
   buildCampaignBriefContext,
   extractCampaignBriefFromHistory,
+  analyzeFileSuitability,
+  MAX_STORED_FILE_TEXT_CHARS,
 } = await import('../campaignBrief.service.js');
 
 describe('campaignBrief.service', () => {
@@ -396,7 +398,7 @@ describe('campaignBrief.service', () => {
       expect(ctx).toContain('Do not force product promotion');
     });
 
-    it('resolves and builds context for attached_file', async () => {
+    it('resolves and builds context for attached_file without attachedFile text', async () => {
       const resolved = await resolveCampaignBrief({
         brief: {
           contentMode: 'attached_file',
@@ -409,6 +411,102 @@ describe('campaignBrief.service', () => {
       expect(resolved.brief.productMode).toBe('attached_file');
       expect(resolved.briefContext).toContain('contentMode=attached_file');
       expect(resolved.briefContext).toContain('attached file');
+    });
+
+    it('builds context for attached_file with text and unconfirmed warning', async () => {
+      const resolved = await resolveCampaignBrief({
+        brief: {
+          contentMode: 'attached_file',
+          productMode: 'attached_file',
+          flowMode: 'standard',
+          attachedFile: {
+            originalName: 'report_assignment.pdf',
+            summary: 'Báo cáo môn học Lập trình Web',
+            hasProductData: false,
+            userConfirmed: false,
+            text: 'Nội dung báo cáo môn học...',
+            truncated: false,
+          },
+        },
+        ownerUserId: 1,
+      });
+      expect(resolved.briefContext).toContain('attachedFile.name: """report_assignment.pdf"""');
+      expect(resolved.briefContext).toContain('attachedFile.hasProductData: false');
+      expect(resolved.briefContext).toContain('[Nội dung tệp đính kèm: "report_assignment.pdf"]:\nNội dung báo cáo môn học...');
+      expect(resolved.briefContext).toContain('RULE: The attached file appears to be an internal report');
+    });
+
+    it('builds context for attached_file with confirmed user without repeating warning', async () => {
+      const resolved = await resolveCampaignBrief({
+        brief: {
+          contentMode: 'attached_file',
+          productMode: 'attached_file',
+          flowMode: 'standard',
+          attachedFile: {
+            originalName: 'report_assignment.pdf',
+            summary: 'Báo cáo môn học Lập trình Web',
+            hasProductData: false,
+            userConfirmed: true,
+            text: 'Nội dung báo cáo môn học...',
+            truncated: true,
+          },
+        },
+        ownerUserId: 1,
+      });
+      expect(resolved.briefContext).toContain('attachedFile.userConfirmed: true');
+      expect(resolved.briefContext).toContain('[Lưu ý: Tệp đính kèm dài đã được rút gọn để xử lý nhanh hơn]');
+      expect(resolved.briefContext).toContain('RULE: User has confirmed to proceed with this file. Do NOT show the warning again.');
+    });
+  });
+
+  describe('analyzeFileSuitability and attachedFile handling', () => {
+    it('detects product data in pricing / catalog documents', () => {
+      const result = analyzeFileSuitability('Bảng giá khoá học AI 2026\nKhoá học Pro: 5.000.000 VNĐ, giảm giá 20%', 'bang-gia.xlsx');
+      expect(result.hasProductData).toBe(true);
+      expect(result.summary).toContain('Bảng giá khoá học AI 2026');
+    });
+
+    it('detects lack of commercial product data in Task reports (e.g. Báo cáo Task 16)', () => {
+      const result = analyzeFileSuitability(
+        'Báo cáo Task 16 — Phát triển module xử lý dữ liệu\nTiến độ: Đã hoàn thành API đăng ký và tính năng quản lý sản phẩm nội bộ.\nJira ticket: UK-1042',
+        'Bao_cao_Task_16.pdf'
+      );
+      expect(result.hasProductData).toBe(false);
+      expect(result.summary).toContain('Báo cáo Task 16');
+    });
+
+    it('detects lack of product data in academic / assignment documents', () => {
+      const result = analyzeFileSuitability('Báo cáo môn học Trí tuệ nhân tạo\nSinh viên thực hiện: Nguyễn Văn A\nĐề tài nghiên cứu thuật toán', 'bao-cao.pdf');
+      expect(result.hasProductData).toBe(false);
+      expect(result.summary).toContain('Báo cáo môn học Trí tuệ nhân tạo');
+    });
+
+    it('detects lack of product data in internal meeting minutes', () => {
+      const result = analyzeFileSuitability('Biên bản họp tuần phòng Kỹ thuật\nThành phần tham dự: Team backend & frontend\nPhân công nhiệm vụ sprint 24', 'bien-ban-hop.docx');
+      expect(result.hasProductData).toBe(false);
+      expect(result.summary).toContain('Biên bản họp tuần');
+    });
+
+    it('MAX_STORED_FILE_TEXT_CHARS is bounded at 30,000 chars', () => {
+      expect(MAX_STORED_FILE_TEXT_CHARS).toBe(30000);
+    });
+
+    it('mergeCampaignBrief preserves attachedFile and hasAttachedFile', () => {
+      const persisted = {
+        contentMode: 'attached_file',
+        attachedFile: {
+          originalName: 'sanpham.pdf',
+          text: 'Danh sách sản phẩm...',
+          hasProductData: true,
+        },
+      };
+      const derived = {
+        contentMode: 'attached_file',
+      };
+      const merged = mergeCampaignBrief(persisted, derived, { defaultContentLocale: 'vi' });
+      expect(merged.attachedFile).toEqual(persisted.attachedFile);
+      expect(merged.hasAttachedFile).toBe(true);
+      expect(isCampaignBriefReady(merged)).toBe(true);
     });
   });
 });

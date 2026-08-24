@@ -752,11 +752,24 @@ export const AskCampaignDetailsCard = ({
     return Boolean(answers[question.id]);
   };
 
+  /**
+   * "Dùng dữ liệu từ file đính kèm" chỉ có MỘT cách đi tiếp — phải có tệp. Chặn ngay ở
+   * nút thay vì cho bấm rồi mới nhắc (backend vẫn nhắc, đó là tầng chốt chặn thứ hai
+   * cho trường hợp trạng thái lệch sau khi tải lại trang).
+   *
+   * CỐ Ý không áp cho `dataSource === 'sheet'`: option đó có HAI cách hợp lệ — tải tệp
+   * .xlsx/.csv HOẶC dán link Google Sheet vào khung chat. Tắt nút khi chưa có tệp sẽ
+   * chặn nhầm người đã có sẵn link.
+   */
+  const attachedFileRequired = questions.some(isBriefQuestion)
+    && answers.campaignBrief === 'attached_file';
+
   const allAnswered =
     data.questions.every(isQuestionAnswered) &&
     (!emailChoiceRequired || emailChoice !== null) &&
     (!emailTemplateRequired || emailTemplateName.trim().length > 0) &&
-    (!manualRecipientsRequired || manualRecipients.trim().length > 0);
+    (!manualRecipientsRequired || manualRecipients.trim().length > 0) &&
+    (!attachedFileRequired || uploadedFiles.length > 0);
 
   const pick = (qId, val) => setAnswers((prev) => {
     const next = { ...prev, [qId]: val };
@@ -795,6 +808,9 @@ export const AskCampaignDetailsCard = ({
       }
       if (briefQuestion && answers.campaignBrief === 'custom_topic' && !isTopicTextValid(topicText)) {
         return t('aiChatbot.campaignTopicRequired') || 'Nhập chủ đề / mục đích (2–500 ký tự)';
+      }
+      if (attachedFileRequired && uploadedFiles.length === 0) {
+        return t('aiChatbot.attachFileRequired') || 'Đính kèm file để tiếp tục';
       }
       return t('aiChatbot.selectAllAbove');
     }

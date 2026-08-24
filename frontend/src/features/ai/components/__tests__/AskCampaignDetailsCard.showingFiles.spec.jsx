@@ -121,6 +121,43 @@ describe('AskCampaignDetailsCard — báo lên cha khi nào thẻ đang hiện c
     expect(onShowingFilesChange.mock.calls.every(([value]) => value === false)).toBe(true);
   });
 
+  it('chọn "file đính kèm" mà chưa có tệp → nút Tiếp tục bị TẮT và nói rõ lý do', () => {
+    // Cho bấm rồi mới nhắc là dở: người dùng phải đi một vòng mới biết mình thiếu gì.
+    renderCard({ uploadedFiles: [] });
+    fireEvent.click(screen.getByText('Dùng dữ liệu từ file đính kèm'));
+
+    const submit = screen.getByRole('button', { name: /attachFileRequired/i });
+    expect(submit).toBeDisabled();
+  });
+
+  it('có tệp rồi thì nút Tiếp tục mở lại', () => {
+    const { rerender } = renderCard({ uploadedFiles: [] });
+    fireEvent.click(screen.getByText('Dùng dữ liệu từ file đính kèm'));
+    expect(screen.getByRole('button', { name: /attachFileRequired/i })).toBeDisabled();
+
+    rerender(
+      <AskCampaignDetailsCard
+        data={briefData}
+        onSubmit={vi.fn()}
+        onAttachClick={vi.fn()}
+        onRemoveFile={vi.fn()}
+        onShowingFilesChange={vi.fn()}
+        uploadedFiles={[FILE]}
+        t={t}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /attachFileRequired/i })).toBeNull();
+  });
+
+  it('nguồn "File Excel / Google Sheet" chưa có tệp thì KHÔNG bị chặn', () => {
+    // Option này có hai đường hợp lệ: tải tệp HOẶC dán link Google Sheet vào khung chat.
+    // Tắt nút ở đây là chặn nhầm người đã có sẵn link.
+    renderCard({ data: dataSourceData, uploadedFiles: [] });
+    fireEvent.click(screen.getByText('File Excel / Google Sheet'));
+
+    expect(screen.queryByRole('button', { name: /attachFileRequired/i })).toBeNull();
+  });
+
   it('thẻ bị gỡ khỏi màn hình → trả cha về false', () => {
     const { onShowingFilesChange, unmount } = renderCard({ uploadedFiles: [FILE] });
     fireEvent.click(screen.getByText('Dùng dữ liệu từ file đính kèm'));

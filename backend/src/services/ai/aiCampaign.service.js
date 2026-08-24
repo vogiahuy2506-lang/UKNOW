@@ -40,6 +40,7 @@ import {
   normalizeChannel,
   shouldGuardCampaignResponse,
   withDeadEndNudge,
+  PLAN_APPROVE_TEXT_RE,
 } from './aiCampaignWizard.service.js';
 import {
   extractCampaignBriefFromHistory,
@@ -48,6 +49,8 @@ import {
   resolveCampaignBrief,
   clearCampaignBriefProductFacts,
   createEmptyCampaignBrief,
+  analyzeFileSuitability,
+  MAX_STORED_FILE_TEXT_CHARS,
 } from './campaignBrief.service.js';
 import {
   isQuickSendRequest,
@@ -57,11 +60,18 @@ import {
 } from '../../utils/campaignQuickSend.util.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 
+export const USER_CONFIRMS_FILE_RE = /vẫn\s*dùng|van\s*dung|cứ\s*tiếp\s*tục|cu\s*tiep\s*tuc|dùng\s*(?:file|tệp|này|luôn|đi)|tiếp\s*tục|tiep\s*tuc|làm\s*tiếp|lam\s*tiep|cứ\s*làm|cu\s*lam|proceed|continue/i;
+
+export function isUserConfirmingFile(text = '') {
+  const trimmed = String(text || '').trim();
+  return USER_CONFIRMS_FILE_RE.test(trimmed) || PLAN_APPROVE_TEXT_RE.test(trimmed);
+}
+
 class AiCampaignService {
   /**
    * Generate campaign JSON structure from prompt and files.
    */
-  async generateCampaignScript({ prompt, files = [], userId = null }) {
+  async generateCampaignScript({ prompt, files = [], userId = null, brief = null }) {
     const parts = [];
 
     // RAG: bơm context doanh nghiệp nếu user đã thiết lập hồ sơ
@@ -338,6 +348,12 @@ D. ZALO NHÓM:
       } catch (err) {
         console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
       }
+    }
+
+    if ((!files || files.length === 0) && brief?.attachedFile?.text) {
+      parts.push({
+        text: `[Nội dung tệp đính kèm: "${brief.attachedFile.originalName || 'Tài liệu'}"]:\n${brief.attachedFile.text}\n${brief.attachedFile.truncated ? '[Lưu ý: Tệp đính kèm dài đã được rút gọn để xử lý nhanh hơn]\n' : ''}[Hết nội dung tệp: "${brief.attachedFile.originalName || 'Tài liệu'}"]`,
+      });
     }
 
     console.log(`[AI] Sending prompt + ${parts.length - 1} files to Gemini...`);
@@ -632,6 +648,42 @@ QUY TẮC:
     let briefForState;
     let contentLocaleNeedsPlanReset = false;
 
+    let extractedAttachedFile = null;
+    if (Array.isArray(files) && files.length > 0) {
+      for (const file of files) {
+        if (!file?.tempId) continue;
+        const mimeType = String(file.contentType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) continue;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+          if (buffer) {
+            // eslint-disable-next-line no-await-in-loop
+            const fullText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
+            if (fullText && fullText.trim()) {
+              const isTruncated = fullText.length > MAX_STORED_FILE_TEXT_CHARS;
+              const truncatedText = isTruncated ? fullText.slice(0, MAX_STORED_FILE_TEXT_CHARS) : fullText;
+              const suitability = analyzeFileSuitability(truncatedText, file.originalName);
+              extractedAttachedFile = {
+                originalName: file.originalName,
+                contentType: file.contentType,
+                text: truncatedText,
+                truncated: isTruncated,
+                totalCharCount: fullText.length,
+                extractedAt: new Date().toISOString(),
+                hasProductData: suitability.hasProductData,
+                summary: suitability.summary,
+                userConfirmed: false,
+              };
+              break;
+            }
+          }
+        } catch (err) {
+          console.warn(`[AI] Could not extract text from file ${file.tempId}:`, err.message);
+        }
+      }
+    }
+
     if (extracted.invalid) {
       // Latest marker authoritative — never fall back to older/persisted brief facts.
       briefForState = clearCampaignBriefProductFacts({
@@ -648,7 +700,24 @@ QUY TẮC:
       briefForState = mergedBrief;
     }
 
-    if (hasAnyAttachedFile && briefForState) {
+    if (extractedAttachedFile) {
+      briefForState = {
+        ...briefForState,
+        attachedFile: extractedAttachedFile,
+        hasAttachedFile: true,
+      };
+    } else if (persistedState.brief?.attachedFile) {
+      const existing = persistedState.brief.attachedFile;
+      const userConfirms = isUserConfirmingFile(lastUserText);
+      briefForState = {
+        ...briefForState,
+        attachedFile: {
+          ...existing,
+          userConfirmed: existing.userConfirmed || userConfirms,
+        },
+        hasAttachedFile: true,
+      };
+    } else if (hasAnyAttachedFile && briefForState) {
       briefForState = { ...briefForState, hasAttachedFile: true };
     }
 
@@ -751,10 +820,11 @@ QUY TẮC:
       gatesForPersist.planApproved = false;
     }
 
+    const hasEffectiveAttachedFile = Boolean(hasAnyAttachedFile || briefForState?.attachedFile?.text);
     const gateState = {
       ...gatesForPersist,
       brief: briefForState,
-      hasAttachedFile: hasAnyAttachedFile,
+      hasAttachedFile: hasEffectiveAttachedFile,
       hasAttachedSpreadsheet: hasAnyAttachedSpreadsheet,
     };
 
@@ -774,7 +844,7 @@ QUY TẮC:
       ...wizardResources,
       briefStale,
       briefPreferredContentMode: briefForState?.contentMode || null,
-      hasAttachedFile: hasAnyAttachedFile,
+      hasAttachedFile: hasEffectiveAttachedFile,
       hasAttachedSpreadsheet: hasAnyAttachedSpreadsheet,
     };
 
@@ -1354,12 +1424,15 @@ UPLOADED FILE (CSV / Excel) CHO DANH SÁCH NGƯỜI NHẬN (dataSource = sheet):
 UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - Khi user chọn "Dùng dữ liệu từ file đính kèm" (contentMode="attached_file"):
   • Trích xuất thông tin sản phẩm/dịch vụ/nội dung quảng bá từ nội dung file đính kèm và yêu cầu của người dùng.
-  • CẢNH BÁO KHI FILE KHÔNG CÓ THÔNG TIN SẢN PHẨM/DỊCH VỤ (chỉ cảnh báo 1 lần, không chặn cứng):
-    Nếu nội dung file đính kèm rõ ràng không chứa sản phẩm, dịch vụ hay ưu đãi bán hàng (ví dụ: báo cáo học tập, bài tập, hoá đơn chi tiêu cá nhân, tài liệu nội bộ không liên quan):
+  • CẢNH BÁO KHI FILE KHÔNG PHẢI TÀI LIỆU CHÀO BÁN / SẢN PHẨM THƯƠNG MẠI (chỉ cảnh báo 1 lần, không chặn cứng):
+    Phân biệt rõ ràng theo ngữ nghĩa:
+    - Tài liệu chào bán hợp lệ: Có thông tin về sản phẩm/dịch vụ/khoá học kèm bảng giá, học phí, chiết khấu, khuyến mãi, tính năng thương mại, combo, ưu đãi dành cho khách hàng...
+    - Tài liệu KHÔNG PHẢI chào bán: Báo cáo công việc (ví dụ: Báo cáo Task, Báo cáo tiến độ dự án), biên bản họp, tài liệu kỹ thuật, đồ án, bài tập, văn bản nội bộ... (dù trong file có thể nhắc đến từ 'sản phẩm', 'tính năng', 'đăng ký' nhưng mục đích file là báo cáo công việc/học tập, KHÔNG phải tài liệu thương mại chào bán cho khách).
+    Khi gặp file không phải tài liệu chào bán và attachedFile.userConfirmed chưa bằng true:
     1. Tóm tắt 1 câu nội dung file nói về điều gì (dựa trên nội dung thật đã trích).
-    2. Nói rõ là không tìm thấy thông tin sản phẩm/dịch vụ trong file.
-    3. Hỏi người dùng muốn tải file khác hay vẫn dùng file này để tạo nội dung chiến dịch.
-  • NẾU NGƯỜI DÙNG ĐÃ XÁC NHẬN "vẫn dùng file này" / "cứ tiếp tục" (hoặc trong lịch sử đã có cảnh báo này rồi):
+    2. Nói rõ là file là tài liệu báo cáo/nội bộ, không tìm thấy thông tin sản phẩm/dịch vụ/ưu đãi thương mại để soạn chiến dịch marketing.
+    3. Hỏi người dùng muốn tải file khác hay vẫn dùng thông tin trong file này để tạo nội dung chiến dịch.
+  • NẾU NGƯỜI DÙNG ĐÃ XÁC NHẬN "vẫn dùng file này" / "cứ tiếp tục" (hoặc trong lịch sử đã có cảnh báo này rồi, hoặc attachedFile.userConfirmed = true):
     Tiếp tục soạn chiến dịch bình thường theo nội dung file và yêu cầu của người dùng, TUYỆT ĐỐI KHÔNG lặp lại cảnh báo.
 
 ### Sau khi user trả lời ask_campaign_details, build campaign dựa vào:
@@ -1787,6 +1860,10 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
       } catch (err) {
         console.warn(`[AI Registry] Could not read file:`, err.message);
       }
+    }
+
+    if ((!files || files.length === 0) && brief?.attachedFile?.text) {
+      parts.push({ text: `[File: ${brief.attachedFile.originalName || 'Tài liệu'}]:\n${brief.attachedFile.text}` });
     }
 
     console.log(`[AI Registry] Sending prompt to Gemini...`);

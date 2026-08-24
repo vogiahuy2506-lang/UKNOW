@@ -88,7 +88,7 @@ jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
   resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.5-flash'),
 }));
 
-const { default: aiCampaignService } = await import('../aiCampaign.service.js');
+const { default: aiCampaignService, isUserConfirmingFile } = await import('../aiCampaign.service.js');
 const { runChat } = await import('../aiChatTransport.service.js');
 
 describe('aiCampaign.service', () => {
@@ -686,5 +686,26 @@ describe('aiCampaign.service', () => {
     expect(result.type).toBe('confirm_create');
     const groupNode = result.data.nodes[0];
     expect(groupNode.config.zaloGroupTemplateSteps.length).toBe(3);
+  });
+
+  describe('isUserConfirmingFile', () => {
+    it('matches common Vietnamese and English confirmation phrases', () => {
+      expect(isUserConfirmingFile('vẫn dùng file này')).toBe(true);
+      expect(isUserConfirmingFile('cứ tiếp tục')).toBe(true);
+      expect(isUserConfirmingFile('tiếp tục đi')).toBe(true);
+      expect(isUserConfirmingFile('ok')).toBe(true);
+      expect(isUserConfirmingFile('đồng ý')).toBe(true);
+      expect(isUserConfirmingFile('ừ dùng đi')).toBe(true);
+      expect(isUserConfirmingFile('được, làm tiếp đi')).toBe(true);
+      expect(isUserConfirmingFile('vẫn dùng')).toBe(true);
+      expect(isUserConfirmingFile('chốt')).toBe(true);
+      expect(isUserConfirmingFile('yes')).toBe(true);
+    });
+
+    it('does not match cancel or unrelated questions', () => {
+      expect(isUserConfirmingFile('huỷ')).toBe(false);
+      expect(isUserConfirmingFile('đổi file khác')).toBe(false);
+      expect(isUserConfirmingFile('hạn mức của tôi còn bao nhiêu?')).toBe(false);
+    });
   });
 });

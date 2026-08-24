@@ -9,6 +9,49 @@ const PRODUCT_DESC_MAX = 2000;
 const TOPIC_MIN = 2;
 const TOPIC_MAX = 500;
 const CATALOG_SNAPSHOT_LIMIT = 50;
+export const MAX_STORED_FILE_TEXT_CHARS = 30000;
+
+export function analyzeFileSuitability(text = '', originalName = '') {
+  const clean = String(text || '').toLowerCase();
+
+  // Commercial indicators: explicit pricing, offers, catalog terms
+  const commercialKeywords = [
+    'bảng giá', 'học phí', 'đơn giá', 'thành tiền', 'chiết khấu', 'khuyến mãi',
+    'ưu đãi', 'voucher', 'quà tặng', 'giá chỉ từ', 'đ/tháng', 'đ/khóa', 'học bổng',
+    'tuyển sinh', 'combo', 'gói cước', 'bán hàng', 'catalogue', 'catalog', 'menu',
+    'pricing', 'price list', 'tuition fee', 'discount code', 'special offer',
+  ];
+
+  // Internal / work / task / academic indicators
+  const internalReportKeywords = [
+    'báo cáo', 'tiến độ', 'task', 'jira', 'ticket', 'họp', 'biên bản', 'phân công',
+    'sprint', 'bug', 'pull request', 'kế hoạch tuần', 'kết quả thực hiện',
+    'bài tập', 'tiểu luận', 'luận văn', 'đồ án', 'thực tập', 'môn học',
+    'sinh viên thực hiện', 'giảng viên hướng dẫn', 'đề cương', 'giáo trình',
+    'assignment', 'thesis', 'internship report', 'lab report', 'meeting minutes',
+  ];
+
+  const hasCommercial = commercialKeywords.some((kw) => clean.includes(kw));
+  const hasInternalReport = internalReportKeywords.some((kw) => clean.includes(kw));
+
+  // Default to false (warn user) if it looks like an internal report/task or lacks commercial pricing/offers
+  const hasProductData = hasCommercial && !hasInternalReport;
+
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 3 && !l.startsWith('---'));
+
+  let summary = lines.slice(0, 2).join(' — ').slice(0, 150);
+  if (!summary) {
+    summary = originalName ? `Tài liệu "${originalName}"` : 'Tài liệu tải lên';
+  }
+
+  return {
+    hasProductData,
+    summary,
+  };
+}
 
 function briefError(status, code, message) {
   const error = new Error(message);
@@ -182,7 +225,6 @@ export function parseCampaignBriefMarker(marker) {
 }
 
 export function mergeCampaignBrief(persisted, derived, options = {}) {
-  // `locale` kept as deprecated alias for callers not yet migrated.
   const { defaultContentLocale, locale } = options;
   const fallback = CONTENT_LOCALES.has(defaultContentLocale)
     ? defaultContentLocale
@@ -192,7 +234,13 @@ export function mergeCampaignBrief(persisted, derived, options = {}) {
   const d = derived && typeof derived === 'object' ? derived : null;
   if (!p && !d) return empty;
 
-  // Sticky: derived → persisted → default. Never insert UI/default between derived and persisted.
+  const attachedFile = d?.attachedFile || p?.attachedFile || null;
+  const hasAttachedFile = Boolean(
+    d?.hasAttachedFile
+    || p?.hasAttachedFile
+    || attachedFile
+  );
+
   const pickLocale = (...candidates) => {
     for (const value of candidates) {
       if (CONTENT_LOCALES.has(value)) return value;
@@ -209,6 +257,7 @@ export function mergeCampaignBrief(persisted, derived, options = {}) {
       flowMode: FLOW_MODES.has(d.flowMode) ? d.flowMode : (FLOW_MODES.has(p?.flowMode) ? p.flowMode : 'standard'),
       contentLocale: pickLocale(d.contentLocale, p?.contentLocale, fallback),
       productIds: Array.isArray(d.productIds) ? d.productIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [],
+      ...(attachedFile ? { attachedFile, hasAttachedFile: true } : (hasAttachedFile ? { hasAttachedFile: true } : {})),
     };
   }
   if (p?.contentMode) {
@@ -220,11 +269,13 @@ export function mergeCampaignBrief(persisted, derived, options = {}) {
       flowMode: FLOW_MODES.has(p.flowMode) ? p.flowMode : 'standard',
       contentLocale: pickLocale(p.contentLocale, fallback),
       productIds: Array.isArray(p.productIds) ? p.productIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [],
+      ...(attachedFile ? { attachedFile, hasAttachedFile: true } : (hasAttachedFile ? { hasAttachedFile: true } : {})),
     };
   }
   return {
     ...empty,
     contentLocale: fallback,
+    ...(attachedFile ? { attachedFile, hasAttachedFile: true } : (hasAttachedFile ? { hasAttachedFile: true } : {})),
   };
 }
 
@@ -243,7 +294,6 @@ export function isCampaignBriefReady(brief) {
     return false;
   }
   if (mode === 'multiple_products') {
-    // Intent-ready even before snapshot IDs are filled — resolveCampaignBrief snapshots.
     return brief.productMode === 'catalog_set';
   }
   if (mode === 'custom_topic') {
@@ -256,6 +306,7 @@ export function isCampaignBriefReady(brief) {
       || brief.hasFile
       || (Array.isArray(brief.files) && brief.files.length > 0)
       || (Number.isFinite(brief.attachedFilesCount) && brief.attachedFilesCount > 0)
+      || brief.attachedFile?.text
     );
   }
   if (mode === 'context') {
@@ -462,7 +513,29 @@ export function buildCampaignBriefContext({ brief, resolvedProducts = [] } = {})
     lines.push(`topicText: """${escapeForPrompt(brief.topicText, 500)}"""`);
     lines.push('GROUNDING: Write about this topic/purpose. Do not force product promotion.');
   } else if (brief.contentMode === 'attached_file') {
-    lines.push('GROUNDING: contentMode=attached_file. Use the product or campaign details provided in the attached file(s) and user prompt. Do not invent products outside the attached files. If the attached file does not contain recognizable products/services/offers, warn the user politely with a brief summary of the file content and ask if they want to proceed with this file or upload another; if the user already confirmed to proceed, draft the campaign content based on the file and instructions without repeating the warning.');
+    if (brief.attachedFile?.originalName) {
+      lines.push(`attachedFile.name: """${escapeForPrompt(brief.attachedFile.originalName, 160)}"""`);
+    }
+    if (brief.attachedFile?.summary) {
+      lines.push(`attachedFile.summary: """${escapeForPrompt(brief.attachedFile.summary, 500)}"""`);
+    }
+    if (brief.attachedFile?.hasProductData !== undefined) {
+      lines.push(`attachedFile.hasProductData: ${Boolean(brief.attachedFile.hasProductData)}`);
+    }
+    if (brief.attachedFile?.userConfirmed) {
+      lines.push('attachedFile.userConfirmed: true');
+    }
+    if (brief.attachedFile?.text) {
+      lines.push(`[Nội dung tệp đính kèm: "${brief.attachedFile.originalName || 'Tài liệu'}"]:\n${brief.attachedFile.text}\n${brief.attachedFile.truncated ? '[Lưu ý: Tệp đính kèm dài đã được rút gọn để xử lý nhanh hơn]\n' : ''}[Hết nội dung tệp: "${brief.attachedFile.originalName || 'Tài liệu'}"]`);
+    }
+    lines.push('GROUNDING: contentMode=attached_file. Use the product or campaign details provided in the attached file(s) and user prompt. Do not invent products outside the attached files.');
+    if (brief.attachedFile?.hasProductData === false && !brief.attachedFile?.userConfirmed) {
+      lines.push('RULE: The attached file appears to be an internal report, task/project document, meeting notes, or non-commercial text without explicit product offers. You MUST politely warn the user: 1) summarize in 1 sentence what the file is about (use attachedFile.summary), 2) state that no commercial product/service/promotional offers were found in the file to promote, and 3) ask if they would like to attach a different file or continue with this file.');
+    } else if (brief.attachedFile?.userConfirmed) {
+      lines.push('RULE: User has confirmed to proceed with this file. Do NOT show the warning again. Draft the campaign content based on the file and instructions.');
+    } else {
+      lines.push('RULE: Check if the attached file has clear commercial products/services to promote. If it is only an internal task report or academic report, politely warn the user (summary, no commercial products found, ask if they want to change file or proceed). If it has commercial products/courses, draft the campaign directly.');
+    }
   } else {
     lines.push('GROUNDING: contentMode=context. Only use product/offer facts that already appear in the user prompt, files, or business profile. If missing, write neutrally — do NOT invent.');
   }

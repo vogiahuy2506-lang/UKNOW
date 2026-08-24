@@ -3530,6 +3530,7 @@ export default {
     campaignPickProduct: 'Chọn sản phẩm / khóa học:',
     campaignTopicPlaceholder: 'Ví dụ: Email cảm ơn sau mua hàng, thông báo nghỉ lễ…',
     campaignTopicRequired: 'Nhập chủ đề / mục đích (2–500 ký tự)',
+    attachFileRequired: 'Đính kèm file để tiếp tục',
     campaignTopicLength: 'Chủ đề cần từ 2 đến 500 ký tự',
     campaignMultipleHint: 'Sẽ dùng danh sách sản phẩm hiện có trong tài khoản để soạn nội dung.',
     campaignBriefContinue: 'Tiếp tục',

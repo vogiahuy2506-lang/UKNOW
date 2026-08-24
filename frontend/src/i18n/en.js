@@ -3496,6 +3496,7 @@ export default {
     campaignPickProduct: 'Choose a product / course:',
     campaignTopicPlaceholder: 'e.g. Thank-you email after purchase, holiday notice…',
     campaignTopicRequired: 'Enter a topic / purpose (2–500 characters)',
+    attachFileRequired: 'Attach a file to continue',
     campaignTopicLength: 'Topic must be 2–500 characters',
     campaignMultipleHint: 'Will use your current product catalog to draft content.',
     campaignBriefContinue: 'Continue',
