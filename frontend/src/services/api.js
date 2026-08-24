@@ -236,7 +236,12 @@ api.interceptors.response.use(
             `${getLimitReachedLabel()} →`
           )
         ),
-        { duration: 8000 }
+        // `id` cố định để react-hot-toast THAY THẾ toast cũ thay vì xếp chồng.
+        // Thao tác hàng loạt (ví dụ "Lưu tất cả template") gọi API nhiều lần, mỗi lần
+        // vượt hạn mức là một lỗi — không có id thì N lỗi giống hệt nhau sinh N toast,
+        // mỗi cái sống 8 giây, che kín màn hình. Đã xảy ra thật ngày 25/08/2026.
+        // Khoá theo nội dung: hai loại hạn mức khác nhau vẫn hiện được riêng.
+        { id: `limit-${msg}`, duration: 8000 }
       );
       error._upgradeToastShown = true;
       return Promise.reject(error);
