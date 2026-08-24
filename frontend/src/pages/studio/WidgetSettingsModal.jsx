@@ -140,7 +140,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     size: 'medium',
     show_header: true,
     show_avatar: true,
-    logo_url: '',
     border_radius: 12,
   });
 
@@ -153,7 +152,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     size: 'medium',
     show_header: true,
     show_avatar: true,
-    logo_url: '',
     border_radius: 12,
     show_suggested: true,
     require_name: false,
@@ -162,6 +160,12 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
   useEffect(() => {
     if (open && chatbot) {
       if (embedKind) setActiveTab(embedKind);
+      // The custom_chatbots table stores ONE shared logo (logo_url / avatar_url);
+      // all 3 embed types (script / iframe / public link) read from it. Earlier
+      // versions stored per-embed logo_url in iframe_settings / public_link_settings
+      // but the backend repository did not persist those fields, so the UI silently
+      // dropped the value on reload. We now expose the same logo to all three tabs.
+      const sharedLogo = chatbot.logo_url || chatbot.avatar_url || '';
       const ws = chatbot.widget_settings || {};
       setScript((s) => ({
         ...s,
@@ -170,7 +174,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         text_color: ws.text_color || s.text_color,
         accent_color: ws.accent_color || s.accent_color,
         position: ws.position || s.position,
-        logo_url: ws.logo_url || '',
+        logo_url: ws.logo_url || sharedLogo,
         show_avatar: ws.show_avatar !== false,
         welcome_message: ws.welcome_message || chatbot.welcome_message || '',
         launcher_label: ws.launcher_label || s.launcher_label,
@@ -188,7 +192,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         size: iw.size || 'medium',
         show_header: iw.show_header !== false,
         show_avatar: iw.show_avatar !== false,
-        logo_url: iw.logo_url || ws.logo_url || '',
         border_radius: iw.border_radius ?? 12,
       }));
       const pw = chatbot.public_link_settings || {};
@@ -202,7 +205,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         size: pw.size || 'medium',
         show_header: pw.show_header !== false,
         show_avatar: pw.show_avatar !== false,
-        logo_url: pw.logo_url || ws.logo_url || '',
         border_radius: pw.border_radius ?? 12,
         show_suggested: pw.show_suggested !== false,
         require_name: pw.require_name === true,
@@ -357,10 +359,10 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 <ScriptPreview cfg={script} chatbot={chatbot} />
               )}
               {activeTab === 'iframe' && (
-                <IframePreview cfg={iframe} chatbot={chatbot} />
+                <IframePreview cfg={{ ...iframe, logo_url: script.logo_url }} chatbot={chatbot} />
               )}
               {activeTab === 'public_link' && (
-                <PublicLinkPreview cfg={publicLink} chatbot={chatbot} />
+                <PublicLinkPreview cfg={{ ...publicLink, logo_url: script.logo_url }} chatbot={chatbot} />
               )}
             </div>
           </nav>
@@ -556,15 +558,22 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                   </section>
 
-                  {/* Logo URL */}
+                  {/* Logo URL — shared across script / iframe / public link tabs.
+                      The custom_chatbots table stores a single logo; this input lives
+                      on the Script tab so all three embed types stay in sync. */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
                     <ImageUrlInput
-                      value={iframe.logo_url}
-                      onChange={(url) => updateIframe({ logo_url: url || '' })}
+                      value={script.logo_url}
+                      onChange={(url) => {
+                        const next = url || '';
+                        updateScript({ logo_url: next });
+                        updateIframe({});
+                        updatePublic({});
+                      }}
                       label=""
                       placeholder="https://example.com/logo.png"
-                      help="Logo thay thế avatar mặc định của bot."
+                      help="Logo dùng chung cho cả 3 kiểu nhúng (script / iframe / public link)."
                     />
                   </section>
 
@@ -665,18 +674,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       />
                       <span className="text-sm font-mono text-slate-700 w-12 text-right">{publicLink.border_radius}px</span>
                     </div>
-                  </section>
-
-                  {/* Logo URL */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
-                    <ImageUrlInput
-                      value={publicLink.logo_url}
-                      onChange={(url) => updatePublic({ logo_url: url || '' })}
-                      label=""
-                      placeholder="https://example.com/logo.png"
-                      help="Logo thay thế avatar mặc định của bot."
-                    />
                   </section>
 
                   {/* Toggles */}

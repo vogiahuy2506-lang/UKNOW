@@ -68,7 +68,7 @@ export default function PublicChatbotPage() {
   const backgroundColor = chatbot?.background_color || '#ffffff';
   const textColor = chatbot?.text_color || '#1f2937';
   const accentColor = chatbot?.accent_color || '#60A5FA';
-  const logoUrl = chatbot?.logo_url || '';
+  const logoUrl = chatbot?.logo_url || chatbot?.avatar_url || '';
   const showAvatar = chatbot?.show_avatar !== false;
   const suggestedQuestions = chatbot?.suggested_questions || [];
   const allowAttachments = chatbot?.allow_attachments === true;

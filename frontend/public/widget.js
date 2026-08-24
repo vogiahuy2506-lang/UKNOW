@@ -71,7 +71,11 @@
         BACKGROUND_COLOR = c.backgroundColor || BACKGROUND_COLOR;
         TEXT_COLOR = c.textColor || TEXT_COLOR;
         ACCENT_COLOR = c.accentColor || ACCENT_COLOR;
-        LOGO_URL = c.logoUrl || LOGO_URL;
+        // Resolve header avatar once: prefer logoUrl, fall back to avatarUrl.
+        // Previously widget.js only checked LOGO_URL so avatars set via the
+        // Studio "Ảnh đại diện" field (which writes custom_chatbots.avatar_url)
+        // were silently dropped from the embeddable header.
+        LOGO_URL = c.logoUrl || c.avatarUrl || LOGO_URL;
         SHOW_AVATAR = c.showAvatar !== false ? SHOW_AVATAR : false;
         SUGGESTED_QUESTIONS = c.suggestedQuestions || SUGGESTED_QUESTIONS;
         POSITION = c.position || POSITION;
