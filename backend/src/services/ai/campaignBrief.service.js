@@ -462,7 +462,7 @@ export function buildCampaignBriefContext({ brief, resolvedProducts = [] } = {})
     lines.push(`topicText: """${escapeForPrompt(brief.topicText, 500)}"""`);
     lines.push('GROUNDING: Write about this topic/purpose. Do not force product promotion.');
   } else if (brief.contentMode === 'attached_file') {
-    lines.push('GROUNDING: contentMode=attached_file. Use the product or campaign details provided in the attached file(s) and user prompt. Do not invent products outside the attached files.');
+    lines.push('GROUNDING: contentMode=attached_file. Use the product or campaign details provided in the attached file(s) and user prompt. Do not invent products outside the attached files. If the attached file does not contain recognizable products/services/offers, warn the user politely with a brief summary of the file content and ask if they want to proceed with this file or upload another; if the user already confirmed to proceed, draft the campaign content based on the file and instructions without repeating the warning.');
   } else {
     lines.push('GROUNDING: contentMode=context. Only use product/offer facts that already appear in the user prompt, files, or business profile. If missing, write neutrally — do NOT invent.');
   }

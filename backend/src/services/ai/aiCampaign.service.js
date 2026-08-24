@@ -1341,7 +1341,7 @@ GOOGLE SHEET / FILE EXCEL — CHƯA có URL và CHƯA có File:
 - Chỉ áp dụng khi user đã chọn dataSource="sheet" nhưng CHƯA dán link Google Sheet và CHƯA tải file lên:
   Nhắc người dùng đính kèm file Excel/CSV hoặc dán link Google Sheet (URL https://docs.google.com/spreadsheets/...) để tiếp tục.
 
-UPLOADED FILE (CSV / Excel) — user tải file lên chat:
+UPLOADED FILE (CSV / Excel) CHO DANH SÁCH NGƯỜI NHẬN (dataSource = sheet):
 - Nội dung file đã được trích xuất thành text và gắn trong message → AI CÓ THỂ đọc được các cột và dữ liệu
 - Phân tích các cột trong file:
   • Xác định cột email (hoặc số điện thoại cho Zalo).
@@ -1350,6 +1350,17 @@ UPLOADED FILE (CSV / Excel) — user tải file lên chat:
   • Kiểm tra số lượng: tối đa 1000 người nhận. Nếu file > 1000 dòng, thông báo vượt hạn mức (không tự ý cắt bớt).
   • Nếu có dòng không hợp lệ, chỉ rõ dòng lỗi cho người dùng.
   • Khi đã có dữ liệu file hợp lệ, KHÔNG đòi link Google Sheet nữa, tiếp tục hoàn thiện chiến dịch.
+
+UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
+- Khi user chọn "Dùng dữ liệu từ file đính kèm" (contentMode="attached_file"):
+  • Trích xuất thông tin sản phẩm/dịch vụ/nội dung quảng bá từ nội dung file đính kèm và yêu cầu của người dùng.
+  • CẢNH BÁO KHI FILE KHÔNG CÓ THÔNG TIN SẢN PHẨM/DỊCH VỤ (chỉ cảnh báo 1 lần, không chặn cứng):
+    Nếu nội dung file đính kèm rõ ràng không chứa sản phẩm, dịch vụ hay ưu đãi bán hàng (ví dụ: báo cáo học tập, bài tập, hoá đơn chi tiêu cá nhân, tài liệu nội bộ không liên quan):
+    1. Tóm tắt 1 câu nội dung file nói về điều gì (dựa trên nội dung thật đã trích).
+    2. Nói rõ là không tìm thấy thông tin sản phẩm/dịch vụ trong file.
+    3. Hỏi người dùng muốn tải file khác hay vẫn dùng file này để tạo nội dung chiến dịch.
+  • NẾU NGƯỜI DÙNG ĐÃ XÁC NHẬN "vẫn dùng file này" / "cứ tiếp tục" (hoặc trong lịch sử đã có cảnh báo này rồi):
+    Tiếp tục soạn chiến dịch bình thường theo nội dung file và yêu cầu của người dùng, TUYỆT ĐỐI KHÔNG lặp lại cảnh báo.
 
 ### Sau khi user trả lời ask_campaign_details, build campaign dựa vào:
 - channel: email/zalo/zalo_group → chọn đúng action node

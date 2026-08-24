@@ -681,6 +681,7 @@ export const AskCampaignDetailsCard = ({
   onAttachClick,
   uploadedFiles = [],
   onRemoveFile,
+  onShowingFilesChange,
   isActive = true,
   t,
 }) => {
@@ -694,14 +695,14 @@ export const AskCampaignDetailsCard = ({
   const [productName, setProductName] = useState('');
   const [productDescription, setProductDescription] = useState('');
   const [topicText, setTopicText] = useState('');
-  if (!data?.questions?.length) return null;
 
-  const isWizardQuestion = data.questions.some((q) => q.wizardGate);
+  const questions = data?.questions || [];
+  const isWizardQuestion = questions.some((q) => q.wizardGate);
   const isEmailChannel = answers.channel === 'email';
   const emailChoiceRequired = isEmailChannel && !isWizardQuestion;
   const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
   const manualRecipientsRequired = answers.dataSource === 'manual';
-  const briefQuestion = data.questions.find((q) => q.inputType === 'campaign_brief' || q.wizardGate === 'campaignBrief');
+  const briefQuestion = questions.find((q) => q.inputType === 'campaign_brief' || q.wizardGate === 'campaignBrief');
 
   const isScheduleQuestion = (question) => question.wizardGate === 'schedule' || question.inputType === 'schedule';
   const isBriefQuestion = (question) => question.inputType === 'campaign_brief' || question.wizardGate === 'campaignBrief';
@@ -712,6 +713,28 @@ export const AskCampaignDetailsCard = ({
     productDescription,
     topicText,
   };
+
+  const isCardActuallyShowingFiles = Boolean(
+    isActive
+    && uploadedFiles.length > 0
+    && (
+      (questions.some(isBriefQuestion) && answers.campaignBrief === 'attached_file')
+      || (questions.some((q) => q.id === 'dataSource') && answers.dataSource === 'sheet')
+    )
+  );
+
+  useEffect(() => {
+    if (isActive && onShowingFilesChange) {
+      onShowingFilesChange(isCardActuallyShowingFiles);
+    }
+    return () => {
+      if (isActive && onShowingFilesChange) {
+        onShowingFilesChange(false);
+      }
+    };
+  }, [isActive, isCardActuallyShowingFiles, onShowingFilesChange]);
+
+  if (!questions.length) return null;
 
   const isQuestionAnswered = (question) => {
     if (isScheduleQuestion(question)) {

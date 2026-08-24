@@ -510,6 +510,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [sessionToDelete, setSessionToDelete] = useState(null);
   const [isSavingAllTemplates, setIsSavingAllTemplates] = useState(false);
+  const [cardShowingFiles, setCardShowingFiles] = useState(false);
 
   const isMobile = useIsMobile();
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -2940,7 +2941,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       <div className={isFullscreen ? 'max-w-3xl mx-auto w-full' : 'w-full'}>
         {isFullscreen && <CreditWarningBanner placement="composer" />}
         <div className={`rounded-2xl border transition-all outline-none shadow-sm ${centered ? 'bg-white border-slate-200' : ''} ${isDragging ? 'border-orange-300 bg-orange-50/40' : centered ? '' : 'border-slate-200 bg-slate-50 focus-within:bg-white'}`}>
-          {uploadedFiles.length > 0 && (
+          {uploadedFiles.length > 0 && !cardShowingFiles && (
             <div className="flex flex-wrap gap-1.5 px-3 pt-3">
               {uploadedFiles.map(f => {
                 const { bg, text } = fileChipMeta(f);
@@ -3371,6 +3372,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onAttachClick={() => fileInputRef.current?.click()}
                   uploadedFiles={uploadedFiles}
                   onRemoveFile={(fileIndex) => setUploadedFiles((prev) => prev.filter((_, i) => i !== fileIndex))}
+                  onShowingFilesChange={setCardShowingFiles}
                   isActive={idx === latestInteractiveIndex}
                   t={t}
                 />

@@ -85,6 +85,10 @@ e2e/playwright-report/
 e2e/screenshots/.auth/
 e2e/screenshots/.env.shots
 e2e/screenshots/out/
+# Ảnh chụp tay / ảnh ghép cho những ô không tự động hoá được. Cũng là ảnh màn
+# hình tài khoản thật nên không commit. Bản đã dùng nằm trong kho ảnh của bài
+# hướng dẫn trên máy chủ; thư mục này chỉ là bản nháp ở máy.
+e2e/screenshots/manual/
 
 ####################
 # OS / EDITOR
