@@ -1,2 +1,9 @@
-@echo off
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%~dp0prepare-commit-msg.ps1" %*
+#!/bin/sh
+# UKNOW policy: khong dung Co-authored-by trong commit message.
+# Strip Co-authored-by trailer without requiring external tools (grep/mktemp).
+
+COMMIT_MSG_FILE="$1"
+[ -f "$COMMIT_MSG_FILE" ] || exit 0
+
+# Use sed (available in MSYS2/Git Bash) to remove Co-authored-by lines.
+sed -i '/^[Cc][Oo]-[Aa]uthored-[Bb][Yy]:/d' "$COMMIT_MSG_FILE"
