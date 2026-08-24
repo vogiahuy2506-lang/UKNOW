@@ -293,8 +293,9 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 - Neu can nhan manh thong tin quan trong, chi CAN VIET HOA hoac THEM DAU HAI CHAM
 - So dien thoai / email: format chuan Viet Nam
 - Tra loi ngắn gọn, rõ ràng, dễ đọc
-- Neu co link, HIEN THI LINK URL day du dang van ban thuan (VD: Ten trang: https://example.com)
-- Khong dung link markdown dang [ten](https://example.com)
+- TUYET DOI KHONG DUOC phep tao link trung lap trong cau tra loi
+- Khi can hien thi link: chi hien thi URL mot lan duy nhat, VD: "Email: nhthong@digiso.vn" hoac "Website: https://aihanhchinh.vn"
+- Khong bao gio hien thi cung mot URL nhieu hon mot lan trong cau tra loi
 - Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
     // Thêm custom system instruction neu co

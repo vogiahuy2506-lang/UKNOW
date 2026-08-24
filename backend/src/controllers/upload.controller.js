@@ -676,6 +676,66 @@ class UploadController {
       return res.status(500).json({ success: false, message: 'Upload logo thất bại' });
     }
   }
+
+  /**
+   * Upload image for chatbot avatar/logo - uses Cloudinary directly, no storage quota check.
+   * Limited to 5MB for image files only.
+   */
+  async uploadImage(req, res) {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, message: 'Người dùng chưa được xác thực' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Không có file ảnh' });
+      }
+
+      // Validate image type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(req.file.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Chỉ chấp nhận file ảnh: JPG, PNG, WebP, GIF'
+        });
+      }
+
+      // Validate file size (5MB)
+      const maxSize = 5 * 1024 * 1024;
+      if (req.file.size > maxSize) {
+        return res.status(400).json({
+          success: false,
+          message: 'File quá lớn. Vui lòng chọn ảnh dưới 5MB'
+        });
+      }
+
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'chatbot-images',
+            resource_type: 'image',
+            allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+            transformation: [
+              { width: 512, height: 512, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
+            ]
+          },
+          (err, data) => (err ? reject(err) : resolve(data))
+        );
+        stream.end(req.file.buffer);
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          url: result.secure_url,
+          originalName: req.file.originalname,
+          size: req.file.size
+        }
+      });
+    } catch (error) {
+      console.error('Upload image error:', error);
+      return res.status(500).json({ success: false, message: 'Upload ảnh thất bại' });
+    }
+  }
 }
 
 export default new UploadController();

@@ -1,8 +1,8 @@
 -- Chatbot AI Studio Conversations - lưu trữ cuộc trò chuyện từ chatbot studio
 CREATE TABLE IF NOT EXISTS chatbot_studio_conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    id_user INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    id_chatbot INTEGER NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+    id_user BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    id_chatbot BIGINT NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
     
     -- Session info
     session_id VARCHAR(128) UNIQUE,

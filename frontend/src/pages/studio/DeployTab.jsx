@@ -8,10 +8,14 @@ import {
   HiOutlineColorSwatch,
   HiOutlineExternalLink,
   HiOutlineCheckCircle,
+  HiOutlineShare,
+  HiOutlineShoppingBag,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { ChannelModal } from './ChannelModals';
+import ShareChatbotModal from '../../components/marketplace/ShareChatbotModal';
+import MarketplaceListingModal from '../../components/marketplace/MarketplaceListingModal';
 
 const EMBED_OPTIONS = [
   {
@@ -61,6 +65,23 @@ const CHANNEL_TILES = [
   },
 ];
 
+const SHARE_OPTIONS = [
+  {
+    id: 'member',
+    title: 'Chia sẻ thành viên',
+    tooltip: 'Mời đồng đội cùng sử dụng chatbot',
+    icon: HiOutlineShare,
+    iconClass: 'bg-orange-50 text-orange-600',
+  },
+  {
+    id: 'marketplace',
+    title: 'Đăng Marketplace',
+    tooltip: 'Đăng bán chatbot lên marketplace',
+    icon: HiOutlineShoppingBag,
+    iconClass: 'bg-violet-50 text-violet-600',
+  },
+];
+
 function SquareTile({ onClick, iconBg, children, badge, tooltip, connected, label }) {
   return (
     <button
@@ -93,6 +114,8 @@ export default function DeployTab({
   const [channels, setChannels] = useState([]);
   const [embedModal, setEmbedModal] = useState(null); // 'script' | 'iframe' | 'public_link' | null
   const [channelModal, setChannelModal] = useState(null); // 'zalo' | 'facebook' | 'zalo_personal' | null
+  const [shareModal, setShareModal] = useState(false);
+  const [marketplaceModal, setMarketplaceModal] = useState(false);
 
   useEffect(() => {
     if (chatbot?.id) loadChannels();
@@ -188,6 +211,36 @@ export default function DeployTab({
             })}
           </div>
         </div>
+
+        {/* Chia sẻ */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
+            Chia sẻ
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {SHARE_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const handleClick = () => {
+                if (opt.id === 'member') {
+                  setShareModal(true);
+                } else if (opt.id === 'marketplace') {
+                  setMarketplaceModal(true);
+                }
+              };
+              return (
+                <SquareTile
+                  key={opt.id}
+                  onClick={handleClick}
+                  iconBg={opt.iconClass}
+                  tooltip={opt.tooltip}
+                  label={opt.title}
+                >
+                  <Icon className="w-5 h-5" />
+                </SquareTile>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Embed modal */}
@@ -212,6 +265,26 @@ export default function DeployTab({
           channel={channelModal}
           chatbot={chatbot}
           onClose={() => setChannelModal(null)}
+        />
+      )}
+
+      {/* Share chatbot modal */}
+      {shareModal && (
+        <ShareChatbotModal
+          open={shareModal}
+          chatbot={chatbot}
+          onClose={() => setShareModal(false)}
+          onSuccess={() => setShareModal(false)}
+        />
+      )}
+
+      {/* Marketplace listing modal */}
+      {marketplaceModal && (
+        <MarketplaceListingModal
+          open={marketplaceModal}
+          chatbot={chatbot}
+          onClose={() => setMarketplaceModal(false)}
+          onSuccess={() => setMarketplaceModal(false)}
         />
       )}
     </div>

@@ -339,12 +339,56 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
             value={config.system_instruction || ''}
             onChange={(e) => update('system_instruction', e.target.value)}
             placeholder="VD: Bạn là một trợ lý ảo thân thiện của công ty ABC, chuyên tư vấn về sản phẩm..."
-            rows={compact ? 3 : 5}
-            className="input resize-y"
+            rows={compact ? 4 : 8}
+            className="input resize-y min-h-[160px]"
           />
           <p className="text-[10px] text-slate-400 mt-1">
             Không giới hạn độ dài. Hướng dẫn chi tiết giúp AI hiểu rõ vai trò và phong cách trả lời.
           </p>
+        </div>
+      )}
+
+      {/* Kiến thức - hiển thị summary khi có showKnowledge prop */}
+      {options?.showKnowledge && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
+              <HiOutlineBookOpen className="w-3.5 h-3.5 text-emerald-500" />
+              Kiến thức chatbot
+            </label>
+            {options.onOpenKnowledge && (
+              <button
+                type="button"
+                onClick={options.onOpenKnowledge}
+                className="text-[11px] text-primary-600 hover:text-primary-700 font-medium"
+              >
+                Quản lý tài liệu →
+              </button>
+            )}
+          </div>
+          <div className="border border-slate-200 rounded-xl p-4 bg-gradient-to-br from-slate-50 to-emerald-50/30">
+            {options.knowledgeCount > 0 ? (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <HiOutlineBookOpen className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-700">
+                    {options.knowledgeCount} tài liệu
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    AI sẽ sử dụng kiến thức để trả lời câu hỏi
+                  </p>
+                </div>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              </div>
+            ) : (
+              <div className="text-center py-2">
+                <p className="text-sm text-slate-500">Chưa có tài liệu kiến thức</p>
+                <p className="text-xs text-slate-400 mt-1">Thêm tài liệu để chatbot trả lời chính xác hơn</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

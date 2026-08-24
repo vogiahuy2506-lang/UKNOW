@@ -405,36 +405,66 @@ class MarketplaceController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
 
-      const chatbots = await chatbotRepository.listChatbotsByUser(userId);
+      let chatbots;
+      try {
+        chatbots = await chatbotRepository.listChatbotsByUser(userId);
+      } catch (chatbotError) {
+        console.error('[Marketplace] listChatbotsByUser error:', chatbotError);
+        chatbots = [];
+      }
+
+      if (!chatbots || chatbots.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
 
       // Get existing listings for these chatbots to mark which ones are already listed
-      const { rows: existingListings } = await db.query(
-        `SELECT resource_id FROM marketplace_listings
-         WHERE resource_type = 'chatbot' AND id_user = $1`,
-        [userId]
-      );
-      const listedChatbotIds = new Set(existingListings.map(l => l.resource_id));
+      let listedChatbotIds = new Set();
+      try {
+        const { rows: existingListings } = await db.query(
+          `SELECT resource_id FROM marketplace_listings
+           WHERE resource_type = 'chatbot' AND id_user = $1`,
+          [userId]
+        );
+        listedChatbotIds = new Set(existingListings.map(l => l.resource_id));
+      } catch (listingError) {
+        console.error('[Marketplace] listing query error:', listingError);
+      }
 
       // Get knowledge base info for each chatbot
-      const chatbotsWithKb = await Promise.all(chatbots.map(async (chatbot) => {
-        const { rows: chunks } = await db.query(
-          `SELECT COUNT(*) as count FROM custom_chatbot_chunks WHERE chatbot_id = $1`,
-          [chatbot.id]
-        );
-        return {
-          ...chatbot,
-          hasKnowledgeBase: parseInt(chunks[0]?.count || 0, 10) > 0,
-          chunkCount: parseInt(chunks[0]?.count || 0, 10),
-          isListed: listedChatbotIds.has(chatbot.id),
-        };
-      }));
+      const chatbotsWithKb = [];
+      for (const chatbot of chatbots) {
+        try {
+          const { rows: chunks } = await db.query(
+            `SELECT COUNT(*) as count FROM custom_chatbot_chunks WHERE chatbot_id = $1`,
+            [chatbot.id]
+          );
+          chatbotsWithKb.push({
+            ...chatbot,
+            hasKnowledgeBase: parseInt(chunks[0]?.count || 0, 10) > 0,
+            chunkCount: parseInt(chunks[0]?.count || 0, 10),
+            isListed: listedChatbotIds.has(chatbot.id),
+          });
+        } catch (chunkError) {
+          console.error('[Marketplace] chunks query error for chatbot', chatbot.id, chunkError);
+          chatbotsWithKb.push({
+            ...chatbot,
+            hasKnowledgeBase: false,
+            chunkCount: 0,
+            isListed: listedChatbotIds.has(chatbot.id),
+          });
+        }
+      }
 
       res.json({
         success: true,
         data: chatbotsWithKb,
       });
     } catch (error) {
-      next(error);
+      console.error('[Marketplace] getMyChatbots error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi tải danh sách chatbot',
+      });
     }
   }
 

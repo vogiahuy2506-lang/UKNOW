@@ -82,7 +82,7 @@ export default {
     browse: {
       headerTitle: 'Marketplace',
       headerSubtitle: 'Template & workflow cộng đồng',
-      postListing: 'Chia sẻ template',
+      postListing: 'Đăng bài',
       close: 'Đóng',
       searchPlaceholder: 'Tìm template...',
       clearSearch: 'Xóa từ khoá',

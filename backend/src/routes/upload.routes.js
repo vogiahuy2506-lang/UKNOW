@@ -43,6 +43,7 @@ const TEMP_UPLOAD_PERMISSIONS = [
 // auth trước → uploadLimiter key theo user (không theo IP)
 router.post('/temp', authMiddleware, requireAnyPermission(TEMP_UPLOAD_PERMISSIONS), uploadLimiter, workspaceTempCapacityGuard, upload.single('file'), uploadController.uploadTemp.bind(uploadController));
 router.post('/logo', authMiddleware, requireAnyPermission(['media_library_manage', 'courses']), uploadLimiter, upload.single('file'), uploadController.uploadLogo.bind(uploadController));
+router.post('/image', authMiddleware, requireAnyPermission(TEMP_UPLOAD_PERMISSIONS), uploadLimiter, upload.single('file'), uploadController.uploadImage.bind(uploadController));
 router.post('/promote', authMiddleware, requirePermission('media_library_manage'), uploadLimiter, workspacePromoteCapacityGuard, uploadController.promoteTemp.bind(uploadController));
 router.post(
   '/help-image',

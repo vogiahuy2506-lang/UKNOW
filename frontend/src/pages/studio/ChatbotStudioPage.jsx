@@ -18,7 +18,6 @@ import ChatbotConfigModal from './ChatbotConfigModal';
 import PlaygroundHeader from './PlaygroundHeader';
 import RightPanel from './RightPanel';
 import WidgetSettingsModal from './WidgetSettingsModal';
-import ShareChatbotModal from '../../components/marketplace/ShareChatbotModal';
 import { clientValidateFile, getChatbotTheme } from './studio.util';
 import { StudioEmptyState } from './StudioEmptyState';
 import { useI18n } from '../../i18n';
@@ -627,7 +626,6 @@ function ChatbotStudioPage() {
   const [rightCollapsed, _setRightCollapsed] = useState(false);
   const [activePanel, setActivePanel] = useState('list');
   const [showConfigModal, setShowConfigModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
   const [widgetModalKind, setWidgetModalKind] = useState(null);
 
   const isCompact = useMediaQuery('(max-width: 1023.99px)');
@@ -703,7 +701,6 @@ function ChatbotStudioPage() {
                   <PlaygroundHeader
                     bot={selectedBot}
                     onConfig={() => setShowConfigModal(true)}
-                    onShare={isEmployeeContext ? undefined : () => setShowShareModal(true)}
                     onDelete={handleCreateNew}
                   />
                 </div>
@@ -724,7 +721,6 @@ function ChatbotStudioPage() {
             <div className="h-full">
               <RightPanel
                 chatbot={selectedBot}
-                defaultTab="knowledge"
                 onOpenWidgetSettings={(kind) => setWidgetModalKind(kind || 'script')}
                 onUpdate={handleUpdateBot}
               />
@@ -761,7 +757,6 @@ function ChatbotStudioPage() {
               {selectedBot ? (
                 <RightPanel
                   chatbot={selectedBot}
-                  defaultTab="knowledge"
                   onOpenWidgetSettings={(kind) => setWidgetModalKind(kind || 'script')}
                   onUpdate={handleUpdateBot}
                 />
@@ -786,13 +781,6 @@ function ChatbotStudioPage() {
         onClose={() => setShowConfigModal(false)}
         onUpdate={handleUpdateBot}
       />
-      {!isEmployeeContext && (
-        <ShareChatbotModal
-          open={showShareModal}
-          chatbot={selectedBot}
-          onClose={() => setShowShareModal(false)}
-        />
-      )}
       <WidgetSettingsModal
         open={!!widgetModalKind}
         embedKind={widgetModalKind}

@@ -49,7 +49,7 @@ const STEPS = [
   { id: 3, label: 'Giá bán' },
 ];
 
-const CreateListing = ({ onClose, onSuccess }) => {
+const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
   const t = useI18n('marketplace');
   const [campaigns, setCampaigns] = useState([]);
   const [chatbots, setChatbots] = useState([]);
@@ -60,7 +60,7 @@ const CreateListing = ({ onClose, onSuccess }) => {
   const [errors, setErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
-  const [resourceType, setResourceType] = useState('campaign'); // 'campaign' or 'chatbot'
+  const [resourceType, setResourceType] = useState('chatbot'); // default to chatbot when opened from studio
   const [includeKnowledgeBase, setIncludeKnowledgeBase] = useState(true);
   const [form, setForm] = useState({
     campaignId: '',
@@ -72,12 +72,39 @@ const CreateListing = ({ onClose, onSuccess }) => {
     priceCredits: 0,
   });
 
+  // Pre-select chatbot when opened from studio
+  useEffect(() => {
+    if (open && chatbot) {
+      setResourceType('chatbot');
+      setForm(prev => ({ ...prev, chatbotId: chatbot.id, title: chatbot.name || '' }));
+      fetchChatbots();
+    }
+  }, [open, chatbot]);
+
+  // Reset form when closed
+  useEffect(() => {
+    if (!open) {
+      setForm({
+        campaignId: '',
+        chatbotId: '',
+        title: '',
+        description: '',
+        category: '',
+        tags: [],
+        priceCredits: 0,
+      });
+      setCurrentStep(1);
+      setErrors({});
+      setResourceType('chatbot');
+    }
+  }, [open]);
+
   useEffect(() => {
     fetchCampaigns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchChatbots = useCallback(async () => {
+  const fetchChatbots = useCallback(async (retryCount = 0) => {
     if (chatbotsFetchedRef.current) return;
     setIsLoadingChatbots(true);
     try {
@@ -85,7 +112,13 @@ const CreateListing = ({ onClose, onSuccess }) => {
       setChatbots(response.data.data || []);
       chatbotsFetchedRef.current = true;
     } catch (error) {
-      toast.error(t('createListing.chatbotLoadError'));
+      console.error('[CreateListing] fetchChatbots error:', error);
+      // Retry up to 2 times with delay
+      if (retryCount < 2) {
+        setTimeout(() => fetchChatbots(retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
+      toast.error(t('createListing.chatbotLoadError') || 'Không thể tải danh sách chatbot');
     } finally {
       setIsLoadingChatbots(false);
     }
@@ -246,7 +279,9 @@ const CreateListing = ({ onClose, onSuccess }) => {
   };
 
   const selectedCampaign = campaigns.find((c) => c.id === parseInt(form.campaignId, 10));
-  const selectedChatbot = chatbots.find((c) => c.id === parseInt(form.chatbotId, 10));
+  // Use passed chatbot if available, otherwise find from list
+  const selectedChatbot = chatbot
+    || chatbots.find((c) => c.id === parseInt(form.chatbotId, 10));
 
   return (
     <div className="flex flex-col h-full bg-gray-50">

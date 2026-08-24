@@ -16,11 +16,13 @@ import {
   HiOutlineChat,
   HiOutlineCheckCircle,
   HiOutlineXCircle,
+  HiOutlineShoppingBag,
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { useAuthStore } from '../../stores/authStore';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
+import CampaignMarketplaceModal from '../../components/campaigns/CampaignMarketplaceModal';
 
 /**
  * Xác định chiến dịch có đang chạy hay không dựa trên số lượt chạy đang thực thi.
@@ -63,6 +65,7 @@ const Campaigns = () => {
   const [isApproving, setIsApproving] = useState(false);
   const [rejectModal, setRejectModal] = useState({ show: false, campaign: null, reason: '' });
   const [isRejecting, setIsRejecting] = useState(false);
+  const [marketplaceModal, setMarketplaceModal] = useState({ show: false, campaign: null });
   const [createCampaignForm, setCreateCampaignForm] = useState({
     campaignName: '',
     campaignType: 'email',
@@ -669,6 +672,19 @@ const Campaigns = () => {
                                     {t('campaigns.share') || 'Chia sẻ'}
                                   </button>
                                 )}
+                                {/* Marketplace - only for self-created campaigns */}
+                                {(!campaign.origin || campaign.origin === 'self_created') && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveMenu(null);
+                                      setMarketplaceModal({ show: true, campaign });
+                                    }}
+                                    className="w-full flex items-center px-4 py-2 text-sm text-violet-600 hover:bg-violet-50"
+                                  >
+                                    <HiOutlineShoppingBag className="w-4 h-4 mr-3" />
+                                    Đăng Marketplace
+                                  </button>
+                                )}
                                 {/* Duplicate - only for self-created campaigns (not marketplace, not shared) */}
                                 {originTab !== 'shared_with_me' && (!campaign.origin || campaign.origin === 'self_created') && (
                                   <button
@@ -1054,6 +1070,16 @@ const Campaigns = () => {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Modal Marketplace */}
+      {marketplaceModal.show && marketplaceModal.campaign && (
+        <CampaignMarketplaceModal
+          open={marketplaceModal.show}
+          campaign={marketplaceModal.campaign}
+          onClose={() => setMarketplaceModal({ show: false, campaign: null })}
+          onSuccess={() => fetchCampaigns()}
+        />
       )}
 
     </div>

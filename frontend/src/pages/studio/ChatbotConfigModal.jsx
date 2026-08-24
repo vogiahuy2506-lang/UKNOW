@@ -9,12 +9,14 @@ import {
   HiOutlineShieldCheck,
   HiOutlinePlus,
   HiOutlineChevronDown,
+  HiOutlineBookOpen,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChatbotReplyLimitsCard from '../../features/chatbot/components/ChatbotReplyLimitsCard';
 import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
 import ImageUrlInput from '../../features/chatbot/components/AvatarUploader';
+import KnowledgeTab from './KnowledgeTab';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import {
   SectionCard,
@@ -29,6 +31,7 @@ import { useI18n } from '../../i18n';
 const ANCHOR_SECTIONS = [
   { id: 'basic',     label: 'Thông tin cơ bản',  icon: HiOutlineChatAlt2 },
   { id: 'ai',        label: 'Hướng dẫn AI',      icon: HiOutlineSparkles },
+  { id: 'knowledge', label: 'Kiến thức',          icon: HiOutlineBookOpen },
   { id: 'questions', label: 'Câu hỏi gợi ý',     icon: HiOutlineQuestionMarkCircle },
   { id: 'limits',    label: 'Giới hạn',          icon: HiOutlineShieldCheck },
 ];
@@ -41,6 +44,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
   const [initialSnapshot, setInitialSnapshot] = useState(null);
   const [newQuestion, setNewQuestion] = useState('');
   const [profileData, setProfileData] = useState(null);
+  const [knowledgeDocs, setKnowledgeDocs] = useState([]);
   const contentRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -93,6 +97,26 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
     setInitialSnapshot(loadedForm);
     setHydrated(true);
   }, [open, chatbot]);
+
+  // Load knowledge documents
+  useEffect(() => {
+    if (!open || !chatbot?.id) return;
+    setKnowledgeDocs([]); // Reset first
+    console.log('[ChatbotConfigModal] Loading documents for chatbot:', chatbot.id);
+    (async () => {
+      try {
+        const res = await chatbotApi.listCustomChatDocuments(chatbot.id);
+        console.log('[ChatbotConfigModal] API response:', res);
+        console.log('[ChatbotConfigModal] res.data:', res.data);
+        const list = res?.data?.documents || res?.documents || res?.data || [];
+        console.log('[ChatbotConfigModal] Parsed documents list:', list);
+        setKnowledgeDocs(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error('[ChatbotConfigModal] Load docs error:', err);
+        setKnowledgeDocs([]);
+      }
+    })();
+  }, [open, chatbot?.id]);
 
   if (!open || !chatbot) return null;
 
@@ -351,6 +375,28 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
                     }}
                     onChange={(updated) => update(updated)}
                     showSystemInstruction={true}
+                  />
+                </SectionCard>
+              </section>
+
+              {/* Kiến thức */}
+              <section id="config-anchor-knowledge">
+                <SectionCard
+                  icon={HiOutlineBookOpen}
+                  title="Kiến thức chatbot"
+                  subtitle="Quản lý tài liệu và nguồn kiến thức cho AI"
+                  accent="green"
+                >
+                  <KnowledgeTab
+                    chatbot={chatbot}
+                    onDocumentsChange={() => {
+                      chatbotApi.listCustomChatDocuments(chatbot.id)
+                        .then(res => {
+                          const list = res?.data?.documents || res?.documents || res?.data || [];
+                          setKnowledgeDocs(Array.isArray(list) ? list : []);
+                        })
+                        .catch(() => {});
+                    }}
                   />
                 </SectionCard>
               </section>

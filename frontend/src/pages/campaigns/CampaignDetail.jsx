@@ -10,7 +10,9 @@ import {
   HiOutlinePencil,
   HiOutlinePlay,
   HiOutlinePause,
+  HiOutlineShoppingBag,
 } from 'react-icons/hi';
+import CampaignMarketplaceModal from '../../components/campaigns/CampaignMarketplaceModal';
 
 const CampaignDetail = () => {
   const { t } = useI18n();
@@ -18,6 +20,7 @@ const CampaignDetail = () => {
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [marketplaceModal, setMarketplaceModal] = useState(false);
 
   /** Nhãn + mã event_type theo loại chiến dịch (phải gọi hook trước mọi return) */
   const engagementStats = useMemo(
@@ -120,6 +123,13 @@ const CampaignDetail = () => {
               {t('campaigns.activate')}
             </button>
           )}
+          <button
+            onClick={() => setMarketplaceModal(true)}
+            className="btn btn-secondary"
+          >
+            <HiOutlineShoppingBag className="w-5 h-5 mr-2" />
+            Đăng Marketplace
+          </button>
         </div>
       </div>
 
@@ -227,6 +237,18 @@ const CampaignDetail = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Marketplace modal */}
+      {marketplaceModal && (
+        <CampaignMarketplaceModal
+          open={marketplaceModal}
+          campaign={campaign}
+          onClose={() => setMarketplaceModal(false)}
+          onSuccess={() => {
+            toast.success('Đăng marketplace thành công!');
+          }}
+        />
       )}
     </div>
   );

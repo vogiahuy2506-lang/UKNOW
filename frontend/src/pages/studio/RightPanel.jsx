@@ -1,10 +1,8 @@
-import { useState } from 'react';
-import { HiOutlineBookOpen, HiOutlineGlobeAlt } from 'react-icons/hi';
-import KnowledgeTab from './KnowledgeTab';
+import { useState, useEffect } from 'react';
+import { HiOutlineGlobeAlt } from 'react-icons/hi';
 import DeployTab from './DeployTab';
 
 const TABS = [
-  { id: 'knowledge', label: 'Kiến thức', icon: HiOutlineBookOpen },
   { id: 'deploy', label: 'Triển khai', icon: HiOutlineGlobeAlt },
 ];
 
@@ -15,6 +13,14 @@ export default function RightPanel({
   onTabChange,
 }) {
   const [tab, setTab] = useState(defaultTab);
+
+  // Switch to deploy tab when bot changes (default)
+  useEffect(() => {
+    if (chatbot?.id) {
+      handleTabChange('deploy');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatbot?.id]);
 
   const handleTabChange = (next) => {
     setTab(next);
@@ -57,7 +63,6 @@ export default function RightPanel({
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === 'knowledge' && <KnowledgeTab chatbot={chatbot} />}
         {tab === 'deploy' && (
           <DeployTab
             chatbot={chatbot}
