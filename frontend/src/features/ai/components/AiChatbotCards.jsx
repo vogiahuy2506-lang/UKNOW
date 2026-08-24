@@ -919,6 +919,21 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClic
               </button>
             </div>
           )}
+          {q.id === 'dataSource' && answers[q.id] === 'sheet' && (
+            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-4 flex flex-col items-center justify-center text-center">
+              <p className="text-xs text-orange-800 leading-relaxed mb-3">
+                Bạn có thể bấm nút bên dưới để tải lên file Excel/CSV, hoặc dán link Google Sheet vào thanh chat để AI đọc.
+              </p>
+              <button
+                type="button"
+                onClick={onAttachClick}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 text-sm font-medium rounded-lg transition-colors border border-orange-300 shadow-sm"
+              >
+                <HiOutlinePaperClip className="w-4 h-4" />
+                Chọn file đính kèm
+              </button>
+            </div>
+          )}
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (
             <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
               <p className="mb-2 text-xs font-semibold text-orange-800">
