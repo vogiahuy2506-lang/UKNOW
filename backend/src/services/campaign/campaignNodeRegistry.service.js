@@ -74,8 +74,8 @@ class CampaignNodeRegistryService {
           },
           sheetName: {
             type: 'string',
-            default: 'Sheet1',
             label: 'Tên Sheet',
+            description: 'Để trống = dùng tab đầu tiên. Chỉ điền khi file có nhiều tab và bạn muốn đọc tab khác.',
           },
           headerRow: {
             type: 'number',
@@ -94,7 +94,7 @@ class CampaignNodeRegistryService {
         },
         exampleConfig: {
           sheetUrl: '',
-          sheetName: 'Sheet1',
+          sheetName: '',
           headerRow: 1,
           dataStartRow: 2,
           dataSelectedColumns: [],
@@ -599,7 +599,7 @@ class CampaignNodeRegistryService {
     lines.push('  config: { "interestedCustomerType": "both", "interestedLimit": 1000 }');
     lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "read_sheet"');
-    lines.push('  config: { "sheetUrl": "url", "sheetName": "Sheet1", "headerRow": 1, "dataStartRow": 2 }');
+    lines.push('  config: { "sheetUrl": "url", "headerRow": 1, "dataStartRow": 2 }');
     lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "read_landing_leads"');
     lines.push('  config: {}');

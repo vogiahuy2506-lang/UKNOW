@@ -32,7 +32,7 @@ export const NodeConfigReadSheetSection = ({
   const connectionSignature = useMemo(
     () => [
       formData.sheetUrl || '',
-      formData.sheetName || 'Sheet1',
+      formData.sheetName || '',
       formData.headerRow || 1,
       formData.dataStartRow || 2,
     ].join('|'),

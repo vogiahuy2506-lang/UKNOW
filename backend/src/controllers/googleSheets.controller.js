@@ -10,11 +10,10 @@ function extractSpreadsheetId(sheetUrl) {
 }
 
 function buildCsvUrl(spreadsheetId, sheetName) {
-  const safeName = sheetName && typeof sheetName === 'string' ? sheetName : 'Sheet1';
+  const safeName = sheetName && typeof sheetName === 'string' ? sheetName.trim() : '';
+  const sheetParam = safeName ? `&sheet=${encodeURIComponent(safeName)}` : '';
   // Public/anyone-with-link view sheets can be exported via gviz.
-  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(
-    safeName
-  )}`;
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv${sheetParam}`;
 }
 
 function toInt(value, fallback) {
@@ -40,7 +39,7 @@ function decodeJsQuotedString(value = '') {
  * Fetch worksheet names for a public Google Spreadsheet via htmlview.
  *
  * @param {string} spreadsheetId
- * @returns {Promise<string[]>}
+ * @returns {Promise<{ ok: boolean, names?: string[], reason?: string }>}
  */
 async function fetchWorksheetNames(spreadsheetId) {
   const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
@@ -49,7 +48,9 @@ async function fetchWorksheetNames(spreadsheetId) {
     timeout: getReadSheetFetchTimeoutMs(),
     validateStatus: () => true,
   });
-  if (response.status >= 400) return [];
+  if (response.status >= 400) {
+    return { ok: false, reason: 'unreadable', status: response.status };
+  }
   const html = String(response.data || '');
   const names = [];
   const regex = /items\.push\(\{name:\s*"((?:\\.|[^"\\])*)"/g;
@@ -58,21 +59,34 @@ async function fetchWorksheetNames(spreadsheetId) {
     const decoded = decodeJsQuotedString(match[1]).trim();
     if (decoded) names.push(decoded);
   }
-  return Array.from(new Set(names));
+  return { ok: true, names: Array.from(new Set(names)) };
 }
 
 /**
  * Validate that provided sheetName exists in spreadsheet.
+ * When sheetName is empty, skips validation (gviz defaults to the first tab).
  *
  * @param {string} spreadsheetId
  * @param {string} sheetName
- * @returns {Promise<boolean>}
+ * @returns {Promise<{ ok: boolean, reason?: 'not_found' | 'unreadable', names?: string[] }>}
  */
 async function validateSheetNameExists(spreadsheetId, sheetName) {
-  const worksheetNames = await fetchWorksheetNames(spreadsheetId);
-  if (!worksheetNames.length) return false;
   const normalizedTarget = String(sheetName || '').trim();
-  return worksheetNames.includes(normalizedTarget);
+  if (!normalizedTarget) {
+    return { ok: true };
+  }
+  const res = await fetchWorksheetNames(spreadsheetId);
+  if (!res.ok) {
+    return { ok: false, reason: 'unreadable' };
+  }
+  const worksheetNames = res.names || [];
+  if (!worksheetNames.length) {
+    return { ok: false, reason: 'unreadable' };
+  }
+  if (!worksheetNames.includes(normalizedTarget)) {
+    return { ok: false, reason: 'not_found', names: worksheetNames };
+  }
+  return { ok: true };
 }
 
 class GoogleSheetsController {
@@ -84,8 +98,8 @@ class GoogleSheetsController {
    */
   async check(req, res) {
     try {
-      const { sheetUrl, sheetName = 'Sheet1', headerRow = 1 } = req.body || {};
-      const normalizedSheetName = String(sheetName || 'Sheet1').trim() || 'Sheet1';
+      const { sheetUrl, sheetName = '', headerRow = 1 } = req.body || {};
+      const normalizedSheetName = sheetName && typeof sheetName === 'string' ? sheetName.trim() : '';
 
       if (!sheetUrl || typeof sheetUrl !== 'string') {
         return res.status(400).json({
@@ -103,11 +117,20 @@ class GoogleSheetsController {
       }
 
       const headerRowNum = Math.max(1, toInt(headerRow, 1));
-      const sheetNameExists = await validateSheetNameExists(spreadsheetId, normalizedSheetName);
-      if (!sheetNameExists) {
+      const validation = await validateSheetNameExists(spreadsheetId, normalizedSheetName);
+      if (!validation.ok) {
+        if (validation.reason === 'not_found') {
+          const availableMsg = validation.names && validation.names.length
+            ? ` File này có: ${validation.names.join(', ')}`
+            : '';
+          return res.status(400).json({
+            success: false,
+            message: `Không tìm thấy tab "${normalizedSheetName}" trong file. ${availableMsg}`.trim(),
+          });
+        }
         return res.status(400).json({
           success: false,
-          message: 'sheetName không tồn tại trong file Google Sheet',
+          message: 'Không đọc được file. Kiểm tra lại link, và đảm bảo đã chia sẻ quyền xem cho "Bất kỳ ai có đường liên kết".',
         });
       }
       const csvUrl = buildCsvUrl(spreadsheetId, normalizedSheetName);
@@ -199,13 +222,13 @@ class GoogleSheetsController {
     try {
       const {
         sheetUrl,
-        sheetName = 'Sheet1',
+        sheetName = '',
         headerRow = 1,
         dataStartRow = 2,
         limit = 25,
         dataSelectedColumns,
       } = req.body || {};
-      const normalizedSheetName = String(sheetName || 'Sheet1').trim() || 'Sheet1';
+      const normalizedSheetName = sheetName && typeof sheetName === 'string' ? sheetName.trim() : '';
 
       if (!sheetUrl || typeof sheetUrl !== 'string') {
         return res.status(400).json({
@@ -227,11 +250,20 @@ class GoogleSheetsController {
       /** Trần số dòng preview — đồng bộ với `GOOGLE_SHEET_PREVIEW_SERVER_MAX` phía frontend Builder. */
       const PREVIEW_LIMIT_MAX = 20000;
       const limitNum = Math.min(PREVIEW_LIMIT_MAX, Math.max(1, toInt(limit, 25)));
-      const sheetNameExists = await validateSheetNameExists(spreadsheetId, normalizedSheetName);
-      if (!sheetNameExists) {
+      const validation = await validateSheetNameExists(spreadsheetId, normalizedSheetName);
+      if (!validation.ok) {
+        if (validation.reason === 'not_found') {
+          const availableMsg = validation.names && validation.names.length
+            ? ` File này có: ${validation.names.join(', ')}`
+            : '';
+          return res.status(400).json({
+            success: false,
+            message: `Không tìm thấy tab "${normalizedSheetName}" trong file. ${availableMsg}`.trim(),
+          });
+        }
         return res.status(400).json({
           success: false,
-          message: 'sheetName không tồn tại trong file Google Sheet',
+          message: 'Không đọc được file. Kiểm tra lại link, và đảm bảo đã chia sẻ quyền xem cho "Bất kỳ ai có đường liên kết".',
         });
       }
 

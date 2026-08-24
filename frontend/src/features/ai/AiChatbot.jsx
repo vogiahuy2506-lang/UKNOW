@@ -322,7 +322,7 @@ const applyWizardSelectionsToScript = (script, context = {}) => {
             nodeDescription: sheetUrl
               ? 'Danh sách lấy từ Google Sheet bạn đã cung cấp.'
               : 'Danh sách lấy từ Google Sheet - cần dán URL trong Campaign Builder nếu chưa có.',
-            config: { sheetUrl, sheetName: 'Sheet1', headerRow: 1, dataStartRow: 2 },
+            config: { sheetUrl, headerRow: 1, dataStartRow: 2 },
           };
         }
         if (context.dataSource === 'landing' && node.nodeSubtype === 'interested_customers') {

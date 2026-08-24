@@ -271,7 +271,7 @@ class CampaignNodeDataService {
    */
   async fetchGoogleSheetCustomersFromConfig(config) {
     const sheetUrl = config?.sheetUrl;
-    const sheetName = String(config?.sheetName || 'Sheet1').trim() || 'Sheet1';
+    const sheetName = String(config?.sheetName || '').trim();
     const headerRowRaw = Number.parseInt(config?.headerRow, 10);
     const headerRow = Number.isFinite(headerRowRaw) ? Math.max(1, headerRowRaw) : 1;
     const dataStartRowRaw = Number.parseInt(config?.dataStartRow, 10);
@@ -287,35 +287,50 @@ class CampaignNodeDataService {
     try {
       const spreadsheetIdMatch = sheetUrl.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
       if (!spreadsheetIdMatch) {
+        console.warn('[GoogleSheetData] sheetUrl không hợp lệ (không tìm thấy spreadsheetId):', sheetUrl);
         return [];
       }
 
       const spreadsheetId = spreadsheetIdMatch[1];
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-      const worksheetHtmlViewUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
+      const sheetParam = sheetName ? `&sheet=${encodeURIComponent(sheetName)}` : '';
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv${sheetParam}`;
 
       const axios = (await import('axios')).default;
       const Papa = (await import('papaparse')).default;
-      logApiCall('google_sheet', worksheetHtmlViewUrl);
-      const validationResponse = await axios.get(worksheetHtmlViewUrl, {
-        responseType: 'text',
-        timeout: fetchTimeoutMs,
-        validateStatus: () => true,
-      });
-      if (validationResponse.status >= 400) {
-        return [];
-      }
-      const html = String(validationResponse.data || '');
-      const worksheetNames = [];
-      const regex = /items\.push\(\{name:\s*"((?:\\.|[^"\\])*)"/g;
-      let match;
-      while ((match = regex.exec(html))) {
-        const decoded = decodeJsQuotedString(match[1]).trim();
-        if (decoded) worksheetNames.push(decoded);
-      }
-      const dedupedWorksheetNames = Array.from(new Set(worksheetNames));
-      if (!dedupedWorksheetNames.includes(sheetName)) {
-        return [];
+
+      if (sheetName) {
+        const worksheetHtmlViewUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
+        logApiCall('google_sheet', worksheetHtmlViewUrl);
+        const validationResponse = await axios.get(worksheetHtmlViewUrl, {
+          responseType: 'text',
+          timeout: fetchTimeoutMs,
+          validateStatus: () => true,
+        });
+        if (validationResponse.status >= 400) {
+          console.warn('[GoogleSheetData] Không đọc được htmlview để kiểm tra tên tab:', {
+            sheetUrl,
+            sheetName,
+            status: validationResponse.status,
+          });
+          return [];
+        }
+        const html = String(validationResponse.data || '');
+        const worksheetNames = [];
+        const regex = /items\.push\(\{name:\s*"((?:\\.|[^"\\])*)"/g;
+        let match;
+        while ((match = regex.exec(html))) {
+          const decoded = decodeJsQuotedString(match[1]).trim();
+          if (decoded) worksheetNames.push(decoded);
+        }
+        const dedupedWorksheetNames = Array.from(new Set(worksheetNames));
+        if (!dedupedWorksheetNames.includes(sheetName)) {
+          console.warn('[GoogleSheetData] Không tìm thấy tab trong file Google Sheet:', {
+            sheetUrl,
+            sheetName,
+            availableWorksheets: dedupedWorksheetNames,
+          });
+          return [];
+        }
       }
 
       logApiCall('google_sheet', csvUrl);
@@ -325,17 +340,32 @@ class CampaignNodeDataService {
         validateStatus: () => true,
       });
       if (response.status >= 400) {
+        console.error('[GoogleSheetData] Tải CSV thất bại từ Google gviz:', {
+          sheetUrl,
+          sheetName: sheetName || '(first tab)',
+          csvUrl,
+          status: response.status,
+        });
         return [];
       }
       const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
       const bodyText = typeof response.data === 'string' ? response.data : '';
       const isHtml = contentType.includes('text/html') || bodyText.trim().startsWith('<!DOCTYPE html');
       if (isHtml) {
+        console.error('[GoogleSheetData] Phản hồi gviz trả về HTML thay vì CSV (chưa chia sẻ quyền xem công khai hoặc sai tab):', {
+          sheetUrl,
+          sheetName: sheetName || '(first tab)',
+        });
         return [];
       }
 
       const parsed = Papa.parse(bodyText, { skipEmptyLines: true });
       if (parsed.errors && parsed.errors.length) {
+        console.error('[GoogleSheetData] Parse CSV thất bại:', {
+          sheetUrl,
+          sheetName: sheetName || '(first tab)',
+          errors: parsed.errors.slice(0, 3),
+        });
         return [];
       }
 

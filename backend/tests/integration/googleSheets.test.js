@@ -139,7 +139,7 @@ describe('POST /api/google-sheets/check', () => {
     expect(res.body.message).toMatch(/không hợp lệ/);
   });
 
-  it('sheetName không tồn tại trong htmlview → 400', async () => {
+  it('sheetName không tồn tại trong htmlview → 400 kèm danh sách tab thật', async () => {
     const user = await createUser({ username: 'gs-3' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url) => {
@@ -153,7 +153,25 @@ describe('POST /api/google-sheets/check', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ sheetUrl: VALID_SHEET_URL, sheetName: 'KhongCoSheetNay' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/sheetName không tồn tại/);
+    expect(res.body.message).toMatch(/Không tìm thấy tab "KhongCoSheetNay"/);
+    expect(res.body.message).toContain('File này có: Sheet1, Data');
+  });
+
+  it('htmlview trả về 403/404 khi có sheetName → 400 không đọc được file', async () => {
+    const user = await createUser({ username: 'gs-unreadable' });
+    const token = await loginAs(user);
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes('/htmlview')) {
+        return { status: 403, data: 'Access Denied' };
+      }
+      return { status: 403, data: '' };
+    });
+    const res = await request(app)
+      .post('/api/google-sheets/check')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sheetUrl: VALID_SHEET_URL, sheetName: 'Tab1' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Không đọc được file/);
   });
 
   it('CSV response trả về text/html → 400 (sheet không public)', async () => {
@@ -193,7 +211,7 @@ describe('POST /api/google-sheets/check', () => {
     expect(res.status).toBe(502);
   });
 
-  it('happy path → 200, columns được parse từ header row', async () => {
+  it('happy path → 200, columns được parse từ header row, sheetName mặc định rỗng', async () => {
     const user = await createUser({ username: 'gs-6' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url) => {
@@ -214,7 +232,7 @@ describe('POST /api/google-sheets/check', () => {
     expect(res.body.data.columns).toEqual(['email', 'full_name', 'phone']);
     expect(res.body.data.meta).toMatchObject({
       spreadsheetId: 'abc123XYZ_DEF',
-      sheetName: 'Sheet1',
+      sheetName: '',
       headerRow: 1,
     });
   });

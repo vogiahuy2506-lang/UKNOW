@@ -67,7 +67,7 @@ export const createCampaignNodeRunner = (deps) => {
   } = deps;
 
   const fetchSheetPreview = async (config, signal) => {
-    const normalizedSheetName = String(config.sheetName || 'Sheet1').trim() || 'Sheet1';
+    const normalizedSheetName = String(config.sheetName || '').trim();
     const parsedHeaderRow = Number.parseInt(config.headerRow, 10);
     const parsedDataStartRow = Number.parseInt(config.dataStartRow, 10);
     /** Ưu tiên `builderSheetPreviewRowLimit` trên node, sau đó `logItemsMode` từ Builder. */
@@ -85,7 +85,7 @@ export const createCampaignNodeRunner = (deps) => {
   };
 
   const checkSheetConnection = async (config) => {
-    const normalizedSheetName = String(config.sheetName || 'Sheet1').trim() || 'Sheet1';
+    const normalizedSheetName = String(config.sheetName || '').trim();
     const parsedHeaderRow = Number.parseInt(config.headerRow, 10);
     const payload = {
       sheetUrl: config.sheetUrl,
@@ -637,7 +637,7 @@ export const createCampaignNodeRunner = (deps) => {
         input: {
           operation: 'Get Row(s)',
           sheetUrl: config.sheetUrl || '',
-          sheetName: config.sheetName || 'Sheet1',
+          sheetName: config.sheetName || '',
           headerRow: config.headerRow || 1,
           dataStartRow: config.dataStartRow || 2,
           recipientColumn: config.recipientColumn || '',

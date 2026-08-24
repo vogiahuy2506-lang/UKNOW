@@ -44,7 +44,10 @@ function isAlreadyInserted(html, captionKey) {
 const API_URL = (process.env.HELP_API_URL || 'https://founderai.biz/api').replace(/\/$/, '');
 const TOKEN = process.env.HELP_API_TOKEN;
 const apply = process.argv.includes('--apply');
-const inputDir = process.argv.find((arg) => !arg.startsWith('-') && arg.includes('out'));
+// `slice(2)` bỏ đường dẫn node và đường dẫn chính file này, phần còn lại mới là
+// tham số người dùng gõ. Bản cũ lọc bằng `arg.includes('out')` nên chỉ nhận thư
+// mục nằm dưới out/ — ảnh chụp tay để ở manual/ thì bị từ chối thẳng.
+const inputDir = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
 
 async function api(pathname, options = {}) {
   const res = await fetch(`${API_URL}${pathname}`, {

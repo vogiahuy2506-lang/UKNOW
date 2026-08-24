@@ -134,7 +134,7 @@ CHỈ được dùng các node sau. Ngoài danh sách này đều KHÔNG hợp l
   config: { "interestedCustomerType": "both", "interestedLimit": 1000 }
 
 • nodeType: "data", nodeSubtype: "read_sheet"             ← Google Sheet
-  config: { "sheetUrl": "...", "sheetName": "Sheet1", "headerRow": 1, "dataStartRow": 2 }
+  config: { "sheetUrl": "...", "headerRow": 1, "dataStartRow": 2 }
 
 • nodeType: "data", nodeSubtype: "read_landing_leads"     ← leads từ landing page
   config: { "landingLeadsSlugs": ["slug-landing-page"] }  ← [] = lấy tất cả leads; điền slug từ danh sách Landing Pages trong TÀI NGUYÊN CÓ SẴN
@@ -1314,7 +1314,7 @@ EMAIL CÓ GIF / ẢNH ĐỘNG:
 
 GOOGLE SHEET — URL đã có sẵn:
 - Nếu message của user chứa URL https://docs.google.com/spreadsheets/... → KHÔNG hỏi lại, dùng luôn URL đó cho read_sheet
-- Format mặc định: sheetName="Sheet1", headerRow=1, dataStartRow=2. Thêm vào nodeDescription: "(Nếu sheet của bạn có tab hoặc cấu trúc khác, hãy chỉnh trong Campaign Builder sau khi tạo)"
+- Format mặc định: headerRow=1, dataStartRow=2 (sheetName để trống = tab đầu tiên). Thêm vào nodeDescription: "(Nếu sheet của bạn có tab hoặc cấu trúc khác, hãy chỉnh trong Campaign Builder sau khi tạo)"
 
 GOOGLE SHEET — CHƯA có URL:
 - Chỉ áp dụng khi user đã nói rõ "Google Sheet" / "Excel" / "file" / "file sheet" hoặc đã chọn dataSource="sheet". Nếu chưa chọn nguồn dữ liệu, KHÔNG hỏi URL; hãy type="ask_campaign_details" và hỏi dataSource.
@@ -1340,7 +1340,7 @@ UPLOADED FILE (CSV / Excel) — user tải file lên chat:
 - "đã mua [khóa X] nhưng chưa mua [khóa Y]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX], notPurchasedCourseIds: [id_khoaY]
 - "quan tâm [khóa X]" / "interested [khóa X]" → interestedCourseIds: [id_khoaX] chỉ khi user yêu cầu lọc audience rõ ràng
 - Dùng ID khóa học từ danh sách "Khóa học / Sản phẩm" ở phần TÀI NGUYÊN CÓ SẴN chỉ cho audience filter khi user yêu cầu lọc; nội dung quảng bá lấy từ CAMPAIGN_BRIEF DATA
-- dataSource="sheet" + URL ĐÃ có trong message (https://docs.google.com/spreadsheets/...) → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", sheetName: "Sheet1", headerRow: 1, dataStartRow: 2 }, thêm ghi chú format trong nodeDescription
+- dataSource="sheet" + URL ĐÃ có trong message (https://docs.google.com/spreadsheets/...) → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", headerRow: 1, dataStartRow: 2 }, thêm ghi chú format trong nodeDescription
 - dataSource="sheet" + CHƯA có URL → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? (URL bắt đầu bằng https://docs.google.com/...)"
 - dataSource="landing" + user CHƯA chọn landing page cụ thể + có nhiều landing page trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Landing page cần lấy leads"], content: "Bạn muốn lấy leads từ landing page nào? (liệt kê tên trang)\n${landingPages.map(lp => `- ${lp.title} (${lp.slug})`).join('\n')}"
 - dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] }

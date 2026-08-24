@@ -172,7 +172,7 @@ export const createNodeConfigFormData = ({
   label: label || '',
   description: config.description || '',
   sheetUrl: config.sheetUrl || '',
-  sheetName: config.sheetName || 'Sheet1',
+  sheetName: config.sheetName || '',
   headerRow: config.headerRow || 1,
   dataStartRow: config.dataStartRow || 2,
   columns: config.columns || [],
