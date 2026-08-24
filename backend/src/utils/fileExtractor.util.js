@@ -62,9 +62,41 @@ async function extractTextFromPdf(buffer) {
   try {
     const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(buffer);
-    return data.text || '';
+    if (data.text && data.text.trim().length > 50) {
+      return data.text.trim();
+    }
   } catch (err) {
-    console.error('[FileExtractor] PDF parse error:', err);
+    console.error('[FileExtractor] PDF parse error:', err.message);
+  }
+
+  // Fallback to Gemini for scanned PDFs or exported presentations (like PowerPoint)
+  try {
+    const { generateGeminiContent } = await import('./geminiClient.util.js');
+    const base64Data = buffer.toString('base64');
+    const parts = [
+      {
+        text: 'Extract all readable text from this document exactly as it appears. If there is no text but there is a clear diagram, chart, or visual data, describe it concisely. If it is just a decorative document with no useful text or data, output "NO_RELEVANT_TEXT_FOUND". Do not add any conversational filler.'
+      },
+      {
+        inlineData: {
+          mimeType: 'application/pdf',
+          data: base64Data
+        }
+      }
+    ];
+
+    const result = await generateGeminiContent({
+      parts,
+      model: 'gemini-2.5-flash',
+      temperature: 0.1
+    });
+
+    if (result?.text?.includes('NO_RELEVANT_TEXT_FOUND')) {
+      return '';
+    }
+    return result?.text?.trim() || '';
+  } catch (err) {
+    console.error('[FileExtractor] Error extracting text from PDF via Gemini:', err.message);
     return '';
   }
 }
