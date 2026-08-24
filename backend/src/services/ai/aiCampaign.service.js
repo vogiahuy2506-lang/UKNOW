@@ -792,7 +792,11 @@ QUY TẮC:
     }
 
     // Deterministic gates before Gemini for any campaign-flow turn (marker or free-text).
-    if (gatesForPersist.isCampaignFlow && !isPlanTemplateDraftRequest(lastUserText)) {
+    // Guard: if this turn is landing-page-oriented, skip the campaign wizard gate entirely.
+    // The AI will produce ask_landing_details or landing_page instead.
+    if (gatesForPersist.isCampaignFlow
+      && !isPlanTemplateDraftRequest(lastUserText)
+      && !isLandingOrientedTurn(history)) {
       const nextGate = evaluateNextGate(gateState, gateResources, locale);
       if (nextGate?.response) {
         const _wizard = buildWizard(nextGate.gate || null);
