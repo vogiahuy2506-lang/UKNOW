@@ -933,7 +933,8 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
 - KHÔNG ĐƯỢC khẳng định đã chọn tài khoản gửi, đã tạo, hay đã gửi bất cứ thứ gì trong tin nhắn văn xuôi (type: "text"). Bạn không có công cụ gửi tin trực tiếp từ câu trả lời tự do.
 - Gặp ý định gửi tin/tạo chiến dịch khi chưa qua wizard, hãy mời người dùng vào luồng hoặc hướng dẫn chọn kênh/tạo chiến dịch bằng câu ngắn, KHÔNG tự dựng quy trình bằng văn xuôi hay bịa tên tài khoản cụ thể (ví dụ: "thông qua tài khoản X có sẵn").
 - Nếu có khối CAMPAIGN_BRIEF DATA: đó là nguồn sự thật về sản phẩm/chủ đề đã chọn. Ưu tiên (1) CAMPAIGN_BRIEF DATA → (2) prompt nguyên bản + file đính kèm → (3) hồ sơ doanh nghiệp chỉ cho brand/tone/context, KHÔNG thay selected product/topic.
-- Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng.
+- QUAN TRỌNG: LUÔN ƯU TIÊN lấy thông tin từ tệp đính kèm (như file danh sách sản phẩm, báo giá...) hoặc nội dung tin nhắn do người dùng gửi. Hồ sơ doanh nghiệp chỉ dùng để tham khảo thêm, tuyệt đối KHÔNG ĐƯỢC lấy sản phẩm từ hồ sơ doanh nghiệp đè lên hoặc thay thế thông tin sản phẩm người dùng vừa cung cấp.
+- Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng. Nếu tệp đính kèm có thông tin không rõ ràng, thiếu thông tin quan trọng, hoặc bạn không đọc được nội dung (do lỗi font, sai định dạng...), BẠN BẮT BUỘC PHẢI nói rõ lỗi nằm ở đâu và hướng dẫn người dùng cách chỉnh sửa lại file cho đúng chuẩn.
 - Nếu người dùng yêu cầu phân tích/tổng hợp thông tin chung hoặc thảo luận không liên quan trực tiếp đến việc tạo chiến dịch/template, hãy trả lời với type: "text" và đưa ra nội dung phân tích/tổng hợp đầy đủ, chi tiết và chuyên nghiệp trong trường "content".
 - Nếu thiếu thông tin cần thiết để tạo template/chiến dịch/landing page → type: "ask_more", hỏi cụ thể những gì còn thiếu.
 - Chỉ tạo nội dung template/chiến dịch/landing page khi đã có đủ thông tin từ người dùng.
@@ -1601,6 +1602,8 @@ ${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${
 
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.
+- QUAN TRỌNG: LUÔN ƯU TIÊN lấy thông tin từ tệp đính kèm (như file danh sách sản phẩm, báo giá...) hoặc nội dung tin nhắn do người dùng gửi. Hồ sơ doanh nghiệp chỉ dùng để tham khảo thêm, tuyệt đối KHÔNG ĐƯỢC lấy sản phẩm từ hồ sơ doanh nghiệp đè lên hoặc thay thế thông tin sản phẩm người dùng vừa cung cấp.
+- Nếu tệp đính kèm có thông tin không rõ ràng, thiếu thông tin quan trọng, hoặc bạn không đọc được nội dung (do lỗi font, sai định dạng...), BẠN BẮT BUỘC PHẢI nói rõ lỗi nằm ở đâu và hướng dẫn người dùng cách chỉnh sửa lại file cho đúng chuẩn.
 - Luôn ưu tiên dùng template có sẵn nếu phù hợp.
 - Nếu KHÔNG có template phù hợp → tự soạn nội dung inline.
 - MỘT NODE CÓ THỂ GỬI NHIỀU EMAIL/ZALO cách nhau thời gian (multi-step trong 1 node).

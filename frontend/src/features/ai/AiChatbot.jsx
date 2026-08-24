@@ -1405,7 +1405,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setContentPlanWorkflow((prev) => (prev ? { ...prev, isCreatingCampaign: true } : prev));
     const loadingToast = toast.loading('Đang tạo campaign draft từ các template đã lưu...');
     try {
-      const res = await aiApi.createCampaignFromDraft(script);
+      const res = await aiApi.createCampaignFromDraft(script, [], directRecipients);
       if (res.success) {
         toast.success('Đã tạo campaign draft thành công!', { id: loadingToast });
         enqueueWizardPatch('mark_campaign_created', { campaignId: res.campaignId ?? null });
