@@ -33,14 +33,14 @@ const normalizeEmailSettings = (response) => {
 
 const PLATFORM_DOMAIN = import.meta.env.VITE_DEFAULT_FROM_DOMAIN || 'digiso.vn';
 
-export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, t }) => {
+export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, isActive = true, t }) => {
   const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
   const channel = data?.channel || 'zalo';
   const isEmail = channel === 'email';
   const noUsableAccount = Boolean(data?.noUsableAccount);
 
   return (
-    <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+    <div className={`mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         {isEmail ? <HiOutlineMail className="h-5 w-5 text-orange-500" /> : <HiOutlineChat className="h-5 w-5 text-blue-500" />}
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600">
@@ -117,7 +117,7 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, t }) 
   );
 };
 
-export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, onDismiss, t }) => {
+export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, onDismiss, isActive = true, t }) => {
   const [checking, setChecking] = useState(false);
   const [quickMode, setQuickMode] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -205,7 +205,7 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, on
   };
 
   return (
-    <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+    <div className={`mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         <HiOutlineMail className="h-5 w-5 text-orange-500" />
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600">
@@ -310,7 +310,7 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, on
   );
 };
 
-export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccounts, onDismiss, t }) => {
+export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccounts, onDismiss, isActive = true, t }) => {
   const [qr, setQr] = useState(null);
   const [sessionKey, setSessionKey] = useState('');
   const [status, setStatus] = useState('idle');
@@ -349,6 +349,7 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
   };
 
   useEffect(() => {
+    if (!isActive) return;
     createQr();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -401,7 +402,7 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
   }, [sessionKey]);
 
   return (
-    <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+    <div className={`mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         <HiOutlineChat className="h-5 w-5 text-blue-500" />
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">
@@ -460,7 +461,7 @@ const foldDiacritics = (value) => String(value || '')
   .replace(/đ/gi, (m) => (m === 'Đ' ? 'D' : 'd'))
   .toLowerCase();
 
-export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, t }) => {
+export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, isActive = true, t }) => {
   const accountId = data?.accountId;
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState([]);
@@ -511,7 +512,7 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, t }) => {
   ));
 
   return (
-    <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+    <div className={`mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         <HiOutlineUserGroup className="h-5 w-5 text-purple-500" />
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600">
@@ -590,7 +591,7 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, t }) => {
   );
 };
 
-export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, t }) => {
+export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = true, t }) => {
   const accountId = data?.accountId;
   const maxRecipients = data?.maxRecipients || 1000;
   const [friends, setFriends] = useState([]);
@@ -691,7 +692,7 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, t }) => {
   };
 
   return (
-    <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+    <div className={`mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <HiOutlineChat className="h-5 w-5 text-blue-500" />

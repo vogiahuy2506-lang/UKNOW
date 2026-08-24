@@ -2874,11 +2874,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     </div>
   );
 
-  const latestConfirmationIndex = messages.reduce(
-    (latest, message, index) => (message.type === 'confirm_create' ? index : latest),
+  const INTERACTIVE_TYPES = [
+    'ask_campaign_details', 'ask_sender_account', 'ask_audience',
+    'ask_campaign_type', 'zalo_group_picker', 'zalo_friend_picker',
+    'confirm_create', 'email_setup_guide', 'zalo_qr_login'
+  ];
+
+  const latestInteractiveIndex = messages.reduce(
+    (latest, message, index) => (INTERACTIVE_TYPES.includes(message.type) ? index : latest),
     -1,
   );
-
   return (
     <div
       className={
@@ -3239,6 +3244,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onSubmit={handleCampaignDetailsSubmit}
                   onDismiss={handleDismissWizardCard}
                   onAttachClick={() => fileInputRef.current?.click()}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
@@ -3249,6 +3255,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onSelect={(account) => handleWizardSenderSelect(account, msg.data.channel)}
                   onOther={() => handleWizardSenderOther(msg.data.channel)}
                   onDismiss={handleDismissWizardCard}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
@@ -3266,6 +3273,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     }]);
                   }}
                   onDismiss={handleDismissWizardCard}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
@@ -3276,6 +3284,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onConnected={(account, channel) => handleWizardSenderSelect(account, channel, { viaQr: true })}
                   onBackToAccounts={handleWizardZaloBackToAccounts}
                   onDismiss={handleDismissWizardCard}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
@@ -3285,6 +3294,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   data={msg.data}
                   onSubmit={handleWizardGroupsSubmit}
                   onDismiss={handleDismissWizardCard}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
@@ -3294,6 +3304,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   data={msg.data}
                   onSubmit={handleWizardFriendsSubmit}
                   onDismiss={handleDismissWizardCard}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
@@ -3311,6 +3322,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   data={msg.data}
                   onSelect={handleSelectCampaignType}
                   onDismiss={handleDismissWizardCard}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
@@ -3320,17 +3332,18 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskAudienceCard
                   data={msg.data}
                   onSelect={handleSelectAudience}
+                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}
 
               {/* Confirm create - xác nhận trước khi tạo */}
-              {msg.type === 'confirm_create' && msg.data && !(isEditingDraft && idx === latestConfirmationIndex) && (
+              {msg.type === 'confirm_create' && msg.data && !(isEditingDraft && idx === latestInteractiveIndex) && (
                 <ConfirmCreateCard
-                  confirmationView={idx === latestConfirmationIndex ? campaignConfirmation?.confirmationView : null}
-                  isPreparing={idx === latestConfirmationIndex && campaignConfirmation?.status === 'loading'}
-                  prepareError={idx === latestConfirmationIndex && campaignConfirmation?.status === 'error' ? campaignConfirmation.error : null}
-                  isActive={idx === latestConfirmationIndex && Boolean(currentScript)}
+                  confirmationView={idx === latestInteractiveIndex ? campaignConfirmation?.confirmationView : null}
+                  isPreparing={idx === latestInteractiveIndex && campaignConfirmation?.status === 'loading'}
+                  prepareError={idx === latestInteractiveIndex && campaignConfirmation?.status === 'error' ? campaignConfirmation.error : null}
+                  isActive={idx === latestInteractiveIndex && Boolean(currentScript)}
                   onConfirm={handleConfirmCreate}
                   onEdit={() => setIsEditingDraft(true)}
                   onCancel={handleCancelCreate}
@@ -3341,7 +3354,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               )}
 
               {/* Campaign Draft Editor - Chỉnh sửa trong chatbot */}
-              {msg.type === 'confirm_create' && msg.data && isEditingDraft && idx === latestConfirmationIndex && (
+              {msg.type === 'confirm_create' && msg.data && isEditingDraft && idx === latestInteractiveIndex && (
                 <CampaignDraftEditor
                   script={currentScript || msg.data}
                   onSave={async (editedScript) => {

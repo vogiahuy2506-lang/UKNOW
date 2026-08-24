@@ -600,11 +600,11 @@ export const AskMoreCard = ({ missingFields, t }) => (
 );
 
 // Ask campaign type card - hỏi user chọn kênh
-export const AskCampaignTypeCard = ({ data, onSelect, onDismiss, t }) => {
+export const AskCampaignTypeCard = ({ data, onSelect, onDismiss, isActive = true, t }) => {
   if (!data?.campaignOptions) return null;
 
   return (
-    <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4">
+    <div className={`mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="flex items-center gap-2 mb-3">
         <HiOutlineSparkles className="w-5 h-5 text-blue-500" />
         <span className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-600">{t('aiChatbot.selectCampaignChannel')}</span>
@@ -652,7 +652,7 @@ export const AskCampaignTypeCard = ({ data, onSelect, onDismiss, t }) => {
 };
 
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
-export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClick, t }) => {
+export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClick, isActive = true, t }) => {
   const [answers, setAnswers] = useState(() => {
     const preferred = data?.preferredContentMode;
     return preferred ? { campaignBrief: preferred } : {};
@@ -790,7 +790,7 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClic
   };
 
   return (
-    <div className="mt-4 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 space-y-4">
+    <div className={`mt-4 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 space-y-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="flex items-center gap-2">
         <HiOutlineSparkles className="w-5 h-5 text-orange-500" />
         <span className="font-black text-[10px] uppercase tracking-[0.2em] text-orange-600">
@@ -1025,7 +1025,7 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClic
 };
 
 // Ask landing details card - hỏi gộp thông tin để tạo landing page
-export const AskLandingDetailsCard = ({ data, onSubmit, t }) => {
+export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) => {
   // formFields mặc định 'basic' — không bắt buộc thay đổi
   const [answers, setAnswers] = useState({ formFields: 'basic' });
   const [customFieldsText, setCustomFieldsText] = useState('');
@@ -1075,7 +1075,7 @@ export const AskLandingDetailsCard = ({ data, onSubmit, t }) => {
   };
 
   return (
-    <div className="mt-4 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 space-y-4">
+    <div className={`mt-4 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 space-y-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="flex items-center gap-2">
         <HiOutlineGlobeAlt className="w-5 h-5 text-indigo-500" />
         <span className="font-black text-[10px] uppercase tracking-[0.2em] text-indigo-600">
