@@ -53,8 +53,11 @@ function InlineLink({ href, children }) {
   );
 }
 
-// Tách một đoạn thành **đậm**, [nhãn](url) và text thường.
+// Tách một đoạn thành **đậm**, [nhãn](url), email@domain và text thường.
 const INLINE_RE = /(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
+
+// Email regex - detect plain email addresses not already in markdown link format
+const EMAIL_RE = /(?<![a-zA-Z0-9@.])([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?![a-zA-Z0-9@])/g;
 
 // Render AI message content — convert basic markdown to JSX
 export function AiContent({ text }) {
@@ -69,6 +72,24 @@ export function AiContent({ text }) {
       const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (link) {
         return <InlineLink key={key} href={link[2]}>{link[1]}</InlineLink>;
+      }
+      // Convert plain email addresses to mailto links
+      const segments = part.split(EMAIL_RE);
+      if (segments.length > 1) {
+        return segments.map((seg, k) => {
+          if (seg.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) {
+            return (
+              <a
+                key={`${key}-email-${k}`}
+                href={`mailto:${seg}`}
+                className="text-blue-600 underline hover:text-blue-700 break-words"
+              >
+                {seg}
+              </a>
+            );
+          }
+          return seg;
+        });
       }
       return part;
     });
