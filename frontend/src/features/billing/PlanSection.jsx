@@ -244,15 +244,17 @@ export default function PlanSection({ data, t }) {
           serviceSuspended={serviceSuspended}
           usingAddons={!!data.addons?.landingPages}
         />
-        <UsageBar
-          icon={HiOutlineSparkles}
-          label={t('topup.items.chatbots')}
-          used={data.chatbotsUsed || 0}
-          limit={data.maxChatbots === -1 ? -1 : (Number(data.maxChatbots) || 0) + (Number(data.addons?.chatbots) || 0)}
-          t={t}
-          serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons?.chatbots}
-        />
+        {((data.maxChatbots && data.maxChatbots > 0) || data.maxChatbots === -1 || (data.addons?.chatbots && data.addons.chatbots > 0) || data.chatbotsUsed > 0) && (
+          <UsageBar
+            icon={HiOutlineSparkles}
+            label={t('topup.items.chatbots')}
+            used={data.chatbotsUsed || 0}
+            limit={data.maxChatbots === -1 ? -1 : (Number(data.maxChatbots) || 0) + (Number(data.addons?.chatbots) || 0)}
+            t={t}
+            serviceSuspended={serviceSuspended}
+            usingAddons={!!data.addons?.chatbots}
+          />
+        )}
       </div>
 
       {/* Storage quota usage */}

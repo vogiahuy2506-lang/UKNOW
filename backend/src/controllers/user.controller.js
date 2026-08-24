@@ -247,7 +247,7 @@ class UserController {
       // 3. Usage counts (best-effort)
       let usageCounts = { email_sent_today: 0, email_sent_month: 0, zalo_sent_today: 0, zalo_sent_month: 0 };
       try {
-        usageCounts = await findProfileUsageCounts(userId) || usageCounts;
+        usageCounts = await findProfileUsageCounts(billingUserId) || usageCounts;
       } catch (err) {
         console.error('[Profile] findProfileUsageCounts failed', { userId, message: err.message });
       }
