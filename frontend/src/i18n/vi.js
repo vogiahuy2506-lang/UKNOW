@@ -104,7 +104,7 @@ export default {
       emptyNoResultsDesc: 'Thử thay đổi bộ lọc',
       emptyNoListingsTitle: 'Chưa có template nào',
       emptyNoListingsDesc: 'Hãy là người đầu tiên đăng bán',
-      createListing: 'Đăng template',
+      postListingButton: 'Đăng template',
       tabBrowse: 'Khám phá',
       tabMine: 'Của tôi',
       tabPurchases: 'Đã mua',
