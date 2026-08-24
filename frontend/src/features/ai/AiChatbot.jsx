@@ -130,6 +130,11 @@ const WIZARD_DATA_SOURCE_LABELS = {
 };
 
 const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
+  // Hide system injected prompts masquerading as user messages
+  if (/^(?:Hãy trả về content_plan JSON|Return content_plan JSON only)/i.test(String(content || '').trim()) || String(content || '').includes('=== CAMPAIGN_BRIEF DATA')) {
+    return '';
+  }
+
   const marker = parseWizardMarker(content);
   if (!marker) return content;
 
