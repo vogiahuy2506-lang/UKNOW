@@ -38,7 +38,7 @@ describe('campaignQuickSend.util', () => {
   describe('inferQuickSendChannel', () => {
     it('infers email / zalo / zalo_group', () => {
       expect(inferQuickSendChannel('Gửi nhanh 1 email cảm ơn')).toBe('email');
-      expect(inferQuickSendChannel('Quick send one zalo message')).toBe('zalo');
+      expect(inferQuickSendChannel('Quick send one zalo message')).toBeNull();
       expect(inferQuickSendChannel('Gửi nhanh tin nhóm zalo')).toBe('zalo_group');
     });
 
@@ -59,11 +59,11 @@ describe('campaignQuickSend.util', () => {
     });
 
     it('"tin nhắn" đứng một mình vẫn là Zalo như cũ', () => {
-      expect(inferQuickSendChannel('gửi nhanh 1 tin nhắn cảm ơn')).toBe('zalo');
+      expect(inferQuickSendChannel('gửi nhanh 1 tin nhắn cảm ơn')).toBeNull();
     });
 
-    it('nhắc Zalo tường minh thì vẫn là Zalo dù câu có chữ email', () => {
-      expect(inferQuickSendChannel('gửi zalo cho khách chưa có email')).toBe('zalo');
+    it('nhắc Zalo nhưng chưa rõ cá nhân hay nhóm thì trả về null để hỏi lại', () => {
+      expect(inferQuickSendChannel('gửi zalo cho khách chưa có email')).toBeNull();
     });
   });
 

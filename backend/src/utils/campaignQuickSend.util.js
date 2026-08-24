@@ -125,13 +125,15 @@ const GENERIC_MESSAGE_RE = /tin nhắn|tin nhan/;
  * @returns {'zalo'|'email'|null}
  */
 export function pickChannelByExplicitSignal(normalized, emailRe) {
+  const hasZaloPersonal = /zalo\s*cá\s*nhân|zalo\s*ca\s*nhan|zalo\s*personal/.test(normalized);
   const hasZalo = /\bzalo\b/.test(normalized);
   const hasEmail = emailRe.test(normalized) || EMAIL_ADDRESS_RE.test(normalized);
 
-  // Cả hai đều tường minh ("gửi zalo và email") → giữ nguyên hành vi cũ là Zalo.
-  if (hasZalo) return 'zalo';
+  if (hasZaloPersonal) return 'zalo';
+  if (hasZalo && hasEmail) return null; // Ambiguous, let it ask
+  if (hasZalo) return null; // Knows it's Zalo, but needs to disambiguate personal vs group. So return null to trigger channel question.
   if (hasEmail) return 'email';
-  if (GENERIC_MESSAGE_RE.test(normalized)) return 'zalo';
+  
   return null;
 }
 
