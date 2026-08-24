@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlineX,
@@ -55,6 +55,7 @@ const CreateListing = ({ onClose, onSuccess }) => {
   const [chatbots, setChatbots] = useState([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
   const [isLoadingChatbots, setIsLoadingChatbots] = useState(false);
+  const chatbotsFetchedRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(1);
@@ -77,10 +78,12 @@ const CreateListing = ({ onClose, onSuccess }) => {
   }, []);
 
   const fetchChatbots = useCallback(async () => {
+    if (chatbotsFetchedRef.current) return;
     setIsLoadingChatbots(true);
     try {
       const response = await marketplaceService.getMyChatbots();
       setChatbots(response.data.data || []);
+      chatbotsFetchedRef.current = true;
     } catch (error) {
       toast.error(t('createListing.chatbotLoadError'));
     } finally {
@@ -90,7 +93,7 @@ const CreateListing = ({ onClose, onSuccess }) => {
 
   // Fetch chatbots when resource type changes to chatbot
   useEffect(() => {
-    if (resourceType === 'chatbot' && chatbots.length === 0) {
+    if (resourceType === 'chatbot' && chatbots.length === 0 && !chatbotsFetchedRef.current) {
       fetchChatbots();
     }
   }, [resourceType, chatbots.length, fetchChatbots]);
