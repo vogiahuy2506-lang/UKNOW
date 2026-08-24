@@ -90,6 +90,14 @@ async function uploadImage(filePath, { onWait } = {}) {
       if (!url) throw new Error(`không lấy được URL sau khi tải ảnh: ${JSON.stringify(payload).slice(0, 200)}`);
       return url;
     } catch (error) {
+      // Lỗi 5xx của proxy là nấc nhất thời — nghỉ vài giây rồi thử lại. Ảnh
+      // trước đó đã lên vẫn nằm trong kho, hỏng ở đây là bỏ phí cả lô.
+      if (error.status >= 500 && error.status < 600 && attempt < 3) {
+        const pause = 5 * (attempt + 1);
+        onWait?.(pause, error.status);
+        await new Promise((resolve) => { setTimeout(resolve, pause * 1000); });
+        continue;
+      }
       if (error.status !== 429 || attempt >= 2) throw error;
       const waitSec = Math.min(error.retryAfterSec || 15 * 60, 16 * 60) + 5;
 
@@ -203,9 +211,11 @@ async function main() {
 
   for (const shot of planned) {
     const url = await uploadImage(path.join(inputDir, shot.file), {
-      onWait: (sec) => console.log(
-        `  … chạm trần tải lên (20 file/15 phút) — chờ ${Math.ceil(sec / 60)} phút rồi tải tiếp.`
-        + ' Đừng tắt: bài viết chỉ được ghi sau khi tải xong hết.',
+      onWait: (sec, httpStatus) => console.log(
+        httpStatus
+          ? `  … máy chủ trả ${httpStatus} — nghỉ ${sec} giây rồi thử lại.`
+          : `  … chạm trần tải lên (20 file/15 phút) — chờ ${Math.ceil(sec / 60)} phút rồi tải tiếp.`
+            + ' Đừng tắt: bài viết chỉ được ghi sau khi tải xong hết.',
       ),
     });
     const out = replaceCaptionWithImage(html, shot.caption, url);
