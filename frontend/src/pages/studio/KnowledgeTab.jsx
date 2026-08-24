@@ -14,8 +14,8 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 
-const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx', 'xlsx', 'xls'];
-const ALLOWED_ACCEPT = '.pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.htm,.xlsx,.xls';
+const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'webp'];
+const ALLOWED_ACCEPT = '.pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.htm,.xlsx,.xls,.png,.jpg,.jpeg,.webp';
 const MAX_FILE_MB = 10;
 
 function formatBytes(bytes) {
@@ -397,7 +397,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange }) {
               <HiOutlineUpload className="w-6 h-6 text-primary-600 animate-bounce" />
             </div>
             <p className="text-sm font-semibold text-primary-700">Thả file để upload</p>
-            <p className="text-xs text-primary-600 mt-1">PDF, DOCX, TXT, MD, CSV, JSON, HTML</p>
+            <p className="text-xs text-primary-600 mt-1">PDF, DOCX, TXT, MD, CSV, JSON, HTML, PNG, JPG, WEBP</p>
           </div>
         </div>
       )}

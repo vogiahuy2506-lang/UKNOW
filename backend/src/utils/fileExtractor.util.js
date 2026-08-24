@@ -31,6 +31,12 @@ export async function extractTextFromBuffer(buffer, filename) {
       case 'xls':
         return await extractTextFromExcel(buffer);
 
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'webp':
+        return await extractTextFromImage(buffer, ext);
+
       default:
         // Try to read as text
         return buffer.toString('utf-8');
@@ -103,6 +109,42 @@ async function extractTextFromExcel(buffer) {
     return text.trim();
   } catch (e) {
     console.error('[FileExtractor] Excel error:', e.message);
+    return '';
+  }
+}
+
+async function extractTextFromImage(buffer, ext) {
+  try {
+    const { generateGeminiContent } = await import('./geminiClient.util.js');
+    let mimeType = 'image/jpeg';
+    if (ext === 'png') mimeType = 'image/png';
+    else if (ext === 'webp') mimeType = 'image/webp';
+
+    const base64Data = buffer.toString('base64');
+    const parts = [
+      {
+        text: 'Extract all readable text from this image exactly as it appears. If there is no text but there is a clear diagram, chart, or visual data, describe it concisely. If it is just a decorative image with no useful text or data, output "NO_RELEVANT_TEXT_FOUND". Do not add any conversational filler.'
+      },
+      {
+        inlineData: {
+          mimeType,
+          data: base64Data
+        }
+      }
+    ];
+
+    const result = await generateGeminiContent({
+      parts,
+      model: 'gemini-2.5-flash',
+      temperature: 0.1
+    });
+
+    if (result?.text?.includes('NO_RELEVANT_TEXT_FOUND')) {
+      return '';
+    }
+    return result?.text || '';
+  } catch (err) {
+    console.error('[FileExtractor] Error extracting text from image:', err.message);
     return '';
   }
 }
