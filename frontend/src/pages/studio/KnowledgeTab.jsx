@@ -32,8 +32,8 @@ function formatDate(dateStr) {
   return date.toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function KnowledgeTab({ chatbot, onDocumentsChange }) {
-  const [documents, setDocuments] = useState([]);
+export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocuments = [] }) {
+  const [documents, setDocuments] = useState(initialDocuments);
   const [showUpload, setShowUpload] = useState(false);
   const [showText, setShowText] = useState(false);
   const [showUrlScrape, setShowUrlScrape] = useState(false);
@@ -82,9 +82,16 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange }) {
     }
   }, [chatbot]);
 
+  // Only load from API if no initial documents provided
   useEffect(() => {
-    if (chatbot?.id) loadDocuments();
-  }, [chatbot?.id, loadDocuments]);
+    if (chatbot?.id) {
+      if (initialDocuments.length > 0) {
+        setDocuments(initialDocuments);
+      } else {
+        loadDocuments();
+      }
+    }
+  }, [chatbot?.id, initialDocuments]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];

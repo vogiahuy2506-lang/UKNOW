@@ -389,6 +389,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
                 >
                   <KnowledgeTab
                     chatbot={chatbot}
+                    initialDocuments={knowledgeDocs}
                     onDocumentsChange={() => {
                       chatbotApi.listCustomChatDocuments(chatbot.id)
                         .then(res => {
