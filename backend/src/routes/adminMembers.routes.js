@@ -44,6 +44,7 @@ router.patch('/:id/detach-email',
   [
     param('id').isInt({ min: 1 }),
     body('confirmEmail').trim().isEmail().withMessage('confirmEmail phải là email hợp lệ'),
+    body('releaseTrialHistory').optional().isBoolean().withMessage('releaseTrialHistory phải là boolean'),
   ],
   handleValidationErrors,
   ctrl.detachEmail

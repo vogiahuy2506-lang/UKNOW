@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff, HiOutlineX } from 'react-icons/hi';
 import { changePassword } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
+import { isValidPassword } from '../../../utils/passwordValidation';
 
 /**
  * Modal đổi mật khẩu cho người dùng đang đăng nhập.
@@ -49,7 +50,7 @@ const ChangePasswordModal = ({ isOpen, onClose, forced = false, onChanged }) => 
       setError(t('changePassword.validationRequired'));
       return;
     }
-    if (form.newPassword.length < 6) {
+    if (!isValidPassword(form.newPassword)) {
       setError(t('changePassword.validationMinLength'));
       return;
     }

@@ -71,13 +71,24 @@ export async function demote(req, res) {
 /** PATCH /api/admin/members/:id/detach-email — Mức 1: giải phóng email, giữ dữ liệu */
 export async function detachEmail(req, res) {
   try {
-    const result = await adminMembersService.detachMemberEmail(Number(req.params.id), req.user.id, req.body.confirmEmail);
+    const releaseTrialHistory = Boolean(req.body.releaseTrialHistory);
+    const result = await adminMembersService.detachMemberEmail(
+      Number(req.params.id),
+      req.user.id,
+      req.body.confirmEmail,
+      releaseTrialHistory
+    );
     await logSystem(
       getSystemAuditContext(req),
       AUDIT_ACTIONS.USER_EMAIL_DETACHED,
       AUDIT_ENTITY_TYPES.USER,
       result.id,
-      { originalEmail: result.originalEmail, newEmail: result.email }
+      {
+        originalEmail: result.originalEmail,
+        newEmail: result.email,
+        releaseTrialHistory: Boolean(result.releaseTrialHistory),
+        anonymizedTrialOrdersCount: Number(result.anonymizedTrialOrdersCount || 0),
+      }
     );
     return res.json({ success: true, message: `Đã gỡ email khỏi tài khoản (email gốc: ${result.originalEmail})`, data: result });
   } catch (err) { return handleError(res, err); }

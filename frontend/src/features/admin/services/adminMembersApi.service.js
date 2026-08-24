@@ -13,8 +13,8 @@ const adminMembersApiService = {
   demote(id) {
     return api.patch(`/admin/members/${id}/demote`);
   },
-  detachEmail(id, confirmEmail) {
-    return api.patch(`/admin/members/${id}/detach-email`, { confirmEmail });
+  detachEmail(id, confirmEmail, releaseTrialHistory = false) {
+    return api.patch(`/admin/members/${id}/detach-email`, { confirmEmail, releaseTrialHistory: Boolean(releaseTrialHistory) });
   },
   purge(id, confirmEmail) {
     return api.delete(`/admin/members/${id}/purge`, { data: { confirmEmail } });

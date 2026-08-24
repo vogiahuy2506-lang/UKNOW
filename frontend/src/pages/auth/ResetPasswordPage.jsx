@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff, HiOutlineShieldCheck } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import { resetPassword } from '../../features/auth/services/authApi.service';
+import { PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../utils/passwordValidation';
 
 /**
  * ResetPasswordPage - Refactored với Impeccable design principles
@@ -105,7 +106,14 @@ const ResetPasswordPage = () => {
               onBlur={() => setFocusedField(null)}
               {...register('password', {
                 required: t('resetPassword.validationPasswordRequired'),
-                minLength: { value: 6, message: t('resetPassword.validationPasswordMin') },
+                minLength: { value: PASSWORD_MIN_LENGTH, message: t('resetPassword.validationPasswordMin') },
+                pattern: {
+                  value: PASSWORD_PATTERN,
+                  message:
+                    t('auth.passwordPattern')
+                    || t('auth.passwordNeedLetter')
+                    || 'Mật khẩu phải chứa ít nhất một chữ cái và một số',
+                },
               })}
             />
             <button

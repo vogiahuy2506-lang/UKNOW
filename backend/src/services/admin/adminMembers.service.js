@@ -70,14 +70,18 @@ function assertCanTargetForRemoval(member, id, actorId, confirmEmail) {
  * Mức 1 — gỡ email khỏi tài khoản. Giải phóng email/username, giữ nguyên dữ liệu
  * (đơn hàng, hoá đơn...), thu hồi mọi refresh token đang sống, và trả về email
  * gốc để controller ghi audit log (không truy vết được nữa sau bước này).
+ * Nếu releaseTrialHistory = true: ẩn danh user_email trên các đơn trial/free sang freed+<id>@deleted.local
  */
-export async function detachMemberEmail(id, actorId, confirmEmail) {
+export async function detachMemberEmail(id, actorId, confirmEmail, releaseTrialHistory = false) {
   const member = await findMemberById(id);
   assertCanTargetForRemoval(member, id, actorId, confirmEmail);
   if (member.status === 'deleted') throw { status: 400, message: 'Tài khoản này đã được gỡ email trước đó' };
 
   const originalEmail = member.email;
-  const result = await detachMemberEmailRow(id);
+  const result = await detachMemberEmailRow(id, {
+    originalEmail,
+    releaseTrialHistory: Boolean(releaseTrialHistory),
+  });
   if (!result) throw { status: 500, message: 'Không thể gỡ email tài khoản' };
   await revokeAllRefreshTokensForUser(id, 'admin_detach_email');
   return { ...result, originalEmail };

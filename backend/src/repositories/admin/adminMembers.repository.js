@@ -156,19 +156,60 @@ export async function setMemberRole(id, role) {
  *
  * username có UNIQUE + VARCHAR(50) — cắt phần username gốc nếu cần để hậu tố
  * "_freed_<id>" không tràn quá 50 ký tự.
+ *
+ * Nếu releaseTrialHistory = true:
+ *   Ẩn danh user_email của các đơn dùng thử/miễn phí (code = trial hoặc price = 0)
+ *   sang freed+<id>@deleted.local trong cùng transaction.
+ *   Tuyệt đối KHÔNG DELETE đơn, và KHÔNG đụng đến đơn trả tiền.
  */
-export async function detachMemberEmail(id) {
-  const { rows } = await db.query(
-    `UPDATE users
-       SET email = 'freed+' || id || '@deleted.local',
-           username = LEFT(username, 50 - LENGTH('_freed_' || id)) || '_freed_' || id,
-           status = 'deleted',
-           updated_at = NOW()
-     WHERE id = $1 AND status != 'deleted'
-     RETURNING id, email, username, status`,
-    [id]
-  );
-  return rows[0] || null;
+export async function detachMemberEmail(id, { originalEmail = null, releaseTrialHistory = false, trialPlanCode = process.env.SIGNUP_TRIAL_PLAN_CODE || 'trial' } = {}) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `UPDATE users
+         SET email = 'freed+' || id || '@deleted.local',
+             username = LEFT(username, 50 - LENGTH('_freed_' || id)) || '_freed_' || id,
+             status = 'deleted',
+             updated_at = NOW()
+       WHERE id = $1 AND status != 'deleted'
+       RETURNING id, email, username, status`,
+      [id]
+    );
+    const updatedUser = rows[0] || null;
+    if (!updatedUser) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    let anonymizedTrialOrdersCount = 0;
+    if (releaseTrialHistory) {
+      const orderUpdateRes = await client.query(
+        `UPDATE orders
+            SET user_email = 'freed+' || $1 || '@deleted.local',
+                updated_at = NOW()
+          WHERE (user_id = $1 OR (user_id IS NULL AND $2::text IS NOT NULL AND LOWER(user_email) = LOWER($2)))
+            AND plan_id IN (
+              SELECT id FROM plans
+               WHERE code = COALESCE(NULLIF($3, ''), 'trial') OR price = 0
+            )`,
+        [id, originalEmail, trialPlanCode]
+      );
+      anonymizedTrialOrdersCount = orderUpdateRes.rowCount || 0;
+    }
+
+    await client.query('COMMIT');
+    return {
+      ...updatedUser,
+      releaseTrialHistory: Boolean(releaseTrialHistory),
+      anonymizedTrialOrdersCount,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**

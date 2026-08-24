@@ -22,6 +22,7 @@ import {
 } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
+import { PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../utils/passwordValidation';
 
 /**
  * Register Page - Refactored với Impeccable design principles:
@@ -38,7 +39,13 @@ const registerSchema = (t) => z.object({
     .max(50, t('register.usernameMaxLen'))
     .regex(/^[A-Za-z0-9]+$/, t('register.usernamePattern')),
   email: z.string().email(t('register.invalidEmail')),
-  password: z.string().min(6, t('auth.passwordMinLength')),
+  password: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, t('register.passwordMinChars') || t('auth.passwordMinLength'))
+    .regex(
+      PASSWORD_PATTERN,
+      t('auth.passwordPattern') || t('auth.passwordNeedLetter') || 'Mật khẩu phải chứa ít nhất một chữ cái và một số'
+    ),
   confirmPassword: z.string(),
   fullName: z.string().optional(),
   phone: z.string().optional().refine(
@@ -136,9 +143,20 @@ const OtpStep = ({ email, formData, onBack }) => {
       }
       navigate(getPostAuthPath(result?.data?.user));
     } catch (err) {
-      const msg = err?.response?.data?.message || t('auth.verificationFailed');
+      const resData = err?.response?.data;
+      const firstFieldError = Array.isArray(resData?.errors) && resData.errors.length > 0 ? resData.errors[0] : null;
+      const fieldPath = firstFieldError?.path || firstFieldError?.param;
+      const msg = firstFieldError?.msg || resData?.message || t('auth.verificationFailed');
       toast.error(msg);
-      if (err?.response?.status === 400) setDigits(['', '', '', '', '', '']);
+
+      // Chỉ xoá mã OTP khi lỗi thật sự thuộc về mã xác minh/OTP (mã sai hoặc hết hạn)
+      const isOtpError =
+        fieldPath === 'emailVerificationCode' ||
+        fieldPath === 'otp' ||
+        (Boolean(msg) && /mã xác minh|mã otp|mã xác thực|mã không đúng|mã đã hết hạn/i.test(msg));
+      if (isOtpError && err?.response?.status === 400) {
+        setDigits(['', '', '', '', '', '']);
+      }
     } finally {
       setIsSubmitting(false);
     }

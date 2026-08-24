@@ -592,36 +592,74 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('BẰNG CHỨNG TÍNH NĂNG HOẠT ĐỘNG: sau khi gỡ email, đăng ký lại đúng email gốc → tạo user MỚI, được cấp trial', async () => {
+  it('BẰNG CHỨNG TÍNH NĂNG HOẠT ĐỘNG: sau khi gỡ email, đăng ký lại đúng email gốc → tạo user MỚI, được cấp trial khi releaseTrialHistory = true', async () => {
     const admin = await createUser({ role: 'admin', username: 'sa' });
     const original = await createUser({ role: 'user', username: 'stuck_google', email: 'canfree@test.local' });
     const trialPlan = await createPlan({ code: 'trial', name: 'Dùng thử', price: 0, durationDays: 14 });
+    const paidPlan = await createPlan({ code: 'pro', name: 'Chuyên nghiệp', price: 100000 });
+
+    // Tạo đơn dùng thử và đơn trả tiền thành công cho tài khoản cũ
+    const trialOrder = await createOrder({ planId: trialPlan.id, userId: original.id, userEmail: original.email, status: 'success' });
+    const paidOrder = await createOrder({ planId: paidPlan.id, userId: original.id, userEmail: original.email, status: 'success' });
 
     const token = await loginAs(admin);
-    const detachRes = await request(app)
+
+    // Ca A: releaseTrialHistory = false (hoặc không truyền) -> gỡ email nhưng giữ nguyên lịch sử đơn trial
+    // Tài khoản mới đăng ký lại không được cấp trial lần 2
+    const originalA = await createUser({ role: 'user', username: 'stuck_a', email: 'no_release@test.local' });
+    await createOrder({ planId: trialPlan.id, userId: originalA.id, userEmail: originalA.email, status: 'success' });
+
+    const detachResA = await request(app)
+      .patch(`/api/admin/members/${originalA.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'no_release@test.local', releaseTrialHistory: false });
+    expect(detachResA.status).toBe(200);
+
+    await createVerificationCode({ email: 'no_release@test.local', code: '123456' });
+    const registerResA = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'noreleasenew',
+        email: 'no_release@test.local',
+        password: 'Passw0rd123',
+        emailVerificationCode: '123456',
+      });
+    expect(registerResA.status).toBe(201);
+    expect(registerResA.body.data.user.email).toBe('no_release@test.local');
+    expect(registerResA.body.data.user.id).not.toBe(originalA.id);
+    expect(registerResA.body.data.trial).toBeNull(); // Không được cấp trial vì đơn cũ vẫn mang email gốc
+
+    // Ca B: releaseTrialHistory = true -> gỡ email và ẩn danh đơn trial -> đăng ký lại được cấp trial
+    const detachResB = await request(app)
       .patch(`/api/admin/members/${original.id}/detach-email`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ confirmEmail: 'canfree@test.local' });
-    expect(detachRes.status).toBe(200);
+      .send({ confirmEmail: 'canfree@test.local', releaseTrialHistory: true });
+    expect(detachResB.status).toBe(200);
 
-    // Đăng ký lại đúng email gốc — trước khi gỡ, endpoint register sẽ báo email đã dùng
+    // Kiểm tra đơn trial đã được đổi email sang freed+<id>@deleted.local
+    const { rows: trialRows } = await db.query('SELECT user_email FROM orders WHERE id = $1', [trialOrder.id]);
+    expect(trialRows[0].user_email).toBe(`freed+${original.id}@deleted.local`);
+
+    // Kiểm tra đơn trả tiền KHÔNG bị đổi email
+    const { rows: paidRows } = await db.query('SELECT user_email FROM orders WHERE id = $1', [paidOrder.id]);
+    expect(paidRows[0].user_email).toBe(original.email);
+
+    // Đăng ký lại đúng email gốc canfree@test.local -> thành công và được cấp trial
     await createVerificationCode({ email: 'canfree@test.local', code: '123456' });
-    const registerRes = await request(app)
+    const registerResB = await request(app)
       .post('/api/auth/register')
       .send({
         username: 'canfreenew',
         email: 'canfree@test.local',
-        password: 'Passw0rd!',
+        password: 'Passw0rd123',
         emailVerificationCode: '123456',
       });
 
-    expect(registerRes.status).toBe(201);
-    expect(registerRes.body.data.user.email).toBe('canfree@test.local');
-    expect(registerRes.body.data.user.id).not.toBe(original.id); // user MỚI, không phải cùng row
-    expect(registerRes.body.data.trial).not.toBeNull();
-    expect(registerRes.body.data.trial.planCode).toBe('trial');
-
-    void trialPlan;
+    expect(registerResB.status).toBe(201);
+    expect(registerResB.body.data.user.email).toBe('canfree@test.local');
+    expect(registerResB.body.data.user.id).not.toBe(original.id);
+    expect(registerResB.body.data.trial).not.toBeNull();
+    expect(registerResB.body.data.trial.planCode).toBe('trial');
   });
 });
 

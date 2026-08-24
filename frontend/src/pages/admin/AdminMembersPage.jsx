@@ -197,9 +197,20 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
 
 // ── TypeToConfirmModal — bắt gõ lại email mới cho bấm, dùng cho thao tác không
 // hoàn tác được (gỡ email / xoá vĩnh viễn) ─────────────────────────────────────
-const TypeToConfirmModal = ({ member, titleKey, warningKey, confirmBtnKey, danger, isBusy, onConfirm, onClose }) => {
+const TypeToConfirmModal = ({
+  member,
+  titleKey,
+  warningKey,
+  confirmBtnKey,
+  danger,
+  isBusy,
+  onConfirm,
+  onClose,
+  showReleaseTrialOption = false,
+}) => {
   const { t } = useI18n();
   const [typed, setTyped] = useState('');
+  const [releaseTrialHistory, setReleaseTrialHistory] = useState(false);
   const matches = typed.trim().toLowerCase() === (member.email || '').trim().toLowerCase();
   const iconBg = danger ? 'bg-red-100' : 'bg-amber-100';
   const iconColor = danger ? 'text-red-600' : 'text-amber-600';
@@ -217,6 +228,28 @@ const TypeToConfirmModal = ({ member, titleKey, warningKey, confirmBtnKey, dange
         <strong>{member.fullName || member.username}</strong> ({member.email})
       </p>
       <p className="text-sm text-gray-600">{t(warningKey)}</p>
+
+      {showReleaseTrialOption && (
+        <div className="mt-4 p-3 bg-amber-50/70 border border-amber-200 rounded-lg space-y-1.5">
+          <label className="flex items-start gap-2.5 cursor-pointer text-sm text-gray-800 select-none">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              checked={releaseTrialHistory}
+              onChange={(e) => setReleaseTrialHistory(e.target.checked)}
+            />
+            <span className="font-medium">
+              {t('adminMembers.releaseTrialHistoryLabel')}
+            </span>
+          </label>
+          {releaseTrialHistory && (
+            <p className="text-xs text-amber-700 pl-6">
+              {t('adminMembers.releaseTrialHistoryWarning')}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">
           {t('adminMembers.typeEmailToConfirm', { email: member.email })}
@@ -235,7 +268,7 @@ const TypeToConfirmModal = ({ member, titleKey, warningKey, confirmBtnKey, dange
         <button
           type="button"
           className={`btn ${btnClass}`}
-          onClick={() => onConfirm(typed.trim())}
+          onClick={() => onConfirm(typed.trim(), releaseTrialHistory)}
           disabled={isBusy || !matches}
         >
           {isBusy ? t('adminMembers.confirming') : t(confirmBtnKey)}
@@ -369,10 +402,10 @@ const AdminMembersPage = () => {
     }
   };
 
-  const handleDetachEmail = async (typedEmail) => {
+  const handleDetachEmail = async (typedEmail, releaseTrialHistory = false) => {
     try {
       setIsDetaching(true);
-      const res = await adminMembersApiService.detachEmail(detachEmailConfirm.id, typedEmail);
+      const res = await adminMembersApiService.detachEmail(detachEmailConfirm.id, typedEmail, releaseTrialHistory);
       toast.success(res.data.message || t('adminMembers.detachEmailSuccess'));
       setDetachEmailConfirm(null);
       fetchMembers();
@@ -776,6 +809,7 @@ const AdminMembersPage = () => {
           confirmBtnKey="adminMembers.detachEmailConfirmBtn"
           danger={false}
           isBusy={isDetaching}
+          showReleaseTrialOption
           onConfirm={handleDetachEmail}
           onClose={() => setDetachEmailConfirm(null)}
         />
