@@ -56,6 +56,52 @@ describe('renderTextWithLinks utility', () => {
         { type: 'text', text: ' ngay' },
       ]);
     });
+
+    it('email thuần abc@xyz.com tự thành link mailto:', () => {
+      const parts = splitTextAndLinks('Liên hệ support@uknow.vn để được hỗ trợ');
+      expect(parts).toEqual([
+        { type: 'text', text: 'Liên hệ ' },
+        { type: 'link', url: 'mailto:support@uknow.vn', text: 'support@uknow.vn' },
+        { type: 'text', text: ' để được hỗ trợ' },
+      ]);
+    });
+
+    it('email thuần đứng cuối câu có dấu chấm thì tách dấu chấm khỏi email', () => {
+      const parts = splitTextAndLinks('Liên hệ support@uknow.vn.');
+      expect(parts).toEqual([
+        { type: 'text', text: 'Liên hệ ' },
+        { type: 'link', url: 'mailto:support@uknow.vn', text: 'support@uknow.vn' },
+        { type: 'text', text: '.' },
+      ]);
+    });
+
+    it('mailto: có sẵn scheme vẫn được nhận diện là link', () => {
+      const parts = splitTextAndLinks('Gửi về mailto:hello@example.com nhé');
+      expect(parts).toEqual([
+        { type: 'text', text: 'Gửi về ' },
+        { type: 'link', url: 'mailto:hello@example.com', text: 'mailto:hello@example.com' },
+        { type: 'text', text: ' nhé' },
+      ]);
+    });
+
+    it('trộn email + http + mailto trong cùng đoạn văn', () => {
+      const parts = splitTextAndLinks('Email abc@example.com, mailto:xyz@hello.com hoặc https://uknow.vn');
+      expect(parts).toEqual([
+        { type: 'text', text: 'Email ' },
+        { type: 'link', url: 'mailto:abc@example.com', text: 'abc@example.com' },
+        { type: 'text', text: ', ' },
+        { type: 'link', url: 'mailto:xyz@hello.com', text: 'mailto:xyz@hello.com' },
+        { type: 'text', text: ' hoặc ' },
+        { type: 'link', url: 'https://uknow.vn', text: 'https://uknow.vn' },
+      ]);
+    });
+
+    it('không match chuỗi @ không phải email (thiếu TLD)', () => {
+      const parts = splitTextAndLinks('user@host không phải email hợp lệ');
+      expect(parts).toEqual([
+        { type: 'text', text: 'user@host không phải email hợp lệ' },
+      ]);
+    });
   });
 
   describe('RenderTextWithLinks React Component & Security (XSS protection)', () => {
