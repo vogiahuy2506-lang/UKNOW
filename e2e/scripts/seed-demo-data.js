@@ -1271,7 +1271,63 @@ export async function seedOrders(client, { userId, planIds }) {
 }
 
 /**
- * 9. E2E_SEED_EMPLOYEES: 3 nhân viên với bộ quyền khác nhau
+ * 9. E2E_SEED_VOUCHERS: một mã nhập tay còn hạn, dùng cho ảnh bài "Voucher".
+ *
+ * Vì sao phải seed dù migration 036 đã có sẵn hai mã: migration bị baseline (chỉ
+ * đánh dấu đã chạy, không thực thi) khi dựng DB test từ bootstrap.sql, nên các
+ * dòng INSERT trong đó không tồn tại. Mà kể cả có chạy thì `ends_at` cũng tính
+ * từ lúc migrate — DB dựng lâu rồi là mã hết hạn, ảnh chụp ra lỗi.
+ *
+ * Tắt luôn mã tự động: để cả hai thì màn thanh toán đã có sẵn một dòng giảm giá
+ * trước khi người dùng gõ gì, rồi mã tay (50.000đ) lại ĐÈ mất ưu đãi tự động
+ * (10% của 1.299.000đ = 129.900đ) — ảnh "sau khi áp mã" hoá ra giảm ÍT hơn ảnh
+ * "trước khi áp mã". Đúng về mặt cơ chế nhưng nhìn như bug.
+ */
+export async function seedVouchers(client) {
+  await client.query(
+    "UPDATE vouchers SET is_active = FALSE, updated_at = NOW() WHERE auto_apply = TRUE",
+  );
+
+  await client.query(
+    `INSERT INTO vouchers (
+       code, name, description, discount_type, discount_value,
+       min_order_amount, applies_to_billing_periods,
+       starts_at, ends_at, usage_limit, usage_limit_per_user, used_count,
+       auto_apply, stackable, is_active, offer_mode
+     ) VALUES (
+       'WELCOME50K', 'Welcome 50K', 'Nhập mã để giảm 50.000đ cho đơn từ 500.000đ.',
+       'fixed_amount', 50000,
+       500000, ARRAY['monthly', 'yearly'],
+       NOW() - INTERVAL '1 day', NOW() + INTERVAL '365 days', 1000, NULL, 0,
+       FALSE, FALSE, TRUE, 'public_code'
+     )
+     -- Chỉ số duy nhất trên bảng này là CÓ ĐIỀU KIỆN:
+     --   CREATE UNIQUE INDEX vouchers_code_active_uniq ON vouchers (code) WHERE is_active = TRUE
+     -- Migration 091 bỏ UNIQUE toàn cục để mã đã tắt còn dùng lại được. Viết
+     -- ON CONFLICT (code) trơn thì Postgres báo "no unique or exclusion
+     -- constraint matching" — phải lặp lại đúng điều kiện của chỉ số.
+     ON CONFLICT (code) WHERE is_active = TRUE DO UPDATE SET
+       discount_type = EXCLUDED.discount_type,
+       discount_value = EXCLUDED.discount_value,
+       min_order_amount = EXCLUDED.min_order_amount,
+       applies_to_plan_codes = NULL,
+       applies_to_billing_periods = EXCLUDED.applies_to_billing_periods,
+       starts_at = EXCLUDED.starts_at,
+       ends_at = EXCLUDED.ends_at,
+       usage_limit = EXCLUDED.usage_limit,
+       -- NULL chứ không phải 1: chụp lại nhiều lượt trên cùng một DB thì giới hạn
+       -- mỗi khách 1 lần sẽ làm lượt thứ hai báo "Voucher không hợp lệ".
+       usage_limit_per_user = NULL,
+       used_count = 0,
+       auto_apply = FALSE,
+       is_active = TRUE,
+       offer_mode = 'public_code',
+       updated_at = NOW()`,
+  );
+}
+
+/**
+ * 10. E2E_SEED_EMPLOYEES: 3 nhân viên với bộ quyền khác nhau
  */
 export async function seedEmployees(client, { userId }) {
   const defaultPasswordHash = await bcrypt.hash('Test@1234', 10);
@@ -1468,7 +1524,12 @@ export async function seedDemoData(client, { userId }) {
     await seedOrders(client, { userId, planIds });
   }
 
-  // 9. Nhân viên
+  // 9. Voucher
+  if (isFlagOn('E2E_SEED_VOUCHERS')) {
+    await seedVouchers(client);
+  }
+
+  // 10. Nhân viên
   if (isFlagOn('E2E_SEED_EMPLOYEES')) {
     await seedEmployees(client, { userId });
   }
@@ -1498,6 +1559,7 @@ export async function seedDemoData(client, { userId }) {
     + (isFlagOn('E2E_SEED_INBOX') ? ' | Inbox: ON' : '')
     + (isFlagOn('E2E_SEED_LANDING') ? ' | Landing: ON' : '')
     + (isFlagOn('E2E_SEED_ORDERS') ? ' | Orders: ON' : '')
+    + (isFlagOn('E2E_SEED_VOUCHERS') ? ' | Vouchers: ON' : '')
     + (isFlagOn('E2E_SEED_EMPLOYEES') ? ' | Employees: ON' : '')
     + (withPending ? ' | Pending Downgrade: ON' : '')
     + (overage ? ` | Overage: ${overageMode}` : ''),

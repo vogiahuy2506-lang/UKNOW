@@ -3,6 +3,7 @@ import {
   normalizeCaption,
   listCaptionSlots,
   replaceCaptionWithImage,
+  replaceImageSrcByCaption,
 } from '../helpCaptionReplace.util.js';
 import { stripTags, extractImageSrcs } from '../helpArticleListRepair.util.js';
 import { HELP_SEED_ARTICLES } from '../../services/help/helpSeed.data.js';
@@ -88,5 +89,43 @@ describe('helpCaptionReplace.replaceCaptionWithImage', () => {
     const out = replaceCaptionWithImage(article.body_html, slots[0].text, '/u/real.png');
     expect(out.ok).toBe(true);
     expect(listCaptionSlots(out.html)).toHaveLength(slots.length - 1);
+  });
+});
+
+describe('helpCaptionReplace.replaceImageSrcByCaption', () => {
+  // Ảnh đã chèn thì không còn ô "[ẢNH: …]" để bám vào, nên chụp lại không thay
+  // được ảnh cũ. Đã có một ảnh sai nằm trên bài chạy thật đúng vì lý do này.
+  const html = '<p>a</p><img src="https://cu.png" alt="mục Lỗi gần đây">'
+    + '<p>b</p><img src="https://khac.png" alt="mục Hiệu quả theo kênh">';
+
+  it('đổi src của đúng ảnh khớp alt, giữ nguyên alt và các ảnh khác', () => {
+    const out = replaceImageSrcByCaption(html, 'mục Lỗi gần đây', 'https://moi.png');
+    expect(out.ok).toBe(true);
+    expect(out.oldSrc).toBe('https://cu.png');
+    expect(out.html).toContain('src="https://moi.png" alt="mục Lỗi gần đây"');
+    expect(out.html).toContain('https://khac.png');
+  });
+
+  it('từ chối khi khoá khớp nhiều hơn một ảnh', () => {
+    const dup = `${html}<img src="https://c.png" alt="mục Lỗi gần đây lần hai">`;
+    const out = replaceImageSrcByCaption(dup, 'mục Lỗi gần đây', 'https://x.png');
+    expect(out.ok).toBe(false);
+    expect(out.matches).toBe(2);
+  });
+
+  it('từ chối khi không ảnh nào khớp, khi thiếu khoá hoặc thiếu URL', () => {
+    expect(replaceImageSrcByCaption(html, 'không có thật', 'https://x.png').ok).toBe(false);
+    expect(replaceImageSrcByCaption(html, '', 'https://x.png').ok).toBe(false);
+    expect(replaceImageSrcByCaption(html, 'mục Lỗi gần đây', '').ok).toBe(false);
+  });
+
+  it('từ chối thẻ img khớp alt nhưng không có src', () => {
+    const out = replaceImageSrcByCaption('<img alt="mục Lỗi gần đây">', 'mục Lỗi gần đây', 'https://x.png');
+    expect(out.ok).toBe(false);
+  });
+
+  it('khớp được khi alt trong DB đang ở dạng thực thể HTML', () => {
+    const enc = '<img src="https://cu.png" alt="khoanh đỏ nút &quot;Áp dụng&quot;">';
+    expect(replaceImageSrcByCaption(enc, 'khoanh đỏ nút "Áp dụng"', 'https://m.png').ok).toBe(true);
   });
 });

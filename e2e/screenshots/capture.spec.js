@@ -22,6 +22,7 @@ const SHEETS = [
   'campaign-theo-doi', 'chatbot', 'landing-page', 'plan-and-billing',
   'faq-billing', 'campaign-create',
   'getting-started', 'dung-thu', 'zalo-account', 'zalo-gui-cham', 'ai-profile',
+  'voucher',
 ];
 
 for (const slugToCapture of SHEETS) {

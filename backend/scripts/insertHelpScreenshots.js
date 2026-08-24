@@ -20,11 +20,20 @@
  *   node backend/scripts/insertHelpScreenshots.js e2e/screenshots/out/doi-goi --apply
  *
  * Không có --apply thì chỉ in ra sẽ làm gì, không tải và không ghi.
+ *
+ * THAY ảnh đã chèn (chụp lại vì ảnh cũ sai hoặc giao diện đổi):
+ *
+ *   node backend/scripts/insertHelpScreenshots.js e2e/screenshots/out/x --replace=ten-anh
+ *
+ * Mặc định script BỎ QUA ô đã có ảnh, nên chụp lại không tự thay được — phải gọi
+ * tên ảnh ra. `--replace` trơn (không kèm tên) thay TẤT CẢ ảnh đã chèn của bài;
+ * cân nhắc vì mỗi ảnh là một lượt tải lên, mà trần là 20 file/15 phút.
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   replaceCaptionWithImage,
+  replaceImageSrcByCaption,
   listCaptionSlots,
   normalizeCaption,
 } from '../src/utils/helpCaptionReplace.util.js';
@@ -48,6 +57,23 @@ const apply = process.argv.includes('--apply');
 // tham số người dùng gõ. Bản cũ lọc bằng `arg.includes('out')` nên chỉ nhận thư
 // mục nằm dưới out/ — ảnh chụp tay để ở manual/ thì bị từ chối thẳng.
 const inputDir = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
+
+/**
+ * Danh sách ảnh cần THAY (đổi src của ảnh đã chèn) thay vì bỏ qua.
+ *
+ * `null`  = không thay gì (mặc định)
+ * `'*'`   = thay mọi ảnh đã chèn
+ * `Set`   = chỉ thay đúng những tên được gọi
+ */
+const replaceArg = process.argv.slice(2).find((arg) => arg === '--replace' || arg.startsWith('--replace='));
+const replaceTargets = (() => {
+  if (!replaceArg) return null;
+  const value = replaceArg.includes('=') ? replaceArg.split('=').slice(1).join('=') : '';
+  const names = value.split(',').map((s) => s.trim()).filter(Boolean);
+  return names.length ? new Set(names) : '*';
+})();
+
+const shouldReplace = (name) => replaceTargets === '*' || (replaceTargets instanceof Set && replaceTargets.has(name));
 
 async function api(pathname, options = {}) {
   const res = await fetch(`${API_URL}${pathname}`, {
@@ -183,6 +209,19 @@ async function main() {
       // nữa. Báo "không tìm thấy" ở đây khiến người chạy tưởng khoá sai và đi sửa
       // file shots — trong khi thực ra chẳng có gì phải làm.
       if (isAlreadyInserted(html, shot.caption)) {
+        if (shouldReplace(shot.name)) {
+          // Thử trên bản nháp trước: nếu alt khớp nhiều ảnh thì dừng ở đây, chứ
+          // đừng tải ảnh lên rồi mới phát hiện không biết thay cái nào.
+          const trialSwap = replaceImageSrcByCaption(probe, shot.caption, 'https://example.invalid/probe.png');
+          if (!trialSwap.ok) {
+            console.log(`  ✗ ${shot.name}: ${trialSwap.reason}`);
+            continue;
+          }
+          probe = trialSwap.html;
+          planned.push({ ...shot, mode: 'replace' });
+          console.log(`  ⟳ ${shot.name} → THAY ảnh đang có`);
+          continue;
+        }
         console.log(`  · ${shot.name}: đã chèn từ trước, bỏ qua`);
         alreadyDone += 1;
         continue;
@@ -221,10 +260,12 @@ async function main() {
             + ' Đừng tắt: bài viết chỉ được ghi sau khi tải xong hết.',
       ),
     });
-    const out = replaceCaptionWithImage(html, shot.caption, url);
+    const out = shot.mode === 'replace'
+      ? replaceImageSrcByCaption(html, shot.caption, url)
+      : replaceCaptionWithImage(html, shot.caption, url);
     if (!out.ok) throw new Error(`${shot.name}: ${out.reason} (lẽ ra vòng kiểm đã bắt được)`);
     html = out.html;
-    console.log(`  ↑ ${shot.name} đã tải lên`);
+    console.log(`  ↑ ${shot.name} đã tải lên${shot.mode === 'replace' ? ' (thay ảnh cũ)' : ''}`);
   }
 
   await api(`/help/admin/articles/${article.id}`, {
@@ -232,8 +273,13 @@ async function main() {
     body: JSON.stringify({ body_html: html }),
   });
 
+  const swapped = planned.filter((s) => s.mode === 'replace').length;
+  const inserted = planned.length - swapped;
   const slotsAfter = listCaptionSlots(html).length;
-  console.log(`\nĐã chèn ${planned.length} ảnh vào "${manifest.slug}".`);
+  console.log(
+    `\nBài "${manifest.slug}": chèn ${inserted} ảnh mới`
+    + (swapped ? `, thay ${swapped} ảnh cũ` : '') + '.',
+  );
   console.log(`Ô chú thích còn lại: ${slotsBefore} → ${slotsAfter}`);
 }
 

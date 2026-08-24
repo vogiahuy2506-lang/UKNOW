@@ -121,6 +121,23 @@ export default {
             + '(campaign_run_recipient_steps với trạng thái lỗi) thì ảnh mới có nội dung.',
           );
         }
+
+        // Chốt chặn: lỗi DO DỮ LIỆU MẪU SINH RA không được lọt vào bài hướng dẫn.
+        //
+        // Worker nền quét campaign_runs có status='running'; chiến dịch Zalo mẫu
+        // không có node nào nên bị đánh failed kèm đúng dòng dưới đây. Người đọc
+        // thấy một lỗi không tồn tại trong sản phẩm thật. Chuyện này ĐÃ lọt lên
+        // production một lần — nên chặn tại đây thay vì trông vào việc nhớ đặt
+        // biến môi trường.
+        const seedArtifact = 'Chiến dịch không có node nào';
+        if ((await page.locator('body').innerText()).includes(seedArtifact)) {
+          throw new Error(
+            `Trang đang hiện lỗi do dữ liệu mẫu sinh ra: "${seedArtifact}".\n`
+            + 'Khởi động lại backend với SCHEDULER_ENABLED=false, nạp lại DB rồi chụp lại:\n'
+            + '  SCHEDULER_ENABLED=false npm run dev        (ở thư mục backend)\n'
+            + '  E2E_SEED_DEMO=1 E2E_SEED_CAMPAIGNS=1 node scripts/seed-test-db.js',
+          );
+        }
         return shot;
       },
     },

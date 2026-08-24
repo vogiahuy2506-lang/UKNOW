@@ -107,3 +107,52 @@ export function replaceCaptionWithImage(html, captionKey, imageUrl) {
     caption: slot.text,
   };
 }
+
+/**
+ * Đổi `src` của một ảnh ĐÃ CHÈN, nhận ra qua thuộc tính alt.
+ *
+ * Vì sao cần: khi ô chú thích đã thành <img> rồi thì không còn "[ẢNH: …]" nào để
+ * `replaceCaptionWithImage` bám vào, nên chụp lại cũng không thay được ảnh cũ.
+ * Đã có một ảnh sai nằm trên bài chạy thật vì lý do này.
+ *
+ * Vẫn giữ nguyên tắc KHÔNG ĐOÁN: khớp đúng một ảnh thì mới đổi. Giữ nguyên alt
+ * (chính là chú thích gốc) và mọi thuộc tính khác — chỉ thay đúng địa chỉ ảnh.
+ *
+ * @param {string} html body_html hiện tại
+ * @param {string} captionKey một đoạn chữ đủ riêng, khớp với alt của ảnh cần thay
+ * @param {string} imageUrl URL ảnh mới
+ * @returns {{ok:true, html:string, caption:string, oldSrc:string} | {ok:false, reason:string, matches:number}}
+ */
+export function replaceImageSrcByCaption(html, captionKey, imageUrl) {
+  const source = String(html ?? '');
+  const key = normalizeCaption(captionKey);
+  if (!key) return { ok: false, reason: 'khoá tìm kiếm rỗng', matches: 0 };
+  if (!imageUrl) return { ok: false, reason: 'thiếu URL ảnh', matches: 0 };
+
+  const hits = [];
+  const imgTag = /<img\b[^>]*>/gi;
+  let match;
+  while ((match = imgTag.exec(source)) !== null) {
+    const alt = match[0].match(/\balt="([^"]*)"/i)?.[1] ?? '';
+    if (normalizeCaption(alt).includes(key)) {
+      hits.push({ start: match.index, end: match.index + match[0].length, tag: match[0], alt });
+    }
+  }
+
+  if (hits.length === 0) return { ok: false, reason: 'không tìm thấy ảnh nào có alt khớp', matches: 0 };
+  if (hits.length > 1) {
+    return { ok: false, reason: `khoá khớp ${hits.length} ảnh khác nhau — cần khoá riêng hơn`, matches: hits.length };
+  }
+
+  const hit = hits[0];
+  const srcMatch = hit.tag.match(/\bsrc="([^"]*)"/i);
+  if (!srcMatch) return { ok: false, reason: 'thẻ img khớp alt nhưng không có thuộc tính src', matches: 1 };
+
+  const nextTag = hit.tag.replace(/\bsrc="[^"]*"/i, `src="${escapeAttribute(imageUrl)}"`);
+  return {
+    ok: true,
+    html: source.slice(0, hit.start) + nextTag + source.slice(hit.end),
+    caption: decodeHtmlEntities(hit.alt),
+    oldSrc: srcMatch[1],
+  };
+}
