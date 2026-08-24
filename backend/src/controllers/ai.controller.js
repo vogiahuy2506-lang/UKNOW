@@ -1107,6 +1107,7 @@ class AiController {
         instruction,
         locale = 'vi',
         sessionId = null,
+        messageId = null,
       } = req.body || {};
 
       if (!String(currentHtml || '').trim()) {
@@ -1141,10 +1142,10 @@ class AiController {
       if (sessionId) {
         const sid = Number(sessionId);
         if (Number.isInteger(sid) && sid > 0) {
-          await aiSessionRepo.updateLatestLandingPageMessage(sid, req.user.id, {
+          await aiSessionRepo.updateLandingPageMessage(sid, req.user.id, {
             title: data.title,
             html: data.html,
-          }).catch((err) => console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message));
+          }, messageId).catch((err) => console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message));
 
           const confirmMsg = contentLocale === 'en'
             ? `I have updated the landing page "${data.title}" according to your request: "${String(instruction).trim()}".`
@@ -1152,7 +1153,7 @@ class AiController {
 
           await aiSessionRepo.saveMessages(sid, req.user.id, String(instruction).trim(), {
             content: confirmMsg,
-            type: 'text',
+            type: 'landing_edit_ack',
           }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save edit chat messages:', err.message));
         }
       }

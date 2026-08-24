@@ -3295,6 +3295,8 @@ export default {
     confirmDeleteSessionMessage: 'Are you sure you want to delete this chat?',
     // Wizards
     wizardDismiss: 'No, I am just asking',
+    missingLandingSourceOrInstruction: 'Missing landing page source or edit instructions.',
+    landingUpdateSuccess: 'Landing page updated successfully!',
     // Quick actions
     quickActions: 'Quick actions',
     createCampaign: 'Create Campaign',
@@ -5675,6 +5677,7 @@ export default {
     applyEdit: 'Apply edit',
     editing: 'Editing...',
     cancelEdit: 'Cancel',
+    updateSuccess: 'Landing page updated successfully!',
   },
 
   // Campaign Run Modals

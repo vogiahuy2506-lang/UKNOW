@@ -3329,6 +3329,8 @@ export default {
     confirmDeleteSessionMessage: 'Bạn có chắc muốn xoá đoạn chat này không?',
     // Wizards
     wizardDismiss: 'Không phải, tôi chỉ hỏi thôi',
+    missingLandingSourceOrInstruction: 'Thiếu mã nguồn trang hoặc yêu cầu chỉnh sửa.',
+    landingUpdateSuccess: 'Đã cập nhật landing page theo yêu cầu!',
     // Quick actions
     quickActions: 'Thao tác nhanh',
     createCampaign: 'Tạo Campaign',
@@ -5714,6 +5716,7 @@ export default {
     applyEdit: 'Áp dụng sửa',
     editing: 'Đang sửa...',
     cancelEdit: 'Hủy',
+    updateSuccess: 'Đã cập nhật landing page theo yêu cầu!',
   },
 
   // Campaign Run Modals

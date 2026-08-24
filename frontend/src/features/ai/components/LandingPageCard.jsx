@@ -12,6 +12,7 @@ import { useI18n } from '../../../i18n';
  */
 const LandingPageCard = ({
   page,
+  messageId = null,
   onSaveToLibrary,
   onGenerateNew,
   onEditWithAi,
@@ -58,15 +59,17 @@ const LandingPageCard = ({
     setShowFullscreen(true);
   };
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(fullHtml);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
+  const handleCopy = () => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(fullHtml).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } else {
       const textarea = document.createElement('textarea');
       textarea.value = fullHtml;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-999999px';
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand('copy');
@@ -96,9 +99,11 @@ const LandingPageCard = ({
     setIsSubmittingLocal(true);
     try {
       if (onEditWithAi) {
-        await onEditWithAi(page, text, messageIndex);
-        setShowEditBox(false);
-        setEditInstruction('');
+        const success = await onEditWithAi(page, text, messageIndex, { messageId });
+        if (success) {
+          setShowEditBox(false);
+          setEditInstruction('');
+        }
       }
     } finally {
       setIsSubmittingLocal(false);

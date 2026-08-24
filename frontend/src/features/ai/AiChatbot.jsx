@@ -40,6 +40,11 @@ import {
   buildLandingBriefFromAnswers,
 } from './utils/landingBrief.js';
 import { buildCampaignBriefMarker } from './utils/campaignBrief.js';
+import {
+  IS_NEW_LANDING_REQ_RE,
+  getLastLandingPageMessageIndex,
+  isRecentLandingPageContext,
+} from './utils/landingEditContext.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -47,8 +52,6 @@ const PLAN_APPROVE_REGEX =
   /^\s*(đồng ý|dong y|duyệt|duyet|ok|okay|oke|tạo đi|tao di|tạo luôn|tao luon|chốt|chot|yes|approve|go)\s*$/i;
 const PLAN_CANCEL_REGEX =
   /^\s*(huỷ|hủy|huy|cancel|dừng|dung|thôi|thoi|stop)\s*$/i;
-const IS_NEW_LANDING_REQ_RE =
-  /^(?:tạo|làm|sinh|viết|thiết kế|build|generate|create|make)\s+(?:lại\s+)?(?:landing\s*page|trang\s*landing|trang\s*đích|trang\s*mới|trang\s*khác)|(?:tạo|làm|thiết kế)\s+mới|tạo\s+lại|làm\s+lại/i;
 
 const normalizeChannel = (channel) => {
   const lower = String(channel || '').trim().toLowerCase();
@@ -1926,7 +1929,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
 
     // Tự động điều hướng sang luồng sửa landing page nếu ngữ cảnh gần nhất là landing page
-    const recentLanding = isRecentLandingPageContext();
+    const recentLanding = isRecentLandingPageContext(messages);
     if (
       trimmedInput
       && uploadedFiles.length === 0
@@ -1936,9 +1939,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     ) {
       isSendingRef.current = true;
       setInputText('');
-      setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
+      const baseWithUser = [...messages, { role: 'user', content: trimmedInput }];
+      setMessages(baseWithUser);
       try {
-        await handleEditLandingPageWithAi(recentLanding.message.data, trimmedInput, recentLanding.index);
+        await handleEditLandingPageWithAi(recentLanding.message.data, trimmedInput, recentLanding.index, { historyBase: baseWithUser });
       } finally {
         isSendingRef.current = false;
       }
@@ -2778,55 +2782,25 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }]);
   };
 
-  const handleUpdateLandingPage = (updatedData, messageIndex) => {
-    setMessages((prev) => prev.map((msg, i) => {
-      if (i === messageIndex) {
-        return {
-          ...msg,
-          data: {
-            ...msg.data,
-            ...updatedData,
-          },
-        };
-      }
-      return msg;
-    }));
-  };
-
-  const getLastLandingPageMessage = (msgList = messages) => {
-    for (let i = msgList.length - 1; i >= 0; i -= 1) {
-      if (msgList[i]?.type === 'landing_page' && msgList[i]?.data?.html) {
-        return { index: i, message: msgList[i] };
-      }
-    }
-    return null;
-  };
-
-  const getLastLandingPageMessageIndex = () => {
-    const res = getLastLandingPageMessage();
-    return res ? res.index : -1;
-  };
-
-  const isRecentLandingPageContext = (msgList = messages) => {
-    for (let i = msgList.length - 1; i >= Math.max(0, msgList.length - 4); i -= 1) {
-      if (msgList[i]?.role === 'assistant' && msgList[i]?.type === 'landing_page' && msgList[i]?.data?.html) {
-        return { index: i, message: msgList[i] };
-      }
-    }
-    return null;
-  };
-
-  const handleEditLandingPageWithAi = async (pageData, instruction, messageIndex = null) => {
+  const handleEditLandingPageWithAi = async (pageData, instruction, messageIndex = null, options = {}) => {
+    const { historyBase = null, messageId = null } = options;
     const rawHtml = pageData?.html;
     const trimmedInstr = String(instruction || '').trim();
     if (!rawHtml || !trimmedInstr) {
-      toast.error(t('aiChatbot.missingLandingSourceOrInstruction') || 'Thiếu mã nguồn trang hoặc yêu cầu chỉnh sửa.');
-      return;
+      toast.error(t('aiChatbot.missingLandingSourceOrInstruction'));
+      return false;
     }
+
+    const mySessionId = currentSessionId;
+    const baseMessages = historyBase ?? messages;
+    const update = makeUpdater(mySessionId, [...baseMessages]);
+    if (mySessionId) markTabPending(mySessionId);
 
     const targetIndex = messageIndex != null
       ? messageIndex
-      : getLastLandingPageMessageIndex();
+      : getLastLandingPageMessageIndex(baseMessages);
+
+    const targetMessageId = messageId || (targetIndex != null && targetIndex >= 0 ? baseMessages[targetIndex]?.id : null) || null;
 
     setEditingLandingPageIndex(targetIndex);
     setIsTyping(true);
@@ -2836,6 +2810,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         instruction: trimmedInstr,
         currentHtml: rawHtml,
         locale,
+        sessionId: mySessionId,
+        messageId: targetMessageId,
       });
 
       if (response?.success && response?.data) {
@@ -2847,18 +2823,32 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           html,
         };
 
-        if (targetIndex != null && targetIndex >= 0) {
-          handleUpdateLandingPage(updatedPage, targetIndex);
-        }
+        const confirmMsg = locale === 'en'
+          ? `I have updated the landing page "${title || pageData.title}" according to your request: "${trimmedInstr}". Check the preview above!`
+          : `Mình đã cập nhật landing page "${title || pageData.title}" theo yêu cầu: "${trimmedInstr}". Bạn xem lại giao diện bên trên nhé!`;
 
-        toast.success(t('landingPageCard.updateSuccess') || 'Đã cập nhật landing page theo yêu cầu!');
+        update((prev) => {
+          const next = prev.map((msg, i) => {
+            if (i === targetIndex) {
+              return {
+                ...msg,
+                data: {
+                  ...msg.data,
+                  ...updatedPage,
+                },
+              };
+            }
+            return msg;
+          });
+          return [...next, {
+            role: 'assistant',
+            content: confirmMsg,
+            type: 'landing_edit_ack',
+          }];
+        });
 
-        setMessages((prev) => [...prev, {
-          role: 'assistant',
-          content: locale === 'en'
-            ? `I have updated the landing page "${title || pageData.title}" according to your request: "${trimmedInstr}". Check the preview above!`
-            : `Mình đã cập nhật landing page "${title || pageData.title}" theo yêu cầu: "${trimmedInstr}". Bạn xem lại giao diện bên trên nhé!`,
-        }]);
+        toast.success(t('aiChatbot.landingUpdateSuccess'));
+        return true;
       } else {
         throw new Error(response?.message || 'Không nhận được kết quả chỉnh sửa từ AI');
       }
@@ -2866,13 +2856,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       console.error('Error editing landing page with AI:', err);
       const errMsg = getAiRequestErrorMessage(err);
       toast.error(errMsg, { duration: 5000 });
-      setMessages((prev) => [...prev, {
+      update((prev) => [...prev, {
         role: 'assistant',
         content: `⚠️ Có lỗi khi chỉnh sửa landing page: ${errMsg}`,
+        type: 'error',
       }]);
+      return false;
     } finally {
       setIsTyping(false);
       setEditingLandingPageIndex(null);
+      if (mySessionId) clearTabPending(mySessionId);
     }
   };
 
@@ -3644,6 +3637,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {msg.type === 'landing_page' && msg.data && (
                 <LandingPageCard
                   page={msg.data}
+                  messageId={msg.id}
                   messageIndex={idx}
                   onSaveToLibrary={handleSaveLandingPage}
                   onGenerateNew={handleGenerateNewLandingPage}
