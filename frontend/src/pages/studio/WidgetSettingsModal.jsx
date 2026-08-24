@@ -117,7 +117,13 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
   const [activeTab, setActiveTab] = useState(embedKind || 'script');
   const [saving, setSaving] = useState(false);
 
-  const [script, setScript] = useState({
+  // ── Shared widget config (saved to custom_chatbots columns) ────────────
+  // All 3 embed types (script / iframe / public link) share the same logo,
+  // colors, avatar toggle, border radius, and launcher label. Settings like
+  // position, auto_open, and show_header are embed-specific and live here
+  // so they can be persisted; settings that have no DB column (size, theme)
+  // stay in their respective local states only (read-only preview helpers).
+  const [cfg, setCfg] = useState({
     primary_color: '#ee7518',
     background_color: '#ffffff',
     text_color: '#1f2937',
@@ -125,144 +131,78 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     position: 'bottom-right',
     logo_url: '',
     show_avatar: true,
+    show_header: true,        // used by iframe & public_link
     welcome_message: '',
-    auto_open: false,
-    launcher_label: 'Chat với chúng tôi',
+    auto_open: false,         // used by script
+    launcher_label: 'Chat với chúng tôi', // used by script
     border_radius: 16,
+    show_suggested: true,     // used by public_link
+    require_name: false,      // used by public_link
   });
 
-  const [iframe, setIframe] = useState({
-    primary_color: '#ee7518',
-    background_color: '#ffffff',
-    text_color: '#1f2937',
-    accent_color: '#f19342',
-    theme: 'light',
-    size: 'medium',
-    show_header: true,
-    show_avatar: true,
-    border_radius: 12,
-  });
-
-  const [publicLink, setPublicLink] = useState({
-    primary_color: '#ee7518',
-    background_color: '#ffffff',
-    text_color: '#1f2937',
-    accent_color: '#f19342',
-    theme: 'light',
-    size: 'medium',
-    show_header: true,
-    show_avatar: true,
-    border_radius: 12,
-    show_suggested: true,
-    require_name: false,
-  });
+  // ── iFrame / public_link only fields (no DB column — read-only preview) ─
+  const [embedSize, setEmbedSize] = useState('medium');
+  const [embedTheme, setEmbedTheme] = useState('light');
 
   useEffect(() => {
     if (open && chatbot) {
       if (embedKind) setActiveTab(embedKind);
-      // The custom_chatbots table stores ONE shared logo (logo_url / avatar_url);
-      // all 3 embed types (script / iframe / public link) read from it. Earlier
-      // versions stored per-embed logo_url in iframe_settings / public_link_settings
-      // but the backend repository did not persist those fields, so the UI silently
-      // dropped the value on reload. We now expose the same logo to all three tabs.
       const sharedLogo = chatbot.logo_url || chatbot.avatar_url || '';
       const ws = chatbot.widget_settings || {};
-      setScript((s) => ({
-        ...s,
-        primary_color: ws.primary_color || s.primary_color,
-        background_color: ws.background_color || s.background_color,
-        text_color: ws.text_color || s.text_color,
-        accent_color: ws.accent_color || s.accent_color,
-        position: ws.position || s.position,
+      setCfg({
+        primary_color: ws.primary_color || chatbot.primary_color || '#ee7518',
+        background_color: ws.background_color || chatbot.background_color || '#ffffff',
+        text_color: ws.text_color || chatbot.text_color || '#1f2937',
+        accent_color: ws.accent_color || chatbot.accent_color || '#f19342',
+        position: ws.position || chatbot.position || 'bottom-right',
         logo_url: ws.logo_url || sharedLogo,
-        show_avatar: ws.show_avatar !== false,
+        show_avatar: ws.show_avatar !== false && chatbot.show_avatar !== false,
+        show_header: ws.show_header !== false,
         welcome_message: ws.welcome_message || chatbot.welcome_message || '',
-        launcher_label: ws.launcher_label || s.launcher_label,
-        border_radius: ws.border_radius || 16,
         auto_open: ws.auto_open === true,
-      }));
-      const iw = chatbot.iframe_settings || {};
-      setIframe((s) => ({
-        ...s,
-        primary_color: iw.primary_color || ws.primary_color || s.primary_color,
-        accent_color: iw.accent_color || ws.accent_color || s.accent_color,
-        background_color: iw.background_color || ws.background_color || s.background_color,
-        text_color: iw.text_color || ws.text_color || s.text_color,
-        theme: iw.theme || 'light',
-        size: iw.size || 'medium',
-        show_header: iw.show_header !== false,
-        show_avatar: iw.show_avatar !== false,
-        border_radius: iw.border_radius ?? 12,
-      }));
-      const pw = chatbot.public_link_settings || {};
-      setPublicLink((s) => ({
-        ...s,
-        primary_color: pw.primary_color || ws.primary_color || s.primary_color,
-        accent_color: pw.accent_color || ws.accent_color || s.accent_color,
-        background_color: pw.background_color || ws.background_color || s.background_color,
-        text_color: pw.text_color || ws.text_color || s.text_color,
-        theme: pw.theme || 'light',
-        size: pw.size || 'medium',
-        show_header: pw.show_header !== false,
-        show_avatar: pw.show_avatar !== false,
-        border_radius: pw.border_radius ?? 12,
-        show_suggested: pw.show_suggested !== false,
-        require_name: pw.require_name === true,
-      }));
+        launcher_label: ws.launcher_label || 'Chat với chúng tôi',
+        border_radius: ws.border_radius ?? chatbot.border_radius ?? 16,
+        show_suggested: ws.show_suggested !== false,
+        require_name: ws.require_name === true,
+      });
+      setEmbedSize(ws.size || 'medium');
+      setEmbedTheme(ws.theme || 'light');
     }
   }, [open, chatbot, embedKind]);
 
   if (!open || !chatbot) return null;
 
-  const updateScript = (patch) => setScript((p) => ({ ...p, ...patch }));
-  const updateIframe = (patch) => setIframe((p) => ({ ...p, ...patch }));
-  const updatePublic = (patch) => setPublicLink((p) => ({ ...p, ...patch }));
-
-  const applyPresetScript = (p) => updateScript({
-    primary_color: p.primary,
-    accent_color: p.accent,
-    background_color: p.bg,
-    text_color: p.text,
-  });
-
-  const applyIframeTheme = (theme) => updateIframe({
-    theme: theme.key,
-    primary_color: theme.primary,
-    accent_color: theme.accent,
-    background_color: theme.bg,
-    text_color: theme.text,
-  });
-
-  const applyPublicTheme = (theme) => updatePublic({
-    theme: theme.key,
-    primary_color: theme.primary,
-    accent_color: theme.accent,
-    background_color: theme.bg,
-    text_color: theme.text,
-  });
+  const update = (patch) => setCfg((p) => ({ ...p, ...patch }));
+  const applyPreset = (p) => update({ primary_color: p.primary, accent_color: p.accent, background_color: p.bg, text_color: p.text });
+  const applyTheme = (t) => { setEmbedTheme(t.key); update({ primary_color: t.primary, accent_color: t.accent, background_color: t.bg, text_color: t.text }); };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       const payload = {
-        // Script widget settings
-        primary_color: script.primary_color,
-        background_color: script.background_color,
-        text_color: script.text_color,
-        accent_color: script.accent_color,
-        position: script.position,
-        logo_url: script.logo_url,
-        show_avatar: script.show_avatar,
-        welcome_message: script.welcome_message,
-        launcher_label: script.launcher_label,
-        border_radius: script.border_radius,
-        auto_open: script.auto_open,
+        primary_color: cfg.primary_color,
+        background_color: cfg.background_color,
+        text_color: cfg.text_color,
+        accent_color: cfg.accent_color,
+        position: cfg.position,
+        logo_url: cfg.logo_url,
+        show_avatar: cfg.show_avatar,
+        show_header: cfg.show_header,
+        welcome_message: cfg.welcome_message,
+        launcher_label: cfg.launcher_label,
+        border_radius: cfg.border_radius,
+        auto_open: cfg.auto_open,
         chat_height: '600px',
         widget_key: chatbot.widget_key,
-        // iFrame settings
-        iframe_settings: iframe,
-        // Public link settings
-        public_link_settings: publicLink,
+        suggested_questions: [],
+        // Persist size + theme even though the UI only uses them as preview hints
+        // (avoids a second silent round-trip on next open)
+        size: embedSize,
+        theme: embedTheme,
+        show_suggested: cfg.show_suggested,
+        require_name: cfg.require_name,
+        // Remove dead fields: iframe_settings and public_link_settings had no
+        // DB column so backend silently dropped them. All UI now shares cfg.
       };
       const res = await chatbotApi.updateChatbot(chatbot.id, payload);
       if (res.success && res.data) {
@@ -280,7 +220,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     }
   };
 
-  const gradientStyle = `linear-gradient(135deg, ${script.primary_color}, ${script.accent_color})`;
+  const gradientStyle = `linear-gradient(135deg, ${cfg.primary_color}, ${cfg.accent_color})`;
   const activeTabMeta = TABS.find((t) => t.id === activeTab);
 
   return (
@@ -350,19 +290,19 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               })}
             </div>
 
-            {/* Live preview chip */}
+            {/* Live preview — uses cfg so all tabs show the same saved colors */}
             <div className="mt-5 px-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
                 Preview
               </p>
               {activeTab === 'script' && (
-                <ScriptPreview cfg={script} chatbot={chatbot} />
+                <ScriptPreview cfg={cfg} chatbot={chatbot} />
               )}
               {activeTab === 'iframe' && (
-                <IframePreview cfg={{ ...iframe, logo_url: script.logo_url }} chatbot={chatbot} />
+                <IframePreview cfg={{ ...cfg, size: embedSize }} chatbot={chatbot} />
               )}
               {activeTab === 'public_link' && (
-                <PublicLinkPreview cfg={{ ...publicLink, logo_url: script.logo_url }} chatbot={chatbot} />
+                <PublicLinkPreview cfg={{ ...cfg, size: embedSize }} chatbot={chatbot} />
               )}
             </div>
           </nav>
@@ -375,29 +315,59 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 <h3 className="text-base font-semibold text-slate-900">{activeTabMeta.label}</h3>
               </div>
 
+              {/* ── Common to all tabs: color palette + logo + border radius ── */}
+              {/* Presets */}
+              <section className="bg-white rounded-xl border border-slate-200 p-5">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">Bảng màu nhanh</h4>
+                <PresetRow
+                  presets={COLOR_PRESETS}
+                  currentValues={cfg}
+                  onApply={applyPreset}
+                />
+              </section>
+
+              {/* Color palette */}
+              <section className="bg-white rounded-xl border border-slate-200 p-5">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">Màu sắc</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <ColorRow label="Màu chính" value={cfg.primary_color} onChange={(v) => update({ primary_color: v })} />
+                  <ColorRow label="Màu nhấn" value={cfg.accent_color} onChange={(v) => update({ accent_color: v })} />
+                  <ColorRow label="Màu nền" value={cfg.background_color} onChange={(v) => update({ background_color: v })} />
+                  <ColorRow label="Màu chữ" value={cfg.text_color} onChange={(v) => update({ text_color: v })} />
+                </div>
+              </section>
+
+              {/* Logo URL — shared across all embed types */}
+              <section className="bg-white rounded-xl border border-slate-200 p-5">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
+                <ImageUrlInput
+                  value={cfg.logo_url}
+                  onChange={(url) => update({ logo_url: url || '' })}
+                  label=""
+                  placeholder="https://example.com/logo.png"
+                  help="Logo dùng chung cho cả 3 kiểu nhúng (script / iframe / public link)."
+                />
+              </section>
+
+              {/* Border radius */}
+              <section className="bg-white rounded-xl border border-slate-200 p-5">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">Bo góc</h4>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={24}
+                    value={cfg.border_radius}
+                    onChange={(e) => update({ border_radius: Number(e.target.value) })}
+                    className="flex-1"
+                  />
+                  <span className="text-sm font-mono text-slate-700 w-12 text-right">{cfg.border_radius}px</span>
+                </div>
+              </section>
+
+              {/* ── Script-only settings ── */}
               {activeTab === 'script' && (
                 <>
-                  {/* Presets */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Bảng màu nhanh</h4>
-                    <PresetRow
-                      presets={COLOR_PRESETS}
-                      currentValues={script}
-                      onApply={applyPresetScript}
-                    />
-                  </section>
-
-                  {/* Color palette */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Màu sắc</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <ColorRow label="Màu chính" value={script.primary_color} onChange={(v) => updateScript({ primary_color: v })} />
-                      <ColorRow label="Màu nhấn" value={script.accent_color} onChange={(v) => updateScript({ accent_color: v })} />
-                      <ColorRow label="Màu nền" value={script.background_color} onChange={(v) => updateScript({ background_color: v })} />
-                      <ColorRow label="Màu chữ" value={script.text_color} onChange={(v) => updateScript({ text_color: v })} />
-                    </div>
-                  </section>
-
                   {/* Position */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <h4 className="text-sm font-semibold text-slate-900 mb-3">Vị trí hiển thị</h4>
@@ -406,9 +376,9 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                         <button
                           key={pos.key}
                           type="button"
-                          onClick={() => updateScript({ position: pos.key })}
+                          onClick={() => update({ position: pos.key })}
                           className={`py-2 text-xs font-medium rounded-lg border transition-colors ${
-                            script.position === pos.key
+                            cfg.position === pos.key
                               ? 'border-primary-500 bg-primary-50 text-primary-700'
                               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
@@ -419,79 +389,52 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                   </section>
 
-                  {/* Border radius */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Bo góc widget</h4>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={0}
-                        max={24}
-                        value={script.border_radius}
-                        onChange={(e) => updateScript({ border_radius: Number(e.target.value) })}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-mono text-slate-700 w-12 text-right">{script.border_radius}px</span>
-                    </div>
-                  </section>
-
                   {/* Launcher label */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <h4 className="text-sm font-semibold text-slate-900 mb-3">Nhãn nút mở chat</h4>
                     <input
                       type="text"
-                      value={script.launcher_label}
-                      onChange={(e) => updateScript({ launcher_label: e.target.value })}
+                      value={cfg.launcher_label}
+                      onChange={(e) => update({ launcher_label: e.target.value })}
                       placeholder="Chat với chúng tôi"
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
                     />
                   </section>
 
-                  {/* Logo URL */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
-                    <ImageUrlInput
-                      value={script.logo_url}
-                      onChange={(url) => updateScript({ logo_url: url || '' })}
-                      label=""
-                      placeholder="https://example.com/logo.png"
-                      help="Logo thay thế avatar mặc định của bot khi nhúng widget."
-                    />
-                  </section>
-
-                  {/* Toggles */}
+                  {/* Script toggles */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Hiển thị Avatar</p>
                         <p className="text-xs text-slate-400">Avatar hiển thị cạnh tin nhắn bot</p>
                       </div>
-                      <Toggle checked={script.show_avatar} onChange={(v) => updateScript({ show_avatar: v })} />
+                      <Toggle checked={cfg.show_avatar} onChange={(v) => update({ show_avatar: v })} />
                     </div>
                     <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Tự động mở chat</p>
                         <p className="text-xs text-slate-400">Mở widget sau 2s khi tải trang</p>
                       </div>
-                      <Toggle checked={script.auto_open} onChange={(v) => updateScript({ auto_open: v })} />
+                      <Toggle checked={cfg.auto_open} onChange={(v) => update({ auto_open: v })} />
                     </div>
                   </section>
                 </>
               )}
 
-              {activeTab === 'iframe' && (
+              {/* ── iFrame + public_link settings ── */}
+              {(activeTab === 'iframe' || activeTab === 'public_link') && (
                 <>
-                  {/* Theme presets */}
+                  {/* Theme presets (iFrame + public_link only) */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <h4 className="text-sm font-semibold text-slate-900 mb-3">Theme</h4>
                     <div className="flex flex-wrap gap-2">
                       {IFRAME_THEMES.map((t) => {
-                        const isActive = iframe.theme === t.key;
+                        const isActive = embedTheme === t.key;
                         return (
                           <button
                             key={t.key}
                             type="button"
-                            onClick={() => applyIframeTheme(t)}
+                            onClick={() => applyTheme(t)}
                             className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
                               isActive
                                 ? 'border-primary-500 bg-primary-50 text-primary-700'
@@ -509,28 +452,17 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                   </section>
 
-                  {/* Color palette */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Màu sắc</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <ColorRow label="Màu chính" value={iframe.primary_color} onChange={(v) => updateIframe({ primary_color: v })} />
-                      <ColorRow label="Màu nhấn" value={iframe.accent_color} onChange={(v) => updateIframe({ accent_color: v })} />
-                      <ColorRow label="Màu nền" value={iframe.background_color} onChange={(v) => updateIframe({ background_color: v })} />
-                      <ColorRow label="Màu chữ" value={iframe.text_color} onChange={(v) => updateIframe({ text_color: v })} />
-                    </div>
-                  </section>
-
                   {/* Size */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Kích thước iframe</h4>
+                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Kích thước</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {SIZES.map((s) => (
                         <button
                           key={s.key}
                           type="button"
-                          onClick={() => updateIframe({ size: s.key })}
+                          onClick={() => setEmbedSize(s.key)}
                           className={`py-2 text-xs font-medium rounded-lg border transition-colors ${
-                            iframe.size === s.key
+                            embedSize === s.key
                               ? 'border-primary-500 bg-primary-50 text-primary-700'
                               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
@@ -540,41 +472,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                         </button>
                       ))}
                     </div>
-                  </section>
-
-                  {/* Border radius */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Bo góc</h4>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={0}
-                        max={24}
-                        value={iframe.border_radius}
-                        onChange={(e) => updateIframe({ border_radius: Number(e.target.value) })}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-mono text-slate-700 w-12 text-right">{iframe.border_radius}px</span>
-                    </div>
-                  </section>
-
-                  {/* Logo URL — shared across script / iframe / public link tabs.
-                      The custom_chatbots table stores a single logo; this input lives
-                      on the Script tab so all three embed types stay in sync. */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
-                    <ImageUrlInput
-                      value={script.logo_url}
-                      onChange={(url) => {
-                        const next = url || '';
-                        updateScript({ logo_url: next });
-                        updateIframe({});
-                        updatePublic({});
-                      }}
-                      label=""
-                      placeholder="https://example.com/logo.png"
-                      help="Logo dùng chung cho cả 3 kiểu nhúng (script / iframe / public link)."
-                    />
                   </section>
 
                   {/* Toggles */}
@@ -584,128 +481,33 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                         <p className="text-sm font-medium text-slate-700">Hiển thị header</p>
                         <p className="text-xs text-slate-400">Tiêu đề + nút đóng</p>
                       </div>
-                      <Toggle checked={iframe.show_header} onChange={(v) => updateIframe({ show_header: v })} />
+                      <Toggle checked={cfg.show_header} onChange={(v) => update({ show_header: v })} />
                     </div>
                     <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Hiển thị Avatar</p>
                         <p className="text-xs text-slate-400">Avatar bên cạnh tin nhắn bot</p>
                       </div>
-                      <Toggle checked={iframe.show_avatar} onChange={(v) => updateIframe({ show_avatar: v })} />
+                      <Toggle checked={cfg.show_avatar} onChange={(v) => update({ show_avatar: v })} />
                     </div>
-                  </section>
-                </>
-              )}
-
-              {activeTab === 'public_link' && (
-                <>
-                  {/* Theme presets */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Theme</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {IFRAME_THEMES.map((t) => {
-                        const isActive = publicLink.theme === t.key;
-                        return (
-                          <button
-                            key={t.key}
-                            type="button"
-                            onClick={() => applyPublicTheme(t)}
-                            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
-                              isActive
-                                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                                : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white'
-                            }`}
-                          >
-                            <span className="flex gap-0.5">
-                              <span className="w-3 h-3 rounded-full border border-white/60" style={{ background: t.primary }} />
-                              <span className="w-3 h-3 rounded-full" style={{ background: t.bg, border: '1px solid rgba(0,0,0,0.1)' }} />
-                            </span>
-                            {t.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  {/* Color palette */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Màu sắc</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <ColorRow label="Màu chính" value={publicLink.primary_color} onChange={(v) => updatePublic({ primary_color: v })} />
-                      <ColorRow label="Màu nhấn" value={publicLink.accent_color} onChange={(v) => updatePublic({ accent_color: v })} />
-                      <ColorRow label="Màu nền" value={publicLink.background_color} onChange={(v) => updatePublic({ background_color: v })} />
-                      <ColorRow label="Màu chữ" value={publicLink.text_color} onChange={(v) => updatePublic({ text_color: v })} />
-                    </div>
-                  </section>
-
-                  {/* Size */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Kích thước khung chat</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      {SIZES.map((s) => (
-                        <button
-                          key={s.key}
-                          type="button"
-                          onClick={() => updatePublic({ size: s.key })}
-                          className={`py-2 text-xs font-medium rounded-lg border transition-colors ${
-                            publicLink.size === s.key
-                              ? 'border-primary-500 bg-primary-50 text-primary-700'
-                              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          {s.label}
-                          <p className="text-[10px] text-slate-400 mt-0.5">{s.w}×{s.h}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* Border radius */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Bo góc</h4>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={0}
-                        max={24}
-                        value={publicLink.border_radius}
-                        onChange={(e) => updatePublic({ border_radius: Number(e.target.value) })}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-mono text-slate-700 w-12 text-right">{publicLink.border_radius}px</span>
-                    </div>
-                  </section>
-
-                  {/* Toggles */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">Hiển thị header</p>
-                        <p className="text-xs text-slate-400">Tiêu đề + mô tả chatbot</p>
-                      </div>
-                      <Toggle checked={publicLink.show_header} onChange={(v) => updatePublic({ show_header: v })} />
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">Hiển thị Avatar</p>
-                        <p className="text-xs text-slate-400">Avatar bên cạnh tin nhắn bot</p>
-                      </div>
-                      <Toggle checked={publicLink.show_avatar} onChange={(v) => updatePublic({ show_avatar: v })} />
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">Câu hỏi gợi ý</p>
-                        <p className="text-xs text-slate-400">Hiện các câu hỏi mẫu khi mở</p>
-                      </div>
-                      <Toggle checked={publicLink.show_suggested} onChange={(v) => updatePublic({ show_suggested: v })} />
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">Yêu cầu nhập tên</p>
-                        <p className="text-xs text-slate-400">Hỏi tên trước khi chat</p>
-                      </div>
-                      <Toggle checked={publicLink.require_name} onChange={(v) => updatePublic({ require_name: v })} />
-                    </div>
+                    {activeTab === 'public_link' && (
+                      <>
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                          <div>
+                            <p className="text-sm font-medium text-slate-700">Câu hỏi gợi ý</p>
+                            <p className="text-xs text-slate-400">Hiện các câu hỏi mẫu khi mở</p>
+                          </div>
+                          <Toggle checked={cfg.show_suggested} onChange={(v) => update({ show_suggested: v })} />
+                        </div>
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                          <div>
+                            <p className="text-sm font-medium text-slate-700">Yêu cầu nhập tên</p>
+                            <p className="text-xs text-slate-400">Hỏi tên trước khi chat</p>
+                          </div>
+                          <Toggle checked={cfg.require_name} onChange={(v) => update({ require_name: v })} />
+                        </div>
+                      </>
+                    )}
                   </section>
                 </>
               )}
