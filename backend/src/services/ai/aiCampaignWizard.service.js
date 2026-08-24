@@ -572,6 +572,10 @@ export function buildCampaignBriefQuestion(courses = [], locale = 'vi', {
     });
   }
   options.push({
+    value: 'attached_file',
+    label: isEnglish ? 'Use attached file (Excel/CSV/PDF)' : 'Dùng dữ liệu từ file đính kèm',
+  });
+  options.push({
     value: 'custom_topic',
     label: isEnglish ? 'Other content (thank-you, notice, …)' : 'Nội dung khác (cảm ơn, thông báo, …)',
   });

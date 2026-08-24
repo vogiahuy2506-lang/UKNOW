@@ -65,6 +65,14 @@ export function buildCampaignBriefMarker(answers = {}) {
     };
   }
 
+  if (contentMode === 'attached_file') {
+    return {
+      gate: 'campaignBrief',
+      contentMode: 'attached_file',
+      productMode: 'attached_file',
+    };
+  }
+
   return null;
 }
 
@@ -93,6 +101,10 @@ export function isCampaignBriefAnswersValid(answers = {}, question = null) {
     return isTopicTextValid(answers.topicText);
   }
 
+  if (contentMode === 'attached_file') {
+    return true;
+  }
+
   return false;
 }
 
@@ -108,7 +120,11 @@ export function buildCampaignBriefSummaryLine(answers = {}, question = null) {
     return `${question?.label || ''} ${course?.label || answers.campaignProduct}`.trim();
   }
   if (contentMode === 'custom_topic') {
-    return `${question?.label || ''} ${String(answers.topicText || '').trim()}`.trim();
+    const topic = String(answers.topicText || '').trim();
+    return `${question?.label || ''} ${opt?.label || contentMode}${topic ? ` — ${topic}` : ''}`.trim();
+  }
+  if (contentMode === 'attached_file') {
+    return `${question?.label || ''} Dùng dữ liệu từ file đính kèm`.trim();
   }
   return `${question?.label || ''} ${opt?.label || contentMode}`.trim();
 }

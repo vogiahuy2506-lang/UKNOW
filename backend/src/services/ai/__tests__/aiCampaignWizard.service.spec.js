@@ -92,7 +92,7 @@ describe('aiCampaignWizard.service', () => {
     expect(gate.gate).toBe('campaignBrief');
     expect(gate.response.data.questions[0].inputType).toBe('campaign_brief');
     expect(gate.response.data.questions[0].options.map((o) => o.value))
-      .toEqual(['single_product', 'multiple_products', 'custom_topic']);
+      .toEqual(['single_product', 'multiple_products', 'attached_file', 'custom_topic']);
   });
 
   it('quick-send sets once schedule + email channel from prompt', () => {
@@ -391,7 +391,7 @@ describe('aiCampaignWizard.service', () => {
   it('buildCampaignBriefQuestion hides multiple_products when <2 courses and supports stale copy', () => {
     const one = buildCampaignBriefQuestion([{ id: 1, name: 'A' }], 'vi');
     expect(one.data.questions[0].options.map((o) => o.value))
-      .toEqual(['single_product', 'custom_topic']);
+      .toEqual(['single_product', 'attached_file', 'custom_topic']);
     expect(one.data.questions[0].courseOptions.at(-1)).toEqual({ value: 'other', label: 'Khác' });
 
     const stale = buildCampaignBriefQuestion([], 'en', {

@@ -904,6 +904,14 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, t }) => {
               {t('aiChatbot.campaignMultipleHint') || 'Sẽ dùng danh sách sản phẩm hiện có trong tài khoản để soạn nội dung.'}
             </p>
           )}
+          {isBriefQuestion(q) && answers.campaignBrief === 'attached_file' && (
+            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
+              <p className="text-xs text-orange-800 leading-relaxed">
+                <span className="font-semibold text-orange-900">Hướng dẫn: </span>
+                Vui lòng đính kèm file (Excel, Word, PDF...) chứa dữ liệu bằng nút Đính kèm ở thanh chat bên dưới trước khi bấm <strong>Tiếp tục</strong>.
+              </p>
+            </div>
+          )}
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (
             <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
               <p className="mb-2 text-xs font-semibold text-orange-800">
