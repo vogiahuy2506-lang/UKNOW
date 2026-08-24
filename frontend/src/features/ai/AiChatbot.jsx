@@ -3238,6 +3238,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   data={msg.data}
                   onSubmit={handleCampaignDetailsSubmit}
                   onDismiss={handleDismissWizardCard}
+                  onAttachClick={() => fileInputRef.current?.click()}
                   t={t}
                 />
               )}

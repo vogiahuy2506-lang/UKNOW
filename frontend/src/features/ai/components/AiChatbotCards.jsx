@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck, HiOutlineQuestionMarkCircle,
-  HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt,
+  HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt, HiOutlinePaperClip,
 } from 'react-icons/hi';
 import api from '../../../services/api';
 import templateLabelApiService from '../../templates/services/templateLabelApi.service';
@@ -652,7 +652,7 @@ export const AskCampaignTypeCard = ({ data, onSelect, onDismiss, t }) => {
 };
 
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
-export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, t }) => {
+export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, onAttachClick, t }) => {
   const [answers, setAnswers] = useState(() => {
     const preferred = data?.preferredContentMode;
     return preferred ? { campaignBrief: preferred } : {};
@@ -905,11 +905,18 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, t }) => {
             </p>
           )}
           {isBriefQuestion(q) && answers.campaignBrief === 'attached_file' && (
-            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
-              <p className="text-xs text-orange-800 leading-relaxed">
-                <span className="font-semibold text-orange-900">Hướng dẫn: </span>
-                Vui lòng đính kèm file (Excel, Word, PDF...) chứa dữ liệu bằng nút Đính kèm ở thanh chat bên dưới trước khi bấm <strong>Tiếp tục</strong>.
+            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-4 flex flex-col items-center justify-center text-center">
+              <p className="text-xs text-orange-800 leading-relaxed mb-3">
+                Bạn có thể bấm nút bên dưới để chọn file (Excel, Word, PDF...) chứa danh sách sản phẩm hoặc nội dung chiến dịch.
               </p>
+              <button
+                type="button"
+                onClick={onAttachClick}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 text-sm font-medium rounded-lg transition-colors border border-orange-300 shadow-sm"
+              >
+                <HiOutlinePaperClip className="w-4 h-4" />
+                Chọn file đính kèm
+              </button>
             </div>
           )}
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (
