@@ -24,6 +24,7 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findProfilePlanByUserIdFallback: jest.fn(),
   findProfilePlanFallback,
   findProfileUsageCounts,
+  findStructuralUsageCounts: jest.fn().mockResolvedValue({}),
   findActiveBillingPeriod: jest.fn().mockResolvedValue('monthly'),
   findRoleAndLimits: jest.fn(),
   findRoleAndLimitsFallback: jest.fn(),
