@@ -42,6 +42,9 @@ async function truncateAll() {
   await db.query('DELETE FROM campaign_connections');
   await db.query('DELETE FROM campaign_nodes');
   await db.query('DELETE FROM campaigns');
+  await db.query('DELETE FROM topup_grants');
+  await db.query('DELETE FROM invoices');
+  await db.query('DELETE FROM orders');
   await db.query('DELETE FROM plans');
   await db.query('DELETE FROM users');
 }
