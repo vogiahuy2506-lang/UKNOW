@@ -76,6 +76,18 @@ const CreateListing = ({ onClose, onSuccess }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const fetchChatbots = useCallback(async () => {
+    setIsLoadingChatbots(true);
+    try {
+      const response = await marketplaceService.getMyChatbots();
+      setChatbots(response.data.data || []);
+    } catch (error) {
+      toast.error(t('createListing.chatbotLoadError'));
+    } finally {
+      setIsLoadingChatbots(false);
+    }
+  }, [t]);
+
   // Fetch chatbots when resource type changes to chatbot
   useEffect(() => {
     if (resourceType === 'chatbot' && chatbots.length === 0) {
@@ -99,18 +111,6 @@ const CreateListing = ({ onClose, onSuccess }) => {
       setIsLoadingCampaigns(false);
     }
   };
-
-  const fetchChatbots = useCallback(async () => {
-    setIsLoadingChatbots(true);
-    try {
-      const response = await marketplaceService.getMyChatbots();
-      setChatbots(response.data.data || []);
-    } catch (error) {
-      toast.error(t('createListing.chatbotLoadError'));
-    } finally {
-      setIsLoadingChatbots(false);
-    }
-  }, [t]);
 
   const validateField = (field, value) => {
     if (field === 'campaignId' && !value && resourceType === 'campaign') return 'Vui lòng chọn chiến dịch';
