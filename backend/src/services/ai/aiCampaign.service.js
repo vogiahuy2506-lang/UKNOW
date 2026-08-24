@@ -1516,7 +1516,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
     if (ownerId) {
       try {
-        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats] =
+        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, landingPages] =
           await Promise.all([
             aiPromptResources.getEmailTemplates(ownerId),
             aiPromptResources.getZaloAccounts(ownerId),
@@ -1524,6 +1524,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             aiPromptResources.getZaloTemplates(ownerId),
             aiPromptResources.getRecommendedCampaignType(ownerId),
             aiPromptResources.getCustomerStats(ownerId),
+            aiPromptResources.getLandingPages(ownerId),
           ]);
 
         // Get node context từ registry
@@ -1559,6 +1560,9 @@ Tài khoản mặc định: ${firstZaloAccountId ?? 'null'}
 ${zaloGroupsList}
 
 ${templateSelectionPrompt}
+
+📄 Landing Pages:
+${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}`).join('\n') : '  (chưa có landing page nào)'}
 `;
       } catch (e) {
         console.warn('[AI V2] Không lấy được resources:', e.message);

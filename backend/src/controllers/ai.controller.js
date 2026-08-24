@@ -1074,14 +1074,14 @@ class AiController {
 
       // Lưu vào session nếu có sessionId (actor, not owner)
       const sid = sessionId ? Number(sessionId) : null;
-      if (sid) {
+      if (sid && data?.title) {
         const userContent = String(userSummary || prompt).trim();
         const assistantMsg = {
           content: `Đã tạo landing page "${data.title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
           type: 'landing_page',
           data: {
             title: data.title,
-            html: data.html,
+            html: data.html || '',
             ...(leadFormDraft ? { leadFormDraft } : {}),
           },
         };
