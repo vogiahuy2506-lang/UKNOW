@@ -494,7 +494,7 @@ export async function tryHandleHelpChat({
   const route = await routeQuestion(question, userId);
 
   if (route === HELP_ROUTE_LABELS.làm_giúp) {
-    return null; // fall through to aiCampaign
+    return { handled: false, route };
   }
 
   if (route === HELP_ROUTE_LABELS.ngoài_phạm_vi) {
@@ -521,7 +521,7 @@ export async function tryHandleHelpChat({
 
   // không_rõ → fall through to AI assistant (clarifies better than a canned reply)
   if (route === HELP_ROUTE_LABELS.không_rõ) {
-    return null;
+    return { handled: false, route };
   }
 
   return answerWithDocs(question, userId, lang);

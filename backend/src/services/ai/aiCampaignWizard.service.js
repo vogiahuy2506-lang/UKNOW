@@ -8,6 +8,7 @@ import {
   isQuickSendRequest,
   inferQuickSendChannel,
   isMultiDaySeriesRequestLocal,
+  pickChannelByExplicitSignal,
 } from '../../utils/campaignQuickSend.util.js';
 
 export {
@@ -83,9 +84,7 @@ const inferChannelFromText = (text = '') => {
   if (/zalo\s*group|zalo\s*nh[oó]m|nh[oó]m\s*zalo|gửi\s*nh[oó]m|gui\s*nhom/.test(normalized)) {
     return 'zalo_group';
   }
-  if (/\bzalo\b|tin nhắn|tin nhan/.test(normalized)) return 'zalo';
-  if (/\bemail\b|gửi mail|gui mail|thư điện tử|thu dien tu/.test(normalized)) return 'email';
-  return null;
+  return pickChannelByExplicitSignal(normalized, /\bemail\b|gửi mail|gui mail|thư điện tử|thu dien tu/);
 };
 
 const inferDataSourceFromText = (text = '') => {
@@ -105,14 +104,38 @@ const inferScheduleFromText = (text = '') => {
   const recurring = normalized.match(/(?:mỗi|moi|every|cách|cach)\s+(\d+)\s*(?:ngày|ngay|day|days)/);
   if (recurring) return { mode: 'recurring', days: Number(recurring[1]) };
 
-  const daysWindow = normalized.match(/(?:trong|for)\s+(\d+)\s*(?:ngày|ngay|day|days)/);
+  // Check slots per day: e.g. "mỗi ngày 2 tin", "2 tin mỗi ngày", "2 tin/ngày", "2 slots/day", "2 messages per day"
+  const slotsMatch = normalized.match(/(?:mỗi|moi|every)\s*ngày\s*(\d+)\s*(?:tin|email|message|slot)s?/i)
+    || normalized.match(/(\d+)\s*(?:tin|email|message|slot)s?\s*(?:mỗi|moi|every)\s*ngày/i)
+    || normalized.match(/(\d+)\s*(?:tin|email|message|slot)s?\s*(?:\/|per)\s*(?:ngày|ngay|day)/i);
+  const slotsPerDay = slotsMatch ? Number(slotsMatch[1]) : undefined;
+
+  // Extract explicit days count if present: e.g. "4 ngày", "trong 3 ngày"
+  const daysMatch = normalized.match(/(?:trong|for|chuỗi|chuoi)?\s*(\d+)\s*(?:ngày|ngay|day|days)/i);
+  const days = daysMatch ? Number(daysMatch[1]) : undefined;
+
+  if (Number.isFinite(slotsPerDay) && slotsPerDay > 0) {
+    return {
+      mode: 'drip',
+      ...(Number.isFinite(days) && days > 0 ? { days } : {}),
+      slotsPerDay,
+    };
+  }
+
+  const daysWindow = normalized.match(/(?:trong|for|chuỗi|chuoi)\s*(\d+)\s*(?:ngày|ngay|day|days)/i);
   if (daysWindow && /(tin|email|message|messages|chuỗi|chuoi|nhiều ngày|nhieu ngay|drip|cách nhau|cach nhau)/.test(normalized)) {
-    return { mode: 'drip', days: Number(daysWindow[1]) };
+    return {
+      mode: 'drip',
+      days: Number(daysWindow[1]),
+    };
   }
 
   const drip = normalized.match(/(\d+)\s*(?:tin nhắn|tin nhan|tin|email|ngày|ngay|message|messages|day|days)/);
   if (drip && /(trong|chuỗi|chuoi|nhiều ngày|nhieu ngay|drip|cách nhau|cach nhau)/.test(normalized)) {
-    return { mode: 'drip', days: Number(drip[1]) };
+    return {
+      mode: 'drip',
+      days: Number(drip[1]),
+    };
   }
 
   if (/một lần|mot lan|1 lần|1 lan|gửi ngay|gui ngay|once/.test(normalized)) return { mode: 'once' };
@@ -125,6 +148,10 @@ const isCampaignRequestText = (text = '') => {
     || isQuickSendRequest(text)
     || isMultiDaySeriesRequestLocal(text);
 };
+
+export const isContentPlanRequestPrompt = (text = '') => (
+  /^(?:Hãy trả về content_plan JSON|Return content_plan JSON only)/i.test(String(text || '').trim())
+);
 
 const isPlanTemplatePrompt = (text = '') => (
   /tạo chi tiết template cho ngày|tao chi tiet template cho ngay/i.test(String(text || ''))
@@ -180,7 +207,18 @@ export function withDeadEndNudge(response, meta = {}, gateAsked = null, locale =
 
 const getAssistantData = (message) => message?.data || null;
 
-export function extractWizardState(history = []) {
+export function extractWizardState(history = [], options = {}) {
+  const {
+    routeSaysActionRequest = false,
+    intent = null,
+    abandonedAtMessageCount = null,
+  } = options || {};
+
+  const rawAbandon = abandonedAtMessageCount;
+  const abandonMark = rawAbandon != null && Number.isFinite(Number(rawAbandon)) && Number(rawAbandon) >= 0
+    ? Number(rawAbandon)
+    : null;
+
   const state = {
     isCampaignFlow: false,
     channel: null,
@@ -202,6 +240,8 @@ export function extractWizardState(history = []) {
     latestIntentIsQuickSend: null,
     // True only when the latest free-text campaign message explicitly set/cleared schedule.
     latestIntentScheduleFresh: false,
+    // Index của tin nhắn gần nhất kích hoạt campaign flow trong history
+    latestCampaignMessageIndex: null,
   };
 
   const recordMarkerGate = (gate) => {
@@ -212,16 +252,23 @@ export function extractWizardState(history = []) {
   let latestFreeTextCampaign = null;
 
   messages.forEach((message, index) => {
+    // Khi session đã bị huỷ ở mốc abandonedAtMessageCount, toàn bộ tin nhắn / marker
+    // trước mốc đó thuộc về chiến dịch đã bỏ → không được dùng để suy ra gates cho phiên mới.
+    if (abandonMark != null && index < abandonMark) return;
+
     const content = message?.content || '';
     const marker = message?.role === 'user' ? parseWizardMarker(content) : null;
+    const isMachinePlanPrompt = isContentPlanRequestPrompt(content)
+      || (index === messages.length - 1 && intent === 'content_plan_request');
 
     if (message?.role === 'user' && isContentPlanRevisionText(content)) {
       state.hasContentPlan = false;
       state.planApproved = false;
     }
 
-    if (message?.role === 'user' && !marker && isCampaignRequestText(content)) {
+    if (message?.role === 'user' && !marker && !isMachinePlanPrompt && isCampaignRequestText(content)) {
       state.isCampaignFlow = true;
+      state.latestCampaignMessageIndex = index;
       latestFreeTextCampaign = content;
       state.channel ||= inferChannelFromText(content);
       if (!state.channel && isQuickSendRequest(content)) {
@@ -257,6 +304,7 @@ export function extractWizardState(history = []) {
 
     if (message?.role === 'assistant' && CAMPAIGN_RESPONSE_TYPES.has(message?.type)) {
       state.isCampaignFlow = true;
+      state.latestCampaignMessageIndex = index;
       const data = getAssistantData(message);
       state.channel ||= normalizeChannel(data?.campaignType || data?.channel || data?.days?.[0]?.channel || data?.days?.[0]?.slots?.[0]?.channel);
       if (message.type === 'content_plan') {
@@ -290,6 +338,7 @@ export function extractWizardState(history = []) {
       return;
     }
     state.isCampaignFlow = true;
+    state.latestCampaignMessageIndex = index;
 
     if (marker.gate === 'channel') {
       state.channel = normalizeChannel(marker.channel || marker.value);
@@ -351,6 +400,23 @@ export function extractWizardState(history = []) {
       state.planApproved = true;
     }
   });
+
+  // Khi bộ định tuyến (router) kết luận người dùng có ý định hành động (làm_giúp),
+  // kích hoạt isCampaignFlow song song với regex từ khoá cũ.
+  if (routeSaysActionRequest) {
+    state.isCampaignFlow = true;
+    state.latestCampaignMessageIndex = Math.max(
+      state.latestCampaignMessageIndex ?? -1,
+      messages.length > 0 ? messages.length - 1 : 0,
+    );
+    const lastUserMsg = messages.slice().reverse().find((m) => m?.role === 'user');
+    const lastContent = lastUserMsg?.content || '';
+    state.channel ||= inferChannelFromText(lastContent);
+    if (!state.channel && isQuickSendRequest(lastContent)) {
+      state.channel ||= inferQuickSendChannel(lastContent);
+    }
+    state.dataSource ||= inferDataSourceFromText(lastContent);
+  }
 
   // After channel switch clears schedule: re-apply once only if LATEST free-text intent is still quick-send.
   if (
@@ -786,6 +852,7 @@ export function createEmptyWizardState() {
       planApproved: false,
       senderOtherRequested: false,
       hasContentPlan: false,
+      abandonedAtMessageCount: null,
     },
     plan: {
       snapshot: null,
@@ -823,6 +890,7 @@ export function normalizeWizardState(raw) {
  * trống (marker đã mất khỏi history, ví dụ session reload); inference chỉ fill gap.
  * Đổi kênh → mọi field downstream chỉ lấy derived, cấm hồi sinh từ persisted.
  * Revision text → reset duyệt kế hoạch, thắng tất cả.
+ * Thoát wizard (abandonedAtMessageCount) → chỉ kích hoạt lại khi có câu yêu cầu mới SAU mốc thoát.
  */
 export function mergeWizardState(persistedGates, derived, { lastUserText = '' } = {}) {
   const p = persistedGates || {};
@@ -831,22 +899,38 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
   const channelMarkerSeen = markerGates.includes('channel');
   const channelSwitched = channelMarkerSeen && p.channel != null && d.channel !== p.channel;
 
+  const rawAbandon = p.abandonedAtMessageCount;
+  const hasAbandonMark = rawAbandon != null && Number.isFinite(Number(rawAbandon)) && Number(rawAbandon) >= 0;
+  const abandonedMark = hasAbandonMark ? Number(rawAbandon) : null;
+  const isReactivated = hasAbandonMark
+    && Number.isFinite(d.latestCampaignMessageIndex)
+    && d.latestCampaignMessageIndex >= abandonedMark;
+
+  const isCampaignFlow = hasAbandonMark
+    ? Boolean(isReactivated && d.isCampaignFlow)
+    : Boolean(d.isCampaignFlow || p.isCampaignFlow);
+
   const pick = (gateName, derivedValue, persistedValue, persistedUsable = (v) => v != null) => {
     if (markerGates.includes(gateName)) return derivedValue;
     if (channelSwitched) return derivedValue;
+    if (hasAbandonMark) return derivedValue;
     return persistedUsable(persistedValue) ? persistedValue : derivedValue;
   };
 
   const merged = {
-    isCampaignFlow: Boolean(d.isCampaignFlow || p.isCampaignFlow),
-    channel: channelMarkerSeen ? (d.channel ?? null) : (p.channel ?? d.channel ?? null),
+    isCampaignFlow,
+    channel: channelMarkerSeen
+      ? (d.channel ?? null)
+      : (hasAbandonMark ? (d.channel ?? null) : (p.channel ?? d.channel ?? null)),
     senderAccountId: pick('senderAccount', d.senderAccountId ?? null, p.senderAccountId),
     senderAccountName: pick('senderAccount', d.senderAccountName ?? null, p.senderAccountName),
-    senderOtherRequested: (markerGates.includes('senderAccount') || channelSwitched)
+    senderOtherRequested: (markerGates.includes('senderAccount') || channelSwitched || hasAbandonMark)
       ? Boolean(d.senderOtherRequested)
       : Boolean(p.senderOtherRequested || d.senderOtherRequested),
     dataSource: pick('dataSource', d.dataSource ?? null, p.dataSource),
-    sheetUrl: channelSwitched ? (d.sheetUrl ?? null) : (d.sheetUrl ?? p.sheetUrl ?? null),
+    sheetUrl: (channelSwitched || hasAbandonMark)
+      ? (d.sheetUrl ?? null)
+      : (d.sheetUrl ?? p.sheetUrl ?? null),
     zaloGroupIds: pick(
       'zaloGroups',
       Array.isArray(d.zaloGroupIds) ? d.zaloGroupIds : [],
@@ -855,13 +939,18 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
     ),
     // Latest free-text intent schedule beats sticky persisted only when that intent set schedule.
     schedule: (() => {
-      if (markerGates.includes('schedule') || channelSwitched) return d.schedule ?? null;
+      if (markerGates.includes('schedule') || channelSwitched || hasAbandonMark) return d.schedule ?? null;
       if (d.latestIntentScheduleFresh) return d.schedule ?? null;
       if (d.latestIntentIsQuickSend === true) return d.schedule ?? { mode: 'once' };
       return (p.schedule != null) ? p.schedule : (d.schedule ?? null);
     })(),
-    hasContentPlan: channelSwitched ? Boolean(d.hasContentPlan) : Boolean(d.hasContentPlan || p.hasContentPlan),
-    planApproved: channelSwitched ? Boolean(d.planApproved) : Boolean(d.planApproved || p.planApproved),
+    hasContentPlan: (channelSwitched || hasAbandonMark)
+      ? Boolean(d.hasContentPlan)
+      : Boolean(d.hasContentPlan || p.hasContentPlan),
+    planApproved: (channelSwitched || hasAbandonMark)
+      ? Boolean(d.planApproved)
+      : Boolean(d.planApproved || p.planApproved),
+    abandonedAtMessageCount: (hasAbandonMark && !isReactivated) ? abandonedMark : null,
   };
 
   if (isContentPlanRevisionText(lastUserText)) {
@@ -908,6 +997,7 @@ export const WIZARD_STATE_ACTIONS = [
   'record_template_saved',
   'reset_plan',
   'mark_campaign_created',
+  'abandon_campaign_flow',
 ];
 
 const invalidAction = (message) => {
@@ -1002,6 +1092,18 @@ export function applyWizardStateAction(state, action, payload = {}) {
       next.plan = createEmptyWizardState().plan;
       next.gates.planApproved = false;
       next.gates.hasContentPlan = false;
+      return { state: next, changed: true };
+    }
+    case 'abandon_campaign_flow': {
+      const messageCount = Number(payload?.messageCount ?? 0);
+      next.gates = {
+        ...createEmptyWizardState().gates,
+        abandonedAtMessageCount: Number.isFinite(messageCount) && messageCount >= 0 ? messageCount : 0,
+      };
+      next.plan = createEmptyWizardState().plan;
+      next.meta.lastGate = null;
+      next.meta.lastGateCount = 0;
+      next.meta.deadEndLoggedAt = null;
       return { state: next, changed: true };
     }
     case 'mark_campaign_created': {

@@ -41,6 +41,30 @@ describe('campaignQuickSend.util', () => {
       expect(inferQuickSendChannel('Quick send one zalo message')).toBe('zalo');
       expect(inferQuickSendChannel('Gửi nhanh tin nhóm zalo')).toBe('zalo_group');
     });
+
+    /**
+     * Lỗi thật ngày 24/08/2026: người dùng gõ câu dưới đây, trợ lý trả lời
+     * "Bạn chọn tài khoản Zalo sẽ dùng để gửi chiến dịch này nhé" kèm danh sách
+     * tài khoản Zalo. Nguyên nhân: `tin nhắn` nằm chung nhánh với `zalo` và
+     * nhánh đó chạy TRƯỚC nhánh email.
+     */
+    it('"tin nhắn đến email X" là EMAIL, không phải Zalo', () => {
+      expect(
+        inferQuickSendChannel('gửi nhanh cho tôi tin nhắn đến email mtruong909@gmail.com')
+      ).toBe('email');
+    });
+
+    it('chỉ cần địa chỉ email trong câu cũng đủ suy ra kênh email', () => {
+      expect(inferQuickSendChannel('gửi nhanh tin nhắn cho mtruong909@gmail.com')).toBe('email');
+    });
+
+    it('"tin nhắn" đứng một mình vẫn là Zalo như cũ', () => {
+      expect(inferQuickSendChannel('gửi nhanh 1 tin nhắn cảm ơn')).toBe('zalo');
+    });
+
+    it('nhắc Zalo tường minh thì vẫn là Zalo dù câu có chữ email', () => {
+      expect(inferQuickSendChannel('gửi zalo cho khách chưa có email')).toBe('zalo');
+    });
   });
 
   describe('inferCampaignBriefFromText', () => {

@@ -60,16 +60,16 @@ describe('tryHandleHelpChat route branches', () => {
     return [{ role: 'user', content: text }];
   }
 
-  it('làm_giúp → null (lọt xuống AI)', async () => {
+  it('làm_giúp → { handled: false, route } (lọt xuống AI)', async () => {
     mockGenerate.mockResolvedValue({ text: 'làm_giúp', modelName: 'm', raw: {} });
     await expect(tryHandleHelpChat({ history: historyWith('tạo chiến dịch'), userId: 1 }))
-      .resolves.toBeNull();
+      .resolves.toEqual({ handled: false, route: HELP_ROUTE_LABELS.làm_giúp });
   });
 
-  it('không_rõ → null (thả xuống AI, không CLARIFY cứng)', async () => {
+  it('không_rõ → { handled: false, route } (thả xuống AI, không CLARIFY cứng)', async () => {
     mockGenerate.mockResolvedValue({ text: 'không_rõ', modelName: 'm', raw: {} });
     await expect(tryHandleHelpChat({ history: historyWith('Zalo'), userId: 1 }))
-      .resolves.toBeNull();
+      .resolves.toEqual({ handled: false, route: HELP_ROUTE_LABELS.không_rõ });
   });
 
   it.each([
@@ -141,7 +141,7 @@ describe('tryHandleHelpChat route branches', () => {
     await expect(tryHandleHelpChat({
       history: historyWith('Write an email about our pricing plans'),
       userId: 1,
-    })).resolves.toBeNull();
+    })).resolves.toEqual({ handled: false, route: HELP_ROUTE_LABELS.làm_giúp });
     expect(mockAnswerPlanAdvice).not.toHaveBeenCalled();
   });
 
@@ -150,7 +150,7 @@ describe('tryHandleHelpChat route branches', () => {
     await expect(tryHandleHelpChat({
       history: historyWith('Create a campaign plan'),
       userId: 1,
-    })).resolves.toBeNull();
+    })).resolves.toEqual({ handled: false, route: HELP_ROUTE_LABELS.làm_giúp });
     expect(mockAnswerPlanAdvice).not.toHaveBeenCalled();
   });
 
@@ -212,7 +212,7 @@ describe('tryHandleHelpChat route branches', () => {
     await expect(tryHandleHelpChat({
       history: historyWith('hãy tạo landing page cho khóa học'),
       userId: 1,
-    })).resolves.toBeNull();
+    })).resolves.toEqual({ handled: false, route: HELP_ROUTE_LABELS.làm_giúp });
 
     expect(mockGenerate).toHaveBeenCalledTimes(1);
   });

@@ -600,7 +600,7 @@ export const AskMoreCard = ({ missingFields, t }) => (
 );
 
 // Ask campaign type card - hỏi user chọn kênh
-export const AskCampaignTypeCard = ({ data, onSelect, t }) => {
+export const AskCampaignTypeCard = ({ data, onSelect, onDismiss, t }) => {
   if (!data?.campaignOptions) return null;
 
   return (
@@ -638,12 +638,21 @@ export const AskCampaignTypeCard = ({ data, onSelect, t }) => {
           </button>
         ))}
       </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+        </button>
+      )}
     </div>
   );
 };
 
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
-export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
+export const AskCampaignDetailsCard = ({ data, onSubmit, onDismiss, t }) => {
   const [answers, setAnswers] = useState(() => {
     const preferred = data?.preferredContentMode;
     return preferred ? { campaignBrief: preferred } : {};
@@ -987,6 +996,15 @@ export const AskCampaignDetailsCard = ({ data, onSubmit, t }) => {
       >
         {allAnswered ? `✓ ${submitLabel}` : submitLabel}
       </button>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+        </button>
+      )}
     </div>
   );
 };

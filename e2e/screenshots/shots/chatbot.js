@@ -66,6 +66,19 @@ export default {
   slug: 'chatbot',
   shots: [
     {
+      // Cùng một màn hình với ô "menu-lich-su-tro-chuyen" bên bài inbox, nhưng
+      // câu chú thích khác nên phải là ảnh riêng — khoá chèn bám theo chú thích.
+      name: 'menu-lich-su-tro-chuyen',
+      caption: 'menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục "Lịch sử trò chuyện"',
+      async take(page, { baseURL }) {
+        return sidebarShot(page, {
+          groupName: 'AI Chatbot',
+          itemName: 'Lịch sử trò chuyện',
+          baseURL,
+        });
+      },
+    },
+    {
       name: 'menu-tao-ai-chatbot',
       caption: 'menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục "Tạo AI Chatbot"',
       async take(page, { baseURL }) {

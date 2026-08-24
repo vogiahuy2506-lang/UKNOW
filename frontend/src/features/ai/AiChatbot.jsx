@@ -90,6 +90,8 @@ const WIZARD_ASSISTANT_TYPES = new Set([
   'email_setup_guide',
   'zalo_qr_login',
   'zalo_group_picker',
+  'zalo_friend_picker',
+  'suggest_content_plan',
 ]);
 
 const stripWizardCards = (items = []) => {
@@ -731,7 +733,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'suggest_content_plan', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
 
       const mappedMessages = dbMessages.map((m) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
@@ -1458,6 +1460,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }]);
   };
 
+  const handleDismissWizardCard = () => {
+    enqueueWizardPatch('abandon_campaign_flow', { messageCount: messages.length });
+    setContentPlanWorkflow(null);
+    setPendingCampaignData(null);
+    setPendingCampaignPrompt(null);
+    setMessages((prev) => [...prev, {
+      role: 'assistant',
+      content: locale === 'en'
+        ? 'Understood, stopped. Tell me if you want to create a campaign or send messages later.'
+        : 'Mình hiểu rồi, đã dừng. Khi nào bạn cần tạo chiến dịch hoặc gửi tin thì cứ nói mình nhé.',
+    }]);
+  };
+
   const handlePlanConfirmationByText = async () => {
     if (!contentPlanWorkflow) return;
     if (contentPlanWorkflow.awaitingCampaignConfirm) {
@@ -1814,17 +1829,51 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const trimmedInput = inputText.trim();
     if (!trimmedInput && !uploadedFiles.length) return;
 
-    // Huỷ plan/wizard bằng free-text — trước mọi nhánh chat.
+    // Huỷ plan/wizard bằng free-text — chỉ khi đang trong wizard hoặc có content plan.
+    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
+    const isWaitingOnWizardCard = Boolean(
+      lastAssistantMessage && [
+        'ask_landing_details',
+        'ask_campaign_details',
+        'ask_campaign_type',
+        'ask_audience',
+        'ask_sender_account',
+        'email_setup_guide',
+        'zalo_qr_login',
+        'zalo_group_picker',
+        'zalo_friend_picker',
+        'suggest_content_plan',
+        'content_plan_actions',
+      ].includes(lastAssistantMessage.type)
+    );
+    const hasActiveWizard = Boolean(contentPlanWorkflow || isWaitingOnWizardCard);
+
     if (
       trimmedInput
       && uploadedFiles.length === 0
+      && hasActiveWizard
       && PLAN_CANCEL_REGEX.test(trimmedInput)
-      && contentPlanWorkflow
     ) {
       isSendingRef.current = true;
       setInputText('');
       try {
-        await handleCancelPlanByText();
+        if (contentPlanWorkflow) {
+          await handleCancelPlanByText();
+        } else {
+          enqueueWizardPatch('abandon_campaign_flow', { messageCount: messages.length });
+          setContentPlanWorkflow(null);
+          setPendingCampaignData(null);
+          setPendingCampaignPrompt(null);
+          setMessages((prev) => [...prev, {
+            role: 'user',
+            content: trimmedInput,
+          }, {
+            role: 'assistant',
+            content: locale === 'en'
+              ? 'Stopped. Tell me if you want to create a campaign or send messages later.'
+              : 'Đã dừng. Khi nào bạn muốn tạo chiến dịch hoặc gửi tin thì cứ nói mình nhé.',
+          }]);
+        }
       } finally {
         isSendingRef.current = false;
       }
@@ -3188,6 +3237,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskCampaignDetailsCard
                   data={msg.data}
                   onSubmit={handleCampaignDetailsSubmit}
+                  onDismiss={handleDismissWizardCard}
                   t={t}
                 />
               )}
@@ -3197,6 +3247,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   data={msg.data}
                   onSelect={(account) => handleWizardSenderSelect(account, msg.data.channel)}
                   onOther={() => handleWizardSenderOther(msg.data.channel)}
+                  onDismiss={handleDismissWizardCard}
                   t={t}
                 />
               )}
@@ -3213,6 +3264,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                       data: { channel: 'email', accounts, allowOther: true, noUsableAccount: false },
                     }]);
                   }}
+                  onDismiss={handleDismissWizardCard}
                   t={t}
                 />
               )}
@@ -3222,6 +3274,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   channel={msg.data?.channel || wizardContext.channel || 'zalo'}
                   onConnected={(account, channel) => handleWizardSenderSelect(account, channel, { viaQr: true })}
                   onBackToAccounts={handleWizardZaloBackToAccounts}
+                  onDismiss={handleDismissWizardCard}
                   t={t}
                 />
               )}
@@ -3230,6 +3283,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <ZaloGroupPickerCard
                   data={msg.data}
                   onSubmit={handleWizardGroupsSubmit}
+                  onDismiss={handleDismissWizardCard}
                   t={t}
                 />
               )}
@@ -3238,6 +3292,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <ZaloFriendPickerCard
                   data={msg.data}
                   onSubmit={handleWizardFriendsSubmit}
+                  onDismiss={handleDismissWizardCard}
                   t={t}
                 />
               )}
@@ -3254,6 +3309,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskCampaignTypeCard
                   data={msg.data}
                   onSelect={handleSelectCampaignType}
+                  onDismiss={handleDismissWizardCard}
                   t={t}
                 />
               )}

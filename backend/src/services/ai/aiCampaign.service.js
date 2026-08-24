@@ -531,6 +531,8 @@ D. ZALO NHÓM:
     model = null,
     persistedWizardState = null,
     intent = null,
+    helpRoute = null,
+    routeSaysActionRequest = false,
   }) {
     let contextBlock = '';
     // Tenant resources (courses, templates, profile) belong to workspace owner;
@@ -583,7 +585,11 @@ QUY TẮC:
     // Wizard state: merge bản persist trong DB (sống sót qua reload) với bản derive
     // từ history của request này (marker tường minh luôn thắng).
     const persistedState = normalizeWizardState(persistedWizardState);
-    const derivedState = extractWizardState(history);
+    const derivedState = extractWizardState(history, {
+      routeSaysActionRequest,
+      intent,
+      abandonedAtMessageCount: persistedState.gates?.abandonedAtMessageCount,
+    });
     const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
     const isRevision = isContentPlanRevisionText(lastUserText);
 
@@ -920,6 +926,8 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
 ## NGUYÊN TẮC QUAN TRỌNG NHẤT:
 - HỒ SƠ DOANH NGHIỆP VÀ TÀI NGUYÊN bên dưới được hệ thống TẢI TRỰC TIẾP TỪ DATABASE ngay trước mỗi tin nhắn — luôn phản ánh trạng thái MỚI NHẤT. Khi user nói "tôi vừa thêm sản phẩm", "tôi vừa cập nhật hồ sơ", v.v., hãy XÁC NHẬN bạn thấy thông tin đó trong phần hồ sơ bên dưới. KHÔNG BAO GIỜ nói "tôi không thể đọc thay đổi mới" hoặc "hồ sơ của tôi là thông tin cũ".
 - KHÔNG BAO GIỜ tự bịa thông tin về sản phẩm, doanh nghiệp, tên công ty, giá cả, khuyến mãi.
+- KHÔNG ĐƯỢC khẳng định đã chọn tài khoản gửi, đã tạo, hay đã gửi bất cứ thứ gì trong tin nhắn văn xuôi (type: "text"). Bạn không có công cụ gửi tin trực tiếp từ câu trả lời tự do.
+- Gặp ý định gửi tin/tạo chiến dịch khi chưa qua wizard, hãy mời người dùng vào luồng hoặc hướng dẫn chọn kênh/tạo chiến dịch bằng câu ngắn, KHÔNG tự dựng quy trình bằng văn xuôi hay bịa tên tài khoản cụ thể (ví dụ: "thông qua tài khoản X có sẵn").
 - Nếu có khối CAMPAIGN_BRIEF DATA: đó là nguồn sự thật về sản phẩm/chủ đề đã chọn. Ưu tiên (1) CAMPAIGN_BRIEF DATA → (2) prompt nguyên bản + file đính kèm → (3) hồ sơ doanh nghiệp chỉ cho brand/tone/context, KHÔNG thay selected product/topic.
 - Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng.
 - Nếu người dùng yêu cầu phân tích/tổng hợp thông tin chung hoặc thảo luận không liên quan trực tiếp đến việc tạo chiến dịch/template, hãy trả lời với type: "text" và đưa ra nội dung phân tích/tổng hợp đầy đủ, chi tiết và chuyên nghiệp trong trường "content".
@@ -1715,6 +1723,7 @@ QUY TẮC QUAN TRỌNG:
 3. Delay đặt trong delayValue + delayUnit CỦA MỖI STEP trong array
 4. Nếu thiếu thông tin cần thiết → hỏi user trước khi tạo
 5. Luôn điền đầy đủ config, không để null cho các trường bắt buộc
+6. KHÔNG khẳng định đã gửi tin thật hay đã chọn tài khoản ngoài các node config được tạo
 
 Yêu cầu từ user: "${prompt}"
 

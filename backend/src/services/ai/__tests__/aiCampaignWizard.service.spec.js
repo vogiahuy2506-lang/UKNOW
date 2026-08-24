@@ -104,6 +104,14 @@ describe('aiCampaignWizard.service', () => {
     expect(state.schedule).toEqual({ mode: 'once' });
   });
 
+  it('"tin nhắn đến email X" không được rơi vào nhánh Zalo', () => {
+    // Câu thật của người dùng ngày 24/08/2026 — trợ lý từng hỏi chọn tài khoản Zalo.
+    const state = extractWizardState([
+      { role: 'user', content: 'gửi nhanh cho tôi tin nhắn đến email mtruong909@gmail.com' },
+    ]);
+    expect(state.channel).toBe('email');
+  });
+
   it('quick-send restores once schedule after channel switch clears it', () => {
     const state = extractWizardState([
       { role: 'user', content: 'Gửi nhanh 1 email cảm ơn đơn hàng' },
@@ -438,6 +446,182 @@ describe('aiCampaignWizard.service', () => {
     expect(gate.response).toMatchObject({
       type: 'zalo_friend_picker',
       data: { accountId: 15 },
+    });
+  });
+
+  describe('PR-1: abandon_campaign_flow & watermark merge', () => {
+    it('applyWizardStateAction resets all gates and records abandonedAtMessageCount', () => {
+      const initial = normalizeWizardState({
+        v: 1,
+        gates: {
+          isCampaignFlow: true,
+          channel: 'email',
+          senderAccountId: 10,
+          dataSource: 'db',
+          hasContentPlan: true,
+          planApproved: true,
+        },
+        plan: {
+          snapshot: { days: [{ day: 1 }] },
+          savedTemplates: [{ slotId: 'd1-s1', templateId: 99 }],
+        },
+        meta: { lastGate: 'senderAccount', lastGateCount: 2 },
+      });
+
+      const { state, changed } = applyWizardStateAction(initial, 'abandon_campaign_flow', { messageCount: 5 });
+      expect(changed).toBe(true);
+      expect(state.gates.isCampaignFlow).toBe(false);
+      expect(state.gates.channel).toBeNull();
+      expect(state.gates.senderAccountId).toBeNull();
+      expect(state.gates.dataSource).toBeNull();
+      expect(state.gates.abandonedAtMessageCount).toBe(5);
+      expect(state.plan.snapshot).toBeNull();
+      expect(state.plan.savedTemplates).toEqual([]);
+      expect(state.meta.lastGate).toBeNull();
+      expect(state.meta.lastGateCount).toBe(0);
+    });
+
+    it('mergeWizardState blocks reactivation from historical turns prior to abandon watermark', () => {
+      const persistedGates = {
+        isCampaignFlow: false,
+        channel: 'email',
+        senderAccountId: 10,
+        abandonedAtMessageCount: 3,
+      };
+
+      // History has 3 messages (index 0, 1, 2) where index 0 had a campaign request
+      const history = [
+        { role: 'user', content: 'tạo chiến dịch' }, // index 0
+        { role: 'assistant', content: 'Chọn tài khoản' }, // index 1
+        { role: 'user', content: 'thôi' }, // index 2
+      ];
+      const derived = extractWizardState(history);
+      expect(derived.latestCampaignMessageIndex).toBe(0);
+
+      const merged = mergeWizardState(persistedGates, derived, { lastUserText: 'thôi' });
+      expect(merged.isCampaignFlow).toBe(false);
+      expect(merged.channel).toBeNull();
+      expect(merged.senderAccountId).toBeNull();
+      expect(merged.abandonedAtMessageCount).toBe(3);
+    });
+
+    it('mergeWizardState allows reactivation when new campaign intent arrives after abandon watermark', () => {
+      const persistedGates = {
+        isCampaignFlow: false,
+        channel: 'email',
+        senderAccountId: 10,
+        abandonedAtMessageCount: 3,
+      };
+
+      // History now has 5 messages (indexes 0, 1, 2, 3, 4) where index 4 has a new campaign request
+      const history = [
+        { role: 'user', content: 'tạo chiến dịch' }, // index 0
+        { role: 'assistant', content: 'Chọn tài khoản' }, // index 1
+        { role: 'user', content: 'thôi' }, // index 2
+        { role: 'assistant', content: 'Đã dừng.' }, // index 3
+        { role: 'user', content: 'tôi muốn tạo chiến dịch Zalo mới' }, // index 4
+      ];
+      const derived = extractWizardState(history);
+      expect(derived.latestCampaignMessageIndex).toBe(4);
+
+      const merged = mergeWizardState(persistedGates, derived, { lastUserText: 'tôi muốn tạo chiến dịch Zalo mới' });
+      expect(merged.isCampaignFlow).toBe(true);
+      expect(merged.channel).toBe('zalo');
+      expect(merged.abandonedAtMessageCount).toBeNull();
+    });
+
+    it('extractWizardState ignores pre-abandon markers and starts fresh on new generic campaign intent', () => {
+      // History has old campaign turns at 0, 1, 2, 3: channel email, sender 7, dataSource db
+      const history = [
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' }, // 0
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7}\nTK 7' }, // 1
+        { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' }, // 2
+        { role: 'user', content: 'thôi' }, // 3
+        { role: 'assistant', content: 'Đã dừng.' }, // 4 (abandonedAtMessageCount = 4)
+        { role: 'user', content: 'tạo chiến dịch quảng cáo khoá học mới' }, // 5 (new generic intent)
+      ];
+
+      const derived = extractWizardState(history, { abandonedAtMessageCount: 4 });
+      expect(derived.isCampaignFlow).toBe(true);
+      expect(derived.latestCampaignMessageIndex).toBe(5);
+      expect(derived.channel).toBeNull();
+      expect(derived.senderAccountId).toBeNull();
+      expect(derived.dataSource).toBeNull();
+
+      const persistedGates = {
+        isCampaignFlow: false,
+        channel: null,
+        senderAccountId: null,
+        dataSource: null,
+        abandonedAtMessageCount: 4,
+      };
+      const merged = mergeWizardState(persistedGates, derived, { lastUserText: 'tạo chiến dịch quảng cáo khoá học mới' });
+      expect(merged.isCampaignFlow).toBe(true);
+      expect(merged.channel).toBeNull();
+      expect(merged.senderAccountId).toBeNull();
+      expect(merged.dataSource).toBeNull();
+      expect(merged.abandonedAtMessageCount).toBeNull();
+    });
+  });
+
+  describe('PR-3: routeSaysActionRequest router integration', () => {
+    it('activates isCampaignFlow and infers channel when routeSaysActionRequest is true', () => {
+      const history = [
+        { role: 'user', content: 'gửi giúp tôi tin nhắn tới số 0908800216' },
+      ];
+      // Regex might not match standard campaign patterns, but router classifies as làm_giúp
+      const stateWithoutRouter = extractWizardState(history);
+      const stateWithRouter = extractWizardState(history, { routeSaysActionRequest: true });
+
+      expect(stateWithRouter.isCampaignFlow).toBe(true);
+      expect(stateWithRouter.latestCampaignMessageIndex).toBe(0);
+      expect(stateWithRouter.channel).toBe('zalo'); // Inferred from phone number
+    });
+  });
+
+  describe('PR-0: schedule inference & machine plan request loop prevention', () => {
+    it('infers slotsPerDay from natural language text', () => {
+      const state1 = extractWizardState([
+        { role: 'user', content: 'gửi 5 email trong 3 ngày, mỗi ngày 2 tin' },
+      ]);
+      expect(state1.schedule).toEqual({ mode: 'drip', days: 3, slotsPerDay: 2 });
+
+      const state2 = extractWizardState([
+        { role: 'user', content: 'tạo chiến dịch 4 ngày 3 tin mỗi ngày' },
+      ]);
+      expect(state2.schedule).toEqual({ mode: 'drip', days: 4, slotsPerDay: 3 });
+
+      const state3 = extractWizardState([
+        { role: 'user', content: 'chiến dịch email trong 5 ngày, 2 tin/ngày' },
+      ]);
+      expect(state3.schedule).toEqual({ mode: 'drip', days: 5, slotsPerDay: 2 });
+    });
+
+    it('retains schedule and slotsPerDay when machine content_plan_request prompt is sent', () => {
+      const history = [
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":1}\nTK 1' },
+        { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' },
+        { role: 'user', content: '[wizard]{"gate":"schedule","mode":"drip","days":3,"slotsPerDay":2}\n3 ngày, 2 tin/ngày' },
+        { role: 'assistant', type: 'suggest_content_plan', content: 'Gợi ý kế hoạch', data: { userPrompt: 'Kênh gửi: email. Lịch gửi: chuỗi 3 ngày, mỗi ngày 2 tin.' } },
+        { role: 'user', content: 'Hãy trả về content_plan JSON (kế hoạch từng ngày, không viết full nội dung tin) cho:\nKênh gửi: email.\nLịch gửi: chuỗi 3 ngày, mỗi ngày 2 tin.' },
+      ];
+
+      const state = extractWizardState(history, { intent: 'content_plan_request' });
+      expect(state.schedule).toEqual({ mode: 'drip', days: 3, slotsPerDay: 2 });
+    });
+
+    it('isolated guard: keeps slotsPerDay from prior marker even when machine prompt text has no slots', () => {
+      // Prompt text deliberately lacks any "mỗi ngày N tin" mentions, only says "chuỗi 3 ngày"
+      const history = [
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },
+        { role: 'user', content: '[wizard]{"gate":"schedule","mode":"drip","days":3,"slotsPerDay":4}\n3 ngày, 4 tin/ngày' },
+        { role: 'assistant', type: 'suggest_content_plan', content: 'Gợi ý kế hoạch', data: { userPrompt: 'chuỗi 3 ngày' } },
+        { role: 'user', content: 'Hãy trả về content_plan JSON (kế hoạch từng ngày, không viết full nội dung tin) cho: chuỗi 3 ngày' },
+      ];
+
+      const state = extractWizardState(history, { intent: 'content_plan_request' });
+      expect(state.schedule).toEqual({ mode: 'drip', days: 3, slotsPerDay: 4 });
     });
   });
 });

@@ -103,14 +103,44 @@ export function isQuickSendRequest(text = '') {
   return QUICK_SEND_RE.test(raw);
 }
 
+/** Địa chỉ email trong câu — tín hiệu email mạnh ngang chữ "email". */
+const EMAIL_ADDRESS_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+
+/** Từ chung chỉ "tin nhắn", KHÔNG phải dấu hiệu riêng của Zalo. */
+const GENERIC_MESSAGE_RE = /tin nhắn|tin nhan/;
+
+/**
+ * Chọn kênh theo tín hiệu tường minh, ưu tiên tên sản phẩm hơn từ chung.
+ *
+ * Trước 24/08/2026 hai hàm suy luận kênh đều xếp `tin nhắn` chung một nhánh với
+ * `zalo` và đặt nhánh đó TRƯỚC nhánh email. Hệ quả: câu "gửi nhanh cho tôi tin
+ * nhắn đến email abc@gmail.com" bị đọc thành Zalo và trợ lý hỏi chọn tài khoản
+ * Zalo, dù người dùng đã nói rõ email kèm địa chỉ.
+ *
+ * `tin nhắn` trong tiếng Việt chỉ có nghĩa "message", dùng cho cả email lẫn
+ * Zalo — nên nó chỉ được quyết định khi câu không có tín hiệu email nào.
+ *
+ * @param {string} normalized Câu đã lowercase.
+ * @param {RegExp} emailRe Bộ từ khoá email riêng của từng hàm gọi.
+ * @returns {'zalo'|'email'|null}
+ */
+export function pickChannelByExplicitSignal(normalized, emailRe) {
+  const hasZalo = /\bzalo\b/.test(normalized);
+  const hasEmail = emailRe.test(normalized) || EMAIL_ADDRESS_RE.test(normalized);
+
+  // Cả hai đều tường minh ("gửi zalo và email") → giữ nguyên hành vi cũ là Zalo.
+  if (hasZalo) return 'zalo';
+  if (hasEmail) return 'email';
+  if (GENERIC_MESSAGE_RE.test(normalized)) return 'zalo';
+  return null;
+}
+
 export function inferQuickSendChannel(text = '') {
   const normalized = String(text || '').toLowerCase();
   if (/zalo\s*group|zalo\s*nh[oó]m|nh[oó]m\s*zalo|gửi\s*nh[oó]m|gui\s*nhom/.test(normalized)) {
     return 'zalo_group';
   }
-  if (/\bzalo\b|tin nhắn|tin nhan/.test(normalized)) return 'zalo';
-  if (/\bemail\b|gửi mail|gui mail|thư|thu\b|mail\b/.test(normalized)) return 'email';
-  return null;
+  return pickChannelByExplicitSignal(normalized, /\bemail\b|gửi mail|gui mail|thư|thu\b|mail\b/);
 }
 
 function matchExactCatalogNames(sourcePrompt, courses = []) {

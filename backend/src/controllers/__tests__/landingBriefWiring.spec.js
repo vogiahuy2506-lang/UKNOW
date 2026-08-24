@@ -45,6 +45,12 @@ jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
 }));
 jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => ({
   tryHandleHelpChat: jest.fn(async () => null),
+  HELP_ROUTE_LABELS: {
+    hỏi_đáp: 'hỏi_đáp',
+    làm_giúp: 'làm_giúp',
+    không_rõ: 'không_rõ',
+    ngoài_phạm_vi: 'ngoài_phạm_vi',
+  },
 }));
 jest.unstable_mockModule('../campaign.controller.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/campaign/campaignCrud.service.js', () => ({ default: {} }));

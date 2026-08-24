@@ -9,7 +9,7 @@ import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
 import { getAllowedModelsForUser, savePreferredModelForUser } from '../services/ai/aiModelPolicy.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
-import { tryHandleHelpChat } from '../services/help/helpAssistant.service.js';
+import { tryHandleHelpChat, HELP_ROUTE_LABELS } from '../services/help/helpAssistant.service.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import campaignNodeRegistryService from '../services/campaign/campaignNodeRegistry.service.js';
@@ -230,11 +230,14 @@ class AiController {
       let _wizard;
       let publicResponse;
 
-      if (helpResponse) {
+      const isHelpHandled = Boolean(helpResponse && helpResponse.handled !== false && helpResponse.type);
+      if (isHelpHandled) {
         publicResponse = helpResponse;
         wizardShortCircuit = false;
         _wizard = null;
       } else {
+        const helpRoute = helpResponse?.route || null;
+        const routeSaysActionRequest = helpRoute === HELP_ROUTE_LABELS?.làm_giúp || helpRoute === 'làm_giúp';
         response = await aiCampaignService.processSmartChat({
           history,
           files: files || [],
@@ -246,6 +249,8 @@ class AiController {
           model,
           persistedWizardState,
           intent: sanitizedIntent,
+          helpRoute,
+          routeSaysActionRequest,
         });
         ({ wizardShortCircuit, _wizard, ...publicResponse } = response || {});
       }

@@ -33,7 +33,7 @@ const normalizeEmailSettings = (response) => {
 
 const PLATFORM_DOMAIN = import.meta.env.VITE_DEFAULT_FROM_DOMAIN || 'digiso.vn';
 
-export const AskSenderAccountCard = ({ data, onSelect, onOther, t }) => {
+export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, t }) => {
   const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
   const channel = data?.channel || 'zalo';
   const isEmail = channel === 'email';
@@ -103,11 +103,21 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, t }) => {
           ? (t('aiChatbot.wizardZaloReconnectQr') || 'Kết nối lại bằng QR')
           : (t('aiChatbot.wizardOtherAccount') || 'Khác')}
       </button>
+
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+        </button>
+      )}
     </div>
   );
 };
 
-export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, t }) => {
+export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, onDismiss, t }) => {
   const [checking, setChecking] = useState(false);
   const [quickMode, setQuickMode] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -286,11 +296,21 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, t 
           </button>
         </div>
       )}
+
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+        </button>
+      )}
     </div>
   );
 };
 
-export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccounts, t }) => {
+export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccounts, onDismiss, t }) => {
   const [qr, setQr] = useState(null);
   const [sessionKey, setSessionKey] = useState('');
   const [status, setStatus] = useState('idle');
@@ -421,6 +441,15 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
           {t('aiChatbot.wizardBackToZaloAccounts') || 'Chọn tài khoản có sẵn'}
         </button>
       )}
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+        </button>
+      )}
     </div>
   );
 };
@@ -431,7 +460,7 @@ const foldDiacritics = (value) => String(value || '')
   .replace(/đ/gi, (m) => (m === 'Đ' ? 'D' : 'd'))
   .toLowerCase();
 
-export const ZaloGroupPickerCard = ({ data, onSubmit, t }) => {
+export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, t }) => {
   const accountId = data?.accountId;
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState([]);
@@ -548,11 +577,20 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, t }) => {
           </button>
         </>
       )}
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+        </button>
+      )}
     </div>
   );
 };
 
-export const ZaloFriendPickerCard = ({ data, onSubmit, t }) => {
+export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, t }) => {
   const accountId = data?.accountId;
   const maxRecipients = data?.maxRecipients || 1000;
   const [friends, setFriends] = useState([]);
@@ -795,6 +833,15 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, t }) => {
             {t('aiChatbot.wizardUseFriends', { count: selected.length }) || `Dùng ${selected.length} bạn bè đã chọn`}
           </button>
         </>
+      )}
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
+        </button>
       )}
     </div>
   );
