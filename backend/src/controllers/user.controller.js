@@ -7,6 +7,7 @@ import {
   findProfilePlan,
   findProfilePlanFallback,
   findProfileUsageCounts,
+  findStructuralUsageCounts,
   findActiveBillingPeriod,
   findRoleAndLimits,
   findRoleAndLimitsFallback,
@@ -253,21 +254,7 @@ class UserController {
 
       let structuralUsage = { chatbots_used: 0, landing_pages_used: 0, zalo_accounts_used: 0, email_accounts_used: 0, employees_used: 0 };
       try {
-        const { default: db } = await import('../config/database.js');
-        const [cBots, cLps, cZalo, cEmail, cEmp] = await Promise.all([
-          db.query('SELECT count(*) FROM chatbots WHERE user_id = $1 AND deleted_at IS NULL', [billingUserId]),
-          db.query('SELECT count(*) FROM landing_pages WHERE owner_user_id = $1 AND deleted_at IS NULL', [billingUserId]),
-          db.query('SELECT count(*) FROM zalo_settings WHERE id_user = $1', [billingUserId]),
-          db.query('SELECT count(*) FROM email_settings WHERE id_user = $1', [billingUserId]),
-          db.query('SELECT count(*) FROM user_members WHERE owner_id = $1', [billingUserId]),
-        ]);
-        structuralUsage = {
-          chatbots_used: Number(cBots.rows[0].count) || 0,
-          landing_pages_used: Number(cLps.rows[0].count) || 0,
-          zalo_accounts_used: Number(cZalo.rows[0].count) || 0,
-          email_accounts_used: Number(cEmail.rows[0].count) || 0,
-          employees_used: Number(cEmp.rows[0].count) || 0,
-        };
+        structuralUsage = await findStructuralUsageCounts(billingUserId);
       } catch (err) {
         console.error('[Profile] structuralUsage failed', err.message);
       }

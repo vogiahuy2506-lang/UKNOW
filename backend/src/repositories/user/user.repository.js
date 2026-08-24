@@ -519,3 +519,20 @@ export async function insertRefreshToken({ userId, tokenHash, deviceInfo, ipAddr
     [userId, tokenHash, deviceInfo, ipAddress, expiresAt]
   );
 }
+
+export async function findStructuralUsageCounts(billingUserId) {
+  const [cBots, cLps, cZalo, cEmail, cEmp] = await Promise.all([
+    db.query('SELECT count(*) FROM chatbots WHERE user_id = $1 AND deleted_at IS NULL', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
+    db.query('SELECT count(*) FROM landing_pages WHERE owner_user_id = $1 AND deleted_at IS NULL', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
+    db.query('SELECT count(*) FROM zalo_settings WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
+    db.query('SELECT count(*) FROM email_settings WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
+    db.query('SELECT count(*) FROM user_members WHERE owner_id = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
+  ]);
+  return {
+    chatbots_used: Number(cBots[0]?.count) || 0,
+    landing_pages_used: Number(cLps[0]?.count) || 0,
+    zalo_accounts_used: Number(cZalo[0]?.count) || 0,
+    email_accounts_used: Number(cEmail[0]?.count) || 0,
+    employees_used: Number(cEmp[0]?.count) || 0,
+  };
+}
