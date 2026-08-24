@@ -193,11 +193,13 @@ const ConversationItem = ({
               {onDelete && (
                 <button
                   type="button"
+                  aria-label="Xóa cuộc trò chuyện"
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
-                    onDelete(conv);
+                    onDelete(conv, e);
                   }}
-                  className="absolute right-2 top-2 hidden p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all group-hover:flex"
+                  className="absolute right-2 top-2 hidden p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all group-hover:flex focus:outline-none focus:ring-2 focus:ring-red-300"
                   title="Xóa cuộc trò chuyện"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,8 +294,7 @@ const ConversationList = ({
     return [...unread, ...read];
   }, [conversations, sortBy]);
 
-  const handleDeleteClick = (e, conv) => {
-    e.stopPropagation();
+  const handleDeleteClick = (conv) => {
     setDeleteTarget(conv);
   };
 
