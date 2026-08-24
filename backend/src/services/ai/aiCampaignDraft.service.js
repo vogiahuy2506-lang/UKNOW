@@ -1,4 +1,5 @@
 import aiCampaignDraftRepository from '../../repositories/ai/aiCampaignDraft.repository.js';
+import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 
 const NODE_REFERENCE_KEYS = [
   'saveCustomerNodeId', 'recipientNodeId', 'ccNodeId', 'bccNodeId',
@@ -259,12 +260,17 @@ class AiCampaignDraftService {
         };
       }
 
+      const registryNode = campaignNodeRegistryService.nodeTypes[nodeSubtype];
+      const defaultName = registryNode?.name || 'Node';
+      const providedName = node.name || node.nodeName || node.templateName;
+      const finalName = (!providedName || providedName === 'Node') ? defaultName : providedName;
+
       return {
         id: nodeId,
         tempId: nodeId,
         node_type: nodeType,
         node_subtype: nodeSubtype,
-        node_name: node.name || node.nodeName || node.templateName || 'Node',
+        node_name: finalName,
         node_description: node.description || node.nodeDescription || '',
         position_x: node.position?.x || node.positionX || node.position_x || 0,
         position_y: node.position?.y || node.positionY || node.position_y || 0,
