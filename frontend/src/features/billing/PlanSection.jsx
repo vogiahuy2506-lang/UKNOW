@@ -12,6 +12,7 @@ import { useI18n } from '../../i18n';
 import { getSubscriptionUiStatus } from '../../utils/subscriptionStatus.util.js';
 import UsageBar from './UsageBar';
 import StorageUsageSection from '../storage/StorageUsageSection';
+import { HiOutlineUsers, HiOutlineDesktopComputer } from 'react-icons/hi';
 
 function formatPrice(price, t) {
   if (price === null || price === undefined) return t('accountProfileModal.contactForPrice');
@@ -206,6 +207,51 @@ export default function PlanSection({ data, t }) {
           t={t}
           serviceSuspended={serviceSuspended}
           usingAddons={!!data.addons}
+        />
+        <UsageBar
+          icon={HiOutlineUsers}
+          label={t('topup.items.employees')}
+          used={data.employeesUsed || 0}
+          limit={data.planMaxEmployees === -1 ? -1 : (Number(data.planMaxEmployees) || 0) + (Number(data.addons?.employees) || 0)}
+          t={t}
+          serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons?.employees}
+        />
+        <UsageBar
+          icon={HiOutlineChatAlt2}
+          label={t('topup.items.zaloAccounts')}
+          used={data.zaloAccountsUsed || 0}
+          limit={data.maxZaloAccounts === -1 ? -1 : (Number(data.maxZaloAccounts) || 0) + (Number(data.addons?.zaloAccounts) || 0)}
+          t={t}
+          serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons?.zaloAccounts}
+        />
+        <UsageBar
+          icon={HiOutlineMail}
+          label={t('topup.items.emailAccounts')}
+          used={data.emailAccountsUsed || 0}
+          limit={data.maxEmailAccounts === -1 ? -1 : (Number(data.maxEmailAccounts) || 0) + (Number(data.addons?.emailAccounts) || 0)}
+          t={t}
+          serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons?.emailAccounts}
+        />
+        <UsageBar
+          icon={HiOutlineDesktopComputer}
+          label={t('topup.items.landingPages')}
+          used={data.landingPagesUsed || 0}
+          limit={data.maxLandingPages === -1 ? -1 : (Number(data.maxLandingPages) || 0) + (Number(data.addons?.landingPages) || 0)}
+          t={t}
+          serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons?.landingPages}
+        />
+        <UsageBar
+          icon={HiOutlineSparkles}
+          label={t('topup.items.chatbots')}
+          used={data.chatbotsUsed || 0}
+          limit={data.maxChatbots === -1 ? -1 : (Number(data.maxChatbots) || 0) + (Number(data.addons?.chatbots) || 0)}
+          t={t}
+          serviceSuspended={serviceSuspended}
+          usingAddons={!!data.addons?.chatbots}
         />
       </div>
 

@@ -142,6 +142,7 @@ const mapProfileResponse = (userRow) => ({
   maxEmailTemplates: userRow.max_email_templates ?? null,
   maxZaloTemplates: userRow.max_zalo_templates ?? null,
   maxLandingPages: userRow.max_landing_pages ?? null,
+  maxChatbots: userRow.max_chatbots ?? null,
   createdAt: userRow.created_at,
   lastLoginAt: userRow.last_login_at,
   subscriptionExpiresAt: userRow.subscription_expires_at ?? null,
@@ -170,6 +171,11 @@ const mapProfileResponse = (userRow) => ({
   emailSentMonth: Number(userRow.email_sent_month ?? 0),
   zaloSentToday: Number(userRow.zalo_sent_today ?? 0),
   zaloSentMonth: Number(userRow.zalo_sent_month ?? 0),
+  chatbotsUsed: Number(userRow.chatbots_used ?? 0),
+  landingPagesUsed: Number(userRow.landing_pages_used ?? 0),
+  zaloAccountsUsed: Number(userRow.zalo_accounts_used ?? 0),
+  emailAccountsUsed: Number(userRow.email_accounts_used ?? 0),
+  employeesUsed: Number(userRow.employees_used ?? 0),
 });
 
 class UserController {
@@ -245,6 +251,27 @@ class UserController {
         console.error('[Profile] findProfileUsageCounts failed', { userId, message: err.message });
       }
 
+      let structuralUsage = { chatbots_used: 0, landing_pages_used: 0, zalo_accounts_used: 0, email_accounts_used: 0, employees_used: 0 };
+      try {
+        const { default: db } = await import('../config/database.js');
+        const [cBots, cLps, cZalo, cEmail, cEmp] = await Promise.all([
+          db.query('SELECT count(*) FROM chatbots WHERE user_id = $1 AND deleted_at IS NULL', [billingUserId]),
+          db.query('SELECT count(*) FROM landing_pages WHERE owner_user_id = $1 AND deleted_at IS NULL', [billingUserId]),
+          db.query('SELECT count(*) FROM zalo_settings WHERE id_user = $1', [billingUserId]),
+          db.query('SELECT count(*) FROM email_settings WHERE id_user = $1', [billingUserId]),
+          db.query('SELECT count(*) FROM user_members WHERE owner_id = $1', [billingUserId]),
+        ]);
+        structuralUsage = {
+          chatbots_used: Number(cBots.rows[0].count) || 0,
+          landing_pages_used: Number(cLps.rows[0].count) || 0,
+          zalo_accounts_used: Number(cZalo.rows[0].count) || 0,
+          email_accounts_used: Number(cEmail.rows[0].count) || 0,
+          employees_used: Number(cEmp.rows[0].count) || 0,
+        };
+      } catch (err) {
+        console.error('[Profile] structuralUsage failed', err.message);
+      }
+
       let aiCreditUsage = { used: 0 };
       try {
         aiCreditUsage = await usageTrackingService.getCreditUsageForCycle(userId, null, billingOptions);
@@ -274,6 +301,7 @@ class UserController {
         active_billing_period: activeBillingPeriod,
         ai_tokens_used: aiTokenUsage.used,
         ai_credits_used: aiCreditUsage.used,
+        ...structuralUsage,
       };
 
       let addons = null;
