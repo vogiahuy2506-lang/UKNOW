@@ -526,7 +526,7 @@ describe('aiCampaignWizard.service', () => {
 
       const merged = mergeWizardState(persistedGates, derived, { lastUserText: 'tôi muốn tạo chiến dịch Zalo mới' });
       expect(merged.isCampaignFlow).toBe(true);
-      expect(merged.channel).toBe('zalo');
+      expect(merged.channel).toBeNull();
       expect(merged.abandonedAtMessageCount).toBeNull();
     });
 
@@ -575,7 +575,7 @@ describe('aiCampaignWizard.service', () => {
 
       expect(stateWithRouter.isCampaignFlow).toBe(true);
       expect(stateWithRouter.latestCampaignMessageIndex).toBe(0);
-      expect(stateWithRouter.channel).toBe('zalo'); // Inferred from phone number
+      expect(stateWithRouter.channel).toBeNull(); // Requires disambiguation
     });
   });
 
