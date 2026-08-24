@@ -1,9 +1,9 @@
 # UKNOW Campaign
 
-[![Test Backend](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/test-backend.yml/badge.svg)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/test-backend.yml)
-[![Deploy Backend](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-backend.yml)
-[![Lint](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/lint.yml/badge.svg)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/lint.yml)
-[![Deploy Frontend](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-frontend.yml/badge.svg)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-frontend.yml)
+[![CI](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/test-backend.yml/badge.svg?branch=main)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/test-backend.yml)
+[![Deploy Backend](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-backend.yml/badge.svg?branch=main)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-backend.yml)
+[![Lint](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/lint.yml)
+[![Deploy Frontend](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-frontend.yml/badge.svg?branch=main)](https://github.com/vogiahuy2506-lang/UKNOW/actions/workflows/deploy-frontend.yml)
 
 Nền tảng marketing automation đa kênh (email + Zalo) cho thị trường Việt Nam: customer segmentation, landing page builder, course management, payment (PayOS).
 
