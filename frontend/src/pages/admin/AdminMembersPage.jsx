@@ -163,7 +163,14 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
           min={1}
           max={36}
           value={quantity}
-          onChange={(e) => setQuantity(Math.max(1, Math.min(36, Number(e.target.value) || 1)))}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val === '') {
+              setQuantity('');
+            } else {
+              setQuantity(Math.max(1, Math.min(36, Number(val))));
+            }
+          }}
         />
         <p className="text-xs text-gray-500 mt-1">{t('adminMembers.quantityHint')}</p>
       </div>
@@ -185,7 +192,7 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>{t('common.cancel')}</button>
-        <button type="button" className="btn btn-primary" onClick={handleAssign} disabled={isSaving}>
+        <button type="button" className="btn btn-primary" onClick={handleAssign} disabled={isSaving || quantity === ''}>
           {isSaving ? t('adminMembers.confirming') : t('adminMembers.confirmAssign')}
         </button>
       </div>
