@@ -464,8 +464,20 @@ export const requestCampaignScheduleRefresh = async () => {
 
 /**
  * Khởi tạo các scheduled jobs
+ *
+ * Đặt `SCHEDULER_ENABLED=false` để bỏ qua toàn bộ — chỉ dùng ở máy, khi chạy
+ * backend trên DB mẫu. Worker nền thấy chiến dịch mẫu ở trạng thái `active` thì
+ * cố thực thi rồi đánh hỏng chúng; thông báo lỗi sinh ra từ đó hiện thẳng trong
+ * trang Giám sát gửi tin và lọt vào ảnh minh hoạ bài hướng dẫn — người đọc thấy
+ * một lỗi chỉ tồn tại ở dữ liệu mẫu. Mặc định vẫn BẬT: production không đặt biến
+ * này, hành vi không đổi.
  */
 export const initScheduler = () => {
+  if (String(process.env.SCHEDULER_ENABLED).toLowerCase() === 'false') {
+    console.log('[Scheduler] SCHEDULER_ENABLED=false — bỏ qua toàn bộ scheduled job.');
+    return;
+  }
+
   // Đồng bộ khóa học từ Founder AI mỗi ngày lúc 00:30 (12:30 AM)
   // Cron format: phút giờ ngày tháng thứ
   // '30 0 * * *' = 00:30 mỗi ngày

@@ -170,6 +170,28 @@ export async function seedChannels(client, { userId }) {
     [userId],
   );
 
+  // Tài khoản Zalo THỨ HAI, đang ở trạng thái cần kết nối lại.
+  //
+  // Hai ô ảnh của bài "Thêm tài khoản Zalo" cần đúng cảnh này: một tài khoản
+  // mang nhãn "Cần kết nối lại" kèm nút "Kết nối lại", và nút "Đặt mặc định"
+  // — nút đó chỉ hiện trên tài khoản KHÔNG phải mặc định, nên phải có ít nhất
+  // hai tài khoản mới chụp được.
+  //
+  // `needs_reauth` là giá trị ZaloSettings.jsx đối chiếu để hiện nhãn vàng;
+  // 'disconnected' ra nhãn đỏ "Mất kết nối", không khớp bài viết.
+  await client.query(
+    `INSERT INTO zalo_settings (
+      id_user, display_name, zalo_user_id, zalo_name, zalo_phone,
+      login_method, cookie_text, status, is_active, is_default,
+      last_connected_at, created_at, updated_at
+    ) VALUES (
+      $1, 'Zalo Chăm sóc khách hàng', '2847192837482911', 'UKNOW CSKH', '0977456123',
+      'qr', 'demo_zalo_cookie_expired', 'needs_reauth', TRUE, FALSE,
+      NOW() - INTERVAL '6 days', NOW() - INTERVAL '18 days', NOW()
+    )`,
+    [userId],
+  );
+
   await client.query(
     `INSERT INTO zalo_accounts (
       id_user, is_active, status, created_at, updated_at
@@ -529,6 +551,17 @@ export async function seedCampaigns(client, { userId }) {
  * mà bài viết chỉ đích danh chỉ nằm trong bảng cài đặt của khối Sheet
  * (NodeConfigModalReadSheetSection). Nút hiện ra không cần Sheet thật — bấm vào
  * mới cần, mà ảnh chụp thì không bấm.
+ *
+ * ⚠ CHỤP ẢNH THÌ PHẢI TẮT WORKER NỀN: chạy backend với `SCHEDULER_ENABLED=false`.
+ * Worker quét các chiến dịch `active`, thấy chiến dịch Zalo mẫu không có node thì
+ * đánh lượt chạy của nó thành `failed` kèm dòng "Chiến dịch không có node nào".
+ * Dòng đó hiện thẳng trong mục "Chiến dịch gần đây" của trang Giám sát gửi tin —
+ * tức là lọt vào ảnh minh hoạ, và người đọc thấy một lỗi CHỈ TỒN TẠI Ở DỮ LIỆU
+ * MẪU. Đã lọt lên production một lần theo đúng đường này.
+ *
+ * Cấp node cho chiến dịch Zalo đó thay vì tắt worker thì KHÔNG xong: worker chạy
+ * tiếp rồi hỏng ở chỗ khác (`null value in column "execution_order"`), đổi một
+ * lỗi giả lấy một lỗi giả khác.
  */
 export async function seedCampaignFlow(client, { userId }) {
   const { rows: campaigns } = await client.query(
@@ -586,6 +619,7 @@ export async function seedCampaignFlow(client, { userId }) {
       [campaignId, ids[i], ids[i + 1]],
     );
   }
+
   return ids.length;
 }
 
@@ -1377,7 +1411,13 @@ export async function seedLockedTemplateUsage(client, { userId }) {
  * @param {{ userId: number|string }} options
  */
 export async function seedDemoData(client, { userId }) {
-  const { planIds, activePlanId } = await seedDemoPlans(client, { userId });
+  // `E2E_SEED_PLAN=trial` để chụp các ảnh của bài "Gói dùng thử" — trang Tổng
+  // quan gói phải hiện đúng gói dùng thử, chứ hiện gói trả phí thì ảnh nói một
+  // đằng bài viết nói một nẻo. Mặc định vẫn là `basic`.
+  const { planIds, activePlanId } = await seedDemoPlans(client, {
+    userId,
+    ...(process.env.E2E_SEED_PLAN ? { activePlanCode: String(process.env.E2E_SEED_PLAN).trim() } : {}),
+  });
   const activeName = Object.entries(planIds).find(([, id]) => id === activePlanId)?.[0];
 
   const seedAll = ['1', 'true', 'yes'].includes(String(process.env.E2E_SEED_ALL || '').toLowerCase());

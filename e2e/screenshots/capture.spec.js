@@ -21,6 +21,7 @@ const SHEETS = [
   'doi-goi', 'nhan-vien', 'mau-tin-nhan', 'inbox', 'khach-hang',
   'campaign-theo-doi', 'chatbot', 'landing-page', 'plan-and-billing',
   'faq-billing', 'campaign-create',
+  'getting-started', 'dung-thu', 'zalo-account', 'zalo-gui-cham', 'ai-profile',
 ];
 
 for (const slugToCapture of SHEETS) {
