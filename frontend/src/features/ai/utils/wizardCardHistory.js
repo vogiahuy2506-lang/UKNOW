@@ -36,7 +36,12 @@ export function findLastWizardCardIndex(messages = []) {
   if (!Array.isArray(messages)) return -1;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
-    if (message?.role === 'assistant' && WIZARD_ASSISTANT_TYPES.has(message?.type)) return i;
+    if (message?.role !== 'assistant') continue;
+    if (WIZARD_ASSISTANT_TYPES.has(message?.type)) return i;
+    // Có tin nhắn trợ lý KHÁC nằm sau thẻ cổng ⇒ luồng đã đi tiếp, thẻ đó đã được bấm rồi.
+    // Giữ lại là mời người dùng bấm lần hai — và bấm là tạo thêm một chiến dịch nữa.
+    // Bug thật 25/08/2026 với thẻ "Tạo kế hoạch & bắt đầu soạn chiến dịch".
+    return -1;
   }
   return -1;
 }

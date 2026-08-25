@@ -29,6 +29,41 @@ describe('wizardCardHistory — chỉ giữ thẻ cổng cuối cùng', () => {
     expect(findLastWizardCardIndex(messages)).toBe(5);
   });
 
+  /**
+   * Regression (bug thật 25/08/2026): sau F5 còn sót thẻ "Tạo kế hoạch & bắt đầu soạn chiến dịch";
+   * bấm vào nó tạo THÊM một chiến dịch nữa. Thẻ đó là thẻ cổng cuối cùng, nhưng luồng đã đi tiếp
+   * (đã có tin nhắn trợ lý khác sau nó) — tức nó đã được bấm rồi.
+   */
+  it('thẻ cổng đã bị luồng vượt qua (có tin nhắn trợ lý sau nó) thì KHÔNG giữ', () => {
+    const messages = [
+      { role: 'user', content: 'tạo chiến dịch zalo' },
+      gate('suggest_content_plan', 'Chuyển sang chế độ kế hoạch đa ngày?'),
+      { role: 'assistant', content: 'Tôi đã xây dựng kế hoạch nội dung Zalo 3 ngày…' },
+    ];
+
+    expect(findLastWizardCardIndex(messages)).toBe(-1);
+  });
+
+  it('thẻ cổng đang chờ trả lời (không có gì sau nó) thì GIỮ', () => {
+    const messages = [
+      { role: 'user', content: 'tạo chiến dịch zalo' },
+      gate('ask_campaign_details', 'Kênh nào?'),
+    ];
+
+    expect(findLastWizardCardIndex(messages)).toBe(1);
+  });
+
+  it('tin nhắn NGƯỜI DÙNG sau thẻ cổng không tính là luồng đã đi tiếp', () => {
+    // Marker trả lời là tin nhắn user ẩn — thẻ vẫn là cổng đang chờ xử lý cho tới khi
+    // trợ lý trả lời tiếp.
+    const messages = [
+      gate('ask_campaign_details', 'Kênh nào?'),
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}' },
+    ];
+
+    expect(findLastWizardCardIndex(messages)).toBe(0);
+  });
+
   it('không có thẻ cổng nào → -1', () => {
     expect(findLastWizardCardIndex([{ role: 'user', content: 'chào' }])).toBe(-1);
     expect(findLastWizardCardIndex([])).toBe(-1);
