@@ -767,7 +767,10 @@
     "email_messages": [
       "body_html",
       "body_text",
+      "bounce_code",
+      "bounce_detected_via",
       "bounce_reason",
+      "bounce_type",
       "bounced_at",
       "brand_domain",
       "click_count",

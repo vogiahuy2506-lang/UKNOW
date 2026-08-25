@@ -46,20 +46,50 @@ class CampaignEmailSenderRepository {
   }
 
   /**
-   * Mark an email_message as bounced with timestamp and bounce reason.
+   * Mark an email_message as bounced with timestamp, bounce reason, and optional bounce classification.
    *
    * @param {string} trackingToken
    * @param {Date} bouncedAt
    * @param {string} bounceReason
+   * @param {object} [options]
+   * @param {'hard'|'soft'|null} [options.bounceType]
+   * @param {string|null} [options.bounceCode]
+   * @param {'smtp'|'dsn'} [options.bounceDetectedVia]
    * @returns {Promise<void>}
    */
-  async markEmailMessageBounced(trackingToken, bouncedAt, bounceReason) {
+  async markEmailMessageBounced(trackingToken, bouncedAt, bounceReason, options = {}) {
+    const bounceType = options?.bounceType || null;
+    const bounceCode = options?.bounceCode || null;
+    const bounceDetectedVia = options?.bounceDetectedVia || 'smtp';
+
     await db.query(
       `UPDATE email_messages
-       SET status = 'bounced', bounced_at = $1, bounce_reason = $2
+       SET status = 'bounced',
+           bounced_at = $1,
+           bounce_reason = $2,
+           bounce_type = COALESCE($4, bounce_type),
+           bounce_code = COALESCE($5, bounce_code),
+           bounce_detected_via = COALESCE($6, bounce_detected_via)
        WHERE tracking_token = $3`,
-      [bouncedAt, bounceReason, trackingToken]
+      [bouncedAt, bounceReason, trackingToken, bounceType, bounceCode, bounceDetectedVia]
     );
+  }
+
+  /**
+   * Tìm bản ghi email_message theo tracking_token.
+   *
+   * @param {string} trackingToken
+   * @returns {Promise<{ id: number, id_campaign: number|null, id_customer: number|null, id_run: number|null, is_preview: boolean, status: string, recipient_email: string }|null>}
+   */
+  async findEmailMessageByTrackingToken(trackingToken) {
+    if (!trackingToken) return null;
+    const result = await db.query(
+      `SELECT id, id_campaign, id_customer, id_run, is_preview, status, recipient_email
+       FROM email_messages
+       WHERE tracking_token = $1`,
+      [trackingToken]
+    );
+    return result.rows[0] || null;
   }
 
   /**
@@ -69,6 +99,7 @@ class CampaignEmailSenderRepository {
    * @returns {Promise<void>}
    */
   async markCustomerHardBounced(customerId) {
+    if (!customerId) return;
     await db.query(
       'UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
       [customerId]

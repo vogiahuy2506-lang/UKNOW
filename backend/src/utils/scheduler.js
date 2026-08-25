@@ -1235,4 +1235,27 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Mat Bao series check: 03:10 hàng ngày');
+
+  // ── Async Bounce Mailbox Sync (VERP DSN via IMAP) — every 10 minutes ───────
+  cron.schedule('8-59/10 * * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const bounceMailboxService = (await import('../services/email/bounceMailbox.service.js')).default;
+      await cronJobRunRepository.recordRun('bounce_mailbox_sync', async () => {
+        const stats = await bounceMailboxService.syncBounceMailbox();
+        if (stats.bouncedCount > 0) {
+          console.log(
+            `[Scheduler][BounceMailbox] Đã xử lý ${stats.processedCount} thư: ${stats.hardBouncedCount} hard bounce, `
+            + `${stats.softBouncedCount} soft bounce, ${stats.skippedCount} skipped`
+          );
+        }
+        return stats;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi đồng bộ hộp thư bounce IMAP:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Async Bounce Mailbox sync: mỗi 10 phút');
 };

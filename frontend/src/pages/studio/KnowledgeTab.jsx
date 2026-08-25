@@ -14,8 +14,8 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 
-const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'webp'];
-const ALLOWED_ACCEPT = '.pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.htm,.xlsx,.xls,.png,.jpg,.jpeg,.webp';
+const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'webp', 'pptx'];
+const ALLOWED_ACCEPT = '.pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.htm,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.pptx';
 const ALLOWED_FORMATS_LABEL = [...new Set(
   ALLOWED_ACCEPT.split(',')
     .map((ext) => ext.replace(/^\./, '').toUpperCase())

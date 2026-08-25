@@ -205,6 +205,14 @@ export const CRON_JOBS = [
     impact: 'Nếu hết số (327) hoặc sai năm (308), toàn bộ hoá đơn không thể phát hành khi khách thanh toán.',
     tracked: true,
   },
+  {
+    code: 'bounce_mailbox_sync',
+    label: 'Đồng bộ hộp thư bounce (VERP DSN)',
+    schedule: 'Mỗi 10 phút',
+    description: 'Đọc hộp thư bounce qua IMAP, bóc DSN RFC 3464 để bắt bounce bất đồng bộ và làm sạch danh sách khách hàng.',
+    impact: 'Nếu không chạy, bounce bất đồng bộ không được ghi nhận và email_hard_bounced không được cập nhật.',
+    tracked: true,
+  },
 ];
 
 export function getCronJobByCode(code) {

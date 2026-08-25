@@ -1,3 +1,5 @@
+import { findBestMatchingKey } from './columnHeaderMatch.js';
+
 /**
  * Runtime helper utilities for CampaignBuilder execution pipeline.
  * These are intentionally pure to keep behavior deterministic.
@@ -52,18 +54,15 @@ export const resolveColumnKey = (row, ref) => {
 };
 
 /**
- * Đọc một trường của item theo tên, KHÔNG phân biệt hoa/thường.
+ * Đọc một trường của item theo tên, với 3 tầng tra cứu:
+ * 1. Khớp chính xác (item['email'])
+ * 2. Khớp không phân biệt hoa/thường (item['Email'])
+ * 3. Khớp theo NGHĨA (item['SĐT'] khi field='phone', item['Thư điện tử'] khi field='email')
  *
  * Vì sao không dùng lại `resolveColumnKey`: hàm đó coi mọi chuỗi toàn chữ cái là **tên cột kiểu
  * Excel** (dòng 41-43), nên `'email'` sẽ bị đọc thành cột E,M,A,I,L → `col_N`. Đúng cho ô nhập
  * "cột người nhận" (nơi người dùng gõ `B`, `C`…), nhưng sai hoàn toàn cho `recipientField` — thứ
  * luôn là TÊN CỘT.
- *
- * Bug thật 25/08/2026: trợ lý AI luôn sinh `recipientField: "email"` (chữ thường, cố định ở
- * `aiCampaignDraft.service.js:522`), trong khi tiêu đề cột trong Sheet/Excel của người dùng
- * thường viết hoa — `Email`. Tra khoá thô `item['email']` trả `undefined`, danh sách người nhận
- * rỗng, node gửi 0 tin và **không báo lỗi gì**. Sheet đọc thành công 3 dòng nhưng không ai nhận
- * được thư.
  *
  * @param {Record<string, unknown>|null|undefined} item một dòng dữ liệu từ output của node nguồn
  * @param {string} field tên cột cần lấy
@@ -73,10 +72,25 @@ export const resolveItemField = (item, field) => {
   if (!item || typeof item !== 'object') return undefined;
   const name = String(field ?? '').trim();
   if (!name) return undefined;
+
+  // Tầng 1: Khớp chính xác
   if (Object.prototype.hasOwnProperty.call(item, name)) return item[name];
+
+  // Tầng 2: Khớp hoa/thường
   const target = name.toLowerCase();
-  const match = Object.keys(item).find((key) => String(key).trim().toLowerCase() === target);
-  return match === undefined ? undefined : item[match];
+  const keys = Object.keys(item);
+  const match = keys.find((key) => String(key).trim().toLowerCase() === target);
+  if (match !== undefined) return item[match];
+
+  // Tầng 3: Khớp theo NGHĨA (cho 3 từ khoá chuẩn: email, phone, name)
+  if (['email', 'phone', 'name'].includes(target)) {
+    const semanticKey = findBestMatchingKey(keys, target);
+    if (semanticKey && Object.prototype.hasOwnProperty.call(item, semanticKey)) {
+      return item[semanticKey];
+    }
+  }
+
+  return undefined;
 };
 
 export const parseEmailList = (text) =>

@@ -47,6 +47,33 @@ describe('resolveItemField — tra cột không phân biệt hoa/thường', () 
     expect(resolveItemField(row, 'email')).toEqual(['a@example.com', 'b@example.com']);
   });
 
+  describe('Tầng 3: khớp theo NGHĨA khi tên cột tiếng Việt khác từ khoá chuẩn', () => {
+    it('lấy đúng số điện thoại khi cột là "SĐT" và field="phone"', () => {
+      const row = { 'Họ Tên': 'Nguyễn Văn A', 'SĐT': '0901234567' };
+      expect(resolveItemField(row, 'phone')).toBe('0901234567');
+    });
+
+    it('lấy đúng số điện thoại khi cột là "Số điện thoại"', () => {
+      const row = { 'Số điện thoại': '0912345678' };
+      expect(resolveItemField(row, 'phone')).toBe('0912345678');
+    });
+
+    it('lấy đúng email khi cột là "Thư điện tử"', () => {
+      const row = { 'Thư điện tử': 'test@example.com' };
+      expect(resolveItemField(row, 'email')).toBe('test@example.com');
+    });
+
+    it('lấy đúng họ tên khi cột là "Tên khách hàng" và field="name"', () => {
+      const row = { 'Tên khách hàng': 'Trần Thị B' };
+      expect(resolveItemField(row, 'name')).toBe('Trần Thị B');
+    });
+
+    it('ưu tiên cột "Email" hơn "Email phụ" khi cả hai cùng xuất hiện', () => {
+      const row = { 'Email phụ': 'phu@example.com', 'Email': 'chinh@example.com' };
+      expect(resolveItemField(row, 'email')).toBe('chinh@example.com');
+    });
+  });
+
   /**
    * Chốt lại lý do tồn tại của hàm này: `resolveColumnKey` KHÔNG thay thế được, vì nó coi chuỗi
    * toàn chữ cái là tên cột kiểu Excel. Ai đó "dọn dẹp" bằng cách gộp hai hàm sẽ làm hỏng lại
@@ -61,3 +88,4 @@ describe('resolveItemField — tra cột không phân biệt hoa/thường', () 
     expect(row[wrongKey]).toBeUndefined();
   });
 });
+

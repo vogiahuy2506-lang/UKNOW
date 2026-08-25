@@ -25,6 +25,7 @@ import zaloFriendsPickerNoLoop from './fixtures/golden/zaloFriendsPickerNoLoop.f
 import attachedFileSurvivesNextTurn from './fixtures/golden/attachedFileSurvivesNextTurn.fixture.js';
 import dripSlotsPerDaySurvivesPlanTurn from './fixtures/golden/dripSlotsPerDaySurvivesPlanTurn.fixture.js';
 import reloadThenSaveContinuesChain from './fixtures/golden/reloadThenSaveContinuesChain.fixture.js';
+import zaloCustomSenderAccountToNodes from './fixtures/golden/zaloCustomSenderAccountToNodes.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -42,6 +43,7 @@ const FIXTURES = [
   attachedFileSurvivesNextTurn,
   dripSlotsPerDaySurvivesPlanTurn,
   reloadThenSaveContinuesChain,
+  zaloCustomSenderAccountToNodes,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));

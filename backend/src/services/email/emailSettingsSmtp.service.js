@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
 import { classifyBounceType, isSmtpAuthConfigError } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
-import { resolveFromAddress, extractBrandDomain } from '../../utils/emailFromAddress.util.js';
+import { resolveFromAddress, extractBrandDomain, resolveEnvelopeFrom } from '../../utils/emailFromAddress.util.js';
 import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from '../../utils/billingCycle.util.js';
 import { maybeDebitWalletForSend } from '../payment/topupWallet.service.js';
 import { checkSendQuota, recordDirectSendUsage } from '../../utils/userSendLimit.util.js';
@@ -399,6 +399,8 @@ class EmailSettingsSmtpService {
     // Resolve actual from address before sending (so we can log it)
     const fromAddress = resolveFromAddress(setting);
     const brandDomain = setting.brand_domain || extractBrandDomain(setting.email);
+    const envelopeFrom = resolveEnvelopeFrom(setting, trackingToken);
+    const allRecipients = [to, ...ccList, ...bccList].filter(Boolean);
 
     let info;
     try {
@@ -408,6 +410,7 @@ class EmailSettingsSmtpService {
         to,
         cc: ccList.length ? ccList : undefined,
         bcc: bccList.length ? bccList : undefined,
+        ...(envelopeFrom ? { envelope: { from: envelopeFrom, to: allRecipients } } : {}),
         subject: subject || 'Email từ Founder AI',
         text: plainTextContent,
         html: trackedHtmlContent || `<p>${plainTextContent}</p>`,

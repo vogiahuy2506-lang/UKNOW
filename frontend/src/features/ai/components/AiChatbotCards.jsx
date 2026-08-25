@@ -4,7 +4,7 @@ import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck, HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt, HiOutlinePaperClip,
-  HiOutlineDocumentText, HiOutlineSearch, HiOutlineExclamationCircle,
+  HiOutlineDocumentText, HiOutlineSearch, HiOutlineExclamationCircle, HiOutlineLightningBolt,
 } from 'react-icons/hi';
 import api from '../../../services/api';
 import aiApi from '../../../services/aiApi';
@@ -1938,7 +1938,7 @@ const previewChannelLabel = (channel, locale) => {
 };
 
 // The server supplies this semantic view. Model-provided summary.steps is intentionally never rendered here.
-export const ConfirmCreateCard = ({ confirmationView, onConfirm, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, t, locale = 'vi' }) => {
+export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, t, locale = 'vi' }) => {
   const [expandedSteps, setExpandedSteps] = useState(new Set());
   const steps = confirmationView?.steps || [];
   const blockingIssues = confirmationView?.blockingIssues || [];
@@ -1949,6 +1949,26 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onEdit, onCance
     else next.add(key);
     return next;
   });
+
+  // Điều kiện hiển thị nút Gửi nhanh:
+  // - Đúng 1 bước gửi
+  // - Kênh email
+  // - Người nhận thủ công (recipients.mode === 'manual')
+  // - Gửi 1 lần / gửi ngay (timing anchor 'start' và value 0)
+  // - Có callback onQuickSend và canCreate
+  const singleStep = steps.length === 1 ? steps[0] : null;
+  const isOnceTiming = singleStep?.timing
+    ? (singleStep.timing.anchor === 'start' && Number(singleStep.timing.value || 0) === 0)
+    : true;
+  const isManualRecipient = singleStep?.recipients?.mode === 'manual';
+  const canQuickSend = Boolean(
+    canCreate &&
+    onQuickSend &&
+    singleStep &&
+    singleStep.channel === 'email' &&
+    isManualRecipient &&
+    isOnceTiming
+  );
 
   return (
     <div className="mt-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl overflow-hidden">
@@ -1989,6 +2009,16 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onEdit, onCance
             <HiOutlineCheck className="w-5 h-5" />
             {t('aiChatbot.createCampaignBtn')}
           </button>
+          {canQuickSend && (
+            <button
+              type="button"
+              onClick={onQuickSend}
+              className="w-full py-2.5 bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:from-teal-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 transition"
+            >
+              <HiOutlineLightningBolt className="w-4 h-4" />
+              {t('aiChatbot.quickSendBtn')}
+            </button>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={onEdit}

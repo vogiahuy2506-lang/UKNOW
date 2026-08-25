@@ -3538,6 +3538,7 @@ export default {
     saveChanges: 'Save changes',
     // Confirm create card
     confirmCreateCampaign: 'Confirm campaign creation',
+    quickSendBtn: 'Quick Send (1-time)',
     steps: 'Steps',
     duration: 'Duration',
     editCampaign: 'Edit',

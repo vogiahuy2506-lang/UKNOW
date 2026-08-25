@@ -3572,6 +3572,7 @@ export default {
     saveChanges: 'Lưu thay đổi',
     // Confirm create card
     confirmCreateCampaign: 'Xác nhận tạo chiến dịch',
+    quickSendBtn: 'Gửi nhanh (1 lần)',
     steps: 'Bước',
     duration: 'Thời gian',
     editCampaign: 'Chỉnh sửa',

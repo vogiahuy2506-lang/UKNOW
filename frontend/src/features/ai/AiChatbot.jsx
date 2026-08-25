@@ -2425,6 +2425,47 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     onToggle?.();
   };
 
+  const handleQuickSendDraft = () => {
+    const confirmationView = campaignConfirmation?.confirmationView;
+    const singleStep = confirmationView?.steps?.[0] || null;
+    const nodes = Array.isArray(currentScript?.nodes) ? currentScript.nodes : [];
+    const sendNode = nodes.find((n) => {
+      const type = String(n.node_subtype || n.nodeSubtype || n.subtype || n.node_type || n.nodeType || n.type || '').toLowerCase();
+      return type === 'send_email' || type === 'email';
+    }) || nodes[0] || null;
+
+    const config = sendNode?.config || sendNode?.data || {};
+
+    let recipients = [];
+    if (Array.isArray(config.recipientEmails)) {
+      recipients = config.recipientEmails;
+    } else if (typeof config.recipientEmails === 'string') {
+      recipients = config.recipientEmails.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+    }
+
+    const subject = singleStep?.content?.subject || config.emailSubject || config.subject || '';
+    const body = config.emailBody || config.htmlContent || config.bodyText || singleStep?.content?.bodyText || '';
+    const accountId = config.fromEmailId || config.emailSettingId || singleStep?.sender?.id || null;
+    const attachments = Array.isArray(config.attachments)
+      ? config.attachments
+      : Array.isArray(singleStep?.content?.attachments)
+        ? singleStep.content.attachments
+        : [];
+
+    const draft = {
+      channel: singleStep?.channel || 'email',
+      recipients,
+      subject,
+      body,
+      accountId: accountId ? Number(accountId) : null,
+      attachments,
+      startStep: 'preview',
+    };
+
+    navigate('/app/quick-send', { state: { quickSendDraft: draft } });
+    onToggle?.();
+  };
+
   /**
    * Xử lý khi user chọn campaign type (email/zalo/zalo_group)
    */
@@ -3549,6 +3590,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   prepareError={idx === latestInteractiveIndex && campaignConfirmation?.status === 'error' ? campaignConfirmation.error : null}
                   isActive={idx === latestInteractiveIndex && Boolean(currentScript)}
                   onConfirm={handleConfirmCreate}
+                  onQuickSend={handleQuickSendDraft}
                   onEdit={() => setIsEditingDraft(true)}
                   onCancel={handleCancelCreate}
                   onRetry={() => prepareAndShowCampaignConfirmation(currentScript, { sessionId: currentSessionIdRef.current, appendMessage: false })}

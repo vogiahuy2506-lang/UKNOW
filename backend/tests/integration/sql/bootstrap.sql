@@ -991,6 +991,9 @@ CREATE TABLE email_messages (
   first_clicked_at        TIMESTAMPTZ,
   sent_at                 TIMESTAMPTZ,
   delivered_at            TIMESTAMPTZ,
+  bounce_type             VARCHAR(10),
+  bounce_code             VARCHAR(15),
+  bounce_detected_via     VARCHAR(10),
   is_preview              BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -2714,5 +2717,10 @@ ALTER TABLE email_messages
 
 ALTER TABLE zalo_messages
   ADD COLUMN IF NOT EXISTS is_preview BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE email_messages
+  ADD COLUMN IF NOT EXISTS bounce_type VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS bounce_code VARCHAR(15),
+  ADD COLUMN IF NOT EXISTS bounce_detected_via VARCHAR(10);
 
 

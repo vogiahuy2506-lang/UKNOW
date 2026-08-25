@@ -16,37 +16,12 @@ const PHONE_RE = /^(?:\+?84|0)\d{9,10}$/;
 const MAX_SKIPPED_SAMPLES = 5;
 /** Cắt bớt giá trị lỗi trước khi trả về — ô trong bảng tính có thể dài tuỳ ý. */
 const MAX_SKIPPED_VALUE_LEN = 120;
-
-function foldDiacritics(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/gi, (m) => (m === 'Đ' ? 'D' : 'd'))
-    .toLowerCase()
-    .trim();
-}
-
-function isEmailHeader(h) {
-  const norm = foldDiacritics(h);
-  return /^(email|e-mail|thu|mail|dia chi email|email address)$/i.test(norm)
-    || norm.includes('email')
-    || norm === 'mail';
-}
-
-function isPhoneHeader(h) {
-  const norm = foldDiacritics(h);
-  return /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|phone number|telephone)$/i.test(norm)
-    || norm.includes('sdt')
-    || norm.includes('dien thoai')
-    || norm.includes('phone');
-}
-
-function isNameHeader(h) {
-  const norm = foldDiacritics(h);
-  return /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|ten khach hang)$/i.test(norm)
-    || norm.includes('ho ten')
-    || norm.includes('fullname');
-}
+import {
+  foldDiacritics,
+  isEmailHeader,
+  isPhoneHeader,
+  isNameHeader,
+} from '../../utils/columnHeaderMatch.util.js';
 
 export function extractRecipientsFromBuffer(buffer, originalName = '', contentType = '') {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {

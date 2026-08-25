@@ -8,6 +8,14 @@ import zaloSettingsApiService from '../../../features/settings/services/zaloSett
 import campaignApiService from '../../../features/campaigns/services/campaignApi.service';
 import toast from 'react-hot-toast';
 
+const mockNavigate = vi.fn();
+let mockLocationState = null;
+
+vi.mock('react-router-dom', () => ({
+  useLocation: () => ({ pathname: '/app/quick-send', state: mockLocationState }),
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock('../../../i18n', () => ({
   useI18n: () => ({
     t: (key, params) => {
@@ -63,6 +71,7 @@ vi.mock('react-hot-toast', () => ({
 describe('QuickSend Attachments Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLocationState = null;
 
     emailTemplateApiService.getTemplates.mockResolvedValue({
       data: { data: { items: [] } },
@@ -377,5 +386,52 @@ describe('QuickSend Attachments Flow', () => {
       expect(toast.error).toHaveBeenCalledWith('quickSend.templateLoadDetailFailed');
     });
     expect(emailSettingsApiService.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('nạp quickSendDraft từ AI Assistant: tự động chuyển bước PREVIEW, hiển thị tiêu đề, nội dung, attachments và làm sạch location.state', async () => {
+    const sampleAttachment = {
+      key: 'uploads/email/hop-dong.docx',
+      originalName: 'hop-dong.docx',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      size: 15360,
+    };
+
+    mockLocationState = {
+      quickSendDraft: {
+        channel: 'email',
+        recipients: ['partner@digiso.vn'],
+        subject: 'Hợp đồng dịch vụ 2026',
+        body: 'Gửi bạn xem hợp đồng đính kèm nhé.',
+        accountId: 1,
+        attachments: [sampleAttachment],
+        startStep: 'preview',
+      },
+    };
+
+    render(<QuickSend />);
+
+    // Kiểm tra đã gọi navigate để dọn sạch state
+    expect(mockNavigate).toHaveBeenCalledWith('/app/quick-send', { replace: true, state: null });
+
+    // Kiểm tra hiển thị thông tin ở bước Preview
+    expect(await screen.findByText('Hợp đồng dịch vụ 2026')).toBeInTheDocument();
+    expect(await screen.findByText('hop-dong.docx')).toBeInTheDocument();
+    expect(await screen.findByText('partner@digiso.vn')).toBeInTheDocument();
+
+    // Bấm Gửi ngay
+    fireEvent.click(await screen.findByRole('button', { name: /quickSend\.sendNow/i }));
+
+    await waitFor(() => {
+      expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    expect(emailSettingsApiService.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromEmailId: 1,
+        to: 'partner@digiso.vn',
+        subject: 'Hợp đồng dịch vụ 2026',
+        attachments: [sampleAttachment],
+      })
+    );
   });
 });

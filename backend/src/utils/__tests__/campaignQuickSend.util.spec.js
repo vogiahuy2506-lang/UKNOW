@@ -13,12 +13,17 @@ describe('campaignQuickSend.util', () => {
       expect(isQuickSendRequest('gửi nhanh email thông báo')).toBe(true);
       expect(isQuickSendRequest('Gửi 1 email cảm ơn')).toBe(true);
       expect(isQuickSendRequest('gui nhanh 1 tin zalo')).toBe(true);
+      expect(isQuickSendRequest('Gửi 1 lần cho bạn')).toBe(true);
+      expect(isQuickSendRequest('Gửi một lần file tài liệu')).toBe(true);
+      expect(isQuickSendRequest('gui 1 lan email')).toBe(true);
+      expect(isQuickSendRequest('gửi 1 mình cho khách')).toBe(true);
     });
 
     it('matches narrow EN markers', () => {
       expect(isQuickSendRequest('Quick send one email thank you')).toBe(true);
       expect(isQuickSendRequest('send one email confirmation')).toBe(true);
       expect(isQuickSendRequest('Send a single message reminder')).toBe(true);
+      expect(isQuickSendRequest('Send once to user')).toBe(true);
     });
 
     it('does not match generic campaign requests', () => {

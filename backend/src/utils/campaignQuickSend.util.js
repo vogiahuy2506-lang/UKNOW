@@ -3,9 +3,9 @@
  * Kept free of wizard/campaignIntent imports to avoid cycles.
  */
 
-const QUICK_SEND_RE = /(?:gửi\s*nhanh|gui\s*nhanh|quick\s*send|send\s*one\s*(?:email|message)|gửi\s*1\s*(?:email|tin|thư)|gui\s*1\s*(?:email|tin|thu)|gửi\s*một\s*(?:email|tin|thư)|gui\s*mot\s*(?:email|tin|thu)|send\s*(?:a\s*)?single\s*(?:email|message))/i;
+const QUICK_SEND_RE = /(?:gửi\s*nhanh|gui\s*nhanh|quick\s*send|send\s*one\s*(?:email|message)|gửi\s*1\s*(?:email|tin|thư)|gui\s*1\s*(?:email|tin|thu)|gửi\s*một\s*(?:email|tin|thư)|gui\s*mot\s*(?:email|tin|thu)|send\s*(?:a\s*)?single\s*(?:email|message)|gửi\s*(?:1|một|mot)\s*lần|gui\s*(?:1|một|mot)\s*lan|gửi\s*(?:1|một|mot)\s*mình|gui\s*(?:1|một|mot)\s*minh|send\s*once)/i;
 
-const QUICK_SEND_PHRASE_RE = /(?:gửi\s*nhanh|gui\s*nhanh|quick\s*send|send\s*one|send\s*(?:a\s*)?single)/i;
+const QUICK_SEND_PHRASE_RE = /(?:gửi\s*nhanh|gui\s*nhanh|quick\s*send|send\s*one|send\s*(?:a\s*)?single|gửi\s*(?:1|một|mot)\s*(?:lần|mình)|gui\s*(?:1|một|mot)\s*(?:lan|minh)|send\s*once)/i;
 
 /** Clause / contrast boundaries — negation must not cross these into a positive quick-send.
  *  Note: chỉ/just stay as fillers (e.g. "không muốn chỉ gửi nhanh"), not splitters.

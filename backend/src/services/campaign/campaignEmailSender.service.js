@@ -10,7 +10,7 @@ import {
   isSmtpProviderRateLimitError,
 } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
-import { resolveFromAddress, extractBrandDomain } from '../../utils/emailFromAddress.util.js';
+import { resolveFromAddress, extractBrandDomain, resolveEnvelopeFrom } from '../../utils/emailFromAddress.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
@@ -77,6 +77,7 @@ class CampaignEmailSenderService {
     attachments = [],
     from = null,
     replyTo = null,
+    envelope = null,
   }) {
     const transporter = this.getOrCreateTransporter(settings);
     const sendStartedAt = Date.now();
@@ -86,6 +87,7 @@ class CampaignEmailSenderService {
       from: from || resolveFromAddress(settings),
       replyTo: replyTo || settings.reply_to || undefined,
       to,
+      ...(envelope ? { envelope } : {}),
       subject: subject || 'Email từ Founder AI',
       text: text || String(html || '').replace(/<[^>]*>/g, ''),
       html: html || `<p>${text || ''}</p>`,
@@ -662,6 +664,7 @@ class CampaignEmailSenderService {
     // Resolve actual from address + brand domain before sending (for logging)
     const fromAddress = resolveFromAddress(settings);
     const brandDomain = settings.brand_domain || extractBrandDomain(settings.email);
+    const envelopeFrom = resolveEnvelopeFrom(settings, trackingToken);
 
     let info;
     try {
@@ -670,6 +673,7 @@ class CampaignEmailSenderService {
         from: fromAddress,
         replyTo: settings.reply_to || undefined,
         to: customer.email,
+        envelope: envelopeFrom ? { from: envelopeFrom, to: [customer.email] } : undefined,
         subject: subject || 'Email từ Founder AI',
         text: textBody,
         html: trackedHtmlContent || `<p>${textBody}</p>`,
@@ -829,7 +833,6 @@ class CampaignEmailSenderService {
       // Ghi log email_message với status bounced
       const bouncedAt = new Date();
       try {
-        const bounceTrackingToken = uuidv4();
         await emailSettingsController.logEmailSent({
           userId: campaign.id_user,
           campaignId: campaign.id,
@@ -840,7 +843,7 @@ class CampaignEmailSenderService {
           subject,
           trackedHtmlContent: null,
           plainTextContent: textBody,
-          trackingToken: bounceTrackingToken,
+          trackingToken,
           info: { messageId: null },
           sentAt: bouncedAt,
           setting: settings,
@@ -852,7 +855,12 @@ class CampaignEmailSenderService {
           debitWallet: true,
         });
         // Cập nhật email_message vừa insert sang status bounced
-        await campaignEmailSenderRepository.markEmailMessageBounced(bounceTrackingToken, bouncedAt, bounceReason);
+        await campaignEmailSenderRepository.markEmailMessageBounced(
+          trackingToken,
+          bouncedAt,
+          bounceReason,
+          { bounceType, bounceCode: null, bounceDetectedVia: 'smtp' }
+        );
       } catch (logErr) {
         console.error('[sendEmailToCustomer] Lỗi ghi log bounce:', logErr.message);
       }

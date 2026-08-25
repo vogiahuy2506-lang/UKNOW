@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
@@ -120,6 +121,8 @@ function buildFailureToast(failureSamples, isEmail) {
 
 const QuickSend = () => {
   const { t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(QUICK_SEND_STEPS.RECIPIENTS);
   const [selectedChannel, setSelectedChannel] = useState(CHANNEL_TYPES.EMAIL);
 
@@ -139,6 +142,7 @@ const QuickSend = () => {
   const [zaloTemplates, setZaloTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [templateContent, setTemplateContent] = useState({ subject: '', body: '' });
+  const [extraAttachments, setExtraAttachments] = useState([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
   const [templateDetailError, setTemplateDetailError] = useState(false);
@@ -157,6 +161,59 @@ const QuickSend = () => {
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
   const [testRecipient, setTestRecipient] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+
+  // Nạp bản nháp từ Trợ lý AI (quickSendDraft) nếu có
+  useEffect(() => {
+    const draft = location.state?.quickSendDraft;
+    if (!draft) return;
+
+    if (draft.channel === CHANNEL_TYPES.EMAIL || draft.channel === CHANNEL_TYPES.ZALO) {
+      setSelectedChannel(draft.channel);
+    }
+
+    if (Array.isArray(draft.recipients)) {
+      const clean = draft.recipients.map((r) => String(r || '').trim()).filter(Boolean).join('\n');
+      if (draft.channel === CHANNEL_TYPES.ZALO) {
+        setManualPhones(clean);
+      } else {
+        setManualEmails(clean);
+      }
+    } else if (typeof draft.recipients === 'string' && draft.recipients.trim()) {
+      if (draft.channel === CHANNEL_TYPES.ZALO) {
+        setManualPhones(draft.recipients.trim());
+      } else {
+        setManualEmails(draft.recipients.trim());
+      }
+    }
+
+    if (draft.subject !== undefined || draft.body !== undefined) {
+      setTemplateContent({
+        subject: draft.subject || '',
+        body: draft.body || '',
+      });
+    }
+
+    if (draft.accountId) {
+      if (draft.channel === CHANNEL_TYPES.ZALO) {
+        setSelectedZaloAccount({ id: draft.accountId });
+      } else {
+        setSelectedEmailAccount({ id: draft.accountId });
+      }
+    }
+
+    if (Array.isArray(draft.attachments) && draft.attachments.length > 0) {
+      setExtraAttachments(draft.attachments);
+    }
+
+    if (draft.startStep === QUICK_SEND_STEPS.PREVIEW || draft.startStep === 'preview') {
+      setCurrentStep(QUICK_SEND_STEPS.PREVIEW);
+    } else if (draft.startStep === QUICK_SEND_STEPS.TEMPLATE || draft.startStep === 'template') {
+      setCurrentStep(QUICK_SEND_STEPS.TEMPLATE);
+    }
+
+    // Xóa state để tránh F5 nạp lại draft cũ
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
 
   // Fetch templates
   const fetchTemplates = useCallback(async () => {
@@ -184,21 +241,31 @@ const QuickSend = () => {
         emailSettingsApiService.listEmailSettings(),
         zaloSettingsApiService.listAccounts(),
       ]);
-      setEmailAccounts(emailRes?.data?.data?.items || []);
+      const emailItems = emailRes?.data?.data?.items || [];
+      setEmailAccounts(emailItems);
       const zaloItemsRaw = zaloRes?.data?.data?.items || [];
       const zaloItems = zaloItemsRaw.filter((a) => !a.isLocked);
       setZaloAccounts(zaloItems);
 
-      // Auto-select default account if exists
-      const emailItems = emailRes?.data?.data?.items || [];
-      if (emailItems.length === 0) {
-        console.warn('[QuickSend] No email accounts returned from API. Response:', emailRes?.data);
-      } else if (emailItems.length === 1) {
-        // Single account — auto-select it so the user doesn't have to pick
-        setSelectedEmailAccount(emailItems[0]);
-      }
-      const defaultZalo = zaloItems.find((a) => a.isDefault || a.is_default);
-      if (defaultZalo) setSelectedZaloAccount(defaultZalo);
+      // Auto-select default account if exists or preserve draft account
+      setSelectedEmailAccount((current) => {
+        if (current?.id) {
+          const matched = emailItems.find((a) => String(a.id) === String(current.id));
+          return matched || current;
+        }
+        if (emailItems.length === 1) return emailItems[0];
+        const def = emailItems.find((a) => a.isDefault || a.is_default);
+        return def || null;
+      });
+
+      setSelectedZaloAccount((current) => {
+        if (current?.id) {
+          const matched = zaloItems.find((a) => String(a.id) === String(current.id));
+          return matched || current;
+        }
+        const defaultZalo = zaloItems.find((a) => a.isDefault || a.is_default);
+        return defaultZalo || null;
+      });
     } catch (error) {
       console.error('Failed to fetch accounts:', error);
     } finally {
@@ -207,9 +274,10 @@ const QuickSend = () => {
   }, []);
 
   useEffect(() => {
-    if (currentStep === QUICK_SEND_STEPS.RECIPIENTS) {
+    if (currentStep === QUICK_SEND_STEPS.RECIPIENTS || currentStep === QUICK_SEND_STEPS.PREVIEW) {
       fetchAccounts();
-    } else if (currentStep === QUICK_SEND_STEPS.TEMPLATE) {
+    }
+    if (currentStep === QUICK_SEND_STEPS.TEMPLATE) {
       fetchTemplates();
     }
   }, [currentStep, fetchTemplates, fetchAccounts]);
@@ -350,7 +418,10 @@ const QuickSend = () => {
         ? selectedEmailAccount?.id
         : selectedZaloAccount?.id;
 
-      const attachments = Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : [];
+      const attachments = [
+        ...(Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : []),
+        ...(Array.isArray(extraAttachments) ? extraAttachments : []),
+      ];
       if (selectedChannel === CHANNEL_TYPES.EMAIL) {
         const { html, text } = resolveEmailBody();
         const res = await campaignApiService.testSendQuickCampaign({
@@ -387,7 +458,10 @@ const QuickSend = () => {
   // `recipients` list of previously-failed recipients).
   const runSendLoop = useCallback(async (recipients) => {
     const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
-    const attachments = Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : [];
+    const attachments = [
+      ...(Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : []),
+      ...(Array.isArray(extraAttachments) ? extraAttachments : []),
+    ];
     let successCount = 0;
     let failCount = 0;
     const failureSamples = new Map();
@@ -459,6 +533,7 @@ const QuickSend = () => {
     resolveZaloBody,
     templateContent.subject,
     selectedTemplate,
+    extraAttachments,
   ]);
 
   // Send quick campaign - gửi trực tiếp không cần tạo campaign
@@ -982,19 +1057,27 @@ const QuickSend = () => {
                 </div>
               )}
 
-              {/* Template Preview */}
-              {selectedTemplate && (
+              {/* Template / Message Content Preview */}
+              {(selectedTemplate || templateContent.subject || templateContent.body || (extraAttachments && extraAttachments.length > 0)) && (
                 <div className="p-4 bg-gray-50 rounded-lg mb-4">
-                  <p className="text-sm font-medium text-gray-700">{t('quickSend.template')}</p>
-                  <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
-                  {selectedTemplate.attachments && selectedTemplate.attachments.length > 0 && (
+                  <p className="text-sm font-medium text-gray-700">
+                    {selectedTemplate ? t('quickSend.template') : (selectedChannel === CHANNEL_TYPES.EMAIL ? 'Nội dung email' : 'Nội dung tin nhắn')}
+                  </p>
+                  {selectedTemplate ? (
+                    <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                  ) : (
+                    templateContent.subject && (
+                      <p className="text-gray-900 font-medium mt-1">{templateContent.subject}</p>
+                    )
+                  )}
+                  {((selectedTemplate?.attachments && selectedTemplate.attachments.length > 0) || (extraAttachments && extraAttachments.length > 0)) && (
                     <div className="mt-3 pt-3 border-t border-gray-200">
                       <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
                         <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
-                        {t('quickSend.attachments')} ({selectedTemplate.attachments.length})
+                        {t('quickSend.attachments')} ({(selectedTemplate?.attachments?.length || 0) + (extraAttachments?.length || 0)})
                       </p>
                       <div className="space-y-1.5">
-                        {selectedTemplate.attachments.map((att, idx) => (
+                        {[...(selectedTemplate?.attachments || []), ...(extraAttachments || [])].map((att, idx) => (
                           <div key={idx} className="flex items-center gap-2 text-xs text-gray-700 bg-white px-3 py-1.5 rounded border border-gray-200">
                             <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                             <span className="font-medium truncate">{att.originalName || att.name || att.filename || att.key}</span>

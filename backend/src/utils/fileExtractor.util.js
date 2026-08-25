@@ -27,6 +27,9 @@ export async function extractTextFromBuffer(buffer, filename) {
       case 'docx':
         return await extractTextFromDocx(buffer);
 
+      case 'pptx':
+        return await extractTextFromPptx(buffer);
+
       case 'xlsx':
       case 'xls':
         return await extractTextFromExcel(buffer);
@@ -177,6 +180,43 @@ async function extractTextFromImage(buffer, ext) {
     return result?.text || '';
   } catch (err) {
     console.error('[FileExtractor] Error extracting text from image:', err.message);
+    return '';
+  }
+}
+
+async function extractTextFromPptx(buffer) {
+  try {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    await zip.loadAsync(buffer);
+
+    let text = '';
+    // Find all slide XML files
+    const slideFiles = Object.keys(zip.files).filter(name => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'));
+    
+    // Sort slides by number so they are in order
+    slideFiles.sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    for (const filename of slideFiles) {
+      const content = await zip.file(filename).async('string');
+      // Extract text from <a:t> tags
+      const matches = content.match(/<a:t>(.*?)<\/a:t>/g);
+      if (matches) {
+        // Remove the xml tags, just keep the text
+        const slideText = matches.map(m => m.replace(/<\/?a:t>/g, '')).join(' ');
+        if (slideText.trim()) {
+          text += `--- Slide ${parseInt(filename.replace(/\D/g, ''), 10)} ---\n${slideText}\n\n`;
+        }
+      }
+    }
+    
+    return text.trim();
+  } catch (e) {
+    console.error('[FileExtractor] PPTX error:', e.message);
     return '';
   }
 }

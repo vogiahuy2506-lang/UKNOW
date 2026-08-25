@@ -100,7 +100,10 @@ class AiCampaignService {
             aiPromptResources.getRecommendedCampaignType(userId),
           ]);
 
-        const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
+        const connectedZaloAccount = zaloAccounts.find(
+          (a) => (a.status === 'connected' || !a.status) && a.isActive !== false && a.is_active !== false
+        );
+        const firstZaloAccountId = connectedZaloAccount?.id ?? null;
 
         existingResources = `
 === TÀI NGUYÊN CÓ SẴN (dùng để điền thẳng vào config node) ===
@@ -935,7 +938,10 @@ QUY TẮC:
           ]);
 
         landingPages = _landingPages;
-        firstZaloAccountId = zaloAccounts[0]?.id ?? null;
+        const connectedZaloAccount = zaloAccounts.find(
+          (a) => (a.status === 'connected' || !a.status) && a.isActive !== false && a.is_active !== false
+        );
+        firstZaloAccountId = connectedZaloAccount?.id ?? null;
 
         existingResources = `
 === TÀI NGUYÊN CÓ SẴN (được tải mới từ hệ thống tại thời điểm tin nhắn này — luôn phản ánh trạng thái hiện tại) ===
@@ -1523,16 +1529,17 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
 ## HEURISTICS CHO type="create_and_run":
 - CHỈ khi người dùng nói RÕ ràng muốn bỏ xác nhận: "tạo và chạy", "create and run", "chạy ngay chiến dịch"
-- "gửi nhanh" / "gui nhanh" / "quick send" / "send one email" KHÔNG đủ → dùng type="confirm_create" (vẫn cần user bấm xác nhận)
+- "gửi nhanh" / "gui nhanh" / "quick send" / "send one email" / "gửi 1 lần" / "gửi một lần" KHÔNG đủ → dùng type="confirm_create" (vẫn cần user bấm xác nhận)
 - Người dùng mô tả rõ ràng mục tiêu nhưng không nói chạy ngay → confirm_create, không create_and_run
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) mà wizard chưa có CAMPAIGN_BRIEF → hỏi qua wizard/gates, không bịa
 
 ## QUICK-SEND (gửi nhanh / one-shot):
-- Marker: "gửi nhanh", "gửi 1 email", "quick send", "send one email", "send a single message"
+- Marker: "gửi nhanh", "gửi 1 email", "gửi 1 lần", "gửi một lần", "gửi một mình", "quick send", "send one email", "send a single message", "send once"
 - Đây là gửi MỘT lần (schedule once). KHÔNG trả content_plan / suggest_content_plan. KHÔNG tự nâng thành chuỗi nhiều ngày.
 - Nếu CAMPAIGN_BRIEF DATA đã có (kể cả contentMode=context cảm ơn/thông báo) → đừng hỏi lại sản phẩm/chủ đề.
 - dataSource="manual" hoặc "zalo_contacts": KHÔNG chép email/SĐT/UID cụ thể vào nodes; FE nhập người nhận riêng (overlay). Giữ recipientSource/zaloRecipientSource = "manual" với list rỗng.
-- Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.`;
+- Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.
+- Khi ra confirm_create cho yêu cầu gửi 1 lần, câu phản hồi giải thích rõ: Bấm "Tạo chiến dịch" nếu muốn lưu lại để theo dõi sau, hoặc "Gửi nhanh" nếu chỉ cần gửi một lần (Gửi nhanh không chiếm suất chiến dịch trong gói).`;
 
     const response = await runChat({ systemPrompt, history, files, userId, requestedModel: model });
     const guarded = this._guardWizardGates(
@@ -1619,6 +1626,14 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     if ((finalResponse?.type === 'confirm_create' || finalResponse?.type === 'create_and_run') && finalResponse.data) {
       const targetScript = finalResponse.data.script || finalResponse.data;
       if (targetScript && Array.isArray(targetScript.nodes) && Array.isArray(targetScript.connections)) {
+        console.log(
+          '[AI Patch][gate] senderAccountId=',
+          gateState?.senderAccountId,
+          'channel=',
+          gateState?.channel,
+          'gateKeys=',
+          Object.keys(gateState || {})
+        );
         aiCampaignDraftService.patchDeterministicCampaignScript(targetScript, {
           senderAccountId: gateState?.senderAccountId,
           dataSource: gateState?.dataSource,
@@ -1721,7 +1736,10 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           zaloTemplates,
         });
 
-        const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
+        const connectedZaloAccount = zaloAccounts.find(
+          (a) => (a.status === 'connected' || !a.status) && a.isActive !== false && a.is_active !== false
+        );
+        const firstZaloAccountId = connectedZaloAccount?.id ?? null;
 
         // Format Zalo accounts list
         let zaloAccountsList = '  (chưa kết nối)';
