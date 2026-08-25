@@ -92,7 +92,7 @@ describe('aiCampaignWizard.service', () => {
     expect(gate.gate).toBe('campaignBrief');
     expect(gate.response.data.questions[0].inputType).toBe('campaign_brief');
     expect(gate.response.data.questions[0].options.map((o) => o.value))
-      .toEqual(['single_product', 'multiple_products', 'attached_file', 'custom_topic']);
+      .toEqual(['single_product', 'attached_file', 'custom_topic']);
   });
 
   it('quick-send sets once schedule + email channel from prompt', () => {

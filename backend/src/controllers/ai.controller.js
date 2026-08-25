@@ -16,6 +16,8 @@ import campaignNodeRegistryService from '../services/campaign/campaignNodeRegist
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
 import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import uploadController from './upload.controller.js';
+import recipientExtractorService from '../services/ai/recipientExtractor.service.js';
 import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../utils/manualRecipients.util.js';
 import {
   resolveLandingBrief,
@@ -1732,6 +1734,35 @@ class AiController {
         : 'Tạo toàn bộ nội dung hiển thị bằng tiếng Việt. Trả về HTML đầy đủ (Tailwind CDN) để hiển thị full page.',
     );
     return parts.join('\n\n');
+  }
+
+  /**
+   * Trích xuất danh sách người nhận (email/SĐT) từ file bảng tính tải lên (.xlsx, .xls, .csv).
+   */
+  async extractRecipients(req, res) {
+    try {
+      const { tempId, originalName, contentType } = req.body || {};
+      if (!tempId) {
+        return res.status(400).json({
+          success: false,
+          message: 'tempId là bắt buộc.',
+          code: 'TEMP_ID_REQUIRED',
+        });
+      }
+
+      const buffer = await uploadController.readTempFileBuffer(tempId, originalName);
+      const result = recipientExtractorService.extractRecipientsFromBuffer(buffer, originalName, contentType);
+
+      return res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error('[AiController] extractRecipients error:', error);
+      return res.status(error.statusCode || 500).json(
+        buildAiErrorPayload(error, 'Không thể trích xuất danh sách người nhận từ tệp')
+      );
+    }
   }
 }
 

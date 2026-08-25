@@ -262,6 +262,9 @@ const deriveWizardContext = (items = []) => {
       context.senderAccountName = marker.accountName || null;
     } else if (marker.gate === 'dataSource') {
       context.dataSource = marker.value || marker.dataSource || null;
+      if (marker.sheetUrl) {
+        context.sheetUrl = marker.sheetUrl;
+      }
       if (Array.isArray(marker.friendUids)) {
         context.zaloFriendIds = marker.friendUids;
       }
@@ -2444,6 +2447,35 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           await emitWizardAnswer(
             { gate: 'dataSource', value: 'manual', recipientCount: values.length },
             summaryText,
+          );
+          return;
+        }
+        if (answers.dataSource === 'sheet') {
+          if (answers.extractedRecipients && answers.extractedRecipients.rowCount > 0) {
+            const { emails = [], phones = [], rowCount } = answers.extractedRecipients;
+            const channel = wizardContext.channel || pendingCampaignData?.channel || null;
+            const recipientPayload = (channel === 'zalo' || channel === 'zalo_group')
+              ? { phones }
+              : (channel === 'email' ? { emails } : { emails, phones });
+
+            directRecipientsRef.current = recipientPayload;
+            setDirectRecipients(recipientPayload);
+
+            await emitWizardAnswer(
+              { gate: 'dataSource', value: 'manual', recipientCount: rowCount, source: 'file' },
+              summaryText
+            );
+            return;
+          }
+
+          const sheetUrl = answers.sheetUrl?.trim();
+          await emitWizardAnswer(
+            {
+              gate: 'dataSource',
+              value: 'sheet',
+              ...(sheetUrl ? { sheetUrl } : {}),
+            },
+            summaryText
           );
           return;
         }

@@ -63,6 +63,9 @@ router.delete('/sessions/:id', requirePermission('ai_assistant_use'), aiControll
 // Wizard state mutation từ nút bấm (không gọi AI → không aiLimiter, không credit)
 router.patch('/sessions/:id/wizard-state', requirePermission('ai_assistant_use'), aiController.patchWizardState.bind(aiController));
 
+// Trích xuất danh sách người nhận từ tệp bảng tính
+router.post('/extract-recipients', requirePermission('ai_assistant_use'), aiController.extractRecipients.bind(aiController));
+
 // Custom AI Chatbot (for widget, Zalo OA, Facebook, Studio chat)
 router.post('/custom-chat', requireSelfContext, aiLimiter, assertAiCreditAvailable('ai_custom_chat'), aiController.customChat.bind(aiController));
 

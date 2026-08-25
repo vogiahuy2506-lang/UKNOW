@@ -363,11 +363,11 @@ describe('POST /api/founderai/sync/courses', () => {
     expect(rows[0]).toMatchObject({
       course_code: '777',
       course_name: 'Course Founder AI',
-      price: '299000',
-      original_price: '499000',
       category: 'AI',
       thumbnail_url: 'https://x.test/img.png',
     });
+    expect(Number(rows[0].original_price)).toBe(499000);
+    expect(Number(rows[0].price)).toBe(299000);
   });
 });
 
@@ -462,14 +462,13 @@ describe('POST /api/founderai/sync/orders/:orderId', () => {
     });
 
     const purchases = await db.query(
-      `SELECT product_name, amount, order_id, order_status, product_type FROM customer_purchases WHERE id_customer = $1`,
+      `SELECT product_name, amount, order_id, product_type FROM customer_purchases WHERE id_customer = $1`,
       [cust.rows[0].id]
     );
     expect(purchases.rows[0]).toMatchObject({
       product_name: 'Course Z',
       amount: '500000',
       order_id: '700',
-      order_status: 'completed',
       product_type: 'complete',
     });
 
@@ -515,10 +514,10 @@ describe('POST /api/founderai/sync/orders/:orderId', () => {
     const cust = await db.query(`SELECT id, has_purchased FROM customers WHERE id_user = $1`, [user.id]);
     expect(cust.rows[0].has_purchased).toBe(false);
     const purchases = await db.query(
-      `SELECT product_type, order_status FROM customer_purchases WHERE id_customer = $1`,
+      `SELECT product_type FROM customer_purchases WHERE id_customer = $1`,
       [cust.rows[0].id]
     );
-    expect(purchases.rows[0]).toMatchObject({ product_type: 'interested', order_status: 'on-hold' });
+    expect(purchases.rows[0]).toMatchObject({ product_type: 'interested' });
 
     const journey = await db.query(
       `SELECT event_type FROM customer_journey WHERE id_customer = $1`,

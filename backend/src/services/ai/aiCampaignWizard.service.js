@@ -387,6 +387,9 @@ export function extractWizardState(history = [], options = {}) {
     } else if (marker.gate === 'dataSource') {
       recordMarkerGate('dataSource');
       state.dataSource = marker.value || marker.dataSource || null;
+      if (marker.sheetUrl && GOOGLE_SHEET_URL_RE.test(marker.sheetUrl)) {
+        state.sheetUrl = marker.sheetUrl.trim();
+      }
       if (Array.isArray(marker.friendUids)) {
         state.zaloFriendIds = marker.friendUids;
       }
@@ -592,27 +595,29 @@ export function buildCampaignBriefQuestion(courses = [], locale = 'vi', {
   preferredContentMode = null,
 } = {}) {
   const isEnglish = locale === 'en';
-  const list = Array.isArray(courses) ? courses : [];
+  const rawList = Array.isArray(courses) ? courses : [];
+  const seenIds = new Set();
+  const list = rawList.filter((course) => {
+    const id = course?.id;
+    if (id == null || seenIds.has(String(id))) return false;
+    seenIds.add(String(id));
+    return true;
+  });
+
   const options = [
     {
       value: 'single_product',
-      label: isEnglish ? 'One product / service' : '1 sản phẩm / dịch vụ',
+      label: isEnglish ? 'Product / service' : 'Sản phẩm / dịch vụ',
+    },
+    {
+      value: 'attached_file',
+      label: isEnglish ? 'Use attached file (Excel/CSV/PDF)' : 'Dùng dữ liệu từ file đính kèm',
+    },
+    {
+      value: 'custom_topic',
+      label: isEnglish ? 'Other content (thank-you, notice, …)' : 'Nội dung khác (cảm ơn, thông báo, …)',
     },
   ];
-  if (list.length >= 2) {
-    options.push({
-      value: 'multiple_products',
-      label: isEnglish ? 'Multiple products' : 'Nhiều sản phẩm cùng lúc',
-    });
-  }
-  options.push({
-    value: 'attached_file',
-    label: isEnglish ? 'Use attached file (Excel/CSV/PDF)' : 'Dùng dữ liệu từ file đính kèm',
-  });
-  options.push({
-    value: 'custom_topic',
-    label: isEnglish ? 'Other content (thank-you, notice, …)' : 'Nội dung khác (cảm ơn, thông báo, …)',
-  });
 
   const courseOptions = [
     ...list.map((course) => ({

@@ -1,10 +1,6 @@
 /**
- * Extract nội dung từ file upload để gửi cho Gemini.
- *
- * - Image / PDF      → inlineData (Gemini đọc native)
- * - xlsx / xls / csv → text (dùng xlsx library)
- * - docx / doc       → text (dùng mammoth)
- * - Khác             → inlineData fallback
+ * DEPRECATED — Giữ làm tham chiếu.
+ * Logic trích xuất text chuẩn của hệ thống hiện nằm tại `fileParser.util.js`.
  */
 import XLSX from 'xlsx';
 import mammoth from 'mammoth';

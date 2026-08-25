@@ -1,10 +1,18 @@
 import db from '../../config/database.js';
 
 class AiCampaignRepository {
+  /**
+   * Sản phẩm cho trợ lý AI (thẻ chọn sản phẩm + danh sách tài nguyên trong prompt).
+   *
+   * Lọc `status = 'publish'`: bảng `courses` đồng bộ nguyên trạng thái từ WooCommerce nên có cả
+   * `draft`, `pending`, `private`. Trước 25/08/2026 không lọc gì, nên thẻ chiến dịch mời người
+   * dùng chạy quảng bá cho khoá NHÁP và khoá RIÊNG TƯ — kể cả mục "Wallet Topup" (private).
+   * Đường tạo thủ công mặc định 'publish' (`courses/course.service.js:58`) nên không bị lọc nhầm.
+   */
   async getCourses(userId) {
     const result = await db.query(
       `SELECT id, course_name AS name, course_code AS code, status
-       FROM courses WHERE id_user = $1
+       FROM courses WHERE id_user = $1 AND status = 'publish'
        ORDER BY created_at DESC LIMIT 50`,
       [userId]
     );

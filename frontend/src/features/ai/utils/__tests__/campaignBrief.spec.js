@@ -70,10 +70,42 @@ describe('campaignBrief helpers', () => {
       campaignProduct: 'other',
       productName: 'AI Course',
     })).toBe(true);
-    expect(isCampaignBriefAnswersValid(
-      { campaignBrief: 'multiple_products' },
-      { courseOptions: [{ value: '1' }, { value: '2' }, { value: 'other' }] },
-    )).toBe(true);
+    expect(isCampaignBriefAnswersValid({
+      campaignBrief: 'single_product',
+      campaignProductIds: [1, 2],
+    })).toBe(true);
     expect(isCampaignBriefAnswersValid({ campaignBrief: 'attached_file' })).toBe(true);
+  });
+
+  it('builds multi-product markers and summaries correctly', () => {
+    expect(buildCampaignBriefMarker({
+      campaignBrief: 'single_product',
+      campaignProductIds: [10],
+    })).toEqual({
+      gate: 'campaignBrief',
+      contentMode: 'single_product',
+      productMode: 'catalog',
+      productId: 10,
+    });
+
+    expect(buildCampaignBriefMarker({
+      campaignBrief: 'multiple_products',
+      campaignProductIds: [10],
+    })).toEqual({
+      gate: 'campaignBrief',
+      contentMode: 'single_product',
+      productMode: 'catalog',
+      productId: 10,
+    });
+
+    expect(buildCampaignBriefMarker({
+      campaignBrief: 'single_product',
+      campaignProductIds: [10, 20, 30],
+    })).toEqual({
+      gate: 'campaignBrief',
+      contentMode: 'multiple_products',
+      productMode: 'catalog_set',
+      productIds: [10, 20, 30],
+    });
   });
 });

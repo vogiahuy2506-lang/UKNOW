@@ -15,6 +15,7 @@ import campaignBuilderApiService from '../../campaigns/services/campaignBuilderA
 import emailSettingsApiService from '../../settings/services/emailSettingsApi.service';
 import zaloSettingsApiService from '../../settings/services/zaloSettingsApi.service';
 import chatbotApiService from '../../chatbot/services/chatbotApi.service';
+import { foldDiacritics } from '../utils/foldDiacritics.js';
 
 const getQrImage = (payload) => (
   payload?.qrImage || payload?.qr_image || payload?.qrCode || payload?.qr_code || payload?.image || payload?.data?.qrImage || ''
@@ -454,12 +455,6 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
     </div>
   );
 };
-
-const foldDiacritics = (value) => String(value || '')
-  .normalize('NFD')
-  .replace(/[̀-ͯ]/g, '')
-  .replace(/đ/gi, (m) => (m === 'Đ' ? 'D' : 'd'))
-  .toLowerCase();
 
 export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, isActive = true, t }) => {
   const accountId = data?.accountId;

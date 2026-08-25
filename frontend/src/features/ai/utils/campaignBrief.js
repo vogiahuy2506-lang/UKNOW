@@ -21,14 +21,18 @@ export function isTopicTextValid(topic) {
 
 /**
  * Build wizard marker for campaignBrief gate.
- * Catalog: ID only (no labels). multiple_products: contentMode only (BE snapshots).
+ * Catalog: single_product (1 ID) or multiple_products (>= 2 IDs).
  */
 export function buildCampaignBriefMarker(answers = {}) {
   const contentMode = answers.campaignBrief || answers.contentMode;
   if (!contentMode) return null;
 
-  if (contentMode === 'single_product') {
+  if (contentMode === 'single_product' || contentMode === 'products') {
     const productValue = answers.campaignProduct;
+    const productIds = Array.isArray(answers.campaignProductIds)
+      ? answers.campaignProductIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+      : [];
+
     if (productValue === 'other') {
       return {
         gate: 'campaignBrief',
@@ -38,21 +42,43 @@ export function buildCampaignBriefMarker(answers = {}) {
         productDescription: String(answers.productDescription || '').trim() || undefined,
       };
     }
-    const id = Number(productValue);
-    if (!Number.isInteger(id) || id <= 0) return null;
+
+    if (productIds.length >= 2) {
+      return {
+        gate: 'campaignBrief',
+        contentMode: 'multiple_products',
+        productMode: 'catalog_set',
+        productIds,
+      };
+    }
+
+    const singleId = productIds.length === 1 ? productIds[0] : Number(productValue);
+    if (!Number.isInteger(singleId) || singleId <= 0) return null;
     return {
       gate: 'campaignBrief',
       contentMode: 'single_product',
       productMode: 'catalog',
-      productId: id,
+      productId: singleId,
     };
   }
 
   if (contentMode === 'multiple_products') {
+    const productIds = Array.isArray(answers.campaignProductIds)
+      ? answers.campaignProductIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+      : [];
+    if (productIds.length === 1) {
+      return {
+        gate: 'campaignBrief',
+        contentMode: 'single_product',
+        productMode: 'catalog',
+        productId: productIds[0],
+      };
+    }
     return {
       gate: 'campaignBrief',
       contentMode: 'multiple_products',
       productMode: 'catalog_set',
+      ...(productIds.length > 0 ? { productIds } : {}),
     };
   }
 
@@ -76,25 +102,25 @@ export function buildCampaignBriefMarker(answers = {}) {
   return null;
 }
 
-export function isCampaignBriefAnswersValid(answers = {}, question = null) {
+export function isCampaignBriefAnswersValid(answers = {}, _question = null) {
   const contentMode = answers.campaignBrief || answers.contentMode;
   if (!contentMode) return false;
 
-  if (contentMode === 'single_product') {
-    const productValue = answers.campaignProduct;
-    if (!productValue) return false;
-    if (productValue === 'other') {
+  if (contentMode === 'single_product' || contentMode === 'products') {
+    if (answers.campaignProduct === 'other') {
       return isProductNameValid(answers.productName)
         && isProductDescriptionValid(answers.productDescription);
     }
-    const id = Number(productValue);
+    const productIds = Array.isArray(answers.campaignProductIds)
+      ? answers.campaignProductIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+      : [];
+    if (productIds.length >= 1) return true;
+    const id = Number(answers.campaignProduct);
     return Number.isInteger(id) && id > 0;
   }
 
   if (contentMode === 'multiple_products') {
-    const courseOptions = question?.courseOptions || [];
-    const catalogCount = courseOptions.filter((o) => o.value !== 'other').length;
-    return catalogCount >= 2;
+    return true;
   }
 
   if (contentMode === 'custom_topic') {
@@ -111,13 +137,26 @@ export function isCampaignBriefAnswersValid(answers = {}, question = null) {
 export function buildCampaignBriefSummaryLine(answers = {}, question = null) {
   const contentMode = answers.campaignBrief || answers.contentMode;
   const opt = (question?.options || []).find((o) => o.value === contentMode);
-  if (contentMode === 'single_product') {
+  if (contentMode === 'single_product' || contentMode === 'products') {
     if (answers.campaignProduct === 'other') {
       const desc = String(answers.productDescription || '').trim();
       return `${question?.label || ''} ${String(answers.productName || '').trim()}${desc ? ` — ${desc}` : ''}`.trim();
     }
-    const course = (question?.courseOptions || []).find((o) => String(o.value) === String(answers.campaignProduct));
-    return `${question?.label || ''} ${course?.label || answers.campaignProduct}`.trim();
+    const productIds = Array.isArray(answers.campaignProductIds)
+      ? answers.campaignProductIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+      : (Number.isInteger(Number(answers.campaignProduct)) && Number(answers.campaignProduct) > 0 ? [Number(answers.campaignProduct)] : []);
+
+    if (productIds.length === 1) {
+      const course = (question?.courseOptions || []).find((o) => String(o.value) === String(productIds[0]));
+      return `${question?.label || ''} ${course?.label || productIds[0]}`.trim();
+    }
+    if (productIds.length >= 2) {
+      const names = productIds
+        .map((id) => (question?.courseOptions || []).find((o) => String(o.value) === String(id))?.label || `#${id}`);
+      const shown = names.slice(0, 3).join(', ');
+      const extra = names.length > 3 ? ` và ${names.length - 3} sản phẩm khác` : '';
+      return `${question?.label || ''} ${shown}${extra}`.trim();
+    }
   }
   if (contentMode === 'custom_topic') {
     const topic = String(answers.topicText || '').trim();

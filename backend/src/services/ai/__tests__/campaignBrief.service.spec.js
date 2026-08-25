@@ -107,14 +107,14 @@ describe('campaignBrief.service', () => {
       })).toThrow(expect.objectContaining({ code: 'CAMPAIGN_BRIEF_INVALID' }));
     });
 
-    it('multiple_products ignores client productIds', () => {
+    it('multiple_products parses and deduplicates client productIds', () => {
       const brief = parseCampaignBriefMarker({
         gate: 'campaignBrief',
         contentMode: 'multiple_products',
-        productIds: [1, 2, 3],
+        productIds: [1, 2, 2, 3, 'invalid', -5],
       });
       expect(brief.productMode).toBe('catalog_set');
-      expect(brief.productIds).toEqual([]);
+      expect(brief.productIds).toEqual([1, 2, 3]);
     });
   });
 

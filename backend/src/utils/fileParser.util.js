@@ -5,7 +5,15 @@ const require = module.createRequire(import.meta.url);
 const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
 const ExcelJS = require('exceljs');
+const XLSX = require('xlsx');
 const Papa = require('papaparse');
+
+const KNOWN_BINARY_EXTENSIONS = new Set([
+  '.xls', '.xlsx', '.doc', '.docx', '.ppt', '.pptx', '.pdf',
+  '.zip', '.rar', '.7z', '.tar', '.gz', '.bin', '.exe', '.dmg',
+  '.iso', '.apk', '.jar', '.class', '.mp3', '.mp4', '.wav', '.avi',
+  '.mov', '.mkv', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp'
+]);
 
 /**
  * Extract text from different file types based on originalName and contentType.
@@ -32,18 +40,42 @@ export async function extractTextFromBuffer(buffer, originalName, contentType = 
     }
   }
 
-  // 2. Word Documents (.docx)
-  if (ext === '.docx' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+  // 2. Word Documents (.docx, .doc)
+  if (
+    ext === '.docx' || ext === '.doc' ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime === 'application/msword'
+  ) {
     try {
       const result = await mammoth.extractRawText({ buffer });
-      return result.value || '';
+      return (result.value || '').trim();
     } catch (err) {
       console.error('[FileParser] Word parse error:', err);
+      if (ext === '.doc' || mime === 'application/msword') {
+        // Mammoth có thể không giải nén được file .doc nhị phân cũ; trả chuỗi rỗng thay vì ném rác
+        return '';
+      }
       throw new Error(`Không thể giải nén file Word (.docx): ${err.message}`);
     }
   }
 
-  // 3. Excel Spreadsheets (.xlsx)
+  // 3. Excel Spreadsheets (.xls legacy format via SheetJS)
+  if (ext === '.xls' || mime === 'application/vnd.ms-excel') {
+    try {
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      const parts = workbook.SheetNames.map((sheetName) => {
+        const sheet = workbook.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+        return `--- Sheet: ${sheetName} ---\n${csv}`;
+      });
+      return parts.join('\n\n').trim();
+    } catch (err) {
+      console.error('[FileParser] Excel .xls parse error:', err);
+      throw new Error(`Không thể giải nén file Excel (.xls): ${err.message}`);
+    }
+  }
+
+  // 4. Excel Spreadsheets (.xlsx openxml format)
   if (ext === '.xlsx' || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
     try {
       const workbook = new ExcelJS.Workbook();
@@ -71,7 +103,7 @@ export async function extractTextFromBuffer(buffer, originalName, contentType = 
     }
   }
 
-  // 4. CSV Files
+  // 5. CSV Files
   if (ext === '.csv' || mime === 'text/csv') {
     try {
       const csvStr = buffer.toString('utf-8');
@@ -86,7 +118,7 @@ export async function extractTextFromBuffer(buffer, originalName, contentType = 
     }
   }
 
-  // 5. Plain Text, HTML, JSON, JS, etc.
+  // 6. Plain Text, HTML, JSON, JS, etc.
   if (
     ext === '.txt' || ext === '.json' || ext === '.html' || ext === '.xml' || ext === '.js' || ext === '.ts' ||
     mime.startsWith('text/') || mime === 'application/json' || mime === 'application/javascript'
@@ -99,7 +131,12 @@ export async function extractTextFromBuffer(buffer, originalName, contentType = 
     }
   }
 
-  // Default: Fallback to UTF-8
+  // Default: Fallback to UTF-8 only if not a known binary extension.
+  // Unknown binary formats should NEVER emit binary garbage into AI prompts.
+  if (KNOWN_BINARY_EXTENSIONS.has(ext)) {
+    return '';
+  }
+
   try {
     return buffer.toString('utf-8');
   } catch {

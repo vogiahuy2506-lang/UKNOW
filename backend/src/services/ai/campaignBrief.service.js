@@ -144,7 +144,8 @@ function escapeForPrompt(value, maxLen = 500) {
 
 /**
  * Pure marker parse — rejects invalid enums/types/lengths. Does not resolve catalog.
- * multiple_products: only contentMode (+ optional productMode); no client productIds.
+ * multiple_products: accepts client productIds (or empty to use full catalog).
+ * Note: Ownership verification is strictly enforced during resolution via resolveCampaignBrief (courseRepository.findByIdsAndUser).
  */
 export function parseCampaignBriefMarker(marker) {
   if (!marker || typeof marker !== 'object' || Array.isArray(marker)) {
@@ -165,6 +166,7 @@ export function parseCampaignBriefMarker(marker) {
 
   let productMode = asOptionalEnum(marker.productMode, PRODUCT_MODES, 'productMode');
   let productId = null;
+  let productIds = [];
   let productName = null;
   let productDescription = null;
   let topicText = null;
@@ -197,6 +199,13 @@ export function parseCampaignBriefMarker(marker) {
     }
   } else if (contentMode === 'multiple_products') {
     productMode = 'catalog_set';
+    if (Array.isArray(marker.productIds)) {
+      productIds = [...new Set(
+        marker.productIds
+          .map(Number)
+          .filter((id) => Number.isInteger(id) && id > 0)
+      )].slice(0, CATALOG_SNAPSHOT_LIMIT);
+    }
   } else if (contentMode === 'custom_topic') {
     productMode = 'context';
     topicText = asTrimmedString(marker.topicText, {
@@ -216,7 +225,7 @@ export function parseCampaignBriefMarker(marker) {
     flowMode: 'standard',
     contentMode,
     productMode,
-    productIds: productId != null ? [productId] : [],
+    productIds: productIds.length > 0 ? productIds : (productId != null ? [productId] : []),
     productName,
     productDescription,
     topicText,
@@ -294,7 +303,8 @@ export function isCampaignBriefReady(brief) {
     return false;
   }
   if (mode === 'multiple_products') {
-    return brief.productMode === 'catalog_set';
+    return brief.productMode === 'catalog_set' &&
+      (Array.isArray(brief.productIds) ? (brief.productIds.length >= 2 || brief.productIds.length === 0) : true);
   }
   if (mode === 'custom_topic') {
     const topic = String(brief.topicText || '').trim();

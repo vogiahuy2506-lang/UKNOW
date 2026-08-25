@@ -255,10 +255,10 @@ describe('POST /api/courses/sync', () => {
     expect(rows[0]).toMatchObject({
       course_code: '999',
       course_name: 'Khoá Founder AI',
-      price: '499000',
-      original_price: '799000',
       category: 'AI Coaching',
     });
+    expect(Number(rows[0].original_price)).toBe(799000);
+    expect(Number(rows[0].price)).toBe(499000);
   });
 
   it('course đã tồn tại + có thay đổi price → UPDATE path', async () => {
@@ -305,9 +305,9 @@ describe('POST /api/courses/sync', () => {
     );
     expect(rows[0]).toMatchObject({
       course_name: 'Khoá mới',
-      price: '300000',
       category: 'new-cat',
     });
+    expect(Number(rows[0].price)).toBe(300000);
   });
 
   it('axios /orders 401 lỗi → success:false, errors array có entry', async () => {

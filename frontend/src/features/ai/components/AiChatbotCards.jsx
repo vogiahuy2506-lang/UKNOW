@@ -4,10 +4,13 @@ import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck, HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt, HiOutlinePaperClip,
-  HiOutlineDocumentText,
+  HiOutlineDocumentText, HiOutlineSearch,
 } from 'react-icons/hi';
 import api from '../../../services/api';
+import aiApi from '../../../services/aiApi';
 import templateLabelApiService from '../../templates/services/templateLabelApi.service';
+import { foldDiacritics } from '../utils/foldDiacritics.js';
+import { isValidGoogleSheetUrl } from '../utils/googleSheetUrl.js';
 import {
   isOtherProductDescriptionValid,
   isOtherProductNameValid,
@@ -692,9 +695,55 @@ export const AskCampaignDetailsCard = ({
   const [emailChoice, setEmailChoice] = useState(null); // 'new' | 'existing'
   const [emailTemplateName, setEmailTemplateName] = useState('');
   const [manualRecipients, setManualRecipients] = useState('');
-  const [productName, setProductName] = useState('');
-  const [productDescription, setProductDescription] = useState('');
-  const [topicText, setTopicText] = useState('');
+  const [productName, setProductName] = useState(data.defaults?.productName || '');
+  const [productDescription, setProductDescription] = useState(data.defaults?.productDescription || '');
+  const [topicText, setTopicText] = useState(data.defaults?.topicText || '');
+  const [sheetUrl, setSheetUrl] = useState(data.defaults?.sheetUrl || answers.sheetUrl || '');
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [extractedRecipients, setExtractedRecipients] = useState(null);
+  const [isExtractingRecipients, setIsExtractingRecipients] = useState(false);
+  const [extractError, setExtractError] = useState(null);
+  const [showSampleRows, setShowSampleRows] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState(() => {
+    if (Array.isArray(answers.campaignProductIds) && answers.campaignProductIds.length > 0) {
+      return answers.campaignProductIds;
+    }
+    if (answers.campaignProduct && answers.campaignProduct !== 'other') {
+      return [answers.campaignProduct];
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    const spreadsheetFile = (uploadedFiles || []).find((f) => {
+      const name = String(f.name || f.originalName || '').toLowerCase();
+      return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv');
+    });
+
+    if (answers.dataSource === 'sheet' && spreadsheetFile && spreadsheetFile.tempId) {
+      setIsExtractingRecipients(true);
+      setExtractError(null);
+      aiApi.extractRecipients({
+        tempId: spreadsheetFile.tempId,
+        originalName: spreadsheetFile.name || spreadsheetFile.originalName,
+        contentType: spreadsheetFile.contentType,
+      })
+        .then((res) => {
+          if (res?.data) {
+            setExtractedRecipients(res.data);
+          }
+        })
+        .catch((err) => {
+          setExtractError(err.response?.data?.message || err.message || 'Không thể đọc danh sách người nhận từ tệp');
+        })
+        .finally(() => {
+          setIsExtractingRecipients(false);
+        });
+    } else {
+      setExtractedRecipients(null);
+      setExtractError(null);
+    }
+  }, [uploadedFiles, answers.dataSource]);
 
   const questions = data?.questions || [];
   const isWizardQuestion = questions.some((q) => q.wizardGate);
@@ -709,6 +758,8 @@ export const AskCampaignDetailsCard = ({
 
   const briefAnswers = {
     ...answers,
+    sheetUrl,
+    campaignProductIds: selectedProductIds,
     productName,
     productDescription,
     topicText,
@@ -749,27 +800,53 @@ export const AskCampaignDetailsCard = ({
     if (isBriefQuestion(question)) {
       return isCampaignBriefAnswersValid(briefAnswers, question);
     }
+    if (question.id === 'dataSource' && answers.dataSource === 'sheet') {
+      return isValidGoogleSheetUrl(sheetUrl) || (uploadedFiles && uploadedFiles.length > 0);
+    }
     return Boolean(answers[question.id]);
   };
 
   /**
-   * "Dùng dữ liệu từ file đính kèm" chỉ có MỘT cách đi tiếp — phải có tệp. Chặn ngay ở
-   * nút thay vì cho bấm rồi mới nhắc (backend vẫn nhắc, đó là tầng chốt chặn thứ hai
-   * cho trường hợp trạng thái lệch sau khi tải lại trang).
-   *
-   * CỐ Ý không áp cho `dataSource === 'sheet'`: option đó có HAI cách hợp lệ — tải tệp
-   * .xlsx/.csv HOẶC dán link Google Sheet vào khung chat. Tắt nút khi chưa có tệp sẽ
-   * chặn nhầm người đã có sẵn link.
+   * "Dùng dữ liệu từ file đính kèm": bắt buộc có tệp đính kèm.
+   * "File Excel / Google Sheet": có thể dán link Google Sheet hợp lệ HOẶC tải tệp đính kèm.
    */
   const attachedFileRequired = questions.some(isBriefQuestion)
     && answers.campaignBrief === 'attached_file';
+
+  const sheetSourceRequired = answers.dataSource === 'sheet';
+  const hasValidSheetUrl = isValidGoogleSheetUrl(sheetUrl);
+  const hasUploadedFile = uploadedFiles && uploadedFiles.length > 0;
+  const sheetSourceValid = !sheetSourceRequired || hasValidSheetUrl || hasUploadedFile;
 
   const allAnswered =
     data.questions.every(isQuestionAnswered) &&
     (!emailChoiceRequired || emailChoice !== null) &&
     (!emailTemplateRequired || emailTemplateName.trim().length > 0) &&
     (!manualRecipientsRequired || manualRecipients.trim().length > 0) &&
-    (!attachedFileRequired || uploadedFiles.length > 0);
+    (!attachedFileRequired || hasUploadedFile) &&
+    sheetSourceValid;
+
+  const toggleProduct = (productId) => {
+    if (productId === 'other') {
+      setSelectedProductIds([]);
+      pick('campaignProduct', 'other');
+      return;
+    }
+    if (answers.campaignProduct === 'other') {
+      setProductName('');
+      setProductDescription('');
+    }
+    setSelectedProductIds((prev) => {
+      const exists = prev.includes(productId);
+      const next = exists ? prev.filter((id) => id !== productId) : [...prev, productId];
+      setAnswers((a) => ({
+        ...a,
+        campaignProductIds: next,
+        campaignProduct: next.length === 1 ? next[0] : (next.length > 1 ? next[0] : undefined),
+      }));
+      return next;
+    });
+  };
 
   const pick = (qId, val) => setAnswers((prev) => {
     const next = { ...prev, [qId]: val };
@@ -780,6 +857,9 @@ export const AskCampaignDetailsCard = ({
     }
     if (qId === 'campaignBrief') {
       delete next.campaignProduct;
+      delete next.campaignProductIds;
+      setSelectedProductIds([]);
+      setProductSearchQuery('');
       setProductName('');
       setProductDescription('');
       setTopicText('');
@@ -856,6 +936,7 @@ export const AskCampaignDetailsCard = ({
       emailChoice,
       emailTemplateName: emailTemplateName.trim(),
       directRecipients: manualRecipients.trim(),
+      extractedRecipients,
     });
   };
 
@@ -901,27 +982,112 @@ export const AskCampaignDetailsCard = ({
           </div>
           {isBriefQuestion(q) && answers.campaignBrief === 'single_product' && (
             <div className="mt-3 space-y-2 rounded-xl border border-orange-200 bg-white p-3">
-              <p className="text-[11px] font-semibold text-orange-800">
-                {t('aiChatbot.campaignPickProduct') || 'Chọn sản phẩm / khóa học:'}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {(q.courseOptions || []).map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => pick('campaignProduct', opt.value)}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
-                      answers.campaignProduct === opt.value
-                        ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold text-orange-800">
+                  {t('aiChatbot.campaignPickProduct') || 'Chọn sản phẩm / khóa học:'}
+                </p>
+                {selectedProductIds.length > 0 && (
+                  <span className="text-[10px] font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                    Đã chọn {selectedProductIds.length}
+                  </span>
+                )}
               </div>
+
+              {/* Search bar */}
+              {(q.courseOptions || []).length > 3 && (
+                <div className="relative">
+                  <HiOutlineSearch className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={productSearchQuery}
+                    onChange={(e) => setProductSearchQuery(e.target.value)}
+                    placeholder="Tìm kiếm sản phẩm..."
+                    className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-slate-700 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  {productSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setProductSearchQuery('')}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Product list */}
+              <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                {(() => {
+                  const filtered = (q.courseOptions || []).filter((opt) => {
+                    if (opt.value === 'other') return true;
+                    if (!productSearchQuery.trim()) return true;
+                    return foldDiacritics(opt.label).includes(foldDiacritics(productSearchQuery));
+                  });
+
+                  const catalogFiltered = filtered.filter((opt) => opt.value !== 'other');
+                  const otherOption = (q.courseOptions || []).find((opt) => opt.value === 'other');
+
+                  if (productSearchQuery.trim() && catalogFiltered.length === 0) {
+                    return (
+                      <div className="text-center py-3 text-xs text-slate-500">
+                        Không khớp «{productSearchQuery}».{' '}
+                        <button
+                          type="button"
+                          onClick={() => setProductSearchQuery('')}
+                          className="text-orange-600 hover:underline font-medium"
+                        >
+                          Xóa tìm kiếm
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {catalogFiltered.map((opt) => {
+                          const isSelected = selectedProductIds.includes(opt.value);
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => toggleProduct(opt.value)}
+                              className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 ${
+                                isSelected
+                                  ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                              }`}
+                            >
+                              {isSelected && <HiOutlineCheck className="w-3.5 h-3.5 shrink-0" />}
+                              <span>{opt.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {otherOption && (
+                        <div className="pt-2 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => toggleProduct('other')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                              answers.campaignProduct === 'other'
+                                ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                            }`}
+                          >
+                            {otherOption.label || 'Khác'}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
               {answers.campaignProduct === 'other' && (
-                <div className="space-y-2 pt-1">
+                <div className="space-y-2 pt-2 border-t border-orange-100">
                   <input
                     type="text"
                     value={productName}
@@ -1010,38 +1176,103 @@ export const AskCampaignDetailsCard = ({
             </div>
           )}
           {q.id === 'dataSource' && answers[q.id] === 'sheet' && (
-            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-4 flex flex-col items-center justify-center text-center">
-              <p className="text-xs text-orange-800 leading-relaxed mb-3">
-                Bạn có thể bấm nút bên dưới để tải lên file Excel/CSV, hoặc dán link Google Sheet vào thanh chat để AI đọc.
-              </p>
-              <button
-                type="button"
-                onClick={onAttachClick}
-                className="flex items-center gap-2 px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 text-sm font-medium rounded-lg transition-colors border border-orange-300 shadow-sm"
-              >
-                <HiOutlinePaperClip className="w-4 h-4" />
-                Chọn file đính kèm
-              </button>
-              {uploadedFiles && uploadedFiles.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2 justify-center">
-                  {uploadedFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-orange-200 rounded-lg text-xs text-orange-900 font-medium shadow-xs">
-                      <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                      <span className="truncate max-w-[180px]">{f.name || f.originalName}</span>
-                      {onRemoveFile && (
+            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-orange-900 mb-1">
+                  Dán link Google Sheet:
+                </label>
+                <input
+                  type="url"
+                  value={sheetUrl}
+                  onChange={(e) => setSheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+                {sheetUrl.trim().length > 0 && !hasValidSheetUrl && (
+                  <p className="mt-1 text-[10px] text-amber-600">
+                    Link không đúng định dạng Google Sheet (cần có dạng https://docs.google.com/spreadsheets/...)
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-px bg-orange-200 flex-1" />
+                <span className="text-[10px] font-semibold text-orange-600 uppercase">HOẶC</span>
+                <div className="h-px bg-orange-200 flex-1" />
+              </div>
+              <div className="flex flex-col items-center justify-center text-center">
+                <p className="text-xs text-orange-800 leading-relaxed mb-2">
+                  Tải lên tệp bảng tính (.xlsx, .xls, .csv) chứa danh sách người nhận:
+                </p>
+                <button
+                  type="button"
+                  onClick={onAttachClick}
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 text-sm font-medium rounded-lg transition-colors border border-orange-300 shadow-sm"
+                >
+                  <HiOutlinePaperClip className="w-4 h-4" />
+                  Chọn file đính kèm
+                </button>
+                {uploadedFiles && uploadedFiles.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                    {uploadedFiles.map((f, i) => (
+                      <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-orange-200 rounded-lg text-xs text-orange-900 font-medium shadow-xs">
+                        <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                        <span className="truncate max-w-[180px]">{f.name || f.originalName}</span>
+                        {onRemoveFile && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onRemoveFile(i); }}
+                            className="text-orange-400 hover:text-red-500 ml-1 p-0.5 rounded transition-colors"
+                            title="Gỡ file"
+                          >
+                            <HiOutlineX className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {isExtractingRecipients && (
+                  <p className="mt-2 text-xs text-orange-700 animate-pulse">
+                    Đang đọc danh sách người nhận từ tệp...
+                  </p>
+                )}
+                {extractError && (
+                  <p className="mt-2 text-xs text-red-600 font-medium bg-red-50 p-2 rounded-lg border border-red-200">
+                    {extractError}
+                  </p>
+                )}
+                {extractedRecipients && (
+                  <div className="mt-3 p-3 bg-white border border-orange-200 rounded-xl text-left w-full space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-green-700 flex items-center gap-1.5">
+                        <HiOutlineCheck className="w-4 h-4 text-green-600" />
+                        Đã đọc {extractedRecipients.rowCount} người nhận từ tệp ({extractedRecipients.emails?.length || 0} email, {extractedRecipients.phones?.length || 0} SĐT)
+                      </span>
+                      {extractedRecipients.sampleRows?.length > 0 && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); onRemoveFile(i); }}
-                          className="text-orange-400 hover:text-red-500 ml-1 p-0.5 rounded transition-colors"
-                          title="Gỡ file"
+                          onClick={() => setShowSampleRows((v) => !v)}
+                          className="text-[11px] text-orange-600 hover:underline font-medium"
                         >
-                          <HiOutlineX className="w-3.5 h-3.5" />
+                          {showSampleRows ? 'Ẩn' : `Xem trước ${Math.min(5, extractedRecipients.sampleRows.length)} dòng`}
                         </button>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
+                    {showSampleRows && extractedRecipients.sampleRows?.length > 0 && (
+                      <div className="border border-slate-200 rounded-lg overflow-x-auto text-[11px] bg-slate-50 p-1.5 space-y-1">
+                        {extractedRecipients.sampleRows.map((row, idx) => (
+                          <div key={idx} className="flex gap-2 text-slate-700">
+                            <span className="font-mono text-slate-400">{idx + 1}.</span>
+                            {row.name && <span className="font-medium">{row.name}</span>}
+                            {row.email && <span className="text-blue-600">{row.email}</span>}
+                            {row.phone && <span className="text-green-600">{row.phone}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (

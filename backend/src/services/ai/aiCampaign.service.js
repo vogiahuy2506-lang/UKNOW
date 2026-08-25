@@ -1458,7 +1458,7 @@ Ví dụ campaign drip 2 đợt (dataSource=db):
 nodes: trigger → interested_customers → action_wave1(delay=0) → action_wave2(delay=3 days) → end
 
 Ví dụ lấy từ sheet (dataSource=sheet):
-nodes: trigger → read_sheet(sheetUrl="") → action_wave1(delay=0) → end
+nodes: trigger → read_sheet(sheetUrl="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit") → action_wave1(delay=0) → end
 
 Ví dụ lấy từ landing page (dataSource=landing):
 nodes: trigger → read_landing_leads → action_wave1(delay=0) → end

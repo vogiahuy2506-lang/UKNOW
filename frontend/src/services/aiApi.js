@@ -190,6 +190,15 @@ const aiApi = {
     });
     return response.data;
   },
+
+  /**
+   * Trích xuất danh sách người nhận (email/SĐT) từ file bảng tính (.xlsx, .xls, .csv).
+   * @param {{ tempId: string, originalName?: string, contentType?: string }} fileInfo
+   */
+  extractRecipients: async ({ tempId, originalName, contentType }) => {
+    const response = await api.post('/ai/extract-recipients', { tempId, originalName, contentType });
+    return response.data;
+  },
 };
 
 export default aiApi;

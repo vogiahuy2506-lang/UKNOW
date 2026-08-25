@@ -121,44 +121,28 @@ class FounderaiDataService {
     const originalPrice = ctx.parseMoney(product.regular_price, price);
     const status = ctx.normalizeCourseStatus(product.status);
 
-    const existingCourse = await client.query(
-      `SELECT id
-       FROM courses
-       WHERE COALESCE(workspace_owner_id, id_user) = $1
-         AND course_code = $2
-       LIMIT 1`,
-      [userId, productId]
-    );
-
-    if (existingCourse.rows.length === 0) {
-      const inserted = await client.query(
-        `INSERT INTO courses (
-            id_user, workspace_owner_id, created_by, course_name, course_code, description,
-            price, original_price, category, thumbnail_url, status
-         ) VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING id`,
-        [userId, actorUserId, courseName, productId, description, price, originalPrice, category, thumbnailUrl, status]
-      );
-
-      return { courseId: inserted.rows[0].id, inserted: true, updated: false };
-    }
-
-    await client.query(
-      `UPDATE courses
-       SET
-         course_name = COALESCE($1, course_name),
-         description = COALESCE($2, description),
-         price = COALESCE($3, price),
-         original_price = COALESCE($4, original_price),
-         category = COALESCE($5, category),
-         thumbnail_url = COALESCE($6, thumbnail_url),
-         status = COALESCE($7, status),
+    const upsertResult = await client.query(
+      `INSERT INTO courses (
+          id_user, workspace_owner_id, created_by, course_name, course_code, description,
+          price, original_price, category, thumbnail_url, status
+       ) VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT ((COALESCE(workspace_owner_id, id_user)), course_code) WHERE course_code IS NOT NULL
+       DO UPDATE SET
+         course_name = COALESCE(EXCLUDED.course_name, courses.course_name),
+         description = COALESCE(EXCLUDED.description, courses.description),
+         price = COALESCE(EXCLUDED.price, courses.price),
+         original_price = COALESCE(EXCLUDED.original_price, courses.original_price),
+         category = COALESCE(EXCLUDED.category, courses.category),
+         thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, courses.thumbnail_url),
+         status = COALESCE(EXCLUDED.status, courses.status),
          updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8`,
-      [courseName, description, price, originalPrice, category, thumbnailUrl, status, existingCourse.rows[0].id]
+       RETURNING id, (xmax = 0) AS inserted`,
+      [userId, actorUserId, courseName, productId, description, price, originalPrice, category, thumbnailUrl, status]
     );
 
-    return { courseId: existingCourse.rows[0].id, inserted: false, updated: true };
+    const row = upsertResult.rows[0];
+    const inserted = Boolean(row?.inserted);
+    return { courseId: row?.id, inserted, updated: !inserted };
   }
 
   async ensureCourseFromLineItem({ ctx, client, userId, actorUserId = userId, lineItem = {}, productCache = {} }) {
@@ -192,14 +176,30 @@ class FounderaiDataService {
 
     const courseName = ctx.toNullableText(lineItem.name) || `Product #${productId}`;
     const price = ctx.parseMoney(lineItem.price);
-    const inserted = await client.query(
+
+    const insertedResult = await client.query(
       `INSERT INTO courses (id_user, workspace_owner_id, created_by, course_name, course_code, price, original_price, status)
        VALUES ($1, $1, $2, $3, $4, $5, $6, 'publish')
+       ON CONFLICT ((COALESCE(workspace_owner_id, id_user)), course_code) WHERE course_code IS NOT NULL
+       DO NOTHING
        RETURNING id`,
       [userId, actorUserId, courseName, productId, price, price]
     );
 
-    return { courseId: inserted.rows[0].id, inserted: true, updated: false };
+    if (insertedResult.rows.length > 0) {
+      return { courseId: insertedResult.rows[0].id, inserted: true, updated: false };
+    }
+
+    const fallbackExisting = await client.query(
+      `SELECT id
+       FROM courses
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
+         AND course_code = $2
+       LIMIT 1`,
+      [userId, productId]
+    );
+
+    return { courseId: fallbackExisting.rows[0]?.id || null, inserted: false, updated: false };
   }
 
   async refreshCustomerPurchaseStats({ ctx, client, customerId }) {
