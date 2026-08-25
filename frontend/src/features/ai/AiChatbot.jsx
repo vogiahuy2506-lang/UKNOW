@@ -41,6 +41,11 @@ import {
 } from './utils/landingBrief.js';
 import { buildCampaignBriefMarker } from './utils/campaignBrief.js';
 import { isInternalAssistantPrompt } from './utils/internalPrompts.js';
+import {
+  WIZARD_ASSISTANT_TYPES,
+  findLastWizardCardIndex,
+  shouldKeepWizardCard,
+} from './utils/wizardCardHistory.js';
 import { enrichTemplateDraftFromDb } from './utils/planWorkflowReconstitution.js';
 import {
   IS_NEW_LANDING_REQ_RE,
@@ -91,15 +96,9 @@ const parseScheduleValue = (value, answers = {}) => {
   return { mode: raw || 'once' };
 };
 
-const WIZARD_ASSISTANT_TYPES = new Set([
-  'ask_campaign_details',
-  'ask_sender_account',
-  'email_setup_guide',
-  'zalo_qr_login',
-  'zalo_group_picker',
-  'zalo_friend_picker',
-  'suggest_content_plan',
-]);
+// Danh sách loại thẻ cổng + luật "chỉ giữ thẻ cuối" dùng chung cho cả lúc chạy live
+// (stripWizardCards bên dưới) lẫn lúc dựng lại từ DB — xem wizardCardHistory.js.
+
 
 const stripWizardCards = (items = []) => {
   const next = [...items];
@@ -752,8 +751,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
       const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'suggest_content_plan', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
 
-      const mappedMessages = dbMessages.map((m) => {
+      // Chỉ thẻ cổng CUỐI CÙNG còn giữ hình dạng thẻ. Các cổng đã trả lời chỉ còn lại câu chữ —
+      // giống hệt những gì người dùng thấy lúc chạy live (stripWizardCards). Xem wizardCardHistory.js.
+      const lastWizardCardIdx = findLastWizardCardIndex(dbMessages);
+
+      const mappedMessages = dbMessages.map((m, idx) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
+          if (!shouldKeepWizardCard(m, idx, lastWizardCardIdx)) {
+            return { role: m.role, content: m.content };
+          }
           let data = m.data;
           if (m.type === 'template_draft' && data) {
             data = enrichTemplateDraftFromDb(data, serverWizardState?.plan?.savedTemplates);
