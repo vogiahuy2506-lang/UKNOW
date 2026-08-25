@@ -104,6 +104,94 @@ Pham Thi D,d@example.com,
     );
   });
 
+  /**
+   * Regression (bug thật 25/08/2026): người dùng tải lên tệp .xlsx hai dòng, hệ thống chỉ lấy
+   * được một email. Nguyên nhân là ô kia gõ `mtruong909@gmail,com` — dấu PHẨY thay vì dấu chấm.
+   * Bộ đọc loại đúng, nhưng loại trong IM LẶNG: chỉ đếm vào `skipped` rồi thôi, không nơi nào
+   * kể tên dòng bị loại. Người dùng nhìn thấy "đã đọc 1 người nhận" và tưởng bộ đọc tệp hỏng.
+   */
+  describe('kể tên dòng bị loại', () => {
+    const buildXlsx = (rows) => {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
+      return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    };
+
+    it('nêu đúng giá trị và số dòng của ô email gõ sai', () => {
+      const buf = buildXlsx([
+        ['Họ Tên', 'Email'],
+        ['minh', 'mtruong909@gmail,com'],
+        ['phúc', 'hoangphuc@gmail.com'],
+      ]);
+
+      const result = extractRecipientsFromBuffer(buf, 'danh-sach.xlsx');
+
+      expect(result.emails).toEqual(['hoangphuc@gmail.com']);
+      expect(result.skipped).toBe(1);
+      expect(result.skippedSamples).toEqual([
+        { row: 2, value: 'mtruong909@gmail,com', reason: 'email_invalid' },
+      ]);
+    });
+
+    it('số dòng vẫn đúng khi tệp có dòng trống xen giữa', () => {
+      // Bộ đọc lọc bỏ dòng trống trước khi duyệt; nếu lấy chỉ số sau khi lọc thì số dòng báo ra
+      // sẽ lệch — báo sai số dòng còn tệ hơn không báo.
+      const buf = buildXlsx([
+        ['Họ Tên', 'Email'],
+        ['a', 'a@example.com'],
+        ['', ''],
+        ['', ''],
+        ['hỏng', 'sai-be-bét'],
+      ]);
+
+      const result = extractRecipientsFromBuffer(buf, 'co-dong-trong.xlsx');
+
+      expect(result.skipped).toBe(1);
+      expect(result.skippedSamples[0].row).toBe(5); // đúng số dòng trong Excel, không phải 3
+    });
+
+    it('phân biệt SĐT sai định dạng với dòng không có gì', () => {
+      const buf = buildXlsx([
+        ['Họ Tên', 'SĐT'],
+        ['a', '0901234567'],
+        ['b', '12'],
+        ['c', ''],
+      ]);
+
+      const result = extractRecipientsFromBuffer(buf, 'sdt.xlsx');
+
+      expect(result.skipped).toBe(2);
+      expect(result.skippedSamples).toEqual([
+        { row: 3, value: '12', reason: 'phone_invalid' },
+        { row: 4, value: null, reason: 'no_contact' },
+      ]);
+    });
+
+    it('không kể quá 5 dòng, nhưng vẫn đếm đủ', () => {
+      const rows = [['Họ Tên', 'Email']];
+      for (let i = 0; i < 9; i += 1) rows.push([`x${i}`, `hong-${i}`]);
+      rows.push(['ok', 'ok@example.com']);
+
+      const result = extractRecipientsFromBuffer(buildXlsx(rows), 'nhieu-loi.xlsx');
+
+      expect(result.skipped).toBe(9);
+      expect(result.skippedSamples).toHaveLength(5);
+    });
+
+    it('tệp sạch thì không có dòng bị loại nào', () => {
+      const buf = buildXlsx([
+        ['Họ Tên', 'Email'],
+        ['a', 'a@example.com'],
+        ['b', 'b@example.com'],
+      ]);
+
+      const result = extractRecipientsFromBuffer(buf, 'sach.xlsx');
+
+      expect(result.skipped).toBe(0);
+      expect(result.skippedSamples).toEqual([]);
+    });
+  });
+
   describe('extractRecipientsFromGoogleSheet', () => {
     it('throws INVALID_SHEET_URL when url is missing or malformed', async () => {
       await expect(extractRecipientsFromGoogleSheet('')).rejects.toThrow(

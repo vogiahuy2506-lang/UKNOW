@@ -9,6 +9,14 @@ const Papa = require('papaparse');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^(?:\+?84|0)\d{9,10}$/;
 
+/**
+ * Số dòng bị loại được kể tên cho người dùng. Chỉ cần vài ví dụ để họ nhận ra kiểu lỗi rồi tự
+ * soát tệp — liệt kê hết một tệp 5.000 dòng thì không ai đọc, mà payload lại phình.
+ */
+const MAX_SKIPPED_SAMPLES = 5;
+/** Cắt bớt giá trị lỗi trước khi trả về — ô trong bảng tính có thể dài tuỳ ý. */
+const MAX_SKIPPED_VALUE_LEN = 120;
+
 function foldDiacritics(value) {
   return String(value || '')
     .normalize('NFD')
@@ -78,8 +86,17 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
     throw error;
   }
 
-  // Filter completely empty rows
-  const rows = rawRows.filter((row) => Array.isArray(row) && row.some((cell) => String(cell || '').trim().length > 0));
+  // Filter completely empty rows.
+  // Giữ kèm số dòng GỐC: sau khi lọc dòng trống, chỉ số trong mảng không còn khớp số dòng người
+  // dùng nhìn thấy trong Excel nữa — mà báo sai số dòng còn tệ hơn không báo.
+  const rows = [];
+  const rowNumbers = [];
+  rawRows.forEach((row, idx) => {
+    if (Array.isArray(row) && row.some((cell) => String(cell || '').trim().length > 0)) {
+      rows.push(row);
+      rowNumbers.push(idx + 1); // 1-based, khớp thanh số dòng của Excel/Google Sheet
+    }
+  });
   if (rows.length === 0) {
     const error = new Error('Bảng tính không có dữ liệu.');
     error.code = 'EMPTY_SPREADSHEET_DATA';
@@ -115,13 +132,15 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
 
   const startRow = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
   const dataRows = rows.slice(startRow);
+  const dataRowNumbers = rowNumbers.slice(startRow);
 
   const emailSet = new Set();
   const phoneSet = new Set();
   const sampleRows = [];
+  const skippedSamples = [];
   let skipped = 0;
 
-  dataRows.forEach((row) => {
+  dataRows.forEach((row, rowIdx) => {
     let emailFound = null;
     let phoneFound = null;
     let nameFound = null;
@@ -167,6 +186,23 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
       }
     } else {
       skipped += 1;
+      // Kể tên vài dòng bị loại kèm LÝ DO. Trước đây chỉ đếm rồi thôi, nên một ô gõ nhầm
+      // ('a@gmail,com' thay vì 'a@gmail.com') làm mất người nhận trong im lặng — người dùng
+      // tưởng bộ đọc tệp hỏng. Bug thật 25/08/2026.
+      if (skippedSamples.length < MAX_SKIPPED_SAMPLES) {
+        const rawEmail = emailCol >= 0 ? String(row[emailCol] || '').trim() : '';
+        const rawPhone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
+        let reason = 'no_contact';
+        let value = null;
+        if (rawEmail) {
+          reason = 'email_invalid';
+          value = rawEmail.slice(0, MAX_SKIPPED_VALUE_LEN);
+        } else if (rawPhone) {
+          reason = 'phone_invalid';
+          value = rawPhone.slice(0, MAX_SKIPPED_VALUE_LEN);
+        }
+        skippedSamples.push({ row: dataRowNumbers[rowIdx] ?? null, value, reason });
+      }
     }
   });
 
@@ -200,6 +236,7 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
       name: nameCol >= 0,
     },
     skipped,
+    skippedSamples,
     sampleRows,
   };
 }

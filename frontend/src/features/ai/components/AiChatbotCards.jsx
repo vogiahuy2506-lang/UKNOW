@@ -1327,6 +1327,42 @@ export const AskCampaignDetailsCard = ({
                         ))}
                       </div>
                     )}
+                    {/*
+                      Dòng bị loại phải nói thành lời. Trước đây chỉ hiện số đọc ĐƯỢC, nên một ô
+                      gõ nhầm dấu phẩy làm mất người nhận mà không ai biết — người dùng tưởng bộ
+                      đọc tệp hỏng. Bug thật 25/08/2026.
+                    */}
+                    {extractedRecipients.skipped > 0 && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900">
+                        <p className="font-semibold">
+                          Bỏ qua {extractedRecipients.skipped} dòng không dùng được
+                        </p>
+                        {extractedRecipients.skippedSamples?.length > 0 && (
+                          <ul className="mt-1 space-y-0.5">
+                            {extractedRecipients.skippedSamples.map((item, idx) => (
+                              <li key={idx} className="flex gap-1.5">
+                                <span className="text-amber-500">•</span>
+                                <span className="break-all">
+                                  {item.row ? `Dòng ${item.row}: ` : ''}
+                                  {item.value ? (
+                                    <code className="rounded bg-amber-100 px-1 font-mono">{item.value}</code>
+                                  ) : (
+                                    'không có email/SĐT'
+                                  )}
+                                  {item.reason === 'email_invalid' && ' — email sai định dạng'}
+                                  {item.reason === 'phone_invalid' && ' — SĐT sai định dạng'}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {extractedRecipients.skipped > (extractedRecipients.skippedSamples?.length || 0) && (
+                          <p className="mt-1 text-amber-700">
+                            …và {extractedRecipients.skipped - (extractedRecipients.skippedSamples?.length || 0)} dòng khác.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
