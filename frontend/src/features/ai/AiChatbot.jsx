@@ -40,6 +40,8 @@ import {
   buildLandingBriefFromAnswers,
 } from './utils/landingBrief.js';
 import { buildCampaignBriefMarker } from './utils/campaignBrief.js';
+import { isInternalAssistantPrompt } from './utils/internalPrompts.js';
+import { enrichTemplateDraftFromDb } from './utils/planWorkflowReconstitution.js';
 import {
   IS_NEW_LANDING_REQ_RE,
   getLastLandingPageMessageIndex,
@@ -660,7 +662,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   // Rebuild contentPlanWorkflow + serverWizardGates từ wizard_state server trả về.
   // Return true nếu đã set workflow (caller bỏ qua fallback lossy từ messages).
-  const restoreFromServerWizardState = (wizardState) => {
+  const restoreFromServerWizardState = (wizardState, draftTemplates = []) => {
     const gates = wizardState?.v === 1 ? wizardState.gates : null;
     const planSection = wizardState?.v === 1 ? wizardState.plan : null;
     setServerWizardGates(gates || null);
@@ -681,7 +683,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       pendingDay,
       completedDays,
       savedTemplates,
-      draftTemplates: [],
+      draftTemplates: Array.isArray(draftTemplates) ? draftTemplates : [],
       savedCountByDay,
       generatingDay: null,
       failedDay: null,
@@ -694,7 +696,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       planApproved: Boolean(gates?.planApproved),
       status: allDone
         ? 'waiting_campaign_confirm'
-        : (savedTemplates.length > 0 ? 'waiting_template_save' : 'waiting_day_confirm'),
+        : (savedTemplates.length > 0 || (draftTemplates && draftTemplates.length > 0) ? 'waiting_template_save' : 'waiting_day_confirm'),
     });
     return true;
   };
@@ -749,9 +751,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       const mappedMessages = dbMessages.map((m) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
-          return { role: m.role, content: m.content, type: m.type, data: m.data };
+          let data = m.data;
+          if (m.type === 'template_draft' && data) {
+            data = enrichTemplateDraftFromDb(data, serverWizardState?.plan?.savedTemplates);
+          }
+          return { role: m.role, content: m.content, type: m.type, data };
         }
-        if (m.role === 'user' && parseWizardMarker(m.content)) {
+        // Ẩn cả marker [wizard] LẪN prompt máy sinh. Cờ `silentUser` lúc gửi chỉ nằm
+        // trong state trình duyệt, không được lưu xuống DB — nên dựng lại phải tự nhận
+        // ra, nếu không người dùng thấy prompt nội bộ như tin nhắn của chính mình.
+        if (m.role === 'user' && (parseWizardMarker(m.content) || isInternalAssistantPrompt(m.content))) {
           return { role: m.role, content: m.content, silent: true };
         }
         return {
@@ -761,6 +770,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         };
       });
 
+      const reconstructedDrafts = mappedMessages
+        .filter((m) => m.role === 'assistant' && m.type === 'template_draft' && m.data?._planTemplate)
+        .map((m) => m.data);
+
       currentSessionIdRef.current = sessionId;
       setMessages([{ role: 'assistant', content: welcomeMessage }, ...mappedMessages]);
       setCurrentSessionId(sessionId);
@@ -769,7 +782,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       // messages chỉ khi server chưa có state (session cũ trước migration)
       let workflowRestored = false;
       if (serverWizardState) {
-        workflowRestored = restoreFromServerWizardState(serverWizardState);
+        workflowRestored = restoreFromServerWizardState(serverWizardState, reconstructedDrafts);
       } else {
         setServerWizardGates(null);
       }
@@ -1090,6 +1103,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     bodyHtml: tpl.bodyHtml || '',
     bodyText: tpl.bodyText || tpl.message || '',
     channel: draftMeta.channel || apiChannel,
+    planSlotKey: draftMeta.planSlotKey || draftMeta._planSlotKey,
     _planTemplate: draftMeta._planTemplate,
     _planDay: draftMeta._planDay,
     _planSlotId: draftMeta._planSlotId,
@@ -1172,6 +1186,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       const draftData = buildLibraryDraftFromTemplate(tpl, {
         channel: apiChannel,
+        planSlotKey: slotKey,
         _planTemplate: true,
         _planDay: day,
         _planSlotId: slotKey,
@@ -1957,17 +1972,35 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const handleEditTemplate = (draft) => {
-    navigate('/app/settings/templates', { state: { aiDraft: draft } });
+    const currentPath = location.pathname + location.search;
+    navigate('/app/settings/templates', {
+      state: {
+        aiDraft: draft,
+        fromAiAssistant: true,
+        returnPath: currentPath,
+      },
+    });
     onToggle?.();
   };
 
   const handlePlanTemplateSaved = (draft, savedTemplate) => {
-    if (!draft?._planTemplate || !savedTemplate?.id) return;
+    if (!draft?._planTemplate || !savedTemplate?.id) {
+      console.warn('[AI Assistant] handlePlanTemplateSaved ignored:', {
+        hasPlanTemplate: Boolean(draft?._planTemplate),
+        savedTemplateId: savedTemplate?.id,
+        slotKey: draft?._planSlotKey || draft?.planSlotKey,
+        draft,
+      });
+      return;
+    }
 
     const day = Number(draft._planDay);
     const slotIndex = Number(draft._planSlotIndex) || 1;
-    const slotId = draft._planSlotId || `d${day}-s${slotIndex}`;
-    if (!Number.isFinite(day)) return;
+    const slotId = draft._planSlotId || draft._planSlotKey || draft?.planSlotKey || `d${day}-s${slotIndex}`;
+    if (!Number.isFinite(day)) {
+      console.warn('[AI Assistant] handlePlanTemplateSaved: invalid day in draft', { day, draft });
+      return;
+    }
 
     const record = {
       day,
@@ -2161,7 +2194,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         const slotUserMsg = { role: 'user', content: slotPrompt };
         workingHistory = [...workingHistory, slotUserMsg];
-        const response = await aiApi.chat(workingHistory, [], mySessionId, locale);
+        // Gửi slotKey TƯỜNG MINH. Trước đây backend regex lại `slotPrompt` để lần ra
+        // "ngày N, slot M" — biến câu chữ trên thành thứ gánh dữ liệu, sửa lời văn là
+        // gãy im lặng. Ở đây ta đã biết chính xác slotKey rồi.
+        const response = await aiApi.chat(workingHistory, [], mySessionId, locale, null, slotKey);
         if (!response?.success) {
           throw new Error('AI không trả về kết quả hợp lệ');
         }
@@ -2193,6 +2229,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         const draftData = {
           ...data,
           channel: draftChannel,
+          planSlotKey: slotKey,
           _planTemplate: true,
           _planDay: day,
           _planSlotId: slotKey,

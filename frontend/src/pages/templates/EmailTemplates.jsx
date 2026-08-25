@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import EmailTemplateListSection from '../../features/templates/components/EmailTemplateListSection';
@@ -27,8 +28,17 @@ import {
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
 
-const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = null, activeChannel = null, onChannelChange = null }) => {
+const EmailTemplates = ({
+  isZaloTemplate = false,
+  aiDraft = null,
+  fromAiAssistant = false,
+  returnPath = null,
+  channelTabs = null,
+  activeChannel = null,
+  onChannelChange = null,
+}) => {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { usage: storageQuota } = useStorageQuota();
   const templateApiService = isZaloTemplate ? zaloTemplateApiService : emailTemplateApiService;
   const templateKindLabel = isZaloTemplate ? 'zalo' : 'email';
@@ -73,6 +83,14 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = 
   const fileInputRef = useRef(null);
   const textSelectionRef = useRef(null);
   const subjectInputRef = useRef(null);
+
+  const handleEditorClose = () => {
+    setShowEditorModal(false);
+    setEditingTemplate(null);
+    if (fromAiAssistant && returnPath) {
+      navigate(returnPath, { replace: true, state: { openAiAssistant: true } });
+    }
+  };
 
   const [formData, setFormData] = useState({
     templateName: '',
@@ -306,6 +324,9 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = 
       setEditingTemplate(null);
       resetForm();
       fetchTemplates();
+      if (fromAiAssistant && returnPath) {
+        navigate(returnPath, { replace: true, state: { openAiAssistant: true } });
+      }
     } catch (error) {
       if (!error._upgradeToastShown) {
         toast.error(error.response?.data?.message || t('templates.error'));
@@ -758,6 +779,7 @@ const EmailTemplates = ({ isZaloTemplate = false, aiDraft = null, channelTabs = 
         editingTemplate={editingTemplate}
         setShowEditorModal={setShowEditorModal}
         setEditingTemplate={setEditingTemplate}
+        onClose={handleEditorClose}
         handleSubmit={handleSubmit}
         formData={formData}
         setFormData={setFormData}

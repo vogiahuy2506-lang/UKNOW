@@ -70,6 +70,7 @@ const EmailTemplateEditorModal = ({
   editingTemplate,
   setShowEditorModal,
   setEditingTemplate,
+  onClose,
   handleSubmit,
   formData,
   setFormData,
@@ -151,8 +152,12 @@ const EmailTemplateEditorModal = ({
         </div>
         <button
           onClick={() => {
-            setShowEditorModal(false);
-            setEditingTemplate(null);
+            if (typeof onClose === 'function') {
+              onClose();
+            } else {
+              setShowEditorModal(false);
+              setEditingTemplate(null);
+            }
           }}
           className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
@@ -625,8 +630,12 @@ const EmailTemplateEditorModal = ({
           <button
             type="button"
             onClick={() => {
-              setShowEditorModal(false);
-              setEditingTemplate(null);
+              if (typeof onClose === 'function') {
+                onClose();
+              } else {
+                setShowEditorModal(false);
+                setEditingTemplate(null);
+              }
             }}
             className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
           >

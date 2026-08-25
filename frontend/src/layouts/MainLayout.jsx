@@ -86,6 +86,13 @@ const MainLayout = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
+  // Quay lại từ modal chỉnh sửa template/landing page → mở lại panel trợ lý
+  useEffect(() => {
+    if (location.state?.openAiAssistant && !isAiHomePage) {
+      setAiPanelOpen(true);
+    }
+  }, [location.state, isAiHomePage, setAiPanelOpen]);
+
   // Trang Trợ lý AI đã có chat full-screen
   useEffect(() => {
     if (isAiHomePage && aiPanelOpen) setAiPanelOpen(false);

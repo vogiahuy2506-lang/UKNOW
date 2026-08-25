@@ -177,8 +177,14 @@ class AiController {
    */
   async chat(req, res) {
     try {
-      const { history, files, sessionId, locale, model, intent } = req.body;
+      const { history, files, sessionId, locale, model, intent, planSlotKey } = req.body;
       const sanitizedIntent = (typeof intent === 'string' && intent === 'content_plan_request') ? intent : null;
+      // Định danh slot kế hoạch nội dung, dạng "d<ngày>-s<slot>". Chỉ nhận đúng khuôn —
+      // giá trị này được lưu xuống ai_chat_messages.data và dùng để dựng lại luồng sau
+      // khi tải lại trang, nên không cho client nhét chuỗi tuỳ ý vào.
+      const sanitizedPlanSlotKey = (typeof planSlotKey === 'string' && /^d\d+-s\d+$/i.test(planSlotKey.trim()))
+        ? planSlotKey.trim().toLowerCase()
+        : null;
 
       if (!history || !history.length) {
         return res.status(400).json({
@@ -249,6 +255,7 @@ class AiController {
           model,
           persistedWizardState,
           intent: sanitizedIntent,
+          planSlotKey: sanitizedPlanSlotKey,
           helpRoute,
           routeSaysActionRequest,
         });

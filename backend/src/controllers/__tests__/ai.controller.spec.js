@@ -273,4 +273,46 @@ describe('ai.controller', () => {
     expect(updateWizardStateSections.mock.calls[0][2].gates).toBeUndefined();
     expect(updateWizardStateSections.mock.calls[0][2].brief).toBeUndefined();
   });
+
+  /**
+   * planSlotKey là DANH TÍNH của slot trong kế hoạch nội dung: nó được lưu xuống
+   * ai_chat_messages.data và là thứ duy nhất giúp dựng lại luồng soạn sau khi tải lại
+   * trang. Bản đầu (25/08) để backend regex ngược prompt văn xuôi "ngày N, slot M" —
+   * biến một câu chữ do frontend sinh thành thứ gánh dữ liệu. Giờ client gửi tường minh.
+   */
+  it('chuyển planSlotKey hợp lệ xuống processSmartChat', async () => {
+    processSmartChat.mockResolvedValue({ type: 'template_draft', content: 'ok', data: {} });
+
+    const req = {
+      body: {
+        history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 2, slot 1 (Email).' }],
+        locale: 'vi',
+        planSlotKey: 'd2-s1',
+      },
+      user: { id: 9, role: 'user' },
+    };
+
+    await aiController.chat(req, makeRes());
+
+    expect(processSmartChat).toHaveBeenCalledWith(
+      expect.objectContaining({ planSlotKey: 'd2-s1' })
+    );
+  });
+
+  it('KHÔNG nhận planSlotKey sai khuôn — client không nhét được chuỗi tuỳ ý vào DB', async () => {
+    processSmartChat.mockResolvedValue({ type: 'template_draft', content: 'ok', data: {} });
+
+    for (const bad of ['../../etc/passwd', 'd1', 's1-d2', '<script>', 'd1-s1; DROP TABLE', '']) {
+      processSmartChat.mockClear();
+      const req = {
+        body: { history: [{ role: 'user', content: 'x' }], locale: 'vi', planSlotKey: bad },
+        user: { id: 9, role: 'user' },
+      };
+      // eslint-disable-next-line no-await-in-loop
+      await aiController.chat(req, makeRes());
+      expect(processSmartChat).toHaveBeenCalledWith(
+        expect.objectContaining({ planSlotKey: null })
+      );
+    }
+  });
 });

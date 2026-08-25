@@ -15,6 +15,8 @@ const ChannelTemplates = () => {
   // Nếu chatbot AI truyền draft qua navigation state,
   // chuyển sang tab đúng kênh và truyền draft xuống EmailTemplates.
   const aiDraft = location.state?.aiDraft || null;
+  const fromAiAssistant = Boolean(location.state?.fromAiAssistant);
+  const returnPath = location.state?.returnPath || null;
 
   useEffect(() => {
     if (aiDraft?.channel === 'zalo') {
@@ -29,6 +31,8 @@ const ChannelTemplates = () => {
       key={active}
       isZaloTemplate={active === 'zalo'}
       aiDraft={active === (aiDraft?.channel || 'email') ? aiDraft : null}
+      fromAiAssistant={fromAiAssistant}
+      returnPath={returnPath}
       channelTabs={TABS}
       activeChannel={active}
       onChannelChange={setActive}

@@ -547,6 +547,7 @@ D. ZALO NHÓM:
     model = null,
     persistedWizardState = null,
     intent = null,
+    planSlotKey = null,
     helpRoute = null,
     routeSaysActionRequest = false,
   }) {
@@ -1519,6 +1520,32 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           contentLocale: resolvedLocaleContext.contentLocale,
         },
       };
+    }
+
+    /**
+     * Gắn planSlotKey cho template_draft của một slot trong kế hoạch nội dung.
+     * Giá trị này được lưu xuống `ai_chat_messages.data` và là DANH TÍNH duy nhất để
+     * dựng lại luồng soạn sau khi người dùng tải lại trang.
+     *
+     * Nguồn ưu tiên là trường `planSlotKey` client gửi tường minh. Bản đầu (25/08) đọc
+     * ngược từ prompt văn xuôi bằng regex "ngày N, slot M" — khiến một câu chữ do chính
+     * frontend sinh ra trở thành thứ gánh dữ liệu: sửa lời văn cho hay hơn là gãy im
+     * lặng, mà test hai phía vẫn xanh vì mỗi bên tự kiểm với bản sao chuỗi của mình.
+     *
+     * Nhánh regex chỉ còn để đỡ client CŨ trong lúc frontend chưa deploy kịp (hai
+     * workflow deploy riêng). Khi nào chắc chắn không còn client cũ thì xoá được.
+     */
+    if (finalResponse?.type === 'template_draft' && finalResponse.data) {
+      if (!finalResponse.data.planSlotKey) {
+        if (planSlotKey) {
+          finalResponse.data.planSlotKey = planSlotKey;
+        } else {
+          const slotMatch = String(lastUserText).match(/ngày\s*(\d+)[,\s]+slot\s*(\d+)/i);
+          if (slotMatch) {
+            finalResponse.data.planSlotKey = `d${slotMatch[1]}-s${slotMatch[2]}`;
+          }
+        }
+      }
     }
 
     // PR-B: Enforce user's selected schedule on content_plan and confirm_create

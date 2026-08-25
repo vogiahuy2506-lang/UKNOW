@@ -80,9 +80,15 @@ const aiApi = {
    */
   // Model AI do hệ thống quyết định (super admin chọn 1 model duy nhất) —
   // client không gửi model nữa, backend luôn resolve về model hệ thống.
-  chat: async (history, files = [], sessionId = null, locale = 'vi', intent = null) => {
+  /**
+   * @param {string|null} planSlotKey Định danh slot trong kế hoạch nội dung ("d1-s2").
+   *   Gửi TƯỜNG MINH thay vì để backend regex lại prompt văn xuôi — xem chú thích ở
+   *   aiCampaign.service.js chỗ gắn planSlotKey.
+   */
+  chat: async (history, files = [], sessionId = null, locale = 'vi', intent = null, planSlotKey = null) => {
     const payload = { history, files, sessionId, locale };
     if (intent) payload.intent = intent;
+    if (planSlotKey) payload.planSlotKey = planSlotKey;
     const response = await api.post('/ai/chat', payload, {
       timeout: 120000
     });
