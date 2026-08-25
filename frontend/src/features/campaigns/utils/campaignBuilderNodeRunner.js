@@ -1,4 +1,5 @@
 import { clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
+import { resolveItemField } from './campaignBuilderRuntime.js';
 import { applyDataColumnSelectionToItems, measureJsonUtf8Bytes } from './dataColumnSelection.js';
 import {
   BUILDER_LOG_ITEMS_CAP,
@@ -430,7 +431,7 @@ export const createCampaignNodeRunner = (deps) => {
     const items = Array.isArray(source?.output?.items) ? source.output.items : [];
     const rows = [];
     items.forEach((item) => {
-      const raw = item?.[sourceField];
+      const raw = resolveItemField(item, sourceField);
       const values = Array.isArray(raw) ? raw.flatMap((value) => parseListText(value)) : parseListText(raw);
       values.forEach((value) => rows.push({ value, phone: value, row: item || null }));
     });
@@ -1278,13 +1279,25 @@ export const createCampaignNodeRunner = (deps) => {
         const field = String(config.recipientField || '').trim();
         if (!field) throw new Error('Chưa chọn cột email');
         items.forEach((item) => {
-          const value = item?.[field];
+          const value = resolveItemField(item, field);
           if (Array.isArray(value)) {
             value.forEach((v) => recipients.push(...parseEmailList(v)));
           } else {
             recipients.push(...parseEmailList(value));
           }
         });
+        // Node nguồn CÓ dữ liệu nhưng lọc ra 0 địa chỉ ⇒ gần như chắc chắn sai tên cột.
+        // Trước đây chỗ này im lặng trả về rỗng: chiến dịch chạy, báo thành công, không ai
+        // nhận được thư và không có lấy một dòng lỗi nào. Bug thật 25/08/2026.
+        if (items.length > 0 && recipients.length === 0) {
+          const available = Object.keys(items[0] || {});
+          throw new Error(
+            `Không tìm thấy cột "${field}" trong dữ liệu của node nguồn (${items.length} dòng). `
+            + (available.length
+              ? `Các cột đang có: ${available.join(', ')}. Hãy chọn lại cột email cho node gửi.`
+              : 'Node nguồn không trả về cột nào.')
+          );
+        }
       } else {
         recipients = rows
           .map((r) => {
@@ -1310,7 +1323,7 @@ export const createCampaignNodeRunner = (deps) => {
           const items = Array.isArray(sourceResult?.output?.items) ? sourceResult.output.items : [];
           const list = [];
           items.forEach((item) => {
-            const value = item?.[field];
+            const value = resolveItemField(item, field);
             if (Array.isArray(value)) {
               value.forEach((v) => list.push(...parseEmailList(v)));
             } else {
@@ -1332,7 +1345,7 @@ export const createCampaignNodeRunner = (deps) => {
         const field = String(config.recipientField || '').trim();
         const map = new Map();
         items.forEach((item) => {
-          const key = String(item?.[field] ?? '').trim();
+          const key = String(resolveItemField(item, field) ?? '').trim();
           if (key) map.set(key, item);
         });
         return map;

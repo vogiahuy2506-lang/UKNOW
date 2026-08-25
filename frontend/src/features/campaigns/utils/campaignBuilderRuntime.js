@@ -51,6 +51,34 @@ export const resolveColumnKey = (row, ref) => {
   return key;
 };
 
+/**
+ * Đọc một trường của item theo tên, KHÔNG phân biệt hoa/thường.
+ *
+ * Vì sao không dùng lại `resolveColumnKey`: hàm đó coi mọi chuỗi toàn chữ cái là **tên cột kiểu
+ * Excel** (dòng 41-43), nên `'email'` sẽ bị đọc thành cột E,M,A,I,L → `col_N`. Đúng cho ô nhập
+ * "cột người nhận" (nơi người dùng gõ `B`, `C`…), nhưng sai hoàn toàn cho `recipientField` — thứ
+ * luôn là TÊN CỘT.
+ *
+ * Bug thật 25/08/2026: trợ lý AI luôn sinh `recipientField: "email"` (chữ thường, cố định ở
+ * `aiCampaignDraft.service.js:522`), trong khi tiêu đề cột trong Sheet/Excel của người dùng
+ * thường viết hoa — `Email`. Tra khoá thô `item['email']` trả `undefined`, danh sách người nhận
+ * rỗng, node gửi 0 tin và **không báo lỗi gì**. Sheet đọc thành công 3 dòng nhưng không ai nhận
+ * được thư.
+ *
+ * @param {Record<string, unknown>|null|undefined} item một dòng dữ liệu từ output của node nguồn
+ * @param {string} field tên cột cần lấy
+ * @returns {unknown} giá trị, hoặc undefined nếu không có cột nào khớp
+ */
+export const resolveItemField = (item, field) => {
+  if (!item || typeof item !== 'object') return undefined;
+  const name = String(field ?? '').trim();
+  if (!name) return undefined;
+  if (Object.prototype.hasOwnProperty.call(item, name)) return item[name];
+  const target = name.toLowerCase();
+  const match = Object.keys(item).find((key) => String(key).trim().toLowerCase() === target);
+  return match === undefined ? undefined : item[match];
+};
+
 export const parseEmailList = (text) =>
   String(text || '')
     .split(/[\n,;]/g)
