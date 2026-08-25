@@ -658,7 +658,19 @@ QUY TẮC:
       for (const file of files) {
         if (!file?.tempId) continue;
         const mimeType = String(file.contentType || '').toLowerCase();
-        if (mimeType.startsWith('image/')) continue;
+        if (mimeType.startsWith('image/')) {
+          extractedAttachedFile = {
+            originalName: file.originalName,
+            contentType: file.contentType,
+            text: '',
+            isImage: true,
+            hasProductData: null,
+            summary: 'Ảnh — nội dung do AI đọc trực tiếp',
+            userConfirmed: false,
+            extractedAt: new Date().toISOString(),
+          };
+          break;
+        }
         try {
           // eslint-disable-next-line no-await-in-loop
           const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);

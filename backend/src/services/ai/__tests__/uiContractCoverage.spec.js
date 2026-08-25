@@ -110,7 +110,7 @@ describe('giao kèo UI ↔ nửa sau — mọi lựa chọn phải có nơi xử
    * Nửa trước ở frontend, nửa sau ở backend. Đọc chéo repo là cố ý: đó chính là chỗ giao kèo bị
    * đứt hôm 24/08, và không có nơi nào khác kiểm được.
    */
-  it('mọi đuôi tệp ô chọn tệp nhận đều có nhánh trong bộ đọc tệp', () => {
+  it('mọi đuôi tệp ô chọn tệp nhận đều có nhánh trong bộ đọc tệp hoặc đường vision', () => {
     const chatUi = readSource('frontend/src/features/ai/AiChatbot.jsx');
     const acceptMatch = chatUi.match(/accept="([^"]+)"/);
     // Không tìm thấy accept="..." nghĩa là ô chọn tệp đã đổi hình dạng — test này mù từ đó,
@@ -122,14 +122,25 @@ describe('giao kèo UI ↔ nửa sau — mọi lựa chọn phải có nơi xử
       .map((ext) => ext.trim().toLowerCase())
       .filter((ext) => ext.startsWith('.'));
 
+    const visionExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp']);
     const parser = readSource('backend/src/utils/fileParser.util.js');
-    const missing = accepted.filter((ext) => !parser.includes(`'${ext}'`));
+    const aiCampaign = readSource('backend/src/services/ai/aiCampaign.service.js');
+
+    // Khẳng định aiCampaign.service.js có xử lý đường vision inlineData cho image/
+    expect(aiCampaign.includes("mimeType.startsWith('image/')")).toBe(true);
+    expect(aiCampaign.includes('inlineData')).toBe(true);
+
+    const missing = accepted.filter((ext) => {
+      if (visionExtensions.has(ext)) return false; // Được xử lý bằng đường vision
+      // Các đuôi tệp văn bản/tài liệu phải có nhánh đọc thực sự trong fileParser
+      return !parser.includes(`ext === '${ext}'`);
+    });
 
     expect({
       accepted,
       missing,
       hint: missing.length
-        ? `Ô chọn tệp nhận [${missing.join(', ')}] nhưng fileParser.util.js không có nhánh nào. `
+        ? `Ô chọn tệp nhận [${missing.join(', ')}] nhưng fileParser.util.js không có nhánh nào và không thuộc vision. `
           + 'Tệp sẽ rơi xuống nhánh mặc định và biến thành rác nhị phân đi vào prompt AI — đúng lỗi '
           + '.xls ngày 24/08. Thêm nhánh đọc, hoặc bỏ đuôi này khỏi accept.'
         : '',

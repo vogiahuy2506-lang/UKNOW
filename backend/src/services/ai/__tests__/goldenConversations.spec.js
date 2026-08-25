@@ -26,6 +26,7 @@ import attachedFileSurvivesNextTurn from './fixtures/golden/attachedFileSurvives
 import dripSlotsPerDaySurvivesPlanTurn from './fixtures/golden/dripSlotsPerDaySurvivesPlanTurn.fixture.js';
 import reloadThenSaveContinuesChain from './fixtures/golden/reloadThenSaveContinuesChain.fixture.js';
 import zaloCustomSenderAccountToNodes from './fixtures/golden/zaloCustomSenderAccountToNodes.fixture.js';
+import imageAttachedSurvivesNextTurn from './fixtures/golden/imageAttachedSurvivesNextTurn.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -44,6 +45,7 @@ const FIXTURES = [
   dripSlotsPerDaySurvivesPlanTurn,
   reloadThenSaveContinuesChain,
   zaloCustomSenderAccountToNodes,
+  imageAttachedSurvivesNextTurn,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));

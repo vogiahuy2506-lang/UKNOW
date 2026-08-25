@@ -398,6 +398,53 @@ describe('campaignBrief.service', () => {
       expect(ctx).toContain('Do not force product promotion');
     });
 
+    /**
+     * Regression (bug thật 25/08/2026): ảnh đính kèm mang `hasProductData: null` vì bộ đọc văn
+     * bản không kết luận được gì — nội dung do model đọc trực tiếp. Chốt chặn cũ dùng
+     * `!== undefined` nên `null` lọt qua và in ra `attachedFile.hasProductData: false`, tức prompt
+     * khẳng định tệp KHÔNG có sản phẩm, ngược hẳn dòng mô tả ảnh ngay bên dưới.
+     */
+    it('ảnh đính kèm KHÔNG sinh dòng hasProductData (chưa biết ≠ không có)', () => {
+      const ctx = buildCampaignBriefContext({
+        brief: {
+          contentMode: 'attached_file',
+          attachedFile: {
+            originalName: 'sanpham.png',
+            contentType: 'image/png',
+            text: '',
+            isImage: true,
+            hasProductData: null,
+            summary: 'Ảnh — nội dung do AI đọc trực tiếp',
+            userConfirmed: false,
+          },
+        },
+      });
+
+      expect(ctx).not.toContain('hasProductData');
+      // Vẫn phải nói cho model biết có ảnh để nó đi đọc.
+      expect(ctx).toContain('sanpham.png');
+      expect(ctx).toContain('hình ảnh');
+    });
+
+    it('tệp văn bản vẫn giữ nguyên dòng hasProductData (true và false)', () => {
+      const build = (hasProductData) => buildCampaignBriefContext({
+        brief: {
+          contentMode: 'attached_file',
+          attachedFile: {
+            originalName: 'baogia.pdf',
+            contentType: 'application/pdf',
+            text: 'Bảng giá sản phẩm',
+            hasProductData,
+            summary: 'Bảng giá',
+            userConfirmed: false,
+          },
+        },
+      });
+
+      expect(build(true)).toContain('attachedFile.hasProductData: true');
+      expect(build(false)).toContain('attachedFile.hasProductData: false');
+    });
+
     it('resolves and builds context for attached_file without attachedFile text', async () => {
       const resolved = await resolveCampaignBrief({
         brief: {

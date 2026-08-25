@@ -317,6 +317,7 @@ export function isCampaignBriefReady(brief) {
       || (Array.isArray(brief.files) && brief.files.length > 0)
       || (Number.isFinite(brief.attachedFilesCount) && brief.attachedFilesCount > 0)
       || brief.attachedFile?.text
+      || brief.attachedFile?.isImage
     );
   }
   if (mode === 'context') {
@@ -529,13 +530,20 @@ export function buildCampaignBriefContext({ brief, resolvedProducts = [] } = {})
     if (brief.attachedFile?.summary) {
       lines.push(`attachedFile.summary: """${escapeForPrompt(brief.attachedFile.summary, 500)}"""`);
     }
-    if (brief.attachedFile?.hasProductData !== undefined) {
+    // `!= null` chứ KHÔNG phải `!== undefined`: ảnh đính kèm mang `hasProductData: null` (chưa
+    // biết — nội dung do model đọc trực tiếp, bộ đọc văn bản không kết luận được gì). Với
+    // `!== undefined` thì `null` lọt qua và `Boolean(null)` in ra `hasProductData: false`, tức
+    // prompt khẳng định tệp KHÔNG có sản phẩm — ngược hẳn dòng mô tả ảnh ngay bên dưới, và đủ để
+    // model quay ra cảnh báo "không tìm thấy sản phẩm nào". Bug thật 25/08/2026.
+    if (brief.attachedFile?.hasProductData != null) {
       lines.push(`attachedFile.hasProductData: ${Boolean(brief.attachedFile.hasProductData)}`);
     }
     if (brief.attachedFile?.userConfirmed) {
       lines.push('attachedFile.userConfirmed: true');
     }
-    if (brief.attachedFile?.text) {
+    if (brief.attachedFile?.isImage) {
+      lines.push(`[Tệp đính kèm là hình ảnh: "${brief.attachedFile.originalName || 'Hình ảnh'}" — AI đọc trực tiếp từ dữ liệu ảnh truyền vào model]`);
+    } else if (brief.attachedFile?.text) {
       lines.push(`[Nội dung tệp đính kèm: "${brief.attachedFile.originalName || 'Tài liệu'}"]:\n${brief.attachedFile.text}\n${brief.attachedFile.truncated ? '[Lưu ý: Tệp đính kèm dài đã được rút gọn để xử lý nhanh hơn]\n' : ''}[Hết nội dung tệp: "${brief.attachedFile.originalName || 'Tài liệu'}"]`);
     }
     lines.push('GROUNDING: contentMode=attached_file. Use the product or campaign details provided in the attached file(s) and user prompt. Do not invent products outside the attached files.');
