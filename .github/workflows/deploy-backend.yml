@@ -28,6 +28,7 @@ jobs:
   deploy:
     name: Build & Deploy Backend
     needs: test
+    timeout-minutes: 30
     runs-on: ubuntu-latest
 
     steps:
@@ -74,6 +75,7 @@ jobs:
 
       - name: Upload SSL scripts to VPS
         uses: appleboy/scp-action@v0.1.7
+        timeout-minutes: 5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -84,6 +86,11 @@ jobs:
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
+        # Trần riêng cho bước SSH: đây là chỗ treo lâu nhất trong thực tế (kết nối tới VPS
+        # không phản hồi, hoặc lệnh docker trên VPS kẹt chờ khoá). Trần cả job không đủ —
+        # có trần ở bước thì log chỉ thẳng ra thủ phạm thay vì "job hết giờ".
+        # Rộng hơn frontend vì bước này còn chạy migration.
+        timeout-minutes: 15
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
@@ -92,6 +99,10 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          # Mặc định của action là 30s bắt tay / 10m chạy lệnh — đặt tường minh để đừng phụ
+          # thuộc vào mặc định của phiên bản action.
+          timeout: 60s
+          command_timeout: 13m
           envs: DOCKERHUB_USERNAME,BACKEND_IMAGE,EXPECTED_SHA
           script: |
             set -e

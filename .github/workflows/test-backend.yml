@@ -23,6 +23,7 @@ concurrency:
 jobs:
   schema-sync-check:
     name: Schema sync (migrations ↔ bootstrap.sql)
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     # Chạy cho CẢ push (kể cả thẳng vào main) lẫn PR.
     # Trước đây giới hạn ở pull_request nên với lối làm việc push thẳng vào main,
@@ -93,6 +94,7 @@ jobs:
 
   unit:
     name: Jest unit (backend)
+    timeout-minutes: 15
     runs-on: ubuntu-latest
 
     defaults:
@@ -118,6 +120,7 @@ jobs:
 
   lint:
     name: ESLint (backend)
+    timeout-minutes: 10
     runs-on: ubuntu-latest
 
     defaults:
@@ -155,6 +158,7 @@ jobs:
 
   integration:
     name: Jest integration (backend) — shard ${{ matrix.shard }}/4
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     if: ${{ !inputs.skip_integration }}
 
