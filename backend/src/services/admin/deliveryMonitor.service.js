@@ -180,7 +180,8 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
       `SELECT 'email' AS channel, COUNT(*)::int AS count
        FROM email_messages
        WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(status::text, '')) IN ('failed', 'bounced', 'error')`,
+         AND LOWER(COALESCE(status::text, '')) IN ('failed', 'bounced', 'error')
+         AND NOT is_preview`,
       params
     ),
     safeQuery(
@@ -188,6 +189,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
        FROM zalo_messages
        WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(status::text, '')) IN ('failed', 'error')
+         AND NOT is_preview
        GROUP BY COALESCE(channel, 'zalo')`,
       params,
       [{ channel: 'zalo', count: 0 }]

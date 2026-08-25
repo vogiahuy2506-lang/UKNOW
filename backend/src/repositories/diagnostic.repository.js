@@ -172,6 +172,7 @@ class DiagnosticRepository {
          AND recipient_type = 'phone'
          AND recipient_value IS NOT NULL
          AND recipient_value <> ''
+         AND NOT is_preview
        ORDER BY phone
        LIMIT 20`,
       [campaignId]
@@ -183,6 +184,7 @@ class DiagnosticRepository {
        WHERE id_campaign = $1
          AND message_text IS NOT NULL
          AND message_text <> ''
+         AND NOT is_preview
        LIMIT 1`,
       [campaignId]
     );

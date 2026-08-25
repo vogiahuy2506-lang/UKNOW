@@ -103,6 +103,7 @@ export function buildZaloSilentDropHourlySql({ userScoped = false } = {}) {
     ${userJoin}
     WHERE zm.created_at >= NOW() - INTERVAL '1 hour'
       AND zm.account_id IS NOT NULL
+      AND NOT zm.is_preview
       ${userWhere}
       AND (
         LOWER(COALESCE(zm.tracking_metadata->>'status', zm.status::text, ''))

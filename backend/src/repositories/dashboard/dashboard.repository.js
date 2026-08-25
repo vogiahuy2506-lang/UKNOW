@@ -211,7 +211,7 @@ class DashboardRepository {
          COALESCE(SUM(COALESCE(em.click_count, 0)), 0)::INTEGER AS clicked_total_count
        FROM email_messages em
        JOIN campaigns c ON c.id = em.id_campaign
-       WHERE ${scoped.clause}`,
+       WHERE ${scoped.clause} AND NOT em.is_preview`,
       scoped.params
     );
     return result.rows?.[0] || {};

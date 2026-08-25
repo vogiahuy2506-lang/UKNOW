@@ -91,6 +91,7 @@ class CustomerCampaignJourneyDetailRepository {
        WHERE em.id_customer = $1
          AND em.id_campaign = $2
          AND em.id_run IS NOT NULL
+         AND NOT em.is_preview
        ORDER BY COALESCE(em.sent_at, em.created_at) ASC, em.id ASC`,
       [customerId, campaignId]
     );
@@ -212,6 +213,7 @@ class CustomerCampaignJourneyDetailRepository {
              )
            )
            AND zm.id_run IS NOT NULL
+           AND NOT zm.is_preview
          ORDER BY COALESCE(zm.sent_at, zm.created_at) ASC, zm.id ASC`,
         [customerId, campaignId]
       );
@@ -240,6 +242,7 @@ class CustomerCampaignJourneyDetailRepository {
          WHERE zm.id_customer = $1
            AND zm.id_campaign = $2
            AND zm.id_run IS NOT NULL
+           AND NOT zm.is_preview
          ORDER BY COALESCE(zm.sent_at, zm.created_at) ASC, zm.id ASC`,
         [customerId, campaignId]
       );

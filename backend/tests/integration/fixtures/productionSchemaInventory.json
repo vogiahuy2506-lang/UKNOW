@@ -1,12 +1,13 @@
 {
   "_meta": {
-    "source": "production uknow-campaign (VPS)",
+    "source": "schema ky vong sau khi chay het migrations (goc: anh chup production 25/08/2026)",
     "measuredAt": "2026-08-25",
     "method": "So md5(string_agg(column_name ORDER BY column_name)) theo tung bang giua DB test (dung tu bootstrap.sql) va production — ket qua 0 bang lech.",
     "scope": "CHI TEN COT. Kieu du lieu CHUA khop: 51/112 bang lech, chu yeu timestamp naive (prod) vs timestamptz (test). Xem _internal/PLAN_SCHEMA_DRIFT_BOOTSTRAP_2026-08-25.md.",
     "excluded": "3 bang backup tam tren production (courses_backup_20260825, campaign_nodes_backup_20260825, users_plan_backup_minh) khong tinh.",
     "tables": 112,
-    "columns": 1525
+    "columns": 1527,
+    "note": "TU migration 172 tro di, fixture DI TRUOC production cho toi khi deploy: is_preview tren email_messages/zalo_messages chi ton tai o production SAU khi 172 chay. Do lai voi production TRUOC deploy se thay lech — do la binh thuong, khong phai loi."
   },
   "tables": {
     "ai_activity_summaries": [
@@ -787,6 +788,7 @@
       "id_node",
       "id_run",
       "id_sequence",
+      "is_preview",
       "last_opened_at",
       "message_id",
       "open_count",
@@ -1657,6 +1659,7 @@
       "id_customer",
       "id_node",
       "id_run",
+      "is_preview",
       "last_clicked_at",
       "message_text",
       "recipient_type",

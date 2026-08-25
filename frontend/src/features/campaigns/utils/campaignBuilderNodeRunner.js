@@ -1452,10 +1452,12 @@ export const createCampaignNodeRunner = (deps) => {
         const htmlContent = renderTemplateString(tpl.bodyHtml || '', mergedVars);
         const content = renderTemplateString(tpl.bodyText || '', mergedVars) || subject;
         // Builder luôn preview-only nên không truyền khóa campaign/customer để tránh backend ghi dữ liệu ngoài ý muốn.
-        const normalizedCustomerId = null;
-        const canAttachCampaignId = null;
-        // Builder chỉ dùng để preview: luôn không lưu message log vào DB.
-        const shouldSaveMessageLog = false;
+        const normalizedCustomerId = Number.isFinite(Number.parseInt(rowForRecipient?.customerId || rowForRecipient?.id || rowForRecipient?.id_customer, 10))
+          ? Number.parseInt(rowForRecipient.customerId || rowForRecipient.id || rowForRecipient.id_customer, 10)
+          : null;
+        const canAttachCampaignId = campaignIdNum;
+        // Cho phép lưu message log preview vào DB (với is_preview = true).
+        const shouldSaveMessageLog = true;
 
         try {
           if (!skipApiDelay) {
@@ -1822,6 +1824,7 @@ export const createCampaignNodeRunner = (deps) => {
             recipientType,
             message: renderedMessage,
             attachments: Array.isArray(step.attachments) ? step.attachments : [],
+            campaignId: campaignIdNum,
           }, { signal });
           const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
           const variables = resolveZaloTemplateVariables(
@@ -2043,6 +2046,7 @@ export const createCampaignNodeRunner = (deps) => {
                 recipients: [recipient],
                 recipientType,
                 message,
+                campaignId: campaignIdNum,
               }, { signal });
               pushItemsFromResponse(response, accountForSend, recipient);
             })
@@ -2053,8 +2057,9 @@ export const createCampaignNodeRunner = (deps) => {
           accountId: selectedAccount.id,
           recipients: pendingRecipients,
           recipientType,
-          message,
-        }, { signal });
+                message,
+                campaignId: campaignIdNum,
+              }, { signal });
         const allItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
         for (let idx = 0; idx < allItems.length; idx += 1) {
           const item = allItems[idx];
@@ -2198,6 +2203,7 @@ export const createCampaignNodeRunner = (deps) => {
           accountId: selectedAccount.id,
           recipients: [entry.phone],
           message: renderedMessage,
+          campaignId: campaignIdNum,
         }, { signal });
         const items = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
         allItems.push(...items.map((item) => ({
@@ -2337,7 +2343,8 @@ export const createCampaignNodeRunner = (deps) => {
               groupIds: [groupId],
               message: renderedMessage,
               attachments: Array.isArray(step.attachments) ? step.attachments : [],
-            }, { signal });
+            campaignId: campaignIdNum,
+          }, { signal });
             const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
             const variables = resolveZaloTemplateVariables(
               ctx,

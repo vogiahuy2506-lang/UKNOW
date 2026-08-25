@@ -98,8 +98,7 @@ class EmailSettingsSmtpService {
     const runIdNum = Number.isFinite(parseInt(payload?.runId, 10))
       ? parseInt(payload.runId, 10)
       : null;
-    // Không có runId thì coi là gửi demo/manual, không tạo bản ghi email_messages/journey để tránh dữ liệu mồ côi.
-    if (!runIdNum) return null;
+    const isPreview = Boolean(payload?.isPreview) || !runIdNum;
 
     return emailSettingsRepository.withTransaction(async (client) => {
       let campaignIdNum = Number.isFinite(parseInt(payload.campaignId, 10)) ? parseInt(payload.campaignId, 10) : null;
@@ -141,9 +140,10 @@ class EmailSettingsSmtpService {
         fromAddress: payload.fromAddress || null,
         replyTo: payload.setting.reply_to || payload.setting.email || null,
         brandDomain: payload.brandDomain || null,
+        isPreview,
       });
 
-      if (resolvedCustomerId) {
+      if (resolvedCustomerId && !isPreview) {
         await emailSettingsRepository.updateCustomerLastEmailSent(
           client,
           payload.sentAt,
@@ -152,7 +152,7 @@ class EmailSettingsSmtpService {
         );
       }
 
-      if (campaignIdNum && resolvedCustomerId) {
+      if (campaignIdNum && resolvedCustomerId && !isPreview) {
         await emailSettingsRepository.upsertCampaignCustomer(client, campaignIdNum, resolvedCustomerId, payload.sentAt);
         await emailSettingsRepository.upsertCampaignParticipation(
           client,
@@ -302,11 +302,11 @@ class EmailSettingsSmtpService {
     /**
      * Builder chỉ dùng demo/test:
      * - không tracking/unsubscribe rewrite
-     * - không ghi email_messages/customer_journey/campaign_participations
+     * - không ghi customer_journey/campaign_participations (được xử lý an toàn trong logEmailSent)
      * - không update cờ bounce/subscribed ở bảng customer
      */
     const shouldForcePreviewOnly = isPreviewMode || isBuilderMode || !normalizedRunId;
-    const shouldSaveMessageLog = Boolean(saveMessageLog) && !shouldForcePreviewOnly;
+    const shouldSaveMessageLog = saveMessageLog !== false;
 
     // Kiểm tra unsubscribe/hard bounce chỉ cho luồng run thật.
     if (!shouldForcePreviewOnly && to) {
@@ -481,6 +481,7 @@ class EmailSettingsSmtpService {
           runId: normalizedRunId,
           fromAddress,
           brandDomain,
+          isPreview: shouldForcePreviewOnly,
         });
       } catch (logError) {
         console.error('Log email message error:', logError);
@@ -489,7 +490,7 @@ class EmailSettingsSmtpService {
 
     // Luồng campaign đã có email_messages cho người nhận chính. CC/BCC không có
     // row riêng nên ghi phần chênh lệch vào usage_logs để quota/ví đếm đúng.
-    const directUsageCount = shouldSaveMessageLog
+    const directUsageCount = shouldSaveMessageLog && !shouldForcePreviewOnly
       ? ccList.length + bccList.length
       : recipientCount;
     if (directUsageCount > 0) {

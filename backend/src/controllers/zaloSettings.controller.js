@@ -30,6 +30,7 @@ import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.j
 import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import zaloMessageRepository from '../repositories/campaign/zaloMessage.repository.js';
 
 
 class ZaloSettingsController {
@@ -2323,6 +2324,32 @@ class ZaloSettingsController {
             });
           } else {
             await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_personal');
+            try {
+              await zaloMessageRepository.insertCampaignZaloMessage({
+                campaignId,
+                runId: null,
+                customerId: null,
+                nodeId: null,
+                channel: 'zalo_personal',
+                recipientType,
+                recipientValue: recipient,
+                uid: sent.uid || null,
+                groupId: null,
+                accountId: account.id,
+                accountName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
+                messageText: message,
+                trackingToken: null,
+                trackingBaseUrl: null,
+                trackingMetadata: {
+                  status: 'sent',
+                  source: 'preview',
+                  response: sent.response || null,
+                },
+                isPreview: true,
+              });
+            } catch (logErr) {
+              console.error('[ZaloPreview] Log personal message error:', logErr);
+            }
             items.push({
               recipient,
               recipientType,

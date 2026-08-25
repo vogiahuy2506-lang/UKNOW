@@ -102,6 +102,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
+         AND NOT em.is_preview
          AND c.id_user = $2`,
       params
     ),
@@ -112,6 +113,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
+         AND NOT zm.is_preview
          AND c.id_user = $2
        GROUP BY COALESCE(zm.channel, 'zalo')`,
       params,
@@ -258,6 +260,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
+         AND NOT em.is_preview
          AND c.id_user = $2`,
       params48h
     ),
@@ -268,6 +271,7 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
+         AND NOT zm.is_preview
          AND c.id_user = $2
        GROUP BY COALESCE(zm.channel, 'zalo')`,
       params48h,

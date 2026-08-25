@@ -117,12 +117,13 @@ export async function getTimeToFirstSend() {
        FROM (
          SELECT id_campaign, sent_at
          FROM email_messages
-         WHERE status = 'sent' AND sent_at IS NOT NULL
+         WHERE status = 'sent' AND sent_at IS NOT NULL AND NOT is_preview
          UNION ALL
          SELECT id_campaign, sent_at
          FROM zalo_messages
          WHERE COALESCE(tracking_metadata->>'status', '') = 'sent'
            AND sent_at IS NOT NULL
+           AND NOT is_preview
        ) m
        JOIN campaigns c ON c.id = m.id_campaign
        GROUP BY c.id_user

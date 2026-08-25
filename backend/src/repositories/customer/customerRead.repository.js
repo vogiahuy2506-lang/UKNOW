@@ -141,7 +141,7 @@ class CustomerReadRepository {
        FROM email_messages em
        LEFT JOIN campaigns c ON c.id = em.id_campaign
        LEFT JOIN email_templates et ON et.id = em.id_email_template
-       WHERE em.id_customer = $1
+       WHERE em.id_customer = $1 AND NOT em.is_preview
        ORDER BY COALESCE(em.sent_at, em.created_at) DESC
        LIMIT 100`,
       [customerId]
@@ -211,6 +211,7 @@ class CustomerReadRepository {
        LEFT JOIN campaigns c ON c.id = em.id_campaign
        WHERE em.id_customer = $1
          AND em.id_run IS NOT NULL
+         AND NOT em.is_preview
          ${emailFilter}
        ORDER BY COALESCE(em.sent_at, em.created_at) DESC
        LIMIT 200`,
@@ -484,6 +485,7 @@ class CustomerReadRepository {
     let whereClause = `
       WHERE zm.id_campaign = $1
         AND LOWER(COALESCE(zm.channel, '')) = 'zalo_group'
+        AND NOT zm.is_preview
     `;
     if (search) {
       queryParams.push(`%${search}%`);

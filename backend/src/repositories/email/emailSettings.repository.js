@@ -291,8 +291,8 @@ class EmailSettingsRepository {
         (id_campaign, id_run, id_customer, id_email_template, id_email_setting, message_id,
          tracking_token, recipient_email, recipient_name, sender_email, sender_name, subject,
          body_html, body_text, status, sent_at, id_node, email_step,
-         from_address, reply_to, brand_domain)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'sent', $15, $16, $17, $18, $19, $20)
+         from_address, reply_to, brand_domain, is_preview)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'sent', $15, $16, $17, $18, $19, $20, $21)
        RETURNING id`,
       [
         payload.campaignId,
@@ -315,6 +315,7 @@ class EmailSettingsRepository {
         payload.fromAddress || null,
         payload.replyTo || null,
         payload.brandDomain || null,
+        Boolean(payload.isPreview),
       ]
     );
     return result.rows[0]?.id || null;

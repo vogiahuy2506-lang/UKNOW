@@ -991,6 +991,7 @@ CREATE TABLE email_messages (
   first_clicked_at        TIMESTAMPTZ,
   sent_at                 TIMESTAMPTZ,
   delivered_at            TIMESTAMPTZ,
+  is_preview              BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_email_messages_customer ON email_messages(id_customer);
@@ -1023,6 +1024,7 @@ CREATE TABLE zalo_messages (
   recipient_value     VARCHAR(255),
   uid                 VARCHAR(255),
   tracking_base_url   VARCHAR(500),
+  is_preview          BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -2706,5 +2708,11 @@ ALTER TABLE verification_codes
 
 ALTER TABLE knowledge_bases
   ADD COLUMN IF NOT EXISTS embedding_model VARCHAR(50) DEFAULT 'gemini-embedding-004';
+
+ALTER TABLE email_messages
+  ADD COLUMN IF NOT EXISTS is_preview BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE zalo_messages
+  ADD COLUMN IF NOT EXISTS is_preview BOOLEAN NOT NULL DEFAULT FALSE;
 
 

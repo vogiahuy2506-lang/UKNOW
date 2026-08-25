@@ -49,6 +49,7 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       FROM email_messages em
       JOIN run_base rb ON rb.id = em.id_run
       WHERE LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
+        AND NOT em.is_preview
       GROUP BY em.id_run
     ),
     run_metrics AS (

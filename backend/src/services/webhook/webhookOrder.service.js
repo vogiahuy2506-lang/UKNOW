@@ -614,7 +614,7 @@ class WebhookOrderService {
       if (!targetCampaignId) {
         const emailRes = await client.query(
           `SELECT id_campaign FROM email_messages
-           WHERE id_customer = $1 AND id_campaign IS NOT NULL
+           WHERE id_customer = $1 AND id_campaign IS NOT NULL AND NOT is_preview
            ORDER BY sent_at DESC NULLS LAST
            LIMIT 1`,
           [customerId]
@@ -630,6 +630,7 @@ class WebhookOrderService {
            FROM zalo_messages
            WHERE id = $1
              AND id_campaign IS NOT NULL
+             AND NOT is_preview
            LIMIT 1`,
           [utmZaloMsgId]
         );

@@ -141,6 +141,7 @@ async function countEmployeeEmailSentToday(ownerId, employeeId) {
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND c.created_by = $2
             AND em.status IN ('sent', 'delivered', 'bounced')
+            AND NOT em.is_preview
             AND em.sent_at >= CURRENT_DATE)
          + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
             WHERE ul.id_user = $1
@@ -166,6 +167,7 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
             WHERE ${CAMPAIGN_OWNER_PREDICATE}
               AND c.created_by = $2
               AND em.status IN ('sent', 'delivered', 'bounced')
+            AND NOT em.is_preview
               AND em.sent_at >= $3 AND em.sent_at < $4)
            + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
               WHERE ul.id_user = $1
@@ -186,6 +188,7 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND c.created_by = $2
             AND em.status IN ('sent', 'delivered', 'bounced')
+            AND NOT em.is_preview
             AND em.sent_at >= DATE_TRUNC('month', NOW()))
          + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
             WHERE ul.id_user = $1
@@ -208,6 +211,7 @@ async function countEmployeeZaloSentToday(ownerId, employeeId) {
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND c.created_by = $2
             AND zm.tracking_metadata->>'status' = 'sent'
+            AND NOT zm.is_preview
             AND zm.sent_at >= CURRENT_DATE)
          + (SELECT COUNT(*) FROM zalo_personal_messages zpm
             WHERE zpm.id_user = $2
@@ -238,6 +242,7 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
             WHERE ${CAMPAIGN_OWNER_PREDICATE}
               AND c.created_by = $2
               AND zm.tracking_metadata->>'status' = 'sent'
+            AND NOT zm.is_preview
               AND zm.sent_at >= $3 AND zm.sent_at < $4)
            + (SELECT COUNT(*) FROM zalo_personal_messages zpm
               WHERE zpm.id_user = $2
@@ -263,6 +268,7 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND c.created_by = $2
             AND zm.tracking_metadata->>'status' = 'sent'
+            AND NOT zm.is_preview
             AND zm.sent_at >= DATE_TRUNC('month', NOW()))
          + (SELECT COUNT(*) FROM zalo_personal_messages zpm
             WHERE zpm.id_user = $2
@@ -289,6 +295,7 @@ async function countEmailSentToday(billingUserId) {
           INNER JOIN campaigns c ON c.id = em.id_campaign
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND em.status IN ('sent', 'delivered', 'bounced')
+            AND NOT em.is_preview
             AND em.sent_at >= CURRENT_DATE)
          + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
             WHERE ul.id_user = $1
@@ -311,6 +318,7 @@ export async function countEmailSentInCycle(billingUserId, cycleStart, cycleEnd,
           INNER JOIN campaigns c ON c.id = em.id_campaign
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND em.status IN ('sent', 'delivered', 'bounced')
+            AND NOT em.is_preview
             AND em.sent_at >= $2 AND em.sent_at < $3)
          + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
             WHERE ul.id_user = $1
@@ -338,6 +346,7 @@ async function countZaloSentToday(billingUserId) {
           JOIN campaigns c ON c.id = zm.id_campaign
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND zm.tracking_metadata->>'status' = 'sent'
+            AND NOT zm.is_preview
             AND zm.sent_at >= CURRENT_DATE)
        + (SELECT COUNT(*) FROM zalo_personal_messages zpm
           WHERE ${ZPM_OWNER_PREDICATE}
@@ -365,6 +374,7 @@ export async function countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, 
           JOIN campaigns c ON c.id = zm.id_campaign
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND zm.tracking_metadata->>'status' = 'sent'
+            AND NOT zm.is_preview
             AND zm.sent_at >= $2 AND zm.sent_at < $3)
        + (SELECT COUNT(*) FROM zalo_personal_messages zpm
           WHERE ${ZPM_OWNER_PREDICATE}
@@ -402,11 +412,13 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
           JOIN campaigns c ON c.id = em.id_campaign
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND em.status IN ('sent', 'delivered', 'bounced')
+            AND NOT em.is_preview
             AND em.sent_at >= $2 AND em.sent_at < $3)
        + (SELECT COUNT(*) FROM zalo_messages zm
           JOIN campaigns c ON c.id = zm.id_campaign
           WHERE ${CAMPAIGN_OWNER_PREDICATE}
             AND zm.tracking_metadata->>'status' = 'sent'
+            AND NOT zm.is_preview
             AND zm.sent_at >= $2 AND zm.sent_at < $3)
        + (SELECT COUNT(*) FROM zalo_personal_messages zpm
           WHERE ${ZPM_OWNER_PREDICATE}

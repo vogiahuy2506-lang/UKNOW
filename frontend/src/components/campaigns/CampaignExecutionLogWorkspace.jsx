@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { HiOutlineDocumentDownload } from 'react-icons/hi';
+import { HiOutlineDocumentDownload, HiOutlineClipboardCopy, HiCheck } from 'react-icons/hi';
 import * as XLSX from 'xlsx';
 import { useI18n } from '../../i18n';
 import {
@@ -128,6 +128,7 @@ const CampaignExecutionLogWorkspace = ({
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
   const [expandedCell, setExpandedCell] = useState(null);
+  const [copiedCell, setCopiedCell] = useState(null);
 
   // Export to Excel
   const exportToExcel = () => {
@@ -464,20 +465,43 @@ const CampaignExecutionLogWorkspace = ({
                                       const rawValue = formatLogCellValue(c, row?.[c]);
                                       const cellKey = `${idx}-${c}`;
                                       const isExpanded = expandedCell === cellKey;
+                                      const isMessageIdCol = /message_?id/i.test(c);
+                                      const isCopied = copiedCell === cellKey;
                                       return (
                                         <td key={c} className="px-3 py-1.5 text-gray-800 whitespace-nowrap">
-                                          <button
-                                            type="button"
-                                            onClick={() => setExpandedCell(isExpanded ? null : cellKey)}
-                                            title={rawValue}
-                                            className={`block text-left ${
-                                              isExpanded
-                                                ? 'max-w-[400px] whitespace-normal break-words'
-                                                : 'max-w-[200px] truncate'
-                                            }`}
-                                          >
-                                            {rawValue}
-                                          </button>
+                                          <div className="flex items-center gap-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={() => setExpandedCell(isExpanded ? null : cellKey)}
+                                              title={rawValue}
+                                              className={`block text-left ${
+                                                isExpanded
+                                                  ? 'max-w-[400px] whitespace-normal break-words'
+                                                  : 'max-w-[200px] truncate'
+                                              }`}
+                                            >
+                                              {rawValue}
+                                            </button>
+                                            {isMessageIdCol && rawValue && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  navigator.clipboard?.writeText(rawValue);
+                                                  setCopiedCell(cellKey);
+                                                  setTimeout(() => setCopiedCell(null), 1500);
+                                                }}
+                                                title={isCopied ? 'Đã sao chép!' : 'Sao chép Message ID'}
+                                                className="p-0.5 text-gray-400 hover:text-gray-700 rounded transition-colors"
+                                              >
+                                                {isCopied ? (
+                                                  <HiCheck className="w-3.5 h-3.5 text-green-600" />
+                                                ) : (
+                                                  <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
+                                                )}
+                                              </button>
+                                            )}
+                                          </div>
                                         </td>
                                       );
                                     })}
