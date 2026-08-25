@@ -59,6 +59,7 @@ import {
   isCampaignScriptShaped,
 } from '../../utils/campaignQuickSend.util.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
+import aiCampaignDraftService from './aiCampaignDraft.service.js';
 
 export const USER_CONFIRMS_FILE_RE = /vẫn\s*dùng|van\s*dung|cứ\s*tiếp\s*tục|cu\s*tiep\s*tuc|dùng\s*(?:file|tệp|này|luôn|đi)|tiếp\s*tục|tiep\s*tuc|làm\s*tiếp|lam\s*tiep|cứ\s*làm|cu\s*lam|proceed|continue/i;
 
@@ -149,7 +150,7 @@ CHỈ được dùng các node sau. Ngoài danh sách này đều KHÔNG hợp l
 • nodeType: "data", nodeSubtype: "read_landing_leads"     ← leads từ landing page
   config: { "landingLeadsSlugs": ["slug-landing-page"] }  ← [] = lấy tất cả leads; điền slug từ danh sách Landing Pages trong TÀI NGUYÊN CÓ SẴN
 
-• nodeType: "data", nodeSubtype: "select_zalo_account"   ← BẮT BUỘC trước get_all_friends/get_all_groups
+• nodeType: "data", nodeSubtype: "select_zalo_account"   ← BẮT BUỘC trong MỌI chiến dịch Zalo, đặt trước node gửi
   config: { "zaloAccountId": <ID_TK_ZALO> }
 
 • nodeType: "data", nodeSubtype: "get_all_friends"        ← lấy danh sách bạn bè Zalo
@@ -189,8 +190,8 @@ CHỈ được dùng các node sau. Ngoài danh sách này đều KHÔNG hợp l
     "delayValue": 0,
     "delayUnit": "days"
 
-• nodeType: "action", nodeSubtype: "send_zalo_personal"   ← gửi Zalo theo danh sách bạn bè
-  (khi nguồn là get_all_friends → dùng uid thay phone)
+• nodeType: "action", nodeSubtype: "send_zalo_personal"   ← gửi Zalo theo danh sách bạn bè / UID
+  (khi nguồn là zalo_contacts hoặc get_all_friends → dùng uid thay phone)
     "zaloRecipientField": "uid",
     "zaloRecipientType": "uid"
 
@@ -230,17 +231,17 @@ CHỈ được dùng các node sau. Ngoài danh sách này đều KHÔNG hợp l
    • Node gửi sau 2 giờ: "delayValue": 2, "delayUnit": "hours"
 
 ════════════════════════════════════════
-  3 LUỒNG CHIẾN DỊCH CHUẨN
+  4 LUỒNG CHIẾN DỊCH CHUẨN
 ════════════════════════════════════════
 
 A. EMAIL:
    trigger → interested_customers → send_email(delay:0) → send_email(delay:3d) → end
 
-B. ZALO CÁ NHÂN (từ danh sách khách hàng):
-   trigger → interested_customers → send_zalo_personal(delay:0) → send_zalo_personal(delay:2d) → end
+B. ZALO CÁ NHÂN (từ danh sách khách hàng / dataSource="db"):
+   trigger → select_zalo_account → interested_customers → send_zalo_personal(delay:0) → send_zalo_personal(delay:2d) → end
 
-C. ZALO CÁ NHÂN (từ danh sách bạn bè):
-   trigger → select_zalo_account → get_all_friends → send_zalo_personal(uid,delay:0) → end
+C. ZALO CÁ NHÂN (từ danh bạ bạn bè / dataSource="zalo_contacts"):
+   trigger → select_zalo_account → send_zalo_personal(uid,delay:0) → end
 
 D. ZALO NHÓM:
    trigger → select_zalo_account → get_all_groups → send_zalo_group(delay:0) → send_zalo_group(delay:1d) → end
@@ -918,6 +919,7 @@ QUY TẮC:
     // Thu thập existing resources cho non-admin users (theo workspace owner)
     let existingResources = '';
     let landingPages = [];
+    let firstZaloAccountId = null;
     if (ownerId) {
       try {
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, _landingPages] =
@@ -933,7 +935,7 @@ QUY TẮC:
           ]);
 
         landingPages = _landingPages;
-        const firstZaloAccountId = zaloAccounts[0]?.id ?? null;
+        firstZaloAccountId = zaloAccounts[0]?.id ?? null;
 
         existingResources = `
 === TÀI NGUYÊN CÓ SẴN (được tải mới từ hệ thống tại thời điểm tin nhắn này — luôn phản ánh trạng thái hiện tại) ===
@@ -968,7 +970,7 @@ NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại n
   - notPurchasedCourseIds: [id1, id2] → loại trừ khách ĐÃ mua các khóa này
 • data/read_sheet — đọc Google Sheet (config: sheetUrl BẮT BUỘC)
 • data/read_landing_leads — lấy leads từ landing page (config: landingLeadsSlugs: ["slug"] — lấy từ danh sách Landing Pages trong TÀI NGUYÊN)
-• data/select_zalo_account — chọn TK Zalo (BẮT BUỘC trước get_all_friends/get_all_groups)
+• data/select_zalo_account — chọn TK Zalo (BẮT BUỘC trong MỌI chiến dịch Zalo, đặt trước node gửi)
 • data/get_all_friends — lấy danh sách bạn bè
 • data/get_all_groups — lấy danh sách nhóm
 • data/save_customer — lưu khách hàng
@@ -990,7 +992,7 @@ ZALO NHÓM — LỌC THEO TÊN NHÓM:
 - Khi user đề cập tên nhóm cụ thể (vd: "nhóm Học viên K2023") → tạo chiến dịch bình thường với get_all_groups, thêm vào description: "⚠️ Vào Campaign Builder → node get_all_groups → chọn đúng nhóm '[tên nhóm]' trước khi chạy"
 - zaloSelectedGroupIds: [] (để trống, user tự chọn trong UI)
 
-Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send_zalo_group (KHÔNG dùng interested_customers cho nhóm)
+Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_customers→send_zalo_personal (hoặc trigger→select_zalo_account→send_zalo_personal khi dataSource="zalo_contacts"). Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send_zalo_group (KHÔNG dùng interested_customers cho nhóm hay cho danh bạ Zalo cá nhân).
 `;
       } catch (e) {
         console.warn('[AI] Không lấy được existing resources:', e.message);
@@ -1004,6 +1006,36 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
       } catch (e) {
         console.warn('[AI] Không lấy được business profile:', e.message);
       }
+    }
+
+    let wizardContext = '';
+    if (mergedGates && (mergedGates.channel || mergedGates.senderAccountId || mergedGates.dataSource || mergedGates.schedule)) {
+      const lines = ['=== WIZARD ĐÃ CHỐT (BẮT BUỘC TUÂN THỦ) ==='];
+      if (mergedGates.channel) {
+        lines.push(`- channel: "${mergedGates.channel}"`);
+      }
+      if (mergedGates.senderAccountId) {
+        if (mergedGates.channel === 'zalo' || mergedGates.channel === 'zalo_group') {
+          lines.push(`- zaloSenderAccountId: ${mergedGates.senderAccountId} (BẮT BUỘC dùng ID này cho select_zalo_account.zaloAccountId và mọi node Zalo; KHÔNG dùng firstZaloAccountId khi có giá trị này)`);
+        } else if (mergedGates.channel === 'email') {
+          lines.push(`- emailSenderId: ${mergedGates.senderAccountId} (dùng ID này cho fromEmailId)`);
+        }
+      }
+      if (mergedGates.dataSource) {
+        lines.push(`- dataSource: "${mergedGates.dataSource}"`);
+        if (mergedGates.dataSource === 'zalo_contacts') {
+          const friendCount = Array.isArray(mergedGates.zaloFriendIds) ? mergedGates.zaloFriendIds.length : 0;
+          lines.push(`- zaloFriendCount: ${friendCount}`);
+        }
+      }
+      if (mergedGates.schedule) {
+        if (mergedGates.schedule.mode === 'drip') {
+          lines.push(`- schedule: drip (${mergedGates.schedule.days || 3} ngày, ${mergedGates.schedule.slotsPerDay || 1} tin/ngày)`);
+        } else if (mergedGates.schedule.mode === 'once') {
+          lines.push('- schedule: once (gửi 1 lần)');
+        }
+      }
+      wizardContext = lines.join('\n') + '\n\n';
     }
 
     const langInstr = buildAssistantLanguageInstructions(resolvedLocaleContext);
@@ -1026,7 +1058,7 @@ Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send
 - Chỉ tạo nội dung template/chiến dịch/landing page khi đã có đủ thông tin từ người dùng.
 - Với yêu cầu tạo chiến dịch, KHÔNG tự suy đoán nguồn khách hàng là Google Sheet chỉ vì user nhắc các cột như full_name, email, phone, tour_name, end_date. Nếu user chưa nói rõ "Google Sheet", "Excel", "file", "landing page", "khách hàng trong hệ thống/database" hoặc chưa chọn dataSource trong câu trả lời trước, BẮT BUỘC dùng type="ask_campaign_details" và hỏi câu "dataSource".
 
-${resolvedBriefContext ? resolvedBriefContext + '\n\n' : ''}${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
+${wizardContext}${resolvedBriefContext ? resolvedBriefContext + '\n\n' : ''}${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
 
 ### 1. type: "text"
 Khi người dùng: chào hỏi, hỏi thông tin chung, thảo luận không liên quan đến tạo nội dung.
@@ -1438,9 +1470,11 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 
 ### Sau khi user trả lời ask_campaign_details, build campaign dựa vào:
 - channel: email/zalo/zalo_group → chọn đúng action node
+- zaloSenderAccountId có giá trị → dùng ĐÚNG ID đó làm zaloAccountId trong select_zalo_account và tất cả action node Zalo. Chỉ dùng firstZaloAccountId khi zaloSenderAccountId rỗng.
 - zaloAccount="<id>" → dùng ID đó làm zaloAccountId trong tất cả action/data node Zalo; nếu không có câu hỏi này → dùng tài khoản mặc định (firstZaloAccountId)
 - landingPage="<slug>" → dùng slug đó trong landingLeadsSlugs của read_landing_leads
 - Dùng CAMPAIGN_BRIEF DATA (nếu có) để viết nội dung: không bịa sản phẩm ngoài brief; không tự map productIds sang interestedCourseIds / notPurchasedCourseIds trừ khi user NÓI RÕ muốn lọc audience theo đã mua/chưa mua/quan tâm khóa đó
+- dataSource="zalo_contacts" → xử lý GIỐNG "manual": KHÔNG tạo interested_customers/read_sheet/get_all_friends. Người nhận là các UID người dùng đã chọn, hệ thống truyền riêng ở bước chuẩn bị gửi. Vẫn PHẢI có select_zalo_account.
 - dataSource="db"      → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
 - dataSource="manual"  → không tạo interested_customers/read_sheet; để trống danh sách — hệ thống sẽ dùng người nhận nhập trực tiếp ở bước chuẩn bị gửi
 - "đã mua [khóa X]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX]
@@ -1455,7 +1489,10 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - dataSource="landing" + không có landing page nào → type: "text", content: "Tài khoản chưa có landing page nào. Bạn cần tạo landing page trước để thu thập leads."
 
 Ví dụ campaign drip 2 đợt (dataSource=db):
-nodes: trigger → interested_customers → action_wave1(delay=0) → action_wave2(delay=3 days) → end
+nodes: trigger → select_zalo_account (nếu là Zalo) → interested_customers → action_wave1(delay=0) → action_wave2(delay=3 days) → end
+
+Ví dụ gửi bạn bè Zalo (dataSource=zalo_contacts):
+nodes: trigger → select_zalo_account → action_wave1(delay=0) → end
 
 Ví dụ lấy từ sheet (dataSource=sheet):
 nodes: trigger → read_sheet(sheetUrl="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit") → action_wave1(delay=0) → end
@@ -1474,7 +1511,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 ### Audience và nguồn khách:
 - KHÔNG có field audience trong ask_campaign_details; nguồn khách được chọn bằng dataSource.
 - KHÔNG bao giờ giả định khách hàng lấy từ file/sheet khi user chưa nói rõ.
-- Nếu user chưa nói rõ nguồn khách, hãy hỏi "Lấy danh sách khách từ đâu?" với các lựa chọn db/sheet/landing/manual.
+- Nếu user chưa nói rõ nguồn khách, hãy hỏi "Lấy danh sách khách từ đâu?" với các lựa chọn db/sheet/landing/manual/zalo_contacts.
 
 ## HEURISTICS CHO type="create_and_run":
 - CHỈ khi người dùng nói RÕ ràng muốn bỏ xác nhận: "tạo và chạy", "create and run", "chạy ngay chiến dịch"
@@ -1486,7 +1523,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Marker: "gửi nhanh", "gửi 1 email", "quick send", "send one email", "send a single message"
 - Đây là gửi MỘT lần (schedule once). KHÔNG trả content_plan / suggest_content_plan. KHÔNG tự nâng thành chuỗi nhiều ngày.
 - Nếu CAMPAIGN_BRIEF DATA đã có (kể cả contentMode=context cảm ơn/thông báo) → đừng hỏi lại sản phẩm/chủ đề.
-- dataSource="manual": KHÔNG chép email/SĐT cụ thể vào nodes; FE nhập người nhận riêng (overlay). Giữ recipientSource/zaloRecipientSource = "manual" với list rỗng.
+- dataSource="manual" hoặc "zalo_contacts": KHÔNG chép email/SĐT/UID cụ thể vào nodes; FE nhập người nhận riêng (overlay). Giữ recipientSource/zaloRecipientSource = "manual" với list rỗng.
 - Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.`;
 
     const response = await runChat({ systemPrompt, history, files, userId, requestedModel: model });
@@ -1526,14 +1563,6 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
      * Gắn planSlotKey cho template_draft của một slot trong kế hoạch nội dung.
      * Giá trị này được lưu xuống `ai_chat_messages.data` và là DANH TÍNH duy nhất để
      * dựng lại luồng soạn sau khi người dùng tải lại trang.
-     *
-     * Nguồn ưu tiên là trường `planSlotKey` client gửi tường minh. Bản đầu (25/08) đọc
-     * ngược từ prompt văn xuôi bằng regex "ngày N, slot M" — khiến một câu chữ do chính
-     * frontend sinh ra trở thành thứ gánh dữ liệu: sửa lời văn cho hay hơn là gãy im
-     * lặng, mà test hai phía vẫn xanh vì mỗi bên tự kiểm với bản sao chuỗi của mình.
-     *
-     * Nhánh regex chỉ còn để đỡ client CŨ trong lúc frontend chưa deploy kịp (hai
-     * workflow deploy riêng). Khi nào chắc chắn không còn client cũ thì xoá được.
      */
     if (finalResponse?.type === 'template_draft' && finalResponse.data) {
       if (!finalResponse.data.planSlotKey) {
@@ -1580,6 +1609,16 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     }
 
     if ((finalResponse?.type === 'confirm_create' || finalResponse?.type === 'create_and_run') && finalResponse.data) {
+      const targetScript = finalResponse.data.script || finalResponse.data;
+      if (targetScript && Array.isArray(targetScript.nodes) && Array.isArray(targetScript.connections)) {
+        aiCampaignDraftService.patchDeterministicZaloScript(targetScript, {
+          senderAccountId: gateState?.senderAccountId,
+          dataSource: gateState?.dataSource,
+          zaloFriendIds: gateState?.zaloFriendIds,
+          defaultZaloAccountId: firstZaloAccountId,
+        });
+      }
+
       const schedule = gateState?.schedule;
       let maxSteps = null;
       if (schedule?.mode === 'drip' && schedule?.days) {

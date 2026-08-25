@@ -332,8 +332,186 @@ class AiCampaignDraftService {
     return cloned;
   }
 
-  async prepareScript(script, userId) {
-    const canonical = this.canonicalizeScript(script);
+  patchDeterministicZaloScript(script, options = {}) {
+    if (!script || !Array.isArray(script.nodes) || !Array.isArray(script.connections)) {
+      return script;
+    }
+
+    const {
+      senderAccountId = null,
+      dataSource = null,
+      defaultZaloAccountId = null,
+    } = options;
+
+    const targetZaloAccountId = senderAccountId || defaultZaloAccountId || null;
+    const effectiveDataSource = dataSource || script.wizardDataSource || null;
+
+    const getNodeSubtype = (node) => String(node?.node_subtype || node?.nodeSubtype || node?.subtype || '').toLowerCase();
+    const getNodeType = (node) => String(node?.node_type || node?.nodeType || node?.type || '').toLowerCase();
+
+    const isZaloSendNode = (node) => {
+      const st = getNodeSubtype(node);
+      const t = getNodeType(node);
+      return ['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request', 'zalo_personal', 'zalo_group', 'zalo_friend'].includes(st) ||
+             ['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request', 'zalo_personal', 'zalo_group'].includes(t);
+    };
+
+    const hasZaloSend = script.nodes.some(isZaloSendNode);
+
+    // 1. Nếu dataSource là 'zalo_contacts' hoặc 'manual', loại bỏ các node lấy audience thừa
+    if (effectiveDataSource === 'zalo_contacts' || effectiveDataSource === 'manual') {
+      const isUnwantedAudienceNode = (node) => {
+        const st = getNodeSubtype(node);
+        const t = getNodeType(node);
+        return ['interested_customers', 'read_interested_customers', 'read_sheet', 'google_sheet', 'read_landing_leads', 'get_all_friends'].includes(st) ||
+               ['interested_customers', 'read_sheet', 'read_landing_leads', 'get_all_friends'].includes(t);
+      };
+
+      const unwantedNodes = script.nodes.filter(isUnwantedAudienceNode);
+      for (const unwantedNode of unwantedNodes) {
+        const unwantedId = String(unwantedNode.tempId || unwantedNode.id);
+        console.log(`[AI Patch] Bỏ node ${getNodeSubtype(unwantedNode) || getNodeType(unwantedNode)} (${unwantedId}) vì dataSource="${effectiveDataSource}"`);
+
+        const incoming = script.connections.filter(c => String(c.targetNodeId || c.target || c.to) === unwantedId);
+        const outgoing = script.connections.filter(c => String(c.sourceNodeId || c.source || c.from) === unwantedId);
+
+        script.nodes = script.nodes.filter(n => String(n.tempId || n.id) !== unwantedId);
+        script.connections = script.connections.filter(c =>
+          String(c.sourceNodeId || c.source || c.from) !== unwantedId &&
+          String(c.targetNodeId || c.target || c.to) !== unwantedId
+        );
+
+        for (const inConn of incoming) {
+          const srcId = String(inConn.sourceNodeId || inConn.source || inConn.from);
+          for (const outConn of outgoing) {
+            const tgtId = String(outConn.targetNodeId || outConn.target || outConn.to);
+            if (srcId && tgtId && srcId !== tgtId) {
+              const alreadyExists = script.connections.some(c =>
+                String(c.sourceNodeId || c.source || c.from) === srcId &&
+                String(c.targetNodeId || c.target || c.to) === tgtId
+              );
+              if (!alreadyExists) {
+                script.connections.push({
+                  sourceNodeId: srcId,
+                  targetNodeId: tgtId,
+                  connectionType: 'default',
+                  connectionLabel: '',
+                });
+              }
+            }
+          }
+        }
+
+        for (const node of script.nodes) {
+          const cfg = node.config || node.settings || {};
+          if (String(cfg.zaloRecipientNodeId) === unwantedId || String(cfg.recipientNodeId) === unwantedId) {
+            cfg.zaloRecipientSource = 'manual';
+            cfg.recipientSource = 'manual';
+            delete cfg.zaloRecipientNodeId;
+            delete cfg.recipientNodeId;
+            node.config = cfg;
+          }
+        }
+      }
+    }
+
+    // 2. Nếu có node gửi Zalo, đảm bảo có select_zalo_account và đúng zaloAccountId
+    if (hasZaloSend) {
+      const isSelectZaloAccountNode = (node) => {
+        return getNodeSubtype(node) === 'select_zalo_account' || getNodeType(node) === 'select_zalo_account';
+      };
+
+      let selectNode = script.nodes.find(isSelectZaloAccountNode);
+
+      if (!selectNode) {
+        const triggerNode = script.nodes.find(n => {
+          const st = getNodeSubtype(n);
+          const t = getNodeType(n);
+          return ['trigger', 'manual', 'start'].includes(st) || ['trigger', 'manual', 'start'].includes(t);
+        }) || script.nodes[0];
+
+        const triggerId = triggerNode ? String(triggerNode.tempId || triggerNode.id) : null;
+        const selectNodeId = `node_select_zalo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
+        selectNode = {
+          id: selectNodeId,
+          tempId: selectNodeId,
+          node_type: 'data',
+          node_subtype: 'select_zalo_account',
+          nodeType: 'data',
+          nodeSubtype: 'select_zalo_account',
+          node_name: 'Chọn tài khoản Zalo',
+          nodeName: 'Chọn tài khoản Zalo',
+          node_description: 'Tài khoản Zalo gửi tin',
+          position_x: triggerNode ? ((triggerNode.position_x || triggerNode.positionX || 100) + 150) : 250,
+          position_y: triggerNode ? (triggerNode.position_y || triggerNode.positionY || 200) : 200,
+          config: {
+            zaloAccountId: targetZaloAccountId ? Number(targetZaloAccountId) : null,
+          },
+        };
+
+        console.log(`[AI Patch] Chèn node select_zalo_account (${selectNodeId}, zaloAccountId: ${targetZaloAccountId}) cho chiến dịch Zalo`);
+
+        const triggerIndex = triggerNode ? script.nodes.indexOf(triggerNode) : -1;
+        if (triggerIndex >= 0) {
+          script.nodes.splice(triggerIndex + 1, 0, selectNode);
+        } else {
+          script.nodes.unshift(selectNode);
+        }
+
+        if (triggerId) {
+          const triggerOutConns = script.connections.filter(c => String(c.sourceNodeId || c.source || c.from) === triggerId);
+          script.connections = script.connections.filter(c => String(c.sourceNodeId || c.source || c.from) !== triggerId);
+
+          script.connections.push({
+            sourceNodeId: triggerId,
+            targetNodeId: selectNodeId,
+            connectionType: 'default',
+            connectionLabel: '',
+          });
+
+          for (const outConn of triggerOutConns) {
+            const oldTargetId = String(outConn.targetNodeId || outConn.target || outConn.to);
+            if (oldTargetId && oldTargetId !== selectNodeId) {
+              script.connections.push({
+                sourceNodeId: selectNodeId,
+                targetNodeId: oldTargetId,
+                connectionType: 'default',
+                connectionLabel: '',
+              });
+            }
+          }
+        }
+      } else {
+        const cfg = selectNode.config || selectNode.settings || {};
+        if (targetZaloAccountId && (!cfg.zaloAccountId || senderAccountId)) {
+          cfg.zaloAccountId = Number(targetZaloAccountId);
+          selectNode.config = cfg;
+          console.log(`[AI Patch] Cập nhật zaloAccountId=${targetZaloAccountId} cho node select_zalo_account`);
+        }
+      }
+
+      for (const node of script.nodes) {
+        if (isZaloSendNode(node)) {
+          const cfg = node.config || node.settings || {};
+          if (targetZaloAccountId && (!cfg.zaloAccountId || senderAccountId)) {
+            cfg.zaloAccountId = Number(targetZaloAccountId);
+            node.config = cfg;
+          }
+        }
+      }
+    }
+
+    return script;
+  }
+
+  async prepareScript(script, userId, context = {}) {
+    const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(userId).catch(() => null);
+    const patched = this.patchDeterministicZaloScript(script, {
+      defaultZaloAccountId: defaultAccountId,
+      ...context,
+    });
+    const canonical = this.canonicalizeScript(patched);
     const nodes = this.normalizeNodes(canonical.nodes);
     await this.autoFillEmailChannels(nodes, userId);
     await this.autoFillZaloAccounts(nodes, userId);

@@ -665,6 +665,31 @@ export function buildCampaignBriefQuestion(courses = [], locale = 'vi', {
 export function buildCampaignPromptWithWizardState(state, basePrompt = '', locale = 'vi', briefContext = '') {
   const isEnglish = locale === 'en';
   const parts = [String(basePrompt || '').trim()].filter(Boolean);
+
+  if (state?.channel || state?.senderAccountId || state?.dataSource) {
+    const lines = [];
+    if (state.channel) {
+      lines.push(`- channel: "${state.channel}"`);
+    }
+    if (state.senderAccountId) {
+      if (state.channel === 'zalo' || state.channel === 'zalo_group') {
+        lines.push(`- zaloSenderAccountId: ${state.senderAccountId} (BẮT BUỘC dùng ID này cho select_zalo_account.zaloAccountId và mọi node Zalo; KHÔNG dùng firstZaloAccountId khi có giá trị này)`);
+      } else if (state.channel === 'email') {
+        lines.push(`- emailSenderId: ${state.senderAccountId} (dùng ID này cho fromEmailId)`);
+      }
+    }
+    if (state.dataSource) {
+      lines.push(`- dataSource: "${state.dataSource}"`);
+      if (state.dataSource === 'zalo_contacts') {
+        const count = Array.isArray(state.zaloFriendIds) ? state.zaloFriendIds.length : 0;
+        lines.push(`- zaloFriendCount: ${count}`);
+      }
+    }
+    if (lines.length > 0) {
+      parts.push(`=== WIZARD ĐÃ CHỐT ===\n${lines.join('\n')}`);
+    }
+  }
+
   if (state?.schedule?.mode === 'drip') {
     const days = Number(state.schedule.days) || 3;
     const slotsPerDay = Number(state.schedule.slotsPerDay) || 1;
@@ -674,6 +699,7 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
   } else if (state?.schedule?.mode === 'once') {
     parts.push(isEnglish ? 'Schedule: send once.' : 'Lịch gửi: gửi một lần.');
   }
+
   const ctx = String(briefContext || '').trim();
   if (ctx) parts.push(ctx);
   return parts.join('\n');

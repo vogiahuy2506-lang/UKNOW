@@ -151,3 +151,152 @@ describe('aiCampaignDraftService.autoCreateZaloTemplates', () => {
   });
 });
 
+describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
+  it('handles scenario 1: Zalo cá nhân from zalo_contacts missing select_zalo_account and with unwanted interested_customers', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'interested_customers', config: { interestedLimit: 1000 } },
+        {
+          id: 'n3',
+          tempId: 'n3',
+          nodeType: 'action',
+          nodeSubtype: 'send_zalo_personal',
+          config: {
+            zaloRecipientSource: 'node',
+            zaloRecipientNodeId: 'n2',
+            message: 'Chào bạn',
+          },
+        },
+        { id: 'n4', tempId: 'n4', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+      senderAccountId: 99,
+      dataSource: 'zalo_contacts',
+      zaloFriendIds: ['friend_1'],
+    });
+
+    // 1. interested_customers (n2) must be removed
+    expect(patched.nodes.find((n) => n.id === 'n2')).toBeUndefined();
+
+    // 2. select_zalo_account must be inserted
+    const selectNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'select_zalo_account');
+    expect(selectNode).toBeDefined();
+    expect(selectNode.config.zaloAccountId).toBe(99);
+
+    // 3. send_zalo_personal must have zaloAccountId = 99 and manual source
+    const sendNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'send_zalo_personal');
+    expect(sendNode.config.zaloAccountId).toBe(99);
+    expect(sendNode.config.zaloRecipientSource).toBe('manual');
+    expect(sendNode.config.zaloRecipientNodeId).toBeUndefined();
+
+    // 4. Graph connections must be trigger -> select_zalo_account -> send_zalo_personal -> end
+    expect(patched.connections.length).toBe(3);
+    expect(patched.connections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceNodeId: 'n1', targetNodeId: selectNode.id }),
+      expect.objectContaining({ sourceNodeId: selectNode.id, targetNodeId: 'n3' }),
+      expect.objectContaining({ sourceNodeId: 'n3', targetNodeId: 'n4' }),
+    ]));
+  });
+
+  it('handles scenario 2: Zalo cá nhân from DB keeps interested_customers and inserts select_zalo_account', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'interested_customers', config: { interestedLimit: 1000 } },
+        { id: 'n3', tempId: 'n3', nodeType: 'action', nodeSubtype: 'send_zalo_personal', config: { message: 'Chào khách hàng' } },
+        { id: 'n4', tempId: 'n4', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+      senderAccountId: 42,
+      dataSource: 'db',
+    });
+
+    // interested_customers is kept
+    expect(patched.nodes.find((n) => n.id === 'n2')).toBeDefined();
+
+    // select_zalo_account inserted after trigger
+    const selectNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'select_zalo_account');
+    expect(selectNode).toBeDefined();
+    expect(selectNode.config.zaloAccountId).toBe(42);
+
+    // Connections: n1 -> selectNode -> n2 -> n3 -> n4
+    expect(patched.connections.length).toBe(4);
+    expect(patched.connections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceNodeId: 'n1', targetNodeId: selectNode.id }),
+      expect.objectContaining({ sourceNodeId: selectNode.id, targetNodeId: 'n2' }),
+      expect.objectContaining({ sourceNodeId: 'n2', targetNodeId: 'n3' }),
+      expect.objectContaining({ sourceNodeId: 'n3', targetNodeId: 'n4' }),
+    ]));
+  });
+
+  it('handles scenario 3: updates existing select_zalo_account when zaloAccountId is empty or specified', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'select_zalo_account', config: { zaloAccountId: null } },
+        { id: 'n3', tempId: 'n3', nodeType: 'data', nodeSubtype: 'get_all_groups', config: { zaloGroupAccountNodeId: 'n2' } },
+        { id: 'n4', tempId: 'n4', nodeType: 'action', nodeSubtype: 'send_zalo_group', config: { zaloGroupNodeId: 'n3' } },
+        { id: 'n5', tempId: 'n5', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+        { sourceNodeId: 'n4', targetNodeId: 'n5' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+      senderAccountId: 88,
+      dataSource: 'db',
+    });
+
+    const selectNodes = patched.nodes.filter((n) => (n.nodeSubtype || n.node_subtype) === 'select_zalo_account');
+    expect(selectNodes.length).toBe(1);
+    expect(selectNodes[0].config.zaloAccountId).toBe(88);
+
+    const sendGroupNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'send_zalo_group');
+    expect(sendGroupNode.config.zaloAccountId).toBe(88);
+  });
+
+  it('handles scenario 4: does not modify email campaign nodes', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'interested_customers', config: {} },
+        { id: 'n3', tempId: 'n3', nodeType: 'action', nodeSubtype: 'send_email', config: { recipientNodeId: 'n2' } },
+        { id: 'n4', tempId: 'n4', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+      senderAccountId: 10,
+      dataSource: 'db',
+    });
+
+    expect(patched.nodes.length).toBe(4);
+    expect(patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'select_zalo_account')).toBeUndefined();
+    expect(patched.nodes.find((n) => n.id === 'n2')).toBeDefined();
+  });
+});
+
