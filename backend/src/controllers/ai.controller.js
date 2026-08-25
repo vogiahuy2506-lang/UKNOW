@@ -221,10 +221,27 @@ class AiController {
       // làm_giúp / không_rõ → aiCampaign. Không nhét tài liệu vào prompt aiCampaign.
       // Có tệp đính kèm hoặc đang trả lời gate wizard → BỎ QUA help-router:
       // đính tệp / giữa flow là dấu hiệu muốn AI xử lý, không phải hỏi trợ giúp.
+      //
+      // PROMPT MÁY cũng phải bỏ qua. Hai prompt do frontend tự sinh — xin content_plan
+      // (intent=content_plan_request) và xin template từng slot (planSlotKey) — mang theo
+      // văn xuôi của kế hoạch làm payload: "Mục tiêu ngày: …", "Tóm tắt slot: …".
+      //
+      // Bug thật 25/08/2026: help-router nhận nhầm chúng là CÂU HỎI VỀ NĂNG LỰC rồi trả
+      // câu kịch bản "Có, mình làm được tạo chiến dịch đa kênh qua Email và Zalo…", nên
+      // frontend không nhận được template_draft và báo "Tạo template Ngày N bị lỗi".
+      // Cơ chế: classifyCapabilityProbe cần (a) một dấu hiệu hỏi năng lực — mà "có thể"
+      // hay cặp "có … không" cách nhau ≤120 ký tự là văn nói thường ngày, và (b) khớp
+      // năng lực `campaign`, vốn chỉ cần chữ "email" hoặc "zalo" — mà prompt slot luôn có
+      // "(Email)" / "(Zalo)". Vì thế lỗi phụ thuộc lời văn tóm tắt của từng ngày: ngày 1
+      // chạy được, ngày 2 chết.
+      //
+      // Hai định danh này do CHÍNH controller lọc sạch ở trên, không phải chuỗi client
+      // nhét tuỳ ý — nên dùng làm điều kiện bỏ qua là an toàn.
       const hasFiles = Array.isArray(files) && files.length > 0;
       const inWizard = isWizardAnswerTurn(history);
+      const isMachinePrompt = Boolean(sanitizedPlanSlotKey) || sanitizedIntent === 'content_plan_request';
       const resourceOwnerUserId = resolveOwnerUserId(req.user);
-      const helpResponse = (hasFiles || inWizard)
+      const helpResponse = (hasFiles || inWizard || isMachinePrompt)
         ? null
         : await tryHandleHelpChat({
           history,

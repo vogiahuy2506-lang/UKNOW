@@ -174,6 +174,86 @@ describe('ai.controller', () => {
     });
   });
 
+  /**
+   * Regression (bug thật 25/08/2026): "Tạo template Ngày 2 bị lỗi: Có, mình làm được tạo
+   * chiến dịch đa kênh qua Email và Zalo…".
+   *
+   * Prompt xin template từng slot do frontend tự sinh, mang theo văn xuôi kế hoạch làm
+   * payload. Help-router đọc nó thành CÂU HỎI NĂNG LỰC vì classifyCapabilityProbe chỉ cần
+   * (a) "có thể" / cặp "có … không" cách nhau ≤120 ký tự — văn nói thường ngày, và
+   * (b) chữ "email" hoặc "zalo" — mà prompt slot luôn có "(Email)". Trả câu kịch bản xong
+   * thì frontend không nhận được template_draft và báo lỗi.
+   */
+  it('prompt xin template theo slot (planSlotKey): BỎ QUA help-router', async () => {
+    tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'Có, mình làm được tạo chiến dịch đa kênh' });
+    processSmartChat.mockResolvedValue({ type: 'template_draft', content: 'Nội dung ngày 2', data: { channel: 'email' } });
+
+    const req = {
+      body: {
+        history: [{
+          role: 'user',
+          // Câu này ĐÚNG là câu đã làm nổ bug: có "(Email)" và cặp "có … không".
+          content: 'Tạo chi tiết template cho ngày 2, slot 1 (Email). Mục tiêu ngày: Nhắc lại ưu đãi cho khách hàng có quan tâm nhưng chưa đăng ký, không bỏ lỡ hạn chót.',
+        }],
+        locale: 'vi',
+        planSlotKey: 'd2-s1',
+      },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ type: 'template_draft' }),
+    });
+  });
+
+  it('prompt xin content_plan (intent=content_plan_request): BỎ QUA help-router', async () => {
+    tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'Có, mình làm được tạo chiến dịch đa kênh' });
+    processSmartChat.mockResolvedValue({ type: 'content_plan', content: 'Kế hoạch 3 ngày', data: { totalDays: 3 } });
+
+    const req = {
+      body: {
+        history: [{
+          role: 'user',
+          content: 'Hãy trả về content_plan JSON (kế hoạch từng ngày, không viết full nội dung tin) cho: gửi email và zalo, khách có thể đăng ký sớm',
+        }],
+        locale: 'vi',
+        intent: 'content_plan_request',
+      },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ type: 'content_plan' }),
+    });
+  });
+
+  it('câu hỏi năng lực THẬT (không phải prompt máy) vẫn đi vào help-router', async () => {
+    tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'Có, mình làm được tạo chiến dịch đa kênh' });
+
+    const req = {
+      body: {
+        history: [{ role: 'user', content: 'bạn có tạo được chiến dịch email không' }],
+        locale: 'vi',
+      },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
+  });
+
   it('đang trả lời gate wizard: BỎ QUA help-router (kể cả câu lạc đề)', async () => {
     tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'KHÔNG ĐƯỢC HIỆN' });
     processSmartChat.mockResolvedValue({ type: 'ask_sender_account', content: 'Chọn tài khoản gửi' });
