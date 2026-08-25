@@ -342,8 +342,8 @@ describe('GET /api/dashboard/landing-pages-stats', () => {
     const user = await createUser();
     // Published page
     await db.query(
-      `INSERT INTO landing_pages (id_user, slug, title, status, is_published, published_at)
-       VALUES ($1, 'promo-1', 'Promo 1', 'published', TRUE, NOW())`,
+      `INSERT INTO landing_pages (id_user, slug, title, is_published)
+       VALUES ($1, 'promo-1', 'Promo 1', TRUE)`,
       [user.id]
     );
     // events
@@ -373,10 +373,10 @@ describe('GET /api/dashboard/landing-pages-stats', () => {
     const other = await createUser({ username: 'landing-stats-other' });
     await db.query(
       `INSERT INTO landing_pages
-         (id_user, workspace_owner_id, created_by, slug, title, status, is_published, published_at)
+         (id_user, workspace_owner_id, created_by, slug, title, is_published)
        VALUES
-         ($1, $1, $1, 'mine-stats', 'Mine', 'published', TRUE, NOW()),
-         ($2, $2, $2, 'foreign-stats', 'Foreign', 'published', TRUE, NOW())`,
+         ($1, $1, $1, 'mine-stats', 'Mine', TRUE),
+         ($2, $2, $2, 'foreign-stats', 'Foreign', TRUE)`,
       [me.id, other.id]
     );
     await db.query(

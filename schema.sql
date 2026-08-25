@@ -1,19 +1,21 @@
-﻿-- =====================================================================
+-- =====================================================================
 -- Bootstrap schema cho integration test
 -- =====================================================================
--- ÄÃ¢y lÃ  schema Tá»I THIá»‚U Ä‘á»§ Ä‘á»ƒ cháº¡y auth integration tests (register,
--- login, /me, refresh-token). KHÃ”NG pháº£i full schema production.
+-- CẢNH BÁO: File schema.sql chỉ mang tính chất tài liệu tham khảo lịch sử,
+-- KHÔNG phải nguồn sự thật duy nhất (source of truth).
+-- Luôn đối chiếu với production (`\d <bảng>`) hoặc `backend/tests/integration/sql/bootstrap.sql`.
+-- =====================================================================
 --
--- NguyÃªn táº¯c:
---   * Schema pháº£n Ã¡nh tráº¡ng thÃ¡i CUá»I CÃ™NG sau khi Ä‘Ã£ Ã¡p dá»¥ng Ä‘á»§
---     migrations 001-015 (vd: cá»™t `role` dÃ¹ng giÃ¡ trá»‹ 'admin'/'user',
---     khÃ´ng pháº£i 'superadmin'/'user_admin').
---   * Test setup sáº½ DROP toÃ n bá»™ schema public rá»“i cháº¡y file nÃ y 1 láº§n.
---   * Khi má»Ÿ rá»™ng test sang module khÃ¡c (campaigns, payments, ...) hÃ£y
---     thÃªm cÃ¡c báº£ng tÆ°Æ¡ng á»©ng vÃ o Ä‘Ã¢y.
+-- Nguyên tắc:
+--   * Schema phản ánh trạng thái CUỐI CÙNG sau khi đã áp dụng đủ
+--     migrations 001-015 (vd: cột `role` dùng giá trị 'admin'/'user',
+--     không phải 'superadmin'/'user_admin').
+--   * Test setup sẽ DROP toàn bộ schema public rồi chạy file này 1 lần.
+--   * Khi mở rộng test sang module khác (campaigns, payments, ...) hãy
+--     thêm các bảng tương ứng vào đây.
 -- =====================================================================
 
--- â”€â”€â”€ Users + RBAC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- ——— Users + RBAC —————————————————————————————————————————————————————
 CREATE TABLE users (
   id                      BIGSERIAL PRIMARY KEY,
   username                VARCHAR(50)  NOT NULL UNIQUE,
@@ -521,14 +523,13 @@ CREATE TABLE courses (
   id              BIGSERIAL PRIMARY KEY,
   id_user         BIGINT       REFERENCES users(id) ON DELETE CASCADE,
   course_code     VARCHAR(100),
-  course_name     VARCHAR(500),
-  product_id      INTEGER,
-  price           BIGINT,
-  original_price  BIGINT,
+  course_name     VARCHAR(255),
+  price           NUMERIC(15, 2),
+  original_price  NUMERIC(15, 2),
   description     TEXT,
   category        VARCHAR(255),
   thumbnail_url   TEXT,
-  status          VARCHAR(50),
+  status          VARCHAR(20)  NOT NULL DEFAULT 'publish',
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

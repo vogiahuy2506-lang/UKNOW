@@ -468,10 +468,10 @@ export async function seedCampaigns(client, { userId }) {
   for (const [idx, s] of sampleSteps.entries()) {
     await client.query(
       `INSERT INTO campaign_run_recipient_steps (
-        id_campaign_run, id_run, id_campaign, id_node, channel,
+        id_run, id_campaign, id_node, channel,
         recipient_key, last_completed_step, is_fully_completed, meta, last_sent_at, updated_at
       ) VALUES (
-        $1, $1, $2, 'node_send_zalo_1', 'zalo',
+        $1, $2, 'node_send_zalo_1', 'zalo',
         $3, $4, $5, $6, NOW() - ($7 || ' minutes')::INTERVAL, NOW()
       )`,
       [

@@ -79,11 +79,20 @@ async function createEmailMessage({ campaignId, customerId = null }) {
   return rows[0];
 }
 
-async function createCourse({ courseCode, name = 'Khoá A' }) {
-  const productId = Number.isFinite(parseInt(courseCode, 10)) ? parseInt(courseCode, 10) : null;
+async function createCourse({ courseCode, name = 'Khoá A', userId = null }) {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const userRow = await db.query('SELECT id FROM users LIMIT 1');
+    if (userRow.rows[0]) {
+      targetUserId = userRow.rows[0].id;
+    } else {
+      const u = await createUser();
+      targetUserId = u.id;
+    }
+  }
   const { rows } = await db.query(
-    `INSERT INTO courses (course_code, course_name, product_id) VALUES ($1, $2, $3) RETURNING *`,
-    [courseCode, name, productId]
+    `INSERT INTO courses (id_user, course_code, course_name) VALUES ($1, $2, $3) RETURNING *`,
+    [targetUserId, courseCode, name]
   );
   return rows[0];
 }

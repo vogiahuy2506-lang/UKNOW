@@ -73,12 +73,23 @@ describe('POST /api/your-endpoint', () => {
 });
 ```
 
-## Mở rộng schema
+## Mở rộng schema & Quy trình đồng bộ 2 chiều (PR-3)
 
-Nếu test mới cần bảng/cột chưa có trong `sql/bootstrap.sql`:
+`bootstrap.sql` được bảo vệ bằng **chốt chặn 2 chiều** (`tests/integration/schemaInventory.test.js`) đối chiếu với ảnh chụp production (`tests/integration/fixtures/productionSchemaInventory.json`).
 
-1. Thêm `CREATE TABLE ...` vào `sql/bootstrap.sql` (phản ánh trạng thái sau khi đã áp dụng đủ migrations).
-2. Cập nhật `truncateAll()` trong `helpers/db.js` để TRUNCATE bảng đó.
-3. Chạy lại test.
+Khi có migration mới làm thay đổi schema:
 
-`bootstrap.sql` không nhằm thay thế `migrations/` của production — nó là snapshot **đủ dùng** cho test. Khi migrations mới thay đổi schema, cập nhật bootstrap.sql theo.
+1. **Cập nhật `sql/bootstrap.sql`**: Thêm/sửa/xoá bảng hoặc cột tương ứng theo đúng migration.
+2. **Cập nhật `fixtures/productionSchemaInventory.json`**: Thêm/xoá tên cột trong fixture và ghi rõ lý do trong commit message (không dùng cơ chế auto-update snapshot).
+3. **Kiểm tra cột thêm bằng ALTER TABLE**: Chạy `npm run check:bootstrap-columns` để đảm bảo không bỏ sót cột do migration thêm.
+4. **Cập nhật `helpers/db.js`**: Nếu thêm bảng mới, bổ sung vào danh sách `TRUNCATE` trong `truncateAll()`.
+5. **Đối chiếu lại với production thật (khi cần)**:
+   Chạy trên VPS:
+   ```bash
+   docker exec uknow-postgres psql -U postgres -d uknow-campaign -t -A -F'|' \
+     -c "SELECT table_name, md5(string_agg(column_name, ',' ORDER BY column_name)) \
+         FROM information_schema.columns WHERE table_schema='public' \
+         GROUP BY table_name ORDER BY table_name;"
+   ```
+   So sánh output với cùng truy vấn chạy trên `uknow_campaign_test`. Lệch bảng nào thì đào sâu bảng đó.
+

@@ -90,7 +90,7 @@ async function writeFakeUpload({ relPath, content }) {
 }
 
 async function insertTemplateFile({
-  idUser,
+  templateId = null,
   storageKey,
   displayName = 'File hiển thị',
   originalName = 'file.txt',
@@ -98,9 +98,9 @@ async function insertTemplateFile({
   fileSize = 100,
 }) {
   const { rows } = await db.query(
-    `INSERT INTO template_files (id_user, storage_key, original_name, display_name, mime_type, file_size)
+    `INSERT INTO template_files (template_id, storage_key, original_name, display_name, mime_type, file_size)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [idUser, storageKey, originalName, displayName, mimeType, fileSize]
+    [templateId, storageKey, originalName, displayName, mimeType, fileSize]
   );
   return rows[0];
 }

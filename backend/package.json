@@ -19,6 +19,7 @@
     "migrate": "node scripts/migrate.js",
     "migrate:check": "node scripts/migrate.js --check",
     "check:schema": "node scripts/checkCoreSchema.js",
+    "check:bootstrap-columns": "node scripts/checkBootstrapColumns.js",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",

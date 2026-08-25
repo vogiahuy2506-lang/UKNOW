@@ -68,9 +68,9 @@ describe('send quota — messages_per_period', () => {
     const campaignId = campaigns[0].id;
 
     await db.query(
-      `INSERT INTO email_messages (id_user, id_campaign, recipient_email, status, sent_at)
-       VALUES ($1, $2, 'a@test.local', 'sent', NOW())`,
-      [user.id, campaignId]
+      `INSERT INTO email_messages (id_campaign, recipient_email, status, sent_at)
+       VALUES ($1, 'a@test.local', 'sent', NOW())`,
+      [campaignId]
     );
 
     const quota = await checkSendQuota({ userId: user.id, channel: 'zalo' });
@@ -90,9 +90,9 @@ describe('send quota — messages_per_period', () => {
       [user.id]
     );
     await db.query(
-      `INSERT INTO email_messages (id_user, id_campaign, recipient_email, status, sent_at)
-       VALUES ($1, $2, 'a@test.local', 'sent', NOW())`,
-      [user.id, campaigns[0].id]
+      `INSERT INTO email_messages (id_campaign, recipient_email, status, sent_at)
+       VALUES ($1, 'a@test.local', 'sent', NOW())`,
+      [campaigns[0].id]
     );
 
     const res = await request(app)

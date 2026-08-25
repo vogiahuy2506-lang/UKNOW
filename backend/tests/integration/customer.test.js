@@ -335,8 +335,8 @@ describe('GET /api/customers/:id — detail', () => {
 
     // 1 purchase
     await db.query(
-      `INSERT INTO customer_purchases (id_customer, id_campaign, id_run, product_name, amount, order_id, order_status, purchase_date)
-       VALUES ($1, $2, NULL, 'Khoá A', 500000, 'WC-1', 'completed', NOW())`,
+      `INSERT INTO customer_purchases (id_customer, id_campaign, id_run, product_name, amount, order_id, product_type, purchase_date)
+       VALUES ($1, $2, NULL, 'Khoá A', 500000, 'WC-1', 'complete', NOW())`,
       [cu.id, camp.id]
     );
     // 1 campaign_customer (participation row)

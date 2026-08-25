@@ -75,8 +75,8 @@ async function addLandingMembership(ownerId, employeeId, permissions = { landing
 
 async function insertLandingPage({ idUser, slug, title = 'Title', html = '<p>x</p>', isPublished = true }) {
   const { rows } = await db.query(
-    `INSERT INTO landing_pages (id_user, slug, title, html_content, is_published, published_at)
-     VALUES ($1, $2, $3, $4, $5, CASE WHEN $5 THEN NOW() ELSE NULL END)
+    `INSERT INTO landing_pages (id_user, slug, title, html_content, is_published)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id, slug, title, is_published, id_user`,
     [idUser, slug, title, html, isPublished]
   );
