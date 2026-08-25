@@ -66,6 +66,8 @@ export const createCampaignNodeRunner = (deps) => {
     logItemsMode = '100',
   } = deps;
 
+  const campaignIdNum = Number.isFinite(parseInt(campaignId, 10)) ? parseInt(campaignId, 10) : null;
+
   const fetchSheetPreview = async (config, signal) => {
     const normalizedSheetName = String(config.sheetName || '').trim();
     const parsedHeaderRow = Number.parseInt(config.headerRow, 10);
@@ -1144,8 +1146,6 @@ export const createCampaignNodeRunner = (deps) => {
         const value = mappingRow?.[key];
         return value === undefined ? null : value;
       };
-
-      const campaignIdNum = Number.isFinite(parseInt(campaignId, 10)) ? parseInt(campaignId, 10) : null;
 
       if (!items.length) {
         return {
