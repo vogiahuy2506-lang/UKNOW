@@ -751,15 +751,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
       const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'suggest_content_plan', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
 
-      // Chỉ thẻ cổng CUỐI CÙNG còn giữ hình dạng thẻ. Các cổng đã trả lời chỉ còn lại câu chữ —
-      // giống hệt những gì người dùng thấy lúc chạy live (stripWizardCards). Xem wizardCardHistory.js.
+      // Chỉ cổng CUỐI CÙNG còn hiện. Cổng đã trả lời bị BỎ HẲN — cả câu hỏi lẫn thẻ — đúng như
+      // stripWizardCards làm lúc chạy live (`next.pop()` bỏ nguyên tin nhắn). Giữ lại câu chữ là
+      // sai: câu trả lời của người dùng là marker ẩn, nên chỉ còn một chồng câu hỏi trơ không ai
+      // trả lời — khó hiểu hơn cả lúc còn thẻ. Xem wizardCardHistory.js.
       const lastWizardCardIdx = findLastWizardCardIndex(dbMessages);
 
       const mappedMessages = dbMessages.map((m, idx) => {
         if (m.role === 'assistant' && interactiveTypes.includes(m.type)) {
-          if (!shouldKeepWizardCard(m, idx, lastWizardCardIdx)) {
-            return { role: m.role, content: m.content };
-          }
+          if (!shouldKeepWizardCard(m, idx, lastWizardCardIdx)) return null;
           let data = m.data;
           if (m.type === 'template_draft' && data) {
             data = enrichTemplateDraftFromDb(data, serverWizardState?.plan?.savedTemplates);
@@ -777,7 +777,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           content: m.content,
           ...(m.role === 'user' && Array.isArray(m.data?.files) ? { files: m.data.files } : {}),
         };
-      });
+      }).filter(Boolean);
 
       const reconstructedDrafts = mappedMessages
         .filter((m) => m.role === 'assistant' && m.type === 'template_draft' && m.data?._planTemplate)

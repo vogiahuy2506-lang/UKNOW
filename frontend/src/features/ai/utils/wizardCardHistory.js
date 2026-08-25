@@ -8,6 +8,10 @@
  * trả lời đều hiện lại và xếp chồng. Câu trả lời thì là marker ẩn nên không thấy đâu — người
  * dùng chỉ thấy một chồng câu hỏi xám kèm nút mờ "Chọn hết các mục bên trên để tiếp tục",
  * đọc như thể trợ lý hỏi nhiều lần mà mình chưa làm gì. Bug thật 25/08/2026.
+ *
+ * Lần vá đầu (e103520d) mới đúng một nửa: bỏ phần thẻ nhưng GIỮ câu chữ. Kết quả còn khó hiểu
+ * hơn — một chồng câu hỏi trơ không có câu trả lời nào bên dưới. Live thì `stripWizardCards`
+ * gọi `next.pop()`, tức bỏ NGUYÊN TIN NHẮN. Nên cổng đã trả lời phải biến mất hoàn toàn.
  */
 
 /** Các loại tin nhắn trợ lý là THẺ CỔNG — hỏi để đi tiếp, không phải sản phẩm cuối. */
