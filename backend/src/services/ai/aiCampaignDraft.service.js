@@ -332,7 +332,7 @@ class AiCampaignDraftService {
     return cloned;
   }
 
-  patchDeterministicZaloScript(script, options = {}) {
+  patchDeterministicCampaignScript(script, options = {}) {
     if (!script || !Array.isArray(script.nodes) || !Array.isArray(script.connections)) {
       return script;
     }
@@ -340,11 +340,19 @@ class AiCampaignDraftService {
     const {
       senderAccountId = null,
       dataSource = null,
+      sheetUrl = null,
+      zaloGroupIds = null,
+      zaloFriendIds = null,
+      landingPageSlug = null,
+      landingLeadsSlugs = null,
       defaultZaloAccountId = null,
+      channel = null,
     } = options;
 
     const targetZaloAccountId = senderAccountId || defaultZaloAccountId || null;
     const effectiveDataSource = dataSource || script.wizardDataSource || null;
+    const effectiveSheetUrl = sheetUrl || script.sheetUrl || null;
+    const effectiveLandingSlug = landingPageSlug || landingLeadsSlugs || script.landingPageSlug || null;
 
     const getNodeSubtype = (node) => String(node?.node_subtype || node?.nodeSubtype || node?.subtype || '').toLowerCase();
     const getNodeType = (node) => String(node?.node_type || node?.nodeType || node?.type || '').toLowerCase();
@@ -356,7 +364,15 @@ class AiCampaignDraftService {
              ['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request', 'zalo_personal', 'zalo_group'].includes(t);
     };
 
+    const isEmailSendNode = (node) => {
+      const st = getNodeSubtype(node);
+      const t = getNodeType(node);
+      return ['send_email', 'email', 'email_send'].includes(st) ||
+             ['send_email', 'email', 'email_send'].includes(t);
+    };
+
     const hasZaloSend = script.nodes.some(isZaloSendNode);
+    const hasEmailSend = script.nodes.some(isEmailSendNode);
 
     // 1. Nếu dataSource là 'zalo_contacts' hoặc 'manual', loại bỏ các node lấy audience thừa
     if (effectiveDataSource === 'zalo_contacts' || effectiveDataSource === 'manual') {
@@ -415,7 +431,140 @@ class AiCampaignDraftService {
       }
     }
 
-    // 2. Nếu có node gửi Zalo, đảm bảo có select_zalo_account và đúng zaloAccountId
+    // 2. Nếu dataSource là 'sheet' và có sheetUrl, đảm bảo có node read_sheet với đúng URL
+    if (effectiveDataSource === 'sheet' && effectiveSheetUrl) {
+      const isReadSheetNode = (node) => {
+        const st = getNodeSubtype(node);
+        const t = getNodeType(node);
+        return st === 'read_sheet' || t === 'read_sheet' || st === 'google_sheet';
+      };
+
+      let sheetNode = script.nodes.find(isReadSheetNode);
+      if (!sheetNode) {
+        const triggerNode = script.nodes.find(n => {
+          const st = getNodeSubtype(n);
+          const t = getNodeType(n);
+          return ['trigger', 'manual', 'start'].includes(st) || ['trigger', 'manual', 'start'].includes(t);
+        }) || script.nodes[0];
+
+        const triggerId = triggerNode ? String(triggerNode.tempId || triggerNode.id) : null;
+        const sheetNodeId = `node_read_sheet_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
+        sheetNode = {
+          id: sheetNodeId,
+          tempId: sheetNodeId,
+          node_type: 'data',
+          node_subtype: 'read_sheet',
+          nodeType: 'data',
+          nodeSubtype: 'read_sheet',
+          node_name: 'Danh sách từ Sheet',
+          nodeName: 'Danh sách từ Sheet',
+          node_description: 'Đọc dữ liệu từ Google Sheet',
+          position_x: triggerNode ? ((triggerNode.position_x || triggerNode.positionX || 100) + 150) : 250,
+          position_y: triggerNode ? (triggerNode.position_y || triggerNode.positionY || 200) : 200,
+          config: {
+            sheetUrl: effectiveSheetUrl,
+            headerRow: 1,
+            dataStartRow: 2,
+          },
+        };
+
+        console.log(`[AI Patch] Chèn node read_sheet (${sheetNodeId}, sheetUrl: ${effectiveSheetUrl})`);
+
+        const triggerIndex = triggerNode ? script.nodes.indexOf(triggerNode) : -1;
+        if (triggerIndex >= 0) {
+          script.nodes.splice(triggerIndex + 1, 0, sheetNode);
+        } else {
+          script.nodes.unshift(sheetNode);
+        }
+
+        if (triggerId) {
+          const triggerOutConns = script.connections.filter(c => String(c.sourceNodeId || c.source || c.from) === triggerId);
+          script.connections = script.connections.filter(c => String(c.sourceNodeId || c.source || c.from) !== triggerId);
+
+          script.connections.push({
+            sourceNodeId: triggerId,
+            targetNodeId: sheetNodeId,
+            connectionType: 'default',
+            connectionLabel: '',
+          });
+
+          for (const outConn of triggerOutConns) {
+            const oldTargetId = String(outConn.targetNodeId || outConn.target || outConn.to);
+            if (oldTargetId && oldTargetId !== sheetNodeId) {
+              script.connections.push({
+                sourceNodeId: sheetNodeId,
+                targetNodeId: oldTargetId,
+                connectionType: 'default',
+                connectionLabel: '',
+              });
+            }
+          }
+        }
+      } else {
+        sheetNode.config = {
+          ...(sheetNode.config || {}),
+          sheetUrl: effectiveSheetUrl,
+          headerRow: sheetNode.config?.headerRow || 1,
+          dataStartRow: sheetNode.config?.dataStartRow || 2,
+        };
+        console.log(`[AI Patch] Cập nhật sheetUrl="${effectiveSheetUrl}" cho node read_sheet`);
+      }
+
+      // Nối recipientNodeId trên action nodes
+      const sheetId = sheetNode.tempId || sheetNode.id;
+      for (const node of script.nodes) {
+        if (isEmailSendNode(node)) {
+          const cfg = node.config || node.settings || {};
+          if (!cfg.recipientNodeId) {
+            cfg.recipientSource = 'node';
+            cfg.recipientNodeId = sheetId;
+            cfg.recipientField = 'email';
+            node.config = cfg;
+          }
+        }
+        if (isZaloSendNode(node)) {
+          const cfg = node.config || node.settings || {};
+          if (!cfg.zaloRecipientNodeId && getNodeSubtype(node) === 'send_zalo_personal') {
+            cfg.zaloRecipientSource = 'node';
+            cfg.zaloRecipientNodeId = sheetId;
+            cfg.zaloRecipientField = 'phone';
+            cfg.zaloRecipientType = 'phone';
+            node.config = cfg;
+          }
+        }
+      }
+    }
+
+    // 3. Nếu có zaloGroupIds, điền vào các node send_zalo_group / get_all_groups
+    if (Array.isArray(zaloGroupIds) && zaloGroupIds.length > 0) {
+      for (const node of script.nodes) {
+        const st = getNodeSubtype(node);
+        if (st === 'send_zalo_group' || st === 'get_all_groups' || isZaloSendNode(node)) {
+          const cfg = node.config || node.settings || {};
+          cfg.zaloGroupIds = zaloGroupIds;
+          cfg.zaloSelectedGroupIds = zaloGroupIds;
+          node.config = cfg;
+          console.log(`[AI Patch] Gán zaloGroupIds=[${zaloGroupIds.join(', ')}] cho node ${st || node.nodeType}`);
+        }
+      }
+    }
+
+    // 4. Nếu có landingLeadsSlugs, điền vào node read_landing_leads
+    if (effectiveLandingSlug) {
+      const slugArray = Array.isArray(effectiveLandingSlug) ? effectiveLandingSlug : [effectiveLandingSlug];
+      for (const node of script.nodes) {
+        const st = getNodeSubtype(node);
+        if (st === 'read_landing_leads') {
+          const cfg = node.config || node.settings || {};
+          cfg.landingLeadsSlugs = slugArray;
+          node.config = cfg;
+          console.log(`[AI Patch] Gán landingLeadsSlugs=[${slugArray.join(', ')}] cho node read_landing_leads`);
+        }
+      }
+    }
+
+    // 5. Nếu có node gửi Zalo, đảm bảo có select_zalo_account và đúng zaloAccountId
     if (hasZaloSend) {
       const isSelectZaloAccountNode = (node) => {
         return getNodeSubtype(node) === 'select_zalo_account' || getNodeType(node) === 'select_zalo_account';
@@ -502,12 +651,87 @@ class AiCampaignDraftService {
       }
     }
 
+    // 6. Nếu có node gửi Email và có senderAccountId, gán fromEmailId
+    if (hasEmailSend && senderAccountId) {
+      for (const node of script.nodes) {
+        if (isEmailSendNode(node)) {
+          const cfg = node.config || node.settings || {};
+          if (!cfg.fromEmailId || senderAccountId) {
+            cfg.fromEmailId = Number(senderAccountId);
+            cfg.emailSenderId = Number(senderAccountId);
+            node.config = cfg;
+            console.log(`[AI Patch] Gán fromEmailId=${senderAccountId} cho node gửi email`);
+          }
+        }
+      }
+    }
+
+    // 7. Thiết lập sendMode / zaloPersonalSendMode / zaloGroupSendMode chuẩn xác theo lịch gửi (drip vs once)
+    const scheduleMode = options.schedule?.mode || (typeof options.schedule === 'string' ? options.schedule : null) || script.wizardSchedule?.mode || null;
+    const hasDripSteps = (node) => {
+      const cfg = node.config || node.settings || {};
+      const personalSteps = Array.isArray(cfg.zaloPersonalTemplateSteps) ? cfg.zaloPersonalTemplateSteps : [];
+      const groupSteps = Array.isArray(cfg.zaloGroupTemplateSteps) ? cfg.zaloGroupTemplateSteps : [];
+      const emailSteps = Array.isArray(cfg.emailSteps) ? cfg.emailSteps : [];
+      const hasMultipleSteps = personalSteps.length > 1 || groupSteps.length > 1 || emailSteps.length > 1;
+      const hasNonZeroDelay = (Number(cfg.delayValue) > 0) ||
+        personalSteps.some((s) => Number(s.delayValue) > 0) ||
+        groupSteps.some((s) => Number(s.delayValue) > 0) ||
+        emailSteps.some((s) => Number(s.delayValue) > 0);
+      return hasMultipleSteps || hasNonZeroDelay;
+    };
+
+    const isDripCampaign = scheduleMode === 'drip' || script.nodes.some(hasDripSteps);
+
+    for (const node of script.nodes) {
+      const cfg = node.config || node.settings || {};
+      const st = getNodeSubtype(node);
+
+      if (isEmailSendNode(node)) {
+        if (isDripCampaign) {
+          cfg.sendMode = 'schedule';
+          console.log(`[AI Patch] Gán sendMode="schedule" cho node ${node.tempId || node.id} (chiến dịch chuỗi drip)`);
+        } else if (scheduleMode === 'once') {
+          cfg.sendMode = 'all';
+        }
+      }
+
+      if (st === 'send_zalo_personal') {
+        if (isDripCampaign) {
+          cfg.zaloPersonalSendMode = 'schedule';
+          console.log(`[AI Patch] Gán zaloPersonalSendMode="schedule" cho node ${node.tempId || node.id} (chiến dịch chuỗi drip)`);
+        } else if (scheduleMode === 'once') {
+          cfg.zaloPersonalSendMode = 'all';
+        }
+      }
+
+      if (st === 'send_zalo_group') {
+        if (isDripCampaign) {
+          cfg.zaloGroupSendMode = 'schedule';
+          console.log(`[AI Patch] Gán zaloGroupSendMode="schedule" cho node ${node.tempId || node.id} (chiến dịch chuỗi drip)`);
+        } else if (scheduleMode === 'once') {
+          cfg.zaloGroupSendMode = 'all';
+        }
+      }
+
+      node.config = cfg;
+    }
+
     return script;
+  }
+
+  // Alias for backward compatibility
+  patchDeterministicZaloScript(script, options = {}) {
+    return this.patchDeterministicCampaignScript(script, options);
+  }
+
+  patchDeterministicScript(script, options = {}) {
+    return this.patchDeterministicCampaignScript(script, options);
   }
 
   async prepareScript(script, userId, context = {}) {
     const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(userId).catch(() => null);
-    const patched = this.patchDeterministicZaloScript(script, {
+    const patched = this.patchDeterministicCampaignScript(script, {
       defaultZaloAccountId: defaultAccountId,
       ...context,
     });

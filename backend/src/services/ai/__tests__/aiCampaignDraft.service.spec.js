@@ -274,7 +274,7 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
     expect(sendGroupNode.config.zaloAccountId).toBe(88);
   });
 
-  it('handles scenario 4: does not modify email campaign nodes', () => {
+  it('handles scenario 4: does not inject select_zalo_account into email campaign', () => {
     const script = {
       nodes: [
         { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
@@ -289,7 +289,7 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
       ],
     };
 
-    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
       senderAccountId: 10,
       dataSource: 'db',
     });
@@ -297,6 +297,205 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
     expect(patched.nodes.length).toBe(4);
     expect(patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'select_zalo_account')).toBeUndefined();
     expect(patched.nodes.find((n) => n.id === 'n2')).toBeDefined();
+    // Email senderId is populated
+    expect(patched.nodes.find((n) => n.id === 'n3').config.fromEmailId).toBe(10);
+  });
+
+  it('handles scenario 5: patches sheetUrl and inserts read_sheet node when missing', () => {
+    const testSheetUrl = 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit';
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_email', config: { emailSubject: 'Test' } },
+        { id: 'n3', tempId: 'n3', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
+      dataSource: 'sheet',
+      sheetUrl: testSheetUrl,
+      senderAccountId: 7,
+    });
+
+    const sheetNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'read_sheet');
+    expect(sheetNode).toBeDefined();
+    expect(sheetNode.config.sheetUrl).toBe(testSheetUrl);
+
+    const emailNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'send_email');
+    expect(emailNode.config.recipientNodeId).toBe(sheetNode.id);
+    expect(emailNode.config.fromEmailId).toBe(7);
+
+    // Graph wired: n1 -> sheetNode -> n2 -> n3
+    expect(patched.connections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceNodeId: 'n1', targetNodeId: sheetNode.id }),
+      expect.objectContaining({ sourceNodeId: sheetNode.id, targetNodeId: 'n2' }),
+      expect.objectContaining({ sourceNodeId: 'n2', targetNodeId: 'n3' }),
+    ]));
+  });
+
+  it('handles scenario 6: patches zaloGroupIds into send_zalo_group and get_all_groups', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'select_zalo_account', config: { zaloAccountId: 5 } },
+        { id: 'n3', tempId: 'n3', nodeType: 'data', nodeSubtype: 'get_all_groups', config: {} },
+        { id: 'n4', tempId: 'n4', nodeType: 'action', nodeSubtype: 'send_zalo_group', config: {} },
+        { id: 'n5', tempId: 'n5', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+        { sourceNodeId: 'n4', targetNodeId: 'n5' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
+      zaloGroupIds: ['grp_123', 'grp_456'],
+      senderAccountId: 5,
+    });
+
+    const groupDataNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'get_all_groups');
+    const groupActionNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'send_zalo_group');
+
+    expect(groupDataNode.config.zaloGroupIds).toEqual(['grp_123', 'grp_456']);
+    expect(groupActionNode.config.zaloGroupIds).toEqual(['grp_123', 'grp_456']);
+  });
+
+  it('handles scenario 7: patches landingLeadsSlugs into read_landing_leads', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'read_landing_leads', config: {} },
+        { id: 'n3', tempId: 'n3', nodeType: 'action', nodeSubtype: 'send_email', config: {} },
+        { id: 'n4', tempId: 'n4', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
+      landingPageSlug: 'khoa-hoc-ielts-2026',
+    });
+
+    const landingNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'read_landing_leads');
+    expect(landingNode.config.landingLeadsSlugs).toEqual(['khoa-hoc-ielts-2026']);
+  });
+
+  it('handles scenario 8: enforces zaloGroupSendMode="schedule" for Zalo group drip campaigns', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'select_zalo_account', config: { zaloAccountId: 1 } },
+        { id: 'n3', tempId: 'n3', nodeType: 'data', nodeSubtype: 'get_all_groups', config: {} },
+        {
+          id: 'n4',
+          tempId: 'n4',
+          nodeType: 'action',
+          nodeSubtype: 'send_zalo_group',
+          config: {
+            zaloGroupTemplateSteps: [
+              { message: 'Tin 1', delayValue: 0 },
+              { message: 'Tin 2', delayValue: 1 },
+              { message: 'Tin 3', delayValue: 2 },
+            ],
+          },
+        },
+        { id: 'n5', tempId: 'n5', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+        { sourceNodeId: 'n4', targetNodeId: 'n5' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
+      schedule: { mode: 'drip', days: 3, slotsPerDay: 1 },
+      senderAccountId: 1,
+    });
+
+    const groupNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'send_zalo_group');
+    expect(groupNode.config.zaloGroupSendMode).toBe('schedule');
+  });
+
+  it('handles scenario 9: enforces zaloPersonalSendMode="schedule" for Zalo personal drip campaigns', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'select_zalo_account', config: { zaloAccountId: 2 } },
+        {
+          id: 'n3',
+          tempId: 'n3',
+          nodeType: 'action',
+          nodeSubtype: 'send_zalo_personal',
+          config: {
+            zaloPersonalTemplateSteps: [
+              { message: 'Chào bạn 1', delayValue: 0 },
+              { message: 'Chào bạn 2', delayValue: 1 },
+            ],
+          },
+        },
+        { id: 'n4', tempId: 'n4', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
+      schedule: { mode: 'drip', days: 2 },
+      senderAccountId: 2,
+    });
+
+    const personalNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'send_zalo_personal');
+    expect(personalNode.config.zaloPersonalSendMode).toBe('schedule');
+  });
+
+  it('handles scenario 10: enforces sendMode="schedule" for email drip campaigns and "all" for once campaigns', () => {
+    const dripScript = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_email', config: { emailSubject: 'Drip email', delayValue: 1 } },
+        { id: 'n3', tempId: 'n3', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+      ],
+    };
+
+    const patchedDrip = aiCampaignDraftService.patchDeterministicCampaignScript(dripScript, {
+      schedule: { mode: 'drip', days: 2 },
+    });
+    expect(patchedDrip.nodes.find((n) => n.id === 'n2').config.sendMode).toBe('schedule');
+
+    const onceScript = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_email', config: { emailSubject: 'Once email' } },
+        { id: 'n3', tempId: 'n3', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+      ],
+    };
+
+    const patchedOnce = aiCampaignDraftService.patchDeterministicCampaignScript(onceScript, {
+      schedule: { mode: 'once' },
+    });
+    expect(patchedOnce.nodes.find((n) => n.id === 'n2').config.sendMode).toBe('all');
   });
 });
 

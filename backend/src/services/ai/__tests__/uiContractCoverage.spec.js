@@ -29,6 +29,8 @@ import {
   buildDataSourceQuestion,
   buildChannelQuestion,
   buildCampaignBriefQuestion,
+  createEmptyWizardState,
+  GATE_PROPAGATION,
 } from '../aiCampaignWizard.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -132,5 +134,22 @@ describe('giao kèo UI ↔ nửa sau — mọi lựa chọn phải có nơi xử
           + '.xls ngày 24/08. Thêm nhánh đọc, hoặc bỏ đuôi này khỏi accept.'
         : '',
     }).toEqual({ accepted, missing: [], hint: '' });
+  });
+
+  it('mọi gate trong createEmptyWizardState đều được khai báo chiến lược truyền xuống trong GATE_PROPAGATION', () => {
+    const emptyState = createEmptyWizardState();
+    const gateKeys = Object.keys(emptyState.gates || {}).sort();
+    const propagationKeys = Object.keys(GATE_PROPAGATION || {}).sort();
+
+    const missingInPropagation = gateKeys.filter((k) => !GATE_PROPAGATION[k]);
+    const extraInPropagation = propagationKeys.filter((k) => !(k in emptyState.gates));
+
+    expect({
+      missingInPropagation,
+      extraInPropagation,
+      hint: missingInPropagation.length
+        ? `Các gate [${missingInPropagation.join(', ')}] được thêm vào wizardState.gates nhưng chưa được khai báo trong GATE_PROPAGATION (aiCampaignWizard.service.js). Hãy chỉ rõ chiến lược truyền xuống (prompt, prompt+patch, direct_recipients, internal...).`
+        : '',
+    }).toEqual({ missingInPropagation: [], extraInPropagation: [], hint: '' });
   });
 });

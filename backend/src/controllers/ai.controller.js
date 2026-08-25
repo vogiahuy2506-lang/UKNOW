@@ -717,6 +717,21 @@ class AiController {
     const recipients = validateManualRecipients(directRecipients);
     const hasEmailAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_email');
     const hasZaloPersonalAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_zalo_personal');
+
+    if (hasZaloPersonalAction && (!recipients.phones || recipients.phones.length === 0) && (!recipients.uids || recipients.uids.length === 0)) {
+      const error = new Error('Danh sách người nhận cho chiến dịch Zalo không có số điện thoại hoặc UID nào hợp lệ.');
+      error.code = 'ZALO_RECIPIENTS_EMPTY';
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (hasEmailAction && (!recipients.emails || recipients.emails.length === 0)) {
+      const error = new Error('Danh sách người nhận cho chiến dịch Email không có địa chỉ email nào hợp lệ.');
+      error.code = 'EMAIL_RECIPIENTS_EMPTY';
+      error.statusCode = 400;
+      throw error;
+    }
+
     if ((recipients.emails.length && !hasEmailAction) || ((recipients.phones.length || recipients.uids.length) && !hasZaloPersonalAction)) {
       const error = new Error('Email chỉ dùng cho chiến dịch Email; số điện thoại hoặc bạn bè Zalo chỉ dùng cho Zalo cá nhân.');
       error.code = 'MANUAL_RECIPIENT_CHANNEL_MISMATCH';
@@ -1754,21 +1769,25 @@ class AiController {
   }
 
   /**
-   * Trích xuất danh sách người nhận (email/SĐT) từ file bảng tính tải lên (.xlsx, .xls, .csv).
+   * Trích xuất danh sách người nhận (email/SĐT) từ file bảng tính tải lên (.xlsx, .xls, .csv) hoặc link Google Sheet.
    */
   async extractRecipients(req, res) {
     try {
-      const { tempId, originalName, contentType } = req.body || {};
-      if (!tempId) {
+      const { tempId, originalName, contentType, sheetUrl, sheetName } = req.body || {};
+      let result;
+
+      if (sheetUrl) {
+        result = await recipientExtractorService.extractRecipientsFromGoogleSheet(sheetUrl, sheetName);
+      } else if (tempId) {
+        const buffer = await uploadController.readTempFileBuffer(tempId, originalName);
+        result = recipientExtractorService.extractRecipientsFromBuffer(buffer, originalName, contentType);
+      } else {
         return res.status(400).json({
           success: false,
-          message: 'tempId là bắt buộc.',
-          code: 'TEMP_ID_REQUIRED',
+          message: 'tempId hoặc sheetUrl là bắt buộc.',
+          code: 'INPUT_REQUIRED',
         });
       }
-
-      const buffer = await uploadController.readTempFileBuffer(tempId, originalName);
-      const result = recipientExtractorService.extractRecipientsFromBuffer(buffer, originalName, contentType);
 
       return res.json({
         success: true,
@@ -1777,7 +1796,7 @@ class AiController {
     } catch (error) {
       console.error('[AiController] extractRecipients error:', error);
       return res.status(error.statusCode || 500).json(
-        buildAiErrorPayload(error, 'Không thể trích xuất danh sách người nhận từ tệp')
+        buildAiErrorPayload(error, 'Không thể trích xuất danh sách người nhận')
       );
     }
   }

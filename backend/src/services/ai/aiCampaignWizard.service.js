@@ -504,6 +504,7 @@ export function buildDataSourceQuestion(locale = 'vi', gateState = null) {
       : 'Bạn muốn gửi cho ai? Chọn nguồn danh sách người nhận nhé.',
     missing_fields: [],
     data: {
+      channel: gateState?.channel || null,
       questions: [
         {
           id: 'dataSource',
@@ -662,11 +663,33 @@ export function buildCampaignBriefQuestion(courses = [], locale = 'vi', {
   };
 }
 
+export const GATE_PROPAGATION = {
+  channel: 'prompt+patch',
+  senderAccountId: 'prompt+patch',
+  senderAccountName: 'internal',
+  dataSource: 'prompt+patch',
+  sheetUrl: 'prompt+patch',
+  zaloGroupIds: 'prompt+patch',
+  zaloFriendIds: 'direct_recipients',
+  schedule: 'prompt+patch',
+  isCampaignFlow: 'internal',
+  planApproved: 'internal',
+  senderOtherRequested: 'internal',
+  hasContentPlan: 'internal',
+  abandonedAtMessageCount: 'internal',
+};
+
 export function buildCampaignPromptWithWizardState(state, basePrompt = '', locale = 'vi', briefContext = '') {
   const isEnglish = locale === 'en';
   const parts = [String(basePrompt || '').trim()].filter(Boolean);
 
-  if (state?.channel || state?.senderAccountId || state?.dataSource) {
+  if (
+    state?.channel ||
+    state?.senderAccountId ||
+    state?.dataSource ||
+    state?.sheetUrl ||
+    (Array.isArray(state?.zaloGroupIds) && state.zaloGroupIds.length > 0)
+  ) {
     const lines = [];
     if (state.channel) {
       lines.push(`- channel: "${state.channel}"`);
@@ -684,6 +707,12 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
         const count = Array.isArray(state.zaloFriendIds) ? state.zaloFriendIds.length : 0;
         lines.push(`- zaloFriendCount: ${count}`);
       }
+    }
+    if (state.sheetUrl) {
+      lines.push(`- sheetUrl: "${state.sheetUrl}"`);
+    }
+    if (Array.isArray(state.zaloGroupIds) && state.zaloGroupIds.length > 0) {
+      lines.push(`- zaloGroupIds: [${state.zaloGroupIds.map((id) => `"${id}"`).join(', ')}]`);
     }
     if (lines.length > 0) {
       parts.push(`=== WIZARD ĐÃ CHỐT ===\n${lines.join('\n')}`);

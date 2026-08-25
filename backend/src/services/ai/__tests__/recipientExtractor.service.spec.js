@@ -1,5 +1,5 @@
 import module from 'module';
-import { extractRecipientsFromBuffer } from '../recipientExtractor.service.js';
+import { extractRecipientsFromBuffer, extractRecipientsFromGoogleSheet } from '../recipientExtractor.service.js';
 
 const require = module.createRequire(import.meta.url);
 const XLSX = require('xlsx');
@@ -102,5 +102,16 @@ Pham Thi D,d@example.com,
     expect(() => extractRecipientsFromBuffer(buf, 'large.xlsx')).toThrow(
       expect.objectContaining({ code: 'RECIPIENTS_LIMIT_EXCEEDED', statusCode: 400 })
     );
+  });
+
+  describe('extractRecipientsFromGoogleSheet', () => {
+    it('throws INVALID_SHEET_URL when url is missing or malformed', async () => {
+      await expect(extractRecipientsFromGoogleSheet('')).rejects.toThrow(
+        expect.objectContaining({ code: 'INVALID_SHEET_URL', statusCode: 400 })
+      );
+      await expect(extractRecipientsFromGoogleSheet('https://example.com')).rejects.toThrow(
+        expect.objectContaining({ code: 'INVALID_SPREADSHEET_ID', statusCode: 400 })
+      );
+    });
   });
 });

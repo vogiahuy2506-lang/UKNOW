@@ -204,6 +204,56 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
   };
 }
 
+export async function extractRecipientsFromGoogleSheet(sheetUrl, sheetName = '') {
+  if (!sheetUrl || typeof sheetUrl !== 'string') {
+    const error = new Error('Đường dẫn Google Sheet không hợp lệ hoặc bị thiếu.');
+    error.code = 'INVALID_SHEET_URL';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const match = sheetUrl.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (!match) {
+    const error = new Error('Đường dẫn Google Sheet không hợp lệ (không tìm thấy spreadsheet ID).');
+    error.code = 'INVALID_SPREADSHEET_ID';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const spreadsheetId = match[1];
+  const safeName = sheetName && typeof sheetName === 'string' ? sheetName.trim() : '';
+  const sheetParam = safeName ? `&sheet=${encodeURIComponent(safeName)}` : '';
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv${sheetParam}`;
+
+  const axios = (await import('axios')).default;
+  const response = await axios.get(csvUrl, {
+    responseType: 'text',
+    timeout: 15000,
+    validateStatus: () => true,
+  });
+
+  if (response.status >= 400) {
+    const error = new Error('Không thể tải dữ liệu từ Google Sheet (lỗi từ Google). Vui lòng kiểm tra lại quyền truy cập.');
+    error.code = 'SHEET_FETCH_FAILED';
+    error.statusCode = 502;
+    throw error;
+  }
+
+  const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+  const bodyText = typeof response.data === 'string' ? response.data : '';
+  const isHtml = contentType.includes('text/html') || bodyText.trim().startsWith('<!DOCTYPE html');
+  if (isHtml) {
+    const error = new Error('Không đọc được Google Sheet. Hãy đảm bảo file đã được chia sẻ quyền xem cho "Bất kỳ ai có đường liên kết" (Anyone with the link) và tên tab chính xác.');
+    error.code = 'SHEET_NOT_PUBLIC';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const buffer = Buffer.from(bodyText, 'utf-8');
+  return extractRecipientsFromBuffer(buffer, 'google_sheet.csv', 'text/csv');
+}
+
 export default {
   extractRecipientsFromBuffer,
+  extractRecipientsFromGoogleSheet,
 };

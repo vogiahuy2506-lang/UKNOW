@@ -4,7 +4,7 @@ import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck, HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt, HiOutlinePaperClip,
-  HiOutlineDocumentText, HiOutlineSearch,
+  HiOutlineDocumentText, HiOutlineSearch, HiOutlineExclamationCircle,
 } from 'react-icons/hi';
 import api from '../../../services/api';
 import aiApi from '../../../services/aiApi';
@@ -720,34 +720,61 @@ export const AskCampaignDetailsCard = ({
       return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv');
     });
 
-    if (answers.dataSource === 'sheet' && spreadsheetFile && spreadsheetFile.tempId) {
-      setIsExtractingRecipients(true);
-      setExtractError(null);
-      aiApi.extractRecipients({
-        tempId: spreadsheetFile.tempId,
-        originalName: spreadsheetFile.name || spreadsheetFile.originalName,
-        contentType: spreadsheetFile.contentType,
-      })
-        .then((res) => {
-          if (res?.data) {
-            setExtractedRecipients(res.data);
-          }
+    if (answers.dataSource === 'sheet') {
+      if (spreadsheetFile && spreadsheetFile.tempId) {
+        setIsExtractingRecipients(true);
+        setExtractError(null);
+        aiApi.extractRecipients({
+          tempId: spreadsheetFile.tempId,
+          originalName: spreadsheetFile.name || spreadsheetFile.originalName,
+          contentType: spreadsheetFile.contentType,
         })
-        .catch((err) => {
-          setExtractError(err.response?.data?.message || err.message || 'Không thể đọc danh sách người nhận từ tệp');
-        })
-        .finally(() => {
-          setIsExtractingRecipients(false);
-        });
+          .then((res) => {
+            if (res?.data) {
+              setExtractedRecipients(res.data);
+            }
+          })
+          .catch((err) => {
+            setExtractError(err.response?.data?.message || err.message || 'Không thể đọc danh sách người nhận từ tệp');
+          })
+          .finally(() => {
+            setIsExtractingRecipients(false);
+          });
+      } else if (isValidGoogleSheetUrl(sheetUrl)) {
+        const timer = setTimeout(() => {
+          setIsExtractingRecipients(true);
+          setExtractError(null);
+          aiApi.extractRecipients({
+            sheetUrl: sheetUrl.trim(),
+          })
+            .then((res) => {
+              if (res?.data) {
+                setExtractedRecipients(res.data);
+              }
+            })
+            .catch((err) => {
+              setExtractError(err.response?.data?.message || err.message || 'Không thể đọc danh sách người nhận từ Google Sheet');
+            })
+            .finally(() => {
+              setIsExtractingRecipients(false);
+            });
+        }, 500);
+        return () => clearTimeout(timer);
+      } else {
+        setExtractedRecipients(null);
+        setExtractError(null);
+      }
     } else {
       setExtractedRecipients(null);
       setExtractError(null);
     }
-  }, [uploadedFiles, answers.dataSource]);
+  }, [uploadedFiles, answers.dataSource, sheetUrl]);
 
   const questions = data?.questions || [];
   const isWizardQuestion = questions.some((q) => q.wizardGate);
-  const isEmailChannel = answers.channel === 'email';
+  const effectiveChannel = data?.channel || answers.channel || data?.wizardState?.channel || 'zalo';
+  const isEmailChannel = effectiveChannel === 'email';
+  const isZaloChannel = effectiveChannel === 'zalo' || effectiveChannel === 'zalo_group';
   const emailChoiceRequired = isEmailChannel && !isWizardQuestion;
   const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
   const manualRecipientsRequired = answers.dataSource === 'manual';
@@ -764,6 +791,25 @@ export const AskCampaignDetailsCard = ({
     productDescription,
     topicText,
   };
+
+  let recipientChannelMismatch = false;
+  let mismatchWarning = '';
+
+  if (extractedRecipients && answers.dataSource === 'sheet') {
+    const spreadsheetFile = (uploadedFiles || []).find((f) => {
+      const name = String(f.name || f.originalName || '').toLowerCase();
+      return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv');
+    });
+    const sourceName = spreadsheetFile ? `Tệp ${spreadsheetFile.name || spreadsheetFile.originalName}` : 'Google Sheet';
+
+    if (isZaloChannel && (!extractedRecipients.phones || extractedRecipients.phones.length === 0)) {
+      recipientChannelMismatch = true;
+      mismatchWarning = `${sourceName} có ${extractedRecipients.rowCount} dòng nhưng không có cột số điện thoại. Chiến dịch Zalo cần SĐT để gửi. Bạn vui lòng tải tệp/sheet khác có cột SĐT, hoặc đổi kênh sang Email (${sourceName} có ${extractedRecipients.emails?.length || 0} email).`;
+    } else if (isEmailChannel && (!extractedRecipients.emails || extractedRecipients.emails.length === 0)) {
+      recipientChannelMismatch = true;
+      mismatchWarning = `${sourceName} có ${extractedRecipients.rowCount} dòng nhưng không có cột email. Chiến dịch Email cần địa chỉ email để gửi. Bạn vui lòng tải tệp/sheet khác có cột email, hoặc đổi kênh sang Zalo (${sourceName} có ${extractedRecipients.phones?.length || 0} SĐT).`;
+    }
+  }
 
   const isCardActuallyShowingFiles = Boolean(
     isActive
@@ -824,7 +870,9 @@ export const AskCampaignDetailsCard = ({
     (!emailTemplateRequired || emailTemplateName.trim().length > 0) &&
     (!manualRecipientsRequired || manualRecipients.trim().length > 0) &&
     (!attachedFileRequired || hasUploadedFile) &&
-    sheetSourceValid;
+    sheetSourceValid &&
+    !recipientChannelMismatch &&
+    !extractError;
 
   const toggleProduct = (productId) => {
     if (productId === 'other') {
@@ -1233,7 +1281,7 @@ export const AskCampaignDetailsCard = ({
                 )}
                 {isExtractingRecipients && (
                   <p className="mt-2 text-xs text-orange-700 animate-pulse">
-                    Đang đọc danh sách người nhận từ tệp...
+                    Đang đọc danh sách người nhận từ tệp / Google Sheet...
                   </p>
                 )}
                 {extractError && (
@@ -1241,12 +1289,21 @@ export const AskCampaignDetailsCard = ({
                     {extractError}
                   </p>
                 )}
-                {extractedRecipients && (
+                {recipientChannelMismatch && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-300 rounded-xl text-left text-xs text-amber-900 flex items-start gap-2">
+                    <HiOutlineExclamationCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">{t('aiChatbot.recipientColumnMismatchTitle') || 'Thiếu cột dữ liệu cần thiết cho kênh gửi'}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed">{mismatchWarning}</p>
+                    </div>
+                  </div>
+                )}
+                {extractedRecipients && !recipientChannelMismatch && (
                   <div className="mt-3 p-3 bg-white border border-orange-200 rounded-xl text-left w-full space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-green-700 flex items-center gap-1.5">
                         <HiOutlineCheck className="w-4 h-4 text-green-600" />
-                        Đã đọc {extractedRecipients.rowCount} người nhận từ tệp ({extractedRecipients.emails?.length || 0} email, {extractedRecipients.phones?.length || 0} SĐT)
+                        Đã đọc {extractedRecipients.rowCount} người nhận ({extractedRecipients.emails?.length || 0} email, {extractedRecipients.phones?.length || 0} SĐT)
                       </span>
                       {extractedRecipients.sampleRows?.length > 0 && (
                         <button
