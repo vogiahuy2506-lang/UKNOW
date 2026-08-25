@@ -21,6 +21,10 @@ import zaloAllDisconnectedQrLogin from './fixtures/golden/zaloAllDisconnectedQrL
 import senderOtherRequestedSetupGuide from './fixtures/golden/senderOtherRequestedSetupGuide.fixture.js';
 import onceScheduleSkipsPlanApproval from './fixtures/golden/onceScheduleSkipsPlanApproval.fixture.js';
 import recurringScheduleReasks from './fixtures/golden/recurringScheduleReasks.fixture.js';
+import zaloFriendsPickerNoLoop from './fixtures/golden/zaloFriendsPickerNoLoop.fixture.js';
+import attachedFileSurvivesNextTurn from './fixtures/golden/attachedFileSurvivesNextTurn.fixture.js';
+import dripSlotsPerDaySurvivesPlanTurn from './fixtures/golden/dripSlotsPerDaySurvivesPlanTurn.fixture.js';
+import reloadThenSaveContinuesChain from './fixtures/golden/reloadThenSaveContinuesChain.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -33,6 +37,11 @@ const FIXTURES = [
   senderOtherRequestedSetupGuide,
   onceScheduleSkipsPlanApproval,
   recurringScheduleReasks,
+  // Bốn ca hỏng thật trong tuần 24–25/08/2026 — mỗi fixture ghi rõ gốc bug ở đầu file
+  zaloFriendsPickerNoLoop,
+  attachedFileSurvivesNextTurn,
+  dripSlotsPerDaySurvivesPlanTurn,
+  reloadThenSaveContinuesChain,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));

@@ -943,6 +943,32 @@ export function normalizeWizardState(raw) {
 }
 
 /**
+ * Câu văn tự do chỉ nói được phần thô của lịch — "chuỗi 5 ngày". Không ai gõ lại
+ * "2 tin mỗi ngày" lần thứ hai; con số đó nằm trong marker [wizard] của bước schedule.
+ *
+ * Sau khi TẢI LẠI TRANG, marker biến mất khỏi history, nên chính câu yêu cầu ĐẦU TIÊN
+ * lại trở thành "ý định mới nhất" (latestIntentScheduleFresh). Nó ghi đè lịch đã lưu và
+ * đánh rơi slotsPerDay ⇒ isValidDripSchedule (:52) trả false ⇒ trợ lý hỏi lại lịch gửi
+ * từ đầu giữa chuỗi drip. Bug thật 23/08/2026; golden fixture
+ * dripSlotsPerDaySurvivesPlanTurn + reloadThenSaveContinuesChain khoá lại ca này.
+ *
+ * Cách xử: giữ nguyên quyền ghi đè của ý định mới, nhưng field nào câu văn KHÔNG nhắc
+ * tới thì lấy lại từ state đã lưu — và chỉ khi cùng mode. Đổi mode (once ↔ drip) thì
+ * derived thắng trọn vẹn, không hồi sinh gì.
+ */
+const backfillScheduleDetails = (derivedSchedule, persistedSchedule) => {
+  if (!derivedSchedule || !persistedSchedule) return derivedSchedule;
+  if (derivedSchedule.mode !== persistedSchedule.mode) return derivedSchedule;
+  const filled = { ...derivedSchedule };
+  ['days', 'slotsPerDay'].forEach((field) => {
+    if (filled[field] == null && persistedSchedule[field] != null) {
+      filled[field] = persistedSchedule[field];
+    }
+  });
+  return filled;
+};
+
+/**
  * Merge persisted gates (DB) với state derive từ history của request hiện tại.
  * Nguyên tắc: marker tường minh trong request → derived thắng; persisted lấp chỗ
  * trống (marker đã mất khỏi history, ví dụ session reload); inference chỉ fill gap.
@@ -1007,7 +1033,7 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
     // Latest free-text intent schedule beats sticky persisted only when that intent set schedule.
     schedule: (() => {
       if (markerGates.includes('schedule') || channelSwitched || hasAbandonMark) return d.schedule ?? null;
-      if (d.latestIntentScheduleFresh) return d.schedule ?? null;
+      if (d.latestIntentScheduleFresh) return backfillScheduleDetails(d.schedule ?? null, p.schedule);
       if (d.latestIntentIsQuickSend === true) return d.schedule ?? { mode: 'once' };
       return (p.schedule != null) ? p.schedule : (d.schedule ?? null);
     })(),
