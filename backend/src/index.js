@@ -9,7 +9,11 @@ import outboundMessageQueueService from './services/queue/outboundMessageQueue.s
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
 import kbDocumentQueue from './services/queue/kbDocumentQueue.service.js';
 import knowledgeBaseService from './services/chatbot/knowledgeBase.service.js';
-import { runMigrations, assertMigrationsUpToDate } from './utils/migrationRunner.util.js';
+import {
+  runMigrations,
+  assertMigrationsUpToDate,
+  resolveStartupMigrationAction,
+} from './utils/migrationRunner.util.js';
 import campaignZaloSenderService from './services/campaign/campaignZaloSender.service.js';
 import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
 import zaloInboxService from './services/chatbot/zaloInbox.service.js';
@@ -65,13 +69,20 @@ const testDBConnection = async () => {
       console.log(
         `Database connected successfully — ${formatUtcAndVietnamForLog(result.rows[0].now)}`
       );
-      if (process.env.SKIP_MIGRATIONS === 'true') {
-        // Bỏ chạy KHÔNG có nghĩa là bỏ kiểm. Migration đã tách sang bước riêng
-        // trong pipeline; nếu bước đó hỏng hoặc bị bỏ sót mà app vẫn lên thì ta
-        // sẽ chạy im lặng trên schema cũ — kiểu hỏng khó lần nhất.
-        console.log('[Migration] Skipped (SKIP_MIGRATIONS=true) — đang kiểm tra schema');
+      const startupMigration = resolveStartupMigrationAction({
+        nodeEnv: process.env.NODE_ENV,
+        skipMigrations: process.env.SKIP_MIGRATIONS,
+      });
+
+      if (startupMigration.warning) {
+        console.warn(startupMigration.warning);
+      }
+
+      if (startupMigration.action === 'check') {
+        console.log('[Migration] Chế độ check-only — đang kiểm tra schema up-to-date');
         await assertMigrationsUpToDate(client);
       } else {
+        console.log('[Migration] Chế độ auto-run (development) — đang chạy migrations');
         await runMigrations(client);
       }
       return;

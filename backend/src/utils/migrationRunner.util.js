@@ -6,17 +6,154 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../migrations');
 
 /**
+ * Quyết định hành vi migration khi tiến trình ứng dụng chính khởi động.
+ *
+ * Quy tắc:
+ * 1. NODE_ENV=production: LUÔN là 'check' (check-only), bất kể SKIP_MIGRATIONS bị thiếu, false hay true.
+ *    Nếu production thiếu SKIP_MIGRATIONS=true, trả về warning để cảnh báo nhưng vẫn ở chế độ check.
+ * 2. Môi trường khác (development, test...):
+ *    - SKIP_MIGRATIONS=true: 'check'
+ *    - Ngược lại: 'run' (cho phép auto-run migration khi dev cục bộ)
+ *
+ * @param {{ nodeEnv?: string, skipMigrations?: string }} [options]
+ * @returns {{ action: 'check' | 'run', isProduction: boolean, warning: string | null }}
+ */
+export function resolveStartupMigrationAction({
+  nodeEnv = process.env.NODE_ENV,
+  skipMigrations = process.env.SKIP_MIGRATIONS,
+} = {}) {
+  const isProduction = nodeEnv === 'production';
+  const isSkipExplicit = String(skipMigrations).toLowerCase() === 'true';
+
+  if (isProduction) {
+    const warning = !isSkipExplicit
+      ? '[Startup] Cảnh báo cấu hình: NODE_ENV=production nhưng thiếu SKIP_MIGRATIONS=true. '
+        + 'Ứng dụng tự động kích hoạt chế độ check-only để đảm bảo an toàn (không tự chạy migration trong app runtime).'
+      : null;
+    return { action: 'check', isProduction: true, warning };
+  }
+
+  if (isSkipExplicit) {
+    return { action: 'check', isProduction: false, warning: null };
+  }
+
+  return { action: 'run', isProduction: false, warning: null };
+}
+
+/**
  * Bỏ 1 `BEGIN;` đầu và 1 `COMMIT;` cuối (nếu có) để runner tự bọc transaction.
- * Chỉ strip token đứng riêng — không đụng nội dung SQL bên trong.
+ * Dùng linear scanner thay vì regex lồng nhau để loại bỏ hoàn toàn nguy cơ Catastrophic Backtracking (ReDoS).
+ * Tuyệt đối không xóa BEGIN/COMMIT bên trong function body hay DO $$ ... $$ block.
  *
  * @param {string} sql
  * @returns {string}
  */
 export function stripOuterTransactionStatements(sql) {
-  let body = String(sql || '').trim();
-  if (!body) return body;
-  body = body.replace(/^\s*BEGIN\s*;\s*/i, '');
-  body = body.replace(/\s*COMMIT\s*;\s*$/i, '');
+  let body = String(sql || '').replace(/^\uFEFF/, '');
+  if (!body.trim()) return body.trim();
+
+  // 1. Quét tìm vị trí bắt đầu của code đầu tiên (bỏ qua whitespace, line comment, block comment)
+  let firstCodeIdx = 0;
+  const len = body.length;
+  while (firstCodeIdx < len) {
+    const ch = body[firstCodeIdx];
+    if (/\s/.test(ch)) {
+      firstCodeIdx++;
+    } else if (ch === '-' && body[firstCodeIdx + 1] === '-') {
+      // Line comment: nhảy đến hết dòng
+      firstCodeIdx += 2;
+      while (firstCodeIdx < len && body[firstCodeIdx] !== '\n' && body[firstCodeIdx] !== '\r') {
+        firstCodeIdx++;
+      }
+    } else if (ch === '/' && body[firstCodeIdx + 1] === '*') {
+      // Block comment: nhảy đến hết */
+      firstCodeIdx += 2;
+      while (firstCodeIdx < len && !(body[firstCodeIdx] === '*' && body[firstCodeIdx + 1] === '/')) {
+        firstCodeIdx++;
+      }
+      if (firstCodeIdx < len) firstCodeIdx += 2;
+    } else {
+      break;
+    }
+  }
+
+  const leadingPrefix = body.slice(0, firstCodeIdx);
+  const afterLeading = body.slice(firstCodeIdx);
+
+  // Khớp câu lệnh SQL đầu tiên bằng regex tuyến tính có neo ^
+  const beginMatch = afterLeading.match(/^BEGIN(?:\s+(?:TRANSACTION|WORK))?\s*;/i);
+  if (beginMatch) {
+    body = leadingPrefix + afterLeading.slice(beginMatch[0].length);
+  }
+
+  // 2. Quét tuyến tính toàn chuỗi để tìm vị trí kết thúc của ký tự code cuối cùng (trước trailing comments/whitespace)
+  let i = 0;
+  const currentLen = body.length;
+  let lastCodeEnd = 0;
+
+  while (i < currentLen) {
+    const ch = body[i];
+    if (/\s/.test(ch)) {
+      i++;
+    } else if (ch === '-' && body[i + 1] === '-') {
+      i += 2;
+      while (i < currentLen && body[i] !== '\n' && body[i] !== '\r') {
+        i++;
+      }
+    } else if (ch === '/' && body[i + 1] === '*') {
+      i += 2;
+      while (i < currentLen && !(body[i] === '*' && body[i + 1] === '/')) {
+        i++;
+      }
+      if (i < currentLen) i += 2;
+    } else if (ch === "'" || ch === '"') {
+      // String literal
+      const quote = ch;
+      i++;
+      while (i < currentLen) {
+        if (body[i] === quote) {
+          i++;
+          if (body[i] === quote) {
+            i++;
+          } else {
+            break;
+          }
+        } else if (body[i] === '\\') {
+          i += 2;
+        } else {
+          i++;
+        }
+      }
+      lastCodeEnd = i;
+    } else if (ch === '$' && /^\$[a-zA-Z0-9_]*\$/.test(body.slice(i, i + 64))) {
+      // Dollar-quoted block (e.g. $$ or $func$)
+      const tagMatch = body.slice(i, i + 64).match(/^\$[a-zA-Z0-9_]*\$/);
+      const tag = tagMatch[0];
+      i += tag.length;
+      const closingIdx = body.indexOf(tag, i);
+      if (closingIdx === -1) {
+        i = currentLen;
+      } else {
+        i = closingIdx + tag.length;
+      }
+      lastCodeEnd = i;
+    } else {
+      i++;
+      lastCodeEnd = i;
+    }
+  }
+
+  const beforeTrailing = body.slice(0, lastCodeEnd);
+  const trailingSuffix = body.slice(lastCodeEnd);
+
+  // Kiểm tra câu lệnh SQL cuối cùng trong beforeTrailing có phải là COMMIT / COMMIT TRANSACTION / COMMIT WORK không
+  const commitMatch = beforeTrailing.match(/(?:^|;)\s*COMMIT(?:\s+(?:TRANSACTION|WORK))?\s*;?\s*$/i);
+  if (commitMatch) {
+    const hasLeadingSemicolon = commitMatch[0].trimStart().startsWith(';');
+    const replacement = hasLeadingSemicolon ? ';' : '';
+    body = beforeTrailing.slice(0, commitMatch.index) + replacement + trailingSuffix;
+  }
+
   return body.trim();
 }
 
@@ -77,18 +214,18 @@ async function readSetting(client, name) {
 }
 
 /**
- * Chạy migration dưới khoá advisory + bỏ trần statement_timeout.
+ * Chạy migration dưới khoá advisory + bảo vệ timeout an toàn.
  *
  * Vì sao cần khoá: hai tiến trình cùng chạy `runMigrations` sẽ cùng đọc
  * `schema_migrations` rỗng rồi cùng chạy một file → lỗi "column already exists"
- * hoặc tệ hơn là chạy đôi phần UPDATE dữ liệu. Hôm nay production chỉ có một
- * container nên chưa xảy ra, nhưng khoá là bảo hiểm vĩnh viễn, không phụ thuộc
- * vào việc người sau có nhớ luật một-container hay không.
+ * hoặc chạy đôi phần UPDATE dữ liệu.
  *
- * Vì sao bỏ trần timeout: pool đặt `statement_timeout = 30s`. Migration nặng
- * (UPDATE toàn bảng) sẽ bị Postgres huỷ giữa chừng → migration fail → app từ
- * chối khởi động. Trong phiên migration, trần được nâng theo
- * `MIGRATION_STATEMENT_TIMEOUT_MS` (mặc định 0 = không giới hạn).
+ * Vì sao cần quản lý timeout trước khi lock:
+ * Pool đặt `statement_timeout = 30s`. Nếu `lock_timeout = 60s`, lệnh chờ `pg_advisory_lock`
+ * sẽ bị `statement_timeout` 30s cắt ngang trước khi chạm deadline chờ lock 60s.
+ * Do đó ta tạm đặt `statement_timeout = 0` trước khi chờ lock, đặt `lock_timeout` theo cấu hình,
+ * và sau khi có lock mới đặt `statement_timeout` cho khối công việc migration.
+ * Toàn bộ setting luôn được theo dõi và khôi phục riêng rẽ trong `finally`.
  *
  * @param {import('pg').PoolClient} client
  * @param {() => Promise<any>} work
@@ -100,27 +237,46 @@ export async function withMigrationLock(client, work) {
   const prevLockTimeout = await readSetting(client, 'lock_timeout');
   const prevStatementTimeout = await readSetting(client, 'statement_timeout');
 
-  // lock_timeout áp cho chính lệnh chờ khoá bên dưới: nếu một tiến trình migration
-  // khác treo, ta fail nhanh và thấy được lý do thay vì đứng im vô hạn.
-  await client.query(`SET lock_timeout = ${Number(lockTimeoutMs)}`);
-
   let locked = false;
+  let statementTimeoutModified = false;
+  let lockTimeoutModified = false;
+
   try {
+    // 1. Tạm vô hiệu hóa statement_timeout để lệnh chờ lock không bị cắt ngang bởi pool 30s
+    await client.query('SET statement_timeout = 0');
+    statementTimeoutModified = true;
+
+    // 2. Đặt lock_timeout deadline cho việc chờ lấy advisory lock
+    await client.query(`SET lock_timeout = ${Number(lockTimeoutMs)}`);
+    lockTimeoutModified = true;
+
+    // 3. Chờ lấy advisory lock
     await client.query(
       'SELECT pg_advisory_lock(hashtext($1), hashtext($2))',
       MIGRATION_LOCK_KEYS
     );
     locked = true;
+
+    // 4. Sau khi có lock, đặt statement_timeout cho work migration
     await client.query(`SET statement_timeout = ${Number(statementTimeoutMs)}`);
     return await work();
   } finally {
-    // Khôi phục trước khi nhả khoá: client sẽ quay lại pool và được tái sử dụng.
-    try {
-      await client.query(`SET statement_timeout = '${prevStatementTimeout}'`);
-      await client.query(`SET lock_timeout = '${prevLockTimeout}'`);
-    } catch (err) {
-      console.error(`[Migration] Không khôi phục được timeout: ${err.message}`);
+    // Luôn khôi phục riêng từng setting ngay khi setting đó đã từng bị sửa
+    if (statementTimeoutModified) {
+      try {
+        await client.query(`SET statement_timeout = '${prevStatementTimeout}'`);
+      } catch (err) {
+        console.error(`[Migration] Không khôi phục được statement_timeout: ${err.message}`);
+      }
     }
+    if (lockTimeoutModified) {
+      try {
+        await client.query(`SET lock_timeout = '${prevLockTimeout}'`);
+      } catch (err) {
+        console.error(`[Migration] Không khôi phục được lock_timeout: ${err.message}`);
+      }
+    }
+
     if (locked) {
       try {
         await client.query(
