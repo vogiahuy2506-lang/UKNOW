@@ -93,7 +93,7 @@ describe('storageUtils', () => {
     });
 
     it('constants match requirements', () => {
-      expect(MAX_UPLOAD_FILE_BYTES).toBe(50 * 1024 * 1024);
+      expect(MAX_UPLOAD_FILE_BYTES).toBe(100 * 1024 * 1024);
       expect(CRITICAL_REMAINING_BYTES).toBe(50 * 1024 * 1024);
       expect(WARNING_PERCENT).toBe(80);
       expect(DANGER_PERCENT).toBe(95);

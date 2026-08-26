@@ -9,7 +9,7 @@ import MessageAttachments, { formatFileSize } from '../../components/MessageAtta
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { formatMessageSegments } from '../../utils/formatMessage.util';
 
-const ACCEPTED = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
+const ACCEPTED = '.pdf,.docx,.pptx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACH = 3;
 
 function FormattedMessage({ text, textColor }) {

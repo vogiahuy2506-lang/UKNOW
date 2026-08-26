@@ -15,6 +15,9 @@ export function clientValidateFile(file, maxMb = MAX_UPLOAD_FILE_MB) {
   if (lower.endsWith('.doc') && !lower.endsWith('.docx')) {
     return 'Chỉ nhận .docx, hãy Lưu thành .docx rồi gửi lại';
   }
+  if (lower.endsWith('.ppt') && !lower.endsWith('.pptx')) {
+    return 'Chỉ nhận .pptx, hãy Lưu thành .pptx rồi gửi lại';
+  }
   if (lower.endsWith('.svg')) {
     return 'Không nhận file SVG';
   }

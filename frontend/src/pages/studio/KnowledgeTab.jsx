@@ -27,7 +27,7 @@ const ALLOWED_FORMATS_LABEL = [...new Set(
       return ext;
     })
 )].join(', ');
-const MAX_FILE_MB = 10;
+const MAX_FILE_MB = 100;
 
 function formatBytes(bytes) {
   if (!bytes) return '0 B';

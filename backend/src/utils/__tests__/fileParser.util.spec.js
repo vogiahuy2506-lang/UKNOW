@@ -69,6 +69,29 @@ const mockXLSX = {
   }
 };
 
+const mockJSZip = jest.fn().mockImplementation(() => {
+  return {
+    loadAsync: jest.fn().mockImplementation(async (buffer) => {
+      if (buffer.toString() === 'error') {
+        throw new Error('PPTX mock error');
+      }
+    }),
+    files: {
+      'ppt/slides/slide1.xml': {},
+      'ppt/slides/slide2.xml': {},
+    },
+    file: jest.fn().mockImplementation((filename) => {
+      if (filename === 'ppt/slides/slide1.xml') {
+        return { async: jest.fn().mockResolvedValue('<a:t>Slide 1 Title</a:t><a:t>Slide 1 Content</a:t>') };
+      }
+      if (filename === 'ppt/slides/slide2.xml') {
+        return { async: jest.fn().mockResolvedValue('<a:t>Slide 2 Conclusion</a:t>') };
+      }
+      return { async: jest.fn().mockResolvedValue('') };
+    }),
+  };
+});
+
 // Spy on moduleLib.createRequire and return our custom mock require
 const actualCreateRequire = moduleLib.createRequire;
 jest.spyOn(moduleLib, 'createRequire').mockImplementation((metaUrl) => {
@@ -78,6 +101,7 @@ jest.spyOn(moduleLib, 'createRequire').mockImplementation((metaUrl) => {
     if (id === 'exceljs') return mockExcelJS;
     if (id === 'xlsx') return mockXLSX;
     if (id === 'papaparse') return mockPapa;
+    if (id === 'jszip') return mockJSZip;
     return actualCreateRequire(metaUrl)(id);
   };
 });
@@ -163,6 +187,21 @@ describe('fileParser.util', () => {
     const buffer = Buffer.from('error');
     const result = await extractTextFromBuffer(buffer, 'old.doc', 'application/msword');
     expect(result).toBe('');
+  });
+
+  it('should parse PowerPoint files (.pptx) using jszip', async () => {
+    const buffer = Buffer.from('PPTX_BYTES');
+    const result = await extractTextFromBuffer(buffer, 'presentation.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    expect(result).toContain('--- Slide 1 ---');
+    expect(result).toContain('Slide 1 Title Slide 1 Content');
+    expect(result).toContain('--- Slide 2 ---');
+    expect(result).toContain('Slide 2 Conclusion');
+  });
+
+  it('should handle PowerPoint (.pptx) parsing errors', async () => {
+    const buffer = Buffer.from('error');
+    await expect(extractTextFromBuffer(buffer, 'presentation.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'))
+      .rejects.toThrow('Không thể giải nén file PowerPoint (.pptx)');
   });
 
   it('should return empty string for unknown binary file types instead of binary garbage', async () => {

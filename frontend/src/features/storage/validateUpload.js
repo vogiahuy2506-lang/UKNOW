@@ -73,8 +73,8 @@ export function getUploadValidationErrorMessage(validation, t, locale = 'vi') {
         : t('storageQuota.fileTooLargeGeneric');
     }
     return locale === 'en'
-      ? `File ${fileName ? `"${fileName}" ` : ''}exceeds the 50MB limit per file.`
-      : `Tệp ${fileName ? `"${fileName}" ` : ''}vượt quá giới hạn 50MB/tệp.`;
+      ? `File ${fileName ? `"${fileName}" ` : ''}exceeds the 100MB limit per file.`
+      : `Tệp ${fileName ? `"${fileName}" ` : ''}vượt quá giới hạn 100MB/tệp.`;
   }
 
   if (validation.reason === 'quota_exceeded') {

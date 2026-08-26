@@ -44,6 +44,12 @@ const DOC_ALLOW = [
     kind: 'doc',
   },
   {
+    mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    exts: ['.pptx'],
+    magic: [0x50, 0x4b, 0x03, 0x04],
+    kind: 'doc',
+  },
+  {
     mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     exts: ['.xlsx'],
     magic: [0x50, 0x4b, 0x03, 0x04],
@@ -95,13 +101,16 @@ export function validateFile({ buffer, originalName, mimetype }) {
   if (rawExt === '.doc' || mime === 'application/msword') {
     throw httpError('Chỉ nhận .docx, hãy Lưu thành .docx rồi gửi lại');
   }
+  if (rawExt === '.ppt' || mime === 'application/vnd.ms-powerpoint') {
+    throw httpError('Chỉ nhận .pptx, hãy Lưu thành .pptx rồi gửi lại');
+  }
   if (rawExt === '.svg' || mime === 'image/svg+xml') {
     throw httpError('Không nhận file SVG');
   }
 
   const rule = ALL_ALLOW.find((r) => r.mime === mime && r.exts.includes(rawExt));
   if (!rule) {
-    throw httpError('Định dạng file không được hỗ trợ. Nhận PDF, DOCX, XLSX, TXT, CSV, PNG, JPEG, WEBP');
+    throw httpError('Định dạng file không được hỗ trợ. Nhận PDF, DOCX, PPTX, XLSX, TXT, CSV, PNG, JPEG, WEBP');
   }
 
   if (!matchesMagic(buffer, rule.magic)) {
@@ -420,6 +429,7 @@ function mimeFromKey(storageKey) {
   switch (ext) {
     case '.pdf': return 'application/pdf';
     case '.docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case '.pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
     case '.xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     case '.txt': return 'text/plain';
     case '.csv': return 'text/csv';

@@ -1012,6 +1012,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       return { label: 'PDF', icon: null, bg: 'bg-red-50 border-red-200', text: 'text-red-500' };
     if (['doc','docx'].includes(ext))
       return { label: 'Word', icon: null, bg: 'bg-sky-50 border-sky-200', text: 'text-sky-600' };
+    if (['pptx','ppt'].includes(ext))
+      return { label: 'PPTX', icon: null, bg: 'bg-orange-50 border-orange-200', text: 'text-orange-600' };
     return { label: 'File', icon: null, bg: 'bg-slate-100 border-slate-200', text: 'text-slate-500' };
   };
 
@@ -3805,7 +3807,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       )}
 
       <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden"
-        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv" />
+        accept=".pdf,.doc,.docx,.pptx,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv" />
 
       {/* Campaign Picker Modal */}
       <CampaignPickerModal

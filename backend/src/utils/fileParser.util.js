@@ -7,6 +7,7 @@ const pdfParse = require('pdf-parse');
 const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
 const Papa = require('papaparse');
+const JSZip = require('jszip');
 
 const KNOWN_BINARY_EXTENSIONS = new Set([
   '.xls', '.xlsx', '.doc', '.docx', '.ppt', '.pptx', '.pdf',
@@ -56,6 +57,41 @@ export async function extractTextFromBuffer(buffer, originalName, contentType = 
         return '';
       }
       throw new Error(`Không thể giải nén file Word (.docx): ${err.message}`);
+    }
+  }
+
+  // 3. PowerPoint Presentations (.pptx)
+  if (
+    ext === '.pptx' ||
+    mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  ) {
+    try {
+      const zip = new JSZip();
+      await zip.loadAsync(buffer);
+      let text = '';
+      const slideFiles = Object.keys(zip.files).filter((name) =>
+        name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
+      );
+      slideFiles.sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      });
+      for (const filename of slideFiles) {
+        const content = await zip.file(filename).async('string');
+        const matches = content.match(/<a:t>(.*?)<\/a:t>/g);
+        if (matches) {
+          const slideText = matches.map((m) => m.replace(/<\/?a:t>/g, '')).join(' ');
+          if (slideText.trim()) {
+            const slideNum = parseInt(filename.replace(/\D/g, ''), 10) || 0;
+            text += `--- Slide ${slideNum} ---\n${slideText}\n\n`;
+          }
+        }
+      }
+      return text.trim();
+    } catch (err) {
+      console.error('[FileParser] PowerPoint parse error:', err);
+      throw new Error(`Không thể giải nén file PowerPoint (.pptx): ${err.message}`);
     }
   }
 

@@ -28,7 +28,7 @@ import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents'
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useAuthStore } from '../../stores/authStore';
 
-const ACCEPTED_EXTENSIONS = '.pdf,.docx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
+const ACCEPTED_EXTENSIONS = '.pdf,.docx,.pptx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
 
 const MOBILE_PANELS = [

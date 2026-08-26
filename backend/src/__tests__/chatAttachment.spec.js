@@ -81,8 +81,8 @@ describe('chatAttachment', () => {
   afterAll(cleanup);
 
   describe('validateFile', () => {
-    it('uses the same 50MB limit for images and documents', () => {
-      expect(MAX_IMAGE_BYTES).toBe(50 * 1024 * 1024);
+    it('uses the same 100MB limit for images and documents', () => {
+      expect(MAX_IMAGE_BYTES).toBe(100 * 1024 * 1024);
       expect(MAX_IMAGE_BYTES).toBe(MAX_FILE_BYTES);
     });
 
@@ -120,6 +120,24 @@ describe('chatAttachment', () => {
       })).toThrow(/docx/i);
     });
 
+    it('accepts pptx with correct mime and magic', () => {
+      const result = validateFile({
+        buffer: zipMagicBuffer(),
+        originalName: 'slides.pptx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      });
+      expect(result.kind).toBe('doc');
+      expect(result.ext).toBe('.pptx');
+    });
+
+    it('rejects .ppt with clear message about .pptx', () => {
+      expect(() => validateFile({
+        buffer: Buffer.from('anything'),
+        originalName: 'old.ppt',
+        mimetype: 'application/vnd.ms-powerpoint',
+      })).toThrow(/pptx/i);
+    });
+
     it('rejects svg', () => {
       expect(() => validateFile({
         buffer: Buffer.from('<svg></svg>'),
@@ -128,8 +146,8 @@ describe('chatAttachment', () => {
       })).toThrow(/SVG/i);
     });
 
-    it('rejects file over 50MB', () => {
-      const big = Buffer.alloc(51 * 1024 * 1024, 0x25);
+    it('rejects file over 100MB', () => {
+      const big = Buffer.alloc(101 * 1024 * 1024, 0x25);
       big[0] = 0x25; big[1] = 0x50; big[2] = 0x44; big[3] = 0x46;
       expect(() => validateFile({
         buffer: big,
