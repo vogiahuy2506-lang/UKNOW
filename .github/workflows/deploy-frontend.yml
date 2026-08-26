@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      - '.github/workflows/lint.yml'
+      - '.github/workflows/test-frontend.yml'
       - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
 
@@ -38,12 +40,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build image
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
-          push: false
-          load: true
+          push: true
           provenance: false
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:latest
@@ -64,17 +65,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Push image (with retry)
+      - name: Verify image on registry
         run: |
-          for attempt in 1 2 3; do
-            echo "--- Push attempt $attempt/3 ---"
-            docker push "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:latest" && \
-            docker push "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}" && exit 0
-            echo "Push failed, retrying in 20s..."
-            sleep 20
-          done
-          echo "All push attempts failed"
-          exit 1
+          echo "Verifying image on Docker Hub: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}"
+          docker buildx imagetools inspect "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}"
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
@@ -97,11 +91,11 @@ jobs:
           envs: DOCKERHUB_USERNAME,FRONTEND_IMAGE,EXPECTED_SHA
           script: |
             set -e
-            echo "Deploying frontend image: $FRONTEND_IMAGE"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Deploying frontend image: $FRONTEND_IMAGE"
             docker pull "$FRONTEND_IMAGE"
             docker image inspect "$FRONTEND_IMAGE" --format 'Pulled image id: {{.Id}}'
             if docker inspect uknow-campaign-frontend > /dev/null 2>&1; then
-              echo "Removing old frontend container..."
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Removing old frontend container..."
               docker update --restart=no uknow-campaign-frontend || true
               for i in $(seq 1 15); do
                 RUNNING=$(docker inspect --format '{{.State.Running}}' uknow-campaign-frontend 2>/dev/null || echo "false")
@@ -122,6 +116,7 @@ jobs:
             mkdir -p /root/uknow/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
             chown -R www-data:www-data /root/uknow/certbot 2>/dev/null || true
 
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Starting new frontend container..."
             docker run -d \
               --name uknow-campaign-frontend \
               --network uknow_network \
@@ -136,14 +131,20 @@ jobs:
             # Dọn image cũ >24h (không dùng plain -af để tránh xoá nhầm image
             # vừa pull của deploy song song). Cron tuần -af lo dọn sâu.
             docker image prune -af --filter "until=24h"
-            echo "Chờ nginx khởi động..."
-            sleep 5
-            if curl --noproxy '*' --retry 5 --retry-delay 2 --retry-connrefused -kfsS \
-              --resolve founderai.biz:443:127.0.0.1 \
-              https://founderai.biz/ > /dev/null; then
-              echo "Smoke test passed — frontend healthy"
-            else
-              echo "Smoke test FAILED"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Polling frontend readiness..."
+            READY=false
+            for i in $(seq 1 15); do
+              if curl --noproxy '*' --connect-timeout 2 --max-time 3 -kfsS \
+                --resolve founderai.biz:443:127.0.0.1 \
+                https://founderai.biz/ > /dev/null 2>&1; then
+                READY=true
+                echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Smoke test passed — frontend healthy (attempt $i/15)"
+                break
+              fi
+              sleep 1
+            done
+            if [ "$READY" != "true" ]; then
+              echo "Smoke test FAILED after 15 attempts"
               docker logs --tail 50 uknow-campaign-frontend
               exit 1
             fi

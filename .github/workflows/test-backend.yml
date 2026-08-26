@@ -8,13 +8,15 @@ on:
         type: boolean
         required: false
         default: false
+  workflow_dispatch:
+    inputs:
+      skip_integration:
+        description: 'Bỏ qua integration test matrix (fast-path cho hotfix deploy — mặc định vẫn chạy đủ)'
+        type: boolean
+        required: false
+        default: false
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/test-backend.yml'
 
 concurrency:
   group: test-backend-${{ github.workflow }}-${{ github.ref }}

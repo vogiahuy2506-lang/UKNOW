@@ -215,6 +215,11 @@ const QuickSend = () => {
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state, location.pathname, navigate]);
 
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   // Fetch templates
   const fetchTemplates = useCallback(async () => {
     setIsLoadingTemplates(true);
@@ -227,11 +232,11 @@ const QuickSend = () => {
       setEmailTemplates(emailRes?.data?.data?.items || []);
       setZaloTemplates(zaloRes?.data?.data?.items || []);
     } catch (error) {
-      toast.error(t('quickSend.loadTemplatesFailed'));
+      toast.error(tRef.current('quickSend.loadTemplatesFailed'));
     } finally {
       setIsLoadingTemplates(false);
     }
-  }, [t]);
+  }, []);
 
   // Fetch sender accounts
   const fetchAccounts = useCallback(async () => {

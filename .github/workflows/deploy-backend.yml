@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'server/scripts/**'
+      - '.github/workflows/test-backend.yml'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
     inputs:
@@ -44,12 +45,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build image
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          push: false
-          load: true
+          push: true
           provenance: false
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:latest
@@ -61,17 +61,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Push image (with retry)
+      - name: Verify image on registry
         run: |
-          for attempt in 1 2 3; do
-            echo "--- Push attempt $attempt/3 ---"
-            docker push "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:latest" && \
-            docker push "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}" && exit 0
-            echo "Push failed, retrying in 20s..."
-            sleep 20
-          done
-          echo "All push attempts failed"
-          exit 1
+          echo "Verifying image on Docker Hub: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"
+          docker buildx imagetools inspect "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"
 
       - name: Upload SSL scripts to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -106,7 +99,7 @@ jobs:
           envs: DOCKERHUB_USERNAME,BACKEND_IMAGE,EXPECTED_SHA
           script: |
             set -e
-            echo "Deploying backend image: $BACKEND_IMAGE"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Deploying backend image: $BACKEND_IMAGE"
             docker pull "$BACKEND_IMAGE"
             docker image inspect "$BACKEND_IMAGE" --format 'Pulled image id: {{.Id}}'
             mkdir -p /root/uknow/scripts /root/uknow/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
@@ -114,21 +107,21 @@ jobs:
             cp /tmp/uknow-ssl-scripts/ssl-provision-pending.sh /root/uknow/scripts/ssl-provision-pending.sh
             chmod +x /root/uknow/scripts/ssl-auto-provision.sh /root/uknow/scripts/ssl-provision-pending.sh
             chown -R www-data:www-data /root/uknow/certbot 2>/dev/null || true
-            echo "SSL scripts deployed to /root/uknow/scripts"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] SSL scripts deployed to /root/uknow/scripts"
             # ── Migration chạy TRƯỚC khi hạ container cũ ──────────────────────
             # Nếu migration hỏng, `set -e` dừng deploy tại đây và container cũ vẫn
             # đang phục vụ. Hạ container trước rồi mới migrate thì migration hỏng
             # = web sập cho tới khi có người vào tay.
             # Chạy bằng ĐÚNG image vừa pull nên file migration luôn khớp code sắp chạy.
-            echo "Chạy migration bằng image mới (container cũ vẫn đang phục vụ)..."
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Chạy migration bằng image mới (container cũ vẫn đang phục vụ)..."
             docker run --rm \
               --name uknow-migrate \
               --network uknow_network \
               -v /root/uknow/backend/.env:/app/.env \
               "$BACKEND_IMAGE" node scripts/migrate.js
-            echo "Migration hoàn tất — bắt đầu đổi container"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Migration hoàn tất — bắt đầu đổi container"
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
-              echo "Removing old backend container..."
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Removing old backend container..."
               docker update --restart=no uknow-campaign-backend || true
               docker rm -f uknow-campaign-backend || true
               sleep 2
@@ -148,6 +141,7 @@ jobs:
               fi
             fi
             DOCKER_GID="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 0)"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Starting new backend container..."
             docker run -d \
               --name uknow-campaign-backend \
               --network uknow_network \
@@ -166,12 +160,21 @@ jobs:
             # Dọn image cũ >24h (không dùng plain -af để tránh xoá nhầm image
             # vừa pull của deploy song song). Cron tuần -af lo dọn sâu.
             docker image prune -af --filter "until=24h"
-            echo "Chờ server khởi động (DB recovery có thể mất ~30s)..."
-            sleep 15
-            if curl --retry 8 --retry-delay 5 --retry-connrefused -sf http://localhost:5001/api/health > /dev/null; then
-              echo "Smoke test passed — backend healthy"
-            else
-              echo "Smoke test FAILED"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Polling backend readiness (DB recovery có thể mất ~30s)..."
+            READY=false
+            START_TIME=$(date +%s)
+            for i in $(seq 1 20); do
+              if curl --connect-timeout 2 --max-time 4 -sf http://localhost:5001/api/health > /dev/null 2>&1; then
+                READY=true
+                ELAPSED=$(( $(date +%s) - START_TIME ))
+                echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Smoke test passed — backend healthy after ${ELAPSED}s (attempt $i/20)"
+                break
+              fi
+              sleep 3
+            done
+            if [ "$READY" != "true" ]; then
+              ELAPSED=$(( $(date +%s) - START_TIME ))
+              echo "Smoke test FAILED after ${ELAPSED}s (20 attempts)"
               docker logs --tail 50 uknow-campaign-backend
               exit 1
             fi

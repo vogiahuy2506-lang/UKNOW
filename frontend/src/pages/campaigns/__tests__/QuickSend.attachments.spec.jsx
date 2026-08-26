@@ -16,14 +16,15 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+const mockT = (key, params) => {
+  if (params?.count !== undefined) return `${key} count=${params.count}`;
+  if (params?.value !== undefined) return `${key} value=${params.value}`;
+  return key;
+};
+const mockI18n = { t: mockT, locale: 'vi' };
+
 vi.mock('../../../i18n', () => ({
-  useI18n: () => ({
-    t: (key, params) => {
-      if (params?.count !== undefined) return `${key} count=${params.count}`;
-      if (params?.value !== undefined) return `${key} value=${params.value}`;
-      return key;
-    },
-  }),
+  useI18n: () => mockI18n,
 }));
 
 vi.mock('../../../features/templates/services/emailTemplateApi.service', () => ({

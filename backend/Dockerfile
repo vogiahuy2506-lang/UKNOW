@@ -14,13 +14,13 @@ RUN echo "Build SHA: $BUILD_SHA"
 ENV LP_APEX_FIXED_IP=${LP_APEX_FIXED_IP}
 ENV LP_CNAME_TARGET=${LP_CNAME_TARGET}
 
-# Copy toàn bộ source sau khi đã cài dependency
-COPY . .
+# Copy toàn bộ source với quyền sở hữu của user node
+COPY --chown=node:node . .
 
 ENV NODE_ENV=production
 
-# Tạo thư mục cho upload và cấp quyền cho user node
-RUN mkdir -p temp_uploads uploads && chown -R node:node /app
+# Tạo thư mục cho upload và cấp quyền ghi cho user node (tránh chown -R toàn bộ /app để tối ưu build layer)
+RUN mkdir -p temp_uploads uploads && chown -R node:node temp_uploads uploads
 
 # Chạy bằng user không phải root để tăng an toàn khi deploy VPS
 USER node
