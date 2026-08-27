@@ -138,7 +138,7 @@ export default function HeroNavbar() {
                   className="inline-flex items-center gap-2 text-[13px] font-semibold text-white rounded-full px-4 py-2"
                   style={{ backgroundColor: '#ef4d23' }}
                 >
-                  {t('navbar.register')}
+                  {t('heroPage.heroCtaPrimary')}
                   <span className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
                     <LuChevronRight className="w-3 h-3" />
                   </span>
@@ -201,7 +201,7 @@ export default function HeroNavbar() {
                     className="block px-4 py-2.5 text-[14px] font-semibold text-white rounded-xl transition-colors text-center"
                     style={{ backgroundColor: '#ef4d23' }}
                   >
-                    {t('navbar.register')}
+                    {t('heroPage.heroCtaPrimary')}
                   </Link>
                 </>
               )}

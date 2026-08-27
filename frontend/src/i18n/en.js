@@ -719,7 +719,7 @@ export default {
     // Default block data
     heroHeadline: 'Welcome to our product',
     heroSubheadline: 'The best solution for your business',
-    heroCtaPrimary: 'Sign up now',
+    heroCtaPrimary: 'Try for Free',
     heroCtaSecondary: 'Learn more',
     featuresTitle: 'Why choose us?',
     feature1Title: 'Fast',
@@ -3801,6 +3801,43 @@ export default {
     statusClosedDetail: 'Reopens Monday 08:00 if today is the weekend',
   },
 
+  trialDemo: {
+    badge: 'Free Experience',
+    titlePrefix: 'Experience ',
+    titleHighlight: 'Founder AI',
+    titleSuffix: ' right now',
+    subtitle: 'No registration required. No credit card needed. Try 3 powerful features of Founder AI instantly.',
+    selectAnother: 'Choose another feature',
+    backToHome: 'Back to home',
+    trustNoSignup: 'No registration',
+    trustInstant: 'Instant experience',
+    trustFullFeature: 'Full features',
+    ctaTitle: 'Like what you see?',
+    ctaSubtitle: 'Sign up now to use the full features with a 14-day free trial.',
+    ctaButton: 'Sign up free',
+    ctaRegisterButton: 'Sign up',
+    notice: 'Note: This is a demo version. All actions are illustrative and do not actually create campaigns or landing pages.',
+    // Flow tabs
+    campaignTab: 'Create Campaign',
+    campaignDesc: 'Create automated marketing campaigns with AI',
+    templateTab: 'Create Template',
+    templateDesc: 'Create professional message templates with AI',
+    landingTab: 'Create Landing Page',
+    landingDesc: 'Create sales landing pages with AI',
+    // Campaign features
+    campaignF1: '3 types: Email, Personal Zalo, Zalo Group',
+    campaignF2: 'Auto-generate content with AI',
+    campaignF3: 'Schedule automatic sending',
+    // Template features
+    templateF1: 'Create Zalo & Email templates',
+    templateF2: 'Email: Plain text & HTML',
+    templateF3: 'Customize to your needs',
+    // Landing features
+    landingF1: 'Created in minutes',
+    landingF2: 'Responsive on all devices',
+    landingF3: 'Edit with AI',
+  },
+
   pricingPage: {
     badge: 'Founder AI',
     titlePrefix: 'Fair pricing,',
@@ -6248,7 +6285,7 @@ export default {
     section4CompanyName: 'DIGISO Digital Solutions Co., Ltd.',
     section4Button: 'Learn more about DIGISO',
     // Hero CTAs + trust indicators
-    heroCtaPrimary: 'Sign up free now',
+    heroCtaPrimary: 'Try for Free',
     heroCtaSecondary: 'View pricing',
     heroTrust1: '14-day free trial',
     heroTrust2: 'No credit card required',
@@ -6418,7 +6455,7 @@ Feel free to ask me anything!`,
     section4CompanyName: 'DIGISO Digital Solutions Co., Ltd.',
     section4Button: 'Learn more about DIGISO',
     // Hero CTAs + trust indicators
-    heroCtaPrimary: 'Sign up free now',
+    heroCtaPrimary: 'Try for Free',
     heroCtaSecondary: 'View pricing',
     heroTrust1: '14-day free trial',
     heroTrust2: 'No credit card required',

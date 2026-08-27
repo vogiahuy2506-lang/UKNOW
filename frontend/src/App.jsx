@@ -46,6 +46,7 @@ import BillingHubPage from './pages/billing/BillingHubPage';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import PublicDPA from './pages/public/PublicDPA';
+import TrialDemoPage from './pages/public/TrialDemoPage';
 import TermsOfService from './pages/public/TermsOfService';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
@@ -292,6 +293,9 @@ function AppContent() {
               </LandingHtmlModeGate>
             )}
           />
+
+          {/* Trial Demo Page — standalone page, no layout */}
+          <Route path="/trial-demo" element={<TrialDemoPage />} />
 
           {/* Public pages — pricing dùng video bg, contact dùng lite */}
           <Route element={<PublicLayoutLite />}>
