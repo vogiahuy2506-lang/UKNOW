@@ -4,19 +4,65 @@
  * Provides AI consultation chat for the hero/landing page widget.
  * - No auth required (public access)
  * - 5 free chats per visitor (tracked by visitorId)
+ * - Daily cap per IP (HERO_IP_DAILY_CAP = 30) with VN day calendar key
  * - Uses Gemini with RAG-style data from database
  * - DIFFERENT from /app chatbot which uses RAG and credit system
  * - ONLY answers with verified data from database, no hallucinations
  */
 
+import IORedis from 'ioredis';
 import db from '../config/database.js';
+import { vnDayKey } from '../utils/vnTimeFormat.util.js';
 
 const MAX_FREE_CHATS = 5;
-const QUOTA_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const VISITOR_QUOTA_TTL_SEC = 24 * 60 * 60; // 24 hours
+const DAY_COUNTER_TTL_SEC = 172800; // 48 hours for calendar day cleanup
 
-// In-memory quota tracking
-// Map<visitorId, { remaining: number, createdAt: number }>
-const visitorQuotaMap = new Map();
+function envInt(name, fallback) {
+  const parsed = Number.parseInt(String(process.env[name] || '').trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function buildRedisConfig() {
+  const redisUrl = String(
+    process.env.BULLMQ_REDIS_URL || process.env.REDIS_URL || ''
+  ).trim();
+  if (redisUrl) return redisUrl;
+
+  const host = String(process.env.REDIS_HOST || '127.0.0.1').trim();
+  const port = Number.parseInt(process.env.REDIS_PORT || '6379', 10);
+  const db = Number.parseInt(process.env.REDIS_DB || '0', 10);
+  const password = String(process.env.REDIS_PASSWORD || '').trim();
+  return {
+    host,
+    port: Number.isFinite(port) ? port : 6379,
+    db: Number.isFinite(db) ? db : 0,
+    ...(password ? { password } : {}),
+  };
+}
+
+/**
+ * In-memory fallback counters when Redis is unavailable.
+ * Key -> { count, expiresAt }
+ */
+const memoryCounters = new Map();
+
+function memoryIncr(key, windowSec) {
+  const now = Date.now();
+  const existing = memoryCounters.get(key);
+  if (!existing || existing.expiresAt <= now) {
+    memoryCounters.set(key, { count: 1, expiresAt: now + windowSec * 1000 });
+    return 1;
+  }
+  existing.count += 1;
+  return existing.count;
+}
+
+function memoryGetCount(key) {
+  const existing = memoryCounters.get(key);
+  if (!existing || existing.expiresAt <= Date.now()) return 0;
+  return Number(existing.count) || 0;
+}
 
 // Fallback data khi DB chua co du lieu
 const DEFAULT_PLANS = [
@@ -29,17 +75,6 @@ const DEFAULT_PLANS = [
 // IMPORTANT: Start with null to force fetch from DB on first request
 let founderaiDataCache = null;
 const DATA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes (reduced for fresher data)
-
-// Cleanup expired entries periodically
-const QUOTA_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-setInterval(() => {
-  const now = Date.now();
-  for (const [visitorId, data] of visitorQuotaMap.entries()) {
-    if (now - data.createdAt > QUOTA_TTL_MS) {
-      visitorQuotaMap.delete(visitorId);
-    }
-  }
-}, QUOTA_CLEANUP_INTERVAL_MS);
 
 /**
  * Fetch founderAI data from database
@@ -102,7 +137,6 @@ async function fetchFounderaiData() {
  * Format plans for AI context (safe public data only)
  */
 function formatPlansForContext(plans) {
-  // IMPORTANT: Do NOT use DEFAULT_PLANS as fallback - return empty if no data
   if (!plans || plans.length === 0) {
     return 'Chua co thong tin goi dich vu.';
   }
@@ -145,15 +179,6 @@ function formatCoursesForContext(courses) {
     const category = course.category ? ` (${course.category})` : '';
     return `${course.course_name}${category}: ${price.toLocaleString('vi-VN')} VND`;
   }).join('\n');
-}
-
-function getOrCreateQuota(visitorId) {
-  let quota = visitorQuotaMap.get(visitorId);
-  if (!quota) {
-    quota = { remaining: MAX_FREE_CHATS, createdAt: Date.now() };
-    visitorQuotaMap.set(visitorId, quota);
-  }
-  return quota;
 }
 
 async function callGemini(prompt) {
@@ -199,6 +224,107 @@ async function callGemini(prompt) {
 }
 
 class HeroConsultationService {
+  constructor() {
+    this.redis = null;
+    this.redisFailed = false;
+    this.connecting = null;
+  }
+
+  get heroIpDailyCap() {
+    return envInt('HERO_IP_DAILY_CAP', 30);
+  }
+
+  async fetchFounderaiData() {
+    if (this._skipDb) {
+      return { plans: [], courses: [], lastUpdated: Date.now() };
+    }
+    return fetchFounderaiData();
+  }
+
+  async getRedis() {
+    if (this.redisFailed) return null;
+    if (this.redis) return this.redis;
+    if (this.connecting) return this.connecting;
+
+    const hasExplicitRedis =
+      String(process.env.BULLMQ_REDIS_URL || '').trim() ||
+      String(process.env.REDIS_URL || '').trim() ||
+      String(process.env.REDIS_HOST || '').trim();
+    if (!hasExplicitRedis) {
+      this.redisFailed = true;
+      return null;
+    }
+
+    this.connecting = (async () => {
+      try {
+        const connectTimeout = envInt('REDIS_CONNECT_TIMEOUT_MS', 5000);
+        const client = new IORedis(buildRedisConfig(), {
+          maxRetriesPerRequest: 1,
+          enableReadyCheck: true,
+          connectTimeout,
+          lazyConnect: true,
+        });
+        let lastErrorLogAt = 0;
+        client.on('error', (err) => {
+          const now = Date.now();
+          if (now - lastErrorLogAt < 60_000) return;
+          lastErrorLogAt = now;
+          console.warn('[HeroConsultation] Redis error:', err.message);
+        });
+        await client.connect();
+        this.redis = client;
+        return client;
+      } catch (err) {
+        console.warn('[HeroConsultation] Redis unavailable, using memory fallback:', err.message);
+        this.redisFailed = true;
+        return null;
+      } finally {
+        this.connecting = null;
+      }
+    })();
+
+    return this.connecting;
+  }
+
+  async incrWithTtl(key, windowSec) {
+    const redis = await this.getRedis();
+    if (!redis) return memoryIncr(key, windowSec);
+
+    try {
+      const count = await redis.incr(key);
+      if (count === 1) {
+        await redis.expire(key, windowSec);
+      }
+      return count;
+    } catch (err) {
+      console.warn('[HeroConsultation] incr failed, memory fallback:', err.message);
+      return memoryIncr(key, windowSec);
+    }
+  }
+
+  async getCounter(key) {
+    const redis = await this.getRedis();
+    if (!redis) return memoryGetCount(key);
+
+    try {
+      const raw = await redis.get(key);
+      if (raw == null) return 0;
+      const n = Number.parseInt(String(raw), 10);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch (err) {
+      console.warn('[HeroConsultation] get failed, memory fallback:', err.message);
+      return memoryGetCount(key);
+    }
+  }
+
+  visitorKey(visitorId) {
+    return `herochat:visitor:${String(visitorId || '').trim()}`;
+  }
+
+  ipDayKey(ip) {
+    return `herochat:ip:${String(ip || '').trim()}:d:${vnDayKey()}`;
+  }
+
   /**
    * Process a consultation message from a hero page visitor
    *
@@ -206,17 +332,22 @@ class HeroConsultationService {
    * @param {string} params.visitorId - Unique visitor identifier
    * @param {string} params.message - User's message
    * @param {Array} [params.history] - Previous messages [{role, content}]
+   * @param {string} [params.ip] - Visitor client IP
    * @returns {Promise<{success: boolean, reply?: string, chatsUsed?: number, code?: string, message?: string}>}
    */
-  async processChat({ visitorId, message, history = [] }) {
+  async processChat({ visitorId, message, history = [], ip = '' }) {
     if (!visitorId || !message?.trim()) {
       return { success: false, code: 'INVALID_INPUT', message: 'visitorId and message are required' };
     }
 
-    // Check and update quota
-    const quota = getOrCreateQuota(visitorId);
+    const cleanVisitorId = String(visitorId).trim();
+    const cleanIp = String(ip || '').trim();
 
-    if (quota.remaining <= 0) {
+    // 1. INCR Visitor Quota (5 chats) — atomic check
+    const visitorKey = this.visitorKey(cleanVisitorId);
+    const visitorCount = await this.incrWithTtl(visitorKey, VISITOR_QUOTA_TTL_SEC);
+
+    if (visitorCount > MAX_FREE_CHATS) {
       return {
         success: false,
         code: 'QUOTA_EXCEEDED',
@@ -224,16 +355,27 @@ class HeroConsultationService {
       };
     }
 
+    // 2. INCR IP Daily Cap (nếu có IP) — chỉ tiêu slot IP khi visitor quota hợp lệ
+    if (cleanIp) {
+      const ipKey = this.ipDayKey(cleanIp);
+      const ipCount = await this.incrWithTtl(ipKey, DAY_COUNTER_TTL_SEC);
+      if (ipCount > this.heroIpDailyCap) {
+        return {
+          success: false,
+          code: 'QUOTA_EXCEEDED',
+          message: 'Ban da het luot chat mien phi trong ngay',
+        };
+      }
+    }
+
     // Fetch real data from database
-    const founderaiData = await fetchFounderaiData();
+    const founderaiData = await this.fetchFounderaiData();
     const plansText = formatPlansForContext(founderaiData.plans);
     const coursesText = formatCoursesForContext(founderaiData.courses);
 
     console.log('[HeroConsultation] Plans text:', plansText.substring(0, 200));
 
     // Build prompt with verified data ONLY
-    // STRICT: AI MUST only use data from DATABASE section
-    // IMPORTANT: Prompt uses Vietnamese with full diacritics to ensure AI replies correctly
     const systemPrompt = `Bạn là "Foundy - Trợ Lý AI" của Founder AI (founderai.biz) - sản phẩm của công ty DIGISO.
 
 ═══════════════════════════════════════════════════════════════════
@@ -251,7 +393,7 @@ DỮ LIỆU DATABASE (CHÍNH XÁC TỪ HỆ THỐNG)
 ═══════════════════════════════════════════════════════════════════
 
 GIỚI THIỆU FOUNDER AI:
-- Founder AI là nền tảng Marketing Automation tổng h�p, giúp doanh nghiệp tự động hóa quy trình marketing và bán hàng.
+- Founder AI là nền tảng Marketing Automation tổng hợp, giúp doanh nghiệp tự động hóa quy trình marketing và bán hàng.
 - Sản phẩm của công ty DIGISO - đơn vị chuyên về giải pháp công nghệ cho doanh nghiệp.
 - Phù hợp với: doanh nghiệp vừa và nhỏ, cá nhân kinh doanh, agency marketing, shop online.
 
@@ -332,7 +474,7 @@ HƯỚNG DẪN TRẢ LỜI
    - Email: info@digiso.vn
    - Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
    - Website: digiso.vn"
-4. Khách chào hỏi/xã giao: Chào lại thân thiện, giới thiệu là trợ lý ảo của Founder AI, hỏi khách cần hỗ tr� gì.
+4. Khách chào hỏi/xã giao: Chào lại thân thiện, giới thiệu là trợ lý ảo của Founder AI, hỏi khách cần hỗ trợ gì.
 5. TUYỆT ĐỐI KHÔNG dùng markdown, không bullet points, không in đậm.
 6. LUÔN viết tiếng Việt có dấu đầy đủ.
 
@@ -349,23 +491,15 @@ Trả lời (tiếng Việt có dấu, không markdown):`;
     try {
       const reply = await callGemini(fullPrompt);
 
-      // Decrement quota
-      quota.remaining -= 1;
-      visitorQuotaMap.set(visitorId, quota);
-
       return {
         success: true,
         reply,
-        chatsUsed: MAX_FREE_CHATS - quota.remaining,
+        chatsUsed: Math.min(visitorCount, MAX_FREE_CHATS),
       };
     } catch (error) {
       console.error('[HeroConsultation] Gemini error:', error);
 
-      // Still consume quota on error to prevent abuse
-      quota.remaining -= 1;
-      visitorQuotaMap.set(visitorId, quota);
-
-      if (error.message.includes('API key') || error.message.includes('not configured')) {
+      if (error.message?.includes('API key') || error.message?.includes('not configured')) {
         return {
           success: false,
           code: 'SERVICE_UNAVAILABLE',
@@ -396,12 +530,20 @@ Hay hoi toi bat cu dieu gi ban quan tam!`,
   /**
    * Get remaining quota for a visitor
    */
-  getRemainingQuota(visitorId) {
-    const quota = visitorQuotaMap.get(visitorId);
-    if (!quota) {
-      return MAX_FREE_CHATS;
-    }
-    return quota.remaining;
+  async getRemainingQuota(visitorId) {
+    const visitorKey = this.visitorKey(visitorId);
+    const count = await this.getCounter(visitorKey);
+    return Math.max(0, MAX_FREE_CHATS - count);
+  }
+
+  /**
+   * Test helper — clear memory counters + force memory path
+   */
+  _resetForTests() {
+    memoryCounters.clear();
+    this.redisFailed = true;
+    this.redis = null;
+    this._skipDb = true;
   }
 }
 

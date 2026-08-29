@@ -38,6 +38,7 @@ import {
   normalizeZaloGroupId,
 } from '../../utils/zaloGroupName.util.js';
 import { resolveConversationExternalId, isInboxSendEcho } from '../../utils/zaloPersonalMessage.util.js';
+import { LRUCache } from '../../utils/lruCache.util.js';
 import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
 import db from '../../config/database.js';
 
@@ -71,8 +72,9 @@ class ZaloPersonalInboxService {
     this._registeredAccounts = new Set();
     // Mutex để tránh race condition khi nhiều cron chạy đồng thời
     this._isRefreshing = false;
-    // Cache group info để tránh gọi API nhiều lần
-    this._groupNameCache = new Map();
+    // Cache group info & user profiles riêng biệt với TTL 30 phút và max 5000 entries
+    this._groupNameCache = new LRUCache(5000, 30 * 60 * 1000);
+    this._userProfileCache = new LRUCache(5000, 30 * 60 * 1000);
   }
 
   /**
@@ -82,7 +84,7 @@ class ZaloPersonalInboxService {
     const { bare, raw } = normalizeZaloGroupId(groupId);
     if (!bare) return null;
 
-    const cacheKey = `group_${accountId}_${bare}`;
+    const cacheKey = `${accountId}:group:${bare}`;
     if (this._groupNameCache.has(cacheKey)) {
       return this._groupNameCache.get(cacheKey);
     }
@@ -123,9 +125,9 @@ class ZaloPersonalInboxService {
    * Lấy thông tin user profile từ uid (có cache)
    */
   async getUserProfile(accountId, uid) {
-    const cacheKey = `user_${accountId}_${uid}`;
-    if (this._groupNameCache.has(cacheKey)) {
-      return this._groupNameCache.get(cacheKey);
+    const cacheKey = `${accountId}:user:${uid}`;
+    if (this._userProfileCache.has(cacheKey)) {
+      return this._userProfileCache.get(cacheKey);
     }
 
     const api = zaloAccountSessionService.getAccountApi(accountId);
@@ -136,7 +138,7 @@ class ZaloPersonalInboxService {
       // Response format: { changed_profiles: { [uid]: { displayName, zaloName, ... } } }
       const profile = result?.changed_profiles?.[uid];
       if (profile) {
-        this._groupNameCache.set(cacheKey, profile);
+        this._userProfileCache.set(cacheKey, profile);
         console.log(`[ZaloInbox] getUserProfile(${uid}) = "${profile.displayName || profile.zaloName}"`);
         return profile;
       }
@@ -259,6 +261,10 @@ class ZaloPersonalInboxService {
   forgetAccount(userId, accountId) {
     if (userId && accountId) {
       this.zaloSettingCache.delete(`${userId}_${accountId}`);
+    }
+    if (accountId) {
+      this._groupNameCache.clearByPrefix(`${accountId}:`);
+      this._userProfileCache.clearByPrefix(`${accountId}:`);
     }
     this._accountCache.timestamp = 0;
   }

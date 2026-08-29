@@ -54,7 +54,9 @@ async function recordEmbeddingUsage(userId, data, text, { feature, model } = {})
  * @returns {Promise<number[]>} vector
  */
 export async function embedText(text, options = {}) {
-  const cacheKey = getCacheKey(options.userId, options.feature, text);
+  const model = options.model || process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL;
+  const outputDim = parseInt(process.env.EMBEDDING_OUTPUT_DIM || DEFAULT_EMBEDDING_DIM, 10);
+  const cacheKey = getCacheKey(options.userId, options.feature, text, { model, outputDim });
   const cached = getFromCache(cacheKey);
   if (cached) {
     return cached;
@@ -136,9 +138,11 @@ export async function embedTexts(texts, options = {}) {
   const results = [];
   const uncachedIndices = [];
   const cacheKeys = [];
+  const model = options.model || process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL;
+  const outputDim = parseInt(process.env.EMBEDDING_OUTPUT_DIM || DEFAULT_EMBEDDING_DIM, 10);
 
   for (let i = 0; i < texts.length; i++) {
-    const cacheKey = getCacheKey(options.userId, options.feature, texts[i]);
+    const cacheKey = getCacheKey(options.userId, options.feature, texts[i], { model, outputDim });
     cacheKeys.push(cacheKey);
     const cached = getFromCache(cacheKey);
 

@@ -17,10 +17,11 @@ describe('embeddingCache.util', () => {
   });
 
   describe('hashText', () => {
-    it('generates consistent hash for same text', () => {
+    it('generates consistent SHA-256 hash for same text', () => {
       const hash1 = hashText('hello world');
       const hash2 = hashText('hello world');
       expect(hash1).toBe(hash2);
+      expect(hash1).toHaveLength(16);
     });
 
     it('generates different hash for different text', () => {
@@ -28,24 +29,58 @@ describe('embeddingCache.util', () => {
       const hash2 = hashText('world');
       expect(hash1).not.toBe(hash2);
     });
+
+    it('handles empty text gracefully', () => {
+      expect(hashText('')).toBe('');
+      expect(hashText(null)).toBe('');
+    });
   });
 
   describe('getCacheKey', () => {
-    it('creates key with userId and feature', () => {
-      const key = getCacheKey('user123', 'rag_query', 'test text');
+    it('creates key with userId, feature, model, dimension, and hash', () => {
+      const key = getCacheKey('user123', 'rag_query', 'test text', {
+        model: 'gemini-embedding-001',
+        outputDim: 768,
+      });
       expect(key).toContain('user123:');
       expect(key).toContain('rag_query:');
+      expect(key).toContain('gemini-embedding-001:');
+      expect(key).toContain('768:');
     });
 
     it('creates key with global prefix when no userId', () => {
-      const key = getCacheKey(null, 'default', 'test text');
-      expect(key).toBe('global:default:-kh95ad');
+      const key = getCacheKey(null, 'default', 'test text', {
+        model: 'gemini-embedding-001',
+        outputDim: 768,
+      });
+      expect(key.startsWith('global:default:gemini-embedding-001:768:')).toBe(true);
     });
 
-    it('creates key without feature when not provided', () => {
-      const key = getCacheKey('user1', null, 'test');
+    it('creates key with default feature when not provided', () => {
+      const key = getCacheKey('user1', null, 'test', {
+        model: 'gemini-embedding-001',
+        outputDim: 768,
+      });
       expect(key).toContain('user1:');
       expect(key).toContain('default:');
+    });
+
+    it('produces different keys when model or outputDim changes', () => {
+      const key768 = getCacheKey('user1', 'rag', 'same text', {
+        model: 'gemini-embedding-001',
+        outputDim: 768,
+      });
+      const key1536 = getCacheKey('user1', 'rag', 'same text', {
+        model: 'gemini-embedding-001',
+        outputDim: 1536,
+      });
+      const keyModel2 = getCacheKey('user1', 'rag', 'same text', {
+        model: 'gemini-embedding-2',
+        outputDim: 768,
+      });
+
+      expect(key768).not.toBe(key1536);
+      expect(key768).not.toBe(keyModel2);
     });
   });
 

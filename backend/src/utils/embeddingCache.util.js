@@ -3,67 +3,13 @@
  * Tự động evict entries cũ nhất khi đạt max size.
  */
 
-class LRUCache {
-  constructor(maxSize = 2000, ttlMs = 5 * 60 * 1000) {
-    this.maxSize = maxSize;
-    this.ttlMs = ttlMs;
-    this.cache = new Map();
-  }
+import crypto from 'crypto';
+import { LRUCache } from './lruCache.util.js';
 
-  get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
+export { LRUCache };
 
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-    return entry.value;
-  }
-
-  set(key, value) {
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
-    }
-
-    this.cache.set(key, {
-      value,
-      expiresAt: Date.now() + this.ttlMs,
-    });
-  }
-
-  delete(key) {
-    return this.cache.delete(key);
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-
-  clearByPrefix(prefix) {
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) {
-        this.cache.delete(key);
-      }
-    }
-  }
-
-  get size() {
-    return this.cache.size;
-  }
-
-  get stats() {
-    return {
-      size: this.cache.size,
-      maxSize: this.maxSize,
-      ttlMs: this.ttlMs,
-    };
-  }
-}
+const DEFAULT_EMBEDDING_MODEL = 'gemini-embedding-001';
+const DEFAULT_EMBEDDING_DIM = 768;
 
 const embeddingCache = new LRUCache(
   parseInt(process.env.EMBEDDING_CACHE_MAX_SIZE || '2000', 10),
@@ -71,19 +17,16 @@ const embeddingCache = new LRUCache(
 );
 
 export function hashText(text) {
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    const char = text.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return hash.toString(36);
+  if (!text) return '';
+  return crypto.createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
 }
 
-export function getCacheKey(userId, feature, text) {
+export function getCacheKey(userId, feature, text, { model, outputDim } = {}) {
   const prefix = userId ? `${userId}:` : 'global:';
+  const m = model || process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL;
+  const dim = outputDim || process.env.EMBEDDING_OUTPUT_DIM || DEFAULT_EMBEDDING_DIM;
   const textHash = hashText(text);
-  return `${prefix}${feature || 'default'}:${textHash}`;
+  return `${prefix}${feature || 'default'}:${m}:${dim}:${textHash}`;
 }
 
 export function getFromCache(key) {

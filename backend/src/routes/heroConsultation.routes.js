@@ -1,6 +1,7 @@
 import express from 'express';
 import heroConsultationService from '../services/heroConsultation.service.js';
 import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
+import { publicChatLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -26,9 +27,10 @@ router.use(allowAllCorsMiddleware);
  *   - code?: string - Error code if failed
  *   - message?: string - Error message if failed
  */
-router.post('/consultation', async (req, res) => {
+router.post('/consultation', publicChatLimiter, async (req, res) => {
   try {
     const { visitorId, message, history } = req.body;
+    const clientIp = (req.ip || req.socket?.remoteAddress || '').trim();
 
     if (!visitorId?.trim() || !message?.trim()) {
       return res.status(400).json({
@@ -42,6 +44,7 @@ router.post('/consultation', async (req, res) => {
       visitorId: visitorId.trim(),
       message: message.trim(),
       history: Array.isArray(history) ? history : [],
+      ip: clientIp,
     });
 
     if (!result.success) {
