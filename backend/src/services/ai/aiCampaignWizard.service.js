@@ -669,6 +669,7 @@ export const GATE_PROPAGATION = {
   senderAccountName: 'internal',
   dataSource: 'prompt+patch',
   sheetUrl: 'prompt+patch',
+  sheetCheck: 'internal',
   zaloGroupIds: 'prompt+patch',
   zaloFriendIds: 'direct_recipients',
   schedule: 'prompt+patch',
@@ -831,6 +832,68 @@ export function buildFriendPickerCard(accountId, locale = 'vi') {
   };
 }
 
+export function buildSheetProblemMessage(state, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  const check = state?.sheetCheck || {};
+  const status = check.status;
+  const channel = state?.channel;
+  const isZalo = channel === 'zalo' || channel === 'zalo_group';
+
+  let content = '';
+
+  if (status === 'no_contact') {
+    const headerList = Array.isArray(check.headers) && check.headers.length > 0
+      ? check.headers.map((h) => `"${h}"`).join(', ')
+      : '';
+    // Ghép câu theo từng ngôn ngữ, KHÔNG dùng chung một tiền tố: tiếng Anh cần
+    // "none of them is…" chứ không nối được vào "…found any…" như tiếng Việt.
+    if (isEnglish) {
+      content = headerList
+        ? `I detected the following columns: ${headerList}, but none of them is an email or phone number column. Please add an Email or Phone column to your sheet (or choose another data source), then share the link again.`
+        : 'I could not find any email or phone number columns in your Google Sheet. Please add an Email or Phone column to your sheet (or choose another data source), then share the link again.';
+    } else {
+      content = headerList
+        ? `Tôi đọc được các cột: ${headerList}, nhưng không tìm thấy cột email hoặc số điện thoại nào trong Google Sheet của bạn. Bạn vui lòng bổ sung cột Email hoặc Số điện thoại vào sheet (hoặc chọn nguồn dữ liệu khác), rồi gửi lại link nhé.`
+        : 'Tôi không tìm thấy cột email hoặc số điện thoại nào trong Google Sheet của bạn. Bạn vui lòng bổ sung cột Email hoặc Số điện thoại vào sheet (hoặc chọn nguồn dữ liệu khác), rồi gửi lại link nhé.';
+    }
+  } else if (status === 'wrong_channel') {
+    if (isZalo) {
+      content = isEnglish
+        ? 'Your Google Sheet has email addresses but no phone numbers, which are required for Zalo. Please add a phone number column or switch to the Email channel.'
+        : 'Google Sheet của bạn chỉ có email mà chưa có số điện thoại (bắt buộc đối với kênh Zalo). Bạn vui lòng bổ sung cột Số điện thoại hoặc đổi sang kênh Email nhé.';
+    } else {
+      content = isEnglish
+        ? 'Your Google Sheet has phone numbers but no email addresses, which are required for Email. Please add an email column or switch to the Zalo channel.'
+        : 'Google Sheet của bạn chỉ có số điện thoại mà chưa có địa chỉ email (bắt buộc đối với kênh Email). Bạn vui lòng bổ sung cột Email hoặc đổi sang kênh Zalo nhé.';
+    }
+  } else if (status === 'not_public') {
+    content = isEnglish
+      ? 'I cannot access your Google Sheet. Please make sure the sheet is shared with "Anyone with the link" set to Viewer, then send the link again.'
+      : 'Tôi không thể truy cập Google Sheet này. Bạn vui lòng mở quyền chia sẻ "Bất kỳ ai có đường liên kết" ở chế độ Người xem (Viewer), rồi gửi lại link nhé.';
+  } else if (status === 'invalid_url') {
+    content = isEnglish
+      ? 'The Google Sheet link is invalid. Please check the URL and send it again (e.g. docs.google.com/spreadsheets/d/...).'
+      : 'Đường dẫn Google Sheet không hợp lệ. Bạn vui lòng kiểm tra lại link (ví dụ: docs.google.com/spreadsheets/d/...) rồi gửi lại nhé.';
+  } else if (status === 'too_many') {
+    const limit = check.limit || MAX_AI_MANUAL_RECIPIENTS;
+    const total = check.totalCount || 0;
+    content = isEnglish
+      ? `Your Google Sheet has ${total.toLocaleString('en-US')} recipients, exceeding the maximum limit of ${limit.toLocaleString('en-US')} recipients per campaign. Please split your sheet and try again.`
+      : `Google Sheet của bạn có ${total.toLocaleString('vi-VN')} người nhận, vượt quá giới hạn tối đa ${limit.toLocaleString('vi-VN')} người mỗi chiến dịch. Bạn vui lòng chia nhỏ danh sách rồi thử lại nhé.`;
+  } else {
+    content = isEnglish
+      ? 'There was an issue reading your Google Sheet recipients. Please check your sheet structure and send the link again.'
+      : 'Có vấn đề khi đọc danh sách người nhận từ Google Sheet. Bạn vui lòng kiểm tra lại cấu trúc bảng tính rồi gửi lại link nhé.';
+  }
+
+  return {
+    type: 'text',
+    content,
+    missing_fields: [],
+    data: null,
+  };
+}
+
 export function evaluateNextGate(state, resources = {}, locale = 'vi') {
   if (!state?.isCampaignFlow) return null;
   if (!state.channel) return { gate: 'channel', response: buildChannelQuestion(locale) };
@@ -889,6 +952,18 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
   );
   if (state.dataSource === 'sheet' && !hasSpreadsheetSource) {
     return null; // Dừng wizard để AI (thông qua LLM) hỏi người dùng link Google Sheet trước khi qua bước schedule
+  }
+
+  if (
+    state.dataSource === 'sheet' &&
+    state.sheetCheck &&
+    state.sheetCheck.url === state.sheetUrl &&
+    state.sheetCheck.status !== 'ok'
+  ) {
+    return {
+      gate: 'sheetUrl',
+      response: buildSheetProblemMessage(state, locale),
+    };
   }
 
   if (state.channel === 'zalo' && state.dataSource === 'zalo_contacts' && (!Array.isArray(state.zaloFriendIds) || state.zaloFriendIds.length === 0)) {
@@ -964,6 +1039,7 @@ export function createEmptyWizardState() {
       senderAccountName: null,
       dataSource: null,
       sheetUrl: null,
+      sheetCheck: null,
       zaloGroupIds: [],
       zaloFriendIds: [],
       schedule: null,
@@ -1075,6 +1151,9 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
     sheetUrl: (channelSwitched || hasAbandonMark)
       ? (d.sheetUrl ?? null)
       : (d.sheetUrl ?? p.sheetUrl ?? null),
+    sheetCheck: (channelSwitched || hasAbandonMark)
+      ? null
+      : ((d.sheetUrl ?? p.sheetUrl) && p.sheetCheck?.url === (d.sheetUrl ?? p.sheetUrl) ? p.sheetCheck : null),
     zaloGroupIds: pick(
       'zaloGroups',
       Array.isArray(d.zaloGroupIds) ? d.zaloGroupIds : [],
@@ -1215,6 +1294,7 @@ export function applyWizardStateAction(state, action, payload = {}) {
       }
       if (current.gates.sheetUrl === sheetUrl) return { state: current, changed: false };
       next.gates.sheetUrl = sheetUrl;
+      next.gates.sheetCheck = null;
       if (!next.gates.dataSource) next.gates.dataSource = 'sheet';
       return { state: next, changed: true };
     }

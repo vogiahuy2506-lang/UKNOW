@@ -37,7 +37,9 @@ jest.unstable_mockModule('../../customer/customerHelper.service.js', () => ({
 }));
 
 jest.unstable_mockModule('../../queue/outboundMessageQueue.service.js', () => ({
-  default: {},
+  default: {
+    isQueueFeatureEnabled: () => false,
+  },
   OUTBOUND_MESSAGE_JOB_TYPES: {},
 }));
 
@@ -151,4 +153,55 @@ describe('campaignNodeDataService.fetchGoogleSheetCustomersFromConfig', () => {
     const customers = await campaignNodeDataService.fetchGoogleSheetCustomersFromConfig(config);
     expect(customers).toEqual([]);
   });
+
+  describe('getCustomersFromDataNode read_sheet contactRowCount metadata', () => {
+    it('returns contactRowCount === 0 when sheet has 7 job management columns without email or phone', async () => {
+      mockAxiosGet.mockImplementation(async () => ({
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+        data: 'STT,Task,Kết quả cần đạt,Thời hạn,Nhân sự,Trạng thái,Đánh giá\n1,Làm slide,Đạt,2026-08-30,Nguyễn Văn A,Đang làm,Tốt\n2,Code backend,Xong,2026-08-31,Trần B,Đang làm,Tốt',
+      }));
+
+      const node = {
+        id: 'node_1',
+        node_subtype: 'read_sheet',
+        config: {
+          sheetUrl: VALID_SHEET_URL,
+        },
+      };
+
+      const result = await campaignNodeDataService.getCustomersFromDataNode(node, 1);
+      expect(result.items).toHaveLength(2);
+      expect(result.dataLoadMeta.contactRowCount).toBe(0);
+      expect(result.dataLoadMeta.emailColumns).toEqual([]);
+      expect(result.dataLoadMeta.phoneColumns).toEqual([]);
+    });
+
+    it('calculates contactRowCount correctly when sheet has Phone and Email columns', async () => {
+      mockAxiosGet.mockImplementation(async () => ({
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+        data: 'Tên,Số điện thoại,Email\nNguyễn Văn A,0901234567,a@test.com\nTrần Văn B,,b@test.com\nLê Văn C,,\nPhạm Văn D,0987654321,',
+      }));
+
+      const node = {
+        id: 'node_2',
+        node_subtype: 'google_sheet',
+        config: {
+          sheetUrl: VALID_SHEET_URL,
+        },
+      };
+
+      const result = await campaignNodeDataService.getCustomersFromDataNode(node, 1);
+      expect(result.items).toHaveLength(4);
+      // Row 1 (A): phone + email -> has contact
+      // Row 2 (B): email -> has contact
+      // Row 3 (C): no phone, no email -> no contact
+      // Row 4 (D): phone -> has contact
+      expect(result.dataLoadMeta.contactRowCount).toBe(3);
+      expect(result.dataLoadMeta.emailColumns).toEqual(['Email']);
+      expect(result.dataLoadMeta.phoneColumns).toEqual(['Số điện thoại']);
+    });
+  });
 });
+

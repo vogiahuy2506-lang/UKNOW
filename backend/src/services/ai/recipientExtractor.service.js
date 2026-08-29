@@ -181,6 +181,11 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
     }
   });
 
+  const detectedHeaderRow = headerRowIndex >= 0 ? rows[headerRowIndex] : (rows.length > 0 ? rows[0] : []);
+  const headers = Array.isArray(detectedHeaderRow)
+    ? detectedHeaderRow.map((c) => String(c || '').trim()).filter(Boolean)
+    : [];
+
   const emails = [...emailSet];
   const phones = [...phoneSet];
   const totalCount = emails.length + phones.length;
@@ -189,6 +194,7 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
     const error = new Error('Không tìm thấy địa chỉ email hoặc số điện thoại hợp lệ nào trong tệp.');
     error.code = 'NO_RECIPIENTS_FOUND';
     error.statusCode = 400;
+    error.headers = headers;
     throw error;
   }
 
@@ -198,6 +204,7 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
     error.statusCode = 400;
     error.totalCount = totalCount;
     error.limit = MAX_AI_MANUAL_RECIPIENTS;
+    error.headers = headers;
     throw error;
   }
 
@@ -205,6 +212,7 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
     emails,
     phones,
     rowCount: totalCount,
+    headers,
     detectedColumns: {
       email: emailCol >= 0 || emails.length > 0,
       phone: phoneCol >= 0 || phones.length > 0,

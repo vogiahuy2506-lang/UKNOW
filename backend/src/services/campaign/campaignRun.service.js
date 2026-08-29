@@ -2924,9 +2924,20 @@ class CampaignRunService {
           const previewItems = outputItems.slice(0, 100);
           const fetched = outputItems.length;
           const totalItems = mergedNodeData.allItems.length;
-          const message = isContinuousMode
+          let nodeStatus = 'success';
+          let message = isContinuousMode
             ? campaignFlowService.buildNodeSuccessMessage(nodeSubtype, { fetched, total: totalItems })
             : campaignFlowService.buildNodeSuccessMessage(nodeSubtype, { fetched, total: fetched });
+
+          if (
+            ['read_sheet', 'google_sheet'].includes(nodeSubtype)
+            && fetched > 0
+            && dataLoadMeta.contactRowCount === 0
+          ) {
+            nodeStatus = 'warning';
+            message = `Đọc được ${fetched} dòng nhưng không có cột email/SĐT — chiến dịch sẽ không gửi được cho ai`;
+          }
+
           nodeOutputs[String(node.id)] = mergedNodeData.allItems;
           lastOutputItems = mergedNodeData.allItems;
 
@@ -2936,7 +2947,7 @@ class CampaignRunService {
             campaignId,
             runId,
             node,
-            status: 'success',
+            status: nodeStatus,
             executionData: {
               message,
               fetchedCustomers: fetched,

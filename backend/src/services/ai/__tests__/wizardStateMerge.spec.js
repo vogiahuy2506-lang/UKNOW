@@ -108,6 +108,35 @@ describe('mergeWizardState — precedence', () => {
     expect(merged.hasContentPlan).toBe(false);
   });
 
+  it('preserves sheetCheck when sheetUrl matches persisted, but clears it on channel switch', () => {
+    const persistedWithCheck = {
+      ...persisted,
+      sheetCheck: { url: 'https://docs.google.com/spreadsheets/d/persisted/edit', status: 'ok' },
+    };
+
+    // Case 1: Same sheetUrl -> sheetCheck survives
+    const derivedSame = extractWizardState([{ role: 'user', content: 'tiếp tục nhé' }]);
+    const mergedSame = mergeWizardState(persistedWithCheck, derivedSame, {});
+    expect(mergedSame.sheetCheck).toEqual({
+      url: 'https://docs.google.com/spreadsheets/d/persisted/edit',
+      status: 'ok',
+    });
+
+    // Case 2: New sheetUrl -> sheetCheck does not match new URL so it resets to null
+    const derivedNew = extractWizardState([
+      { role: 'user', content: 'https://docs.google.com/spreadsheets/d/new_url/edit' },
+    ]);
+    const mergedNew = mergeWizardState(persistedWithCheck, derivedNew, {});
+    expect(mergedNew.sheetCheck).toBeNull();
+
+    // Case 3: Channel switch -> sheetCheck is wiped
+    const derivedSwitch = extractWizardState([
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nĐổi qua Zalo' },
+    ]);
+    const mergedSwitch = mergeWizardState(persistedWithCheck, derivedSwitch, {});
+    expect(mergedSwitch.sheetCheck).toBeNull();
+  });
+
   it('handles null persisted (legacy session) as pass-through of derived', () => {
     const derived = extractWizardState([
       { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' },

@@ -27,6 +27,7 @@ import dripSlotsPerDaySurvivesPlanTurn from './fixtures/golden/dripSlotsPerDaySu
 import reloadThenSaveContinuesChain from './fixtures/golden/reloadThenSaveContinuesChain.fixture.js';
 import zaloCustomSenderAccountToNodes from './fixtures/golden/zaloCustomSenderAccountToNodes.fixture.js';
 import imageAttachedSurvivesNextTurn from './fixtures/golden/imageAttachedSurvivesNextTurn.fixture.js';
+import sheetThieuCotLienHe from './fixtures/golden/sheetThieuCotLienHe.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -46,6 +47,7 @@ const FIXTURES = [
   reloadThenSaveContinuesChain,
   zaloCustomSenderAccountToNodes,
   imageAttachedSurvivesNextTurn,
+  sheetThieuCotLienHe,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -105,6 +107,10 @@ const runFixture = (fixture) => {
       const { brief, ...gates } = state;
       persistedGates = clone(gates);
       persistedBrief = clone(brief);
+      return;
+    }
+    if (turn.patchPersisted) {
+      persistedGates = { ...(persistedGates || {}), ...turn.patchPersisted };
       return;
     }
     if (turn.dropMarkers) {

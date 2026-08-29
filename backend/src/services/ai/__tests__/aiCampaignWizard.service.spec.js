@@ -768,6 +768,101 @@ describe('aiCampaignWizard.service', () => {
       expect(state.hasAttachedFile).toBe(false);
       expect(state.hasAttachedSpreadsheet).toBe(false);
     });
+
+    it('blocks at sheetUrl gate when sheetCheck status is no_contact', () => {
+      const sheetUrl = 'https://docs.google.com/spreadsheets/d/abc12345/edit';
+      const state = {
+        isCampaignFlow: true,
+        channel: 'zalo',
+        senderAccountId: 1,
+        dataSource: 'sheet',
+        sheetUrl,
+        sheetCheck: {
+          url: sheetUrl,
+          status: 'no_contact',
+        },
+      };
+
+      const gate = evaluateNextGate(state, { courses: [] });
+      expect(gate.gate).toBe('sheetUrl');
+      expect(gate.response.type).toBe('text');
+      expect(gate.response.content).toContain('không tìm thấy');
+    });
+
+    it('blocks at sheetUrl gate when sheetCheck status is wrong_channel (zalo channel with no phone)', () => {
+      const sheetUrl = 'https://docs.google.com/spreadsheets/d/abc12345/edit';
+      const state = {
+        isCampaignFlow: true,
+        channel: 'zalo',
+        senderAccountId: 1,
+        dataSource: 'sheet',
+        sheetUrl,
+        sheetCheck: {
+          url: sheetUrl,
+          status: 'wrong_channel',
+        },
+      };
+
+      const gate = evaluateNextGate(state, { courses: [] });
+      expect(gate.gate).toBe('sheetUrl');
+      expect(gate.response.type).toBe('text');
+      expect(gate.response.content).toContain('chỉ có email mà chưa có số điện thoại');
+    });
+
+    it('proceeds to campaignBrief when sheetCheck status is ok', () => {
+      const sheetUrl = 'https://docs.google.com/spreadsheets/d/abc12345/edit';
+      const state = {
+        isCampaignFlow: true,
+        channel: 'zalo',
+        senderAccountId: 1,
+        dataSource: 'sheet',
+        sheetUrl,
+        sheetCheck: {
+          url: sheetUrl,
+          status: 'ok',
+        },
+      };
+
+      const gate = evaluateNextGate(state, { courses: [] });
+      expect(gate.gate).toBe('campaignBrief');
+    });
+
+    it('does not block when sheetCheck url does not match sheetUrl (waiting for async check)', () => {
+      const sheetUrl = 'https://docs.google.com/spreadsheets/d/new_url/edit';
+      const state = {
+        isCampaignFlow: true,
+        channel: 'zalo',
+        senderAccountId: 1,
+        dataSource: 'sheet',
+        sheetUrl,
+        sheetCheck: {
+          url: 'https://docs.google.com/spreadsheets/d/old_url/edit',
+          status: 'no_contact',
+        },
+      };
+
+      const gate = evaluateNextGate(state, { courses: [] });
+      expect(gate.gate).toBe('campaignBrief');
+    });
+
+    it('resets sheetCheck when applyWizardStateAction changes sheetUrl', () => {
+      const initial = {
+        v: 1,
+        gates: {
+          ...createEmptyWizardState().gates,
+          sheetUrl: 'https://docs.google.com/spreadsheets/d/old/edit',
+          sheetCheck: { url: 'https://docs.google.com/spreadsheets/d/old/edit', status: 'ok' },
+        },
+      };
+
+      const { state: nextState } = applyWizardStateAction(initial, 'set_sheet_url', {
+        sheetUrl: 'https://docs.google.com/spreadsheets/d/new/edit',
+      });
+
+      expect(nextState.gates.sheetUrl).toBe('https://docs.google.com/spreadsheets/d/new/edit');
+      expect(nextState.gates.sheetCheck).toBeNull();
+    });
   });
 });
+
 

@@ -7,6 +7,7 @@ import aiUsageMeter from './aiUsageMeter.service.js';
 import aiPromptResources from './aiPromptResources.service.js';
 import { runChat } from './aiChatTransport.service.js';
 import { parseAiJson } from '../../utils/aiJsonParse.util.js';
+import { checkSheetForChannel } from './sheetRecipientCheck.service.js';
 import {
   lastUserMessageContent,
   hasExplicitCustomerSource,
@@ -823,6 +824,18 @@ QUY TẮC:
     // Keep brief off gates (top-level _wizard.brief only); pass a copy into evaluator.
     const gatesForPersist = { ...mergedGates };
     delete gatesForPersist.brief;
+
+    if (
+      gatesForPersist.dataSource === 'sheet' &&
+      gatesForPersist.sheetUrl &&
+      gatesForPersist.sheetCheck?.url !== gatesForPersist.sheetUrl
+    ) {
+      const channel = normalizeChannel(gatesForPersist.channel);
+      const check = await checkSheetForChannel(gatesForPersist.sheetUrl, channel);
+      if (check?.status && check.status !== 'unknown') {
+        gatesForPersist.sheetCheck = check;
+      }
+    }
 
     const marker = isWizardMarkerMessage(lastUserText) ? parseWizardMarker(lastUserText) : null;
     const briefMarkerJustSet = marker?.gate === 'campaignBrief';
@@ -1883,7 +1896,7 @@ Khi muốn tạo Landing Page.
    * Generate campaign using Node Registry for multi-step support.
    * Sử dụng campaignNodeRegistryService để AI hiểu rõ về các node types và multi-step.
    */
-  async generateCampaignWithRegistry({ prompt, files = [], userId = null }) {
+  async generateCampaignWithRegistry({ prompt, files = [], userId = null, brief = null }) {
     const parts = [];
 
     // Get business context

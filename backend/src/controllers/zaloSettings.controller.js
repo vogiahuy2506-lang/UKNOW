@@ -2326,7 +2326,7 @@ class ZaloSettingsController {
             await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_personal');
             try {
               await zaloMessageRepository.insertCampaignZaloMessage({
-                campaignId,
+                campaignId: null,
                 runId: null,
                 customerId: null,
                 nodeId: null,

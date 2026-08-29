@@ -34,6 +34,7 @@ module.exports = {
     'no-func-assign': 'error',
     'no-import-assign': 'error',
     // Nhầm lẫn dễ gây bug thầm lặng
+    'no-undef': 'error',
     'no-unsafe-negation': 'error',
     'no-cond-assign': ['error', 'except-parens'],
     'no-self-assign': 'error',

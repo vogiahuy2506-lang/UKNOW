@@ -15,6 +15,7 @@ import {
   shouldReadSheetUseBullMq,
 } from '../../utils/readSheetConfig.util.js';
 import { applyDataColumnSelectionToItems } from '../../utils/dataColumnSelection.util.js';
+import { isEmailHeader, isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
 
 /**
  * Số khách tối đa mỗi transaction khi lưu batch (BEGIN…COMMIT).
@@ -168,7 +169,37 @@ class CampaignNodeDataService {
           rawSheetItems = await this.fetchGoogleSheetCustomersFromConfig(config);
         }
         const sheetList = Array.isArray(rawSheetItems) ? rawSheetItems : [];
-        return applyDataColumnSelectionToItems(sheetList, config.dataSelectedColumns, 'sheet');
+
+        const emailColSet = new Set();
+        const phoneColSet = new Set();
+        let contactRowCount = 0;
+
+        for (const row of sheetList) {
+          if (!row || typeof row !== 'object') continue;
+          let hasContact = false;
+          for (const key of Object.keys(row)) {
+            if (key === 'row_number') continue;
+            const val = String(row[key] ?? '').trim();
+            if (isEmailHeader(key)) {
+              emailColSet.add(key);
+              if (val) hasContact = true;
+            }
+            if (isPhoneHeader(key)) {
+              phoneColSet.add(key);
+              if (val) hasContact = true;
+            }
+          }
+          if (hasContact) contactRowCount += 1;
+        }
+
+        const result = applyDataColumnSelectionToItems(sheetList, config.dataSelectedColumns, 'sheet');
+        result.dataLoadMeta = {
+          ...(result.dataLoadMeta || {}),
+          contactRowCount,
+          emailColumns: Array.from(emailColSet),
+          phoneColumns: Array.from(phoneColSet),
+        };
+        return result;
       }
 
       case 'read_landing_leads': {
