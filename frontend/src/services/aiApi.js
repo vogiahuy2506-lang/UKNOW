@@ -192,11 +192,18 @@ const aiApi = {
   },
 
   /**
-   * Trích xuất danh sách người nhận (email/SĐT) từ file bảng tính (.xlsx, .xls, .csv).
-   * @param {{ tempId: string, originalName?: string, contentType?: string }} fileInfo
+   * Trích xuất danh sách người nhận (email/SĐT) từ file bảng tính (.xlsx, .xls, .csv)
+   * hoặc từ link Google Sheet.
+   * @param {{ tempId?: string, originalName?: string, contentType?: string, sheetUrl?: string, sheetName?: string }} source
    */
-  extractRecipients: async ({ tempId, originalName, contentType }) => {
-    const response = await api.post('/ai/extract-recipients', { tempId, originalName, contentType });
+  extractRecipients: async ({ tempId, originalName, contentType, sheetUrl, sheetName }) => {
+    const response = await api.post('/ai/extract-recipients', {
+      tempId,
+      originalName,
+      contentType,
+      sheetUrl,
+      sheetName,
+    });
     return response.data;
   },
 };
