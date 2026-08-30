@@ -63,8 +63,10 @@ class CampaignZaloSenderRepository {
            first_restore_fail_at = COALESCE(first_restore_fail_at, CURRENT_TIMESTAMP),
            last_restore_attempt_at = CURRENT_TIMESTAMP,
            status = CASE
-             WHEN (restore_fail_count + 1) >= 3
-             THEN 'disconnected'
+             WHEN (restore_fail_count + 1) >= 5
+               AND COALESCE(first_restore_fail_at, CURRENT_TIMESTAMP)
+                   <= CURRENT_TIMESTAMP - INTERVAL '60 minutes'
+             THEN 'needs_reauth'
              ELSE status
            END,
            updated_at = CURRENT_TIMESTAMP
