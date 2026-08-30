@@ -31,6 +31,8 @@ import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import zaloMessageRepository from '../repositories/campaign/zaloMessage.repository.js';
+import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
+import { toZcaCookieShape } from '../utils/zaloSessionRestore.util.js';
 
 
 class ZaloSettingsController {
@@ -282,9 +284,10 @@ class ZaloSettingsController {
       safeObject?.userAgent || safeObject?.user_agent || safeObject?.ua || ''
     ).trim() || this.defaultZaloUserAgent;
     const language = String(safeObject?.language || '').trim() || this.defaultZaloLanguage;
-    const cookie = safeObject
+    const rawCookie = safeObject
       ? (safeObject.cookie || safeObject.cookies || null)
       : source;
+    const cookie = toZcaCookieShape(rawCookie);
     if (!cookie) return null;
 
     const imei = String(safeObject?.imei || '').trim() || this.buildImeiFromUserAgent(userAgent);
@@ -1150,7 +1153,11 @@ class ZaloSettingsController {
     ctx.imei = String(credentials?.imei || '').trim() || this.buildImeiFromUserAgent(credentials?.userAgent);
     ctx.userAgent = String(credentials?.userAgent || '').trim() || this.defaultZaloUserAgent;
     ctx.language = String(credentials?.language || '').trim() || this.defaultZaloLanguage;
-    ctx.cookie = zalo.parseCookies(credentials?.cookie);
+    const cookieShape = toZcaCookieShape(credentials?.cookie);
+    if (!cookieShape) {
+      throw new Error('Định dạng cookie Zalo không hợp lệ hoặc rỗng');
+    }
+    ctx.cookie = zalo.parseCookies(cookieShape);
 
     try {
       const { api } = await this.buildApiWithLowLevelRetry(ctx, {
@@ -1951,12 +1958,22 @@ class ZaloSettingsController {
           });
         }
         if (req.skipMarkDisconnectedOnFail) {
-          // Startup / cron restore: giữ nguyên 'connected' trong DB, cron sẽ retry sau 5 phút.
-          // Không mark disconnected vì lỗi có thể chỉ là network timeout thoáng qua.
+          // Startup / cron restore: ghi nhận số lần thất bại liên tiếp (quá 3 lần sẽ đánh disconnected)
+          const failRecord = await campaignZaloSenderRepository.recordRestoreFailure(accountId);
+          const failCount = Number(failRecord?.restore_fail_count || 0);
           console.warn(
-            `[ZaloSettings] Startup restore failed for account ${accountId} (keeping DB status) — will retry: ${error?.message}`
+            `[ZaloSettings] Startup/cron restore failed for account ${accountId} (attempt ${failCount}/3) — will retry: ${error?.message}`
           );
           zaloAccountSessionService.clearAccountApi(accountId);
+          if (failCount >= 3) {
+            console.warn(
+              `[ZaloSettings] Account ${accountId} failed restore ${failCount} consecutive times → marking disconnected`
+            );
+            await this.markAccountDisconnectedAfterRestoreFail({
+              userId: accountRow.id_user,
+              accountId,
+            });
+          }
         } else {
           // Restore chủ động từ UI: mới mark disconnected để user biết cần scan QR lại.
           await this.markAccountDisconnectedAfterRestoreFail({

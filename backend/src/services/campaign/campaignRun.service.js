@@ -987,6 +987,12 @@ class CampaignRunService {
       resumedBy: String(executionOptions?.resumedBy || 'manual_or_internal'),
     };
     const recordedScheduleDriftStepKeys = new Set();
+    let nodeOutputs = {};
+    let lastOutputItems = [];
+    let totalRecipients = 0;
+    let successfulSends = 0;
+    let failedSends = 0;
+    let skippedSends = 0;
     try {
       // Đã yield slot trước đó do chờ dài; nếu mốc resume chưa tới thì thoát ngay (scheduler gọi lại sau).
       if (await this._exitIfRunDeferredUntilFuture(runId, resumeContext)) {
@@ -1937,6 +1943,9 @@ class CampaignRunService {
         campaign?.flow_json
       );
       const runRow = await campaignRunRepository.getRunForExecution(runId);
+      totalRecipients = Number(runRow?.total_recipients || 0);
+      successfulSends = Number(runRow?.successful_sends || 0);
+      failedSends = Number(runRow?.failed_sends || 0);
       const runSource = String(runRow?.run_metadata?.source || 'campaign_run').trim() || 'campaign_run';
       const rawAdjacentDelay = Number.parseInt(runRow?.run_metadata?.adjacentZaloNodeDelayMs, 10);
       const adjacentZaloNodeDelayMs = Number.isFinite(rawAdjacentDelay) && rawAdjacentDelay > 0
@@ -2554,12 +2563,6 @@ class CampaignRunService {
         await campaignCrudRepository.updateNodeExecutionOrder(node.id, nextOrder);
       }
 
-      const nodeOutputs = {};
-      let lastOutputItems = [];
-      let totalRecipients = 0;
-      let successfulSends = Number(runRow?.successful_sends || 0);
-      let failedSends = Number(runRow?.failed_sends || 0);
-      let skippedSends = 0;
       let hasPendingRecipientDue = false;
       let pendingRecipientDueCount = 0;
       /**
@@ -7462,9 +7465,20 @@ class CampaignRunService {
         return;
       }
       if (isNetworkTimeoutError(error)) {
+        if (totalRecipients > 0) {
+          console.warn(
+            `[Campaign ${campaignId}] Run ${runId} gặp lỗi mạng tạm thời, `
+            + `giữ 'running' để scheduler resume: ${String(error?.message || 'network timeout')}`
+          );
+          return;
+        }
         console.warn(
-          `[Campaign ${campaignId}] Run ${runId} gặp lỗi mạng tạm thời, `
-          + `giữ 'running' để scheduler resume: ${String(error?.message || 'network timeout')}`
+          `[Campaign ${campaignId}] Run ${runId} gặp lỗi mạng khi chưa giải ra người nhận (totalRecipients=0), `
+          + `đánh failed: ${String(error?.message || 'network timeout')}`
+        );
+        await campaignRunRepository.failRun(
+          runId,
+          `Lỗi kết nối mạng trong lúc khởi tạo danh sách người nhận: ${String(error?.message || 'network timeout')}`
         );
         return;
       }

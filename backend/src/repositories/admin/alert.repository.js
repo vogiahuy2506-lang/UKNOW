@@ -181,6 +181,38 @@ export async function metricCampaignRepeatedFailures(days = 3) {
   }));
 }
 
+export async function metricStalledRuns(hours = 6) {
+  const { rows } = await db.query(
+    `SELECT
+       cr.id,
+       cr.id_campaign,
+       cr.started_at,
+       cr.total_recipients,
+       cr.successful_sends,
+       cr.failed_sends,
+       c.name AS campaign_name,
+       MAX(ce.created_at) AS last_execution_at
+     FROM campaign_runs cr
+     LEFT JOIN campaigns c ON c.id = cr.id_campaign
+     LEFT JOIN campaign_executions ce ON ce.id_run = cr.id
+     WHERE cr.status = 'running'
+       AND cr.started_at <= NOW() - ($1 || ' hours')::interval
+     GROUP BY cr.id, cr.id_campaign, cr.started_at, cr.total_recipients, cr.successful_sends, cr.failed_sends, c.name
+     HAVING MAX(ce.created_at) IS NULL OR MAX(ce.created_at) <= NOW() - ($1 || ' hours')::interval`,
+    [String(hours)]
+  );
+  return rows.map((r) => ({
+    runId: r.id,
+    campaignId: r.id_campaign,
+    campaignName: r.campaign_name || '',
+    startedAt: r.started_at,
+    lastExecutionAt: r.last_execution_at,
+    totalRecipients: Number(r.total_recipients || 0),
+    successfulSends: Number(r.successful_sends || 0),
+    failedSends: Number(r.failed_sends || 0),
+  }));
+}
+
 export async function metricZaloInboundCount(windowMinutes) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS cnt

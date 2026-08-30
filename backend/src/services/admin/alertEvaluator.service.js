@@ -87,6 +87,18 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'campaign_run_stalled': {
+      const hours = Number(config.hours || threshold) || 6;
+      const list = await alertRepo.metricStalledRuns(hours);
+      if (list.length > 0) {
+        return {
+          measuredValue: list.length,
+          message: `Có ${list.length} lượt chạy chiến dịch đang running nhưng không có hoạt động trong ${hours} giờ qua`,
+          payload: { stalledRuns: list, hours },
+        };
+      }
+      return null;
+    }
     case 'zalo_inbound_silence': {
       if (config.businessHoursOnly !== false) {
         const hour = hanoiHour();

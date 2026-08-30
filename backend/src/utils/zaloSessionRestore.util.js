@@ -70,7 +70,7 @@ function deserializeCookieSource(cookieText) {
  * @param {unknown} cookie
  * @returns {Array|{cookies: Array}|null} null nếu không thể dùng để đăng nhập
  */
-function toZcaCookieShape(cookie) {
+export function toZcaCookieShape(cookie) {
   if (!cookie) return null;
 
   if (Array.isArray(cookie)) return cookie.length ? cookie : null;

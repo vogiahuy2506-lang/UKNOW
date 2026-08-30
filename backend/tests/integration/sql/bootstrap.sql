@@ -2039,6 +2039,33 @@ VALUES (
   '{"staleHours": 6}'::jsonb
 );
 
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'campaign_run_failures',
+  'Nhiều lượt chạy chiến dịch thất bại',
+  'Có nhiều lượt chạy chiến dịch bị failed trong khoảng thời gian ngắn (kể cả chiến dịch chết sớm 0 recipient)',
+  3, 60, 'email', 'critical', 60,
+  '{}'::jsonb
+);
+
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'campaign_repeated_failures',
+  'Chiến dịch hỏng lặp lại nhiều ngày',
+  'Chiến dịch có lượt chạy thất bại liên tiếp trong >= 3 ngày và không có lượt nào thành công',
+  1, 1440, 'email', 'critical', 720,
+  '{"days": 3}'::jsonb
+);
+
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'campaign_run_stalled',
+  'Lượt chạy chiến dịch đứng yên',
+  'Có lượt chạy chiến dịch ở trạng thái running nhưng không có thêm hoạt động/execution nào trong 6 giờ qua',
+  1, 360, 'email', 'warning', 180,
+  '{"hours": 6}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
