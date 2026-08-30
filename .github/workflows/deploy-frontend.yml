@@ -10,26 +10,66 @@ on:
       - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
 
+# Keep same-service workflows ordered. The job-level lock below still prevents
+# backend and frontend deploys from mutating the VPS concurrently.
 concurrency:
-  group: deploy-frontend-${{ github.ref }}
+  group: deploy-frontend-production
   cancel-in-progress: false
 
 jobs:
+  validate-production-ref:
+    name: Validate production ref
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only deploy the current main branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Production deploy only accepts refs/heads/main; received $GITHUB_REF."
+            exit 1
+          fi
+
   lint:
+    needs: validate-production-ref
     uses: ./.github/workflows/lint.yml
 
   test:
+    needs: validate-production-ref
     uses: ./.github/workflows/test-frontend.yml
 
   deploy:
     name: Build & Deploy Frontend
     needs: [lint, test]
+    concurrency:
+      group: production-vps-deploy
+      cancel-in-progress: false
     timeout-minutes: 25
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Reject newer frontend-relevant revision before deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF_NAME="${GITHUB_REF_NAME}"
+          git fetch --no-tags origin "refs/heads/${REF_NAME}"
+          LATEST_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            echo "Commit guard passed: ${GITHUB_SHA} is current ${REF_NAME} head."
+            exit 0
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$LATEST_SHA" -- \
+            frontend/ \
+            .github/workflows/lint.yml \
+            .github/workflows/test-frontend.yml \
+            .github/workflows/deploy-frontend.yml; then
+            echo "Stale frontend deploy refused: workflow=$GITHUB_SHA has newer frontend-relevant changes at ${LATEST_SHA}."
+            exit 1
+          fi
+          echo "A newer main commit exists (${LATEST_SHA}) but it does not change frontend deploy inputs; continuing safely."
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -46,9 +86,9 @@ jobs:
           context: ./frontend
           push: true
           provenance: false
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}
+          # Do not let a commit that becomes stale during build publish `latest`.
+          # The mutable tag is promoted only after the stale-SHA guard passes.
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}
           build-args: |
             VITE_API_URL=/api
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
@@ -69,6 +109,25 @@ jobs:
         run: |
           echo "Verifying image on Docker Hub: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}"
           docker buildx imagetools inspect "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}"
+
+      - name: Reject newer frontend-relevant revision before VPS mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}"
+          LATEST_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            exit 0
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$LATEST_SHA" -- \
+            frontend/ \
+            .github/workflows/lint.yml \
+            .github/workflows/test-frontend.yml \
+            .github/workflows/deploy-frontend.yml; then
+            echo "Stale frontend deploy refused: workflow=$GITHUB_SHA has newer frontend-relevant changes at ${LATEST_SHA}."
+            exit 1
+          fi
+          echo "A newer main commit exists but frontend deploy inputs are unchanged; continuing safely."
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
@@ -172,3 +231,11 @@ jobs:
                 exit 1
                 ;;
             esac
+
+      - name: Promote deployed image as latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:latest" \
+            "${{ secrets.DOCKERHUB_USERNAME }}/uknow-frontend:${{ github.sha }}"

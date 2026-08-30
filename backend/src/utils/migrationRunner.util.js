@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createHash } from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../migrations');
@@ -158,13 +159,108 @@ export function stripOuterTransactionStatements(sql) {
 }
 
 /**
+ * Hash đúng bytes của migration trên đĩa. Không hash SQL sau khi bỏ wrapper,
+ * vì checksum phải phát hiện mọi thay đổi nội dung (kể cả comment/CRLF).
+ *
+ * @param {string|Buffer} content
+ * @returns {string}
+ */
+export function hashMigrationContent(content) {
+  return createHash('sha256')
+    .update(Buffer.isBuffer(content) ? content : Buffer.from(String(content ?? ''), 'utf8'))
+    .digest('hex');
+}
+
+/**
+ * Đảm bảo bảng lịch sử có cột checksum mà không phụ thuộc một migration đánh
+ * số. Hàm được gọi trong critical section của runner trước khi đọc lịch sử.
+ *
+ * @param {import('pg').PoolClient} client
+ */
+async function ensureMigrationTrackingSchema(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      filename       VARCHAR(255) PRIMARY KEY,
+      ran_at         TIMESTAMPTZ DEFAULT NOW(),
+      checksum_sha256 CHAR(64)
+    )
+  `);
+  await client.query(
+    'ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum_sha256 CHAR(64)'
+  );
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS migration_runner_checkpoints (
+      checkpoint  VARCHAR(100) PRIMARY KEY,
+      release_id  VARCHAR(255) NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+function migrationPath(file) {
+  return path.join(MIGRATIONS_DIR, file);
+}
+
+function readMigrationBytes(file) {
+  return fs.readFileSync(migrationPath(file));
+}
+
+/**
+ * Đọc và xác minh checksum lịch sử. Mọi row cũ còn NULL phải được baseline bởi
+ * runMigrations trước; check-only không tự tin cậy và ghi đè lịch sử.
+ *
+ * @param {Array<{filename: string, checksum_sha256?: string|null}>} records
+ * @param {string[]} files
+ * @returns {{ pending: string[], mismatches: string[], missingFiles: string[], unbaselined: string[] }}
+ */
+function inspectMigrationChecksums(records, files) {
+  const byFilename = new Map(records.map((row) => [row.filename, row]));
+  const pending = files.filter((file) => !byFilename.has(file));
+  const mismatches = [];
+  const missingFiles = [];
+  const unbaselined = [];
+
+  for (const row of records) {
+    const file = row.filename;
+    if (!files.includes(file)) {
+      missingFiles.push(file);
+      continue;
+    }
+    if (!row.checksum_sha256) {
+      unbaselined.push(file);
+      continue;
+    }
+    const actual = hashMigrationContent(readMigrationBytes(file));
+    if (actual !== String(row.checksum_sha256).toLowerCase()) {
+      mismatches.push(`${file} (DB=${row.checksum_sha256}, file=${actual})`);
+    }
+  }
+
+  return { pending, mismatches, missingFiles, unbaselined };
+}
+
+function formatChecksumFailure({ mismatches, missingFiles, unbaselined }) {
+  const details = [];
+  if (mismatches.length > 0) {
+    details.push(`checksum không khớp: ${mismatches.join(', ')}`);
+  }
+  if (missingFiles.length > 0) {
+    details.push(`file lịch sử không còn trên đĩa: ${missingFiles.join(', ')}`);
+  }
+  if (unbaselined.length > 0) {
+    details.push(`row checksum NULL chưa baseline: ${unbaselined.join(', ')}`);
+  }
+  return details.length > 0 ? details.join('; ') : null;
+}
+
+/**
  * Chạy một file migration trong transaction (all-or-nothing per file).
  *
  * @param {import('pg').PoolClient} client
  * @param {string} file
  * @param {string} sql
  */
-export async function runSingleMigration(client, file, sql) {
+export async function runSingleMigration(client, file, sql, checksum = hashMigrationContent(sql)) {
   const migrationSql = stripOuterTransactionStatements(sql);
   await client.query('BEGIN');
   try {
@@ -172,8 +268,8 @@ export async function runSingleMigration(client, file, sql) {
       await client.query(migrationSql);
     }
     await client.query(
-      `INSERT INTO schema_migrations (filename) VALUES ($1)`,
-      [file]
+      `INSERT INTO schema_migrations (filename, checksum_sha256) VALUES ($1, $2)`,
+      [file, checksum]
     );
     await client.query('COMMIT');
   } catch (err) {
@@ -188,6 +284,103 @@ export async function runSingleMigration(client, file, sql) {
 
 /** Khoá advisory cho migration — session-scoped, KHÔNG dùng `_xact_` như các repo khác. */
 const MIGRATION_LOCK_KEYS = ['schema:migrations', 'migration_runner'];
+const CHECKSUM_BASELINE_PENDING_CHECKPOINT = 'checksum_baseline_with_pending';
+
+function getMigrationReleaseId() {
+  const value = process.env.MIGRATION_RELEASE_ID || process.env.BUILD_SHA;
+  return String(value || '').trim() || null;
+}
+
+async function readMigrationCheckpoint(client, checkpoint) {
+  const { rows } = await client.query(
+    `SELECT release_id
+       FROM migration_runner_checkpoints
+      WHERE checkpoint = $1
+      LIMIT 1`,
+    [checkpoint]
+  );
+  return rows[0]?.release_id || null;
+}
+
+async function recordMigrationCheckpoint(client, checkpoint, releaseId) {
+  await client.query(
+    `INSERT INTO migration_runner_checkpoints (checkpoint, release_id)
+     VALUES ($1, $2)
+     ON CONFLICT (checkpoint) DO UPDATE
+       SET release_id = EXCLUDED.release_id,
+           created_at = NOW()`,
+    [checkpoint, releaseId]
+  );
+}
+
+async function clearMigrationCheckpoint(client, checkpoint) {
+  await client.query(
+    'DELETE FROM migration_runner_checkpoints WHERE checkpoint = $1',
+    [checkpoint]
+  );
+}
+
+/**
+ * Baseline checksum legacy as one durable unit. When a pending business
+ * migration exists, the release checkpoint is committed in that same unit so a
+ * process crash can never leave "checksums applied but checkpoint missing".
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {string[]} files
+ * @param {string[]} unbaselinedFiles
+ * @param {string|null} checkpointReleaseId
+ * @returns {Promise<number>}
+ */
+async function baselineLegacyChecksums(client, files, unbaselinedFiles, checkpointReleaseId = null) {
+  if (unbaselinedFiles.length === 0) return 0;
+
+  let transactionStarted = false;
+  try {
+    await client.query('BEGIN');
+    transactionStarted = true;
+
+    for (const file of unbaselinedFiles) {
+      const checksum = hashMigrationContent(readMigrationBytes(file));
+      await client.query(
+        `UPDATE schema_migrations
+            SET checksum_sha256 = $2
+          WHERE filename = $1
+            AND checksum_sha256 IS NULL`,
+        [file, checksum]
+      );
+    }
+
+    const refreshed = await client.query(
+      'SELECT filename, checksum_sha256 FROM schema_migrations'
+    );
+    const refreshedInspection = inspectMigrationChecksums(refreshed.rows, files);
+    const checksumFailure = formatChecksumFailure(refreshedInspection);
+    if (checksumFailure) {
+      throw new Error(`[Migration] Kiểm tra checksum thất bại: ${checksumFailure}`);
+    }
+
+    if (checkpointReleaseId) {
+      await recordMigrationCheckpoint(
+        client,
+        CHECKSUM_BASELINE_PENDING_CHECKPOINT,
+        checkpointReleaseId
+      );
+    }
+
+    await client.query('COMMIT');
+    transactionStarted = false;
+    return unbaselinedFiles.length;
+  } catch (err) {
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error(`[Migration] Không rollback được checksum baseline: ${rollbackErr.message}`);
+      }
+    }
+    throw err;
+  }
+}
 
 /** Danh sách file migration trên đĩa, đã sắp theo tên (001_, 002_, ...). */
 export function listMigrationFiles() {
@@ -315,25 +508,53 @@ export async function findPendingMigrations(client) {
  * @param {import('pg').PoolClient} client
  */
 export async function assertMigrationsUpToDate(client) {
-  const { rows } = await client.query(
+  const { rows: tableRows } = await client.query(
     `SELECT 1 FROM information_schema.tables
      WHERE table_schema = 'public' AND table_name = 'schema_migrations' LIMIT 1`
   );
-  if (rows.length === 0) {
+  if (tableRows.length === 0) {
     throw new Error(
       'schema_migrations chưa tồn tại — DB chưa được migrate lần nào. '
       + 'Chạy `npm run migrate` trước khi khởi động app.'
     );
   }
 
-  const pending = await findPendingMigrations(client);
-  if (pending.length > 0) {
+  // `--check` phải thực sự read-only. DB cũ chưa có cột checksum cần được
+  // nâng cấp bằng `npm run migrate` trước, không âm thầm ALTER trong bước
+  // kiểm tra (đặc biệt khi chạy với credential chỉ có quyền đọc).
+  const { rows: checksumColumnRows } = await client.query(
+    `SELECT 1
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'schema_migrations'
+        AND column_name = 'checksum_sha256'
+      LIMIT 1`
+  );
+  if (checksumColumnRows.length === 0) {
     throw new Error(
-      `Còn ${pending.length} migration chưa chạy: ${pending.join(', ')}. `
+      'schema_migrations thiếu cột checksum_sha256 — chạy `npm run migrate` trước khi --check.'
+    );
+  }
+
+  const { rows } = await client.query(
+    `SELECT filename, checksum_sha256 FROM schema_migrations`
+  );
+  const files = listMigrationFiles();
+  const inspection = inspectMigrationChecksums(rows, files);
+  const checksumFailure = formatChecksumFailure(inspection);
+  if (checksumFailure) {
+    throw new Error(
+      `[Migration] Kiểm tra checksum thất bại: ${checksumFailure}. `
+      + 'Chạy migration runner ở checkpoint checksum để baseline hoặc xử lý thủ công.'
+    );
+  }
+  if (inspection.pending.length > 0) {
+    throw new Error(
+      `Còn ${inspection.pending.length} migration chưa chạy: ${inspection.pending.join(', ')}. `
       + 'Chạy `npm run migrate` (hoặc bước migrate trong pipeline) trước khi khởi động app.'
     );
   }
-  console.log(`[Migration] Schema up-to-date (${listMigrationFiles().length} migration đã chạy)`);
+  console.log(`[Migration] Schema up-to-date (${files.length} migration đã chạy)`);
 }
 
 /**
@@ -359,18 +580,88 @@ export async function runMigrations(client) {
  * @param {import('pg').PoolClient} client
  */
 export async function runMigrationsUnlocked(client) {
-  // Tạo bảng tracking nếu chưa có
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      filename  VARCHAR(255) PRIMARY KEY,
-      ran_at    TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+  // Tạo bảng tracking/cột checksum trước khi đọc lịch sử. Việc ALTER này nằm
+  // dưới advisory lock của runMigrations, nên chỉ một process baseline lần đầu.
+  await ensureMigrationTrackingSchema(client);
 
-  const { rows: ranRows } = await client.query('SELECT filename FROM schema_migrations');
+  const { rows: ranRows } = await client.query(
+    'SELECT filename, checksum_sha256 FROM schema_migrations'
+  );
+  const files = listMigrationFiles();
   const ran = new Set(ranRows.map(r => r.filename));
 
-  const files = listMigrationFiles(); // thứ tự theo tên: 001_, 002_, ...
+  // Baseline một lần cho DB cũ. Không baseline row không còn file: đó là dấu
+  // hiệu migration lịch sử bị thiếu và phải dừng để xử lý, không được đoán.
+  const existingInspection = inspectMigrationChecksums(ranRows, files);
+  if (existingInspection.missingFiles.length > 0) {
+    throw new Error(
+      `[Migration] Không tìm thấy file migration lịch sử: ${existingInspection.missingFiles.join(', ')}`
+    );
+  }
+
+  const hasPendingMigrations = existingInspection.pending.length > 0;
+  const hasLegacyChecksumBaseline = existingInspection.unbaselined.length > 0;
+  const migrationReleaseId = getMigrationReleaseId();
+  const pendingCheckpoint = hasPendingMigrations
+    ? await readMigrationCheckpoint(client, CHECKSUM_BASELINE_PENDING_CHECKPOINT)
+    : null;
+
+  // Checksum baseline is a release boundary, not merely a failed invocation.
+  // Production images receive BUILD_SHA from Docker build; a manual runner can
+  // supply MIGRATION_RELEASE_ID explicitly. Refuse to start a mixed release
+  // before changing historical checksum rows, so operators can safely retry.
+  if (hasLegacyChecksumBaseline && hasPendingMigrations && !migrationReleaseId) {
+    throw new Error(
+      '[Migration] DB legacy cần checksum baseline nhưng image không có BUILD_SHA/MIGRATION_RELEASE_ID. '
+      + 'Từ chối chạy migration pending để giữ checkpoint checksum là một release độc lập.'
+    );
+  }
+
+  if (pendingCheckpoint) {
+    if (!migrationReleaseId) {
+      throw new Error(
+        '[Migration] Có checkpoint checksum đang chờ migration release kế tiếp nhưng image không có BUILD_SHA/MIGRATION_RELEASE_ID.'
+      );
+    }
+    if (pendingCheckpoint === migrationReleaseId) {
+      throw new Error(
+        `[Migration] Checkpoint checksum đã hoàn tất bởi chính release ${migrationReleaseId}; `
+        + 'từ chối chạy migration pending khi retry cùng artifact. Hãy deploy release/commit kế tiếp.'
+      );
+    }
+  }
+
+  if (existingInspection.unbaselined.length > 0) {
+    // The baseline and its release boundary must commit together. If the
+    // process dies before COMMIT, both are rolled back; if COMMIT succeeds,
+    // same-artifact retries see the checkpoint and cannot run pending DDL.
+    await baselineLegacyChecksums(
+      client,
+      files,
+      existingInspection.unbaselined,
+      hasLegacyChecksumBaseline && hasPendingMigrations ? migrationReleaseId : null
+    );
+    console.log(
+      `[Migration] Đã baseline checksum cho ${existingInspection.unbaselined.length} migration lịch sử`
+    );
+  } else {
+    const checksumFailure = formatChecksumFailure(existingInspection);
+    if (checksumFailure) {
+      throw new Error(`[Migration] Kiểm tra checksum thất bại: ${checksumFailure}`);
+    }
+  }
+
+  // Checkpoint checksum phải là một release độc lập. Nếu một DB legacy vừa
+  // được ghi checksum lần đầu mà image hiện tại cũng có migration chưa chạy,
+  // dừng trước DDL nghiệp vụ để operator xác minh baseline trên production.
+  // Lần chạy/release tiếp theo sẽ thấy checksum đầy đủ và mới được chạy pending.
+  if (hasLegacyChecksumBaseline && hasPendingMigrations) {
+    throw new Error(
+      `[Migration] Đã baseline checksum cho ${existingInspection.unbaselined.length} migration lịch sử `
+      + `nhưng còn ${existingInspection.pending.length} migration pending: ${existingInspection.pending.join(', ')}. `
+      + `Dừng tại checkpoint checksum của release ${migrationReleaseId}; xác minh baseline rồi deploy release/commit kế tiếp.`
+    );
+  }
 
   // Baseline: DB cũ đã có schema từ lazy migrations (001–009) — chỉ đánh dấu các
   // migration cũ là đã chạy, để các migration mới (010+) vẫn được thực thi bình thường.
@@ -385,8 +676,9 @@ export async function runMigrationsUnlocked(client) {
       });
       for (const file of legacyFiles) {
         await client.query(
-          `INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`,
-          [file]
+          `INSERT INTO schema_migrations (filename, checksum_sha256)
+           VALUES ($1, $2) ON CONFLICT (filename) DO NOTHING`,
+          [file, hashMigrationContent(readMigrationBytes(file))]
         );
         ran.add(file);
       }
@@ -399,10 +691,12 @@ export async function runMigrationsUnlocked(client) {
   for (const file of files) {
     if (ran.has(file)) continue;
 
-    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+    const migrationBytes = readMigrationBytes(file);
+    const checksum = hashMigrationContent(migrationBytes);
+    const sql = migrationBytes.toString('utf8');
     console.log(`[Migration] Đang chạy ${file}...`);
     try {
-      await runSingleMigration(client, file, sql);
+      await runSingleMigration(client, file, sql, checksum);
       console.log(`[Migration] ✓ ${file}`);
       newCount++;
     } catch (err) {
@@ -415,5 +709,8 @@ export async function runMigrationsUnlocked(client) {
     console.log('[Migration] Không có migration mới');
   } else {
     console.log(`[Migration] Đã chạy ${newCount} migration mới`);
+    if (pendingCheckpoint) {
+      await clearMigrationCheckpoint(client, CHECKSUM_BASELINE_PENDING_CHECKPOINT);
+    }
   }
 }

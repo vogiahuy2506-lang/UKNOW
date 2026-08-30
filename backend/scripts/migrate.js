@@ -17,7 +17,7 @@ import 'dotenv/config';
 import db from '../src/config/database.js';
 import {
   runMigrations,
-  findPendingMigrations,
+  assertMigrationsUpToDate,
   listMigrationFiles,
 } from '../src/utils/migrationRunner.util.js';
 
@@ -27,13 +27,7 @@ async function main() {
   const client = await db.getClient();
   try {
     if (checkOnly) {
-      const pending = await findPendingMigrations(client);
-      if (pending.length > 0) {
-        console.error(`[Migrate] Còn ${pending.length} migration chưa chạy:`);
-        for (const file of pending) console.error(`  - ${file}`);
-        process.exitCode = 1;
-        return;
-      }
+      await assertMigrationsUpToDate(client);
       console.log(`[Migrate] Schema up-to-date (${listMigrationFiles().length} migration).`);
       return;
     }

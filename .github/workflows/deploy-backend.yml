@@ -16,12 +16,29 @@ on:
         required: false
         default: false
 
+# Serialize same-service workflows so an older commit cannot finish its tests
+# after a newer commit and deploy over it. The deploy job below also uses a
+# shared VPS lock for backend/frontend mutations.
 concurrency:
-  group: deploy-backend-${{ github.ref }}
+  group: deploy-backend-production
   cancel-in-progress: false
 
 jobs:
+  validate-production-ref:
+    name: Validate production ref
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only deploy the current main branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Production deploy only accepts refs/heads/main; received $GITHUB_REF."
+            exit 1
+          fi
+
   test:
+    needs: validate-production-ref
     uses: ./.github/workflows/test-backend.yml
     with:
       skip_integration: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_integration || false }}
@@ -29,12 +46,34 @@ jobs:
   deploy:
     name: Build & Deploy Backend
     needs: test
+    concurrency:
+      group: production-vps-deploy
+      cancel-in-progress: false
     timeout-minutes: 30
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Reject newer backend-relevant revision before deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF_NAME="${GITHUB_REF_NAME}"
+          git fetch --no-tags origin "refs/heads/${REF_NAME}"
+          LATEST_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            echo "Commit guard passed: ${GITHUB_SHA} is current ${REF_NAME} head."
+            exit 0
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$LATEST_SHA" -- \
+            backend/ server/scripts/ \
+            .github/workflows/test-backend.yml \
+            .github/workflows/deploy-backend.yml; then
+            echo "Stale backend deploy refused: workflow=$GITHUB_SHA has newer backend-relevant changes at ${LATEST_SHA}."
+            exit 1
+          fi
+          echo "A newer main commit exists (${LATEST_SHA}) but it does not change backend deploy inputs; continuing safely."
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -51,9 +90,9 @@ jobs:
           context: ./backend
           push: true
           provenance: false
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
+          # Push only an immutable tag while the workflow is still subject to
+          # stale-SHA checks. `latest` is promoted after the final guard below.
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
           build-args: |
             BUILD_SHA=${{ github.sha }}
             LP_APEX_FIXED_IP=${{ secrets.LP_APEX_FIXED_IP }}
@@ -66,6 +105,24 @@ jobs:
           echo "Verifying image on Docker Hub: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"
           docker buildx imagetools inspect "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"
 
+      - name: Reject newer backend-relevant revision before VPS mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}"
+          LATEST_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            exit 0
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$LATEST_SHA" -- \
+            backend/ server/scripts/ \
+            .github/workflows/test-backend.yml \
+            .github/workflows/deploy-backend.yml; then
+            echo "Stale backend deploy refused: workflow=$GITHUB_SHA has newer backend-relevant changes at ${LATEST_SHA}."
+            exit 1
+          fi
+          echo "A newer main commit exists but backend deploy inputs are unchanged; continuing safely."
+
       - name: Upload SSL scripts to VPS
         uses: appleboy/scp-action@v0.1.7
         timeout-minutes: 5
@@ -76,6 +133,24 @@ jobs:
           source: "server/scripts/ssl-auto-provision.sh,server/scripts/ssl-provision-pending.sh"
           target: "/tmp/uknow-ssl-scripts"
           strip_components: 2
+
+      - name: Recheck backend-relevant revision immediately before VPS mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}"
+          LATEST_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            exit 0
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$LATEST_SHA" -- \
+            backend/ server/scripts/ \
+            .github/workflows/test-backend.yml \
+            .github/workflows/deploy-backend.yml; then
+            echo "Stale backend deploy refused: workflow=$GITHUB_SHA has newer backend-relevant changes at ${LATEST_SHA}."
+            exit 1
+          fi
+          echo "A newer main commit exists but backend deploy inputs are unchanged; continuing safely."
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
@@ -178,3 +253,11 @@ jobs:
               docker logs --tail 50 uknow-campaign-backend
               exit 1
             fi
+
+      - name: Promote deployed image as latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:latest" \
+            "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"

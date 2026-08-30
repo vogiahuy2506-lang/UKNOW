@@ -1,0 +1,103 @@
+# Quy ước Database Schema Migrations (UKNOW Campaign)
+
+Tài liệu này quy định tiêu chuẩn viết và triển khai migration cho database PostgreSQL trong dự án UKNOW.
+
+---
+
+## 1. Nguyên tắc cốt lõi: Tính bất biến (Append-only)
+
+1. **Không sửa / không xóa / không đổi tên** bất kỳ file migration nào đã được release hoặc merge vào `main`.
+2. Khi cần bổ sung hoặc sửa đổi schema, **luôn tạo một file migration mới** với số prefix kế tiếp.
+3. Số prefix: Sử dụng định dạng `XXX_ten_migration.sql` (ví dụ: `191_create_user_profiles.sql`). Kiểm tra file có số thứ tự lớn nhất trong thư mục `backend/migrations/` để lấy số tiếp theo.
+
+---
+
+## 2. Quy trình tương thích ngược: Expand $\rightarrow$ Deploy $\rightarrow$ Contract
+
+Trong quá trình deploy trên VPS, backend container phiên bản cũ vẫn đang nhận request và phục vụ người dùng trong lúc migration chạy. Do đó:
+
+1. **Phase 1 — Expand (Mở rộng)**:
+   - Thêm bảng mới hoặc thêm cột mới.
+   - Cột mới **phải là `NULLABLE`** hoặc có giá trị `DEFAULT` an toàn.
+   - Không được `SET NOT NULL` trực tiếp trên cột đang có dữ liệu mà không qua backfill an toàn.
+2. **Phase 2 — Deploy & Backfill**:
+   - Triển khai backend code mới hỗ trợ đọc/ghi trên cấu trúc mới (và vẫn tương thích dự phòng với cấu trúc cũ nếu cần).
+   - Chạy script backfill dữ liệu nếu có.
+3. **Phase 3 — Contract (Thu hẹp / Dọn dẹp)**:
+   - Chỉ dọn dẹp (drop column/table cũ) ở một phiên bản release tiếp theo, sau khi toàn bộ traffic đã chuyển sang code mới ổn định.
+
+---
+
+## 3. Transaction & Transaction Block Rules
+
+1. **Runner sở hữu Transaction**:
+   - Migration runner (`backend/src/utils/migrationRunner.util.js`) tự động mở transaction (`BEGIN`) và `COMMIT` cho từng file migration (all-or-nothing per file).
+   - **Không tự thêm `BEGIN;` và `COMMIT;` ngoài cùng** vào file migration mới.
+2. **Không dùng `CREATE INDEX CONCURRENTLY`**:
+   - PostgreSQL cấm chạy `CREATE INDEX CONCURRENTLY` bên trong transaction block (`BEGIN...COMMIT`).
+   - Sử dụng `CREATE INDEX` thông thường (hoặc `CREATE INDEX IF NOT EXISTS`). Nếu bảng có dung lượng cực lớn cần index không lock, liên hệ lead vận hành để chạy lệnh ngoài transaction runner.
+
+---
+
+## 4. Hàng rào CI & Destructive DDL Guard
+
+CI (`checkMigrationSafety.js`) sẽ tự động quét và chặn các hành vi sau:
+- Chỉnh sửa (Modified), xóa (Deleted) hoặc đổi tên (Renamed) migration cũ.
+- `DROP TABLE`, `DROP COLUMN`, `DROP TYPE`, `DROP CONSTRAINT`.
+- `RENAME TABLE`, `RENAME COLUMN`.
+- `SET NOT NULL` trực tiếp.
+- `CREATE INDEX CONCURRENTLY`.
+- `ALTER COLUMN TYPE` (nguy cơ rewrite bảng hoặc mất dữ liệu).
+
+### Ngoại lệ có chủ đích (Annotation)
+Nếu migration có chủ ý nghiệp vụ đặc biệt (ví dụ: dọn dẹp bảng tạm đã ngưng sử dụng, hoặc nới rộng độ dài VARCHAR an toàn) và đã được code review chấp thuận, hãy gắn annotation ở đầu file, ngay trước DDL cần miễn:
+```sql
+-- allow-destructive-ddl: Giải thích lý do vì sao thao tác này an toàn
+```
+
+Annotation chỉ có hiệu lực khi nằm trong comment trước câu lệnh SQL đầu tiên,
+có lý do không rỗng, và chỉ miễn **một** DDL nguy hiểm nằm liền sau annotation
+(chỉ được cách bởi khoảng trắng). Nó không phải cờ tắt toàn bộ guard: mọi DDL
+nguy hiểm khác trong cùng file vẫn bị chặn. Annotation đặt sau code hoặc chỉ có
+khoảng trắng sẽ không có hiệu lực.
+
+---
+
+## 5. Đồng bộ DB Test (`bootstrap.sql`)
+
+Khi migration có thêm bảng mới (`CREATE TABLE`), thêm cột mới (`ADD COLUMN`) hoặc thêm extension (`CREATE EXTENSION`):
+- **Bắt buộc mirror thay đổi tương ứng vào `backend/tests/integration/sql/bootstrap.sql`**.
+- CI sẽ kiểm tra và chặn nếu có migration thêm schema mới mà quên cập nhật `bootstrap.sql`.
+
+---
+
+## 6. Lệnh kiểm tra an toàn cục bộ
+
+```bash
+cd backend
+npm run check:migration-safety
+```
+
+## 7. Checksum lịch sử
+
+`schema_migrations.checksum_sha256` lưu SHA-256 của đúng bytes file migration trên
+đĩa (trước khi runner bóc `BEGIN`/`COMMIT`). Runner sẽ baseline một lần các row
+legacy còn `NULL` dưới advisory lock; sau đó cả `run` và `--check` đều dừng nếu
+file đã chạy bị sửa hoặc bị thiếu. Không tự ghi đè checksum đã có — cần xử lý
+roll-forward/khôi phục lịch sử có review.
+
+### Rollout checkpoint checksum
+
+Khi đưa checksum vào một database legacy, release đó **không được kèm migration
+nghiệp vụ mới**. Deploy riêng, xác nhận log baseline và chạy `migrate:check` lại
+trước. Chỉ sau khi xác nhận thành công mới tạo/deploy release kế tiếp có migration
+nghiệp vụ (ví dụ `174_repair_billing_cycle_anchors.sql`). Không dùng retry của
+cùng artifact checksum để thay cho release kế tiếp. Runner lưu checkpoint kèm
+`BUILD_SHA` (hoặc `MIGRATION_RELEASE_ID` khi chạy tay), nên retry cùng image sẽ
+bị từ chối nếu còn migration pending; chỉ image của release/commit kế tiếp mới
+được phép tiếp tục.
+
+`check:migration-safety` cũng chặn ngay trong CI nếu diff đồng thời đưa code
+checksum-baseline và một file migration mới. Chốt này cố ý làm batch hỗn hợp
+fail trước khi chạm VPS: tách thành commit checksum-only trước, rồi commit
+migration ở release kế tiếp.

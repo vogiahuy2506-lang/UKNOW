@@ -2139,8 +2139,15 @@ CREATE INDEX idx_favorites_listing ON marketplace_favorites(listing_id);
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (
-  filename VARCHAR(255) PRIMARY KEY,
-  ran_at   TIMESTAMPTZ DEFAULT NOW()
+  filename        VARCHAR(255) PRIMARY KEY,
+  ran_at          TIMESTAMPTZ DEFAULT NOW(),
+  checksum_sha256 CHAR(64)
+);
+
+CREATE TABLE migration_runner_checkpoints (
+  checkpoint  VARCHAR(100) PRIMARY KEY,
+  release_id  VARCHAR(255) NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ─── Top-up wallet (migrations 110/111) ──────────────────────────────────
@@ -2722,5 +2729,3 @@ ALTER TABLE email_messages
   ADD COLUMN IF NOT EXISTS bounce_type VARCHAR(10),
   ADD COLUMN IF NOT EXISTS bounce_code VARCHAR(15),
   ADD COLUMN IF NOT EXISTS bounce_detected_via VARCHAR(10);
-
-
