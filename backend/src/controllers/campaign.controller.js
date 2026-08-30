@@ -348,6 +348,21 @@ class CampaignController {
         connections,
       });
 
+      try {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.CAMPAIGN_UPDATED,
+          AUDIT_ENTITY_TYPES.CAMPAIGN,
+          Number(id),
+          {
+            nodesTruoc: data?.nodesTruoc ?? null,
+            nodesSau: Array.isArray(nodes) ? nodes.length : null,
+          }
+        );
+      } catch (auditErr) {
+        console.warn('[Campaign] CAMPAIGN_UPDATED audit failed:', auditErr?.message);
+      }
+
       res.json({
         success: true,
         message: 'Cập nhật chiến dịch thành công',
@@ -364,6 +379,7 @@ class CampaignController {
       if (error?.statusCode === 409) {
         return res.status(409).json({
           success: false,
+          code: error.code || 'CONFLICT',
           message: error.message,
         });
       }
@@ -451,6 +467,13 @@ class CampaignController {
       });
     } catch (error) {
       console.error('Publish campaign error:', error);
+      if (error?.statusCode === 409) {
+        return res.status(409).json({
+          success: false,
+          code: error.code || 'CONFLICT',
+          message: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: 'Lỗi server'
@@ -709,6 +732,7 @@ class CampaignController {
       const statusCode = error.statusCode || 500;
       res.status(statusCode).json({
         success: false,
+        ...(error.code ? { code: error.code } : {}),
         message: error.message || 'Lỗi server khi chạy chiến dịch'
       });
     }
@@ -725,6 +749,7 @@ class CampaignController {
     scheduleId = null,
     runName = '',
     runOptions = {},
+    activatePendingApproval = false,
   }) {
     return campaignRunService.createCampaignRunRecord({
       campaignId,
@@ -736,12 +761,13 @@ class CampaignController {
       scheduleId,
       runName,
       runOptions,
+      activatePendingApproval,
     });
   }
 
   /**
    * Thực thi chiến dịch trong background
-   * @param {number} campaignId 
+   * @param {number} campaignId
    * @param {number} runId
    * @param {number} userId
    * @param {string|null} roleCode
@@ -814,9 +840,9 @@ class CampaignController {
 
   /**
    * Gửi email cho một customer
-   * @param {object} actionNode 
-   * @param {object} customer 
-   * @param {object} campaign 
+   * @param {object} actionNode
+   * @param {object} customer
+   * @param {object} campaign
    * @param {number} runId - Campaign run ID để lưu log
    */
   async sendEmailToCustomer(actionNode, customer, campaign, runId) {
@@ -1177,12 +1203,15 @@ class CampaignController {
         return res.status(404).json({ success: false, message: 'Chiến dịch không tồn tại' });
       }
 
-      await db.query(
-        `UPDATE campaigns SET status = 'active', updated_at = NOW() WHERE id = $1`,
-        [campaignId]
-      );
+      if (campaign.status !== 'pending_owner_approval') {
+        return res.status(409).json({
+          success: false,
+          code: 'CAMPAIGN_NOT_PENDING_APPROVAL',
+          message: 'Chiến dịch không còn ở trạng thái chờ phê duyệt.',
+        });
+      }
 
-      // Tạo run record và chạy chiến dịch
+      // Preflight, chuyển trạng thái active và tạo run phải cùng transaction.
       const runRecord = await this.createCampaignRunRecord({
         campaignId,
         workspaceOwnerId: workspaceContext.workspaceOwnerId,
@@ -1191,6 +1220,7 @@ class CampaignController {
         isAdmin: workspaceContext.isSuperAdmin,
         source: 'manual',
         runName: `${campaign.campaign_name} (Approved)`,
+        activatePendingApproval: true,
       });
 
       this.executeCampaign(campaignId, runRecord.id, workspaceContext.workspaceOwnerId, workspaceContext.roleCode).catch(err => {
@@ -1222,6 +1252,7 @@ class CampaignController {
       console.error('Approve campaign error:', error);
       return res.status(error.statusCode || 500).json({
         success: false,
+        ...(error.code ? { code: error.code } : {}),
         message: error.message || 'Lỗi server khi phê duyệt chiến dịch',
       });
     }

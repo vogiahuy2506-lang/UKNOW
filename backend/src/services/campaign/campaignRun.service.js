@@ -40,6 +40,7 @@ import {
   notifyCampaignQuotaPaused,
   notifyCampaignQuotaStopped,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
+import { validateCampaignPreflight } from './campaignPreflight.service.js';
 
 export const EMAIL_API_DELAY_MIN_MS = 50;
 export const EMAIL_API_DELAY_MAX_MS = 250;
@@ -555,6 +556,7 @@ class CampaignRunService {
     scheduleId = null,
     runName = '',
     runOptions = {},
+    activatePendingApproval = false,
   }) {
     const client = await db.getClient();
     let runRecord;
@@ -575,7 +577,9 @@ class CampaignRunService {
         throw error;
       }
 
-      if (campaignData.status !== 'active') {
+      const shouldActivatePendingApproval = activatePendingApproval
+        && campaignData.status === 'pending_owner_approval';
+      if (campaignData.status !== 'active' && !shouldActivatePendingApproval) {
         const error = new Error('Chỉ có thể chạy chiến dịch đang hoạt động');
         error.statusCode = 400;
         throw error;
@@ -585,6 +589,25 @@ class CampaignRunService {
         const error = new Error('Chiến dịch này đã có lượt chạy đang hoạt động');
         error.statusCode = 409;
         throw error;
+      }
+
+      // Preflight validation: kiểm tra node gửi, tài khoản, sheet trước khi tạo run record
+      await validateCampaignPreflight({
+        campaignId,
+        workspaceOwnerId: campaignData.workspace_owner_id || workspaceOwnerId,
+      });
+
+      if (shouldActivatePendingApproval) {
+        const activatedCampaign = await campaignRunRepository.activatePendingApprovalCampaignTx(client, {
+          campaignId,
+          isAdmin,
+          workspaceOwnerId,
+        });
+        if (!activatedCampaign) {
+          const error = new Error('Chiến dịch không còn ở trạng thái chờ phê duyệt.');
+          error.statusCode = 409;
+          throw error;
+        }
       }
 
       const runType = source === 'schedule' ? 'scheduled' : 'manual';
@@ -761,6 +784,12 @@ class CampaignRunService {
         error.statusCode = 409;
         throw error;
       }
+
+      // Preflight validation: kiểm tra node gửi, tài khoản, sheet trước khi resume
+      await validateCampaignPreflight({
+        campaignId,
+        workspaceOwnerId: currentRun.workspace_owner_id || workspaceOwnerId,
+      });
 
       const rawAdjacentDelay = Number.parseInt(runOptions?.adjacentZaloNodeDelayMs, 10);
       const adjacentZaloNodeDelayMs = Number.isFinite(rawAdjacentDelay) && rawAdjacentDelay >= 0

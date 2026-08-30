@@ -508,6 +508,35 @@ class CampaignRunRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * Approve a pending campaign inside the same transaction that creates its first run.
+   *
+   * @param {import('pg').PoolClient} client
+   * @param {object} params
+   * @returns {Promise<object|null>}
+   */
+  async activatePendingApprovalCampaignTx(client, {
+    campaignId,
+    isAdmin,
+    workspaceOwnerId,
+  }) {
+    const params = [campaignId];
+    let query = `UPDATE campaigns
+      SET status = 'active',
+          published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND status = 'pending_owner_approval'`;
+    if (!isAdmin) {
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(workspace_owner_id, id_user) = $${params.length}`;
+    }
+    query += ' RETURNING id, status';
+
+    const result = await client.query(query, params);
+    return result.rows[0] || null;
+  }
+
   async hasActiveRunForCampaignTx(client, campaignId) {
     const result = await client.query(
       `SELECT id

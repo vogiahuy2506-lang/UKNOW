@@ -31,6 +31,8 @@ import {
   buildCampaignBriefQuestion,
   createEmptyWizardState,
   GATE_PROPAGATION,
+  GATE_MERGE_POLICIES,
+  mergeWizardState,
 } from '../aiCampaignWizard.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -162,5 +164,37 @@ describe('giao kèo UI ↔ nửa sau — mọi lựa chọn phải có nơi xử
         ? `Các gate [${missingInPropagation.join(', ')}] được thêm vào wizardState.gates nhưng chưa được khai báo trong GATE_PROPAGATION (aiCampaignWizard.service.js). Hãy chỉ rõ chiến lược truyền xuống (prompt, prompt+patch, direct_recipients, internal...).`
         : '',
     }).toEqual({ missingInPropagation: [], extraInPropagation: [], hint: '' });
+  });
+
+  it('hợp đồng 2 chiều: mọi gate trong createEmptyWizardState đều có chính sách trong GATE_MERGE_POLICIES và mergeWizardState trả về đúng tập hợp đó', () => {
+    const emptyState = createEmptyWizardState();
+    const declaredKeys = Object.keys(emptyState.gates || {}).sort();
+    const policyKeys = Object.keys(GATE_MERGE_POLICIES || {}).sort();
+
+    const missingInPolicies = declaredKeys.filter((k) => !GATE_MERGE_POLICIES[k]);
+    const extraInPolicies = policyKeys.filter((k) => !(k in emptyState.gates));
+
+    expect({
+      missingInPolicies,
+      extraInPolicies,
+      hint: missingInPolicies.length
+        ? `Các gate [${missingInPolicies.join(', ')}] có trong createEmptyWizardState().gates nhưng chưa có chính sách trong GATE_MERGE_POLICIES.`
+        : '',
+    }).toEqual({ missingInPolicies: [], extraInPolicies: [], hint: '' });
+
+    // Chiều 2: mergeWizardState trả về đúng 100% các keys đã khai báo
+    const mergedGates = mergeWizardState({}, {}, {});
+    const mergedKeys = Object.keys(mergedGates).sort();
+
+    const missingInMerged = declaredKeys.filter((k) => !(k in mergedGates));
+    const extraInMerged = mergedKeys.filter((k) => !(k in emptyState.gates));
+
+    expect({
+      missingInMerged,
+      extraInMerged,
+      hint: extraInMerged.length
+        ? `mergeWizardState trả về các field lậu [${extraInMerged.join(', ')}] không có trong createEmptyWizardState().gates!`
+        : (missingInMerged.length ? `mergeWizardState làm rơi các field [${missingInMerged.join(', ')}] đã khai báo!` : ''),
+    }).toEqual({ missingInMerged: [], extraInMerged: [], hint: '' });
   });
 });

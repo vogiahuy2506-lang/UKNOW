@@ -859,6 +859,7 @@ describe('POST /api/campaigns/:id/publish + /pause', () => {
   it('publish: draft → active + set published_at', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const c = await insertCampaign({ ownerId: o.id, status: 'draft' });
+    await insertNode({ campaignId: c.id });
 
     const t = await loginAs(o);
     const res = await request(app)
@@ -876,6 +877,7 @@ describe('POST /api/campaigns/:id/publish + /pause', () => {
   it('publish: paused → active', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const c = await insertCampaign({ ownerId: o.id, status: 'paused' });
+    await insertNode({ campaignId: c.id });
 
     const t = await loginAs(o);
     const res = await request(app)
@@ -1057,9 +1059,41 @@ describe('POST /api/campaigns/:id/run', () => {
     expect(res.status).toBe(400);
   });
 
+  it('Zalo sender disconnected → 400 SENDER_DISCONNECTED và không tạo run row', async () => {
+    const o = await createUser({ role: 'user', username: 'zalo_sender_offline' });
+    const c = await insertCampaign({ ownerId: o.id, status: 'active', campaignType: 'zalo' });
+    const { rows: accountRows } = await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active)
+       VALUES ($1, $2, 'disconnected', true)
+       RETURNING id`,
+      [o.id, 'Disconnected Zalo']
+    );
+    await insertNode({
+      campaignId: c.id,
+      nodeSubtype: 'send_zalo_personal',
+      config: { zaloAccountId: accountRows[0].id },
+    });
+
+    const t = await loginAs(o);
+    const res = await request(app)
+      .post(`/api/campaigns/${c.id}/run`)
+      .set('Authorization', `Bearer ${t}`)
+      .send({ source: 'campaign_run' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ success: false, code: 'SENDER_DISCONNECTED' });
+    const { rows: runRows } = await db.query(
+      'SELECT id FROM campaign_runs WHERE id_campaign = $1',
+      [c.id]
+    );
+    expect(runRows).toHaveLength(0);
+    expect(executeCampaignSpy).not.toHaveBeenCalled();
+  });
+
   it('đã có run đang running → 409', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertNode({ campaignId: c.id });
     await insertRun({ campaignId: c.id, status: 'running' });
 
     const t = await loginAs(o);
@@ -1073,6 +1107,7 @@ describe('POST /api/campaigns/:id/run', () => {
   it('source=campaign_run → tạo campaign_runs row run_type=manual, gọi executeCampaign', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const c = await insertCampaign({ ownerId: o.id, status: 'active', campaignName: 'Live' });
+    await insertNode({ campaignId: c.id });
 
     const t = await loginAs(o);
     const res = await request(app)
@@ -1108,6 +1143,7 @@ describe('POST /api/campaigns/:id/run', () => {
   it('source=schedule → run_type=scheduled', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertNode({ campaignId: c.id });
 
     const t = await loginAs(o);
     const res = await request(app)
@@ -1125,6 +1161,7 @@ describe('POST /api/campaigns/:id/run', () => {
   it('continueRunId yêu cầu source=campaign_run + continuousMode=true → các combo khác bị 400', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertNode({ campaignId: c.id });
 
     const t = await loginAs(o);
 
@@ -1160,6 +1197,7 @@ describe('POST /api/campaigns/:id/run', () => {
   it('adjacentZaloNodeDelayMs được ghi vào run_metadata', async () => {
     const o = await createUser({ role: 'user', username: 'o1' });
     const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertNode({ campaignId: c.id });
 
     const t = await loginAs(o);
     const res = await request(app)
@@ -1189,6 +1227,7 @@ describe('Campaign run employee attribution', () => {
       status: 'active',
       campaignName: 'Employee runnable campaign',
     });
+    await insertNode({ campaignId: campaign.id });
 
     const token = await loginAs(employee);
     const res = await request(app)
@@ -1210,5 +1249,64 @@ describe('Campaign run employee attribution', () => {
 
     expect(executeCampaignSpy).toHaveBeenCalledTimes(1);
     expect(Number(executeCampaignSpy.mock.calls[0][2])).toBe(Number(owner.id));
+  });
+});
+
+// ===========================================================================
+// POST /api/campaigns/:id/approve
+// ===========================================================================
+
+describe('POST /api/campaigns/:id/approve', () => {
+  it('preflight failure leaves pending_owner_approval unchanged and creates no run row', async () => {
+    const owner = await createUser({ role: 'user', username: 'approve_preflight_failure' });
+    const campaign = await insertCampaign({
+      ownerId: owner.id,
+      campaignName: 'Pending campaign without sender',
+      status: 'pending_owner_approval',
+    });
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .post(`/api/campaigns/${campaign.id}/approve`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ success: false, code: 'NO_SEND_NODE' });
+    const { rows } = await db.query(
+      `SELECT c.status, COUNT(cr.id)::int AS run_count
+       FROM campaigns c
+       LEFT JOIN campaign_runs cr ON cr.id_campaign = c.id
+       WHERE c.id = $1
+       GROUP BY c.id`,
+      [campaign.id]
+    );
+    expect(rows[0]).toMatchObject({ status: 'pending_owner_approval', run_count: 0 });
+  });
+
+  it('approves, activates and creates the run in one path after preflight passes', async () => {
+    const owner = await createUser({ role: 'user', username: 'approve_pending_campaign' });
+    const campaign = await insertCampaign({
+      ownerId: owner.id,
+      campaignName: 'Pending campaign with sender',
+      status: 'pending_owner_approval',
+    });
+    await insertNode({ campaignId: campaign.id, nodeSubtype: 'send_email' });
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .post(`/api/campaigns/${campaign.id}/approve`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const { rows } = await db.query(
+      `SELECT c.status, COUNT(cr.id)::int AS run_count
+       FROM campaigns c
+       LEFT JOIN campaign_runs cr ON cr.id_campaign = c.id
+       WHERE c.id = $1
+       GROUP BY c.id`,
+      [campaign.id]
+    );
+    expect(rows[0]).toMatchObject({ status: 'active', run_count: 1 });
+    expect(executeCampaignSpy).toHaveBeenCalledTimes(1);
   });
 });

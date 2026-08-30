@@ -55,7 +55,7 @@ class AiCampaignDraftRepository {
   async findDefaultZaloSettingId(userId) {
     const { rows } = await db.query(
       `SELECT id FROM zalo_settings
-       WHERE id_user = $1 AND is_active = true
+       WHERE id_user = $1 AND is_active = true AND status = 'connected'
          AND NOT EXISTS (
            SELECT 1 FROM topup_locked_resources tlr
            WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id

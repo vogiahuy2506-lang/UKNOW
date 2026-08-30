@@ -602,6 +602,17 @@ class AiController {
           campaignController.run(runReq, mockRes).catch(reject);
         });
 
+        if (runRes.status >= 400) {
+          return res.status(runRes.status).json({
+            ...(runRes.data || {}),
+            data: {
+              ...(runRes.data?.data || {}),
+              campaignId,
+              campaignUpdated: true,
+            },
+          });
+        }
+
         return res.json({
           success: true,
           message: 'Đã tạo và kích hoạt chiến dịch tự động thành công!',
@@ -798,15 +809,31 @@ class AiController {
         return denyCampaignRun(res);
       }
 
-      if (!script || !script.nodes || !script.connections) {
+      if (!script || !Array.isArray(script.nodes) || script.nodes.length === 0 || !script.connections) {
         return res.status(400).json({
           success: false,
-          message: 'Script không hợp lệ. Cần có nodes và connections.',
+          code: 'EMPTY_CAMPAIGN_SCRIPT',
+          message: 'Kịch bản không có node nào.',
         });
       }
 
       // Normalize AI nodes trước khi đẩy vào campaign
       const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);
+
+      // Validate node config nếu autoRun trước khi update DB
+      if (autoRun) {
+        for (const node of normalizedNodes) {
+          const subtype = node.node_subtype || node.nodeSubtype;
+          const validation = campaignNodeRegistryService.validateNodeConfig(subtype, node.config || {});
+          if (!validation.valid) {
+            return res.status(400).json({
+              success: false,
+              code: 'INVALID_NODE_CONFIG',
+              message: validation.errors.join(', '),
+            });
+          }
+        }
+      }
 
       // Re-use campaignController.update logic to push nodes/connections
       const updateReq = {
@@ -856,6 +883,17 @@ class AiController {
           campaignController.run(runReq, mockRes).catch(reject);
         });
 
+        if (runRes.status >= 400) {
+          return res.status(runRes.status).json({
+            ...(runRes.data || {}),
+            data: {
+              ...(runRes.data?.data || {}),
+              campaignId,
+              campaignUpdated: true,
+            },
+          });
+        }
+
         return res.json({
           success: true,
           message: 'Đã cập nhật và kích hoạt chiến dịch!',
@@ -898,10 +936,11 @@ class AiController {
 
       const { script, directRecipients } = req.body;
 
-      if (!script || !script.nodes || !script.connections) {
+      if (!script || !Array.isArray(script.nodes) || script.nodes.length === 0 || !script.connections) {
         return res.status(400).json({
           success: false,
-          message: 'Script không hợp lệ. Cần có nodes và connections.',
+          code: 'EMPTY_CAMPAIGN_SCRIPT',
+          message: 'Kịch bản không có node nào.',
         });
       }
 
@@ -933,6 +972,19 @@ class AiController {
       // Auto-fill fromEmailId với SMTP channel đầu tiên của user
       await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, req.user.id);
       await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, req.user.id);
+
+      // Validate node config sau autofill và trước khi tạo campaign
+      for (const node of normalizedNodes) {
+        const subtype = node.node_subtype || node.nodeSubtype;
+        const validation = campaignNodeRegistryService.validateNodeConfig(subtype, node.config || {});
+        if (!validation.valid) {
+          return res.status(400).json({
+            success: false,
+            code: 'INVALID_NODE_CONFIG',
+            message: validation.errors.join(', '),
+          });
+        }
+      }
 
       // Bước 1: Tạo campaign
       const createReq = {
@@ -969,13 +1021,35 @@ class AiController {
       }
 
       // Bước 2: Kích hoạt campaign (set status = active)
+      let publishedCampaign;
       try {
-        await campaignCrudService.publishCampaign({
+        publishedCampaign = await campaignCrudService.publishCampaign({
           authUser: req.user,
           campaignId,
         });
-      } catch (pubErr) {
-        console.warn('[AI] Không publish được campaign:', pubErr.message);
+      } catch (publishError) {
+        return res.status(publishError.statusCode || 500).json({
+          success: false,
+          code: publishError.code || 'CAMPAIGN_PUBLISH_FAILED',
+          message: publishError.message || 'Không thể kích hoạt chiến dịch vừa tạo.',
+          data: {
+            campaignId,
+            campaignName: script.campaignName,
+            status: 'draft',
+          },
+        });
+      }
+      if (!publishedCampaign) {
+        return res.status(409).json({
+          success: false,
+          code: 'CAMPAIGN_PUBLISH_FAILED',
+          message: 'Không thể kích hoạt chiến dịch vừa tạo.',
+          data: {
+            campaignId,
+            campaignName: script.campaignName,
+            status: 'draft',
+          },
+        });
       }
 
       // Bước 3: Tạo run và thực thi
@@ -997,6 +1071,18 @@ class AiController {
         };
         campaignController.run(runReq, mockRes).catch(reject);
       });
+
+      if (runRes.status >= 400) {
+        return res.status(runRes.status).json({
+          ...(runRes.data || {}),
+          data: {
+            ...(runRes.data?.data || {}),
+            campaignId,
+            campaignName: script.campaignName,
+            status: 'active',
+          },
+        });
+      }
 
       return res.json({
         success: true,

@@ -488,6 +488,19 @@ class CampaignCrudRepository {
 
   /**
    * @param {object} client
+   * @param {number|string} campaignId
+   * @returns {Promise<number>}
+   */
+  async countNodesByCampaignTx(client, campaignId) {
+    const result = await client.query(
+      'SELECT COUNT(*)::int AS count FROM campaign_nodes WHERE id_campaign = $1',
+      [campaignId]
+    );
+    return Number(result.rows[0]?.count || 0);
+  }
+
+  /**
+   * @param {object} client
    * @param {object} params
    * @returns {Promise<object[]|null>}
    */

@@ -231,7 +231,10 @@ describe('aiController directRecipients with Zalo contacts UIDs (P0)', () => {
           id: 'node-1',
           node_type: 'action',
           node_subtype: 'send_zalo_personal',
-          config: {},
+          config: {
+            zaloAccountId: 1,
+            message: 'Tin nhắn chào bạn',
+          },
         },
       ],
     };

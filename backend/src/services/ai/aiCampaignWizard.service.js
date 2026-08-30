@@ -677,6 +677,8 @@ export const GATE_PROPAGATION = {
   planApproved: 'internal',
   senderOtherRequested: 'internal',
   hasContentPlan: 'internal',
+  hasAttachedFile: 'internal',
+  hasAttachedSpreadsheet: 'internal',
   abandonedAtMessageCount: 'internal',
 };
 
@@ -1029,6 +1031,34 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
 
 export const WIZARD_STATE_VERSION = 1;
 
+export const GATE_MERGE_POLICIES = {
+  // marker-pick: dùng pick(gateName, d[field], p[field])
+  senderAccountId: { policy: 'marker-pick', gateName: 'senderAccount' },
+  senderAccountName: { policy: 'marker-pick', gateName: 'senderAccount' },
+  dataSource: { policy: 'marker-pick', gateName: 'dataSource' },
+
+  // marker-pick-array: như marker-pick nhưng usable là mảng không rỗng
+  zaloGroupIds: { policy: 'marker-pick-array', gateName: 'zaloGroups' },
+  zaloFriendIds: { policy: 'marker-pick-array', gateName: 'zaloFriends' },
+
+  // derived-first: (channelSwitched || hasAbandonMark) ? (d[field] ?? null) : (d[field] ?? p[field] ?? null)
+  sheetUrl: { policy: 'derived-first' },
+
+  // boolean-or-reset: OR hai nguồn, reset khi đổi kênh / abandon
+  senderOtherRequested: { policy: 'boolean-or-reset', gateName: 'senderAccount' },
+  hasContentPlan: { policy: 'boolean-or-reset' },
+  planApproved: { policy: 'boolean-or-reset' },
+  hasAttachedFile: { policy: 'boolean-or-reset', ignoreChannelSwitch: true, ignoreAbandon: true },
+  hasAttachedSpreadsheet: { policy: 'boolean-or-reset', ignoreChannelSwitch: true, ignoreAbandon: true },
+
+  // custom: giữ logic riêng biệt
+  isCampaignFlow: { policy: 'custom' },
+  channel: { policy: 'custom' },
+  schedule: { policy: 'custom' },
+  sheetCheck: { policy: 'custom' },
+  abandonedAtMessageCount: { policy: 'custom' },
+};
+
 export function createEmptyWizardState() {
   return {
     v: WIZARD_STATE_VERSION,
@@ -1046,6 +1076,8 @@ export function createEmptyWizardState() {
       planApproved: false,
       senderOtherRequested: false,
       hasContentPlan: false,
+      hasAttachedFile: false,
+      hasAttachedSpreadsheet: false,
       abandonedAtMessageCount: null,
     },
     plan: {
@@ -1137,55 +1169,55 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
     return persistedUsable(persistedValue) ? persistedValue : derivedValue;
   };
 
-  const merged = {
-    isCampaignFlow,
-    channel: channelMarkerSeen
-      ? (d.channel ?? null)
-      : (hasAbandonMark ? (d.channel ?? null) : (p.channel ?? d.channel ?? null)),
-    senderAccountId: pick('senderAccount', d.senderAccountId ?? null, p.senderAccountId),
-    senderAccountName: pick('senderAccount', d.senderAccountName ?? null, p.senderAccountName),
-    senderOtherRequested: (markerGates.includes('senderAccount') || channelSwitched || hasAbandonMark)
-      ? Boolean(d.senderOtherRequested)
-      : Boolean(p.senderOtherRequested || d.senderOtherRequested),
-    dataSource: pick('dataSource', d.dataSource ?? null, p.dataSource),
-    sheetUrl: (channelSwitched || hasAbandonMark)
-      ? (d.sheetUrl ?? null)
-      : (d.sheetUrl ?? p.sheetUrl ?? null),
-    sheetCheck: (channelSwitched || hasAbandonMark)
-      ? null
-      : ((d.sheetUrl ?? p.sheetUrl) && p.sheetCheck?.url === (d.sheetUrl ?? p.sheetUrl) ? p.sheetCheck : null),
-    zaloGroupIds: pick(
-      'zaloGroups',
-      Array.isArray(d.zaloGroupIds) ? d.zaloGroupIds : [],
-      p.zaloGroupIds,
-      (v) => Array.isArray(v) && v.length > 0
-    ),
-    // Thiếu dòng này thì lựa chọn bạn bè bị đánh rơi ngay sau khi người dùng chọn xong:
-    // derived có ["uid-1","uid-2"] nhưng merged trả undefined, cổng zaloFriends (:834)
-    // thấy mảng rỗng nên mở lại picker → lặp vô hạn. Giữ song song với zaloGroupIds.
-    zaloFriendIds: pick(
-      'zaloFriends',
-      Array.isArray(d.zaloFriendIds) ? d.zaloFriendIds : [],
-      p.zaloFriendIds,
-      (v) => Array.isArray(v) && v.length > 0
-    ),
-    // Latest free-text intent schedule beats sticky persisted only when that intent set schedule.
-    schedule: (() => {
-      if (markerGates.includes('schedule') || channelSwitched || hasAbandonMark) return d.schedule ?? null;
-      if (d.latestIntentScheduleFresh) return backfillScheduleDetails(d.schedule ?? null, p.schedule);
-      if (d.latestIntentIsQuickSend === true) return d.schedule ?? { mode: 'once' };
-      return (p.schedule != null) ? p.schedule : (d.schedule ?? null);
-    })(),
-    hasContentPlan: (channelSwitched || hasAbandonMark)
-      ? Boolean(d.hasContentPlan)
-      : Boolean(d.hasContentPlan || p.hasContentPlan),
-    planApproved: (channelSwitched || hasAbandonMark)
-      ? Boolean(d.planApproved)
-      : Boolean(d.planApproved || p.planApproved),
-    hasAttachedFile: Boolean(d.hasAttachedFile || p.hasAttachedFile),
-    hasAttachedSpreadsheet: Boolean(d.hasAttachedSpreadsheet || p.hasAttachedSpreadsheet),
-    abandonedAtMessageCount: (hasAbandonMark && !isReactivated) ? abandonedMark : null,
-  };
+  const merged = {};
+
+  for (const [field, config] of Object.entries(GATE_MERGE_POLICIES)) {
+    const policy = config.policy;
+
+    if (policy === 'marker-pick') {
+      merged[field] = pick(config.gateName || field, d[field] ?? null, p[field]);
+    } else if (policy === 'marker-pick-array') {
+      merged[field] = pick(
+        config.gateName || field,
+        Array.isArray(d[field]) ? d[field] : [],
+        p[field],
+        (v) => Array.isArray(v) && v.length > 0
+      );
+    } else if (policy === 'derived-first') {
+      merged[field] = (channelSwitched || hasAbandonMark)
+        ? (d[field] ?? null)
+        : (d[field] ?? p[field] ?? null);
+    } else if (policy === 'boolean-or-reset') {
+      const reset = (!config.ignoreChannelSwitch && channelSwitched)
+        || (!config.ignoreAbandon && hasAbandonMark)
+        || (config.gateName && markerGates.includes(config.gateName));
+
+      merged[field] = reset
+        ? Boolean(d[field])
+        : Boolean(d[field] || p[field]);
+    } else if (policy === 'custom') {
+      if (field === 'isCampaignFlow') {
+        merged.isCampaignFlow = isCampaignFlow;
+      } else if (field === 'channel') {
+        merged.channel = channelMarkerSeen
+          ? (d.channel ?? null)
+          : (hasAbandonMark ? (d.channel ?? null) : (p.channel ?? d.channel ?? null));
+      } else if (field === 'schedule') {
+        merged.schedule = (() => {
+          if (markerGates.includes('schedule') || channelSwitched || hasAbandonMark) return d.schedule ?? null;
+          if (d.latestIntentScheduleFresh) return backfillScheduleDetails(d.schedule ?? null, p.schedule);
+          if (d.latestIntentIsQuickSend === true) return d.schedule ?? { mode: 'once' };
+          return (p.schedule != null) ? p.schedule : (d.schedule ?? null);
+        })();
+      } else if (field === 'sheetCheck') {
+        merged.sheetCheck = (channelSwitched || hasAbandonMark)
+          ? null
+          : ((d.sheetUrl ?? p.sheetUrl) && p.sheetCheck?.url === (d.sheetUrl ?? p.sheetUrl) ? p.sheetCheck : null);
+      } else if (field === 'abandonedAtMessageCount') {
+        merged.abandonedAtMessageCount = (hasAbandonMark && !isReactivated) ? abandonedMark : null;
+      }
+    }
+  }
 
   if (isContentPlanRevisionText(lastUserText)) {
     merged.planApproved = false;

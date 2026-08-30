@@ -366,6 +366,36 @@ class CampaignCrudService {
         flowJson,
       });
 
+      const finalStatus = status !== undefined ? status : existing.status;
+
+      let nodesCountBefore = null;
+      if (nodes !== undefined || finalStatus === 'active') {
+        nodesCountBefore = await campaignCrudRepository.countNodesByCampaignTx(client, campaignId);
+      }
+      const nodesAfterCount = nodes !== undefined
+        ? (Array.isArray(nodes) ? nodes.length : 0)
+        : (nodesCountBefore ?? 0);
+
+      // Cấm campaign có trạng thái active khi rỗng node (do xoá hết node hoặc do đổi status sang active)
+      if (finalStatus === 'active' && nodesAfterCount === 0) {
+        const error = new Error(
+          existing.status === 'active'
+            ? 'Không thể xoá toàn bộ node của chiến dịch đã kích hoạt'
+            : 'Không thể kích hoạt chiến dịch khi chưa có node nào'
+        );
+        error.code = existing.status === 'active' ? 'CANNOT_EMPTY_ACTIVE_CAMPAIGN' : 'CANNOT_ACTIVATE_EMPTY_CAMPAIGN';
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // Cấm xoá sạch node của campaign khác draft (ví dụ paused, running, completed...)
+      if (finalStatus !== 'draft' && Array.isArray(nodes) && nodes.length === 0 && (nodesCountBefore || 0) > 0) {
+        const error = new Error('Không thể xoá toàn bộ node của chiến dịch đã kích hoạt');
+        error.code = 'CANNOT_EMPTY_ACTIVE_CAMPAIGN';
+        error.statusCode = 409;
+        throw error;
+      }
+
       if (nodes !== undefined) {
         await campaignCrudRepository.deleteConnectionsByCampaignTx(client, campaignId);
         await campaignCrudRepository.deleteNodesByCampaignTx(client, campaignId);
@@ -440,6 +470,7 @@ class CampaignCrudService {
         id: updated.id,
         campaignName: updated.campaign_name,
         status: updated.status,
+        nodesTruoc: nodes !== undefined ? nodesCountBefore : null,
       };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -638,6 +669,26 @@ class CampaignCrudService {
    */
   async publishCampaign({ authUser, userId, roleCode, workspaceOwnerId, campaignId }) {
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+
+    const existing = await campaignCrudRepository.findCampaignById({
+      campaignId,
+      isAdmin: context.isSuperAdmin,
+      userId: context.actorUserId,
+      workspaceOwnerId: context.workspaceOwnerId,
+    });
+
+    if (!existing || !['draft', 'paused'].includes(existing.status)) {
+      return null;
+    }
+
+    const nodes = await campaignCrudRepository.findNodesByCampaignId(campaignId);
+    if (!nodes || nodes.length === 0) {
+      const error = new Error('Không thể kích hoạt chiến dịch khi chưa có node nào');
+      error.code = 'CANNOT_ACTIVATE_EMPTY_CAMPAIGN';
+      error.statusCode = 409;
+      throw error;
+    }
+
     return campaignCrudRepository.publishCampaign({
       campaignId,
       isAdmin: context.isSuperAdmin,

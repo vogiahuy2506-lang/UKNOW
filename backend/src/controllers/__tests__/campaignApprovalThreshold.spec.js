@@ -78,6 +78,10 @@ jest.unstable_mockModule('../emailSettings.controller.js', () => ({
   default: {},
 }));
 
+jest.unstable_mockModule('../../services/campaign/campaignPreflight.service.js', () => ({
+  validateCampaignPreflight: jest.fn(async () => ({ valid: true })),
+}));
+
 const { default: campaignController } = await import('../campaign.controller.js');
 
 function createRes() {
@@ -315,9 +319,7 @@ describe('Campaign Approval Threshold in campaign.controller.js', () => {
     mockDbQuery.mockResolvedValueOnce({
       rows: [{ id: 10, campaign_name: 'Big Campaign', status: 'pending_owner_approval' }],
     });
-    // 2. UPDATE status = 'ready'
-    mockDbQuery.mockResolvedValueOnce({ rowCount: 1 });
-    // 3. createCampaignRunRecord
+    // 2. createCampaignRunRecord performs preflight, activation and run insertion atomically.
     mockCreateCampaignRunRecord.mockResolvedValueOnce({ id: 101 });
     mockExecuteCampaign.mockResolvedValueOnce({});
 
@@ -340,6 +342,31 @@ describe('Campaign Approval Threshold in campaign.controller.js', () => {
       10,
       expect.anything()
     );
+    expect(mockDbQuery).toHaveBeenCalledTimes(1);
+    expect(mockCreateCampaignRunRecord).toHaveBeenCalledWith(expect.objectContaining({
+      campaignId: 10,
+      activatePendingApproval: true,
+    }));
+  });
+
+  it('does not approve a campaign that is no longer pending owner approval', async () => {
+    const req = {
+      params: { id: '10' },
+      user: { id: 1, role: 'user', activeContext: { type: 'self' } },
+    };
+    const res = createRes();
+    mockDbQuery.mockResolvedValueOnce({
+      rows: [{ id: 10, campaign_name: 'Already Active', status: 'active' }],
+    });
+
+    await campaignController.approve(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      code: 'CAMPAIGN_NOT_PENDING_APPROVAL',
+    }));
+    expect(mockCreateCampaignRunRecord).not.toHaveBeenCalled();
   });
 
   it('owner từ chối campaign pending_owner_approval → cập nhật status = draft', async () => {
