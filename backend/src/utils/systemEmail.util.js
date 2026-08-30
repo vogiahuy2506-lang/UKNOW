@@ -502,6 +502,8 @@ export function buildPaymentSuccessEmail({
   invoiceUrl,
   isScheduled = false,
   activateAfter = null,
+  isEntitlementSuperseded = false,
+  activePlanName = null,
 }) {
   const amountFormatted = new Intl.NumberFormat('vi-VN').format(amount);
   const periodLabel = billingPeriod === 'yearly' ? 'năm' : 'tháng';
@@ -513,13 +515,21 @@ export function buildPaymentSuccessEmail({
   }) : '';
   const methodLabel = paymentMethod === 'payos' ? 'PayOS (QR Code)' : paymentMethod === 'voucher' ? 'Voucher' : 'Thủ công';
 
-  const titleText = isScheduled ? 'Đặt lịch hẹn đổi gói thành công!' : 'Thanh toán thành công!';
-  const messageText = isScheduled
+  const titleText = isEntitlementSuperseded
+    ? 'Thanh toán đã được ghi nhận!'
+    : (isScheduled ? 'Đặt lịch hẹn đổi gói thành công!' : 'Thanh toán thành công!');
+  const messageText = isEntitlementSuperseded
+    ? `Chúng tôi đã nhận được thanh toán của bạn. Bạn đã có một đơn gói mới hơn được thanh toán trước đó, nên hệ thống giữ nguyên gói đang dùng${activePlanName ? ` là <strong>${activePlanName}</strong>` : ''} để tránh hạ gói ngoài ý muốn. Nếu cần hỗ trợ về đơn này, vui lòng liên hệ bộ phận thanh toán.`
+    : (isScheduled
     ? `Cảm ơn bạn đã thanh toán! Đơn đặt lịch hẹn đổi sang gói <strong>${planName}</strong> đã được ghi nhận thành công. Gói sẽ tự động kích hoạt vào ngày <strong>${activateAfterStr}</strong> khi gói hiện tại của bạn hết hạn.`
-    : `Cảm ơn bạn đã thanh toán! Chúng tôi đã nhận được thanh toán của bạn và gói <strong>${planName}</strong> đã được kích hoạt thành công.`;
+    : `Cảm ơn bạn đã thanh toán! Chúng tôi đã nhận được thanh toán của bạn và gói <strong>${planName}</strong> đã được kích hoạt thành công.`);
 
-  const dateRowLabel = isScheduled ? 'Ngày tự động kích hoạt' : 'Ngày hết hạn';
-  const dateRowValue = isScheduled ? activateAfterStr : expiresStr;
+  const dateRowLabel = isEntitlementSuperseded
+    ? 'Trạng thái gói'
+    : (isScheduled ? 'Ngày tự động kích hoạt' : 'Ngày hết hạn');
+  const dateRowValue = isEntitlementSuperseded
+    ? (activePlanName ? `Đang giữ gói ${activePlanName}` : 'Đang giữ theo đơn thanh toán mới hơn')
+    : (isScheduled ? activateAfterStr : expiresStr);
 
   const content = `
     <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">

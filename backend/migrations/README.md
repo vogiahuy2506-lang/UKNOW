@@ -101,3 +101,30 @@ bị từ chối nếu còn migration pending; chỉ image của release/commit 
 checksum-baseline và một file migration mới. Chốt này cố ý làm batch hỗn hợp
 fail trước khi chạm VPS: tách thành commit checksum-only trước, rồi commit
 migration ở release kế tiếp.
+
+### Backup bắt buộc cho migration 174
+
+Trước khi `174_repair_billing_cycle_anchors.sql` chạy, dùng
+`npm run backup:billing-anchor-repair`. Script chỉ đọc những row migration sẽ
+thay đổi, ghi JSON với quyền `0600`, số row và SHA-256 vào thư mục
+`BILLING_ANCHOR_BACKUP_DIR`. Production workflow mount thư mục VPS riêng để
+backup không đi vào image, git hoặc CI log. Mount đó phải giữ **cùng đường dẫn
+tuyệt đối** ở VPS và trong container preflight; `backup_path` được lưu vào DB
+để audit/khôi phục phải trỏ tới file thực trên VPS, không phải một path tạm như
+`/backups` chỉ tồn tại trong container.
+
+Ở môi trường local/development, `npm run migrate` và startup auto-run tự tạo
+preflight vào thư mục `backups/` trước khi chạy 174. Production vẫn phải chạy
+backup VPS riêng trong workflow; không dùng local fallback trong image release.
+
+Ngoài file, script ghi một preflight manifest ngắn hạn vào DB. Migration 174
+chỉ update row còn khớp manifest; row nào vừa được entitlement/payment khác
+thay đổi sau backup sẽ bị bỏ qua để không ghi đè dữ liệu mới. Migration sẽ từ
+chối chạy nếu không có manifest mới (tối đa 2 giờ) **và DB đã có active
+entitlement**; database trắng không có dữ liệu để repair được phép đi qua để
+bootstrap từ đầu. Manifest chỉ bị xóa cùng transaction khi repair thành công.
+Không chạy migration trên DB có entitlement nếu backup hoặc manifest không tạo
+được. Workflow production chạy `auditBillingCycles.js` read-only ngay sau
+migration; log audit ghi số dòng snapshot/repair/skip và các dòng cần manual
+review. Snapshot DB bị xóa khi transaction commit, chỉ còn metadata kết quả và
+file backup VPS để truy vết/rollback có kiểm soát.

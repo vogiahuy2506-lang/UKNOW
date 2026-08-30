@@ -2,7 +2,7 @@
  * Integration tests cho `/api/users/*` — phần dành cho user tự quản lý profile.
  *
  * Phạm vi:
- *   - GET  /api/users/profile         : lấy info + plan đang dùng + orders fallback.
+ *   - GET  /api/users/profile         : lấy info + entitlement plan đang dùng.
  *   - PUT  /api/users/profile         : update fullName/email/phone.
  *   - PUT  /api/users/change-password : đổi mật khẩu (bcrypt compare).
  *   - GET  /api/users/my-orders       : lịch sử đơn hàng `status='success'`.
@@ -88,7 +88,7 @@ describe('GET /api/users/profile', () => {
     expect(res.body.data.activePlanName).toBe('Business');
   });
 
-  it('user chưa có active_plan_id NHƯNG có order success → fallback theo order mới nhất', async () => {
+  it('user chưa có active_plan_id nhưng có order success cũ → không hiển thị nhầm plan lịch sử là entitlement hiện tại', async () => {
     const plan = await createPlan({ code: 'past' });
     const user = await createUser({ username: 'has-order', withPlan: false });
     // Tạo order success nhưng KHÔNG gán active_plan_id (giả lập order cũ migration thiếu sót)
@@ -100,8 +100,8 @@ describe('GET /api/users/profile', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(Number(res.body.data.activePlanId)).toBe(Number(plan.id));
-    expect(res.body.data.activePlanCode).toBe('past');
+    expect(res.body.data.activePlanId).toBeNull();
+    expect(res.body.data.activePlanCode).toBeNull();
   });
 });
 

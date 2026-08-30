@@ -38,6 +38,30 @@ class AiCampaignDraftRepository {
     return rows[0] || null;
   }
 
+  async deleteEmailTemplatesByIds({ userId, ids = [] }) {
+    const normalizedIds = ids.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    if (!userId || normalizedIds.length === 0) return [];
+    const { rows } = await db.query(
+      `DELETE FROM email_templates
+       WHERE id_user = $1 AND id = ANY($2::bigint[])
+       RETURNING id`,
+      [userId, normalizedIds]
+    );
+    return rows;
+  }
+
+  async deleteZaloTemplatesByIds({ userId, ids = [] }) {
+    const normalizedIds = ids.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    if (!userId || normalizedIds.length === 0) return [];
+    const { rows } = await db.query(
+      `DELETE FROM zalo_templates
+       WHERE id_user = $1 AND id = ANY($2::bigint[])
+       RETURNING id`,
+      [userId, normalizedIds]
+    );
+    return rows;
+  }
+
   async findDefaultEmailSettingId(userId) {
     const { rows } = await db.query(
       `SELECT id FROM email_settings

@@ -55,7 +55,17 @@ export async function grantSignupTrialInTx(client, { userId, userEmail }) {
     throw new Error('grantSignupTrialInTx: missing userId/userEmail');
   }
 
+  // This service is intentionally fail-soft for a trial configuration error:
+  // the account registration may still commit.  Isolate the trial writes in a
+  // savepoint so a failure after creating the free order cannot commit that
+  // `success` order without its entitlement.
+  const savepoint = 'signup_trial_activation';
+  let savepointCreated = false;
+
   try {
+    await client.query(`SAVEPOINT ${savepoint}`);
+    savepointCreated = true;
+
     // Dynamic import, không static ở đầu file: payment.service.js kéo theo cả PayOS
     // client, matbaoInvoice, einvoice... — một cây import rất nặng. auth.controller.js
     // (caller tĩnh của hàm này) sẽ kéo cả cây đó vào graph của nó nếu import tĩnh,
@@ -82,7 +92,7 @@ export async function grantSignupTrialInTx(client, { userId, userEmail }) {
     if (!row) {
       throw new Error('grantSignupTrialInTx: plan not applied after activateFreePlan');
     }
-    return {
+    const result = {
       activePlanId: row.active_plan_id,
       planCode: row.code,
       planName: row.name,
@@ -92,7 +102,34 @@ export async function grantSignupTrialInTx(client, { userId, userEmail }) {
       maxChatbots: row.max_chatbots,
       expiresAt: row.subscription_expires_at,
     };
+    await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    savepointCreated = false;
+    return result;
   } catch (err) {
+    // Không tạo được SAVEPOINT thì không có ranh giới nào để cô lập trial
+    // writes. Có thể outer transaction đã bị abort (25P02), nên tuyệt đối
+    // không được fail-soft rồi để caller COMMIT transaction không còn hợp lệ.
+    if (!savepointCreated) {
+      throw err;
+    }
+
+    if (savepointCreated) {
+      try {
+        await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+      } catch (savepointErr) {
+        // If savepoint recovery fails, the outer transaction is no longer known
+        // to be usable. Do not swallow it: the caller must roll back the whole
+        // signup instead of attempting to commit a poisoned transaction.
+        console.error(`[SignupTrial] Không rollback được savepoint cho user ${userId}:`, savepointErr?.message || savepointErr);
+        const recoveryError = new Error(
+          `Không thể khôi phục transaction cấp trial cho user ${userId}; cần rollback toàn bộ đăng ký`,
+          { cause: err }
+        );
+        recoveryError.savepointError = savepointErr;
+        throw recoveryError;
+      }
+    }
     if (isTransientInfraError(err)) throw err; // lỗi hạ tầng thật sự — để caller rollback
     console.error(`[SignupTrial] Không cấp được trial cho user ${userId} (không rollback đăng ký):`, err?.message || err);
     return null;

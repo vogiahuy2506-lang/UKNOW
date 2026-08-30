@@ -592,7 +592,7 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('BẰNG CHỨNG TÍNH NĂNG HOẠT ĐỘNG: sau khi gỡ email, đăng ký lại đúng email gốc → tạo user MỚI, được cấp trial khi releaseTrialHistory = true', async () => {
+  it('BẰNG CHỨNG TÍNH NĂNG HOẠT ĐỘNG: sau khi gỡ email, đăng ký lại đúng email gốc → user mới không bị lịch sử trial của user cũ chặn', async () => {
     const admin = await createUser({ role: 'admin', username: 'sa' });
     const original = await createUser({ role: 'user', username: 'stuck_google', email: 'canfree@test.local' });
     const trialPlan = await createPlan({ code: 'trial', name: 'Dùng thử', price: 0, durationDays: 14 });
@@ -604,8 +604,8 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
 
     const token = await loginAs(admin);
 
-    // Ca A: releaseTrialHistory = false (hoặc không truyền) -> gỡ email nhưng giữ nguyên lịch sử đơn trial
-    // Tài khoản mới đăng ký lại không được cấp trial lần 2
+    // Ca A: releaseTrialHistory = false -> đơn trial vẫn thuộc user cũ qua user_id.
+    // Email tái sử dụng phải được xem là tài khoản mới, không bị lịch sử cũ chặn.
     const originalA = await createUser({ role: 'user', username: 'stuck_a', email: 'no_release@test.local' });
     await createOrder({ planId: trialPlan.id, userId: originalA.id, userEmail: originalA.email, status: 'success' });
 
@@ -627,7 +627,8 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
     expect(registerResA.status).toBe(201);
     expect(registerResA.body.data.user.email).toBe('no_release@test.local');
     expect(registerResA.body.data.user.id).not.toBe(originalA.id);
-    expect(registerResA.body.data.trial).toBeNull(); // Không được cấp trial vì đơn cũ vẫn mang email gốc
+    expect(registerResA.body.data.trial).not.toBeNull();
+    expect(registerResA.body.data.trial.planCode).toBe('trial');
 
     // Ca B: releaseTrialHistory = true -> gỡ email và ẩn danh đơn trial -> đăng ký lại được cấp trial
     const detachResB = await request(app)

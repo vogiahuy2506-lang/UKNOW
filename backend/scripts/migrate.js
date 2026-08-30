@@ -20,6 +20,7 @@ import {
   assertMigrationsUpToDate,
   listMigrationFiles,
 } from '../src/utils/migrationRunner.util.js';
+import { prepareBillingAnchorRepairPreflight } from '../src/utils/billingAnchorRepairBackup.util.js';
 
 const checkOnly = process.argv.includes('--check');
 
@@ -32,6 +33,12 @@ async function main() {
       return;
     }
 
+    // Production uses the VPS-only preflight step in deploy-backend.yml. Keep
+    // `npm run migrate` ergonomic for local/dev databases that already have
+    // active entitlements, without writing a backup inside the production image.
+    if (process.env.NODE_ENV !== 'production') {
+      await prepareBillingAnchorRepairPreflight(client);
+    }
     await runMigrations(client);
     console.log('[Migrate] Hoàn tất.');
   } finally {

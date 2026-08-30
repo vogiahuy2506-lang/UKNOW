@@ -270,6 +270,7 @@ export async function findEligibleVouchers({
   userId = null,
   userEmail = null,
   pendingWindowMinutes = getPayosPendingWindowMinutes(),
+  excludedPendingOrderIds = [],
   queryable = db,
 } = {}) {
   let modes = Array.isArray(offerModes) ? offerModes.filter(Boolean) : null;
@@ -288,6 +289,9 @@ export async function findEligibleVouchers({
     userEmail ? String(userEmail).trim().toLowerCase() : null,
     Boolean(ignoreMinOrder),
     Math.max(1, Number(pendingWindowMinutes) || getPayosPendingWindowMinutes()),
+    Array.isArray(excludedPendingOrderIds) && excludedPendingOrderIds.length
+      ? excludedPendingOrderIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+      : null,
   ];
 
   const { rows } = await queryable.query(
@@ -310,6 +314,7 @@ export async function findEligibleVouchers({
               WHERE o.voucher_id = v.id
                 AND o.status = 'pending'
                 AND o.created_at > NOW() - ($9 || ' minutes')::interval
+                AND ($10::bigint[] IS NULL OR NOT (o.id = ANY($10::bigint[])))
             )
             < v.usage_limit
        )
@@ -337,7 +342,7 @@ export async function findEligibleVouchers({
              WHERE r.voucher_id = v.id
                AND (
                  ($6::bigint IS NOT NULL AND r.user_id = $6)
-                 OR ($7::text IS NOT NULL AND LOWER(r.user_email) = $7)
+                 OR (r.user_id IS NULL AND LOWER(r.user_email) = $7)
                )
            )
            +
@@ -347,9 +352,10 @@ export async function findEligibleVouchers({
              WHERE o.voucher_id = v.id
                AND o.status = 'pending'
                AND o.created_at > NOW() - ($9 || ' minutes')::interval
+               AND ($10::bigint[] IS NULL OR NOT (o.id = ANY($10::bigint[])))
                AND (
                  ($6::bigint IS NOT NULL AND o.user_id = $6)
-                 OR ($7::text IS NOT NULL AND LOWER(o.user_email) = $7)
+                 OR (o.user_id IS NULL AND LOWER(o.user_email) = $7)
                )
            )
          ) < v.usage_limit_per_user

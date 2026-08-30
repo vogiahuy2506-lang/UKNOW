@@ -188,12 +188,48 @@ jobs:
             # đang phục vụ. Hạ container trước rồi mới migrate thì migration hỏng
             # = web sập cho tới khi có người vào tay.
             # Chạy bằng ĐÚNG image vừa pull nên file migration luôn khớp code sắp chạy.
-            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Chạy migration bằng image mới (container cũ vẫn đang phục vụ)..."
+            BACKUP_DIR="/root/uknow/backups/billing-anchor-repair"
+            mkdir -p "$BACKUP_DIR"
+            chmod 700 "$BACKUP_DIR"
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Tạo backup + preflight manifest cho các row migration 174 có thể thay đổi..."
+            # The production image deliberately runs as the unprivileged
+            # `node` user, while this VPS-only backup directory is root:0700.
+            # Run only the transient backup writer as root so its JSON remains
+            # private; the application container never receives this mount.
+            # Mount at the same absolute VPS path: backup_path persisted in the
+            # DB must point to the recoverable host file, never /backups inside
+            # this short-lived container.
+            PREFLIGHT_OUTPUT="$(docker run --rm \
+              --user 0:0 \
+              --network uknow_network \
+              -e BILLING_ANCHOR_BACKUP_DIR="$BACKUP_DIR" \
+              -v /root/uknow/backend/.env:/app/.env \
+              -v "$BACKUP_DIR":"$BACKUP_DIR" \
+              "$BACKEND_IMAGE" node scripts/backupBillingAnchorRepair.js)"
+            printf '%s\n' "$PREFLIGHT_OUTPUT"
+            RUN_BILLING_ANCHOR_AUDIT=false
+            if printf '%s\n' "$PREFLIGHT_OUTPUT" | grep -Fxq 'BILLING_ANCHOR_PREFLIGHT_STATUS=prepared'; then
+              RUN_BILLING_ANCHOR_AUDIT=true
+            fi
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Chạy migration bằng image mới (container cũ vẫn đang phục vụ; migration chỉ sửa row khớp preflight manifest)..."
             docker run --rm \
               --name uknow-migrate \
               --network uknow_network \
               -v /root/uknow/backend/.env:/app/.env \
               "$BACKEND_IMAGE" node scripts/migrate.js
+            # Migration 174 deliberately skips a row that changed after the
+            # preflight snapshot. Audit only the deploy that created a fresh
+            # preflight; later releases must not put a full billing scan on the
+            # critical path merely because the one-time repair once existed.
+            if [ "$RUN_BILLING_ANCHOR_AUDIT" = "true" ]; then
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Audit billing anchors sau migration (read-only)..."
+              docker run --rm \
+                --network uknow_network \
+                -v /root/uknow/backend/.env:/app/.env \
+                "$BACKEND_IMAGE" node scripts/auditBillingCycles.js
+            else
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Bỏ qua billing audit: migration 174 đã áp dụng từ release trước."
+            fi
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Migration hoàn tất — bắt đầu đổi container"
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
               echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Removing old backend container..."

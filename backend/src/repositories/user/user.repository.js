@@ -1,5 +1,5 @@
 import db from '../../config/database.js';
-import { EFFECTIVE_PLAN_ID_SQL } from '../../utils/billingCycle.util.js';
+import { EFFECTIVE_PLAN_ID_SQL, findCurrentPlanActivation } from '../../utils/billingCycle.util.js';
 
 const PROFILE_LIMIT_COLUMNS = `
   u.max_campaigns,
@@ -15,6 +15,7 @@ const PLAN_COLUMNS = `
   p.name        AS plan_name,
   p.code        AS plan_code,
   p.price       AS plan_price,
+  p.price_yearly AS plan_price_yearly,
   p.features    AS plan_features,
   p.is_custom   AS plan_is_custom,
   p.max_employees AS plan_max_employees,
@@ -33,6 +34,7 @@ const PLAN_COLUMNS_FALLBACK = `
   p.name        AS plan_name,
   p.code        AS plan_code,
   p.price       AS plan_price,
+  p.price_yearly AS plan_price_yearly,
   p.features    AS plan_features,
   NULL::boolean AS plan_is_custom,
   p.max_employees AS plan_max_employees,
@@ -46,12 +48,7 @@ const PLAN_COLUMNS_FALLBACK = `
 `;
 
 const PROFILE_PLAN_WHERE = `
-  WHERE p.id = COALESCE(
-    $1::int,
-    (SELECT o.plan_id FROM orders o
-     WHERE o.user_id = $2 OR o.user_email = $3
-     ORDER BY o.created_at DESC LIMIT 1)
-  )
+  WHERE p.id = $1::int
 `;
 
 export async function findUserById(userId, queryable = db) {
@@ -62,6 +59,24 @@ export async function findUserById(userId, queryable = db) {
     [userId]
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Serialize entitlement mutations for one account inside the caller's
+ * transaction. This deliberately locks the user row rather than a plan/order
+ * row, because a trial may have no order yet when two requests race.
+ */
+export async function lockUserForPlanActivation(userId, queryable = db) {
+  if (!userId) return null;
+  const { rows } = await queryable.query(
+    `SELECT id, email
+     FROM users
+     WHERE id = $1
+     LIMIT 1
+     FOR UPDATE`,
+    [userId]
+  );
+  return rows[0] || null;
 }
 
 export async function findProfileBase(userId) {
@@ -97,22 +112,22 @@ export async function findProfileBaseFallback(userId) {
   return rows[0] || null;
 }
 
-export async function findProfilePlan({ activePlanId, userId, email }) {
+export async function findProfilePlan({ activePlanId }) {
   const { rows } = await db.query(
     `SELECT ${PLAN_COLUMNS}
      FROM plans p
      ${PROFILE_PLAN_WHERE}`,
-    [activePlanId || null, userId, email]
+    [activePlanId || null]
   );
   return rows[0] || null;
 }
 
-export async function findProfilePlanFallback({ activePlanId, userId, email }) {
+export async function findProfilePlanFallback({ activePlanId }) {
   const { rows } = await db.query(
     `SELECT ${PLAN_COLUMNS_FALLBACK}
      FROM plans p
      ${PROFILE_PLAN_WHERE}`,
-    [activePlanId || null, userId, email]
+    [activePlanId || null]
   );
   return rows[0] || null;
 }
@@ -130,20 +145,18 @@ export async function findProfilePlanByUserId(userId) {
 
 export async function findActiveBillingPeriod(userId, email, queryable = db) {
   try {
-    const { rows } = await queryable.query(
-      `SELECT billing_period FROM orders
-       WHERE (user_id = $1 OR user_email = $2)
-         AND status IN ('paid', 'success', 'completed')
-         AND note IS DISTINCT FROM 'topup'
-         AND note IS DISTINCT FROM 'scheduled_change'
-         AND topup_config IS NULL
-         AND plan_id IS NOT NULL
-       ORDER BY created_at DESC LIMIT 1`,
-      [userId || null, email || null]
-    );
-    return rows[0]?.billing_period || 'monthly';
-  } catch {
-    return 'monthly';
+    const activation = await findCurrentPlanActivation(userId, queryable);
+    return activation?.billing_period || 'monthly';
+  } catch (error) {
+    console.error('[Billing] Failed to resolve active billing period', {
+      userId,
+      email,
+      message: error?.message,
+    });
+    // Do not infer a monthly subscription when the database is unavailable;
+    // callers must surface the operational failure instead of making a
+    // potentially destructive billing decision.
+    throw error;
   }
 }
 
@@ -408,6 +421,8 @@ export async function updateLegacyEmployeeLimits(employeeId, entries) {
 export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
   const { rows } = await db.query(
     `SELECT o.id, o.order_code, o.amount, o.status, o.created_at, o.updated_at,
+            o.billing_period, o.payment_method, o.original_amount, o.discount_amount,
+            o.voucher_code, o.discount_source, o.discount_label,
             p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
             p.daily_email_limit, p.monthly_email_limit,
             p.daily_zalo_limit, p.monthly_zalo_limit,
@@ -417,7 +432,9 @@ export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
      FROM orders o
      LEFT JOIN plans p ON o.plan_id = p.id
      LEFT JOIN einvoices e ON e.order_id = o.id
-     WHERE (o.user_id = $1 OR o.user_email = $2) AND o.status = 'success'
+     WHERE (o.user_id = $1
+        OR (o.user_id IS NULL AND LOWER(o.user_email) = LOWER($2)))
+       AND o.status = 'success'
      ORDER BY o.created_at DESC
      LIMIT 20`,
     [userId, userEmail]

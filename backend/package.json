@@ -18,6 +18,7 @@
     "seed": "node scripts/seed.js",
     "migrate": "node scripts/migrate.js",
     "migrate:check": "node scripts/migrate.js --check",
+    "backup:billing-anchor-repair": "node scripts/backupBillingAnchorRepair.js",
     "check:schema": "node scripts/checkCoreSchema.js",
     "check:bootstrap-columns": "node scripts/checkBootstrapColumns.js",
     "check:migration-safety": "node scripts/checkMigrationSafety.js",

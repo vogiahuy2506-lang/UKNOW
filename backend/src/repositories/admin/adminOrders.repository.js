@@ -9,28 +9,46 @@ export async function findOrders({ status, search, dateFrom, dateTo, page = 1, l
   if (dateFrom) { conditions.push(`o.created_at >= $${p++}`);     params.push(dateFrom); }
   if (dateTo)   { conditions.push(`o.created_at < $${p++}`);      params.push(dateTo); }
   if (search) {
-    conditions.push(`(o.user_email ILIKE $${p} OR CAST(o.order_code AS TEXT) ILIKE $${p})`);
+    conditions.push(`(o.user_email ILIKE $${p}
+      OR CAST(o.order_code AS TEXT) ILIKE $${p}
+      OR COALESCE(NULLIF(o.voucher_code, ''), redemption.voucher_code) ILIKE $${p})`);
     params.push(`%${search}%`); p++;
   }
 
   const where = conditions.join(' AND ');
   const offset = (page - 1) * limit;
+  const redemptionJoin = `
+       LEFT JOIN LATERAL (
+         SELECT v.code AS voucher_code, vr.discount_amount
+         FROM voucher_redemptions vr
+         JOIN vouchers v ON v.id = vr.voucher_id
+         WHERE vr.order_id = o.id
+         ORDER BY vr.id DESC
+         LIMIT 1
+       ) redemption ON TRUE`;
 
   const [rowsRes, countRes] = await Promise.all([
     db.query(
       `SELECT o.id, o.order_code AS "orderCode", o.amount, o.status, o.created_at AS "createdAt", o.updated_at AS "updatedAt",
               o.user_email AS "userEmail", o.user_id AS "userId",
+              o.billing_period AS "billingPeriod", o.payment_method AS "paymentMethod",
+              o.original_amount AS "originalAmount",
+              COALESCE(NULLIF(o.discount_amount, 0), redemption.discount_amount, 0) AS "discountAmount",
+              COALESCE(NULLIF(o.voucher_code, ''), redemption.voucher_code) AS "voucherCode",
+              o.discount_source AS "discountSource", o.discount_label AS "discountLabel",
+              (o.topup_config IS NOT NULL OR o.note = 'topup') AS "isTopup",
               p.name AS "planName", p.code AS "planCode", p.is_custom AS "isCustom",
               u.full_name AS "userFullName"
        FROM orders o
        LEFT JOIN plans p ON o.plan_id = p.id
        LEFT JOIN users u ON o.user_id = u.id
+       ${redemptionJoin}
        WHERE ${where}
        ORDER BY o.created_at DESC
        LIMIT $${p} OFFSET $${p + 1}`,
       [...params, limit, offset]
     ),
-    db.query(`SELECT COUNT(*) FROM orders o WHERE ${where}`, params),
+    db.query(`SELECT COUNT(*) FROM orders o ${redemptionJoin} WHERE ${where}`, params),
   ]);
 
   return { rows: rowsRes.rows, total: Number(countRes.rows[0].count) };

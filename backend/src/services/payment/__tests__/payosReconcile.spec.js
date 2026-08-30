@@ -9,6 +9,8 @@ const mockFindPending = jest.fn();
 const mockFindStale = jest.fn();
 const mockFulfill = jest.fn();
 const mockGetClient = jest.fn();
+const mockLockUserForPlanActivation = jest.fn();
+const mockFindActiveUserByEmail = jest.fn();
 
 const client = {
   query: jest.fn(),
@@ -32,6 +34,11 @@ jest.unstable_mockModule('../../../repositories/payment/payment.repository.js', 
   findOrderByCode: mockFindByCode,
 }));
 
+jest.unstable_mockModule('../../../repositories/user/user.repository.js', () => ({
+  lockUserForPlanActivation: mockLockUserForPlanActivation,
+  findActiveUserByEmail: mockFindActiveUserByEmail,
+}));
+
 jest.unstable_mockModule('../payosOrderFulfillment.service.js', () => ({
   fulfillPaidOrder: mockFulfill,
 }));
@@ -53,10 +60,12 @@ describe('applyPayosLinkToPendingOrder', () => {
     jest.clearAllMocks();
     mockGetClient.mockResolvedValue(client);
     client.query.mockResolvedValue({});
+    mockLockUserForPlanActivation.mockResolvedValue({ id: 9, email: 'user@example.com' });
+    mockFindActiveUserByEmail.mockResolvedValue(null);
   });
 
   it('PAID + matching amount → claim + fulfill', async () => {
-    const order = { order_code: 111, status: 'pending', amount: 99000 };
+    const order = { order_code: 111, status: 'pending', amount: 99000, user_id: 9 };
     mockGet.mockResolvedValue({ status: 'PAID', amountPaid: 99000 });
     mockFindByCode.mockResolvedValue(order);
     mockClaim.mockResolvedValue({ ...order, status: 'success' });
@@ -65,6 +74,49 @@ describe('applyPayosLinkToPendingOrder', () => {
     expect(out).toBe('fulfilled');
     expect(mockClaim).toHaveBeenCalled();
     expect(mockFulfill).toHaveBeenCalled();
+    expect(mockLockUserForPlanActivation.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClaim.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('runs registered payment notifications only after COMMIT', async () => {
+    const order = { order_code: 116, status: 'pending', amount: 99000 };
+    const afterCommitTask = jest.fn();
+    mockGet.mockResolvedValue({ status: 'PAID', amountPaid: 99000 });
+    mockFindByCode.mockResolvedValue(order);
+    mockClaim.mockResolvedValue({ ...order, status: 'success' });
+    mockFulfill.mockImplementationOnce(async (_claimed, _client, { registerAfterCommit }) => {
+      registerAfterCommit(afterCommitTask);
+      return null;
+    });
+
+    const out = await applyPayosLinkToPendingOrder(order, { source: 'test' });
+
+    expect(out).toBe('fulfilled');
+    expect(client.query).toHaveBeenCalledWith('COMMIT');
+    expect(afterCommitTask).toHaveBeenCalledTimes(1);
+    const commitCallIndex = client.query.mock.calls.findIndex(([sql]) => sql === 'COMMIT');
+    expect(afterCommitTask.mock.invocationCallOrder[0]).toBeGreaterThan(
+      client.query.mock.invocationCallOrder[commitCallIndex]
+    );
+  });
+
+  it('does not run registered payment notifications when fulfillment rolls back', async () => {
+    const order = { order_code: 117, status: 'pending', amount: 99000 };
+    const afterCommitTask = jest.fn();
+    mockGet.mockResolvedValue({ status: 'PAID', amountPaid: 99000 });
+    mockFindByCode.mockResolvedValue(order);
+    mockClaim.mockResolvedValue({ ...order, status: 'success' });
+    mockFulfill.mockImplementationOnce(async (_claimed, _client, { registerAfterCommit }) => {
+      registerAfterCommit(afterCommitTask);
+      throw new Error('voucher redemption failed');
+    });
+
+    const out = await applyPayosLinkToPendingOrder(order, { source: 'test' });
+
+    expect(out).toBe('error');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(afterCommitTask).not.toHaveBeenCalled();
   });
 
   it('PAID + amount mismatch → mark failed, no fulfill', async () => {

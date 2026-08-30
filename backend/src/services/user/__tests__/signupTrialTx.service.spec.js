@@ -49,6 +49,9 @@ describe('signupTrialTx.grantSignupTrialInTx', () => {
     const client = fakeClient();
     const result = await grantSignupTrialInTx(client, { userId: 1, userEmail: 'a@b.com' });
     expect(result).toBeNull();
+    expect(client.query).toHaveBeenCalledWith('SAVEPOINT signup_trial_activation');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK TO SAVEPOINT signup_trial_activation');
+    expect(client.query).toHaveBeenCalledWith('RELEASE SAVEPOINT signup_trial_activation');
   });
 
   it('config error from the post-check (plan not applied) is also swallowed', async () => {
@@ -65,6 +68,44 @@ describe('signupTrialTx.grantSignupTrialInTx', () => {
     const client = fakeClient();
     await expect(grantSignupTrialInTx(client, { userId: 1, userEmail: 'a@b.com' }))
       .rejects.toThrow('connection terminated');
+  });
+
+  it('rethrows when SAVEPOINT itself cannot be created, even for a non-transient PostgreSQL error', async () => {
+    const abortedTransaction = Object.assign(new Error('current transaction is aborted'), { code: '25P02' });
+    const client = {
+      query: jest.fn().mockRejectedValueOnce(abortedTransaction),
+    };
+
+    await expect(grantSignupTrialInTx(client, { userId: 1, userEmail: 'a@b.com' }))
+      .rejects.toThrow('current transaction is aborted');
+
+    expect(mockActivateFreePlan).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledTimes(1);
+    expect(client.query).toHaveBeenCalledWith('SAVEPOINT signup_trial_activation');
+  });
+
+  it('rethrows when rollback to the trial savepoint fails so signup cannot commit a poisoned transaction', async () => {
+    mockActivateFreePlan.mockRejectedValueOnce(new Error('Gói không tồn tại'));
+    const savepointError = new Error('connection terminated during rollback');
+    const client = fakeClient();
+    client.query.mockImplementation(async (sql) => {
+      if (String(sql).startsWith('ROLLBACK TO SAVEPOINT')) {
+        throw savepointError;
+      }
+      return { rows: [] };
+    });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await expect(grantSignupTrialInTx(client, { userId: 1, userEmail: 'a@b.com' }))
+        .rejects.toThrow('Không thể khôi phục transaction cấp trial');
+    } finally {
+      errorSpy.mockRestore();
+    }
+
+    expect(client.query).toHaveBeenCalledWith('SAVEPOINT signup_trial_activation');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK TO SAVEPOINT signup_trial_activation');
+    expect(client.query).not.toHaveBeenCalledWith('RELEASE SAVEPOINT signup_trial_activation');
   });
 
   // Regression (code review 22/08): "has .code" was used as a proxy for "transient",

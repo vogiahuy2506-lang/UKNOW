@@ -639,6 +639,8 @@ class AiController {
    * @param {import('express').Response} res
    */
   async createCampaignFromDraft(req, res) {
+    const createdTemplates = { emailTemplateIds: [], zaloTemplateIds: [] };
+    let campaignCreated = false;
     try {
       const { script, resourceVersions = [], directRecipients } = req.body;
 
@@ -660,10 +662,6 @@ class AiController {
       await campaignConfirmationService.assertResourceVersionsCurrent({ resourceVersions, userId: req.user.id });
       const normalizedNodes = preparedScript.nodes;
       const normalizedConnections = preparedScript.connections;
-      // Runtime only executes email/zalo steps with templateId. Materialize inline steps before validation.
-      // A later create failure can leave an orphan template; transaction coupling is intentionally deferred.
-      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, req.user.id);
-      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, req.user.id);
       const ownershipPreview = await campaignConfirmationService.buildConfirmationView({
         script: preparedScript,
         userId: req.user.id,
@@ -682,6 +680,9 @@ class AiController {
           return res.status(400).json({ success: false, code: 'INVALID_NODE_CONFIG', message: validation.errors.join(', ') });
         }
       }
+
+      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, req.user.id, createdTemplates);
+      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, req.user.id, createdTemplates);
 
       const createReq = {
         ...req,
@@ -705,8 +706,10 @@ class AiController {
       });
 
       if (createRes.status >= 400) {
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user.id);
         return res.status(createRes.status).json(createRes.data);
       }
+      campaignCreated = true;
 
       return res.json({
         success: true,
@@ -715,6 +718,9 @@ class AiController {
         campaignName: preparedScript.campaignName,
       });
     } catch (error) {
+      if (!campaignCreated) {
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user?.id);
+      }
       console.error('AI create from draft error:', error);
       return res.status(error.statusCode || 500).json({
         success: false,
@@ -924,6 +930,8 @@ class AiController {
    * @param {import('express').Response} res
    */
   async createAndRunCampaign(req, res) {
+    const createdTemplates = { emailTemplateIds: [], zaloTemplateIds: [] };
+    let campaignCreated = false;
     try {
       // Defense in depth because this controller is also called by tests/internal code.
       if (!employeeHasPermission(req, 'campaigns_create') || !employeeHasPermission(req, 'campaigns_run')) {
@@ -962,16 +970,26 @@ class AiController {
         this.applyDirectRecipients(script, directRecipients);
       }
 
-      // Tự động tạo email/zalo templates từ inline content
-      await aiCampaignDraftService.autoCreateEmailTemplates(script.nodes, req.user.id);
-      await aiCampaignDraftService.autoCreateZaloTemplates(script.nodes, req.user.id);
-
       // Normalize AI nodes trước khi tạo campaign
       const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);
 
       // Auto-fill fromEmailId với SMTP channel đầu tiên của user
       await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, req.user.id);
       await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, req.user.id);
+
+      // Sender/template ownership and inline content are read-only checks.
+      // Run them before materializing any persistent template rows.
+      const ownershipPreview = await campaignConfirmationService.buildConfirmationView({
+        script: { ...script, nodes: normalizedNodes },
+        userId: req.user.id,
+      });
+      if (!ownershipPreview.readyToCreate) {
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_DRAFT_RESOURCES',
+          message: 'Kịch bản có tài khoản gửi, mẫu tin hoặc nội dung chưa hợp lệ.',
+        });
+      }
 
       // Validate node config sau autofill và trước khi tạo campaign
       for (const node of normalizedNodes) {
@@ -985,6 +1003,9 @@ class AiController {
           });
         }
       }
+
+      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, req.user.id, createdTemplates);
+      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, req.user.id, createdTemplates);
 
       // Bước 1: Tạo campaign
       const createReq = {
@@ -1009,8 +1030,13 @@ class AiController {
       });
 
       if (createRes.status >= 400) {
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user.id);
         return res.status(createRes.status).json(createRes.data);
       }
+
+      // The campaign owns these template IDs from this point onward. Publish
+      // or run failures must preserve them for the draft campaign.
+      campaignCreated = true;
 
       const campaignId = createRes.data.data?.id;
       if (!campaignId) {
@@ -1096,6 +1122,9 @@ class AiController {
         },
       });
     } catch (error) {
+      if (!campaignCreated) {
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user?.id);
+      }
       console.error('AI create and run campaign error:', error);
       return res.status(500).json({
         success: false,

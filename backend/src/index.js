@@ -14,6 +14,7 @@ import {
   assertMigrationsUpToDate,
   resolveStartupMigrationAction,
 } from './utils/migrationRunner.util.js';
+import { prepareBillingAnchorRepairPreflight } from './utils/billingAnchorRepairBackup.util.js';
 import campaignZaloSenderService from './services/campaign/campaignZaloSender.service.js';
 import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
 import zaloInboxService from './services/chatbot/zaloInbox.service.js';
@@ -83,6 +84,11 @@ const testDBConnection = async () => {
         await assertMigrationsUpToDate(client);
       } else {
         console.log('[Migration] Chế độ auto-run (development) — đang chạy migrations');
+        // Migration 174 is fail-closed when a local DB already has an active
+        // entitlement. Prepare its local, filesystem-backed snapshot before
+        // the runner acquires the migration lock; production never enters this
+        // auto-run branch and keeps the VPS preflight in CI/CD.
+        await prepareBillingAnchorRepairPreflight(client);
         await runMigrations(client);
       }
       return;

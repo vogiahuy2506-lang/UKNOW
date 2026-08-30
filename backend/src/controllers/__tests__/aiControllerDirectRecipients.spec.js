@@ -7,6 +7,7 @@ const mockAutoCreateZaloTemplates = jest.fn();
 const mockNormalizeNodes = jest.fn((nodes) => nodes);
 const mockAutoFillEmailChannels = jest.fn();
 const mockAutoFillZaloAccounts = jest.fn();
+const mockCleanupAutoCreatedTemplates = jest.fn();
 const mockCreateCampaign = jest.fn();
 const mockRunCampaign = jest.fn();
 
@@ -18,6 +19,7 @@ jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => (
     normalizeNodes: mockNormalizeNodes,
     autoFillEmailChannels: mockAutoFillEmailChannels,
     autoFillZaloAccounts: mockAutoFillZaloAccounts,
+    cleanupAutoCreatedTemplates: mockCleanupAutoCreatedTemplates,
   },
 }));
 
@@ -82,6 +84,8 @@ const makeRes = () => {
 describe('aiController directRecipients with Zalo contacts UIDs (P0)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockBuildConfirmationView.mockResolvedValue({ readyToCreate: true });
+    mockCleanupAutoCreatedTemplates.mockResolvedValue(undefined);
   });
 
   it('prepareCampaign: attaches 3 UIDs to send_zalo_personal node with zaloRecipientType=uid', async () => {

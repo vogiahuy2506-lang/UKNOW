@@ -6,6 +6,12 @@ import adminOrdersApiService from '../../features/admin/services/adminOrdersApi.
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const paymentLabel = (o, t) => {
+  if (o.paymentMethod === 'voucher') return t('adminOrders.paymentVoucher');
+  if (o.paymentMethod === 'manual') return t('adminOrders.paymentManual');
+  if (o.paymentMethod === 'free') return t('adminOrders.paymentFree');
+  return o.paymentMethod || 'PayOS';
+};
 
 const STATUS_LABEL = (t) => ({
   success: { label: t('orders.success'), cls: 'badge-green' },
@@ -189,7 +195,7 @@ const AdminOrdersPage = () => {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {[t('adminOrders.orderCode'), t('adminOrders.servicePackage'), t('adminOrders.customer'), t('adminOrders.amount'), t('adminOrders.createdAt'), t('adminOrders.status'), t('adminOrders.actions')].map((h) => (
+                {[t('adminOrders.orderCode'), t('adminOrders.servicePackage'), t('adminOrders.billingPeriod'), t('adminOrders.promotion'), t('adminOrders.customer'), t('adminOrders.amount'), t('adminOrders.createdAt'), t('adminOrders.status'), t('adminOrders.actions')].map((h) => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">
                     {h}
                   </th>
@@ -200,7 +206,7 @@ const AdminOrdersPage = () => {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(6)].map((__, j) => (
+                    {[...Array(9)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-gray-100 rounded animate-pulse" />
                       </td>
@@ -209,7 +215,7 @@ const AdminOrdersPage = () => {
                 ))
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                  <td colSpan={9} className="px-4 py-10 text-center text-gray-400">
                     {t('adminOrders.noOrders')}
                   </td>
                 </tr>
@@ -227,12 +233,32 @@ const AdminOrdersPage = () => {
                     </div>
                     {o.planCode && <p className="text-xs text-gray-400">#{o.planCode}</p>}
                   </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="badge badge-gray text-xs">
+                      {o.isTopup
+                        ? t('adminOrders.topup')
+                        : o.billingPeriod === 'yearly' ? t('adminOrders.yearly') : t('adminOrders.monthly')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 min-w-[150px]">
+                    {o.voucherCode ? (
+                      <>
+                        <p className="font-mono text-xs font-semibold text-violet-700">{o.voucherCode}</p>
+                        {Number(o.discountAmount) > 0 && <p className="text-xs text-gray-500">-{fmtVnd(o.discountAmount)}</p>}
+                      </>
+                    ) : o.discountLabel || o.discountSource === 'automatic' ? (
+                      <span className="text-xs text-violet-700">{o.discountLabel || t('adminOrders.automaticPromotion')}</span>
+                    ) : (
+                      <span className="text-xs text-gray-400">{t('adminOrders.noVoucher')}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <p className="text-gray-800">{o.userFullName || o.userEmail}</p>
                     {o.userFullName && <p className="text-xs text-gray-400">{o.userEmail}</p>}
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {fmtVnd(o.amount)}
+                    <p className="text-[11px] font-normal text-gray-400">{paymentLabel(o, t)}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
                     {fmtDate(o.createdAt)}

@@ -65,11 +65,36 @@ describe('ScheduledPlanChangeRepository', () => {
     });
   });
 
+  describe('claimDueChange', () => {
+    it('claims only the still-pending due change while holding its row lock', async () => {
+      mockDb.query.mockResolvedValueOnce({ rows: [{ id: 1, user_id: 10, status: 'pending' }] });
+
+      const res = await repo.claimDueChange(1, 10);
+
+      const [sql, params] = mockDb.query.mock.calls[0];
+      expect(res).toEqual({ id: 1, user_id: 10, status: 'pending' });
+      expect(sql).toContain("spc.status = 'pending'");
+      expect(sql).toContain('spc.activate_after <= NOW()');
+      expect(sql).toContain('FOR UPDATE OF spc');
+      expect(params).toEqual([1, 10]);
+    });
+  });
+
+  describe('supersedePendingById', () => {
+    it('does not supersede an already-activated change', async () => {
+      mockDb.query.mockResolvedValueOnce({ rows: [] });
+
+      await expect(repo.supersedePendingById(1)).resolves.toBeNull();
+      expect(mockDb.query.mock.calls[0][0]).toContain("WHERE id = $1 AND status = 'pending'");
+    });
+  });
+
   describe('markActivated', () => {
     it('marks change as activated', async () => {
       mockDb.query.mockResolvedValueOnce({ rows: [{ id: 1, status: 'activated' }] });
       const res = await repo.markActivated(1);
       expect(res.status).toBe('activated');
+      expect(mockDb.query.mock.calls[0][0]).toContain("WHERE id = $1 AND status = 'pending'");
     });
   });
 });

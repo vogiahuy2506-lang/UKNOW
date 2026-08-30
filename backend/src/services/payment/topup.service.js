@@ -23,13 +23,12 @@ import {
 import { findAllPricingRows } from '../../repositories/payment/customPlan.repository.js';
 import {
   createOrder,
-  deleteOrderByCode,
   cancelRecentPendingTopupOrders,
 } from '../../repositories/payment/payment.repository.js';
 import { getPayosPendingWindowMinutes } from '../../repositories/voucher.repository.js';
 import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
 import { resolveOrderAmountWithInvoice, normalizeBuyerInvoiceProfile } from '../../utils/invoiceVat.util.js';
-import { saveInvoiceProfile } from '../../repositories/user/user.repository.js';
+import { lockUserForPlanActivation, saveInvoiceProfile } from '../../repositories/user/user.repository.js';
 import { _clearQuotaCache } from '../../utils/userSendLimit.util.js';
 import crypto from 'crypto';
 
@@ -314,18 +313,19 @@ export async function createTopupPaymentLink({
     months: quote.months,
   };
 
-  const cancelledDupes = await cancelRecentPendingTopupOrders({
-    userId,
-    withinMinutes: reuseWindowMinutes,
-  });
-  if (cancelledDupes.length) {
-    await bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code));
-  }
-
   const client = await db.getClient();
   let order;
+  let paymentLink = null;
+  let cancelledDupes = [];
+  const expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
   try {
     await client.query('BEGIN');
+
+    const lockedUser = await lockUserForPlanActivation(userId, client);
+    if (!lockedUser) {
+      throw { status: 404, message: 'Không tìm thấy tài khoản để tạo thanh toán mua thêm' };
+    }
+
     order = await createOrder({
       orderCode,
       planId: null,
@@ -341,12 +341,40 @@ export async function createTopupPaymentLink({
       topupConfig,
       invoiceInfo,
     }, client);
+
+    paymentLink = await payosClient.paymentRequests.create({
+      orderCode: Number(orderCode),
+      amount,
+      description: 'Mua them han muc'.substring(0, 25),
+      returnUrl: `${process.env.FRONTEND_URL || 'https://founderai.vn'}/payment-success`,
+      cancelUrl: `${process.env.FRONTEND_URL || 'https://founderai.vn'}/app/topup`,
+      expiredAt,
+    });
+
+    cancelledDupes = await cancelRecentPendingTopupOrders({
+      userId,
+      withinMinutes: reuseWindowMinutes,
+      olderThanOrderId: order.id,
+      queryable: client,
+    });
+
     await client.query('COMMIT');
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('[TopupService] Không rollback được checkout:', rollbackError.message);
+    }
+    if (paymentLink) {
+      await bestEffortCancelPayosLinks([orderCode]);
+    }
     throw err;
   } finally {
     client.release();
+  }
+
+  if (cancelledDupes.length) {
+    await bestEffortCancelPayosLinks(cancelledDupes.map((row) => row.order_code));
   }
 
   if (userId && invoiceInfoRaw?.saveProfile === true) {
@@ -358,32 +386,16 @@ export async function createTopupPaymentLink({
     }
   }
 
-  const expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
-
-  try {
-    const paymentLink = await payosClient.paymentRequests.create({
-      orderCode: Number(orderCode),
-      amount,
-      description: 'Mua them han muc'.substring(0, 25),
-      returnUrl: `${process.env.FRONTEND_URL || 'https://founderai.vn'}/payment-success`,
-      cancelUrl: `${process.env.FRONTEND_URL || 'https://founderai.vn'}/app/topup`,
-      expiredAt,
-    });
-
-    return {
-      qrCode: paymentLink.qrCode,
-      checkoutUrl: paymentLink.checkoutUrl,
-      orderCode,
-      amount,
-      originalAmount: amount,
-      discountAmount: 0,
-      expiredAt,
-      topupConfig,
-    };
-  } catch (err) {
-    await deleteOrderByCode(orderCode).catch(() => {});
-    throw err;
-  }
+  return {
+    qrCode: paymentLink.qrCode,
+    checkoutUrl: paymentLink.checkoutUrl,
+    orderCode,
+    amount,
+    originalAmount: amount,
+    discountAmount: 0,
+    expiredAt,
+    topupConfig,
+  };
 }
 
 /**

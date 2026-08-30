@@ -14,6 +14,10 @@ import {
 } from '../../repositories/payment/payment.repository.js';
 import { fulfillPaidOrder } from './payosOrderFulfillment.service.js';
 import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
+import {
+  findActiveUserByEmail,
+  lockUserForPlanActivation,
+} from '../../repositories/user/user.repository.js';
 
 export const PAYOS_RECONCILE_JOB_CODE = 'payos_order_reconcile';
 export const PAYOS_EXPIRE_JOB_CODE = 'payos_order_expire';
@@ -52,15 +56,29 @@ export async function claimAndFulfillFromPayos({ order, amountPaid, source = 're
       return 'amount_mismatch';
     }
 
+    const fulfillmentUserId = fresh.user_id || (
+      fresh.user_email ? (await findActiveUserByEmail(fresh.user_email, client))?.id : null
+    );
+    if (fulfillmentUserId) {
+      const lockedUser = await lockUserForPlanActivation(fulfillmentUserId, client);
+      if (!lockedUser) {
+        throw new Error(`Không tìm thấy tài khoản ${fulfillmentUserId} để đối soát thanh toán`);
+      }
+    }
+
     const claimed = await claimOrderSuccess(fresh.order_code, client);
     if (!claimed) {
       await client.query('COMMIT');
       return 'not_claimed';
     }
 
-    const einvoiceId = await fulfillPaidOrder(claimed, client);
+    const afterCommit = [];
+    const einvoiceId = await fulfillPaidOrder(claimed, client, {
+      registerAfterCommit: (callback) => afterCommit.push(callback),
+    });
     await client.query('COMMIT');
     scheduleDispatchEinvoiceAfterCommit(einvoiceId);
+    for (const callback of afterCommit) callback();
     console.log(`[PayOSReconcile] Fulfilled order ${claimed.order_code} via ${source}`);
     return 'fulfilled';
   } catch (err) {

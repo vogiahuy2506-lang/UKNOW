@@ -31,7 +31,7 @@ describe('subscriptionStatus.util', () => {
 
   it('không có gói hiệu lực → không có gói', async () => {
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ active_plan_id: null }] })
+      .mockResolvedValueOnce({ rows: [{ effective_plan_id: null }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ effective_plan_id: null, subscription_expires_at: null, grace_period_days: 0 }] });
     const result = await getSubscriptionStatus(10);
@@ -42,7 +42,7 @@ describe('subscriptionStatus.util', () => {
   it('còn hạn → không expired', async () => {
     const future = new Date(Date.now() + 7 * 86400000);
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ active_plan_id: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ effective_plan_id: 1 }] })
       .mockResolvedValueOnce({
         rows: [{
           effective_plan_id: 1,
@@ -61,7 +61,7 @@ describe('subscriptionStatus.util', () => {
   it('trong ân hạn → isInGracePeriod, chưa isExpired', async () => {
     const past = new Date(Date.now() - 2 * 86400000);
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ active_plan_id: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ effective_plan_id: 1 }] })
       .mockResolvedValueOnce({
         rows: [{
           effective_plan_id: 1,
@@ -79,7 +79,7 @@ describe('subscriptionStatus.util', () => {
   it('hết ân hạn → isExpired', async () => {
     const past = new Date(Date.now() - 10 * 86400000);
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ active_plan_id: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ effective_plan_id: 1 }] })
       .mockResolvedValueOnce({
         rows: [{
           effective_plan_id: 1,
@@ -97,7 +97,7 @@ describe('subscriptionStatus.util', () => {
   it('nhân viên không có gói → dùng gói owner', async () => {
     const future = new Date(Date.now() + 5 * 86400000);
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ active_plan_id: null }] })
+      .mockResolvedValueOnce({ rows: [{ effective_plan_id: null }] })
       .mockResolvedValueOnce({ rows: [{ owner_id: 20 }] })
       .mockResolvedValueOnce({
         rows: [{

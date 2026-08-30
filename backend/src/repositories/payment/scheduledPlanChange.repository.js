@@ -136,6 +136,59 @@ export class ScheduledPlanChangeRepository {
   }
 
   /**
+   * Atomically claim one due change after its owner user row has been locked
+   * by the caller. `findDueChanges` is only a candidate scan; this predicate
+   * prevents a second worker (or a cancellation) from activating stale work.
+   *
+   * @param {number|string} id
+   * @param {number|string} userId
+   * @param {import('pg').PoolClient} [client]
+   */
+  async claimDueChange(id, userId, client = null) {
+    const database = client || this.db;
+    const query = `
+      SELECT
+        spc.id,
+        spc.user_id,
+        spc.plan_id,
+        spc.billing_period,
+        spc.order_id,
+        spc.amount_paid,
+        spc.activate_after,
+        u.email AS user_email,
+        u.full_name AS user_full_name,
+        p.name AS plan_name,
+        p.duration_days AS plan_duration_days
+      FROM scheduled_plan_changes spc
+      JOIN users u ON u.id = spc.user_id
+      JOIN plans p ON p.id = spc.plan_id
+      WHERE spc.id = $1
+        AND spc.user_id = $2
+        AND spc.status = 'pending'
+        AND spc.activate_after <= NOW()
+      FOR UPDATE OF spc;
+    `;
+    const result = await database.query(query, [id, userId]);
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Supersede one pending scheduled change while it is claimed in this
+   * transaction. Returns null if another actor already cancelled/activated it.
+   */
+  async supersedePendingById(id, client = null) {
+    const database = client || this.db;
+    const query = `
+      UPDATE scheduled_plan_changes
+      SET status = 'superseded', updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'
+      RETURNING *;
+    `;
+    const result = await database.query(query, [id]);
+    return result.rows[0] || null;
+  }
+
+  /**
    * Mark a scheduled plan change as activated.
    * @param {number|string} id
    * @param {import('pg').PoolClient} [client]
@@ -145,7 +198,7 @@ export class ScheduledPlanChangeRepository {
     const query = `
       UPDATE scheduled_plan_changes
       SET status = 'activated', activated_at = NOW(), updated_at = NOW()
-      WHERE id = $1
+      WHERE id = $1 AND status = 'pending'
       RETURNING *;
     `;
     const result = await database.query(query, [id]);

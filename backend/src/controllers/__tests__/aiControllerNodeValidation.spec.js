@@ -7,6 +7,8 @@ const mockAutoCreateZaloTemplates = jest.fn();
 const mockNormalizeNodes = jest.fn((nodes) => nodes);
 const mockAutoFillEmailChannels = jest.fn();
 const mockAutoFillZaloAccounts = jest.fn();
+const mockCleanupAutoCreatedTemplates = jest.fn();
+const mockAssertResourceVersionsCurrent = jest.fn();
 const mockCreateCampaign = jest.fn();
 const mockUpdateCampaign = jest.fn();
 const mockRunCampaign = jest.fn();
@@ -20,12 +22,14 @@ jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => (
     normalizeNodes: mockNormalizeNodes,
     autoFillEmailChannels: mockAutoFillEmailChannels,
     autoFillZaloAccounts: mockAutoFillZaloAccounts,
+    cleanupAutoCreatedTemplates: mockCleanupAutoCreatedTemplates,
   },
 }));
 
 jest.unstable_mockModule('../../services/ai/campaignConfirmation.service.js', () => ({
   default: {
     buildConfirmationView: mockBuildConfirmationView,
+    assertResourceVersionsCurrent: mockAssertResourceVersionsCurrent,
   },
 }));
 
@@ -81,6 +85,9 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPublishCampaign.mockResolvedValue({ id: 101, status: 'active' });
+    mockBuildConfirmationView.mockResolvedValue({ readyToCreate: true });
+    mockCleanupAutoCreatedTemplates.mockResolvedValue(undefined);
+    mockAssertResourceVersionsCurrent.mockResolvedValue(undefined);
   });
 
   describe('createAndRunCampaign', () => {
@@ -116,6 +123,73 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
       );
       expect(mockCreateCampaign).not.toHaveBeenCalled();
       expect(mockRunCampaign).not.toHaveBeenCalled();
+      expect(mockAutoCreateEmailTemplates).not.toHaveBeenCalled();
+      expect(mockAutoCreateZaloTemplates).not.toHaveBeenCalled();
+    });
+
+    it('does not materialize templates when sender/template ownership validation fails', async () => {
+      mockBuildConfirmationView.mockResolvedValueOnce({ readyToCreate: false });
+      const req = {
+        body: {
+          script: {
+            campaignName: 'Invalid resources',
+            connections: [],
+            nodes: [{
+              node_type: 'action',
+              node_subtype: 'send_email',
+              config: { fromEmailId: 999, emailBody: 'Body' },
+            }],
+          },
+        },
+        user: { id: 1, role: 'user_admin' },
+      };
+      const res = makeRes();
+
+      await aiController.createAndRunCampaign(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_DRAFT_RESOURCES' }));
+      expect(mockAutoCreateEmailTemplates).not.toHaveBeenCalled();
+      expect(mockAutoCreateZaloTemplates).not.toHaveBeenCalled();
+      expect(mockCreateCampaign).not.toHaveBeenCalled();
+    });
+
+    it('cleans up materialized templates when campaign creation is rejected', async () => {
+      mockAutoCreateEmailTemplates.mockImplementationOnce(async (_nodes, _userId, tracker) => {
+        tracker.emailTemplateIds.push(701);
+      });
+      mockCreateCampaign.mockImplementation(async (_req, res) => res.status(409).json({
+        success: false,
+        code: 'CAMPAIGN_CREATE_REJECTED',
+      }));
+      const req = {
+        body: {
+          script: {
+            campaignName: 'Rejected campaign',
+            connections: [],
+            nodes: [{
+              node_type: 'action',
+              node_subtype: 'send_email',
+              config: { fromEmailId: 1, emailBody: 'Body' },
+            }],
+          },
+        },
+        user: { id: 1, role: 'user_admin' },
+      };
+      const res = makeRes();
+
+      await aiController.createAndRunCampaign(req, res);
+
+      expect(mockAutoCreateEmailTemplates).toHaveBeenCalledWith(
+        expect.any(Array),
+        1,
+        expect.objectContaining({ emailTemplateIds: [701], zaloTemplateIds: [] })
+      );
+      expect(mockCleanupAutoCreatedTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({ emailTemplateIds: [701], zaloTemplateIds: [] }),
+        1
+      );
+      expect(res.status).toHaveBeenCalledWith(409);
     });
 
     it('allows campaign creation and run when node config is valid', async () => {
@@ -222,6 +296,61 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
         code: 'SENDER_DISCONNECTED',
         data: expect.objectContaining({ campaignId: 101, status: 'active' }),
       }));
+    });
+  });
+
+  describe('createCampaignFromDraft', () => {
+    it('validates resources before materializing inline templates', async () => {
+      const preparedScript = {
+        campaignName: 'Draft invalid resources',
+        connections: [],
+        nodes: [{
+          node_type: 'action',
+          node_subtype: 'send_email',
+          config: { fromEmailId: 999, emailBody: 'Body' },
+        }],
+      };
+      mockPrepareScript.mockResolvedValueOnce(preparedScript);
+      mockBuildConfirmationView.mockResolvedValueOnce({ readyToCreate: false });
+      const req = {
+        body: { script: preparedScript, resourceVersions: [] },
+        user: { id: 1, role: 'user_admin' },
+      };
+      const res = makeRes();
+
+      await aiController.createCampaignFromDraft(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_DRAFT_RESOURCES' }));
+      expect(mockAutoCreateEmailTemplates).not.toHaveBeenCalled();
+      expect(mockAutoCreateZaloTemplates).not.toHaveBeenCalled();
+      expect(mockCreateCampaign).not.toHaveBeenCalled();
+    });
+
+    it('validates node config before materializing inline templates', async () => {
+      const preparedScript = {
+        campaignName: 'Draft invalid node',
+        connections: [],
+        nodes: [{
+          node_type: 'action',
+          node_subtype: 'send_email',
+          config: { emailBody: 'Body' },
+        }],
+      };
+      mockPrepareScript.mockResolvedValueOnce(preparedScript);
+      const req = {
+        body: { script: preparedScript, resourceVersions: [] },
+        user: { id: 1, role: 'user_admin' },
+      };
+      const res = makeRes();
+
+      await aiController.createCampaignFromDraft(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_NODE_CONFIG' }));
+      expect(mockAutoCreateEmailTemplates).not.toHaveBeenCalled();
+      expect(mockAutoCreateZaloTemplates).not.toHaveBeenCalled();
+      expect(mockCreateCampaign).not.toHaveBeenCalled();
     });
   });
 

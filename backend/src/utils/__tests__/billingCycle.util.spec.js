@@ -1,5 +1,10 @@
-import { describe, it, expect } from '@jest/globals';
-import { getBillingCycle, computeBillingWindow } from '../billingCycle.util.js';
+import { describe, it, expect, jest } from '@jest/globals';
+import {
+  getBillingCycle,
+  computeBillingWindow,
+  findCurrentPlanActivation,
+  resolveBillingUserId,
+} from '../billingCycle.util.js';
 
 describe('billingCycle.util', () => {
   it('returns empty cycle when userId is missing', async () => {
@@ -7,6 +12,132 @@ describe('billingCycle.util', () => {
     expect(cycle.hasPlan).toBe(false);
     expect(cycle.cycleStart).toBeNull();
     expect(cycle.cycleEnd).toBeNull();
+  });
+
+  it('ignores a stored anchor after expiry and resolves the activation event', async () => {
+    const now = Date.now();
+    const invalidAnchor = new Date(now - 2 * 86400000);
+    const expiry = new Date(now - 3 * 86400000);
+    const activation = new Date(now - 10 * 86400000);
+    const queryable = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ effective_plan_id: 15 }] })
+        .mockResolvedValueOnce({ rows: [{
+          effective_plan_id: 15,
+          plan_activated_at: invalidAnchor,
+          subscription_expires_at: expiry,
+          created_at: new Date(now - 30 * 86400000),
+          duration_days: 30,
+        }] })
+        .mockResolvedValueOnce({ rows: [{ activation_at: activation, billing_period: 'yearly' }] }),
+    };
+
+    const cycle = await getBillingCycle(90, {}, queryable);
+    expect(cycle.hasPlan).toBe(true);
+    expect(cycle.cycleStart.getTime()).toBe(activation.getTime());
+    expect(queryable.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses a past activation event when the stored anchor is in the future', async () => {
+    const now = Date.now();
+    const futureAnchor = new Date(now + 2 * 86400000);
+    const activation = new Date(now - 5 * 86400000);
+    const queryable = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ effective_plan_id: 15 }] })
+        .mockResolvedValueOnce({ rows: [{
+          effective_plan_id: 15,
+          plan_activated_at: futureAnchor,
+          subscription_expires_at: new Date(now + 365 * 86400000),
+          created_at: new Date(now - 30 * 86400000),
+          duration_days: 30,
+        }] })
+        .mockResolvedValueOnce({ rows: [{ activation_at: activation, billing_period: 'yearly' }] }),
+    };
+
+    const cycle = await getBillingCycle(90, {}, queryable);
+    expect(cycle.cycleStart.getTime()).toBe(activation.getTime());
+    expect(queryable.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses activation evidence for a past anchor produced by expiry minus duration', async () => {
+    const now = Date.now();
+    const activation = new Date(now - 340 * 86400000);
+    const expiry = new Date(now + 25 * 86400000);
+    const pastButWrongAnchor = new Date(expiry.getTime() - 30 * 86400000);
+    const queryable = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ effective_plan_id: 15 }] })
+        .mockResolvedValueOnce({ rows: [{
+          effective_plan_id: 15,
+          plan_activated_at: pastButWrongAnchor,
+          subscription_expires_at: expiry,
+          created_at: new Date(now - 365 * 86400000),
+          duration_days: 30,
+        }] })
+        .mockResolvedValueOnce({ rows: [{ activation_at: activation, billing_period: 'yearly' }] }),
+    };
+
+    const cycle = await getBillingCycle(90, {}, queryable);
+    const expected = computeBillingWindow(activation, 30, new Date(now));
+
+    expect(cycle.cycleStart.getTime()).toBe(expected.cycleStart.getTime());
+    expect(cycle.cycleStart.getTime()).not.toBe(pastButWrongAnchor.getTime());
+    expect(queryable.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not restore entitlement from a historical order when active_plan_id is missing', async () => {
+    const queryable = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ effective_plan_id: null }] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{
+          effective_plan_id: null,
+          plan_activated_at: null,
+          subscription_expires_at: new Date(Date.now() - 86400000),
+          created_at: new Date(Date.now() - 30 * 86400000),
+          duration_days: 30,
+        }] }),
+    };
+
+    const cycle = await getBillingCycle(90, {}, queryable);
+
+    expect(cycle.hasPlan).toBe(false);
+    expect(queryable.query.mock.calls[0][0]).not.toContain('FROM orders');
+  });
+
+  it('uses an active owner for an employee even when the employee has historical orders', async () => {
+    const queryable = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [{ effective_plan_id: null }] })
+        .mockResolvedValueOnce({ rows: [{ owner_id: 42 }] }),
+    };
+
+    await expect(resolveBillingUserId(90, {}, queryable)).resolves.toBe(42);
+    expect(queryable.query.mock.calls[0][0]).not.toContain('FROM orders');
+  });
+
+  it('uses checkout intent across direct/scheduled events and only preserves legacy evidence over an older direct checkout', async () => {
+    const queryable = {
+      query: jest.fn().mockResolvedValue({ rows: [] }),
+    };
+
+    await findCurrentPlanActivation(90, queryable);
+
+    const [query, params] = queryable.query.mock.calls[0];
+    expect(query).toContain('spc.id::bigint AS event_id');
+    expect(query).toContain('o.id::bigint AS event_id');
+    expect(query).toContain('spc.order_id::bigint AS checkout_order_id');
+    expect(query).toContain('direct.event_id AS checkout_order_id');
+    expect(query).toContain('latest_direct_order AS');
+    expect(query).toContain('ORDER BY o.id DESC');
+    expect(query).toContain('COALESCE(o.created_at, o.paid_at) AS checkout_created_at');
+    expect(query).toContain("source = 'scheduled'");
+    expect(query).toContain('AND checkout_order_id IS NULL');
+    expect(query).toContain('NOT EXISTS (SELECT 1 FROM latest_direct_order)');
+    expect(query).toContain('(SELECT checkout_created_at FROM latest_direct_order) <= activation_at');
+    expect(query).toContain('checkout_order_id DESC NULLS LAST');
+    expect(params).toEqual([90]);
   });
 });
 

@@ -2150,6 +2150,28 @@ CREATE TABLE migration_runner_checkpoints (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Migration 174 preflight snapshot. The production backup script creates this
+-- defensively too because it must run before migration 174 itself.
+CREATE TABLE migration_runner_preflight_backups (
+  migration_filename VARCHAR(255) PRIMARY KEY,
+  backup_path        TEXT NOT NULL,
+  content_sha256     CHAR(64) NOT NULL,
+  row_count          INTEGER NOT NULL CHECK (row_count >= 0),
+  rows               JSONB NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE migration_runner_repair_results (
+  migration_filename  VARCHAR(255) PRIMARY KEY,
+  backup_path         TEXT NOT NULL,
+  content_sha256      CHAR(64) NOT NULL,
+  preflight_row_count INTEGER NOT NULL CHECK (preflight_row_count >= 0),
+  repaired_row_count  INTEGER NOT NULL CHECK (repaired_row_count >= 0),
+  skipped_row_count   INTEGER NOT NULL CHECK (skipped_row_count >= 0),
+  preflight_created_at TIMESTAMPTZ NOT NULL,
+  completed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ─── Top-up wallet (migrations 110/111) ──────────────────────────────────
 -- cycle_end NULL = ví vĩnh viễn (consumable). Có giá trị = structural.
 ALTER TABLE topup_grants ALTER COLUMN cycle_end DROP NOT NULL;

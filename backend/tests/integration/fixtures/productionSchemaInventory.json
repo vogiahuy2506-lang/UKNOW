@@ -5,9 +5,9 @@
     "method": "So md5(string_agg(column_name ORDER BY column_name)) theo tung bang giua DB test (dung tu bootstrap.sql) va production — ket qua 0 bang lech.",
     "scope": "CHI TEN COT. Anh chup goc co 51/112 bang lech kieu du lieu, chu yeu timestamp naive (prod) vs timestamptz (test). Xem _internal/PLAN_SCHEMA_DRIFT_BOOTSTRAP_2026-08-25.md.",
     "excluded": "3 bang backup tam tren production (courses_backup_20260825, campaign_nodes_backup_20260825, users_plan_backup_minh) khong tinh.",
-    "tables": 113,
-    "columns": 1531,
-    "note": "TU migration 172 tro di, fixture DI TRUOC production cho toi khi deploy: is_preview tren email_messages/zalo_messages chi ton tai o production SAU khi 172 chay. Do lai voi production TRUOC deploy se thay lech — do la binh thuong, khong phai loi."
+    "tables": 115,
+    "columns": 1548,
+    "note": "TU migration 172 tro di, fixture DI TRUOC production cho toi khi deploy: is_preview tren email_messages/zalo_messages chi ton tai o production SAU khi 172 chay. Metadata preflight/result migration 174 cung chi co tren production sau khi deploy release 174. Do lai voi production TRUOC deploy se thay lech — do la binh thuong, khong phai loi."
   },
   "tables": {
     "ai_activity_summaries": [
@@ -1356,6 +1356,24 @@
       "checkpoint",
       "release_id",
       "created_at"
+    ],
+    "migration_runner_preflight_backups": [
+      "backup_path",
+      "content_sha256",
+      "created_at",
+      "migration_filename",
+      "row_count",
+      "rows"
+    ],
+    "migration_runner_repair_results": [
+      "backup_path",
+      "completed_at",
+      "content_sha256",
+      "migration_filename",
+      "preflight_created_at",
+      "preflight_row_count",
+      "repaired_row_count",
+      "skipped_row_count"
     ],
     "storage_objects": [
       "actor_user_id",

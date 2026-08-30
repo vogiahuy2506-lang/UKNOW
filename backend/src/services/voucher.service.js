@@ -184,6 +184,7 @@ export async function validateVoucherForCheckout({
   amountOverride = null,
   queryable,
   pendingWindowMinutes = getPayosPendingWindowMinutes(),
+  excludedPendingOrderIds = [],
   mapDto = null,
 }) {
   const { amount, eligibilityPlanCode } = await resolveCheckoutAmount({
@@ -210,6 +211,7 @@ export async function validateVoucherForCheckout({
     userId,
     userEmail,
     pendingWindowMinutes,
+    excludedPendingOrderIds,
     queryable,
   });
 
@@ -246,6 +248,7 @@ export async function resolveCheckoutDiscount({
   lockForPayment = false,
   queryable,
   pendingWindowMinutes = getPayosPendingWindowMinutes(),
+  excludedPendingOrderIds = [],
 }) {
   const amount = Math.round(Number(originalAmount || 0));
   const eligibilityPlanCode = String(planCode || '').trim().toLowerCase() || 'custom';
@@ -298,6 +301,7 @@ export async function resolveCheckoutDiscount({
       amountOverride: amount,
       queryable,
       pendingWindowMinutes,
+      excludedPendingOrderIds,
     });
     if (!validation.voucher) throw { ...VOUCHER_NOT_APPLICABLE };
     await lockVoucher(validation.voucher.id, 'id');
@@ -311,6 +315,7 @@ export async function resolveCheckoutDiscount({
       amountOverride: amount,
       queryable,
       pendingWindowMinutes,
+      excludedPendingOrderIds,
     });
     if (!recheck.voucher || Number(recheck.voucher.id) !== Number(validation.voucher.id)) {
       throw {
@@ -334,6 +339,7 @@ export async function resolveCheckoutDiscount({
       queryable,
       pendingWindowMinutes,
       includeIneligible: false,
+      excludedPendingOrderIds,
     });
     const candidates = sortDiscountCandidates(listed.vouchers || []).filter(
       (v) => v.isEligible && Number(v.discountAmount || 0) > 0
@@ -351,6 +357,7 @@ export async function resolveCheckoutDiscount({
         amountOverride: amount,
         queryable,
         pendingWindowMinutes,
+        excludedPendingOrderIds,
       });
       if (recheck.voucher && Number(recheck.voucher.id) === Number(candidate.id)) {
         return recheck.voucher;

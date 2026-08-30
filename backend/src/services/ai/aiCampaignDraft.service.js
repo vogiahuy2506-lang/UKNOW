@@ -15,7 +15,7 @@ function draftError(code, message) {
 }
 
 class AiCampaignDraftService {
-  async autoCreateEmailTemplates(nodes, userId) {
+  async autoCreateEmailTemplates(nodes, userId, createdTemplates = null) {
     for (const node of nodes) {
       const cfg = node.config || node.nodeConfig || {};
       const nodeType = node.nodeType || node.type || node.node_type || '';
@@ -32,6 +32,7 @@ class AiCampaignDraftService {
           bodyHtml: body,
         });
         if (!row?.id) throw new Error('Không thể tạo email template từ nội dung nháp');
+        createdTemplates?.emailTemplateIds?.push(row.id);
         return row.id;
       };
 
@@ -55,7 +56,7 @@ class AiCampaignDraftService {
     }
   }
 
-  async autoCreateZaloTemplates(nodes, userId) {
+  async autoCreateZaloTemplates(nodes, userId, createdTemplates = null) {
     for (const node of nodes) {
       const cfg = node.config || node.nodeConfig || {};
       const nodeType = node.nodeType || node.type || node.node_type || '';
@@ -79,6 +80,7 @@ class AiCampaignDraftService {
           bodyText: body,
         });
         if (!row?.id) throw new Error('Không thể tạo Zalo template từ nội dung nháp');
+        createdTemplates?.zaloTemplateIds?.push(row.id);
         return row.id;
       };
 
@@ -140,6 +142,21 @@ class AiCampaignDraftService {
       }
 
       node.config = cfg;
+    }
+  }
+
+  async cleanupAutoCreatedTemplates(createdTemplates, userId) {
+    if (!createdTemplates || !userId) return;
+    const emailTemplateIds = createdTemplates.emailTemplateIds || [];
+    const zaloTemplateIds = createdTemplates.zaloTemplateIds || [];
+    const results = await Promise.allSettled([
+      aiCampaignDraftRepository.deleteEmailTemplatesByIds({ userId, ids: emailTemplateIds }),
+      aiCampaignDraftRepository.deleteZaloTemplatesByIds({ userId, ids: zaloTemplateIds }),
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn('[AI] Không dọn được template tạm sau khi tạo campaign thất bại:', result.reason?.message);
+      }
     }
   }
 

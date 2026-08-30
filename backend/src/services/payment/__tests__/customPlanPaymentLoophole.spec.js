@@ -6,10 +6,13 @@ const mockUpdateCustomPlanLimits = jest.fn();
 const mockCreatePlan = jest.fn();
 const mockCreateOrder = jest.fn();
 const mockCancelRecentPendingPlanOrders = jest.fn().mockResolvedValue([]);
+const mockFindRecentPendingPlanOrders = jest.fn().mockResolvedValue([]);
 const mockResolveCheckoutDiscount = jest.fn();
 const mockRedeemVoucherForOrder = jest.fn().mockResolvedValue(undefined);
 const mockActivateUserPlan = jest.fn().mockResolvedValue(undefined);
 const mockCreatePaymentLink = jest.fn().mockResolvedValue({ checkoutUrl: 'https://pay.payos.vn/test' });
+const mockLockUserForPlanActivation = jest.fn();
+const mockBestEffortCancelPayosLinks = jest.fn();
 
 const mockClient = {
   query: jest.fn().mockResolvedValue({ rows: [] }),
@@ -29,6 +32,7 @@ jest.unstable_mockModule('../../../repositories/payment/payment.repository.js', 
   getPlanByUserId: mockGetPlanByUserId,
   createOrder: mockCreateOrder,
   cancelRecentPendingPlanOrders: mockCancelRecentPendingPlanOrders,
+  findRecentPendingPlanOrders: mockFindRecentPendingPlanOrders,
   cancelRecentPendingTopupOrders: jest.fn().mockResolvedValue([]),
   cancelPendingOrderWithNote: jest.fn().mockResolvedValue(null),
   activateUserPlan: mockActivateUserPlan,
@@ -39,6 +43,9 @@ jest.unstable_mockModule('../../../repositories/payment/payment.repository.js', 
   deleteOrderByCode: jest.fn(),
   hasSuccessfulOrderForPlanByUser: jest.fn(),
   findUserIdByEmail: jest.fn(),
+  lockUserForPaidPlanFulfillment: jest.fn(),
+  findNewerSuccessfulPlanEntitlement: jest.fn(),
+  findNewerSuccessfulPlanCheckout: jest.fn(),
   updateOrderStatus: jest.fn(),
   findPendingPayosOrdersSinceHours: jest.fn().mockResolvedValue([]),
   findStalePendingPayosOrders: jest.fn().mockResolvedValue([]),
@@ -56,6 +63,7 @@ jest.unstable_mockModule('../../../repositories/user/user.repository.js', () => 
     subscription_expires_at: new Date(Date.now() + 15 * 86400000).toISOString(),
   }),
   findActiveBillingPeriod: jest.fn().mockResolvedValue('monthly'),
+  lockUserForPlanActivation: mockLockUserForPlanActivation,
   saveInvoiceProfile: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -105,6 +113,10 @@ jest.unstable_mockModule('../../../utils/payos.util.js', () => ({
   bestEffortCancelPayosLinks: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.unstable_mockModule('../../../utils/payosLink.util.js', () => ({
+  bestEffortCancelPayosLinks: mockBestEffortCancelPayosLinks,
+}));
+
 jest.unstable_mockModule('../customPlan.service.js', () => ({
   resolveCustomPlanQuote: jest.fn().mockImplementation(async ({ quantities, billingPeriod }) => ({
     quantities,
@@ -128,10 +140,13 @@ describe('PR-1 Custom Plan Payment Loophole, Renewal & Downgrade Check', () => {
     mockCreatePlan.mockReset();
     mockCreateOrder.mockReset();
     mockCancelRecentPendingPlanOrders.mockReset().mockResolvedValue([]);
+    mockFindRecentPendingPlanOrders.mockReset().mockResolvedValue([]);
     mockResolveCheckoutDiscount.mockReset();
     mockRedeemVoucherForOrder.mockReset().mockResolvedValue(undefined);
     mockActivateUserPlan.mockReset().mockResolvedValue(undefined);
     mockCreatePaymentLink.mockReset().mockResolvedValue({ checkoutUrl: 'https://pay.payos.vn/test' });
+    mockLockUserForPlanActivation.mockReset().mockResolvedValue({ id: 1, email: 'test@example.com' });
+    mockBestEffortCancelPayosLinks.mockReset().mockResolvedValue(undefined);
   });
 
   it('chặn khi cùng reusePlanId và cùng kỳ hạn thanh toán (SAME_PLAN)', async () => {
@@ -295,6 +310,36 @@ describe('PR-1 Custom Plan Payment Loophole, Renewal & Downgrade Check', () => {
     );
 
     expect(result).toHaveProperty('checkoutUrl');
+  });
+
+  it('giữ nguyên đơn custom cũ nếu PayOS không tạo được link thay thế', async () => {
+    mockGetPlanByUserId.mockResolvedValue({ id: 99, price: 50000 });
+    mockFindCustomPlanOwnedByUser.mockResolvedValueOnce({
+      id: 99,
+      name: 'Gói tự chọn của test@example.com',
+      price: 50000,
+      custom_config: { quantities: { emails: 500 } },
+    });
+    mockResolveCheckoutDiscount.mockResolvedValueOnce({
+      voucher: null,
+      discountAmount: 0,
+      finalAmount: 200000,
+      discount: null,
+      snapshot: {},
+    });
+    mockCreateOrder.mockResolvedValueOnce({ id: 101, order_code: 123456, amount: 200000 });
+    mockCreatePaymentLink.mockRejectedValueOnce(new Error('provider unavailable'));
+
+    await expect(createCustomPaymentLink({
+      quantities: { emails: 2000 },
+      billingPeriod: 'monthly',
+      userId: 1,
+      userEmail: 'test@example.com',
+      reusePlanId: 99,
+    })).rejects.toMatchObject({ status: 502 });
+
+    expect(mockCancelRecentPendingPlanOrders).not.toHaveBeenCalled();
+    expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
   });
 
   it('nhánh đơn 0đ (voucher 100%) cập nhật limits và kích hoạt plan ngay khi tạo đơn', async () => {

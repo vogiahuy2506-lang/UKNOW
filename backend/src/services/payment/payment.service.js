@@ -12,7 +12,7 @@ import {
     markOrderFailedForReview,
     activateUserPlan,
     hasSuccessfulOrderForPlanByUser,
-    deleteOrderByCode,
+    findRecentPendingPlanOrders,
     cancelRecentPendingPlanOrders,
 } from '../../repositories/payment/payment.repository.js';
 import {
@@ -32,12 +32,17 @@ import {
 } from './payosReconcile.service.js';
 import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
 import { resolveOrderAmountWithInvoice, normalizeBuyerInvoiceProfile } from '../../utils/invoiceVat.util.js';
-import { saveInvoiceProfile } from '../../repositories/user/user.repository.js';
+import {
+    findUserById,
+    findActiveBillingPeriod,
+    findActiveUserByEmail,
+    lockUserForPlanActivation,
+    saveInvoiceProfile,
+} from '../../repositories/user/user.repository.js';
 import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
 
 import { resolvePlanChange } from '../../utils/planChange.util.js';
 import { scheduledPlanChangeRepository } from '../../repositories/payment/scheduledPlanChange.repository.js';
-import { findUserById, findActiveBillingPeriod, findActiveUserByEmail } from '../../repositories/user/user.repository.js';
 
 const isTrialOrFreePlan = (plan) => {
     if (!plan) return false;
@@ -119,54 +124,75 @@ export const createPaymentLink = async ({
     explicitVoucherCode = null,
     invoiceInfo: invoiceInfoRaw = null,
 }) => {
-    const plan = await findPlanByCode(planCode);
-    if (!plan) throw new Error('Gói không tồn tại');
-    await assertTrialNotRegisteredTwice({ plan, userId, userEmail });
-    const planChange = await validatePlanChange({
-        targetPlan: plan,
-        targetBillingPeriod: billingPeriod,
-        userId,
-        userEmail,
-    });
-
-    let originalAmount = billingPeriod === 'yearly' && plan.price_yearly
-        ? Number(plan.price_yearly)
-        : Number(plan.price);
-
-    if (planChange.action === 'upgrade_pending' && planChange.amountToPay !== undefined) {
-        originalAmount = planChange.amountToPay;
+    if (!userId) {
+        throw { status: 401, message: 'Yêu cầu đăng nhập để tạo thanh toán' };
     }
-
-    if (originalAmount <= 0) throw new Error('Giá tiền không hợp lệ cho gói này');
-
     const pendingWindowMinutes = getPayosPendingWindowMinutes();
     const reuseWindowMinutes = Math.max(1, pendingWindowMinutes - 2);
     const orderCode = generateOrderCode();
-
-    const cancelledDupes = await cancelRecentPendingPlanOrders({
-        userId,
-        userEmail,
-        planId: plan.id,
-        billingPeriod,
-        withinMinutes: reuseWindowMinutes,
-    });
-    if (cancelledDupes.length) {
-        await bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code));
-    }
-
     const client = await db.getClient();
+    let plan;
+    let planChange;
     let order;
     let voucher = null;
-    let amount = Math.round(originalAmount);
+    let originalAmount = 0;
+    let amount = 0;
     let discountAmount = 0;
     let discount = null;
+    let paymentLink = null;
+    let expiredAt = null;
+    let cancelledDupes = [];
+    let effectiveUserEmail = userEmail;
 
     try {
         await client.query('BEGIN');
 
+        // Serialize the complete checkout decision, not only scheduled changes.
+        // Otherwise two requests can both validate stale entitlement state and
+        // the older request may cancel/overwrite the newer checkout.
+        const lockedUser = await lockUserForPlanActivation(userId, client);
+        if (!lockedUser) {
+            throw { status: 404, message: 'Không tìm thấy tài khoản để tạo thanh toán' };
+        }
+        effectiveUserEmail = lockedUser.email || userEmail;
+
+        plan = await findPlanByCode(planCode, client);
+        if (!plan) throw new Error('Gói không tồn tại');
+        await assertTrialNotRegisteredTwice({
+            plan,
+            userId,
+            userEmail: effectiveUserEmail,
+            queryable: client,
+        });
+        planChange = await validatePlanChange({
+            targetPlan: plan,
+            targetBillingPeriod: billingPeriod,
+            userId,
+            userEmail: effectiveUserEmail,
+            queryable: client,
+        });
+
+        originalAmount = billingPeriod === 'yearly' && plan.price_yearly
+            ? Number(plan.price_yearly)
+            : Number(plan.price);
+        if (planChange.action === 'upgrade_pending' && planChange.amountToPay !== undefined) {
+            originalAmount = Number(planChange.amountToPay);
+        }
+        if (originalAmount <= 0) throw new Error('Giá tiền không hợp lệ cho gói này');
+
+        const isScheduledChange = planChange.action === 'schedule' || planChange.action === 'upgrade_pending';
+        const replaceablePendingOrders = await findRecentPendingPlanOrders({
+            userId,
+            userEmail: effectiveUserEmail,
+            planId: plan.id,
+            billingPeriod,
+            withinMinutes: reuseWindowMinutes,
+            queryable: client,
+        });
+
         const resolved = await resolveCheckoutDiscount({
             userId,
-            userEmail,
+            userEmail: effectiveUserEmail,
             planCode,
             billingPeriod,
             originalAmount,
@@ -176,6 +202,7 @@ export const createPaymentLink = async ({
             lockForPayment: true,
             queryable: client,
             pendingWindowMinutes,
+            excludedPendingOrderIds: replaceablePendingOrders.map((row) => row.id),
         });
         voucher = resolved.voucher;
         discountAmount = Number(resolved.discountAmount || 0);
@@ -183,18 +210,16 @@ export const createPaymentLink = async ({
         discount = resolved.discount;
 
         const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount, {
-            accountEmail: userEmail,
+            accountEmail: effectiveUserEmail,
         });
         amount = priced.amount;
         const invoiceInfo = priced.invoiceInfo;
-
-        const isScheduledChange = planChange.action === 'schedule' || planChange.action === 'upgrade_pending';
 
         order = await createOrder({
             orderCode,
             planId: plan.id,
             amount,
-            userEmail,
+            userEmail: effectiveUserEmail,
             userId,
             billingPeriod,
             originalAmount,
@@ -234,14 +259,56 @@ export const createPaymentLink = async ({
                     await reconcileResourceLocks(userId, client, { unlockOnly: true });
                 }
             }
+        } else {
+            expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
+            try {
+                paymentLink = await payosClient.paymentRequests.create({
+                    orderCode: Number(orderCode),
+                    amount,
+                    description: `FOUNDERAI ${String(planCode || '').toUpperCase()}`.substring(0, 25),
+                    returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
+                    cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
+                    expiredAt,
+                });
+            } catch (err) {
+                const message = String(err?.message || err?.desc || '').trim();
+                throw {
+                    status: 502,
+                    message: message ? `PayOS: ${message}` : 'Không thể tạo link thanh toán PayOS',
+                };
+            }
         }
+
+        // Only replace orders that are provably older than the newly-created
+        // order. The condition protects a slower request from cancelling a
+        // checkout committed by a later request.
+        cancelledDupes = await cancelRecentPendingPlanOrders({
+            userId,
+            userEmail: effectiveUserEmail,
+            planId: plan.id,
+            billingPeriod,
+            withinMinutes: reuseWindowMinutes,
+            olderThanOrderId: order.id,
+            queryable: client,
+        });
 
         await client.query('COMMIT');
     } catch (err) {
-        await client.query('ROLLBACK');
+        try {
+            await client.query('ROLLBACK');
+        } catch (rollbackError) {
+            console.error('[Payment] Không rollback được checkout:', rollbackError.message);
+        }
+        if (paymentLink) {
+            await bestEffortCancelPayosLinks([orderCode]);
+        }
         throw err;
     } finally {
         client.release();
+    }
+
+    if (cancelledDupes.length) {
+        await bestEffortCancelPayosLinks(cancelledDupes.map((row) => row.order_code));
     }
 
     if (userId && invoiceInfoRaw?.saveProfile === true) {
@@ -265,39 +332,19 @@ export const createPaymentLink = async ({
         };
     }
 
-    const expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
+    console.log('PayOS response:', JSON.stringify(paymentLink, null, 2));
 
-    try {
-        const paymentLink = await payosClient.paymentRequests.create({
-            orderCode: Number(orderCode),
-            amount,
-            description: `FOUNDERAI ${String(planCode || '').toUpperCase()}`.substring(0, 25),
-            returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
-            cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
-            expiredAt,
-        });
-
-        console.log('PayOS response:', JSON.stringify(paymentLink, null, 2));
-
-        return {
-            qrCode: paymentLink.qrCode,
-            checkoutUrl: paymentLink.checkoutUrl,
-            orderCode,
-            originalAmount: Math.round(originalAmount),
-            discountAmount,
-            amount,
-            voucher: voucher ? toValidatedCodeDto(voucher) : null,
-            discount,
-            expiredAt,
-        };
-    } catch (err) {
-        try { await deleteOrderByCode(orderCode); } catch { /* best-effort */ }
-        const message = String(err?.message || err?.desc || '').trim();
-        throw {
-            status: 502,
-            message: message ? `PayOS: ${message}` : 'Không thể tạo link thanh toán PayOS',
-        };
-    }
+    return {
+        qrCode: paymentLink.qrCode,
+        checkoutUrl: paymentLink.checkoutUrl,
+        orderCode,
+        originalAmount: Math.round(originalAmount),
+        discountAmount,
+        amount,
+        voucher: voucher ? toValidatedCodeDto(voucher) : null,
+        discount,
+        expiredAt,
+    };
 };
 
 export const handleWebhook = async (body) => {
@@ -338,6 +385,21 @@ export const handleWebhook = async (body) => {
                 return { ...webhookData, amountMismatch: true, acknowledged: true };
             }
 
+            // Checkout creation locks the user before replacing an older order.
+            // Acquire the same lock before claiming the order to keep lock
+            // ordering user -> order and avoid a checkout/webhook deadlock.
+            const fulfillmentUserId = existing.user_id || (
+                existing.user_email
+                    ? (await findActiveUserByEmail(existing.user_email, client))?.id
+                    : null
+            );
+            if (fulfillmentUserId) {
+                const lockedUser = await lockUserForPlanActivation(fulfillmentUserId, client);
+                if (!lockedUser) {
+                    throw new Error(`Không tìm thấy tài khoản ${fulfillmentUserId} để xử lý thanh toán`);
+                }
+            }
+
             const order = await claimOrderSuccess(webhookData.orderCode, client);
             if (!order) {
                 await client.query('COMMIT');
@@ -345,9 +407,13 @@ export const handleWebhook = async (body) => {
                 return webhookData;
             }
 
-            const einvoiceId = await fulfillPaidOrder(order, client);
+            const afterCommit = [];
+            const einvoiceId = await fulfillPaidOrder(order, client, {
+                registerAfterCommit: (callback) => afterCommit.push(callback),
+            });
             await client.query('COMMIT');
             scheduleDispatchEinvoiceAfterCommit(einvoiceId);
+            for (const callback of afterCommit) callback();
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -360,43 +426,76 @@ export const handleWebhook = async (body) => {
 };
 
 export const activateFreePlan = async ({ planCode, userId, userEmail, billingPeriod = 'monthly', queryable = db }) => {
-    const plan = await findPlanByCode(planCode, queryable);
-    if (!plan) throw new Error('Gói không tồn tại');
-    await assertTrialNotRegisteredTwice({ plan, userId, userEmail, queryable });
-    await validatePlanChange({
-        targetPlan: plan,
-        targetBillingPeriod: billingPeriod,
-        userId,
-        userEmail,
-        queryable,
-    });
-
-    const amount = billingPeriod === 'yearly' && plan.price_yearly
-        ? Number(plan.price_yearly)
-        : Number(plan.price);
-
-    if (amount > 0) throw new Error('Gói này cần thanh toán, không thể kích hoạt miễn phí');
-
-    const orderCode = generateOrderCode();
-
-    await createOrder({
-        orderCode,
-        planId: plan.id,
-        amount: 0,
-        userEmail,
-        userId,
-        status: 'success',
-        paymentMethod: 'free',
-        billingPeriod,
-    }, queryable);
-
-    if (userId) {
-        await activateUserPlan(userId, plan.id, billingPeriod, queryable);
-        const { reconcileResourceLocks } = await import('./topupLock.service.js');
-        await reconcileResourceLocks(userId, queryable, { unlockOnly: true });
+    if (!userId) {
+        throw { status: 401, message: 'Yêu cầu đăng nhập để kích hoạt gói miễn phí' };
     }
 
-    return { orderCode };
+    // HTTP/Google trial paths pass the pool, while registration passes its
+    // already-open client.  Own the transaction only for the former so a
+    // successful order can never survive a failed entitlement activation.
+    const ownsTransaction = queryable === db;
+    const client = ownsTransaction ? await db.getClient() : queryable;
+
+    try {
+        if (ownsTransaction) await client.query('BEGIN');
+
+        // Check-then-create of a free/trial order must share a per-user lock.
+        // Without it, two simultaneous requests can both observe no prior
+        // successful order and each insert one before either commits.
+        const lockedUser = await lockUserForPlanActivation(userId, client);
+        if (!lockedUser) {
+            throw { status: 404, message: 'Không tìm thấy tài khoản để kích hoạt gói miễn phí' };
+        }
+        const effectiveUserEmail = lockedUser.email || userEmail;
+
+        const plan = await findPlanByCode(planCode, client);
+        if (!plan) throw new Error('Gói không tồn tại');
+        await assertTrialNotRegisteredTwice({ plan, userId, userEmail: effectiveUserEmail, queryable: client });
+        await validatePlanChange({
+            targetPlan: plan,
+            targetBillingPeriod: billingPeriod,
+            userId,
+            userEmail: effectiveUserEmail,
+            queryable: client,
+        });
+
+        const amount = billingPeriod === 'yearly' && plan.price_yearly
+            ? Number(plan.price_yearly)
+            : Number(plan.price);
+
+        if (amount > 0) throw new Error('Gói này cần thanh toán, không thể kích hoạt miễn phí');
+
+        const orderCode = generateOrderCode();
+
+        await createOrder({
+            orderCode,
+            planId: plan.id,
+            amount: 0,
+            userEmail: effectiveUserEmail,
+            userId,
+            status: 'success',
+            paymentMethod: 'free',
+            billingPeriod,
+        }, client);
+
+        await activateUserPlan(userId, plan.id, billingPeriod, client);
+        const { reconcileResourceLocks } = await import('./topupLock.service.js');
+        await reconcileResourceLocks(userId, client, { unlockOnly: true });
+
+        if (ownsTransaction) await client.query('COMMIT');
+        return { orderCode };
+    } catch (error) {
+        if (ownsTransaction) {
+            try {
+                await client.query('ROLLBACK');
+            } catch (rollbackError) {
+                console.error('[Payment] Không rollback được kích hoạt gói miễn phí:', rollbackError.message);
+            }
+        }
+        throw error;
+    } finally {
+        if (ownsTransaction) client.release();
+    }
 };
 
 export const getOrderStatus = async (orderCode) => {
@@ -479,15 +578,24 @@ export const createCustomPaymentLink = async ({
 
     const client = await db.getClient();
     let plan = null;
-    let createdNewPlan = false;
     let order;
     let voucher = null;
     let amount = originalAmount;
     let discountAmount = 0;
     let discount = null;
+    let paymentLink = null;
+    let expiredAt = null;
+    let cancelledDupes = [];
+    let effectiveUserEmail = userEmail;
 
     try {
         await client.query('BEGIN');
+
+        const lockedUser = await lockUserForPlanActivation(userId, client);
+        if (!lockedUser) {
+            throw { status: 404, message: 'Không tìm thấy tài khoản để tạo thanh toán' };
+        }
+        effectiveUserEmail = lockedUser.email || userEmail;
 
         let planChange;
         if (reusePlanId) {
@@ -500,7 +608,7 @@ export const createCustomPaymentLink = async ({
                 targetBillingPeriod: billingPeriod,
                 targetPrice: billingPeriod === 'yearly' ? quote.yearlyTotal : quote.monthlyTotal,
                 userId,
-                userEmail,
+                userEmail: effectiveUserEmail,
                 queryable: client,
             });
         } else {
@@ -509,12 +617,12 @@ export const createCustomPaymentLink = async ({
                 targetBillingPeriod: billingPeriod,
                 targetPrice: billingPeriod === 'yearly' ? quote.yearlyTotal : quote.monthlyTotal,
                 userId,
-                userEmail,
+                userEmail: effectiveUserEmail,
                 queryable: client,
             });
             plan = await createPlan({
                 code: null,
-                name: buildCustomPlanName(userEmail),
+                name: buildCustomPlanName(effectiveUserEmail),
                 price: quote.monthlyTotal,
                 priceYearly: quote.yearlyTotal,
                 description: 'Gói tự chọn (self-serve)',
@@ -548,11 +656,10 @@ export const createCustomPaymentLink = async ({
                 customOwnerUserId: userId,
                 customConfig,
             }, client);
-            createdNewPlan = true;
         }
 
         const customPlanConfig = {
-            name: plan.name || buildCustomPlanName(userEmail),
+            name: plan.name || buildCustomPlanName(effectiveUserEmail),
             price: quote.monthlyTotal,
             priceYearly: quote.yearlyTotal,
             customConfig,
@@ -560,22 +667,19 @@ export const createCustomPaymentLink = async ({
             durationDays: 30,
         };
 
-        const cancelledDupes = await cancelRecentPendingPlanOrders({
+        const isScheduledChange = planChange?.action === 'schedule' || planChange?.action === 'upgrade_pending';
+        const replaceablePendingOrders = await findRecentPendingPlanOrders({
             userId,
-            userEmail,
+            userEmail: effectiveUserEmail,
             planId: plan.id,
             billingPeriod,
             withinMinutes: reuseWindowMinutes,
             queryable: client,
         });
-        if (cancelledDupes.length) {
-            // PayOS cancel outside txn best-effort after commit — fire now is fine too
-            bestEffortCancelPayosLinks(cancelledDupes.map((r) => r.order_code)).catch(() => {});
-        }
 
         const resolved = await resolveCheckoutDiscount({
             userId,
-            userEmail,
+            userEmail: effectiveUserEmail,
             planCode: CUSTOM_PLAN_VOUCHER_CODE,
             billingPeriod,
             originalAmount,
@@ -585,6 +689,7 @@ export const createCustomPaymentLink = async ({
             lockForPayment: true,
             queryable: client,
             pendingWindowMinutes,
+            excludedPendingOrderIds: replaceablePendingOrders.map((row) => row.id),
         });
         voucher = resolved.voucher;
         discountAmount = Number(resolved.discountAmount || 0);
@@ -592,18 +697,16 @@ export const createCustomPaymentLink = async ({
         discount = resolved.discount;
 
         const priced = resolveOrderAmountWithInvoice(invoiceInfoRaw, amount, {
-            accountEmail: userEmail,
+            accountEmail: effectiveUserEmail,
         });
         amount = priced.amount;
         const invoiceInfo = priced.invoiceInfo;
-
-        const isScheduledChange = planChange?.action === 'schedule' || planChange?.action === 'upgrade_pending';
 
         order = await createOrder({
             orderCode,
             planId: plan.id,
             amount,
-            userEmail,
+            userEmail: effectiveUserEmail,
             userId,
             billingPeriod,
             originalAmount,
@@ -645,14 +748,53 @@ export const createCustomPaymentLink = async ({
                 const { reconcileResourceLocks } = await import('./topupLock.service.js');
                 await reconcileResourceLocks(userId, client, { unlockOnly: true });
             }
+        } else {
+            expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
+            try {
+                paymentLink = await payosClient.paymentRequests.create({
+                    orderCode: Number(orderCode),
+                    amount,
+                    description: 'FOUNDERAI CUSTOM'.substring(0, 25),
+                    returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
+                    cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
+                    expiredAt,
+                });
+            } catch (err) {
+                const message = String(err?.message || err?.desc || '').trim();
+                throw {
+                    status: 502,
+                    message: message ? `PayOS: ${message}` : 'Không thể tạo link thanh toán PayOS',
+                };
+            }
         }
+
+        cancelledDupes = await cancelRecentPendingPlanOrders({
+            userId,
+            userEmail: effectiveUserEmail,
+            planId: plan.id,
+            billingPeriod,
+            withinMinutes: reuseWindowMinutes,
+            olderThanOrderId: order.id,
+            queryable: client,
+        });
 
         await client.query('COMMIT');
     } catch (err) {
-        await client.query('ROLLBACK');
+        try {
+            await client.query('ROLLBACK');
+        } catch (rollbackError) {
+            console.error('[Payment] Không rollback được checkout custom:', rollbackError.message);
+        }
+        if (paymentLink) {
+            await bestEffortCancelPayosLinks([orderCode]);
+        }
         throw err;
     } finally {
         client.release();
+    }
+
+    if (cancelledDupes.length) {
+        await bestEffortCancelPayosLinks(cancelledDupes.map((row) => row.order_code));
     }
 
     if (userId && invoiceInfoRaw?.saveProfile === true) {
@@ -678,44 +820,17 @@ export const createCustomPaymentLink = async ({
         };
     }
 
-    const expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
-
-    try {
-        const paymentLink = await payosClient.paymentRequests.create({
-            orderCode: Number(orderCode),
-            amount,
-            description: `FOUNDERAI CUSTOM`.substring(0, 25),
-            returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
-            cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
-            expiredAt,
-        });
-
-        return {
-            qrCode: paymentLink.qrCode,
-            checkoutUrl: paymentLink.checkoutUrl,
-            orderCode,
-            planId: plan.id,
-            originalAmount,
-            discountAmount,
-            amount,
-            voucher: voucher ? toValidatedCodeDto(voucher) : null,
-            discount,
-            quote,
-            expiredAt,
-        };
-    } catch (err) {
-        try { await deleteOrderByCode(orderCode); } catch { /* best-effort */ }
-        if (createdNewPlan && plan?.id) {
-            try {
-                const { deletePlan } = await import('../../repositories/admin/adminPlans.repository.js');
-                await deletePlan(plan.id);
-            } catch { /* best-effort */ }
-        }
-        if (err?.status) throw err;
-        const message = String(err?.message || err?.desc || '').trim();
-        throw {
-            status: 502,
-            message: message ? `PayOS: ${message}` : 'Không thể tạo link thanh toán PayOS',
-        };
-    }
+    return {
+        qrCode: paymentLink.qrCode,
+        checkoutUrl: paymentLink.checkoutUrl,
+        orderCode,
+        planId: plan.id,
+        originalAmount,
+        discountAmount,
+        amount,
+        voucher: voucher ? toValidatedCodeDto(voucher) : null,
+        discount,
+        quote,
+        expiredAt,
+    };
 };

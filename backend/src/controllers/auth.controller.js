@@ -103,7 +103,9 @@ class AuthController {
       // Đánh dấu mã xác minh đã dùng
       await verificationService.markCodeAsUsed(verification.id);
 
-      // Auto-grant trial INSIDE cùng transaction. Nếu lỗi → throw → handler ROLLBACK cả INSERT user.
+      // Auto-grant trial trong cùng transaction. Lỗi cấu hình trial được cô lập
+      // ở savepoint; lỗi hạ tầng hoặc không khôi phục được savepoint sẽ throw để
+      // handler rollback toàn bộ đăng ký.
       const trial = await grantSignupTrialInTx(client, { userId: user.id, userEmail: user.email });
       if (trial) {
         user.active_plan_id = trial.activePlanId;

@@ -12,13 +12,14 @@ import { _clearQuotaCache } from '../../../src/utils/userSendLimit.util.js';
  * Không truncate schema_migrations để khỏi rerun bootstrap.
  */
 /**
- * Chạy lại khi Postgres báo deadlock (SQLSTATE 40P01).
+ * Chạy lại khi Postgres báo deadlock hoặc lock timeout trong lúc dọn DB test.
  *
  * Vì sao cần: `truncateAll()` chạy ở `beforeEach` của MỌI suite và lấy khoá
  * ACCESS EXCLUSIVE trên ~60 bảng cùng lúc. Integration chạy `--runInBand` nên công
  * việc bất đồng bộ còn sót của test trước (ghi `login_history`, audit log, reconcile
- * lưu trữ…) vẫn có thể đang giữ khoá dòng khi TRUNCATE bắt đầu → chờ vòng tròn →
- * Postgres giết một bên.
+ * lưu trữ…) vẫn có thể đang giữ khoá dòng khi TRUNCATE bắt đầu. Nếu không đặt
+ * `lock_timeout`, Jest sẽ hết 20 giây trước khi PostgreSQL trả lỗi và không còn
+ * cơ hội retry.
  *
  * Đây là nguyên nhân thật của chuyện integration đỏ giả ngẫu nhiên (đo 18/08/2026):
  * mỗi lần đỏ một suite khác nhau vì `beforeEach` ở đâu cũng có, còn chạy riêng từng
@@ -28,26 +29,23 @@ import { _clearQuotaCache } from '../../../src/utils/userSendLimit.util.js';
  * deadlock là dấu hiệu sai thứ tự khoá và phải lộ ra, không được âm thầm thử lại.
  * Tranh chấp lúc dọn bảng giữa các test thì khác — lành tính và thử lại được.
  */
-async function retryOnDeadlock(operation, maxRetries = 5) {
+const RETRYABLE_CLEANUP_ERROR_CODES = new Set(['40P01', '55P03']);
+
+async function retryOnCleanupContention(operation, maxRetries = 10) {
   let lastError;
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await operation();
     } catch (error) {
       lastError = error;
-      if (error?.code !== '40P01') throw error;
-      await new Promise((r) => setTimeout(r, 100 * (i + 1)));
+      if (!RETRYABLE_CLEANUP_ERROR_CODES.has(error?.code)) throw error;
+      await new Promise((r) => setTimeout(r, 150 * (i + 1)));
     }
   }
   throw lastError;
 }
 
-export async function truncateAll() {
-  // RESTART IDENTITY tái sử dụng user id giữa các test — phải xóa quota cache
-  // (TTL 10s, key theo billingUserId) để limits/counts của test trước không
-  // rò sang test sau trong cùng process (runInBand dùng chung process cho mọi file).
-  _clearQuotaCache();
-  await retryOnDeadlock(() => db.query(`
+const TRUNCATE_ALL_SQL = `
     TRUNCATE TABLE
       usage_logs,
       dashboard_insights,
@@ -86,6 +84,8 @@ export async function truncateAll() {
       login_history,
       refresh_tokens,
       verification_codes,
+      migration_runner_preflight_backups,
+      migration_runner_repair_results,
       user_members,
       voucher_redemptions,
       vouchers,
@@ -107,7 +107,32 @@ export async function truncateAll() {
       plans,
       users
     RESTART IDENTITY CASCADE
-  `));
+  `;
+
+async function truncateAllTables() {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    // Scoped to this cleanup transaction only; production queries keep their
+    // normal lock behavior. A short timeout converts an otherwise invisible
+    // wait into SQLSTATE 55P03 so the retry loop can recover.
+    await client.query("SET LOCAL lock_timeout = '1000ms'");
+    await client.query(TRUNCATE_ALL_SQL);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function truncateAll() {
+  // RESTART IDENTITY tái sử dụng user id giữa các test — phải xóa quota cache
+  // (TTL 10s, key theo billingUserId) để limits/counts của test trước không
+  // rò sang test sau trong cùng process (runInBand dùng chung process cho mọi file).
+  _clearQuotaCache();
+  await retryOnCleanupContention(truncateAllTables);
 }
 
 /**

@@ -16,8 +16,10 @@ import { HiOutlineUsers, HiOutlineDesktopComputer } from 'react-icons/hi';
 
 function formatPrice(price, t) {
   if (price === null || price === undefined) return t('accountProfileModal.contactForPrice');
-  if (price === 0) return t('accountProfileModal.free');
-  return `${Number(price).toLocaleString('vi-VN')} ₫`;
+  const numericPrice = Number(price);
+  if (!Number.isFinite(numericPrice)) return t('accountProfileModal.contactForPrice');
+  if (numericPrice === 0) return t('accountProfileModal.free');
+  return `${numericPrice.toLocaleString('vi-VN')} ₫`;
 }
 
 function unwrapFeature(feat, locale) {
@@ -32,6 +34,15 @@ export default function PlanSection({ data, t }) {
   const { locale } = useI18n();
   const hasPlan = !!data?.activePlanId;
   const planLabel = data?.activePlanName || data?.activePlanCode || (hasPlan ? `#${data.activePlanId}` : '');
+  const isYearly = data?.activeBillingPeriod === 'yearly';
+  const monthlyPrice = Number(data?.activePlanPrice);
+  const isFreePlan = Number.isFinite(monthlyPrice) && monthlyPrice === 0;
+  // price_yearly is legitimately NULL for older/custom plans. Keep the agreed
+  // "Liên hệ" behavior for paid plans, but a zero-price plan must stay free
+  // even if a legacy yearly entitlement has no separate annual price snapshot.
+  const displayPrice = isYearly && data?.activePlanPriceYearly == null && isFreePlan
+    ? data?.activePlanPrice
+    : (isYearly ? data?.activePlanPriceYearly : data?.activePlanPrice);
 
   const features = useMemo(() => {
     if (!data?.activePlanFeatures) return [];
@@ -75,10 +86,13 @@ export default function PlanSection({ data, t }) {
               <span className="text-xs text-primary-600 font-mono">{data.activePlanCode}</span>
             )}
           </div>
-          <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(data.activePlanPrice, t)}</p>
-          {data.activePlanPrice > 0 && (
-            <p className="text-xs text-gray-400">{t('accountProfileModal.perMonth')}</p>
+          <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(displayPrice, t)}</p>
+          {displayPrice > 0 && (
+            <p className="text-xs text-gray-400">{isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth')}</p>
           )}
+          <span className="inline-flex mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-white/70 text-primary-700 border border-primary-100">
+            {isYearly ? t('accountProfileModal.billingYearly') : t('accountProfileModal.billingMonthly')}
+          </span>
         </div>
         {data.planMaxEmployees !== null && (
           <div className="text-right shrink-0">

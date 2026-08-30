@@ -90,7 +90,8 @@ describe('aiCampaignDraftService.autoCreateZaloTemplates', () => {
       },
     ];
 
-    await aiCampaignDraftService.autoCreateZaloTemplates(nodes, 42);
+    const createdTemplates = { emailTemplateIds: [], zaloTemplateIds: [] };
+    await aiCampaignDraftService.autoCreateZaloTemplates(nodes, 42, createdTemplates);
 
     expect(nodes[0].config.zaloGroupTemplateSteps[0].templateId).toBe(101);
     expect(nodes[0].config.zaloGroupTemplateSteps[1].templateId).toBe(102);
@@ -98,12 +99,30 @@ describe('aiCampaignDraftService.autoCreateZaloTemplates', () => {
     expect(created.length).toBe(3);
     expect(created[0].userId).toBe(42);
     expect(created[0].bodyText).toBe('Tin 1 chào nhóm');
+    expect(createdTemplates.zaloTemplateIds).toEqual([101, 102, 103]);
 
     // Idempotent: calling again should not create new templates
     await aiCampaignDraftService.autoCreateZaloTemplates(nodes, 42);
     expect(created.length).toBe(3);
 
     spy.mockRestore();
+  });
+
+  it('cleans up only tracked templates owned by the requesting user', async () => {
+    const mockRepo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    const deleteEmailSpy = jest.spyOn(mockRepo, 'deleteEmailTemplatesByIds').mockResolvedValue([{ id: 11 }]);
+    const deleteZaloSpy = jest.spyOn(mockRepo, 'deleteZaloTemplatesByIds').mockResolvedValue([{ id: 22 }]);
+
+    await aiCampaignDraftService.cleanupAutoCreatedTemplates({
+      emailTemplateIds: [11],
+      zaloTemplateIds: [22],
+    }, 42);
+
+    expect(deleteEmailSpy).toHaveBeenCalledWith({ userId: 42, ids: [11] });
+    expect(deleteZaloSpy).toHaveBeenCalledWith({ userId: 42, ids: [22] });
+
+    deleteEmailSpy.mockRestore();
+    deleteZaloSpy.mockRestore();
   });
 
   it('handles single inline message on node without multi-step array', async () => {
@@ -498,4 +517,3 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
     expect(patchedOnce.nodes.find((n) => n.id === 'n2').config.sendMode).toBe('all');
   });
 });
-
