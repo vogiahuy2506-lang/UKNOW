@@ -26,6 +26,7 @@ jest.unstable_mockModule('axios', () => ({
 
 jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
   extractGeminiUsage,
+  generateGeminiContent: jest.fn(),
 }));
 
 jest.unstable_mockModule('../businessProfile.service.js', () => ({

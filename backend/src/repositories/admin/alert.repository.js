@@ -141,6 +141,46 @@ export async function metricCampaignFailRate(windowMinutes, minRecipients = 20) 
   return { rate: failed / total, total, failed, skipped: false };
 }
 
+export async function metricCampaignRunFailures(windowMinutes) {
+  const { rows } = await db.query(
+    `SELECT
+       count(*) FILTER (WHERE status = 'failed')::int AS failed,
+       count(DISTINCT id_campaign) FILTER (WHERE status = 'failed')::int AS campaigns
+     FROM campaign_runs
+     WHERE started_at >= NOW() - ($1 || ' minutes')::interval`,
+    [String(windowMinutes)]
+  );
+  const failed = Number(rows[0]?.failed || 0);
+  const campaigns = Number(rows[0]?.campaigns || 0);
+  return { failed, campaigns };
+}
+
+export async function metricCampaignRepeatedFailures(days = 3) {
+  const { rows } = await db.query(
+    `SELECT
+       id_campaign,
+       COUNT(DISTINCT DATE(started_at AT TIME ZONE 'Asia/Ho_Chi_Minh'))::int AS failed_days,
+       COUNT(*)::int AS failed_runs
+     FROM campaign_runs
+     WHERE started_at >= NOW() - ($1 || ' days')::interval
+       AND id_campaign NOT IN (
+         SELECT DISTINCT id_campaign
+         FROM campaign_runs
+         WHERE started_at >= NOW() - ($1 || ' days')::interval
+           AND status = 'completed'
+       )
+       AND status = 'failed'
+     GROUP BY id_campaign
+     HAVING COUNT(DISTINCT DATE(started_at AT TIME ZONE 'Asia/Ho_Chi_Minh')) >= $2`,
+    [String(days), Number(days)]
+  );
+  return rows.map((r) => ({
+    campaignId: r.id_campaign,
+    failedDays: Number(r.failed_days),
+    failedRuns: Number(r.failed_runs),
+  }));
+}
+
 export async function metricZaloInboundCount(windowMinutes) {
   const { rows } = await db.query(
     `SELECT COUNT(*)::int AS cnt

@@ -55,6 +55,7 @@ export async function generateGeminiContent({
   parts,
   timeoutMs = 180000,
   jsonMode = false,
+  responseSchema = null,
   maxOutputTokens = 16384,
   temperature = 0.35,
   model,
@@ -80,7 +81,10 @@ export async function generateGeminiContent({
         topP: 0.9,
         maxOutputTokens: tokenCap,
       };
-      if (jsonMode) {
+      if (responseSchema) {
+        generationConfig.responseMimeType = 'application/json';
+        generationConfig.responseSchema = responseSchema;
+      } else if (jsonMode) {
         generationConfig.responseMimeType = 'application/json';
       }
       if (useThinkingBudget && shouldAttachThinkingBudget(thinkingBudget)) {

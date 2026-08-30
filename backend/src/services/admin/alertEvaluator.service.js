@@ -64,6 +64,29 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'campaign_run_failures': {
+      const m = await alertRepo.metricCampaignRunFailures(windowMinutes);
+      if (m.failed >= threshold) {
+        return {
+          measuredValue: m.failed,
+          message: `${m.failed} lượt chạy chiến dịch thất bại (${m.campaigns} chiến dịch) trong ${windowMinutes} phút`,
+          payload: m,
+        };
+      }
+      return null;
+    }
+    case 'campaign_repeated_failures': {
+      const days = Number(config.days || threshold) || 3;
+      const list = await alertRepo.metricCampaignRepeatedFailures(days);
+      if (list.length > 0) {
+        return {
+          measuredValue: list.length,
+          message: `${list.length} chiến dịch hỏng liên tiếp trong ${days} ngày qua và không có lượt thành công`,
+          payload: { campaigns: list, days },
+        };
+      }
+      return null;
+    }
     case 'zalo_inbound_silence': {
       if (config.businessHoursOnly !== false) {
         const hour = hanoiHour();
