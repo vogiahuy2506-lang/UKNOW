@@ -1,3 +1,7 @@
+// BẮT BUỘC: script chạy độc lập với app nên không đi qua `src/index.js` — nơi duy nhất
+// gọi dotenv. Thiếu dòng này thì DB_HOST rơi về mặc định 'localhost' và script chết
+// ECONNREFUSED khi chạy trong container (Postgres nằm ở host 'uknow-postgres').
+import 'dotenv/config';
 import db from '../src/config/database.js';
 
 /**
