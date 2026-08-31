@@ -2578,6 +2578,8 @@ class CampaignRunService {
       let pendingRecipientWithRetryMetaInLedger = null;
       /** Mốc `nextDueAt` sớm nhất của một lượt đã duyệt xong; dùng để park run-level an toàn. */
       let pendingRecipientNextDueAt = null;
+      /** Chỉ true khi mọi recipient ledger chưa hoàn tất đều có `nextDueAt` hợp lệ ở tương lai. */
+      let allPendingRecipientsWaitUntilFuture = false;
       let selectedZaloAccount = null;
       /** Cấu hình node «Chọn tài khoản Zalo» gần nhất trên luồng thực thi (pool / một TK). */
       let lastSelectZaloAccountConfig = null;
@@ -2632,19 +2634,24 @@ class CampaignRunService {
        * Đồng bộ trạng thái “còn recipient chờ mốc nextDueAt” từ ledger trước khi finalize run.
        *
        * Luồng hoạt động:
-       * 1. Chỉ kiểm tra cho run one-shot khi chưa có cờ pending trong cycle hiện tại.
+       * 1. Chỉ kiểm tra cho run one-shot.
        * 2. Đếm toàn bộ recipient chưa hoàn tất ở mọi channel có `nextDueAt` trong tương lai
        *    (ví dụ: template step kế tiếp, lịch schedule, hoặc retry theo chính sách từng kênh).
-       * 3. Đếm thêm (con) các dòng còn `meta.retryCount` > 0 để phục vụ chẩn đoán retry SMTP.
-       * 4. Nếu có ít nhất 1 bản ghi chờ `nextDueAt`, giữ run `running` tới khi scheduler/resume xử lý.
+       * 3. Đếm riêng recipient chưa có mốc tương lai hợp lệ. Chỉ khi số này bằng 0 mới được
+       *    park cả run — nếu không, scheduler phải tiếp tục nhận nuôi để xử lý phần còn dang dở.
+       * 4. Đếm thêm (con) các dòng còn `meta.retryCount` > 0 để phục vụ chẩn đoán retry SMTP.
        *
        * @returns {Promise<void>}
        */
       const syncPendingEmailRetryFromLedger = async () => {
-        if (isContinuousMode || hasPendingRecipientDue || !isRecipientLedgerTableAvailable) return;
+        if (isContinuousMode || !isRecipientLedgerTableAvailable) return;
         try {
           const pendingRow = await recipientLedgerRepository.countPendingDue(runId);
           const pendingCount = Number.parseInt(pendingRow?.pending_count, 10) || 0;
+          const pendingWithoutFutureDue = Number.parseInt(
+            pendingRow?.pending_without_future_due,
+            10
+          ) || 0;
           const pendingWithRetryMeta = Number.parseInt(pendingRow?.pending_with_retry_meta, 10) || 0;
           if (pendingCount > 0) {
             hasPendingRecipientDue = true;
@@ -2652,8 +2659,13 @@ class CampaignRunService {
             pendingRecipientWithRetryMetaInLedger = pendingWithRetryMeta;
             const rawNextDueAt = String(pendingRow?.next_due_at || '').trim();
             const nextDueAtMs = Date.parse(rawNextDueAt);
-            if (Number.isFinite(nextDueAtMs) && nextDueAtMs > Date.now()) {
+            if (
+              pendingWithoutFutureDue === 0
+              && Number.isFinite(nextDueAtMs)
+              && nextDueAtMs > Date.now()
+            ) {
               pendingRecipientNextDueAt = new Date(nextDueAtMs).toISOString();
+              allPendingRecipientsWaitUntilFuture = true;
             }
           }
         } catch (pendingCheckError) {
@@ -7437,18 +7449,27 @@ class CampaignRunService {
 
       await syncPendingEmailRetryFromLedger();
 
-      await campaignRunRepository.finalizeRun(runId, hasPendingRecipientDue && !isContinuousMode, { totalRecipients, successfulSends, failedSends, skippedSends });
-
-      // Chỉ ghi mốc wake cấp run SAU KHI đã đi hết flow và finalize giữ run `running`.
-      // Không suy diễn từ một ledger row trong scheduler: nếu process chết giữa lượt,
-      // không có marker thì recovery chung vẫn phải chạy để cứu recipient chưa xử lý.
-      if (hasPendingRecipientDue && !isContinuousMode && pendingRecipientNextDueAt) {
-        await campaignRunRepository.patchRunMetadata(runId, {
+      // Chỉ park run-level ở lượt one-shot đã chạy trọn vẹn và mọi recipient còn lại
+      // đều có nextDueAt hợp lệ ở tương lai. Ghi cùng UPDATE finalize để không có cửa sổ
+      // scheduler nhìn thấy run `running` nhưng chưa có marker.
+      const nonContinuousDeferPatch = (
+        hasPendingRecipientDue
+        && !isContinuousMode
+        && allPendingRecipientsWaitUntilFuture
+        && pendingRecipientNextDueAt
+      )
+        ? {
           nonContinuousDeferredUntil: pendingRecipientNextDueAt,
           nonContinuousDeferredReason: 'all_recipients_waiting_next_due',
           nonContinuousDeferredAt: new Date().toISOString(),
-        });
-      }
+        }
+        : null;
+      await campaignRunRepository.finalizeRun(
+        runId,
+        hasPendingRecipientDue && !isContinuousMode,
+        { totalRecipients, successfulSends, failedSends, skippedSends },
+        nonContinuousDeferPatch
+      );
 
       await campaignCrudRepository.updateCampaignLastRunStats(campaignId, successfulSends);
 

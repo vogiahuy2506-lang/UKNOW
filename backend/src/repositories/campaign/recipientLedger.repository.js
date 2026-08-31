@@ -108,33 +108,46 @@ class RecipientLedgerRepository {
   }
 
   /**
-   * Count recipients with a future nextDueAt (pending completion) and those with retryCount in meta.
+   * Count incomplete recipients that have a valid future nextDueAt, plus any
+   * incomplete recipient that is due now, has no due time, or has malformed metadata.
+   * A caller may defer an entire run only when the latter count is zero.
    *
    * @param {number} runId
-   * @returns {Promise<{pending_count: number, pending_with_retry_meta: number, next_due_at: Date|null}>}
+   * @returns {Promise<{
+   *   pending_count: number,
+   *   pending_without_future_due: number,
+   *   pending_with_retry_meta: number,
+   *   next_due_at: Date|null
+   * }>}
    */
   async countPendingDue(runId) {
     const result = await db.query(
       `SELECT
-         COUNT(*)::int AS pending_count,
-         MIN(safe_due.next_due_at) AS next_due_at,
+         COUNT(*) FILTER (WHERE safe_due.next_due_at > NOW())::int AS pending_count,
          COUNT(*) FILTER (
-           WHERE meta ? 'retryCount'
+           WHERE safe_due.next_due_at IS NULL
+              OR safe_due.next_due_at <= NOW()
+         )::int AS pending_without_future_due,
+         MIN(safe_due.next_due_at) FILTER (
+           WHERE safe_due.next_due_at > NOW()
+         ) AS next_due_at,
+         COUNT(*) FILTER (
+           WHERE safe_due.next_due_at > NOW()
+             AND meta ? 'retryCount'
              AND TRIM(COALESCE(meta->>'retryCount', '')) <> ''
-             AND TRIM(meta->>'retryCount') ~ '^[0-9]+$'
-             AND (meta->>'retryCount')::int > 0
+             AND TRIM(meta->>'retryCount') ~ '^0*[1-9][0-9]*$'
          )::int AS pending_with_retry_meta
        FROM campaign_run_recipient_steps
        CROSS JOIN LATERAL (
          SELECT ${SAFE_NEXT_DUE_AT_SQL} AS next_due_at
        ) safe_due
        WHERE id_run = $1
-         AND COALESCE(is_fully_completed, FALSE) = FALSE
-         AND safe_due.next_due_at > NOW()`,
+         AND COALESCE(is_fully_completed, FALSE) = FALSE`,
       [runId]
     );
     return result.rows[0] ?? {
       pending_count: 0,
+      pending_without_future_due: 0,
       pending_with_retry_meta: 0,
       next_due_at: null,
     };

@@ -56,14 +56,6 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
-    code: 'campaign_overdue_retry',
-    label: 'Gửi tiếp bước quá hạn',
-    schedule: 'Mỗi phút (giây 40)',
-    description: 'Quét các chiến dịch chạy một lần đang kẹt ở một bước quá thời hạn chờ và đẩy bước đó đi tiếp.',
-    impact: 'Chiến dịch dừng giữa chừng ở một bước, phần khách còn lại không bao giờ nhận được tin.',
-    tracked: true,
-  },
-  {
     code: 'scheduled_notifications',
     label: 'Gửi thông báo hẹn giờ',
     schedule: 'Mỗi phút',

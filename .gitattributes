@@ -15,6 +15,7 @@ backend/src/services/campaign/campaignZaloSender.service.js whitespace=cr-at-eol
 backend/src/services/campaign/campaignEmailSender.service.js whitespace=cr-at-eol
 backend/src/controllers/zaloSettings.controller.js whitespace=cr-at-eol
 backend/src/utils/zaloTimeoutRetry.util.js whitespace=cr-at-eol
+backend/src/utils/scheduler.js whitespace=cr-at-eol
 # File CRLF sẵn trong repo — git diff --check coi CR là trailing whitespace nếu không có cờ này
 backend/src/controllers/landingPagePublic.controller.js whitespace=cr-at-eol
 backend/src/controllers/lead.controller.js whitespace=cr-at-eol

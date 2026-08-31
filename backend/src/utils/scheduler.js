@@ -298,16 +298,6 @@ const refreshCampaignSchedules = async () => {
 };
 
 /**
- * Khởi chạy lại các campaign run liên tục đang ở trạng thái running.
- *
- * Luồng hoạt động:
- * 1. Quét DB lấy các run có `run_metadata.continuousMode = true` và `status = running`.
- * 2. Bỏ qua run đã được tiến trình hiện tại phục hồi trước đó.
- * 3. Kích hoạt lại executeCampaign để tiếp tục quét khách/gửi tin nền ngay cả khi không ai đăng nhập UI.
- *
- * @returns {Promise<void>}
- */
-/**
  * Chỉ wake run khi mọi mốc defer cấp run đã tới hạn. Không suy diễn từ ledger:
  * một recipient có nextDueAt tương lai không có nghĩa các recipient khác đã xong.
  * `nonContinuousDeferredUntil` chỉ được ghi ở cuối một lượt đã duyệt sạch ledger.
@@ -525,25 +515,6 @@ export const initScheduler = () => {
     timezone: 'Asia/Ho_Chi_Minh'
   });
 
-  // Mỗi phút quét các run non-continuous còn treo step quá hạn để gửi tiếp.
-  // Lệch giây với refresh/recover chính ở :20 để giảm chồng trigger trong cùng tick.
-  cron.schedule('40 * * * * *', async () => {
-    try {
-      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
-      await cronJobRunRepository.recordRun('campaign_overdue_retry', async () => {
-        const overdue = await recoverOverdueNonContinuousCampaignRuns();
-        return {
-          recovered: overdue?.recovered ?? 0,
-          synced: overdue?.recovered ?? 0,
-        };
-      });
-    } catch (error) {
-      console.error('[Scheduler] Lỗi khi quét retry non-continuous quá hạn:', error.message);
-    }
-  }, {
-    timezone: 'Asia/Ho_Chi_Minh'
-  });
-
   refreshCampaignSchedules().catch((error) => {
     console.error('[Scheduler] Không thể nạp campaign schedules ban đầu:', error.message);
   });
@@ -553,10 +524,6 @@ export const initScheduler = () => {
   recoverNonContinuousCampaignRuns().catch((error) => {
     console.error('[Scheduler] Không thể phục hồi campaign run non-continuous ban đầu:', error.message);
   });
-  recoverOverdueNonContinuousCampaignRuns().catch((error) => {
-    console.error('[Scheduler] Không thể quét retry non-continuous quá hạn ban đầu:', error.message);
-  });
-
   // ── Reset daily_sent_count — chạy lúc 00:00 mỗi ngày ─────────────────────
   cron.schedule('0 0 * * *', async () => {
     try {

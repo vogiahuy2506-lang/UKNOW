@@ -76,5 +76,10 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
     expect(sql).toContain('c.campaign_name AS campaign_name');
     expect(sql).toContain('c.campaign_name');
     expect(sql).not.toMatch(/\bc\.name\b/);
+    expect(sql).toContain("cr.run_metadata->>'nonContinuousDeferredUntil'");
+    expect(sql).toContain("cr.run_metadata->>'quotaDeferredUntil'");
+    expect(sql).toContain("cr.run_metadata->>'zaloOutboundDeferredUntil'");
+    expect(sql).toContain('make_timestamptz');
+    expect(sql).not.toContain("(cr.run_metadata->>'nonContinuousDeferredUntil')::timestamptz");
   });
 });

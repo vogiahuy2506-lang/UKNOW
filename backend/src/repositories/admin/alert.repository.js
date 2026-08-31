@@ -1,5 +1,29 @@
 import db from '../../config/database.js';
 import { stuckEinvoiceKindSql } from '../payment/einvoice.repository.js';
+import { safeMetadataTimestampSql } from '../../utils/metadataTimestampSql.util.js';
+
+const SAFE_STALLED_QUOTA_DEFER_UNTIL_SQL = safeMetadataTimestampSql(
+  "cr.run_metadata->>'quotaDeferredUntil'"
+);
+const SAFE_STALLED_ZALO_DEFER_UNTIL_SQL = safeMetadataTimestampSql(
+  "cr.run_metadata->>'zaloOutboundDeferredUntil'"
+);
+const SAFE_STALLED_NON_CONTINUOUS_DEFER_UNTIL_SQL = safeMetadataTimestampSql(
+  "cr.run_metadata->>'nonContinuousDeferredUntil'"
+);
+
+const STALLED_RUN_DEFER_READY_SQL = `AND (
+  ${SAFE_STALLED_QUOTA_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_STALLED_QUOTA_DEFER_UNTIL_SQL} <= NOW()
+)
+AND (
+  ${SAFE_STALLED_ZALO_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_STALLED_ZALO_DEFER_UNTIL_SQL} <= NOW()
+)
+AND (
+  ${SAFE_STALLED_NON_CONTINUOUS_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_STALLED_NON_CONTINUOUS_DEFER_UNTIL_SQL} <= NOW()
+)`;
 
 export async function listRules() {
   const { rows } = await db.query(
@@ -197,6 +221,7 @@ export async function metricStalledRuns(hours = 6) {
      LEFT JOIN campaign_executions ce ON ce.id_run = cr.id
      WHERE cr.status = 'running'
        AND cr.started_at <= NOW() - ($1 || ' hours')::interval
+       ${STALLED_RUN_DEFER_READY_SQL}
      GROUP BY cr.id, cr.id_campaign, cr.started_at, cr.total_recipients, cr.successful_sends, cr.failed_sends, c.campaign_name
      HAVING MAX(GREATEST(ce.created_at, ce.updated_at)) IS NULL
          OR MAX(GREATEST(ce.created_at, ce.updated_at)) <= NOW() - ($1 || ' hours')::interval`,

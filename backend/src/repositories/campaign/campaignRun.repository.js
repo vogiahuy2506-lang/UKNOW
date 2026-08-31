@@ -400,9 +400,16 @@ class CampaignRunRepository {
    * @param {number} runId
    * @param {boolean} hasPendingRecipientDue keep running when true
    * @param {{totalRecipients: number, successfulSends: number, failedSends: number, skippedSends: number}} counts
+   * @param {object|null} [runMetadataPatch] metadata cần ghi atomically khi giữ run running
    * @returns {Promise<void>}
    */
-  async finalizeRun(runId, hasPendingRecipientDue, { totalRecipients, successfulSends, failedSends, skippedSends }) {
+  async finalizeRun(
+    runId,
+    hasPendingRecipientDue,
+    { totalRecipients, successfulSends, failedSends, skippedSends },
+    runMetadataPatch = null
+  ) {
+    const metadataPatchJson = JSON.stringify(runMetadataPatch || {});
     if (!(await this.hasSkippedSendsColumn())) {
       await db.query(
         hasPendingRecipientDue
@@ -411,8 +418,9 @@ class CampaignRunRepository {
              completed_at = NULL,
              total_recipients = $1,
              successful_sends = $2,
-             failed_sends = $3
-             WHERE id = $4
+             failed_sends = $3,
+             run_metadata = COALESCE(run_metadata, '{}'::jsonb) || $4::jsonb
+             WHERE id = $5
                AND status = 'running'`
           : `UPDATE campaign_runs SET
              status = 'completed',
@@ -422,7 +430,9 @@ class CampaignRunRepository {
              failed_sends = $3
              WHERE id = $4
                AND status = 'running'`,
-        [totalRecipients, successfulSends, failedSends, runId]
+        hasPendingRecipientDue
+          ? [totalRecipients, successfulSends, failedSends, metadataPatchJson, runId]
+          : [totalRecipients, successfulSends, failedSends, runId]
       );
       return;
     }
@@ -435,8 +445,9 @@ class CampaignRunRepository {
            total_recipients = $1,
            successful_sends = $2,
            failed_sends = $3,
-           skipped_sends = $4
-           WHERE id = $5
+           skipped_sends = $4,
+           run_metadata = COALESCE(run_metadata, '{}'::jsonb) || $5::jsonb
+           WHERE id = $6
              AND status = 'running'`
         : `UPDATE campaign_runs SET
            status = 'completed',
@@ -447,7 +458,9 @@ class CampaignRunRepository {
            skipped_sends = $4
            WHERE id = $5
              AND status = 'running'`,
-      [totalRecipients, successfulSends, failedSends, skippedSends, runId]
+      hasPendingRecipientDue
+        ? [totalRecipients, successfulSends, failedSends, skippedSends, metadataPatchJson, runId]
+        : [totalRecipients, successfulSends, failedSends, skippedSends, runId]
     );
   }
 

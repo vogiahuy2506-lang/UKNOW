@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import db from '../../src/config/database.js';
+import recipientLedgerRepository from '../../src/repositories/campaign/recipientLedger.repository.js';
 import { safeMetadataTimestampSql } from '../../src/utils/metadataTimestampSql.util.js';
 
 const SAFE_TIMESTAMP_SQL = safeMetadataTimestampSql('samples.raw_value');
@@ -46,5 +47,14 @@ describe('safeMetadataTimestampSql — PostgreSQL compatibility', () => {
       offset: '2026-08-31T08:30:15.123Z',
       utc: '2026-08-31T08:30:15.123Z',
     });
+  });
+
+  it('keeps the recipient-ledger aggregate query executable', async () => {
+    const result = await recipientLedgerRepository.countPendingDue(-1);
+
+    expect(Number(result.pending_count)).toBe(0);
+    expect(Number(result.pending_without_future_due)).toBe(0);
+    expect(Number(result.pending_with_retry_meta)).toBe(0);
+    expect(result.next_due_at).toBeNull();
   });
 });
