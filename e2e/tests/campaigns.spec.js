@@ -23,15 +23,28 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
     await expect(page).toHaveURL(/\/builder/);
   });
 
-  test('kích hoạt từ danh sách', async ({ page }) => {
+  /**
+   * Chiến dịch vừa tạo CHƯA có node nào — kích hoạt nó phải bị TỪ CHỐI.
+   *
+   * Trước 30/08/2026 test này khẳng định điều ngược lại (kích hoạt thành công), và đó chính là
+   * lỗ hổng đã gây sự cố 15/08: 15 chiến dịch rỗng node của 11 khách hàng thật được kích hoạt,
+   * chạy thất bại mỗi ngày suốt 15 ngày mà không ai được báo. Đợt A thêm preflight `NO_SEND_NODE`
+   * (`backend/src/services/campaign/campaignPreflight.service.js:50-61`) để chặn.
+   *
+   * Nói cách khác: test đỏ từ 30/08 KHÔNG phải lỗi sản phẩm — là test còn khẳng định hành vi cũ.
+   */
+  test('kích hoạt chiến dịch rỗng node → bị từ chối', async ({ page }) => {
     await page.goto('/app/campaigns');
     const row = page.locator('tr', { hasText: name });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.locator('td').last().locator('button').first().click();
     await page.getByRole('button', { name: 'Kích hoạt' }).click();
-    await expect(page.getByText(/Kích hoạt chiến dịch thành công|thành công/i).first()).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(row.getByText('Đang hoạt động')).toBeVisible({ timeout: 10_000 });
+
+    await expect(
+      page.getByText(/không có node gửi tin nhắn|NO_SEND_NODE/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Và trạng thái KHÔNG được đổi sang đang hoạt động.
+    await expect(row.getByText('Đang hoạt động')).toHaveCount(0);
   });
 });

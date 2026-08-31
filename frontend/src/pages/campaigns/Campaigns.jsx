@@ -129,7 +129,11 @@ const Campaigns = () => {
       toast.success(t('campaigns.activateSuccess'));
       fetchCampaigns();
     } catch (error) {
-      toast.error(t('campaigns.activateFailed'));
+      // Ưu tiên lý do cụ thể từ server. Preflight trả về những câu nói rõ phải sửa gì
+      // ("Chiến dịch không có node gửi tin nhắn nào."); nuốt chúng rồi hiện câu chung chung
+      // khiến người dùng không biết vì sao hỏng — đúng thứ Đợt A sinh ra để chấm dứt.
+      const serverMessage = String(error?.response?.data?.message || '').trim();
+      toast.error(serverMessage || t('campaigns.activateFailed'));
     }
     setActiveMenu(null);
   };
