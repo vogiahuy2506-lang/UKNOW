@@ -61,6 +61,7 @@ import {
   pickChannelByExplicitSignal,
 } from '../../utils/campaignQuickSend.util.js';
 import { runShadowIntentExtraction } from './intentExtractor.service.js';
+import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
 
@@ -1685,6 +1686,13 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           defaultZaloAccountId: firstZaloAccountId,
           channel: gateState?.channel,
           schedule: gateState?.schedule,
+        });
+
+        // Giai đoạn 2 - Việc 2.3: Shadow compare graph của compiler với script cũ
+        runCompilerShadowCompare({
+          legacyScript: targetScript,
+          gateState,
+          brief: briefForState || null,
         });
       }
 
