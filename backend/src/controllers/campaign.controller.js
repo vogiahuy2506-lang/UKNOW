@@ -284,7 +284,10 @@ class CampaignController {
         connections,
       });
 
-      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaignName, type: campaign.campaignType });
+      // `via` phân biệt campaign do trợ lý AI dựng với campaign người dùng tự dựng trong Builder.
+      // Trước đây hai đường ghi ra sự kiện giống hệt nhau, nên không đếm được đường AI được dùng
+      // bao nhiêu — trong khi WIZARD_DEAD_END lại đếm được số phiên hỏng. Có tử số, không có mẫu số.
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_CREATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, { name: campaign.campaignName, type: campaign.campaignType, via: req.campaignVia || 'builder' });
       res.status(201).json({
         success: true,
         message: 'Tạo chiến dịch thành công',
@@ -722,7 +725,9 @@ class CampaignController {
           AUDIT_ACTIONS.CAMPAIGN_RUN_STARTED,
           AUDIT_ENTITY_TYPES.CAMPAIGN,
           campaignId,
-          { runId: runRecord.id, source, continuousMode: Boolean(continuousMode) }
+          // `source` = nguồn kích hoạt lượt chạy (manual/schedule…), đã có từ trước.
+          // `via` = campaign này được dựng bằng đường nào (ai/builder) — hai thứ khác nhau.
+          { runId: runRecord.id, source, continuousMode: Boolean(continuousMode), via: req.campaignVia || 'builder' }
         );
       } catch (auditErr) {
         console.warn('[Campaign] CAMPAIGN_RUN_STARTED audit failed:', auditErr?.message);

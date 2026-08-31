@@ -585,6 +585,7 @@ class AiController {
         const campaignId = createRes.data.data.id;
         const runReq = {
           ...req,
+          campaignVia: 'ai',
           params: { id: campaignId },
           body: {
             runName: `AI Auto Run - ${new Date().toLocaleString()}`,
@@ -686,6 +687,8 @@ class AiController {
 
       const createReq = {
         ...req,
+        // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI với Builder.
+        campaignVia: 'ai',
         body: {
           campaignName: preparedScript.campaignName,
           description: preparedScript.description || '',
@@ -844,6 +847,7 @@ class AiController {
       // Re-use campaignController.update logic to push nodes/connections
       const updateReq = {
         ...req,
+        campaignVia: 'ai',
         params: { id: campaignId },
         body: {
           campaignName: script.campaignName,
@@ -872,6 +876,7 @@ class AiController {
       if (autoRun) {
         const runReq = {
           ...req,
+          campaignVia: 'ai',
           params: { id: campaignId },
           body: {
             runName: `AI Auto Run - ${new Date().toLocaleString()}`,
@@ -1010,6 +1015,8 @@ class AiController {
       // Bước 1: Tạo campaign
       const createReq = {
         ...req,
+        // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI với Builder.
+        campaignVia: 'ai',
         body: {
           campaignName: script.campaignName,
           description: script.description || '',
@@ -1081,6 +1088,7 @@ class AiController {
       // Bước 3: Tạo run và thực thi
       const runReq = {
         ...req,
+        campaignVia: 'ai',
         params: { id: campaignId },
         body: {
           runName: `AI Auto Run - ${new Date().toLocaleString('vi-VN')}`,
