@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   buildSafeStalledRunPredicate,
   parseCleanupStalledRunArgs,
+  splitCleanupStalledRunIds,
   STALLED_RUN_CLEANUP_HOURS,
 } from '../cleanupStalledRuns.util.js';
 
@@ -22,6 +23,13 @@ describe('cleanupStalledRuns safety guards', () => {
     expect(() => parseCleanupStalledRunArgs(['--ids='])).toThrow('--ids phải là danh sách ID dương');
     expect(() => parseCleanupStalledRunArgs(['--ids=0,314'])).toThrow('--ids phải là danh sách ID dương');
     expect(() => parseCleanupStalledRunArgs(['--ids=227,abc'])).toThrow('--ids phải là danh sách ID dương');
+  });
+
+  it('không báo nhầm run đã đóng là bị bỏ qua khi PostgreSQL trả BIGINT dạng string', () => {
+    expect(splitCleanupStalledRunIds([227, 314], [{ id: '227' }])).toEqual({
+      closedIds: ['227'],
+      skippedIds: [314],
+    });
   });
 
   it('predicate loại mọi run còn được runtime hẹn chạy lại và re-check hoạt động mới', () => {

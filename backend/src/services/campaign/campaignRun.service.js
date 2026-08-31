@@ -2576,6 +2576,8 @@ class CampaignRunService {
       const EMAIL_RATE_LIMIT_PAUSE_MS = 12 * 60 * 60 * 1000;
       /** Số bản ghi còn `meta.retryCount` trong nhóm đang chờ `nextDueAt` — chỉ có sau khi sync ledger; null = chưa sync trong phiên. */
       let pendingRecipientWithRetryMetaInLedger = null;
+      /** Mốc `nextDueAt` sớm nhất của một lượt đã duyệt xong; dùng để park run-level an toàn. */
+      let pendingRecipientNextDueAt = null;
       let selectedZaloAccount = null;
       /** Cấu hình node «Chọn tài khoản Zalo» gần nhất trên luồng thực thi (pool / một TK). */
       let lastSelectZaloAccountConfig = null;
@@ -2648,6 +2650,11 @@ class CampaignRunService {
             hasPendingRecipientDue = true;
             pendingRecipientDueCount = Math.max(pendingRecipientDueCount, pendingCount);
             pendingRecipientWithRetryMetaInLedger = pendingWithRetryMeta;
+            const rawNextDueAt = String(pendingRow?.next_due_at || '').trim();
+            const nextDueAtMs = Date.parse(rawNextDueAt);
+            if (Number.isFinite(nextDueAtMs) && nextDueAtMs > Date.now()) {
+              pendingRecipientNextDueAt = new Date(nextDueAtMs).toISOString();
+            }
           }
         } catch (pendingCheckError) {
           if (String(pendingCheckError?.code || '') === '42P01' || String(pendingCheckError?.code || '') === '42703') {
@@ -7431,6 +7438,17 @@ class CampaignRunService {
       await syncPendingEmailRetryFromLedger();
 
       await campaignRunRepository.finalizeRun(runId, hasPendingRecipientDue && !isContinuousMode, { totalRecipients, successfulSends, failedSends, skippedSends });
+
+      // Chỉ ghi mốc wake cấp run SAU KHI đã đi hết flow và finalize giữ run `running`.
+      // Không suy diễn từ một ledger row trong scheduler: nếu process chết giữa lượt,
+      // không có marker thì recovery chung vẫn phải chạy để cứu recipient chưa xử lý.
+      if (hasPendingRecipientDue && !isContinuousMode && pendingRecipientNextDueAt) {
+        await campaignRunRepository.patchRunMetadata(runId, {
+          nonContinuousDeferredUntil: pendingRecipientNextDueAt,
+          nonContinuousDeferredReason: 'all_recipients_waiting_next_due',
+          nonContinuousDeferredAt: new Date().toISOString(),
+        });
+      }
 
       await campaignCrudRepository.updateCampaignLastRunStats(campaignId, successfulSends);
 

@@ -23,6 +23,24 @@ export function parseCleanupStalledRunArgs(argv = []) {
 }
 
 /**
+ * Tách các ID vừa được UPDATE thành công khỏi ID bị bỏ qua.
+ * node-postgres mặc định trả PostgreSQL BIGINT ở dạng string, trong khi CLI đã
+ * parse ID thành number; so sánh sau khi chuẩn hoá string để log không báo nhầm.
+ * @param {number[]} requestedRunIds
+ * @param {Array<{ id: string|number|bigint }>} closedRows
+ * @returns {{ closedIds: Array<string|number|bigint>, skippedIds: number[] }}
+ */
+export function splitCleanupStalledRunIds(requestedRunIds, closedRows = []) {
+  const closedIds = closedRows.map((row) => row.id);
+  const closedIdSet = new Set(closedIds.map((id) => String(id)));
+
+  return {
+    closedIds,
+    skippedIds: requestedRunIds.filter((id) => !closedIdSet.has(String(id))),
+  };
+}
+
+/**
  * Predicate bảo thủ cho script dọn một lần.
  * Bất kỳ dấu vết recipient/defer đang được runtime quản lý đều loại run khỏi danh sách.
  * @param {string} hoursParam PostgreSQL placeholder, ví dụ `$1`

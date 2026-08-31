@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockQuery = jest.fn();
 jest.unstable_mockModule('../../../config/database.js', () => ({
@@ -7,9 +7,13 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
   },
 }));
 
-const { metricCampaignRunFailures, metricCampaignRepeatedFailures } = await import('../alert.repository.js');
+const { metricCampaignRunFailures, metricCampaignRepeatedFailures, metricStalledRuns } = await import('../alert.repository.js');
 
 describe('PR-4: Alert repository failure metrics SQL behavior', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
   it('metricCampaignRunFailures query không lọc total_recipients > 0 (đếm được run chết sớm 0 recipient)', async () => {
     mockQuery.mockResolvedValueOnce({
       rows: [{ failed: '3', campaigns: '2' }],
@@ -37,5 +41,40 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
     const sql = mockQuery.mock.calls[0][0];
     expect(sql).toContain("status = 'completed'");
     expect(sql).toContain("status = 'failed'");
+  });
+
+  it('metricStalledRuns dùng đúng cột campaign_name của bảng campaigns', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          id: '105',
+          id_campaign: '2',
+          campaign_name: 'Flash Sale Tháng 8',
+          total_recipients: '100',
+          successful_sends: '10',
+          failed_sends: '1',
+          started_at: '2026-08-30T00:00:00.000Z',
+          last_execution_at: null,
+        },
+      ],
+    });
+
+    await expect(metricStalledRuns(48)).resolves.toEqual([
+      {
+        runId: '105',
+        campaignId: '2',
+        campaignName: 'Flash Sale Tháng 8',
+        startedAt: '2026-08-30T00:00:00.000Z',
+        lastExecutionAt: null,
+        totalRecipients: 100,
+        successfulSends: 10,
+        failedSends: 1,
+      },
+    ]);
+
+    const sql = mockQuery.mock.calls[0][0];
+    expect(sql).toContain('c.campaign_name AS campaign_name');
+    expect(sql).toContain('c.campaign_name');
+    expect(sql).not.toMatch(/\bc\.name\b/);
   });
 });

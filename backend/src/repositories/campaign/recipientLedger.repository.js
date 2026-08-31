@@ -1,4 +1,7 @@
 import db from '../../config/database.js';
+import { safeMetadataTimestampSql } from '../../utils/metadataTimestampSql.util.js';
+
+const SAFE_NEXT_DUE_AT_SQL = safeMetadataTimestampSql("meta->>'nextDueAt'");
 
 class RecipientLedgerRepository {
   /**
@@ -108,12 +111,13 @@ class RecipientLedgerRepository {
    * Count recipients with a future nextDueAt (pending completion) and those with retryCount in meta.
    *
    * @param {number} runId
-   * @returns {Promise<{pending_count: number, pending_with_retry_meta: number}>}
+   * @returns {Promise<{pending_count: number, pending_with_retry_meta: number, next_due_at: Date|null}>}
    */
   async countPendingDue(runId) {
     const result = await db.query(
       `SELECT
          COUNT(*)::int AS pending_count,
+         MIN(safe_due.next_due_at) AS next_due_at,
          COUNT(*) FILTER (
            WHERE meta ? 'retryCount'
              AND TRIM(COALESCE(meta->>'retryCount', '')) <> ''
@@ -121,13 +125,19 @@ class RecipientLedgerRepository {
              AND (meta->>'retryCount')::int > 0
          )::int AS pending_with_retry_meta
        FROM campaign_run_recipient_steps
+       CROSS JOIN LATERAL (
+         SELECT ${SAFE_NEXT_DUE_AT_SQL} AS next_due_at
+       ) safe_due
        WHERE id_run = $1
          AND COALESCE(is_fully_completed, FALSE) = FALSE
-         AND NULLIF(TRIM(COALESCE(meta->>'nextDueAt', '')), '') IS NOT NULL
-         AND (meta->>'nextDueAt')::timestamptz > NOW()`,
+         AND safe_due.next_due_at > NOW()`,
       [runId]
     );
-    return result.rows[0] ?? { pending_count: 0, pending_with_retry_meta: 0 };
+    return result.rows[0] ?? {
+      pending_count: 0,
+      pending_with_retry_meta: 0,
+      next_due_at: null,
+    };
   }
 }
 

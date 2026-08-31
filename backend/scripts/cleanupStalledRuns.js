@@ -6,6 +6,7 @@ import db from '../src/config/database.js';
 import {
   buildSafeStalledRunPredicate,
   parseCleanupStalledRunArgs,
+  splitCleanupStalledRunIds,
   STALLED_RUN_CLEANUP_HOURS,
 } from '../src/utils/cleanupStalledRuns.util.js';
 
@@ -100,8 +101,7 @@ async function cleanupStalledRuns() {
       String(STALLED_HOURS),
       `Lượt chạy bị bỏ rơi — không có hoạt động quá ${STALLED_HOURS} giờ (dọn dẹp thủ công).`,
     ]);
-    const closedIds = updateResult.rows.map((row) => row.id);
-    const skippedIds = REQUESTED_RUN_IDS.filter((id) => !closedIds.includes(id));
+    const { closedIds, skippedIds } = splitCleanupStalledRunIds(REQUESTED_RUN_IDS, updateResult.rows);
     console.log(`[CleanupStalledRuns] ✅ Đã đóng ${updateResult.rowCount} run: ${closedIds.join(', ') || '(không có)'}.`);
     if (skippedIds.length) {
       console.log(
