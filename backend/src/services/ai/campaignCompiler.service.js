@@ -528,6 +528,11 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, optio
     positionX: sendZaloPosX,
     positionY: 200,
     config: {
+      // Giữ zaloAccountId ở node gửi: registry khai `required: true` cho trường này
+      // (campaignNodeRegistry.service.js:324-326). Chiến dịch cũ để trống và vẫn chạy được
+      // vì runtime lấy tài khoản từ `select_zalo_account` phía trên — hai dạng tương đương
+      // về ngữ nghĩa. Khác biệt đó được xử lý ở BỘ SO SÁNH (so giá trị hiệu dụng),
+      // không phải bằng cách bỏ trường và làm hỏng validateNodeConfig.
       zaloAccountId: Number(sender.id),
       zaloRecipientSource: recipientSource,
       zaloRecipientNodeId: audienceNodeId || '',
@@ -767,6 +772,11 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
     positionX: sendZaloPosX,
     positionY: 200,
     config: {
+      // Giữ zaloAccountId ở node gửi: registry khai `required: true` cho trường này
+      // (campaignNodeRegistry.service.js:324-326). Chiến dịch cũ để trống và vẫn chạy được
+      // vì runtime lấy tài khoản từ `select_zalo_account` phía trên — hai dạng tương đương
+      // về ngữ nghĩa. Khác biệt đó được xử lý ở BỘ SO SÁNH (so giá trị hiệu dụng),
+      // không phải bằng cách bỏ trường và làm hỏng validateNodeConfig.
       zaloAccountId: Number(sender.id),
       zaloRecipientSource: recipientSource,
       zaloRecipientNodeId: audienceNodeId || '',
@@ -892,6 +902,7 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options 
     positionX: 750,
     positionY: 200,
     config: {
+      // Xem ghi chú ở node gửi Zalo cá nhân.
       zaloAccountId: Number(sender.id),
       zaloGroupSource: 'node',
       zaloGroupNodeId: groupAudienceId,
@@ -1051,6 +1062,7 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
     positionX: 750,
     positionY: 200,
     config: {
+      // Xem ghi chú ở node gửi Zalo cá nhân.
       zaloAccountId: Number(sender.id),
       zaloGroupSource: 'node',
       zaloGroupNodeId: groupAudienceId,

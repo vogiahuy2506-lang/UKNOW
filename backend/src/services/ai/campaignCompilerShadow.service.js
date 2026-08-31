@@ -14,6 +14,47 @@ import { deriveIntent, isCompilableIntent } from './campaignIntent.schema.js';
  * @param {object} node
  * @returns {string}
  */
+/**
+ * Chuẩn hoá zaloAccountId trước khi so sánh.
+ *
+ * KHÔNG dùng `Number(a) !== Number(b)` trực tiếp: khi cả hai phía đều thiếu trường này —
+ * đúng trạng thái bình thường của node gửi, vì tài khoản nằm ở `select_zalo_account` —
+ * thì cả hai thành `NaN`, và `NaN !== NaN` luôn ĐÚNG. Bộ so sánh sẽ báo lệch cho hai
+ * giá trị giống hệt nhau.
+ *
+ * @param {unknown} value
+ * @returns {number|null} null nếu thiếu/rỗng/không phải số
+ */
+function normalizeAccountId(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Tài khoản Zalo mà RUNTIME thật sự dùng cho một node gửi.
+ *
+ * Đo trên production 31/08: 100% chiến dịch thật để trống `zaloAccountId` ở node gửi —
+ * tài khoản chỉ nằm ở `select_zalo_account` phía trên, và node gửi thừa hưởng từ đó
+ * (run 364 chạy trót lọt đúng theo cách này). Compiler thì ghi tường minh vào node gửi
+ * vì registry khai `required: true` (campaignNodeRegistry.service.js:324-326).
+ *
+ * Hai dạng TƯƠNG ĐƯƠNG về ngữ nghĩa. So sánh thô từng trường sẽ báo lệch cho 106/110
+ * campaign trong backtest 31/08 mà không có khác biệt thật nào về hành vi. Nên so
+ * giá trị hiệu dụng: lấy ở node gửi, thiếu thì lấy ở `select_zalo_account`.
+ *
+ * @param {object} sendNode node gửi (đã có config)
+ * @param {object[]} allNodes toàn bộ node cùng phía để tra ngược
+ * @param {(n: object) => string} getSubtype hàm lấy subtype đúng cho phía đó
+ * @returns {number|null}
+ */
+function resolveEffectiveZaloAccountId(sendNode, allNodes, getSubtype) {
+  const own = normalizeAccountId((sendNode?.config || sendNode?.settings || {}).zaloAccountId);
+  if (own !== null) return own;
+  const selectNode = allNodes.find((n) => getSubtype(n) === 'select_zalo_account');
+  return normalizeAccountId((selectNode?.config || selectNode?.settings || {}).zaloAccountId);
+}
+
 export function getCompiledNodeSubtype(node) {
   return String(node?.nodeSubtype || '');
 }
@@ -105,11 +146,10 @@ export function compareCompiledWithLegacy(compiledGraph, legacyScript) {
   const legacySendZalo = legacyNodes.find((n) => getLegacyNodeSubtype(n) === 'send_zalo_personal');
 
   if (compiledSendZalo && legacySendZalo) {
-    const cCfg = compiledSendZalo.config || {};
-    const lCfg = legacySendZalo.config || legacySendZalo.settings || {};
-
-    if (Number(cCfg.zaloAccountId) !== Number(lCfg.zaloAccountId)) {
-      differences.push(`zaloAccountId khác nhau: compiler=${cCfg.zaloAccountId}, legacy=${lCfg.zaloAccountId}`);
+    const cAcc = resolveEffectiveZaloAccountId(compiledSendZalo, compiledNodes, getCompiledNodeSubtype);
+    const lAcc = resolveEffectiveZaloAccountId(legacySendZalo, legacyNodes, getLegacyNodeSubtype);
+    if (cAcc !== lAcc) {
+      differences.push(`zaloAccountId hiệu dụng khác nhau: compiler=${cAcc}, legacy=${lAcc}`);
     }
   }
 
@@ -118,11 +158,10 @@ export function compareCompiledWithLegacy(compiledGraph, legacyScript) {
   const legacySendZaloGroup = legacyNodes.find((n) => getLegacyNodeSubtype(n) === 'send_zalo_group');
 
   if (compiledSendZaloGroup && legacySendZaloGroup) {
-    const cCfg = compiledSendZaloGroup.config || {};
-    const lCfg = legacySendZaloGroup.config || legacySendZaloGroup.settings || {};
-
-    if (Number(cCfg.zaloAccountId) !== Number(lCfg.zaloAccountId)) {
-      differences.push(`zaloAccountId khác nhau (nhóm): compiler=${cCfg.zaloAccountId}, legacy=${lCfg.zaloAccountId}`);
+    const cAcc = resolveEffectiveZaloAccountId(compiledSendZaloGroup, compiledNodes, getCompiledNodeSubtype);
+    const lAcc = resolveEffectiveZaloAccountId(legacySendZaloGroup, legacyNodes, getLegacyNodeSubtype);
+    if (cAcc !== lAcc) {
+      differences.push(`zaloAccountId hiệu dụng khác nhau (nhóm): compiler=${cAcc}, legacy=${lAcc}`);
     }
   }
 
