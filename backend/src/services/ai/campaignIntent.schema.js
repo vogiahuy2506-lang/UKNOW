@@ -212,3 +212,77 @@ export function deriveIntent(gates = {}, brief = null) {
 
   return { intent, missing };
 }
+
+/**
+ * Vị từ nghiêm ngặt kiểm tra xem một intent đã đủ mọi dữ liệu cần thiết để compiler dựng graph chưa.
+ * Khác với validator/schema (cho phép intent khuyết trong lúc hội thoại đang diễn ra),
+ * compiler bắt buộc phải có đủ channel, sender hợp lệ, audience cụ thể và schedule.
+ *
+ * @param {any} intent
+ * @returns {{ ok: boolean, missing: string[] }}
+ */
+export function isCompilableIntent(intent) {
+  const missing = [];
+  if (!intent || typeof intent !== 'object' || Array.isArray(intent)) {
+    return { ok: false, missing: ['intent'] };
+  }
+
+  if (intent.version !== 1) {
+    missing.push('version');
+  }
+
+  if (!intent.channel || !VALID_CHANNELS.has(intent.channel)) {
+    missing.push('channel');
+  }
+
+  if (!intent.sender || typeof intent.sender !== 'object' || Array.isArray(intent.sender)) {
+    missing.push('sender');
+  } else {
+    if (intent.sender.id == null || !Number.isInteger(Number(intent.sender.id))) {
+      missing.push('sender.id');
+    }
+    if (!intent.sender.type || !VALID_SENDER_TYPES.has(intent.sender.type)) {
+      missing.push('sender.type');
+    }
+  }
+
+  if (!intent.audience || typeof intent.audience !== 'object' || Array.isArray(intent.audience)) {
+    missing.push('audience');
+  } else {
+    if (!intent.audience.type || !VALID_AUDIENCE_TYPES.has(intent.audience.type)) {
+      missing.push('audience.type');
+    } else {
+      if (intent.audience.type === 'sheet' && (!intent.audience.url || !String(intent.audience.url).trim())) {
+        missing.push('audience.url');
+      }
+      if (intent.audience.type === 'landing' && (!Array.isArray(intent.audience.slugs) || intent.audience.slugs.length === 0)) {
+        missing.push('audience.slugs');
+      }
+      if (
+        intent.channel === 'zalo_group' &&
+        intent.audience.type === 'zalo_contacts' &&
+        (!Array.isArray(intent.audience.groupIds) || intent.audience.groupIds.length === 0)
+      ) {
+        missing.push('audience.groupIds');
+      }
+    }
+  }
+
+  if (!intent.schedule || typeof intent.schedule !== 'object' || Array.isArray(intent.schedule)) {
+    missing.push('schedule');
+  } else {
+    if (!intent.schedule.type || !VALID_SCHEDULE_TYPES.has(intent.schedule.type)) {
+      missing.push('schedule.type');
+    } else if (intent.schedule.type === 'drip') {
+      if (!intent.schedule.days || Number(intent.schedule.days) <= 0) {
+        missing.push('schedule.days');
+      }
+    }
+  }
+
+  return {
+    ok: missing.length === 0,
+    missing,
+  };
+}
+
