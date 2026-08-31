@@ -109,7 +109,10 @@ async function cleanupStalledRuns() {
       );
     }
   } finally {
-    await db.end();
+    // db.pool.end() chu KHONG phai db.end(): default export cua config/database.js la
+    // { query, getClient, pool, withRetry, isConnectionError } — khong co ham end().
+    // Moi script khac trong scripts/ deu dung db.pool.end().
+    await db.pool.end();
   }
 }
 
