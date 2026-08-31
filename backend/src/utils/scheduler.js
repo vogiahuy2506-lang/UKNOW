@@ -302,6 +302,29 @@ const refreshCampaignSchedules = async () => {
  *
  * @returns {Promise<void>}
  */
+/**
+ * Bỏ qua những run đang ĐỖ CHỜ ĐÚNG THIẾT KẾ: còn bước chưa xong nhưng hạn `nextDueAt`
+ * vẫn ở tương lai. Những run đó KHÔNG cần nhấc lên — `recoverOverdueNonContinuousCampaignRuns`
+ * (quét :40 mỗi phút) sẽ nhận chúng đúng lúc tới hạn.
+ *
+ * Vì sao cần: `recoverNonContinuousCampaignRuns` quét mù mọi run `running`, và mỗi lần nhấc
+ * là `executeCampaign` chạy LẠI TOÀN BỘ luồng từ node trigger — kể cả các node gọi ra ngoài.
+ * Đo trên production 31/08/2026: 87 lượt nhấc/giờ cho 2 run, node `get_all_groups` (gọi API
+ * Zalo của khách) và `read_sheet` (đọc 28.500 dòng Google Sheet) đều được chạy lại cách thời
+ * điểm đo 12 giây — tức khoảng 2.000 lượt gọi API vô ích mỗi ngày, không gửi thêm tin nào.
+ *
+ * Run KHÔNG có bản ghi bước nào vẫn lọt qua bộ lọc này — đó là chủ ý, để giữ nguyên khả năng
+ * nhận nuôi run mồ côi sau khi tiến trình khởi động lại.
+ */
+const PARKED_UNTIL_FUTURE_DUE_SQL = `AND NOT EXISTS (
+  SELECT 1
+  FROM campaign_run_recipient_steps crs_parked
+  WHERE crs_parked.id_run = cr.id
+    AND COALESCE(crs_parked.is_fully_completed, FALSE) = FALSE
+    AND NULLIF(TRIM(COALESCE(crs_parked.meta->>'nextDueAt', '')), '') IS NOT NULL
+    AND (crs_parked.meta->>'nextDueAt')::timestamptz > NOW()
+)`;
+
 const QUOTA_DEFER_READY_SQL = `AND (
   NULLIF(TRIM(COALESCE(cr.run_metadata->>'quotaDeferredUntil', '')), '') IS NULL
   OR (cr.run_metadata->>'quotaDeferredUntil')::timestamptz <= NOW()
@@ -385,6 +408,7 @@ const recoverNonContinuousCampaignRuns = async () => {
      JOIN campaigns c ON c.id = cr.id_campaign
      WHERE cr.status = 'running'
        AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'
+       ${PARKED_UNTIL_FUTURE_DUE_SQL}
        ${QUOTA_DEFER_READY_SQL}`
   );
   if (result.rows.length === 0) return { recovered: 0 };

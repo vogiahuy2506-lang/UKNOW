@@ -191,14 +191,15 @@ export async function metricStalledRuns(hours = 6) {
        cr.successful_sends,
        cr.failed_sends,
        c.name AS campaign_name,
-       MAX(ce.created_at) AS last_execution_at
+       MAX(GREATEST(ce.created_at, ce.updated_at)) AS last_execution_at
      FROM campaign_runs cr
      LEFT JOIN campaigns c ON c.id = cr.id_campaign
      LEFT JOIN campaign_executions ce ON ce.id_run = cr.id
      WHERE cr.status = 'running'
        AND cr.started_at <= NOW() - ($1 || ' hours')::interval
      GROUP BY cr.id, cr.id_campaign, cr.started_at, cr.total_recipients, cr.successful_sends, cr.failed_sends, c.name
-     HAVING MAX(ce.created_at) IS NULL OR MAX(ce.created_at) <= NOW() - ($1 || ' hours')::interval`,
+     HAVING MAX(GREATEST(ce.created_at, ce.updated_at)) IS NULL
+         OR MAX(GREATEST(ce.created_at, ce.updated_at)) <= NOW() - ($1 || ' hours')::interval`,
     [String(hours)]
   );
   return rows.map((r) => ({

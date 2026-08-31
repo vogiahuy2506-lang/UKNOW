@@ -3,13 +3,34 @@
 // ECONNREFUSED khi chạy trong container (Postgres nằm ở host 'uknow-postgres').
 import 'dotenv/config';
 import db from '../src/config/database.js';
+import {
+  buildSafeStalledRunPredicate,
+  parseCleanupStalledRunArgs,
+  STALLED_RUN_CLEANUP_HOURS,
+} from '../src/utils/cleanupStalledRuns.util.js';
 
 /**
- * Script dọn dẹp một lần cho các run đang bị treo ở trạng thái 'running' không có hoạt động trong > 24 giờ.
- * An toàn: Tự động loại bỏ các run đang chạy thật (có execution trong 24h qua).
+ * Script dọn dẹp một lần cho các run kẹt ở trạng thái 'running' không có hoạt động trong > 48 giờ.
+ *
+ * VÌ SAO 48 GIỜ, KHÔNG PHẢI 24: một run im lặng KHÔNG có nghĩa là treo. Các khoảng
+ * chờ hợp lệ theo thiết kế:
+ *   - Đụng trần gửi email theo ngày → chờ tới lần reset kế tiếp: tối đa ~24 giờ
+ *     (`assertSendQuotaOrYield` → `persistQuotaDeferYieldSlot`).
+ *   - SMTP bị rate-limit → tạm dừng 12 giờ (EMAIL_RATE_LIMIT_PAUSE_MS).
+ *   - Giờ yên lặng Zalo 23:00–06:00 → tới ~7 giờ.
+ * Ngưỡng 24 giờ cũ có thể đóng nhầm một chiến dịch email đang chờ quota reset.
+ *
+ * Cách dùng:
+ *   node scripts/cleanupStalledRuns.js
+ *     → chỉ in các ứng viên an toàn, KHÔNG ghi DB.
+ *   node scripts/cleanupStalledRuns.js --apply --ids=227,314
+ *     → chỉ đóng các ID đã được người vận hành xem trước và xác nhận.
  */
+const STALLED_HOURS = STALLED_RUN_CLEANUP_HOURS;
+const { apply: APPLY, requestedRunIds: REQUESTED_RUN_IDS } = parseCleanupStalledRunArgs(process.argv.slice(2));
+
 async function cleanupStalledRuns() {
-  console.log('[CleanupStalledRuns] Đang quét các run bị treo...');
+  console.log(`[CleanupStalledRuns] Đang quét các run bị treo${APPLY ? ' để áp dụng thay đổi' : ' (dry-run)'}...`);
 
   const selectQuery = `
     SELECT
@@ -20,51 +41,76 @@ async function cleanupStalledRuns() {
       cr.successful_sends,
       cr.failed_sends,
       cr.status,
-      MAX(ce.created_at) AS last_execution_at
+      -- updated_at CHỨ KHÔNG PHẢI created_at: campaign_executions được cập nhật TẠI CHỖ
+      -- theo từng node (một node gửi chạy nhiều giờ vẫn giữ nguyên created_at ban đầu).
+      -- Dùng created_at sẽ coi một chiến dịch đang gửi suốt nhiều ngày là "đứng yên".
+      MAX(GREATEST(ce.created_at, ce.updated_at)) AS last_execution_at
     FROM campaign_runs cr
     LEFT JOIN campaign_executions ce ON ce.id_run = cr.id
-    WHERE cr.status = 'running'
-      AND cr.started_at < NOW() - INTERVAL '24 hours'
+    WHERE ${buildSafeStalledRunPredicate('$1')}
     GROUP BY cr.id, cr.id_campaign, cr.started_at, cr.total_recipients, cr.successful_sends, cr.failed_sends, cr.status
-    HAVING MAX(ce.created_at) IS NULL OR MAX(ce.created_at) < NOW() - INTERVAL '24 hours'
     ORDER BY cr.id ASC;
   `;
 
-  const { rows } = await db.query(selectQuery);
+  try {
+    const { rows } = await db.query(selectQuery, [String(STALLED_HOURS)]);
 
-  if (rows.length === 0) {
-    console.log('[CleanupStalledRuns] Không tìm thấy run nào bị treo quá 24 giờ.');
+    if (rows.length === 0) {
+      console.log(`[CleanupStalledRuns] Không tìm thấy run nào bị treo quá ${STALLED_HOURS} giờ mà không có mốc chờ hợp lệ.`);
+      return;
+    }
+
+    console.log(`[CleanupStalledRuns] Tìm thấy ${rows.length} run đủ điều kiện an toàn để xem xét:`);
+    console.table(
+      rows.map((r) => ({
+        run_id: r.id,
+        campaign_id: r.id_campaign,
+        started_at: r.started_at,
+        last_activity: r.last_execution_at || 'Không có execution',
+        total_recipients: r.total_recipients,
+        successful_sends: r.successful_sends,
+      }))
+    );
+
+    if (!APPLY) {
+      console.log(
+        `\n[CleanupStalledRuns] Dry-run: CHƯA ghi DB. Sau khi xem danh sách, chạy lại với --apply --ids=${rows.map((row) => row.id).join(',')}`
+      );
+      return;
+    }
+
+    if (REQUESTED_RUN_IDS.length === 0) {
+      throw new Error('Từ chối ghi DB: cần truyền ID đã xác nhận, ví dụ: --apply --ids=227,314');
+    }
+
+    // Re-check toàn bộ predicate trong chính UPDATE. Nếu scheduler vừa tạo execution mới
+    // hoặc vừa ghi một mốc defer sau dry-run, run đó sẽ không bị đóng nhầm.
+    const updateQuery = `
+      UPDATE campaign_runs cr
+      SET status = 'failed',
+          completed_at = CURRENT_TIMESTAMP,
+          error_message = $3
+      WHERE cr.id = ANY($1::bigint[])
+        AND ${buildSafeStalledRunPredicate('$2')}
+      RETURNING id, status, completed_at, error_message;
+    `;
+
+    const updateResult = await db.query(updateQuery, [
+      REQUESTED_RUN_IDS,
+      String(STALLED_HOURS),
+      `Lượt chạy bị bỏ rơi — không có hoạt động quá ${STALLED_HOURS} giờ (dọn dẹp thủ công).`,
+    ]);
+    const closedIds = updateResult.rows.map((row) => row.id);
+    const skippedIds = REQUESTED_RUN_IDS.filter((id) => !closedIds.includes(id));
+    console.log(`[CleanupStalledRuns] ✅ Đã đóng ${updateResult.rowCount} run: ${closedIds.join(', ') || '(không có)'}.`);
+    if (skippedIds.length) {
+      console.log(
+        `[CleanupStalledRuns] Bỏ qua ${skippedIds.join(', ')} vì không còn thỏa điều kiện an toàn (có thể đã được phục hồi).`
+      );
+    }
+  } finally {
     await db.end();
-    return;
   }
-
-  console.log(`[CleanupStalledRuns] Tìm thấy ${rows.length} run bị treo:`);
-  console.table(
-    rows.map((r) => ({
-      run_id: r.id,
-      campaign_id: r.id_campaign,
-      started_at: r.started_at,
-      last_activity: r.last_execution_at || 'Không có execution',
-      total_recipients: r.total_recipients,
-      successful_sends: r.successful_sends,
-    }))
-  );
-
-  const runIds = rows.map((r) => r.id);
-
-  const updateQuery = `
-    UPDATE campaign_runs
-    SET status = 'completed',
-        completed_at = CURRENT_TIMESTAMP,
-        error_message = 'Đã hoàn thành (dọn dẹp thủ công run không có hoạt động > 24h)'
-    WHERE id = ANY($1::bigint[])
-      AND status = 'running'
-    RETURNING id, status, completed_at, error_message;
-  `;
-
-  const updateResult = await db.query(updateQuery, [runIds]);
-  console.log(`[CleanupStalledRuns] ✅ Đã đóng ${updateResult.rowCount} run treo thành công.`);
-  await db.end();
 }
 
 cleanupStalledRuns().catch((err) => {
