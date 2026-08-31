@@ -25,7 +25,9 @@ export function getCompiledNodeSubtype(node) {
  * @returns {string}
  */
 export function getLegacyNodeSubtype(node) {
-  return String(node?.nodeSubtype || node?.node_subtype || node?.subtype || '');
+  const sub = String(node?.nodeSubtype || node?.node_subtype || node?.subtype || '');
+  if (sub === 'manual_trigger') return 'manual';
+  return sub;
 }
 
 /**
