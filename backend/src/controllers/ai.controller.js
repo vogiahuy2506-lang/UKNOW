@@ -687,8 +687,8 @@ class AiController {
 
       const createReq = {
         ...req,
-        // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI với Builder.
-        campaignVia: 'ai',
+        // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI, Compiler và Builder.
+        campaignVia: (preparedScript?.compilerApplied || preparedScript?._via === 'ai_compiler') ? 'ai_compiler' : 'ai',
         body: {
           campaignName: preparedScript.campaignName,
           description: preparedScript.description || '',
@@ -1015,8 +1015,8 @@ class AiController {
       // Bước 1: Tạo campaign
       const createReq = {
         ...req,
-        // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI với Builder.
-        campaignVia: 'ai',
+        // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI, Compiler và Builder.
+        campaignVia: (script?.compilerApplied || script?._via === 'ai_compiler') ? 'ai_compiler' : 'ai',
         body: {
           campaignName: script.campaignName,
           description: script.description || '',

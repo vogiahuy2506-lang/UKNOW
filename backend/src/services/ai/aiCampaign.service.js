@@ -62,6 +62,9 @@ import {
 } from '../../utils/campaignQuickSend.util.js';
 import { runShadowIntentExtraction } from './intentExtractor.service.js';
 import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
+import { isCompilableIntent, deriveIntent } from './campaignIntent.schema.js';
+import { compileCampaign } from './campaignCompiler.service.js';
+import { mergeCompiledWithContent, assertNoEmptyContent } from './campaignScriptMerge.service.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
 
@@ -1694,6 +1697,54 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           gateState,
           brief: briefForState || null,
         });
+
+        // Giai đoạn 4 & PLAN_BAT_CO_ZALO_GROUP: Bật cờ compiler theo từng luồng
+        try {
+          const enabledFlows = (process.env.COMPILER_ENABLED_FLOWS || '')
+            .split(',')
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean);
+
+          // CẢNH BÁO TÊN BIẾN: hàm này đã có sẵn tham số `intent` — đó là CHUỖI phân loại ý
+          // định (so với 'content_plan_request' ở dòng 397), KHÔNG phải CampaignIntentV1.
+          // Bản đầu dùng nhầm biến đó nên `isCompilableIntent` luôn trả false và compiler
+          // KHÔNG BAO GIỜ chạy — một no-op im lặng, log ra lý do trông rất hợp lý.
+          // Phải tự dựng intent có cấu trúc, giống cách runCompilerShadowCompare làm bên trong.
+          const { intent: campaignIntent } = deriveIntent(gateState, briefForState || null);
+
+          const compilableCheck = isCompilableIntent(campaignIntent);
+          if (!compilableCheck.ok) {
+            console.log(`[CampaignCompiler] Giữ script LLM cũ — intent khuyết trường: ${compilableCheck.missing.join(', ')}`);
+          } else if (!enabledFlows.includes(campaignIntent.channel)) {
+            // Luồng chưa bật cờ
+          } else {
+            const compiledGraph = compileCampaign(intent);
+            const { script: mergedScript, unmatchedSlots } = mergeCompiledWithContent(compiledGraph, targetScript);
+
+            if (unmatchedSlots.length > 0) {
+              console.warn(`[CampaignCompiler] Giữ script LLM cũ — merge_failed có ${unmatchedSlots.length} slot chưa khớp`);
+            } else {
+              assertNoEmptyContent(mergedScript);
+
+              if (finalResponse.data?.script) {
+                finalResponse.data.script.nodes = mergedScript.nodes;
+                finalResponse.data.script.connections = mergedScript.connections;
+                finalResponse.data.script.compilerApplied = true;
+                finalResponse.data.script._via = 'ai_compiler';
+              }
+              if (Array.isArray(finalResponse.data?.nodes)) {
+                finalResponse.data.nodes = mergedScript.nodes;
+                finalResponse.data.connections = mergedScript.connections;
+                finalResponse.data.compilerApplied = true;
+                finalResponse.data._via = 'ai_compiler';
+              }
+              console.log(`[CampaignCompiler] ✅ Đã áp dụng graph Compiler cho luồng ${intent.channel} (via: ai_compiler)`);
+            }
+          }
+        } catch (compilerApplyErr) {
+          const reason = compilerApplyErr.code === 'EMPTY_CONTENT' ? 'empty_content' : 'merge_error';
+          console.warn(`[CampaignCompiler] Giữ script LLM cũ — lỗi ${reason}: ${compilerApplyErr.message}`);
+        }
       }
 
       const schedule = gateState?.schedule;
