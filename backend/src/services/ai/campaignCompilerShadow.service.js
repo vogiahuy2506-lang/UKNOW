@@ -40,11 +40,33 @@ export function getLegacyNodeSubtype(node) {
 export function compareCompiledWithLegacy(compiledGraph, legacyScript) {
   const differences = [];
 
-  const compiledNodes = Array.isArray(compiledGraph?.nodes) ? compiledGraph.nodes : [];
-  const legacyNodes = Array.isArray(legacyScript?.nodes) ? legacyScript.nodes : [];
+  const rawCompiledNodes = Array.isArray(compiledGraph?.nodes) ? compiledGraph.nodes : [];
+  const rawLegacyNodes = Array.isArray(legacyScript?.nodes) ? legacyScript.nodes : [];
 
-  const compiledConns = Array.isArray(compiledGraph?.connections) ? compiledGraph.connections : [];
-  const legacyConns = Array.isArray(legacyScript?.connections) ? legacyScript.connections : [];
+  const rawCompiledConns = Array.isArray(compiledGraph?.connections) ? compiledGraph.connections : [];
+  const rawLegacyConns = Array.isArray(legacyScript?.connections) ? legacyScript.connections : [];
+
+  // Lọc bỏ node `end` ở cả 2 phía trước khi so sánh (Việc 2 - PLAN_SUA_SAU_BACKTEST)
+  const compiledNodes = rawCompiledNodes.filter((n) => getCompiledNodeSubtype(n) !== 'end');
+  const legacyNodes = rawLegacyNodes.filter((n) => getLegacyNodeSubtype(n) !== 'end');
+
+  const compiledEndIds = new Set(
+    rawCompiledNodes.filter((n) => getCompiledNodeSubtype(n) === 'end').map((n) => String(n.id || n.tempId))
+  );
+  const legacyEndIds = new Set(
+    rawLegacyNodes.filter((n) => getLegacyNodeSubtype(n) === 'end').map((n) => String(n.id || n.tempId))
+  );
+
+  const compiledConns = rawCompiledConns.filter((c) => {
+    const src = String(c.sourceNodeId ?? c.source_node_id ?? c.source ?? c.from ?? '');
+    const tgt = String(c.targetNodeId ?? c.target_node_id ?? c.target ?? c.to ?? '');
+    return !compiledEndIds.has(src) && !compiledEndIds.has(tgt);
+  });
+  const legacyConns = rawLegacyConns.filter((c) => {
+    const src = String(c.sourceNodeId ?? c.source_node_id ?? c.source ?? c.from ?? '');
+    const tgt = String(c.targetNodeId ?? c.target_node_id ?? c.target ?? c.to ?? '');
+    return !legacyEndIds.has(src) && !legacyEndIds.has(tgt);
+  });
 
   // 1. So sánh số lượng nodes
   if (compiledNodes.length !== legacyNodes.length) {

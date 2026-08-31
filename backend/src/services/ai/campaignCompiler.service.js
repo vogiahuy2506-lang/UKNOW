@@ -8,7 +8,7 @@
  * 3. Xuất camelCase (nodeType, nodeSubtype, nodeName, nodeDescription, positionX, positionY, config)
  *    khớp đúng contract của insertNodeTx, updateCampaign và aiCampaignDraft.service.js.
  * 4. Hỗ trợ đầy đủ các kênh: Email, Zalo cá nhân, Zalo nhóm (Once & Drip).
- * 5. Luôn sinh node End ở cuối luồng để đảm bảo tính toàn vẹn của đồ thị và shadow compare.
+ * 5. Graph gọn, không sinh node End thừa (khớp đa số campaign và chuẩn runtime).
  */
 
 import { isCompilableIntent } from './campaignIntent.schema.js';
@@ -66,13 +66,12 @@ export function compileCampaign(intent, options = {}) {
 
 /**
  * Biên dịch luồng Email gửi một lần (Email Once).
- * Graph: Trigger -> Audience -> Send Email -> End
+ * Graph: Trigger -> Audience -> Send Email
  */
 function compileEmailOnceCampaign({ sender, audience, contentBrief, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const sendEmailId = `${prefix}_send_email_1`;
-  const endId = `${prefix}_end_1`;
 
   const nodes = [];
   const connections = [];
@@ -179,20 +178,7 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, options = {}
     },
   });
 
-  // 4. End Node
-  nodes.push({
-    id: endId,
-    tempId: endId,
-    nodeType: 'end',
-    nodeSubtype: 'end',
-    nodeName: 'Kết thúc',
-    nodeDescription: 'Kết thúc luồng chiến dịch',
-    positionX: sendEmailPosX + 250,
-    positionY: 200,
-    config: {},
-  });
-
-  // 5. Connections
+  // 4. Connections
   if (audienceNodeId) {
     connections.push({
       sourceNodeId: triggerId,
@@ -221,16 +207,7 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, options = {}
     });
   }
 
-  connections.push({
-    sourceNodeId: sendEmailId,
-    targetNodeId: endId,
-    connectionType: 'default',
-    connectionLabel: '',
-    sourceHandle: 'default_out',
-    targetHandle: 'default_in',
-  });
-
-  // 6. Content Slot
+  // 5. Content Slot
   contentSlots.push({
     slotId: `${sendEmailId}_step_0`,
     nodeId: sendEmailId,
@@ -250,13 +227,12 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, options = {}
 
 /**
  * Biên dịch luồng Email Drip nhiều ngày.
- * Graph: Trigger -> Audience -> Send Email Drip -> End
+ * Graph: Trigger -> Audience -> Send Email Drip
  */
 function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const sendEmailId = `${prefix}_send_email_1`;
-  const endId = `${prefix}_end_1`;
 
   const nodes = [];
   const connections = [];
@@ -387,19 +363,6 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, op
     },
   });
 
-  // End Node
-  nodes.push({
-    id: endId,
-    tempId: endId,
-    nodeType: 'end',
-    nodeSubtype: 'end',
-    nodeName: 'Kết thúc',
-    nodeDescription: 'Kết thúc luồng chiến dịch',
-    positionX: sendEmailPosX + 250,
-    positionY: 200,
-    config: {},
-  });
-
   if (audienceNodeId) {
     connections.push({
       sourceNodeId: triggerId,
@@ -428,15 +391,6 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, op
     });
   }
 
-  connections.push({
-    sourceNodeId: sendEmailId,
-    targetNodeId: endId,
-    connectionType: 'default',
-    connectionLabel: '',
-    sourceHandle: 'default_out',
-    targetHandle: 'default_in',
-  });
-
   return {
     nodes,
     connections,
@@ -446,14 +400,13 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, op
 
 /**
  * Biên dịch luồng Zalo cá nhân gửi một lần (Zalo Personal Once).
- * Graph: Trigger -> select_zalo_account -> Audience -> send_zalo_personal -> End
+ * Graph: Trigger -> select_zalo_account -> Audience -> send_zalo_personal
  */
 function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const selectAccountId = `${prefix}_select_zalo_1`;
   const sendZaloId = `${prefix}_send_zalo_personal_1`;
-  const endId = `${prefix}_end_1`;
 
   const nodes = [];
   const connections = [];
@@ -595,20 +548,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, optio
     },
   });
 
-  // 5. End Node
-  nodes.push({
-    id: endId,
-    tempId: endId,
-    nodeType: 'end',
-    nodeSubtype: 'end',
-    nodeName: 'Kết thúc',
-    nodeDescription: 'Kết thúc luồng chiến dịch',
-    positionX: sendZaloPosX + 250,
-    positionY: 200,
-    config: {},
-  });
-
-  // 6. Connections
+  // 5. Connections
   connections.push({
     sourceNodeId: triggerId,
     targetNodeId: selectAccountId,
@@ -646,16 +586,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, optio
     });
   }
 
-  connections.push({
-    sourceNodeId: sendZaloId,
-    targetNodeId: endId,
-    connectionType: 'default',
-    connectionLabel: '',
-    sourceHandle: 'default_out',
-    targetHandle: 'default_in',
-  });
-
-  // 7. Content Slot
+  // 6. Content Slot
   contentSlots.push({
     slotId: `${sendZaloId}_step_0`,
     nodeId: sendZaloId,
@@ -675,14 +606,13 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, optio
 
 /**
  * Biên dịch luồng Zalo cá nhân Drip nhiều ngày.
- * Graph: Trigger -> select_zalo_account -> Audience -> send_zalo_personal -> End
+ * Graph: Trigger -> select_zalo_account -> Audience -> send_zalo_personal
  */
 function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBrief, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const selectAccountId = `${prefix}_select_zalo_1`;
   const sendZaloId = `${prefix}_send_zalo_personal_1`;
-  const endId = `${prefix}_end_1`;
 
   const nodes = [];
   const connections = [];
@@ -848,19 +778,6 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
     },
   });
 
-  // End Node
-  nodes.push({
-    id: endId,
-    tempId: endId,
-    nodeType: 'end',
-    nodeSubtype: 'end',
-    nodeName: 'Kết thúc',
-    nodeDescription: 'Kết thúc luồng chiến dịch',
-    positionX: sendZaloPosX + 250,
-    positionY: 200,
-    config: {},
-  });
-
   connections.push({
     sourceNodeId: triggerId,
     targetNodeId: selectAccountId,
@@ -898,15 +815,6 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
     });
   }
 
-  connections.push({
-    sourceNodeId: sendZaloId,
-    targetNodeId: endId,
-    connectionType: 'default',
-    connectionLabel: '',
-    sourceHandle: 'default_out',
-    targetHandle: 'default_in',
-  });
-
   return {
     nodes,
     connections,
@@ -916,7 +824,7 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
 
 /**
  * Biên dịch luồng Zalo nhóm gửi một lần (Zalo Group Once).
- * Graph: Trigger -> select_zalo_account -> get_all_groups -> send_zalo_group -> End
+ * Graph: Trigger -> select_zalo_account -> get_all_groups -> send_zalo_group
  */
 function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options = {} }) {
   const prefix = options.idPrefix || 'node';
@@ -924,7 +832,6 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options 
   const selectAccountId = `${prefix}_select_zalo_1`;
   const groupAudienceId = `${prefix}_get_all_groups_1`;
   const sendGroupId = `${prefix}_send_zalo_group_1`;
-  const endId = `${prefix}_end_1`;
 
   const nodes = [];
   const connections = [];
@@ -1002,20 +909,7 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options 
     },
   });
 
-  // 5. End Node
-  nodes.push({
-    id: endId,
-    tempId: endId,
-    nodeType: 'end',
-    nodeSubtype: 'end',
-    nodeName: 'Kết thúc',
-    nodeDescription: 'Kết thúc luồng chiến dịch',
-    positionX: 1000,
-    positionY: 200,
-    config: {},
-  });
-
-  // 6. Connections
+  // 5. Connections
   connections.push({
     sourceNodeId: triggerId,
     targetNodeId: selectAccountId,
@@ -1040,16 +934,8 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options 
     sourceHandle: 'default_out',
     targetHandle: 'default_in',
   });
-  connections.push({
-    sourceNodeId: sendGroupId,
-    targetNodeId: endId,
-    connectionType: 'default',
-    connectionLabel: '',
-    sourceHandle: 'default_out',
-    targetHandle: 'default_in',
-  });
 
-  // 7. Content Slot
+  // 6. Content Slot
   contentSlots.push({
     slotId: `${sendGroupId}_step_0`,
     nodeId: sendGroupId,
@@ -1069,7 +955,7 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options 
 
 /**
  * Biên dịch luồng Zalo nhóm Drip nhiều ngày.
- * Graph: Trigger -> select_zalo_account -> get_all_groups -> send_zalo_group -> End
+ * Graph: Trigger -> select_zalo_account -> get_all_groups -> send_zalo_group
  */
 function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief, options = {} }) {
   const prefix = options.idPrefix || 'node';
@@ -1077,7 +963,6 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
   const selectAccountId = `${prefix}_select_zalo_1`;
   const groupAudienceId = `${prefix}_get_all_groups_1`;
   const sendGroupId = `${prefix}_send_zalo_group_1`;
-  const endId = `${prefix}_end_1`;
 
   const nodes = [];
   const connections = [];
@@ -1175,19 +1060,6 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
     },
   });
 
-  // End Node
-  nodes.push({
-    id: endId,
-    tempId: endId,
-    nodeType: 'end',
-    nodeSubtype: 'end',
-    nodeName: 'Kết thúc',
-    nodeDescription: 'Kết thúc luồng chiến dịch',
-    positionX: 1000,
-    positionY: 200,
-    config: {},
-  });
-
   connections.push({
     sourceNodeId: triggerId,
     targetNodeId: selectAccountId,
@@ -1207,14 +1079,6 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
   connections.push({
     sourceNodeId: groupAudienceId,
     targetNodeId: sendGroupId,
-    connectionType: 'default',
-    connectionLabel: '',
-    sourceHandle: 'default_out',
-    targetHandle: 'default_in',
-  });
-  connections.push({
-    sourceNodeId: sendGroupId,
-    targetNodeId: endId,
     connectionType: 'default',
     connectionLabel: '',
     sourceHandle: 'default_out',

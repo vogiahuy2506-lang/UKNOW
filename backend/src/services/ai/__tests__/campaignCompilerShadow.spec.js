@@ -6,7 +6,7 @@ import {
   runCompilerShadowCompare,
 } from '../campaignCompilerShadow.service.js';
 
-describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
+describe('PR-2.3 & PR-3.2 & Việc 2: campaignCompilerShadow.service', () => {
   const sampleCompiledGraph = {
     nodes: [
       { id: 'node_trigger_1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
@@ -17,12 +17,10 @@ describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
         nodeSubtype: 'send_email',
         config: { fromEmailId: 5, recipientSource: 'node', emailSteps: [{ emailSubject: 'Hi' }] },
       },
-      { id: 'node_end_1', nodeType: 'end', nodeSubtype: 'end', config: {} },
     ],
     connections: [
       { sourceNodeId: 'node_trigger_1', targetNodeId: 'node_read_sheet_1' },
       { sourceNodeId: 'node_read_sheet_1', targetNodeId: 'node_send_email_1' },
-      { sourceNodeId: 'node_send_email_1', targetNodeId: 'node_end_1' },
     ],
     contentSlots: [{ slotId: 'slot_1' }],
   };
@@ -37,13 +35,15 @@ describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
     expect(getLegacyNodeSubtype({ nodeSubtype: 'send_email' })).toBe('send_email');
     expect(getLegacyNodeSubtype({ node_subtype: 'send_email' })).toBe('send_email');
     expect(getLegacyNodeSubtype({ subtype: 'send_email' })).toBe('send_email');
+    expect(getLegacyNodeSubtype({ node_subtype: 'manual_trigger' })).toBe('manual'); // Chuẩn hoá manual_trigger
     expect(getLegacyNodeSubtype({ type: 'send_email' })).toBe(''); // Không fallback sang type
   });
 
-  it('compareCompiledWithLegacy trả về match: true khi 2 graph khớp cấu trúc', () => {
-    const legacyScript = {
+  it('compareCompiledWithLegacy trả về match: true khi 2 graph khớp cấu trúc (tự động bỏ qua node end nếu có)', () => {
+    // Legacy có node end nhưng compiled không có node end -> Vẫn khớp hoàn toàn vì đã lọc bỏ end
+    const legacyScriptWithEnd = {
       nodes: [
-        { tempId: 'manual_1', node_subtype: 'manual', config: {} },
+        { tempId: 'manual_1', node_subtype: 'manual_trigger', config: {} },
         { tempId: 'read_sheet_1', node_subtype: 'read_sheet', config: { sheetUrl: 'https://sheet.link' } },
         {
           tempId: 'send_email_1',
@@ -59,11 +59,11 @@ describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
       ],
     };
 
-    const result = compareCompiledWithLegacy(sampleCompiledGraph, legacyScript);
+    const result = compareCompiledWithLegacy(sampleCompiledGraph, legacyScriptWithEnd);
     expect(result.match).toBe(true);
     expect(result.differences).toEqual([]);
-    expect(result.summary.compiledNodeCount).toBe(4);
-    expect(result.summary.legacyNodeCount).toBe(4);
+    expect(result.summary.compiledNodeCount).toBe(3);
+    expect(result.summary.legacyNodeCount).toBe(3);
   });
 
   it('compareCompiledWithLegacy phát hiện khác biệt khi thiếu node hoặc sai config', () => {
@@ -73,7 +73,7 @@ describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
         {
           tempId: 'send_email_1',
           node_subtype: 'send_email',
-          config: { fromEmailId: 99, recipientSource: 'manual' }, // sai fromEmailId và recipientSource
+          config: { fromEmailId: 99, recipientSource: 'manual' },
         },
       ],
       connections: [
@@ -107,12 +107,10 @@ describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
           node_subtype: 'send_email',
           config: { fromEmailId: 7, recipientSource: 'node' },
         },
-        { tempId: 'end_1', node_subtype: 'end', config: {} },
       ],
       connections: [
         { sourceNodeId: 'trigger_1', targetNodeId: 'read_sheet_1' },
         { sourceNodeId: 'read_sheet_1', targetNodeId: 'send_email_1' },
-        { sourceNodeId: 'send_email_1', targetNodeId: 'end_1' },
       ],
     };
 
@@ -144,13 +142,11 @@ describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
           node_subtype: 'send_zalo_personal',
           config: { zaloAccountId: 12, zaloRecipientSource: 'node' },
         },
-        { tempId: 'end_1', node_subtype: 'end', config: {} },
       ],
       connections: [
         { sourceNodeId: 'trigger_1', targetNodeId: 'select_zalo_1' },
         { sourceNodeId: 'select_zalo_1', targetNodeId: 'friends_1' },
         { sourceNodeId: 'friends_1', targetNodeId: 'send_zalo_1' },
-        { sourceNodeId: 'send_zalo_1', targetNodeId: 'end_1' },
       ],
     };
 

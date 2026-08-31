@@ -17,14 +17,14 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     contentBrief: { topic: 'Ra mắt tính năng', locale: 'vi' },
   };
 
-  it('biên dịch thành công luồng email-once với Google Sheet (bao gồm node End)', () => {
+  it('biên dịch thành công luồng email-once với Google Sheet (camelCase contract)', () => {
     const graph = compileCampaign(sampleEmailSheetOnce);
     expect(graph).toHaveProperty('nodes');
     expect(graph).toHaveProperty('connections');
     expect(graph).toHaveProperty('contentSlots');
 
-    expect(graph.nodes.length).toBe(4);
-    const [triggerNode, audienceNode, sendEmailNode, endNode] = graph.nodes;
+    expect(graph.nodes.length).toBe(3);
+    const [triggerNode, audienceNode, sendEmailNode] = graph.nodes;
 
     expect(triggerNode.nodeSubtype).toBe('manual');
     expect(triggerNode.nodeType).toBe('trigger');
@@ -40,16 +40,11 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     expect(Array.isArray(sendEmailNode.config.emailSteps)).toBe(true);
     expect(sendEmailNode.config.emailSteps.length).toBe(1);
 
-    expect(endNode.nodeSubtype).toBe('end');
-    expect(endNode.nodeType).toBe('end');
-
-    expect(graph.connections.length).toBe(3);
+    expect(graph.connections.length).toBe(2);
     expect(graph.connections[0].sourceNodeId).toBe(triggerNode.id);
     expect(graph.connections[0].targetNodeId).toBe(audienceNode.id);
     expect(graph.connections[1].sourceNodeId).toBe(audienceNode.id);
     expect(graph.connections[1].targetNodeId).toBe(sendEmailNode.id);
-    expect(graph.connections[2].sourceNodeId).toBe(sendEmailNode.id);
-    expect(graph.connections[2].targetNodeId).toBe(endNode.id);
 
     expect(graph.contentSlots.length).toBe(1);
     expect(graph.contentSlots[0].channel).toBe('email');
@@ -67,8 +62,8 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     };
 
     const graph = compileCampaign(intentZaloPersonal);
-    expect(graph.nodes.length).toBe(5); // trigger -> select_zalo_account -> get_all_friends -> send_zalo_personal -> end
-    const [triggerNode, selectNode, audienceNode, sendZaloNode, endNode] = graph.nodes;
+    expect(graph.nodes.length).toBe(4); // trigger -> select_zalo_account -> get_all_friends -> send_zalo_personal
+    const [triggerNode, selectNode, audienceNode, sendZaloNode] = graph.nodes;
 
     expect(triggerNode.nodeSubtype).toBe('manual');
     expect(selectNode.nodeSubtype).toBe('select_zalo_account');
@@ -84,17 +79,13 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     expect(Array.isArray(sendZaloNode.config.zaloPersonalTemplateSteps)).toBe(true);
     expect(sendZaloNode.config.zaloPersonalTemplateSteps.length).toBe(1);
 
-    expect(endNode.nodeSubtype).toBe('end');
-
-    expect(graph.connections.length).toBe(4);
+    expect(graph.connections.length).toBe(3);
     expect(graph.connections[0].sourceNodeId).toBe(triggerNode.id);
     expect(graph.connections[0].targetNodeId).toBe(selectNode.id);
     expect(graph.connections[1].sourceNodeId).toBe(selectNode.id);
     expect(graph.connections[1].targetNodeId).toBe(audienceNode.id);
     expect(graph.connections[2].sourceNodeId).toBe(audienceNode.id);
     expect(graph.connections[2].targetNodeId).toBe(sendZaloNode.id);
-    expect(graph.connections[3].sourceNodeId).toBe(sendZaloNode.id);
-    expect(graph.connections[3].targetNodeId).toBe(endNode.id);
 
     expect(graph.contentSlots[0].channel).toBe('zalo');
     expect(graph.contentSlots[0].type).toBe('zalo');
@@ -112,9 +103,7 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
 
     const graph = compileCampaign(intentZaloDrip);
     const sendNode = graph.nodes.find((n) => n.nodeSubtype === 'send_zalo_personal');
-    const endNode = graph.nodes.find((n) => n.nodeSubtype === 'end');
     expect(sendNode).not.toBeUndefined();
-    expect(endNode).not.toBeUndefined();
     expect(sendNode.config.zaloPersonalSendMode).toBe('schedule');
     expect(sendNode.config.zaloPersonalTemplateSteps.length).toBe(3);
     expect(graph.contentSlots.length).toBe(3);
@@ -131,11 +120,9 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     };
 
     const graph = compileCampaign(intentZaloGroup);
-    expect(graph.nodes.length).toBe(5); // trigger -> select_zalo_account -> get_all_groups -> send_zalo_group -> end
+    expect(graph.nodes.length).toBe(4); // trigger -> select_zalo_account -> get_all_groups -> send_zalo_group
     const sendGroupNode = graph.nodes.find((n) => n.nodeSubtype === 'send_zalo_group');
-    const endNode = graph.nodes.find((n) => n.nodeSubtype === 'end');
     expect(sendGroupNode).not.toBeUndefined();
-    expect(endNode).not.toBeUndefined();
     expect(sendGroupNode.config.zaloAccountId).toBe(8);
     expect(Array.isArray(sendGroupNode.config.zaloGroupTemplateSteps)).toBe(true);
     expect(sendGroupNode.config.zaloGroupTemplateSteps.length).toBe(1);
@@ -191,7 +178,7 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     }
   });
 
-  it('mọi node do compiler sinh ra (Email, Zalo, Zalo Group, End) đều pass validateNodeConfig của registry', () => {
+  it('mọi node do compiler sinh ra đều pass validateNodeConfig của registry', () => {
     const testIntents = [
       sampleEmailSheetOnce,
       {

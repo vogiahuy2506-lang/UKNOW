@@ -190,10 +190,15 @@ export function deriveIntentFromGraph(nodes = [], connections = []) {
     } else if (audSubtype === 'get_all_groups') {
       audience = {
         type: 'zalo_contacts',
-        groupIds: Array.isArray(audCfg.groupIds) ? audCfg.groupIds : [],
         recipientKind: 'phone',
+        ...(Array.isArray(audCfg.groupIds) && audCfg.groupIds.length > 0 ? { groupIds: audCfg.groupIds } : {}),
       };
     }
+  } else if (channel === 'zalo_group') {
+    audience = {
+      type: 'zalo_contacts',
+      recipientKind: 'phone',
+    };
   } else {
     // Nếu không có audience node nhưng recipientSource là manual
     const recipientSource = cfg.recipientSource || cfg.zaloRecipientSource || cfg.zaloGroupSource;

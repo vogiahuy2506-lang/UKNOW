@@ -261,13 +261,6 @@ export function isCompilableIntent(intent) {
       if (intent.audience.type === 'landing' && (!Array.isArray(intent.audience.slugs) || intent.audience.slugs.length === 0)) {
         missing.push('audience.slugs');
       }
-      if (
-        intent.channel === 'zalo_group' &&
-        intent.audience.type === 'zalo_contacts' &&
-        (!Array.isArray(intent.audience.groupIds) || intent.audience.groupIds.length === 0)
-      ) {
-        missing.push('audience.groupIds');
-      }
     }
   }
 
