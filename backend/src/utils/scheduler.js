@@ -7,12 +7,17 @@ import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.j
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 import notificationService from '../services/admin/notification.service.js';
+import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
 const activeContinuousRunIds = new Set();
 const activeNonContinuousResumeRunIds = new Set();
 const HANOI_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
+const SAFE_QUOTA_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'quotaDeferredUntil'");
+const SAFE_ZALO_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'zaloOutboundDeferredUntil'");
+const SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'nonContinuousDeferredUntil'");
 
 /**
  * Chuyển thời điểm bất kỳ về khóa ngày `YYYY-MM-DD` theo múi giờ Hà Nội.
@@ -303,35 +308,21 @@ const refreshCampaignSchedules = async () => {
  * @returns {Promise<void>}
  */
 /**
- * Bỏ qua những run đang ĐỖ CHỜ ĐÚNG THIẾT KẾ: còn bước chưa xong nhưng hạn `nextDueAt`
- * vẫn ở tương lai. Những run đó KHÔNG cần nhấc lên — `recoverOverdueNonContinuousCampaignRuns`
- * (quét :40 mỗi phút) sẽ nhận chúng đúng lúc tới hạn.
- *
- * Vì sao cần: `recoverNonContinuousCampaignRuns` quét mù mọi run `running`, và mỗi lần nhấc
- * là `executeCampaign` chạy LẠI TOÀN BỘ luồng từ node trigger — kể cả các node gọi ra ngoài.
- * Đo trên production 31/08/2026: 87 lượt nhấc/giờ cho 2 run, node `get_all_groups` (gọi API
- * Zalo của khách) và `read_sheet` (đọc 28.500 dòng Google Sheet) đều được chạy lại cách thời
- * điểm đo 12 giây — tức khoảng 2.000 lượt gọi API vô ích mỗi ngày, không gửi thêm tin nào.
- *
- * Run KHÔNG có bản ghi bước nào vẫn lọt qua bộ lọc này — đó là chủ ý, để giữ nguyên khả năng
- * nhận nuôi run mồ côi sau khi tiến trình khởi động lại.
+ * Chỉ wake run khi mọi mốc defer cấp run đã tới hạn. Không suy diễn từ ledger:
+ * một recipient có nextDueAt tương lai không có nghĩa các recipient khác đã xong.
+ * `nonContinuousDeferredUntil` chỉ được ghi ở cuối một lượt đã duyệt sạch ledger.
  */
-const PARKED_UNTIL_FUTURE_DUE_SQL = `AND NOT EXISTS (
-  SELECT 1
-  FROM campaign_run_recipient_steps crs_parked
-  WHERE crs_parked.id_run = cr.id
-    AND COALESCE(crs_parked.is_fully_completed, FALSE) = FALSE
-    AND NULLIF(TRIM(COALESCE(crs_parked.meta->>'nextDueAt', '')), '') IS NOT NULL
-    AND (crs_parked.meta->>'nextDueAt')::timestamptz > NOW()
-)`;
-
-const QUOTA_DEFER_READY_SQL = `AND (
-  NULLIF(TRIM(COALESCE(cr.run_metadata->>'quotaDeferredUntil', '')), '') IS NULL
-  OR (cr.run_metadata->>'quotaDeferredUntil')::timestamptz <= NOW()
+const RUN_DEFER_READY_SQL = `AND (
+  ${SAFE_QUOTA_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_QUOTA_DEFER_UNTIL_SQL} <= NOW()
 )
 AND (
-  NULLIF(TRIM(COALESCE(cr.run_metadata->>'zaloOutboundDeferredUntil', '')), '') IS NULL
-  OR (cr.run_metadata->>'zaloOutboundDeferredUntil')::timestamptz <= NOW()
+  ${SAFE_ZALO_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_ZALO_DEFER_UNTIL_SQL} <= NOW()
+)
+AND (
+  ${SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL} <= NOW()
 )`;
 
 const recoverContinuousCampaignRuns = async () => {
@@ -342,7 +333,7 @@ const recoverContinuousCampaignRuns = async () => {
      JOIN campaigns c ON c.id = cr.id_campaign
      WHERE cr.status = 'running'
        AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) = 'true'
-       ${QUOTA_DEFER_READY_SQL}`
+       ${RUN_DEFER_READY_SQL}`
   );
   if (result.rows.length === 0) return { recovered: 0 };
 
@@ -408,8 +399,7 @@ const recoverNonContinuousCampaignRuns = async () => {
      JOIN campaigns c ON c.id = cr.id_campaign
      WHERE cr.status = 'running'
        AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'
-       ${PARKED_UNTIL_FUTURE_DUE_SQL}
-       ${QUOTA_DEFER_READY_SQL}`
+       ${RUN_DEFER_READY_SQL}`
   );
   if (result.rows.length === 0) return { recovered: 0 };
 
@@ -424,50 +414,6 @@ const recoverNonContinuousCampaignRuns = async () => {
     if (triggerNonContinuousResume({ runId, campaignId, userId, resumedBy: 'per_minute' })) {
       recovered += 1;
       console.log(`[Scheduler] Phục hồi campaign run non-continuous #${runId} (campaign #${campaignId})`);
-    }
-  }
-  return { recovered };
-};
-
-/**
- * Quét các run non-continuous đang chạy nhưng đã quá hạn `nextDueAt` để gửi tiếp step kế tiếp.
- *
- * Luồng hoạt động:
- * 1. Lấy danh sách run có `status = running`, `continuousMode != true` và còn recipient chưa hoàn tất.
- * 2. Chỉ chọn bản ghi có `meta.nextDueAt` đã tới hạn (`<= NOW()`).
- * 3. Trigger lại executeCampaign theo từng run để resume gửi step còn treo.
- *
- * @returns {Promise<void>}
- */
-const recoverOverdueNonContinuousCampaignRuns = async () => {
-  const result = await db.query(
-    `SELECT DISTINCT cr.id, cr.id_campaign,
-            COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id
-     FROM campaign_runs cr
-     JOIN campaigns c ON c.id = cr.id_campaign
-     JOIN campaign_run_recipient_steps crs ON crs.id_run = cr.id
-     WHERE cr.status = 'running'
-       AND LOWER(COALESCE(cr.run_metadata->>'continuousMode', 'false')) <> 'true'
-       AND COALESCE(crs.is_fully_completed, FALSE) = FALSE
-       AND NULLIF(TRIM(COALESCE(crs.meta->>'nextDueAt', '')), '') IS NOT NULL
-       AND (crs.meta->>'nextDueAt')::timestamptz <= NOW()
-       ${QUOTA_DEFER_READY_SQL}`
-  );
-  if (result.rows.length === 0) return { recovered: 0 };
-
-  let recovered = 0;
-  for (const row of result.rows) {
-    const runId = Number.parseInt(row.id, 10);
-    const campaignId = Number.parseInt(row.id_campaign, 10);
-    const userId = Number.parseInt(row.workspace_owner_id, 10);
-    if (!Number.isFinite(runId) || !Number.isFinite(campaignId) || !Number.isFinite(userId)) {
-      continue;
-    }
-    if (triggerNonContinuousResume({ runId, campaignId, userId, resumedBy: 'overdue_scan' })) {
-      recovered += 1;
-      console.log(
-        `[Scheduler] Quét retry non-continuous quá hạn cho run #${runId} (campaign #${campaignId})`
-      );
     }
   }
   return { recovered };

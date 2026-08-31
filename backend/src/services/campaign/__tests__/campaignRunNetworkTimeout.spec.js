@@ -10,6 +10,10 @@ const mockFindNodesByCampaignId = jest.fn();
 const mockFindConnectionsByCampaignId = jest.fn().mockResolvedValue([]);
 const mockGetRunMetadata = jest.fn().mockResolvedValue({});
 const mockGetRunStatus = jest.fn().mockResolvedValue('running');
+const mockCountPendingDue = jest.fn().mockResolvedValue({
+  pending_count: 0,
+  pending_without_future_due: 0,
+});
 
 jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.js', () => ({
   default: {
@@ -45,7 +49,7 @@ jest.unstable_mockModule('../campaignExecutionLog.service.js', () => ({
 
 jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.repository.js', () => ({
   default: {
-    countPendingDue: jest.fn().mockResolvedValue({ pending_count: 0 }),
+    countPendingDue: mockCountPendingDue,
     isTableAvailable: jest.fn().mockResolvedValue(true),
   },
 }));
@@ -129,7 +133,75 @@ describe('PR-1: Campaign run network timeout & zero-recipient behavior', () => {
     expect(mockFinalizeRun).toHaveBeenCalledWith(
       101,
       false, // hasPendingRecipientDue = false -> status becomes completed
-      expect.objectContaining({ totalRecipients: 0, successfulSends: 0 })
+      expect.objectContaining({ totalRecipients: 0, successfulSends: 0 }),
+      null
+    );
+  });
+
+  it('sau một lượt duyệt xong khi mọi recipient còn lại đều hẹn tương lai → lưu mốc wake cùng finalize', async () => {
+    const runData = {
+      id: 103,
+      id_campaign: 1,
+      status: 'running',
+      total_recipients: 2,
+      successful_sends: 1,
+      failed_sends: 0,
+      run_metadata: {},
+    };
+    mockFindRunById.mockResolvedValue(runData);
+    mockGetRunForExecution.mockResolvedValue(runData);
+    mockFindNodesByCampaignId.mockResolvedValueOnce([
+      { id: 'node_1', node_type: 'trigger', node_subtype: 'start', config: {} },
+    ]);
+    mockCountPendingDue.mockResolvedValueOnce({
+      pending_count: 2,
+      pending_without_future_due: 0,
+      pending_with_retry_meta: 0,
+      next_due_at: '2030-01-01T00:00:00.000Z',
+    });
+
+    await campaignRunService.executeCampaign(1, 103, 10);
+
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      103,
+      true,
+      expect.objectContaining({ totalRecipients: 2, successfulSends: 1 }),
+      expect.objectContaining({
+        nonContinuousDeferredUntil: '2030-01-01T00:00:00.000Z',
+        nonContinuousDeferredReason: 'all_recipients_waiting_next_due',
+      })
+    );
+  });
+
+  it('không park cả run khi ledger còn recipient chưa có nextDueAt tương lai', async () => {
+    const runData = {
+      id: 104,
+      id_campaign: 1,
+      status: 'running',
+      total_recipients: 2,
+      successful_sends: 1,
+      failed_sends: 0,
+      run_metadata: {},
+    };
+    mockFindRunById.mockResolvedValue(runData);
+    mockGetRunForExecution.mockResolvedValue(runData);
+    mockFindNodesByCampaignId.mockResolvedValueOnce([
+      { id: 'node_1', node_type: 'trigger', node_subtype: 'start', config: {} },
+    ]);
+    mockCountPendingDue.mockResolvedValueOnce({
+      pending_count: 1,
+      pending_without_future_due: 1,
+      pending_with_retry_meta: 0,
+      next_due_at: '2030-01-01T00:00:00.000Z',
+    });
+
+    await campaignRunService.executeCampaign(1, 104, 10);
+
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      104,
+      true,
+      expect.objectContaining({ totalRecipients: 2, successfulSends: 1 }),
+      null
     );
   });
 });
