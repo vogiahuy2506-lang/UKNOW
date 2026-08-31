@@ -142,7 +142,7 @@ const Header = () => {
                   {t('header.activeContext')}
                 </p>
                 <button
-                  onClick={() => { switchContext(null); setProfileOpen(false); }}
+                  onClick={async () => { setProfileOpen(false); await switchContext(null); }}
                   className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors ${
                     activeContext.type === 'self'
                       ? 'bg-orange-50 text-orange-600 font-semibold'
@@ -158,8 +158,9 @@ const Header = () => {
                 {user?.memberships?.map((m) => (
                   <button
                     key={m.ownerId}
-                    onClick={() => { switchContext(m.ownerId); setProfileOpen(false); }}
+                    onClick={async () => { setProfileOpen(false); await switchContext(m.ownerId); }}
                     className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors mt-1 ${
+
                       activeContext.type === 'employee' && activeContext.ownerId === m.ownerId
                         ? 'bg-orange-50 text-orange-600 font-semibold'
                         : 'text-gray-700 hover:bg-gray-50'

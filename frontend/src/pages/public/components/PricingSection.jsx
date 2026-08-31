@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaCheckCircle, FaCheck, FaCrown, FaGem, FaRocket, FaStar, FaBolt, FaArrowRight, FaCog, FaClock, FaExclamationTriangle } from 'react-icons/fa';
+import { FaCheckCircle, FaCheck, FaCrown, FaRocket, FaBolt, FaArrowRight, FaCog, FaClock, FaExclamationTriangle } from 'react-icons/fa';
 import AnimatedSection from '../../../components/AnimatedSection';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile } from '../../../features/auth/services/authApi.service';
-import { getPlans } from '../../../services/plan.service';
+import { usePlansQuery } from '../../../hooks/queries/usePlansQuery';
 import { getActivePromotions } from '../../../services/promotion.service';
 import { useI18n } from '../../../i18n';
 import CustomPlanBuilder from '../../../features/billing/CustomPlanBuilder';
@@ -16,11 +16,12 @@ import {
   isContactPlan,
   isFreePlan,
   getPlanCtaLabel,
-  getPlanTranslationKey,
   getTranslatedPlanName,
   getTranslatedPlanDescription,
   getTranslatedFeature,
 } from '../../../utils/planTranslation.util';
+
+
 
 // Solid styles — đồng bộ với giao diện tổng thể (ContactPage, HeroPage)
 // Tất cả card cùng style border trắng, không có "phổ biến nhất" nổi bật riêng.
@@ -75,11 +76,15 @@ const calcSavings = (monthly, yearly) => {
   return pct > 0 ? pct : 0;
 };
 
+
+const EMPTY_PLANS = [];
+
 export default function PricingSection({ embedded = false, compact = false, glass = false }) {
+
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const { isAuthenticated, user, activeContext, updateUser } = useAuthStore();
-const isEmployee = activeContext?.type === 'employee';
+  const isEmployee = activeContext?.type === 'employee';
   const activePlanId = user?.activePlanId;
   const activePlanIsCustom = Boolean(user?.activePlanIsCustom);
   const activePlanPrice = user?.activePlanPrice;
@@ -90,8 +95,19 @@ const isEmployee = activeContext?.type === 'employee';
     ? (user?.subscription_expires_at ?? user?.subscriptionExpiresAt ?? null)
     : null;
   const activeBillingPeriod = user?.activeBillingPeriod || 'monthly';
-  const [plans, setPlans] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawPlans = EMPTY_PLANS, isLoading: loading } = usePlansQuery();
+
+  const plans = useMemo(() => {
+    return (rawPlans || [])
+      .filter((p) => p.is_active)
+      .sort((a, b) => {
+        const aContact = isContactPlan(a);
+        const bContact = isContactPlan(b);
+        if (aContact !== bContact) return aContact ? 1 : -1;
+        return Number(a.price || 0) - Number(b.price || 0);
+      });
+  }, [rawPlans]);
+
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [promotionsByPlanCode, setPromotionsByPlanCode] = useState({});
   const [showCustomBuilder, setShowCustomBuilder] = useState(false);
@@ -122,9 +138,10 @@ const isEmployee = activeContext?.type === 'employee';
   // Single Source of Truth: Fetch dynamic plan change resolutions directly from BE
   useEffect(() => {
     if (!isAuthenticated || isEmployee || !plans.length) {
-      setPlanResolutions({});
+      setPlanResolutions((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
+
     let cancelled = false;
     const fetchResolutions = async () => {
       const standardPlans = plans.filter((p) => !isContactPlan(p));
@@ -162,31 +179,6 @@ const isEmployee = activeContext?.type === 'employee';
     return { id: currentPlanId, price: activePlanPrice || 0 };
   }, [currentPlanId, plans, customPlanInfo, activePlanPrice]);
 
-  const getPlansData = async () => {
-    try {
-      setLoading(true);
-      const { data } = await getPlans();
-      // Lọc các gói active và sắp xếp theo giá để hiển thị hợp lý
-      const sortedPlans = (data.plans || [])
-        .filter(p => p.is_active)
-        .sort((a, b) => {
-          const aContact = isContactPlan(a);
-          const bContact = isContactPlan(b);
-          if (aContact !== bContact) return aContact ? 1 : -1;
-          return Number(a.price || 0) - Number(b.price || 0);
-        });
-      setPlans(sortedPlans);
-    } catch (error) {
-      console.error('Lỗi khi lấy dữ liệu gói:', error);
-      setPlans([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    getPlansData();
-  }, []);
 
   // Store `user` chỉ được nạp lúc đăng nhập — nếu admin gán/đổi gói trong lúc khách
   // đang có phiên đăng nhập cũ, active_plan_id trong store bị cũ (badge "Gói hiện tại"
@@ -607,9 +599,10 @@ const isEmployee = activeContext?.type === 'employee';
               ? Number(plan.price_yearly)
               : Number(plan.price || 0);
             const promotedPrice = hasPromotion ? Number(promotion.finalAmount ?? rawPlanPrice) : rawPlanPrice;
-            const discountPct = hasPromotion && rawPlanPrice > 0
+            const _discountPct = hasPromotion && rawPlanPrice > 0
               ? Math.round(promotion.discountAmount / rawPlanPrice * 100)
               : 0;
+
             const currentPlanExpiryText = isCurrentStandardPlan && subscriptionExpiresAt
               ? new Date(subscriptionExpiresAt).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' })
               : null;

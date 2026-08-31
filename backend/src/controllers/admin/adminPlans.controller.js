@@ -1,7 +1,25 @@
 import * as adminPlansService from '../../services/admin/adminPlans.service.js';
+import cloudflareService from '../../services/cloudflare.service.js';
 import { generateGeminiText } from '../../utils/geminiClient.util.js';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../../services/audit.service.js';
 import { getSystemAuditContext } from '../../utils/auditContext.util.js';
+
+async function purgePublicPlansCache() {
+  try {
+    const frontendOrigin = (process.env.FRONTEND_PUBLIC_URL || 'https://founderai.biz').replace(/\/$/, '');
+    const backendOrigin = (process.env.BACKEND_PUBLIC_URL || 'https://founderai.biz').replace(/\/$/, '');
+    const result = await cloudflareService.purgeUrls([
+      `${backendOrigin}/api/plans`,
+      `${frontendOrigin}/pricing`,
+    ]);
+    if (!result?.success) {
+      console.warn('[AdminPlans] Cloudflare purge failed:', result?.message || result?.results);
+    }
+  } catch (err) {
+    console.warn('[AdminPlans] Cloudflare purge exception:', err.message);
+  }
+}
+
 
 function handleError(res, err) {
   if (err.status) return res.status(err.status).json({ success: false, message: err.message });
@@ -77,6 +95,7 @@ export async function create(req, res) {
       gracePeriodDays, storageLimitBytes,
     });
     await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_CREATED, AUDIT_ENTITY_TYPES.PLAN, plan.id, { code: plan.code, name: plan.name });
+    purgePublicPlansCache();
     return res.status(201).json({ success: true, message: 'Tạo gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
 }
@@ -100,6 +119,7 @@ export async function update(req, res) {
       gracePeriodDays, storageLimitBytes,
     });
     await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_UPDATED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { name: plan.name });
+    purgePublicPlansCache();
     return res.json({ success: true, message: 'Cập nhật gói thành công', data: plan });
   } catch (err) { return handleError(res, err); }
 }
@@ -109,9 +129,11 @@ export async function remove(req, res) {
   try {
     const result = await adminPlansService.removePlan(Number(req.params.id));
     await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.PLAN_DELETED, AUDIT_ENTITY_TYPES.PLAN, Number(req.params.id), { softDelete: !!result.softDeleted });
+    purgePublicPlansCache();
     return res.json({ success: true, message: result.message, data: result });
   } catch (err) { return handleError(res, err); }
 }
+
 
 /** POST /api/admin/plans/custom-with-payment — tạo gói riêng + tạo link thanh toán PayOS */
 export async function createCustomWithPayment(req, res) {

@@ -37,17 +37,18 @@ const ContextSwitcher = ({ showLabels = true }) => {
     (isEmployeeCtx ? activeContext.ownerName : user?.fullName || user?.username)?.[0] || 'T'
   ).toUpperCase();
 
-  const handleSwitch = (ownerId) => {
+  const handleSwitch = async (ownerId) => {
     setOpen(false);
-    switchContext(ownerId);
+    await switchContext(ownerId);
     navigate('/app');
   };
 
-  const handleSelf = () => {
+  const handleSelf = async () => {
     setOpen(false);
-    switchContext(null);
+    await switchContext(null);
     navigate('/app');
   };
+
 
   // ─── Dropdown panel ──────────────────────────────
   const DropdownPanel = ({ className = '' }) => (

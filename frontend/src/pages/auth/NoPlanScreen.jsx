@@ -26,10 +26,11 @@ const NoPlanScreen = () => {
     navigate('/login');
   };
 
-  const handleEnterWorkspace = (ownerId) => {
-    switchContext(ownerId);
+  const handleEnterWorkspace = async (ownerId) => {
+    await switchContext(ownerId);
     navigate('/app');
   };
+
 
   return (
     <div className="relative min-h-screen overflow-x-hidden" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>

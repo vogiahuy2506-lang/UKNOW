@@ -98,7 +98,7 @@ const QuickTaskBar = ({ className = '' }) => {
                     {t('header.activeContext')}
                   </p>
                   <button
-                    onClick={() => { switchContext(null); setProfileOpen(false); }}
+                    onClick={async () => { setProfileOpen(false); await switchContext(null); }}
                     className={`w-full flex items-center justify-between px-3 py-1.5 text-sm rounded-lg transition-colors ${
                       activeContext.type === 'self'
                         ? 'bg-primary-50 text-primary-600 font-medium'
@@ -114,8 +114,9 @@ const QuickTaskBar = ({ className = '' }) => {
                   {user?.memberships?.map((m) => (
                     <button
                       key={m.ownerId}
-                      onClick={() => { switchContext(m.ownerId); setProfileOpen(false); }}
+                      onClick={async () => { setProfileOpen(false); await switchContext(m.ownerId); }}
                       className={`w-full flex items-center justify-between px-3 py-1.5 text-sm rounded-lg transition-colors mt-0.5 ${
+
                         activeContext.type === 'employee' && activeContext.ownerId === m.ownerId
                           ? 'bg-primary-50 text-primary-600 font-medium'
                           : 'text-gray-700 hover:bg-gray-50'

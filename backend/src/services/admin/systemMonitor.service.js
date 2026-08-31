@@ -3,12 +3,14 @@ import http from 'node:http';
 import os from 'node:os';
 import db from '../../config/database.js';
 import outboundMessageQueueService from '../queue/outboundMessageQueue.service.js';
+import { getDomainResolverCacheStats } from '../../middleware/domainResolver.js';
 import {
   getStorageCapacityPolicy,
   getStorageCapacityState,
   getStorageCapacitySummary,
   getStoragePaths,
 } from '../../utils/storageCapacity.util.js';
+
 
 const DOCKER_SOCKET = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock';
 const CONTAINER_ALLOWLIST = {
@@ -291,10 +293,14 @@ export async function getSystemOverview() {
     redis,
     bullmq: bullmq ?? { available: false },
     dbPool,
+    caches: {
+      domainResolver: getDomainResolverCacheStats(),
+    },
   };
 
   return { ...data, alerts: buildAlerts(data) };
 }
+
 
 export async function getSystemLogs(service = 'backend', tail = 200) {
   const normalizedService = String(service || 'backend').trim().toLowerCase();

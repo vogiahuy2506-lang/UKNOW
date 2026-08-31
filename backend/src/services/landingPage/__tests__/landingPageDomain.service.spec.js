@@ -21,7 +21,10 @@ const mockCloudflareService = {
   isConfigured: jest.fn(),
   setupLandingPageDNS: jest.fn(),
   deleteDnsRecord: jest.fn(),
+  purgeLandingCache: jest.fn().mockResolvedValue({ success: true }),
+  purgeUrls: jest.fn().mockResolvedValue({ success: true }),
 };
+
 
 jest.unstable_mockModule('../../../repositories/landingPageDomain.repository.js', () => ({
   default: mockDomainRepo,

@@ -1,10 +1,9 @@
-import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PricingSection from './PricingSection';
-import { getPlans } from '../../../services/plan.service';
 import { getActivePromotions } from '../../../services/promotion.service';
+
 
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
@@ -29,13 +28,24 @@ vi.mock('../../../features/billing/CustomPlanBuilder', () => ({
   default: () => null,
 }));
 
-vi.mock('../../../features/auth/services/authApi.service', () => ({
-  getMyProfile: vi.fn(),
+const MOCK_PLANS = [{
+  id: 1,
+  code: 'starter',
+  name: 'Starter',
+  description: 'Starter plan',
+  price: 99000,
+  is_active: true,
+  features: [],
+}];
+
+vi.mock('../../../hooks/queries/usePlansQuery', () => ({
+  usePlansQuery: () => ({
+    data: MOCK_PLANS,
+    isLoading: false,
+    isSuccess: true,
+  }),
 }));
 
-vi.mock('../../../services/plan.service', () => ({
-  getPlans: vi.fn(),
-}));
 
 vi.mock('../../../services/promotion.service', () => ({
   getActivePromotions: vi.fn(),
@@ -56,19 +66,6 @@ vi.mock('../../../services/customPlan.service', () => ({
 describe('PricingSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getPlans.mockResolvedValue({
-      data: {
-        plans: [{
-          id: 1,
-          code: 'starter',
-          name: 'Starter',
-          description: 'Starter plan',
-          price: 99000,
-          is_active: true,
-          features: [],
-        }],
-      },
-    });
     getActivePromotions.mockResolvedValue({ data: { data: { byPlanCode: {} } } });
   });
 

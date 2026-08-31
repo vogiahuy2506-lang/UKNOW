@@ -11,13 +11,35 @@ import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceCon
 
 // Lazy import to avoid circular dependency
 let clearVerifiedDomainsCache = null;
-async function getClearCacheFn() {
+let clearDomainResolverCache = null;
+
+async function getClearCacheFn(options = {}) {
   if (!clearVerifiedDomainsCache) {
-    const module = await import('../../middleware/dynamicCors.middleware.js');
-    clearVerifiedDomainsCache = module.clearVerifiedDomainsCache;
+    const corsModule = await import('../../middleware/dynamicCors.middleware.js');
+    clearVerifiedDomainsCache = corsModule.clearVerifiedDomainsCache;
   }
+  if (!clearDomainResolverCache) {
+    const resolverModule = await import('../../middleware/domainResolver.js');
+    clearDomainResolverCache = resolverModule.clearDomainResolverCache;
+  }
+
+  if (typeof clearVerifiedDomainsCache === 'function') {
+    clearVerifiedDomainsCache();
+  }
+  if (typeof clearDomainResolverCache === 'function') {
+    clearDomainResolverCache();
+  }
+
+  if (options.hostname || options.slug) {
+    cloudflareService.purgeLandingCache(options).catch((e) =>
+      console.warn('[LandingPageDomain.getClearCacheFn] Cloudflare purge failed:', e.message)
+    );
+  }
+
   return clearVerifiedDomainsCache;
 }
+
+
 
 const WWW_HOST_RE = /^www\.([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
 const APEX_SUBDOMAIN_PREFIXES = new Set(['www', 'lp', 'm', 'blog', 'app', 'admin', 'crm', 'api', 'dev', 'staging', 'test']);
@@ -357,7 +379,7 @@ class LandingPageDomainService {
         cfHostnameId: null,
         isApexDomain: false,
       });
-      await getClearCacheFn();
+      await getClearCacheFn({ hostname });
     } catch (e) {
       console.warn(`[LandingPageDomainService] DB upsert pending failed for ${hostname}: ${e.message}`);
       return {
@@ -398,9 +420,10 @@ class LandingPageDomainService {
         cfHostnameId: null,
         isApexDomain: false,
       });
-      // Clear CORS cache so auto-provisioned subdomain is immediately allowed
-      await getClearCacheFn();
+      // Clear CORS cache so auto-provisioned subdomain is immediately allowed + purge Cloudflare
+      await getClearCacheFn({ hostname });
       console.log(`[LandingPageDomainService] Auto-provisioned ${hostname} → CF zone=${cfResult.zoneId}`);
+
       return {
         hostname,
         cfManaged: true,
@@ -570,9 +593,14 @@ class LandingPageDomainService {
         cfHostnameId: null,
         isApexDomain: isApex,
       });
-      await getClearCacheFn();
+      await getClearCacheFn({
+        hostname: h,
+        hostnames: [existing?.hostname, h].filter(Boolean),
+        slug: lp?.slug,
+      });
 
       // Đồng bộ landing_pages.domain_type = custom để query nhanh.
+
       try {
         await landingPageRepository.updateByIdInScope(landingPageId, {
           slug: lp.slug,
@@ -657,9 +685,10 @@ class LandingPageDomainService {
     }
 
     await landingPageDomainRepository.updateStatusById(row.id, 'active');
-    await getClearCacheFn();
+    await getClearCacheFn({ hostname: row.hostname });
 
     // Trigger SSL provisioning via Certbot
+
     this.provisionSsl(row.hostname).catch((err) => {
       console.error(`[LandingPageDomainService] SSL provisioning failed for ${row.hostname}:`, err.message);
     });
@@ -801,7 +830,7 @@ class LandingPageDomainService {
     // Xóa domain khỏi database
     // SSL certificate sẽ được cleanup bởi certbot renewal hooks hoặc manual
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
-    await getClearCacheFn();
+    await getClearCacheFn({ hostname: row.hostname });
 
     // Reset landing_pages về system nếu trước đó là custom (chỉ set khi row không phải CF-managed).
     if (!row.cfManaged) {
@@ -860,8 +889,8 @@ class LandingPageDomainService {
     }
 
     await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
-    // Clear CORS cache so removed subdomain is no longer allowed
-    await getClearCacheFn();
+    // Clear CORS & L1 cache so removed subdomain is no longer allowed and purged
+    await getClearCacheFn({ hostname: row.hostname });
   }
 
   /**
@@ -888,8 +917,9 @@ class LandingPageDomainService {
         const dnsStatus = await checkCnameStatus(domain.hostname, target);
         if (dnsStatus.verified) {
           await landingPageDomainRepository.updateStatusById(domain.id, 'active');
-          await getClearCacheFn();
+          await getClearCacheFn({ hostname: domain.hostname });
           console.log(`[LandingPageDomainService] Auto-verified (DNS): ${domain.hostname}`);
+
           
           // Trigger SSL provisioning
           this.provisionSsl(domain.hostname).catch((err) => {

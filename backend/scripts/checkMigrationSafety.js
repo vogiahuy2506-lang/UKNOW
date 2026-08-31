@@ -112,9 +112,20 @@ function getDiffOutput() {
 
   const beforeSha = process.env.GITHUB_EVENT_BEFORE;
   if (beforeSha && beforeSha !== '0000000000000000000000000000000000000000') {
-    console.log(`[check:migration-safety] CI Push: So sánh ${beforeSha.slice(0, 8)}...HEAD`);
-    comparedRange = `${beforeSha}...HEAD`;
-    return runGit(`git diff --name-status ${comparedRange} -- backend/migrations/`);
+    // Mốc `before` của GitHub có thể KHÔNG còn tồn tại trong repo sau một lần force-push
+    // (commit cũ bị amend/rebase thay thế). Khi đó `git diff <sha>...HEAD` chết với
+    // "Invalid symmetric difference expression" và job đỏ vì một lý do không phải lỗi mã.
+    // Kiểm tra mốc có với tới được không, không thì rơi xuống nhánh dự phòng bên dưới.
+    const reachable = runGit(`git cat-file -e ${beforeSha}^{commit}`, { allowFail: true }) !== null;
+    if (reachable) {
+      console.log(`[check:migration-safety] CI Push: So sánh ${beforeSha.slice(0, 8)}...HEAD`);
+      comparedRange = `${beforeSha}...HEAD`;
+      return runGit(`git diff --name-status ${comparedRange} -- backend/migrations/`);
+    }
+    console.warn(
+      `[check:migration-safety] Mốc before ${beforeSha.slice(0, 8)} không còn trong repo `
+      + '(thường do force-push) — chuyển sang so sánh HEAD~1...HEAD.'
+    );
   }
 
   // 2. Môi trường local: Kiểm tra staged + unstaged changes

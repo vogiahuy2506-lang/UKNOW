@@ -1,5 +1,53 @@
 import landingPageDomainService from '../services/landingPage/landingPageDomain.service.js';
 import landingPagePublicService from '../services/landingPage/landingPagePublic.service.js';
+import { LRUCache } from '../utils/lruCache.util.js';
+
+// L1 In-Memory Caches for Domain Resolution
+// hostMappingCache: hostname -> { id, slug } | null (TTL 60s, Negative TTL 30s)
+export const hostMappingCache = new LRUCache(1000, 60 * 1000, { negativeTtlMs: 30 * 1000 });
+
+// payloadCache: key (slug:xxx hoặc id:xxx) -> published payload (TTL 30s)
+export const payloadCache = new LRUCache(500, 30 * 1000);
+
+export const isDomainResolverCacheEnabled = () => {
+  return process.env.DOMAIN_RESOLVER_CACHE_ENABLED !== 'false';
+};
+
+/**
+ * Invalidate host mapping cache for a specific hostname.
+ */
+export const invalidateDomainResolverHost = (hostname) => {
+  if (!hostname) return;
+  const h = String(hostname).trim().toLowerCase();
+  hostMappingCache.delete(h);
+};
+
+/**
+ * Invalidate published payload cache by ID and/or slug.
+ */
+export const invalidateDomainResolverPayload = (id, slug) => {
+  if (id) payloadCache.delete(`id:${id}`);
+  if (slug) payloadCache.delete(`slug:${String(slug).trim().toLowerCase()}`);
+};
+
+/**
+ * Clear all domain resolver caches.
+ */
+export const clearDomainResolverCache = () => {
+  hostMappingCache.clear();
+  payloadCache.clear();
+};
+
+/**
+ * Get aggregate cache statistics for monitoring.
+ */
+export const getDomainResolverCacheStats = () => {
+  return {
+    hostMapping: hostMappingCache.stats,
+    payload: payloadCache.stats,
+    enabled: isDomainResolverCacheEnabled(),
+  };
+};
 
 /**
  * Middleware: resolve custom hostname → landing page slug → attach to req.
@@ -10,9 +58,15 @@ export const domainResolver = async (req, res, next) => {
     const host = (req.headers.host || '').split(':')[0].toLowerCase();
     if (!host) return next();
 
-    let resolved;
+    let resolved = null;
     try {
-      resolved = await landingPageDomainService.getPublishedLandingIdForHost(host);
+      if (!isDomainResolverCacheEnabled()) {
+        resolved = await landingPageDomainService.getPublishedLandingIdForHost(host);
+      } else {
+        resolved = await hostMappingCache.remember(host, () =>
+          landingPageDomainService.getPublishedLandingIdForHost(host)
+        );
+      }
     } catch (err) {
       if (err?.message?.includes('is_apex_domain') || err?.message?.includes('does not exist')) {
         console.warn(`[DomainResolver] Migration missing for is_apex_domain column, skipping: ${err.message}`);
@@ -21,22 +75,30 @@ export const domainResolver = async (req, res, next) => {
       throw err;
     }
 
+
     if (resolved) {
-      // Nếu landing có slug → dùng getPublishedPayload(slug) (logic cũ).
-      // Nếu không có slug → dùng id để load payload, đảm bảo landing không slug
-      // vẫn được phục vụ qua custom hostname.
       let payload = null;
-      if (resolved.slug) {
-        payload = await landingPagePublicService.getPublishedPayload(resolved.slug);
+      if (!isDomainResolverCacheEnabled()) {
+        if (resolved.slug) {
+          payload = await landingPagePublicService.getPublishedPayload(resolved.slug);
+        } else {
+          payload = await landingPagePublicService.getPublishedPayloadById(resolved.id);
+        }
       } else {
-        payload = await landingPagePublicService.getPublishedPayloadById(resolved.id);
+        const payloadKey = resolved.slug ? `slug:${resolved.slug.toLowerCase()}` : `id:${resolved.id}`;
+        payload = await payloadCache.remember(payloadKey, 30 * 1000, async () => {
+          if (resolved.slug) {
+            return landingPagePublicService.getPublishedPayload(resolved.slug);
+          }
+          return landingPagePublicService.getPublishedPayloadById(resolved.id);
+        });
       }
+
       if (payload) {
         req.isCustomDomain = true;
         req.customDomainSlug = resolved.slug || null;
         req.customDomainLandingId = resolved.id;
         req.landingPage = payload;
-        console.log(`[DomainResolver] ${host} → landing id=${resolved.id} slug="${resolved.slug || ''}"`);
       }
     }
 
@@ -46,6 +108,7 @@ export const domainResolver = async (req, res, next) => {
     next();
   }
 };
+
 
 /**
  * Middleware to inject Tailwind CDN into HTML for proper rendering.

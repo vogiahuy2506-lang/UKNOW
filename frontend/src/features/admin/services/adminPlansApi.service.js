@@ -1,4 +1,6 @@
 import api from '../../../services/api';
+import { queryClient } from '../../../lib/queryClient';
+import { PLANS_QUERY_KEY } from '../../../hooks/queries/usePlansQuery';
 
 const adminPlansApiService = {
   getPlans()                { return api.get('/admin/plans'); },
@@ -6,11 +8,23 @@ const adminPlansApiService = {
   searchUsers(q, excludeWithPlan = false) {
     return api.get('/admin/plans/search-users', { params: { q, ...(excludeWithPlan && { excludeWithPlan: 'true' }) } });
   },
-  createPlan(payload)       { return api.post('/admin/plans', payload); },
+  async createPlan(payload) {
+    const res = await api.post('/admin/plans', payload);
+    queryClient.invalidateQueries({ queryKey: PLANS_QUERY_KEY }).catch(() => {});
+    return res;
+  },
   createCustomPlan(payload)              { return api.post('/admin/plans/custom', payload); },
   createCustomPlanWithPayment(payload)   { return api.post('/admin/plans/custom-with-payment', payload); },
-  updatePlan(id, payload)   { return api.patch(`/admin/plans/${id}`, payload); },
-  deletePlan(id)            { return api.delete(`/admin/plans/${id}`); },
+  async updatePlan(id, payload) {
+    const res = await api.patch(`/admin/plans/${id}`, payload);
+    queryClient.invalidateQueries({ queryKey: PLANS_QUERY_KEY }).catch(() => {});
+    return res;
+  },
+  async deletePlan(id) {
+    const res = await api.delete(`/admin/plans/${id}`);
+    queryClient.invalidateQueries({ queryKey: PLANS_QUERY_KEY }).catch(() => {});
+    return res;
+  },
   assignPlan(id, userEmail, { paymentMethod = 'free', note = null, billingPeriod = 'monthly', quantity = 1 } = {}) {
     return api.post(`/admin/plans/${id}/assign`, { userEmail, paymentMethod, note, billingPeriod, quantity });
   },
@@ -23,9 +37,12 @@ const adminPlansApiService = {
   getCustomPricing() {
     return api.get('/admin/plans/custom-pricing');
   },
-  updateCustomPricing(itemKey, payload) {
-    return api.patch(`/admin/plans/custom-pricing/${encodeURIComponent(itemKey)}`, payload);
+  async updateCustomPricing(itemKey, payload) {
+    const res = await api.patch(`/admin/plans/custom-pricing/${encodeURIComponent(itemKey)}`, payload);
+    queryClient.invalidateQueries({ queryKey: PLANS_QUERY_KEY }).catch(() => {});
+    return res;
   },
 };
+
 
 export default adminPlansApiService;

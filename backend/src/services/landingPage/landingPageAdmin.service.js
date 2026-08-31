@@ -1,6 +1,9 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
+import landingPageDomainRepository from '../../repositories/landingPageDomain.repository.js';
 import landingPageDomainService from './landingPageDomain.service.js';
 import landingPageVersionService from './landingPageVersion.service.js';
+import cloudflareService from '../cloudflare.service.js';
+
 import db from '../../config/database.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import {
@@ -13,6 +16,10 @@ import {
   toPublicLeadFormConfig,
 } from '../../utils/landingLeadFormConfig.util.js';
 import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
+import {
+  invalidateDomainResolverPayload,
+  invalidateDomainResolverHost,
+} from '../../middleware/domainResolver.js';
 
 /** Slug dành cho landing React cố định `/l` — không quản lý qua bảng `landing_pages`. */
 const RESERVED_SLUG_FIXED_LANDING = 'l';
@@ -288,6 +295,30 @@ class LandingPageAdminService {
       );
     }
 
+    // Invalidate L1 domain resolver caches & find domain hostname
+    let activeHostname = null;
+    try {
+      invalidateDomainResolverPayload(id, current.slug);
+      if (slug && slug !== current.slug) {
+        invalidateDomainResolverPayload(id, slug);
+      }
+      const domainRow = await landingPageDomainRepository.findByLandingPageId(id).catch(() => null);
+      if (domainRow?.hostname) {
+        activeHostname = domainRow.hostname;
+        invalidateDomainResolverHost(domainRow.hostname);
+      }
+    } catch (e) {
+      console.warn('[LandingPageAdmin.update] cache invalidation failed:', e.message);
+    }
+
+    // Trigger non-blocking Cloudflare purge for updated page (both slug and hostname)
+    cloudflareService.purgeLandingCache({
+      slug: slug || current.slug,
+      hostname: activeHostname,
+    }).catch((e) =>
+      console.warn('[LandingPageAdmin.update] Cloudflare purge failed:', e.message)
+    );
+
     const dto = toAdminLandingDto(updated);
     if (snapshotWarning && dto) {
       dto.warning = snapshotWarning;
@@ -313,6 +344,18 @@ class LandingPageAdminService {
       err.statusCode = 403;
       throw err;
     }
+
+    // Lấy domain record trước khi xóa
+    let activeHostname = null;
+    try {
+      const domainRow = await landingPageDomainRepository.findByLandingPageId(id).catch(() => null);
+      if (domainRow?.hostname) {
+        activeHostname = domainRow.hostname;
+      }
+    } catch {
+      // ignore
+    }
+
     // Xóa subdomain Cloudflare trước khi xóa bản ghi (lỗi CF không fail request)
     await landingPageDomainService.removeSubdomain(id).catch((e) =>
       console.warn('[LandingPageAdmin.remove] removeSubdomain failed:', e.message)
@@ -324,8 +367,28 @@ class LandingPageAdminService {
       err.statusCode = 404;
       throw err;
     }
+
+    // Invalidate L1 domain resolver cache
+    try {
+      invalidateDomainResolverPayload(id, current.slug);
+      if (activeHostname) {
+        invalidateDomainResolverHost(activeHostname);
+      }
+    } catch (e) {
+      console.warn('[LandingPageAdmin.remove] cache invalidation failed:', e.message);
+    }
+
+    // Trigger non-blocking Cloudflare purge
+    cloudflareService.purgeLandingCache({
+      slug: current.slug,
+      hostname: activeHostname,
+    }).catch((e) =>
+      console.warn('[LandingPageAdmin.remove] Cloudflare purge failed:', e.message)
+    );
+
     return true;
   }
+
 
   /**
    * Lấy danh sách các phiên bản của landing page

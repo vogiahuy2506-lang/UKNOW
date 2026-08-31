@@ -4,14 +4,17 @@ import * as customPlanService from '../services/payment/customPlan.service.js';
 export const getPlans = async (req, res) => {
     try {
         const plans = await planService.getAllPlans();
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
         res.json({ success: true, plans });
     } catch (err) {
+
         res.status(500).json({ success: false, message: 'Lỗi server' });
     }
 };
 
 export const getCustomPlanConfig = async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'private, no-store');
         const data = await customPlanService.getCustomPlanPricingConfig();
         res.json({ success: true, data });
     } catch (err) {
@@ -22,6 +25,7 @@ export const getCustomPlanConfig = async (req, res) => {
 
 export const quoteCustomPlan = async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'private, no-store');
         const { quantities = {}, billingPeriod = 'monthly' } = req.body || {};
         const data = await customPlanService.quoteCustomPlan({ quantities, billingPeriod });
         res.json({ success: true, data });
@@ -39,6 +43,7 @@ export const quoteCustomPlan = async (req, res) => {
 
 export const getMyCustomPlan = async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'private, no-store');
         if (req.user?.activeContext?.type === 'employee') {
             return res.json({ success: true, data: null });
         }

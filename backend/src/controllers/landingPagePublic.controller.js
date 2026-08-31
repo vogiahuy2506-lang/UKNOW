@@ -1,4 +1,9 @@
+import crypto from 'crypto';
 import landingPagePublicService from '../services/landingPage/landingPagePublic.service.js';
+
+function generateETag(content) {
+  return crypto.createHash('sha256').update(String(content || '')).digest('hex');
+}
 
 /**
  * API công khai — HTML landing đã publish, analytics, redirect click.
@@ -22,6 +27,15 @@ class LandingPagePublicController {
           message: 'Không tìm thấy landing page hoặc chưa được công bố',
         });
       }
+
+      const etag = `"${generateETag(JSON.stringify(data))}"`;
+      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+      res.setHeader('ETag', etag);
+
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+
       return res.json({ success: true, data });
     } catch (error) {
       console.error('[LandingPagePublicController.getPublished]', error);
@@ -45,6 +59,15 @@ class LandingPagePublicController {
           message: 'Không tìm thấy landing page hoặc chưa được công bố',
         });
       }
+
+      const etag = `"${generateETag(JSON.stringify(data))}"`;
+      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+      res.setHeader('ETag', etag);
+
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+
       return res.json({ success: true, data });
     } catch (error) {
       const status = error.statusCode || 500;
@@ -78,6 +101,15 @@ class LandingPagePublicController {
           message: 'Không tìm thấy landing cho hostname này hoặc chưa xác minh DNS',
         });
       }
+
+      const etag = `"${generateETag(JSON.stringify(data))}"`;
+      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+      res.setHeader('ETag', etag);
+
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+
       return res.json({ success: true, data });
     } catch (error) {
       console.error('[LandingPagePublicController.getPublishedByHost]', error);
@@ -121,13 +153,9 @@ class LandingPagePublicController {
    */
   async getByDomain(req, res) {
     try {
-      // If domain was resolved, req.landingPage contains the data
+      // If domain was resolved, req.landingPage contains the resolved payload directly
       if (req.landingPage) {
-        let data = req.landingPage;
-        if (req.landingPage.id) {
-          const byId = await landingPagePublicService.getPublishedPayloadById(req.landingPage.id);
-          if (byId) data = byId;
-        }
+        const data = req.landingPage;
         if (!data?.htmlContent) {
           return res.status(404).json({
             success: false,
@@ -135,11 +163,9 @@ class LandingPagePublicController {
           });
         }
 
-        if (data.htmlContent.includes('<!DOCTYPE') || data.htmlContent.includes('<html')) {
-          return res.type('html').send(data.htmlContent);
-        }
-
-        const html = `<!DOCTYPE html>
+        const html = (data.htmlContent.includes('<!DOCTYPE') || data.htmlContent.includes('<html'))
+          ? data.htmlContent
+          : `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -152,6 +178,14 @@ class LandingPagePublicController {
   ${data.htmlContent}
 </body>
 </html>`;
+
+        const etag = `"${generateETag(html)}"`;
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+        res.setHeader('ETag', etag);
+
+        if (req.headers['if-none-match'] === etag) {
+          return res.status(304).end();
+        }
 
         return res.type('html').send(html);
       }
@@ -191,6 +225,7 @@ class LandingPagePublicController {
     }
   }
 }
+
 
 /**
  * Escape HTML special characters for safe embedding.

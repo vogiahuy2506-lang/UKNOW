@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import api, { setAuthStore } from '../services/api';
 import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
 import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
+import { clearQueryCache } from '../lib/queryClient';
 
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
+
 export const trialWelcomeKey = (userId) => `founderai_trial_welcome_${userId}`;
 
 // Storage guard: an toàn cho SSR / test env không có window. Không throw nếu storage
@@ -303,7 +305,9 @@ export const useAuthStore = create((set, get) => ({
       removeToken('accessToken');
       safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
       notifyStorageQuotaClear();
+      await clearQueryCache();
       set({
+
         user: null,
         isAuthenticated: false,
         aiCredits: { used: 0, limit: null },
@@ -343,13 +347,14 @@ export const useAuthStore = create((set, get) => ({
    * Chuyển ngữ cảnh hoạt động.
    * @param {number|string|null} ownerId - null để về self context
    */
-  switchContext: (ownerId) => {
+  switchContext: async (ownerId) => {
     const { user } = get();
 
     if (!ownerId) {
       const ctx = { type: 'self' };
       saveContext(ctx);
       notifyStorageQuotaClear();
+      await clearQueryCache();
       set({ activeContext: ctx });
       notifyStorageQuotaRefresh();
       return;
@@ -378,9 +383,12 @@ export const useAuthStore = create((set, get) => ({
 
     saveContext(ctx);
     notifyStorageQuotaClear();
+    await clearQueryCache();
     set({ activeContext: ctx });
     notifyStorageQuotaRefresh();
   },
+
+
 
   /** Cập nhật thông tin user trong store. */
   updateUser: (user) => {
