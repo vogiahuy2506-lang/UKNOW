@@ -40,8 +40,13 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
     await row.locator('td').last().locator('button').first().click();
     await page.getByRole('button', { name: 'Kích hoạt' }).click();
 
+    // Hai tầng chặn khác nhau, thông điệp khác nhau — nhận cả hai:
+    //  - publish (409): 'Không thể kích hoạt chiến dịch khi chưa có node nào'
+    //    (campaignCrud.service.js:685) — chặn campaign KHÔNG CÓ NODE NÀO.
+    //  - preflight tầng chạy (400): 'Chiến dịch không có node gửi tin nhắn nào.'
+    //    (campaignPreflight.service.js:57) — chặn campaign CÓ node nhưng không có node gửi.
     await expect(
-      page.getByText(/không có node gửi tin nhắn|NO_SEND_NODE/i).first()
+      page.getByText(/chưa có node nào|không có node gửi tin nhắn/i).first()
     ).toBeVisible({ timeout: 10_000 });
 
     // Và trạng thái KHÔNG được đổi sang đang hoạt động.
