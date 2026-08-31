@@ -120,22 +120,24 @@ describe('PR-2.4: Replay 17 golden fixtures qua Intent Compiler', () => {
       const check = isCompilableIntent(intent);
 
       if (check.ok) {
-        // Với các fixture email đã compilable, kiểm tra compiler biên dịch hợp lệ 100%
-        if (intent.channel === 'email') {
-          const graph = compileCampaign(intent);
-          expect(Array.isArray(graph.nodes)).toBe(true);
-          expect(Array.isArray(graph.connections)).toBe(true);
-          expect(Array.isArray(graph.contentSlots)).toBe(true);
-          expect(graph.nodes.length).toBeGreaterThanOrEqual(2);
+        // Mọi fixture compilable (Email, Zalo, Zalo Group) đều biên dịch hợp lệ 100%
+        const graph = compileCampaign(intent);
+        expect(Array.isArray(graph.nodes)).toBe(true);
+        expect(Array.isArray(graph.connections)).toBe(true);
+        expect(Array.isArray(graph.contentSlots)).toBe(true);
+        expect(graph.nodes.length).toBeGreaterThanOrEqual(2);
 
-          for (const node of graph.nodes) {
-            const validation = campaignNodeRegistryService.validateNodeConfig(
-              node.nodeSubtype,
-              node.config
-            );
-            expect(validation.valid).toBe(true);
-            expect(validation.errors).toEqual([]);
-          }
+        for (const node of graph.nodes) {
+          expect(node).toHaveProperty('nodeType');
+          expect(node).toHaveProperty('nodeSubtype');
+          expect(node).not.toHaveProperty('node_subtype');
+
+          const validation = campaignNodeRegistryService.validateNodeConfig(
+            node.nodeSubtype,
+            node.config
+          );
+          expect(validation.valid).toBe(true);
+          expect(validation.errors).toEqual([]);
         }
       } else {
         // Các fixture dở dang bị compiler từ chối an toàn

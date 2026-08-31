@@ -6,7 +6,7 @@ import {
   runCompilerShadowCompare,
 } from '../campaignCompilerShadow.service.js';
 
-describe('PR-2.3: campaignCompilerShadow.service', () => {
+describe('PR-2.3 & PR-3.2: campaignCompilerShadow.service', () => {
   const sampleCompiledGraph = {
     nodes: [
       { id: 'node_trigger_1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
@@ -84,22 +84,13 @@ describe('PR-2.3: campaignCompilerShadow.service', () => {
     expect(result.differences.some((d) => d.includes('fromEmailId khác nhau'))).toBe(true);
   });
 
-  it('runCompilerShadowCompare chạy an toàn, không ném lỗi khi intent khuyết hoặc không phải email', () => {
-    // Intent khuyết
+  it('runCompilerShadowCompare chạy an toàn, không ném lỗi khi intent khuyết', () => {
     const resIncomplete = runCompilerShadowCompare({
       legacyScript: { nodes: [], connections: [] },
       gateState: {},
     });
     expect(resIncomplete.executed).toBe(false);
     expect(resIncomplete.reason).toContain('chưa đủ điều kiện compile');
-
-    // Intent zalo
-    const resZalo = runCompilerShadowCompare({
-      legacyScript: { nodes: [], connections: [] },
-      gateState: { channel: 'zalo', senderAccountId: 1, dataSource: 'db', schedule: { mode: 'once' } },
-    });
-    expect(resZalo.executed).toBe(false);
-    expect(resZalo.reason).toContain('chưa bật shadow compare');
   });
 
   it('runCompilerShadowCompare chạy thành công với email-once hợp lệ', () => {
@@ -124,6 +115,42 @@ describe('PR-2.3: campaignCompilerShadow.service', () => {
       senderAccountId: 7,
       dataSource: 'sheet',
       sheetUrl: 'https://sheet.link',
+      schedule: { mode: 'once' },
+    };
+
+    const res = runCompilerShadowCompare({
+      legacyScript,
+      gateState,
+    });
+
+    expect(res.executed).toBe(true);
+    expect(res.match).toBe(true);
+  });
+
+  it('runCompilerShadowCompare chạy thành công với Zalo cá nhân bạn bè', () => {
+    const legacyScript = {
+      nodes: [
+        { tempId: 'trigger_1', node_subtype: 'manual', config: {} },
+        { tempId: 'select_zalo_1', node_subtype: 'select_zalo_account', config: { zaloAccountId: 12 } },
+        { tempId: 'friends_1', node_subtype: 'get_all_friends', config: {} },
+        {
+          tempId: 'send_zalo_1',
+          node_subtype: 'send_zalo_personal',
+          config: { zaloAccountId: 12, zaloRecipientSource: 'node' },
+        },
+      ],
+      connections: [
+        { sourceNodeId: 'trigger_1', targetNodeId: 'select_zalo_1' },
+        { sourceNodeId: 'select_zalo_1', targetNodeId: 'friends_1' },
+        { sourceNodeId: 'friends_1', targetNodeId: 'send_zalo_1' },
+      ],
+    };
+
+    const gateState = {
+      channel: 'zalo',
+      senderAccountId: 12,
+      dataSource: 'zalo_friends',
+      zaloFriendIds: ['f1', 'f2'],
       schedule: { mode: 'once' },
     };
 

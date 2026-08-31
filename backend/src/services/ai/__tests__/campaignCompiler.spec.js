@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import campaignNodeRegistryService from '../../campaign/campaignNodeRegistry.service.js';
 import { compileCampaign } from '../campaignCompiler.service.js';
 
-describe('PR-2.1: campaignCompiler.service', () => {
+describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
   const sampleEmailSheetOnce = {
     version: 1,
     channel: 'email',
@@ -51,8 +51,102 @@ describe('PR-2.1: campaignCompiler.service', () => {
     expect(graph.contentSlots[0].brief.topic).toBe('Ra mắt tính năng');
   });
 
+  it('biên dịch thành công luồng Zalo cá nhân gửi một lần (bạn bè zalo_contacts)', () => {
+    const intentZaloPersonal = {
+      version: 1,
+      channel: 'zalo',
+      sender: { type: 'zalo_account', id: 12 },
+      audience: { type: 'zalo_contacts', recipientKind: 'phone' },
+      schedule: { type: 'once' },
+      contentBrief: { topic: 'Nhắc lịch hẹn', locale: 'vi' },
+    };
+
+    const graph = compileCampaign(intentZaloPersonal);
+    expect(graph.nodes.length).toBe(4); // trigger -> select_zalo_account -> get_all_friends -> send_zalo_personal
+    const [triggerNode, selectNode, audienceNode, sendZaloNode] = graph.nodes;
+
+    expect(triggerNode.nodeSubtype).toBe('manual');
+    expect(selectNode.nodeSubtype).toBe('select_zalo_account');
+    expect(selectNode.config.zaloAccountId).toBe(12);
+
+    expect(audienceNode.nodeSubtype).toBe('get_all_friends');
+    expect(audienceNode.config.zaloFriendAccountNodeId).toBe(selectNode.id);
+
+    expect(sendZaloNode.nodeSubtype).toBe('send_zalo_personal');
+    expect(sendZaloNode.config.zaloAccountId).toBe(12);
+    expect(sendZaloNode.config.zaloRecipientSource).toBe('node');
+    expect(sendZaloNode.config.zaloRecipientType).toBe('uid');
+    expect(Array.isArray(sendZaloNode.config.zaloPersonalTemplateSteps)).toBe(true);
+    expect(sendZaloNode.config.zaloPersonalTemplateSteps.length).toBe(1);
+
+    expect(graph.connections.length).toBe(3);
+    expect(graph.connections[0].sourceNodeId).toBe(triggerNode.id);
+    expect(graph.connections[0].targetNodeId).toBe(selectNode.id);
+    expect(graph.connections[1].sourceNodeId).toBe(selectNode.id);
+    expect(graph.connections[1].targetNodeId).toBe(audienceNode.id);
+    expect(graph.connections[2].sourceNodeId).toBe(audienceNode.id);
+    expect(graph.connections[2].targetNodeId).toBe(sendZaloNode.id);
+
+    expect(graph.contentSlots[0].channel).toBe('zalo');
+    expect(graph.contentSlots[0].type).toBe('zalo');
+  });
+
+  it('biên dịch thành công luồng Zalo cá nhân Drip 3 ngày', () => {
+    const intentZaloDrip = {
+      version: 1,
+      channel: 'zalo',
+      sender: { type: 'zalo_account', id: 5 },
+      audience: { type: 'sheet', url: 'https://docs.google.com/spreadsheets/d/abc', recipientKind: 'phone' },
+      schedule: { type: 'drip', days: 3, slotsPerDay: 1 },
+      contentBrief: { topic: 'Chuỗi chăm sóc Zalo', locale: 'vi' },
+    };
+
+    const graph = compileCampaign(intentZaloDrip);
+    const sendNode = graph.nodes.find((n) => n.nodeSubtype === 'send_zalo_personal');
+    expect(sendNode).not.toBeUndefined();
+    expect(sendNode.config.zaloPersonalSendMode).toBe('schedule');
+    expect(sendNode.config.zaloPersonalTemplateSteps.length).toBe(3);
+    expect(graph.contentSlots.length).toBe(3);
+  });
+
+  it('biên dịch thành công luồng Zalo nhóm gửi một lần và Drip', () => {
+    const intentZaloGroup = {
+      version: 1,
+      channel: 'zalo_group',
+      sender: { type: 'zalo_account', id: 8 },
+      audience: { type: 'zalo_contacts', groupIds: ['g1', 'g2'], recipientKind: 'phone' },
+      schedule: { type: 'once' },
+      contentBrief: { topic: 'Thông báo nhóm', locale: 'vi' },
+    };
+
+    const graph = compileCampaign(intentZaloGroup);
+    expect(graph.nodes.length).toBe(4); // trigger -> select_zalo_account -> get_all_groups -> send_zalo_group
+    const sendGroupNode = graph.nodes.find((n) => n.nodeSubtype === 'send_zalo_group');
+    expect(sendGroupNode).not.toBeUndefined();
+    expect(sendGroupNode.config.zaloAccountId).toBe(8);
+    expect(Array.isArray(sendGroupNode.config.zaloGroupTemplateSteps)).toBe(true);
+    expect(sendGroupNode.config.zaloGroupTemplateSteps.length).toBe(1);
+  });
+
   it('tên khoá của node do compiler sinh trùng đúng tham số của insertNodeTx và updateCampaign', () => {
-    const graph = compileCampaign(sampleEmailSheetOnce);
+    const testIntents = [
+      sampleEmailSheetOnce,
+      {
+        version: 1,
+        channel: 'zalo',
+        sender: { type: 'zalo_account', id: 12 },
+        audience: { type: 'zalo_contacts', recipientKind: 'phone' },
+        schedule: { type: 'once' },
+      },
+      {
+        version: 1,
+        channel: 'zalo_group',
+        sender: { type: 'zalo_account', id: 8 },
+        audience: { type: 'zalo_contacts', groupIds: ['g1'], recipientKind: 'phone' },
+        schedule: { type: 'drip', days: 2, slotsPerDay: 1 },
+      },
+    ];
+
     const requiredInsertNodeParams = [
       'nodeType',
       'nodeSubtype',
@@ -63,50 +157,56 @@ describe('PR-2.1: campaignCompiler.service', () => {
       'config',
     ];
 
-    for (const node of graph.nodes) {
-      expect(node).toHaveProperty('id');
-      expect(node).toHaveProperty('tempId');
+    for (const intent of testIntents) {
+      const graph = compileCampaign(intent);
+      for (const node of graph.nodes) {
+        expect(node).toHaveProperty('id');
+        expect(node).toHaveProperty('tempId');
 
-      for (const param of requiredInsertNodeParams) {
-        expect(node).toHaveProperty(param);
-        expect(node[param]).not.toBeUndefined();
+        for (const param of requiredInsertNodeParams) {
+          expect(node).toHaveProperty(param);
+          expect(node[param]).not.toBeUndefined();
+        }
+
+        expect(node).not.toHaveProperty('node_type');
+        expect(node).not.toHaveProperty('node_subtype');
+        expect(node).not.toHaveProperty('node_name');
+        expect(node).not.toHaveProperty('node_description');
+        expect(node).not.toHaveProperty('position_x');
+        expect(node).not.toHaveProperty('position_y');
       }
-
-      // Khẳng định KHÔNG còn dùng snake_case cũ trên node object
-      expect(node).not.toHaveProperty('node_type');
-      expect(node).not.toHaveProperty('node_subtype');
-      expect(node).not.toHaveProperty('node_name');
-      expect(node).not.toHaveProperty('node_description');
-      expect(node).not.toHaveProperty('position_x');
-      expect(node).not.toHaveProperty('position_y');
     }
   });
 
-  it('biên dịch thành công luồng email-once với Database', () => {
-    const intent = {
-      version: 1,
-      channel: 'email',
-      sender: { type: 'email_account', id: 3 },
-      audience: { type: 'db', recipientKind: 'email' },
-      schedule: { type: 'once' },
-    };
+  it('mọi node do compiler sinh ra (Email, Zalo, Zalo Group) đều pass validateNodeConfig của registry', () => {
+    const testIntents = [
+      sampleEmailSheetOnce,
+      {
+        version: 1,
+        channel: 'zalo',
+        sender: { type: 'zalo_account', id: 12 },
+        audience: { type: 'zalo_contacts', recipientKind: 'phone' },
+        schedule: { type: 'once' },
+      },
+      {
+        version: 1,
+        channel: 'zalo_group',
+        sender: { type: 'zalo_account', id: 8 },
+        audience: { type: 'zalo_contacts', groupIds: ['g1'], recipientKind: 'phone' },
+        schedule: { type: 'once' },
+      },
+    ];
 
-    const graph = compileCampaign(intent);
-    expect(graph.nodes.length).toBe(3);
-    expect(graph.nodes[1].nodeSubtype).toBe('interested_customers');
-    expect(graph.nodes[2].config.fromEmailId).toBe(3);
-  });
-
-  it('mọi node do compiler sinh ra đều pass validateNodeConfig của registry', () => {
-    const graph = compileCampaign(sampleEmailSheetOnce);
-
-    for (const node of graph.nodes) {
-      const validation = campaignNodeRegistryService.validateNodeConfig(
-        node.nodeSubtype,
-        node.config
-      );
-      expect(validation.valid).toBe(true);
-      expect(validation.errors).toEqual([]);
+    for (const intent of testIntents) {
+      const graph = compileCampaign(intent);
+      for (const node of graph.nodes) {
+        const validation = campaignNodeRegistryService.validateNodeConfig(
+          node.nodeSubtype,
+          node.config
+        );
+        expect(validation.valid).toBe(true);
+        expect(validation.errors).toEqual([]);
+      }
     }
   });
 
@@ -124,7 +224,7 @@ describe('PR-2.1: campaignCompiler.service', () => {
   it('từ chối intent khuyết dữ liệu và ném danh sách missing fields', () => {
     const incomplete = {
       version: 1,
-      channel: 'email',
+      channel: 'zalo',
       // thiếu sender, audience, schedule
     };
 

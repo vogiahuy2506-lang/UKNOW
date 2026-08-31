@@ -158,7 +158,10 @@ export function deriveIntent(gates = {}, brief = null) {
     (Array.isArray(gates?.zaloGroupIds) && gates.zaloGroupIds.length > 0) ||
     (Array.isArray(gates?.zaloFriendIds) && gates.zaloFriendIds.length > 0)
   ) {
-    const audType = gates?.dataSource || (channel === 'zalo_group' ? 'zalo_contacts' : null);
+    let audType = gates?.dataSource || (channel === 'zalo_group' ? 'zalo_contacts' : null);
+    if (audType === 'zalo_friends' || audType === 'zalo_groups') {
+      audType = 'zalo_contacts';
+    }
     const recipientKind = channel === 'email' ? 'email' : 'phone';
     audience = {
       ...(audType ? { type: audType } : {}),

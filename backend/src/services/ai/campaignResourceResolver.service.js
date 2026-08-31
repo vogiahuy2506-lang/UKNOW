@@ -1,7 +1,7 @@
 /**
- * Campaign Resource Resolver (Giai đoạn 2 - Việc 2.2)
+ * Campaign Resource Resolver (Giai đoạn 2 & 3 - Việc 2.2 & 3.2)
  *
- * Nhiệm vụ: Xác thực và giải quyết tài nguyên thật (accounts, sheets, landing pages)
+ * Nhiệm vụ: Xác thực và giải quyết tài nguyên thật (accounts, sheets, landing pages, zalo groups)
  * TRƯỚC KHI biên dịch intent thành đồ thị. Tách biệt hoàn toàn tầng I/O bất đồng bộ
  * khỏi compiler thuần túy.
  */
@@ -16,6 +16,7 @@ import { checkSheetForChannel } from './sheetRecipientCheck.service.js';
  * @param {object} context - Context chứa resources hoặc repositories
  * @param {Array<object>} [context.emailSenders] - Danh sách email senders của user
  * @param {Array<object>} [context.zaloAccounts] - Danh sách zalo accounts của user
+ * @param {Array<object>} [context.zaloGroups] - Danh sách nhóm Zalo của user/account
  * @param {Function} [context.checkSheetFn] - Hàm kiểm tra sheet (tuỳ chọn override cho test)
  * @returns {Promise<{ ok: boolean, resolved: object, errors: string[] }>}
  */
@@ -24,6 +25,7 @@ export async function resolveCampaignResources(intent, context = {}) {
   const resolved = {
     senderAccount: null,
     sheetCheck: null,
+    zaloGroups: null,
   };
 
   if (!intent || typeof intent !== 'object') {
@@ -77,6 +79,23 @@ export async function resolveCampaignResources(intent, context = {}) {
         errors.push('Google Sheet không chứa dữ liệu liên hệ nào.');
       } else if (sheetCheck.status === 'not_public') {
         errors.push('Google Sheet không thể truy cập (hãy bật quyền chia sẻ "Bất kỳ ai có đường liên kết").');
+      }
+    }
+  }
+
+  // 3. Resolve & Preflight Zalo Group Audience
+  if (channel === 'zalo_group') {
+    if (Array.isArray(audience?.groupIds) && audience.groupIds.length > 0) {
+      if (Array.isArray(context.zaloGroups) && context.zaloGroups.length > 0) {
+        const existingGroupIds = new Set(context.zaloGroups.map((g) => String(g.groupId || g.id)));
+        const missingGroups = audience.groupIds.filter((gid) => !existingGroupIds.has(String(gid)));
+        if (missingGroups.length > 0) {
+          errors.push(`Có ${missingGroups.length} nhóm Zalo không tồn tại hoặc tài khoản không còn là thành viên.`);
+        } else {
+          resolved.zaloGroups = audience.groupIds;
+        }
+      } else {
+        resolved.zaloGroups = audience.groupIds;
       }
     }
   }

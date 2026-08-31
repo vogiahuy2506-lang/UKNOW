@@ -1,5 +1,5 @@
 /**
- * Campaign Compiler Shadow Compare Service (Giai đoạn 2 - Việc 2.3)
+ * Campaign Compiler Shadow Compare Service (Giai đoạn 2 & 3 - Việc 2.3 & 3.2)
  *
  * Nhiệm vụ: Chạy song song compiler mới với hệ thống sinh script cũ,
  * so sánh cấu trúc đồ thị (nodes, connections, configs cốt lõi) và ghi log an toàn.
@@ -59,7 +59,7 @@ export function compareCompiledWithLegacy(compiledGraph, legacyScript) {
     );
   }
 
-  // 3. So sánh config của send node (email/zalo)
+  // 3. So sánh config của send node (Email)
   const compiledSendEmail = compiledNodes.find((n) => getCompiledNodeSubtype(n) === 'send_email');
   const legacySendEmail = legacyNodes.find((n) => getLegacyNodeSubtype(n) === 'send_email');
 
@@ -76,7 +76,33 @@ export function compareCompiledWithLegacy(compiledGraph, legacyScript) {
     }
   }
 
-  // 4. So sánh số lượng connections
+  // 4. So sánh config của send node (Zalo cá nhân)
+  const compiledSendZalo = compiledNodes.find((n) => getCompiledNodeSubtype(n) === 'send_zalo_personal');
+  const legacySendZalo = legacyNodes.find((n) => getLegacyNodeSubtype(n) === 'send_zalo_personal');
+
+  if (compiledSendZalo && legacySendZalo) {
+    const cCfg = compiledSendZalo.config || {};
+    const lCfg = legacySendZalo.config || legacySendZalo.settings || {};
+
+    if (Number(cCfg.zaloAccountId) !== Number(lCfg.zaloAccountId)) {
+      differences.push(`zaloAccountId khác nhau: compiler=${cCfg.zaloAccountId}, legacy=${lCfg.zaloAccountId}`);
+    }
+  }
+
+  // 5. So sánh config của send node (Zalo nhóm)
+  const compiledSendZaloGroup = compiledNodes.find((n) => getCompiledNodeSubtype(n) === 'send_zalo_group');
+  const legacySendZaloGroup = legacyNodes.find((n) => getLegacyNodeSubtype(n) === 'send_zalo_group');
+
+  if (compiledSendZaloGroup && legacySendZaloGroup) {
+    const cCfg = compiledSendZaloGroup.config || {};
+    const lCfg = legacySendZaloGroup.config || legacySendZaloGroup.settings || {};
+
+    if (Number(cCfg.zaloAccountId) !== Number(lCfg.zaloAccountId)) {
+      differences.push(`zaloAccountId khác nhau (nhóm): compiler=${cCfg.zaloAccountId}, legacy=${lCfg.zaloAccountId}`);
+    }
+  }
+
+  // 6. So sánh số lượng connections
   if (compiledConns.length !== legacyConns.length) {
     differences.push(`Số lượng connections không khớp: compiler=${compiledConns.length}, legacy=${legacyConns.length}`);
   }
@@ -111,11 +137,6 @@ export function runCompilerShadowCompare({ legacyScript, gateState, brief = null
 
     if (!check.ok) {
       return { executed: false, reason: `Intent chưa đủ điều kiện compile: missing [${check.missing.join(', ')}]` };
-    }
-
-    // Chỉ shadow compare cho các luồng đã hỗ trợ trong compiler (email-once, email-drip)
-    if (intent.channel !== 'email') {
-      return { executed: false, reason: `Luồng channel="${intent.channel}" chưa bật shadow compare` };
     }
 
     const compiledGraph = compileCampaign(intent);

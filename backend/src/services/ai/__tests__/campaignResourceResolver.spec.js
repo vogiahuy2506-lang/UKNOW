@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { resolveCampaignResources } from '../campaignResourceResolver.service.js';
 
-describe('PR-2.2: campaignResourceResolver.service', () => {
+describe('PR-2.2 & PR-3.2: campaignResourceResolver.service', () => {
   const sampleEmailSenders = [
     { id: 1, name: 'Active Sender', email: 'active@example.com', status: 'active', is_active: true },
     { id: 2, name: 'Inactive Sender', email: 'inactive@example.com', status: 'inactive', is_active: false },
@@ -10,6 +10,11 @@ describe('PR-2.2: campaignResourceResolver.service', () => {
   const sampleZaloAccounts = [
     { id: 10, displayName: 'Connected Zalo', status: 'connected', isActive: true },
     { id: 20, displayName: 'Disconnected Zalo', status: 'disconnected', isActive: true },
+  ];
+
+  const sampleZaloGroups = [
+    { id: 'g1', groupId: 'g1', name: 'Nhóm Khách Hàng VIP' },
+    { id: 'g2', groupId: 'g2', name: 'Nhóm Cộng Đồng' },
   ];
 
   it('xác thực thành công email sender đang active', async () => {
@@ -83,5 +88,37 @@ describe('PR-2.2: campaignResourceResolver.service', () => {
     });
     expect(resWrong.ok).toBe(false);
     expect(resWrong.errors[0]).toContain('không có cột chứa thông tin email');
+  });
+
+  it('xác thực danh sách groupIds cho Zalo nhóm (PR-3.2)', async () => {
+    const intentGroupOk = {
+      version: 1,
+      channel: 'zalo_group',
+      sender: { type: 'zalo_account', id: 10 },
+      audience: { type: 'zalo_contacts', groupIds: ['g1', 'g2'], recipientKind: 'phone' },
+      schedule: { type: 'once' },
+    };
+
+    const resOk = await resolveCampaignResources(intentGroupOk, {
+      zaloAccounts: sampleZaloAccounts,
+      zaloGroups: sampleZaloGroups,
+    });
+    expect(resOk.ok).toBe(true);
+    expect(resOk.resolved.zaloGroups).toEqual(['g1', 'g2']);
+
+    const intentGroupMissing = {
+      version: 1,
+      channel: 'zalo_group',
+      sender: { type: 'zalo_account', id: 10 },
+      audience: { type: 'zalo_contacts', groupIds: ['g1', 'non_existent_group'], recipientKind: 'phone' },
+      schedule: { type: 'once' },
+    };
+
+    const resMissing = await resolveCampaignResources(intentGroupMissing, {
+      zaloAccounts: sampleZaloAccounts,
+      zaloGroups: sampleZaloGroups,
+    });
+    expect(resMissing.ok).toBe(false);
+    expect(resMissing.errors[0]).toContain('nhóm Zalo không tồn tại');
   });
 });
