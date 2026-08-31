@@ -269,6 +269,15 @@ export async function metricLatestCronRescued(jobCode = 'payos_order_reconcile')
 
 /**
  * Latest einvoice series check result (series remaining count & year mismatch).
+ *
+ * CHỈ đọc run đã kết thúc (`finished_at IS NOT NULL`). `recordRun` chèn dòng
+ * `status='running'` với `result='{}'` ngay khi job bắt đầu; nếu đọc phải dòng đó
+ * thì `cLai` = null trong khi không có lỗi nào, và evaluator bắn cảnh báo critical
+ * giả "Không đọc được số lượng hoá đơn còn lại". Đã xảy ra thật: 14 lần từ
+ * 17/08–31/08/2026, mỗi ngày lúc 03:10:0x, do cron kiểm dải số và evaluator
+ * (chạy mỗi 5 phút, tức đúng phút 10) cùng nổ lúc 03:10:00 trong khi job mất
+ * ~150–350ms mới ghi xong.
+ *
  * @param {string} [jobCode]
  * @returns {Promise<{ cLai: number|null, yearMismatch: boolean, notFound: boolean, found: boolean, result: object|null }>}
  */
@@ -277,6 +286,7 @@ export async function metricLatestEinvoiceSeries(jobCode = 'einvoice_series_chec
     `SELECT status, result, error_message
      FROM cron_job_runs
      WHERE job_code = $1
+       AND finished_at IS NOT NULL
      ORDER BY started_at DESC
      LIMIT 1`,
     [jobCode]

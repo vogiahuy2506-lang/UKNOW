@@ -1182,8 +1182,11 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Storage reconcile: 02:40 hàng ngày');
 
-  // ── Mat Bao E-Invoice series & year check — nightly 03:10 ─────────────────
-  cron.schedule('10 3 * * *', async () => {
+  // ── Mat Bao E-Invoice series & year check — nightly 03:13 ─────────────────
+  // Phút 13 (không phải 10) để lệch khỏi lưới 5 phút của alert evaluator: chạy
+  // trùng phút thì evaluator đọc phải dòng cron 'running' còn rỗng và bắn cảnh
+  // báo giả. Lọc ở repository là chốt chính, đây là lớp phòng thủ thứ hai.
+  cron.schedule('13 3 * * *', async () => {
     if (process.env.NODE_ENV === 'test') return;
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
@@ -1204,7 +1207,7 @@ export const initScheduler = () => {
     }
   }, { timezone: HANOI_TIME_ZONE });
 
-  console.log('[Scheduler] Đã khởi tạo Mat Bao series check: 03:10 hàng ngày');
+  console.log('[Scheduler] Đã khởi tạo Mat Bao series check: 03:13 hàng ngày');
 
   // ── Async Bounce Mailbox Sync (VERP DSN via IMAP) — every 10 minutes ───────
   cron.schedule('8-59/10 * * * *', async () => {

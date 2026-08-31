@@ -200,7 +200,7 @@ export const CRON_JOBS = [
   {
     code: 'einvoice_series_check',
     label: 'Kiểm tra dải số hoá đơn Mắt Bão',
-    schedule: '03:10 hàng ngày',
+    schedule: '03:13 hàng ngày',
     description: 'Đọc số lượng hoá đơn còn lại từ Mắt Bão và kiểm tra ký hiệu năm hiện tại (KHHDon). Cảnh báo khi sắp hết số hoặc sai năm.',
     impact: 'Nếu hết số (327) hoặc sai năm (308), toàn bộ hoá đơn không thể phát hành khi khách thanh toán.',
     tracked: true,
