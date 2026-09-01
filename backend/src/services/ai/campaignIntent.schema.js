@@ -6,7 +6,12 @@ import { normalizeChannel } from './aiCampaignWizard.service.js';
 export const CAMPAIGN_INTENT_V1_SCHEMA = {
   type: 'object',
   properties: {
-    version: { type: 'integer', enum: [1] },
+    // KHÔNG thêm `enum` vào trường số. Gemini chỉ nhận enum gồm chuỗi; gặp
+    // `enum: [1]` nó từ chối NGUYÊN schema với lỗi 400 chứ không bỏ qua trường
+    // này — làm chết cả lệnh gọi. Lỗi đó tồn tại từ GĐ 1 (7d49f4f4) khiến
+    // IntentShadow chưa từng chạy thành công lần nào. Ràng buộc version === 1
+    // đã được validateCampaignIntent kiểm ở dưới, đúng chỗ hơn.
+    version: { type: 'integer' },
     channel: { type: 'string', enum: ['email', 'zalo', 'zalo_group'] },
     sender: {
       type: 'object',
