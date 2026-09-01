@@ -509,15 +509,18 @@ class CampaignEmailSenderService {
     let templateId = config.emailTemplateId || config.templateId;
     let templateMappings = [];
 
-    if (Array.isArray(config.emailSteps) && config.emailSteps.length > 0) {
-      const firstStep = config.emailSteps[0];
-      templateId = firstStep.templateId || templateId;
-      templateMappings = firstStep.templateMappings || [];
-    }
     const firstStepConfig = Array.isArray(config.emailSteps) && config.emailSteps.length > 0
       ? config.emailSteps[0]
       : null;
-    const shouldEnableEmailClickTracking = firstStepConfig?.enableLinkTracking !== false;
+    const currentStepConfig = (Array.isArray(config.emailSteps) && Number.isInteger(sendMeta?.emailStep) && config.emailSteps[sendMeta.emailStep - 1])
+      ? config.emailSteps[sendMeta.emailStep - 1]
+      : firstStepConfig;
+
+    if (currentStepConfig) {
+      templateId = currentStepConfig.templateId || templateId;
+      templateMappings = currentStepConfig.templateMappings || [];
+    }
+    const shouldEnableEmailClickTracking = currentStepConfig?.enableLinkTracking !== false;
 
     const template = await this.getTemplateByRunNodeCache({
       runId,
@@ -535,6 +538,10 @@ class CampaignEmailSenderService {
       throw new Error('Email settings không có địa chỉ email (source)');
     }
 
+    const fallbackAttachments = Array.isArray(currentStepConfig?.attachments) && currentStepConfig.attachments.length > 0
+      ? currentStepConfig.attachments
+      : (Array.isArray(config.attachments) && config.attachments.length > 0 ? config.attachments : []);
+
     let subject;
     let htmlBody;
     let textBody;
@@ -544,11 +551,14 @@ class CampaignEmailSenderService {
       subject = template.subject || 'Thông báo từ Founder AI';
       htmlBody = template.body_html || template.html_content || '';
       textBody = template.body_text || template.text_content || '';
-      attachments = template.attachments || [];
+      attachments = Array.isArray(template.attachments) && template.attachments.length > 0
+        ? template.attachments
+        : fallbackAttachments;
     } else {
-      subject = config.emailSubject || config.subject || 'Thông báo từ Founder AI';
-      htmlBody = config.emailBody || config.htmlContent || config.body || '';
+      subject = config.emailSubject || config.subject || currentStepConfig?.emailSubject || 'Thông báo từ Founder AI';
+      htmlBody = config.emailBody || config.htmlContent || config.body || currentStepConfig?.emailBody || '';
       textBody = config.textContent || config.textBody || '';
+      attachments = fallbackAttachments;
 
       if (!subject && !htmlBody) {
         throw new Error('Không có email template hoặc nội dung email trong config');

@@ -83,4 +83,48 @@ describe('Việc 1: Wizard hỏi cách dùng tệp (gate: fileUsage)', () => {
     const mergedWithMarker = mergeWizardState(persisted, derivedWithMarker);
     expect(mergedWithMarker.fileUsage).toBe('as_content');
   });
+
+  it('Finding 2: khi chọn fileUsage là as_content hoặc both, brief tự động sẵn sàng và KHÔNG hỏi lại cổng campaignBrief', () => {
+    // Trường hợp as_content
+    const stateContent = {
+      ...baseState,
+      hasAttachedFile: true,
+      hasAttachedSpreadsheet: false,
+      fileUsage: 'as_content',
+      brief: null, // Chưa có brief
+      schedule: null,
+    };
+
+    const nextContent = evaluateNextGate(stateContent, {}, 'vi');
+    // Phải bỏ qua campaignBrief và hỏi thẳng schedule!
+    expect(nextContent?.gate).toBe('schedule');
+
+    // Trường hợp both
+    const stateBoth = {
+      ...baseState,
+      hasAttachedFile: true,
+      hasAttachedSpreadsheet: false,
+      fileUsage: 'both',
+      brief: null,
+      schedule: null,
+    };
+
+    const nextBoth = evaluateNextGate(stateBoth, {}, 'vi');
+    expect(nextBoth?.gate).toBe('schedule');
+  });
+
+  it('Finding 2: khi chọn fileUsage là as_attachment và chưa có brief, wizard VẪN HỎI cổng campaignBrief', () => {
+    const stateAttachment = {
+      ...baseState,
+      hasAttachedFile: true,
+      hasAttachedSpreadsheet: false,
+      fileUsage: 'as_attachment',
+      brief: null, // Chưa có brief
+      schedule: null,
+    };
+
+    const nextAttachment = evaluateNextGate(stateAttachment, {}, 'vi');
+    // Khi chỉ gửi kèm, phải hỏi brief để biết nội dung tin lấy từ đâu
+    expect(nextAttachment?.gate).toBe('campaignBrief');
+  });
 });

@@ -360,6 +360,14 @@ export function extractWizardState(history = [], options = {}) {
           } else if (/lấy\s*nội\s*dung|lay\s*noi\s*dung|làm\s*nội\s*dung|lam\s*noi\s*dung|content/i.test(norm)) {
             state.fileUsage = 'as_content';
           }
+          if (state.fileUsage === 'as_content' || state.fileUsage === 'both') {
+            state.brief = {
+              ...(state.brief || {}),
+              contentMode: 'attached_file',
+              productMode: 'attached_file',
+              hasAttachedFile: true,
+            };
+          }
         }
       }
       return;
@@ -434,7 +442,16 @@ export function extractWizardState(history = [], options = {}) {
       }
     } else if (marker.gate === 'fileUsage') {
       recordMarkerGate('fileUsage');
-      state.fileUsage = marker.value || marker.fileUsage || null;
+      const usage = marker.value || marker.fileUsage || null;
+      state.fileUsage = usage;
+      if (usage === 'as_content' || usage === 'both') {
+        state.brief = {
+          ...(state.brief || {}),
+          contentMode: 'attached_file',
+          productMode: 'attached_file',
+          hasAttachedFile: true,
+        };
+      }
     }
   });
 
@@ -1041,16 +1058,26 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
   );
 
   const briefCandidate = state.brief || resources.brief;
-  const effectiveBrief = (briefCandidate?.contentMode === 'attached_file' && (state.hasAttachedFile || resources.hasAttachedFile))
+  const hasAnyAttachedFile = Boolean(state.hasAttachedFile || resources.hasAttachedFile);
+  let effectiveBrief = (briefCandidate?.contentMode === 'attached_file' && hasAnyAttachedFile)
     ? { ...briefCandidate, hasAttachedFile: true }
     : briefCandidate;
 
-  const effectiveFileUsage = state.fileUsage || (effectiveBrief?.contentMode === 'attached_file' ? 'as_content' : null);
+  const effectiveFileUsage = state.fileUsage || (hasAnyAttachedFile && effectiveBrief?.contentMode === 'attached_file' ? 'as_content' : null);
 
   if (hasNonSpreadsheetFile && !effectiveFileUsage) {
     return {
       gate: 'fileUsage',
       response: buildFileUsageQuestion(locale),
+    };
+  }
+
+  if (hasAnyAttachedFile && (effectiveFileUsage === 'as_content' || effectiveFileUsage === 'both')) {
+    effectiveBrief = {
+      ...(effectiveBrief || createEmptyCampaignBrief(locale)),
+      contentMode: 'attached_file',
+      productMode: 'attached_file',
+      hasAttachedFile: true,
     };
   }
 

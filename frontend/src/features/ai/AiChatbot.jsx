@@ -52,6 +52,7 @@ import {
   getLastLandingPageMessageIndex,
   isRecentLandingPageContext,
 } from './utils/landingEditContext.js';
+import { extractQuickSendDraftAttachments } from './utils/quickSendHandoff.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -2448,11 +2449,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const subject = singleStep?.content?.subject || config.emailSubject || config.subject || '';
     const body = config.emailBody || config.htmlContent || config.bodyText || singleStep?.content?.bodyText || '';
     const accountId = config.fromEmailId || config.emailSettingId || singleStep?.sender?.id || null;
-    const attachments = Array.isArray(config.attachments)
-      ? config.attachments
-      : Array.isArray(singleStep?.content?.attachments)
-        ? singleStep.content.attachments
-        : [];
+    const attachments = extractQuickSendDraftAttachments(config, singleStep);
 
     const draft = {
       channel: singleStep?.channel || 'email',
