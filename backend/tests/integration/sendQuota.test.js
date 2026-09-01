@@ -224,8 +224,10 @@ describe('send quota — messages_per_period', () => {
       expect(initialPoolCount).toBe(0);
 
       const client = await db.getClient();
+      let inTransaction = false;
       try {
         await client.query('BEGIN');
+        inTransaction = true;
         await client.query(
           `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
            VALUES ($1, 'email_direct_send', 5, $2, $3, '{"source":"test_tx"}')`,
@@ -241,7 +243,11 @@ describe('send quota — messages_per_period', () => {
         expect(concurrentPoolCount).toBe(0);
 
         await client.query('ROLLBACK');
+        inTransaction = false;
       } finally {
+        if (inTransaction) {
+          try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+        }
         client.release();
         _clearQuotaCache();
       }
@@ -259,8 +265,10 @@ describe('send quota — messages_per_period', () => {
 
       _clearQuotaCache();
       const client = await db.getClient();
+      let inTransaction = false;
       try {
         await client.query('BEGIN');
+        inTransaction = true;
         await client.query(
           `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
            VALUES ($1, 'zalo_direct_send', 3, $2, $3, '{"source":"test_zalo_tx"}')`,
@@ -276,8 +284,11 @@ describe('send quota — messages_per_period', () => {
         expect(concurrentPoolCount).toBe(0);
 
         await client.query('COMMIT');
-        _clearQuotaCache();
+        inTransaction = false;
       } finally {
+        if (inTransaction) {
+          try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+        }
         client.release();
         _clearQuotaCache();
       }

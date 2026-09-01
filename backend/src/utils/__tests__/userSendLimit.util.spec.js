@@ -535,7 +535,16 @@ describe('userSendLimit.util', () => {
 
       expect(count1).toBe(10);
       expect(count2).toBe(15);
-      expect(mockQuery).toHaveBeenCalledTimes(2);
+
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 20 }] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 25 }] });
+
+      const zCount1 = await countZaloSentInCycleUncached(10, new Date('2026-01-01'), new Date('2026-02-01'));
+      const zCount2 = await countZaloSentInCycleUncached(10, new Date('2026-01-01'), new Date('2026-02-01'));
+
+      expect(zCount1).toBe(20);
+      expect(zCount2).toBe(25);
+      expect(mockQuery).toHaveBeenCalledTimes(4);
     });
 
     it('bypasses cache when explicit { cache: false } is provided', async () => {

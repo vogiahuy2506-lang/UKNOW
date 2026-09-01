@@ -204,6 +204,7 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
           code: 'QUIET_HOURS_ACTIVE',
         }));
+        expect(mockRecordDirectSendUsage).not.toHaveBeenCalled();
       } finally {
         campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = origStart;
         campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = origEnd;
@@ -254,6 +255,85 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
           success: true,
         }));
+      } finally {
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = origStart;
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = origEnd;
+      }
+    });
+
+    it('does not record usage when admin sends Zalo test message (admin bypass has billingUserId: null)', async () => {
+      // Admin bypass returns allowed: true with billingUserId: null
+      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true, billingUserId: null });
+      mockResolvePreviewAccountAndApi.mockResolvedValueOnce({
+        account: { id: 10 },
+        api: {},
+      });
+      mockPrepareZaloAttachmentSources.mockResolvedValueOnce([]);
+      mockSendPersonalMessage.mockResolvedValueOnce({
+        status: 'success',
+        msgId: 'zalo_admin_123',
+      });
+
+      const origStart = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
+      const origEnd = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = 24;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = 0;
+
+      try {
+        const req = {
+          user: { id: 999, role: 'admin' },
+          body: { channel: 'zalo', recipient: '0901234567', message: 'Tin admin' },
+        };
+        const res = {
+          status: jest.fn().mockReturnThis(),
+          json: jest.fn(),
+        };
+
+        await campaignController.testSendQuickCampaign(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+          success: true,
+        }));
+        expect(mockRecordDirectSendUsage).not.toHaveBeenCalled();
+      } finally {
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = origStart;
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = origEnd;
+      }
+    });
+
+    it('does not record usage when quota result has no billing context (billingUserId is null/undefined)', async () => {
+      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true });
+      mockResolvePreviewAccountAndApi.mockResolvedValueOnce({
+        account: { id: 10 },
+        api: {},
+      });
+      mockPrepareZaloAttachmentSources.mockResolvedValueOnce([]);
+      mockSendPersonalMessage.mockResolvedValueOnce({
+        status: 'success',
+        msgId: 'zalo_nobilling_123',
+      });
+
+      const origStart = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
+      const origEnd = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = 24;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = 0;
+
+      try {
+        const req = {
+          user: { id: 1, role: 'user' },
+          body: { channel: 'zalo', recipient: '0901234567', message: 'Tin test' },
+        };
+        const res = {
+          status: jest.fn().mockReturnThis(),
+          json: jest.fn(),
+        };
+
+        await campaignController.testSendQuickCampaign(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+          success: true,
+        }));
+        expect(mockRecordDirectSendUsage).not.toHaveBeenCalled();
       } finally {
         campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = origStart;
         campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = origEnd;

@@ -1138,10 +1138,9 @@ class CampaignController {
           });
         }
 
-        const billingUserId = quota.billingUserId || workspaceOwnerId;
-        if (billingUserId) {
+        if (quota.billingUserId) {
           await recordDirectSendUsage({
-            billingUserId,
+            billingUserId: quota.billingUserId,
             channel: 'zalo',
             amount: 1,
             actorUserId,
