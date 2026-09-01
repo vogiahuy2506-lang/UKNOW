@@ -401,22 +401,6 @@ class ZaloSettingsController {
   }
 
   /**
-   * Đánh dấu account về disconnected khi khôi phục cookie thất bại.
-   *
-   * @param {{ userId: number; accountId: number }} input
-   * @returns {Promise<void>}
-   */
-  async markAccountDisconnectedAfterRestoreFail(input) {
-    const userId = Number.parseInt(input?.userId, 10);
-    const accountId = Number.parseInt(input?.accountId, 10);
-    if (!Number.isFinite(userId) || !Number.isFinite(accountId)) return;
-
-    await zaloSettingRepository.markAccountDisconnected(userId, accountId);
-    zaloAccountSessionService.clearAccountApi(accountId);
-    zaloPersonalInboxService.invalidateAccountCache();
-  }
-
-  /**
    * Best-effort lấy thông tin account sau khi login QR thành công.
    *
    * @param {any} api
@@ -1958,28 +1942,20 @@ class ZaloSettingsController {
           });
         }
         if (req.skipMarkDisconnectedOnFail) {
-          // Startup / cron restore: ghi nhận số lần thất bại liên tiếp (quá 3 lần sẽ đánh disconnected)
+          // Startup / cron restore: ghi nhận số lần thất bại (ngưỡng ≥5 lần / 60 phút sẽ tự chuyển needs_reauth)
           const failRecord = await campaignZaloSenderRepository.recordRestoreFailure(accountId);
           const failCount = Number(failRecord?.restore_fail_count || 0);
           console.warn(
-            `[ZaloSettings] Startup/cron restore failed for account ${accountId} (attempt ${failCount}/3) — will retry: ${error?.message}`
+            `[ZaloSettings] Startup/cron restore failed for account ${accountId} (fails: ${failCount}, status: ${failRecord?.status || 'connected'}) — will retry: ${error?.message}`
           );
           zaloAccountSessionService.clearAccountApi(accountId);
-          if (failCount >= 3) {
-            console.warn(
-              `[ZaloSettings] Account ${accountId} failed restore ${failCount} consecutive times → marking disconnected`
-            );
-            await this.markAccountDisconnectedAfterRestoreFail({
-              userId: accountRow.id_user,
-              accountId,
-            });
-          }
         } else {
-          // Restore chủ động từ UI: mới mark disconnected để user biết cần scan QR lại.
-          await this.markAccountDisconnectedAfterRestoreFail({
-            userId: accountRow.id_user,
-            accountId,
-          });
+          // Restore chủ động từ UI: ghi nhận thất bại để giữ đường ra (needs_reauth) cho người dùng
+          const failRecord = await campaignZaloSenderRepository.recordRestoreFailure(accountId);
+          console.warn(
+            `[ZaloSettings] Manual restore failed for account ${accountId} (fails: ${failRecord?.restore_fail_count || 1}, status: ${failRecord?.status || 'connected'}): ${error?.message}`
+          );
+          zaloAccountSessionService.clearAccountApi(accountId);
         }
         return res.status(400).json({
           success: false,

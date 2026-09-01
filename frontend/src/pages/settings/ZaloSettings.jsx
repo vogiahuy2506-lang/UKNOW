@@ -472,7 +472,7 @@ const ZaloSettings = () => {
                     <div className="flex items-center gap-2">
                       {!(account.status === 'connected' && account.isActive) && (
                         <>
-                          {account.status === 'needs_reauth' && (
+                          {(account.status === 'needs_reauth' || account.status === 'disconnected') && (
                             <button
                               type="button"
                               className="btn btn-secondary text-xs"

@@ -6,6 +6,7 @@
 import zaloPersonalSyncService from '../services/chatbot/zaloPersonalSync.service.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import zaloSettingRepository from '../repositories/zalo/zaloSetting.repository.js';
+import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 class ZaloPersonalSyncController {
@@ -225,9 +226,9 @@ class ZaloPersonalSyncController {
             zaloAccountSessionService.setAccountApi(account.id, api);
             console.log(`[ZaloSyncStatus] ✅ Session restored for account ${account.id}`);
           } else {
-            // Session restore failed - mark as disconnected in DB
-            console.log(`[ZaloSyncStatus] ❌ Session restore failed for account ${account.id}, marking disconnected`);
-            await zaloSettingRepository.markAccountDisconnected(account.id_user, account.id);
+            // Session restore failed - record failure (follows ≥5 fails / 60 mins policy to needs_reauth)
+            console.log(`[ZaloSyncStatus] ❌ Session restore failed for account ${account.id}, recording restore failure...`);
+            await campaignZaloSenderRepository.recordRestoreFailure(account.id);
             zaloAccountSessionService.clearAccountApi(account.id);
           }
         }

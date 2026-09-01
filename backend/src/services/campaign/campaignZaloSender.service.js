@@ -1703,7 +1703,8 @@ class CampaignZaloSenderService {
       if (restoredApi) return restoredApi;
     }
 
-    await this.markAccountDisconnected({ accountId, userId });
+    await campaignZaloSenderRepository.recordRestoreFailure(accountId);
+    zaloAccountSessionService.clearAccountApi(accountId);
     throw new Error(
       'Phiên đăng nhập Zalo của tài khoản đã chọn không còn hiệu lực. Vui lòng đăng nhập lại trong Cài đặt Zalo.'
     );
@@ -1738,7 +1739,7 @@ class CampaignZaloSenderService {
 
     if (!missingSessionAccounts.length) return new Set();
 
-    const disconnectedIds = [];
+    const failedIds = [];
     for (const account of missingSessionAccounts) {
       const accountId = Number.parseInt(account.id, 10);
       if (!Number.isFinite(accountId)) {
@@ -1767,15 +1768,12 @@ class CampaignZaloSenderService {
         }
       }
 
-      disconnectedIds.push(accountId);
+      failedIds.push(accountId);
+      await campaignZaloSenderRepository.recordRestoreFailure(accountId);
+      zaloAccountSessionService.clearAccountApi(accountId);
     }
 
-    if (!disconnectedIds.length) return new Set();
-
-    await campaignZaloSenderRepository.bulkMarkAccountsDisconnected(normalizedUserId, disconnectedIds);
-    disconnectedIds.forEach((id) => zaloAccountSessionService.clearAccountApi(id));
-
-    return new Set(disconnectedIds.map((id) => String(id)));
+    return new Set(failedIds.map((id) => String(id)));
   }
 
   /**

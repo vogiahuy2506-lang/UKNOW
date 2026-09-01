@@ -171,25 +171,6 @@ class CampaignZaloSenderRepository {
   }
 
   /**
-   * Bulk-mark a list of accounts as disconnected for one user.
-   *
-   * @param {number} userId
-   * @param {number[]} accountIds
-   * @returns {Promise<void>}
-   */
-  async bulkMarkAccountsDisconnected(userId, accountIds) {
-    if (!accountIds.length) return;
-    await db.query(
-      `UPDATE zalo_settings
-       SET status = 'disconnected',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id_user = $1
-         AND id = ANY($2::bigint[])`,
-      [userId, accountIds]
-    );
-  }
-
-  /**
    * Find all connected Zalo accounts that need session restoration.
    * Returns accounts where status='connected' but may not have active memory session.
    *
