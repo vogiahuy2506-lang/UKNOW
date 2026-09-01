@@ -1,3 +1,5 @@
+import { normalizeVietnamesePhone, isValidVietnamesePhone } from './vietnamesePhone.util.js';
+
 export const MAX_AI_MANUAL_RECIPIENTS = 1000;
 
 const splitRecipients = (value) => (Array.isArray(value) ? value : String(value || '').split(/[\s,;\n]+/))
@@ -6,11 +8,11 @@ const splitRecipients = (value) => (Array.isArray(value) ? value : String(value 
 
 export function validateManualRecipients({ emails, phones, uids } = {}) {
   const emailItems = [...new Set(splitRecipients(emails).map((email) => email.toLowerCase()))];
-  const phoneItems = [...new Set(splitRecipients(phones).map((phone) => phone.replace(/[\s().-]/g, '')))];
+  const phoneItems = [...new Set(splitRecipients(phones).map((phone) => normalizeVietnamesePhone(phone)))];
   const uidItems = [...new Set(splitRecipients(uids).map((uid) => String(uid).trim()))];
 
   const invalidEmail = emailItems.find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
-  const invalidPhone = phoneItems.find((phone) => !/^(?:\+?84|0)\d{9,10}$/.test(phone));
+  const invalidPhone = phoneItems.find((phone) => !isValidVietnamesePhone(phone));
   const invalidUid = uidItems.find((uid) => !/^\d{6,32}$/.test(uid));
 
   if (invalidEmail || invalidPhone || invalidUid) {

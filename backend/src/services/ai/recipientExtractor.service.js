@@ -1,33 +1,13 @@
 import module from 'module';
 import path from 'path';
 import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../../utils/manualRecipients.util.js';
+import { normalizeVietnamesePhone, isValidVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 
 const require = module.createRequire(import.meta.url);
 const XLSX = require('xlsx');
 const Papa = require('papaparse');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^(?:\+?84|0)\d{9,10}$/;
-
-/**
- * Google Sheets coi số điện thoại gõ trần là SỐ và nuốt mất số 0 đầu:
- * `0388180856` được lưu thành `388180856`. Đây là hành vi MẶC ĐỊNH của Sheets, không
- * phải ca hiếm — người dùng phải chủ động định dạng cột thành text mới giữ được số 0.
- *
- * Trước bản vá này, `PHONE_RE` loại thẳng những giá trị đó và hệ thống báo
- * "Google Sheet không có cột số điện thoại" **dù cột có thật và dữ liệu có thật**
- * (phát hiện 01/09/2026 khi dùng thử luồng tạo chiến dịch Zalo).
- *
- * Đầu số di động Việt Nam sau số 0 là 3, 5, 7, 8, 9. Một chuỗi 9 chữ số bắt đầu bằng
- * một trong các đầu số đó gần như chắc chắn là số đã bị mất số 0. Cố ý KHÔNG nhận
- * đầu số 2 (số cố định) để tránh nhận nhầm mã số/số tiền thành số điện thoại.
- *
- * @param {string} raw giá trị đã bỏ khoảng trắng và dấu phân cách
- * @returns {string} số đã chuẩn hoá (thêm lại số 0 nếu thiếu)
- */
-function restoreLeadingZero(raw) {
-  return /^[35789]\d{8}$/.test(raw) ? `0${raw}` : raw;
-}
 
 /**
  * Số dòng bị loại được kể tên cho người dùng. Chỉ cần vài ví dụ để họ nhận ra kiểu lỗi rồi tự
@@ -145,8 +125,8 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
       if (EMAIL_RE.test(val)) emailFound = val;
     }
     if (phoneCol >= 0 && row[phoneCol]) {
-      const rawPhone = restoreLeadingZero(String(row[phoneCol] || '').replace(/[\s().-]/g, ''));
-      if (PHONE_RE.test(rawPhone)) phoneFound = rawPhone;
+      const rawPhone = normalizeVietnamesePhone(row[phoneCol]);
+      if (isValidVietnamesePhone(rawPhone)) phoneFound = rawPhone;
     }
     if (nameCol >= 0 && row[nameCol]) {
       nameFound = String(row[nameCol] || '').trim();
@@ -160,7 +140,7 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
         const rawPhone = str.replace(/[\s().-]/g, '');
         if (!emailFound && EMAIL_RE.test(lower)) {
           emailFound = lower;
-        } else if (!phoneFound && PHONE_RE.test(rawPhone)) {
+        } else if (!phoneFound && isValidVietnamesePhone(rawPhone) && rawPhone.startsWith('0')) {
           phoneFound = rawPhone;
         } else if (!nameFound && str.length > 1 && str.length < 100 && !/\d{5,}/.test(str)) {
           nameFound = str;

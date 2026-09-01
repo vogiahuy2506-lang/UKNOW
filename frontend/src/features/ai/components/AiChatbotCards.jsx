@@ -811,6 +811,49 @@ export const AskCampaignDetailsCard = ({
     }
   }
 
+  let manualRecipientsError = null;
+  if (manualRecipientsRequired && manualRecipients.trim().length > 0) {
+    const rawItems = manualRecipients.split(/[\s,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (rawItems.length === 0) {
+      manualRecipientsError = 'Vui lòng nhập ít nhất một người nhận.';
+    } else {
+      for (const item of rawItems) {
+        if (isZaloChannel) {
+          if (item.includes('@')) {
+            manualRecipientsError = `Kênh Zalo cần số điện thoại. '${item}' là địa chỉ email.`;
+            break;
+          }
+          const cleaned = item.replace(/[\s().-]/g, '');
+          // Kiểm tra thiếu số 0 đầu: 9 chữ số bắt đầu bằng 3, 5, 7, 8, 9
+          if (/^[35789]\d{8}$/.test(cleaned)) {
+            manualRecipientsError = `Số ${item} thiếu số 0 đầu — ý bạn là 0${item}?`;
+            break;
+          }
+          // Kiểm tra đầu số di động không hợp lệ
+          if (/^0[0-246]\d{7,8}$/.test(cleaned)) {
+            manualRecipientsError = `Số điện thoại '${item}' không hợp lệ (cần là số di động 10 chữ số đầu 03, 05, 07, 08, 09).`;
+            break;
+          }
+          // Kiểm tra định dạng số di động Việt Nam hợp lệ
+          if (!/^(?:\+?84|0)[35789]\d{8}$/.test(cleaned)) {
+            manualRecipientsError = `Số điện thoại '${item}' không hợp lệ.`;
+            break;
+          }
+        } else if (isEmailChannel) {
+          const cleaned = item.replace(/[\s().-]/g, '');
+          if (/^(?:\+?84|0)\d{8,11}$/.test(cleaned)) {
+            manualRecipientsError = `Kênh Email cần địa chỉ email. '${item}' là số điện thoại.`;
+            break;
+          }
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item)) {
+            manualRecipientsError = `Email '${item}' không đúng định dạng.`;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   const isCardActuallyShowingFiles = Boolean(
     isActive
     && uploadedFiles.length > 0
@@ -846,8 +889,13 @@ export const AskCampaignDetailsCard = ({
     if (isBriefQuestion(question)) {
       return isCampaignBriefAnswersValid(briefAnswers, question);
     }
-    if (question.id === 'dataSource' && answers.dataSource === 'sheet') {
-      return isValidGoogleSheetUrl(sheetUrl) || (uploadedFiles && uploadedFiles.length > 0);
+    if (question.id === 'dataSource') {
+      if (answers.dataSource === 'sheet') {
+        return isValidGoogleSheetUrl(sheetUrl) || (uploadedFiles && uploadedFiles.length > 0);
+      }
+      if (answers.dataSource === 'manual') {
+        return manualRecipients.trim().length > 0 && !manualRecipientsError;
+      }
     }
     return Boolean(answers[question.id]);
   };
@@ -868,10 +916,11 @@ export const AskCampaignDetailsCard = ({
     data.questions.every(isQuestionAnswered) &&
     (!emailChoiceRequired || emailChoice !== null) &&
     (!emailTemplateRequired || emailTemplateName.trim().length > 0) &&
-    (!manualRecipientsRequired || manualRecipients.trim().length > 0) &&
+    (!manualRecipientsRequired || (manualRecipients.trim().length > 0 && !manualRecipientsError)) &&
     (!attachedFileRequired || hasUploadedFile) &&
     sheetSourceValid &&
     !recipientChannelMismatch &&
+    !manualRecipientsError &&
     !extractError;
 
   const toggleProduct = (productId) => {
@@ -1415,6 +1464,11 @@ export const AskCampaignDetailsCard = ({
                   className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal text-slate-700 focus:border-orange-400 focus:outline-none"
                 />
               </label>
+              {manualRecipientsError && (
+                <p className="mt-2 text-xs text-red-600 font-medium bg-red-50 p-2 rounded-lg border border-red-200">
+                  {manualRecipientsError}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -1952,7 +2006,7 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
 
   // Điều kiện hiển thị nút Gửi nhanh:
   // - Đúng 1 bước gửi
-  // - Kênh email
+  // - Kênh email hoặc zalo (chỉ áp dụng phone, không áp dụng UID)
   // - Người nhận thủ công (recipients.mode === 'manual')
   // - Gửi 1 lần / gửi ngay (timing anchor 'start' và value 0)
   // - Có callback onQuickSend và canCreate
@@ -1961,11 +2015,13 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
     ? (singleStep.timing.anchor === 'start' && Number(singleStep.timing.value || 0) === 0)
     : true;
   const isManualRecipient = singleStep?.recipients?.mode === 'manual';
+  const isAllowedChannel = singleStep && ['email', 'zalo'].includes(singleStep.channel);
+  const isPhoneRecipient = singleStep?.channel !== 'zalo' || (singleStep?.recipients?.type || 'phone') === 'phone';
   const canQuickSend = Boolean(
     canCreate &&
     onQuickSend &&
-    singleStep &&
-    singleStep.channel === 'email' &&
+    isAllowedChannel &&
+    isPhoneRecipient &&
     isManualRecipient &&
     isOnceTiming
   );

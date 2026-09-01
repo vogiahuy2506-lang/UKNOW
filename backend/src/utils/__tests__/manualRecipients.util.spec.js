@@ -27,6 +27,18 @@ describe('manualRecipients', () => {
     expect(() => validateManualRecipients({ uids: '123' })).toThrow('UID Zalo không hợp lệ'); // < 6 chars
   });
 
+  it('restores leading zero for 9-digit mobile phones', () => {
+    const res = validateManualRecipients({
+      phones: '844790999, 388180856',
+    });
+    expect(res.phones).toEqual(['0844790999', '0388180856']);
+  });
+
+  it('rejects invalid phones (e.g. 0123456789 with non-existent prefix 01)', () => {
+    expect(() => validateManualRecipients({ phones: '0123456789' })).toThrow('số điện thoại không hợp lệ');
+    expect(() => validateManualRecipients({ phones: '12345' })).toThrow('số điện thoại không hợp lệ');
+  });
+
   it('rejects invalid input and values over the hard limit', () => {
     expect(() => validateManualRecipients({ emails: 'not-an-email' })).toThrow('email không hợp lệ');
     expect(() => validateManualRecipients({ emails: Array.from({ length: MAX_AI_MANUAL_RECIPIENTS + 1 }, (_, i) => `u${i}@example.test`) }))

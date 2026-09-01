@@ -17,6 +17,7 @@ const makeI18n = (dict) => (key) => {
 const createMockConfirmationView = ({
   mode = 'manual',
   channel = 'email',
+  recipientType = 'phone',
   stepCount = 1,
   timing = { anchor: 'start', value: 0 },
 } = {}) => {
@@ -29,8 +30,8 @@ const createMockConfirmationView = ({
       channel,
       title: channel === 'email' ? 'Gửi Email' : 'Gửi Zalo',
       timing,
-      sender: { id: 1, label: 'sender@uknow.vn' },
-      recipients: mode ? { mode, count: 1, sourceLabel: mode === 'manual' ? null : 'Lead từ Landing Page' } : undefined,
+      sender: { id: 1, label: channel === 'email' ? 'sender@uknow.vn' : 'Tài khoản Zalo' },
+      recipients: mode ? { mode, type: recipientType, count: 1, sourceLabel: mode === 'manual' ? null : 'Lead từ Landing Page' } : undefined,
       content: {
         subject: 'Tiêu đề thư',
         bodyText: 'Nội dung thư',
@@ -134,5 +135,67 @@ describe('ConfirmCreateCard - Quick Send Gate & Rendering', () => {
     expect(enBtn).toBeInTheDocument();
     expect(enBtn.textContent).toBe('Quick Send (1-time)');
     expect(enBtn.textContent).not.toContain('.');
+  });
+
+  it('channel === "zalo" + recipients.mode === "manual" + type === "phone" -> Hiện nút Gửi nhanh', () => {
+    const confirmationView = createMockConfirmationView({ channel: 'zalo', mode: 'manual', recipientType: 'phone' });
+    const onQuickSend = vi.fn();
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={onQuickSend}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    const viBtn = screen.getByRole('button', { name: /gửi nhanh/i });
+    expect(viBtn).toBeInTheDocument();
+    fireEvent.click(viBtn);
+    expect(onQuickSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('channel === "zalo" + recipients.mode === "manual" + type === "uid" -> KHÔNG hiện nút Gửi nhanh (fail-closed cho UID)', () => {
+    const confirmationView = createMockConfirmationView({ channel: 'zalo', mode: 'manual', recipientType: 'uid' });
+    const onQuickSend = vi.fn();
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={onQuickSend}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    const quickSendBtn = screen.queryByRole('button', { name: /gửi nhanh/i });
+    expect(quickSendBtn).toBeNull();
+  });
+
+  it('channel === "zalo" + recipients.mode === "source" -> KHÔNG hiện nút Gửi nhanh (fail-closed)', () => {
+    const confirmationView = createMockConfirmationView({ channel: 'zalo', mode: 'source' });
+    const onQuickSend = vi.fn();
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={onQuickSend}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    const quickSendBtn = screen.queryByRole('button', { name: /gửi nhanh/i });
+    expect(quickSendBtn).toBeNull();
   });
 });

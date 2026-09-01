@@ -2431,28 +2431,63 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const handleQuickSendDraft = () => {
     const confirmationView = campaignConfirmation?.confirmationView;
     const singleStep = confirmationView?.steps?.[0] || null;
+    const channel = singleStep?.channel || 'email';
     const nodes = Array.isArray(currentScript?.nodes) ? currentScript.nodes : [];
+
     const sendNode = nodes.find((n) => {
       const type = String(n.node_subtype || n.nodeSubtype || n.subtype || n.node_type || n.nodeType || n.type || '').toLowerCase();
+      if (channel === 'zalo' || channel === 'zalo_personal') {
+        return type === 'send_zalo_personal' || type === 'zalo_personal' || type === 'zalo';
+      }
       return type === 'send_email' || type === 'email';
+    }) || nodes.find((n) => {
+      const type = String(n.node_type || n.nodeType || n.type || '').toLowerCase();
+      return type === 'action';
     }) || nodes[0] || null;
 
     const config = sendNode?.config || sendNode?.data || {};
 
     let recipients = [];
-    if (Array.isArray(config.recipientEmails)) {
-      recipients = config.recipientEmails;
-    } else if (typeof config.recipientEmails === 'string') {
-      recipients = config.recipientEmails.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+    if (channel === 'zalo' || channel === 'zalo_personal') {
+      const rawPhones = config.zaloRecipientPhones || config.recipientPhones || '';
+      if (Array.isArray(rawPhones)) {
+        recipients = rawPhones;
+      } else if (typeof rawPhones === 'string') {
+        recipients = rawPhones.split(/[\n,;]/).map((s) => s.trim()).filter(Boolean);
+      }
+    } else {
+      const rawEmails = config.recipientEmails || config.recipientList || config.manualEmails || '';
+      if (Array.isArray(rawEmails)) {
+        recipients = rawEmails;
+      } else if (typeof rawEmails === 'string') {
+        recipients = rawEmails.split(/[\n,;]/).map((s) => s.trim()).filter(Boolean);
+      }
     }
 
-    const subject = singleStep?.content?.subject || config.emailSubject || config.subject || '';
-    const body = config.emailBody || config.htmlContent || config.bodyText || singleStep?.content?.bodyText || '';
-    const accountId = config.fromEmailId || config.emailSettingId || singleStep?.sender?.id || null;
+    let subject = '';
+    let body = '';
+    let accountId = null;
+
+    if (channel === 'zalo' || channel === 'zalo_personal') {
+      subject = '';
+      body = singleStep?.content?.bodyText ||
+             config.message ||
+             config.zaloPersonalTemplateSteps?.[0]?.message ||
+             '';
+      accountId = config.zaloAccountId ||
+                  config.zalo_account_id ||
+                  singleStep?.sender?.id ||
+                  null;
+    } else {
+      subject = singleStep?.content?.subject || config.emailSubject || config.subject || '';
+      body = config.emailBody || config.htmlContent || config.bodyText || singleStep?.content?.bodyText || '';
+      accountId = config.fromEmailId || config.emailSettingId || singleStep?.sender?.id || null;
+    }
+
     const attachments = extractQuickSendDraftAttachments(config, singleStep);
 
     const draft = {
-      channel: singleStep?.channel || 'email',
+      channel: channel === 'zalo_personal' ? 'zalo' : channel,
       recipients,
       subject,
       body,
