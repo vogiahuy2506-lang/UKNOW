@@ -120,46 +120,6 @@ async function isDomainVerified(hostname) {
 }
 
 /**
- * Dynamic CORS origin validator
- */
-export function dynamicCorsValidator(origin, callback) {
-  // Allow non-browser requests (Postman, curl, server-to-server)
-  if (!origin) {
-    return callback(null, true);
-  }
-
-  // Allow iframe sandbox (srcDoc) requests
-  if (origin === 'null') {
-    return callback(null, true);
-  }
-
-  // Check predefined allowed origins first (localhost, dev environments)
-  if (defaultAllowedOrigins.has(origin)) {
-    return callback(null, true);
-  }
-
-  // Parse hostname from origin
-  let hostname;
-  try {
-    const url = new URL(origin);
-    hostname = url.hostname;
-  } catch (e) {
-    console.warn('[DynamicCors] Invalid origin format:', origin);
-    return callback(new Error('Invalid origin format'));
-  }
-
-  // Sync check for known domains (quick path)
-  if (defaultAllowedOrigins.has(hostname)) {
-    return callback(null, true);
-  }
-
-  // For unknown origins, we need async check
-  // Since cors middleware doesn't support async directly, we'll handle this in a wrapper
-  // The actual async check will be done in the middleware wrapper
-  return callback(null, true); // Allow temporarily, actual check in middleware
-}
-
-/**
  * Create async CORS middleware that properly handles async domain verification
  */
 export function createDynamicCorsMiddleware() {
@@ -167,6 +127,23 @@ export function createDynamicCorsMiddleware() {
     const origin = req.headers.origin;
 
     if (!origin) {
+      return next();
+    }
+
+    /**
+     * Landing page công bố chạy trong iframe sandbox không có `allow-same-origin`
+     * (LpRendererByHost.jsx:71) → mọi request mang `Origin: null`. `new URL('null')`
+     * ném lỗi nên nhánh dưới bỏ qua, không gắn ACAO → form đăng ký chết im lặng.
+     * Chỉ mở cho `/api/public/*` và KHÔNG kèm credentials: origin `null` là ẩn danh,
+     * bất kỳ trang web nào cũng tạo được bằng một iframe sandbox.
+     */
+    if (origin === 'null') {
+      if (String(req.path || '').startsWith('/api/public/')) {
+        res.setHeader('Access-Control-Allow-Origin', 'null');
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+      }
       return next();
     }
 
