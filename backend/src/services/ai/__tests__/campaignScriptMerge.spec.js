@@ -148,6 +148,38 @@ describe('Việc 1 & 2: campaignScriptMerge.service', () => {
     expect(() => assertNoEmptyContent(script)).not.toThrow();
   });
 
+  it('Tự động sinh templateMappings cho step khi message/emailBody chứa biến {{full_name}}', () => {
+    const intentZalo = {
+      version: 1,
+      channel: 'zalo',
+      sender: { type: 'zalo_account', id: 1 },
+      audience: { type: 'sheet', url: 'https://sheet.url', recipientKind: 'phone' },
+      schedule: { type: 'once' },
+    };
+
+    const compiled = compileCampaign(intentZalo);
+    const legacyScript = {
+      nodes: [
+        {
+          nodeSubtype: 'send_zalo_personal',
+          config: {
+            zaloPersonalTemplateSteps: [
+              { message: 'Chào {{full_name}}! Mã của bạn là {{code}}', templateMappings: [] },
+            ],
+          },
+        },
+      ],
+    };
+
+    const { script } = mergeCompiledWithContent(compiled, legacyScript);
+    const sendNode = script.nodes.find((n) => n.nodeSubtype === 'send_zalo_personal');
+    const stepMappings = sendNode.config.zaloPersonalTemplateSteps[0].templateMappings;
+    expect(stepMappings).toEqual([
+      { key: 'full_name', sourceType: 'node', nodeId: expect.any(String), field: 'full_name' },
+      { key: 'code', sourceType: 'node', nodeId: expect.any(String), field: 'code' },
+    ]);
+  });
+
   /**
    * Lệch số bước phải bị bắt ở CẢ HAI chiều.
    *

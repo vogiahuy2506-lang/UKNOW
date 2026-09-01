@@ -71,14 +71,41 @@ export const buildExecutionOrder = (nodeList, edgeList) => {
 };
 
 /**
+ * Tìm các biến template {{...}} chưa được map trong step templateMappings.
+ *
+ * @param {string} text
+ * @param {Array} mappings
+ * @returns {string[]}
+ */
+export function findUnmappedVariables(text, mappings) {
+  if (!text || typeof text !== 'string') return [];
+  const matches = text.match(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g);
+  if (!matches || matches.length === 0) return [];
+  const mappedKeys = new Set(
+    (Array.isArray(mappings) ? mappings : [])
+      .map((m) => String(m?.key || m?.variableName || '').trim())
+      .filter(Boolean)
+  );
+  const unmapped = [];
+  for (const m of matches) {
+    const varName = m.replace(/[{}]|\s/g, '');
+    if (varName && !mappedKeys.has(varName)) {
+      unmapped.push(varName);
+    }
+  }
+  return Array.from(new Set(unmapped));
+}
+
+/**
  * Validate node configuration before preview execution.
  *
  * @param {object} node current node in execution order
- * @returns {{status: 'success'|'failed', message: string}}
+ * @returns {{status: 'success'|'failed', message: string, warning?: string}}
  */
 export const validateNodeForRun = (node) => {
   const nodeType = node.data?.nodeType || node.type;
   const config = node.data?.config || {};
+  let nodeWarning = null;
   const requireSourceNodeAndField = (source, nodeId, field, fieldLabel = 'cột dữ liệu') => {
     if (source !== 'node') return null;
     if (!String(nodeId || '').trim()) return 'Chưa chọn node dữ liệu';
@@ -131,6 +158,12 @@ export const validateNodeForRun = (node) => {
       if (invalidFrom) {
         return { status: 'failed', message: 'Mốc thời gian gửi không hợp lệ' };
       }
+    }
+    const unmappedEmailVars = steps.flatMap((s) =>
+      findUnmappedVariables(`${s.emailSubject || ''} ${s.emailBody || ''}`, s.templateMappings)
+    );
+    if (unmappedEmailVars.length > 0) {
+      nodeWarning = `Biến [${unmappedEmailVars.join(', ')}] chưa map thủ công; hệ thống sẽ tự động suy ra từ dữ liệu nguồn khi gửi.`;
     }
   }
 
@@ -308,6 +341,12 @@ export const validateNodeForRun = (node) => {
           return { status: 'failed', message: 'Mốc thời gian gửi Zalo cá nhân không hợp lệ' };
         }
       }
+      const unmappedPersonalVars = steps.flatMap((s) =>
+        findUnmappedVariables(s.message, s.templateMappings)
+      );
+      if (unmappedPersonalVars.length > 0) {
+        nodeWarning = `Biến [${unmappedPersonalVars.join(', ')}] chưa map thủ công; hệ thống sẽ tự động suy ra từ dữ liệu nguồn khi gửi.`;
+      }
     }
     if (config.zaloRecipientSource === 'manual' && !String(config.zaloRecipientPhones || '').trim()) {
       return {
@@ -410,6 +449,12 @@ export const validateNodeForRun = (node) => {
           return { status: 'failed', message: 'Mốc thời gian gửi Zalo nhóm không hợp lệ' };
         }
       }
+      const unmappedGroupVars = steps.flatMap((s) =>
+        findUnmappedVariables(s.message, s.templateMappings)
+      );
+      if (unmappedGroupVars.length > 0) {
+        nodeWarning = `Biến [${unmappedGroupVars.join(', ')}] chưa map thủ công; hệ thống sẽ tự động suy ra từ dữ liệu nguồn khi gửi.`;
+      }
     }
     if (config.zaloGroupSource === 'manual' && !String(config.zaloGroupIds || '').trim()) {
       return { status: 'failed', message: 'Thiếu danh sách group id' };
@@ -423,5 +468,9 @@ export const validateNodeForRun = (node) => {
     if (sourceError) return { status: 'failed', message: sourceError };
   }
 
-  return { status: 'success', message: 'Thực thi thành công' };
+  return {
+    status: 'success',
+    message: 'Thực thi thành công',
+    ...(nodeWarning ? { warning: nodeWarning } : {}),
+  };
 };

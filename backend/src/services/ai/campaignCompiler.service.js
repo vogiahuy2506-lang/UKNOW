@@ -12,6 +12,25 @@
  */
 
 import { isCompilableIntent } from './campaignIntent.schema.js';
+import { extractTemplateVariableNames } from '../../utils/templateVariableAutoMap.util.js';
+
+/**
+ * Tự động sinh templateMappings cho bước gửi tin nếu nội dung chứa biến template {{...}}.
+ *
+ * @param {string} text
+ * @param {string|number} [audienceNodeId]
+ * @returns {Array<{ key: string, sourceType: 'node', nodeId: string, field: string }>}
+ */
+export function buildCompilerTemplateMappings(text, audienceNodeId) {
+  if (!text || !audienceNodeId) return [];
+  const varNames = extractTemplateVariableNames(text);
+  return varNames.map((key) => ({
+    key,
+    sourceType: 'node',
+    nodeId: String(audienceNodeId),
+    field: key,
+  }));
+}
 
 /**
  * Biên dịch CampaignIntentV1 thành đồ thị chiến dịch.
@@ -187,7 +206,7 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, a
           delayUnit: 'days',
           delayFrom: 'start',
           enableLinkTracking: true,
-          templateMappings: [],
+          templateMappings: buildCompilerTemplateMappings('', audienceNodeId),
           ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
         },
       ],
@@ -340,7 +359,7 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
         delayUnit,
         delayFrom: 'prev',
         enableLinkTracking: true,
-        templateMappings: [],
+        templateMappings: buildCompilerTemplateMappings('', audienceNodeId),
         ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
       });
 
@@ -561,7 +580,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
           delayValue: 0,
           delayUnit: 'days',
           enableLinkTracking: true,
-          templateMappings: [],
+          templateMappings: buildCompilerTemplateMappings('', audienceNodeId),
           ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
         },
       ],
@@ -758,7 +777,7 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
         delayValue,
         delayUnit,
         enableLinkTracking: true,
-        templateMappings: [],
+        templateMappings: buildCompilerTemplateMappings('', audienceNodeId),
         ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
       });
 
@@ -932,7 +951,7 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, fileUsag
           message: '',
           delayValue: 0,
           delayUnit: 'days',
-          templateMappings: [],
+          templateMappings: buildCompilerTemplateMappings('', groupAudienceId),
           ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
         },
       ],
@@ -1053,8 +1072,8 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
         templateId: null,
         message: '',
         delayValue,
-        delayUnit,
-        templateMappings: [],
+        delayUnit: 'days',
+        templateMappings: buildCompilerTemplateMappings('', groupAudienceId),
         ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
       });
 

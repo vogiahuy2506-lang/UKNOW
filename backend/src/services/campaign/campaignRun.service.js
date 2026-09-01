@@ -41,6 +41,7 @@ import {
   notifyCampaignQuotaStopped,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
+import { deriveVariablesForText } from '../../utils/templateVariableAutoMap.util.js';
 
 export const EMAIL_API_DELAY_MIN_MS = 50;
 export const EMAIL_API_DELAY_MAX_MS = 250;
@@ -5309,14 +5310,14 @@ class CampaignRunService {
                     }
                     const step = stepsWithMessage[nextStepIndex];
                     const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-                    const variables = resolveTemplateVariablesFromMappings({
+                    const { variables } = deriveVariablesForText(step.message, {
                       mappings,
                       entry,
                       fallbackNodeId: sourceNodeId,
+                      resolveFromMappings: resolveTemplateVariablesFromMappings,
+                      logContext: { runId, nodeId: node.id, stepIndex: nextStepIndex },
                     });
-                    const renderedMessage = mappings.length
-                      ? renderTemplateText(step.message, variables).trim()
-                      : String(step.message || '').trim();
+                    const renderedMessage = renderTemplateText(step.message, variables).trim();
                     if (!renderedMessage) return;
                     const dedupedZaloLedger = await trySyncLedgerFromExistingZaloMessage({
                       nodeId: node.id,
@@ -5470,14 +5471,14 @@ class CampaignRunService {
               }
               const entry = recipientEntryMap.get(normalizedRecipient) || null;
               const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-              const variables = resolveTemplateVariablesFromMappings({
+              const { variables } = deriveVariablesForText(step.message, {
                 mappings,
                 entry,
                 fallbackNodeId: sourceNodeId,
+                resolveFromMappings: resolveTemplateVariablesFromMappings,
+                logContext: { runId, nodeId: node.id, stepIndex },
               });
-              const renderedMessage = mappings.length
-                ? renderTemplateText(step.message, variables).trim()
-                : String(step.message || '').trim();
+              const renderedMessage = renderTemplateText(step.message, variables).trim();
               if (!renderedMessage) {
                 throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
               }
@@ -5557,14 +5558,14 @@ class CampaignRunService {
                   }
                   const entry = recipientEntryMap.get(normalizedRecipient) || null;
                   const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-                  const variables = resolveTemplateVariablesFromMappings({
+                  const { variables } = deriveVariablesForText(step.message, {
                     mappings,
                     entry,
                     fallbackNodeId: sourceNodeId,
+                    resolveFromMappings: resolveTemplateVariablesFromMappings,
+                    logContext: { runId, nodeId: node.id, stepIndex },
                   });
-                  const renderedMessage = mappings.length
-                    ? renderTemplateText(step.message, variables).trim()
-                    : String(step.message || '').trim();
+                  const renderedMessage = renderTemplateText(step.message, variables).trim();
                   if (!renderedMessage) {
                     throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
                   }
@@ -7039,14 +7040,14 @@ class CampaignRunService {
                     }
                     const step = stepsWithMessage[nextStepIndex];
                     const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-                    const variables = resolveTemplateVariablesFromMappings({
+                    const { variables } = deriveVariablesForText(step.message, {
                       mappings,
                       entry,
                       fallbackNodeId: sourceNodeId,
+                      resolveFromMappings: resolveTemplateVariablesFromMappings,
+                      logContext: { runId, nodeId: node.id, stepIndex: nextStepIndex },
                     });
-                    const renderedMessage = mappings.length
-                      ? renderTemplateText(step.message, variables).trim()
-                      : String(step.message || '').trim();
+                    const renderedMessage = renderTemplateText(step.message, variables).trim();
                     if (!renderedMessage) return;
                     const dedupedZaloGroup = await trySyncLedgerFromExistingZaloMessage({
                       nodeId: node.id,
@@ -7212,14 +7213,14 @@ class CampaignRunService {
                 }
                 const entry = groupEntryMap.get(normalizedGroupId) || null;
                 const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-                const variables = resolveTemplateVariablesFromMappings({
+                const { variables } = deriveVariablesForText(step.message, {
                   mappings,
                   entry,
                   fallbackNodeId: sourceNodeId,
+                  resolveFromMappings: resolveTemplateVariablesFromMappings,
+                  logContext: { runId, nodeId: node.id, stepIndex },
                 });
-                const renderedMessage = mappings.length
-                  ? renderTemplateText(step.message, variables).trim()
-                  : String(step.message || '').trim();
+                const renderedMessage = renderTemplateText(step.message, variables).trim();
                 if (!renderedMessage) {
                   throw new Error(`Thiếu nội dung tin nhắn cho nhóm ${normalizedGroupId}`);
                 }

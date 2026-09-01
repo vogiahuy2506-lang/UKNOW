@@ -8,6 +8,8 @@
  * Hàm thuần túy, không I/O, an toàn và tất định.
  */
 
+import { buildCompilerTemplateMappings } from './campaignCompiler.service.js';
+
 function getNodeSubtype(node) {
   return String(node?.nodeSubtype || node?.node_subtype || node?.subtype || '').trim();
 }
@@ -59,7 +61,11 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
         if (message && message.trim()) {
           compSteps[i].message = message;
           if (legStep?.templateId) compSteps[i].templateId = legStep.templateId;
-          if (Array.isArray(legStep?.templateMappings)) compSteps[i].templateMappings = legStep.templateMappings;
+          const explicitMappings =
+            Array.isArray(legStep?.templateMappings) && legStep.templateMappings.length > 0
+              ? legStep.templateMappings
+              : buildCompilerTemplateMappings(message, compNode.config?.zaloGroupNodeId);
+          compSteps[i].templateMappings = explicitMappings;
           // Bảo toàn attachments từ compiler; nếu compiler chưa có mà legacy có thì lấy legacy
           if (!compSteps[i].attachments && Array.isArray(legStep?.attachments) && legStep.attachments.length > 0) {
             compSteps[i].attachments = legStep.attachments;
@@ -100,7 +106,11 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
         if (message && message.trim()) {
           compSteps[i].message = message;
           if (legStep?.templateId) compSteps[i].templateId = legStep.templateId;
-          if (Array.isArray(legStep?.templateMappings)) compSteps[i].templateMappings = legStep.templateMappings;
+          const explicitMappings =
+            Array.isArray(legStep?.templateMappings) && legStep.templateMappings.length > 0
+              ? legStep.templateMappings
+              : buildCompilerTemplateMappings(message, compNode.config?.zaloRecipientNodeId);
+          compSteps[i].templateMappings = explicitMappings;
           if (!compSteps[i].attachments && Array.isArray(legStep?.attachments) && legStep.attachments.length > 0) {
             compSteps[i].attachments = legStep.attachments;
           }
@@ -140,7 +150,11 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
           compSteps[i].emailSubject = subject;
           compSteps[i].emailBody = body;
           if (legStep?.templateId) compSteps[i].templateId = legStep.templateId;
-          if (Array.isArray(legStep?.templateMappings)) compSteps[i].templateMappings = legStep.templateMappings;
+          const explicitMappings =
+            Array.isArray(legStep?.templateMappings) && legStep.templateMappings.length > 0
+              ? legStep.templateMappings
+              : buildCompilerTemplateMappings(`${subject} ${body}`, compNode.config?.recipientNodeId);
+          compSteps[i].templateMappings = explicitMappings;
           if (!compSteps[i].attachments && Array.isArray(legStep?.attachments) && legStep.attachments.length > 0) {
             compSteps[i].attachments = legStep.attachments;
           }

@@ -14,6 +14,7 @@ import { resolveFromAddress, extractBrandDomain, resolveEnvelopeFrom } from '../
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
+import { deriveVariablesForText } from '../../utils/templateVariableAutoMap.util.js';
 
 class CampaignEmailSenderService {
   constructor() {
@@ -594,19 +595,40 @@ class CampaignEmailSenderService {
         replacements[`{{ ${key} }}`] = value;
         replacements[`{${key}}`] = value;
       }
-
+    } else {
+      // Auto-map fallback khi templateMappings rỗng
+      const combinedEmailText = `${subject || ''} ${htmlBody || ''} ${textBody || ''}`;
+      const { variables } = deriveVariablesForText(combinedEmailText, {
+        customer,
+        logContext: { runId: 'email_send', nodeId: 'email_step' },
+      });
+      for (const [key, val] of Object.entries(variables)) {
+        const strVal = String(val ?? '');
+        replacements[`{{${key}}}`] = strVal;
+        replacements[`{{ ${key} }}`] = strVal;
+        replacements[`{${key}}`] = strVal;
+      }
     }
 
-    if (!replacements['{full_name}']) {
-      replacements['{full_name}'] = customer.full_name || customer.email;
+    if (!replacements['{full_name}'] && !replacements['{{full_name}}']) {
+      const defaultName = customer.full_name || customer.email || '';
+      replacements['{full_name}'] = defaultName;
+      replacements['{{full_name}}'] = defaultName;
+      replacements['{{ full_name }}'] = defaultName;
     }
-    if (!replacements['{email}']) {
-      replacements['{email}'] = customer.email;
+    if (!replacements['{email}'] && !replacements['{{email}}']) {
+      const defaultEmail = customer.email || '';
+      replacements['{email}'] = defaultEmail;
+      replacements['{{email}}'] = defaultEmail;
+      replacements['{{ email }}'] = defaultEmail;
     }
-    if (!replacements['{courses}']) {
-      replacements['{courses}'] = Array.isArray(customer.interested_courses)
+    if (!replacements['{courses}'] && !replacements['{{courses}}']) {
+      const defaultCourses = Array.isArray(customer.interested_courses)
         ? customer.interested_courses.join(', ')
         : '';
+      replacements['{courses}'] = defaultCourses;
+      replacements['{{courses}}'] = defaultCourses;
+      replacements['{{ courses }}'] = defaultCourses;
     }
 
     for (const [key, value] of Object.entries(replacements)) {
