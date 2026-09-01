@@ -147,4 +147,44 @@ describe('Việc 1 & 2: campaignScriptMerge.service', () => {
     expect(sendNode.config.emailSteps[0].emailBody).toBe('<p>Nội dung thật</p>');
     expect(() => assertNoEmptyContent(script)).not.toThrow();
   });
+
+  /**
+   * Lệch số bước phải bị bắt ở CẢ HAI chiều.
+   *
+   * Vòng ghép duyệt theo bước của compiler, nên chiều "compiler nhiều hơn" tự lộ ra
+   * (chỉ số vượt quá mảng legacy → không có nội dung). Nhưng chiều ngược lại thì không:
+   * LLM soạn 5 tin, compiler dựng 3 bước → cả 3 đều có nội dung, `unmatchedSlots` rỗng,
+   * bản ghép được áp dụng và **2 tin bị bỏ đi trong im lặng**. Khách nhận 3 thay vì 5.
+   */
+  const mkGroupScript = (steps) => ({
+    nodes: [{ id: 'send', nodeSubtype: 'send_zalo_group', config: { zaloGroupTemplateSteps: steps } }],
+    connections: [],
+  });
+
+  it('compiler ÍT bước hơn LLM → báo unmatched để rơi về script cũ, không âm thầm bỏ tin', () => {
+    const compiled = mkGroupScript([{ message: '' }, { message: '' }, { message: '' }]);
+    const legacy = mkGroupScript(
+      Array.from({ length: 5 }, (_, i) => ({ message: `tin ${i + 1}` }))
+    );
+
+    const { unmatchedSlots } = mergeCompiledWithContent(compiled, legacy);
+
+    expect(unmatchedSlots.length).toBeGreaterThan(0);
+    expect(unmatchedSlots[0].reason).toBe('legacy_has_more_steps');
+    expect(unmatchedSlots[0].legacyStepCount).toBe(5);
+    expect(unmatchedSlots[0].compiledStepCount).toBe(3);
+  });
+
+  it('số bước bằng nhau → ghép được, không có unmatched', () => {
+    const compiled = mkGroupScript([{ message: '' }, { message: '' }]);
+    const legacy = mkGroupScript([{ message: 'tin 1' }, { message: 'tin 2' }]);
+
+    const { script, unmatchedSlots } = mergeCompiledWithContent(compiled, legacy);
+
+    expect(unmatchedSlots).toHaveLength(0);
+    expect(script.nodes[0].config.zaloGroupTemplateSteps.map((s) => s.message)).toEqual([
+      'tin 1',
+      'tin 2',
+    ]);
+  });
 });

@@ -146,6 +146,41 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
     }
   }
 
+  // CHIỀU NGƯỢC LẠI: legacy NHIỀU bước hơn compiler.
+  //
+  // Vòng lặp ở trên chỉ duyệt theo bước của compiler, nên nếu LLM soạn 5 tin mà compiler dựng
+  // 3 bước thì cả 3 đều có nội dung, `unmatchedSlots` rỗng, và bản ghép được áp dụng — **2 tin
+  // bị bỏ đi trong im lặng**. Khách nhận 3 thay vì 5 và không ai được báo.
+  //
+  // Mất nội dung lặng lẽ tệ hơn việc không áp dụng compiler. Ghi nhận để rơi về script cũ.
+  const STEP_FIELDS = [
+    ['send_zalo_group', 'zaloGroupTemplateSteps', 'zalo_group'],
+    ['send_zalo_personal', 'zaloPersonalTemplateSteps', 'zalo'],
+    ['send_email', 'emailSteps', 'email'],
+  ];
+
+  for (const [subtype, field, channel] of STEP_FIELDS) {
+    const compNode = mergedNodes.find((n) => getNodeSubtype(n) === subtype);
+    if (!compNode) continue;
+    const legNode = legacyNodes.find((n) => getNodeSubtype(n) === subtype);
+    if (!legNode) continue;
+
+    const compLen = Array.isArray(compNode.config?.[field]) ? compNode.config[field].length : 0;
+    const legCfg = legNode.config || legNode.settings || {};
+    const legLen = Array.isArray(legCfg[field]) ? legCfg[field].length : 0;
+
+    if (legLen > compLen) {
+      unmatchedSlots.push({
+        nodeId: compNode.id,
+        channel,
+        stepIndex: compLen,
+        reason: 'legacy_has_more_steps',
+        legacyStepCount: legLen,
+        compiledStepCount: compLen,
+      });
+    }
+  }
+
   return {
     script: {
       nodes: mergedNodes,
