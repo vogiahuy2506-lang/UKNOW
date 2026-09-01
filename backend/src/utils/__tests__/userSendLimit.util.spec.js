@@ -30,6 +30,10 @@ const {
   checkUserEmailSendLimit,
   checkUserZaloSendLimit,
   checkSendQuota,
+  countEmailSentInCycle,
+  countZaloSentInCycle,
+  countEmailSentInCycleUncached,
+  countZaloSentInCycleUncached,
   countEmailSentThisMonth,
   countZaloSentThisMonth,
   nextVnMidnight,
@@ -497,7 +501,7 @@ describe('userSendLimit.util', () => {
     });
   });
 
-  describe('countEmailSentThisMonth & countZaloSentThisMonth', () => {
+  describe('countEmailSentThisMonth & countZaloSentThisMonth (PR-Q0.1 Hotfix)', () => {
     it('countEmailSentThisMonth ném lỗi khi thiếu cycleStart hoặc cycleEnd', async () => {
       await expect(countEmailSentThisMonth(10, null, null)).rejects.toThrow(
         /countEmailSentThisMonth requires explicit cycleStart and cycleEnd/
@@ -520,6 +524,47 @@ describe('userSendLimit.util', () => {
       mockQuery.mockResolvedValueOnce({ rows: [{ total: 42 }] });
       const count = await countEmailSentThisMonth(10, new Date('2026-01-01'), new Date('2026-02-01'));
       expect(count).toBe(42);
+    });
+
+    it('countEmailSentInCycleUncached & countZaloSentInCycleUncached không đọc/ghi quotaCache', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 10 }] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 15 }] });
+
+      const count1 = await countEmailSentInCycleUncached(10, new Date('2026-01-01'), new Date('2026-02-01'));
+      const count2 = await countEmailSentInCycleUncached(10, new Date('2026-01-01'), new Date('2026-02-01'));
+
+      expect(count1).toBe(10);
+      expect(count2).toBe(15);
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    });
+
+    it('bypasses cache when explicit { cache: false } is provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 10 }] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 20 }] });
+
+      const c1 = await countEmailSentInCycle(10, new Date('2026-01-01'), new Date('2026-02-01'), undefined, { cache: false });
+      const c2 = await countEmailSentInCycle(10, new Date('2026-01-01'), new Date('2026-02-01'), undefined, { cache: false });
+
+      expect(c1).toBe(10);
+      expect(c2).toBe(20);
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    });
+
+    it('transaction client (queryable !== db) automatically bypasses cache and avoids cache pollution', async () => {
+      const mockClient = {
+        query: jest.fn().mockResolvedValueOnce({ rows: [{ total: 99 }] }),
+      };
+
+      // 1. Transaction client queries uncommitted count (99)
+      const txCount = await countEmailSentThisMonth(10, new Date('2026-01-01'), new Date('2026-02-01'), mockClient);
+      expect(txCount).toBe(99);
+      expect(mockClient.query).toHaveBeenCalledTimes(1);
+
+      // 2. Concurrent/subsequent pool read does NOT receive 99 from cache; it queries db pool directly
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: 5 }] });
+      const poolCount = await countEmailSentThisMonth(10, new Date('2026-01-01'), new Date('2026-02-01'));
+      expect(poolCount).toBe(5);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
     });
   });
 });

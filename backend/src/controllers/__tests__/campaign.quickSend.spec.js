@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockCheckSendQuota = jest.fn();
+const mockRecordDirectSendUsage = jest.fn();
 const mockSendPersonalMessage = jest.fn();
 const mockPrepareZaloAttachmentSources = jest.fn();
 const mockSendCustomEmail = jest.fn();
@@ -8,6 +9,7 @@ const mockResolvePreviewAccountAndApi = jest.fn();
 
 jest.unstable_mockModule('../../utils/userSendLimit.util.js', () => ({
   checkSendQuota: mockCheckSendQuota,
+  recordDirectSendUsage: mockRecordDirectSendUsage,
 }));
 
 jest.unstable_mockModule('../../services/campaign/campaignZaloSender.service.js', () => ({
@@ -208,8 +210,8 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
       }
     });
 
-    it('sends Zalo test message via canonical personal sender and shared mutex', async () => {
-      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true });
+    it('sends Zalo test message via canonical personal sender and records usage on success', async () => {
+      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true, billingUserId: 50 });
       mockResolvePreviewAccountAndApi.mockResolvedValueOnce({
         account: { id: 10 },
         api: {},
@@ -242,6 +244,13 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
           recipient: '0901234567',
           message: 'Tin test',
         }));
+        expect(mockRecordDirectSendUsage).toHaveBeenCalledWith({
+          billingUserId: 50,
+          channel: 'zalo',
+          amount: 1,
+          actorUserId: 1,
+          source: 'zalo_quick_send',
+        });
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
           success: true,
         }));
@@ -251,8 +260,45 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
       }
     });
 
-    it('sends Email test message via emailSettingsSmtpService', async () => {
-      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true });
+    it('does not record usage when Zalo outbound fails', async () => {
+      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true, billingUserId: 50 });
+      mockResolvePreviewAccountAndApi.mockResolvedValueOnce({
+        account: { id: 10 },
+        api: {},
+      });
+      mockPrepareZaloAttachmentSources.mockResolvedValueOnce([]);
+      mockSendPersonalMessage.mockResolvedValueOnce({
+        status: 'error',
+        error: 'Network timeout',
+      });
+
+      const origStart = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
+      const origEnd = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = 24;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = 0;
+
+      try {
+        const req = {
+          user: { id: 1, role: 'user' },
+          body: { channel: 'zalo', recipient: '0901234567', message: 'Tin test' },
+        };
+        const res = {
+          status: jest.fn().mockReturnThis(),
+          json: jest.fn(),
+        };
+
+        await campaignController.testSendQuickCampaign(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(mockRecordDirectSendUsage).not.toHaveBeenCalled();
+      } finally {
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = origStart;
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = origEnd;
+      }
+    });
+
+    it('sends Email test message via emailSettingsSmtpService without double-recording usage', async () => {
+      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true, billingUserId: 50 });
       mockSendCustomEmail.mockResolvedValueOnce({
         messageId: 'email_msg_123',
       });
@@ -274,6 +320,8 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
           content: 'Hello',
         }),
       }), expect.anything());
+      // sendCustomEmail handles its own usage persistence, campaignController must not duplicate
+      expect(mockRecordDirectSendUsage).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         success: true,
       }));

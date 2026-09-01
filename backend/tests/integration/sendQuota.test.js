@@ -6,7 +6,12 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createPlan, assignPlanToUser } from './helpers/db.js';
-import { checkSendQuota } from '../../src/utils/userSendLimit.util.js';
+import {
+  checkSendQuota,
+  countEmailSentInCycle,
+  countZaloSentInCycle,
+  _clearQuotaCache,
+} from '../../src/utils/userSendLimit.util.js';
 
 let app;
 
@@ -205,5 +210,81 @@ describe('send quota — messages_per_period', () => {
     );
     expect(Number(auditRows[0].id_user)).toBe(Number(employee.id));
     expect(Number(auditRows[0].owner_id)).toBe(Number(owner.id));
+  });
+
+  describe('PR-Q0.1: Transaction Uncached Path & Rollback/Concurrency Isolation', () => {
+    it('insert usage trong transaction: client uncached thấy row, rollback, pool query sau đó không bị ô nhiễm cache', async () => {
+      const { user } = await seedQuotaUser({ messagesPerPeriod: 10 });
+      const now = new Date();
+      const cycleStart = new Date(now.getTime() - 86400000);
+      const cycleEnd = new Date(now.getTime() + 86400000 * 20);
+
+      _clearQuotaCache();
+      const initialPoolCount = await countEmailSentInCycle(user.id, cycleStart, cycleEnd);
+      expect(initialPoolCount).toBe(0);
+
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
+           VALUES ($1, 'email_direct_send', 5, $2, $3, '{"source":"test_tx"}')`,
+          [user.id, cycleStart, cycleEnd]
+        );
+
+        // Client uncached thấy 5 row trong transaction
+        const txCount = await countEmailSentInCycle(user.id, cycleStart, cycleEnd, client, { cache: false });
+        expect(txCount).toBe(5);
+
+        // Pool read bên ngoài transaction KHÔNG thấy 5 (Read Committed) và cache không bị ô nhiễm bởi 5
+        const concurrentPoolCount = await countEmailSentInCycle(user.id, cycleStart, cycleEnd);
+        expect(concurrentPoolCount).toBe(0);
+
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+        _clearQuotaCache();
+      }
+
+      // Sau rollback, pool query kiểm tra lại vẫn là 0
+      const postRollbackCount = await countEmailSentInCycle(user.id, cycleStart, cycleEnd);
+      expect(postRollbackCount).toBe(0);
+    });
+
+    it('concurrent same-workspace trong khoảng trước COMMIT không thấy cached value chưa commit', async () => {
+      const { user } = await seedQuotaUser({ messagesPerPeriod: 10 });
+      const now = new Date();
+      const cycleStart = new Date(now.getTime() - 86400000);
+      const cycleEnd = new Date(now.getTime() + 86400000 * 20);
+
+      _clearQuotaCache();
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
+           VALUES ($1, 'zalo_direct_send', 3, $2, $3, '{"source":"test_zalo_tx"}')`,
+          [user.id, cycleStart, cycleEnd]
+        );
+
+        // Transaction client uses uncached count (automatically bypasses cache because queryable !== db)
+        const txCount = await countZaloSentInCycle(user.id, cycleStart, cycleEnd, client);
+        expect(txCount).toBe(3);
+
+        // Concurrent request on main db pool must NOT see 3 and must NOT get 3 from cache
+        const concurrentPoolCount = await countZaloSentInCycle(user.id, cycleStart, cycleEnd);
+        expect(concurrentPoolCount).toBe(0);
+
+        await client.query('COMMIT');
+        _clearQuotaCache();
+      } finally {
+        client.release();
+        _clearQuotaCache();
+      }
+
+      // Sau COMMIT, pool query thấy count = 3
+      const postCommitCount = await countZaloSentInCycle(user.id, cycleStart, cycleEnd);
+      expect(postCommitCount).toBe(3);
+    });
   });
 });

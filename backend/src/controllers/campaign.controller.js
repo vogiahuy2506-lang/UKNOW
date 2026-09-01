@@ -14,7 +14,7 @@ import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
-import { checkSendQuota } from '../utils/userSendLimit.util.js';
+import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
 import zaloSettingsController from './zaloSettings.controller.js';
 import emailSettingsController from './emailSettings.controller.js';
@@ -1135,6 +1135,17 @@ class CampaignController {
             success: false,
             message: `Gửi tin Zalo thất bại: ${failure.userReason || failure.errorMessage || 'Lỗi không xác định'}`,
             data: failure,
+          });
+        }
+
+        const billingUserId = quota.billingUserId || workspaceOwnerId;
+        if (billingUserId) {
+          await recordDirectSendUsage({
+            billingUserId,
+            channel: 'zalo',
+            amount: 1,
+            actorUserId,
+            source: 'zalo_quick_send',
           });
         }
 

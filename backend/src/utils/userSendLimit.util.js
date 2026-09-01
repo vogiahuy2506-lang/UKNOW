@@ -308,32 +308,42 @@ async function countEmailSentToday(billingUserId) {
   });
 }
 
-export async function countEmailSentInCycle(billingUserId, cycleStart, cycleEnd, queryable = db) {
+export async function countEmailSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable = db) {
   const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
   const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
-  return cached(`${billingUserId}:email_cycle:${startIso}:${endIso}`, async () => {
-    const { rows } = await queryable.query(
-      `SELECT (
-         (SELECT COUNT(*) FROM email_messages em
-          INNER JOIN campaigns c ON c.id = em.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
-            AND em.status IN ('sent', 'delivered', 'bounced')
-            AND NOT em.is_preview
-            AND em.sent_at >= $2 AND em.sent_at < $3)
-         + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
-            WHERE ul.id_user = $1
-              AND ul.resource_type = 'email_direct_send'
-              AND ul.created_at >= $2 AND ul.created_at < $3)
-       )::int AS total`,
-      [billingUserId, startIso, endIso]
-    );
-    return toCount(rows[0]?.total);
-  });
+  const { rows } = await queryable.query(
+    `SELECT (
+       (SELECT COUNT(*) FROM email_messages em
+        INNER JOIN campaigns c ON c.id = em.id_campaign
+        WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          AND em.status IN ('sent', 'delivered', 'bounced')
+          AND NOT em.is_preview
+          AND em.sent_at >= $2 AND em.sent_at < $3)
+       + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+          WHERE ul.id_user = $1
+            AND ul.resource_type = 'email_direct_send'
+            AND ul.created_at >= $2 AND ul.created_at < $3)
+     )::int AS total`,
+    [billingUserId, startIso, endIso]
+  );
+  return toCount(rows[0]?.total);
 }
 
-export async function countEmailSentThisMonth(billingUserId, cycleStart = null, cycleEnd = null, queryable = db) {
+export async function countEmailSentInCycle(billingUserId, cycleStart, cycleEnd, queryable = db, options = {}) {
+  const isCacheDisabled = options.cache === false || queryable !== db;
+  if (isCacheDisabled) {
+    return countEmailSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable);
+  }
+  const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+  const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  return cached(`${billingUserId}:email_cycle:${startIso}:${endIso}`, () =>
+    countEmailSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable)
+  );
+}
+
+export async function countEmailSentThisMonth(billingUserId, cycleStart = null, cycleEnd = null, queryable = db, options = {}) {
   if (cycleStart && cycleEnd) {
-    return countEmailSentInCycle(billingUserId, cycleStart, cycleEnd, queryable);
+    return countEmailSentInCycle(billingUserId, cycleStart, cycleEnd, queryable, options);
   }
   throw new Error(`countEmailSentThisMonth requires explicit cycleStart and cycleEnd for user ${billingUserId}`);
 }
@@ -364,37 +374,47 @@ async function countZaloSentToday(billingUserId) {
   });
 }
 
-export async function countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, queryable = db) {
+export async function countZaloSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable = db) {
   const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
   const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
-  return cached(`${billingUserId}:zalo_cycle:${startIso}:${endIso}`, async () => {
-    const { rows } = await queryable.query(
-      `SELECT (
-         (SELECT COUNT(*) FROM zalo_messages zm
-          JOIN campaigns c ON c.id = zm.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
-            AND zm.tracking_metadata->>'status' = 'sent'
-            AND NOT zm.is_preview
-            AND zm.sent_at >= $2 AND zm.sent_at < $3)
-       + (SELECT COUNT(*) FROM zalo_personal_messages zpm
-          WHERE ${ZPM_OWNER_PREDICATE}
-            AND zpm.role = 'agent'
-            AND zpm.metadata->>'source' = 'manual_inbox'
-            AND zpm.created_at >= $2 AND zpm.created_at < $3)
-       + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
-          WHERE ul.id_user = $1
-            AND ul.resource_type = 'zalo_direct_send'
-            AND ul.created_at >= $2 AND ul.created_at < $3)
-       )::int AS total`,
-      [billingUserId, startIso, endIso]
-    );
-    return toCount(rows[0]?.total);
-  });
+  const { rows } = await queryable.query(
+    `SELECT (
+       (SELECT COUNT(*) FROM zalo_messages zm
+        JOIN campaigns c ON c.id = zm.id_campaign
+        WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          AND zm.tracking_metadata->>'status' = 'sent'
+          AND NOT zm.is_preview
+          AND zm.sent_at >= $2 AND zm.sent_at < $3)
+     + (SELECT COUNT(*) FROM zalo_personal_messages zpm
+        WHERE ${ZPM_OWNER_PREDICATE}
+          AND zpm.role = 'agent'
+          AND zpm.metadata->>'source' = 'manual_inbox'
+          AND zpm.created_at >= $2 AND zpm.created_at < $3)
+     + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+        WHERE ul.id_user = $1
+          AND ul.resource_type = 'zalo_direct_send'
+          AND ul.created_at >= $2 AND ul.created_at < $3)
+     )::int AS total`,
+    [billingUserId, startIso, endIso]
+  );
+  return toCount(rows[0]?.total);
 }
 
-export async function countZaloSentThisMonth(billingUserId, cycleStart = null, cycleEnd = null, queryable = db) {
+export async function countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, queryable = db, options = {}) {
+  const isCacheDisabled = options.cache === false || queryable !== db;
+  if (isCacheDisabled) {
+    return countZaloSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable);
+  }
+  const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+  const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  return cached(`${billingUserId}:zalo_cycle:${startIso}:${endIso}`, () =>
+    countZaloSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable)
+  );
+}
+
+export async function countZaloSentThisMonth(billingUserId, cycleStart = null, cycleEnd = null, queryable = db, options = {}) {
   if (cycleStart && cycleEnd) {
-    return countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, queryable);
+    return countZaloSentInCycle(billingUserId, cycleStart, cycleEnd, queryable, options);
   }
   throw new Error(`countZaloSentThisMonth requires explicit cycleStart and cycleEnd for user ${billingUserId}`);
 }
@@ -751,8 +771,8 @@ export async function recordDirectSendUsage({
     const cycleEnd = cycle?.hasPlan ? cycle.cycleEnd : null;
     const usageAfter = (cycleStart && cycleEnd)
       ? (channel === 'email'
-          ? await countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd, client)
-          : await countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd, client))
+          ? await countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd, client, { cache: false })
+          : await countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd, client, { cache: false }))
       : 0;
     const planLimit = toInt(channel === 'email' ? limits?.monthly_email_limit : limits?.monthly_zalo_limit);
     const usageBefore = Math.max(0, usageAfter - quantity);
@@ -778,6 +798,7 @@ export async function recordDirectSendUsage({
     _clearQuotaCache();
     throw error;
   } finally {
+    _clearQuotaCache();
     client.release();
   }
 }

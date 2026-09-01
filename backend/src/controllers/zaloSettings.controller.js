@@ -2325,14 +2325,23 @@ class ZaloSettingsController {
           });
           if (!isZaloOutboundResultSuccessful(sent)) {
             const mapped = describeZaloOutboundFailure(sent);
+            // `describeZaloOutboundFailure` chỉ chuyển tiếp trường thô: không phân loại, nên
+            // mọi lỗi lạ đều ra errorCategory='UNKNOWN' kèm nguyên văn thông điệp của Zalo.
+            // Người dùng thấy "Tham số không hợp lệ" và không có cách nào biết phải sửa gì
+            // (gặp thật ngày 01/09/2026). `classifyZaloSendError` đã được import sẵn ở file
+            // này từ trước — chỉ là chưa dùng ở nhánh preview.
+            const classified = classifyZaloSendError(sent?.error || mapped.errorLabel, {
+              stage: mapped.errorStage,
+            });
             items.push({
               recipient,
               recipientType,
               phone: sent.phone || null,
               status: 'failed',
-              error: mapped.errorLabel,
-              errorCategory: mapped.errorCategory,
-              errorLabel: mapped.errorLabel,
+              error: classified.label || mapped.errorLabel,
+              errorCategory: classified.category !== 'UNKNOWN' ? classified.category : mapped.errorCategory,
+              errorLabel: classified.label || mapped.errorLabel,
+              errorHint: classified.hint || null,
               uid: sent.uid || null,
               zaloName: sent.zaloName || null,
               senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,

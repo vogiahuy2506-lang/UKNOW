@@ -24,6 +24,7 @@ const CATEGORY_LABELS = {
   TIMEOUT: 'Mạng/Zalo phản hồi chậm',
   ACCOUNT_DISCONNECTED: 'Tài khoản Zalo mất kết nối / hết phiên',
   NOT_FRIEND_OR_BLOCKED: 'Người nhận chặn / chưa là bạn / hạn chế',
+  INVALID_PARAMETER: 'Zalo từ chối tham số gửi — thường do gửi cho chính mình hoặc số không dùng Zalo',
   ZALO_GROUP_UNREACHABLE: 'Không gửi được tới nhóm Zalo',
   [ZALO_SILENT_DROP_CATEGORY]: ZALO_SILENT_DROP_LABEL,
   [ZALO_PARTIAL_DELIVERY_CATEGORY]: ZALO_PARTIAL_DELIVERY_LABEL,
@@ -213,6 +214,24 @@ export function classifyZaloSendError(error, { stage } = {}) {
       category: 'RECIPIENT_NOT_FOUND',
       label: CATEGORY_LABELS.RECIPIENT_NOT_FOUND,
       hint: null,
+    };
+  }
+
+  // Zalo trả "Tham số không hợp lệ" cho khá nhiều tình huống mà nguyên văn không gợi ra gì cho
+  // người dùng. Hai ca hay gặp nhất, theo thứ tự:
+  //   1. Gửi cho CHÍNH SỐ của tài khoản đang gửi — Zalo không cho tự nhắn mình.
+  //   2. Số người nhận không phải tài khoản Zalo, hoặc UID tra ra đã cũ.
+  //
+  // Trước bản vá 01/09/2026, chuỗi này rơi thẳng vào UNKNOWN và người dùng thấy nguyên văn
+  // "Tham số không hợp lệ" trong log chiến dịch — không có cách nào biết phải sửa gì.
+  // (`inferZaloUnreachableReason` ở zaloPhoneCampaign.util.js:171 nhận ra chuỗi này từ trước
+  // nhưng chưa có nơi nào gọi tới.)
+  if (rawMessage.toLowerCase().includes('tham số không hợp lệ')) {
+    return {
+      category: 'INVALID_PARAMETER',
+      label: CATEGORY_LABELS.INVALID_PARAMETER,
+      hint: 'Thường gặp khi gửi cho chính số của tài khoản đang gửi, hoặc số người nhận không dùng Zalo. '
+        + 'Thử với một số khác không phải số của tài khoản gửi.',
     };
   }
 
