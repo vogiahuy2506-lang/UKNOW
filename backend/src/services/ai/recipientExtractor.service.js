@@ -10,6 +10,26 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^(?:\+?84|0)\d{9,10}$/;
 
 /**
+ * Google Sheets coi số điện thoại gõ trần là SỐ và nuốt mất số 0 đầu:
+ * `0388180856` được lưu thành `388180856`. Đây là hành vi MẶC ĐỊNH của Sheets, không
+ * phải ca hiếm — người dùng phải chủ động định dạng cột thành text mới giữ được số 0.
+ *
+ * Trước bản vá này, `PHONE_RE` loại thẳng những giá trị đó và hệ thống báo
+ * "Google Sheet không có cột số điện thoại" **dù cột có thật và dữ liệu có thật**
+ * (phát hiện 01/09/2026 khi dùng thử luồng tạo chiến dịch Zalo).
+ *
+ * Đầu số di động Việt Nam sau số 0 là 3, 5, 7, 8, 9. Một chuỗi 9 chữ số bắt đầu bằng
+ * một trong các đầu số đó gần như chắc chắn là số đã bị mất số 0. Cố ý KHÔNG nhận
+ * đầu số 2 (số cố định) để tránh nhận nhầm mã số/số tiền thành số điện thoại.
+ *
+ * @param {string} raw giá trị đã bỏ khoảng trắng và dấu phân cách
+ * @returns {string} số đã chuẩn hoá (thêm lại số 0 nếu thiếu)
+ */
+function restoreLeadingZero(raw) {
+  return /^[35789]\d{8}$/.test(raw) ? `0${raw}` : raw;
+}
+
+/**
  * Số dòng bị loại được kể tên cho người dùng. Chỉ cần vài ví dụ để họ nhận ra kiểu lỗi rồi tự
  * soát tệp — liệt kê hết một tệp 5.000 dòng thì không ai đọc, mà payload lại phình.
  */
@@ -125,7 +145,7 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
       if (EMAIL_RE.test(val)) emailFound = val;
     }
     if (phoneCol >= 0 && row[phoneCol]) {
-      const rawPhone = String(row[phoneCol] || '').replace(/[\s().-]/g, '');
+      const rawPhone = restoreLeadingZero(String(row[phoneCol] || '').replace(/[\s().-]/g, ''));
       if (PHONE_RE.test(rawPhone)) phoneFound = rawPhone;
     }
     if (nameCol >= 0 && row[nameCol]) {

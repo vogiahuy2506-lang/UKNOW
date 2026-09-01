@@ -3318,6 +3318,11 @@ export default {
   },
 
   aiChatbot: {
+    // Tiêu đề cảnh báo khi sheet/tệp thiếu cột dữ liệu mà kênh gửi cần (email hoặc SĐT).
+    // Thiếu key này thì giao diện hiện nguyên mã 'aiChatbot.recipientColumnMismatchTitle'
+    // cho người dùng thấy — `t()` trả về chính key khi không có bản dịch, nên câu dự phòng
+    // `|| '...'` ở AiChatbotCards.jsx:1296 không bao giờ chạy.
+    recipientColumnMismatchTitle: 'Thiếu cột dữ liệu cần thiết cho kênh gửi',
     // Welcome messages
     welcomeAdmin: 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng Founder AI theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!',
     welcomeUser: 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo và chạy chiến dịch tự động\n🌐 Thiết kế Landing Page\n\nChỉ cần mô tả yêu cầu, tôi sẽ tự tạo và chạy chiến dịch cho bạn!',

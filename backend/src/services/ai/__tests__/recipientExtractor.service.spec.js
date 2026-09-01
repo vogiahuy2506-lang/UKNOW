@@ -5,6 +5,30 @@ const require = module.createRequire(import.meta.url);
 const XLSX = require('xlsx');
 
 describe('recipientExtractor.service', () => {
+  /**
+   * Google Sheets coi số điện thoại gõ trần là SỐ và nuốt số 0 đầu: `0388180856` → `388180856`.
+   * Đây là hành vi MẶC ĐỊNH, không phải ca hiếm.
+   *
+   * Trước bản vá 01/09/2026, những giá trị đó bị `PHONE_RE` loại, và giao diện báo
+   * "Google Sheet không có cột số điện thoại" **dù cột `sđt` có thật và có dữ liệu thật**.
+   * Phát hiện khi dùng thử luồng tạo chiến dịch Zalo — không bài test nào trong 2054 bài
+   * lúc đó bắt được, vì tất cả đều dùng số đã có sẵn số 0.
+   */
+  it('khôi phục số 0 bị Google Sheets nuốt ở cột có tiêu đề SĐT', () => {
+    const csv = 'Họ Tên,Email,sđt\nminh,minh@example.com,388180856\nphuc,phuc@example.com,987654321\n';
+    const result = extractRecipientsFromBuffer(Buffer.from(csv, 'utf-8'), 'r.csv', 'text/csv');
+
+    expect(result.phones).toEqual(['0388180856', '0987654321']);
+    expect(result.detectedColumns.phone).toBe(true);
+  });
+
+  it('KHÔNG nhận nhầm số 9 chữ số đầu 2 (số cố định) hay chuỗi số khác thành SĐT', () => {
+    const csv = 'Họ Tên,Email,sđt\na,a@example.com,288180856\nb,b@example.com,12345678\n';
+    const result = extractRecipientsFromBuffer(Buffer.from(csv, 'utf-8'), 'r.csv', 'text/csv');
+
+    expect(result.phones).toEqual([]);
+  });
+
   it('throws error when buffer is invalid or empty', () => {
     expect(() => extractRecipientsFromBuffer(null)).toThrow(
       expect.objectContaining({ code: 'INVALID_FILE_BUFFER', statusCode: 400 })
