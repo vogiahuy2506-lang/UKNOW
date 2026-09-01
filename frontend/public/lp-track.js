@@ -242,10 +242,21 @@
       // Bỏ qua form không có email input (không phải lead form)
       var hasEmail = form.querySelector('input[type=email], input[name=email]');
       var isMarked = form.hasAttribute('data-lp-lead-form');
+
+      // (1) Chủ trang nói rõ "form này tôi tự lo" → không đụng vào.
+      if (form.hasAttribute('data-lp-ignore')) return;
+
+      // (2) Form tự có onsubmit mà không đánh dấu data-lp-lead-form → của chủ trang,
+      //     không phải lead form của hệ thống. Trước đây dòng `form.onsubmit = null`
+      //     xoá thẳng handler này nên HTML dán từ AI/web builder chết im lặng.
+      if (!isMarked && (form.getAttribute('onsubmit') || typeof form.onsubmit === 'function')) return;
+
       if (!hasEmail && !isMarked) return;
 
-      // Xóa inline onsubmit (alert cũ) để tránh xung đột
-      form.onsubmit = null;
+      // Xóa inline onsubmit (alert cũ) để tránh xung đột - chỉ cho form do hệ thống sinh
+      if (isMarked) {
+        form.onsubmit = null;
+      }
 
       form.addEventListener('submit', function (ev) {
         ev.preventDefault();
