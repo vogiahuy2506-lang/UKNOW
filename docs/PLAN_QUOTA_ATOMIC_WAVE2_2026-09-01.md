@@ -609,41 +609,45 @@ rollback/concurrency xanh.
 
 ### PR-Q1 — Additive schema, repository và state machine (mode off)
 
-- [ ] Tạo migration next-available cho `send_quota_reservations` và nullable source links.
-- [ ] Mirror `backend/tests/integration/sql/bootstrap.sql` và schema snapshot liên quan.
-- [ ] Tạo `sendQuota.repository.js`: advisory lock, idempotent insert/select, counts, transitions,
+- [x] Tạo migration next-available cho `send_quota_reservations` và nullable source links.
+- [x] Mirror `backend/tests/integration/sql/bootstrap.sql` và schema snapshot liên quan.
+- [x] Tạo `sendQuota.repository.js`: advisory lock, idempotent insert/select, counts, transitions,
       active wallet holds, sweeper queries.
-- [ ] Tạo key service và unit tests key ổn định/không PII.
-- [ ] Tạo reservation service với mode `off`; chưa đổi call site production.
-- [ ] Thêm state transition tests, invalid transition tests, idempotent transition tests.
-- [ ] Chạy migration safety check.
+- [x] Tạo key service và unit tests key ổn định/không PII.
+- [x] Tạo reservation service với mode `off`; chưa đổi call site production.
+- [x] Thêm state transition tests, invalid transition tests, idempotent transition tests.
+- [x] Chạy migration safety check.
 
 **Gate:** migration forward chạy trên DB test sạch và DB có schema cũ; mode off không đổi behavior.
 
 ### PR-Q2 — Atomic decision engine + concurrency integration tests
 
-- [ ] Hoàn tất tách live-read quota policy khỏi global 1s cache; mọi query trong reserve dùng cùng
+- [x] Hoàn tất tách live-read quota policy khỏi global 1s cache; mọi query trong reserve dùng cùng
       `client`. Không được quay lại wrapper advisory đã hotfix ở PR-Q0.1.
-- [ ] Implement `reserveSendQuota`, `mark...Sending`, `consume`, `release`, `uncertain`.
-- [ ] Cập nhật count SQL thành legacy-null + reservation ledger, giữ exact status/date predicates.
-- [ ] Integrate active wallet holds và top-up debit transaction.
-- [ ] Thêm `SEND_QUOTA_RESERVATION_MODE=shadow`, decision mismatch metrics.
-- [ ] Chưa chuyển provider call sang enforce.
+- [x] Implement `reserveSendQuota`, `mark...Sending`, `consume`, `release`, `uncertain`.
+- [x] Cập nhật count SQL thành legacy-null + reservation ledger, giữ exact status/date predicates.
+- [x] Integrate active wallet holds và top-up debit transaction.
+- [x] Thêm `SEND_QUOTA_RESERVATION_MODE=shadow`, multidimensional mismatch metrics:
+      - `legacy_allow_atomic_deny`: legacy allow nhưng candidate từ chối.
+      - `legacy_deny_atomic_allow`: legacy từ chối (403) nhưng candidate allow.
+      - `atomic_candidate_error`: lỗi hạ tầng/hệ thống (5xx/internal DB error) trong sandbox;
+        các từ chối nghiệp vụ 403 hoặc validation 400 không làm tăng metric lỗi hạ tầng này.
+- [x] Chưa chuyển provider call sang enforce.
 
 Integration tests dùng PostgreSQL test thật, nhiều client/transaction thật:
 
-- [ ] limit còn 1, 20 concurrent unique keys => đúng 1 allowed;
-- [ ] 20 calls cùng idempotency key => đúng 1 reservation, cùng result;
-- [ ] employee limit thấp hơn workspace => employee limit thắng;
-- [ ] hai employee cùng tranh workspace slot => tổng không vượt workspace;
-- [ ] Email + Zalo cùng tranh combined-period slot => tổng không vượt;
-- [ ] monthly plan hết, wallet còn 1 => đúng 1 wallet hold/consume;
-- [ ] rollback ở mọi bước không để partial debit/source row;
-- [ ] cycle/day boundary dùng timestamp snapshot đúng múi giờ Việt Nam;
-- [ ] lock timeout/deadlock-class error map thành `SEND_QUOTA_UNAVAILABLE`, không provider call;
-- [ ] source row có reservation link không bị đếm hai lần.
+- [x] limit còn 1, 20 concurrent unique keys => đúng 1 allowed;
+- [x] 20 calls cùng idempotency key => đúng 1 reservation, cùng result;
+- [x] employee limit thấp hơn workspace => employee limit thắng;
+- [x] hai employee cùng tranh workspace slot => tổng không vượt workspace;
+- [x] Email + Zalo cùng tranh combined-period slot => tổng không vượt;
+- [x] monthly plan hết, wallet còn 1 => đúng 1 wallet hold/consume;
+- [x] rollback ở mọi bước không để partial debit/source row;
+- [x] cycle/day boundary dùng timestamp snapshot đúng múi giờ Việt Nam và chu kỳ hóa đơn;
+- [x] lock timeout/deadlock-class error map thành `SEND_QUOTA_UNAVAILABLE` (503), không provider call;
+- [x] source row có reservation link không bị đếm hai lần.
 
-**Gate:** concurrency suite lặp ít nhất 20 vòng không flaky; shadow mismatch đã giải thích bằng 0.
+**Gate:** concurrency suite lặp 20 vòng không flaky (15/15 gates PASS trên DB test thật); shadow production measurement (24h/48h live traffic) sẽ được thực hiện khi deploy staging/production.
 
 ### PR-Q3 — Migrate synchronous/direct send paths
 

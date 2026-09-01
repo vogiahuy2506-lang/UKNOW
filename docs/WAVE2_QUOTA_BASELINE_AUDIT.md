@@ -120,7 +120,7 @@ Việc phân loại rate-limit không dựa trên generic 421/450 mà phải d�
 Đối với các endpoint synchronous/direct send (Direct Email, Zalo Preview, Quick Send, Unified Inbox):
 
 1. **Header và Định danh:**
-   - **Header:** `Idempotency-Key: <UUIDv4>`
+   - **Header:** `Idempotency-Key: <UUIDv4 | chuỗi opaque 1–128 ký tự>` (Frontend phát UUIDv4, backend chấp nhận chuỗi opaque an toàn 1–128 ký tự).
    - Nếu client không gửi header: Server tự sinh UUID tạm cho request, log metric `missing_client_idempotency_key` để theo dõi mà không làm gián đoạn client cũ.
 
 2. **Request Fingerprint Validation:**

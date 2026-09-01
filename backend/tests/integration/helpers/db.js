@@ -47,6 +47,7 @@ async function retryOnCleanupContention(operation, maxRetries = 10) {
 
 const TRUNCATE_ALL_SQL = `
     TRUNCATE TABLE
+      send_quota_reservations,
       usage_logs,
       dashboard_insights,
       landing_testimonials,
