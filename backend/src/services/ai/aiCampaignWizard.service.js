@@ -349,6 +349,18 @@ export function extractWizardState(history = [], options = {}) {
       if (message?.role === 'user') {
         const sheetMatch = content.match(GOOGLE_SHEET_URL_RE);
         if (sheetMatch) state.sheetUrl = sheetMatch[0].replace(/[)\]}>.,;'"]+$/, '');
+
+        // Free-text trả lời câu hỏi fileUsage nếu đang có tệp đính kèm
+        if (!state.fileUsage) {
+          const norm = content.toLowerCase().trim();
+          if (/^cả\s*hai|ca\s*hai|both$/i.test(norm)) {
+            state.fileUsage = 'both';
+          } else if (/gửi\s*kèm|gui\s*kem|đính\s*kèm|dinh\s*kem|attachment/i.test(norm)) {
+            state.fileUsage = 'as_attachment';
+          } else if (/lấy\s*nội\s*dung|lay\s*noi\s*dung|làm\s*nội\s*dung|lam\s*noi\s*dung|content/i.test(norm)) {
+            state.fileUsage = 'as_content';
+          }
+        }
       }
       return;
     }
@@ -416,6 +428,13 @@ export function extractWizardState(history = [], options = {}) {
     } else if (marker.gate === 'planApproved') {
       recordMarkerGate('planApproved');
       state.planApproved = true;
+    } else if (marker.gate === 'campaignBrief') {
+      if (marker.contentMode === 'attached_file' && !state.fileUsage) {
+        state.fileUsage = 'as_content';
+      }
+    } else if (marker.gate === 'fileUsage') {
+      recordMarkerGate('fileUsage');
+      state.fileUsage = marker.value || marker.fileUsage || null;
     }
   });
 
@@ -553,6 +572,49 @@ export function buildDataSourceQuestion(locale = 'vi', gateState = null) {
   };
 }
 
+export function buildFileUsageQuestion(locale = 'vi') {
+  const isEnglish = locale === 'en';
+  return {
+    type: 'ask_campaign_details',
+    content: isEnglish
+      ? 'Would you like me to use the content inside the attached file as the message body, or send the file itself as an attachment to recipients?'
+      : 'Bạn muốn tôi lấy nội dung trong tệp làm nội dung tin, hay gửi kèm tệp này cho người nhận?',
+    missing_fields: [],
+    data: {
+      questions: [
+        {
+          id: 'fileUsage',
+          label: isEnglish ? 'How should the attached file be used?' : 'Cách sử dụng tệp đính kèm?',
+          wizardGate: 'fileUsage',
+          options: [
+            {
+              value: 'as_content',
+              label: isEnglish ? 'Use content as message body' : 'Lấy nội dung',
+              description: isEnglish
+                ? 'Extract text from the file to craft your campaign messages'
+                : 'Trích xuất nội dung trong tệp để soạn tin nhắn chiến dịch',
+            },
+            {
+              value: 'as_attachment',
+              label: isEnglish ? 'Send as attachment' : 'Gửi kèm tệp',
+              description: isEnglish
+                ? 'Send this file directly as an attachment to each recipient'
+                : 'Gửi trực tiếp tệp này đính kèm cùng tin nhắn cho người nhận',
+            },
+            {
+              value: 'both',
+              label: isEnglish ? 'Both (use content & attach file)' : 'Cả hai',
+              description: isEnglish
+                ? 'Use file content for messages and attach the file'
+                : 'Vừa lấy nội dung soạn tin, vừa đính kèm tệp gửi cho khách',
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 export function buildScheduleQuestion(locale = 'vi') {
   const isEnglish = locale === 'en';
   return {
@@ -679,6 +741,7 @@ export const GATE_PROPAGATION = {
   hasContentPlan: 'internal',
   hasAttachedFile: 'internal',
   hasAttachedSpreadsheet: 'internal',
+  fileUsage: 'internal',
   abandonedAtMessageCount: 'internal',
 };
 
@@ -972,10 +1035,24 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     return { gate: 'zaloFriends', response: buildFriendPickerCard(state.senderAccountId, locale) };
   }
 
+  const hasNonSpreadsheetFile = Boolean(
+    (state.hasAttachedFile || resources.hasAttachedFile) &&
+    !(state.hasAttachedSpreadsheet || resources.hasAttachedSpreadsheet)
+  );
+
   const briefCandidate = state.brief || resources.brief;
   const effectiveBrief = (briefCandidate?.contentMode === 'attached_file' && (state.hasAttachedFile || resources.hasAttachedFile))
     ? { ...briefCandidate, hasAttachedFile: true }
     : briefCandidate;
+
+  const effectiveFileUsage = state.fileUsage || (effectiveBrief?.contentMode === 'attached_file' ? 'as_content' : null);
+
+  if (hasNonSpreadsheetFile && !effectiveFileUsage) {
+    return {
+      gate: 'fileUsage',
+      response: buildFileUsageQuestion(locale),
+    };
+  }
 
   if (!isCampaignBriefReady(effectiveBrief)) {
     const preferredMode = resources.briefPreferredContentMode || effectiveBrief?.contentMode || null;
@@ -1036,6 +1113,7 @@ export const GATE_MERGE_POLICIES = {
   senderAccountId: { policy: 'marker-pick', gateName: 'senderAccount' },
   senderAccountName: { policy: 'marker-pick', gateName: 'senderAccount' },
   dataSource: { policy: 'marker-pick', gateName: 'dataSource' },
+  fileUsage: { policy: 'marker-pick', gateName: 'fileUsage' },
 
   // marker-pick-array: như marker-pick nhưng usable là mảng không rỗng
   zaloGroupIds: { policy: 'marker-pick-array', gateName: 'zaloGroups' },
@@ -1078,6 +1156,7 @@ export function createEmptyWizardState() {
       hasContentPlan: false,
       hasAttachedFile: false,
       hasAttachedSpreadsheet: false,
+      fileUsage: null,
       abandonedAtMessageCount: null,
     },
     plan: {

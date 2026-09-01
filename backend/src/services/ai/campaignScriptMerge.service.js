@@ -60,6 +60,10 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
           compSteps[i].message = message;
           if (legStep?.templateId) compSteps[i].templateId = legStep.templateId;
           if (Array.isArray(legStep?.templateMappings)) compSteps[i].templateMappings = legStep.templateMappings;
+          // Bảo toàn attachments từ compiler; nếu compiler chưa có mà legacy có thì lấy legacy
+          if (!compSteps[i].attachments && Array.isArray(legStep?.attachments) && legStep.attachments.length > 0) {
+            compSteps[i].attachments = legStep.attachments;
+          }
         } else {
           unmatchedSlots.push({
             nodeId: compNode.id,
@@ -97,6 +101,9 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
           compSteps[i].message = message;
           if (legStep?.templateId) compSteps[i].templateId = legStep.templateId;
           if (Array.isArray(legStep?.templateMappings)) compSteps[i].templateMappings = legStep.templateMappings;
+          if (!compSteps[i].attachments && Array.isArray(legStep?.attachments) && legStep.attachments.length > 0) {
+            compSteps[i].attachments = legStep.attachments;
+          }
         } else {
           unmatchedSlots.push({
             nodeId: compNode.id,
@@ -134,6 +141,9 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
           compSteps[i].emailBody = body;
           if (legStep?.templateId) compSteps[i].templateId = legStep.templateId;
           if (Array.isArray(legStep?.templateMappings)) compSteps[i].templateMappings = legStep.templateMappings;
+          if (!compSteps[i].attachments && Array.isArray(legStep?.attachments) && legStep.attachments.length > 0) {
+            compSteps[i].attachments = legStep.attachments;
+          }
         } else {
           unmatchedSlots.push({
             nodeId: compNode.id,

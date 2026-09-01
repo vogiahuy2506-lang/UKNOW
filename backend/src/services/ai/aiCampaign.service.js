@@ -1710,7 +1710,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           // Bản đầu dùng nhầm biến đó nên `isCompilableIntent` luôn trả false và compiler
           // KHÔNG BAO GIỜ chạy — một no-op im lặng, log ra lý do trông rất hợp lý.
           // Phải tự dựng intent có cấu trúc, giống cách runCompilerShadowCompare làm bên trong.
-          const { intent: campaignIntent } = deriveIntent(gateState, briefForState || null);
+          const { intent: campaignIntent } = deriveIntent(gateState, briefForState || null, { files });
 
           const compilableCheck = isCompilableIntent(campaignIntent);
           if (!compilableCheck.ok) {

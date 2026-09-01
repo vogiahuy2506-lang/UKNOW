@@ -29,49 +29,64 @@ export function compileCampaign(intent, options = {}) {
     throw error;
   }
 
-  const { channel, schedule, sender, audience, contentBrief = {} } = intent;
+  const {
+    channel,
+    schedule,
+    sender,
+    audience,
+    contentBrief = {},
+    fileUsage = null,
+    attachments = [],
+  } = intent;
 
   // Luồng 1 & 2: Email (Once & Drip)
   if (channel === 'email') {
     if (schedule.type === 'once') {
-      return compileEmailOnceCampaign({ sender, audience, contentBrief, options });
+      return compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, attachments, options });
     }
     if (schedule.type === 'drip') {
-      return compileEmailDripCampaign({ sender, audience, schedule, contentBrief, options });
+      return compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fileUsage, attachments, options });
     }
   }
 
   // Luồng 3: Zalo cá nhân (Once & Drip)
   if (channel === 'zalo') {
     if (schedule.type === 'once') {
-      return compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, options });
+      return compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileUsage, attachments, options });
     }
     if (schedule.type === 'drip') {
-      return compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBrief, options });
+      return compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBrief, fileUsage, attachments, options });
     }
   }
 
   // Luồng 4: Zalo nhóm (Once & Drip)
   if (channel === 'zalo_group') {
     if (schedule.type === 'once') {
-      return compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options });
+      return compileZaloGroupOnceCampaign({ sender, audience, contentBrief, fileUsage, attachments, options });
     }
     if (schedule.type === 'drip') {
-      return compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief, options });
+      return compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief, fileUsage, attachments, options });
     }
   }
 
   throw new Error(`Unsupported compiler channel/schedule combination: channel="${channel}", schedule="${schedule?.type}"`);
 }
 
+function resolveStepAttachments(fileUsage, attachments) {
+  const shouldAttach = (fileUsage === 'as_attachment' || fileUsage === 'both')
+    && Array.isArray(attachments) && attachments.length > 0;
+  return shouldAttach ? attachments : [];
+}
+
 /**
  * Biên dịch luồng Email gửi một lần (Email Once).
  * Graph: Trigger -> Audience -> Send Email
  */
-function compileEmailOnceCampaign({ sender, audience, contentBrief, options = {} }) {
+function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, attachments, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const sendEmailId = `${prefix}_send_email_1`;
+  const stepAttachments = resolveStepAttachments(fileUsage, attachments);
 
   const nodes = [];
   const connections = [];
@@ -173,6 +188,7 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, options = {}
           delayFrom: 'start',
           enableLinkTracking: true,
           templateMappings: [],
+          ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
         },
       ],
     },
@@ -229,10 +245,11 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, options = {}
  * Biên dịch luồng Email Drip nhiều ngày.
  * Graph: Trigger -> Audience -> Send Email Drip
  */
-function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, options = {} }) {
+function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fileUsage, attachments, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const sendEmailId = `${prefix}_send_email_1`;
+  const stepAttachments = resolveStepAttachments(fileUsage, attachments);
 
   const nodes = [];
   const connections = [];
@@ -324,6 +341,7 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, op
         delayFrom: 'prev',
         enableLinkTracking: true,
         templateMappings: [],
+        ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
       });
 
       contentSlots.push({
@@ -402,11 +420,12 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, op
  * Biên dịch luồng Zalo cá nhân gửi một lần (Zalo Personal Once).
  * Graph: Trigger -> select_zalo_account -> Audience -> send_zalo_personal
  */
-function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, options = {} }) {
+function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileUsage, attachments, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const selectAccountId = `${prefix}_select_zalo_1`;
   const sendZaloId = `${prefix}_send_zalo_personal_1`;
+  const stepAttachments = resolveStepAttachments(fileUsage, attachments);
 
   const nodes = [];
   const connections = [];
@@ -528,11 +547,6 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, optio
     positionX: sendZaloPosX,
     positionY: 200,
     config: {
-      // Giữ zaloAccountId ở node gửi: registry khai `required: true` cho trường này
-      // (campaignNodeRegistry.service.js:324-326). Chiến dịch cũ để trống và vẫn chạy được
-      // vì runtime lấy tài khoản từ `select_zalo_account` phía trên — hai dạng tương đương
-      // về ngữ nghĩa. Khác biệt đó được xử lý ở BỘ SO SÁNH (so giá trị hiệu dụng),
-      // không phải bằng cách bỏ trường và làm hỏng validateNodeConfig.
       zaloAccountId: Number(sender.id),
       zaloRecipientSource: recipientSource,
       zaloRecipientNodeId: audienceNodeId || '',
@@ -548,6 +562,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, optio
           delayUnit: 'days',
           enableLinkTracking: true,
           templateMappings: [],
+          ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
         },
       ],
     },
@@ -613,11 +628,12 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, optio
  * Biên dịch luồng Zalo cá nhân Drip nhiều ngày.
  * Graph: Trigger -> select_zalo_account -> Audience -> send_zalo_personal
  */
-function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBrief, options = {} }) {
+function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBrief, fileUsage, attachments, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const selectAccountId = `${prefix}_select_zalo_1`;
   const sendZaloId = `${prefix}_send_zalo_personal_1`;
+  const stepAttachments = resolveStepAttachments(fileUsage, attachments);
 
   const nodes = [];
   const connections = [];
@@ -743,6 +759,7 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
         delayUnit,
         enableLinkTracking: true,
         templateMappings: [],
+        ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
       });
 
       contentSlots.push({
@@ -836,12 +853,13 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
  * Biên dịch luồng Zalo nhóm gửi một lần (Zalo Group Once).
  * Graph: Trigger -> select_zalo_account -> get_all_groups -> send_zalo_group
  */
-function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options = {} }) {
+function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, fileUsage, attachments, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const selectAccountId = `${prefix}_select_zalo_1`;
   const groupAudienceId = `${prefix}_get_all_groups_1`;
   const sendGroupId = `${prefix}_send_zalo_group_1`;
+  const stepAttachments = resolveStepAttachments(fileUsage, attachments);
 
   const nodes = [];
   const connections = [];
@@ -915,6 +933,7 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options 
           delayValue: 0,
           delayUnit: 'days',
           templateMappings: [],
+          ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
         },
       ],
     },
@@ -968,12 +987,13 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, options 
  * Biên dịch luồng Zalo nhóm Drip nhiều ngày.
  * Graph: Trigger -> select_zalo_account -> get_all_groups -> send_zalo_group
  */
-function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief, options = {} }) {
+function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief, fileUsage, attachments, options = {} }) {
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
   const selectAccountId = `${prefix}_select_zalo_1`;
   const groupAudienceId = `${prefix}_get_all_groups_1`;
   const sendGroupId = `${prefix}_send_zalo_group_1`;
+  const stepAttachments = resolveStepAttachments(fileUsage, attachments);
 
   const nodes = [];
   const connections = [];
@@ -1035,6 +1055,7 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
         delayValue,
         delayUnit,
         templateMappings: [],
+        ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
       });
 
       contentSlots.push({

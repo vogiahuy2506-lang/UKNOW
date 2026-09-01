@@ -44,6 +44,22 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
         tone: { type: 'string' },
       },
     },
+    fileUsage: {
+      type: 'string',
+      enum: ['as_content', 'as_attachment', 'both'],
+    },
+    attachments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          key: { type: 'string' },
+          name: { type: 'string' },
+          size: { type: 'integer' },
+          contentType: { type: 'string' },
+        },
+      },
+    },
   },
   required: ['version', 'channel'],
 };
@@ -54,6 +70,7 @@ const VALID_AUDIENCE_TYPES = new Set(['sheet', 'db', 'landing', 'manual', 'zalo_
 const VALID_RECIPIENT_KINDS = new Set(['email', 'phone']);
 const VALID_SCHEDULE_TYPES = new Set(['once', 'drip']);
 const VALID_LOCALES = new Set(['vi', 'en']);
+const VALID_FILE_USAGES = new Set(['as_content', 'as_attachment', 'both']);
 
 /**
  * Validator viết tay ~40 dòng cho CampaignIntentV1. Không phụ thuộc thư viện bên ngoài.
@@ -120,6 +137,14 @@ export function validateCampaignIntentV1(intent) {
     }
   }
 
+  if (intent.fileUsage != null && !VALID_FILE_USAGES.has(intent.fileUsage)) {
+    errors.push(`fileUsage không hợp lệ: "${intent.fileUsage}" (cho phép: as_content, as_attachment, both)`);
+  }
+
+  if (intent.attachments != null && !Array.isArray(intent.attachments)) {
+    errors.push('attachments phải là array');
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -130,9 +155,10 @@ export function validateCampaignIntentV1(intent) {
  *
  * @param {object} gates
  * @param {object} [brief]
+ * @param {object} [options]
  * @returns {{ intent: object, missing: string[] }}
  */
-export function deriveIntent(gates = {}, brief = null) {
+export function deriveIntent(gates = {}, brief = null, options = {}) {
   const missing = [];
 
   const rawChannel = gates?.channel;
@@ -204,6 +230,21 @@ export function deriveIntent(gates = {}, brief = null) {
     };
   }
 
+  // File usage & attachments (Việc 2 - PLAN_GUI_KEM_TEP)
+  const fileUsage = gates?.fileUsage || options?.fileUsage || null;
+  const rawFiles = Array.isArray(options?.files)
+    ? options.files
+    : (Array.isArray(gates?.files) ? gates.files : []);
+
+  const attachments = rawFiles
+    .map((f) => ({
+      key: f?.key || f?.storageKey || f?.url || f?.link || f?.attachmentUrl || '',
+      name: f?.name || f?.filename || f?.originalName || '',
+      size: Number(f?.size) || 0,
+      contentType: f?.contentType || f?.mimeType || '',
+    }))
+    .filter((f) => Boolean(f.key));
+
   const intent = {
     version: 1,
     ...(channel ? { channel } : {}),
@@ -211,6 +252,8 @@ export function deriveIntent(gates = {}, brief = null) {
     ...(audience ? { audience } : {}),
     ...(schedule ? { schedule } : {}),
     ...(contentBrief && Object.keys(contentBrief).length > 0 ? { contentBrief } : {}),
+    ...(fileUsage ? { fileUsage } : {}),
+    ...(attachments.length > 0 ? { attachments } : {}),
   };
 
   return { intent, missing };
