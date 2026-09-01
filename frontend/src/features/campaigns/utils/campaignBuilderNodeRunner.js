@@ -6,6 +6,11 @@ import {
   resolveEffectiveBuilderLogItemsMode,
   resolveSheetPreviewApiLimit,
 } from './builderLogItems.util.js';
+import {
+  deriveVariablesForText,
+  renderAutoMappedTemplateText,
+  mergeVariablesPreferNonEmpty,
+} from './templateVariableAutoMap.js';
 
 /**
  * Chuẩn hóa trường cấu hình lọc lead: có thể là mảng hoặc chuỗi JSON (bản lưu cũ) trước khi gọi API preview.
@@ -594,9 +599,15 @@ export const createCampaignNodeRunner = (deps) => {
     ctx,
     entry,
     fallbackNodeId = '',
-  }) => renderTemplateString(
+    logContext = null,
+  }) => renderAutoMappedTemplateText(
     String(templateText || ''),
-    resolveZaloTemplateVariables(ctx, mappings, entry, fallbackNodeId)
+    {
+      mappings,
+      entry,
+      resolveFromMappings: () => resolveZaloTemplateVariables(ctx, mappings, entry, fallbackNodeId),
+      logContext,
+    }
   ).trim();
   const getNodeRecipientProgressMap = (ctx, nodeId, channel) => {
     if (!ctx.recipientProgressByNode) {
@@ -1459,11 +1470,20 @@ export const createCampaignNodeRunner = (deps) => {
           };
         }
 
-        const extraVars = resolveTemplateVariables(to, step);
+        const extraVars = resolveTemplateVariables(to, step, rowForRecipient);
         const mergedVars = { ...mappedVars, ...extraVars };
-        const subject = renderTemplateString(config.emailSubject || tpl.subject || '', mergedVars);
-        const htmlContent = renderTemplateString(tpl.bodyHtml || '', mergedVars);
-        const content = renderTemplateString(tpl.bodyText || '', mergedVars) || subject;
+        const emailTemplateText = `${config.emailSubject || tpl.subject || ''} ${tpl.bodyHtml || ''} ${tpl.bodyText || ''}`;
+        const { variables: autoVars } = deriveVariablesForText(emailTemplateText, {
+          mappings: step?.templateMappings || [],
+          entry: rowForRecipient ? { row: rowForRecipient } : null,
+          customer: rowForRecipient,
+          resolveFromMappings: () => mergedVars,
+          logContext: { nodeId: node.id, stepIndex: stepIndex + 1 },
+        });
+        const finalVars = mergeVariablesPreferNonEmpty(autoVars, mergedVars);
+        const subject = renderTemplateString(config.emailSubject || tpl.subject || '', finalVars);
+        const htmlContent = renderTemplateString(tpl.bodyHtml || '', finalVars);
+        const content = renderTemplateString(tpl.bodyText || '', finalVars) || subject;
         // Builder luôn preview-only nên không truyền khóa campaign/customer để tránh backend ghi dữ liệu ngoài ý muốn.
         const normalizedCustomerId = Number.isFinite(Number.parseInt(rowForRecipient?.customerId || rowForRecipient?.id || rowForRecipient?.id_customer, 10))
           ? Number.parseInt(rowForRecipient.customerId || rowForRecipient.id || rowForRecipient.id_customer, 10)
@@ -1511,7 +1531,7 @@ export const createCampaignNodeRunner = (deps) => {
             sentAt: resp.data?.data?.sentAt,
             tracking: resp.data?.data?.tracking || null,
             subject,
-            variables: mergedVars,
+            variables: finalVars,
             stepIndex: stepIndex + 1,
           };
         } catch (err) {
@@ -1816,15 +1836,14 @@ export const createCampaignNodeRunner = (deps) => {
             recipientType,
           });
           const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
-          const renderedMessage = mappings.length > 0
-            ? renderZaloTemplateMessage({
-              templateText: step.message,
-              mappings,
-              ctx,
-              entry,
-              fallbackNodeId: config.zaloRecipientNodeId || '',
-            })
-            : String(step.message || '').trim();
+          const renderedMessage = renderZaloTemplateMessage({
+            templateText: step.message,
+            mappings,
+            ctx,
+            entry,
+            fallbackNodeId: config.zaloRecipientNodeId || '',
+            logContext: { nodeId: node.id, stepIndex: stepIndex + 1 },
+          });
           if (!skipApiDelay) {
             await waitRandomPreviewApiDelay(`zalo_personal_single_step_${stepIndex + 1}`, signal, {
               channel: 'zalo',
@@ -1840,11 +1859,19 @@ export const createCampaignNodeRunner = (deps) => {
             campaignId: campaignIdNum,
           }, { signal });
           const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
-          const variables = resolveZaloTemplateVariables(
-            ctx,
-            mappings,
-            entry,
-            config.zaloRecipientNodeId || ''
+          const { variables } = deriveVariablesForText(
+            step.message,
+            {
+              mappings,
+              entry,
+              resolveFromMappings: () => resolveZaloTemplateVariables(
+                ctx,
+                mappings,
+                entry,
+                config.zaloRecipientNodeId || ''
+              ),
+              logContext: { nodeId: node.id, stepIndex: stepIndex + 1 },
+            }
           );
           stepItems.forEach((item) => {
             const meta = buildPreviewZaloLogMeta({
@@ -2341,15 +2368,14 @@ export const createCampaignNodeRunner = (deps) => {
 
               await waitRandomTemplateStepDelay(`zalo_group_step_${stepIndex + 1}`, signal, 'zalo_group_template');
             }
-            const renderedMessage = mappings.length > 0
-              ? renderZaloTemplateMessage({
-                templateText: step.message,
-                mappings,
-                ctx,
-                entry,
-                fallbackNodeId: config.zaloGroupNodeId || '',
-              })
-              : String(step.message || '').trim();
+            const renderedMessage = renderZaloTemplateMessage({
+              templateText: step.message,
+              mappings,
+              ctx,
+              entry,
+              fallbackNodeId: config.zaloGroupNodeId || '',
+              logContext: { nodeId: node.id, stepIndex: stepIndex + 1 },
+            });
 
             const response = await apiService.sendPreviewZaloGroup({
               accountId: selectedAccount.id,
@@ -2359,11 +2385,19 @@ export const createCampaignNodeRunner = (deps) => {
             campaignId: campaignIdNum,
           }, { signal });
             const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
-            const variables = resolveZaloTemplateVariables(
-              ctx,
-              mappings,
-              entry,
-              config.zaloGroupNodeId || ''
+            const { variables } = deriveVariablesForText(
+              step.message,
+              {
+                mappings,
+                entry,
+                resolveFromMappings: () => resolveZaloTemplateVariables(
+                  ctx,
+                  mappings,
+                  entry,
+                  config.zaloGroupNodeId || ''
+                ),
+                logContext: { nodeId: node.id, stepIndex: stepIndex + 1 },
+              }
             );
             stepItems.forEach((item) => {
               const meta = buildPreviewZaloLogMeta({
@@ -2380,7 +2414,7 @@ export const createCampaignNodeRunner = (deps) => {
                 message: renderedMessage,
                 attachments: Array.isArray(item?.attachments) ? item.attachments : step.attachments,
                 attachmentsCount: Number(item?.attachmentsCount || step.attachments?.length || 0),
-                variables: mappings.length > 0 ? variables : {},
+                variables,
               });
               emitProgress();
             });
