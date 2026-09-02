@@ -13,7 +13,11 @@
  */
 
 import 'dotenv/config';
-import { pool } from '../src/config/database.js';
+// KHONG dung `import { pool }` — config/database.js chi co default export
+// { query, getClient, pool, withRetry, isConnectionError }, khong co named export nao
+// ten `pool`. Moi script khac trong scripts/ deu dung `db.pool`. Xem ghi chu cung noi
+// dung o cleanupStalledRuns.js:112.
+import db from '../src/config/database.js';
 
 async function rescueAccounts() {
   const args = process.argv.slice(2);
@@ -27,7 +31,7 @@ async function rescueAccounts() {
   console.log(`Batch size: ${batchSize}`);
   console.log('====================================================\n');
 
-  const client = await pool.connect();
+  const client = await db.pool.connect();
   try {
     // 1. Thống kê hiện trạng
     const statRes = await client.query(`
@@ -110,7 +114,7 @@ async function rescueAccounts() {
     console.error('❌ Lỗi khi thực thi script cứu hộ:', err);
   } finally {
     client.release();
-    await pool.end();
+    await db.pool.end();
   }
 }
 
