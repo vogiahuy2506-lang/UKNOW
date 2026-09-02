@@ -144,7 +144,7 @@ describe('templateVariableAutoMap.util', () => {
       expect(res4.variables.email).toBe('an@example.com');
     });
 
-    it('Rule 2c: Populates unresolved and sets empty string for unmatchable variables', () => {
+    it('Rule 2c: Populates unresolved and sets empty string for unmatchable variables (or "bạn" for unresolvable name variables)', () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       const result = deriveVariablesForText('Tour: {{tour_name}} - Khách: {{full_name}}', {
         mappings: [],
@@ -161,6 +161,23 @@ describe('templateVariableAutoMap.util', () => {
         expect.stringContaining('[TemplateAutoMap] Unresolved template variables [tour_name]')
       );
       warnSpy.mockRestore();
+    });
+
+    it('Safety Net: Fallbacks to "bạn" for unresolvable name variables when entry has no name data (e.g. manual phones)', () => {
+      const result = deriveVariablesForText('Chào {{full_name}}! Giá: {{product_price}}', {
+        mappings: [],
+        entry: { row: { phone: '0844790999' } },
+      });
+
+      expect(result.variables.full_name).toBe('bạn');
+      expect(result.variables.product_price).toBe('');
+      expect(result.unresolved).toEqual(['full_name', 'product_price']);
+
+      const rendered = renderAutoMappedTemplateText('Chào {{full_name}}! Giá: {{product_price}}', {
+        mappings: [],
+        entry: { row: { phone: '0844790999' } },
+      });
+      expect(rendered).toBe('Chào bạn! Giá: ');
     });
 
     it('Rule 3: Returns empty variables without processing if text has no variables', () => {

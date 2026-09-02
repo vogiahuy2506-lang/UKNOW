@@ -774,7 +774,7 @@ export const AskCampaignDetailsCard = ({
   const isWizardQuestion = questions.some((q) => q.wizardGate);
   const effectiveChannel = data?.channel || answers.channel || data?.wizardState?.channel || 'zalo';
   const isEmailChannel = effectiveChannel === 'email';
-  const isZaloChannel = effectiveChannel === 'zalo' || effectiveChannel === 'zalo_group';
+  const isZaloChannel = effectiveChannel === 'zalo' || effectiveChannel === 'zalo_personal' || effectiveChannel === 'zalo_group';
   const emailChoiceRequired = isEmailChannel && !isWizardQuestion;
   const emailTemplateRequired = isEmailChannel && emailChoice === 'existing';
   const manualRecipientsRequired = answers.dataSource === 'manual';
@@ -2015,8 +2015,8 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
     ? (singleStep.timing.anchor === 'start' && Number(singleStep.timing.value || 0) === 0)
     : true;
   const isManualRecipient = singleStep?.recipients?.mode === 'manual';
-  const isAllowedChannel = singleStep && ['email', 'zalo'].includes(singleStep.channel);
-  const isPhoneRecipient = singleStep?.channel !== 'zalo' || (singleStep?.recipients?.type || 'phone') === 'phone';
+  const isAllowedChannel = singleStep && ['email', 'zalo_personal'].includes(singleStep.channel);
+  const isPhoneRecipient = singleStep?.channel !== 'zalo_personal' || (singleStep?.recipients?.type || 'phone') === 'phone';
   const canQuickSend = Boolean(
     canCreate &&
     onQuickSend &&

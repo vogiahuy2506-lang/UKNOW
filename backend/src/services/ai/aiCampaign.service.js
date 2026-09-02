@@ -1246,7 +1246,7 @@ Zalo cá nhân campaign:
   "nodes": [
     { "tempId": "n1", "nodeType": "trigger",  "nodeSubtype": "manual",                  "nodeName": "Bắt đầu",          "nodeDescription": "", "positionX": 100, "positionY": 200, "config": {} },
     { "tempId": "n2", "nodeType": "data",     "nodeSubtype": "interested_customers",    "nodeName": "Danh sách khách",  "nodeDescription": "Khách từ database", "positionX": 350, "positionY": 200, "config": { "interestedCustomerType": "both", "interestedLimit": 1000 } },
-    { "tempId": "n3", "nodeType": "action",   "nodeSubtype": "send_zalo_personal",      "nodeName": "Gửi Zalo cá nhân", "nodeDescription": "Gửi chuỗi 2 tin",  "positionX": 600, "positionY": 200, "config": { "zaloAccountId": null, "zaloRecipientSource": "node", "zaloRecipientNodeId": "n2", "zaloRecipientField": "phone", "zaloRecipientType": "phone", "zaloPersonalSendMode": "schedule", "saveMessageLog": true, "zaloPersonalTemplateSteps": [ { "message": "Xin chào {{full_name}}! Nội dung tin 1...", "delayValue": 0, "delayUnit": "days", "enableLinkTracking": true, "templateMappings": [{ "key": "full_name", "sourceType": "node", "nodeId": "n2", "field": "full_name" }] }, { "message": "Nội dung tin 2 sau 2 ngày...", "delayValue": 2, "delayUnit": "days", "enableLinkTracking": true, "templateMappings": [] } ] } },
+    { "tempId": "n3", "nodeType": "action",   "nodeSubtype": "send_zalo_personal",      "nodeName": "Gửi Zalo cá nhân", "nodeDescription": "Gửi chuỗi 2 tin",  "positionX": 600, "positionY": 200, "config": { "zaloAccountId": null, "zaloRecipientSource": "node", "zaloRecipientNodeId": "n2", "zaloRecipientField": "phone", "zaloRecipientType": "phone", "zaloPersonalSendMode": "schedule", "saveMessageLog": true, "zaloPersonalTemplateSteps": [ { "message": "Xin chào bạn! Nội dung tin 1...", "delayValue": 0, "delayUnit": "days", "enableLinkTracking": true, "templateMappings": [] }, { "message": "Nội dung tin 2 sau 2 ngày...", "delayValue": 2, "delayUnit": "days", "enableLinkTracking": true, "templateMappings": [] } ] } },
     { "tempId": "n4", "nodeType": "end",      "nodeSubtype": "end",                     "nodeName": "Kết thúc",         "nodeDescription": "", "positionX": 900, "positionY": 200, "config": {} }
   ],
   "connections": [{"sourceNodeId":"n1","targetNodeId":"n2"},{"sourceNodeId":"n2","targetNodeId":"n3"},{"sourceNodeId":"n3","targetNodeId":"n4"}]
@@ -1583,6 +1583,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Đây là gửi MỘT lần (schedule once). KHÔNG trả content_plan / suggest_content_plan. KHÔNG tự nâng thành chuỗi nhiều ngày.
 - Nếu CAMPAIGN_BRIEF DATA đã có (kể cả contentMode=context cảm ơn/thông báo) → đừng hỏi lại sản phẩm/chủ đề.
 - dataSource="manual" hoặc "zalo_contacts": KHÔNG chép email/SĐT/UID cụ thể vào nodes; FE nhập người nhận riêng (overlay). Giữ recipientSource/zaloRecipientSource = "manual" với list rỗng.
+- TUYỆT ĐỐI KHÔNG sinh {{full_name}} (hay bất kỳ biến cá nhân hoá họ tên nào) vào nội dung tin nhắn hoặc templateMappings khi dataSource="manual", vì nguồn nhập tay chỉ có SĐT/email thuần, không có thông tin họ tên. Dùng câu chào chung tự nhiên như "Chào bạn!", "Xin chào!", KHÔNG viết "Chào {{full_name}}!" hay "Xin chào {{full_name}}!".
 - Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.
 - Khi ra confirm_create cho yêu cầu gửi 1 lần, câu phản hồi giải thích rõ: Bấm "Tạo chiến dịch" nếu muốn lưu lại để theo dõi sau, hoặc "Gửi nhanh" nếu chỉ cần gửi một lần (Gửi nhanh không chiếm suất chiến dịch trong gói).`;
 
@@ -1917,7 +1918,7 @@ ${multiStepExample}
 3. Nội dung inline PHẢI có:
    - Email: emailSubject + emailBody (HTML đẹp, có CTA)
    - Zalo: message (dưới 4000 ký tự, có biến {{variable}})
-4. Luôn thêm templateMappings cho các biến động như {{full_name}}, {{product_name}}
+4. Luôn thêm templateMappings cho các biến động như {{full_name}}, {{product_name}} (NGOẠI TRỪ khi dataSource="manual" / nhập tay: KHÔNG dùng {{full_name}} vì không có dữ liệu họ tên khách)
 5. KHÔNG dùng placeholder như "[TÊN_SẢN_PHẨM]" - phải điền thực
 
 ## LUẬT PHÂN LOẠI Ý ĐỊNH (intent):

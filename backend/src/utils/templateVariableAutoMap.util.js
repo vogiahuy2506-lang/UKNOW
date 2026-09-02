@@ -186,7 +186,13 @@ export function deriveVariablesForText(text, options = {}) {
     ) {
       variables[varName] = String(dataObj[matchedKey]);
     } else {
-      variables[varName] = '';
+      // Lưới an toàn: khi biến nhóm "tên người" không giải được (ví dụ SĐT nhập tay), thay bằng "bạn" thay vì chuỗi rỗng
+      // CHỈ áp dụng cho biến tên người (semanticTarget === 'name'), TUYỆT ĐỐI không áp dụng cho các biến khác.
+      if (semanticTarget === 'name') {
+        variables[varName] = 'bạn';
+      } else {
+        variables[varName] = '';
+      }
       unresolved.push(varName);
     }
   }

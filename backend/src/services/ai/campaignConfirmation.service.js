@@ -243,7 +243,7 @@ class CampaignConfirmationService {
           sender,
           recipients: {
             mode: manual ? 'manual' : 'source',
-            type: channel === 'zalo' ? (config.zaloRecipientType || 'phone') : null,
+            type: channel === 'zalo_personal' ? (config.zaloRecipientType || 'phone') : null,
             count: manual ? manualRecipientCount(recipientList) : null,
             sourceLabel: manual ? null : sourceLabel(config, nodes, channel === 'email' ? 'email' : 'zalo'),
           },

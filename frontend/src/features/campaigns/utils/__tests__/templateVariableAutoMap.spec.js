@@ -122,13 +122,26 @@ describe('PR-4: Frontend Template Variable Auto Map Spec', () => {
         resolveFromMappings: () => mergedVars,
       });
 
-      // autoVars will be { full_name: '' } because mappings is empty and 'Người nhận' is not recognized
-      expect(autoVars.full_name).toBe('');
+      // autoVars will be { full_name: 'bạn' } as safety net fallback because 'Người nhận' is not in standard aliases
+      expect(autoVars.full_name).toBe('bạn');
 
       // Merging with priority for non-empty mergedVars via helper function:
       const finalVars = mergeVariablesPreferNonEmpty(autoVars, mergedVars);
 
       expect(finalVars.full_name).toBe('Nguyễn Văn A');
+    });
+
+    it('Case 6 (Safety Net): unresolvable name variable falls back to "bạn" while other variables fall back to ""', () => {
+      const entry = { row: { 'SĐT': '0844790999' } };
+      const templateText = 'Chào {{full_name}}! Mã ưu đãi: {{promo_code}}';
+
+      const { variables, unresolved } = deriveVariablesForText(templateText, { entry });
+      expect(variables.full_name).toBe('bạn');
+      expect(variables.promo_code).toBe('');
+      expect(unresolved).toEqual(['full_name', 'promo_code']);
+
+      const rendered = renderAutoMappedTemplateText(templateText, { entry });
+      expect(rendered).toBe('Chào bạn! Mã ưu đãi: ');
     });
   });
 });

@@ -21,14 +21,30 @@ export function extractTemplateVariableNames(text) {
  * @returns {'name'|'email'|'phone'|null}
  */
 export function mapVariableToSemanticTarget(varName) {
-  const norm = foldDiacritics(varName).replace(/[ _-]/g, '');
-  if (/^(fullname|name|ten|hoten|hovaten|customername|tenkhachhang)$/.test(norm)) {
+  const norm = foldDiacritics(varName).replace(/[_-]/g, ' ').trim();
+  if (
+    /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|recipient name)$/i.test(norm) ||
+    norm.includes('ho ten') ||
+    norm.includes('fullname') ||
+    norm.includes('full name') ||
+    norm.includes('ten khach')
+  ) {
     return 'name';
   }
-  if (/^(email|mail|diachiemail|emailaddress|thudientu)$/.test(norm)) {
+  if (
+    /^(email|mail|dia chi email|email address|thu dien tu)$/i.test(norm) ||
+    norm.includes('email') ||
+    norm.includes('mail')
+  ) {
     return 'email';
   }
-  if (/^(phone|sdt|dienthoai|sodt|sodienthoai|mobile|tel|phonenumber|telephone)$/.test(norm)) {
+  if (
+    /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|telephone)$/i.test(norm) ||
+    norm.includes('sdt') ||
+    norm.includes('dien thoai') ||
+    norm.includes('so dt') ||
+    norm.includes('phone')
+  ) {
     return 'phone';
   }
   return null;
@@ -129,7 +145,13 @@ export function deriveVariablesForText(text, options = {}) {
     ) {
       variables[varName] = String(dataObj[matchedKey]);
     } else {
-      variables[varName] = '';
+      // Lưới an toàn: khi biến nhóm "tên người" không giải được (ví dụ SĐT nhập tay), thay bằng "bạn" thay vì chuỗi rỗng
+      // CHỈ áp dụng cho biến tên người (semanticTarget === 'name'), TUYỆT ĐỐI không áp dụng cho các biến khác.
+      if (semanticTarget === 'name') {
+        variables[varName] = 'bạn';
+      } else {
+        variables[varName] = '';
+      }
       unresolved.push(varName);
     }
   }
