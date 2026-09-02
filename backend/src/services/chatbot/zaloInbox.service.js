@@ -679,9 +679,12 @@ class ZaloPersonalInboxService {
           // Back-fill so future reads of this conv skip the fallback work.
           try {
             await db.query(
+              // Bảng này KHÔNG có cột updated_at (chỉ có created_at/started_at/
+              // last_message_at). Câu UPDATE cũ set updated_at nên lần back-fill
+              // nào cũng ném lỗi, bị catch nuốt và chỉ để lại một dòng warn —
+              // id_chatbot không bao giờ được ghi, mỗi tin đến lại dò lại từ đầu.
               `UPDATE zalo_personal_conversations
-                  SET id_chatbot = $2,
-                      updated_at = NOW()
+                  SET id_chatbot = $2
                 WHERE id = $1 AND id_chatbot IS NULL`,
               [conversation.id, idChatbot]
             );
