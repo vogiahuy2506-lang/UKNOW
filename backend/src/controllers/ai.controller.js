@@ -58,6 +58,10 @@ function denyCampaignRun(res) {
   });
 }
 
+function getNodeSubtype(node) {
+  return String(node?.nodeSubtype || node?.node_subtype || node?.subtype || node?.node_type || node?.nodeType || node?.type || '').toLowerCase();
+}
+
 async function logWorkspaceMutation(req, action, entityType, entityId, details = {}) {
   const context = getWorkspaceAuditContext(req);
   await auditService.log({
@@ -675,7 +679,7 @@ class AiController {
         });
       }
       for (const node of normalizedNodes) {
-        const subtype = node.node_subtype || node.nodeSubtype;
+        const subtype = getNodeSubtype(node);
         const validation = campaignNodeRegistryService.validateNodeConfig(subtype, node.config || {});
         if (!validation.valid) {
           return res.status(400).json({ success: false, code: 'INVALID_NODE_CONFIG', message: validation.errors.join(', ') });
@@ -735,8 +739,8 @@ class AiController {
 
   applyDirectRecipients(script, directRecipients) {
     const recipients = validateManualRecipients(directRecipients);
-    const hasEmailAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_email');
-    const hasZaloPersonalAction = (script.nodes || []).some((node) => (node.node_subtype || node.nodeSubtype) === 'send_zalo_personal');
+    const hasEmailAction = (script.nodes || []).some((node) => getNodeSubtype(node) === 'send_email');
+    const hasZaloPersonalAction = (script.nodes || []).some((node) => getNodeSubtype(node) === 'send_zalo_personal');
 
     if (hasZaloPersonalAction && (!recipients.phones || recipients.phones.length === 0) && (!recipients.uids || recipients.uids.length === 0)) {
       const error = new Error('Danh sách người nhận cho chiến dịch Zalo không có số điện thoại hoặc UID nào hợp lệ.');
@@ -760,7 +764,7 @@ class AiController {
     }
     let matched = false;
     for (const node of script.nodes || []) {
-      const subtype = node.node_subtype || node.nodeSubtype;
+      const subtype = getNodeSubtype(node);
       const config = node.config || (node.config = {});
       if (subtype === 'send_email' && recipients.emails.length) {
         config.recipientSource = 'manual';
@@ -790,14 +794,18 @@ class AiController {
 
   markManualRecipientsRequired(script) {
     for (const node of script.nodes || []) {
-      const subtype = node.node_subtype || node.nodeSubtype;
+      const subtype = getNodeSubtype(node);
       const config = node.config || (node.config = {});
       if (subtype === 'send_email') {
         config.recipientSource = 'manual';
-        config.recipientEmails = [];
+        if (!Array.isArray(config.recipientEmails) || config.recipientEmails.length === 0) {
+          config.recipientEmails = [];
+        }
       } else if (subtype === 'send_zalo_personal') {
         config.zaloRecipientSource = 'manual';
-        config.zaloRecipientPhones = [];
+        if (!Array.isArray(config.zaloRecipientPhones) || config.zaloRecipientPhones.length === 0) {
+          config.zaloRecipientPhones = [];
+        }
       }
     }
   }
@@ -832,7 +840,7 @@ class AiController {
       // Validate node config nếu autoRun trước khi update DB
       if (autoRun) {
         for (const node of normalizedNodes) {
-          const subtype = node.node_subtype || node.nodeSubtype;
+          const subtype = getNodeSubtype(node);
           const validation = campaignNodeRegistryService.validateNodeConfig(subtype, node.config || {});
           if (!validation.valid) {
             return res.status(400).json({
@@ -998,7 +1006,7 @@ class AiController {
 
       // Validate node config sau autofill và trước khi tạo campaign
       for (const node of normalizedNodes) {
-        const subtype = node.node_subtype || node.nodeSubtype;
+        const subtype = getNodeSubtype(node);
         const validation = campaignNodeRegistryService.validateNodeConfig(subtype, node.config || {});
         if (!validation.valid) {
           return res.status(400).json({

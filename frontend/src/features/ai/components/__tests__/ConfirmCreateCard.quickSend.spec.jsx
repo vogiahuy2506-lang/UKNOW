@@ -199,3 +199,120 @@ describe('ConfirmCreateCard - Quick Send Gate & Rendering', () => {
     expect(quickSendBtn).toBeNull();
   });
 });
+
+describe('ConfirmCreateCard - Blocking Issues & Exact Error Messages', () => {
+  const issueCodes = [
+    {
+      code: 'manual_recipients_required',
+      expectedVi: 'Chưa có người nhận. Bạn hãy nhập số điện thoại hoặc email trước khi tạo.',
+      expectedEn: 'No recipients provided. Please enter phone numbers or emails before creating.',
+    },
+    {
+      code: 'missing_sender',
+      expectedVi: 'Chưa chọn tài khoản gửi cho bước này.',
+      expectedEn: 'No sender account selected for this step.',
+    },
+    {
+      code: 'missing_message_content',
+      expectedVi: 'Bước gửi chưa có nội dung tin nhắn.',
+      expectedEn: 'This send step is missing message content.',
+    },
+    {
+      code: 'invalid_template_step',
+      expectedVi: 'Mẫu tin của bước gửi không hợp lệ.',
+      expectedEn: 'Invalid template configured for this step.',
+    },
+    {
+      code: 'template_not_found',
+      expectedVi: 'Không tìm thấy mẫu tin đã chọn.',
+      expectedEn: 'Selected template could not be found.',
+    },
+    {
+      code: 'no_send_steps',
+      expectedVi: 'Chiến dịch chưa có bước gửi tin nào.',
+      expectedEn: 'Campaign does not have any send steps.',
+    },
+  ];
+
+  for (const { code, expectedVi, expectedEn } of issueCodes) {
+    it(`Hiển thị đúng thông điệp lỗi cho mã "${code}" (VI & EN)`, () => {
+      // Fixture mô phỏng đúng cấu trúc thật do campaignConfirmation.service.js:100 sinh ra
+      const mockIssue = {
+        code,
+        nodeId: 'node-1',
+        stepIndex: 0,
+        messageKey: `aiChatbot.confirmation.${code}`,
+      };
+
+      const confirmationView = {
+        ...createMockConfirmationView(),
+        readyToCreate: false,
+        blockingIssues: [mockIssue],
+      };
+
+      // Test tiếng Việt
+      const { unmount } = render(
+        <ConfirmCreateCard
+          confirmationView={confirmationView}
+          onConfirm={vi.fn()}
+          onQuickSend={vi.fn()}
+          onEdit={vi.fn()}
+          onCancel={vi.fn()}
+          t={makeI18n(viDict)}
+          locale="vi"
+        />
+      );
+
+      expect(screen.getByText(expectedVi)).toBeInTheDocument();
+      // Đảm bảo không in câu cứng chung chung khi có mã lỗi cụ thể
+      if (code === 'manual_recipients_required') {
+        expect(screen.queryByText(/nội dung, mẫu tin hoặc tài khoản/i)).toBeNull();
+      }
+      unmount();
+
+      // Test tiếng Anh
+      render(
+        <ConfirmCreateCard
+          confirmationView={confirmationView}
+          onConfirm={vi.fn()}
+          onQuickSend={vi.fn()}
+          onEdit={vi.fn()}
+          onCancel={vi.fn()}
+          t={makeI18n(enDict)}
+          locale="en"
+        />
+      );
+
+      expect(screen.getByText(expectedEn)).toBeInTheDocument();
+    });
+  }
+
+  it('Dùng câu fallback chung khi gặp mã issue lạ không có bản dịch', () => {
+    const unknownIssue = {
+      code: 'unknown_future_issue',
+      nodeId: 'node-1',
+      stepIndex: 0,
+      messageKey: 'aiChatbot.confirmation.unknown_future_issue',
+    };
+
+    const confirmationView = {
+      ...createMockConfirmationView(),
+      readyToCreate: false,
+      blockingIssues: [unknownIssue],
+    };
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={vi.fn()}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    expect(screen.getByText('Một bước gửi chưa đủ nội dung, mẫu tin hoặc tài khoản gửi.')).toBeInTheDocument();
+  });
+});

@@ -3592,6 +3592,15 @@ export default {
     duration: 'Thời gian',
     editCampaign: 'Chỉnh sửa',
     cancelAction: 'Huỷ bỏ',
+    confirmation: {
+      missing_sender: 'Chưa chọn tài khoản gửi cho bước này.',
+      invalid_template_step: 'Mẫu tin của bước gửi không hợp lệ.',
+      template_not_found: 'Không tìm thấy mẫu tin đã chọn.',
+      missing_message_content: 'Bước gửi chưa có nội dung tin nhắn.',
+      manual_recipients_required: 'Chưa có người nhận. Bạn hãy nhập số điện thoại hoặc email trước khi tạo.',
+      no_send_steps: 'Chiến dịch chưa có bước gửi tin nào.',
+      unknown_issue: 'Một bước gửi chưa đủ nội dung, mẫu tin hoặc tài khoản gửi.',
+    },
     // Auto creating card
     creatingCampaign: 'Đang tạo và chạy chiến dịch...',
     autoCreateNotice: '✨ Chiến dịch sẽ được tạo tự động và bắt đầu chạy ngay!',

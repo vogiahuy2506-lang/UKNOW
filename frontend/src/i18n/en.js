@@ -3554,6 +3554,15 @@ export default {
     duration: 'Duration',
     editCampaign: 'Edit',
     cancelAction: 'Cancel',
+    confirmation: {
+      missing_sender: 'No sender account selected for this step.',
+      invalid_template_step: 'Invalid template configured for this step.',
+      template_not_found: 'Selected template could not be found.',
+      missing_message_content: 'This send step is missing message content.',
+      manual_recipients_required: 'No recipients provided. Please enter phone numbers or emails before creating.',
+      no_send_steps: 'Campaign does not have any send steps.',
+      unknown_issue: 'A send step is incomplete or unavailable.',
+    },
     // Auto creating card
     creatingCampaign: 'Creating and running campaign...',
     autoCreateNotice: '✨ Campaign will be created automatically and start running right away!',

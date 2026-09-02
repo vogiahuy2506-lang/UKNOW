@@ -61,15 +61,28 @@ describe('aiController.applyDirectRecipients', () => {
     expect(script.nodes[0].config.zaloRecipientType).toBe('phone');
   });
 
-  it('successfully applies emails for Email campaign', () => {
+  it('successfully applies phone numbers when node uses subtype or node_subtype variation', () => {
     const script = {
       nodes: [
-        { nodeSubtype: 'send_email', config: {} },
+        { subtype: 'send_zalo_personal', config: {} },
       ],
     };
 
-    aiController.applyDirectRecipients(script, { emails: ['user1@test.com', 'user2@test.com'] });
-    expect(script.nodes[0].config.recipientSource).toBe('manual');
-    expect(script.nodes[0].config.recipientEmails).toEqual(['user1@test.com', 'user2@test.com']);
+    aiController.applyDirectRecipients(script, { phones: ['0844790999'] });
+    expect(script.nodes[0].config.zaloRecipientSource).toBe('manual');
+    expect(script.nodes[0].config.zaloRecipientPhones).toEqual(['0844790999']);
+    expect(script.nodes[0].config.zaloRecipientType).toBe('phone');
+  });
+
+  it('markManualRecipientsRequired does not wipe out non-empty recipient arrays', () => {
+    const script = {
+      nodes: [
+        { subtype: 'send_zalo_personal', config: { zaloRecipientPhones: ['0844790999'] } },
+      ],
+    };
+
+    aiController.markManualRecipientsRequired(script);
+    expect(script.nodes[0].config.zaloRecipientSource).toBe('manual');
+    expect(script.nodes[0].config.zaloRecipientPhones).toEqual(['0844790999']);
   });
 });

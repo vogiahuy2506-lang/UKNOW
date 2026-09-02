@@ -2043,8 +2043,24 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
         {isPreparing && <p className="text-sm text-emerald-700">{locale === 'en' ? 'Preparing the delivery preview...' : 'Đang chuẩn bị bản xem trước gửi tin...'}</p>}
         {prepareError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><p>{prepareError}</p>{isActive && <button onClick={onRetry} className="mt-2 font-bold underline">{locale === 'en' ? 'Retry' : 'Thử lại'}</button>}</div>}
         {!isPreparing && !prepareError && confirmationView && <>
-          <div className="flex items-center justify-between text-xs text-emerald-700"><span>{locale === 'en' ? 'Messages to send' : 'Tin sẽ gửi'}</span><strong>{confirmationView.totals?.sendSteps || 0}</strong></div>
-          {blockingIssues.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><p className="font-bold">{locale === 'en' ? 'Fix these items before creating:' : 'Cần sửa trước khi tạo:'}</p><ul className="mt-1 list-disc pl-4">{blockingIssues.map((issue, index) => <li key={`${issue.code}-${index}`}>{locale === 'en' ? 'A send step is incomplete or unavailable.' : 'Một bước gửi chưa đủ nội dung, mẫu tin hoặc tài khoản gửi.'}</li>)}</ul></div>}
+          {blockingIssues.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <p className="font-bold">{locale === 'en' ? 'Fix these items before creating:' : 'Cần sửa trước khi tạo:'}</p>
+              <ul className="mt-1 list-disc pl-4">
+                {blockingIssues.map((issue, index) => {
+                  const fallback = locale === 'en'
+                    ? 'A send step is incomplete or unavailable.'
+                    : 'Một bước gửi chưa đủ nội dung, mẫu tin hoặc tài khoản gửi.';
+                  const resolvedText = issue.messageKey && t(issue.messageKey) !== issue.messageKey
+                    ? t(issue.messageKey)
+                    : (issue.code && t(`aiChatbot.confirmation.${issue.code}`) !== `aiChatbot.confirmation.${issue.code}`
+                      ? t(`aiChatbot.confirmation.${issue.code}`)
+                      : fallback);
+                  return <li key={`${issue.code}-${index}`}>{resolvedText}</li>;
+                })}
+              </ul>
+            </div>
+          )}
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {steps.map((step, index) => {
               const expanded = expandedSteps.has(step.key);

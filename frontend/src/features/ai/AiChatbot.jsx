@@ -2875,7 +2875,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const res = await aiApi.createCampaignFromDraft(
         currentScript,
         campaignConfirmation?.confirmationView?.resourceVersions || [],
-        directRecipients,
+        directRecipients || directRecipientsRef.current,
       );
       if (res.success) {
         toast.success('Đã tạo chiến dịch từ draft AI!', { id: t });
