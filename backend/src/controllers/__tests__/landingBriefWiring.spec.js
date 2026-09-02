@@ -62,6 +62,7 @@ jest.unstable_mockModule('../../services/audit.service.js', () => ({
 }));
 jest.unstable_mockModule('../../utils/manualRecipients.util.js', () => ({
   MAX_AI_MANUAL_RECIPIENTS: 1000,
+  MAX_SHEET_RECIPIENTS: 10000,
   validateManualRecipients: jest.fn(),
 }));
 jest.unstable_mockModule('../../services/ai/aiCampaignWizard.service.js', () => ({

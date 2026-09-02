@@ -1,6 +1,10 @@
 import module from 'module';
 import path from 'path';
-import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../../utils/manualRecipients.util.js';
+import {
+  MAX_AI_MANUAL_RECIPIENTS,
+  MAX_SHEET_RECIPIENTS,
+  validateManualRecipients,
+} from '../../utils/manualRecipients.util.js';
 import { normalizeVietnamesePhone, isValidVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 
 const require = module.createRequire(import.meta.url);
@@ -23,7 +27,12 @@ import {
   isNameHeader,
 } from '../../utils/columnHeaderMatch.util.js';
 
-export function extractRecipientsFromBuffer(buffer, originalName = '', contentType = '') {
+export function extractRecipientsFromBuffer(
+  buffer,
+  originalName = '',
+  contentType = '',
+  { maxRecipients = MAX_AI_MANUAL_RECIPIENTS } = {}
+) {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
     const error = new Error('Tệp tải lên rỗng hoặc không hợp lệ.');
     error.code = 'INVALID_FILE_BUFFER';
@@ -198,12 +207,12 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
     throw error;
   }
 
-  if (totalCount > MAX_AI_MANUAL_RECIPIENTS) {
-    const error = new Error(`Tệp có ${totalCount.toLocaleString('vi-VN')} người nhận, vượt quá giới hạn tối đa ${MAX_AI_MANUAL_RECIPIENTS.toLocaleString('vi-VN')} người mỗi chiến dịch.`);
+  if (totalCount > maxRecipients) {
+    const error = new Error(`Tệp có ${totalCount.toLocaleString('vi-VN')} người nhận, vượt quá giới hạn tối đa ${maxRecipients.toLocaleString('vi-VN')} người mỗi chiến dịch.`);
     error.code = 'RECIPIENTS_LIMIT_EXCEEDED';
     error.statusCode = 400;
     error.totalCount = totalCount;
-    error.limit = MAX_AI_MANUAL_RECIPIENTS;
+    error.limit = maxRecipients;
     error.headers = headers;
     throw error;
   }
@@ -224,7 +233,17 @@ export function extractRecipientsFromBuffer(buffer, originalName = '', contentTy
   };
 }
 
-export async function extractRecipientsFromGoogleSheet(sheetUrl, sheetName = '') {
+/**
+ * Đọc người nhận từ Google Sheet.
+ *
+ * Trần mặc định là `MAX_SHEET_RECIPIENTS` (không phải trần nhập tay): sheet là
+ * danh sách có sẵn, thường vài nghìn dòng.
+ */
+export async function extractRecipientsFromGoogleSheet(
+  sheetUrl,
+  sheetName = '',
+  { maxRecipients = MAX_SHEET_RECIPIENTS } = {}
+) {
   if (!sheetUrl || typeof sheetUrl !== 'string') {
     const error = new Error('Đường dẫn Google Sheet không hợp lệ hoặc bị thiếu.');
     error.code = 'INVALID_SHEET_URL';
@@ -270,7 +289,7 @@ export async function extractRecipientsFromGoogleSheet(sheetUrl, sheetName = '')
   }
 
   const buffer = Buffer.from(bodyText, 'utf-8');
-  return extractRecipientsFromBuffer(buffer, 'google_sheet.csv', 'text/csv');
+  return extractRecipientsFromBuffer(buffer, 'google_sheet.csv', 'text/csv', { maxRecipients });
 }
 
 export default {

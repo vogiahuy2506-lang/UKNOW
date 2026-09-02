@@ -432,7 +432,10 @@ const CampaignRun = () => {
       await checkRunningCampaigns();
       closeRunConfirmModal(true);
     } catch (error) {
-      toast.error(t('campaigns.runFailed'));
+      // Backend trả lý do cụ thể (vượt trần người nhận, sheet không truy cập được,
+      // tài khoản gửi mất kết nối…). Trước đây chỗ này nuốt hết và chỉ hiện chuỗi
+      // chung chung, người dùng không biết vì sao chiến dịch không chạy được.
+      toast.error(error.response?.data?.message || t('campaigns.runFailed'));
     } finally {
       setIsSubmittingRun(false);
     }

@@ -216,6 +216,44 @@ Pham Thi D,d@example.com,
     });
   });
 
+  /**
+   * Sự cố 02/09/2026: sheet 8.156 người nhận bị từ chối chạy vì trần 1.000 vốn
+   * dành cho người nhận NHẬP TAY qua trợ lý AI bị áp luôn cho node đọc Sheet.
+   * Trần phải truyền được từ ngoài vào, và mặc định của đường đọc Sheet là
+   * MAX_SHEET_RECIPIENTS chứ không phải trần nhập tay.
+   */
+  describe('trần người nhận truyền từ ngoài vào', () => {
+    const buildCsvBuffer = (count) => {
+      const lines = ['Email'];
+      for (let i = 0; i < count; i += 1) lines.push(`user${i}@example.com`);
+      return Buffer.from(lines.join('\n'), 'utf-8');
+    };
+
+    it('không chặn khi maxRecipients được nâng lên trên số dòng thực tế', () => {
+      const buf = buildCsvBuffer(1005);
+
+      const result = extractRecipientsFromBuffer(buf, 'lon.csv', 'text/csv', { maxRecipients: 10000 });
+
+      expect(result.emails).toHaveLength(1005);
+    });
+
+    it('báo đúng trần được truyền vào khi vượt ngưỡng', () => {
+      const buf = buildCsvBuffer(5);
+
+      expect(() => extractRecipientsFromBuffer(buf, 'nho.csv', 'text/csv', { maxRecipients: 3 })).toThrow(
+        expect.objectContaining({ code: 'RECIPIENTS_LIMIT_EXCEEDED', limit: 3, totalCount: 5 })
+      );
+    });
+
+    it('giữ trần nhập tay 1.000 khi không truyền gì (đường tải tệp lên)', () => {
+      const buf = buildCsvBuffer(1005);
+
+      expect(() => extractRecipientsFromBuffer(buf, 'lon.csv', 'text/csv')).toThrow(
+        expect.objectContaining({ code: 'RECIPIENTS_LIMIT_EXCEEDED', limit: 1000 })
+      );
+    });
+  });
+
   describe('extractRecipientsFromGoogleSheet', () => {
     it('throws INVALID_SHEET_URL when url is missing or malformed', async () => {
       await expect(extractRecipientsFromGoogleSheet('')).rejects.toThrow(

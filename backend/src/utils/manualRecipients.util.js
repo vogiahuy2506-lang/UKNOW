@@ -2,6 +2,16 @@ import { normalizeVietnamesePhone, isValidVietnamesePhone } from './vietnamesePh
 
 export const MAX_AI_MANUAL_RECIPIENTS = 1000;
 
+/**
+ * Trần người nhận đọc từ Google Sheet — KHÁC trần nhập tay ở trên.
+ *
+ * Nhập tay 1.000 người là hợp lý (không ai gõ nhiều hơn thế). Nhưng một sheet
+ * danh sách khách vài nghìn dòng cũng hợp lý, nên dùng chung một con số làm
+ * chiến dịch bị từ chối chạy mà người dùng không hiểu vì sao (sự cố 02/09/2026:
+ * sheet 8.156 người nhận bị chặn bởi trần vốn dành cho nhập tay).
+ */
+export const MAX_SHEET_RECIPIENTS = 10000;
+
 const splitRecipients = (value) => (Array.isArray(value) ? value : String(value || '').split(/[\s,;\n]+/))
   .map((item) => String(item || '').trim())
   .filter(Boolean);

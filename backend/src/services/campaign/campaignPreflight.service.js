@@ -8,6 +8,7 @@
 
 import db from '../../config/database.js';
 import { checkSheetForChannel } from '../ai/sheetRecipientCheck.service.js';
+import { MAX_SHEET_RECIPIENTS } from '../../utils/manualRecipients.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 
 export const SEND_NODE_SUBTYPES = new Set([
@@ -185,7 +186,7 @@ export async function validateCampaignPreflight({
           }
 
           if (sheetResult.status === 'too_many') {
-            const limit = sheetResult.limit || 1000;
+            const limit = sheetResult.limit || MAX_SHEET_RECIPIENTS;
             const total = sheetResult.totalCount || 0;
             const error = new Error(
               `Google Sheet có ${total.toLocaleString('vi-VN')} người nhận, vượt quá giới hạn tối đa ${limit.toLocaleString('vi-VN')} người mỗi chiến dịch.`
