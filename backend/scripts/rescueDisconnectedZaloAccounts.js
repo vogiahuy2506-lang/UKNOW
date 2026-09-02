@@ -106,23 +106,34 @@ async function rescueAccounts() {
     );
 
     if (isDryRun) {
-      console.log('\n[DRY-RUN] Sẽ cập nhật các tài khoản trên về status = "connected", restore_fail_count = 0.');
+      console.log('\n[DRY-RUN] Sẽ đổi các tài khoản trên về status = "connected" (GIỮ NGUYÊN restore_fail_count và first_restore_fail_at).');
       console.log('Chạy lại không có cờ --dry-run để thực thi.');
       return;
     }
 
-    // 3. Thực thi cập nhật
+    // 3. Thực thi cập nhật.
+    //
+    // CỐ Ý KHÔNG reset restore_fail_count và first_restore_fail_at.
+    //
+    // recordRestoreFailure chỉ chuyển tài khoản sang 'needs_reauth' khi đủ 5 lần thất bại
+    // VÀ đã qua 60 phút kể từ first_restore_fail_at. Nếu xoá mốc thời gian cũ, đồng hồ 60
+    // phút chạy lại từ đầu — tài khoản chết thật sẽ mang trạng thái 'connected' suốt hơn
+    // một giờ, và findDefaultZaloSettingId (chọn theo status='connected' ORDER BY id ASC)
+    // có thể chọn trúng nó làm tài khoản gửi mặc định cho chiến dịch mới.
+    //
+    // Giữ nguyên hai cột này thì:
+    //  - Tài khoản SỐNG: khôi phục thành công, markAccountConnected tự reset bộ đếm về 0.
+    //  - Tài khoản CHẾT: đang có sẵn fail_count ~3 nên chỉ cần vài lần nữa là đủ 5, còn
+    //    điều kiện 60 phút đã thoả sẵn từ mốc cũ ⇒ rơi về 'needs_reauth' sau ~10 phút
+    //    thay vì hơn một giờ.
     const accountIds = targetAccounts.map((a) => a.id);
     const updateRes = await client.query(
       `
       UPDATE zalo_settings
       SET status = 'connected',
-          restore_fail_count = 0,
-          first_restore_fail_at = NULL,
-          last_restore_attempt_at = NULL,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ANY($1::int[])
-      RETURNING id, id_user, display_name, status;
+      RETURNING id, id_user, display_name, status, restore_fail_count;
       `,
       [accountIds]
     );
@@ -132,7 +143,9 @@ async function rescueAccounts() {
 
     console.log('\n💡 Bước tiếp theo:');
     console.log('1. Keep-alive cron (chạy mỗi 5 phút) sẽ tự động thử khôi phục session cho các tài khoản trên.');
-    console.log('2. Tài khoản sống sẽ duy trì "connected". Tài khoản chết thật sẽ tự chuyển về "needs_reauth" sau 5 lần / 60 phút.');
+    console.log('2. Tài khoản sống sẽ duy trì "connected" (bộ đếm thất bại tự reset khi khôi phục thành công).');
+    console.log('   Tài khoản chết thật sẽ trôi về "needs_reauth" sau ~10 phút — vì bộ đếm cũ được giữ nguyên,');
+    console.log('   nên chỉ cần vài lần thất bại nữa là đủ ngưỡng 5 lần, còn điều kiện 60 phút đã thoả sẵn.');
     console.log('3. Kiểm tra log backend: [ZaloKeepAlive] hoặc [ZaloRestore].');
   } catch (err) {
     console.error('❌ Lỗi khi thực thi script cứu hộ:', err);
