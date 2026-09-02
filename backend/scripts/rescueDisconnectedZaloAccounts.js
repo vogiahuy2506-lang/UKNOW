@@ -49,7 +49,30 @@ async function rescueAccounts() {
     console.log('📊 Hiện trạng tài khoản Zalo trong DB:');
     console.table(statRes.rows);
 
-    // 2. Lấy danh sách tài khoản cần cứu hộ (còn cookie)
+    // 2a. Đếm và cảnh báo các tài khoản disconnected trùng số với tài khoản đang
+    // connected. Zalo chỉ cho MỘT phiên sống trên một số — hồi sinh tài khoản này sẽ
+    // khiến cron đăng nhập lại và ĐÁ VĂNG phiên đang chạy của tài khoản connected.
+    // Đã đo trên production 02/09: 4 tài khoản rơi vào ca này, trong đó có tài khoản
+    // đang dùng để gửi tin thật.
+    const skippedRes = await client.query(`
+      SELECT d.id, d.display_name, d.zalo_phone, c.id AS conflicts_with_id, c.display_name AS conflicts_with_name
+      FROM zalo_settings d
+      JOIN zalo_settings c
+        ON regexp_replace(COALESCE(c.zalo_phone, ''), '^\\+?84', '0')
+         = regexp_replace(COALESCE(d.zalo_phone, ''), '^\\+?84', '0')
+       AND c.status = 'connected' AND c.is_active = TRUE
+      WHERE d.status = 'disconnected' AND d.is_active = TRUE
+        AND NULLIF(TRIM(COALESCE(d.zalo_phone, '')), '') IS NOT NULL
+    `);
+    if (skippedRes.rows.length > 0) {
+      console.log(`\n⚠️  Loại ${skippedRes.rows.length} tài khoản vì TRÙNG SỐ với phiên đang sống (không cứu, tránh đá văng phiên đang chạy):`);
+      console.table(skippedRes.rows);
+    }
+    const skippedIds = skippedRes.rows.map((r) => r.id);
+
+    // 2b. Lấy danh sách tài khoản cần cứu hộ (còn cookie), loại các id trùng số ở trên,
+    // ưu tiên tài khoản mới rớt gần đây nhất — đó cũng là khách đang dùng thật, và tỉ lệ
+    // cứu thành công cao hơn hẳn so với tài khoản đã chết từ nhiều tháng trước.
     const findRes = await client.query(
       `
       SELECT id, id_user, display_name, zalo_phone, status, restore_fail_count, first_restore_fail_at, updated_at
@@ -58,10 +81,11 @@ async function rescueAccounts() {
         AND is_active = TRUE
         AND cookie_text IS NOT NULL
         AND cookie_text <> ''
-      ORDER BY id ASC
+        AND NOT (id = ANY($2::int[]))
+      ORDER BY updated_at DESC
       LIMIT $1;
       `,
-      [batchSize]
+      [batchSize, skippedIds.length > 0 ? skippedIds : [0]]
     );
 
     const targetAccounts = findRes.rows;
