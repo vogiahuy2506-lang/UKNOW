@@ -2435,7 +2435,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const nodes = Array.isArray(currentScript?.nodes) ? currentScript.nodes : [];
 
     const sendNode = nodes.find((n) => {
-      const type = String(n.node_subtype || n.nodeSubtype || n.subtype || n.node_type || n.nodeType || n.type || '').toLowerCase();
+      const type = String(n.nodeSubtype || n.node_subtype || n.subtype || '').trim().toLowerCase();
       if (channel === 'zalo' || channel === 'zalo_personal') {
         return type === 'send_zalo_personal' || type === 'zalo_personal' || type === 'zalo';
       }

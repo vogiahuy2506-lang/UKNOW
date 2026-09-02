@@ -9,10 +9,7 @@
  */
 
 import { buildCompilerTemplateMappings } from './campaignCompiler.service.js';
-
-function getNodeSubtype(node) {
-  return String(node?.nodeSubtype || node?.node_subtype || node?.subtype || '').trim();
-}
+import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 
 /**
  * Ghép cấu trúc từ đồ thị do Compiler sinh ra với nội dung do LLM sinh ra.

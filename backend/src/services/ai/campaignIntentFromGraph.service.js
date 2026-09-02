@@ -5,6 +5,8 @@
  * Hàm thuần túy, không I/O, phục vụ kiểm điểm bất động (Backtest) và đối chiếu.
  */
 
+import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
+
 const KNOWN_TRIGGER_SUBTYPES = new Set(['manual', 'manual_trigger']);
 const KNOWN_AUDIENCE_SUBTYPES = new Set([
   'read_sheet',
@@ -25,15 +27,6 @@ const KNOWN_SUPPORTED_SUBTYPES = new Set([
   'select_zalo_account',
   'end',
 ]);
-
-/**
- * Trích xuất subtype chuẩn của node (hỗ trợ cả snake_case từ DB và camelCase).
- * @param {object} node
- * @returns {string}
- */
-function getNodeSubtype(node) {
-  return String(node?.node_subtype || node?.nodeSubtype || node?.subtype || '').trim();
-}
 
 /**
  * Rút CampaignIntentV1 từ graph đã lưu.

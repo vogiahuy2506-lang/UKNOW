@@ -32,6 +32,7 @@ import {
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits.util.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { getNodeSubtype } from '../utils/nodeSubtype.util.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -56,10 +57,6 @@ function denyCampaignRun(res) {
     message: 'Bạn không có quyền kích hoạt chạy chiến dịch (cần quyền campaigns_run)',
     code: 'PERMISSION_DENIED',
   });
-}
-
-function getNodeSubtype(node) {
-  return String(node?.nodeSubtype || node?.node_subtype || node?.subtype || node?.node_type || node?.nodeType || node?.type || '').toLowerCase();
 }
 
 async function logWorkspaceMutation(req, action, entityType, entityId, details = {}) {

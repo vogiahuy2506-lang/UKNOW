@@ -1,5 +1,6 @@
 import aiCampaignDraftRepository from '../../repositories/ai/aiCampaignDraft.repository.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
+import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 
 const NODE_REFERENCE_KEYS = [
   'saveCustomerNodeId', 'recipientNodeId', 'ccNodeId', 'bccNodeId',
@@ -371,7 +372,6 @@ class AiCampaignDraftService {
     const effectiveSheetUrl = sheetUrl || script.sheetUrl || null;
     const effectiveLandingSlug = landingPageSlug || landingLeadsSlugs || script.landingPageSlug || null;
 
-    const getNodeSubtype = (node) => String(node?.node_subtype || node?.nodeSubtype || node?.subtype || '').toLowerCase();
     const getNodeType = (node) => String(node?.node_type || node?.nodeType || node?.type || '').toLowerCase();
 
     const isZaloSendNode = (node) => {
