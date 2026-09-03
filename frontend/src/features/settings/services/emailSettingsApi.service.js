@@ -1,4 +1,5 @@
 import api from '../../../services/api';
+import { generateIdempotencyKey } from '../../../utils/idempotency.util';
 
 const emailSettingsApiService = {
   listEmailSettings() {
@@ -29,13 +30,27 @@ const emailSettingsApiService = {
     return api.post('/email-settings/test-connection', payload);
   },
 
-  sendTestEmail(emailSettingId, payload) {
-    return api.post(`/email-settings/${emailSettingId}/send-test`, payload);
+  sendTestEmail(emailSettingId, payload, options = {}) {
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post(`/email-settings/${emailSettingId}/send-test`, payload, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
   },
 
   // Gửi email trực tiếp (dùng cho Quick Send)
-  sendEmail(payload) {
-    return api.post('/email-settings/send-email', payload);
+  sendEmail(payload, options = {}) {
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post('/email-settings/send-email', payload, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
   },
 
   // Domain verification (Hướng 2)

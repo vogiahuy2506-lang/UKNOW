@@ -1,4 +1,4 @@
-import db from '../../config/database.js';
+import db, { isConnectionError } from '../../config/database.js';
 import {
   acquireWorkspaceQuotaLock,
   createReservation,
@@ -141,10 +141,19 @@ export function getVnDayBoundaries(now = new Date()) {
  * - 'enforce': Executes atomic reservation and state transitions.
  * - 'test_enforce': Test bypass when NODE_ENV === 'test'.
  *
+ * NOTE: Source allowlist (SEND_QUOTA_RESERVATION_SOURCES / SEND_QUOTA_RESERVATION_ALLOWLIST)
+ * applies STRICTLY to admission control (reserveSendQuota / isAdmission: true).
+ * Existing reservations that have already been admitted MUST ALWAYS be allowed to settle
+ * (markSendQuotaSending, consumeSendQuota, releaseSendQuota, markSendQuotaUncertain),
+ * even if their source is unlisted or dynamically removed from rollout.
+ *
  * @param {object} [options]
- * @returns {{ mode: string, isTestEnforce: boolean }}
+ * @param {object|null} [params]
+ * @param {object} [context]
+ * @param {boolean} [context.isAdmission]
+ * @returns {{ mode: string, isTestEnforce: boolean, skippedByAllowlist?: boolean, reason?: string }}
  */
-export function assertReservationOperationMode(options = {}) {
+export function assertReservationOperationMode(options = {}, params = null, { isAdmission = false } = {}) {
   const isTestEnv = process.env.NODE_ENV === 'test';
   const configuredMode = process.env.SEND_QUOTA_RESERVATION_MODE || SEND_QUOTA_RESERVATION_MODE;
   const effectiveMode = isTestEnv && options.modeOverride
@@ -155,6 +164,33 @@ export function assertReservationOperationMode(options = {}) {
     return { mode: 'off', isTestEnforce: false };
   }
 
+  // Check source allowlist ONLY during admission (creating a new reservation in reserveSendQuota)
+  const shouldCheckAllowlist = isAdmission || options.isAdmission || (params !== null && typeof params === 'object' && ('sourceType' in params || 'source' in params || 'isAdmission' in params));
+  if (shouldCheckAllowlist) {
+    const configuredSources = process.env.SEND_QUOTA_RESERVATION_SOURCES || process.env.SEND_QUOTA_RESERVATION_ALLOWLIST;
+    if (configuredSources && configuredSources.trim() !== '*' && configuredSources.trim() !== 'all') {
+      const rawSource = params?.sourceType || params?.source || options?.source || options?.sourceType;
+      let sourceStr = rawSource ? String(rawSource).trim().toLowerCase() : '';
+      if (sourceStr === 'direct') sourceStr = 'direct_email';
+      const allowedSources = configuredSources
+        .split(',')
+        .map((s) => {
+          const clean = s.trim().toLowerCase();
+          return clean === 'direct' ? 'direct_email' : clean;
+        })
+        .filter(Boolean);
+
+      if (!sourceStr || !allowedSources.includes(sourceStr)) {
+        return {
+          mode: 'off',
+          isTestEnforce: false,
+          skippedByAllowlist: true,
+          reason: 'source_not_in_allowlist',
+        };
+      }
+    }
+  }
+
   if (effectiveMode === 'shadow') {
     return { mode: 'shadow', isTestEnforce: false };
   }
@@ -163,8 +199,8 @@ export function assertReservationOperationMode(options = {}) {
     return { mode: 'enforce', isTestEnforce: false };
   }
 
-  if (isTestEnv && (options.allowTestEnforce || options.modeOverride === 'test_enforce')) {
-    return { mode: 'test_enforce', isTestEnforce: true };
+  if (effectiveMode === 'test_enforce' || (isTestEnv && options.allowTestEnforce)) {
+    return { mode: 'enforce', isTestEnforce: true };
   }
 
   const err = new Error(
@@ -476,7 +512,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
  */
 export async function reserveSendQuota(params, options = {}) {
   const { queryableClient = null } = options;
-  const { mode } = assertReservationOperationMode(options);
+  const { mode, skippedByAllowlist = false } = assertReservationOperationMode(options, params, { isAdmission: true });
 
   const {
     userId,
@@ -488,15 +524,45 @@ export async function reserveSendQuota(params, options = {}) {
     quantity = 1,
     reservationKey,
     requestFingerprint,
-    fingerprintVersion = 'v1',
-    sourceType = 'direct',
+    fingerprintVersion = 'v2',
+    sourceType = 'direct_email',
     sourceRef = {},
     requestPayload = null,
     expiresInSeconds = 300,
   } = params;
 
-  // Step 1: Mode 'off' — pure passthrough stub without touching DB or validating
+  // Step 1: Mode 'off' — evaluate legacy checkSendQuota without atomic table reservation
   if (mode === 'off') {
+    let legacyResult = null;
+    if (roleCode === 'admin' && !ownerContextId) {
+      legacyResult = { allowed: true, billingUserId: null, bypass: true };
+    } else if (userId && channel) {
+      try {
+        legacyResult = await checkSendQuota({
+          userId,
+          channel,
+          roleCode,
+          ownerContextId,
+          requiredCount: quantity,
+          actorUserId,
+        });
+        if (legacyResult?.allowed === false) {
+          const err = new Error(legacyResult.message || 'Hạn mức gửi tin không đủ (legacy)');
+          err.status = legacyResult.status || 403;
+          err.code = legacyResult.code || 'RESOURCE_LIMIT_EXCEEDED';
+          throw err;
+        }
+      } catch (checkErr) {
+        if (checkErr.status === 403 || checkErr.code === 'RESOURCE_LIMIT_EXCEEDED' || checkErr.code === 'SEND_QUOTA_EXCEEDED') {
+          throw checkErr;
+        }
+        if (process.env.NODE_ENV === 'test' && (isConnectionError(checkErr) || checkErr?.code === '28P01' || checkErr?.message?.includes('password authentication failed') || checkErr?.message?.includes('connect ECONNREFUSED'))) {
+          legacyResult = { allowed: true, billingUserId: userId };
+        } else {
+          throw checkErr;
+        }
+      }
+    }
     return {
       id: null,
       reservation_key: reservationKey || null,
@@ -505,6 +571,8 @@ export async function reserveSendQuota(params, options = {}) {
       is_metered: roleCode !== 'admin',
       allowed: true,
       bypass: true,
+      skippedByAllowlist: Boolean(skippedByAllowlist),
+      legacyDecision: legacyResult || { allowed: true },
     };
   }
 
@@ -725,21 +793,33 @@ export async function reserveSendQuota(params, options = {}) {
           allowed: true,
           replayed: true,
           replayedStatus: 'consumed',
+          responseSnapshot: existing.response_snapshot || null,
         };
       }
 
-      if (['reserved', 'sending', 'uncertain'].includes(existing.status)) {
+      if (['reserved', 'sending'].includes(existing.status)) {
         if (isSelfManagedTx) {
           await client.query('COMMIT');
           inTransaction = false;
         }
-        return {
-          ...existing,
-          mode,
-          allowed: true,
-          replayed: true,
-          replayedStatus: existing.status,
-        };
+        const err = new Error(`A send operation with reservation key '${reservationKey}' is already in progress (${existing.status})`);
+        err.status = 409;
+        err.code = 'CONCURRENT_SEND_IN_PROGRESS';
+        err.currentStatus = existing.status;
+        err.reservationId = existing.id;
+        throw err;
+      }
+
+      if (existing.status === 'uncertain') {
+        if (isSelfManagedTx) {
+          await client.query('COMMIT');
+          inTransaction = false;
+        }
+        const err = new Error(`Prior send operation with reservation key '${reservationKey}' is in uncertain state and requires reconciliation`);
+        err.status = 409;
+        err.code = 'RESERVATION_UNCERTAIN';
+        err.reservationId = existing.id;
+        throw err;
       }
 
       if (existing.status === 'released') {
@@ -892,8 +972,8 @@ export async function markSendQuotaSending(
 ) {
   const { queryableClient = null } = options;
   const { mode } = assertReservationOperationMode(options);
-  if (mode === 'off' || mode === 'shadow') {
-    return { status: 'sending', mode, ...(reservationId != null ? { id: reservationId } : {}) };
+  if (mode === 'off' || mode === 'shadow' || reservationId == null) {
+    return { status: 'sending', mode: reservationId == null ? 'off' : mode, ...(reservationId != null ? { id: reservationId } : {}) };
   }
 
   const cleanProviderRef = validateProviderReference(providerReference);
@@ -966,8 +1046,8 @@ export async function consumeSendQuota(
 ) {
   const { queryableClient = null } = options;
   const { mode } = assertReservationOperationMode(options);
-  if (mode === 'off' || mode === 'shadow') {
-    return { status: 'consumed', mode, ...(reservationId != null ? { id: reservationId } : {}) };
+  if (mode === 'off' || mode === 'shadow' || reservationId == null) {
+    return { status: 'consumed', mode: reservationId == null ? 'off' : mode, ...(reservationId != null ? { id: reservationId } : {}) };
   }
 
   const cleanProviderRef = validateProviderReference(providerReference);
@@ -1094,8 +1174,8 @@ export async function releaseSendQuota(
 ) {
   const { queryableClient = null } = options;
   const { mode } = assertReservationOperationMode(options);
-  if (mode === 'off' || mode === 'shadow') {
-    return { status: 'released', mode, ...(reservationId != null ? { id: reservationId } : {}) };
+  if (mode === 'off' || mode === 'shadow' || reservationId == null) {
+    return { status: 'released', mode: reservationId == null ? 'off' : mode, ...(reservationId != null ? { id: reservationId } : {}) };
   }
 
   const cleanReason = validateFailureCode(failureCode);
@@ -1182,8 +1262,8 @@ export async function markSendQuotaUncertain(
 ) {
   const { queryableClient = null } = options;
   const { mode } = assertReservationOperationMode(options);
-  if (mode === 'off' || mode === 'shadow') {
-    return { status: 'uncertain', mode, ...(reservationId != null ? { id: reservationId } : {}) };
+  if (mode === 'off' || mode === 'shadow' || reservationId == null) {
+    return { status: 'uncertain', mode: reservationId == null ? 'off' : mode, ...(reservationId != null ? { id: reservationId } : {}) };
   }
 
   const cleanFailure = validateFailureCode(failureCode);

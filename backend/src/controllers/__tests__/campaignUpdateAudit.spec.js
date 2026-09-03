@@ -8,6 +8,7 @@ const mockIsCampaignContentUpdateRequest = jest.fn(() => false);
 
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockDbQuery },
+  isConnectionError: jest.fn(() => false),
 }));
 
 jest.unstable_mockModule('../../services/audit.service.js', () => ({
@@ -45,9 +46,14 @@ jest.unstable_mockModule('../../services/campaign/campaignRun.service.js', () =>
 jest.unstable_mockModule('../../services/campaign/campaignNodeData.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/campaign/campaignExecutionLog.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/campaign/campaignEmailSender.service.js', () => ({ default: {} }));
-jest.unstable_mockModule('../../repositories/campaign/campaignCustomer.repository.js', () => ({ default: {} }));
-jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({ checkUserResourceLimit: jest.fn() }));
-jest.unstable_mockModule('../../utils/userSendLimit.util.js', () => ({ checkSendQuota: jest.fn(), recordDirectSendUsage: jest.fn() }));
+jest.unstable_mockModule('../../utils/userSendLimit.util.js', () => ({
+  checkSendQuota: jest.fn(),
+  recordDirectSendUsage: jest.fn(),
+  _clearQuotaCache: jest.fn(),
+  getVnDayBoundaries: jest.fn(() => ({ vnDayStart: new Date(), vnDayEnd: new Date(), vnNow: new Date() })),
+  nextVnMidnight: jest.fn(() => new Date()),
+  nextVnMonthStart: jest.fn(() => new Date()),
+}));
 jest.unstable_mockModule('../upload.controller.js', () => ({ default: {} }));
 jest.unstable_mockModule('../zaloSettings.controller.js', () => ({ default: {} }));
 jest.unstable_mockModule('../emailSettings.controller.js', () => ({ default: {} }));

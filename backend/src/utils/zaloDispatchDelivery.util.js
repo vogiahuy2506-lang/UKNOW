@@ -255,7 +255,7 @@ export function buildZaloPartialCampaignOutcome(sendResult) {
 export function isZaloOutboundResultSuccessful(result, { allowDryRun = false } = {}) {
   if (!result || typeof result !== 'object') return false;
   if (allowDryRun && result.dryRun === true) return true;
-  return result.status === 'success';
+  return result.status === 'success' || (result.success === true && result.status !== 'failed' && result.status !== 'partial' && !result.error);
 }
 
 /**

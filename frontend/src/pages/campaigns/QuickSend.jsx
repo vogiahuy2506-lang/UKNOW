@@ -9,6 +9,7 @@ import zaloSettingsApiService from '../../features/settings/services/zaloSetting
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
+import { resolveActionIdempotencyKey } from '../../utils/idempotency.util.js';
 import { pickTemplateContent } from './quickSend.util';
 import {
   HiOutlinePlus,
@@ -161,6 +162,8 @@ const QuickSend = () => {
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
   const [testRecipient, setTestRecipient] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+  const testSendActionKeyRef = useRef({ key: null, signature: null });
+  const testSendPreparationRef = useRef(false);
 
   // Nạp bản nháp từ Trợ lý AI (quickSendDraft) nếu có
   useEffect(() => {
@@ -399,6 +402,9 @@ const QuickSend = () => {
 
   // Test send to a single address
   const handleTestSend = async () => {
+    // The idempotency signature may await binary hashing. Keep a synchronous
+    // guard so a rapid second click cannot begin another logical send first.
+    if (isTesting || testSendPreparationRef.current) return;
     if (isLoadingTemplateDetail) {
       toast.error(t('quickSend.loadingTemplateDetail'));
       return;
@@ -417,6 +423,7 @@ const QuickSend = () => {
       return;
     }
 
+    testSendPreparationRef.current = true;
     setIsTesting(true);
     try {
       const accountId = selectedChannel === CHANNEL_TYPES.EMAIL
@@ -427,33 +434,57 @@ const QuickSend = () => {
         ...(Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : []),
         ...(Array.isArray(extraAttachments) ? extraAttachments : []),
       ];
-      if (selectedChannel === CHANNEL_TYPES.EMAIL) {
-        const { html, text } = resolveEmailBody();
+
+      const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
+      const { html, text } = isEmail ? resolveEmailBody() : { html: null, text: '' };
+      const zaloMsg = !isEmail ? resolveZaloBody() : '';
+      const subject = templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW';
+
+      const testPayloadData = {
+        channel: selectedChannel,
+        recipient: cleanRecipient,
+        accountId,
+        subject,
+        message: isEmail ? text : zaloMsg,
+        htmlContent: isEmail ? html : null,
+        attachments,
+      };
+
+      testSendActionKeyRef.current = await resolveActionIdempotencyKey(
+        testSendActionKeyRef.current,
+        testPayloadData
+      );
+      const testOptions = { idempotencyKey: testSendActionKeyRef.current.key };
+
+      if (isEmail) {
         const res = await campaignApiService.testSendQuickCampaign({
           channel: selectedChannel,
           recipient: cleanRecipient,
-          subject: templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW',
+          subject,
           message: text,
           htmlContent: html,
           accountId,
           attachments,
-        });
+        }, testOptions);
         toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
+        testSendActionKeyRef.current = { key: null, signature: null };
       } else {
         const res = await campaignApiService.testSendQuickCampaign({
           channel: selectedChannel,
           recipient: cleanRecipient,
-          subject: templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW',
-          message: resolveZaloBody(),
+          subject,
+          message: zaloMsg,
           accountId,
           attachments,
-        });
+        }, testOptions);
         toast.success(res?.data?.message || t('quickSend.testSendSuccess'));
+        testSendActionKeyRef.current = { key: null, signature: null };
       }
     } catch (err) {
       const msg = err.response?.data?.message || t('quickSend.testSendFailed');
       toast.error(msg);
     } finally {
+      testSendPreparationRef.current = false;
       setIsTesting(false);
     }
   };

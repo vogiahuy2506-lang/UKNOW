@@ -19,6 +19,7 @@ import campaignZaloSenderService from '../services/campaign/campaignZaloSender.s
 import zaloSettingsController from './zaloSettings.controller.js';
 import emailSettingsController from './emailSettings.controller.js';
 import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.service.js';
+import campaignQuickSendService from '../services/campaign/campaignQuickSend.service.js';
 import {
   isZaloOutboundResultSuccessful,
   describeZaloOutboundFailure,
@@ -1071,128 +1072,64 @@ class CampaignController {
       const subject = String(req.body.subject || '').trim();
       const accountId = req.body.accountId;
       const attachments = Array.isArray(req.body.attachments) ? req.body.attachments : [];
+      const htmlContent = req.body.htmlContent;
+      const idempotencyKey = req.headers?.['idempotency-key']
+        || req.headers?.['x-idempotency-key']
+        || req.body?.idempotencyKey
+        || req.body?.clientKey
+        || null;
 
-      if (!recipient) {
-        return res.status(400).json({
-          success: false,
-          message: 'Vui lòng nhập địa chỉ / số điện thoại người nhận thử nghiệm',
-        });
-      }
+      const result = await campaignQuickSendService.sendQuickTestMessage({
+        actorUserId,
+        workspaceOwnerId,
+        roleCode: req.user?.role,
+        channel,
+        recipient,
+        message,
+        subject,
+        accountId,
+        attachments,
+        htmlContent,
+      }, { idempotencyKey });
 
-      // Kiểm tra quota tài khoản hiện tại
-      const quota = await checkSendQuota({
-        userId: actorUserId,
-        channel: channel.startsWith('zalo') ? 'zalo' : 'email',
-        roleCode: req.user.role,
-        ownerContextId: workspaceOwnerId,
+      return res.json({
+        success: true,
+        message: result.message || `Đã gửi tin thử nghiệm thành công tới ${recipient}`,
+        data: result.data || result,
       });
-
-      if (!quota.allowed) {
+    } catch (error) {
+      if (error.status === 403 || error.code === 'SEND_QUOTA_EXCEEDED' || error.code === 'RESOURCE_LIMIT_EXCEEDED') {
         return res.status(403).json({
           success: false,
-          code: 'SEND_QUOTA_EXCEEDED',
-          message: quota.message || 'Bạn đã hết hạn mức gửi tin.',
+          code: error.code || 'SEND_QUOTA_EXCEEDED',
+          message: error.message || 'Bạn đã hết hạn mức gửi tin.',
+          data: error.data,
         });
       }
-
-      if (channel.startsWith('zalo')) {
-        const limiter = campaignRunService.zaloRateLimiter;
-
-        // 1. Kiểm tra khung giờ yên lặng trước khi gửi Zalo
-        const nextAllowedSendAt = limiter.computeNextAllowedSendAtByQuietHours(Date.now());
-        if (nextAllowedSendAt) {
-          const qs = String(limiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE).padStart(2, '0');
-          const qe = String(limiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE).padStart(2, '0');
-          return res.status(400).json({
-            success: false,
-            code: 'QUIET_HOURS_ACTIVE',
-            message: `Đang trong khung giờ yên lặng (${qs}:00 – ${qe}:00). Hệ thống tạm dừng gửi tin Zalo để bảo vệ tài khoản.`,
-          });
-        }
-
-        const { account, api } = await zaloSettingsController.resolvePreviewAccountAndApi({
-          userId: workspaceOwnerId,
-          roleCode: req.user.role,
-          accountId,
-        });
-
-        const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(attachments);
-
-        // 2. Chạy qua Account Mutex chung của CampaignRunService để đồng bộ tuyệt đối với campaign worker
-        const sent = await campaignRunService.runWithZaloAccountMutex(account.id, async () => {
-          return campaignZaloSenderService.sendPersonalMessage({
-            api,
-            recipient,
-            recipientType: 'phone',
-            message,
-            attachments: preparedAttachments,
-          });
-        });
-
-        if (!isZaloOutboundResultSuccessful(sent)) {
-          const failure = describeZaloOutboundFailure(sent);
-          return res.status(400).json({
-            success: false,
-            message: `Gửi tin Zalo thất bại: ${failure.userReason || failure.errorMessage || 'Lỗi không xác định'}`,
-            data: failure,
-          });
-        }
-
-        if (quota.billingUserId) {
-          await recordDirectSendUsage({
-            billingUserId: quota.billingUserId,
-            channel: 'zalo',
-            amount: 1,
-            actorUserId,
-            source: 'zalo_quick_send',
-          });
-        }
-
-        return res.json({
-          success: true,
-          message: `Đã gửi tin Zalo thử nghiệm thành công tới ${recipient}`,
-          data: sent,
-        });
-      } else {
-        // BUGFIX (Bug — Quick Send test empty body): handle the case where
-        // `content` is an empty string (e.g. a template whose `body_html` is
-        // all HTML chrome / scripts and `htmlToPlainText` strips down to "").
-        // Previously the frontend's `htmlContent` was silently dropped at this
-        // layer, then `emailSettingsSmtpService.sendCustomEmail` rejected
-        // empty bodies with HTTP 422 — toasting a confusing message in the
-        // preview "Gửi thử" panel even though a real template was picked.
-        const htmlContent = req.body.htmlContent;
-        const emailResult = await emailSettingsSmtpService.sendCustomEmail({
-          userId: actorUserId,
-          roleCode: req.user.role,
-          ownerContextId: workspaceOwnerId,
-          payload: {
-            fromEmailId: accountId,
-            to: recipient,
-            subject: subject || 'Thử nghiệm gửi nhanh UKNOW Campaign',
-            content: message,
-            htmlContent: typeof htmlContent === 'string' && htmlContent.trim() ? htmlContent : undefined,
-            attachments,
-          },
-          trackingConfig: emailSettingsController.resolveTrackingBaseUrl(req),
-        }, {
-          normalizeEmailList: (v) => emailSettingsController.normalizeEmailList(v),
-          buildTrackedHtml: (...args) => emailSettingsController.buildTrackedHtml(...args),
-          buildMailAttachments: (items) => emailSettingsController.buildMailAttachments(items),
-          createSmtpTransporter: (input) => emailSettingsController.createSmtpTransporter(input),
-          formatUtc7: () => emailSettingsController.formatUtc7(),
-        });
-
-
-        return res.json({
-          success: true,
-          message: `Đã gửi email thử nghiệm thành công tới ${recipient}`,
-          data: emailResult,
+      if (error.status === 409 || error.statusCode === 409 || error.code === 'CONCURRENT_SEND_IN_PROGRESS' || error.code === 'IDEMPOTENCY_KEY_REUSED' || error.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: error.code || 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
         });
       }
-    } catch (error) {
+      if (error.status === 503 || error.statusCode === 503 || error.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: error.code || 'SERVICE_UNAVAILABLE',
+          message: error.message,
+        });
+      }
+      if (error.code === 'QUIET_HOURS_ACTIVE' || error.status === 400 || error.statusCode === 400 || error.statusCode === 422) {
+        return res.status(error.status || error.statusCode || 400).json({
+          success: false,
+          code: error.code,
+          message: error.message,
+          data: error.data,
+        });
+      }
       console.error('[QuickSend] testSendQuickCampaign error:', error);
-      return res.status(error.statusCode || 500).json({
+      return res.status(error.statusCode || error.status || 500).json({
         success: false,
         message: error.message || 'Lỗi server khi gửi thử nghiệm',
       });

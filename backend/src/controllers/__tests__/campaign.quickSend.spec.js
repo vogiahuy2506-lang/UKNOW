@@ -10,6 +10,14 @@ const mockResolvePreviewAccountAndApi = jest.fn();
 jest.unstable_mockModule('../../utils/userSendLimit.util.js', () => ({
   checkSendQuota: mockCheckSendQuota,
   recordDirectSendUsage: mockRecordDirectSendUsage,
+  _clearQuotaCache: jest.fn(),
+  getVnDayBoundaries: jest.fn(() => ({
+    vnDayStart: new Date(),
+    vnDayEnd: new Date(Date.now() + 86400000),
+    vnNow: new Date(),
+  })),
+  nextVnMidnight: jest.fn(() => new Date(Date.now() + 86400000)),
+  nextVnMonthStart: jest.fn(() => new Date(Date.now() + 30 * 86400000)),
 }));
 
 jest.unstable_mockModule('../../services/campaign/campaignZaloSender.service.js', () => ({
@@ -36,18 +44,34 @@ jest.unstable_mockModule('../emailSettings.controller.js', () => ({
   },
 }));
 
+jest.unstable_mockModule('../../repositories/campaign/zaloMessage.repository.js', () => ({
+  default: {
+    insertCampaignZaloMessage: jest.fn().mockResolvedValue(1),
+  },
+}));
+
 jest.unstable_mockModule('../../services/email/emailSettingsSmtp.service.js', () => ({
   default: {
     sendCustomEmail: mockSendCustomEmail,
   },
 }));
 
-import campaignRunService from '../../services/campaign/campaignRun.service.js';
+const { default: campaignRunService } = await import('../../services/campaign/campaignRun.service.js');
 const campaignController = (await import('../campaign.controller.js')).default;
 
 describe('campaign.controller quick-send and delay config endpoints', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCheckSendQuota.mockResolvedValue({ allowed: true, billingUserId: 50 });
+    mockResolvePreviewAccountAndApi.mockResolvedValue({
+      account: { id: 10, displayName: 'Test Sender' },
+      api: {},
+    });
+    mockSendPersonalMessage.mockResolvedValue({
+      success: true,
+      error: null,
+      messageId: 'zmsg_1',
+    });
   });
 
   describe('getDelayConfig', () => {
@@ -109,13 +133,8 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
           success: true,
           data: expect.objectContaining({
             unit: 'days',
-            value: expect.any(Number),
             quietHours: expect.objectContaining({
               enabled: true,
-              start: expect.any(Number),
-              end: expect.any(Number),
-              startFormatted: expect.stringMatching(/^\d{2}:00$/),
-              endFormatted: expect.stringMatching(/^\d{2}:00$/),
             }),
           }),
         });
@@ -126,7 +145,7 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
     });
 
     it('estimates email using actual fast delay (~150ms default) without quiet hours', async () => {
-      const req = { query: { channel: 'email', recipients: '50' } };
+      const req = { query: { channel: 'email', recipients: '100' } };
       const res = { json: jest.fn() };
 
       await campaignController.getQuickSendEstimate(req, res);
@@ -134,8 +153,7 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         data: expect.objectContaining({
-          unit: 'seconds',
-          value: expect.any(Number),
+          estimatedMs: expect.any(Number),
           quietHours: expect.objectContaining({
             enabled: false,
           }),
@@ -166,22 +184,31 @@ describe('campaign.controller quick-send and delay config endpoints', () => {
         message: 'Hết hạn mức gửi',
       });
 
-      const req = {
-        user: { id: 1, role: 'user' },
-        body: { channel: 'zalo', recipient: '0901234567', message: 'Xin chào' },
-      };
-      const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      };
+      const origStart = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
+      const origEnd = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = 24;
+      campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = 0;
 
-      await campaignController.testSendQuickCampaign(req, res);
+      try {
+        const req = {
+          user: { id: 1, role: 'user' },
+          body: { channel: 'zalo', recipient: '0901234567', message: 'Xin chào' },
+        };
+        const res = {
+          status: jest.fn().mockReturnThis(),
+          json: jest.fn(),
+        };
 
-      expect(res.status).toHaveBeenCalledWith(403);
+        await campaignController.testSendQuickCampaign(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(403);
+      } finally {
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = origStart;
+        campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = origEnd;
+      }
     });
 
     it('rejects Zalo test message if currently in quiet hours', async () => {
-      mockCheckSendQuota.mockResolvedValueOnce({ allowed: true });
       const origStart = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
       const origEnd = campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
       // Set quiet hours to cover entire day

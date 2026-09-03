@@ -8,6 +8,7 @@ const mockExecuteCampaign = jest.fn();
 
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockDbQuery },
+  isConnectionError: jest.fn(() => false),
 }));
 
 jest.unstable_mockModule('../../services/audit.service.js', () => ({
@@ -64,6 +65,10 @@ jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({
 jest.unstable_mockModule('../../utils/userSendLimit.util.js', () => ({
   checkSendQuota: jest.fn(),
   recordDirectSendUsage: jest.fn(),
+  _clearQuotaCache: jest.fn(),
+  getVnDayBoundaries: jest.fn(() => ({ vnDayStart: new Date(), vnDayEnd: new Date(), vnNow: new Date() })),
+  nextVnMidnight: jest.fn(() => new Date()),
+  nextVnMonthStart: jest.fn(() => new Date()),
 }));
 
 jest.unstable_mockModule('../upload.controller.js', () => ({

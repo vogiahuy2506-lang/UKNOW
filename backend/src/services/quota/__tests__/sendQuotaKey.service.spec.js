@@ -351,14 +351,20 @@ describe('sendQuotaKey.service — Canonical Keys & Zero-PII', () => {
         recipient: '0901234567',
         content: 'Message 1',
       };
-      const fp = computeRequestFingerprint(payload);
+      const fpV1 = computeRequestFingerprint(payload, 'v1');
+      const checkValidV1 = validateFingerprint('v1', fpV1, payload);
+      expect(checkValidV1.valid).toBe(true);
 
-      const checkValid = validateFingerprint('v1', fp, payload);
-      expect(checkValid.valid).toBe(true);
+      const fpV2 = computeRequestFingerprint(payload, 'v2');
+      const checkValidV2 = validateFingerprint('v2', fpV2, payload);
+      expect(checkValidV2.valid).toBe(true);
 
       const modifiedPayload = { ...payload, content: 'Different message' };
-      const checkInvalid = validateFingerprint('v1', fp, modifiedPayload);
-      expect(checkInvalid.valid).toBe(false);
+      const checkInvalidV1 = validateFingerprint('v1', fpV1, modifiedPayload);
+      expect(checkInvalidV1.valid).toBe(false);
+
+      const checkInvalidV2 = validateFingerprint('v2', fpV2, modifiedPayload);
+      expect(checkInvalidV2.valid).toBe(false);
     });
 
     it('validateFingerprint returns valid=false when saved fingerprint is malformed or not 64 hex', () => {
@@ -480,6 +486,91 @@ describe('sendQuotaKey.service — Canonical Keys & Zero-PII', () => {
         attachments: [{ filename: 'file.bin', content: buf2 }],
       });
       expect(fp1).not.toBe(fp2);
+    });
+
+    it('v1 vs v2 versioning: v1 preserves legacy hashes while v2 protects fromEmailId, accountId, html, cc, bcc', () => {
+      const basePayload = {
+        channel: 'email',
+        to: 'user@example.com',
+        subject: 'Hello',
+        content: 'World',
+      };
+
+      const fpV1 = computeRequestFingerprint(basePayload, 'v1');
+      const fpV2 = computeRequestFingerprint(basePayload, 'v2');
+      expect(fpV1).toBeDefined();
+      expect(fpV2).toBeDefined();
+
+      // Changing fromEmailId alters v2 but leaves v1 unchanged
+      const payloadFromEmail1 = { ...basePayload, fromEmailId: 10 };
+      const payloadFromEmail2 = { ...basePayload, fromEmailId: 20 };
+      expect(computeRequestFingerprint(payloadFromEmail1, 'v1')).toBe(computeRequestFingerprint(payloadFromEmail2, 'v1'));
+      expect(computeRequestFingerprint(payloadFromEmail1, 'v2')).not.toBe(computeRequestFingerprint(payloadFromEmail2, 'v2'));
+
+      // Changing accountId alters v2 but leaves v1 unchanged
+      const payloadAcc1 = { ...basePayload, accountId: 'acc_1' };
+      const payloadAcc2 = { ...basePayload, accountId: 'acc_2' };
+      expect(computeRequestFingerprint(payloadAcc1, 'v1')).toBe(computeRequestFingerprint(payloadAcc2, 'v1'));
+      expect(computeRequestFingerprint(payloadAcc1, 'v2')).not.toBe(computeRequestFingerprint(payloadAcc2, 'v2'));
+
+      // Changing htmlContent alters v2 but leaves v1 unchanged
+      const payloadHtml1 = { ...basePayload, htmlContent: '<p>A</p>' };
+      const payloadHtml2 = { ...basePayload, htmlContent: '<p>B</p>' };
+      expect(computeRequestFingerprint(payloadHtml1, 'v1')).toBe(computeRequestFingerprint(payloadHtml2, 'v1'));
+      expect(computeRequestFingerprint(payloadHtml1, 'v2')).not.toBe(computeRequestFingerprint(payloadHtml2, 'v2'));
+
+      // Changing cc/bcc alters v2 but leaves v1 unchanged
+      const payloadCc1 = { ...basePayload, cc: ['cc1@example.com'] };
+      const payloadCc2 = { ...basePayload, cc: ['cc2@example.com'] };
+      expect(computeRequestFingerprint(payloadCc1, 'v1')).toBe(computeRequestFingerprint(payloadCc2, 'v1'));
+      expect(computeRequestFingerprint(payloadCc1, 'v2')).not.toBe(computeRequestFingerprint(payloadCc2, 'v2'));
+    });
+
+    it('validateFingerprint correctly checks against saved v1 vs v2 records', () => {
+      const payloadV1 = { channel: 'email', to: 'a@example.com', subject: 'S', content: 'C' };
+      const fp1 = computeRequestFingerprint(payloadV1, 'v1');
+      expect(validateFingerprint('v1', fp1, payloadV1).valid).toBe(true);
+
+      const payloadV2 = { channel: 'email', to: 'a@example.com', subject: 'S', content: 'C', fromEmailId: 5 };
+      const fp2 = computeRequestFingerprint(payloadV2, 'v2');
+      expect(validateFingerprint('v2', fp2, payloadV2).valid).toBe(true);
+
+      // Mutated payload fails validation
+      expect(validateFingerprint('v2', fp2, { ...payloadV2, fromEmailId: 6 }).valid).toBe(false);
+    });
+
+    it('Golden vectors: v1 and v2 produce exact expected 64-char hex hashes matching HEAD commits', () => {
+      const pSimple = {
+        channel: 'email',
+        to: 'user@example.com',
+        subject: 'Hello World',
+        content: 'Plain text content',
+        quantity: 1,
+        sourceType: 'direct_email',
+      };
+      // Exactly matches committed HEAD v1 implementation
+      expect(computeRequestFingerprint(pSimple, 'v1')).toBe(
+        '62e423b0c8b84e60df81e3320e9d64f0e4b16ebfff77ce8a8801939fa4c8f1db'
+      );
+      expect(computeRequestFingerprint(pSimple, 'v2')).toBe(
+        '0b927b9b69d4482114450aa03044e9cc3bfb7964434c534b0a0abbc3ee28d28a'
+      );
+
+      const pWithAtt = {
+        channel: 'email',
+        to: 'user@example.com',
+        subject: 'Hello World',
+        content: 'Plain text content',
+        quantity: 1,
+        sourceType: 'direct_email',
+        attachments: [{ filename: 'test.pdf', size: 1024, content: 'base64data' }],
+      };
+      expect(computeRequestFingerprint(pWithAtt, 'v1')).toBe(
+        'e50d34de93d060f2868eb416773462b9ec66660cdc6ddf3f8266787dd83f7fbd'
+      );
+      expect(computeRequestFingerprint(pWithAtt, 'v2')).toBe(
+        '8360060a1344f6308da063321895298e3e43104f90b5fa90bbfbf7a5ea4e7e90'
+      );
     });
   });
 });

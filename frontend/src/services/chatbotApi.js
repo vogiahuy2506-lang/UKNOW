@@ -1,4 +1,5 @@
 import api from './api';
+import { generateIdempotencyKey } from '../utils/idempotency.util';
 
 const chatbotApi = {
   // ── Knowledge Base ─────────────────────────────────────────────
@@ -299,12 +300,19 @@ const chatbotApi = {
     return response.data;
   },
 
-  sendMessage: async (id, { type = 'channel', content, attachments, replyTo } = {}) => {
+  sendMessage: async (id, { type = 'channel', content, attachments, replyTo } = {}, options = {}) => {
+    const key = options.idempotencyKey || generateIdempotencyKey();
     const response = await api.post(`/ai/chatbot/inbox/conversations/${id}/messages`, {
       type,
       content,
       attachments,
       replyTo,
+    }, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
     });
     return response.data;
   },
@@ -318,8 +326,15 @@ const chatbotApi = {
     return response.data;
   },
 
-  retryMessage: async (messageId, { type }) => {
-    const response = await api.post(`/ai/chatbot/inbox/messages/${messageId}/retry`, { type });
+  retryMessage: async (messageId, { type }, options = {}) => {
+    const key = options.idempotencyKey || `msg_${messageId}`;
+    const response = await api.post(`/ai/chatbot/inbox/messages/${messageId}/retry`, { type }, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
     return response.data;
   },
 

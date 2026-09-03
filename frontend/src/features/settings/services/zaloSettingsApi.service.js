@@ -1,4 +1,5 @@
 import api from '../../../services/api';
+import { generateIdempotencyKey } from '../../../utils/idempotency.util';
 
 const zaloSettingsApiService = {
   listAccounts() {
@@ -30,13 +31,20 @@ const zaloSettingsApiService = {
   },
 
   // Gửi tin nhắn Zalo cá nhân (dùng cho Quick Send)
-  sendMessage(payload) {
+  sendMessage(payload, options = {}) {
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
     return api.post('/zalo/preview/send-personal', {
       accountId: payload.accountId,
       recipients: [payload.phone],
       recipientType: 'phone',
       message: payload.message || '',
       attachments: Array.isArray(payload.attachments) ? payload.attachments : [],
+    }, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
     });
   },
 };

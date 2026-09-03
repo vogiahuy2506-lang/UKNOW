@@ -86,10 +86,28 @@ describe('zaloSendErrorClassifier.util', () => {
       expect(result.category).toBe('EMAIL_HARD_BOUNCE');
     });
 
+    it('map timeout dạng string → TIMEOUT kèm isTimeout=true và failureCode=TIMEOUT', () => {
+      const result1 = classifyZaloSendError('Connect Timeout Error');
+      expect(result1.category).toBe('TIMEOUT');
+      expect(result1.isTimeout).toBe(true);
+      expect(result1.failureCode).toBe('TIMEOUT');
+
+      const result2 = classifyZaloSendError('socket hang up');
+      expect(result2.category).toBe('TIMEOUT');
+      expect(result2.isTimeout).toBe(true);
+      expect(result2.failureCode).toBe('TIMEOUT');
+
+      const result3 = classifyZaloSendError('ETIMEDOUT');
+      expect(result3.category).toBe('TIMEOUT');
+      expect(result3.isTimeout).toBe(true);
+      expect(result3.failureCode).toBe('TIMEOUT');
+    });
+
     it('fallback UNKNOWN giữ message thô', () => {
       const result = classifyZaloSendError(new Error('Lỗi SDK lạ XYZ'));
       expect(result.category).toBe('UNKNOWN');
       expect(result.label).toBe('Lỗi SDK lạ XYZ');
+      expect(result.isTimeout).toBe(false);
     });
   });
 });

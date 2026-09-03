@@ -34,6 +34,22 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * @returns {boolean} true nếu là lỗi timeout cần retry
  */
 export function isZaloTimeoutError(error) {
+  if (typeof error === 'string') {
+    const raw = error.trim().toLowerCase();
+    const rawUpper = error.trim().toUpperCase();
+    if (RETRYABLE_TIMEOUT_CODES.has(rawUpper)) {
+      return true;
+    }
+    return raw.includes('timeout')
+      || raw.includes('fetch failed')
+      || raw.includes('getaddrinfo')
+      || raw.includes('socket hang up')
+      || raw.includes('econnreset')
+      || raw.includes('etimedout')
+      || raw.includes('econnrefused')
+      || raw.includes('eai_again');
+  }
+
   const directCode = String(error?.code || '').trim().toUpperCase();
   const causeCode = String(error?.cause?.code || '').trim().toUpperCase();
   if (RETRYABLE_TIMEOUT_CODES.has(directCode) || RETRYABLE_TIMEOUT_CODES.has(causeCode)) {
@@ -46,7 +62,11 @@ export function isZaloTimeoutError(error) {
   return combinedMessage.includes('timeout')
     || combinedMessage.includes('fetch failed')
     || combinedMessage.includes('getaddrinfo')
-    || combinedMessage.includes('socket hang up');
+    || combinedMessage.includes('socket hang up')
+    || combinedMessage.includes('econnreset')
+    || combinedMessage.includes('etimedout')
+    || combinedMessage.includes('econnrefused')
+    || combinedMessage.includes('eai_again');
 }
 
 /**

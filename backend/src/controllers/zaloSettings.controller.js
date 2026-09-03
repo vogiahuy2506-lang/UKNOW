@@ -24,6 +24,7 @@ import { classifyZaloSendError } from '../utils/zaloSendErrorClassifier.util.js'
 import {
   describeZaloOutboundFailure,
   isZaloOutboundResultSuccessful,
+  isZaloPartialDeliveryResult,
 } from '../utils/zaloDispatchDelivery.util.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.js';
@@ -33,6 +34,18 @@ import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import zaloMessageRepository from '../repositories/campaign/zaloMessage.repository.js';
 import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
 import { toZcaCookieShape } from '../utils/zaloSessionRestore.util.js';
+import {
+  reserveSendQuota,
+  markSendQuotaSending,
+  consumeSendQuota,
+  releaseSendQuota,
+  markSendQuotaUncertain,
+} from '../services/quota/sendQuotaReservation.service.js';
+import {
+  buildPreviewReservationKey,
+  computeRequestFingerprint,
+  resolveRequestIdempotencyKey,
+} from '../services/quota/sendQuotaKey.service.js';
 
 
 class ZaloSettingsController {
@@ -45,6 +58,10 @@ class ZaloSettingsController {
   }
 
   async assertPreviewSendQuota(req, recipientCount) {
+    const mode = process.env.SEND_QUOTA_RESERVATION_MODE || 'off';
+    if (mode === 'enforce' || mode === 'test_enforce') {
+      return { allowed: true, mode };
+    }
     const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
     const quota = await checkSendQuota({
       userId: actorUserId,
@@ -2284,6 +2301,9 @@ class ZaloSettingsController {
         || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+      const rawHeaderKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.idempotencyKey || req.body?.requestKey || null;
+      const baseRequestKey = resolveRequestIdempotencyKey(rawHeaderKey);
+
       for (let i = 0; i < normalizedRecipients.length; i++) {
         const recipient = normalizedRecipients[i];
         if (i > 0) {
@@ -2291,39 +2311,193 @@ class ZaloSettingsController {
           console.info(`[CampaignBuilder][ZaloPersonalPreviewDelay] delay_ms=${delayMs} to=${recipient}`);
           await sleep(delayMs);
         }
+
+        let reservation = null;
         try {
-          const sent = await campaignZaloSenderService.sendPersonalMessage({
+          // KHÔNG nối thêm recipient vào key: buildPreviewReservationKey đã tự hash
+          // recipient riêng (normRecip). Nối thêm ở đây vừa thừa vừa đẩy độ dài vượt
+          // trần 128 ký tự của hashClientSegment khi client gửi key gần tối đa —
+          // baseRequestKey hợp lệ bị từ chối oan.
+          const reservationKey = buildPreviewReservationKey({
+            channel: 'zalo',
+            billingUserId: userId,
+            requestKey: baseRequestKey,
+            recipient,
+          });
+          const requestPayload = {
+            recipient,
+            accountId: account.id,
+            message,
+            attachments: Array.isArray(templateAttachments) ? templateAttachments : (Array.isArray(req.body?.attachments) ? req.body.attachments : []),
+          };
+          const requestFingerprint = computeRequestFingerprint(requestPayload);
+          reservation = await reserveSendQuota({
+            userId: actorUserId,
+            roleCode: req.user?.role,
+            ownerContextId: userId,
+            channel: 'zalo',
+            quantity: 1,
+            reservationKey,
+            requestFingerprint,
+            requestPayload,
+            sourceType: 'zalo_preview',
+          });
+
+          if (reservation.mode === 'enforce' || reservation.mode === 'test_enforce') {
+            if (reservation.status === 'consumed') {
+              const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+              items.push({
+                recipient,
+                recipientType,
+                status: 'success',
+                uid: snapshot.uid || null,
+                zaloName: snapshot.zaloName || null,
+                senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
+                isReplay: true,
+              });
+              continue;
+            }
+            await markSendQuotaSending({ reservationId: reservation.id });
+          }
+        } catch (quotaErr) {
+          if (quotaErr.status === 409 || quotaErr.statusCode === 409 || quotaErr.code === 'CONCURRENT_SEND_IN_PROGRESS' || quotaErr.code === 'IDEMPOTENCY_KEY_REUSED' || quotaErr.code === 'RESERVATION_UNCERTAIN') {
+            throw quotaErr;
+          }
+          if (quotaErr.status === 503 || quotaErr.statusCode === 503 || quotaErr.code === 'SEND_QUOTA_UNAVAILABLE') {
+            throw quotaErr;
+          }
+          items.push({
+            recipient,
+            recipientType,
+            status: 'failed',
+            error: quotaErr.message || 'Lỗi kiểm tra hạn mức gửi Zalo',
+            errorCode: quotaErr.code || 'QUOTA_ERROR',
+            errorCategory: (quotaErr.status === 403 || quotaErr.statusCode === 403 || quotaErr.code === 'SEND_QUOTA_EXCEEDED' || quotaErr.code === 'RESOURCE_LIMIT_EXCEEDED')
+              ? 'QUOTA_EXCEEDED'
+              : 'SYSTEM_ERROR',
+          });
+          continue;
+        }
+
+        let sent;
+        try {
+          sent = await campaignZaloSenderService.sendPersonalMessage({
             api,
             recipient,
             recipientType,
             message,
             attachments: preparedAttachments,
           });
-          if (!isZaloOutboundResultSuccessful(sent)) {
-            const mapped = describeZaloOutboundFailure(sent);
-            // `describeZaloOutboundFailure` chỉ chuyển tiếp trường thô: không phân loại, nên
-            // mọi lỗi lạ đều ra errorCategory='UNKNOWN' kèm nguyên văn thông điệp của Zalo.
-            // Người dùng thấy "Tham số không hợp lệ" và không có cách nào biết phải sửa gì
-            // (gặp thật ngày 01/09/2026). `classifyZaloSendError` đã được import sẵn ở file
-            // này từ trước — chỉ là chưa dùng ở nhánh preview.
-            const classified = classifyZaloSendError(sent?.error || mapped.errorLabel, {
-              stage: mapped.errorStage,
-            });
-            items.push({
-              recipient,
-              recipientType,
-              phone: sent.phone || null,
-              status: 'failed',
-              error: classified.label || mapped.errorLabel,
-              errorCategory: classified.category !== 'UNKNOWN' ? classified.category : mapped.errorCategory,
-              errorLabel: classified.label || mapped.errorLabel,
-              errorHint: classified.hint || null,
-              uid: sent.uid || null,
-              zaloName: sent.zaloName || null,
-              senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
-              attachments: templateAttachments,
-              attachmentsCount: preparedAttachments.length,
-            });
+        } catch (providerErr) {
+          const classified = classifyZaloSendError(providerErr?.message || 'send_failed');
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              if (classified.isTimeout) {
+                await markSendQuotaUncertain({
+                  reservationId: reservation.id,
+                  failureCode: 'TIMEOUT',
+                  reason: classified.label || 'Network timeout',
+                });
+              } else {
+                await releaseSendQuota({
+                  reservationId: reservation.id,
+                  failureCode: classified.failureCode || classified.category || 'PROVIDER_ERROR',
+                  reason: classified.label || providerErr?.message || 'provider_exception',
+                });
+              }
+            } catch (_) {}
+          }
+          items.push({
+            recipient,
+            recipientType,
+            status: 'failed',
+            error: providerErr?.message || 'Lỗi kết nối provider Zalo',
+            errorCategory: classified.category,
+            errorLabel: classified.label,
+          });
+          continue;
+        }
+
+        if (!isZaloOutboundResultSuccessful(sent)) {
+          const mapped = describeZaloOutboundFailure(sent);
+          const classified = classifyZaloSendError(sent?.error || mapped.errorLabel, {
+            stage: mapped.errorStage,
+          });
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              // Partial: một phần nội dung đã tới máy khách thật. Release ở đây mở
+              // lại slot cho retry gửi LẠI TOÀN BỘ — khách nhận trùng phần đã tới.
+              // Coi như timeout: giữ 'uncertain' để đối soát tay, không tự retry.
+              if (classified.isTimeout || isZaloPartialDeliveryResult(sent)) {
+                await markSendQuotaUncertain({
+                  reservationId: reservation.id,
+                  failureCode: isZaloPartialDeliveryResult(sent) ? 'PARTIAL_DELIVERY' : 'TIMEOUT',
+                  reason: classified.label || (isZaloPartialDeliveryResult(sent) ? 'Partial delivery' : 'Network timeout'),
+                });
+              } else {
+                await releaseSendQuota({
+                  reservationId: reservation.id,
+                  failureCode: classified.failureCode || classified.category || 'PROVIDER_FAILURE',
+                  reason: classified.label || mapped.errorLabel || 'zalo_send_failed',
+                });
+              }
+            } catch (_) {}
+          }
+          items.push({
+            recipient,
+            recipientType,
+            phone: sent.phone || null,
+            status: 'failed',
+            error: classified.label || mapped.errorLabel,
+            errorCategory: classified.category !== 'UNKNOWN' ? classified.category : mapped.errorCategory,
+            errorLabel: classified.label || mapped.errorLabel,
+            errorHint: classified.hint || null,
+            uid: sent.uid || null,
+            zaloName: sent.zaloName || null,
+            senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
+            attachments: templateAttachments,
+            attachmentsCount: preparedAttachments.length,
+          });
+        } else {
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              await consumeSendQuota({
+                reservationId: reservation.id,
+                responseSnapshot: sent,
+                persistSource: async (txClient) => {
+                  const insertedId = await zaloMessageRepository.insertCampaignZaloMessage({
+                    campaignId: null,
+                    runId: null,
+                    customerId: null,
+                    nodeId: null,
+                    channel: 'zalo_personal',
+                    recipientType,
+                    recipientValue: recipient,
+                    uid: sent.uid || null,
+                    groupId: null,
+                    accountId: account.id,
+                    accountName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
+                    messageText: message,
+                    trackingToken: null,
+                    trackingBaseUrl: null,
+                    trackingMetadata: {
+                      status: 'sent',
+                      source: 'preview',
+                      response: sent.response || null,
+                    },
+                    isPreview: true,
+                    quotaReservationId: reservation.id,
+                  }, txClient);
+                  return { sourceKey: `zalo_preview:${insertedId}` };
+                },
+              });
+            } catch (consumeErr) {
+              console.warn('[previewSendPersonalMessage] consumeSendQuota error:', consumeErr.message);
+              await markSendQuotaUncertain({
+                reservationId: reservation.id,
+                failureCode: 'CONSUME_DB_FAILED',
+              }).catch(() => {});
+            }
           } else {
             await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_personal');
             try {
@@ -2352,41 +2526,16 @@ class ZaloSettingsController {
             } catch (logErr) {
               console.error('[ZaloPreview] Log personal message error:', logErr);
             }
-            items.push({
-              recipient,
-              recipientType,
-              phone: sent.phone || null,
-              status: 'success',
-              uid: sent.uid || null,
-              zaloName: sent.zaloName || null,
-              senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
-              response: sent.response || null,
-              attachments: templateAttachments,
-              attachmentsCount: preparedAttachments.length,
-            });
           }
-        } catch (error) {
-          const cleanErrorMessage = campaignZaloSenderService.extractZaloSendObservability(error).message;
-          if (isZaloSenderBlockedError(error)) {
-            items.push({
-              recipient,
-              recipientType,
-              status: 'skipped',
-              skipReason: 'zalo_sender_blocked',
-              skipDetail: cleanErrorMessage || 'Người nhận đang chặn tin nhắn từ tài khoản gửi hiện tại.',
-              attachments: templateAttachments,
-              attachmentsCount: preparedAttachments.length,
-            });
-            continue;
-          }
-          const classified = classifyZaloSendError(error, { stage: 'send' });
           items.push({
             recipient,
             recipientType,
-            status: 'failed',
-            error: cleanErrorMessage || 'Không thể gửi tin nhắn',
-            errorCategory: classified.category,
-            errorLabel: classified.label,
+            phone: sent.phone || null,
+            status: 'success',
+            uid: sent.uid || null,
+            zaloName: sent.zaloName || null,
+            senderName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
+            response: sent.response || null,
             attachments: templateAttachments,
             attachmentsCount: preparedAttachments.length,
           });
@@ -2408,7 +2557,28 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewSendPersonalMessage error:', error);
-      return res.status(error?.statusCode || 400).json({
+      if (error.status === 409 || error.statusCode === 409 || error.code === 'CONCURRENT_SEND_IN_PROGRESS' || error.code === 'IDEMPOTENCY_KEY_REUSED' || error.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: error.code || 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
+        });
+      }
+      if (error.status === 503 || error.statusCode === 503 || error.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: error.code || 'SERVICE_UNAVAILABLE',
+          message: error.message,
+        });
+      }
+      if (error.status === 403 || error.statusCode === 403 || error.code === 'SEND_QUOTA_EXCEEDED' || error.code === 'RESOURCE_LIMIT_EXCEEDED') {
+        return res.status(403).json({
+          success: false,
+          code: error.code || 'SEND_QUOTA_EXCEEDED',
+          message: error.message,
+        });
+      }
+      return res.status(error?.statusCode || error?.status || 400).json({
         success: false,
         message: error?.message || 'Không thể gửi tin nhắn Zalo preview',
         ...(error?.code ? { code: error.code } : {}),
@@ -2453,6 +2623,9 @@ class ZaloSettingsController {
         || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+      const rawHeaderKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.idempotencyKey || req.body?.requestKey || null;
+      const baseRequestKey = resolveRequestIdempotencyKey(rawHeaderKey);
+
       for (let i = 0; i < normalizedRecipients.length; i++) {
         const phone = normalizedRecipients[i];
         if (i > 0) {
@@ -2460,26 +2633,127 @@ class ZaloSettingsController {
           console.info(`[CampaignBuilder][ZaloFriendPreviewDelay] delay_ms=${delayMs} to=${phone}`);
           await sleep(delayMs);
         }
+
+        let reservation = null;
         try {
-          const sent = await campaignZaloSenderService.sendFriendRequest({
+          // KHÔNG nối thêm phone vào key: buildPreviewReservationKey đã tự hash
+          // recipient riêng. Nối thêm ở đây vừa thừa vừa đẩy độ dài vượt trần 128
+          // ký tự của hashClientSegment khi client gửi key gần tối đa.
+          const reservationKey = buildPreviewReservationKey({
+            channel: 'zalo',
+            billingUserId: userId,
+            requestKey: baseRequestKey,
+            recipient: phone,
+          });
+          const requestPayload = {
+            recipient: phone,
+            accountId: account.id,
+            message,
+          };
+          const requestFingerprint = computeRequestFingerprint(requestPayload);
+          reservation = await reserveSendQuota({
+            userId: actorUserId,
+            roleCode: req.user?.role,
+            ownerContextId: userId,
+            channel: 'zalo',
+            quantity: 1,
+            reservationKey,
+            requestFingerprint,
+            requestPayload,
+            sourceType: 'zalo_preview',
+          });
+
+          if (reservation.mode === 'enforce' || reservation.mode === 'test_enforce') {
+            if (reservation.status === 'consumed') {
+              const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+              items.push({
+                phone,
+                status: 'success',
+                uid: snapshot.uid || null,
+                response: snapshot.response || null,
+                isReplay: true,
+              });
+              continue;
+            }
+            await markSendQuotaSending({ reservationId: reservation.id });
+          }
+        } catch (quotaErr) {
+          if (quotaErr.status === 409 || quotaErr.statusCode === 409 || quotaErr.code === 'CONCURRENT_SEND_IN_PROGRESS' || quotaErr.code === 'IDEMPOTENCY_KEY_REUSED' || quotaErr.code === 'RESERVATION_UNCERTAIN') {
+            throw quotaErr;
+          }
+          if (quotaErr.status === 503 || quotaErr.statusCode === 503 || quotaErr.code === 'SEND_QUOTA_UNAVAILABLE') {
+            throw quotaErr;
+          }
+          items.push({
+            phone,
+            status: 'failed',
+            error: quotaErr.message || 'Lỗi kiểm tra hạn mức gửi Zalo',
+            errorCode: quotaErr.code || 'QUOTA_ERROR',
+            errorCategory: (quotaErr.status === 403 || quotaErr.statusCode === 403 || quotaErr.code === 'SEND_QUOTA_EXCEEDED' || quotaErr.code === 'RESOURCE_LIMIT_EXCEEDED')
+              ? 'QUOTA_EXCEEDED'
+              : 'SYSTEM_ERROR',
+          });
+          continue;
+        }
+
+        let sent;
+        try {
+          sent = await campaignZaloSenderService.sendFriendRequest({
             api,
             phone,
             message,
           });
-          await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_friend_request');
-          items.push({
-            phone,
-            status: 'success',
-            uid: sent.uid || null,
-            response: sent.response || null,
-          });
         } catch (error) {
+          const classified = classifyZaloSendError(error?.message || 'friend_request_failed');
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              if (classified.isTimeout) {
+                await markSendQuotaUncertain({
+                  reservationId: reservation.id,
+                  failureCode: 'TIMEOUT',
+                  reason: classified.label || 'Network timeout',
+                });
+              } else {
+                await releaseSendQuota({
+                  reservationId: reservation.id,
+                  failureCode: classified.failureCode || classified.category || 'PROVIDER_ERROR',
+                  reason: classified.label || error?.message || 'friend_request_failed',
+                });
+              }
+            } catch (_) {}
+          }
           items.push({
             phone,
             status: 'failed',
             error: error?.message || 'Không thể gửi lời mời kết bạn',
+            errorCategory: classified.category,
           });
+          continue;
         }
+
+        if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+          try {
+            await consumeSendQuota({
+              reservationId: reservation.id,
+              responseSnapshot: sent,
+            });
+          } catch (consumeErr) {
+            console.warn('[previewSendFriendRequest] consumeSendQuota error:', consumeErr.message);
+            await markSendQuotaUncertain({
+              reservationId: reservation.id,
+              failureCode: 'CONSUME_DB_FAILED',
+            }).catch(() => {});
+          }
+        } else {
+          await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_friend_request');
+        }
+
+        items.push({
+          phone,
+          status: 'success',
+          uid: sent.uid || null,
+          response: sent.response || null,
+        });
       }
 
       return res.json({
@@ -2496,7 +2770,28 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewSendFriendRequest error:', error);
-      return res.status(error?.statusCode || 400).json({
+      if (error.status === 409 || error.statusCode === 409 || error.code === 'CONCURRENT_SEND_IN_PROGRESS' || error.code === 'IDEMPOTENCY_KEY_REUSED' || error.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: error.code || 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
+        });
+      }
+      if (error.status === 503 || error.statusCode === 503 || error.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: error.code || 'SERVICE_UNAVAILABLE',
+          message: error.message,
+        });
+      }
+      if (error.status === 403 || error.statusCode === 403 || error.code === 'SEND_QUOTA_EXCEEDED' || error.code === 'RESOURCE_LIMIT_EXCEEDED') {
+        return res.status(403).json({
+          success: false,
+          code: error.code || 'SEND_QUOTA_EXCEEDED',
+          message: error.message,
+        });
+      }
+      return res.status(error?.statusCode || error?.status || 400).json({
         success: false,
         message: error?.message || 'Không thể gửi lời mời kết bạn preview',
         ...(error?.code ? { code: error.code } : {}),
@@ -2550,6 +2845,9 @@ class ZaloSettingsController {
         || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+      const rawGroupHeaderKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.idempotencyKey || req.body?.requestKey || null;
+      const baseGroupRequestKey = resolveRequestIdempotencyKey(rawGroupHeaderKey);
+
       for (let i = 0; i < normalizedGroupIds.length; i++) {
         const groupId = normalizedGroupIds[i];
         if (i > 0) {
@@ -2557,45 +2855,168 @@ class ZaloSettingsController {
           console.info(`[CampaignBuilder][ZaloGroupPreviewDelay] delay_ms=${delayMs} to=${groupId}`);
           await sleep(delayMs);
         }
+
+        let reservation = null;
+        try {
+          // KHÔNG nối thêm groupId vào key: buildPreviewReservationKey đã tự hash
+          // recipient riêng. Nối thêm ở đây vừa thừa vừa đẩy độ dài vượt trần 128
+          // ký tự của hashClientSegment khi client gửi key gần tối đa.
+          const reservationKey = buildPreviewReservationKey({
+            channel: 'zalo',
+            billingUserId: userId,
+            requestKey: baseGroupRequestKey,
+            recipient: groupId,
+          });
+          const requestPayload = {
+            recipient: groupId,
+            accountId: account.id,
+            message,
+            attachments: Array.isArray(templateAttachments) ? templateAttachments : (Array.isArray(req.body?.attachments) ? req.body.attachments : []),
+          };
+          const requestFingerprint = computeRequestFingerprint(requestPayload);
+          reservation = await reserveSendQuota({
+            userId: actorUserId,
+            roleCode: req.user?.role,
+            ownerContextId: userId,
+            channel: 'zalo',
+            quantity: 1,
+            reservationKey,
+            requestFingerprint,
+            requestPayload,
+            sourceType: 'zalo_preview',
+          });
+
+          if (reservation.mode === 'enforce' || reservation.mode === 'test_enforce') {
+            if (reservation.status === 'consumed') {
+              const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+              items.push({
+                groupId,
+                status: 'success',
+                response: snapshot.response || null,
+                attachments: templateAttachments,
+                attachmentsCount: preparedAttachments.length,
+                isReplay: true,
+              });
+              continue;
+            }
+            await markSendQuotaSending({ reservationId: reservation.id });
+          }
+        } catch (quotaErr) {
+          if (quotaErr.status === 409 || quotaErr.statusCode === 409 || quotaErr.code === 'CONCURRENT_SEND_IN_PROGRESS' || quotaErr.code === 'IDEMPOTENCY_KEY_REUSED' || quotaErr.code === 'RESERVATION_UNCERTAIN') {
+            throw quotaErr;
+          }
+          if (quotaErr.status === 503 || quotaErr.statusCode === 503 || quotaErr.code === 'SEND_QUOTA_UNAVAILABLE') {
+            throw quotaErr;
+          }
+          items.push({
+            groupId,
+            status: 'failed',
+            error: quotaErr.message || 'Lỗi kiểm tra hạn mức gửi Zalo',
+            errorCode: quotaErr.code || 'QUOTA_ERROR',
+            errorCategory: (quotaErr.status === 403 || quotaErr.statusCode === 403 || quotaErr.code === 'SEND_QUOTA_EXCEEDED' || quotaErr.code === 'RESOURCE_LIMIT_EXCEEDED')
+              ? 'QUOTA_EXCEEDED'
+              : 'SYSTEM_ERROR',
+          });
+          continue;
+        }
+
+        let sent;
         try {
           if (groupIdSet.size > 0 && !groupIdSet.has(groupId)) {
             throw new Error(`Không tìm thấy nhóm ${groupId} trong tài khoản hiện tại`);
           }
-          const sent = await campaignZaloSenderService.sendGroupMessage({
+          sent = await campaignZaloSenderService.sendGroupMessage({
             api,
             groupId,
             message,
             attachments: preparedAttachments,
           });
-          if (!isZaloOutboundResultSuccessful(sent)) {
-            const mapped = describeZaloOutboundFailure(sent);
-            items.push({
-              groupId,
-              status: 'failed',
-              error: mapped.errorLabel,
-              errorCategory: mapped.errorCategory,
-              errorLabel: mapped.errorLabel,
-              attachments: templateAttachments,
-              attachmentsCount: preparedAttachments.length,
-            });
-          } else {
-            await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_group');
-            items.push({
-              groupId,
-              status: 'success',
-              response: sent.response || null,
-              attachments: templateAttachments,
-              attachmentsCount: preparedAttachments.length,
-            });
-          }
         } catch (error) {
           const classified = classifyZaloSendError(error, { stage: 'send' });
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              if (classified.isTimeout) {
+                await markSendQuotaUncertain({
+                  reservationId: reservation.id,
+                  failureCode: 'TIMEOUT',
+                  reason: classified.label || 'Network timeout',
+                });
+              } else {
+                await releaseSendQuota({
+                  reservationId: reservation.id,
+                  failureCode: classified.failureCode || classified.category || 'PROVIDER_ERROR',
+                  reason: classified.label || error?.message || 'zalo_group_exception',
+                });
+              }
+            } catch (_) {}
+          }
           items.push({
             groupId,
             status: 'failed',
             error: error?.message || 'Không thể gửi tin nhắn nhóm',
             errorCategory: classified.category,
             errorLabel: classified.label,
+            attachments: templateAttachments,
+            attachmentsCount: preparedAttachments.length,
+          });
+          continue;
+        }
+
+        if (!isZaloOutboundResultSuccessful(sent)) {
+          const mapped = describeZaloOutboundFailure(sent);
+          const classified = classifyZaloSendError(sent?.error || mapped.errorLabel, {
+            stage: mapped.errorStage,
+          });
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              // Partial: một phần nội dung đã tới nhóm thật. Release ở đây mở lại
+              // slot cho retry gửi LẠI TOÀN BỘ — nhóm nhận trùng phần đã tới. Coi
+              // như timeout: giữ 'uncertain' để đối soát tay, không tự retry.
+              if (classified.isTimeout || isZaloPartialDeliveryResult(sent)) {
+                await markSendQuotaUncertain({
+                  reservationId: reservation.id,
+                  failureCode: isZaloPartialDeliveryResult(sent) ? 'PARTIAL_DELIVERY' : 'TIMEOUT',
+                  reason: classified.label || (isZaloPartialDeliveryResult(sent) ? 'Partial delivery' : 'Network timeout'),
+                });
+              } else {
+                await releaseSendQuota({
+                  reservationId: reservation.id,
+                  failureCode: classified.failureCode || classified.category || 'PROVIDER_FAILURE',
+                  reason: classified.label || mapped.errorLabel || 'zalo_group_send_failed',
+                });
+              }
+            } catch (_) {}
+          }
+          items.push({
+            groupId,
+            status: 'failed',
+            error: mapped.errorLabel,
+            errorCategory: mapped.errorCategory,
+            errorLabel: mapped.errorLabel,
+            attachments: templateAttachments,
+            attachmentsCount: preparedAttachments.length,
+          });
+        } else {
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              await consumeSendQuota({
+                reservationId: reservation.id,
+                responseSnapshot: sent,
+              });
+            } catch (consumeErr) {
+              console.warn('[previewSendGroupMessage] consumeSendQuota error:', consumeErr.message);
+              await markSendQuotaUncertain({
+                reservationId: reservation.id,
+                failureCode: 'CONSUME_DB_FAILED',
+              }).catch(() => {});
+            }
+          } else {
+            await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_group');
+          }
+          items.push({
+            groupId,
+            status: 'success',
+            response: sent.response || null,
             attachments: templateAttachments,
             attachmentsCount: preparedAttachments.length,
           });
@@ -2616,7 +3037,28 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewSendGroupMessage error:', error);
-      return res.status(error?.statusCode || 400).json({
+      if (error.status === 409 || error.statusCode === 409 || error.code === 'CONCURRENT_SEND_IN_PROGRESS' || error.code === 'IDEMPOTENCY_KEY_REUSED' || error.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: error.code || 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
+        });
+      }
+      if (error.status === 503 || error.statusCode === 503 || error.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: error.code || 'SERVICE_UNAVAILABLE',
+          message: error.message,
+        });
+      }
+      if (error.status === 403 || error.statusCode === 403 || error.code === 'SEND_QUOTA_EXCEEDED' || error.code === 'RESOURCE_LIMIT_EXCEEDED') {
+        return res.status(403).json({
+          success: false,
+          code: error.code || 'SEND_QUOTA_EXCEEDED',
+          message: error.message,
+        });
+      }
+      return res.status(error?.statusCode || error?.status || 400).json({
         success: false,
         message: error?.message || 'Không thể gửi tin nhắn nhóm preview',
         ...(error?.code ? { code: error.code } : {}),

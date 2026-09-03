@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import db from '../../config/database.js';
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
@@ -20,6 +22,23 @@ import {
   getCachedAutoResumeMinutes,
   normalizeAiPausedAt,
 } from '../../utils/aiHandoffResume.util.js';
+import {
+  reserveSendQuota,
+  markSendQuotaSending,
+  consumeSendQuota,
+  releaseSendQuota,
+  markSendQuotaUncertain,
+} from '../quota/sendQuotaReservation.service.js';
+import {
+  buildDirectReservationKey,
+  computeRequestFingerprint,
+  resolveRequestIdempotencyKey,
+} from '../quota/sendQuotaKey.service.js';
+import {
+  findReservationById,
+} from '../../repositories/sendQuota.repository.js';
+import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import { isZaloPartialDeliveryResult } from '../../utils/zaloDispatchDelivery.util.js';
 
 function presentInboxAttachments(raw) {
   return chatAttachmentService.presentAttachmentsForClient(raw || [], { includeRef: false });
@@ -371,6 +390,7 @@ class UnifiedInboxService {
       zaloAccountId = conversation.id_zalo_setting;
     }
 
+    const resolvedIdempotencyKey = resolveRequestIdempotencyKey(options.idempotencyKey || options.clientKey || null);
     const messagePayload = {
       role: 'agent',
       content: String(content || '').trim(),
@@ -379,32 +399,117 @@ class UnifiedInboxService {
         source: 'manual_inbox',
         actor_user_id: options.actorUserId || userId,
         membership_id: options.membershipId || null,
+        idempotency_key: resolvedIdempotencyKey,
       },
     };
 
-    // Zalo Personal: insert + trừ ví cùng transaction (đếm vào hạn mức tháng)
+    // Zalo Personal: atomic quota reservation + insert message
     let messageId = null;
+    let reservation = null;
     if (conversationType === 'zalo_personal') {
       const billingOptions = options.ownerContextId != null && options.ownerContextId !== ''
         ? { ownerContextId: options.ownerContextId }
         : {};
       const billingUserId = await resolveBillingUserId(userId, billingOptions);
-      messageId = await unifiedInboxRepository.withTransaction(async (client) => {
-        const msgId = await unifiedInboxRepository.insertZaloPersonalAgentMessage(
-          client,
-          parseInt(conversationId),
-          userId,
-          messagePayload
-        );
-        if (billingUserId && msgId) {
-          await debitZaloPersonalInboxIfNeeded(client, {
-            billingUserId,
-            messageId: msgId,
-          });
-        }
-        return msgId;
+      const recipient = conversation.external_id || String(conversationId);
+      const idempotencyKey = resolvedIdempotencyKey;
+
+      const reservationKey = buildDirectReservationKey({
+        channel: 'zalo',
+        billingUserId: billingUserId || userId,
+        clientKey: idempotencyKey,
+        recipient,
       });
-    } else {
+
+      const requestPayload = {
+        conversationId: parseInt(conversationId),
+        recipient,
+        content: String(content || '').trim(),
+        attachments: attachments || [],
+      };
+      const requestFingerprint = computeRequestFingerprint(requestPayload);
+
+      reservation = await reserveSendQuota({
+        userId: options.actorUserId || userId,
+        roleCode: options.roleCode || 'user',
+        ownerContextId: options.ownerContextId || null,
+        membershipId: options.membershipId || null,
+        channel: 'zalo',
+        quantity: 1,
+        reservationKey,
+        requestFingerprint,
+        requestPayload,
+        sourceType: 'inbox',
+      }, options);
+
+      if (reservation.mode === 'enforce' || reservation.mode === 'test_enforce') {
+        if (reservation.status === 'consumed') {
+          return {
+            messageId: reservation.responseSnapshot?.messageId || reservation.response_snapshot?.messageId || null,
+            conversationId: parseInt(conversationId),
+            isReplay: true,
+            pauseState: { aiPaused: true, aiPausedAt: null, aiResumeAt: null },
+          };
+        }
+        await markSendQuotaSending({ reservationId: reservation.id }, options);
+      }
+
+      try {
+        messageId = await unifiedInboxRepository.withTransaction(async (client) => {
+          const msgId = await unifiedInboxRepository.insertZaloPersonalAgentMessage(
+            client,
+            parseInt(conversationId),
+            userId,
+            {
+              ...messagePayload,
+              quotaReservationId: reservation?.id || null,
+            }
+          );
+          // Chỉ tự trừ ví ở đây khi KHÔNG enforce: mode enforce/test_enforce đã trừ ví
+          // bên trong reserveSendQuota/consumeSendQuota (Tier 3 wallet fallback) rồi —
+          // gọi lại sẽ trừ đôi. Ở mode off/shadow, reserveSendQuota không giữ ví nên đây
+          // là chỗ duy nhất trừ ví cho lượt gửi vượt hạn mức tháng qua inbox.
+          //
+          // billingUserId phải lấy từ reservation.legacyDecision, KHÔNG tự resolve lại:
+          // với admin bypass (roleCode=admin, không có ownerContextId), reserveSendQuota
+          // cố ý trả legacyDecision.billingUserId = null (bypass:true) — tự resolve lại
+          // qua resolveBillingUserId() bỏ qua quyết định đó và trừ nhầm ví admin.
+          const legacyDecision = reservation?.legacyDecision || reservation?.legacyResult;
+          const debitBillingUserId = legacyDecision?.billingUserId || null;
+          if (
+            reservation
+            && reservation.mode !== 'enforce'
+            && reservation.mode !== 'test_enforce'
+            && debitBillingUserId
+            && msgId
+          ) {
+            await debitZaloPersonalInboxIfNeeded(client, {
+              billingUserId: debitBillingUserId,
+              messageId: msgId,
+            });
+          }
+          return msgId;
+        });
+      } catch (persistErr) {
+        // Provider CHƯA từng được gọi (adapter nằm sau đoạn này) — an toàn để release,
+        // không phải trạng thái mơ hồ. Không release thì reservation mắc kẹt ở 'sending'
+        // vĩnh viễn dù chưa hề gửi gì, chặn retry và phải đối soát tay không cần thiết.
+        if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+          try {
+            await releaseSendQuota({
+              reservationId: reservation.id,
+              failureCode: 'INBOX_PERSIST_FAILED',
+              reason: persistErr.message || 'Failed to persist inbox message before send',
+            }, options);
+          } catch (releaseErr) {
+            console.warn('[UnifiedInbox] releaseSendQuota after persist failure error:', releaseErr.message);
+          }
+        }
+        throw persistErr;
+      }
+    }
+
+    if (!messageId) {
       messageId = await unifiedInboxRepository.sendMessage(
         parseInt(conversationId),
         userId,
@@ -421,12 +526,7 @@ class UnifiedInboxService {
     }
 
     // Handoff: pause AI for this conversation when owner replies from inbox.
-    // Uses reason=handoff (default); does not overwrite an existing manual pause.
-    let pauseState = {
-      aiPaused: true,
-      aiPausedAt: null,
-      aiResumeAt: null,
-    };
+    let pauseState = { aiPaused: true, aiPausedAt: null, aiResumeAt: null };
     try {
       const pausedRow = await unifiedInboxRepository.setAiPaused(
         parseInt(conversationId),
@@ -443,61 +543,51 @@ class UnifiedInboxService {
       console.warn('[UnifiedInbox] setAiPaused failed:', e.message);
     }
 
-    // NOTE: Do NOT broadcast to sender - they already see the message immediately after sending.
-    // Broadcasting causes frontend to create duplicate "Agent" conversations.
-
-    // Send via channel adapter — đọc kết quả (cả ba kênh return {success}, hiếm khi ném)
+    // Send via channel adapter
     let sendStatus = 'sent';
     let sendError = null;
+    // Giữ nguyên object trả về của adapter (không chỉ chuỗi lỗi) để nhánh quota-finalize
+    // bên dưới còn phân biệt được "gửi thất bại thật" với "partial" (một phần tin đã tới
+    // khách — release ở trường hợp này cho retry gửi lại toàn bộ, khách nhận trùng).
+    let lastSendResult = null;
     const canTrackSend = messageId
       && (conversationType === 'zalo_personal' || conversationType === 'channel');
 
     try {
       const adapter = this._getChannelAdapter(conversation.channel);
       if (adapter?.sendReply) {
-        const visitorInfo = conversation._parsedVisitorInfo
-          || (typeof conversation.visitor_info === 'string'
-            ? (() => { try { return JSON.parse(conversation.visitor_info); } catch { return {}; } })()
-            : (conversation.visitor_info || {}));
         const params = {
           externalId: conversation.external_id,
-          message: String(content || '').trim(),
-          attachments: ownedAttachments,
+          message: content,
+          attachments: ownedAttachments.length > 0 ? ownedAttachments : attachments,
           userId,
           accountId: zaloAccountId,
-          conversationInfo: conversation.channel === 'zalo_personal'
-            ? this._buildZaloConversationInfo(conversation)
-            : {
-              is_group: conversation._isGroup === true || visitorInfo.is_group === true,
-              group_id: visitorInfo.group_id || conversation.group_id || null,
-            },
+          conversationInfo: this._buildZaloConversationInfo(conversation),
           forceReply: true,
           persist: false,
         };
-
         if (conversationType === 'channel') {
           params.channelId = channelId;
         }
 
-        const sendResult = await adapter.sendReply(params);
-        if (sendResult && sendResult.success === false) {
+        const result = await adapter.sendReply(params);
+        lastSendResult = result;
+        if (result && result.success === false) {
           sendStatus = 'failed';
-          sendError = sendResult.error || 'Send failed';
-        } else if (conversation.channel === 'zalo_personal' && zaloAccountId) {
+          sendError = result.error || 'Channel send failed';
+        } else if (conversationType === 'zalo_personal' && zaloAccountId && messageId) {
           // Durable echo keys: bind Zalo msgId(s) onto the pre-inserted inbox row so
           // later sync ON CONFLICT / isSelf skip does not re-pause after owner resumes AI.
-          if (conversationType === 'zalo_personal' && messageId) {
-            const msgIds = Array.isArray(sendResult?.msgIds) ? sendResult.msgIds : [];
-            const primaryMsgId = sendResult?.msgId ?? msgIds[0] ?? null;
-            if (primaryMsgId || msgIds.length > 0) {
-              try {
-                await unifiedInboxRepository.bindZaloPersonalOutboundMsgIds(messageId, {
-                  externalId: primaryMsgId,
-                  msgIds: msgIds.length > 0 ? msgIds : (primaryMsgId ? [primaryMsgId] : []),
-                });
-              } catch (bindErr) {
-                console.warn('[UnifiedInbox] bind outbound msgIds failed:', bindErr.message);
-              }
+          const msgIds = Array.isArray(result?.msgIds) ? result.msgIds : [];
+          const primaryMsgId = result?.msgId ?? msgIds[0] ?? null;
+          if (primaryMsgId || msgIds.length > 0) {
+            try {
+              await unifiedInboxRepository.bindZaloPersonalOutboundMsgIds(messageId, {
+                externalId: primaryMsgId,
+                msgIds: msgIds.length > 0 ? msgIds : (primaryMsgId ? [primaryMsgId] : []),
+              });
+            } catch (bindErr) {
+              console.warn('[UnifiedInbox] bind outbound msgIds failed:', bindErr.message);
             }
           }
           // Gửi OK chứng tỏ session API còn; inbox handler có thể đã lệch listener sau restore.
@@ -510,40 +600,108 @@ class UnifiedInboxService {
           }
         }
       }
-    } catch (err) {
+    } catch (adapterErr) {
       sendStatus = 'failed';
-      sendError = err.message || 'Send failed';
-      console.warn('[UnifiedInbox] Failed to send via channel adapter:', sendError);
+      sendError = adapterErr.message || 'Lỗi gửi tin qua kênh';
+    }
+
+    // Quota finalize & message status sync
+    if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+      const optArg = [options];
+      if (sendStatus === 'sent') {
+        const respSnap = { messageId, conversationId: parseInt(conversationId) };
+        try {
+          await consumeSendQuota({
+            reservationId: reservation.id,
+            responseSnapshot: respSnap,
+            responsePayload: respSnap,
+            persistSource: async () => ({
+              sourceKey: `inbox_msg:${messageId}`,
+            }),
+          }, ...optArg);
+        } catch (consumeErr) {
+          // Tin đã gửi thật (provider đã trả success) nhưng ghi nhận quota lỗi — KHÔNG
+          // được release (sẽ cho phép gửi trùng), đánh dấu uncertain để đối soát tay.
+          console.warn('[UnifiedInbox] consumeSendQuota failed after successful send:', consumeErr.message);
+          try {
+            await markSendQuotaUncertain({
+              reservationId: reservation.id,
+              failureCode: 'CONSUME_DB_FAILED',
+              reason: 'Failed to settle inbox reservation after successful send',
+            }, ...optArg);
+          } catch (_) {}
+        }
+      } else {
+        const classified = classifyZaloSendError(sendError);
+        const failureCode = classified.failureCode || classified.category || 'INBOX_SEND_FAILED';
+        // Partial: một phần nội dung đã tới khách thật (adapter đã gắn code/errorCategory
+        // tương ứng — xem zaloPersonal.adapter.js). Release ở đây mở lại slot cho retry
+        // gửi LẠI TOÀN BỘ — khách nhận trùng phần đã tới. Coi như timeout: giữ 'uncertain'.
+        if (classified.isTimeout || isZaloPartialDeliveryResult(lastSendResult)) {
+          await markSendQuotaUncertain({
+            reservationId: reservation.id,
+            failureCode: isZaloPartialDeliveryResult(lastSendResult) ? 'PARTIAL_DELIVERY' : 'TIMEOUT',
+            reason: classified.label || (isZaloPartialDeliveryResult(lastSendResult) ? 'Partial delivery' : 'Timeout'),
+          }, ...optArg);
+        } else {
+          await releaseSendQuota({
+            reservationId: reservation.id,
+            failureCode,
+            reason: classified.label || 'Send failed',
+          }, ...optArg);
+        }
+      }
     }
 
     if (canTrackSend) {
-      try {
-        await unifiedInboxRepository.updateMessageSendStatus(conversationType, messageId, {
-          status: sendStatus,
-          error: sendStatus === 'failed' ? sendError : null,
-          attempts: sendStatus === 'failed' ? 1 : 1,
-        });
-      } catch (metaErr) {
-        console.warn('[UnifiedInbox] Failed to update send metadata:', metaErr.message);
-      }
+      await unifiedInboxRepository.updateMessageSendStatus(conversationType, messageId, {
+        status: sendStatus,
+        error: sendError,
+        attempts: 1,
+      }).catch((e) => {
+        console.warn('[UnifiedInbox] updateMessageSendStatus failed:', e.message);
+      });
     }
 
     return {
       success: true,
       messageId,
-      sendStatus: canTrackSend ? sendStatus : 'sent',
+      conversationId: parseInt(conversationId),
+      sendStatus,
+      sendError,
       error: sendStatus === 'failed' ? sendError : undefined,
+      pauseState,
       ...pauseState,
     };
   }
 
   /**
-   * Retry a previously failed agent outbound message (same DB row — no double wallet debit).
+   * Gửi lại một tin nhắn của agent bị thất bại (retry).
+   *
+   * Hỗ trợ 2 chữ ký gọi:
+   * 1. retryMessage({ userId, messageId, type }, options)
+   * 2. retryMessage(userId, messageId, type, options)
    */
-  async retryMessage(userId, messageId, conversationType) {
-    const type = String(conversationType || '');
+  async retryMessage(paramOrUserId, maybeMessageId, maybeType, maybeOptions) {
+    let userId;
+    let messageId;
+    let type;
+    let options = {};
+
+    if (paramOrUserId && typeof paramOrUserId === 'object') {
+      userId = paramOrUserId.userId;
+      messageId = paramOrUserId.messageId;
+      type = paramOrUserId.type;
+      options = maybeMessageId || {};
+    } else {
+      userId = paramOrUserId;
+      messageId = maybeMessageId;
+      type = maybeType;
+      options = maybeOptions || {};
+    }
+
     if (type !== 'zalo_personal' && type !== 'channel') {
-      const err = new Error('type must be zalo_personal or channel');
+      const err = new Error('Invalid conversation type for retry');
       err.status = 400;
       err.code = 'INVALID_TYPE';
       throw err;
@@ -560,8 +718,53 @@ class UnifiedInboxService {
       throw err;
     }
 
+    // Check if message is already sent (idempotent replay)
+    if (owned.metadata?.send?.status === 'sent') {
+      return {
+        success: true,
+        messageId: owned.id,
+        sendStatus: 'sent',
+        isReplay: true,
+      };
+    }
+
+    // Check existing reservation status BEFORE claiming
+    if (type === 'zalo_personal' && owned.quota_reservation_id) {
+      const prevRes = await findReservationById(db, owned.quota_reservation_id);
+      if (prevRes?.status === 'consumed') {
+        return {
+          success: true,
+          messageId: owned.id,
+          sendStatus: 'sent',
+          isReplay: true,
+        };
+      }
+      if (prevRes?.status === 'uncertain') {
+        const err = new Error('Trạng thái gửi tin nhắn trước đó chưa xác định. Vui lòng kiểm tra lại trước khi gửi.');
+        err.status = 409;
+        err.code = 'RESERVATION_UNCERTAIN';
+        throw err;
+      }
+      if (prevRes?.status === 'reserved' || prevRes?.status === 'sending') {
+        const err = new Error('Tin nhắn đang được xử lý gửi trong một tiến trình khác');
+        err.status = 409;
+        err.code = 'CONCURRENT_SEND_IN_PROGRESS';
+        throw err;
+      }
+    }
+
     const claimed = await unifiedInboxRepository.claimMessageForRetry(type, owned.id);
     if (!claimed) {
+      // If message was completed concurrently, return replay success
+      const refreshed = await unifiedInboxRepository.findAgentMessageForRetry(userId, parseInt(messageId, 10), type);
+      if (refreshed?.metadata?.send?.status === 'sent') {
+        return {
+          success: true,
+          messageId: owned.id,
+          sendStatus: 'sent',
+          isReplay: true,
+        };
+      }
       const err = new Error('Tin đang được gửi lại hoặc không ở trạng thái thất bại');
       err.status = 409;
       err.code = 'RETRY_NOT_AVAILABLE';
@@ -585,6 +788,92 @@ class UnifiedInboxService {
 
     let sendStatus = 'sent';
     let sendError = null;
+
+    let reservation = null;
+    if (type === 'zalo_personal') {
+      const retryClientKey = resolveRequestIdempotencyKey(options.idempotencyKey || options.clientKey || null);
+      const recipient = conversation.external_id || owned.external_id || String(owned.id_conversation);
+      // retryClientKey có thể dài tới 128 ký tự (trần của resolveRequestIdempotencyKey).
+      // Nối thẳng tiền tố `inbox_retry_${owned.id}_` vào sẽ đẩy vượt trần 128 của
+      // hashClientSegment và bị từ chối oan (cùng lỗi đã sửa ở zaloSettings.controller.js
+      // cho preview) — băm cả cụm trước để độ dài luôn cố định, không phụ thuộc key gốc.
+      const retryKeyDigest = crypto
+        .createHash('sha256')
+        .update(`inbox_retry_${owned.id}_${retryClientKey}`)
+        .digest('hex')
+        .slice(0, 32);
+      const reservationKey = buildDirectReservationKey({
+        channel: 'zalo',
+        billingUserId: options.ownerContextId || userId,
+        clientKey: `inbox_retry_${retryKeyDigest}`,
+        recipient,
+      });
+
+      let parsedAttachments = [];
+      try {
+        parsedAttachments = Array.isArray(owned.attachments)
+          ? owned.attachments
+          : (typeof owned.attachments === 'string' ? JSON.parse(owned.attachments || '[]') : []);
+      } catch {
+        parsedAttachments = [];
+      }
+
+      const requestPayload = {
+        messageId: owned.id,
+        conversationId: Number(owned.id_conversation),
+        recipient,
+        content: owned.content,
+        attachments: parsedAttachments,
+      };
+      const requestFingerprint = computeRequestFingerprint(requestPayload);
+
+      try {
+        reservation = await reserveSendQuota({
+          // Controller truyền workspace owner vào `userId` và người thao tác thật vào
+          // `options.actorUserId` (xem unifiedInbox.controller.js:retryMessage). Thiếu
+          // fallback này thì policy luôn coi đây là owner gửi, bỏ qua trần Tier 1 của
+          // nhân viên khi họ bấm gửi lại một tin lỗi.
+          userId: options.actorUserId || userId,
+          roleCode: options.roleCode || 'user',
+          ownerContextId: options.ownerContextId || null,
+          membershipId: options.membershipId || null,
+          channel: 'zalo',
+          quantity: 1,
+          reservationKey,
+          requestFingerprint,
+          requestPayload,
+          sourceType: 'inbox',
+        }, options);
+
+        if (reservation.mode === 'enforce' || reservation.mode === 'test_enforce') {
+          if (reservation.status === 'consumed') {
+            return {
+              success: true,
+              messageId: owned.id,
+              sendStatus: 'sent',
+              isReplay: true,
+            };
+          }
+          await markSendQuotaSending({ reservationId: reservation.id }, options);
+        }
+
+        await unifiedInboxRepository.updateMessageQuotaReservationId(type, owned.id, reservation.id);
+      } catch (quotaErr) {
+        if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+          await releaseSendQuota({
+            reservationId: reservation.id,
+            failureCode: 'RETRY_INIT_FAILED',
+            reason: quotaErr.message || 'retry_init_failed',
+          }, options).catch(() => {});
+        }
+        await unifiedInboxRepository.updateMessageSendStatus(type, owned.id, {
+          status: 'failed',
+          error: quotaErr.message || 'Lỗi kiểm tra hạn mức gửi tin Zalo',
+        }).catch(() => {});
+        throw quotaErr;
+      }
+    }
+
     try {
       const adapter = this._getChannelAdapter(conversation.channel || owned.channel);
       if (!adapter?.sendReply) {
@@ -610,30 +899,84 @@ class UnifiedInboxService {
         if (sendResult && sendResult.success === false) {
           sendStatus = 'failed';
           sendError = sendResult.error || 'Send failed';
-        } else if (type === 'zalo_personal' && params.accountId) {
-          const msgIds = Array.isArray(sendResult?.msgIds) ? sendResult.msgIds : [];
-          const primaryMsgId = sendResult?.msgId ?? msgIds[0] ?? null;
-          if (primaryMsgId || msgIds.length > 0) {
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            const classified = classifyZaloSendError(sendError);
             try {
-              await unifiedInboxRepository.bindZaloPersonalOutboundMsgIds(owned.id, {
-                externalId: primaryMsgId,
-                msgIds: msgIds.length > 0 ? msgIds : (primaryMsgId ? [primaryMsgId] : []),
-              });
-            } catch (bindErr) {
-              console.warn('[UnifiedInbox] bind outbound msgIds on retry failed:', bindErr.message);
+              // Partial: một phần nội dung đã tới khách thật. Release ở đây mở lại slot
+              // cho retry gửi LẠI TOÀN BỘ — khách nhận trùng phần đã tới. Coi như timeout.
+              if (classified.isTimeout || isZaloPartialDeliveryResult(sendResult)) {
+                await markSendQuotaUncertain({
+                  reservationId: reservation.id,
+                  failureCode: isZaloPartialDeliveryResult(sendResult) ? 'PARTIAL_DELIVERY' : 'TIMEOUT',
+                  reason: classified.label || (isZaloPartialDeliveryResult(sendResult) ? 'Partial delivery' : 'Network timeout'),
+                }, options);
+              } else {
+                await releaseSendQuota({
+                  reservationId: reservation.id,
+                  failureCode: classified.failureCode || classified.category || 'PROVIDER_ERROR',
+                  reason: classified.label || sendError,
+                }, options);
+              }
+            } catch (_) {}
+          }
+        } else {
+          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            try {
+              await consumeSendQuota({
+                reservationId: reservation.id,
+                responseSnapshot: sendResult,
+              }, options);
+            } catch (consumeErr) {
+              console.warn('[UnifiedInbox] retry consumeSendQuota error:', consumeErr.message);
+              await markSendQuotaUncertain({
+                reservationId: reservation.id,
+                failureCode: 'CONSUME_DB_FAILED',
+              }, options).catch(() => {});
             }
           }
-          try {
-            const { default: zaloPersonalInboxService } = await import('./zaloInbox.service.js');
-            await zaloPersonalInboxService.registerAccountListener(params.accountId);
-          } catch (rebindErr) {
-            console.warn('[UnifiedInbox] Re-bind inbox listener after retry send failed:', rebindErr.message);
+          if (type === 'zalo_personal' && params.accountId) {
+            const msgIds = Array.isArray(sendResult?.msgIds) ? sendResult.msgIds : [];
+            const primaryMsgId = sendResult?.msgId ?? msgIds[0] ?? null;
+            if (primaryMsgId || msgIds.length > 0) {
+              try {
+                await unifiedInboxRepository.bindZaloPersonalOutboundMsgIds(owned.id, {
+                  externalId: primaryMsgId,
+                  msgIds: msgIds.length > 0 ? msgIds : (primaryMsgId ? [primaryMsgId] : []),
+                });
+              } catch (bindErr) {
+                console.warn('[UnifiedInbox] bind outbound msgIds on retry failed:', bindErr.message);
+              }
+            }
+            try {
+              const { default: zaloPersonalInboxService } = await import('./zaloInbox.service.js');
+              await zaloPersonalInboxService.registerAccountListener(params.accountId);
+            } catch (rebindErr) {
+              console.warn('[UnifiedInbox] Re-bind inbox listener after retry send failed:', rebindErr.message);
+            }
           }
         }
       }
     } catch (err) {
       sendStatus = 'failed';
       sendError = err.message || 'Send failed';
+      if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+        const classified = classifyZaloSendError(sendError);
+        try {
+          if (classified.isTimeout) {
+            await markSendQuotaUncertain({
+              reservationId: reservation.id,
+              failureCode: 'TIMEOUT',
+              reason: classified.label || 'Network timeout',
+            }, options);
+          } else {
+            await releaseSendQuota({
+              reservationId: reservation.id,
+              failureCode: classified.failureCode || classified.category || 'PROVIDER_ERROR',
+              reason: classified.label || sendError,
+            }, options);
+          }
+        } catch (_) {}
+      }
     }
 
     const updated = await unifiedInboxRepository.updateMessageSendStatus(type, owned.id, {

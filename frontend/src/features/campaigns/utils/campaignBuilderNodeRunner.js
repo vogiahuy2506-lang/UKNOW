@@ -11,6 +11,7 @@ import {
   renderAutoMappedTemplateText,
   mergeVariablesPreferNonEmpty,
 } from './templateVariableAutoMap.js';
+import { generateIdempotencyKey } from '../../../utils/idempotency.util.js';
 
 /**
  * Chuẩn hóa trường cấu hình lọc lead: có thể là mảng hoặc chuỗi JSON (bản lưu cũ) trước khi gọi API preview.
@@ -1518,7 +1519,7 @@ export const createCampaignNodeRunner = (deps) => {
             // Cờ ngữ cảnh Build để backend chặn tuyệt đối các nhánh ghi dữ liệu.
             builderMode: true,
             runId: null,
-          }, { signal });
+          }, { signal, idempotencyKey: generateIdempotencyKey() });
           const trackingWarnings = resp.data?.data?.tracking?.warnings || [];
           if (trackingWarnings.length) {
             toastNotifier.error(trackingWarnings[0], { id: 'tracking-base-url-warning' });
@@ -1857,7 +1858,7 @@ export const createCampaignNodeRunner = (deps) => {
             message: renderedMessage,
             attachments: Array.isArray(step.attachments) ? step.attachments : [],
             campaignId: campaignIdNum,
-          }, { signal });
+          }, { signal, idempotencyKey: generateIdempotencyKey() });
           const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
           const { variables } = deriveVariablesForText(
             step.message,
@@ -2244,7 +2245,7 @@ export const createCampaignNodeRunner = (deps) => {
           recipients: [entry.phone],
           message: renderedMessage,
           campaignId: campaignIdNum,
-        }, { signal });
+        }, { signal, idempotencyKey: generateIdempotencyKey() });
         const items = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
         allItems.push(...items.map((item) => ({
           ...item,
@@ -2383,7 +2384,7 @@ export const createCampaignNodeRunner = (deps) => {
               message: renderedMessage,
               attachments: Array.isArray(step.attachments) ? step.attachments : [],
             campaignId: campaignIdNum,
-          }, { signal });
+          }, { signal, idempotencyKey: generateIdempotencyKey() });
             const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
             const { variables } = deriveVariablesForText(
               step.message,
@@ -2494,7 +2495,7 @@ export const createCampaignNodeRunner = (deps) => {
         accountId: selectedAccount.id,
         groupIds,
         message,
-      }, { signal });
+      }, { signal, idempotencyKey: generateIdempotencyKey() });
       const allItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
       const results = [];
       for (let idx = 0; idx < allItems.length; idx += 1) {

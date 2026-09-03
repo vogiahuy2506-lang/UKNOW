@@ -152,96 +152,84 @@ function formatTimeoutLabel(error) {
  *
  * @param {unknown} error
  * @param {{ stage?: 'lookup'|'send'|'wait'|string }} [options]
- * @returns {{ category: string, label: string, hint: string|null }}
+ * @returns {{ category: string, label: string, hint: string|null, isTimeout: boolean, failureCode: string }}
  */
 export function classifyZaloSendError(error, { stage } = {}) {
   const rawMessage = String(
     error && typeof error === 'object' ? (error.message || error.code || '') : (error ?? '')
   ).trim();
 
+  let res;
+
   if (isZaloSendNotDeliveredError(error)) {
-    return {
+    res = {
       category: ZALO_SILENT_DROP_CATEGORY,
       label: CATEGORY_LABELS[ZALO_SILENT_DROP_CATEGORY],
       hint: 'Zalo nhận lệnh gửi nhưng không trả msgId hợp lệ; có thể liên quan giới hạn/anti-spam.',
     };
-  }
-
-  if (isZaloPhoneLookupRateLimitError(error)) {
-    return {
+  } else if (isZaloPhoneLookupRateLimitError(error)) {
+    res = {
       category: 'PHONE_LOOKUP_RATE_LIMIT',
       label: CATEGORY_LABELS.PHONE_LOOKUP_RATE_LIMIT,
       hint: stage === 'lookup'
         ? 'Lỗi xảy ra khi tra số điện thoại sang UID Zalo.'
         : 'Tài khoản có thể đang trong cooldown tra số ~3 giờ.',
     };
-  }
-
-  if (isZaloTimeoutError(error)) {
-    return {
+  } else if (isZaloTimeoutError(error)) {
+    res = {
       category: 'TIMEOUT',
       label: formatTimeoutLabel(error),
       hint: 'Kiểm tra mạng VPS hoặc thử lại sau vài phút.',
     };
-  }
-
-  if (isAccountDisconnectedError(error)) {
-    return {
+  } else if (isAccountDisconnectedError(error)) {
+    res = {
       category: 'ACCOUNT_DISCONNECTED',
       label: CATEGORY_LABELS.ACCOUNT_DISCONNECTED,
       hint: 'Vào Cài đặt Zalo và đăng nhập lại tài khoản.',
     };
-  }
-
-  if (isNotFriendOrBlockedError(error)) {
-    return {
+  } else if (isNotFriendOrBlockedError(error)) {
+    res = {
       category: 'NOT_FRIEND_OR_BLOCKED',
       label: CATEGORY_LABELS.NOT_FRIEND_OR_BLOCKED,
       hint: null,
     };
-  }
-
-  if (isZaloGroupUnreachableError(error)) {
-    return {
+  } else if (isZaloGroupUnreachableError(error)) {
+    res = {
       category: 'ZALO_GROUP_UNREACHABLE',
       label: CATEGORY_LABELS.ZALO_GROUP_UNREACHABLE,
       hint: 'Kiểm tra group ID và quyền thành viên của tài khoản Zalo gửi.',
     };
-  }
-
-  if (isRecipientNotFoundError(error)) {
-    return {
+  } else if (isRecipientNotFoundError(error)) {
+    res = {
       category: 'RECIPIENT_NOT_FOUND',
       label: CATEGORY_LABELS.RECIPIENT_NOT_FOUND,
       hint: null,
     };
-  }
-
-  // Zalo trả "Tham số không hợp lệ" cho khá nhiều tình huống mà nguyên văn không gợi ra gì cho
-  // người dùng. Hai ca hay gặp nhất, theo thứ tự:
-  //   1. Gửi cho CHÍNH SỐ của tài khoản đang gửi — Zalo không cho tự nhắn mình.
-  //   2. Số người nhận không phải tài khoản Zalo, hoặc UID tra ra đã cũ.
-  //
-  // Trước bản vá 01/09/2026, chuỗi này rơi thẳng vào UNKNOWN và người dùng thấy nguyên văn
-  // "Tham số không hợp lệ" trong log chiến dịch — không có cách nào biết phải sửa gì.
-  // (`inferZaloUnreachableReason` ở zaloPhoneCampaign.util.js:171 nhận ra chuỗi này từ trước
-  // nhưng chưa có nơi nào gọi tới.)
-  if (rawMessage.toLowerCase().includes('tham số không hợp lệ')) {
-    return {
+  } else if (rawMessage.toLowerCase().includes('tham số không hợp lệ')) {
+    res = {
       category: 'INVALID_PARAMETER',
       label: CATEGORY_LABELS.INVALID_PARAMETER,
       hint: 'Thường gặp khi gửi cho chính số của tài khoản đang gửi, hoặc số người nhận không dùng Zalo. '
         + 'Thử với một số khác không phải số của tài khoản gửi.',
     };
+  } else {
+    const emailClassified = classifyEmailError(error);
+    if (emailClassified) {
+      res = emailClassified;
+    } else {
+      res = {
+        category: 'UNKNOWN',
+        label: rawMessage || 'Lỗi không xác định',
+        hint: null,
+      };
+    }
   }
 
-  const emailClassified = classifyEmailError(error);
-  if (emailClassified) return emailClassified;
-
+  const isTimeout = res.category === 'TIMEOUT' || isZaloTimeoutError(error);
   return {
-    category: 'UNKNOWN',
-    label: rawMessage || 'Lỗi không xác định',
-    hint: null,
+    ...res,
+    isTimeout,
+    failureCode: res.category || 'UNKNOWN',
   };
 }
 

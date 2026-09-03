@@ -1,4 +1,5 @@
 import api from '../../../services/api';
+import { generateIdempotencyKey } from '../../../utils/idempotency.util';
 
 /**
  * Campaign feature API wrappers.
@@ -79,8 +80,15 @@ export const campaignApiService = {
     return api.get('/campaigns/quick-send/estimate', { params });
   },
 
-  testSendQuickCampaign(payload) {
-    return api.post('/campaigns/quick-send/test-send', payload);
+  testSendQuickCampaign(payload, options = {}) {
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post('/campaigns/quick-send/test-send', payload, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
   },
 };
 

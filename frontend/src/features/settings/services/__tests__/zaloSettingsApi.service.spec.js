@@ -28,13 +28,21 @@ describe('zaloSettingsApiService', () => {
 
     await zaloSettingsApiService.sendMessage(payload);
 
-    expect(api.post).toHaveBeenCalledWith('/zalo/preview/send-personal', {
-      accountId: 'acc-123',
-      recipients: ['0912345678'],
-      recipientType: 'phone',
-      message: 'Xin chào',
-      attachments: [{ key: 'uploads/zalo/sample.jpg', originalName: 'sample.jpg' }],
-    });
+    expect(api.post).toHaveBeenCalledWith(
+      '/zalo/preview/send-personal',
+      {
+        accountId: 'acc-123',
+        recipients: ['0912345678'],
+        recipientType: 'phone',
+        message: 'Xin chào',
+        attachments: [{ key: 'uploads/zalo/sample.jpg', originalName: 'sample.jpg' }],
+      },
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Idempotency-Key': expect.any(String),
+        }),
+      })
+    );
   });
 
   it('sendMessage khi không truyền attachments thì mặc định gửi mảng rỗng []', async () => {
@@ -48,12 +56,20 @@ describe('zaloSettingsApiService', () => {
 
     await zaloSettingsApiService.sendMessage(payload);
 
-    expect(api.post).toHaveBeenCalledWith('/zalo/preview/send-personal', {
-      accountId: 'acc-123',
-      recipients: ['0912345678'],
-      recipientType: 'phone',
-      message: 'Xin chào',
-      attachments: [],
-    });
+    expect(api.post).toHaveBeenCalledWith(
+      '/zalo/preview/send-personal',
+      {
+        accountId: 'acc-123',
+        recipients: ['0912345678'],
+        recipientType: 'phone',
+        message: 'Xin chào',
+        attachments: [],
+      },
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Idempotency-Key': expect.any(String),
+        }),
+      })
+    );
   });
 });

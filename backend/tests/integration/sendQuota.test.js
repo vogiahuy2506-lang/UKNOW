@@ -100,8 +100,21 @@ describe('send quota — messages_per_period', () => {
       [campaigns[0].id]
     );
 
+    const { rows: accounts } = await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active)
+       VALUES ($1, 'TK test quota', 'disconnected', TRUE)
+       RETURNING id`,
+      [user.id]
+    );
+    const { rows: convs } = await db.query(
+      `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name)
+       VALUES ($1, $2, 'uid_test_quota_1', 'Khách quota')
+       RETURNING id`,
+      [user.id, accounts[0].id]
+    );
+
     const res = await request(app)
-      .post('/api/ai/chatbot/inbox/conversations/1/messages')
+      .post(`/api/ai/chatbot/inbox/conversations/${convs[0].id}/messages`)
       .set('Authorization', `Bearer ${token}`)
       .send({ type: 'zalo_personal', content: 'Xin chào' });
 

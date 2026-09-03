@@ -118,12 +118,12 @@ describe('PR-Q2: Atomic Send Quota Decision Engine & Concurrency Integration', (
     expect(resRows[0].status).toBe('reserved');
   });
 
-  it('2. 20 concurrent replays with identical idempotency key -> exactly 1 reservation created, all 20 succeed', async () => {
-    const plan = await createTestPlan({ dailyEmail: 10 });
+  it('2. 20 concurrent requests with identical idempotency key -> exactly 1 reservation created, 19 rejected with 409', async () => {
+    const plan = await createTestPlan({ dailyEmail: 100 });
     const user = await createUser({ username: `replay_user_${Date.now()}` });
     await assignPlanToUser(user.id, plan.id);
 
-    const recipient = 'same@example.com';
+    const recipient = 'concurrent_user@example.com';
     const idempotencyKey = buildDirectReservationKey({
       channel: 'email',
       billingUserId: user.id,
@@ -153,15 +153,15 @@ describe('PR-Q2: Atomic Send Quota Decision Engine & Concurrency Integration', (
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected');
 
-    expect(rejected).toHaveLength(0);
-    expect(fulfilled).toHaveLength(20);
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(19);
 
-    const firstId = fulfilled[0].value.id;
-    for (const r of fulfilled) {
-      expect(r.value.id).toBe(firstId);
-      expect(r.value.allowed).toBe(true);
+    for (const r of rejected) {
+      expect(r.reason.status).toBe(409);
+      expect(r.reason.code).toBe('CONCURRENT_SEND_IN_PROGRESS');
     }
 
+    const firstId = fulfilled[0].value.id;
     const { rows: resRows } = await db.query(
       'SELECT id, reservation_key FROM send_quota_reservations WHERE billing_user_id = $1',
       [user.id]

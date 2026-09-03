@@ -135,3 +135,58 @@ export async function debitZaloPersonalInboxIfNeeded(client, { billingUserId, me
     usageCountAfterSend,
   });
 }
+
+/**
+ * Debit wallet for a direct / custom / test email send in legacy / mode-off paths.
+ * Must run in the same transaction that inserts or settles email_messages.
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {{
+ *   billingUserId: number|string,
+ *   emailMessageId: number|string,
+ *   totalRecipients?: number,
+ *   isPreview?: boolean,
+ * }} input
+ */
+export async function debitDirectEmailIfNeeded(client, {
+  billingUserId,
+  emailMessageId,
+  totalRecipients = 1,
+  isPreview = false,
+}) {
+  if (!billingUserId || !emailMessageId) return { debited: false, reason: 'missing_args' };
+
+  const { rows: limitRows } = await client.query(
+    `SELECT p.monthly_email_limit
+     FROM users u
+     JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
+     WHERE u.id = $1
+     LIMIT 1`,
+    [billingUserId]
+  );
+  const rawLimit = limitRows[0]?.monthly_email_limit;
+  const planLimit = rawLimit == null || rawLimit === ''
+    ? null
+    : Number.parseInt(rawLimit, 10);
+
+  const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
+  const { countEmailSentThisMonth } = await import('../../utils/userSendLimit.util.js');
+  const cycle = await getBillingCycle(billingUserId, {}, client);
+  const usageCountAfterSend = (cycle?.hasPlan && cycle.cycleStart && cycle.cycleEnd)
+    ? await countEmailSentThisMonth(
+        billingUserId,
+        cycle.cycleStart,
+        cycle.cycleEnd,
+        client
+      )
+    : 0;
+
+  return maybeDebitWalletForSend(client, {
+    billingUserId,
+    itemKey: 'emails',
+    sourceKey: isPreview ? `email_preview:${emailMessageId}` : `email_message:${emailMessageId}`,
+    planLimit: Number.isFinite(planLimit) ? planLimit : null,
+    usageCountAfterSend,
+    qty: totalRecipients,
+  });
+}

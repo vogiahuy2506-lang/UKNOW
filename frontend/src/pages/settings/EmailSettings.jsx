@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
+import { resolveActionIdempotencyKey } from '../../utils/idempotency.util';
 import {
   HiOutlineMail,
   HiOutlinePlus,
@@ -189,22 +190,36 @@ const SmtpGuideAccordion = ({ t }) => {
 };
 
 // ── Test Email Modal ──────────────────────────────────────────────────────────
-const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
+export const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  const [isPreparing, setIsPreparing] = useState(false);
+  const actionKeyRef = useRef({ key: null, signature: null });
+  const actionPreparationRef = useRef(false);
+  const actionGenerationRef = useRef(0);
 
   useEffect(() => {
+    // Invalidate an unfinished binary-hash operation when this modal lifecycle
+    // changes, so a stale completion cannot send after close/reopen.
+    actionGenerationRef.current += 1;
+    actionPreparationRef.current = false;
+    setIsPreparing(false);
     if (isOpen) {
       setEmail('');
       setSubject(t('emailSettings.testEmailSubjectDefault'));
       setContent(t('emailSettings.testEmailContentDefault'));
       setError('');
+      actionKeyRef.current = { key: null, signature: null };
     }
   }, [isOpen, t]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    // resolveActionIdempotencyKey is async for binary payloads. A ref closes
+    // the gap before React can render the disabled state after a rapid double
+    // click, preserving one idempotency key per logical action.
+    if (isSending || actionPreparationRef.current) return;
     if (!email.trim()) {
       setError(t('emailSettings.enterTestEmail'));
       return;
@@ -214,7 +229,44 @@ const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
       return;
     }
     setError('');
-    onSend({ to: email.trim(), subject, content });
+
+    const payload = {
+      to: email.trim(),
+      subject: subject.trim(),
+      content: content.trim(),
+    };
+
+    const actionGeneration = actionGenerationRef.current;
+    actionPreparationRef.current = true;
+    setIsPreparing(true);
+
+    try {
+      // Retain key if retrying same payload, rotate key if payload edited.
+      const nextActionKey = await resolveActionIdempotencyKey(actionKeyRef.current, payload);
+      if (actionGeneration !== actionGenerationRef.current) return;
+      actionKeyRef.current = nextActionKey;
+
+      await onSend(
+        payload,
+        { idempotencyKey: actionKeyRef.current.key }
+      );
+    } catch {
+      // Parent handles provider/API notifications; this covers a preparation
+      // failure such as an unreadable binary attachment.
+      setError(t('emailSettings.sendTestFailed'));
+    } finally {
+      if (actionGeneration === actionGenerationRef.current) {
+        actionPreparationRef.current = false;
+        setIsPreparing(false);
+      }
+    }
+  };
+
+  const handleClose = () => {
+    actionGenerationRef.current += 1;
+    actionPreparationRef.current = false;
+    setIsPreparing(false);
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -273,8 +325,8 @@ const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50">
           <button
             type="button"
-            onClick={onClose}
-            disabled={isSending}
+            onClick={handleClose}
+            disabled={isSending || isPreparing}
             className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
           >
             {t('common.cancel')}
@@ -282,7 +334,7 @@ const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSending}
+            disabled={isSending || isPreparing}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-sm font-semibold text-white hover:bg-orange-700 transition disabled:opacity-50"
           >
             {isSending ? (
@@ -530,14 +582,14 @@ const EmailSettings = () => {
     }
   };
 
-  const handleSendTestEmail = async (payload) => {
+  const handleSendTestEmail = async (payload, options = {}) => {
     if (!selectedEmailId) {
       toast.error(t('emailSettings.editEmailHint'));
       return;
     }
     setIsSendingTest(true);
     try {
-      await emailSettingsApiService.sendTestEmail(selectedEmailId, payload);
+      await emailSettingsApiService.sendTestEmail(selectedEmailId, payload, options);
       toast.success(t('emailSettings.sendTestSuccess'));
       setShowTestEmailModal(false);
     } catch (error) {

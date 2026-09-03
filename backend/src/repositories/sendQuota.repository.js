@@ -45,6 +45,9 @@ export const ALLOWED_RESPONSE_SNAPSHOT_FIELDS = new Set([
   'tracking',
   'deliveredAt',
   'bouncedAt',
+  'failed',
+  'errorType',
+  'error',
 ]);
 
 export const ALLOWED_TRACKING_FIELDS = new Set([
@@ -99,7 +102,8 @@ export function assertNoPiiOrSecret(val, path = 'root') {
     return;
   }
   if (typeof val === 'string') {
-    if (EMAIL_PATTERN.test(val)) {
+    const isTechnicalId = path.endsWith('messageId') || path.endsWith('providerReference');
+    if (!isTechnicalId && EMAIL_PATTERN.test(val)) {
       const err = new Error(`PII detected in ${path}: email address not allowed`);
       err.status = 400;
       err.code = 'PII_DETECTED';
@@ -567,15 +571,10 @@ export async function transitionReservationState(client, reservationId, fromStat
     throw err;
   }
 
-  // Idempotent duplicate call
-  if (row.status === toStatus) {
-    return row;
-  }
-
-  const allowedNext = VALID_RESERVATION_TRANSITIONS[row.status] || [];
-  if (!allowedNext.includes(toStatus)) {
+  // Check caller's fromStatus precondition if provided
+  if (fromStatus && row.status !== fromStatus) {
     const err = new Error(
-      `Cannot transition reservation #${reservationId} from '${row.status}' to '${toStatus}'`
+      `Precondition failed: reservation #${reservationId} is '${row.status}', expected '${fromStatus}'`
     );
     err.status = 409;
     err.code = 'INVALID_RESERVATION_TRANSITION';
@@ -584,10 +583,25 @@ export async function transitionReservationState(client, reservationId, fromStat
     throw err;
   }
 
-  // Optional: check caller's fromStatus precondition if provided
-  if (fromStatus && row.status !== fromStatus) {
+  // Idempotent duplicate call for terminal states; reject concurrent in-flight transitions
+  if (row.status === toStatus) {
+    if (toStatus === 'sending' || toStatus === 'reserved') {
+      const err = new Error(
+        `Precondition failed: reservation #${reservationId} is already in '${row.status}' status`
+      );
+      err.status = 409;
+      err.code = 'CONCURRENT_SEND_IN_PROGRESS';
+      err.currentStatus = row.status;
+      err.targetStatus = toStatus;
+      throw err;
+    }
+    return row;
+  }
+
+  const allowedNext = VALID_RESERVATION_TRANSITIONS[row.status] || [];
+  if (!allowedNext.includes(toStatus)) {
     const err = new Error(
-      `Precondition failed: reservation #${reservationId} is '${row.status}', expected '${fromStatus}'`
+      `Cannot transition reservation #${reservationId} from '${row.status}' to '${toStatus}'`
     );
     err.status = 409;
     err.code = 'INVALID_RESERVATION_TRANSITION';

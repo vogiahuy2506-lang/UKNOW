@@ -11,6 +11,7 @@ import {
   logWorkspace,
 } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { resolveRequestIdempotencyKey } from '../services/quota/sendQuotaKey.service.js';
 
 function normalizeInboxQueryFilters(query = {}) {
   const rawStatus = String(query.status || '').trim().toLowerCase();
@@ -210,27 +211,12 @@ class UnifiedInboxController {
         });
       }
 
-      if (String(type) === 'zalo_personal') {
-        const quota = await checkSendQuota({
-          userId: req.user.id,
-          channel: 'zalo',
-          roleCode: req.user.role,
-          ownerContextId: req.user.activeContext?.type === 'employee'
-            ? req.user.activeContext.ownerId
-            : null,
-        });
-        if (!quota.allowed) {
-          return res.status(403).json({
-            success: false,
-            code: 'RESOURCE_LIMIT_EXCEEDED',
-            resource: 'zalo_send',
-            upgradeRequired: true,
-            resetAt: quota.resetAt,
-            message: quota.message
-              || 'Đã đạt giới hạn gửi tin Zalo của gói dịch vụ. Vui lòng nâng cấp gói để tiếp tục.',
-          });
-        }
-      }
+      const rawKey = req.headers['idempotency-key']
+        || req.headers['x-idempotency-key']
+        || req.body?.idempotencyKey
+        || req.body?.clientKey
+        || null;
+      const idempotencyKey = resolveRequestIdempotencyKey(rawKey);
 
       const result = await unifiedInboxService.sendMessage(
         resolveWorkspaceOwnerId(req.user),
@@ -243,7 +229,9 @@ class UnifiedInboxController {
             ? req.user.activeContext.ownerId
             : null,
           actorUserId: req.user.id,
+          roleCode: req.user.role,
           membershipId: req.user.activeContext?.membershipId || null,
+          idempotencyKey,
         }
       );
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_REPLY_SENT, AUDIT_ENTITY_TYPES.INBOX_MESSAGE, result.messageId, { conversationId: Number(id), conversationType: type, attachmentCount: Array.isArray(attachments) ? attachments.length : 0 });
@@ -257,11 +245,39 @@ class UnifiedInboxController {
         aiPaused: result.aiPaused === true,
         aiPausedAt: result.aiPausedAt ?? null,
         aiResumeAt: result.aiResumeAt ?? null,
+        isReplay: result.isReplay || false,
       });
     } catch (err) {
       console.error('[UnifiedInbox] Send message error:', err);
+      if (err.status === 403 || err.statusCode === 403 || err.code === 'RESOURCE_LIMIT_EXCEEDED' || err.code === 'SEND_QUOTA_EXCEEDED') {
+        return res.status(403).json({
+          success: false,
+          code: 'RESOURCE_LIMIT_EXCEEDED',
+          resource: 'zalo_send',
+          upgradeRequired: true,
+          resetAt: err.resetAt,
+          message: err.message || 'Đã đạt giới hạn gửi tin Zalo của gói dịch vụ. Vui lòng nâng cấp gói để tiếp tục.',
+        });
+      }
+      if (err.status === 409 || err.statusCode === 409 || err.code === 'CONCURRENT_SEND_IN_PROGRESS' || err.code === 'IDEMPOTENCY_KEY_REUSED' || err.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: err.code || 'IDEMPOTENCY_CONFLICT',
+          message: err.message,
+        });
+      }
+      if (err.status === 503 || err.statusCode === 503 || err.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: err.code || 'SERVICE_UNAVAILABLE',
+          message: err.message,
+        });
+      }
       if (err.message === 'Conversation not found') {
         return res.status(404).json({ success: false, message: err.message });
+      }
+      if (err.status === 400 || err.statusCode === 400) {
+        return res.status(400).json({ success: false, message: err.message, code: err.code });
       }
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -288,7 +304,26 @@ class UnifiedInboxController {
         });
       }
 
-      const result = await unifiedInboxService.retryMessage(resolveWorkspaceOwnerId(req.user), messageId, type);
+      const rawKey = req.headers['idempotency-key']
+        || req.headers['x-idempotency-key']
+        || req.body?.idempotencyKey
+        || req.body?.clientKey
+        || null;
+      const idempotencyKey = resolveRequestIdempotencyKey(rawKey);
+
+      const result = await unifiedInboxService.retryMessage({
+        userId: resolveWorkspaceOwnerId(req.user),
+        messageId,
+        type,
+      }, {
+        ownerContextId: req.user.activeContext?.type === 'employee'
+          ? req.user.activeContext.ownerId
+          : null,
+        actorUserId: req.user.id,
+        roleCode: req.user.role,
+        membershipId: req.user.activeContext?.membershipId || null,
+        idempotencyKey,
+      });
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_REPLY_RETRIED, AUDIT_ENTITY_TYPES.INBOX_MESSAGE, Number(messageId), { conversationType: type, sendStatus: result.sendStatus });
       return res.json({
         success: true,
@@ -299,6 +334,27 @@ class UnifiedInboxController {
       });
     } catch (err) {
       console.error('[UnifiedInbox] Retry message error:', err);
+      if (err.status === 403 || err.statusCode === 403 || err.code === 'RESOURCE_LIMIT_EXCEEDED' || err.code === 'SEND_QUOTA_EXCEEDED') {
+        return res.status(403).json({
+          success: false,
+          code: 'RESOURCE_LIMIT_EXCEEDED',
+          message: err.message,
+        });
+      }
+      if (err.status === 409 || err.statusCode === 409 || err.code === 'CONCURRENT_SEND_IN_PROGRESS' || err.code === 'IDEMPOTENCY_KEY_REUSED' || err.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: err.code || 'IDEMPOTENCY_CONFLICT',
+          message: err.message,
+        });
+      }
+      if (err.status === 503 || err.statusCode === 503 || err.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: err.code || 'SERVICE_UNAVAILABLE',
+          message: err.message,
+        });
+      }
       const status = err.status || (err.message === 'Message not found' || err.message === 'Conversation not found'
         ? 404
         : 500);

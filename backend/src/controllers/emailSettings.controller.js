@@ -7,6 +7,7 @@ import emailSettingsCrudService from '../services/email/emailSettingsCrud.servic
 import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { resolveRequestIdempotencyKey } from '../services/quota/sendQuotaKey.service.js';
 
 class EmailSettingsController {
   /**
@@ -520,13 +521,21 @@ ${linkItems}
   async sendTestEmail(req, res) {
     try {
       const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
+      const rawKey = req.headers['idempotency-key']
+        || req.headers['x-idempotency-key']
+        || req.body?.idempotencyKey
+        || req.body?.clientKey
+        || null;
+      const idempotencyKey = resolveRequestIdempotencyKey(rawKey);
+
       const data = await emailSettingsSmtpService.sendTestEmail({
         userId: actorUserId,
         roleCode: req.user?.role,
         ownerContextId: workspaceOwnerId,
         id: req.params.id,
-        payload: req.body,
+        payload: { ...req.body, idempotencyKey },
       }, {
+        sourceType: 'direct_email',
         createSmtpTransporter: (input) => this.createSmtpTransporter(input),
       });
 
@@ -537,10 +546,33 @@ ${linkItems}
       });
     } catch (error) {
       console.error('Send test email error:', error);
-      if (error.statusCode) {
-        return res.status(error.statusCode).json({
+      if (error.status === 403 || error.statusCode === 403 || error.code === 'SEND_QUOTA_EXCEEDED' || error.code === 'RESOURCE_LIMIT_EXCEEDED') {
+        return res.status(403).json({
+          success: false,
+          code: error.code || 'SEND_QUOTA_EXCEEDED',
+          message: error.message || 'Bạn đã hết hạn mức gửi email.',
+          data: error.data,
+        });
+      }
+      if (error.status === 409 || error.statusCode === 409 || error.code === 'CONCURRENT_SEND_IN_PROGRESS' || error.code === 'IDEMPOTENCY_KEY_REUSED' || error.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: error.code || 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
+        });
+      }
+      if (error.status === 503 || error.statusCode === 503 || error.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: error.code || 'SERVICE_UNAVAILABLE',
+          message: error.message,
+        });
+      }
+      if (error.statusCode || error.status) {
+        return res.status(error.statusCode || error.status).json({
           success: false,
           message: error.message,
+          ...(error.data ? { data: error.data } : {}),
         });
       }
       return this.handleSmtpError(error, res);
@@ -571,13 +603,21 @@ ${linkItems}
   async sendCustomEmail(req, res) {
     try {
       const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
+      const rawKey = req.headers['idempotency-key']
+        || req.headers['x-idempotency-key']
+        || req.body?.idempotencyKey
+        || req.body?.clientKey
+        || null;
+      const idempotencyKey = resolveRequestIdempotencyKey(rawKey);
+
       const data = await emailSettingsSmtpService.sendCustomEmail({
         userId: actorUserId,
         roleCode: req.user?.role,
         ownerContextId: workspaceOwnerId,
-        payload: req.body,
+        payload: { ...req.body, idempotencyKey },
         trackingConfig: this.resolveTrackingBaseUrl(req),
       }, {
+        sourceType: 'direct_email',
         normalizeEmailList: (value) => this.normalizeEmailList(value),
         buildTrackedHtml: (...args) => this.buildTrackedHtml(...args),
         buildMailAttachments: (items) => this.buildMailAttachments(items),
@@ -592,8 +632,30 @@ ${linkItems}
       });
     } catch (error) {
       console.error('Send custom email error:', error);
-      if (error.statusCode) {
-        return res.status(error.statusCode).json({
+      if (error.status === 403 || error.statusCode === 403 || error.code === 'SEND_QUOTA_EXCEEDED' || error.code === 'RESOURCE_LIMIT_EXCEEDED') {
+        return res.status(403).json({
+          success: false,
+          code: error.code || 'SEND_QUOTA_EXCEEDED',
+          message: error.message || 'Bạn đã hết hạn mức gửi email.',
+          data: error.data,
+        });
+      }
+      if (error.status === 409 || error.statusCode === 409 || error.code === 'CONCURRENT_SEND_IN_PROGRESS' || error.code === 'IDEMPOTENCY_KEY_REUSED' || error.code === 'RESERVATION_UNCERTAIN') {
+        return res.status(409).json({
+          success: false,
+          code: error.code || 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
+        });
+      }
+      if (error.status === 503 || error.statusCode === 503 || error.code === 'SEND_QUOTA_UNAVAILABLE') {
+        return res.status(503).json({
+          success: false,
+          code: error.code || 'SERVICE_UNAVAILABLE',
+          message: error.message,
+        });
+      }
+      if (error.statusCode || error.status) {
+        return res.status(error.statusCode || error.status).json({
           success: false,
           message: error.message,
           ...(error.data ? { data: error.data } : {}),

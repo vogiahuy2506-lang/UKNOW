@@ -348,6 +348,8 @@ export async function countEmailSentThisMonth(billingUserId, cycleStart = null, 
   throw new Error(`countEmailSentThisMonth requires explicit cycleStart and cycleEnd for user ${billingUserId}`);
 }
 
+export { countEmailSentThisMonth as countEmailsSentThisMonth };
+
 async function countZaloSentToday(billingUserId) {
   return cached(`${billingUserId}:zalo_today`, async () => {
     const { rows } = await db.query(

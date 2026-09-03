@@ -653,14 +653,14 @@ Integration tests dùng PostgreSQL test thật, nhiều client/transaction thậ
 
 Thứ tự rollout đề xuất: direct Email -> Zalo preview/test -> quick-send -> unified inbox.
 
-- [ ] Di chuyển orchestration quota khỏi controller xuống service.
-- [ ] Frontend/request service tạo và giữ idempotency key cho một user action.
-- [ ] Reserve ngay trước provider; persist source + consume + wallet debit theo protocol.
-- [ ] Definitive provider failure release; timeout/ambiguous mark uncertain.
-- [ ] Zalo preview nhiều recipient reserve từng recipient ngay trước send.
-- [ ] Unified inbox retry dùng key gốc, không charge hoặc send trùng khi already consumed.
-- [ ] Giữ response quota hiện tại; thêm 503/409 codes có test.
-- [ ] Shadow từng source, staging verify, rồi enforce từng source qua allowlist.
+- [x] Di chuyển orchestration quota khỏi controller xuống service.
+- [x] Frontend/request service tạo và giữ idempotency key cho một user action.
+- [x] Reserve ngay trước provider; persist source + consume + wallet debit theo protocol.
+- [x] Definitive provider failure release; timeout/ambiguous mark uncertain.
+- [x] Zalo preview nhiều recipient reserve từng recipient ngay trước send.
+- [x] Unified inbox retry dùng key gốc, không charge hoặc send trùng khi already consumed.
+- [x] Giữ response quota hiện tại; thêm 503/409 codes có test.
+- [ ] Shadow từng source, staging verify, rồi enforce từng source qua allowlist (operational pending: cần số đo volume đại diện staging/reconciliation trước khi đóng rollout).
 
 **Gate:** provider mocks chứng minh success/definitive failure/timeout/retry; không path synchronous nào
 trong allowlist còn gọi `checkSendQuota()` như enforcement duy nhất.

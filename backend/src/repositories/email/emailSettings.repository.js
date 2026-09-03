@@ -228,8 +228,10 @@ class EmailSettingsRepository {
     return result.rows[0] || null;
   }
 
-  async incrementSentCount(id) {
-    await db.query(
+  async incrementSentCount(id, client = db) {
+    if (!id) return;
+    const runner = client || db;
+    await runner.query(
       'UPDATE email_settings SET daily_sent_count = daily_sent_count + 1, total_sent_count = total_sent_count + 1 WHERE id = $1',
       [id]
     );
@@ -261,8 +263,9 @@ class EmailSettingsRepository {
     return result.rows[0] || null;
   }
 
-  async markCustomerHardBounced(userId, email) {
-    await db.query(
+  async markCustomerHardBounced(userId, email, queryable = db) {
+    const q = queryable || db;
+    await q.query(
       `UPDATE customers SET email_hard_bounced = true, updated_at = CURRENT_TIMESTAMP
        WHERE COALESCE(workspace_owner_id, id_user) = $1 AND LOWER(email) = $2`,
       [userId, String(email || '').trim().toLowerCase()]
@@ -286,13 +289,19 @@ class EmailSettingsRepository {
   }
 
   async insertEmailMessage(client, payload) {
+    const rawReservationId = payload.quotaReservationId != null
+      ? Number.parseInt(payload.quotaReservationId, 10)
+      : (payload.reservationId != null ? Number.parseInt(payload.reservationId, 10) : null);
+    const quotaReservationId = Number.isFinite(rawReservationId) ? rawReservationId : null;
+
+    const status = payload.status || 'sent';
     const result = await client.query(
       `INSERT INTO email_messages
         (id_campaign, id_run, id_customer, id_email_template, id_email_setting, message_id,
          tracking_token, recipient_email, recipient_name, sender_email, sender_name, subject,
          body_html, body_text, status, sent_at, id_node, email_step,
-         from_address, reply_to, brand_domain, is_preview)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'sent', $15, $16, $17, $18, $19, $20, $21)
+         from_address, reply_to, brand_domain, is_preview, quota_reservation_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING id`,
       [
         payload.campaignId,
@@ -309,6 +318,7 @@ class EmailSettingsRepository {
         payload.subject,
         payload.bodyHtml,
         payload.bodyText,
+        status,
         payload.sentAt,
         Number.isFinite(Number.parseInt(payload.idNode, 10)) ? Number.parseInt(payload.idNode, 10) : null,
         Number.isFinite(Number.parseInt(payload.emailStep, 10)) ? Number.parseInt(payload.emailStep, 10) : null,
@@ -316,6 +326,7 @@ class EmailSettingsRepository {
         payload.replyTo || null,
         payload.brandDomain || null,
         Boolean(payload.isPreview),
+        quotaReservationId,
       ]
     );
     return result.rows[0]?.id || null;

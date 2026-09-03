@@ -3,6 +3,14 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
   checkSendQuota: jest.fn().mockResolvedValue({ allowed: true }),
   recordDirectSendUsage: jest.fn().mockResolvedValue(),
+  _clearQuotaCache: jest.fn(),
+  getVnDayBoundaries: jest.fn(() => ({
+    vnDayStart: new Date(),
+    vnDayEnd: new Date(Date.now() + 86400000),
+    vnNow: new Date(),
+  })),
+  nextVnMidnight: jest.fn(() => new Date(Date.now() + 86400000)),
+  nextVnMonthStart: jest.fn(() => new Date(Date.now() + 30 * 86400000)),
 }));
 
 const { default: campaignEmailSenderService } = await import('../campaignEmailSender.service.js');

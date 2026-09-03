@@ -1,4 +1,5 @@
 import api from '../../../services/api';
+import { generateIdempotencyKey } from '../../../utils/idempotency.util';
 
 /**
  * API helpers dedicated to CampaignBuilder workflows.
@@ -79,7 +80,14 @@ const campaignBuilderApiService = {
   },
 
   sendPreviewEmail(payload, options = {}) {
-    return api.post('/email-settings/send-email', payload, options);
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post('/email-settings/send-email', payload, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
   },
 
   getZaloAccounts(options = {}) {
@@ -99,15 +107,36 @@ const campaignBuilderApiService = {
   },
 
   sendPreviewZaloPersonal(payload, options = {}) {
-    return api.post('/zalo/preview/send-personal', payload, options);
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post('/zalo/preview/send-personal', payload, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
   },
 
   sendPreviewZaloFriendRequest(payload, options = {}) {
-    return api.post('/zalo/preview/send-friend-request', payload, options);
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post('/zalo/preview/send-friend-request', payload, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
   },
 
   sendPreviewZaloGroup(payload, options = {}) {
-    return api.post('/zalo/preview/send-group', payload, options);
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post('/zalo/preview/send-group', payload, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
   },
 
   getAttachmentPreviewUrlByKey(key, options = {}) {

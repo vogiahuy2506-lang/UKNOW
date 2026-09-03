@@ -749,19 +749,23 @@ class UnifiedInboxRepository {
     metadata = {},
     metadataJson = null,
     now = null,
+    quotaReservationId = null,
   } = {}) {
     const ts = now || new Date().toISOString();
     const meta = metadataJson ?? JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {});
+    const rawResId = quotaReservationId != null ? Number.parseInt(quotaReservationId, 10) : null;
+    const safeQuotaReservationId = Number.isFinite(rawResId) ? rawResId : null;
+
     const { rows: settingRows } = await queryable.query(
       `SELECT id_zalo_setting FROM zalo_personal_conversations WHERE id = $1`,
       [conversationId]
     );
     const zaloSettingId = settingRows[0]?.id_zalo_setting;
     const { rows: inserted } = await queryable.query(
-      `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, metadata, is_read, read_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)
+      `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, attachments, metadata, is_read, read_at, quota_reservation_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8, $9)
        RETURNING id`,
-      [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), meta, ts]
+      [conversationId, userId, zaloSettingId, role, content, JSON.stringify(attachments), meta, ts, safeQuotaReservationId]
     );
     await queryable.query(
       `UPDATE zalo_personal_conversations SET last_message_at = $2 WHERE id = $1`,
@@ -1262,6 +1266,18 @@ class UnifiedInboxRepository {
     return rows[0] || null;
   }
 
+  async updateMessageQuotaReservationId(conversationType, messageId, quotaReservationId) {
+    if (conversationType !== 'zalo_personal') return null;
+    const { rows } = await db.query(
+      `UPDATE zalo_personal_messages
+       SET quota_reservation_id = $2
+       WHERE id = $1
+       RETURNING id, quota_reservation_id`,
+      [messageId, quotaReservationId]
+    );
+    return rows[0] || null;
+  }
+
   /**
    * Atomically claim a failed/stale-retrying agent message for retry.
    * @returns {Promise<object|null>} claimed row or null
@@ -1315,7 +1331,7 @@ class UnifiedInboxRepository {
       // is_group / group_id live in visitor_info JSONB (not table columns — see migration 045)
       const { rows } = await db.query(
         `SELECT zpm.id, zpm.id_conversation, zpm.id_user, zpm.id_zalo_setting, zpm.role,
-                zpm.content, zpm.attachments, zpm.metadata,
+                zpm.content, zpm.attachments, zpm.metadata, zpm.quota_reservation_id,
                 zp.external_id, zp.visitor_info, zp.id_user AS conversation_user_id,
                 'zalo_personal' AS channel
          FROM zalo_personal_messages zpm

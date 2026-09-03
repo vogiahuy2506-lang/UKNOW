@@ -238,37 +238,72 @@ function hashAttachments(attachments) {
 
 /**
  * Canonical reservation key for campaign run nodes.
+ * Format: campaign:{channel}:{billingUserId}:{campaignId}:{nodeId}:{recipientHash}
+ *
+ * @param {object} params
+ * @param {string} params.channel - 'email' | 'zalo'
+ * @param {string|number} params.billingUserId
+ * @param {string|number} params.campaignId
+ * @param {string|number} params.nodeId
+ * @param {string} params.recipient
+ * @returns {string}
  */
-export function buildCampaignReservationKey({ runId, nodeId, channel, recipient, logicalStep = 1 }) {
-  const recipientHash = hashRecipient(recipient);
-  const safeNodeId = normalizeNodeId(nodeId);
-  return `campaign:${runId}:${safeNodeId}:${channel}:${recipientHash}:${logicalStep}`;
+export function buildCampaignReservationKey({ runId, nodeId, channel, recipient, logicalStep = 1, campaignId, billingUserId }) {
+  const normRecip = hashRecipient(recipient);
+  const normNode = normalizeNodeId(nodeId);
+  if (runId != null) {
+    return `campaign:${runId}:${normNode}:${channel}:${normRecip}:${logicalStep}`;
+  }
+  const normChannel = String(channel || '').toLowerCase();
+  const normUser = String(billingUserId || '');
+  const normCamp = String(campaignId || '');
+  return `campaign:${normChannel}:${normUser}:${normCamp}:${normNode}:${normRecip}`;
 }
 
 /**
- * Canonical reservation key for direct sends.
+ * Canonical reservation key for direct / single message sends.
+ * Format: direct:{channel}:{billingUserId}:{clientKey}:{recipientHash}
+ *
+ * @param {object} params
+ * @param {string} params.channel - 'email' | 'zalo'
+ * @param {string|number} params.billingUserId
+ * @param {string} params.clientKey - caller supplied idempotency / deduplication key
+ * @param {string} params.recipient
+ * @returns {string}
  */
 export function buildDirectReservationKey({ channel, billingUserId, clientKey, recipient }) {
-  const recipientHash = hashRecipient(recipient);
-  const safeClientKey = hashClientSegment(clientKey);
-  return `direct:${channel}:${billingUserId}:${safeClientKey}:${recipientHash}`;
+  const normChannel = String(channel || '').toLowerCase();
+  const normUser = String(billingUserId || '');
+  const normKey = hashClientSegment(clientKey);
+  const normRecip = hashRecipient(recipient);
+  return `direct:${normChannel}:${normUser}:${normKey}:${normRecip}`;
 }
 
 /**
  * Canonical reservation key for preview sends.
+ * Format: preview:{channel}:{billingUserId}:{requestKey}:{recipientHash}
+ *
+ * @param {object} params
+ * @param {string} params.channel - 'email' | 'zalo'
+ * @param {string|number} params.billingUserId
+ * @param {string} params.requestKey
+ * @param {string} params.recipient
+ * @returns {string}
  */
 export function buildPreviewReservationKey({ channel, billingUserId, requestKey, recipient }) {
-  const recipientHash = hashRecipient(recipient);
-  const safeRequestKey = hashClientSegment(requestKey);
-  return `preview:${channel}:${billingUserId}:${safeRequestKey}:${recipientHash}`;
+  const normChannel = String(channel || '').toLowerCase();
+  const normUser = String(billingUserId || '');
+  const normKey = hashClientSegment(requestKey);
+  const normRecip = hashRecipient(recipient);
+  return `preview:${normChannel}:${normUser}:${normKey}:${normRecip}`;
 }
 
 /**
  * Canonical reservation key for quick sends.
  */
-export function buildQuickSendReservationKey({ channel, billingUserId, requestKey, recipient }) {
+export function buildQuickSendReservationKey({ channel, billingUserId, requestKey, clientKey, recipient }) {
   const recipientHash = hashRecipient(recipient);
-  const safeRequestKey = hashClientSegment(requestKey);
+  const safeRequestKey = hashClientSegment(requestKey || clientKey);
   return `quick:${channel}:${billingUserId}:${safeRequestKey}:${recipientHash}`;
 }
 
@@ -281,45 +316,121 @@ export function buildInboxReservationKey({ messageId, channel = 'zalo' }) {
 }
 
 /**
- * Computes request fingerprint (SHA-256 64-char hex string) deterministically.
- * Hashes all fields affecting provider send: channel, recipient, subject, content,
- * templateId, templateVariables, attachments, options, quantity, sourceType.
+ * Original v1 canonical request payload fingerprint algorithm.
+ * Preserves exact hashes for older reservation records in PostgreSQL.
  *
  * @param {object} payload
- * @param {string} [version='v1']
  * @returns {string}
  */
-export function computeRequestFingerprint(payload = {}, version = 'v1') {
+export function computeRequestFingerprintV1(payload = {}) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('computeRequestFingerprint requires a valid payload object');
   }
 
-  if (version === 'v1') {
-    const rawContent = payload.content ?? payload.message ?? payload.body ?? '';
-    const contentStr = typeof rawContent === 'string'
-      ? rawContent
-      : (rawContent != null && typeof rawContent === 'object')
-        ? canonicalSerialize(rawContent)
-        : String(rawContent ?? '');
+  const rawContent = payload.content ?? payload.message ?? payload.body ?? '';
+  const contentStr = typeof rawContent === 'string'
+    ? rawContent
+    : (rawContent != null && typeof rawContent === 'object')
+      ? canonicalSerialize(rawContent)
+      : String(rawContent ?? '');
 
-    const canonical = {
-      channel: String(payload.channel || '').toLowerCase(),
-      recipientHash: hashRecipient(payload.recipient || payload.to || ''),
-      subjectHash: hashString(payload.subject || ''),
-      contentHash: hashString(contentStr),
-      templateId: payload.templateId != null ? String(payload.templateId) : '',
-      templateVariablesHash: hashCanonicalJson(payload.templateVariables ?? payload.variables ?? payload.template_variables),
-      attachmentsHash: hashAttachments(payload.attachments),
-      optionsHash: hashCanonicalJson(payload.options),
-      quantity: Number(payload.quantity || 1),
-      sourceType: String(payload.sourceType || '').toLowerCase(),
-    };
+  const canonical = {
+    channel: String(payload.channel || '').toLowerCase(),
+    recipientHash: hashRecipient(payload.recipient || payload.to || ''),
+    subjectHash: hashString(payload.subject || ''),
+    contentHash: hashString(contentStr),
+    templateId: payload.templateId != null ? String(payload.templateId) : '',
+    templateVariablesHash: hashCanonicalJson(payload.templateVariables ?? payload.variables ?? payload.template_variables),
+    attachmentsHash: hashAttachments(payload.attachments),
+    optionsHash: hashCanonicalJson(payload.options),
+    quantity: Number(payload.quantity || 1),
+    sourceType: String(payload.sourceType || '').toLowerCase(),
+  };
 
-    // Sort keys alphabetically to guarantee strict determinism
-    const sortedJson = JSON.stringify(canonical, Object.keys(canonical).sort());
-    return crypto.createHash('sha256').update(sortedJson).digest('hex');
+  const sortedJson = JSON.stringify(canonical, Object.keys(canonical).sort());
+  return crypto.createHash('sha256').update(sortedJson).digest('hex');
+}
+
+/**
+ * v2 canonical request payload fingerprint algorithm:
+ * - Adds full email/attachment protection: htmlHash, ccHash, bccHash, attachmentsHash
+ * - Adds account/sender protection: fromEmailId, accountId
+ * - Supports phone / groupId / to / recipient aliases
+ *
+ * @param {object} payload
+ * @returns {string}
+ */
+export function computeRequestFingerprintV2(payload = {}) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('computeRequestFingerprint requires a valid payload object');
   }
 
+  const rawContent = payload.content ?? payload.message ?? payload.body ?? payload.bodyText ?? '';
+  const contentStr = typeof rawContent === 'string'
+    ? rawContent
+    : (rawContent != null && typeof rawContent === 'object')
+      ? canonicalSerialize(rawContent)
+      : String(rawContent ?? '');
+
+  const rawHtml = payload.htmlContent ?? payload.html ?? payload.bodyHtml ?? '';
+  const htmlStr = typeof rawHtml === 'string'
+    ? rawHtml
+    : (rawHtml != null && typeof rawHtml === 'object')
+      ? canonicalSerialize(rawHtml)
+      : String(rawHtml ?? '');
+
+  const ccList = Array.isArray(payload.cc)
+    ? [...payload.cc].filter(Boolean).sort()
+    : (payload.cc ? [payload.cc] : []);
+  const bccList = Array.isArray(payload.bcc)
+    ? [...payload.bcc].filter(Boolean).sort()
+    : (payload.bcc ? [payload.bcc] : []);
+
+  const fromEmailId = payload.fromEmailId != null
+    ? String(payload.fromEmailId)
+    : (payload.from_email_id != null ? String(payload.from_email_id) : '');
+  const accountId = payload.accountId != null
+    ? String(payload.accountId)
+    : (payload.account_id != null ? String(payload.account_id) : '');
+
+  const canonical = {
+    accountId,
+    attachmentsHash: hashAttachments(payload.attachments),
+    bccHash: hashCanonicalJson(bccList),
+    ccHash: hashCanonicalJson(ccList),
+    channel: String(payload.channel || '').toLowerCase(),
+    contentHash: hashString(contentStr),
+    fromEmailId,
+    htmlHash: hashString(htmlStr),
+    optionsHash: hashCanonicalJson(payload.options),
+    quantity: Number(payload.quantity || 1),
+    recipientHash: hashRecipient(payload.recipient || payload.to || payload.phone || payload.groupId || ''),
+    sourceType: String(payload.sourceType || '').toLowerCase(),
+    subjectHash: hashString(payload.subject || ''),
+    templateId: payload.templateId != null ? String(payload.templateId) : '',
+    templateVariablesHash: hashCanonicalJson(payload.templateVariables ?? payload.variables ?? payload.template_variables),
+  };
+
+  const sortedJson = JSON.stringify(canonical, Object.keys(canonical).sort());
+  return crypto.createHash('sha256').update(sortedJson).digest('hex');
+}
+
+/**
+ * Computes request payload fingerprint for tamper and parameter-drift protection.
+ * Uses sha256 of canonical deterministic JSON.
+ * Defaults to 'v2'.
+ *
+ * @param {object} payload
+ * @param {string} [version='v2']
+ * @returns {string}
+ */
+export function computeRequestFingerprint(payload = {}, version = 'v2') {
+  if (version === 'v1') {
+    return computeRequestFingerprintV1(payload);
+  }
+  if (version === 'v2') {
+    return computeRequestFingerprintV2(payload);
+  }
   throw new Error(`Unsupported request fingerprint version: ${version}`);
 }
 

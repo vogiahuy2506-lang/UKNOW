@@ -483,6 +483,8 @@ describe('POST /api/email-settings/test-connection (SMTP verify)', () => {
   it('verify thành công → 200', async () => {
     const me = await createUser({ username: 'tester' });
     const token = await loginAs(me);
+    mockCreateTransport.mockClear();
+    mockVerify.mockClear();
 
     const res = await request(app)
       .post('/api/email-settings/test-connection')

@@ -676,19 +676,22 @@ describe('PR-Q1: send_quota_reservations Repository & Schema Integration', () =>
     expect(isNaN(cycleEndDate.getTime())).toBe(false);
     expect(cycleStartDate.getTime()).toBeLessThan(cycleEndDate.getTime());
 
-    // 2. Duplicate reservation with same payload: returns replayed reservation
-    const replayed = await reserveSendQuota(
-      {
-        userId: testUserId,
-        channel: 'email',
-        quantity: 1,
-        reservationKey: resKey,
-        requestPayload: payload,
-      },
-      { modeOverride: 'test_enforce' }
-    );
-    expect(replayed.id).toBe(reserved.id);
-    expect(replayed.replayed).toBe(true);
+    // 2. Duplicate reservation with same payload while in reserved status: throws 409 CONCURRENT_SEND_IN_PROGRESS
+    await expect(
+      reserveSendQuota(
+        {
+          userId: testUserId,
+          channel: 'email',
+          quantity: 1,
+          reservationKey: resKey,
+          requestPayload: payload,
+        },
+        { modeOverride: 'test_enforce' }
+      )
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'CONCURRENT_SEND_IN_PROGRESS',
+    });
 
     // 3. Duplicate reservation with modified payload: throws 409 IDEMPOTENCY_KEY_REUSED
     await expect(
@@ -738,6 +741,20 @@ describe('PR-Q1: send_quota_reservations Repository & Schema Integration', () =>
     );
     expect(reConsumed.status).toBe('consumed');
     expect(mockPersist).toHaveBeenCalledTimes(1); // Still 1, not called second time!
+
+    // 7. Duplicate reservation after consumed: returns replayed reservation with responseSnapshot
+    const replayed = await reserveSendQuota(
+      {
+        userId: testUserId,
+        channel: 'email',
+        quantity: 1,
+        reservationKey: resKey,
+        requestPayload: payload,
+      },
+      { modeOverride: 'test_enforce' }
+    );
+    expect(replayed.id).toBe(reserved.id);
+    expect(replayed.isReplay || replayed.replayed).toBe(true);
   });
 
   it('sweeper queries use FOR UPDATE SKIP LOCKED and skip locked rows concurrently', async () => {

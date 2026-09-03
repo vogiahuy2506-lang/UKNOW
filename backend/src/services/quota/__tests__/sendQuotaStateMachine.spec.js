@@ -523,6 +523,68 @@ describe('sendQuota State Machine & Transition Rules (PR-Q1)', () => {
       }
     });
 
+    it('Finding 1: source allowlist is strictly fail-closed and rejects unlisted/missing sources to mode off', () => {
+      const origEnv = process.env.NODE_ENV;
+      const origMode = process.env.SEND_QUOTA_RESERVATION_MODE;
+      const origSources = process.env.SEND_QUOTA_RESERVATION_SOURCES;
+      try {
+        process.env.NODE_ENV = 'production';
+        process.env.SEND_QUOTA_RESERVATION_MODE = 'enforce';
+        process.env.SEND_QUOTA_RESERVATION_SOURCES = 'quick_send,direct_email';
+
+        // 1. Allowed source in params
+        expect(assertReservationOperationMode({}, { sourceType: 'quick_send' })).toEqual({
+          mode: 'enforce',
+          isTestEnforce: false,
+        });
+        expect(assertReservationOperationMode({}, { sourceType: 'direct_email' })).toEqual({
+          mode: 'enforce',
+          isTestEnforce: false,
+        });
+
+        // 2. Unlisted source in params -> mode off (skippedByAllowlist: true)
+        expect(assertReservationOperationMode({}, { sourceType: 'zalo_preview' })).toEqual({
+          mode: 'off',
+          isTestEnforce: false,
+          skippedByAllowlist: true,
+          reason: 'source_not_in_allowlist',
+        });
+
+        // 3. Missing source during admission -> MUST NOT fail-open to enforce! Must be mode off
+        expect(assertReservationOperationMode({}, {}, { isAdmission: true })).toEqual({
+          mode: 'off',
+          isTestEnforce: false,
+          skippedByAllowlist: true,
+          reason: 'source_not_in_allowlist',
+        });
+        expect(assertReservationOperationMode({}, null, { isAdmission: true })).toEqual({
+          mode: 'off',
+          isTestEnforce: false,
+          skippedByAllowlist: true,
+          reason: 'source_not_in_allowlist',
+        });
+
+        // 4. Lifecycle settlement (markSending, consume, release, uncertain) MUST NOT be blocked by allowlist
+        expect(assertReservationOperationMode({})).toEqual({
+          mode: 'enforce',
+          isTestEnforce: false,
+        });
+
+        // 4. Wildcard '*' enables all sources
+        process.env.SEND_QUOTA_RESERVATION_SOURCES = '*';
+        expect(assertReservationOperationMode({}, { sourceType: 'inbox' })).toEqual({
+          mode: 'enforce',
+          isTestEnforce: false,
+        });
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        if (origMode === undefined) delete process.env.SEND_QUOTA_RESERVATION_MODE;
+        else process.env.SEND_QUOTA_RESERVATION_MODE = origMode;
+        if (origSources === undefined) delete process.env.SEND_QUOTA_RESERVATION_SOURCES;
+        else process.env.SEND_QUOTA_RESERVATION_SOURCES = origSources;
+      }
+    });
+
     it('Finding 3: consumeSendQuota in mode off is a pure stub and never executes persistSource callback', async () => {
       const mockPersist = jest.fn();
       const result = await consumeSendQuota(
