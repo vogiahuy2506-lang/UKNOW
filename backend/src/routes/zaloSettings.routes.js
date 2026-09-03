@@ -3,11 +3,12 @@ import { body, param, query } from 'express-validator';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import zaloSettingsController from '../controllers/zaloSettings.controller.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 router.use(requirePermission('zalo_settings'));
 

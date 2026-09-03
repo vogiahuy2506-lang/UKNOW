@@ -2,7 +2,7 @@ import { Router } from 'express';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import landingTemplateController from '../controllers/landingTemplate.controller.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = Router();
 
@@ -13,6 +13,7 @@ router.get('/categories', landingTemplateController.getCategories.bind(landingTe
 // Authenticated routes
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // GET /api/landing-templates/my - Get current user's templates

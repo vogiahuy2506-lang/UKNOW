@@ -9,6 +9,7 @@ import {
   requirePermission,
   requireActivePlan,
   requirePasswordChange,
+  requirePhone,
   requireSelfContext,
 } from '../middleware/authorization.middleware.js';
 import { campaignRunLimiter, quickSendTestLimiter } from '../middleware/rateLimiter.middleware.js';
@@ -18,6 +19,7 @@ const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed'];
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // Get all — chỉ cần quyền xem

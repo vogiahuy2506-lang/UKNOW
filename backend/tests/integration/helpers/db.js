@@ -195,11 +195,17 @@ export async function createUser(overrides = {}) {
   const passwordHash = await bcrypt.hash(password, 4); // cost thấp cho test cho nhanh
   const username = overrides.username || `user${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const email = overrides.email || `${username}@test.local`;
+  // migration 179 (idx_users_phone_unique) + requirePhone chặn user không có SĐT ở mọi
+  // route đã gắn requirePasswordChange — mọi user test tạo qua đây phải có SĐT hợp lệ
+  // và không trùng. overrides.phone = null để dựng đúng ca "user chưa có SĐT" có chủ đích.
+  const phone = overrides.phone === null
+    ? null
+    : (overrides.phone ?? `09${String(Date.now()).slice(-7)}${Math.floor(Math.random() * 10)}`);
 
   const result = await db.query(
-    `INSERT INTO users (username, email, password_hash, full_name, status, is_verified, verified_at, role, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, NOW(), NOW())
-     RETURNING id, username, email, full_name, avatar_url, status, role, active_plan_id`,
+    `INSERT INTO users (username, email, password_hash, full_name, status, is_verified, verified_at, role, phone, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, NOW(), NOW())
+     RETURNING id, username, email, full_name, avatar_url, status, role, active_plan_id, phone`,
     [
       username,
       email,
@@ -208,6 +214,7 @@ export async function createUser(overrides = {}) {
       overrides.status ?? 'active',
       overrides.isVerified ?? true,
       overrides.role ?? 'user',
+      phone,
     ]
   );
 

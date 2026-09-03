@@ -214,12 +214,14 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   const selfUser = {
     id: 1,
     role: 'user',
+    phone: '0900000001',
     activeContext: { type: 'self', contextPlanId: 1 },
   };
 
   const createEmployee = (permissions = {}) => ({
     id: 2,
     role: 'user',
+    phone: '0900000002',
     activeContext: {
       type: 'employee',
       ownerId: 1,

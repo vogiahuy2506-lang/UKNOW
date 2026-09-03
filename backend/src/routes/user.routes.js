@@ -15,6 +15,18 @@ router.get('/profile', userController.getProfile.bind(userController));
 // Lịch sử mua gói dịch vụ của user đang đăng nhập
 router.get('/my-orders', userController.getMyOrders.bind(userController));
 
+/**
+ * PUT /api/users/me/phone
+ * KHÔNG gắn requirePhone — đây là lối thoát duy nhất của cổng đó. Gắn vào sẽ tạo
+ * vòng lặp chết: phải có SĐT mới được nhập SĐT (Bẫy #4, PLAN_SDT_BAT_BUOC_SYNC_SHEET).
+ */
+router.put(
+  '/me/phone',
+  [body('phone').trim().notEmpty().withMessage('Vui lòng nhập số điện thoại')],
+  handleValidationErrors,
+  userController.updatePhone.bind(userController)
+);
+
 // Hồ sơ xuất hoá đơn người dùng tự lưu
 router.get('/invoice-profile', userController.getInvoiceProfile.bind(userController));
 router.put('/invoice-profile', userController.updateInvoiceProfile.bind(userController));

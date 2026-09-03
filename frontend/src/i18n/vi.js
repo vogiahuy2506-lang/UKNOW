@@ -338,6 +338,7 @@ export default {
     passwordMinChars: 'Mật khẩu phải từ 8 ký tự trở lên (gồm cả chữ và số)',
     passwordsMismatch: 'Mật khẩu xác nhận không khớp',
     invalidPhone: 'Số điện thoại không hợp lệ',
+    phoneRequired: 'Vui lòng nhập số điện thoại',
     invalidEmail: 'Email không hợp lệ',
     usernameMinLen: 'Tên đăng nhập phải có ít nhất 3 ký tự',
     usernameMaxLen: 'Tên đăng nhập không được quá 50 ký tự',
@@ -6561,6 +6562,18 @@ export default {
     success: 'Password changed successfully!',
     failed: 'Password change failed.',
     errorOccurred: 'An error occurred. Please try again.',
+  },
+
+  phoneRequired: {
+    title: 'Bổ sung số điện thoại',
+    description: 'Vui lòng bổ sung số điện thoại để tiếp tục sử dụng hệ thống.',
+    phoneLabel: 'Số điện thoại',
+    phonePlaceholder: '0901234567',
+    submit: 'Xác nhận',
+    saving: 'Đang lưu...',
+    validationInvalid: 'Số điện thoại không hợp lệ.',
+    failed: 'Cập nhật số điện thoại thất bại.',
+    errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   },
 
   // Trial Welcome Modal

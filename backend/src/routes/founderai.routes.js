@@ -4,6 +4,7 @@ import authMiddleware from '../middleware/auth.middleware.js';
 import {
   requireActivePlan,
   requirePasswordChange,
+  requirePhone,
   requirePermission,
 } from '../middleware/authorization.middleware.js';
 
@@ -11,6 +12,7 @@ const router = express.Router();
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // Get customers from Founder AI

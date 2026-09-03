@@ -11,6 +11,7 @@ import authMiddleware, {
 import {
   requireActivePlan,
   requirePasswordChange,
+  requirePhone,
   requirePermission,
   requireSelfContext,
 } from '../middleware/authorization.middleware.js';
@@ -80,6 +81,8 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 
   const passwordGate = await runGate(requirePasswordChange, req, res);
   if (!passwordGate.ok) return;
+  const phoneGate = await runGate(requirePhone, req, res);
+  if (!phoneGate.ok) return;
   const planGate = await runGate(requireActivePlan, req, res);
   if (!planGate.ok) return;
   const permissionGate = await runGate(requirePermission('inbox_view'), req, res);
@@ -125,6 +128,7 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // ── Knowledge Base ───────────────────────────────────────────────

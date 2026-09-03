@@ -3,7 +3,7 @@ import { body } from 'express-validator';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import CampaignScheduleController from '../controllers/campaignSchedule.controller.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 const controller = new CampaignScheduleController();
@@ -11,6 +11,7 @@ const controller = new CampaignScheduleController();
 // Apply auth middleware to all routes
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // Get all — cần quyền campaigns_view

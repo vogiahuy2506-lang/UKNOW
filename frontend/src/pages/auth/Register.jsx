@@ -48,10 +48,9 @@ const registerSchema = (t) => z.object({
     ),
   confirmPassword: z.string(),
   fullName: z.string().optional(),
-  phone: z.string().optional().refine(
-    (v) => !v || /^[0-9]{10,11}$/.test(v),
-    { message: t('register.invalidPhone') }
-  ),
+  phone: z.string()
+    .min(1, t('register.phoneRequired'))
+    .refine((v) => /^[0-9]{10,11}$/.test(v), { message: t('register.invalidPhone') }),
 }).refine((d) => d.password === d.confirmPassword, {
   message: t('auth.passwordMismatch'),
   path: ['confirmPassword'],
@@ -540,7 +539,9 @@ const Register = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-slate-700">{t('register.phone')}</label>
+            <label className="block text-sm font-semibold text-slate-700">
+              {t('register.phone')} <span className="text-red-500">*</span>
+            </label>
             <div className="relative group">
               <HiOutlinePhone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
               <input 

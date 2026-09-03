@@ -1,13 +1,14 @@
 import express from 'express';
 import coursesController from '../controllers/courses.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
 // Tất cả các routes đều yêu cầu xác thực + quyền courses
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // Đồng bộ khóa học từ Founder AI (thủ công)

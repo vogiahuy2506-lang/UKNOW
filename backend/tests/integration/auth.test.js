@@ -37,6 +37,7 @@ describe('POST /api/auth/register', () => {
         email,
         password: 'Passw0rd!',
         fullName: 'New User',
+        phone: '0911000001',
         emailVerificationCode: '123456',
       });
 
@@ -159,6 +160,7 @@ describe('POST /api/auth/register', () => {
         email,
         password: 'Passw0rd!',
         fullName: 'Trial User',
+        phone: '0911000002',
         emailVerificationCode: '123456',
       });
 
@@ -205,6 +207,7 @@ describe('POST /api/auth/register', () => {
         email,
         password: 'Passw0rd!',
         fullName: 'No Trial User',
+        phone: '0911000003',
         emailVerificationCode: '123456',
       });
 

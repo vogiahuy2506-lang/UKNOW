@@ -201,6 +201,21 @@ export async function findUserByEmailExceptId(email, userId) {
   return rows[0] || null;
 }
 
+/**
+ * Kiểm trùng SĐT, loại trừ chính user đang cập nhật — thiếu điều kiện loại trừ sẽ
+ * khoá cứng người gửi lại đúng số của mình (xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 1.5).
+ */
+export async function findUserByPhoneExceptId(phone, userId) {
+  const { rows } = await db.query(
+    `SELECT id
+     FROM users
+     WHERE phone = $1 AND id <> $2
+     LIMIT 1`,
+    [phone, userId]
+  );
+  return rows[0] || null;
+}
+
 export async function updateProfile(userId, { fullName, email, phone, avatarUrl }) {
   const { rows } = await db.query(
     `UPDATE users SET

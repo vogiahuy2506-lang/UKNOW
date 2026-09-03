@@ -1,12 +1,13 @@
 import express from 'express';
 import leadController from '../controllers/lead.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 router.get('/preview', requirePermission('leads'), leadController.preview.bind(leadController));

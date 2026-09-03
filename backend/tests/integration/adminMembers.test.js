@@ -622,6 +622,7 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
         username: 'noreleasenew',
         email: 'no_release@test.local',
         password: 'Passw0rd123',
+        phone: '0911000011',
         emailVerificationCode: '123456',
       });
     expect(registerResA.status).toBe(201);
@@ -653,6 +654,7 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
         username: 'canfreenew',
         email: 'canfree@test.local',
         password: 'Passw0rd123',
+        phone: '0911000012',
         emailVerificationCode: '123456',
       });
 

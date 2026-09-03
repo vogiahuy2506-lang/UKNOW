@@ -19,6 +19,7 @@ import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.
 import { getSystemAuditContext } from '../utils/auditContext.util.js';
 import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
+import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -89,13 +90,30 @@ class AuthController {
         throw { status: 400, message: 'Tên đăng nhập đã được sử dụng' };
       }
 
+      // SĐT bắt buộc — một số chỉ được gắn với 1 tài khoản (idx_users_phone_unique, migration 179).
+      const normalizedPhone = normalizePhoneForZaloCampaign(phone);
+      if (normalizedPhone.length < 9) {
+        throw { status: 400, message: 'Số điện thoại không hợp lệ' };
+      }
+      const existingPhone = await client.query(
+        'SELECT id FROM users WHERE phone = $1',
+        [normalizedPhone]
+      );
+      if (existingPhone.rows.length > 0) {
+        throw {
+          status: 409,
+          code: 'PHONE_TAKEN',
+          message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+        };
+      }
+
       const passwordHash = await bcrypt.hash(password, 10);
 
       const result = await client.query(
         `INSERT INTO users (username, email, password_hash, full_name, phone, status, is_verified, verified_at, role, auth_provider, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', 'local', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-         RETURNING id, username, email, full_name, avatar_url, status, role`,
-        [username, email, passwordHash, fullName || null, phone || null]
+         RETURNING id, username, email, full_name, avatar_url, status, role, phone`,
+        [username, email, passwordHash, fullName || null, normalizedPhone]
       );
 
       const user = result.rows[0];
@@ -164,12 +182,23 @@ class AuthController {
         if (detail.includes('username')) {
           return res.status(400).json({ success: false, message: 'Tên đăng nhập đã được sử dụng' });
         }
+        if (detail.includes('phone')) {
+          return res.status(409).json({
+            success: false,
+            code: 'PHONE_TAKEN',
+            message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+          });
+        }
       }
 
-      // Lỗi đã gắn status (validation OTP/email/username phía trên throw kiểu này,
+      // Lỗi đã gắn status (validation OTP/email/username/phone phía trên throw kiểu này,
       // hoặc lỗi từ trial grant như race unique order_code — status 409)
       if (error.status && typeof error.message === 'string') {
-        return res.status(error.status).json({ success: false, message: error.message });
+        return res.status(error.status).json({
+          success: false,
+          message: error.message,
+          ...(error.code ? { code: error.code } : {}),
+        });
       }
 
       return res.status(500).json({ success: false, message: 'Lỗi server' });
@@ -204,7 +233,7 @@ class AuthController {
       const result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
                 active_plan_id, password_hash, failed_login_attempts, locked_until,
-                must_change_password
+                must_change_password, phone
          FROM users
          WHERE username = $1`,
         [username]
@@ -349,7 +378,7 @@ class AuthController {
       // 2. Check if user exists
       let result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
-                active_plan_id, password_hash, failed_login_attempts, locked_until
+                active_plan_id, password_hash, failed_login_attempts, locked_until, phone
          FROM users
          WHERE LOWER(email) = LOWER($1)`,
         [email]
@@ -792,6 +821,9 @@ class AuthController {
       // Thiếu nó thì mọi request sau đó bị requirePasswordChange trả 403 mà
       // người dùng không hiểu vì sao.
       mustChangePassword: user.must_change_password === true,
+      // Cùng lý do như trên nhưng cho requirePhone — thiếu field này thì frontend
+      // không biết mở modal bổ sung SĐT.
+      phone: user.phone ?? null,
     };
   }
 

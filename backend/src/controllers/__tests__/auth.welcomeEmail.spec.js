@@ -70,7 +70,9 @@ describe('auth.controller welcome email invariant', () => {
     mockClient.query.mockResolvedValueOnce({ rows: [] });
     // 2. check username
     mockClient.query.mockResolvedValueOnce({ rows: [] });
-    // 3. insert user
+    // 3. check phone (mục 1.3 — SĐT bắt buộc, kiểm trùng trước khi insert)
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
+    // 4. insert user
     mockClient.query.mockResolvedValueOnce({
       rows: [
         {
@@ -80,10 +82,11 @@ describe('auth.controller welcome email invariant', () => {
           full_name: 'Test User',
           status: 'active',
           role: 'user',
+          phone: '0912345678',
         },
       ],
     });
-    // 4. COMMIT
+    // 5. COMMIT
     mockClient.query.mockResolvedValueOnce({ rows: [] });
 
     const req = {
@@ -92,6 +95,7 @@ describe('auth.controller welcome email invariant', () => {
         email: 'newuser@example.com',
         password: 'password123',
         fullName: 'Test User',
+        phone: '0912345678',
         emailVerificationCode: '123456',
       },
       headers: {},

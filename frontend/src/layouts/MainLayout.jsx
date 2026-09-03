@@ -10,6 +10,7 @@ import { useI18n } from '../i18n';
 import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
 import ChangePasswordModal from '../features/auth/components/ChangePasswordModal';
+import PhoneRequiredModal from '../features/auth/components/PhoneRequiredModal';
 import TrialWelcomeModal from '../features/auth/components/TrialWelcomeModal';
 import { trialWelcomeKey } from '../stores/authStore';
 
@@ -23,6 +24,12 @@ const MainLayout = () => {
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
   const mustChangePassword = user?.mustChangePassword === true;
+  // Đổi mật khẩu trước, xong mới tới SĐT — hai cổng cùng đóng là chuyện có thật
+  // (nhân viên được mời, hoặc admin reset mật khẩu, đều có thể chưa có SĐT).
+  // role !== 'admin': khớp isSuperAdmin() bên backend (requirePhone bypass superadmin) —
+  // thiếu điều kiện này thì superadmin cũng dính modal không đóng được dù server không chặn họ.
+  // Xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 1.4 và 1.6.
+  const phoneRequired = !mustChangePassword && !user?.phone && user?.role !== 'admin';
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', false); // default icon-only
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('founder_ai_ai_panel_open', false);
@@ -194,6 +201,11 @@ const MainLayout = () => {
           onChanged={() => updateUser({ ...user, mustChangePassword: false })}
         />
 
+        <PhoneRequiredModal
+          isOpen={phoneRequired}
+          onChanged={(phone) => updateUser({ ...user, phone })}
+        />
+
         <TrialWelcomeModal
           isOpen={Boolean(trial)}
           trial={trial}
@@ -288,6 +300,11 @@ const MainLayout = () => {
         forced
         onClose={() => {}}
         onChanged={() => updateUser({ ...user, mustChangePassword: false })}
+      />
+
+      <PhoneRequiredModal
+        isOpen={phoneRequired}
+        onChanged={(phone) => updateUser({ ...user, phone })}
       />
 
       <TrialWelcomeModal

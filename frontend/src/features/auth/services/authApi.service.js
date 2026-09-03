@@ -70,3 +70,15 @@ export function resetPassword(payload) {
 export function sendVerificationCode(payload) {
   return api.post('/verification/send-code', payload);
 }
+
+/**
+ * Bổ sung/đổi SĐT — dùng cho modal bắt buộc sau khi requirePhone chặn 403.
+ * Gửi lại đúng số đang có là no-op (200), server đã loại trừ chính user.
+ *
+ * @param {{ phone: string }} payload
+ * @returns {Promise<{ success: boolean, message?: string, data: { phone: string } }>}
+ */
+export async function updateMyPhone({ phone }) {
+  const response = await api.put('/users/me/phone', { phone });
+  return response.data;
+}

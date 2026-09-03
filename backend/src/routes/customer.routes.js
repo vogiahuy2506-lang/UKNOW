@@ -3,7 +3,7 @@ import { body } from 'express-validator';
 import customerController from '../controllers/customer.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
@@ -15,6 +15,7 @@ router.get('/zalo-tracking/click/:token', customerController.trackZaloClick.bind
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 router.use(requirePermission('customers'));
 

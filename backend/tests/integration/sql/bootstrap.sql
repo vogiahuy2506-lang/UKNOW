@@ -75,6 +75,8 @@ CREATE TABLE users (
 
 CREATE INDEX idx_users_role  ON users(role);
 CREATE INDEX idx_users_email ON users(email);
+-- migration 179: SĐT chỉ được dùng cho 1 tài khoản
+CREATE UNIQUE INDEX idx_users_phone_unique ON users (phone) WHERE phone IS NOT NULL;
 
 CREATE TABLE user_members (
   id          BIGSERIAL PRIMARY KEY,

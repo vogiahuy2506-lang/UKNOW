@@ -3,12 +3,13 @@ import { body, param } from 'express-validator';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import productsController from '../controllers/products.controller.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 router.get('/', requirePermission('courses'), productsController.getAll.bind(productsController));

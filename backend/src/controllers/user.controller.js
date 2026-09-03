@@ -16,6 +16,7 @@ import {
   saveInvoiceProfile,
   clearInvoiceProfile,
   findUserByEmailExceptId,
+  findUserByPhoneExceptId,
   resetLegacyEmployeePassword,
   revokeAllRefreshTokensForUser,
   updateLegacyEmployeeLimits,
@@ -37,6 +38,7 @@ import {
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
 import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
+import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -345,7 +347,28 @@ class UserController {
         }
       }
 
-      const user = await updateProfileInDb(userId, { fullName, email, phone, avatarUrl });
+      // Route đa năng này ghi thẳng `phone` từ trước khi có idx_users_phone_unique
+      // (migration 179) — không chuẩn hoá, không kiểm trùng. Từ khi có ràng buộc UNIQUE,
+      // để nguyên sẽ vỡ 500 thô khi trùng, hoặc lưu giá trị lệch với
+      // normalizePhoneForZaloCampaign mà PUT /users/me/phone dùng. Vá tại đây thay vì
+      // chỉ vá đường mới, để chỉ có một chỗ ghi `phone` không qua chuẩn hoá.
+      let normalizedPhone = phone;
+      if (phone !== undefined && phone !== null) {
+        normalizedPhone = normalizePhoneForZaloCampaign(phone);
+        if (normalizedPhone.length < 9) {
+          return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
+        }
+        const existingPhone = await findUserByPhoneExceptId(normalizedPhone, userId);
+        if (existingPhone) {
+          return res.status(409).json({
+            success: false,
+            code: 'PHONE_TAKEN',
+            message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+          });
+        }
+      }
+
+      const user = await updateProfileInDb(userId, { fullName, email, phone: normalizedPhone, avatarUrl });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -399,11 +422,66 @@ class UserController {
         data: { ...mapProfileResponse(userProfileRow), addons },
       });
     } catch (error) {
+      if (error.code === '23505' && String(error.detail || '').includes('phone')) {
+        return res.status(409).json({
+          success: false,
+          code: 'PHONE_TAKEN',
+          message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+        });
+      }
       console.error('Update profile error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi server'
       });
+    }
+  }
+
+  /**
+   * PUT /api/users/me/phone
+   * Bổ sung/đổi SĐT — dùng cho modal bắt buộc sau requirePhone (authorization.middleware.js).
+   * KHÔNG đi qua requirePhone (route này chính là lối thoát của cổng đó — xem
+   * user.routes.js). Kiểm trùng loại trừ chính mình: gửi lại đúng số đang có là no-op 200.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async updatePhone(req, res) {
+    try {
+      const userId = req.user.id;
+      const normalizedPhone = normalizePhoneForZaloCampaign(req.body?.phone);
+      if (normalizedPhone.length < 9) {
+        return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
+      }
+
+      const existingPhone = await findUserByPhoneExceptId(normalizedPhone, userId);
+      if (existingPhone) {
+        return res.status(409).json({
+          success: false,
+          code: 'PHONE_TAKEN',
+          message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+        });
+      }
+
+      const user = await updateProfileInDb(userId, { phone: normalizedPhone });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã cập nhật số điện thoại',
+        data: { phone: user.phone },
+      });
+    } catch (error) {
+      if (error.code === '23505' && String(error.detail || '').includes('phone')) {
+        return res.status(409).json({
+          success: false,
+          code: 'PHONE_TAKEN',
+          message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+        });
+      }
+      console.error('Update phone error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 

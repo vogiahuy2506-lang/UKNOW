@@ -1,13 +1,14 @@
 import express from 'express';
 import campaignRunController from '../controllers/campaignRun.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { requirePermission, requireActivePlan, requirePasswordChange } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 
 // Tất cả routes đều yêu cầu xác thực + quyền campaigns_run
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // GET /api/campaign-runs - Lấy danh sách lịch sử chạy

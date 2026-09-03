@@ -3,7 +3,7 @@ import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
-import { requireActivePlan, requirePasswordChange, requirePermission, requireAllPermissions, requireSelfContext } from '../middleware/authorization.middleware.js';
+import { requireActivePlan, requirePasswordChange, requirePhone, requirePermission, requireAllPermissions, requireSelfContext } from '../middleware/authorization.middleware.js';
 import multer from 'multer';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
@@ -15,6 +15,7 @@ const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePa
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
+router.use(requirePhone);
 router.use(requireActivePlan);
 
 // Smart interactive chat

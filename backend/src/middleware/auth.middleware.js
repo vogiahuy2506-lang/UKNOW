@@ -15,7 +15,7 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
   try {
     userResult = await db.query(
       `SELECT u.id, u.username, u.email, u.password_hash, u.full_name, u.avatar_url, u.status, u.role,
-              u.active_plan_id, u.subscription_expires_at, u.must_change_password,
+              u.active_plan_id, u.subscription_expires_at, u.must_change_password, u.phone,
               u.updated_at,
               COALESCE(p.grace_period_days, 0)::int AS grace_period_days
        FROM users u
@@ -26,7 +26,7 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
   } catch {
     userResult = await db.query(
       `SELECT id, username, email, NULL AS password_hash, full_name, avatar_url, status, role, active_plan_id,
-              NULL AS subscription_expires_at, FALSE AS must_change_password,
+              NULL AS subscription_expires_at, FALSE AS must_change_password, phone,
               updated_at,
               0 AS grace_period_days
        FROM users

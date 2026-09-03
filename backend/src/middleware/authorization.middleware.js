@@ -21,6 +21,32 @@ export function requirePasswordChange(req, res, next) {
 }
 
 /**
+ * Middleware yêu cầu user đã bổ sung số điện thoại trước khi truy cập.
+ * Chỉ áp dụng cho user thường, bypass cho superadmin.
+ *
+ * Nhân viên (role='user', gắn qua bảng user_members) CŨNG bị chặn — không có cách
+ * loại trừ nào đáng tin (role='employee' không tồn tại trong sản phẩm; activeContext
+ * chỉ đổi khi có header X-Owner-Context). Xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md
+ * mục 1.4 để biết lý do đầy đủ.
+ */
+export function requirePhone(req, res, next) {
+  if (isSuperAdmin(req.user?.role)) {
+    return next();
+  }
+
+  const phone = String(req.user?.phone ?? '').trim();
+  if (!phone) {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn cần bổ sung số điện thoại trước khi sử dụng hệ thống',
+      code: 'PHONE_REQUIRED',
+    });
+  }
+
+  return next();
+}
+
+/**
  * Middleware kiểm tra superadmin — quyền cao nhất, quản lý toàn hệ thống.
  * Giữ tên requireAdmin để tương thích với các route cũ đang dùng.
  */
