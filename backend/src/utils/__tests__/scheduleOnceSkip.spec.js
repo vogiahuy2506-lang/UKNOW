@@ -16,6 +16,7 @@ const executeCampaignMock = jest.fn(() => Promise.resolve());
 
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: queryMock },
+  isConnectionError: () => false,
 }));
 
 jest.unstable_mockModule('../../controllers/campaign.controller.js', () => ({
