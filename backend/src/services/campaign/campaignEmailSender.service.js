@@ -750,8 +750,20 @@ class CampaignEmailSenderService {
 
     if (reservationActive && reservation.status === 'consumed') {
       // Idempotent replay: cùng logical send đã consumed trước đó (vd. retry sau khi job stalled
-      // trong BullMQ) — không gọi lại provider, trả kết quả y hệt lần trước.
+      // trong BullMQ) — không gọi lại provider, trả kết quả y hệt lần trước. PHẢI đọc lại
+      // snapshot.status thay vì hardcode 'success': hard bounce cũng consume (billable), nếu
+      // replay luôn trả success thì campaign ledger/thống kê đánh dấu nhầm recipient thành công
+      // (review độc lập bắt lỗi này).
       const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+      if (snapshot.status === 'bounced') {
+        return {
+          to: customer?.email || '',
+          status: 'bounced',
+          bounceType: snapshot.errorType === 'hard_bounce' ? 'hard' : 'soft',
+          bounceReason: snapshot.error || '',
+          isReplay: true,
+        };
+      }
       return {
         to: customer?.email || '',
         status: 'success',
@@ -962,7 +974,16 @@ class CampaignEmailSenderService {
         try {
           await consumeSendQuota({
             reservationId: reservation.id,
-            responseSnapshot: { bounceType, provider: 'smtp' },
+            // Dùng field allowlisted (status/errorType/error trong ALLOWED_RESPONSE_SNAPSHOT_FIELDS
+            // ở sendQuota.repository.js) — bounceType KHÔNG nằm trong allowlist nên bị
+            // sanitizeResponseSnapshot() lặng lẽ lọc mất, làm nhánh replay bên trên không còn cách
+            // nào phân biệt bounce với success (review độc lập bắt lỗi này).
+            responseSnapshot: {
+              status: 'bounced',
+              errorType: bounceType === 'hard' ? 'hard_bounce' : 'soft_bounce',
+              error: bounceReason ? String(bounceReason).slice(0, 500) : null,
+              provider: 'smtp',
+            },
             persistSource: async (client) => {
               await emailSettingsSmtpService.logEmailSentWithClient(client, {
                 userId: campaign.id_user,
@@ -1058,7 +1079,12 @@ class CampaignEmailSenderService {
           providerReference: info?.messageId
             ? crypto.createHash('sha256').update(String(info.messageId)).digest('hex').slice(0, 32)
             : null,
-          responseSnapshot: { messageId: info?.messageId || null, provider: 'smtp', sentAt: sentAt.toISOString() },
+          responseSnapshot: {
+            status: 'success',
+            messageId: info?.messageId || null,
+            provider: 'smtp',
+            sentAt: sentAt.toISOString(),
+          },
           persistSource: shouldSaveMessageLog
             ? (client) => emailSettingsSmtpService.logEmailSentWithClient(client, {
                 userId: campaign.id_user,

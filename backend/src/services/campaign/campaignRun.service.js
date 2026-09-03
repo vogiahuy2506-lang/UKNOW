@@ -4745,6 +4745,11 @@ class CampaignRunService {
                   // là định danh gốc từ dữ liệu campaign (phone/uid trước resolve) — ổn định qua
                   // các lần retry cùng logical send, dùng để build reservation key (PR-Q4b).
                   quotaRecipientKey: recipient,
+                  // message (bên dưới, tham số gửi thật) đã bị rewrite tracking link/short-code
+                  // NGẪU NHIÊN mỗi lần chạy — dùng nó để fingerprint sẽ làm retry lệch fingerprint
+                  // và bị 409 IDEMPOTENCY_KEY_REUSED. quotaContentKey giữ nội dung gốc trước khi
+                  // rewrite, ổn định qua các lần thử cùng logical send (PR-Q4b, review độc lập).
+                  quotaContentKey: message,
                   runId,
                   nodeId: node.id,
                   stepIndex: stepMeta?.stepIndex ?? 1,
@@ -6077,6 +6082,7 @@ class CampaignRunService {
                 accountId: workingAccount.id,
                 phone,
                 quotaRecipientKey: phone,
+                quotaContentKey: message,
                 runId,
                 nodeId: node.id,
                 stepIndex: 1,
@@ -6651,6 +6657,7 @@ class CampaignRunService {
                 accountId: account.id,
                 groupId,
                 quotaRecipientKey: groupId,
+                quotaContentKey: message,
                 runId,
                 nodeId: node.id,
                 stepIndex: stepMeta?.stepIndex ?? 1,

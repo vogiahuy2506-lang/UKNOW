@@ -32,6 +32,21 @@ import {
 import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
 
 /**
+ * Nhóm category của classifyZaloSendError() được coi là "definitive_no_send" (chắc chắn CHƯA
+ * gửi, an toàn để release quota) theo plan Wave 2 mục 8. Mọi category KHÔNG có trong set này
+ * (kể cả ZALO_SILENT_DROP và UNKNOWN) mặc định là uncertain — không được release, vì release cho
+ * phép retry tự động và có nguy cơ gửi trùng khi thực ra không rõ provider đã nhận hay chưa.
+ */
+const ZALO_DEFINITIVE_NO_SEND_CATEGORIES = new Set([
+  'PHONE_LOOKUP_RATE_LIMIT', // lookup phone->uid xảy ra TRƯỚC provider call thật
+  'ACCOUNT_DISCONNECTED', // session chết trước khi transmit
+  'NOT_FRIEND_OR_BLOCKED', // Zalo validation-reject trước khi gửi
+  'ZALO_GROUP_UNREACHABLE', // group không truy cập được, chưa gửi
+  'RECIPIENT_NOT_FOUND', // Zalo validation-reject trước khi gửi
+  'INVALID_PARAMETER', // validation-reject trước khi gửi
+]);
+
+/**
  * Ánh xạ mảng với giới hạn đồng thời — tránh bắn hàng trăm request Zalo cùng lúc khi enrich tên nhóm.
  *
  * @template T, R
@@ -1862,6 +1877,12 @@ class CampaignZaloSenderService {
     recipientType = 'phone',
     message,
     attachments = [],
+    quotaRecipientKey,
+    quotaContentKey,
+    runId,
+    nodeId,
+    stepIndex,
+    zaloMessageId,
   }) {
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_PERSONAL_SEND,
@@ -1872,6 +1893,12 @@ class CampaignZaloSenderService {
         recipientType,
         message,
         attachments,
+        quotaRecipientKey,
+    quotaContentKey,
+        runId,
+        nodeId,
+        stepIndex,
+        zaloMessageId,
       },
       jobOptions: { attempts: 1 },
     });
@@ -1884,6 +1911,16 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendPersonalMessageByQueue(payload = {}) {
+    // Resolve session TRƯỚC reserve: nếu tài khoản mất phiên đăng nhập, throw ở đây chưa hề tạo
+    // reservation nào — không phải release/uncertain gì cả. Nếu markSendQuotaSending() chạy trước
+    // bước này rồi mới lookup session lỗi, reservation kẹt 'sending' vĩnh viễn (throw nằm ngoài
+    // try/catch phía dưới) cho tới khi sweeper PR-Q5 xử lý — vá theo review độc lập.
+    const api = await this.getConnectedApiOrSyncStatus({
+      accountId: payload?.accountId,
+      userId: payload?.userId,
+    });
+    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
+
     const { reservation, active } = await this.reserveCampaignZaloQuota(payload, {
       logicalStep: Number.isInteger(payload?.stepIndex) ? payload.stepIndex : 1,
     });
@@ -1894,12 +1931,6 @@ class CampaignZaloSenderService {
     if (active) {
       await markSendQuotaSending({ reservationId: reservation.id });
     }
-
-    const api = await this.getConnectedApiOrSyncStatus({
-      accountId: payload?.accountId,
-      userId: payload?.userId,
-    });
-    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
 
     let sendResult;
     try {
@@ -1952,8 +1983,13 @@ class CampaignZaloSenderService {
       recipient: recipientForKey,
       sourceType: 'campaign_zalo',
       quantity: 1,
-      // message để fingerprint bắt được trường hợp key trùng nhưng nội dung đổi giữa 2 lần thử.
-      content: payload.message || '',
+      // Dùng quotaContentKey (nội dung GỐC trước khi campaignRun.service.js rewrite tracking
+      // link/short-code) để fingerprint bắt được trường hợp key trùng nhưng nội dung đổi giữa
+      // 2 lần thử. KHÔNG dùng payload.message trực tiếp: với Zalo cá nhân/nhóm, message đã bị
+      // rewrite short-link NGẪU NHIÊN mỗi lần chạy (kể cả retry cùng logical send) — dùng nó sẽ
+      // làm fingerprint đổi theo mỗi lần thử và retry hợp lệ bị 409 IDEMPOTENCY_KEY_REUSED
+      // (review độc lập bắt lỗi này). Kết bạn không rewrite tracking nên quotaContentKey === message.
+      content: payload.quotaContentKey || payload.message || '',
     });
     const parsedNodeId = Number.parseInt(payload.nodeId, 10);
     let reservation;
@@ -2025,8 +2061,17 @@ class CampaignZaloSenderService {
   async settleCampaignZaloQuotaOnError(reservation, active, sendErr) {
     if (!active || !reservation?.id) return;
     const classified = classifyZaloSendError(sendErr);
-    if (classified.isTimeout) {
-      await this.markCampaignZaloQuotaUncertain(reservation, 'TIMEOUT', classified.label || 'Network timeout');
+    // Plan Wave 2 mục 8: chỉ release khi CHẮC CHẮN chưa gửi (definitive_no_send). Mặc định coi
+    // là uncertain — đặc biệt ZALO_SILENT_DROP (Zalo nhận lệnh nhưng không trả msgId hợp lệ,
+    // tức provider ĐÃ được gọi) và UNKNOWN (lỗi chưa phân loại được, không có bằng chứng chưa
+    // gửi) tuyệt đối không được release, vì release cho phép retry tự động và có nguy cơ gửi
+    // trùng (review độc lập bắt lỗi này — code cũ release mọi thứ trừ timeout).
+    if (classified.isTimeout || !ZALO_DEFINITIVE_NO_SEND_CATEGORIES.has(classified.category)) {
+      await this.markCampaignZaloQuotaUncertain(
+        reservation,
+        classified.isTimeout ? 'TIMEOUT' : (classified.failureCode || classified.category || 'UNKNOWN'),
+        classified.label || sendErr.message || 'Network/unknown error'
+      );
     } else {
       try {
         await releaseSendQuota({
@@ -2176,7 +2221,18 @@ class CampaignZaloSenderService {
    * @param {string} input.message
    * @returns {Promise<object>}
    */
-  async sendFriendRequestQueued({ userId, accountId, phone, message }) {
+  async sendFriendRequestQueued({
+    userId,
+    accountId,
+    phone,
+    message,
+    quotaRecipientKey,
+    quotaContentKey,
+    runId,
+    nodeId,
+    stepIndex,
+    zaloMessageId,
+  }) {
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_FRIEND_REQUEST_SEND,
       payload: {
@@ -2184,6 +2240,12 @@ class CampaignZaloSenderService {
         accountId,
         phone,
         message,
+        quotaRecipientKey,
+    quotaContentKey,
+        runId,
+        nodeId,
+        stepIndex,
+        zaloMessageId,
       },
       jobOptions: { attempts: 1 },
     });
@@ -2196,6 +2258,12 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendFriendRequestByQueue(payload = {}) {
+    // Resolve session TRƯỚC reserve — xem giải thích ở sendPersonalMessageByQueue.
+    const api = await this.getConnectedApiOrSyncStatus({
+      accountId: payload?.accountId,
+      userId: payload?.userId,
+    });
+
     // Kết bạn không có multi-step template (khác Email/Zalo cá nhân/nhóm) — logicalStep luôn 1.
     const { reservation, active } = await this.reserveCampaignZaloQuota(payload, { logicalStep: 1 });
     if (active && reservation.status === 'consumed') {
@@ -2205,11 +2273,6 @@ class CampaignZaloSenderService {
     if (active) {
       await markSendQuotaSending({ reservationId: reservation.id });
     }
-
-    const api = await this.getConnectedApiOrSyncStatus({
-      accountId: payload?.accountId,
-      userId: payload?.userId,
-    });
 
     let sendResult;
     try {
@@ -2336,6 +2399,12 @@ class CampaignZaloSenderService {
     groupId,
     message,
     attachments = [],
+    quotaRecipientKey,
+    quotaContentKey,
+    runId,
+    nodeId,
+    stepIndex,
+    zaloMessageId,
   }) {
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_GROUP_SEND,
@@ -2345,6 +2414,12 @@ class CampaignZaloSenderService {
         groupId,
         message,
         attachments,
+        quotaRecipientKey,
+    quotaContentKey,
+        runId,
+        nodeId,
+        stepIndex,
+        zaloMessageId,
       },
       jobOptions: { attempts: 1 },
     });
@@ -2357,6 +2432,13 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendGroupMessageByQueue(payload = {}) {
+    // Resolve session TRƯỚC reserve — xem giải thích ở sendPersonalMessageByQueue.
+    const api = await this.getConnectedApiOrSyncStatus({
+      accountId: payload?.accountId,
+      userId: payload?.userId,
+    });
+    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
+
     const { reservation, active } = await this.reserveCampaignZaloQuota(payload, {
       logicalStep: Number.isInteger(payload?.stepIndex) ? payload.stepIndex : 1,
     });
@@ -2367,12 +2449,6 @@ class CampaignZaloSenderService {
     if (active) {
       await markSendQuotaSending({ reservationId: reservation.id });
     }
-
-    const api = await this.getConnectedApiOrSyncStatus({
-      accountId: payload?.accountId,
-      userId: payload?.userId,
-    });
-    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
 
     let sendResult;
     try {
