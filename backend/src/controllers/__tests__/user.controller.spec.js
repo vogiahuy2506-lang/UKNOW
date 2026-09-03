@@ -34,6 +34,7 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   clearInvoiceProfile,
   findUserByEmailExceptId: jest.fn(),
   findUserByPhoneExceptId: jest.fn(),
+  isCurrentlyAnyonesEmployee: jest.fn().mockResolvedValue(false),
   resetLegacyEmployeePassword: jest.fn(),
   revokeAllRefreshTokensForUser: jest.fn(),
   updateLegacyEmployeeLimits: jest.fn(),

@@ -202,6 +202,20 @@ export async function findUserByEmailExceptId(email, userId) {
 }
 
 /**
+ * Đang là nhân viên của ai đó không (bảng `user_members`, không phải cột `role` —
+ * `role='employee'` không tồn tại trong sản phẩm, xem employee.repository.js:78-80).
+ * Dùng để lọc ai được đẩy sang Google Sheet thành viên
+ * (PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 2.3, Bẫy #5b).
+ */
+export async function isCurrentlyAnyonesEmployee(userId) {
+  const { rows } = await db.query(
+    `SELECT 1 FROM user_members WHERE employee_id = $1 AND status = 'active' LIMIT 1`,
+    [userId]
+  );
+  return rows.length > 0;
+}
+
+/**
  * Kiểm trùng SĐT, loại trừ chính user đang cập nhật — thiếu điều kiện loại trừ sẽ
  * khoá cứng người gửi lại đúng số của mình (xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 1.5).
  */

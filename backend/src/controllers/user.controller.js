@@ -17,6 +17,7 @@ import {
   clearInvoiceProfile,
   findUserByEmailExceptId,
   findUserByPhoneExceptId,
+  isCurrentlyAnyonesEmployee,
   resetLegacyEmployeePassword,
   revokeAllRefreshTokensForUser,
   updateLegacyEmployeeLimits,
@@ -39,6 +40,7 @@ import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.servic
 import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
 import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
 import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
+import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -465,6 +467,25 @@ class UserController {
       const user = await updateProfileInDb(userId, { phone: normalizedPhone });
       if (!user) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      }
+
+      // Đẩy sang Google Sheet thành viên — CHỈ khi không phải nhân viên của ai
+      // (role='employee' không tồn tại trong sản phẩm, tư cách nằm ở bảng user_members;
+      // xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 2.3, Bẫy #5b). Đây là chỗ
+      // DUY NHẤT thực sự cần kiểm — user hoàn thành modal SĐT ở đây có thể là nhân viên
+      // cũ chưa từng có SĐT, khác với register() luôn tạo user hoàn toàn mới.
+      if (req.user.role === 'user') {
+        isCurrentlyAnyonesEmployee(userId)
+          .then((isEmployee) => {
+            if (isEmployee) return;
+            return pushMemberToSheet({
+              email: req.user.email,
+              phone: user.phone,
+              fullName: req.user.full_name,
+              createdAt: new Date(),
+            });
+          })
+          .catch((err) => console.warn('[MemberSheet] Failed to push:', err.message));
       }
 
       return res.json({

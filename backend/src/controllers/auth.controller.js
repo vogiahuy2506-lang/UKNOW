@@ -20,6 +20,7 @@ import { getSystemAuditContext } from '../utils/auditContext.util.js';
 import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
 import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
+import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -155,6 +156,17 @@ class AuthController {
         subject: welcome.subject,
         html: welcome.html,
       }).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
+
+      // Đẩy sang Google Sheet thành viên (async, không block response — xem
+      // memberSheetSync.util.js). User vừa tạo trong transaction này chắc chắn
+      // chưa thể là nhân viên của ai (user_members chỉ gắn được SAU khi đã có id),
+      // nên không cần kiểm isCurrentlyAnyonesEmployee ở đây như PUT /me/phone.
+      pushMemberToSheet({
+        email: userEmail,
+        phone: user.phone,
+        fullName: full_name,
+        createdAt: new Date(),
+      }).catch((err) => console.warn('[MemberSheet] Failed to push:', err.message));
 
       return res.status(201).json({
         success: true,
