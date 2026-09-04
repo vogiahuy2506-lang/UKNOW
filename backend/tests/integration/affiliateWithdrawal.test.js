@@ -90,6 +90,8 @@ const VALID_PERSONAL_BODY = {
   amount: 2000000,
   full_name: 'Nguyễn Văn Test',
   id_card_number: '001200012345',
+  id_card_issued_date: '2021-05-15',
+  id_card_issued_place: 'Cục Cảnh sát QLHC về TTXH',
   bank_name: 'Vietcombank',
   bank_account_number: '1234567890',
   bank_account_name: 'NGUYEN VAN TEST',
@@ -198,31 +200,24 @@ describe('Affiliate PR-A4 — Yêu cầu rút + KYC + Email nội bộ', () => {
     expect(withdrawals.rows.length).toBe(1);
   });
 
-  it('e. Gọi THẲNG service bỏ qua tầng kiểm khi đã có 1 pending → vẫn bị chặn ở tầng DB bởi idx_affiliate_withdrawals_one_pending, trả đúng câu thông báo, KHÔNG 500', async () => {
+  it('e. Chèn thẳng dòng pending thứ hai bằng SQL → bị chặn ở tầng DB bởi idx_affiliate_withdrawals_one_pending (23505)', async () => {
     const user = await createUser({ email: 'user-e@test.com', username: 'user_e' });
     await insertLedger(user.id, 5000000);
 
     // Tạo yêu cầu 1 bình thường
     await requestWithdrawal(user.id, { ...VALID_PERSONAL_BODY, amount: 2000000 });
 
-    // Gọi thẳng service với skipPendingCheck=true để ép câu lệnh INSERT xuống DB
-    let catchedError = null;
-    try {
-      await requestWithdrawal(
-        user.id,
-        { ...VALID_PERSONAL_BODY, amount: 1000000 },
-        { skipPendingCheck: true }
-      );
-    } catch (err) {
-      catchedError = err;
-    }
-
-    expect(catchedError).not.toBeNull();
-    expect(catchedError.status).toBe(400);
-    expect(catchedError.code).toBe('ALREADY_HAS_PENDING_WITHDRAWAL');
-    expect(catchedError.message).toBe(
-      'Bạn đang có một yêu cầu rút tiền đang chờ xử lý. Vui lòng đợi hoàn tất trước khi tạo yêu cầu mới.'
-    );
+    // Chèn thẳng dòng pending thứ hai bằng SQL
+    await expect(
+      db.query(
+        `INSERT INTO affiliate_withdrawals (
+           user_id, partner_type, amount_gross, tax_amount, amount_net,
+           full_name, bank_name, bank_account_number, bank_account_name,
+           id_card_number_enc, status
+         ) VALUES ($1, 'personal', 1000000, 100000, 900000, 'X', 'Y', '1', 'X', 'enc:v1:x', 'pending')`,
+        [user.id]
+      )
+    ).rejects.toMatchObject({ code: '23505' });
 
     // Khẳng định số dư không bị trừ lần 2 (vẫn đúng 3.000.000đ)
     const sum = await getLedgerSum(user.id);
@@ -477,6 +472,66 @@ describe('Affiliate PR-A4 — Yêu cầu rút + KYC + Email nội bộ', () => {
 
     const blockers = await findPurgeBlockers(user.id);
     expect(blockers).toContain('hoạt động affiliate (doanh thu giới thiệu hoặc được giới thiệu)');
+  });
+
+  it('n. Thiếu ngày cấp CCCD/CMND → BỊ CHẶN (400 "Thiếu ngày cấp CCCD/CMND")', async () => {
+    const user = await createUser({ email: 'user-n@test.com', username: 'user_n' });
+    await insertLedger(user.id, 2000000);
+    const token = createAuthToken(user);
+
+    const res = await request(app)
+      .post('/api/affiliate/withdrawals')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...VALID_PERSONAL_BODY, id_card_issued_date: '' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Thiếu ngày cấp CCCD/CMND');
+    expect(await getLedgerSum(user.id)).toBe(2000000);
+  });
+
+  it('o. Ngày cấp CCCD/CMND ở tương lai → BỊ CHẶN (400 "Ngày cấp CCCD/CMND không thể ở tương lai")', async () => {
+    const user = await createUser({ email: 'user-o@test.com', username: 'user_o' });
+    await insertLedger(user.id, 2000000);
+    const token = createAuthToken(user);
+
+    const res = await request(app)
+      .post('/api/affiliate/withdrawals')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...VALID_PERSONAL_BODY, id_card_issued_date: '2099-01-01' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Ngày cấp CCCD/CMND không thể ở tương lai');
+    expect(await getLedgerSum(user.id)).toBe(2000000);
+  });
+
+  it('p. Ngày cấp CCCD/CMND không hợp lệ → BỊ CHẶN (400 "Ngày cấp CCCD/CMND không hợp lệ")', async () => {
+    const user = await createUser({ email: 'user-p@test.com', username: 'user_p' });
+    await insertLedger(user.id, 2000000);
+    const token = createAuthToken(user);
+
+    const res = await request(app)
+      .post('/api/affiliate/withdrawals')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...VALID_PERSONAL_BODY, id_card_issued_date: 'invalid-date' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Ngày cấp CCCD/CMND không hợp lệ');
+    expect(await getLedgerSum(user.id)).toBe(2000000);
+  });
+
+  it('q. Thiếu nơi cấp CCCD/CMND → BỊ CHẶN (400 "Thiếu nơi cấp CCCD/CMND")', async () => {
+    const user = await createUser({ email: 'user-q@test.com', username: 'user_q' });
+    await insertLedger(user.id, 2000000);
+    const token = createAuthToken(user);
+
+    const res = await request(app)
+      .post('/api/affiliate/withdrawals')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...VALID_PERSONAL_BODY, id_card_issued_place: '   ' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Thiếu nơi cấp CCCD/CMND');
+    expect(await getLedgerSum(user.id)).toBe(2000000);
   });
 });
 

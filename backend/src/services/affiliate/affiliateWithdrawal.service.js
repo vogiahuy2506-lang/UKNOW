@@ -150,6 +150,56 @@ export async function requestWithdrawal(userId, payload, options = {}) {
     throw error;
   }
 
+  // Kiểm tra ngày cấp CCCD/CMND
+  const rawIssuedDate = payload?.id_card_issued_date;
+  const issuedDateStr = String(rawIssuedDate || '').trim();
+  if (!issuedDateStr) {
+    const error = new Error('Thiếu ngày cấp CCCD/CMND');
+    error.status = 400;
+    throw error;
+  }
+
+  let idCardIssuedDate;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(issuedDateStr)) {
+    const [y, m, d] = issuedDateStr.split('-').map(Number);
+    const dObj = new Date(y, m - 1, d);
+    if (dObj.getFullYear() !== y || dObj.getMonth() !== m - 1 || dObj.getDate() !== d) {
+      const error = new Error('Ngày cấp CCCD/CMND không hợp lệ');
+      error.status = 400;
+      throw error;
+    }
+    const todayVn = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    if (issuedDateStr > todayVn) {
+      const error = new Error('Ngày cấp CCCD/CMND không thể ở tương lai');
+      error.status = 400;
+      throw error;
+    }
+    idCardIssuedDate = issuedDateStr;
+  } else {
+    const issuedDateObj = new Date(issuedDateStr);
+    if (Number.isNaN(issuedDateObj.getTime())) {
+      const error = new Error('Ngày cấp CCCD/CMND không hợp lệ');
+      error.status = 400;
+      throw error;
+    }
+    const todayVn = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const issuedDateVn = issuedDateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    if (issuedDateVn > todayVn) {
+      const error = new Error('Ngày cấp CCCD/CMND không thể ở tương lai');
+      error.status = 400;
+      throw error;
+    }
+    idCardIssuedDate = issuedDateObj.toISOString().slice(0, 10);
+  }
+
+  // Kiểm tra nơi cấp CCCD/CMND
+  const idCardIssuedPlace = String(payload?.id_card_issued_place || '').trim();
+  if (!idCardIssuedPlace) {
+    const error = new Error('Thiếu nơi cấp CCCD/CMND');
+    error.status = 400;
+    throw error;
+  }
+
   const taxCode = String(payload?.tax_code || '').trim().replace(/\s+/g, '');
   if (taxCode && !TAX_CODE_REGEX.test(taxCode)) {
     const error = new Error('Mã số thuế không hợp lệ (10 số hoặc 13 số dạng xxxxxxxxxx-xxx)');
@@ -222,18 +272,16 @@ export async function requestWithdrawal(userId, payload, options = {}) {
       throw error;
     }
 
-    // 3b. Kiểm tra yêu cầu pending khác (nếu không bypass bằng cờ kiểm thử)
-    if (!options.skipPendingCheck) {
-      const pendingResult = await client.query(
-        `SELECT id FROM affiliate_withdrawals WHERE user_id = $1 AND status = 'pending' LIMIT 1`,
-        [userId]
-      );
-      if (pendingResult.rows.length > 0) {
-        const error = new Error('Bạn đang có một yêu cầu rút tiền đang chờ xử lý. Vui lòng đợi hoàn tất trước khi tạo yêu cầu mới.');
-        error.status = 400;
-        error.code = 'ALREADY_HAS_PENDING_WITHDRAWAL';
-        throw error;
-      }
+    // 3b. Kiểm tra yêu cầu pending khác
+    const pendingResult = await client.query(
+      `SELECT id FROM affiliate_withdrawals WHERE user_id = $1 AND status = 'pending' LIMIT 1`,
+      [userId]
+    );
+    if (pendingResult.rows.length > 0) {
+      const error = new Error('Bạn đang có một yêu cầu rút tiền đang chờ xử lý. Vui lòng đợi hoàn tất trước khi tạo yêu cầu mới.');
+      error.status = 400;
+      error.code = 'ALREADY_HAS_PENDING_WITHDRAWAL';
+      throw error;
     }
 
     // 4. INSERT affiliate_withdrawals
@@ -264,8 +312,8 @@ export async function requestWithdrawal(userId, payload, options = {}) {
       bankAccountNumber,
       bankAccountName.toUpperCase(),
       idCardEncrypted,
-      payload?.id_card_issued_date || null,
-      payload?.id_card_issued_place ? String(payload.id_card_issued_place).trim() : null,
+      idCardIssuedDate,
+      idCardIssuedPlace,
       null,
       null,
       null,
