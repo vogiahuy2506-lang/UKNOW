@@ -971,6 +971,77 @@ describe('Integration — Synchronous Send Atomic Quota Reservation Protocol', (
       expect(reservations[0].status).toBe('consumed');
     });
 
+    it('reservation Zalo v2 co attachment (shape {data,filename,metadata}) da consumed truoc khi co v3 van replay dung, khong goi lai provider', async () => {
+      // Vong review thu 5: test v2-compat truoc chi seed Email attachments:[], khong tai hien dung
+      // payload Zalo {data, filename, metadata} — chinh shape gay ra collision goc. Test nay seed
+      // BANG DUNG computeRequestFingerprintV2() (thuat toan dong bang, KHONG doc att.data) cho mot
+      // payload Zalo co attachment thuc, roi goi sendPersonalMessageByQueue() tren code HIEN TAI —
+      // phai replay thanh cong, khong duoc goi lai provider.
+      const { computeRequestFingerprintV2, buildCampaignReservationKey } = await import('../../src/services/quota/sendQuotaKey.service.js');
+      const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
+      const recipientUid = `uid_v2compat_${Date.now()}`;
+      const zaloMessageId = await insertZaloMessagePlaceholder({
+        campaignId, runId, channel: 'zalo_personal', recipientValue: recipientUid, accountId,
+      });
+
+      const attachmentBuffer = Buffer.from('noi dung anh that', 'utf8');
+      const attachments = [{ data: attachmentBuffer, filename: 'anh.jpg', metadata: { totalSize: attachmentBuffer.length } }];
+
+      const reservationKey = buildCampaignReservationKey({
+        runId, nodeId: 1, channel: 'zalo', recipient: recipientUid, logicalStep: 1,
+      });
+      const v2Payload = {
+        channel: 'zalo',
+        recipient: recipientUid,
+        sourceType: 'campaign_zalo',
+        quantity: 1,
+        content: 'noi dung goc',
+        attachments,
+      };
+      const v2Fingerprint = computeRequestFingerprintV2(v2Payload);
+
+      await db.query(
+        `INSERT INTO send_quota_reservations (
+          billing_user_id, channel, quantity, status, reservation_key,
+          request_fingerprint, fingerprint_version, source_type, response_snapshot,
+          vn_day_start, vn_day_end, created_at, updated_at, consumed_at
+        ) VALUES (
+          $1, 'zalo', 1, 'consumed', $2, $3, 'v2', 'campaign_zalo', $4::jsonb,
+          CURRENT_DATE, CURRENT_DATE + INTERVAL '1 day', NOW(), NOW(), NOW()
+        )`,
+        [user.id, reservationKey, v2Fingerprint, JSON.stringify({ status: 'success', message: { msgId: 'legacy-v2-msgid' } })]
+      );
+
+      const fakeSendMessage = jest.fn().mockResolvedValue({ message: { msgId: '000111222' } });
+      zaloAccountSessionService.setAccountApi(accountId, { sendMessage: fakeSendMessage });
+      activeFakeZaloAccountIds.push(accountId);
+
+      const result = await campaignZaloSenderService.sendPersonalMessageByQueue({
+        userId: user.id,
+        accountId,
+        recipient: recipientUid,
+        recipientType: 'uid',
+        quotaRecipientKey: recipientUid,
+        quotaContentKey: 'noi dung goc',
+        runId,
+        nodeId: 1,
+        stepIndex: 1,
+        zaloMessageId,
+        message: 'noi dung goc',
+        attachments,
+      });
+
+      expect(result.isReplay).toBe(true);
+      expect(fakeSendMessage).not.toHaveBeenCalled(); // KHONG duoc goi lai provider
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].fingerprint_version).toBe('v2');
+    });
+
     it('replay dung logical key (runId+nodeId+recipient+stepIndex): khong goi provider lan hai', async () => {
       const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
       const fakeSendMessage = jest.fn().mockResolvedValue({ message: { msgId: '777888999' } });

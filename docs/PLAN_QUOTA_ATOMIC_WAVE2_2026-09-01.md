@@ -385,7 +385,7 @@ reserveSendQuota({
   quantity,
   reservationKey,
   requestFingerprint,
-  fingerprintVersion = 'v1',
+  fingerprintVersion = 'v3', // xem "Cập nhật 04/09/2026" ở mục 7 — v1/v2 đã đóng băng thật, v3 là mặc định hiện tại
   sourceType,
   sourceRef,
 })
@@ -449,6 +449,31 @@ Trong giai đoạn chuyển đổi:
 ---
 
 ## 7. Idempotency key theo từng luồng
+
+**Cập nhật 04/09/2026 — contract fingerprint version đã qua thử thách thật.** PR-Q4a/Q4b (campaign
+Email/Zalo) sinh ra lần nâng cấp thuật toán fingerprint đầu tiên (thêm nhận diện shape attachment
+Zalo `{data, filename, metadata}` — thuật toán cũ chỉ đọc `att.content`, bỏ qua `att.data` hoàn toàn,
+gây collision giữa 2 file khác nội dung nhưng cùng tên/kích thước). Xác nhận đúng đoạn "khi nâng thuật
+toán fingerprint, retry của reservation cũ phải được tính lại bằng version đã lưu" ở mục 6 là bắt buộc,
+không phải phòng xa lý thuyết — sửa `hashAttachments()` tại chỗ (dùng chung bởi v1/v2) đã thực sự làm
+lệch fingerprint của mọi reservation v1/v2 có attachment đã lưu trước đó, phát hiện qua review độc lập.
+
+Chốt lại trạng thái hiện tại của versioning:
+- **v1, v2: ĐÓNG BĂNG vĩnh viễn**, chỉ phục vụ compatibility cho reservation cũ đã lưu trên
+  PostgreSQL — không được sửa thuật toán bên trong (kể cả bugfix) vì sẽ làm lệch fingerprint đã lưu.
+- **v3: mặc định cho mọi reservation mới** (`computeRequestFingerprint()`/`reserveSendQuota()` đều
+  default `'v3'`) — chứa `hashAttachmentsV3()` nhận diện đúng cả 2 dạng attachment trong repo
+  (`{content}` của email và `{data}` của Zalo campaign, gồm cả dạng JSON round-trip qua BullMQ/Redis
+  `{type:'Buffer', data:[...]}`).
+- **Caller BẮT BUỘC truyền `requestPayload`** (không chỉ `requestFingerprint` tính sẵn) vào
+  `reserveSendQuota()` — thiếu field này, việc kiểm trùng `reservationKey` rơi về so sánh chuỗi thô
+  theo `fingerprintVersion` hiện tại của caller thay vì tự tính lại theo `fingerprint_version` ĐÃ LƯU
+  của reservation (xem `sendQuotaReservation.service.js`, đoạn tìm `existing` theo `reservationKey`).
+  Đây là nguyên nhân gốc khiến lần nâng v3 đầu tiên gây lỗi dù đã tách version đúng — 2 file
+  `campaignEmailSender.service.js`/`campaignZaloSender.service.js` ban đầu chỉ truyền
+  `requestFingerprint`, phải sửa lại để truyền cả `requestPayload`.
+- Lần nâng cấp fingerprint TIẾP THEO (nếu có) phải thêm `computeRequestFingerprintV4()` mới, KHÔNG
+  được sửa `hashAttachmentsV3()`/`computeRequestFingerprintV3()` tại chỗ — lặp lại đúng nguyên tắc này.
 
 Key không được chứa raw email, phone, UID hay message content. Nếu recipient là thành phần duy nhất,
 dùng SHA-256 và chỉ log prefix hash.
@@ -728,7 +753,28 @@ tìm 3 finding, cả 3 đã sửa:
   `src/utils/__tests__/scheduleOnceSkip.spec.js` fail vì mock `database.js` thiếu export
   `isConnectionError` mà `scheduler.js` đang import — `git diff` trên cả 3 file liên quan đều rỗng (không
   phải do Q4a/Q4b), khả năng do một nhánh làm việc song song khác chưa hoàn tất. Cần người khác xử lý
-  riêng, sẽ chặn pre-push hook nếu không được vá trước khi merge.
+  riêng, sẽ chặn pre-push hook nếu không được vá trước khi merge (đã vá riêng, không nằm trong commit Q4).
+
+**Review độc lập vòng 2-5 (03-04/09/2026)** — tổng 8 finding P1 thêm, tất cả đã sửa:
+- **Vòng 2**: 3 finding — `incrementEmailSettingsSentCount()` không try/catch trước `consumeSendQuota()`
+  (reservation kẹt `sending` nếu query lỗi); Zalo resolve session trước khi kiểm reservation `consumed`
+  (job redeliver của send đã thành công bị fail oan nếu session chết giữa 2 lần); `responseSnapshot.error`
+  lưu nguyên `bounceReason` bị `assertNoPiiOrSecret()` chặn PII (email thật trong message SMTP), làm
+  MỌI hard bounce thật lệch sang `uncertain` thay vì `consumed`.
+- **Vòng 3**: 1 finding — commit lặp lại đúng lỗi self-containment ở vòng 1 (agent viết plan `git add`
+  cả file khi rename của agent khác còn trong working tree lúc sửa) + `hashAttachments()` bỏ qua shape
+  attachment Zalo `{data, filename, metadata}`, gây collision hash giữa 2 file khác byte cùng tên/size.
+- **Vòng 4**: 1 finding (nghiêm trọng nhất) — sửa `hashAttachments()` tại chỗ ở vòng 3 làm lệch fingerprint
+  v1/v2 (dùng chung hàm này), khiến MỌI reservation v1/v2 có attachment đã lưu trước khi deploy fix có
+  nguy cơ bị 409 `IDEMPOTENCY_KEY_REUSED` oan khi retry — vi phạm đúng điều mục 6 cảnh báo riêng. Đã tách
+  `hashAttachmentsV3()`/`computeRequestFingerprintV3()` riêng, đóng băng v1/v2, và bắt buộc truyền
+  `requestPayload` vào `reserveSendQuota()` (xem chi tiết ở mục 7 phía trên).
+- **Vòng 5**: 2 finding P2 (test gap Zalo cụ thể, tài liệu chưa đồng bộ v3) — đã bổ sung golden vector +
+  test tích hợp riêng cho đúng shape attachment Zalo, đã cập nhật mục 7 phía trên.
+- Escalation quan trọng nhất rút ra: lỗi self-containment (commit dính rename của agent khác đang làm
+  song song) xảy ra **3 lần liên tiếp** trước khi được khắc phục triệt để bằng quy trình
+  `grep` xác nhận + `git show :file | grep` trên nội dung ĐÃ STAGE trước mỗi lần commit — không chỉ
+  kiểm working tree, vì working tree luôn "sạch trông thấy" do đã tự khôi phục rename sau lần trước.
 
 #### 0. Hạ tầng đã có sẵn từ PR-Q1..Q3 — không cần build lại
 

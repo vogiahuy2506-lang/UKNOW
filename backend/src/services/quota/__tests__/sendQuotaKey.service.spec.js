@@ -619,5 +619,50 @@ describe('sendQuotaKey.service — Canonical Keys & Zero-PII', () => {
         '8360060a1344f6308da063321895298e3e43104f90b5fa90bbfbf7a5ea4e7e90'
       );
     });
+
+    it('Golden vector: shape attachment Zalo {data,filename,metadata} — v1/v2 giu hash co dinh (khong doc att.data)', () => {
+      // Bo sung theo yeu cau review vong 5: golden vector rieng cho DUNG shape gay ra collision
+      // (Zalo campaign, khong phai shape {content} cua email). Neu ai do vo tinh sua lai
+      // hashAttachments() (dung chung v1/v2) trong tuong lai, test nay se do ngay — dung y
+      // bao ve dung diem da gay loi thay vi chi bao ve shape email chung chung.
+      const pZaloAtt = {
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        quantity: 1,
+        sourceType: 'campaign_zalo',
+        attachments: [{ data: Buffer.from('noi dung file that', 'utf8'), filename: 'anh.jpg', metadata: { totalSize: 19 } }],
+      };
+      expect(computeRequestFingerprint(pZaloAtt, 'v1')).toBe(
+        '185f589b16da21e8a0bc8e04101be2542ae26ab0f297c5773db53bfd3f774079'
+      );
+      expect(computeRequestFingerprint(pZaloAtt, 'v2')).toBe(
+        '940f7d6538e55eac7c3c27e362d50d5795ccfbafa0fbf86f472ba8ce13d31691'
+      );
+      expect(computeRequestFingerprint(pZaloAtt, 'v3')).toBe(
+        '526f0714f9a32ebb83f41a0726c686a7eeea7c87dd78ccab6ec632955945a2aa'
+      );
+    });
+
+    it('v1/v2 giu nguyen hanh vi legacy (collision) cho shape attachment Zalo; chi v3 phat hien khac byte', () => {
+      // Dung yeu cau review vong 5: "xac nhan hai file khac byte: v2 giu hanh vi legacy, con v3
+      // phat hien khac nhau". Day KHONG phai bug moi — la dac tinh dong bang bat buoc de reservation
+      // v1/v2 da luu tren Postgres truoc khi co v3 van replay dung (xem chu thich hashAttachments()).
+      const fileA = Buffer.from('noi dung A', 'utf8');
+      const fileB = Buffer.from('noi dung B hoan toan khac', 'utf8');
+      const attA = [{ data: fileA, filename: 'anh.jpg', metadata: { totalSize: fileA.length } }];
+      const attB = [{ data: fileB, filename: 'anh.jpg', metadata: { totalSize: fileA.length } }]; // cung metadata, khac byte
+      const base = { channel: 'zalo', recipient: '0901234567', content: 'hello' };
+
+      expect(computeRequestFingerprint({ ...base, attachments: attA }, 'v1')).toBe(
+        computeRequestFingerprint({ ...base, attachments: attB }, 'v1')
+      );
+      expect(computeRequestFingerprint({ ...base, attachments: attA }, 'v2')).toBe(
+        computeRequestFingerprint({ ...base, attachments: attB }, 'v2')
+      );
+      expect(computeRequestFingerprint({ ...base, attachments: attA }, 'v3')).not.toBe(
+        computeRequestFingerprint({ ...base, attachments: attB }, 'v3')
+      );
+    });
   });
 });
