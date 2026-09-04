@@ -205,29 +205,65 @@ function hashCanonicalJson(val) {
  * @param {Array|null|undefined} attachments
  * @returns {string}
  */
+/**
+ * Chuẩn hoá một giá trị buffer-like về Buffer thật, hỗ trợ 2 dạng:
+ * - Buffer/TypedArray trực tiếp (trong process, chưa qua serialize).
+ * - `{ type: 'Buffer', data: [...] }` — dạng JSON.stringify(Buffer) sau khi đi qua BullMQ/Redis
+ *   (round-trip mất prototype Buffer, chỉ còn plain object).
+ *
+ * @param {any} val
+ * @returns {Buffer|null}
+ */
+function coerceToBuffer(val) {
+  if (Buffer.isBuffer(val) || ArrayBuffer.isView(val)) return Buffer.from(val);
+  if (
+    val
+    && typeof val === 'object'
+    && String(val.type || '').toLowerCase() === 'buffer'
+    && Array.isArray(val.data)
+  ) {
+    return Buffer.from(val.data);
+  }
+  return null;
+}
+
+/**
+ * Deterministic hash of attachments array:
+ * - Strictly preserves array order
+ * - Hashes content identity / checksum if available along with metadata
+ *
+ * Hỗ trợ 2 shape attachment trong repo: `{content}` (email — nodemailer-ready) và
+ * `{data, filename, metadata}` (Zalo campaign — xem reviveZaloAttachmentSourcesFromQueue trong
+ * campaignZaloSender.service.js). Thiếu nhánh `att.data` sẽ làm 2 file khác byte nhưng cùng
+ * filename/size cho ra CÙNG fingerprint (collision đã xác nhận bằng test độc lập).
+ *
+ * @param {Array|null|undefined} attachments
+ * @returns {string}
+ */
 function hashAttachments(attachments) {
   if (!Array.isArray(attachments) || attachments.length === 0) return '';
   const mapped = attachments.map((att) => {
     if (!att) return '';
     if (typeof att === 'string') return att;
-    if (Buffer.isBuffer(att) || ArrayBuffer.isView(att)) {
+    const directBuffer = coerceToBuffer(att);
+    if (directBuffer) {
       return {
-        contentHash: crypto.createHash('sha256').update(att).digest('hex'),
+        contentHash: crypto.createHash('sha256').update(directBuffer).digest('hex'),
       };
     }
     let contentHash = '';
-    if (att.content != null) {
-      if (Buffer.isBuffer(att.content) || ArrayBuffer.isView(att.content)) {
-        contentHash = crypto.createHash('sha256').update(att.content).digest('hex');
-      } else {
-        contentHash = crypto.createHash('sha256').update(String(att.content)).digest('hex');
-      }
+    const contentBuffer = coerceToBuffer(att.content) || coerceToBuffer(att.data);
+    if (contentBuffer) {
+      contentHash = crypto.createHash('sha256').update(contentBuffer).digest('hex');
+    } else if (att.content != null) {
+      contentHash = crypto.createHash('sha256').update(String(att.content)).digest('hex');
     } else {
       contentHash = att.hash || att.checksum || '';
     }
+    const sizeCandidate = att.size ?? att.metadata?.totalSize;
     return {
       name: att.name || att.filename || '',
-      size: att.size != null ? Number(att.size) : null,
+      size: sizeCandidate != null ? Number(sizeCandidate) : null,
       key: att.key || att.url || att.path || att.fileKey || '',
       contentType: att.contentType || att.mimeType || '',
       contentHash,

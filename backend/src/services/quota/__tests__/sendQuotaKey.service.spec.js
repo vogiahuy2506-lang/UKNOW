@@ -311,6 +311,53 @@ describe('sendQuotaKey.service — Canonical Keys & Zero-PII', () => {
       expect(fp1).not.toBe(fp2);
     });
 
+    it('Zalo attachment shape {data, filename, metadata}: cung bytes truoc/sau BullMQ round-trip cho CUNG fingerprint', () => {
+      // Vong review thu 3 (Finding P1): hashAttachments() truoc day chi doc att.content, khong doc
+      // att.data (shape thuc te cua attachment campaign Zalo — xem reviveZaloAttachmentSourcesFromQueue
+      // trong campaignZaloSender.service.js). Sau khi qua BullMQ/Redis, Buffer that mat prototype,
+      // chi con { type:'Buffer', data:[...] }. Ca hai dang phai cho CUNG fingerprint neu cung byte.
+      const realBuffer = Buffer.from('noi dung file that', 'utf8');
+      const jsonRoundTripBuffer = JSON.parse(JSON.stringify(realBuffer)); // { type: 'Buffer', data: [...] }
+
+      const fpBeforeBullMQ = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: realBuffer, filename: 'anh.jpg', metadata: { totalSize: realBuffer.length } }],
+      });
+      const fpAfterBullMQ = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: jsonRoundTripBuffer, filename: 'anh.jpg', metadata: { totalSize: realBuffer.length } }],
+      });
+
+      expect(fpBeforeBullMQ).toBe(fpAfterBullMQ);
+    });
+
+    it('Zalo attachment shape {data, filename, metadata}: khac bytes nhung CUNG filename/size van cho fingerprint KHAC nhau', () => {
+      // Day chinh la collision Codex phat hien bang test doc lap: truoc khi sua, hashAttachments()
+      // bo qua att.data hoan toan nen 2 file khac noi dung nhung trung filename/size se ra CUNG
+      // fingerprint — retry voi file khac se lang le replay sai file thay vi 409.
+      const fileA = Buffer.from('noi dung file A', 'utf8');
+      const fileB = Buffer.from('noi dung file B hoan toan khac', 'utf8');
+
+      const fpA = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: fileA, filename: 'anh.jpg', metadata: { totalSize: 999 } }],
+      });
+      const fpB = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: fileB, filename: 'anh.jpg', metadata: { totalSize: 999 } }],
+      });
+
+      expect(fpA).not.toBe(fpB);
+    });
+
     it('changes fingerprint when templateVariables change', () => {
       const fp1 = computeRequestFingerprint({
         channel: 'zalo',
