@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
 import { useI18n, I18nProvider } from './i18n';
 import RouteAnalytics from './components/RouteAnalytics';
+import ReferralCapture from './components/ReferralCapture';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -266,6 +267,7 @@ function AppContent() {
       <MarketplaceModalProvider>
         <Router>
           <RouteAnalytics />
+          <ReferralCapture />
           {toaster}
           <Routes>
           {/* Auth Routes */}

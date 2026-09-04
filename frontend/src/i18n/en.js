@@ -340,6 +340,8 @@ export default {
     invalidPhone: 'Invalid phone number',
     phoneRequired: 'Please enter your phone number',
     invalidEmail: 'Invalid email',
+    referralCode: 'Referral code (optional)',
+    referralCodePlaceholder: 'Enter referral code if any',
     usernameMinLen: 'Username must be at least 3 characters',
     usernameMaxLen: 'Username must not exceed 50 characters',
     usernamePattern: 'Username can only contain letters and numbers',
@@ -5499,6 +5501,14 @@ export default {
     placeholderFullName: 'Enter full name',
     placeholderEmail: 'Enter email',
     placeholderPhone: 'Enter phone number',
+    // Profile tab - affiliate & referral
+    affiliateTitle: 'Referral Code & Share Link',
+    affiliateDesc: 'Share your referral code or link with friends. When a new member signs up and purchases a plan, you will receive commission according to partner policy.',
+    referralCodeLabel: 'Referral Code',
+    referralLinkLabel: 'Referral Link',
+    copyCode: 'Copy Code',
+    copyLink: 'Copy Link',
+    copied: 'Copied!',
     // Profile tab - account stats
     createdAt: 'Created on {date}',
     lastLogin: 'Last login {date}',
@@ -6618,6 +6628,7 @@ Feel free to ask me anything!`,
     validationInvalid: 'Invalid phone number.',
     failed: 'Failed to update phone number.',
     errorOccurred: 'An error occurred. Please try again.',
+    versionMismatchError: 'The system is currently being updated. Please try again in a few minutes or contact support.',
   },
 
   // Trial Welcome Modal

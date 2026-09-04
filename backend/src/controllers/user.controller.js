@@ -137,6 +137,7 @@ const mapProfileResponse = (userRow) => ({
   fullName: userRow.full_name,
   avatarUrl: userRow.avatar_url,
   phone: userRow.phone,
+  referralCode: userRow.referral_code ?? null,
   status: userRow.status,
   role: userRow.role || userRow.role_code || 'user',
   roleCode: userRow.role || userRow.role_code || 'user',

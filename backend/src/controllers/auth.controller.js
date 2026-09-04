@@ -21,6 +21,7 @@ import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
+import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -110,11 +111,53 @@ class AuthController {
 
       const passwordHash = await bcrypt.hash(password, 10);
 
+      // Xử lý mã giới thiệu (Affiliate PR-A1)
+      let referredByUserId = null;
+      const cleanRefCode = normalizeReferralCode(req.body.referralCode);
+      if (cleanRefCode) {
+        const referrerRes = await client.query(
+          'SELECT id, email, phone FROM users WHERE referral_code = $1',
+          [cleanRefCode]
+        );
+        if (referrerRes.rows.length > 0) {
+          const referrer = referrerRes.rows[0];
+          // Phòng thủ chiều sâu lớp 2: không tự giới thiệu chính mình.
+          // Hàng rào chính thật sự là ràng buộc UNIQUE trên email và SĐT (đã chặn 400/409 ở phía trên).
+          const isSelf = (referrer.email && referrer.email.toLowerCase() === email.toLowerCase()) ||
+                         (referrer.phone && referrer.phone === normalizedPhone);
+          if (!isSelf) {
+            referredByUserId = referrer.id;
+          }
+        }
+        // Nếu mã không tồn tại / sai: bỏ qua trong im lặng, vẫn cho đăng ký (theo đúng plan)
+      }
+
+      // Sinh mã giới thiệu duy nhất cho user mới
+      let myReferralCode = generateReferralCode();
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const existingCode = await client.query('SELECT 1 FROM users WHERE referral_code = $1', [myReferralCode]);
+        if (existingCode.rows.length === 0) break;
+        myReferralCode = generateReferralCode();
+      }
+
       const result = await client.query(
-        `INSERT INTO users (username, email, password_hash, full_name, phone, status, is_verified, verified_at, role, auth_provider, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', 'local', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-         RETURNING id, username, email, full_name, avatar_url, status, role, phone`,
-        [username, email, passwordHash, fullName || null, normalizedPhone]
+        `INSERT INTO users (
+           username, email, password_hash, full_name, phone, status, is_verified, verified_at,
+           role, auth_provider, referral_code, referred_by_user_id, referred_at,
+           created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', 'local', $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING id, username, email, full_name, avatar_url, status, role, phone, referral_code`,
+        [
+          username,
+          email,
+          passwordHash,
+          fullName || null,
+          normalizedPhone,
+          myReferralCode,
+          referredByUserId,
+          referredByUserId ? new Date() : null,
+        ]
       );
 
       const user = result.rows[0];
@@ -245,7 +288,7 @@ class AuthController {
       const result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
                 active_plan_id, password_hash, failed_login_attempts, locked_until,
-                must_change_password, phone
+                must_change_password, phone, referral_code
          FROM users
          WHERE username = $1`,
         [username]
@@ -343,7 +386,7 @@ class AuthController {
     const client = await db.getClient();
 
     try {
-      const { credential, access_token } = req.body;
+      const { credential, access_token, referralCode } = req.body;
       const ipAddress = req.ip || req.socket?.remoteAddress;
       const userAgent = req.headers['user-agent'];
 
@@ -390,7 +433,7 @@ class AuthController {
       // 2. Check if user exists
       let result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
-                active_plan_id, password_hash, failed_login_attempts, locked_until, phone
+                active_plan_id, password_hash, failed_login_attempts, locked_until, phone, referral_code
          FROM users
          WHERE LOWER(email) = LOWER($1)`,
         [email]
@@ -419,11 +462,48 @@ class AuthController {
         const randomPassword = crypto.randomBytes(16).toString('hex');
         const passwordHash = await bcrypt.hash(randomPassword, 10);
 
+        // Xử lý mã giới thiệu (Affiliate PR-A1)
+        let referredByUserId = null;
+        const cleanRefCode = normalizeReferralCode(referralCode);
+        if (cleanRefCode) {
+          const referrerRes = await client.query(
+            'SELECT id, email FROM users WHERE referral_code = $1',
+            [cleanRefCode]
+          );
+          if (referrerRes.rows.length > 0) {
+            const referrer = referrerRes.rows[0];
+            // Phòng thủ chiều sâu lớp 2: email trùng đã được rẽ sang nhánh user tồn tại ở phía trên.
+            if (referrer.email && referrer.email.toLowerCase() !== email.toLowerCase()) {
+              referredByUserId = referrer.id;
+            }
+          }
+        }
+
+        // Sinh mã giới thiệu duy nhất cho user mới
+        let myReferralCode = generateReferralCode();
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const existingCode = await client.query('SELECT 1 FROM users WHERE referral_code = $1', [myReferralCode]);
+          if (existingCode.rows.length === 0) break;
+          myReferralCode = generateReferralCode();
+        }
+
         const insertResult = await client.query(
-          `INSERT INTO users (username, email, password_hash, full_name, avatar_url, is_verified, status, role, auth_provider, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, true, 'active', 'user', 'google', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-           RETURNING id, username, email, full_name, avatar_url, status, role`,
-          [username, email, passwordHash, name || null, picture || null]
+          `INSERT INTO users (
+             username, email, password_hash, full_name, avatar_url, is_verified, status, role,
+             auth_provider, referral_code, referred_by_user_id, referred_at, created_at, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, true, 'active', 'user', 'google', $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           RETURNING id, username, email, full_name, avatar_url, status, role, referral_code`,
+          [
+            username,
+            email,
+            passwordHash,
+            name || null,
+            picture || null,
+            myReferralCode,
+            referredByUserId,
+            referredByUserId ? new Date() : null,
+          ]
         );
         user = insertResult.rows[0];
 
@@ -836,6 +916,8 @@ class AuthController {
       // Cùng lý do như trên nhưng cho requirePhone — thiếu field này thì frontend
       // không biết mở modal bổ sung SĐT.
       phone: user.phone ?? null,
+      // Mã giới thiệu cá nhân (Affiliate PR-A1)
+      referralCode: user.referral_code ?? user.referralCode ?? null,
     };
   }
 

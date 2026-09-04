@@ -72,6 +72,8 @@ describe('auth.controller welcome email invariant', () => {
     mockClient.query.mockResolvedValueOnce({ rows: [] });
     // 3. check phone (mục 1.3 — SĐT bắt buộc, kiểm trùng trước khi insert)
     mockClient.query.mockResolvedValueOnce({ rows: [] });
+    // 3.5 check referral code uniqueness (Affiliate PR-A1)
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
     // 4. insert user
     mockClient.query.mockResolvedValueOnce({
       rows: [

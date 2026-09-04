@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { generateReferralCode } from '../../utils/affiliateReferral.util.js';
 
 const EMPLOYEE_SELECT = `
   u.id, u.username, u.email, u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
@@ -73,12 +74,20 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
   try {
     await client.query('BEGIN');
 
+    // Sinh mã giới thiệu duy nhất cho nhân viên mới (Affiliate PR-A1)
+    let referralCode = generateReferralCode();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const existingCode = await client.query('SELECT 1 FROM users WHERE referral_code = $1', [referralCode]);
+      if (existingCode.rows.length === 0) break;
+      referralCode = generateReferralCode();
+    }
+
     // Tạo user mới với role user_admin (pending_activation cho đến khi họ set password)
     const userResult = await client.query(
-      `INSERT INTO users (username, email, password_hash, full_name, status, role, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'pending_activation', 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       RETURNING id, username, email, full_name, avatar_url, status, role`,
-      [username, email, passwordHash, fullName || null]
+      `INSERT INTO users (username, email, password_hash, full_name, status, role, referral_code, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'pending_activation', 'user', $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id, username, email, full_name, avatar_url, status, role, referral_code`,
+      [username, email, passwordHash, fullName || null, referralCode]
     );
     const newUser = userResult.rows[0];
 

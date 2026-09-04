@@ -19,11 +19,13 @@ import {
   HiOutlineCheckCircle,
   HiOutlineShieldCheck,
   HiOutlineX,
+  HiOutlineTag,
 } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
 import { PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../utils/passwordValidation';
 import { isPlausiblePhone } from '../../utils/phoneValidation';
+import { getStoredReferralCode, captureReferralFromUrl, clearStoredReferralCode } from '../../utils/referralStorage';
 
 /**
  * Register Page - Refactored với Impeccable design principles:
@@ -52,6 +54,7 @@ const registerSchema = (t) => z.object({
   phone: z.string()
     .min(1, t('register.phoneRequired'))
     .refine(isPlausiblePhone, { message: t('register.invalidPhone') }),
+  referralCode: z.string().optional(),
 }).refine((d) => d.password === d.confirmPassword, {
   message: t('auth.passwordMismatch'),
   path: ['confirmPassword'],
@@ -130,6 +133,7 @@ const OtpStep = ({ email, formData, onBack }) => {
     setIsSubmitting(true);
     try {
       const result = await registerUser({ ...formData, emailVerificationCode: code });
+      clearStoredReferralCode();
       trackEvent('sign_up', { method: 'email' });
       toast.success(t('auth.registerSuccess'));
       // TẠM GIỮ LẠI (đã gỡ rồi phục hồi 22/08): lẽ ra TrialWelcomeModal thay được
@@ -389,7 +393,12 @@ const Register = () => {
     if (!pendingGoogleToken) return;
     setIsSendingCode(true);
     try {
-      const result = await googleLogin({ access_token: pendingGoogleToken.access_token });
+      const activeRefCode = (watch('referralCode') || '').trim() || getStoredReferralCode() || undefined;
+      const result = await googleLogin({
+        access_token: pendingGoogleToken.access_token,
+        ...(activeRefCode ? { referralCode: activeRefCode } : {}),
+      });
+      clearStoredReferralCode();
       toast.success(t('register.googleLoginSuccess'));
       // TẠM GIỮ LẠI — đây chính xác là luồng bị nghi TrialWelcomeModal không hiện
       // (P2-1, 22/08). Xem comment đầy đủ ở handleSubmit phía trên.
@@ -413,8 +422,12 @@ const Register = () => {
     toast.error(t('register.googleError'));
   };
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const initialReferralCode = captureReferralFromUrl() || getStoredReferralCode() || '';
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(registerSchema(t)),
+    defaultValues: {
+      referralCode: initialReferralCode,
+    },
   });
 
   const onSubmit = async (data) => {
@@ -425,6 +438,7 @@ const Register = () => {
     setIsSendingCode(true);
     try {
       await sendVerificationCode({ email: data.email, username: data.username });
+      const cleanRef = (data.referralCode || '').trim();
       setOtpData({
         email: data.email,
         formData: {
@@ -433,6 +447,7 @@ const Register = () => {
           password: data.password,
           fullName: data.fullName?.trim() || undefined,
           phone:    data.phone?.trim()    || undefined,
+          referralCode: cleanRef || undefined,
         },
       });
       setStep('otp');
@@ -629,6 +644,23 @@ const Register = () => {
                 {errors.confirmPassword.message}
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Referral Code (optional) */}
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-slate-700">
+            {t('register.referralCode')}
+          </label>
+          <div className="relative group">
+            <HiOutlineTag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+            <input 
+              type="text" 
+              {...register('referralCode')}
+              className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm bg-white uppercase hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10 font-mono tracking-wider"
+              placeholder={t('register.referralCodePlaceholder')}
+              maxLength={16}
+            />
           </div>
         </div>
 

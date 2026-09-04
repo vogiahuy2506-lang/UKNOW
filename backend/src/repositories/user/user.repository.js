@@ -82,7 +82,7 @@ export async function lockUserForPlanActivation(userId, queryable = db) {
 export async function findProfileBase(userId) {
   const { rows } = await db.query(
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
-            u.role, u.active_plan_id, u.subscription_expires_at,
+            u.role, u.active_plan_id, u.subscription_expires_at, u.referral_code,
             ${PROFILE_LIMIT_COLUMNS},
             u.bot_daily_reply_cap,
             u.ai_handoff_auto_resume_minutes,
@@ -98,7 +98,7 @@ export async function findProfileBase(userId) {
 export async function findProfileBaseFallback(userId) {
   const { rows } = await db.query(
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
-            u.role, u.active_plan_id,
+            u.role, u.active_plan_id, u.referral_code,
             NULL AS subscription_expires_at,
             NULL::int AS max_campaigns, NULL::int AS max_zalo_accounts,
             NULL::int AS max_email_accounts, NULL::int AS max_email_templates,

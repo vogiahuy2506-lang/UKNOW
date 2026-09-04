@@ -44,9 +44,13 @@ const PhoneRequiredModal = ({ isOpen, onChanged }) => {
         setError(res.message || t('phoneRequired.failed'));
       }
     } catch (err) {
-      // 409 PHONE_TAKEN: user phải đổi số khác, không phải thử lại — message từ
-      // backend đã nói rõ điều đó, hiển thị nguyên văn thay vì viết lại.
-      setError(err?.response?.data?.message || t('phoneRequired.errorOccurred'));
+      if (err?.response?.status === 404) {
+        setError(t('phoneRequired.versionMismatchError'));
+      } else {
+        // 409 PHONE_TAKEN: user phải đổi số khác, không phải thử lại — message từ
+        // backend đã nói rõ điều đó, hiển thị nguyên văn thay vì viết lại.
+        setError(err?.response?.data?.message || t('phoneRequired.errorOccurred'));
+      }
     } finally {
       setLoading(false);
     }

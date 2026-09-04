@@ -69,6 +69,10 @@ CREATE TABLE users (
   invoice_profile         JSONB,
   -- migration 166: ngưỡng duyệt chiến dịch nhân viên
   employee_campaign_approval_threshold INTEGER,
+  -- migration 180: mã giới thiệu và người giới thiệu
+  referral_code           VARCHAR(16),
+  referred_by_user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  referred_at             TIMESTAMPTZ,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -77,6 +81,9 @@ CREATE INDEX idx_users_role  ON users(role);
 CREATE INDEX idx_users_email ON users(email);
 -- migration 179: SĐT chỉ được dùng cho 1 tài khoản
 CREATE UNIQUE INDEX idx_users_phone_unique ON users (phone) WHERE phone IS NOT NULL;
+-- migration 180: mã giới thiệu duy nhất
+CREATE UNIQUE INDEX idx_users_referral_code ON users (referral_code) WHERE referral_code IS NOT NULL;
+CREATE INDEX idx_users_referred_by ON users (referred_by_user_id);
 
 CREATE TABLE user_members (
   id          BIGSERIAL PRIMARY KEY,

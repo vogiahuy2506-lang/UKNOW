@@ -38,7 +38,12 @@ router.post('/register',
     body('phone')
       .trim()
       .notEmpty()
-      .withMessage('Vui lòng nhập số điện thoại')
+      .withMessage('Vui lòng nhập số điện thoại'),
+    body('referralCode')
+      .optional({ checkFalsy: true })
+      .trim()
+      .isLength({ max: 32 })
+      .withMessage('Mã giới thiệu không được quá 32 ký tự'),
   ],
   handleValidationErrors,
   authController.register.bind(authController)

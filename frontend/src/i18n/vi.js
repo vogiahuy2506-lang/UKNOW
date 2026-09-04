@@ -340,6 +340,8 @@ export default {
     invalidPhone: 'Số điện thoại không hợp lệ',
     phoneRequired: 'Vui lòng nhập số điện thoại',
     invalidEmail: 'Email không hợp lệ',
+    referralCode: 'Mã giới thiệu (không bắt buộc)',
+    referralCodePlaceholder: 'Nhập mã giới thiệu nếu có',
     usernameMinLen: 'Tên đăng nhập phải có ít nhất 3 ký tự',
     usernameMaxLen: 'Tên đăng nhập không được quá 50 ký tự',
     usernamePattern: 'Tên đăng nhập chỉ được chứa chữ cái không dấu và số',
@@ -5538,6 +5540,14 @@ export default {
     placeholderFullName: 'Nhập họ và tên',
     placeholderEmail: 'Nhập email',
     placeholderPhone: 'Nhập số điện thoại',
+    // Profile tab - affiliate & referral
+    affiliateTitle: 'Mã giới thiệu & Link chia sẻ',
+    affiliateDesc: 'Chia sẻ mã hoặc link giới thiệu với bạn bè. Khi thành viên mới đăng ký và mua gói, bạn sẽ nhận được hoa hồng theo chính sách đối tác.',
+    referralCodeLabel: 'Mã giới thiệu',
+    referralLinkLabel: 'Link giới thiệu',
+    copyCode: 'Sao chép mã',
+    copyLink: 'Sao chép link',
+    copied: 'Đã sao chép!',
     // Profile tab - account stats
     createdAt: 'Tạo ngày {date}',
     lastLogin: 'Đăng nhập gần nhất {date}',
@@ -6574,6 +6584,7 @@ export default {
     validationInvalid: 'Số điện thoại không hợp lệ.',
     failed: 'Cập nhật số điện thoại thất bại.',
     errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+    versionMismatchError: 'Hệ thống đang được cập nhật. Vui lòng thử lại sau ít phút hoặc liên hệ hỗ trợ.',
   },
 
   // Trial Welcome Modal

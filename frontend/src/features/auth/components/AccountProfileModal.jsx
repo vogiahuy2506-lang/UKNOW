@@ -10,7 +10,10 @@ import {
   HiOutlineCheckCircle,
   HiOutlineBan,
   HiOutlineShieldCheck,
+  HiOutlineTag,
+  HiOutlineClipboardCopy,
 } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
@@ -183,6 +186,31 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [copiedTarget, setCopiedTarget] = useState(null);
+
+  const referralCode = profileData?.referralCode || user?.referralCode || '';
+  const referralLink = referralCode ? `https://founderai.biz/register?ref=${referralCode}` : '';
+
+  const handleCopy = (text, target) => {
+    if (!text) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedTarget(target);
+      toast.success(t('accountProfileModal.copied'));
+      setTimeout(() => setCopiedTarget(null), 2000);
+    } catch {
+      toast.error('Không thể sao chép');
+    }
+  };
 
   const isUserAdmin = !isEmployeeCtx && user?.role === 'user';
 
@@ -391,6 +419,83 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                 </div>
               </div>
             </div>
+
+            {/* Mã giới thiệu & Link chia sẻ (Affiliate PR-A1) */}
+            {referralCode && (
+              <div className="rounded-xl border border-orange-100 bg-gradient-to-br from-orange-50/50 to-amber-50/30 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <HiOutlineTag className="w-4 h-4 text-orange-600" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-orange-950">
+                      {t('accountProfileModal.affiliateTitle')}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {t('accountProfileModal.affiliateDesc')}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Mã giới thiệu */}
+                  <div className="bg-white rounded-lg border border-orange-200/80 p-3 flex items-center justify-between shadow-xs">
+                    <div>
+                      <span className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+                        {t('accountProfileModal.referralCodeLabel')}
+                      </span>
+                      <span className="text-base font-bold font-mono text-slate-900 tracking-wider">
+                        {referralCode}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(referralCode, 'code')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors border border-orange-200 cursor-pointer"
+                    >
+                      {copiedTarget === 'code' ? (
+                        <>
+                          <HiOutlineCheckCircle className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-green-700">{t('accountProfileModal.copied')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
+                          <span>{t('accountProfileModal.copyCode')}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Link giới thiệu */}
+                  <div className="bg-white rounded-lg border border-orange-200/80 p-3 flex items-center justify-between shadow-xs">
+                    <div className="min-w-0 pr-2">
+                      <span className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+                        {t('accountProfileModal.referralLinkLabel')}
+                      </span>
+                      <span className="text-xs font-mono text-slate-600 truncate block">
+                        {referralLink}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(referralLink, 'link')}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors border border-orange-200 cursor-pointer"
+                    >
+                      {copiedTarget === 'link' ? (
+                        <>
+                          <HiOutlineCheckCircle className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-green-700">{t('accountProfileModal.copied')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
+                          <span>{t('accountProfileModal.copyLink')}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {(isUserAdmin || isEmployeeCtx) && (
               <div>
