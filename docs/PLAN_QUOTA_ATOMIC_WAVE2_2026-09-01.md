@@ -728,6 +728,21 @@ bằng call site cụ thể (`file:dòng`) và tách PR-Q4 thành ba sub-PR tu�
   với đúng logical key, xác nhận provider chỉ gọi 1 lần). Phần "reconciliation hook khi resume run" **CHƯA
   làm** — để lại cho PR-Q5 (sweeper chung), không xây riêng cho campaign.
 
+**Cập nhật 04/09/2026 — đóng hai operational test gap của Q4b:**
+
+- `synchronousSendQuota.test.js` chạy hai lời gọi đồng thời qua đúng wrapper
+  `sendPersonalMessageQueued()` với hai logical send khác nhau nhưng cùng workspace có
+  `dailyZaloLimit=1`. Kết quả bắt buộc: đúng 1 worker thành công, đúng 1 worker nhận
+  `PLAN_SEND_LIMIT_EXCEEDED`, provider được gọi 1 lần, PostgreSQL chỉ có 1 reservation `consumed` và
+  chỉ 1 `zalo_messages` được link atomic. Test đo trên DB `uknow_campaign_test` tại `localhost:5433`.
+- `campaignRunZaloQuotaBoundary.spec.js` chạy qua `CampaignRunService.executeCampaign()` thật với node
+  `send_zalo_group` tại 23:30 giờ Việt Nam. Limiter ghi `zaloOutboundDeferredUntil` tới 06:00 và ném
+  `RUN_YIELD_SLOT`; wrapper `sendGroupMessageQueued()` (final reservation boundary) cùng thao tác insert
+  placeholder đều chưa được gọi. Như vậy quiet-hours/defer không tạo reservation sớm.
+
+Hai test trên chỉ đóng đúng hai gap đã khai báo; chúng **không** thay thế matrix Q4c còn pending cho đủ
+4 job type/3 kênh Zalo, staging queue-depth measurement hay reconciliation drill.
+
 **Review độc lập 03/09/2026** (subagent riêng, tự chạy lại toàn bộ test, không tin báo cáo implement) —
 tìm 3 finding, cả 3 đã sửa:
 1. **[Đã sửa]** Zalo `consumeCampaignZaloQuota()` gọi `consumeSendQuota()` không truyền `persistSource` —

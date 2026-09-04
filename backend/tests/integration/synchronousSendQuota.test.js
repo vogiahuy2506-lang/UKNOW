@@ -756,6 +756,79 @@ describe('Integration — Synchronous Send Atomic Quota Reservation Protocol', (
       expect(reservations[0].source_ref).toMatchObject({ runId, nodeId: 1, stepIndex: 1 });
     });
 
+    it('hai worker campaign tranh cung mot slot Zalo: chi mot provider call va mot reservation consumed', async () => {
+      const limitedPlan = await createPlan({ dailyZaloLimit: 1, monthlyZaloLimit: 1000 });
+      await assignPlanToUser(user.id, limitedPlan.id);
+      const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
+      const fakeSendMessage = jest.fn().mockResolvedValue({ message: { msgId: '900000001' } });
+      zaloAccountSessionService.setAccountApi(accountId, { sendMessage: fakeSendMessage });
+      activeFakeZaloAccountIds.push(accountId);
+
+      const recipients = ['uid_quota_slot_a', 'uid_quota_slot_b'];
+      const zaloMessageIds = await Promise.all(
+        recipients.map((recipientValue) => insertZaloMessagePlaceholder({
+          campaignId,
+          runId,
+          channel: 'zalo_personal',
+          recipientValue,
+          accountId,
+        }))
+      );
+
+      // Gọi qua wrapper thật để mô phỏng hai BullMQ workers cùng tới final send boundary.
+      // Hai logical sends dùng recipient khác nhau nên đây là tranh chấp quota capacity,
+      // không phải replay/idempotency conflict trên cùng reservation_key.
+      const settled = await Promise.allSettled(
+        recipients.map((recipient, index) => campaignZaloSenderService.sendPersonalMessageQueued({
+          userId: user.id,
+          accountId,
+          recipient,
+          recipientType: 'uid',
+          quotaRecipientKey: recipient,
+          quotaContentKey: 'noi dung tranh chap quota',
+          runId,
+          nodeId: index + 1,
+          stepIndex: 1,
+          zaloMessageId: zaloMessageIds[index],
+          message: 'noi dung tranh chap quota',
+        }))
+      );
+
+      const fulfilled = settled.filter((item) => item.status === 'fulfilled');
+      const rejected = settled.filter((item) => item.status === 'rejected');
+      const outcomeSummary = settled.map((item) => (
+        item.status === 'fulfilled'
+          ? { status: item.status }
+          : { status: item.status, code: item.reason?.code, message: item.reason?.message }
+      ));
+      expect(outcomeSummary).toEqual(expect.arrayContaining([
+        { status: 'fulfilled' },
+        expect.objectContaining({ status: 'rejected', code: 'PLAN_SEND_LIMIT_EXCEEDED' }),
+      ]));
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toMatchObject({ code: 'PLAN_SEND_LIMIT_EXCEEDED' });
+      expect(fakeSendMessage).toHaveBeenCalledTimes(1);
+
+      const { rows: reservations } = await db.query(
+        'SELECT id, status FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations).toHaveLength(1);
+      expect(reservations[0].status).toBe('consumed');
+
+      const { rows: linkedMessages } = await db.query(
+        `SELECT id, quota_reservation_id, tracking_metadata
+         FROM zalo_messages
+         WHERE id = ANY($1::bigint[])
+           AND quota_reservation_id IS NOT NULL`,
+        [zaloMessageIds]
+      );
+      expect(linkedMessages).toHaveLength(1);
+      expect(linkedMessages[0].quota_reservation_id).toBe(reservations[0].id);
+      expect(linkedMessages[0].tracking_metadata.status).toBe('sent');
+    });
+
     it('zalo ket ban: reserves and consumes quota', async () => {
       const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
       const fakeFindUser = jest.fn().mockResolvedValue({ uid: 'uid_friend_1', zalo_display: 'Nguyen Van Friend' });
