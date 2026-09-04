@@ -242,6 +242,10 @@ export async function findPurgeBlockers(id) {
        ) AS "hasMarketplace",
        EXISTS(
          SELECT 1 FROM affiliate_revenue_events WHERE referrer_user_id = $1 OR buyer_user_id = $1
+         UNION ALL
+         SELECT 1 FROM affiliate_periods WHERE referrer_user_id = $1
+         UNION ALL
+         SELECT 1 FROM affiliate_ledger WHERE user_id = $1
        ) AS "hasAffiliateActivity"`,
     [id]
   );

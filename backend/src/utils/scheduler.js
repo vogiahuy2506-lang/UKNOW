@@ -1221,4 +1221,34 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Affiliate revenue sweep: mỗi giờ');
+
+  // ── Affiliate Month Closing — 03:00 on the 2nd of each month ──────────────
+  cron.schedule('0 3 2 * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const {
+        isAffiliateClosingEnabled,
+        closeAffiliateMonth,
+        AFFILIATE_MONTH_CLOSING_JOB_CODE,
+      } = await import('../services/affiliate/affiliateMonthClosing.service.js');
+
+      if (!isAffiliateClosingEnabled()) return;
+
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun(AFFILIATE_MONTH_CLOSING_JOB_CODE, async () => {
+        const summary = await closeAffiliateMonth();
+        if (summary.insertedPeriods > 0 || summary.adjustedPeriods > 0) {
+          console.log(
+            `[Scheduler] Affiliate month closing (${summary.monthKey}): inserted=${summary.insertedPeriods}, `
+            + `adjusted=${summary.adjustedPeriods}, commission=${summary.totalCommission}, delta=${summary.totalAdjustment}`
+          );
+        }
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi đóng sổ hoa hồng affiliate:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Affiliate month closing: 03:00 ngày 2 hàng tháng');
 };
