@@ -6,14 +6,23 @@ import { useI18n } from '../../../i18n';
 import { isPlausiblePhone } from '../../../utils/phoneValidation';
 
 /**
- * Modal bắt buộc bổ sung SĐT — mở khi user.phone rỗng.
+ * Modal nhắc bổ sung SĐT — mở khi user.phone rỗng.
  *
- * Luôn `forced`: không có nút X, bấm ra ngoài không đóng. Đóng sớm sẽ khiến mọi
- * request tiếp theo bị requirePhone (authorization.middleware.js) trả 403.
+ * ĐÓNG ĐƯỢC (đổi 04/09/2026). Trước đây là cổng chặn cứng không có lối thoát, và điều đó
+ * đã gây sự cố thật: backend `requirePhone` trả 403 ở 13+ nhóm route, trong khi đường duy
+ * nhất để user tự gỡ chặn là modal này — user nào có bundle JS cũ trong cache thì không
+ * thấy modal và bị khoá khỏi toàn bộ tính năng mà không hiểu vì sao.
  *
- * @param {{ isOpen: boolean, onChanged: (phone: string) => void }} props
+ * Nay là lời nhắc: bấm "Để sau" hoặc bấm ra ngoài là đóng, user dùng app bình thường.
+ * Nhắc lại ở lần vào `/app` kế tiếp — MainLayout cố ý giữ trạng thái đã tắt trong bộ nhớ
+ * chứ KHÔNG lưu localStorage, để nạp lại trang là hiện lại.
+ *
+ * Đi kèm điều kiện bắt buộc: `PHONE_GATE_ENABLED=false` ở backend. Bật lại cổng chặn mà
+ * vẫn cho đóng modal thì user bấm "Để sau" xong sẽ ăn 403 ở mọi nơi — tệ hơn cả bản cũ.
+ *
+ * @param {{ isOpen: boolean, onClose: () => void, onChanged: (phone: string) => void }} props
  */
-const PhoneRequiredModal = ({ isOpen, onChanged }) => {
+const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
   const { t } = useI18n();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,7 +66,7 @@ const PhoneRequiredModal = ({ isOpen, onChanged }) => {
   };
 
   return createPortal(
-    <div className="modal-overlay">
+    <div className="modal-overlay" onClick={loading ? undefined : onClose}>
       <div
         className="modal-content modal-content-animate w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
@@ -90,7 +99,15 @@ const PhoneRequiredModal = ({ isOpen, onChanged }) => {
             </p>
           )}
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end items-center gap-2 pt-2">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              {t('phoneRequired.later')}
+            </button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? t('phoneRequired.saving') : t('phoneRequired.submit')}
             </button>

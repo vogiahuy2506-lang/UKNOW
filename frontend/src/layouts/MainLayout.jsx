@@ -29,7 +29,11 @@ const MainLayout = () => {
   // role !== 'admin': khớp isSuperAdmin() bên backend (requirePhone bypass superadmin) —
   // thiếu điều kiện này thì superadmin cũng dính modal không đóng được dù server không chặn họ.
   // Xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 1.4 và 1.6.
-  const phoneRequired = !mustChangePassword && !user?.phone && user?.role !== 'admin';
+  // Nhắc, KHÔNG chặn (đổi 04/09/2026). `phonePrompted` cố ý là state trong bộ nhớ —
+  // KHÔNG lưu localStorage — để bấm "Để sau" chỉ tắt trong phiên xem hiện tại, còn lần
+  // vào /app sau vẫn được nhắc lại. Đây là yêu cầu của sếp, không phải thiếu sót.
+  const [phoneDismissed, setPhoneDismissed] = useState(false);
+  const phoneRequired = !mustChangePassword && !user?.phone && user?.role !== 'admin' && !phoneDismissed;
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', false); // default icon-only
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('founder_ai_ai_panel_open', false);
@@ -203,6 +207,7 @@ const MainLayout = () => {
 
         <PhoneRequiredModal
           isOpen={phoneRequired}
+          onClose={() => setPhoneDismissed(true)}
           onChanged={(phone) => updateUser({ ...user, phone })}
         />
 
@@ -304,6 +309,7 @@ const MainLayout = () => {
 
       <PhoneRequiredModal
         isOpen={phoneRequired}
+        onClose={() => setPhoneDismissed(true)}
         onChanged={(phone) => updateUser({ ...user, phone })}
       />
 

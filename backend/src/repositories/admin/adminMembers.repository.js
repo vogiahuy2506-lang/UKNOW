@@ -167,9 +167,19 @@ export async function detachMemberEmail(id, { originalEmail = null, releaseTrial
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
+      // `phone` phải được giải phóng cùng email/username — nó là trường định danh DUY NHẤT
+      // thứ ba kể từ migration 179 (idx_users_phone_unique). Hàm này viết khi mới có 2
+      // trường, và migration 179 không rà lại đường giải phóng định danh.
+      //
+      // Hậu quả có thật: tài khoản id=7 bị xoá mềm vẫn giữ 0388180856, nên chính chủ không
+      // đăng ký/nhập lại số của mình được nữa — user `deleted` không đăng nhập nổi
+      // (resolveUserContext chỉ nhận active/pending_activation) nên số bị giam vĩnh viễn.
+      //
+      // Thêm trường UNIQUE mới vào `users` thì phải quay lại thêm vào đây.
       `UPDATE users
          SET email = 'freed+' || id || '@deleted.local',
              username = LEFT(username, 50 - LENGTH('_freed_' || id)) || '_freed_' || id,
+             phone = NULL,
              status = 'deleted',
              updated_at = NOW()
        WHERE id = $1 AND status != 'deleted'

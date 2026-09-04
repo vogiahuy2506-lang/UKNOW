@@ -6576,10 +6576,13 @@ export default {
 
   phoneRequired: {
     title: 'Bổ sung số điện thoại',
-    description: 'Vui lòng bổ sung số điện thoại để tiếp tục sử dụng hệ thống.',
+    // Không còn là cổng chặn — user bấm "Để sau" vẫn dùng app bình thường, nên câu cũ
+    // ("để tiếp tục sử dụng hệ thống") đã sai sự thật và phải đổi.
+    description: 'Bổ sung số điện thoại để chúng tôi liên hệ khi cần. Bạn có thể nhập sau.',
     phoneLabel: 'Số điện thoại',
     phonePlaceholder: '0901234567',
     submit: 'Xác nhận',
+    later: 'Để sau',
     saving: 'Đang lưu...',
     validationInvalid: 'Số điện thoại không hợp lệ.',
     failed: 'Cập nhật số điện thoại thất bại.',
