@@ -3,6 +3,13 @@ name: Test Frontend
 on:
   push:
     branches: [main]
+    # Xem ghi chú cùng loại ở test-backend.yml — deploy-frontend.yml đã gọi workflow này
+    # qua `uses:` cho mọi push chạm frontend/**, nên bỏ để khỏi chạy hai lần.
+    paths-ignore:
+      - 'frontend/**'
+      - '.github/workflows/lint.yml'
+      - '.github/workflows/test-frontend.yml'
+      - '.github/workflows/deploy-frontend.yml'
   workflow_call:
   workflow_dispatch:
   pull_request:

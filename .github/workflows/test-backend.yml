@@ -3,6 +3,16 @@ name: Test Backend
 on:
   push:
     branches: [main]
+    # Bỏ đúng những đường mà deploy-backend.yml đã trigger — nó gọi CHÍNH workflow này
+    # qua `uses:` nên push chạm backend/** vốn đã chạy đủ test, chạy thêm lần nữa ở đây
+    # là tốn runner và làm các job khác phải xếp hàng.
+    # Giữ nguyên ý đồ của hoangphuc ở 1082ddce: push KHÔNG chạm backend (vd. chỉ sửa
+    # e2e/) vẫn được CI chặn, vì deploy-backend không chạy cho những push đó.
+    paths-ignore:
+      - 'backend/**'
+      - 'server/scripts/**'
+      - '.github/workflows/test-backend.yml'
+      - '.github/workflows/deploy-backend.yml'
   workflow_call:
     inputs:
       skip_integration:
@@ -178,7 +188,7 @@ jobs:
           echo "No CP437 encoding corruption found."
 
   integration:
-    name: Jest integration (backend) — shard ${{ matrix.shard }}/4
+    name: Jest integration (backend) — shard ${{ matrix.shard }}/8
     timeout-minutes: 25
     runs-on: ubuntu-latest
     if: ${{ !inputs.skip_integration }}
@@ -186,7 +196,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     services:
       postgres:
@@ -235,14 +245,24 @@ jobs:
         run: npm ci
 
       # Mỗi shard chạy trên Postgres service riêng của chính job đó (matrix = VM
-      # riêng), không đụng shard khác. --shard chia theo SỐ LƯỢNG file test (không
-      # cân theo thời gian chạy thật), nên 4 shard có thể lệch nhau vài phút —
-      # chấp nhận được, vẫn nhanh hơn hẳn 1 lần chạy ~26 phút.
+      # riêng), không đụng shard khác. --shard chia theo SỐ LƯỢNG file test, KHÔNG
+      # cân theo thời gian chạy thật.
+      #
+      # Tăng 4 -> 8 shard ngày 04/09/2026. Đo trên run 33846775428, 4 shard lệch nhau
+      # rất xa chứ không phải "vài phút" như ghi chú cũ:
+      #   shard 1: 3m12s | shard 3: 4m37s | shard 4: 8m24s | shard 2: 18m38s
+      # Deploy phải đợi shard chậm nhất, nên riêng chỗ mất cân này ăn ~15 phút mỗi lần
+      # deploy. Shard 2 gánh toàn file nặng: campaign 126s, landingCms 124s,
+      # dashboard 91s, fileStorage 72s...
+      #
+      # Chia nhỏ hơn để file nặng tản ra. Tổng công việc ~35 phút, nên 8 shard lý
+      # tưởng còn ~4-5 phút mỗi shard. Cận dưới là file test nặng nhất (~2 phút) —
+      # muốn nhanh hơn nữa thì phải tách chính file đó, thêm shard không giúp được.
       #
       # Không sinh coverage ở đây nữa (trước đây integration job chạy test:coverage,
       # gộp cả unit lẫn integration coverage qua scripts/mergeCoverage.js). Gộp
       # coverage từ 4 shard song song cần thêm 1 job download-artifact + merge —
       # coverage report chỉ mang tính tham khảo trên PR summary, không gate gì,
       # nên đánh đổi lấy tốc độ + đơn giản. Cần lại thì xem lịch sử file này.
-      - name: Run Jest (integration, shard ${{ matrix.shard }}/4)
-        run: npm run test:integration -- --ci --shard=${{ matrix.shard }}/4
+      - name: Run Jest (integration, shard ${{ matrix.shard }}/8)
+        run: npm run test:integration -- --ci --shard=${{ matrix.shard }}/8
