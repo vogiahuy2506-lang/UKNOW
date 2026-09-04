@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
-import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
+import emailSettingsSmtpService from '../email/emailSettingsSmtp.service.js';
 import campaignFlowService from './campaignFlow.service.js';
 import {
   classifyBounceType,
@@ -15,6 +16,14 @@ import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
 import { deriveVariablesForText } from '../../utils/templateVariableAutoMap.util.js';
+import {
+  reserveSendQuota,
+  markSendQuotaSending,
+  consumeSendQuota,
+  releaseSendQuota,
+  markSendQuotaUncertain,
+} from '../quota/sendQuotaReservation.service.js';
+import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
 
 class CampaignEmailSenderService {
   constructor() {
@@ -481,25 +490,8 @@ class CampaignEmailSenderService {
       };
     }
 
-    const emailLimitCheck = await checkSendQuota({ userId: campaign.id_user, channel: 'email' });
-    if (!emailLimitCheck.allowed) {
-      return {
-        to: customer?.email || '',
-        status: 'failed',
-        errorType: 'plan_send_limit_exceeded',
-        error: emailLimitCheck.message,
-        period: emailLimitCheck.limitType === 'daily' || emailLimitCheck.limitType === 'monthly'
-          ? emailLimitCheck.limitType
-          : null,
-        resetAt: emailLimitCheck.resetAt
-          ? (emailLimitCheck.resetAt instanceof Date
-            ? emailLimitCheck.resetAt.toISOString()
-            : String(emailLimitCheck.resetAt))
-          : null,
-        limitType: emailLimitCheck.limitType,
-      };
-    }
-
+    // Quota reservation atomic được giữ chỗ ngay trước provider call (xem gần this.sendRawEmail bên dưới),
+    // không check sớm ở đây nữa: PR-Q4a Wave 2 (docs/PLAN_QUOTA_ATOMIC_WAVE2_2026-09-01.md).
     const config = actionNode.config || {};
     const nodeId = actionNode?.id || 'unknown';
     const parsedLogNodeId = Number.parseInt(String(actionNode?.id ?? '').trim(), 10);
@@ -698,6 +690,124 @@ class CampaignEmailSenderService {
     const brandDomain = settings.brand_domain || extractBrandDomain(settings.email);
     const envelopeFrom = resolveEnvelopeFrom(settings, trackingToken);
 
+    // Giữ chỗ quota atomic ngay trước provider call (PR-Q4a Wave 2). Đặt muộn nhất có thể để
+    // không phải release cho các nhánh throw/return sớm hơn (template thiếu, settings thiếu,
+    // unsubscribed/hard-bounced) — những nhánh đó chưa từng giữ reservation nào.
+    const logicalStep = Number.isInteger(sendMeta?.emailStep) ? sendMeta.emailStep : 1;
+    const reservationKey = buildCampaignReservationKey({
+      runId,
+      nodeId: actionNode?.id,
+      channel: 'email',
+      recipient: customer?.email || '',
+      logicalStep,
+    });
+    // requestPayload dùng dạng object (không chỉ hash tính sẵn) để reserveSendQuota() tự tính lại
+    // fingerprint đúng theo fingerprint_version ĐÃ LƯU của reservation khi kiểm trùng key — khớp
+    // đúng pattern đã dùng ở emailSettingsSmtp.service.js/campaignQuickSend.service.js/
+    // zaloSettings.controller.js. Thiếu requestPayload thì so khớp rơi về so sánh chuỗi thô theo
+    // fingerprintVersion hiện tại của CALLER, không tự re-derive theo version đã lưu — nếu thuật
+    // toán fingerprint từng đổi (v1/v2 -> v3, xem hashAttachments()/hashAttachmentsV3()), reservation
+    // cũ bị 409 IDEMPOTENCY_KEY_REUSED oan dù nội dung logic không đổi (review độc lập bắt lỗi này).
+    //
+    // subject/content/templateId/attachments để fingerprint bắt được trường hợp key trùng nhưng nội
+    // dung đổi giữa 2 lần thử (retry sau smtp_rate_limited_retry_scheduled có thể cách nhau nhiều
+    // giờ). Dùng attachments dạng mô tả (key/name/size/contentType), không phải realMailAttachments
+    // đã đọc buffer thật — đủ để phát hiện đổi file, không tốn chi phí hash nội dung mỗi lần gửi.
+    const requestPayload = {
+      channel: 'email',
+      recipient: customer?.email || '',
+      sourceType: 'campaign_email',
+      quantity: 1,
+      subject,
+      content: htmlBody,
+      templateId: templateId || null,
+      attachments,
+    };
+    const requestFingerprint = computeRequestFingerprint(requestPayload);
+
+    let reservation;
+    try {
+      reservation = await reserveSendQuota({
+        userId: campaign.id_user,
+        channel: 'email',
+        quantity: 1,
+        reservationKey,
+        requestFingerprint,
+        requestPayload,
+        sourceType: 'campaign_email',
+        sourceRef: { runId, nodeId: logNodeIdForDb, stepIndex: logEmailStepForDb },
+      });
+    } catch (quotaErr) {
+      // Chỉ quota-exceeded (403 RESOURCE_LIMIT_EXCEEDED) mới map sang kết quả "failed sạch" để
+      // campaignRun.service.js:3457-3484 pause-and-resume. Lỗi hạ tầng (503 SEND_QUOTA_UNAVAILABLE)
+      // hoặc conflict (409 CONCURRENT_SEND_IN_PROGRESS/IDEMPOTENCY_KEY_REUSED) phải throw ra ngoài
+      // như hành vi cũ của checkSendQuota() khi DB lỗi — nuốt thành "hết hạn mức" sẽ chặn nhầm
+      // retry-wrapper phía trên (executeWithTimeoutRetry) vốn tự retry lỗi mạng/kết nối.
+      if (quotaErr.code !== 'RESOURCE_LIMIT_EXCEEDED') {
+        throw quotaErr;
+      }
+      return {
+        to: customer?.email || '',
+        status: 'failed',
+        errorType: 'plan_send_limit_exceeded',
+        error: quotaErr.message,
+        period: quotaErr.limitType === 'daily' || quotaErr.limitType === 'monthly' ? quotaErr.limitType : null,
+        resetAt: quotaErr.resetAt
+          ? (quotaErr.resetAt instanceof Date ? quotaErr.resetAt.toISOString() : String(quotaErr.resetAt))
+          : null,
+        limitType: quotaErr.limitType || null,
+      };
+    }
+
+    const reservationActive = reservation.mode === 'enforce' || reservation.mode === 'test_enforce';
+
+    if (reservationActive && reservation.status === 'consumed') {
+      // Idempotent replay: cùng logical send đã consumed trước đó (vd. retry sau khi job stalled
+      // trong BullMQ) — không gọi lại provider, trả kết quả y hệt lần trước. PHẢI đọc lại
+      // snapshot.status thay vì hardcode 'success': hard bounce cũng consume (billable), nếu
+      // replay luôn trả success thì campaign ledger/thống kê đánh dấu nhầm recipient thành công
+      // (review độc lập bắt lỗi này).
+      const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+      if (snapshot.status === 'bounced') {
+        // snapshot không lưu bounceReason gốc (tránh PII trong quota ledger — xem chỗ consume
+        // bounce bên dưới); lý do đầy đủ đã có trong email_messages.bounce_reason qua persistSource.
+        return {
+          to: customer?.email || '',
+          status: 'bounced',
+          bounceType: snapshot.errorType === 'hard_bounce' ? 'hard' : 'soft',
+          bounceReason: '',
+          isReplay: true,
+        };
+      }
+      return {
+        to: customer?.email || '',
+        status: 'success',
+        messageId: snapshot.messageId || null,
+        isReplay: true,
+      };
+    }
+
+    if (reservationActive) {
+      await markSendQuotaSending({ reservationId: reservation.id });
+    }
+
+    const releaseReservation = async (failureCode, reason) => {
+      if (!reservationActive) return;
+      try {
+        await releaseSendQuota({ reservationId: reservation.id, failureCode, reason });
+      } catch (e) {
+        console.warn('[CampaignEmailSender] releaseSendQuota error:', e.message);
+      }
+    };
+    const markUncertainReservation = async (failureCode, reason) => {
+      if (!reservationActive) return;
+      try {
+        await markSendQuotaUncertain({ reservationId: reservation.id, failureCode, reason });
+      } catch (e) {
+        console.warn('[CampaignEmailSender] markSendQuotaUncertain error:', e.message);
+      }
+    };
+
     let info;
     try {
       const rawResult = await this.sendRawEmail({
@@ -751,6 +861,10 @@ class CampaignEmailSenderService {
         const nextRetryCount = currentRetryCount + 1;
         const canRetry = nextRetryCount <= retryConfig.maxRetries;
 
+        // SMTP từ chối trước khi nhận (definitive_no_send) — release ngay cả khi còn lượt retry:
+        // lần retry theo lịch sẽ tự re-reserve đúng key (reservationKey không đổi theo attempt count).
+        await releaseReservation('SMTP_PROVIDER_RATE_LIMITED', shortBounceReason);
+
         if (canRetry) {
           const retryScheduleAt = new Date(Date.now() + retryConfig.delayMs);
           // Không tạo job BullMQ delay ở đây: khi job chạy sau không đi qua campaignRun nên không mark step;
@@ -781,6 +895,7 @@ class CampaignEmailSenderService {
 
       // Lỗi cấu hình SMTP (ví dụ 535) không phải bounce của người nhận.
       if (smtpConfigError) {
+        await releaseReservation('SMTP_CONFIG_ERROR', shortBounceReason);
         const failedAt = new Date();
         try {
           const failedTrackingToken = uuidv4();
@@ -819,6 +934,10 @@ class CampaignEmailSenderService {
 
       // Chỉ đánh dấu bounce khi có dấu hiệu rõ ràng email người nhận không tồn tại.
       if (!shouldMarkAsRecipientBounce) {
+        // Không thể chứng minh SMTP server đã nhận hay chưa nhận trước khi lỗi — theo mục 8
+        // plan Wave 2, đây là nhóm "unknown", phải uncertain chứ không được coi là chắc chắn
+        // chưa gửi (release). Đây là thay đổi hành vi thật so với code cũ (PR-Q4a).
+        await markUncertainReservation('SMTP_DELIVERY_ERROR_AMBIGUOUS', shortBounceReason);
         const failedAt = new Date();
         try {
           const failedTrackingToken = uuidv4();
@@ -862,39 +981,99 @@ class CampaignEmailSenderService {
         console.info(`[CampaignRun][Email] mark_hard_bounce run=${runId} customerId=${customerId}`);
       }
 
-      // Ghi log email_message với status bounced
+      // Ghi log email_message với status bounced. Theo policy Wave 2 (mục 8): hard bounce phát
+      // sinh SAU khi provider đã nhận request là "billable_bounce" — vẫn consume + debit ví như
+      // gửi thành công (baseline sản phẩm hiện tại đã tính bounce vào quota, giữ nguyên).
       const bouncedAt = new Date();
-      try {
-        await emailSettingsController.logEmailSent({
-          userId: campaign.id_user,
-          campaignId: campaign.id,
-          customerId,
-          emailTemplateId: null,
-          fromEmailId: settings.id,
-          to: customer.email,
-          subject,
-          trackedHtmlContent: null,
-          plainTextContent: textBody,
-          trackingToken,
-          info: { messageId: null },
-          sentAt: bouncedAt,
-          setting: settings,
-          runId,
-          nodeId: logNodeIdForDb,
-          emailStep: logEmailStepForDb,
-          fromAddress,
-          brandDomain,
-          debitWallet: true,
-        });
-        // Cập nhật email_message vừa insert sang status bounced
-        await campaignEmailSenderRepository.markEmailMessageBounced(
-          trackingToken,
-          bouncedAt,
-          bounceReason,
-          { bounceType, bounceCode: null, bounceDetectedVia: 'smtp' }
-        );
-      } catch (logErr) {
-        console.error('[sendEmailToCustomer] Lỗi ghi log bounce:', logErr.message);
+      if (reservationActive) {
+        try {
+          await consumeSendQuota({
+            reservationId: reservation.id,
+            // Dùng field allowlisted (status/errorType trong ALLOWED_RESPONSE_SNAPSHOT_FIELDS ở
+            // sendQuota.repository.js) — bounceType KHÔNG nằm trong allowlist nên bị
+            // sanitizeResponseSnapshot() lặng lẽ lọc mất, làm nhánh replay bên trên không còn cách
+            // nào phân biệt bounce với success (finding đã sửa trước đó).
+            //
+            // KHÔNG đưa bounceReason vào field 'error': assertNoPiiOrSecret() quét đệ quy toàn bộ
+            // snapshot sau sanitize (kể cả field allowlisted) và bounceReason SMTP thật thường
+            // chứa nguyên email người nhận (vd. "550 5.1.1 <user@example.com> User unknown") —
+            // consumeSendQuota() sẽ throw PII_DETECTED, bị catch bên dưới rồi chuyển nhầm reservation
+            // sang uncertain thay vì consumed cho MỌI hard bounce thật (review độc lập bắt lỗi này).
+            // Lý do bounce đầy đủ đã có sẵn trong email_messages.bounce_reason qua persistSource,
+            // không cần lặp lại (và không an toàn để lặp lại) trong quota snapshot.
+            responseSnapshot: {
+              status: 'bounced',
+              errorType: bounceType === 'hard' ? 'hard_bounce' : 'soft_bounce',
+              provider: 'smtp',
+            },
+            persistSource: async (client) => {
+              await emailSettingsSmtpService.logEmailSentWithClient(client, {
+                userId: campaign.id_user,
+                campaignId: campaign.id,
+                customerId,
+                emailTemplateId: null,
+                fromEmailId: settings.id,
+                to: customer.email,
+                subject,
+                trackedHtmlContent: null,
+                plainTextContent: textBody,
+                trackingToken,
+                info: { messageId: null },
+                sentAt: bouncedAt,
+                setting: settings,
+                runId,
+                nodeId: logNodeIdForDb,
+                emailStep: logEmailStepForDb,
+                fromAddress,
+                brandDomain,
+                quotaReservationId: reservation.id,
+              });
+              await campaignEmailSenderRepository.markEmailMessageBounced(
+                trackingToken,
+                bouncedAt,
+                bounceReason,
+                { bounceType, bounceCode: null, bounceDetectedVia: 'smtp' },
+                client
+              );
+            },
+          });
+        } catch (consumeErr) {
+          console.warn('[CampaignEmailSender] consumeSendQuota (bounce) failed after provider attempt:', consumeErr.message);
+          await markUncertainReservation('CONSUME_DB_FAILED', consumeErr.message);
+        }
+      } else {
+        try {
+          await emailSettingsController.logEmailSent({
+            userId: campaign.id_user,
+            campaignId: campaign.id,
+            customerId,
+            emailTemplateId: null,
+            fromEmailId: settings.id,
+            to: customer.email,
+            subject,
+            trackedHtmlContent: null,
+            plainTextContent: textBody,
+            trackingToken,
+            info: { messageId: null },
+            sentAt: bouncedAt,
+            setting: settings,
+            runId,
+            nodeId: logNodeIdForDb,
+            emailStep: logEmailStepForDb,
+            fromAddress,
+            brandDomain,
+            debitWallet: true,
+          });
+          // Cập nhật email_message vừa insert sang status bounced
+          await campaignEmailSenderRepository.markEmailMessageBounced(
+            trackingToken,
+            bouncedAt,
+            bounceReason,
+            { bounceType, bounceCode: null, bounceDetectedVia: 'smtp' }
+          );
+        } catch (logErr) {
+          console.error('[sendEmailToCustomer] Lỗi ghi log bounce:', logErr.message);
+        }
       }
 
       return {
@@ -909,10 +1088,59 @@ class CampaignEmailSenderService {
       `[CampaignRun][Email] success run=${runId} to=${customer.email} messageId=${info?.messageId || 'n/a'}`
     );
 
-    await campaignEmailSenderRepository.incrementEmailSettingsSentCount(settings.id);
+    // Không chặn: đây là counter thống kê không tính billing (khác consumeSendQuota() bên dưới).
+    // Nếu để throw không bắt, reservation đã 'sending' (provider đã accept) sẽ không bao giờ được
+    // consume hay uncertain — kẹt 'sending' vĩnh viễn cho tới sweeper PR-Q5 (review độc lập bắt lỗi này).
+    await campaignEmailSenderRepository.incrementEmailSettingsSentCount(settings.id).catch((e) => {
+      console.warn('[CampaignEmailSender] incrementEmailSettingsSentCount error (khong chan luong consume):', e.message);
+    });
 
     const sentAt = new Date();
-    if (config.saveMessageLog !== false) {
+    const shouldSaveMessageLog = config.saveMessageLog !== false;
+    if (reservationActive) {
+      // Reservation đã "sending" — provider vừa xác nhận nhận email (accepted). Luôn consume để
+      // đóng lease dù có ghi log DB hay không (đã dùng quota thật, không được để trống quota).
+      try {
+        await consumeSendQuota({
+          reservationId: reservation.id,
+          providerReference: info?.messageId
+            ? crypto.createHash('sha256').update(String(info.messageId)).digest('hex').slice(0, 32)
+            : null,
+          responseSnapshot: {
+            status: 'success',
+            messageId: info?.messageId || null,
+            provider: 'smtp',
+            sentAt: sentAt.toISOString(),
+          },
+          persistSource: shouldSaveMessageLog
+            ? (client) => emailSettingsSmtpService.logEmailSentWithClient(client, {
+                userId: campaign.id_user,
+                campaignId: campaign.id,
+                customerId,
+                emailTemplateId: templateId,
+                fromEmailId: settings.id,
+                to: customer.email,
+                subject,
+                trackedHtmlContent,
+                plainTextContent: textBody,
+                trackingToken,
+                info,
+                sentAt,
+                setting: settings,
+                runId,
+                nodeId: logNodeIdForDb,
+                emailStep: logEmailStepForDb,
+                fromAddress,
+                brandDomain,
+                quotaReservationId: reservation.id,
+              })
+            : null,
+        });
+      } catch (consumeErr) {
+        console.warn('[CampaignEmailSender] consumeSendQuota failed after successful provider send:', consumeErr.message);
+        await markUncertainReservation('CONSUME_DB_FAILED', consumeErr.message);
+      }
+    } else if (shouldSaveMessageLog) {
       try {
         await emailSettingsController.logEmailSent({
           userId: campaign.id_user,

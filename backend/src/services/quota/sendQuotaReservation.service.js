@@ -524,7 +524,10 @@ export async function reserveSendQuota(params, options = {}) {
     quantity = 1,
     reservationKey,
     requestFingerprint,
-    fingerprintVersion = 'v2',
+    // Phải khớp default của computeRequestFingerprint() ở sendQuotaKey.service.js — caller không
+    // truyền fingerprintVersion tường minh sẽ tự tính bằng default đó, nên default ở đây lệch sẽ
+    // lưu sai fingerprint_version cho hash thực sự đã dùng (v1/v2 đóng băng, thuật toán mới là v3).
+    fingerprintVersion = 'v3',
     sourceType = 'direct_email',
     sourceRef = {},
     requestPayload = null,
@@ -550,6 +553,14 @@ export async function reserveSendQuota(params, options = {}) {
           const err = new Error(legacyResult.message || 'Hạn mức gửi tin không đủ (legacy)');
           err.status = legacyResult.status || 403;
           err.code = legacyResult.code || 'RESOURCE_LIMIT_EXCEEDED';
+          // Giữ nguyên resetAt/limitType/limit/currentCount từ checkSendQuota() legacy:
+          // caller (vd. campaign pause-and-resume ở campaignRun.service.js) đọc trực tiếp
+          // các field này trên error để quyết định defer-and-retry thay vì fail cứng.
+          err.resetAt = legacyResult.resetAt ?? null;
+          err.limitType = legacyResult.limitType ?? null;
+          err.limit = legacyResult.limit ?? null;
+          err.currentCount = legacyResult.currentCount ?? null;
+          err.billingUserId = legacyResult.billingUserId ?? null;
           throw err;
         }
       } catch (checkErr) {
@@ -670,6 +681,11 @@ export async function reserveSendQuota(params, options = {}) {
       const err = new Error(legacyResult?.message || 'Hạn mức gửi tin không đủ (legacy)');
       err.status = legacyResult?.status || 403;
       err.code = legacyResult?.code || 'RESOURCE_LIMIT_EXCEEDED';
+      err.resetAt = legacyResult?.resetAt ?? null;
+      err.limitType = legacyResult?.limitType ?? null;
+      err.limit = legacyResult?.limit ?? null;
+      err.currentCount = legacyResult?.currentCount ?? null;
+      err.billingUserId = legacyResult?.billingUserId ?? null;
       throw err;
     }
 

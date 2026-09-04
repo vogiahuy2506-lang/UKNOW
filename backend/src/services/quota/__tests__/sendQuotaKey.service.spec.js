@@ -311,6 +311,53 @@ describe('sendQuotaKey.service — Canonical Keys & Zero-PII', () => {
       expect(fp1).not.toBe(fp2);
     });
 
+    it('Zalo attachment shape {data, filename, metadata}: cung bytes truoc/sau BullMQ round-trip cho CUNG fingerprint', () => {
+      // Vong review thu 3 (Finding P1): hashAttachments() truoc day chi doc att.content, khong doc
+      // att.data (shape thuc te cua attachment campaign Zalo — xem reviveZaloAttachmentSourcesFromQueue
+      // trong campaignZaloSender.service.js). Sau khi qua BullMQ/Redis, Buffer that mat prototype,
+      // chi con { type:'Buffer', data:[...] }. Ca hai dang phai cho CUNG fingerprint neu cung byte.
+      const realBuffer = Buffer.from('noi dung file that', 'utf8');
+      const jsonRoundTripBuffer = JSON.parse(JSON.stringify(realBuffer)); // { type: 'Buffer', data: [...] }
+
+      const fpBeforeBullMQ = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: realBuffer, filename: 'anh.jpg', metadata: { totalSize: realBuffer.length } }],
+      });
+      const fpAfterBullMQ = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: jsonRoundTripBuffer, filename: 'anh.jpg', metadata: { totalSize: realBuffer.length } }],
+      });
+
+      expect(fpBeforeBullMQ).toBe(fpAfterBullMQ);
+    });
+
+    it('Zalo attachment shape {data, filename, metadata}: khac bytes nhung CUNG filename/size van cho fingerprint KHAC nhau', () => {
+      // Day chinh la collision Codex phat hien bang test doc lap: truoc khi sua, hashAttachments()
+      // bo qua att.data hoan toan nen 2 file khac noi dung nhung trung filename/size se ra CUNG
+      // fingerprint — retry voi file khac se lang le replay sai file thay vi 409.
+      const fileA = Buffer.from('noi dung file A', 'utf8');
+      const fileB = Buffer.from('noi dung file B hoan toan khac', 'utf8');
+
+      const fpA = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: fileA, filename: 'anh.jpg', metadata: { totalSize: 999 } }],
+      });
+      const fpB = computeRequestFingerprint({
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        attachments: [{ data: fileB, filename: 'anh.jpg', metadata: { totalSize: 999 } }],
+      });
+
+      expect(fpA).not.toBe(fpB);
+    });
+
     it('changes fingerprint when templateVariables change', () => {
       const fp1 = computeRequestFingerprint({
         channel: 'zalo',
@@ -570,6 +617,51 @@ describe('sendQuotaKey.service — Canonical Keys & Zero-PII', () => {
       );
       expect(computeRequestFingerprint(pWithAtt, 'v2')).toBe(
         '8360060a1344f6308da063321895298e3e43104f90b5fa90bbfbf7a5ea4e7e90'
+      );
+    });
+
+    it('Golden vector: shape attachment Zalo {data,filename,metadata} — v1/v2 giu hash co dinh (khong doc att.data)', () => {
+      // Bo sung theo yeu cau review vong 5: golden vector rieng cho DUNG shape gay ra collision
+      // (Zalo campaign, khong phai shape {content} cua email). Neu ai do vo tinh sua lai
+      // hashAttachments() (dung chung v1/v2) trong tuong lai, test nay se do ngay — dung y
+      // bao ve dung diem da gay loi thay vi chi bao ve shape email chung chung.
+      const pZaloAtt = {
+        channel: 'zalo',
+        recipient: '0901234567',
+        content: 'hello',
+        quantity: 1,
+        sourceType: 'campaign_zalo',
+        attachments: [{ data: Buffer.from('noi dung file that', 'utf8'), filename: 'anh.jpg', metadata: { totalSize: 19 } }],
+      };
+      expect(computeRequestFingerprint(pZaloAtt, 'v1')).toBe(
+        '185f589b16da21e8a0bc8e04101be2542ae26ab0f297c5773db53bfd3f774079'
+      );
+      expect(computeRequestFingerprint(pZaloAtt, 'v2')).toBe(
+        '940f7d6538e55eac7c3c27e362d50d5795ccfbafa0fbf86f472ba8ce13d31691'
+      );
+      expect(computeRequestFingerprint(pZaloAtt, 'v3')).toBe(
+        '526f0714f9a32ebb83f41a0726c686a7eeea7c87dd78ccab6ec632955945a2aa'
+      );
+    });
+
+    it('v1/v2 giu nguyen hanh vi legacy (collision) cho shape attachment Zalo; chi v3 phat hien khac byte', () => {
+      // Dung yeu cau review vong 5: "xac nhan hai file khac byte: v2 giu hanh vi legacy, con v3
+      // phat hien khac nhau". Day KHONG phai bug moi — la dac tinh dong bang bat buoc de reservation
+      // v1/v2 da luu tren Postgres truoc khi co v3 van replay dung (xem chu thich hashAttachments()).
+      const fileA = Buffer.from('noi dung A', 'utf8');
+      const fileB = Buffer.from('noi dung B hoan toan khac', 'utf8');
+      const attA = [{ data: fileA, filename: 'anh.jpg', metadata: { totalSize: fileA.length } }];
+      const attB = [{ data: fileB, filename: 'anh.jpg', metadata: { totalSize: fileA.length } }]; // cung metadata, khac byte
+      const base = { channel: 'zalo', recipient: '0901234567', content: 'hello' };
+
+      expect(computeRequestFingerprint({ ...base, attachments: attA }, 'v1')).toBe(
+        computeRequestFingerprint({ ...base, attachments: attB }, 'v1')
+      );
+      expect(computeRequestFingerprint({ ...base, attachments: attA }, 'v2')).toBe(
+        computeRequestFingerprint({ ...base, attachments: attB }, 'v2')
+      );
+      expect(computeRequestFingerprint({ ...base, attachments: attA }, 'v3')).not.toBe(
+        computeRequestFingerprint({ ...base, attachments: attB }, 'v3')
       );
     });
   });

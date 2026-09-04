@@ -57,12 +57,13 @@ class CampaignEmailSenderRepository {
    * @param {'smtp'|'dsn'} [options.bounceDetectedVia]
    * @returns {Promise<void>}
    */
-  async markEmailMessageBounced(trackingToken, bouncedAt, bounceReason, options = {}) {
+  async markEmailMessageBounced(trackingToken, bouncedAt, bounceReason, options = {}, queryable = db) {
     const bounceType = options?.bounceType || null;
     const bounceCode = options?.bounceCode || null;
     const bounceDetectedVia = options?.bounceDetectedVia || 'smtp';
+    const runner = queryable || db;
 
-    await db.query(
+    await runner.query(
       `UPDATE email_messages
        SET status = 'bounced',
            bounced_at = $1,

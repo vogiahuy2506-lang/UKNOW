@@ -119,6 +119,20 @@ class ZaloMessageRepository {
     );
   }
 
+  /**
+   * Gắn quota_reservation_id vào một zalo_messages đã tồn tại (PR-Q4b).
+   * Dùng sau khi consumeSendQuota() thành công cho message đã insert trước đó (placeholder 'queued').
+   */
+  async linkQuotaReservation(zaloMessageId, reservationId, queryable = db) {
+    const rawId = Number.parseInt(zaloMessageId, 10);
+    const rawResId = Number.parseInt(reservationId, 10);
+    if (!Number.isFinite(rawId) || !Number.isFinite(rawResId)) return;
+    await queryable.query(
+      `UPDATE zalo_messages SET quota_reservation_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [rawId, rawResId]
+    );
+  }
+
   async withTransaction(callback) {
     const client = await db.getClient();
     try {
