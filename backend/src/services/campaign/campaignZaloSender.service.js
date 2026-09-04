@@ -1736,16 +1736,31 @@ class CampaignZaloSenderService {
   }
 
   /**
-   * Sync account statuses with in-memory API sessions.
-   * Connected accounts without RAM session will be auto-restored first,
-   * and only accounts that still fail restore will be marked disconnected.
+   * Liệt kê các tài khoản đang mang status='connected' trong DB nhưng KHÔNG có phiên
+   * sống trong bộ nhớ. Chỉ để hiển thị đúng trạng thái cho giao diện.
+   *
+   * ĐÂY LÀ HÀM CHỈ ĐỌC. Không đăng nhập lại Zalo, không ghi DB.
+   *
+   * Trước 03/09 hàm này gọi tryAutoRestoreSession cho từng tài khoản ngay trong lúc xử lý
+   * request GET /api/zalo/accounts — tức mỗi lần admin mở trang quản lý Zalo là hệ thống
+   * đăng nhập lại tuần tự vào từng tài khoản chết, chờ Zalo trả lời rồi mới sang cái tiếp.
+   * Với 10 tài khoản connected thì còn chịu được; sau đợt cứu hộ PR-2 nâng lên 45 tài khoản
+   * (phần lớn cookie đã hết hạn) thì request vượt quá thời gian chờ và trang báo
+   * "Backend Zalo chưa sẵn sàng".
+   *
+   * Việc khôi phục phiên là của keep-alive cron (5 phút/lần) và cron Session Restoration
+   * (15 phút/lần) — cả hai đã quét đúng tập tài khoản này rồi. Ghi nhận thất bại cũng do
+   * recordRestoreFailure trong các cron đó lo, không phải đường đọc danh sách.
+   *
+   * Cùng nguyên tắc đã áp cho endpoint sync/status ở PR-1b: thao tác XEM không được có
+   * tác dụng phụ.
    *
    * @param {object} input
    * @param {string|number} input.userId
    * @param {Array<Record<string, any>>} input.accounts
-   * @returns {Promise<Set<string>>}
+   * @returns {Set<string>} id các tài khoản không có phiên sống
    */
-  async syncDisconnectedAccountsFromMemory({ userId, accounts = [] }) {
+  findAccountsMissingLiveSession({ userId, accounts = [] }) {
     const normalizedUserId = Number.isFinite(parseInt(userId, 10))
       ? parseInt(userId, 10)
       : null;
@@ -1753,52 +1768,18 @@ class CampaignZaloSenderService {
       return new Set();
     }
 
-    const missingSessionAccounts = accounts
+    const missingIds = accounts
       .filter((account) => {
         const accountId = String(account?.id || '').trim();
         if (!accountId) return false;
         if (String(account?.status || '').trim() !== 'connected') return false;
         if (account?.is_active !== true) return false;
         return !zaloAccountSessionService.getAccountApi(accountId);
-      });
+      })
+      .map((account) => String(account.id).trim())
+      .filter(Boolean);
 
-    if (!missingSessionAccounts.length) return new Set();
-
-    const failedIds = [];
-    for (const account of missingSessionAccounts) {
-      const accountId = Number.parseInt(account.id, 10);
-      if (!Number.isFinite(accountId)) {
-        continue;
-      }
-
-      const restoreSource = await this.getAccountRestoreSource({
-        accountId,
-        userId: normalizedUserId,
-      });
-      if (
-        restoreSource?.is_active === true
-        && String(restoreSource?.status || '').trim() === 'connected'
-      ) {
-        const restoredApi = await this.tryAutoRestoreSession({
-          accountId,
-          userId: normalizedUserId,
-          cookieText: restoreSource.cookie_text,
-          fallbackDisplayName:
-            String(restoreSource.display_name || '').trim()
-            || String(account?.display_name || '').trim()
-            || 'Tài khoản Zalo',
-        });
-        if (restoredApi) {
-          continue;
-        }
-      }
-
-      failedIds.push(accountId);
-      await campaignZaloSenderRepository.recordRestoreFailure(accountId);
-      zaloAccountSessionService.clearAccountApi(accountId);
-    }
-
-    return new Set(failedIds.map((id) => String(id)));
+    return new Set(missingIds);
   }
 
   /**

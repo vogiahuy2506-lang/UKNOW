@@ -1645,14 +1645,14 @@ class ZaloSettingsController {
         }, {});
 
         for (const [ownerUserId, ownerAccounts] of Object.entries(accountsByOwner)) {
-          const ownerDisconnectedIds = await campaignZaloSenderService.syncDisconnectedAccountsFromMemory({
+          const ownerDisconnectedIds = campaignZaloSenderService.findAccountsMissingLiveSession({
             userId: ownerUserId,
             accounts: ownerAccounts,
           });
           ownerDisconnectedIds.forEach((id) => disconnectedIds.add(id));
         }
       } else {
-        const ownerDisconnectedIds = await campaignZaloSenderService.syncDisconnectedAccountsFromMemory({
+        const ownerDisconnectedIds = campaignZaloSenderService.findAccountsMissingLiveSession({
           userId,
           accounts: rows,
         });
