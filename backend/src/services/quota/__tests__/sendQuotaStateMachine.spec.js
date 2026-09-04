@@ -243,21 +243,64 @@ describe('sendQuota State Machine & Transition Rules (PR-Q1)', () => {
 
   describe('sendQuotaReservation.service — Mode OFF default & Idempotent Consume', () => {
     it('reserveSendQuota returns safe passthrough stub when mode is off', async () => {
-      const result = await reserveSendQuota({
-        userId: 10,
-        channel: 'email',
-        quantity: 1,
-        reservationKey: 'res_key_1',
+      // Nhánh mode 'off' của reserveSendQuota gọi checkSendQuota() legacy, và hàm đó đi
+      // xuống resolveBillingUserId() -> db.query. Trên máy dev có Postgres nên câu này
+      // trả lời tức thì và bài test xanh; job "Jest unit (backend)" trên CI KHÔNG dựng
+      // database, nên kết nối treo, withRetry (database.js:27) thử lại 6 lượt và bài test
+      // vượt mốc 5000ms mặc định của Jest.
+      //
+      // Hậu quả thật, không phải giả định: bài test này làm đỏ job unit và chặn TOÀN BỘ
+      // deploy backend từ 03/09/2026 (6 run liên tiếp). Deploy frontend dùng workflow
+      // riêng nên vẫn lên — lệch phiên bản đó khoá modal "Bổ sung số điện thoại" của mọi
+      // user không phải admin trên production.
+      //
+      // Chặn ở tầng db.query để bài test thuần đơn vị, không phụ thuộc môi trường có DB
+      // hay không. Dùng đúng khuôn mock đã có sẵn ở phần shadow-mode cuối file này.
+      _clearQuotaCache();
+      const origDbQuery = db.query;
+      db.query = jest.fn().mockImplementation(async (sql) => {
+        if (sql.includes('FROM users') || sql.includes('JOIN plans') || sql.includes('FROM plans')) {
+          return {
+            rows: [{
+              id: 10,
+              has_plan: true,
+              is_subscription_expired: false,
+              subscription_expires_at: new Date(Date.now() + 86400000),
+              plan_activated_at: new Date(Date.now() - 5 * 86400000),
+              effective_plan_id: 10,
+              active_plan_id: 10,
+              role: 'user',
+              daily_email_limit: 100,
+              monthly_email_limit: 1000,
+            }],
+          };
+        }
+        if (sql.includes('count') || sql.includes('COUNT')) {
+          return { rows: [{ count: 0, total: 0 }] };
+        }
+        return { rows: [] };
       });
 
-      expect(result).toMatchObject({
-        id: null,
-        reservation_key: 'res_key_1',
-        status: 'reserved',
-        mode: 'off',
-        allowed: true,
-        bypass: true,
-      });
+      try {
+        const result = await reserveSendQuota({
+          userId: 10,
+          channel: 'email',
+          quantity: 1,
+          reservationKey: 'res_key_1',
+        });
+
+        expect(result).toMatchObject({
+          id: null,
+          reservation_key: 'res_key_1',
+          status: 'reserved',
+          mode: 'off',
+          allowed: true,
+          bypass: true,
+        });
+      } finally {
+        db.query = origDbQuery;
+        _clearQuotaCache();
+      }
     });
 
     it('reserveSendQuota fails closed with 503 if mode is unrecognized', async () => {
