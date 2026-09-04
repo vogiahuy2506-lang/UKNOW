@@ -14,6 +14,7 @@ import {
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
+import { isPlausiblePhone } from '../../../utils/phoneValidation';
 import PlanSection from '../../billing/PlanSection';
 import OrderHistoryTab from '../../billing/OrderHistoryTab';
 
@@ -258,7 +259,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
     const payload = buildSubmitPayload();
     if (!payload.email) { setError(t('accountProfileModal.emailRequired')); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) { setError(t('accountProfileModal.emailInvalid')); return; }
-    if (payload.phone && !/^[0-9]{10,11}$/.test(payload.phone)) {
+    if (payload.phone && !isPlausiblePhone(payload.phone)) {
       setError(t('accountProfileModal.phoneInvalid'));
       return;
     }

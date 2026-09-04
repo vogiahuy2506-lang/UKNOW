@@ -265,3 +265,86 @@ describe('Đăng ký chấp nhận mọi định dạng SĐT hợp lý (route kh
     expect(rows).toHaveLength(0);
   });
 });
+
+describe('PUT /api/users/profile chấp nhận mọi định dạng SĐT hợp lý và chuẩn hoá', () => {
+  it('"+84 912 000 099" (dấu + và khoảng trắng) → 200, lưu DB dạng 0912000099', async () => {
+    const user = await createUser({ username: 'prof_plus84', phone: '0912000098' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '+84 912 000 099' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.phone).toBe('0912000099');
+    const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [user.id]);
+    expect(rows[0].phone).toBe('0912000099');
+  });
+
+  it('"0912-345-679" (gạch nối) → 200, chuẩn hoá lưu DB 0912345679', async () => {
+    const user = await createUser({ username: 'prof_dash', phone: '0912000090' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '0912-345-679' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.phone).toBe('0912345679');
+  });
+
+  it('trùng SĐT của user khác dưới dạng +84 vs 0xxx → 409 PHONE_TAKEN', async () => {
+    await createUser({ username: 'prof_owner', phone: '0912345688' });
+    const user = await createUser({ username: 'prof_other', phone: '0912000088' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '+84 912 345 688' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PHONE_TAKEN');
+  });
+
+  it('gửi lại đúng SĐT của chính mình dưới dạng +84 → 200 no-op', async () => {
+    const user = await createUser({ username: 'prof_self', phone: '0912345689' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '+84 912 345 689' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.phone).toBe('0912345689');
+  });
+
+  it('SĐT rác ("123") → 400 Số điện thoại không hợp lệ', async () => {
+    const user = await createUser({ username: 'prof_bad', phone: '0912000077' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '123' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('không truyền phone (chỉ sửa fullName) → 200, giữ nguyên phone cũ', async () => {
+    const user = await createUser({ username: 'prof_nofield', phone: '0912000066', fullName: 'Cũ' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'Mới' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.fullName).toBe('Mới');
+    expect(res.body.data.phone).toBe('0912000066');
+  });
+});

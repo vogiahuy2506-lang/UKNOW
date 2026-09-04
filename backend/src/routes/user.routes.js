@@ -100,7 +100,7 @@ router.put('/profile',
     body('phone')
       .optional()
       .trim()
-      .matches(/^[0-9]{10,11}$/)
+      .notEmpty()
       .withMessage('Số điện thoại không hợp lệ'),
   ],
   handleValidationErrors,
