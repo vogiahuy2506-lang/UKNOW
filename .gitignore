@@ -134,3 +134,11 @@ backend/create_sample_campaign.js
 backend/create_test_user.js
 backend/create_zalo_group_campaign.js
 backend/create_zalo_personal_campaign.js
+backend/scripts/fix-affiliate-columns.js
+backend/scripts/test-leads-sheets-sync.js
+backend/backups/
+backend/test-all-emails.js
+backend/test-email.js
+backend/nodemon.json
+frontend/test-output.log
+frontend/public/test-sheets-sync.html
