@@ -157,11 +157,22 @@ async function main() {
     const password = process.env.E2E_PASSWORD || 'Test@1234';
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // SĐT là BẮT BUỘC, không phải tuỳ chọn. `MainLayout.jsx` mở PhoneRequiredModal khi
+    // `!user.phone && role !== 'admin'`, và modal đó KHÔNG đóng được — overlay của nó phủ
+    // kín trang nên mọi `click()` của Playwright bị chặn với
+    //   "<div class=\"modal-overlay\">…</div> intercepts pointer events".
+    // Bỏ cột này thì auth.spec.js và campaigns.spec.js đỏ mà thông báo lỗi không hề nhắc
+    // tới SĐT — rất tốn thời gian để lần ra.
+    // Đây là lần thứ ba cùng một khuôn lỗi kể từ khi có tính năng SĐT bắt buộc: production
+    // (backend cũ không trả `phone`), helper `createUser` của integration test, và seed này.
+    // Thêm đường tạo user mới ở đâu thì phải cấp SĐT ở đó.
+    const phone = process.env.E2E_PHONE || '0900000001';
+
     const userResult = await client.query(
-      `INSERT INTO users (username, email, password_hash, full_name, status, role, is_verified, verified_at, active_plan_id, subscription_expires_at)
-       VALUES ($1, $2, $3, $4, 'active', 'user', TRUE, NOW(), $5, NOW() + INTERVAL '1 year')
+      `INSERT INTO users (username, email, password_hash, full_name, phone, status, role, is_verified, verified_at, active_plan_id, subscription_expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'active', 'user', TRUE, NOW(), $6, NOW() + INTERVAL '1 year')
        RETURNING id`,
-      [username, email, passwordHash, 'E2E Test User', planId]
+      [username, email, passwordHash, 'E2E Test User', phone, planId]
     );
 
     // Dữ liệu mẫu để chụp ảnh minh hoạ — CHỈ khi được yêu cầu. Bộ test e2e dựa
