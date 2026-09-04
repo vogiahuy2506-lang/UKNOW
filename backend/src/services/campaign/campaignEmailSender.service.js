@@ -706,11 +706,16 @@ class CampaignEmailSenderService {
       recipient: customer?.email || '',
       sourceType: 'campaign_email',
       quantity: 1,
-      // subject/content/templateId để fingerprint bắt được trường hợp key trùng nhưng nội dung
-      // đổi giữa 2 lần thử (retry sau smtp_rate_limited_retry_scheduled có thể cách nhau nhiều giờ).
+      // subject/content/templateId/attachments để fingerprint bắt được trường hợp key trùng nhưng
+      // nội dung đổi giữa 2 lần thử (retry sau smtp_rate_limited_retry_scheduled có thể cách nhau
+      // nhiều giờ). Thiếu attachments thì đổi file đính kèm cùng key vẫn lặng lẽ replay kết quả cũ
+      // thay vì 409 IDEMPOTENCY_KEY_REUSED (review độc lập bắt lỗi này). Dùng attachments dạng mô
+      // tả (key/name/size/contentType), không phải realMailAttachments đã đọc buffer thật — đủ để
+      // phát hiện đổi file, không tốn chi phí hash nội dung mỗi lần gửi.
       subject,
       content: htmlBody,
       templateId: templateId || null,
+      attachments,
     });
 
     let reservation;
@@ -756,11 +761,13 @@ class CampaignEmailSenderService {
       // (review độc lập bắt lỗi này).
       const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
       if (snapshot.status === 'bounced') {
+        // snapshot không lưu bounceReason gốc (tránh PII trong quota ledger — xem chỗ consume
+        // bounce bên dưới); lý do đầy đủ đã có trong email_messages.bounce_reason qua persistSource.
         return {
           to: customer?.email || '',
           status: 'bounced',
           bounceType: snapshot.errorType === 'hard_bounce' ? 'hard' : 'soft',
-          bounceReason: snapshot.error || '',
+          bounceReason: '',
           isReplay: true,
         };
       }
@@ -974,14 +981,21 @@ class CampaignEmailSenderService {
         try {
           await consumeSendQuota({
             reservationId: reservation.id,
-            // Dùng field allowlisted (status/errorType/error trong ALLOWED_RESPONSE_SNAPSHOT_FIELDS
-            // ở sendQuota.repository.js) — bounceType KHÔNG nằm trong allowlist nên bị
+            // Dùng field allowlisted (status/errorType trong ALLOWED_RESPONSE_SNAPSHOT_FIELDS ở
+            // sendQuota.repository.js) — bounceType KHÔNG nằm trong allowlist nên bị
             // sanitizeResponseSnapshot() lặng lẽ lọc mất, làm nhánh replay bên trên không còn cách
-            // nào phân biệt bounce với success (review độc lập bắt lỗi này).
+            // nào phân biệt bounce với success (finding đã sửa trước đó).
+            //
+            // KHÔNG đưa bounceReason vào field 'error': assertNoPiiOrSecret() quét đệ quy toàn bộ
+            // snapshot sau sanitize (kể cả field allowlisted) và bounceReason SMTP thật thường
+            // chứa nguyên email người nhận (vd. "550 5.1.1 <user@example.com> User unknown") —
+            // consumeSendQuota() sẽ throw PII_DETECTED, bị catch bên dưới rồi chuyển nhầm reservation
+            // sang uncertain thay vì consumed cho MỌI hard bounce thật (review độc lập bắt lỗi này).
+            // Lý do bounce đầy đủ đã có sẵn trong email_messages.bounce_reason qua persistSource,
+            // không cần lặp lại (và không an toàn để lặp lại) trong quota snapshot.
             responseSnapshot: {
               status: 'bounced',
               errorType: bounceType === 'hard' ? 'hard_bounce' : 'soft_bounce',
-              error: bounceReason ? String(bounceReason).slice(0, 500) : null,
               provider: 'smtp',
             },
             persistSource: async (client) => {
@@ -1066,7 +1080,12 @@ class CampaignEmailSenderService {
       `[CampaignRun][Email] success run=${runId} to=${customer.email} messageId=${info?.messageId || 'n/a'}`
     );
 
-    await campaignEmailSenderRepository.incrementEmailSettingsSentCount(settings.id);
+    // Không chặn: đây là counter thống kê không tính billing (khác consumeSendQuota() bên dưới).
+    // Nếu để throw không bắt, reservation đã 'sending' (provider đã accept) sẽ không bao giờ được
+    // consume hay uncertain — kẹt 'sending' vĩnh viễn cho tới sweeper PR-Q5 (review độc lập bắt lỗi này).
+    await campaignEmailSenderRepository.incrementEmailSettingsSentCount(settings.id).catch((e) => {
+      console.warn('[CampaignEmailSender] incrementEmailSettingsSentCount error (khong chan luong consume):', e.message);
+    });
 
     const sentAt = new Date();
     const shouldSaveMessageLog = config.saveMessageLog !== false;

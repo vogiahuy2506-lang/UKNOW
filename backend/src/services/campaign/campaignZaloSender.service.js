@@ -1911,16 +1911,10 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendPersonalMessageByQueue(payload = {}) {
-    // Resolve session TRƯỚC reserve: nếu tài khoản mất phiên đăng nhập, throw ở đây chưa hề tạo
-    // reservation nào — không phải release/uncertain gì cả. Nếu markSendQuotaSending() chạy trước
-    // bước này rồi mới lookup session lỗi, reservation kẹt 'sending' vĩnh viễn (throw nằm ngoài
-    // try/catch phía dưới) cho tới khi sweeper PR-Q5 xử lý — vá theo review độc lập.
-    const api = await this.getConnectedApiOrSyncStatus({
-      accountId: payload?.accountId,
-      userId: payload?.userId,
-    });
-    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
-
+    // Reserve TRƯỚC, kiểm replay TRƯỚC khi đụng tới session Zalo: một job BullMQ redeliver của
+    // logical send ĐÃ consumed (thành công lần trước) phải luôn replay được từ snapshot, kể cả khi
+    // session hiện tại đã chết — không được để session lookup chặn mất đường replay (review độc
+    // lập bắt lỗi này: version trước resolve session trước reserve nên replay hợp lệ bị fail oan).
     const { reservation, active } = await this.reserveCampaignZaloQuota(payload, {
       logicalStep: Number.isInteger(payload?.stepIndex) ? payload.stepIndex : 1,
     });
@@ -1928,6 +1922,9 @@ class CampaignZaloSenderService {
       const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
       return { ...snapshot, isReplay: true, quotaReservationId: reservation.id };
     }
+
+    const { api, revivedAttachments } = await this.resolveZaloSessionOrRelease(reservation, active, payload);
+
     if (active) {
       await markSendQuotaSending({ reservationId: reservation.id });
     }
@@ -1990,6 +1987,12 @@ class CampaignZaloSenderService {
       // làm fingerprint đổi theo mỗi lần thử và retry hợp lệ bị 409 IDEMPOTENCY_KEY_REUSED
       // (review độc lập bắt lỗi này). Kết bạn không rewrite tracking nên quotaContentKey === message.
       content: payload.quotaContentKey || payload.message || '',
+      // Thiếu attachments thì đổi file đính kèm cùng reservationKey vẫn lặng lẽ replay kết quả cũ
+      // thay vì 409 IDEMPOTENCY_KEY_REUSED (review độc lập bắt lỗi này). payload.attachments đã là
+      // dạng revive-từ-BullMQ (Buffer) — hashAttachments() tự dùng crypto.createHash trên content
+      // nếu có, hoặc fallback name/size/key cho định dạng khác; friend-request không có field này,
+      // hashAttachments(undefined) trả '' ổn định, không ảnh hưởng.
+      attachments: payload.attachments,
     });
     const parsedNodeId = Number.parseInt(payload.nodeId, 10);
     let reservation;
@@ -2020,6 +2023,42 @@ class CampaignZaloSenderService {
     }
     const active = reservation.mode === 'enforce' || reservation.mode === 'test_enforce';
     return { reservation, active };
+  }
+
+  /**
+   * Resolve session Zalo (+ revive attachment) SAU khi đã xác nhận reservation không phải replay
+   * của một send đã consumed (PR-Q4b). Gọi ngay trước markSendQuotaSending().
+   *
+   * Nếu session lỗi: reservation còn 'reserved' (provider chưa từng được gọi) — release an toàn
+   * (definitive_no_send) thay vì để mắc kẹt. Nếu mode không active, reservation null nên bỏ qua.
+   *
+   * @param {object|null} reservation
+   * @param {boolean} active
+   * @param {object} payload
+   * @returns {Promise<{api: any, revivedAttachments: Array}>}
+   */
+  async resolveZaloSessionOrRelease(reservation, active, payload) {
+    try {
+      const api = await this.getConnectedApiOrSyncStatus({
+        accountId: payload?.accountId,
+        userId: payload?.userId,
+      });
+      const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
+      return { api, revivedAttachments };
+    } catch (sessionErr) {
+      if (active && reservation?.id) {
+        try {
+          await releaseSendQuota({
+            reservationId: reservation.id,
+            failureCode: 'SESSION_UNAVAILABLE',
+            reason: sessionErr.message || 'Zalo session unavailable',
+          });
+        } catch (e) {
+          console.warn('[CampaignZaloSender] releaseSendQuota error (session unavailable):', e.message);
+        }
+      }
+      throw sessionErr;
+    }
   }
 
   /**
@@ -2258,18 +2297,16 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendFriendRequestByQueue(payload = {}) {
-    // Resolve session TRƯỚC reserve — xem giải thích ở sendPersonalMessageByQueue.
-    const api = await this.getConnectedApiOrSyncStatus({
-      accountId: payload?.accountId,
-      userId: payload?.userId,
-    });
-
+    // Reserve + kiểm replay TRƯỚC session — xem giải thích ở sendPersonalMessageByQueue.
     // Kết bạn không có multi-step template (khác Email/Zalo cá nhân/nhóm) — logicalStep luôn 1.
     const { reservation, active } = await this.reserveCampaignZaloQuota(payload, { logicalStep: 1 });
     if (active && reservation.status === 'consumed') {
       const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
       return { ...snapshot, isReplay: true, quotaReservationId: reservation.id };
     }
+
+    const { api } = await this.resolveZaloSessionOrRelease(reservation, active, payload);
+
     if (active) {
       await markSendQuotaSending({ reservationId: reservation.id });
     }
@@ -2432,13 +2469,7 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendGroupMessageByQueue(payload = {}) {
-    // Resolve session TRƯỚC reserve — xem giải thích ở sendPersonalMessageByQueue.
-    const api = await this.getConnectedApiOrSyncStatus({
-      accountId: payload?.accountId,
-      userId: payload?.userId,
-    });
-    const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
-
+    // Reserve + kiểm replay TRƯỚC session — xem giải thích ở sendPersonalMessageByQueue.
     const { reservation, active } = await this.reserveCampaignZaloQuota(payload, {
       logicalStep: Number.isInteger(payload?.stepIndex) ? payload.stepIndex : 1,
     });
@@ -2446,6 +2477,9 @@ class CampaignZaloSenderService {
       const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
       return { ...snapshot, isReplay: true, quotaReservationId: reservation.id };
     }
+
+    const { api, revivedAttachments } = await this.resolveZaloSessionOrRelease(reservation, active, payload);
+
     if (active) {
       await markSendQuotaSending({ reservationId: reservation.id });
     }
