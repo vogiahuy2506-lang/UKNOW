@@ -78,6 +78,7 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
 
     // Lần chạy 1: Đóng sổ tháng 2026-09
     const res1 = await closeAffiliateMonth('2026-09');
+    expect(res1.status).toBe('success');
     expect(res1.skipped).toBe(false);
     expect(res1.insertedPeriods).toBe(1);
     expect(res1.adjustedPeriods).toBe(0);
@@ -107,6 +108,7 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
 
     // Lần chạy 2: Chạy lại đóng sổ cùng tháng 2026-09 (không có event mới)
     const res2 = await closeAffiliateMonth('2026-09');
+    expect(res2.status).toBe('noop');
     expect(res2.insertedPeriods).toBe(0);
     expect(res2.adjustedPeriods).toBe(0);
 
@@ -344,6 +346,7 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
       return closeAffiliateMonth('2026-09');
     });
 
+    expect(result.status).toBe('noop');
     expect(result.skipped).toBe(true);
     expect(result.reason).toBe('disabled');
     expect(result.insertedPeriods).toBe(0);
@@ -354,7 +357,7 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
       [AFFILIATE_MONTH_CLOSING_JOB_CODE]
     );
     expect(runs).toHaveLength(1);
-    expect(runs[0].status).toBe('success');
+    expect(runs[0].status).toBe('noop');
     expect(runs[0].result).toMatchObject({ skipped: true, reason: 'disabled' });
 
     const { rows: periods } = await db.query('SELECT * FROM affiliate_periods');
@@ -411,6 +414,7 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
 
     // Đóng sổ lần 1: gross 5tr, bậc 1 (10%) -> 500.000đ
     const run1 = await closeAffiliateMonth('2026-09');
+    expect(run1.status).toBe('success');
     expect(run1.insertedPeriods).toBe(1);
     expect(run1.totalCommission).toBe(500000);
     expect(await getAffiliateBalance(referrer.id)).toBe(500000);
@@ -420,6 +424,7 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
 
     // Đóng sổ lại tháng 9: gross tính theo buyer có SĐT tụt về 0 (< 5tr)
     const run2 = await closeAffiliateMonth('2026-09');
+    expect(run2.status).toBe('noop');
     expect(run2.insertedPeriods).toBe(0);
     expect(run2.adjustedPeriods).toBe(0);
     expect(run2.decreasedGrossPeriods).toBe(1);

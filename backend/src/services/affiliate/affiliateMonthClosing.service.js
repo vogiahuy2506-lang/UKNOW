@@ -83,6 +83,7 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
   if (!options.force && !isAffiliateClosingEnabled()) {
     console.log(`[AffiliateClosing] Bỏ qua đóng sổ tháng ${monthKey} vì AFFILIATE_CLOSING_ENABLED chưa bật`);
     return {
+      status: 'noop',
       skipped: true,
       reason: 'disabled',
       monthKey,
@@ -228,6 +229,7 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
   }
 
   return {
+    status: (insertedPeriods > 0 || adjustedPeriods > 0) ? 'success' : 'noop',
     skipped: false,
     monthKey,
     processedReferrers,
