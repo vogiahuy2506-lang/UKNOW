@@ -68,10 +68,14 @@ describe('POST /api/auth/register', () => {
   });
 
   it('thiếu emailVerificationCode → 400', async () => {
+    // phone bắt buộc từ tầng route (auth.routes.js) — phải gửi hợp lệ để test này
+    // đúng thứ nó kiểm (thiếu OTP), không bị chặn nhầm lý do ở route trước khi tới
+    // controller. Xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 1.3 sửa 04/09.
     const res = await request(app).post('/api/auth/register').send({
       username: 'noverify',
       email: 'noverify@test.local',
       password: 'Passw0rd!',
+      phone: '0916000001',
     });
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
@@ -86,6 +90,7 @@ describe('POST /api/auth/register', () => {
       username: 'wrongotp',
       email,
       password: 'Passw0rd!',
+      phone: '0916000002',
       emailVerificationCode: '000000',
     });
     expect(res.status).toBe(400);
@@ -101,6 +106,7 @@ describe('POST /api/auth/register', () => {
       username: 'newdup',
       email,
       password: 'Passw0rd!',
+      phone: '0916000003',
       emailVerificationCode: '123456',
     });
     expect(res.status).toBe(400);
@@ -115,6 +121,7 @@ describe('POST /api/auth/register', () => {
       username: 'taken',
       email: 'other@test.local',
       password: 'Passw0rd!',
+      phone: '0916000004',
       emailVerificationCode: '123456',
     });
     expect(res.status).toBe(400);

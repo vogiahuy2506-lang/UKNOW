@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser } from './helpers/db.js';
+import { truncateAll, createUser, createVerificationCode } from './helpers/db.js';
 
 let app;
 
@@ -208,5 +208,60 @@ describe('Ràng buộc UNIQUE trên users.phone (migration 179)', () => {
     const b = await createUser({ username: 'null_b', phone: null });
     expect(a.id).toBeDefined();
     expect(b.id).toBeDefined();
+  });
+});
+
+/**
+ * Trước bản vá này, /auth/register có riêng một regex `/^[0-9]{10,11}$/` ở tầng
+ * route (auth.routes.js) chạy TRƯỚC khi controller kịp chuẩn hoá — chặn nhầm mọi
+ * SĐT có dấu `+`/khoảng trắng dù chúng hợp lệ và đã có sẵn số trùng trong DB.
+ * Route giờ chỉ kiểm không rỗng; chuẩn hoá + kiểm độ dài chuyển hết vào controller
+ * (isValidNormalizedPhoneLength, zaloPhoneCampaign.util.js) — một nguồn sự thật.
+ */
+describe('Đăng ký chấp nhận mọi định dạng SĐT hợp lý (route không còn regex riêng)', () => {
+  async function registerWithPhone(phone, usernameSuffix) {
+    const email = `fmt${usernameSuffix}@test.local`;
+    await createVerificationCode({ email, code: '123456' });
+    return request(app).post('/api/auth/register').send({
+      username: `fmt${usernameSuffix}`,
+      email,
+      password: 'Passw0rd!',
+      phone,
+      emailVerificationCode: '123456',
+    });
+  }
+
+  it('"+84 912 345 678" (dấu + và khoảng trắng) → 201, chuẩn hoá xuống 0912345678', async () => {
+    const res = await registerWithPhone('+84 912 345 678', '1');
+    expect(res.status).toBe(201);
+    const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [res.body.data.user.id]);
+    expect(rows[0].phone).toBe('0912345678');
+  });
+
+  it('"0912-345-679" (gạch nối) → 201', async () => {
+    const res = await registerWithPhone('0912-345-679', '2');
+    expect(res.status).toBe(201);
+  });
+
+  it('trùng với số đã có dưới dạng khác (+84 vs 0xxx) → 409 PHONE_TAKEN, không phải 400', async () => {
+    await createUser({ username: 'fmt_owner', phone: '0912345680' });
+    const res = await registerWithPhone('+84 912 345 680', '3');
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PHONE_TAKEN');
+  });
+
+  it('Bẫy 2b đã vá: "812345680" (9 số, thiếu số 0 đầu, KHÔNG bắt đầu bằng 9) → 400', async () => {
+    // normalizePhoneForZaloCampaign chỉ khôi phục số 0 cho số 9 chữ số bắt đầu
+    // bằng "9" — "812345680" giữ nguyên 9 chữ số, giờ bị isValidNormalizedPhoneLength
+    // (đòi 10-11) bắt được. Trước bản vá, ngưỡng cũ `< 9` để lọt ca này.
+    const res = await registerWithPhone('812345680', '4');
+    expect(res.status).toBe(400);
+  });
+
+  it('rác hoàn toàn ("abc") → 400, không tạo tài khoản', async () => {
+    const res = await registerWithPhone('abc', '5');
+    expect(res.status).toBe(400);
+    const { rows } = await db.query('SELECT id FROM users WHERE username = $1', ['fmt5']);
+    expect(rows).toHaveLength(0);
   });
 });

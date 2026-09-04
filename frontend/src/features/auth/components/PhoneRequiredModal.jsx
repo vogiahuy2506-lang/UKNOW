@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { HiOutlinePhone } from 'react-icons/hi';
 import { updateMyPhone } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
+import { isPlausiblePhone } from '../../../utils/phoneValidation';
 
 /**
  * Modal bắt buộc bổ sung SĐT — mở khi user.phone rỗng.
@@ -29,7 +30,7 @@ const PhoneRequiredModal = ({ isOpen, onChanged }) => {
     e.preventDefault();
     setError('');
 
-    if (!/^[0-9]{9,11}$/.test(phone.trim())) {
+    if (!isPlausiblePhone(phone)) {
       setError(t('phoneRequired.validationInvalid'));
       return;
     }

@@ -39,7 +39,7 @@ import {
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
 import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
-import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
+import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
@@ -357,7 +357,7 @@ class UserController {
       let normalizedPhone = phone;
       if (phone !== undefined && phone !== null) {
         normalizedPhone = normalizePhoneForZaloCampaign(phone);
-        if (normalizedPhone.length < 9) {
+        if (!isValidNormalizedPhoneLength(normalizedPhone)) {
           return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
         }
         const existingPhone = await findUserByPhoneExceptId(normalizedPhone, userId);
@@ -451,7 +451,7 @@ class UserController {
     try {
       const userId = req.user.id;
       const normalizedPhone = normalizePhoneForZaloCampaign(req.body?.phone);
-      if (normalizedPhone.length < 9) {
+      if (!isValidNormalizedPhoneLength(normalizedPhone)) {
         return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
       }
 

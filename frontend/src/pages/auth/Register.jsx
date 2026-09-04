@@ -23,6 +23,7 @@ import {
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
 import { PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../utils/passwordValidation';
+import { isPlausiblePhone } from '../../utils/phoneValidation';
 
 /**
  * Register Page - Refactored với Impeccable design principles:
@@ -50,7 +51,7 @@ const registerSchema = (t) => z.object({
   fullName: z.string().optional(),
   phone: z.string()
     .min(1, t('register.phoneRequired'))
-    .refine((v) => /^[0-9]{10,11}$/.test(v), { message: t('register.invalidPhone') }),
+    .refine(isPlausiblePhone, { message: t('register.invalidPhone') }),
 }).refine((d) => d.password === d.confirmPassword, {
   message: t('auth.passwordMismatch'),
   path: ['confirmPassword'],

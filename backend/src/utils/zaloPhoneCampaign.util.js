@@ -18,6 +18,24 @@ export function normalizePhoneForZaloCampaign(raw) {
 }
 
 /**
+ * Kết quả `normalizePhoneForZaloCampaign` có đủ dài để là một SĐT thật không (10-11
+ * chữ số — di động VN chuẩn 10 số dạng 0xxxxxxxxx, giữ thêm 11 cho số bàn cũ có mã
+ * vùng). Dùng SAU khi chuẩn hoá, không phải trên input thô — input thô có thể có
+ * `+`, khoảng trắng, gạch nối mà vẫn hợp lệ.
+ *
+ * Dùng chung ở mọi nơi kiểm SĐT (đăng ký, cập nhật hồ sơ, PUT /me/phone) — đừng lặp
+ * lại ngưỡng độ dài rải rác ở từng controller, sẽ lệch nhau đúng kiểu hai hàm chuẩn
+ * hoá bất đồng ý.
+ *
+ * @param {string} normalized kết quả từ normalizePhoneForZaloCampaign
+ * @returns {boolean}
+ */
+export function isValidNormalizedPhoneLength(normalized) {
+  const len = String(normalized ?? '').length;
+  return len >= 10 && len <= 11;
+}
+
+/**
  * Gom chuỗi tra cứu từ Error/SDK (message, code, cause) để so khớp ổn định.
  *
  * @param {unknown} error

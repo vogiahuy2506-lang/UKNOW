@@ -19,7 +19,7 @@ import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.
 import { getSystemAuditContext } from '../utils/auditContext.util.js';
 import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
-import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
+import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -93,7 +93,7 @@ class AuthController {
 
       // SĐT bắt buộc — một số chỉ được gắn với 1 tài khoản (idx_users_phone_unique, migration 179).
       const normalizedPhone = normalizePhoneForZaloCampaign(phone);
-      if (normalizedPhone.length < 9) {
+      if (!isValidNormalizedPhoneLength(normalizedPhone)) {
         throw { status: 400, message: 'Số điện thoại không hợp lệ' };
       }
       const existingPhone = await client.query(
