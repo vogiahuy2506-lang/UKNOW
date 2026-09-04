@@ -456,7 +456,9 @@ Zalo `{data, filename, metadata}` — thuật toán cũ chỉ đọc `att.conten
 gây collision giữa 2 file khác nội dung nhưng cùng tên/kích thước). Xác nhận đúng đoạn "khi nâng thuật
 toán fingerprint, retry của reservation cũ phải được tính lại bằng version đã lưu" ở mục 6 là bắt buộc,
 không phải phòng xa lý thuyết — sửa `hashAttachments()` tại chỗ (dùng chung bởi v1/v2) đã thực sự làm
-lệch fingerprint của mọi reservation v1/v2 có attachment đã lưu trước đó, phát hiện qua review độc lập.
+lệch fingerprint của các reservation v1/v2 dùng đúng shape attachment mới được nhận diện (chủ yếu
+`{data, filename, metadata}` của Zalo campaign) đã lưu trước đó, phát hiện qua review độc lập. Attachment
+email `{content}` không bị ảnh hưởng — thuật toán không đổi cho shape đó.
 
 Chốt lại trạng thái hiện tại của versioning:
 - **v1, v2: ĐÓNG BĂNG vĩnh viễn**, chỉ phục vụ compatibility cho reservation cũ đã lưu trên
@@ -765,8 +767,11 @@ tìm 3 finding, cả 3 đã sửa:
   cả file khi rename của agent khác còn trong working tree lúc sửa) + `hashAttachments()` bỏ qua shape
   attachment Zalo `{data, filename, metadata}`, gây collision hash giữa 2 file khác byte cùng tên/size.
 - **Vòng 4**: 1 finding (nghiêm trọng nhất) — sửa `hashAttachments()` tại chỗ ở vòng 3 làm lệch fingerprint
-  v1/v2 (dùng chung hàm này), khiến MỌI reservation v1/v2 có attachment đã lưu trước khi deploy fix có
-  nguy cơ bị 409 `IDEMPOTENCY_KEY_REUSED` oan khi retry — vi phạm đúng điều mục 6 cảnh báo riêng. Đã tách
+  v1/v2 (dùng chung hàm này) cho các **shape mới được thuật toán sửa nhận diện** (chủ yếu
+  `{data, filename, metadata}` của Zalo campaign), khiến reservation v1/v2 dùng shape đó đã lưu trước
+  khi deploy fix có nguy cơ bị 409 `IDEMPOTENCY_KEY_REUSED` oan khi retry — vi phạm đúng điều mục 6 cảnh
+  báo riêng. Attachment email `{content}` không bị ảnh hưởng (đã hash đúng từ trước, thuật toán không
+  đổi cho shape này). Đã tách
   `hashAttachmentsV3()`/`computeRequestFingerprintV3()` riêng, đóng băng v1/v2, và bắt buộc truyền
   `requestPayload` vào `reserveSendQuota()` (xem chi tiết ở mục 7 phía trên).
 - **Vòng 5**: 2 finding P2 (test gap Zalo cụ thể, tài liệu chưa đồng bộ v3) — đã bổ sung golden vector +
