@@ -30,6 +30,21 @@ export function requirePasswordChange(req, res, next) {
  * mục 1.4 để biết lý do đầy đủ.
  */
 export function requirePhone(req, res, next) {
+  // CÔNG TẮC TẮT KHẨN — thêm 04/09/2026.
+  //
+  // Vì sao cần: cổng này chặn 13+ nhóm route, nhưng đường DUY NHẤT để user tự gỡ chặn là
+  // PhoneRequiredModal, mà modal đó chỉ được gắn trong MainLayout. Có tài khoản thật
+  // (id=12, role='user', phone rỗng) vào /app mà modal KHÔNG hiện — chưa tìm ra nguyên
+  // nhân. Khi đó user bị 403 ở mọi tính năng và không có đường nào để nhập SĐT.
+  // Chặn mà không có lối thoát thì tệ hơn là chưa chặn.
+  //
+  // Mặc định VẪN BẬT để test và môi trường dev không đổi hành vi. Tắt trên production
+  // bằng cách thêm vào backend/.env:  PHONE_GATE_ENABLED=false  rồi restart container.
+  // BẬT LẠI ngay khi đã chứng minh modal hiện đúng cho user chưa có SĐT — bỏ dòng đó đi.
+  if (process.env.PHONE_GATE_ENABLED === 'false') {
+    return next();
+  }
+
   if (isSuperAdmin(req.user?.role)) {
     return next();
   }
