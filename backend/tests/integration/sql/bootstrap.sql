@@ -2913,3 +2913,39 @@ CREATE TABLE IF NOT EXISTS affiliate_ledger (
 CREATE INDEX IF NOT EXISTS idx_affiliate_ledger_user ON affiliate_ledger (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_affiliate_periods_month ON affiliate_periods (month_key);
 
+-- Affiliate withdrawals (migration 184)
+CREATE TABLE IF NOT EXISTS affiliate_withdrawals (
+  id                    BIGSERIAL PRIMARY KEY,
+  user_id               BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  partner_type          VARCHAR(10)   NOT NULL DEFAULT 'personal'
+    CHECK (partner_type IN ('personal', 'company')),
+  amount_gross          NUMERIC(12,2) NOT NULL,
+  tax_amount            NUMERIC(12,2) NOT NULL,
+  amount_net            NUMERIC(12,2) NOT NULL,
+  full_name             VARCHAR(255)  NOT NULL,
+  tax_code              VARCHAR(20),
+  bank_name             VARCHAR(255)  NOT NULL,
+  bank_account_number   VARCHAR(50)   NOT NULL,
+  bank_account_name     VARCHAR(255)  NOT NULL,
+  id_card_number_enc    TEXT,
+  id_card_issued_date   DATE,
+  id_card_issued_place  VARCHAR(255),
+  company_name          VARCHAR(255),
+  company_address       TEXT,
+  invoice_reference     VARCHAR(100),
+  status                VARCHAR(20)   NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','paid','rejected')),
+  requested_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  processed_at          TIMESTAMPTZ,
+  processed_by          BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  note                  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_user
+  ON affiliate_withdrawals (user_id, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_status
+  ON affiliate_withdrawals (status, requested_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliate_withdrawals_one_pending
+  ON affiliate_withdrawals (user_id) WHERE status = 'pending';
+
+

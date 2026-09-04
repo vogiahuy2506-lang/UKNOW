@@ -77,6 +77,7 @@ import diagnosticRoutes from './routes/diagnostic.routes.js';
 import templateLabelRoutes from './routes/templateLabel.routes.js';
 import marketplaceRoutes from './routes/marketplace.routes.js';
 import marketplaceAdminRoutes from './routes/marketplaceAdmin.routes.js';
+import { affiliateWithdrawalRouter, adminAffiliateWithdrawalRouter } from './routes/affiliateWithdrawal.routes.js';
 import { domainResolver } from './middleware/domainResolver.js';
 import { createDynamicCorsMiddleware, publicCorsMiddleware } from './middleware/dynamicCors.middleware.js';
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
@@ -208,6 +209,8 @@ export function createApp() {
   app.use('/api/template-labels', templateLabelRoutes);
   app.use('/api/marketplace', marketplaceRoutes);
   app.use('/api/admin/marketplace', marketplaceAdminRoutes);
+  app.use('/api/affiliate/withdrawals', affiliateWithdrawalRouter);
+  app.use('/api/admin/affiliate/withdrawals', adminAffiliateWithdrawalRouter);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
