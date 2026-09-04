@@ -320,7 +320,7 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
     expect(balance2).toBe(1515000);
   });
 
-  it('e. Job đóng sổ khi AFFILIATE_CLOSING_ENABLED chưa bật → không làm gì', async () => {
+  it('e. Job đóng sổ khi AFFILIATE_CLOSING_ENABLED chưa bật → không làm gì nhưng vẫn recordRun minh chứng cron sống', async () => {
     process.env.AFFILIATE_CLOSING_ENABLED = 'false';
 
     const referrer = await createUser({ email: 'ref-e@test.com', username: 'ref_e' });
@@ -337,10 +337,25 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
       orderCode: 90006,
     });
 
-    const result = await closeAffiliateMonth('2026-09');
+    const cronJobRunRepository = await import('../../src/repositories/admin/cronJobRun.repository.js');
+    const { AFFILIATE_MONTH_CLOSING_JOB_CODE } = await import('../../src/services/affiliate/affiliateMonthClosing.service.js');
+
+    const result = await cronJobRunRepository.recordRun(AFFILIATE_MONTH_CLOSING_JOB_CODE, async () => {
+      return closeAffiliateMonth('2026-09');
+    });
+
     expect(result.skipped).toBe(true);
     expect(result.reason).toBe('disabled');
     expect(result.insertedPeriods).toBe(0);
+
+    // Bằng chứng cron có sống và ghi nhận vào cron_job_runs
+    const { rows: runs } = await db.query(
+      'SELECT * FROM cron_job_runs WHERE job_code = $1 ORDER BY id DESC LIMIT 1',
+      [AFFILIATE_MONTH_CLOSING_JOB_CODE]
+    );
+    expect(runs).toHaveLength(1);
+    expect(runs[0].status).toBe('success');
+    expect(runs[0].result).toMatchObject({ skipped: true, reason: 'disabled' });
 
     const { rows: periods } = await db.query('SELECT * FROM affiliate_periods');
     expect(periods).toHaveLength(0);
@@ -377,5 +392,53 @@ describe('Affiliate PR-A3 — Đóng sổ tháng + Ví hoa hồng', () => {
     await expect(
       db.query('DELETE FROM users WHERE id = $1', [referrer.id])
     ).rejects.toThrow(/affiliate_(periods|ledger)/i);
+  });
+
+  it('g. Gross giảm (do buyer bị xoá mềm / mất SĐT) → đếm decreasedGrossPeriods, log cảnh báo, KHÔNG trừ tiền khách', async () => {
+    const referrer = await createUser({ email: 'ref-g@test.com', username: 'ref_g' });
+    const buyer = await createUser({
+      email: 'buyer-g@test.com',
+      username: 'buyer_g',
+      phone: '0901000008',
+    });
+    await insertRevenueEvent({
+      referrerId: referrer.id,
+      buyerId: buyer.id,
+      amount: 5000000,
+      monthKey: '2026-09',
+      orderCode: 90008,
+    });
+
+    // Đóng sổ lần 1: gross 5tr, bậc 1 (10%) -> 500.000đ
+    const run1 = await closeAffiliateMonth('2026-09');
+    expect(run1.insertedPeriods).toBe(1);
+    expect(run1.totalCommission).toBe(500000);
+    expect(await getAffiliateBalance(referrer.id)).toBe(500000);
+
+    // Buyer bị xoá mềm hoặc gỡ SĐT (phone = NULL)
+    await db.query('UPDATE users SET phone = NULL WHERE id = $1', [buyer.id]);
+
+    // Đóng sổ lại tháng 9: gross tính theo buyer có SĐT tụt về 0 (< 5tr)
+    const run2 = await closeAffiliateMonth('2026-09');
+    expect(run2.insertedPeriods).toBe(0);
+    expect(run2.adjustedPeriods).toBe(0);
+    expect(run2.decreasedGrossPeriods).toBe(1);
+
+    // Số dư và bút toán trên ledger KHÔNG bị trừ
+    expect(await getAffiliateBalance(referrer.id)).toBe(500000);
+    const { rows: ledgerRows } = await db.query(
+      'SELECT * FROM affiliate_ledger WHERE user_id = $1',
+      [referrer.id]
+    );
+    expect(ledgerRows).toHaveLength(1);
+    expect(Number(ledgerRows[0].amount)).toBe(500000);
+
+    // affiliate_periods giữ nguyên không bị ghi đè thành 0
+    const { rows: periods } = await db.query(
+      'SELECT * FROM affiliate_periods WHERE referrer_user_id = $1 AND month_key = $2',
+      [referrer.id, '2026-09']
+    );
+    expect(Number(periods[0].commission_amount)).toBe(500000);
+    expect(Number(periods[0].gross_revenue)).toBe(5000000);
   });
 });

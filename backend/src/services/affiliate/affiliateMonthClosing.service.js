@@ -89,6 +89,7 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
       processedReferrers: 0,
       insertedPeriods: 0,
       adjustedPeriods: 0,
+      decreasedGrossPeriods: 0,
       totalCommission: 0,
       totalAdjustment: 0,
     };
@@ -109,6 +110,7 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
   let processedReferrers = 0;
   let insertedPeriods = 0;
   let adjustedPeriods = 0;
+  let decreasedGrossPeriods = 0;
   let totalCommission = 0;
   let totalAdjustment = 0;
 
@@ -206,6 +208,11 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
             adjustedPeriods += 1;
             totalAdjustment += delta;
           }
+        } else if (currentGross < prevGross) {
+          decreasedGrossPeriods += 1;
+          console.warn(
+            `[AffiliateClosing] Gross giảm so với kỳ trước (buyer bị detach/mất SĐT): referrer=${referrerId} month=${monthKey} grossCu=${prevGross} grossMoi=${currentGross} (giữ nguyên hoa hồng đã ghi: ${prevCommission})`
+          );
         }
       }
 
@@ -226,6 +233,7 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
     processedReferrers,
     insertedPeriods,
     adjustedPeriods,
+    decreasedGrossPeriods,
     totalCommission,
     totalAdjustment,
   };
