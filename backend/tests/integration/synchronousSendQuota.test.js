@@ -22,11 +22,13 @@ process.env.TEST_SEND_EMAIL = '1';
 process.env.SEND_QUOTA_RESERVATION_MODE = 'enforce';
 
 const db = (await import('../../src/config/database.js')).default;
-const { truncateAll, createUser } = await import('./helpers/db.js');
+const { truncateAll, createUser, createPlan, assignPlanToUser } = await import('./helpers/db.js');
 const emailSettingsSmtpService = (await import('../../src/services/email/emailSettingsSmtp.service.js')).default;
 const emailSettingsController = (await import('../../src/controllers/emailSettings.controller.js')).default;
 const emailSettingsRepository = (await import('../../src/repositories/email/emailSettings.repository.js')).default;
 const campaignQuickSendService = (await import('../../src/services/campaign/campaignQuickSend.service.js')).default;
+const campaignEmailSenderService = (await import('../../src/services/campaign/campaignEmailSender.service.js')).default;
+const campaignZaloSenderService = (await import('../../src/services/campaign/campaignZaloSender.service.js')).default;
 const unifiedInboxService = (await import('../../src/services/chatbot/unifiedInbox.service.js')).default;
 const zaloAccountSessionService = (await import('../../src/services/zalo/zaloAccountSession.service.js')).default;
 const { encryptSmtpSecret } = await import('../../src/utils/smtpSecretCrypto.js');
@@ -223,6 +225,447 @@ describe('Integration — Synchronous Send Atomic Quota Reservation Protocol', (
       const res2 = await emailSettingsSmtpService.sendTestEmail(sendArgs, countingDeps);
       expect(res2.isReplay).toBe(true);
       expect(callCount).toBe(1); // Provider NOT called again!
+    });
+  });
+
+  describe('Campaign Email Send (campaignEmailSenderService — PR-Q4a)', () => {
+    async function setupCampaignFixture(senderEmailOverride) {
+      const { rows: campaignRows } = await db.query(
+        `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name, campaign_type, status)
+         VALUES ($1, $1, 'Test Campaign PR-Q4a', 'email', 'active') RETURNING id`,
+        [user.id]
+      );
+      const campaignId = campaignRows[0].id;
+      const { rows: runRows } = await db.query(
+        `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status)
+         VALUES ($1, $2, 'manual', 'running') RETURNING id`,
+        [campaignId, user.id]
+      );
+      const runId = runRows[0].id;
+      const senderEmail = senderEmailOverride || `camp_sender_${Date.now()}_${Math.random().toString(36).slice(2, 6)}@example.com`;
+      const { rows: settingRows } = await db.query(
+        `INSERT INTO email_settings (id_user, name, email, smtp_host, smtp_port, smtp_username, smtp_password, status, is_verified)
+         VALUES ($1, 'Campaign Sender', $2, 'smtp.example.com', 465, $2, $3, 'active', true)
+         RETURNING id`,
+        [user.id, senderEmail, encryptSmtpSecret('secret123')]
+      );
+      return { campaignId, runId, emailSettingId: settingRows[0].id };
+    }
+
+    function buildActionNode(nodeId, fromEmailId) {
+      return {
+        id: nodeId,
+        config: {
+          fromEmailId,
+          emailSubject: 'Campaign quota test',
+          emailBody: '<p>Noi dung test khong co link</p>',
+        },
+      };
+    }
+
+    it('reserves and consumes quota, gan quota_reservation_id vao email_messages khi gui thanh cong', async () => {
+      const { campaignId, runId, emailSettingId } = await setupCampaignFixture();
+      const recipientEmail = `recipient_${Date.now()}@example.com`;
+      await db.query(
+        `INSERT INTO customers (id_user, email, full_name) VALUES ($1, $2, 'Nguyen Van Test')`,
+        [user.id, recipientEmail]
+      );
+
+      const result = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        buildActionNode('node_success', emailSettingId),
+        { email: recipientEmail, full_name: 'Nguyen Van Test' },
+        { id: campaignId, id_user: user.id },
+        runId,
+        null,
+        { emailStep: 1 }
+      );
+
+      expect(result.status).toBe('success');
+      expect(result.isReplay).toBeFalsy();
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].status).toBe('consumed');
+      expect(reservations[0].source_type).toBe('campaign_email');
+
+      const { rows: messages } = await db.query(
+        'SELECT * FROM email_messages WHERE id_run = $1',
+        [runId]
+      );
+      expect(messages.length).toBe(1);
+      expect(messages[0].quota_reservation_id).toBe(reservations[0].id);
+    });
+
+    it('replay dung idempotency key: khong goi provider lan hai, khong tao reservation moi', async () => {
+      const { campaignId, runId, emailSettingId } = await setupCampaignFixture();
+      const recipientEmail = `recipient_replay_${Date.now()}@example.com`;
+      await db.query(
+        `INSERT INTO customers (id_user, email, full_name) VALUES ($1, $2, 'Nguyen Van Replay')`,
+        [user.id, recipientEmail]
+      );
+      const actionNode = buildActionNode('node_replay', emailSettingId);
+      const customer = { email: recipientEmail, full_name: 'Nguyen Van Replay' };
+      const campaign = { id: campaignId, id_user: user.id };
+
+      mockSendMail.mockClear();
+      const r1 = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        actionNode, customer, campaign, runId, null, { emailStep: 1 }
+      );
+      expect(r1.status).toBe('success');
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+      // Goi lai voi dung run/node/recipient/emailStep (mo phong BullMQ stalled-job redelivery)
+      const r2 = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        actionNode, customer, campaign, runId, null, { emailStep: 1 }
+      );
+      expect(r2.status).toBe('success');
+      expect(r2.isReplay).toBe(true);
+      expect(mockSendMail).toHaveBeenCalledTimes(1); // provider KHONG duoc goi lan hai
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1); // dung 1 reservation cho ca 2 lan goi
+    });
+
+    it('hard bounce sau provider attempt: consume reservation, email_messages.status=bounced', async () => {
+      const { campaignId, runId, emailSettingId } = await setupCampaignFixture();
+      const recipientEmail = `bounce_${Date.now()}@example.com`;
+      await db.query(
+        `INSERT INTO customers (id_user, email, full_name) VALUES ($1, $2, 'Nguyen Van Bounce')`,
+        [user.id, recipientEmail]
+      );
+
+      mockSendMail.mockClear().mockImplementation(async () => {
+        const err = new Error('550 5.1.1 User unknown recipient');
+        err.responseCode = 550;
+        throw err;
+      });
+
+      const result = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        buildActionNode('node_bounce', emailSettingId),
+        { email: recipientEmail, full_name: 'Nguyen Van Bounce' },
+        { id: campaignId, id_user: user.id },
+        runId,
+        null,
+        { emailStep: 1 }
+      );
+
+      expect(result.status).toBe('bounced');
+      expect(result.bounceType).toBe('hard');
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].status).toBe('consumed');
+
+      const { rows: messages } = await db.query(
+        'SELECT * FROM email_messages WHERE id_run = $1',
+        [runId]
+      );
+      expect(messages.length).toBe(1);
+      expect(messages[0].status).toBe('bounced');
+      expect(messages[0].quota_reservation_id).toBe(reservations[0].id);
+    });
+
+    it('loi SMTP khong phan loai duoc (khong ro provider da nhan hay chua): reservation uncertain', async () => {
+      const { campaignId, runId, emailSettingId } = await setupCampaignFixture();
+      const recipientEmail = `ambiguous_${Date.now()}@example.com`;
+
+      mockSendMail.mockClear().mockImplementation(async () => {
+        throw new Error('Connection reset by peer');
+      });
+
+      const result = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        buildActionNode('node_ambiguous', emailSettingId),
+        { email: recipientEmail, full_name: 'Nguyen Van Ambiguous' },
+        { id: campaignId, id_user: user.id },
+        runId,
+        null,
+        { emailStep: 1 }
+      );
+
+      expect(result.status).toBe('failed');
+      expect(result.errorType).toBe('smtp_delivery');
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].status).toBe('uncertain');
+    });
+
+    it('dailyEmailLimit=1: recipient thu hai bi tu choi voi resetAt, khong lam sai lech behavior pause-and-resume', async () => {
+      const limitedPlan = await createPlan({ dailyEmailLimit: 1, monthlyEmailLimit: 1000 });
+      await assignPlanToUser(user.id, limitedPlan.id);
+      const { campaignId, runId, emailSettingId } = await setupCampaignFixture();
+
+      const first = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        buildActionNode('node_limit_1', emailSettingId),
+        { email: `limit1_${Date.now()}@example.com`, full_name: 'A' },
+        { id: campaignId, id_user: user.id },
+        runId,
+        null,
+        { emailStep: 1 }
+      );
+      expect(first.status).toBe('success');
+
+      const second = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        buildActionNode('node_limit_2', emailSettingId),
+        { email: `limit2_${Date.now()}@example.com`, full_name: 'B' },
+        { id: campaignId, id_user: user.id },
+        runId,
+        null,
+        { emailStep: 1 }
+      );
+      expect(second.status).toBe('failed');
+      expect(second.errorType).toBe('plan_send_limit_exceeded');
+      expect(second.limitType).toBe('daily');
+      // campaignRun.service.js:3457-3484 doc truc tiep resetAt de quyet dinh defer-and-resume
+      // thay vi fail cung — day la field bat buoc phai co sau khi qua reserveSendQuota().
+      expect(second.resetAt).toBeTruthy();
+
+      const { rows: reservations } = await db.query(
+        "SELECT * FROM send_quota_reservations WHERE billing_user_id = $1 AND status = 'consumed'",
+        [user.id]
+      );
+      expect(reservations.length).toBe(1); // chi 1 reservation duoc consume, recipient thu 2 khong tao reservation nao
+    });
+  });
+
+  describe('Campaign Zalo Send (campaignZaloSenderService — PR-Q4b)', () => {
+    const activeFakeZaloAccountIds = [];
+    afterEach(() => {
+      while (activeFakeZaloAccountIds.length) {
+        zaloAccountSessionService.clearAccountApi(activeFakeZaloAccountIds.pop());
+      }
+    });
+
+    async function setupZaloCampaignFixture() {
+      const { rows: accRows } = await db.query(
+        `INSERT INTO zalo_settings (id_user, is_active, status, display_name)
+         VALUES ($1, true, 'connected', 'Test Zalo Account') RETURNING id`,
+        [user.id]
+      );
+      const accountId = accRows[0].id;
+      const { rows: campaignRows } = await db.query(
+        `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name, campaign_type, status)
+         VALUES ($1, $1, 'Test Zalo Campaign', 'zalo', 'active') RETURNING id`,
+        [user.id]
+      );
+      const campaignId = campaignRows[0].id;
+      const { rows: runRows } = await db.query(
+        `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status)
+         VALUES ($1, $2, 'manual', 'running') RETURNING id`,
+        [campaignId, user.id]
+      );
+      const runId = runRows[0].id;
+      return { accountId, campaignId, runId };
+    }
+
+    async function insertZaloMessagePlaceholder({ campaignId, runId, channel, recipientValue, groupId, accountId }) {
+      const { rows } = await db.query(
+        `INSERT INTO zalo_messages (
+           id_campaign, id_run, id_node, channel, recipient_type, recipient_value, group_id,
+           account_id, message_text, tracking_token, tracking_metadata, sent_at, created_at, updated_at
+         ) VALUES ($1, $2, 1, $3, $4, $5, $6, $7, 'hello', $8, '{"status":"queued"}'::jsonb, NOW(), NOW(), NOW())
+         RETURNING id`,
+        [
+          campaignId, runId, channel, groupId ? 'group' : 'uid', recipientValue || null, groupId || null,
+          accountId, `tok_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        ]
+      );
+      return rows[0].id;
+    }
+
+    it('zalo ca nhan: reserves and consumes quota, gan quota_reservation_id vao zalo_messages', async () => {
+      const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
+      const fakeSendMessage = jest.fn().mockResolvedValue({ message: { msgId: '111222333' } });
+      zaloAccountSessionService.setAccountApi(accountId, { sendMessage: fakeSendMessage });
+      activeFakeZaloAccountIds.push(accountId);
+
+      const zaloMessageId = await insertZaloMessagePlaceholder({
+        campaignId, runId, channel: 'zalo_personal', recipientValue: 'uid_recipient_1', accountId,
+      });
+
+      const sendResult = await campaignZaloSenderService.sendPersonalMessageByQueue({
+        userId: user.id,
+        accountId,
+        recipient: 'uid_recipient_1',
+        recipientType: 'uid',
+        quotaRecipientKey: 'uid_recipient_1',
+        runId,
+        nodeId: 1,
+        stepIndex: 1,
+        zaloMessageId,
+        message: 'hello',
+      });
+
+      expect(sendResult.quotaReservationId).toBeTruthy();
+      expect(fakeSendMessage).toHaveBeenCalledTimes(1);
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].status).toBe('consumed');
+      expect(reservations[0].source_type).toBe('campaign_zalo');
+
+      // persistSource phải gắn quota_reservation_id + status='sent' NGAY trong transaction consume
+      // (atomic với việc trừ quota) — không phụ thuộc updateZaloMessageTrackingMeta gọi riêng sau đó
+      // ở campaignRun.service.js. Đây là điểm review độc lập bắt được (Finding 1) và đã vá.
+      const { rows: msgRows } = await db.query(
+        'SELECT quota_reservation_id, tracking_metadata FROM zalo_messages WHERE id = $1',
+        [zaloMessageId]
+      );
+      expect(msgRows[0].quota_reservation_id).toBe(reservations[0].id);
+      expect(msgRows[0].tracking_metadata.status).toBe('sent');
+    });
+
+    it('zalo ket ban: reserves and consumes quota', async () => {
+      const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
+      const fakeFindUser = jest.fn().mockResolvedValue({ uid: 'uid_friend_1', zalo_display: 'Nguyen Van Friend' });
+      const fakeSendFriendRequest = jest.fn().mockResolvedValue({ ok: true });
+      zaloAccountSessionService.setAccountApi(accountId, { findUser: fakeFindUser, sendFriendRequest: fakeSendFriendRequest });
+      activeFakeZaloAccountIds.push(accountId);
+
+      const zaloMessageId = await insertZaloMessagePlaceholder({
+        campaignId, runId, channel: 'zalo_friend_request', recipientValue: '0912345678', accountId,
+      });
+
+      const sendResult = await campaignZaloSenderService.sendFriendRequestByQueue({
+        userId: user.id,
+        accountId,
+        phone: '0912345678',
+        quotaRecipientKey: '0912345678',
+        runId,
+        nodeId: 1,
+        stepIndex: 1,
+        zaloMessageId,
+        message: 'Ket ban nhe',
+      });
+
+      expect(sendResult.quotaReservationId).toBeTruthy();
+      expect(fakeSendFriendRequest).toHaveBeenCalledTimes(1);
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].status).toBe('consumed');
+    });
+
+    it('zalo nhom: reserves and consumes quota', async () => {
+      const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
+      const fakeSendMessage = jest.fn().mockResolvedValue({ message: { msgId: '444555666' } });
+      zaloAccountSessionService.setAccountApi(accountId, { sendMessage: fakeSendMessage });
+      activeFakeZaloAccountIds.push(accountId);
+
+      const zaloMessageId = await insertZaloMessagePlaceholder({
+        campaignId, runId, channel: 'zalo_group', groupId: 'group_1', accountId,
+      });
+
+      const sendResult = await campaignZaloSenderService.sendGroupMessageByQueue({
+        userId: user.id,
+        accountId,
+        groupId: 'group_1',
+        quotaRecipientKey: 'group_1',
+        runId,
+        nodeId: 1,
+        stepIndex: 1,
+        zaloMessageId,
+        message: 'hello group',
+      });
+
+      expect(sendResult.quotaReservationId).toBeTruthy();
+      expect(fakeSendMessage).toHaveBeenCalledTimes(1);
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].status).toBe('consumed');
+    });
+
+    it('provider throw loi xac dinh (khong timeout): release reservation, khong tao lai tu dong', async () => {
+      const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
+      const fakeSendMessage = jest.fn().mockRejectedValue(new Error('Zalo API rejected: invalid recipient'));
+      zaloAccountSessionService.setAccountApi(accountId, { sendMessage: fakeSendMessage });
+      activeFakeZaloAccountIds.push(accountId);
+
+      const zaloMessageId = await insertZaloMessagePlaceholder({
+        campaignId, runId, channel: 'zalo_personal', recipientValue: 'uid_bad', accountId,
+      });
+
+      await expect(
+        campaignZaloSenderService.sendPersonalMessageByQueue({
+          userId: user.id,
+          accountId,
+          recipient: 'uid_bad',
+          recipientType: 'uid',
+          quotaRecipientKey: 'uid_bad',
+          runId,
+          nodeId: 1,
+          stepIndex: 1,
+          zaloMessageId,
+          message: 'hello',
+        })
+      ).rejects.toThrow();
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
+      expect(reservations[0].status).toBe('released');
+    });
+
+    it('replay dung logical key (runId+nodeId+recipient+stepIndex): khong goi provider lan hai', async () => {
+      const { accountId, campaignId, runId } = await setupZaloCampaignFixture();
+      const fakeSendMessage = jest.fn().mockResolvedValue({ message: { msgId: '777888999' } });
+      zaloAccountSessionService.setAccountApi(accountId, { sendMessage: fakeSendMessage });
+      activeFakeZaloAccountIds.push(accountId);
+
+      const zaloMessageId = await insertZaloMessagePlaceholder({
+        campaignId, runId, channel: 'zalo_personal', recipientValue: 'uid_replay', accountId,
+      });
+      const jobPayload = {
+        userId: user.id,
+        accountId,
+        recipient: 'uid_replay',
+        recipientType: 'uid',
+        quotaRecipientKey: 'uid_replay',
+        runId,
+        nodeId: 1,
+        stepIndex: 1,
+        zaloMessageId,
+        message: 'hello',
+      };
+
+      const r1 = await campaignZaloSenderService.sendPersonalMessageByQueue(jobPayload);
+      expect(fakeSendMessage).toHaveBeenCalledTimes(1);
+
+      // Mo phong BullMQ stalled-job redelivery: cung payload goi lai lan hai
+      const r2 = await campaignZaloSenderService.sendPersonalMessageByQueue(jobPayload);
+      expect(r2.isReplay).toBe(true);
+      expect(fakeSendMessage).toHaveBeenCalledTimes(1); // provider KHONG duoc goi lan hai
+      expect(r2.quotaReservationId).toBe(r1.quotaReservationId);
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1);
     });
   });
 

@@ -1,6 +1,6 @@
 import campaignZaloSenderRepository from '../../repositories/campaign/campaignZaloSender.repository.js';
+import zaloMessageRepository from '../../repositories/campaign/zaloMessage.repository.js';
 import crypto from 'node:crypto';
-import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import path from 'node:path';
 import uploadController from '../../controllers/upload.controller.js';
 import { ThreadType, Zalo } from 'zca-js';
@@ -19,7 +19,17 @@ import {
   collectDeliveredZaloMsgIds,
   createZaloSendNotDeliveredError,
   withZaloPartialDeliveryFields,
+  isZaloPartialDeliveryResult,
 } from '../../utils/zaloDispatchDelivery.util.js';
+import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import {
+  reserveSendQuota,
+  markSendQuotaSending,
+  consumeSendQuota,
+  releaseSendQuota,
+  markSendQuotaUncertain,
+} from '../quota/sendQuotaReservation.service.js';
+import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
 
 /**
  * Ánh xạ mảng với giới hạn đồng thời — tránh bắn hàng trăm request Zalo cùng lúc khi enrich tên nhóm.
@@ -1874,26 +1884,170 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendPersonalMessageByQueue(payload = {}) {
-    if (payload?.userId) {
-      const quota = await checkSendQuota({ userId: payload.userId, channel: 'zalo' });
-      if (!quota.allowed) {
-        const err = new Error(`[PLAN_QUOTA] ${quota.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
-        err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
-        throw err;
-      }
+    const { reservation, active } = await this.reserveCampaignZaloQuota(payload, {
+      logicalStep: Number.isInteger(payload?.stepIndex) ? payload.stepIndex : 1,
+    });
+    if (active && reservation.status === 'consumed') {
+      const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+      return { ...snapshot, isReplay: true, quotaReservationId: reservation.id };
     }
+    if (active) {
+      await markSendQuotaSending({ reservationId: reservation.id });
+    }
+
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,
       userId: payload?.userId,
     });
     const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
-    return this.sendPersonalMessage({
-      api,
-      recipient: payload?.recipient,
-      recipientType: payload?.recipientType,
-      message: payload?.message,
-      attachments: revivedAttachments,
+
+    let sendResult;
+    try {
+      sendResult = await this.sendPersonalMessage({
+        api,
+        recipient: payload?.recipient,
+        recipientType: payload?.recipientType,
+        message: payload?.message,
+        attachments: revivedAttachments,
+      });
+    } catch (sendErr) {
+      await this.settleCampaignZaloQuotaOnError(reservation, active, sendErr);
+      throw sendErr;
+    }
+
+    if (active) {
+      if (isZaloPartialDeliveryResult(sendResult)) {
+        await this.markCampaignZaloQuotaUncertain(reservation, 'PARTIAL_DELIVERY', 'Partial delivery');
+      } else {
+        await this.consumeCampaignZaloQuota(reservation, sendResult, payload?.zaloMessageId);
+      }
+      sendResult.quotaReservationId = reservation.id;
+    }
+    return sendResult;
+  }
+
+  /**
+   * Reserve quota atomic cho một logical send campaign Zalo (PR-Q4b).
+   * Thay thế backstop `checkSendQuota()` cũ trong send*ByQueue — đây là "final send boundary"
+   * ngay trước provider call, sau khi campaignRun.service.js đã chạy advisory pre-check
+   * (assertSendQuotaOrYield) và các gate quiet-hours/rate-limit/delay.
+   *
+   * @param {object} payload job payload (userId, runId, nodeId, quotaRecipientKey/recipient/phone/groupId)
+   * @param {object} [options]
+   * @param {number} [options.logicalStep]
+   * @returns {Promise<{reservation: object|null, active: boolean}>}
+   */
+  async reserveCampaignZaloQuota(payload = {}, { logicalStep = 1 } = {}) {
+    if (!payload?.userId) return { reservation: null, active: false };
+    const recipientForKey = payload.quotaRecipientKey || payload.recipient || payload.phone || payload.groupId || '';
+    const reservationKey = buildCampaignReservationKey({
+      runId: payload.runId,
+      nodeId: payload.nodeId,
+      channel: 'zalo',
+      recipient: recipientForKey,
+      logicalStep,
     });
+    const requestFingerprint = computeRequestFingerprint({
+      channel: 'zalo',
+      recipient: recipientForKey,
+      sourceType: 'campaign_zalo',
+      quantity: 1,
+      // message để fingerprint bắt được trường hợp key trùng nhưng nội dung đổi giữa 2 lần thử.
+      content: payload.message || '',
+    });
+    const parsedNodeId = Number.parseInt(payload.nodeId, 10);
+    let reservation;
+    try {
+      reservation = await reserveSendQuota({
+        userId: payload.userId,
+        channel: 'zalo',
+        quantity: 1,
+        reservationKey,
+        requestFingerprint,
+        sourceType: 'campaign_zalo',
+        sourceRef: {
+          runId: payload.runId,
+          nodeId: Number.isFinite(parsedNodeId) ? parsedNodeId : null,
+          stepIndex: logicalStep,
+        },
+      });
+    } catch (quotaErr) {
+      // Chỉ quota-exceeded thật (403 RESOURCE_LIMIT_EXCEEDED) mới đổi nhãn PLAN_QUOTA. Lỗi hạ
+      // tầng (503 SEND_QUOTA_UNAVAILABLE) hoặc conflict (409 CONCURRENT_SEND_IN_PROGRESS/
+      // IDEMPOTENCY_KEY_REUSED) throw nguyên trạng — không giả thành "hết hạn mức gói".
+      if (quotaErr.code !== 'RESOURCE_LIMIT_EXCEEDED') {
+        throw quotaErr;
+      }
+      const err = new Error(`[PLAN_QUOTA] ${quotaErr.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
+      err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
+      throw err;
+    }
+    const active = reservation.mode === 'enforce' || reservation.mode === 'test_enforce';
+    return { reservation, active };
+  }
+
+  /**
+   * Consume quota reservation sau khi provider xác nhận thành công (PR-Q4b).
+   *
+   * `persistSource` gắn `quota_reservation_id` + `status='sent'` vào đúng row `zalo_messages`
+   * (placeholder đã insert trước khi gửi) TRONG CÙNG transaction với consume — nếu không, một
+   * crash giữa lúc consume xong (ví đã trừ) và lúc `updateZaloMessageTrackingMeta` chạy riêng ở
+   * campaignRun.service.js sẽ để lại reservation `consumed` nhưng row vẫn `status='queued'`,
+   * `quota_reservation_id=NULL`. `updateZaloMessageTrackingMeta` vẫn chạy sau đó để merge thêm
+   * các field khác (uid/response/groupName/...) — ghi đè lại status/link ở đây là vô hại (idempotent).
+   *
+   * @param {object} reservation
+   * @param {object} sendResult
+   * @param {string|number|null} [zaloMessageId] id row zalo_messages placeholder, nếu có
+   */
+  async consumeCampaignZaloQuota(reservation, sendResult, zaloMessageId = null) {
+    if (!reservation?.id) return;
+    const safeZaloMessageId = Number.parseInt(zaloMessageId, 10);
+    const hasZaloMessageId = Number.isFinite(safeZaloMessageId);
+    try {
+      await consumeSendQuota({
+        reservationId: reservation.id,
+        responseSnapshot: sendResult,
+        persistSource: hasZaloMessageId
+          ? async (client) => {
+              await zaloMessageRepository.mergeZaloMessageTrackingMetadata(safeZaloMessageId, { status: 'sent' }, client);
+              await zaloMessageRepository.linkQuotaReservation(safeZaloMessageId, reservation.id, client);
+            }
+          : null,
+      });
+    } catch (consumeErr) {
+      console.warn('[CampaignZaloSender] consumeSendQuota failed after successful provider send:', consumeErr.message);
+      await this.markCampaignZaloQuotaUncertain(reservation, 'CONSUME_DB_FAILED', consumeErr.message);
+    }
+  }
+
+  /** Release hoặc mark uncertain reservation khi provider call throw lỗi (PR-Q4b). */
+  async settleCampaignZaloQuotaOnError(reservation, active, sendErr) {
+    if (!active || !reservation?.id) return;
+    const classified = classifyZaloSendError(sendErr);
+    if (classified.isTimeout) {
+      await this.markCampaignZaloQuotaUncertain(reservation, 'TIMEOUT', classified.label || 'Network timeout');
+    } else {
+      try {
+        await releaseSendQuota({
+          reservationId: reservation.id,
+          failureCode: classified.failureCode || classified.category || 'PROVIDER_ERROR',
+          reason: classified.label || sendErr.message || 'provider_exception',
+        });
+      } catch (e) {
+        console.warn('[CampaignZaloSender] releaseSendQuota error:', e.message);
+      }
+    }
+  }
+
+  /** @param {object} reservation @param {string} failureCode @param {string} reason */
+  async markCampaignZaloQuotaUncertain(reservation, failureCode, reason) {
+    if (!reservation?.id) return;
+    try {
+      await markSendQuotaUncertain({ reservationId: reservation.id, failureCode, reason });
+    } catch (e) {
+      console.warn('[CampaignZaloSender] markSendQuotaUncertain error:', e.message);
+    }
   }
 
   /**
@@ -2042,23 +2196,41 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendFriendRequestByQueue(payload = {}) {
-    if (payload?.userId) {
-      const quota = await checkSendQuota({ userId: payload.userId, channel: 'zalo' });
-      if (!quota.allowed) {
-        const err = new Error(`[PLAN_QUOTA] ${quota.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
-        err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
-        throw err;
-      }
+    // Kết bạn không có multi-step template (khác Email/Zalo cá nhân/nhóm) — logicalStep luôn 1.
+    const { reservation, active } = await this.reserveCampaignZaloQuota(payload, { logicalStep: 1 });
+    if (active && reservation.status === 'consumed') {
+      const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+      return { ...snapshot, isReplay: true, quotaReservationId: reservation.id };
     }
+    if (active) {
+      await markSendQuotaSending({ reservationId: reservation.id });
+    }
+
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,
       userId: payload?.userId,
     });
-    return this.sendFriendRequest({
-      api,
-      phone: payload?.phone,
-      message: payload?.message,
-    });
+
+    let sendResult;
+    try {
+      sendResult = await this.sendFriendRequest({
+        api,
+        phone: payload?.phone,
+        message: payload?.message,
+      });
+    } catch (sendErr) {
+      // "Đã là bạn bè" là lỗi nghiệp vụ, không phải send thật — release để không tính quota,
+      // caller (campaignRun.service.js) coi đây là thành công nghiệp vụ nhưng ghi nhận theo
+      // đường legacy (không gắn quota_reservation_id) — xem updateZaloMessageTrackingMeta.
+      await this.settleCampaignZaloQuotaOnError(reservation, active, sendErr);
+      throw sendErr;
+    }
+
+    if (active) {
+      await this.consumeCampaignZaloQuota(reservation, sendResult, payload?.zaloMessageId);
+      sendResult.quotaReservationId = reservation.id;
+    }
+    return sendResult;
   }
 
   /**
@@ -2185,25 +2357,45 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendGroupMessageByQueue(payload = {}) {
-    if (payload?.userId) {
-      const quota = await checkSendQuota({ userId: payload.userId, channel: 'zalo' });
-      if (!quota.allowed) {
-        const err = new Error(`[PLAN_QUOTA] ${quota.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
-        err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
-        throw err;
-      }
+    const { reservation, active } = await this.reserveCampaignZaloQuota(payload, {
+      logicalStep: Number.isInteger(payload?.stepIndex) ? payload.stepIndex : 1,
+    });
+    if (active && reservation.status === 'consumed') {
+      const snapshot = reservation.responseSnapshot || reservation.response_snapshot || {};
+      return { ...snapshot, isReplay: true, quotaReservationId: reservation.id };
     }
+    if (active) {
+      await markSendQuotaSending({ reservationId: reservation.id });
+    }
+
     const api = await this.getConnectedApiOrSyncStatus({
       accountId: payload?.accountId,
       userId: payload?.userId,
     });
     const revivedAttachments = this.reviveZaloAttachmentSourcesFromQueue(payload?.attachments);
-    return this.sendGroupMessage({
-      api,
-      groupId: payload?.groupId,
-      message: payload?.message,
-      attachments: revivedAttachments,
-    });
+
+    let sendResult;
+    try {
+      sendResult = await this.sendGroupMessage({
+        api,
+        groupId: payload?.groupId,
+        message: payload?.message,
+        attachments: revivedAttachments,
+      });
+    } catch (sendErr) {
+      await this.settleCampaignZaloQuotaOnError(reservation, active, sendErr);
+      throw sendErr;
+    }
+
+    if (active) {
+      if (isZaloPartialDeliveryResult(sendResult)) {
+        await this.markCampaignZaloQuotaUncertain(reservation, 'PARTIAL_DELIVERY', 'Partial delivery');
+      } else {
+        await this.consumeCampaignZaloQuota(reservation, sendResult, payload?.zaloMessageId);
+      }
+      sendResult.quotaReservationId = reservation.id;
+    }
+    return sendResult;
   }
 
   /**

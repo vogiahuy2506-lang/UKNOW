@@ -2457,9 +2457,26 @@ class CampaignRunService {
           await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadata);
           return;
         }
-        // Cùng TX: đánh dấu sent + trừ ví (nếu vượt hạn mức gói)
+        // PR-Q4b: nếu send đã đi qua atomic quota reservation (campaignZaloSenderService đã
+        // reserve/consume trong worker), consumeSendQuota() đã tự debit ví qua
+        // topup_debits(source_key=quota_reservation:<id>) rồi — không debit lại ở đây,
+        // chỉ gắn link quota_reservation_id để audit. metadata.quotaReservationId không được
+        // lưu vào tracking_metadata JSONB (cột riêng, không lặp dữ liệu).
+        const { quotaReservationId, ...metadataToMerge } = metadata;
+        const rawReservationId = Number.parseInt(quotaReservationId, 10);
+        const hasReservationLink = Number.isFinite(rawReservationId);
+
+        if (hasReservationLink) {
+          await zaloMessageRepository.withTransaction(async (client) => {
+            await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadataToMerge, client);
+            await zaloMessageRepository.linkQuotaReservation(zaloMessageId, rawReservationId, client);
+          });
+          return;
+        }
+
+        // Cùng TX: đánh dấu sent + trừ ví (nếu vượt hạn mức gói) — legacy path (reservation mode off/shadow).
         await zaloMessageRepository.withTransaction(async (client) => {
-          await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadata, client);
+          await zaloMessageRepository.mergeZaloMessageTrackingMetadata(zaloMessageId, metadataToMerge, client);
           const billingUserId = await resolveBillingUserId(userId);
           if (!billingUserId) return;
           const { rows: limitRows } = await client.query(
@@ -4724,6 +4741,14 @@ class CampaignRunService {
                   accountId: workingAccount.id,
                   recipient: resolvedRecipientUid,
                   recipientType: 'uid',
+                  // recipient ở trên là UID đã resolve (dùng để gọi provider); quotaRecipientKey
+                  // là định danh gốc từ dữ liệu campaign (phone/uid trước resolve) — ổn định qua
+                  // các lần retry cùng logical send, dùng để build reservation key (PR-Q4b).
+                  quotaRecipientKey: recipient,
+                  runId,
+                  nodeId: node.id,
+                  stepIndex: stepMeta?.stepIndex ?? 1,
+                  zaloMessageId,
                   message: trackedMessage,
                   attachments,
                 });
@@ -4882,6 +4907,7 @@ class CampaignRunService {
                 stepIndex: stepMeta?.stepIndex ?? null,
                 uid: resolvedUid || null,
                 response: sendResult.response || null,
+                quotaReservationId: sendResult.quotaReservationId || null,
               });
               // Upsert customer zalo_id using resolved UID
               if (resolvedUid) {
@@ -6050,6 +6076,11 @@ class CampaignRunService {
                 userId,
                 accountId: workingAccount.id,
                 phone,
+                quotaRecipientKey: phone,
+                runId,
+                nodeId: node.id,
+                stepIndex: 1,
+                zaloMessageId,
                 message,
               });
               successfulSends += 1;
@@ -6076,6 +6107,7 @@ class CampaignRunService {
                 stepIndex: 1,
                 uid: sendResult.uid || null,
                 response: sendResult.response || null,
+                quotaReservationId: sendResult.quotaReservationId || null,
               });
               await logZaloSentJourneyEvent({
                 customerId: Number.parseInt(customerId, 10) || null,
@@ -6618,6 +6650,11 @@ class CampaignRunService {
                 userId,
                 accountId: account.id,
                 groupId,
+                quotaRecipientKey: groupId,
+                runId,
+                nodeId: node.id,
+                stepIndex: stepMeta?.stepIndex ?? 1,
+                zaloMessageId,
                 message: trackedMessage,
                 attachments,
               });
@@ -6709,6 +6746,7 @@ class CampaignRunService {
                 groupName,
                 attachments: attachmentList,
                 attachmentsCount: attachmentList.length,
+                quotaReservationId: sendResult.quotaReservationId || null,
               });
               await logZaloSentJourneyEvent({
                 customerId: null,

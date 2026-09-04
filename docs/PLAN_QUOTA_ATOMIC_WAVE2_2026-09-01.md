@@ -667,28 +667,312 @@ trong allowlist còn gọi `checkSendQuota()` như enforcement duy nhất.
 
 ### PR-Q4 — Migrate campaign Email/Zalo và BullMQ retry
 
-- [ ] Tạo deterministic reservation key từ run/node/channel/recipient/logical step.
-- [ ] Campaign run pre-check chỉ advisory để yield/stop sớm; worker/final sender mới reserve.
-- [ ] Reserve sau quiet hours/rate-limit/delay gate, ngay trước provider call.
-- [ ] Gắn reservation ID vào `email_messages`/`zalo_messages` và recipient-step metadata an toàn.
-- [ ] BullMQ retry cùng logical key; attempt count không tạo quota reservation mới.
-- [ ] Nếu consumed, worker retry không gọi provider.
-- [ ] Nếu released do definitive no-send, explicit retry có thể re-reserve cùng row dưới lock.
-- [ ] Nếu uncertain, job dừng auto retry và đưa vào reconciliation/ops path.
-- [ ] Không thay đổi campaign status/progress semantics ngoài dữ liệu cần cho idempotency.
+**Cập nhật 03/09/2026 — chi tiết hoá sau khi đối soát code thật.** Bản dưới đây thay thế checklist cũ
+bằng call site cụ thể (`file:dòng`) và tách PR-Q4 thành ba sub-PR tuần tự vì phạm vi đụng 3 file lớn
+(`campaignEmailSender.service.js` 960 dòng, `campaignZaloSender.service.js` 2282 dòng,
+`campaignRun.service.js` 7540 dòng). Không gộp Q4a/Q4b/Q4c thành một PR.
 
-Test bắt buộc:
+**Cập nhật 03/09/2026 (implement)** — Q4a và Q4b **đã implement + test xanh** trên Postgres thật (mode
+`enforce`), theo đúng thiết kế mô tả bên dưới:
 
-- [ ] hai worker cùng recipient => một reservation và tối đa một provider call;
-- [ ] job retry sau success/response loss => không debit/quota/provider lần hai;
-- [ ] provider rate-limit trước acceptance => release và retry hợp lệ;
-- [ ] quiet-hour defer => không giữ reservation hàng giờ;
-- [ ] worker crash trước provider => lease release an toàn;
-- [ ] worker crash/timeout sau provider call => uncertain, không auto-resend;
-- [ ] campaign owner/employee context vẫn tính đúng billing owner.
+- Q4a: `campaignEmailSender.service.js` (`sendEmailToCustomerDirect`) đã chuyển sang
+  `reserveSendQuota/markSendQuotaSending/consumeSendQuota/releaseSendQuota/markSendQuotaUncertain`.
+  Sửa kèm một bug thật phát hiện khi implement: `sendQuotaReservation.service.js` (nhánh mode `off` và
+  `shadow`) không copy `resetAt/limitType/limit/currentCount` từ `checkSendQuota()` lên error object khi
+  throw — vá tại đó vì `campaignRun.service.js:3457-3484` đọc trực tiếp `resetAt` để quyết định
+  pause-and-resume thay vì fail cứng; không vá thì mọi caller mới (không riêng campaign) đều mất field
+  này ở mode mặc định production. 5 test integration mới trong
+  `backend/tests/integration/synchronousSendQuota.test.js` (describe `Campaign Email Send`): reserve+consume
+  thành công, replay đúng idempotency key (mô phỏng BullMQ stalled-job redelivery), hard bounce → consume,
+  lỗi SMTP không phân loại được → uncertain, `dailyEmailLimit=1` → recipient thứ hai bị từ chối với
+  `resetAt` còn nguyên.
+- Q4b: cả 3 kênh Zalo (`sendPersonalMessageByQueue`/`sendFriendRequestByQueue`/`sendGroupMessageByQueue`
+  trong `campaignZaloSender.service.js`) dùng chung 4 helper mới trên class
+  (`reserveCampaignZaloQuota`/`consumeCampaignZaloQuota`/`settleCampaignZaloQuotaOnError`/
+  `markCampaignZaloQuotaUncertain`) thay cho backstop `checkSendQuota` cũ. `campaignRun.service.js`
+  (3 call site `send*Queued`) truyền thêm `runId/nodeId/stepIndex/quotaRecipientKey/zaloMessageId`; closure
+  dùng chung `updateZaloMessageTrackingMeta` (dòng ~2454) được sửa để gắn `quota_reservation_id` (repository
+  method mới `zaloMessageRepository.linkQuotaReservation`) và **bỏ debit ví cũ** (`maybeDebitWalletForSend`
+  key `zalo_message:<id>`) khi send đã đi qua reservation — tránh double-debit với debit tự động của
+  `consumeSendQuota` (key `quota_reservation:<id>`); path legacy (mode off/shadow) giữ nguyên hành vi debit
+  cũ 100%, không đổi gì. 5 test integration mới (describe `Campaign Zalo Send`): reserve+consume cho cả 3
+  kênh, release khi provider throw lỗi xác định, replay đúng logical key.
+- Q4c: phần "test stalled-job redelivery" coi như đã phủ bởi 2 test replay ở trên (gọi handler 2 lần
+  với đúng logical key, xác nhận provider chỉ gọi 1 lần). Phần "reconciliation hook khi resume run" **CHƯA
+  làm** — để lại cho PR-Q5 (sweeper chung), không xây riêng cho campaign.
 
-**Gate:** targeted campaign suites + BullMQ integration (nếu Redis test sẵn sàng) xanh; staging chạy một
-campaign concurrency đại diện và reconciliation sạch.
+**Review độc lập 03/09/2026** (subagent riêng, tự chạy lại toàn bộ test, không tin báo cáo implement) —
+tìm 3 finding, cả 3 đã sửa:
+1. **[Đã sửa]** Zalo `consumeCampaignZaloQuota()` gọi `consumeSendQuota()` không truyền `persistSource` —
+   việc gắn `quota_reservation_id`/`status='sent'` xảy ra ở transaction RIÊNG (`updateZaloMessageTrackingMeta`),
+   không atomic với debit ví. Crash giữa hai bước để lại reservation `consumed` (đã trừ ví) nhưng
+   `zalo_messages` vẫn `status='queued'`. Đã vá: `persistSource` giờ tự merge `status='sent'` +
+   `linkQuotaReservation` trong CÙNG transaction consume, dùng `payload.zaloMessageId` xuyên suốt 3 call
+   site; `updateZaloMessageTrackingMeta` gọi sau đó là ghi đè vô hại (idempotent), chỉ để merge thêm
+   field khác (uid/response/groupName...). Test mới xác nhận `zalo_messages.quota_reservation_id` +
+   `tracking_metadata.status='sent'` đã đúng NGAY sau khi `sendPersonalMessageByQueue()` trả về, không
+   phụ thuộc bước gọi riêng sau đó.
+2. **[Đã sửa]** Cả Email lẫn Zalo gộp MỌI lỗi từ `reserveSendQuota()` (kể cả 503
+   `SEND_QUOTA_UNAVAILABLE` hạ tầng, 409 `CONCURRENT_SEND_IN_PROGRESS`/`IDEMPOTENCY_KEY_REUSED`) thành
+   `plan_send_limit_exceeded` — vi phạm mục 4.4 ("hạ tầng quota lỗi là 503, không giả thành hết gói").
+   Với Email còn có tác dụng phụ thật: code cũ để lỗi hạ tầng ném ra ngoài cho retry-wrapper phía trên
+   (`executeWithTimeoutRetry`) tự bắt; code mới nuốt hết thành kết quả "sạch" nên một DB blip thoáng
+   qua thành `failedSends++` vĩnh viễn thay vì được retry. Đã vá cả hai: chỉ khi
+   `quotaErr.code === 'RESOURCE_LIMIT_EXCEEDED'` mới map sang kết quả/nhãn quota-exceeded; mọi lỗi khác
+   throw nguyên trạng.
+3. **[Đã sửa]** `requestFingerprint` chỉ gồm `{channel, recipient, sourceType, quantity}`, thiếu
+   `subject/content/templateId` như plan mẫu — rủi ro thấp (reviewer đánh giá LOW, không double-send/
+   double-charge) nhưng vẫn vá cho khớp thiết kế: Email thêm `subject/content(htmlBody)/templateId`,
+   Zalo thêm `content(message)`.
+- Đã xác nhận một lỗi test **có sẵn trên `main`, không liên quan Wave 2**:
+  `src/utils/__tests__/scheduleOnceSkip.spec.js` fail vì mock `database.js` thiếu export
+  `isConnectionError` mà `scheduler.js` đang import — `git diff` trên cả 3 file liên quan đều rỗng (không
+  phải do Q4a/Q4b), khả năng do một nhánh làm việc song song khác chưa hoàn tất. Cần người khác xử lý
+  riêng, sẽ chặn pre-push hook nếu không được vá trước khi merge.
+
+#### 0. Hạ tầng đã có sẵn từ PR-Q1..Q3 — không cần build lại
+
+Đối soát code cho thấy phần lớn plumbing PR-Q4 cần đã được Codex làm sẵn ở các PR trước nhưng **chưa
+có call site nào dùng**:
+
+| Thành phần | Vị trí | Trạng thái |
+|---|---|---|
+| `buildCampaignReservationKey({runId, nodeId, channel, recipient, logicalStep})` | `backend/src/services/quota/sendQuotaKey.service.js:251-261` | Đã có, đã có unit test (`sendQuotaKey.service.spec.js`), **0 call site production** |
+| Cột `quota_reservation_id` trên `email_messages`/`zalo_messages`/`zalo_personal_messages`/`usage_logs` | migration `178_send_quota_reservations.sql`, mirror `backend/tests/integration/sql/bootstrap.sql:2843-2864` | Đã có, đã mirror bootstrap |
+| `emailSettingsSmtpService.logEmailSentWithClient(client, payload)` — nhận `quotaReservationId`, KHÔNG tự debit ví | `backend/src/services/email/emailSettingsSmtp.service.js:129-211` | Đã có, docblock ghi rõ "Used by atomic persistSource callback and legacy logEmailSent" (dòng 126-128) |
+| `zaloMessageRepository.insertCampaignZaloMessage({..., quotaReservationId}, queryable)` | `backend/src/repositories/campaign/zaloMessage.repository.js:58-110` | Đã có, nhận `queryable` client tuỳ chọn |
+| `reserveSendQuota/markSendQuotaSending/consumeSendQuota/releaseSendQuota/markSendQuotaUncertain` | `backend/src/services/quota/sendQuotaReservation.service.js:513,969,1043,1171,1259` | Đã có, đã dùng ở PR-Q3 (quick-send, preview, inbox) |
+
+**Không cần migration mới cho PR-Q4** — cột/index cần đều đã tồn tại từ migration 178. Next available
+migration number tại thời điểm viết là **179** (`ls backend/migrations | tail -3` → `178_send_quota_reservations.sql`
+là mới nhất); chỉ dùng nếu Q4c cần thêm index cho reconciliation, xác nhận lại số trước khi tạo file vì
+agent khác có thể đã chiếm 179 lúc implement.
+
+**Khác biệt calling convention phải xử lý:** `checkSendQuota()` (legacy) trả `{allowed:false, message,
+resetAt, limitType}` — không throw. `reserveSendQuota()` (mới) **throw** Error có `.status/.code/.resetAt/.limitType`
+khi vượt hạn mức (xác nhận tại `sendQuotaReservation.service.js` các dòng ~590, 665-673, 970 `err.status=403;
+err.code='RESOURCE_LIMIT_EXCEEDED'`). Mọi call site Q4a/Q4b phải đổi từ `if (!check.allowed)` sang
+`try/catch` và map lại đúng shape response hiện tại (`errorType: 'plan_send_limit_exceeded'`, giữ
+`resetAt`/`limitType`) để không phá luồng defer/yield đang đọc các field này ở `campaignRun.service.js`.
+
+---
+
+#### PR-Q4a — Campaign Email (làm trước, đơn giản nhất)
+
+**Call site:** `backend/src/services/campaign/campaignEmailSender.service.js`, hàm `sendEmailToCustomerDirect()`.
+
+- Advisory pre-check hiện tại ở `campaignRun.service.js:1239-1263` (hàm `assertSendQuotaOrYield`)
+  **giữ nguyên, không đổi** — đây đúng là "pre-flight chỉ advisory" theo mục 3.3 của plan gốc, ngăn
+  campaign cắm đầu gửi khi cả batch chắc chắn sẽ bị từ chối. Không reserve ở đây.
+- Reserve thật nằm ở `campaignEmailSender.service.js:484`, hiện là:
+  ```js
+  const emailLimitCheck = await checkSendQuota({ userId: campaign.id_user, channel: 'email' });
+  ```
+  Vị trí này **sớm hơn** provider call một khoảng (còn phải resolve template/settings/tracking token,
+  dòng 503-699 — đều là DB read/build string, không phải network I/O rủi ro). Theo mục 4.1 plan gốc
+  ("ngay trước provider call"), cách an toàn nhất là **giữ nguyên vị trí gọi reserve ở dòng 484** (để
+  không phải refactor lại toàn bộ hàm 400+ dòng) nhưng rút ngắn khoảng hở bằng cách đặt `markSendQuotaSending()`
+  ngay trước `sendRawEmail()` ở dòng 703 — tức tách `reserveSendQuota` (dòng 484) và `markSendQuotaSending`
+  (ngay trước dòng 703) làm hai bước, đúng state machine mục 5.3 (`reserved -> sending -> ...`). Nếu
+  Cursor thấy khoảng hở này vẫn đáng ngại (ví dụ template lookup chậm bất thường), có thể dời cả
+  `reserveSendQuota` xuống ngay trước dòng 703 — đổi vị trí không phá tính đúng, chỉ cần đảm bảo mọi
+  nhánh return sớm giữa dòng 484 và 703 (không có nhánh nào hiện tại — đã đọc toàn bộ đoạn 484-700,
+  không có `return` nào chen giữa ngoài quota check) đều không rời hàm khi đã có reservation mà chưa release.
+
+- **Key & fingerprint:**
+  ```js
+  const logicalStep = Number.isInteger(sendMeta?.emailStep) ? sendMeta.emailStep : 1;
+  const reservationKey = buildCampaignReservationKey({
+    runId, nodeId: actionNode.id, channel: 'email', recipient: customer.email, logicalStep,
+  });
+  const requestFingerprint = computeRequestFingerprint({
+    channel: 'email', recipient: customer.email, subject, content: htmlBody,
+    templateId, sourceType: 'campaign_email',
+  }); // version 'v2' mặc định
+  ```
+  `sendMeta.emailStep` đã là logical step 1-based có sẵn trong signature hàm (dùng lại, xác nhận tại
+  dòng 506, 516) — không cần query `campaign_run_recipient_steps` để suy ra step.
+  Vì key không phụ thuộc `retryMeta`/attempt count, một lần retry theo lịch (nhánh
+  `smtp_rate_limited_retry_scheduled`, dòng 469-482 và 747-767) sẽ tự nhiên tái dùng đúng
+  `reservationKey` — cơ chế idempotent-replay có sẵn trong `reserveSendQuota` (fingerprint match →
+  trả lại state hiện tại, không gọi provider lần hai nếu đã `consumed`) xử lý đúng ca này miễn phí,
+  không cần code thêm ở tầng campaign.
+
+- **`sourceType: 'campaign_email'`**, `sourceRef: { runId, nodeId: logNodeIdForDb, emailStep: logEmailStepForDb }`
+  (dùng đúng 2 biến đã có sẵn ở dòng 507-508, không đưa email/recipient thô vào `source_ref`).
+
+- **Map từng nhánh kết quả sang state machine** (theo bảng phân loại mục 8 của plan gốc):
+
+  | Nhánh hiện tại | Dòng | Phân loại | Hành động |
+  |---|---|---|---|
+  | `sendRawEmail()` thành công | 701-714 | `accepted` | `consumeSendQuota({reservationId, providerReference: hash(info.messageId), responseSnapshot: {messageId, provider:'smtp', sentAt}, persistSource: (client) => emailSettingsSmtpService.logEmailSentWithClient(client, {...payload, quotaReservationId: reservation.id})})` |
+  | `providerRateLimitError` (SMTP từ chối trước khi nhận) | 722-724, 747-767 | `definitive_no_send` | `releaseSendQuota({reservationId, reasonCode:'SMTP_PROVIDER_RATE_LIMITED'})` — **chỉ khi hết lượt retry** (`!canRetry`, dòng 769); nhánh còn lượt retry (`canRetry`, dòng 754-767) cũng release vì chưa gửi được, lần retry kế tự re-reserve đúng key |
+  | `smtpConfigError` (535 v.v.) | 725, 778-818 | `definitive_no_send` | `releaseSendQuota({reservationId, reasonCode:'SMTP_CONFIG_ERROR'})` |
+  | SMTP lỗi khác không rõ có bị nhận hay không (`!shouldMarkAsRecipientBounce`, nhánh "smtp_delivery") | 821-856 | `unknown` — **đổi hành vi**: hiện code coi như thất bại chắc chắn (ghi `email_messages.status='failed'`, không debit) nhưng KHÔNG có cách chứng minh SMTP server chưa nhận email trước khi lỗi | `markSendQuotaUncertain({reservationId, reasonCode:'SMTP_DELIVERY_ERROR_AMBIGUOUS'})` thay vì release. Đây là thay đổi hành vi thật so với code hiện tại — ghi rõ trong PR description, không phải hotfix âm thầm |
+  | Hard bounce xác định (`shouldMarkAsRecipientBounce`) | 858-905 | `billable_bounce` | `consumeSendQuota({..., persistSource: (client) => { const id = await logEmailSentWithClient(client, {...}); await markEmailMessageBouncedWithClient(client, ...); return id; }})` — **hiện tại 2 call tách rời, 2 transaction khác nhau** (`logEmailSent()` mở transaction riêng ở dòng 868, `markEmailMessageBounced()` là query rời ở dòng 890) → phải gộp vào cùng 1 `client` trong `persistSource` để atomic với `consumeSendQuota`. `campaignEmailSenderRepository.markEmailMessageBounced` hiện không nhận `client` — cần thêm overload nhận `queryable` giống pattern `insertCampaignZaloMessage` |
+
+- **Bỏ `debitWallet: true`** khỏi mọi lời gọi `logEmailSent`/`logEmailSentWithClient` trong luồng
+  campaign đã migrate — `consumeSendQuota()` tự debit ví qua `topup_debits` với
+  `source_key = quota_reservation:<id>` (mục 6, bước 5 plan gốc). Giữ `debitWallet:true` ở đây sẽ
+  debit hai lần qua hai idempotency key khác nhau (`email_message:<id>` cũ vs `quota_reservation:<id>`
+  mới) — đây là **bẫy cần tránh số 1**, không phải giả định, đã đọc thấy `logEmailSent()` dòng 222-238
+  tự gọi `debitDirectEmailIfNeeded` độc lập với reservation.
+
+**Test bắt buộc PR-Q4a** (unit + integration Postgres thật, theo pattern `synchronousSendQuota.test.js`
+đã có từ PR-Q3):
+- limit còn 1, gửi 2 recipient khác nhau cùng lúc → đúng 1 email ra provider (mock SMTP), 1 bị từ chối trước gửi;
+- retry theo lịch (`smtp_rate_limited_retry_scheduled`) dùng lại đúng reservation, không tạo reservation thứ hai;
+- hard bounce → reservation `consumed`, `email_messages.status='bounced'`, `quota_reservation_id` khớp, ví bị trừ đúng 1 lần nếu vượt gói;
+- SMTP lỗi không phân loại được → reservation `uncertain`, không tự gửi lại trong cùng run;
+- không đổi hành vi các nhánh còn lại của `campaignEmailSenderAttachments.spec.js` (đã có, phải chạy lại xanh).
+
+**Gate Q4a:** `campaignEmailSender` unit + attachments spec xanh; 1 integration test mới xác nhận
+concurrency + bounce + uncertain; không đổi API response shape cho phía frontend.
+
+---
+
+#### PR-Q4b — Campaign Zalo cá nhân / nhóm / kết bạn
+
+**Call site đã xác nhận (3 chỗ, đều theo cùng pattern "backstop trong worker"):**
+
+| Kênh | Enqueue (campaignRun.service.js) | Worker thực thi + `checkSendQuota` backstop (campaignZaloSender.service.js) |
+|---|---|---|
+| Cá nhân | `sendPersonalMessageQueued(...)` gọi tại dòng 4722 | `sendPersonalMessageByQueue()` dòng 1876, quota check dòng 1878 |
+| Kết bạn | `sendFriendRequestQueued(...)` gọi tại dòng 6049 | `sendFriendRequestByQueue()` dòng 2044, quota check dòng 2046 |
+| Nhóm | `sendGroupMessageQueued(...)` gọi tại dòng 6161 | `sendGroupMessageByQueue()` dòng 2187, quota check dòng 2189 |
+
+Comment tại `campaignRun.service.js:1240-1242` tự gọi các quota check này là "backstop" — xác nhận
+đây đúng là điểm "final send boundary" cần reserve, không phải điểm advisory.
+
+**Khác biệt cấu trúc quan trọng so với Email — đọc kỹ trước khi copy pattern Q4a:**
+
+Zalo campaign **không** insert-message-sau-khi-gửi như email. Nó insert một dòng `zalo_messages`
+**trước khi gửi** với `tracking_metadata.status='queued'`
+(`createZaloMessageTrackingRecord` → `zaloMessageRepository.insertCampaignZaloMessage`,
+định nghĩa tại `campaignRun.service.js:2414-2450`, gọi tại dòng 4680 trước khi tới `sendPersonalMessageQueued`
+ở dòng 4722), rồi **update** dòng đó thành `status='sent'` sau khi gửi xong qua
+`updateZaloMessageTrackingMeta()` (định nghĩa dòng 2454-2496, gọi tại dòng 4816/4754 vùng lân cận).
+Việc debit ví Zalo nằm trong chính `updateZaloMessageTrackingMeta`, dòng 2460-2495: khi
+`metadata.status==='sent'`, mở transaction riêng, gọi `maybeDebitWalletForSend(client, {billingUserId,
+itemKey:'zalo_messages', sourceKey: \`zalo_message:${zaloMessageId}\`, ...})`.
+
+Vì vậy `persistSource` cho Zalo **là một UPDATE, không phải INSERT** — khác hẳn email. Thiết kế đề xuất:
+
+1. Reserve **trước** `createZaloMessageTrackingRecord` (tức trước dòng 4680, bên trong
+   `runWithZaloAccountMutex` sau `assertSendQuotaOrYield`/`enforceZaloOutboundPolicyBeforeSend` ở dòng
+   4638-4644) — để `reservation.id` có sẵn khi insert placeholder, gắn ngay `quota_reservation_id` vào
+   `insertCampaignZaloMessage(..., quotaReservationId: reservation.id)` thay vì để `null`. Nếu process
+   crash giữa insert-placeholder và gọi provider, row `zalo_messages` đã có `quota_reservation_id` để
+   reconciler đối chiếu.
+2. `markSendQuotaSending()` ngay trước lời gọi `sendPersonalMessageQueued`/`sendFriendRequestQueued`/`sendGroupMessageQueued`
+   (dòng 4722 / 6049 / 6161) — đây chính là điểm enqueue BullMQ; **lease phải đủ dài hơn thời gian job
+   có thể nằm chờ trong queue + inter-message delay** (nhắc lại: production đang chạy delay 80-150s/tin
+   Zalo — xem CLAUDE.md phần "Operational Parameters"), nếu không sweeper sẽ mark `uncertain` một
+   reservation còn đang chờ tới lượt trong hàng đợi chứ chưa hề gọi provider. `SEND_QUOTA_SENDING_UNCERTAIN_SECONDS`
+   mặc định plan gốc là 300s (mục 9) — **phải tăng riêng cho Zalo campaign** hoặc dời điểm
+   `markSendQuotaSending` xuống sau khi `enqueueAndWait` đã thực sự vào tay worker (nếu
+   `outboundMessageQueueService` có hook "job started" thì dùng, chưa xác nhận có hay không — GIẢ ĐỊNH,
+   Cursor kiểm `outboundMessageQueue.service.js` trước khi chọn phương án). Đây là điểm khác biệt lớn
+   nhất so với email/direct-send (không phải trong `send*ByQueue` — nơi có `checkSendQuota` backstop —
+   vì payload job đi qua Redis, không mang được `reservationId` một cách an toàn nếu reserve trước khi
+   enqueue... thực ra mang được, `reservationId` chỉ là số nguyên, không phải PII, an toàn để nhét vào
+   payload). **Quyết định đơn giản nhất**: reserve + `markSendQuotaSending` cùng lúc, ngay trước
+   `enqueueAndWait`, và set lease `expires_at` theo tổng ước lượng "thời gian chờ hàng đợi + gửi" chứ
+   không dùng default — cần đo baseline queue depth thực tế trước khi chốt số (không đoán ở đây).
+3. Sau `enqueueAndWait` trả về, worker (`send*ByQueue`) **bỏ hẳn** `checkSendQuota` backstop
+   (dòng 1878/2046/2189) — vì đã reserve trước khi enqueue rồi, backstop check cũ giờ redundant và
+   dùng advisory cache không còn ý nghĩa.
+4. Kết quả `sendResult`:
+   - `isZaloPartialDeliveryResult(sendResult)` (đã có sẵn util từ PR-Q3,
+     `backend/src/utils/zaloDispatchDelivery.util.js`, đã dùng trong `campaignRun.service.js:4747`) → `markSendQuotaUncertain`;
+   - thành công bình thường (`markZaloOutboundSuccess` nhánh, dòng 4754-4763) → `consumeSendQuota({..., persistSource: (client) => { await mergeZaloMessageTrackingMetadata(zaloMessageId, {status:'sent',...}, client); await maybeDebitWalletForSend(client, {billingUserId, itemKey:'zalo_messages', sourceKey: \`quota_reservation:${reservation.id}\`, ...}); }})` — **đổi `sourceKey` từ `zalo_message:<id>` sang `quota_reservation:<id>`** để nhất quán với mục 6 bước 5 plan gốc, và **xoá lời gọi `maybeDebitWalletForSend` cũ trong `updateZaloMessageTrackingMeta`** (dòng 2488-2494) cho luồng đã migrate — tránh debit hai lần với hai key khác nhau, y hệt bẫy đã nêu ở Q4a;
+   - lỗi Zalo throw ra từ `sendPersonalMessageQueued` (catch tại dòng 4730-4738, phân loại qua `annotateZaloSendError`/`classifyZaloSendError` có sẵn ở `zaloSendErrorClassifier.util.js`) → map theo bảng mục 8: rate-limit/quota lỗi xác định trước gửi → `release`; timeout/network không rõ → `uncertain` (đã có cờ `classified.isTimeout` dùng ở PR-Q3 cho quick-send/preview, tái dùng y hệt).
+5. `findExistingSentCampaignZaloMessage()` (`zaloMessage.repository.js:16-56`, gọi qua
+   `trySyncLedgerFromExistingZaloMessage` tại `campaignRun.service.js:1864-1887`) là cơ chế dedupe
+   **resume sau crash** hiện có — **giữ nguyên, không xoá**. Nó giải quyết vấn đề khác (ledger
+   `campaign_run_recipient_steps` không khớp `zalo_messages` sau crash), còn reservation giải quyết
+   "không charge quota hai lần". Cả hai cùng tồn tại, không thay thế nhau.
+
+**`sourceType: 'campaign_zalo'`** cho cả 3 kênh (khớp ví dụ allowlist ở mục 9 plan gốc:
+`campaign_email,campaign_zalo` — không tách `campaign_zalo_personal/group/friend_request` trừ khi
+sau này cần allowlist riêng từng kênh); phân biệt kênh qua `sourceRef.channel` (`zalo_personal` /
+`zalo_group` / `zalo_friend_request`, đúng giá trị cột `channel` hiện có trong `zalo_messages`).
+
+**`logicalStep`:**
+- cá nhân/nhóm: `stepMeta?.stepIndex || 1` (đã dùng sẵn ở dòng 4691/dòng tương ứng phần nhóm — xác nhận
+  `stepMeta?.stepIndex ?? null` xuất hiện trong đoạn code nhóm quanh dòng 6617);
+- kết bạn: luôn `1` — xác nhận tại dòng quanh 6049 không có khái niệm `stepMeta`/multi-step, tracking
+  metadata hardcode `stepIndex: 1`.
+
+**Test bắt buộc PR-Q4b:** áp lại đúng 7 test mục "Test bắt buộc" gốc (hai worker cùng recipient, retry
+sau success không debit lại, rate-limit trước acceptance release+retry được, quiet-hour defer không giữ
+reservation treo, crash trước/sau provider) cho **cả 3 kênh** — viết bằng fixture Zalo fake session
+giống pattern đã sửa ở `synchronousSendQuota.test.js` (PR-Q3, phần Unified Inbox) để tránh lặp lại đúng
+lỗi false-positive đã gặp ở đó (test không cấu hình fake session, provider không thực sự được gọi mà
+test vẫn xanh).
+
+**Gate Q4b:** targeted `campaignZaloSender` + `campaignRun` Zalo suites xanh; 1 integration test/kênh
+xác nhận reservation lifecycle đúng; lease `SEND_QUOTA_SENDING_UNCERTAIN_SECONDS` cho Zalo đã đo bằng
+số liệu queue depth thật trên staging, không dùng default 300s mà không kiểm.
+
+---
+
+#### PR-Q4c — BullMQ stalled-job hardening + reconciliation hook + test matrix còn lại
+
+Đối soát `backend/src/services/queue/outboundMessageQueue.service.js:256-271` (khởi tạo `new Worker`)
+cho thấy **không override** `lockDuration`/`stalledInterval`/`maxStalledCount` — dùng default BullMQ
+(`lockDuration=30000ms`, `maxStalledCount=1`). Cả 4 job type campaign (`EMAIL_SEND`, `ZALO_PERSONAL_SEND`,
+`ZALO_GROUP_SEND`, `ZALO_FRIEND_REQUEST_SEND`, đăng ký tại
+`backend/src/services/queue/outboundMessageProcessorRegistry.js:22-47`) đều gọi `enqueueAndWait` với
+`jobOptions: { attempts: 1 }` — nghĩa là **BullMQ's `attempts` retry không áp dụng cho các job này**;
+nguồn retry duy nhất hiện tại là tầng application (`campaign_run_recipient_steps.meta.nextDueAt` +
+`retryCount`, xem `recipientLedger.repository.js`). Nhưng **stalled-job recovery vẫn hoạt động độc lập
+với `attempts`**: nếu worker crash giữa lúc xử lý job (ví dụ sau khi provider đã accept, trước khi
+`enqueueAndWait` trả kết quả về caller), BullMQ mặc định sẽ coi job "stalled" sau 30s và giao lại đúng
+job đó cho một worker khác **tối đa 1 lần** (`maxStalledCount=1`) — tức là handler
+(`sendEmailToCustomerDirect`/`sendPersonalMessageByQueue`/...) có thể chạy lại với **cùng payload**
+dù `attempts:1`. Đây chính là kịch bản "job retry sau success/response loss" trong test bắt buộc gốc —
+xác nhận nó là rủi ro thật, không phải giả định, và lý do idempotency key theo Q4a/Q4b (không phụ
+thuộc BullMQ attempt count) là cơ chế phòng vệ đúng chỗ.
+
+- [ ] Viết test giả lập: gọi trực tiếp handler 2 lần với cùng `reservationKey` (mô phỏng stalled-job
+      redelivery) → xác nhận provider chỉ được gọi 1 lần nếu lần đầu đã `consumed`, hoặc job thứ hai
+      nhận `409 SEND_ALREADY_IN_PROGRESS` nếu lần đầu còn `sending`.
+- [ ] Reconciliation hook: khi resume một run bị dừng giữa chừng, ngoài
+      `trySyncLedgerFromExistingZaloMessage` hiện có, thêm bước quét reservation `uncertain`/`reserved`
+      quá hạn thuộc `sourceType IN ('campaign_email','campaign_zalo')` gắn với `runId` đang resume —
+      không tự động release/consume, chỉ log + để sweeper chung (PR-Q5) xử lý, tránh xây riêng một
+      reconciler cho campaign.
+- [ ] Chạy đủ 7 test bắt buộc còn lại trong danh sách gốc (mục "Test bắt buộc") cho toàn bộ 4 job type,
+      gồm cả kịch bản "campaign owner/employee context vẫn tính đúng billing owner" — campaign vẫn
+      **không truyền `roleCode`** khi gọi `reserveSendQuota` (giữ đúng quy tắc mục 3.2: "Campaign hiện
+      chủ ý không truyền role để quota owner luôn được áp dụng"), xác nhận không có regress admin-bypass
+      lọt vào luồng campaign.
+- [ ] `npm run test:integration` full suite (không chỉ file mới) xanh — Q4a/Q4b có thể đã sửa
+      `campaignEmailSenderRepository`/`zaloMessageRepository` theo cách ảnh hưởng test cũ.
+
+**Gate Q4c:** toàn bộ test bắt buộc gốc của PR-Q4 (7 dòng mục "Test bắt buộc") pass cho cả email và 3
+kênh Zalo; `npm run test:integration` full xanh; staging chạy một campaign concurrency đại diện (song
+song ≥ 2 recipient cùng workspace, ≥ 1 recipient chạm limit) và reconciliation sạch — như Gate gốc.
+
+---
+
+**Bẫy cần tránh (tổng hợp cả 3 sub-PR):**
+
+1. Double debit ví do giữ nguyên `debitWallet:true`/`maybeDebitWalletForSend(...,sourceKey:'zalo_message:<id>')`
+   cũ song song với `consumeSendQuota`'s tự debit qua `quota_reservation:<id>` — xoá đường cũ ngay khi
+   migrate từng nhánh, không để cả hai cùng chạy "cho chắc".
+2. Copy nguyên pattern Email (insert-sau-khi-gửi) sang Zalo — Zalo là update-sau-khi-gửi, persistSource
+   phải là UPDATE không phải INSERT, xem mục PR-Q4b.
+3. Đặt `markSendQuotaSending`/lease timeout cho Zalo bằng default 300s mà không tính thời gian chờ
+   hàng đợi BullMQ + inter-message delay thật (80-150s/tin trên production) — sweeper sẽ đánh
+   `uncertain` hàng loạt reservation còn đang chờ tới lượt, gây báo động giả và có thể chặn nhầm gửi.
+4. Coi mọi lỗi SMTP không phân loại được là "thất bại chắc chắn" như code cũ đang làm — theo policy
+   mới đây phải là `uncertain`, đổi hành vi thật, cần ghi rõ trong PR description để reviewer không
+   tưởng nhầm là giữ nguyên logic.
+5. Xoá `findExistingSentCampaignZaloMessage`/ledger dedupe hiện có vì tưởng reservation đã thay thế —
+   hai cơ chế giải quyết hai vấn đề khác nhau (ledger đồng bộ tiến trình gửi, reservation chặn charge
+   quota trùng), phải giữ cả hai.
 
 ### PR-Q5 — Reconciler, observability, enforce toàn bộ và cleanup
 
