@@ -519,10 +519,10 @@ function PublicDPA() {
                 <strong>Governing Law and Dispute Resolution:</strong> This Agreement is governed by and interpreted in accordance with Vietnamese law. Any disputes arising from or related to this Agreement, including any issues related to the existence, validity, or termination of the Agreement, shall be submitted for resolution by competent courts in <strong>Ho Chi Minh City</strong>.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Thông báo:</strong> Mọi Thông Báo liên quan tới Dữ Liệu Cá Nhân cần phải được gửi tới: Người nhận: Bộ phận Bảo Vệ Dữ Liệu Cá Nhân - Công ty TNHH Giải pháp số DIGISO; Địa chỉ: Việt Nam; E-mail: <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Thông báo:</strong> Mọi Thông Báo liên quan tới Dữ Liệu Cá Nhân cần phải được gửi tới: Người nhận: Bộ phận Bảo Vệ Dữ Liệu Cá Nhân - Công ty TNHH Giải pháp số DIGISO; Địa chỉ: Việt Nam; E-mail: <a href="mailto:hotro.digibook@gmail.com" className="text-orange-600 hover:underline">hotro.digibook@gmail.com</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Notices:</strong> All Notices related to Personal Data must be sent to: Recipient: Personal Data Protection Department - DIGISO Digital Solutions Co., Ltd.; Address: Vietnam; Email: <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Notices:</strong> All Notices related to Personal Data must be sent to: Recipient: Personal Data Protection Department - DIGISO Digital Solutions Co., Ltd.; Address: Vietnam; Email: <a href="mailto:hotro.digibook@gmail.com" className="text-orange-600 hover:underline">hotro.digibook@gmail.com</a>
               </li>
               <li className={lc(language, 'vi')}>
                 DIGISO được quyền từ chối cung cấp sản phẩm, dịch vụ cho Bạn trong trường hợp Bạn không tuân thủ bất kỳ quy định, thoả thuận nào tại Thoả Thuận này khi thực hiện hoạt động Xử Lý Dữ Liệu Cá Nhân.
@@ -564,7 +564,7 @@ function PublicDPA() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
+                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
@@ -598,7 +598,7 @@ function PublicDPA() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
+                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">

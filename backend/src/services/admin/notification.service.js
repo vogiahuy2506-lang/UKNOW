@@ -5,7 +5,7 @@ import { sendSystemEmail, buildBaseTemplate } from '../../utils/systemEmail.util
 const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
 const PRODUCT_NAME = process.env.PRODUCT_NAME || process.env.MAIL_FROM_NAME || 'Founder AI';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'info@digiso.vn';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'hotro.digibook@gmail.com';
 
 // ─── Notification Type Config ──────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ const NOTIFICATION_TYPE_CONFIG = {
     icon: '⚠️',
     label: 'Thông báo bảo trì',
     labelEn: 'Maintenance Notice',
-    footerNote: 'Nếu có thắc mắc, vui lòng liên hệ info@digiso.vn.'
+    footerNote: 'Nếu có thắc mắc, vui lòng liên hệ hotro.digibook@gmail.com.'
   },
   announcement: {
     headerColor: '#2563eb',

@@ -13,7 +13,7 @@ const SAMPLE_USER = {
 
 const MAIL_FROM_NAME = 'Founder AI Platform';
 const SYSTEM_LOGO_URL = '/logo.png';
-const SUPPORT_EMAIL = 'info@digiso.vn';
+const SUPPORT_EMAIL = 'hotro.digibook@gmail.com';
 const DASHBOARD_URL = 'https://founderai.vn';
 
 /**
@@ -410,7 +410,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
                   Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh
                 </p>
                 <p style={{ margin: 0 }}>
-                  Điện thoại: (+84) 879529079 (Hotline) | Email: info@digiso.vn
+                  Điện thoại: (+84) 879529079 (Hotline) | Email: hotro.digibook@gmail.com
                 </p>
               </div>
             </div>

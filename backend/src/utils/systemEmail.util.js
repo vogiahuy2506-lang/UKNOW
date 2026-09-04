@@ -149,7 +149,7 @@ export function buildBaseTemplate({ subtitle, content, footerNote }) {
             <td style="padding:20px 8px;text-align:center;font-size:11px;color:#6b7280">
               <p style="margin:0 0 4px;font-weight:600">Đơn vị chủ quản: Công ty TNHH Giải pháp số Digiso</p>
               <p style="margin:0 0 4px">Địa chỉ: Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh, Đ. Võ Trường Toản, KP. 6, Phường Linh Trung, Thành phố Thủ Đức.</p>
-              <p style="margin:0">Điện thoại: (+84) 879529079 (Hotline) | Email: info@digiso.vn</p>
+              <p style="margin:0">Điện thoại: (+84) 879529079 (Hotline) | Email: hotro.digibook@gmail.com</p>
             </td>
           </tr>
 
@@ -225,7 +225,7 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
       Nếu bạn đã gia hạn hoặc không muốn nhận thông báo này, vui lòng liên hệ
-      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+      <a href="mailto:hotro.digibook@gmail.com" style="color:#f97316;text-decoration:none">hotro.digibook@gmail.com</a>.
     </p>
   `;
 
@@ -310,7 +310,7 @@ export function buildCampaignPausedEmail({ fullName, campaignName, channelLabel,
 
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
       Nếu bạn đã mua thêm hoặc không muốn nhận thông báo này, vui lòng liên hệ
-      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+      <a href="mailto:hotro.digibook@gmail.com" style="color:#f97316;text-decoration:none">hotro.digibook@gmail.com</a>.
     </p>
   `;
 
@@ -371,7 +371,7 @@ export function buildCampaignStoppedQuotaEmail({ fullName, campaignName, reason,
 
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
       Cần hỗ trợ? Liên hệ
-      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+      <a href="mailto:hotro.digibook@gmail.com" style="color:#f97316;text-decoration:none">hotro.digibook@gmail.com</a>.
     </p>
   `;
 
@@ -473,7 +473,7 @@ export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }
 
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
-      Nếu cần hỗ trợ, liên hệ <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a> hoặc
+      Nếu cần hỗ trợ, liên hệ <a href="mailto:hotro.digibook@gmail.com" style="color:#f97316;text-decoration:none">hotro.digibook@gmail.com</a> hoặc
       xem <a href="${FRONTEND_URL}/docs" style="color:#f97316;text-decoration:none">tài liệu hướng dẫn</a>.
     </p>
   `;
@@ -607,7 +607,7 @@ export function buildPaymentSuccessEmail({
 
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
-      Nếu có thắc mắc về thanh toán, liên hệ <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">billing@digiso.vn</a>.
+      Nếu có thắc mắc về thanh toán, liên hệ <a href="mailto:hotro.digibook@gmail.com" style="color:#f97316;text-decoration:none">hotro.digibook@gmail.com</a>.
     </p>
   `;
 
@@ -835,7 +835,7 @@ export function buildMaintenanceEmail({ title, message, durationMinutes, startTi
     html: buildBaseTemplate({
       subtitle: 'Thông báo bảo trì hệ thống',
       content,
-      footerNote: 'Nếu có thắc mắc, vui lòng liên hệ info@digiso.vn.',
+      footerNote: 'Nếu có thắc mắc, vui lòng liên hệ hotro.digibook@gmail.com.',
     }),
   };
 }

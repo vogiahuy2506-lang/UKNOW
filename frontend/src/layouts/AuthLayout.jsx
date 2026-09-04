@@ -149,7 +149,7 @@ const AuthLayout = ({ children }) => {
               <span>© 2026 Founder AI Marketing</span>
               <div className="flex items-center gap-4">
                 <Link to="/privacy-policy" className="hover:text-orange-400 transition-colors duration-200">{t('authLayout.footer.privacy')}</Link>
-                <a href="mailto:info@digiso.vn" className="hover:text-orange-400 transition-colors duration-200">{t('authLayout.footer.support')}</a>
+                <a href="mailto:hotro.digibook@gmail.com" className="hover:text-orange-400 transition-colors duration-200">{t('authLayout.footer.support')}</a>
               </div>
             </div>
           </div>

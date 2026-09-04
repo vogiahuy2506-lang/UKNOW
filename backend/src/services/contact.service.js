@@ -1,7 +1,7 @@
 import { createContactSubmission, countRecentSubmissionsByEmail } from '../repositories/contact.repository.js';
 import { sendSystemEmail, buildContactNotificationEmail } from '../utils/systemEmail.util.js';
 
-const CONTACT_NOTIFICATION_EMAIL = process.env.CONTACT_NOTIFICATION_EMAIL || 'info@digiso.vn';
+const CONTACT_NOTIFICATION_EMAIL = process.env.CONTACT_NOTIFICATION_EMAIL || 'hotro.digibook@gmail.com';
 
 /**
  * Xử lý submission từ trang /contact. Throw error có { status, message } khi validation fail.

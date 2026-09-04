@@ -807,10 +807,10 @@ function TermsOfService() {
                 <strong>Company:</strong> DIGISO Digital Solutions Co., Ltd.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:hotro.digibook@gmail.com" className="text-orange-600 hover:underline">hotro.digibook@gmail.com</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:hotro.digibook@gmail.com" className="text-orange-600 hover:underline">hotro.digibook@gmail.com</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Website:</strong> <a href="https://digiso.vn" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">https://digiso.vn</a>
@@ -864,7 +864,7 @@ function TermsOfService() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
+                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
@@ -898,7 +898,7 @@ function TermsOfService() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
+                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">

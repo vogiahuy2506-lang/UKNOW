@@ -506,10 +506,10 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
           </ul>
         </div>
         <div className={`mt-[14px] rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm ${lc(language, 'vi')}`}>
-          <strong>Thực thi quyền:</strong> Để thực thi các quyền của mình, vui lòng liên hệ DIGISO qua email <strong>info@digiso.vn</strong> hoặc sử dụng các tính năng tự phục vụ trên website. DIGISO sẽ phản hồi trong thời gian sớm nhất theo quy định pháp luật.
+          <strong>Thực thi quyền:</strong> Để thực thi các quyền của mình, vui lòng liên hệ DIGISO qua email <strong>hotro.digibook@gmail.com</strong> hoặc sử dụng các tính năng tự phục vụ trên website. DIGISO sẽ phản hồi trong thời gian sớm nhất theo quy định pháp luật.
         </div>
         <div className={`mt-[14px] rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm ${lc(language, 'en')}`}>
-          <strong>Exercising your rights:</strong> To exercise your rights, please contact DIGISO via email at <strong>info@digiso.vn</strong> or use self-service features available on the website. DIGISO will respond as soon as possible in accordance with the law.
+          <strong>Exercising your rights:</strong> To exercise your rights, please contact DIGISO via email at <strong>hotro.digibook@gmail.com</strong> or use self-service features available on the website. DIGISO will respond as soon as possible in accordance with the law.
         </div>
       </section>
 
@@ -655,7 +655,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             DIGISO <strong>không sử dụng dữ liệu cá nhân</strong> cho các mục đích khác ngoài các mục đích đã được thông báo và có sự đồng ý.
           </li>
           <li>
-            Nếu bạn phát hiện DIGISO đang xử lý dữ liệu ngoài phạm vi cho phép hoặc có bất kỳ lo ngại nào về việc bảo vệ dữ liệu cá nhân, vui lòng liên hệ ngay qua email <strong>info@digiso.vn</strong>.
+            Nếu bạn phát hiện DIGISO đang xử lý dữ liệu ngoài phạm vi cho phép hoặc có bất kỳ lo ngại nào về việc bảo vệ dữ liệu cá nhân, vui lòng liên hệ ngay qua email <strong>hotro.digibook@gmail.com</strong>.
           </li>
         </ul>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
@@ -669,7 +669,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             DIGISO <strong>does not use personal data</strong> for purposes other than those notified and consented to.
           </li>
           <li>
-            If you discover DIGISO is processing data beyond the permitted scope or have any concerns about personal data protection, please contact us immediately at <strong>info@digiso.vn</strong>.
+            If you discover DIGISO is processing data beyond the permitted scope or have any concerns about personal data protection, please contact us immediately at <strong>hotro.digibook@gmail.com</strong>.
           </li>
         </ul>
       </section>

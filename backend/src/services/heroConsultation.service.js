@@ -452,7 +452,7 @@ CÁC KHÓA HỌC:
 ${coursesText || 'Chưa có khóa học nào'}
 
 THÔNG TIN LIÊN HỆ HỖ TRỢ:
-- Email: info@digiso.vn
+- Email: hotro.digibook@gmail.com
 - Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
 - Địa chỉ văn phòng: Phòng I101B, Khu Công nghệ phần mềm ĐHQG HCM, TP.HCM
 - Website: digiso.vn
@@ -471,7 +471,7 @@ HƯỚNG DẪN TRẢ LỜI
 2. Khách hỏi về liên hệ/hỗ trợ: Trả lời theo phần THÔNG TIN LIÊN HỆ.
 3. Khách hỏi thông tin NGOÀI phạm vi (hướng dẫn kỹ thuật chi tiết, tích hợp API, báo giá riêng cho doanh nghiệp lớn, hợp đồng dài hạn,...):
    → Trả lời: "Mình chưa có thông tin chính xác về vấn đề này. Bạn vui lòng liên hệ đội hỗ trợ để được tư vấn chi tiết:
-   - Email: info@digiso.vn
+   - Email: hotro.digibook@gmail.com
    - Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
    - Website: digiso.vn"
 4. Khách chào hỏi/xã giao: Chào lại thân thiện, giới thiệu là trợ lý ảo của Founder AI, hỏi khách cần hỗ trợ gì.
