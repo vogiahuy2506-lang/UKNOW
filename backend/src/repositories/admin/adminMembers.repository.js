@@ -239,13 +239,17 @@ export async function findPurgeBlockers(id) {
          SELECT 1 FROM marketplace_reviews WHERE id_user = $1
          UNION ALL
          SELECT 1 FROM marketplace_favorites WHERE id_user = $1
-       ) AS "hasMarketplace"`,
+       ) AS "hasMarketplace",
+       EXISTS(
+         SELECT 1 FROM affiliate_revenue_events WHERE referrer_user_id = $1 OR buyer_user_id = $1
+       ) AS "hasAffiliateActivity"`,
     [id]
   );
   const row = rows[0] || {};
   const reasons = [];
   if (row.hasOrders) reasons.push('đơn hàng thành công');
   if (row.hasMarketplace) reasons.push('dữ liệu marketplace (đã đăng bán/mua/đánh giá/yêu thích)');
+  if (row.hasAffiliateActivity) reasons.push('hoạt động affiliate (doanh thu giới thiệu hoặc được giới thiệu)');
   return reasons;
 }
 

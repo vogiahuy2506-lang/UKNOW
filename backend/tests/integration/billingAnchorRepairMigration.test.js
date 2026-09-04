@@ -35,8 +35,8 @@ async function insertPlanOrder({
     `INSERT INTO orders (
        order_code, plan_id, user_id, user_email, amount, status, payment_method,
        billing_period, note, topup_config, paid_at, created_at
-     ) VALUES ($1, $2, $3, $4, 0, 'success', 'voucher', $5, $6, $7, $8, $8)`,
-    [orderCode, planId, user.id, user.email, billingPeriod, note, topupConfig, paidAt]
+     ) VALUES ($1, $2, $3, $4, 0, 'success', 'voucher', $5, $6, $7, $8, $9)`,
+    [orderCode, planId, user.id, user.email, billingPeriod, note, topupConfig, paidAt, paidAt]
   );
 }
 
@@ -236,9 +236,9 @@ describe('Migration 174 — repair billing cycle anchors', () => {
          order_code, plan_id, user_id, user_email, amount, status, payment_method,
          billing_period, note, paid_at, created_at
        ) VALUES ($1, $2, $3, $4, 0, 'success', 'voucher', 'yearly',
-                 'scheduled_change', $5, $5)
+                 'scheduled_change', $5, $6)
        RETURNING id`,
-      [174011, starter.id, user.id, user.email, scheduledActivatedAt]
+      [174011, starter.id, user.id, user.email, scheduledActivatedAt, scheduledActivatedAt]
     );
     await db.query(
       `INSERT INTO scheduled_plan_changes (

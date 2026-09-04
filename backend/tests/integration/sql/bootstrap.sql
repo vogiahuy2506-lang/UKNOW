@@ -353,8 +353,8 @@ CREATE TABLE orders (
   invoice_info JSONB,
   custom_plan_config JSONB,
   paid_at     TIMESTAMPTZ,
-  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
   CONSTRAINT orders_order_code_key UNIQUE (order_code)
 );
 
@@ -2871,3 +2871,18 @@ ALTER TABLE usage_logs
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ul_quota_reservation_id
   ON usage_logs (quota_reservation_id)
   WHERE quota_reservation_id IS NOT NULL;
+
+-- Affiliate revenue events (migration 181)
+CREATE TABLE IF NOT EXISTS affiliate_revenue_events (
+  id                BIGSERIAL PRIMARY KEY,
+  referrer_user_id  BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  buyer_user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  order_id          INTEGER       NOT NULL UNIQUE REFERENCES orders(id) ON DELETE RESTRICT,
+  amount            NUMERIC(12,2) NOT NULL,
+  month_key         CHAR(7)       NOT NULL,
+  created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_are_referrer_month ON affiliate_revenue_events (referrer_user_id, month_key);
+CREATE INDEX IF NOT EXISTS idx_are_buyer_user_id  ON affiliate_revenue_events (buyer_user_id);
+

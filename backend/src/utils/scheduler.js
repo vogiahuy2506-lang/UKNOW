@@ -1198,4 +1198,27 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Async Bounce Mailbox sync: mỗi 10 phút');
+
+  // ── Affiliate Revenue Sweep — hourly ───────────────────────────────────────
+  cron.schedule('0 * * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const {
+        sweepAffiliateRevenue,
+        AFFILIATE_REVENUE_SWEEP_JOB_CODE,
+      } = await import('../services/affiliate/affiliateRevenueSweep.service.js');
+      await cronJobRunRepository.recordRun(AFFILIATE_REVENUE_SWEEP_JOB_CODE, async () => {
+        const summary = await sweepAffiliateRevenue();
+        if (summary.inserted > 0) {
+          console.log(`[Scheduler] Affiliate revenue sweep: inserted=${summary.inserted}`);
+        }
+        return summary;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi quét doanh thu affiliate:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Affiliate revenue sweep: mỗi giờ');
 };

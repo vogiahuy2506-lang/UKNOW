@@ -817,8 +817,8 @@ describe('POST /api/payments/webhook', () => {
       `INSERT INTO orders (
          order_code, plan_id, amount, user_email, user_id, status, payment_method,
          billing_period, paid_at, created_at
-       ) VALUES ($1, $2, $3, $4, $5, 'success', 'payos', 'monthly', $6, $6)`,
-      [directOrderCode, starter.id, starter.price, user.email, user.id, directCreatedAt]
+       ) VALUES ($1, $2, $3, $4, $5, 'success', 'payos', 'monthly', $6, $7)`,
+      [directOrderCode, starter.id, starter.price, user.email, user.id, directCreatedAt, directCreatedAt]
     );
     await db.query(
       `UPDATE users
