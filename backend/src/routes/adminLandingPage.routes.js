@@ -19,6 +19,8 @@ router.get('/:id/versions', landingPageAdminController.listVersions.bind(landing
 router.get('/:id/versions/:versionId/preview', landingPageAdminController.previewVersion.bind(landingPageAdminController));
 router.post('/:id/versions/:versionId/restore', landingPageAdminController.restoreVersion.bind(landingPageAdminController));
 router.delete('/:id/versions/:versionId', landingPageAdminController.deleteVersion.bind(landingPageAdminController));
+router.get('/:id/sheets-sync', landingPageAdminController.getSheetsSync.bind(landingPageAdminController));
+router.put('/:id/sheets-sync', landingPageAdminController.putSheetsSync.bind(landingPageAdminController));
 
 router.get('/:id', landingPageAdminController.getById.bind(landingPageAdminController));
 router.post('/', landingPageAdminController.create.bind(landingPageAdminController));

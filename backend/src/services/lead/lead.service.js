@@ -16,6 +16,11 @@ import {
   toPublicLeadFormConfig,
 } from '../../utils/landingLeadFormConfig.util.js';
 import { normalizeLandingLeadsCustomFilters } from '../../utils/landingLeadCustomFilters.util.js';
+import {
+  appendLeadToGoogleSheet,
+  buildGoogleSheetsPayload,
+  extractGoogleSheetsSyncConfig,
+} from '../../utils/googleSheetsAppend.util.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -297,6 +302,31 @@ class LeadService {
       });
     } catch (e) {
       console.warn('[LeadService] Không ghi landing_page_events submit:', e?.message || e);
+    }
+
+    // Auto-sync sang Google Sheets nếu admin đã cấu hình webhook URL trong customConfig.
+    // Best-effort: KHÔNG throw để không ảnh hưởng flow đăng ký lead chính.
+    const sheetsConfig = extractGoogleSheetsSyncConfig(lp.customConfig);
+    if (sheetsConfig) {
+      const sheetsPayload = buildGoogleSheetsPayload(row, {
+        landingPageSlug,
+        landingPageTitle: lp.title || lp.name || '',
+      });
+      appendLeadToGoogleSheet(sheetsConfig, sheetsPayload)
+        .then((res) => {
+          if (!res.ok) {
+            console.warn(
+              `[LeadService] Google Sheets sync fail (slug=${landingPageSlug}, leadId=${row.id}):`,
+              res.error || `status=${res.status}`
+            );
+          }
+        })
+        .catch((err) => {
+          console.warn(
+            `[LeadService] Google Sheets sync error (slug=${landingPageSlug}, leadId=${row.id}):`,
+            err?.message || err
+          );
+        });
     }
 
     return { row, item: mapLeadRowToCampaignItem(row) };

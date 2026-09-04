@@ -463,6 +463,123 @@ class LandingPageAdminService {
       current.workspaceOwnerId || current.idUser
     );
   }
+
+  /**
+   * Lấy cấu hình Google Sheets sync của landing page.
+   * DTO an toàn — không lộ secret.
+   *
+   * @param {number} id
+   * @param {object} authUser
+   */
+  async getSheetsSync(id, authUser) {
+    const current = await landingPageRepository.findByIdInScope(id, getWorkspaceScope(authUser));
+    if (!current) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+    const cfg = (current.customConfig && current.customConfig.googleSheetsSync) || {};
+    const webhookUrl = String(cfg.webhookUrl || '').trim();
+    const sheetName = String(cfg.sheetName || '').trim();
+    const hasSecret = Boolean(cfg.secret);
+    return {
+      enabled: Boolean(cfg.enabled),
+      webhookUrl,
+      sheetName,
+      hasSecret,
+      lastSyncAt: current.customConfig?.googleSheetsLastSyncAt || null,
+      lastError: current.customConfig?.googleSheetsLastError || null,
+    };
+  }
+
+  /**
+   * Cập nhật cấu hình Google Sheets sync — lưu vào customConfig.googleSheetsSync.
+   * Validate URL (chỉ https hoặc localhost).
+   *
+   * @param {number} id
+   * @param {{enabled?: boolean, webhookUrl?: string, sheetName?: string, secret?: string|null}} body
+   * @param {object} authUser
+   */
+  async updateSheetsSync(id, body, authUser) {
+    const scope = getWorkspaceScope(authUser);
+    const current = await landingPageRepository.findByIdInScope(id, scope);
+    if (!current) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const enabled = body?.enabled === true;
+    const rawUrl = String(body?.webhookUrl || '').trim();
+    const sheetName = String(body?.sheetName || '').trim().slice(0, 100);
+    const incomingSecret = body?.secret;
+    const removeSecret = incomingSecret === null || incomingSecret === '';
+
+    let safeUrl = '';
+    if (enabled) {
+      if (!rawUrl) {
+        const err = new Error('Bật sync thì phải nhập Webhook URL của Google Apps Script');
+        err.statusCode = 400;
+        throw err;
+      }
+      try {
+        const u = new URL(rawUrl);
+        const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+        if (u.protocol !== 'https:' && !isLocal) {
+          throw new Error('Webhook URL phải là https:// (Google Apps Script luôn dùng https)');
+        }
+        if (!/(^|\.)googleusercontent\.com$|(^|\.)script\.google\.com$|(^|\.)googleapis\.com$/.test(u.hostname) && !isLocal) {
+          throw new Error('URL phải thuộc script.google.com hoặc *.googleusercontent.com (Google Apps Script)');
+        }
+        safeUrl = u.toString();
+      } catch (e) {
+        const err = new Error(e.message || 'Webhook URL không hợp lệ');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    // Merge vào customConfig hiện tại - không ghi đè các key khác
+    const existingCustom = (current.customConfig && typeof current.customConfig === 'object')
+      ? { ...current.customConfig }
+      : {};
+    delete existingCustom.__proto__;
+
+    const nextSheetsSync = {
+      enabled,
+      webhookUrl: enabled ? safeUrl : '',
+      sheetName,
+    };
+    if (removeSecret) {
+      delete nextSheetsSync.secret;
+    } else if (typeof incomingSecret === 'string' && incomingSecret.length > 0) {
+      nextSheetsSync.secret = String(incomingSecret).slice(0, 200);
+    } else if (existingCustom.googleSheetsSync?.secret) {
+      nextSheetsSync.secret = existingCustom.googleSheetsSync.secret;
+    }
+    // Khi tắt → xóa hẳn để payload gọn
+    if (!enabled) {
+      delete existingCustom.googleSheetsSync;
+    } else {
+      existingCustom.googleSheetsSync = nextSheetsSync;
+    }
+
+    const updated = await landingPageRepository.updateByIdInScope(id, {
+      customConfig: existingCustom,
+    }, scope);
+    if (!updated) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    return {
+      enabled,
+      webhookUrl: enabled ? safeUrl : '',
+      sheetName,
+      hasSecret: Boolean(nextSheetsSync.secret),
+    };
+  }
 }
 
 export default new LandingPageAdminService();

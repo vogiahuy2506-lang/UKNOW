@@ -347,6 +347,53 @@ class LandingPageAdminController {
       return res.status(status).json({ success: false, message: error.message || 'Không thể xóa phiên bản' });
     }
   }
+
+  /**
+   * GET /api/admin/landing-pages/:id/sheets-sync
+   * Trả về cấu hình Google Sheets sync hiện tại của landing page.
+   */
+  async getSheetsSync(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageAdminService.getSheetsSync(id, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.getSheetsSync]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Lỗi' });
+    }
+  }
+
+  /**
+   * PUT /api/admin/landing-pages/:id/sheets-sync
+   * Body: { enabled: bool, webhookUrl: string, sheetName?: string, secret?: string }
+   * - Cho phép admin bật/tắt auto-sync lead sang Google Sheets (qua Google Apps Script webhook).
+   * - Không ghi đè các key khác trong customConfig.
+   */
+  async putSheetsSync(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageAdminService.updateSheetsSync(id, req.body || {}, req.user);
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_PAGE_UPDATED,
+        AUDIT_ENTITY_TYPES.LANDING_PAGE,
+        id,
+        { sheetsSync: data }
+      );
+      return res.json({ success: true, data, message: 'Đã lưu cấu hình Google Sheets' });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.putSheetsSync]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể lưu cấu hình' });
+    }
+  }
 }
 
 export default new LandingPageAdminController();
