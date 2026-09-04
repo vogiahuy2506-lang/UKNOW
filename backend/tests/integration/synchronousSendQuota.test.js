@@ -383,6 +383,67 @@ describe('Integration — Synchronous Send Atomic Quota Reservation Protocol', (
       readFileSpy.mockRestore();
     });
 
+    it('reservation v2 da consumed truoc khi co v3 van replay dung tren code hien tai, khong goi lai provider', async () => {
+      // Vong review thu 4 (Finding P1): hashAttachments() (dung chung boi v1/v2) truoc do bi sua
+      // tai cho (khong tach v3) - lam MOI reservation v1/v2 da luu tren Postgres truoc khi deploy
+      // fix nay tinh sai fingerprint khi replay, bi 409 IDEMPOTENCY_KEY_REUSED oan. Da tach:
+      // hashAttachments() dong bang cho v1/v2, thuat toan moi chi dung cho v3
+      // (computeRequestFingerprintV3/hashAttachmentsV3). Test nay seed 1 reservation 'consumed'
+      // dung DUNG thuat toan v2 (khong qua code moi), roi goi sendEmailToCustomerDirect() tren
+      // code HIEN TAI voi cung tham so - phai replay thanh cong, KHONG duoc goi lai SMTP.
+      const { computeRequestFingerprintV2, buildCampaignReservationKey } = await import('../../src/services/quota/sendQuotaKey.service.js');
+      const { campaignId, runId, emailSettingId } = await setupCampaignFixture();
+      const recipientEmail = `recipient_v2compat_${Date.now()}@example.com`;
+      const actionNode = buildActionNode('node_v2_compat', emailSettingId);
+      const customer = { email: recipientEmail, full_name: 'Nguyen Van V2Compat' };
+      const campaign = { id: campaignId, id_user: user.id };
+
+      const reservationKey = buildCampaignReservationKey({
+        runId, nodeId: actionNode.id, channel: 'email', recipient: recipientEmail, logicalStep: 1,
+      });
+      // Payload phai khop CHINH XAC nhung gi sendEmailToCustomerDirect() se tu tinh (subject/content
+      // lay thang tu config vi khong co template va khong co placeholder {{...}} de auto-map thay).
+      const v2Payload = {
+        channel: 'email',
+        recipient: recipientEmail,
+        sourceType: 'campaign_email',
+        quantity: 1,
+        subject: actionNode.config.emailSubject,
+        content: actionNode.config.emailBody,
+        templateId: null,
+        attachments: [],
+      };
+      const v2Fingerprint = computeRequestFingerprintV2(v2Payload);
+
+      await db.query(
+        `INSERT INTO send_quota_reservations (
+          billing_user_id, channel, quantity, status, reservation_key,
+          request_fingerprint, fingerprint_version, source_type, response_snapshot,
+          vn_day_start, vn_day_end, created_at, updated_at, consumed_at
+        ) VALUES (
+          $1, 'email', 1, 'consumed', $2, $3, 'v2', 'campaign_email', $4::jsonb,
+          CURRENT_DATE, CURRENT_DATE + INTERVAL '1 day', NOW(), NOW(), NOW()
+        )`,
+        [user.id, reservationKey, v2Fingerprint, JSON.stringify({ status: 'success', messageId: 'legacy-v2-msg-id' })]
+      );
+
+      mockSendMail.mockClear();
+      const result = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        actionNode, customer, campaign, runId, null, { emailStep: 1 }
+      );
+
+      expect(result.isReplay).toBe(true);
+      expect(result.status).toBe('success');
+      expect(mockSendMail).not.toHaveBeenCalled(); // KHONG duoc goi lai provider
+
+      const { rows: reservations } = await db.query(
+        'SELECT * FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      expect(reservations.length).toBe(1); // khong tao reservation moi, khong double-charge
+      expect(reservations[0].fingerprint_version).toBe('v2'); // van giu nguyen version cu
+    });
+
     it('hard bounce sau provider attempt: consume reservation, email_messages.status=bounced', async () => {
       const { campaignId, runId, emailSettingId } = await setupCampaignFixture();
       const recipientEmail = `bounce_${Date.now()}@example.com`;
@@ -1166,6 +1227,11 @@ describe('Integration — Synchronous Send Atomic Quota Reservation Protocol', (
           quantity: 1,
           reservationKey: resKey,
           requestFingerprint: fp,
+          // Phải khớp fingerprint_version='v2' đã seed ở trên (test chỉ kiểm tra phát hiện
+          // concurrent-send, không kiểm version compat) — mặc định computeRequestFingerprint()/
+          // reserveSendQuota() đã đổi sang 'v3' (xem sendQuotaKey.service.js), không khai rõ ở
+          // đây thì so khớp fingerprint_version lệch, rơi nhầm sang IDEMPOTENCY_KEY_REUSED.
+          fingerprintVersion: 'v2',
           sourceType: 'direct_email',
         })
       ).rejects.toMatchObject({

@@ -1975,7 +1975,12 @@ class CampaignZaloSenderService {
       recipient: recipientForKey,
       logicalStep,
     });
-    const requestFingerprint = computeRequestFingerprint({
+    // requestPayload dạng object (không chỉ hash tính sẵn) để reserveSendQuota() tự tính lại
+    // fingerprint đúng theo fingerprint_version ĐÃ LƯU của reservation khi kiểm trùng key — thiếu
+    // field này thì so khớp rơi về so sánh chuỗi thô theo fingerprintVersion hiện tại của CALLER,
+    // không tự re-derive theo version đã lưu (review độc lập bắt lỗi này, xem thêm chú thích ở
+    // hashAttachments()/hashAttachmentsV3()/computeRequestFingerprintV3() trong sendQuotaKey.service.js).
+    const requestPayload = {
       channel: 'zalo',
       recipient: recipientForKey,
       sourceType: 'campaign_zalo',
@@ -1988,12 +1993,13 @@ class CampaignZaloSenderService {
       // (review độc lập bắt lỗi này). Kết bạn không rewrite tracking nên quotaContentKey === message.
       content: payload.quotaContentKey || payload.message || '',
       // Thiếu attachments thì đổi file đính kèm cùng reservationKey vẫn lặng lẽ replay kết quả cũ
-      // thay vì 409 IDEMPOTENCY_KEY_REUSED (review độc lập bắt lỗi này). payload.attachments đã là
-      // dạng revive-từ-BullMQ (Buffer) — hashAttachments() tự dùng crypto.createHash trên content
-      // nếu có, hoặc fallback name/size/key cho định dạng khác; friend-request không có field này,
-      // hashAttachments(undefined) trả '' ổn định, không ảnh hưởng.
+      // thay vì 409 IDEMPOTENCY_KEY_REUSED. payload.attachments đã là dạng revive-từ-BullMQ (Buffer
+      // hoặc {type:'Buffer',data:[...]}) — computeRequestFingerprint() mặc định v3 nên dùng
+      // hashAttachmentsV3() nhận diện đúng shape này; friend-request không có field này,
+      // hashAttachmentsV3(undefined) trả '' ổn định, không ảnh hưởng.
       attachments: payload.attachments,
-    });
+    };
+    const requestFingerprint = computeRequestFingerprint(requestPayload);
     const parsedNodeId = Number.parseInt(payload.nodeId, 10);
     let reservation;
     try {
@@ -2003,6 +2009,7 @@ class CampaignZaloSenderService {
         quantity: 1,
         reservationKey,
         requestFingerprint,
+        requestPayload,
         sourceType: 'campaign_zalo',
         sourceRef: {
           runId: payload.runId,

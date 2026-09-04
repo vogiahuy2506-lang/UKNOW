@@ -198,13 +198,49 @@ function hashCanonicalJson(val) {
 }
 
 /**
- * Deterministic hash of attachments array:
- * - Strictly preserves array order
- * - Hashes content identity / checksum if available along with metadata
+ * Deterministic hash of attachments array — thuật toán GỐC, ĐÓNG BĂNG cho v1/v2.
+ *
+ * KHÔNG được sửa hàm này: mọi thay đổi làm lệch fingerprint đã lưu của các reservation
+ * v1/v2 hiện có trên PostgreSQL, khiến retry hợp lệ bị 409 IDEMPOTENCY_KEY_REUSED oan
+ * (đúng điều cấm ở plan Wave 2 mục 0: "giải phóng một send có kết quả provider không
+ * chắc chắn rồi gửi lại ngay" — ở đây là biến thể "chặn nhầm retry hợp lệ"). Thuật toán
+ * mới (nhận diện đúng shape attachment Zalo `{data, filename, metadata}`) nằm ở
+ * `hashAttachmentsV3()`, chỉ dùng cho `computeRequestFingerprintV3()`.
  *
  * @param {Array|null|undefined} attachments
  * @returns {string}
  */
+function hashAttachments(attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return '';
+  const mapped = attachments.map((att) => {
+    if (!att) return '';
+    if (typeof att === 'string') return att;
+    if (Buffer.isBuffer(att) || ArrayBuffer.isView(att)) {
+      return {
+        contentHash: crypto.createHash('sha256').update(att).digest('hex'),
+      };
+    }
+    let contentHash = '';
+    if (att.content != null) {
+      if (Buffer.isBuffer(att.content) || ArrayBuffer.isView(att.content)) {
+        contentHash = crypto.createHash('sha256').update(att.content).digest('hex');
+      } else {
+        contentHash = crypto.createHash('sha256').update(String(att.content)).digest('hex');
+      }
+    } else {
+      contentHash = att.hash || att.checksum || '';
+    }
+    return {
+      name: att.name || att.filename || '',
+      size: att.size != null ? Number(att.size) : null,
+      key: att.key || att.url || att.path || att.fileKey || '',
+      contentType: att.contentType || att.mimeType || '',
+      contentHash,
+    };
+  });
+  return crypto.createHash('sha256').update(canonicalSerialize(mapped)).digest('hex').slice(0, 16);
+}
+
 /**
  * Chuẩn hoá một giá trị buffer-like về Buffer thật, hỗ trợ 2 dạng:
  * - Buffer/TypedArray trực tiếp (trong process, chưa qua serialize).
@@ -228,19 +264,17 @@ function coerceToBuffer(val) {
 }
 
 /**
- * Deterministic hash of attachments array:
- * - Strictly preserves array order
- * - Hashes content identity / checksum if available along with metadata
- *
- * Hỗ trợ 2 shape attachment trong repo: `{content}` (email — nodemailer-ready) và
- * `{data, filename, metadata}` (Zalo campaign — xem reviveZaloAttachmentSourcesFromQueue trong
- * campaignZaloSender.service.js). Thiếu nhánh `att.data` sẽ làm 2 file khác byte nhưng cùng
- * filename/size cho ra CÙNG fingerprint (collision đã xác nhận bằng test độc lập).
+ * Deterministic hash of attachments array — thuật toán v3, nhận diện đúng shape attachment
+ * Zalo campaign `{data, filename, metadata}` (xem reviveZaloAttachmentSourcesFromQueue trong
+ * campaignZaloSender.service.js), cả dạng Buffer trực tiếp lẫn `{type:'Buffer', data:[...]}`
+ * sau khi qua BullMQ/Redis. Thuật toán gốc (`hashAttachments`) bỏ qua att.data hoàn toàn nên
+ * 2 file khác byte nhưng cùng filename/size cho CÙNG fingerprint (collision đã xác nhận bằng
+ * test độc lập) — CHỈ dùng cho `computeRequestFingerprintV3()`, không dùng lại cho v1/v2.
  *
  * @param {Array|null|undefined} attachments
  * @returns {string}
  */
-function hashAttachments(attachments) {
+function hashAttachmentsV3(attachments) {
   if (!Array.isArray(attachments) || attachments.length === 0) return '';
   const mapped = attachments.map((att) => {
     if (!att) return '';
@@ -452,20 +486,89 @@ export function computeRequestFingerprintV2(payload = {}) {
 }
 
 /**
- * Computes request payload fingerprint for tamper and parameter-drift protection.
- * Uses sha256 of canonical deterministic JSON.
- * Defaults to 'v2'.
+ * v3 canonical request payload fingerprint algorithm — hệt v2, chỉ đổi cách hash attachments
+ * sang `hashAttachmentsV3()` để nhận diện đúng shape attachment Zalo campaign
+ * `{data, filename, metadata}` (Buffer trực tiếp lẫn dạng JSON round-trip qua BullMQ/Redis).
+ * v1/v2 GIỮ NGUYÊN thuật toán attachment cũ để không phá idempotency của reservation đã lưu
+ * trước khi có v3 — xem chú thích ở `hashAttachments()`.
  *
  * @param {object} payload
- * @param {string} [version='v2']
  * @returns {string}
  */
-export function computeRequestFingerprint(payload = {}, version = 'v2') {
+export function computeRequestFingerprintV3(payload = {}) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('computeRequestFingerprint requires a valid payload object');
+  }
+
+  const rawContent = payload.content ?? payload.message ?? payload.body ?? payload.bodyText ?? '';
+  const contentStr = typeof rawContent === 'string'
+    ? rawContent
+    : (rawContent != null && typeof rawContent === 'object')
+      ? canonicalSerialize(rawContent)
+      : String(rawContent ?? '');
+
+  const rawHtml = payload.htmlContent ?? payload.html ?? payload.bodyHtml ?? '';
+  const htmlStr = typeof rawHtml === 'string'
+    ? rawHtml
+    : (rawHtml != null && typeof rawHtml === 'object')
+      ? canonicalSerialize(rawHtml)
+      : String(rawHtml ?? '');
+
+  const ccList = Array.isArray(payload.cc)
+    ? [...payload.cc].filter(Boolean).sort()
+    : (payload.cc ? [payload.cc] : []);
+  const bccList = Array.isArray(payload.bcc)
+    ? [...payload.bcc].filter(Boolean).sort()
+    : (payload.bcc ? [payload.bcc] : []);
+
+  const fromEmailId = payload.fromEmailId != null
+    ? String(payload.fromEmailId)
+    : (payload.from_email_id != null ? String(payload.from_email_id) : '');
+  const accountId = payload.accountId != null
+    ? String(payload.accountId)
+    : (payload.account_id != null ? String(payload.account_id) : '');
+
+  const canonical = {
+    accountId,
+    attachmentsHash: hashAttachmentsV3(payload.attachments),
+    bccHash: hashCanonicalJson(bccList),
+    ccHash: hashCanonicalJson(ccList),
+    channel: String(payload.channel || '').toLowerCase(),
+    contentHash: hashString(contentStr),
+    fromEmailId,
+    htmlHash: hashString(htmlStr),
+    optionsHash: hashCanonicalJson(payload.options),
+    quantity: Number(payload.quantity || 1),
+    recipientHash: hashRecipient(payload.recipient || payload.to || payload.phone || payload.groupId || ''),
+    sourceType: String(payload.sourceType || '').toLowerCase(),
+    subjectHash: hashString(payload.subject || ''),
+    templateId: payload.templateId != null ? String(payload.templateId) : '',
+    templateVariablesHash: hashCanonicalJson(payload.templateVariables ?? payload.variables ?? payload.template_variables),
+  };
+
+  const sortedJson = JSON.stringify(canonical, Object.keys(canonical).sort());
+  return crypto.createHash('sha256').update(sortedJson).digest('hex');
+}
+
+/**
+ * Computes request payload fingerprint for tamper and parameter-drift protection.
+ * Uses sha256 of canonical deterministic JSON.
+ * Defaults to 'v3' (v1/v2 đóng băng cho reservation cũ, gọi tường minh version khi cần replay
+ * đúng thuật toán đã lưu — xem validateFingerprint()).
+ *
+ * @param {object} payload
+ * @param {string} [version='v3']
+ * @returns {string}
+ */
+export function computeRequestFingerprint(payload = {}, version = 'v3') {
   if (version === 'v1') {
     return computeRequestFingerprintV1(payload);
   }
   if (version === 'v2') {
     return computeRequestFingerprintV2(payload);
+  }
+  if (version === 'v3') {
+    return computeRequestFingerprintV3(payload);
   }
   throw new Error(`Unsupported request fingerprint version: ${version}`);
 }

@@ -701,22 +701,29 @@ class CampaignEmailSenderService {
       recipient: customer?.email || '',
       logicalStep,
     });
-    const requestFingerprint = computeRequestFingerprint({
+    // requestPayload dùng dạng object (không chỉ hash tính sẵn) để reserveSendQuota() tự tính lại
+    // fingerprint đúng theo fingerprint_version ĐÃ LƯU của reservation khi kiểm trùng key — khớp
+    // đúng pattern đã dùng ở emailSettingsSmtp.service.js/campaignQuickSend.service.js/
+    // zaloSettings.controller.js. Thiếu requestPayload thì so khớp rơi về so sánh chuỗi thô theo
+    // fingerprintVersion hiện tại của CALLER, không tự re-derive theo version đã lưu — nếu thuật
+    // toán fingerprint từng đổi (v1/v2 -> v3, xem hashAttachments()/hashAttachmentsV3()), reservation
+    // cũ bị 409 IDEMPOTENCY_KEY_REUSED oan dù nội dung logic không đổi (review độc lập bắt lỗi này).
+    //
+    // subject/content/templateId/attachments để fingerprint bắt được trường hợp key trùng nhưng nội
+    // dung đổi giữa 2 lần thử (retry sau smtp_rate_limited_retry_scheduled có thể cách nhau nhiều
+    // giờ). Dùng attachments dạng mô tả (key/name/size/contentType), không phải realMailAttachments
+    // đã đọc buffer thật — đủ để phát hiện đổi file, không tốn chi phí hash nội dung mỗi lần gửi.
+    const requestPayload = {
       channel: 'email',
       recipient: customer?.email || '',
       sourceType: 'campaign_email',
       quantity: 1,
-      // subject/content/templateId/attachments để fingerprint bắt được trường hợp key trùng nhưng
-      // nội dung đổi giữa 2 lần thử (retry sau smtp_rate_limited_retry_scheduled có thể cách nhau
-      // nhiều giờ). Thiếu attachments thì đổi file đính kèm cùng key vẫn lặng lẽ replay kết quả cũ
-      // thay vì 409 IDEMPOTENCY_KEY_REUSED (review độc lập bắt lỗi này). Dùng attachments dạng mô
-      // tả (key/name/size/contentType), không phải realMailAttachments đã đọc buffer thật — đủ để
-      // phát hiện đổi file, không tốn chi phí hash nội dung mỗi lần gửi.
       subject,
       content: htmlBody,
       templateId: templateId || null,
       attachments,
-    });
+    };
+    const requestFingerprint = computeRequestFingerprint(requestPayload);
 
     let reservation;
     try {
@@ -726,6 +733,7 @@ class CampaignEmailSenderService {
         quantity: 1,
         reservationKey,
         requestFingerprint,
+        requestPayload,
         sourceType: 'campaign_email',
         sourceRef: { runId, nodeId: logNodeIdForDb, stepIndex: logEmailStepForDb },
       });

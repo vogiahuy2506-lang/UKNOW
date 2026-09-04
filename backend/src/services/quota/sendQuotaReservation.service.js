@@ -524,7 +524,10 @@ export async function reserveSendQuota(params, options = {}) {
     quantity = 1,
     reservationKey,
     requestFingerprint,
-    fingerprintVersion = 'v2',
+    // Phải khớp default của computeRequestFingerprint() ở sendQuotaKey.service.js — caller không
+    // truyền fingerprintVersion tường minh sẽ tự tính bằng default đó, nên default ở đây lệch sẽ
+    // lưu sai fingerprint_version cho hash thực sự đã dùng (v1/v2 đóng băng, thuật toán mới là v3).
+    fingerprintVersion = 'v3',
     sourceType = 'direct_email',
     sourceRef = {},
     requestPayload = null,
