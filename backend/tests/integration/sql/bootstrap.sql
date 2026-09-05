@@ -820,7 +820,7 @@ CREATE TABLE leads (
   phone               VARCHAR(50),
   occupation          VARCHAR(100),
   interest_area       VARCHAR(100),
-  marketing_consent   BOOLEAN      NOT NULL DEFAULT FALSE,
+  marketing_consent   BOOLEAN,
   landing_page_slug   VARCHAR(100),
   utm_source          VARCHAR(255),
   utm_medium          VARCHAR(255),

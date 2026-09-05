@@ -66,7 +66,9 @@ export function buildGoogleSheetsPayload(lead, meta = {}) {
     phone: lead.phone || '',
     occupation: lead.occupation || '',
     interestArea: lead.interestArea || lead.interest_area || '',
-    marketingConsent: Boolean(lead.marketingConsent ?? lead.marketing_consent),
+    marketingConsent: (lead.marketingConsent ?? lead.marketing_consent) === null || (lead.marketingConsent ?? lead.marketing_consent) === undefined
+      ? null
+      : Boolean(lead.marketingConsent ?? lead.marketing_consent),
     utmSource: lead.utmSource || lead.utm_source || '',
     utmMedium: lead.utmMedium || lead.utm_medium || '',
     utmCampaign: lead.utmCampaign || lead.utm_campaign || '',

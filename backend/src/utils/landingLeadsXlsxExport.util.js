@@ -102,7 +102,7 @@ export async function buildLandingLeadsAdminXlsxBuffer(items, opts = {}) {
       landingPageSlug: formulaSafe(item.landingPageSlug || ''),
       occupation: formulaSafe(item.occupation || ''),
       interestArea: formulaSafe(item.interestArea || ''),
-      marketingConsent: item.marketingConsent ? 'Có' : 'Không',
+      marketingConsent: item.marketingConsent === true ? 'Có' : item.marketingConsent === false ? 'Không' : '—',
       createdAt: createdStr,
     };
     const cf = item.customFields && typeof item.customFields === 'object' ? item.customFields : {};

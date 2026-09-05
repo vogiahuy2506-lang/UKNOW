@@ -38,6 +38,24 @@ const normalizePhone = (raw) => {
 };
 
 /**
+ * Parse marketingConsent phòng thủ: hỗ trợ boolean, urlencoded 'on'/'true'/'false', 1/0,
+ * hoặc null khi trang chưa hỏi (không tự suy đoán đồng ý).
+ *
+ * @param {any} raw
+ * @returns {boolean|null}
+ */
+export function parseMarketingConsent(raw) {
+  if (raw === true || raw === 1) return true;
+  if (raw === false || raw === 0) return false;
+  if (typeof raw === 'string') {
+    const s = raw.trim().toLowerCase();
+    if (s === 'true' || s === 'on' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+  }
+  return null; // vắng mặt, null, undefined, chuỗi lạ → chưa hỏi
+}
+
+/**
  * Map một dòng DB sang item dùng trong chiến dịch (email/Zalo): thêm `leadId`, `fullName`.
  *
  * @param {object} row
@@ -48,6 +66,8 @@ export const mapLeadRowToCampaignItem = (row) => {
   const firstName = String(row.firstName ?? row.first_name ?? '').trim();
   const fullName = `${lastName} ${firstName}`.trim();
   const id = row.id ?? row.leadId;
+  const rawConsent = row.marketingConsent ?? row.marketing_consent;
+  const marketingConsent = rawConsent === null || rawConsent === undefined ? null : Boolean(rawConsent);
   return {
     leadId: id,
     id,
@@ -58,7 +78,7 @@ export const mapLeadRowToCampaignItem = (row) => {
     phone: normalizePhone(row.phone),
     occupation: String(row.occupation || '').trim(),
     interestArea: String(row.interestArea ?? row.interest_area ?? '').trim(),
-    marketingConsent: Boolean(row.marketingConsent ?? row.marketing_consent),
+    marketingConsent,
     landingPageSlug: String(row.landingPageSlug ?? row.landing_page_slug ?? '').trim() || null,
     createdAt: row.createdAt || row.created_at,
     customFields: customFieldsSnapshotToPrimitives(row.customFields ?? row.custom_fields),
@@ -196,7 +216,6 @@ class LeadService {
     const firstName = String(body?.firstName ?? body?.first_name ?? '').trim();
     const email = String(body?.email ?? '').trim().toLowerCase();
     const phone = normalizePhone(body?.phone);
-    const marketingConsent = Boolean(body?.marketingConsent ?? body?.marketing_consent);
 
     if (!lastName && !firstName) {
       const err = new Error('Vui lòng nhập Họ và Tên');
@@ -216,14 +235,10 @@ class LeadService {
       err.statusCode = 400;
       throw err;
     }
-    // Nếu marketingConsent không được gửi hoặc undefined/null → coi như đồng ý (opt-in mềm)
-    if (body && (body.marketingConsent === false || body.marketing_consent === false)) {
-      const err = new Error('Vui lòng đồng ý nhận thông tin marketing để gửi yêu cầu');
-      err.statusCode = 400;
-      err.code = 'MARKETING_CONSENT_REQUIRED';
-      throw err;
-    }
-    const effectiveConsent = !(body && (body.marketingConsent === false || body.marketing_consent === false));
+
+    // Nghị định 330/2026: parse marketingConsent phòng thủ theo 3 trạng thái (true / false / null = chưa hỏi)
+    // Không ép khách phải đồng ý để được gửi form (không ném 400 khi false)
+    const marketingConsent = parseMarketingConsent(body?.marketingConsent ?? body?.marketing_consent);
 
     const landingPageSlug = canonicalLandingPageSlug(
       body?.landingPageSlug ?? body?.landing_page_slug ?? ''
@@ -268,7 +283,7 @@ class LeadService {
       phone,
       occupation,
       interestArea,
-      marketingConsent: effectiveConsent,
+      marketingConsent,
       landingPageSlug,
       utmSource,
       utmMedium,

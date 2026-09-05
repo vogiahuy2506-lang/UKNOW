@@ -220,9 +220,10 @@
     var phone = val(form, 'phone');
     var occupation   = val(form, 'occupation');
     var interestArea = val(form, 'interestArea') || val(form, 'interest_area');
-    var consent      = el(form, 'marketingConsent') || el(form, 'consent') || form.querySelector('[name="consent"]');
-    // Nếu không có checkbox consent, mặc định true (submit form = đồng ý)
-    var marketingConsent = consent ? consent.checked : true;
+    var consent      = el(form, 'marketingConsent') || el(form, 'marketing_consent')
+                    || el(form, 'consent') || form.querySelector('[name="consent"]');
+    // Nếu không có checkbox consent trên form: null (trang chưa hỏi, không tự suy đoán đồng ý)
+    var marketingConsent = consent ? consent.checked : null;
     return {
       firstName:       firstName,
       lastName:        lastName,

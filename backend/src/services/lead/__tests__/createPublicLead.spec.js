@@ -21,7 +21,7 @@ jest.unstable_mockModule('../../../utils/topupLockGate.util.js', () => ({
 }));
 
 const { resourceIsLocked } = await import('../../../utils/topupLockGate.util.js');
-const leadService = (await import('../lead.service.js')).default;
+const { default: leadService, parseMarketingConsent, mapLeadRowToCampaignItem } = await import('../lead.service.js');
 
 const baseBody = {
   lastName: 'Nguyen',
@@ -74,5 +74,99 @@ describe('LeadService.createPublicLead fail-closed', () => {
     expect(mockLeadRepo.insertLead.mock.calls[0][0].interestArea).toBe('AI cho Giáo dục');
     expect(row.id).toBe(99);
     expect(mockEventRepo.insert).toHaveBeenCalledTimes(1);
+  });
+
+  describe('Nghị định 330/2026: marketingConsent 3 trạng thái', () => {
+    beforeEach(() => {
+      mockLandingRepo.findPublishedBySlug.mockResolvedValue({
+        id: 1,
+        idUser: 10,
+        customConfig: { leadForm: { version: 1, fixedFields: {}, customFields: [] } },
+      });
+    });
+
+    it('form có ô tick, không tick (marketingConsent: false) → LƯU FALSE, KHÔNG báo lỗi 400', async () => {
+      const { row } = await leadService.createPublicLead({ ...baseBody, marketingConsent: false });
+      expect(mockLeadRepo.insertLead).toHaveBeenCalledTimes(1);
+      expect(mockLeadRepo.insertLead.mock.calls[0][0].marketingConsent).toBe(false);
+      expect(row.id).toBe(99);
+    });
+
+    it('form không có ô tick (thiếu marketingConsent) → LƯU NULL (chưa hỏi), KHÔNG báo lỗi', async () => {
+      const bodyWithoutConsent = { ...baseBody };
+      delete bodyWithoutConsent.marketingConsent;
+      const { row } = await leadService.createPublicLead(bodyWithoutConsent);
+      expect(mockLeadRepo.insertLead).toHaveBeenCalledTimes(1);
+      expect(mockLeadRepo.insertLead.mock.calls[0][0].marketingConsent).toBeNull();
+      expect(row.id).toBe(99);
+    });
+
+    it('form urlencoded gửi marketingConsent="on" (HTML checkbox mặc định) → LƯU TRUE', async () => {
+      const { row } = await leadService.createPublicLead({ ...baseBody, marketingConsent: 'on' });
+      expect(mockLeadRepo.insertLead).toHaveBeenCalledTimes(1);
+      expect(mockLeadRepo.insertLead.mock.calls[0][0].marketingConsent).toBe(true);
+      expect(row.id).toBe(99);
+    });
+
+    it('form gửi snake_case marketing_consent="false" → LƯU FALSE', async () => {
+      const bodySnake = { ...baseBody };
+      delete bodySnake.marketingConsent;
+      bodySnake.marketing_consent = 'false';
+      const { row } = await leadService.createPublicLead(bodySnake);
+      expect(mockLeadRepo.insertLead).toHaveBeenCalledTimes(1);
+      expect(mockLeadRepo.insertLead.mock.calls[0][0].marketingConsent).toBe(false);
+      expect(row.id).toBe(99);
+    });
+  });
+});
+
+describe('parseMarketingConsent utility', () => {
+  it('nhánh TRUE: true, 1, "true", "on", "1", hoa thường "ON", "True"', () => {
+    expect(parseMarketingConsent(true)).toBe(true);
+    expect(parseMarketingConsent(1)).toBe(true);
+    expect(parseMarketingConsent('true')).toBe(true);
+    expect(parseMarketingConsent('on')).toBe(true);
+    expect(parseMarketingConsent('1')).toBe(true);
+    expect(parseMarketingConsent('ON')).toBe(true);
+    expect(parseMarketingConsent('True')).toBe(true);
+    expect(parseMarketingConsent('  on  ')).toBe(true);
+  });
+
+  it('nhánh FALSE: false, 0, "false", "0", hoa thường "FALSE"', () => {
+    expect(parseMarketingConsent(false)).toBe(false);
+    expect(parseMarketingConsent(0)).toBe(false);
+    expect(parseMarketingConsent('false')).toBe(false);
+    expect(parseMarketingConsent('0')).toBe(false);
+    expect(parseMarketingConsent('FALSE')).toBe(false);
+    expect(parseMarketingConsent('  false  ')).toBe(false);
+  });
+
+  it('nhánh NULL (chưa hỏi): null, undefined, "", "abc", {}, []', () => {
+    expect(parseMarketingConsent(null)).toBeNull();
+    expect(parseMarketingConsent(undefined)).toBeNull();
+    expect(parseMarketingConsent('')).toBeNull();
+    expect(parseMarketingConsent('maybe')).toBeNull();
+    expect(parseMarketingConsent({})).toBeNull();
+    expect(parseMarketingConsent([])).toBeNull();
+  });
+});
+
+describe('mapLeadRowToCampaignItem — bảo toàn NULL qua đường đọc', () => {
+  it('giữ nguyên marketingConsent=null khi DB là null (chưa hỏi, không ép thành false)', () => {
+    const row = { id: 1, last_name: 'Trần', first_name: 'B', email: 'b@test.local', marketing_consent: null };
+    const item = mapLeadRowToCampaignItem(row);
+    expect(item.marketingConsent).toBeNull();
+  });
+
+  it('giữ nguyên marketingConsent=false khi người dùng chủ động từ chối', () => {
+    const row = { id: 2, last_name: 'Lê', first_name: 'C', email: 'c@test.local', marketing_consent: false };
+    const item = mapLeadRowToCampaignItem(row);
+    expect(item.marketingConsent).toBe(false);
+  });
+
+  it('giữ nguyên marketingConsent=true khi người dùng đã đồng ý', () => {
+    const row = { id: 3, last_name: 'Phạm', first_name: 'D', email: 'd@test.local', marketing_consent: true };
+    const item = mapLeadRowToCampaignItem(row);
+    expect(item.marketingConsent).toBe(true);
   });
 });
