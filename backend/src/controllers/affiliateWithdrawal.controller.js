@@ -158,3 +158,100 @@ export async function adminReject(req, res) {
     });
   }
 }
+
+export async function getOverview(req, res) {
+  try {
+    const userId = req.user?.id;
+    const overview = await affiliateWithdrawalService.getAffiliateOverview(userId);
+    return res.json({
+      success: true,
+      data: overview,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    console.error('[AffiliateWithdrawalController] getOverview error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi server khi tải dữ liệu tổng quan đối tác',
+    });
+  }
+}
+
+export async function adminLedgerAdjustment(req, res) {
+  try {
+    const adminUserId = req.user?.id;
+    const { userId, amount, note } = req.body || {};
+
+    const result = await affiliateWithdrawalService.createLedgerAdjustment({
+      adminUserId,
+      targetUserId: userId,
+      amount,
+      note,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Đã ghi nhận bút toán điều chỉnh số dư thành công',
+      data: result,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        currentBalance: error.currentBalance,
+        message: error.message,
+      });
+    }
+    console.error('[AffiliateWithdrawalController] adminLedgerAdjustment error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi server khi ghi nhận bút toán điều chỉnh',
+    });
+  }
+}
+
+export async function adminListPeriods(req, res) {
+  try {
+    const { monthKey, limit, offset } = req.query || {};
+    const periods = await affiliateWithdrawalService.getAdminAffiliatePeriods({
+      monthKey,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+    return res.json({
+      success: true,
+      data: periods,
+    });
+  } catch (error) {
+    console.error('[AffiliateWithdrawalController] adminListPeriods error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi server khi lấy danh sách doanh số đối tác theo tháng',
+    });
+  }
+}
+
+export async function adminListAvailableMonths(req, res) {
+  try {
+    const months = await affiliateWithdrawalService.getAdminAvailableMonths();
+    return res.json({
+      success: true,
+      data: months,
+    });
+  } catch (error) {
+    console.error('[AffiliateWithdrawalController] adminListAvailableMonths error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi server khi lấy danh sách các tháng có dữ liệu',
+    });
+  }
+}
+

@@ -60,6 +60,7 @@ export const superAdminMenuItems = (t) => [
   { name: t('nav.voucherManagement'), section: t('nav.adminNavBusiness'),   path: '/admin/vouchers', icon: HiOutlineTicket },
   { name: t('nav.orders'),            section: t('nav.adminNavBusiness'),   path: '/admin/orders', icon: HiOutlineClipboardList },
   { name: t('nav.einvoices'),         section: t('nav.adminNavBusiness'),   path: '/admin/einvoices', icon: HiOutlineDocumentText },
+  { name: t('nav.affiliateManagement'), section: t('nav.adminNavBusiness'), path: '/admin/affiliate', icon: HiOutlineCurrencyDollar },
   { name: t('nav.serverMonitoring'),  section: t('nav.adminNavMonitoring'), path: '/admin/health/system', icon: HiOutlineServer },
   { name: t('nav.alertCenter'),       section: t('nav.adminNavMonitoring'), path: '/admin/alerts', icon: HiOutlineBell },
   { name: t('nav.activationFunnel'),  section: t('nav.adminNavOverview'),    path: '/admin/funnel', icon: HiOutlineFilter },
@@ -125,6 +126,12 @@ export const userMenuItems = (t) => [
       { name: t('nav.billingOverview'), path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },
       { name: t('nav.buyTopup'),        path: '/app/topup',   icon: HiOutlinePlusCircle,    ownerOnly: true },
     ],
+  },
+  {
+    name: t('nav.affiliateProgram'),
+    path: '/app/affiliate',
+    icon: HiOutlineCurrencyDollar,
+    ownerOnly: true,
   },
   {
     name: t('nav.settings'),

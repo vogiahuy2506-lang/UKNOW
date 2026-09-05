@@ -1,7 +1,9 @@
 import db from '../../config/database.js';
 import { TAX_CODE_REGEX, ID_NUMBER_REGEX } from '../../utils/invoiceVat.util.js';
-import { encryptAffiliatePii } from '../../utils/affiliatePiiCrypto.util.js';
+import { encryptAffiliatePii, decryptAffiliatePii } from '../../utils/affiliatePiiCrypto.util.js';
 import { buildBaseTemplate, sendSystemEmail } from '../../utils/systemEmail.util.js';
+import { resolveTier, AFFILIATE_TIERS } from '../../utils/affiliateTier.util.js';
+import auditService from '../audit.service.js';
 
 export const MIN_WITHDRAWAL_AMOUNT = 1_000_000;
 export const INTERNAL_NOTIFY_EMAIL = process.env.AFFILIATE_NOTIFY_EMAIL || 'hotro.digibook@gmail.com';
@@ -542,5 +544,352 @@ export async function adminListWithdrawals({ status, limit = 50, offset = 0 } = 
   `;
 
   const result = await db.query(query, params);
-  return result.rows;
+  return result.rows.map((row) => {
+    let idCardNumber = '';
+    if (row.id_card_number_enc) {
+      try {
+        idCardNumber = decryptAffiliatePii(row.id_card_number_enc);
+      } catch (err) {
+        console.error(`[AffiliateWithdrawal] Không thể giải mã CCCD withdrawal #${row.id}:`, err.message);
+        idCardNumber = '***';
+      }
+    }
+    return {
+      ...row,
+      id_card_number: idCardNumber,
+    };
+  });
 }
+
+/**
+ * Lấy month_key của thời điểm hiện tại theo múi giờ Việt Nam (Asia/Ho_Chi_Minh).
+ * @param {Date} [referenceDate=new Date()]
+ * @returns {string} định dạng 'YYYY-MM'
+ */
+export function resolveCurrentMonthKey(referenceDate = new Date()) {
+  const vnFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+  });
+  const parts = vnFormatter.formatToParts(referenceDate);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  return `${year}-${month}`;
+}
+
+/**
+ * Super admin ghi bút toán điều chỉnh ví hoa hồng.
+ *
+ * @param {object} params
+ * @param {number|string} params.adminUserId - ID của super admin thực hiện
+ * @param {number|string} params.targetUserId - ID của đối tác cần điều chỉnh
+ * @param {number|string} params.amount - Số tiền điều chỉnh (ÂM để thu hồi, DƯƠNG để bù)
+ * @param {string} params.note - Lý do điều chỉnh (BẮT BUỘC)
+ * @param {string} [params.ipAddress]
+ * @param {string} [params.userAgent]
+ */
+export async function createLedgerAdjustment({
+  adminUserId,
+  targetUserId,
+  amount,
+  note,
+  ipAddress,
+  userAgent,
+}) {
+  const parsedUserId = Number(targetUserId);
+  if (!parsedUserId || Number.isNaN(parsedUserId)) {
+    const error = new Error('ID người dùng không hợp lệ');
+    error.status = 400;
+    throw error;
+  }
+
+  const cleanNote = String(note || '').trim();
+  if (!cleanNote) {
+    const error = new Error('Vui lòng nhập lý do điều chỉnh');
+    error.status = 400;
+    throw error;
+  }
+
+  const parsedAmount = Math.round(Number(amount));
+  if (Number.isNaN(parsedAmount) || parsedAmount === 0) {
+    const error = new Error('Số tiền điều chỉnh không hợp lệ (phải khác 0)');
+    error.status = 400;
+    throw error;
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Khóa advisory xact lock theo targetUserId
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtext('affiliate_withdrawal'), hashtext($1::text))`,
+      [String(parsedUserId)]
+    );
+
+    // 2. Tính số dư hiện tại từ affiliate_ledger
+    const balanceResult = await client.query(
+      `SELECT COALESCE(SUM(amount), 0)::numeric AS balance FROM affiliate_ledger WHERE user_id = $1`,
+      [parsedUserId]
+    );
+    const currentBalance = Math.round(Number(balanceResult.rows[0]?.balance || 0));
+
+    // 3. CHẶN nếu bút toán làm số dư âm -> 400 kèm số dư hiện tại
+    if (currentBalance + parsedAmount < 0) {
+      const error = new Error(
+        `Số dư hiện tại (${currentBalance.toLocaleString('vi-VN')}đ) không đủ để trừ ${Math.abs(parsedAmount).toLocaleString('vi-VN')}đ`
+      );
+      error.status = 400;
+      error.code = 'INSUFFICIENT_AFFILIATE_BALANCE';
+      error.currentBalance = currentBalance;
+      throw error;
+    }
+
+    // 4. Ghi affiliate_ledger entry_type='adjustment', ref_type='admin', ref_id=<admin id>
+    const insertResult = await client.query(
+      `INSERT INTO affiliate_ledger (
+        user_id, entry_type, amount, ref_type, ref_id, note, created_at
+      ) VALUES (
+        $1, 'adjustment', $2, 'admin', $3, $4, NOW()
+      ) RETURNING id, user_id, entry_type, amount, ref_type, ref_id, note, created_at`,
+      [parsedUserId, parsedAmount, adminUserId, cleanNote]
+    );
+
+    const insertedLedger = insertResult.rows[0];
+
+    await client.query('COMMIT');
+
+    // 5. Ghi audit log theo khuôn repo
+    await auditService.log({
+      userId: adminUserId,
+      category: 'system',
+      action: 'AFFILIATE_LEDGER_ADJUSTMENT',
+      entityType: 'affiliate_ledger',
+      entityId: insertedLedger.id,
+      details: {
+        targetUserId: parsedUserId,
+        amount: parsedAmount,
+        note: cleanNote,
+        balanceBefore: currentBalance,
+        balanceAfter: currentBalance + parsedAmount,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return {
+      ledger: insertedLedger,
+      balanceBefore: currentBalance,
+      balanceAfter: currentBalance + parsedAmount,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Lấy toàn bộ thông tin tổng quan trang đối tác Affiliate cho một user.
+ *
+ * @param {number|string} userId
+ * @returns {Promise<object>}
+ */
+export async function getAffiliateOverview(userId) {
+  const parsedUserId = Number(userId);
+  if (!parsedUserId || Number.isNaN(parsedUserId)) {
+    const error = new Error('ID người dùng không hợp lệ');
+    error.status = 400;
+    throw error;
+  }
+
+  // 1. Thông tin user (mã giới thiệu, họ tên, email)
+  const userResult = await db.query(
+    `SELECT id, email, full_name, referral_code FROM users WHERE id = $1`,
+    [parsedUserId]
+  );
+  const user = userResult.rows[0];
+  if (!user) {
+    const error = new Error('Người dùng không tồn tại');
+    error.status = 404;
+    throw error;
+  }
+
+  const referralCode = user.referral_code || '';
+  const referralLink = referralCode ? `https://founderai.biz/register?ref=${referralCode}` : '';
+
+  // 2. Số dư ví hiện tại
+  const balanceResult = await db.query(
+    `SELECT COALESCE(SUM(amount), 0)::numeric AS balance FROM affiliate_ledger WHERE user_id = $1`,
+    [parsedUserId]
+  );
+  const currentBalance = Math.round(Number(balanceResult.rows[0]?.balance || 0));
+
+  // 3. Doanh thu tháng hiện tại & resolveTier
+  const currentMonthKey = resolveCurrentMonthKey();
+  const currentGrossResult = await db.query(
+    `SELECT COALESCE(SUM(e.amount), 0)::numeric AS current_gross
+     FROM affiliate_revenue_events e
+     JOIN users b ON b.id = e.buyer_user_id
+       AND b.phone IS NOT NULL
+       AND TRIM(b.phone) <> ''
+     WHERE e.referrer_user_id = $1 AND e.month_key = $2`,
+    [parsedUserId, currentMonthKey]
+  );
+  const currentMonthGross = Math.round(Number(currentGrossResult.rows[0]?.current_gross || 0));
+  const currentTier = resolveTier(currentMonthGross);
+
+  let nextTier = null;
+  let amountToNextTier = 0;
+  if (currentTier.level < 5) {
+    nextTier = AFFILIATE_TIERS.find((t) => t.level === currentTier.level + 1) || null;
+    if (nextTier) {
+      amountToNextTier = Math.max(0, nextTier.minRevenue - currentMonthGross);
+    }
+  }
+  const estimatedCommission = Math.round((currentMonthGross * currentTier.ratePercent) / 100);
+
+  // 4. Mục ĐANG CHỜ ĐỦ ĐIỀU KIỆN (người mua chưa có SĐT)
+  const pendingEventsResult = await db.query(
+    `SELECT e.id, e.order_id, e.amount, e.month_key, e.created_at,
+            b.id AS buyer_id, b.email AS buyer_email, b.full_name AS buyer_name
+     FROM affiliate_revenue_events e
+     JOIN users b ON b.id = e.buyer_user_id
+     WHERE e.referrer_user_id = $1
+       AND (b.phone IS NULL OR TRIM(b.phone) = '')
+     ORDER BY e.created_at DESC`,
+    [parsedUserId]
+  );
+  const pendingEvents = pendingEventsResult.rows.map((row) => ({
+    id: row.id,
+    orderId: row.order_id,
+    amount: Math.round(Number(row.amount || 0)),
+    monthKey: row.month_key,
+    createdAt: row.created_at,
+    buyerEmail: row.buyer_email,
+    buyerName: row.buyer_name || '',
+  }));
+  const pendingRevenue = pendingEvents.reduce((acc, ev) => acc + ev.amount, 0);
+  const pendingBuyersSet = new Set(pendingEventsResult.rows.map((r) => r.buyer_id));
+  const pendingBuyersCount = pendingBuyersSet.size;
+
+  // 5. Lịch sử theo tháng (affiliate_periods)
+  const periodsResult = await db.query(
+    `SELECT id, month_key, gross_revenue, tier_level, rate_percent, commission_amount, closed_at
+     FROM affiliate_periods
+     WHERE referrer_user_id = $1
+     ORDER BY month_key DESC`,
+    [parsedUserId]
+  );
+  const monthlyHistory = periodsResult.rows.map((row) => ({
+    id: row.id,
+    monthKey: row.month_key,
+    grossRevenue: Math.round(Number(row.gross_revenue || 0)),
+    tierLevel: row.tier_level,
+    ratePercent: row.rate_percent,
+    commissionAmount: Math.round(Number(row.commission_amount || 0)),
+    closedAt: row.closed_at,
+  }));
+
+  // 6. Lịch sử rút tiền (affiliate_withdrawals)
+  const withdrawals = await getUserWithdrawals(parsedUserId);
+
+  // 7. Lịch sử biến động ví (affiliate_ledger)
+  const ledgerResult = await db.query(
+    `SELECT id, entry_type, amount, ref_type, ref_id, note, created_at
+     FROM affiliate_ledger
+     WHERE user_id = $1
+     ORDER BY created_at DESC, id DESC
+     LIMIT 50`,
+    [parsedUserId]
+  );
+  const ledgerHistory = ledgerResult.rows.map((row) => ({
+    id: row.id,
+    entryType: row.entry_type,
+    amount: Math.round(Number(row.amount || 0)),
+    refType: row.ref_type,
+    refId: row.ref_id,
+    note: row.note,
+    createdAt: row.created_at,
+  }));
+
+  // Kiểm tra có yêu cầu rút nào đang pending không
+  const hasPendingWithdrawal = withdrawals.some((w) => w.status === 'pending');
+
+  return {
+    referralCode,
+    referralLink,
+    currentBalance,
+    currentMonthKey,
+    currentMonthGross,
+    currentTier,
+    nextTier,
+    amountToNextTier,
+    estimatedCommission,
+    hasPendingWithdrawal,
+    pendingApproval: {
+      pendingRevenue,
+      pendingBuyersCount,
+      pendingEventsCount: pendingEvents.length,
+      events: pendingEvents,
+    },
+    monthlyHistory,
+    withdrawalHistory: withdrawals,
+    ledgerHistory,
+  };
+}
+
+/**
+ * Admin lấy danh sách đóng sổ theo tháng (affiliate_periods).
+ */
+export async function getAdminAffiliatePeriods({ monthKey, limit = 50, offset = 0 } = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (monthKey) {
+    params.push(monthKey);
+    conditions.push(`p.month_key = $${params.length}`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  params.push(limit, offset);
+
+  const query = `
+    SELECT p.id, p.referrer_user_id, p.month_key, p.gross_revenue, p.tier_level, p.rate_percent, p.commission_amount, p.closed_at,
+           u.email AS user_email, u.full_name AS user_full_name, u.phone AS user_phone, u.referral_code
+    FROM affiliate_periods p
+    LEFT JOIN users u ON u.id = p.referrer_user_id
+    ${whereClause}
+    ORDER BY p.gross_revenue DESC, p.id DESC
+    LIMIT $${params.length - 1} OFFSET $${params.length}
+  `;
+
+  const result = await db.query(query, params);
+  return result.rows.map((r) => ({
+    id: r.id,
+    referrerUserId: r.referrer_user_id,
+    monthKey: r.month_key,
+    grossRevenue: Math.round(Number(r.gross_revenue || 0)),
+    tierLevel: r.tier_level,
+    ratePercent: r.rate_percent,
+    commissionAmount: Math.round(Number(r.commission_amount || 0)),
+    closedAt: r.closed_at,
+    userEmail: r.user_email,
+    userFullName: r.user_full_name,
+    userPhone: r.user_phone,
+    referralCode: r.referral_code,
+  }));
+}
+
+/**
+ * Admin lấy danh sách các month_key có sẵn trong affiliate_periods.
+ */
+export async function getAdminAvailableMonths() {
+  const result = await db.query(
+    `SELECT DISTINCT month_key FROM affiliate_periods ORDER BY month_key DESC`
+  );
+  return result.rows.map((r) => r.month_key);
+}
+
