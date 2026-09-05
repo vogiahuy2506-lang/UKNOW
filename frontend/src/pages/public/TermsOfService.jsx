@@ -122,12 +122,12 @@ function TermsOfService() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>04 tháng 08 năm 2026</strong>
+                Cập nhật: <strong>05 tháng 09 năm 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: digiso.vn, founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>August 04, 2026</strong>
+                Last updated: <strong>September 05, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: digiso.vn, founderai.biz
               </span>
@@ -785,13 +785,89 @@ function TermsOfService() {
             </p>
           </section>
 
-          {/* Section 15: Contact */}
+          {/* Section 15: Affiliate Program */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              15. Liên hệ
+              15. Chương trình Đối tác Giới thiệu
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              15. Contact
+              15. Referral Partner Program
+            </h2>
+
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'vi')}`}>15.1. Tham gia và cách tính hoa hồng</h3>
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'en')}`}>15.1. Participation and commission calculation</h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Khi đăng ký tài khoản, bạn đương nhiên trở thành Đối tác Cấp 1, không cần xét duyệt. Hoa hồng được tính trên <strong>doanh thu phát sinh trong từng tháng</strong> từ những khách hàng bạn giới thiệu, theo bậc đã công bố. Khi doanh thu trong tháng vượt ngưỡng lên bậc cao hơn, <strong>tỉ lệ mới áp cho toàn bộ doanh thu của tháng đó</strong>. Doanh thu tính bậc được đặt lại về 0 vào đầu mỗi tháng; số dư hoa hồng đã ghi nhận thì được bảo lưu cho tới khi bạn rút.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Upon registering an account, you automatically become a Level 1 Partner with no approval required. Commission is calculated on <strong>revenue generated within each calendar month</strong> from customers you referred, according to the published tiers. When monthly revenue crosses a higher tier threshold, <strong>the new rate applies to that entire month&apos;s revenue</strong>. Tier revenue resets to zero at the start of each month; commission already recorded is retained until you withdraw it.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Chương trình chỉ có <strong>một cấp giới thiệu</strong>. Nếu A giới thiệu B và B giới thiệu C, A không được hưởng hoa hồng từ giao dịch của C. Người giới thiệu được ghi nhận <strong>một lần duy nhất tại thời điểm khách hàng đăng ký</strong> và không thay đổi về sau.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              The program has <strong>a single referral level</strong>. If A refers B and B refers C, A earns nothing from C&apos;s transactions. The referrer is recorded <strong>once, at the time the customer registers</strong>, and is not changed thereafter.
+            </p>
+
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'vi')}`}>15.2. Hành vi bị cấm và quyền thu hồi hoa hồng</h3>
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'en')}`}>15.2. Prohibited conduct and right to reclaim commission</h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Bạn không được thực hiện các hành vi sau nhằm hưởng hoa hồng không chính đáng:
+            </p>
+            <ul className={`list-disc pl-6 text-slate-700 mb-4 space-y-1 ${lc(language, 'vi')}`}>
+              <li>Tự mua dịch vụ cho chính mình thông qua tài khoản khác do bạn hoặc người thân của bạn kiểm soát;</li>
+              <li>Tạo tài khoản giả, dùng thông tin của người khác, hoặc mua bán/trao đổi mã giới thiệu;</li>
+              <li>Quảng bá sai lệch về giá, tính năng hoặc cam kết của DIGISO;</li>
+              <li>Gửi thư rác, tin nhắn hàng loạt không được phép, hoặc mọi hình thức tiếp thị vi phạm pháp luật.</li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              You must not engage in the following in order to obtain commission improperly: purchasing services for yourself through another account controlled by you or your relatives; creating fake accounts, using another person&apos;s information, or selling/trading referral codes; misrepresenting DIGISO&apos;s pricing, features, or commitments; sending spam, unauthorised bulk messages, or any unlawful marketing.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Khi có căn cứ hợp lý cho rằng một khoản hoa hồng phát sinh từ các hành vi nêu trên, DIGISO có quyền <strong>từ chối chi trả, thu hồi khoản hoa hồng đó khỏi số dư của bạn, và chấm dứt việc tham gia chương trình</strong>. Mọi thao tác thu hồi đều được ghi nhận kèm lý do trong lịch sử số dư để bạn đối chiếu. Hoa hồng phát sinh từ đơn hàng bị huỷ hoặc hoàn tiền cũng được điều chỉnh tương ứng.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Where there are reasonable grounds to believe a commission arose from the conduct above, DIGISO may <strong>refuse payment, reclaim that commission from your balance, and terminate your participation</strong>. Every reclaim is recorded with its reason in your balance history for your review. Commission arising from cancelled or refunded orders is adjusted accordingly.
+            </p>
+
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'vi')}`}>15.3. Rút hoa hồng, thuế và dữ liệu cá nhân</h3>
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'en')}`}>15.3. Withdrawal, tax and personal data</h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Bạn có thể yêu cầu rút khi số tiền muốn rút đạt từ <strong>1.000.000 VNĐ</strong> trở lên. DIGISO chi trả trong vòng <strong>07 ngày làm việc</strong> kể từ khi nhận yêu cầu. Với đối tác là <strong>cá nhân</strong>, DIGISO thay mặt bạn khấu trừ <strong>10% thuế thu nhập cá nhân</strong>, nộp Ngân sách Nhà nước và cấp cho bạn <strong>chứng từ khấu trừ thuế</strong>.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              You may request a withdrawal when the requested amount reaches <strong>1,000,000 VND</strong> or more. DIGISO pays within <strong>07 working days</strong> of receiving the request. For <strong>individual</strong> partners, DIGISO withholds <strong>10% personal income tax</strong> on your behalf, remits it to the State Budget, and issues you a <strong>tax withholding certificate</strong>.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Để thực hiện nghĩa vụ thuế và chuyển khoản nêu trên, tại <strong>bước gửi yêu cầu rút</strong> — chứ không phải khi đăng ký tài khoản — DIGISO thu thập của bạn: <strong>họ tên, số CCCD/CMND kèm ngày cấp và nơi cấp, tên ngân hàng, số tài khoản và tên chủ tài khoản</strong>. Các dữ liệu này chỉ được dùng cho <strong>đúng mục đích khấu trừ, kê khai thuế và chi trả hoa hồng</strong>, không dùng cho mục đích nào khác và không cung cấp cho bên thứ ba ngoài cơ quan thuế và ngân hàng thực hiện lệnh chuyển tiền. Số CCCD/CMND được <strong>mã hoá khi lưu trữ</strong> và không xuất hiện trong email thông báo. Dữ liệu được lưu trong thời hạn mà pháp luật về thuế và kế toán yêu cầu, sau đó được xoá hoặc ẩn danh.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              To fulfil the tax and payment obligations above, at the <strong>withdrawal request step</strong> — not at account registration — DIGISO collects from you: <strong>full name, national ID number with its issue date and place, bank name, account number and account holder name</strong>. This data is used <strong>solely for withholding, tax declaration and commission payment</strong>, for no other purpose, and is not provided to third parties other than the tax authority and the bank executing the transfer. The national ID number is <strong>encrypted at rest</strong> and never appears in notification emails. Data is retained for the period required by tax and accounting law, after which it is deleted or anonymised.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Việc cung cấp các dữ liệu này là <strong>tự nguyện và chỉ cần thiết nếu bạn muốn rút hoa hồng</strong>. Bạn có thể tiếp tục sử dụng toàn bộ Dịch vụ mà không cung cấp chúng; khi đó số dư hoa hồng của bạn vẫn được bảo lưu. Bạn có quyền yêu cầu xem, chỉnh sửa hoặc xoá dữ liệu này theo Chính sách Bảo mật, trừ phần mà pháp luật về thuế và kế toán buộc DIGISO phải lưu giữ.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Providing this data is <strong>voluntary and necessary only if you wish to withdraw commission</strong>. You may continue using the full Service without providing it, and your commission balance remains preserved. You may request access to, correction of, or deletion of this data under the Privacy Policy, except where tax and accounting law requires DIGISO to retain it.
+            </p>
+
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'vi')}`}>15.4. Thay đổi hoặc chấm dứt chương trình</h3>
+            <h3 className={`text-lg font-semibold text-slate-900 mb-2 ${lc(language, 'en')}`}>15.4. Changes to or termination of the program</h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO có quyền điều chỉnh tỉ lệ hoa hồng, các bậc, ngưỡng rút hoặc điều kiện tham gia, và có quyền tạm dừng hoặc chấm dứt chương trình. Mọi thay đổi bất lợi cho đối tác sẽ được <strong>thông báo trước ít nhất 30 ngày</strong> qua email hoặc thông báo trong tài khoản. <strong>Hoa hồng đã được ghi nhận trước thời điểm thay đổi có hiệu lực vẫn được giữ nguyên và chi trả</strong> theo điều kiện tại thời điểm phát sinh.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              DIGISO may adjust commission rates, tiers, withdrawal thresholds or participation conditions, and may suspend or terminate the program. Any change adverse to partners will be <strong>notified at least 30 days in advance</strong> by email or in-account notice. <strong>Commission already recorded before a change takes effect remains valid and payable</strong> under the conditions in force when it arose.
+            </p>
+          </section>
+
+          {/* Section 16: Contact */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              16. Liên hệ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              16. Contact
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               Nếu bạn có bất kỳ câu hỏi hoặc yêu cầu nào liên quan đến các Điều khoản Sử dụng này, vui lòng liên hệ:
