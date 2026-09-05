@@ -619,6 +619,7 @@ export async function createLedgerAdjustment({
   }
 
   const client = await db.getClient();
+  let committed = false;
   try {
     await client.query('BEGIN');
 
@@ -659,24 +660,31 @@ export async function createLedgerAdjustment({
     const insertedLedger = insertResult.rows[0];
 
     await client.query('COMMIT');
+    committed = true;
 
-    // 5. Ghi audit log theo khuôn repo
-    await auditService.log({
-      userId: adminUserId,
-      category: 'system',
-      action: 'AFFILIATE_LEDGER_ADJUSTMENT',
-      entityType: 'affiliate_ledger',
-      entityId: insertedLedger.id,
-      details: {
-        targetUserId: parsedUserId,
-        amount: parsedAmount,
-        note: cleanNote,
-        balanceBefore: currentBalance,
-        balanceAfter: currentBalance + parsedAmount,
-      },
-      ipAddress,
-      userAgent,
-    });
+    // Audit sau commit: KHÔNG await và KHÔNG để ném ngược ra ngoài. Bút toán đã
+    // nằm trong sổ rồi — để lỗi audit làm endpoint trả về thất bại sẽ khiến admin
+    // bấm lại và ghi bút toán thứ hai, tức trừ tiền khách hai lần.
+    auditService
+      .log({
+        userId: adminUserId,
+        category: 'system',
+        action: 'AFFILIATE_LEDGER_ADJUSTMENT',
+        entityType: 'affiliate_ledger',
+        entityId: insertedLedger.id,
+        details: {
+          targetUserId: parsedUserId,
+          amount: parsedAmount,
+          note: cleanNote,
+          balanceBefore: currentBalance,
+          balanceAfter: currentBalance + parsedAmount,
+        },
+        ipAddress,
+        userAgent,
+      })
+      .catch((err) => {
+        console.warn('[AffiliateLedgerAdjustment] Không ghi được audit log:', err.message);
+      });
 
     return {
       ledger: insertedLedger,
@@ -684,11 +692,33 @@ export async function createLedgerAdjustment({
       balanceAfter: currentBalance + parsedAmount,
     };
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (!committed) {
+      await client.query('ROLLBACK');
+    }
     throw err;
   } finally {
     client.release();
   }
+}
+
+/**
+ * Che email người mua theo Nghị định 330/2026/NĐ-CP:
+ * Giữ 3 ký tự đầu của phần trước @, thay phần còn lại bằng '***', giữ nguyên domain.
+ * Ví dụ:
+ *   nguyenvanan@gmail.com -> ngu***@gmail.com
+ *   ab@gmail.com          -> ab***@gmail.com
+ *   a@gmail.com           -> a***@gmail.com
+ */
+export function maskEmail(rawEmail) {
+  const email = String(rawEmail || '').trim();
+  const atIndex = email.indexOf('@');
+  if (atIndex === -1) {
+    return '***';
+  }
+  const localPart = email.slice(0, atIndex);
+  const domainPart = email.slice(atIndex + 1);
+  const prefix = localPart.slice(0, 3);
+  return `${prefix}***@${domainPart}`;
 }
 
 /**
@@ -754,7 +784,7 @@ export async function getAffiliateOverview(userId) {
   // 4. Mục ĐANG CHỜ ĐỦ ĐIỀU KIỆN (người mua chưa có SĐT)
   const pendingEventsResult = await db.query(
     `SELECT e.id, e.order_id, e.amount, e.month_key, e.created_at,
-            b.id AS buyer_id, b.email AS buyer_email, b.full_name AS buyer_name
+            b.id AS buyer_id, b.email AS buyer_email
      FROM affiliate_revenue_events e
      JOIN users b ON b.id = e.buyer_user_id
      WHERE e.referrer_user_id = $1
@@ -768,8 +798,7 @@ export async function getAffiliateOverview(userId) {
     amount: Math.round(Number(row.amount || 0)),
     monthKey: row.month_key,
     createdAt: row.created_at,
-    buyerEmail: row.buyer_email,
-    buyerName: row.buyer_name || '',
+    buyerEmailMasked: maskEmail(row.buyer_email),
   }));
   const pendingRevenue = pendingEvents.reduce((acc, ev) => acc + ev.amount, 0);
   const pendingBuyersSet = new Set(pendingEventsResult.rows.map((r) => r.buyer_id));

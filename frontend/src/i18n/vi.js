@@ -7468,7 +7468,6 @@ export default {
     pendingBuyersCount: 'Người mua chưa có SĐT',
     pendingRevenueAmount: 'Doanh thu tạm treo',
     buyerEmail: 'Email người mua',
-    buyerName: 'Họ tên',
     orderAmount: 'Giá trị đơn',
     orderDate: 'Ngày mua',
     noPendingOrders: 'Tất cả người mua đã bổ sung số điện thoại hợp lệ.',

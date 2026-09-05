@@ -38,8 +38,7 @@ describe('AffiliatePage — Frontend UI', () => {
           events: [
             {
               id: 101,
-              buyerEmail: 'pending_friend@example.com',
-              buyerName: 'Nguyễn Bạn Thân',
+              buyerEmailMasked: 'pen***@example.com',
               amount: 3000000,
               createdAt: '2026-09-01T10:00:00.000Z',
             },
@@ -78,8 +77,8 @@ describe('AffiliatePage — Frontend UI', () => {
     // Khẳng định link ref
     expect(screen.getByText('https://founderai.biz/register?ref=AFF888')).toBeInTheDocument();
 
-    // 🔴 BẮT BUỘC: Khẳng định mục "ĐANG CHỜ ĐỦ ĐIỀU KIỆN" hiển thị
-    expect(screen.getByText('pending_friend@example.com')).toBeInTheDocument();
+    // 🔴 BẮT BUỘC: Khẳng định mục "ĐANG CHỜ ĐỦ ĐIỀU KIỆN" hiển thị buyerEmailMasked
+    expect(screen.getByText('pen***@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('3.000.000 đ').length).toBeGreaterThanOrEqual(1);
 
     // Nút rút tiền enable vì số dư 2.500.000đ >= 1.000.000đ

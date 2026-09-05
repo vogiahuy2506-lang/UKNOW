@@ -279,43 +279,61 @@ export default function AffiliatePage() {
 
       {/* 🔴 Card 4: MỤC "ĐANG CHỜ ĐỦ ĐIỀU KIỆN" (BẮT BUỘC CÓ) */}
       <div className="bg-amber-50/70 dark:bg-amber-950/20 rounded-2xl p-5 border border-amber-200 dark:border-amber-900/60 shadow-sm space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-amber-900 dark:text-amber-200">
+              {t('affiliate.pendingApprovalTitle')}
+            </h3>
+            <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-1 max-w-3xl leading-relaxed">
+              {t('affiliate.pendingApprovalDesc')}
+            </p>
+          </div>
+        </div>
+
+        {/* THÔNG TIN CHÍNH NỔI BẬT: Số lượng + Tổng tiền treo */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div className="bg-white/80 dark:bg-gray-900/80 rounded-xl p-4 border border-amber-200/80 dark:border-amber-900/60 shadow-xs flex items-center justify-between">
             <div>
-              <h3 className="text-base font-bold text-amber-900 dark:text-amber-200">
-                {t('affiliate.pendingApprovalTitle')}
-              </h3>
-              <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-1 max-w-3xl leading-relaxed">
-                {t('affiliate.pendingApprovalDesc')}
-              </p>
+              <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wider block">
+                {t('affiliate.pendingRevenueAmount')}
+              </span>
+              <span className="text-2xl font-black text-amber-900 dark:text-amber-100 mt-0.5 block">
+                {formatVnd(pendingApproval.pendingRevenue)}
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center justify-center text-lg font-bold">
+              ₫
             </div>
           </div>
-          <div className="text-right flex-shrink-0">
-            <div className="text-xs text-amber-800 dark:text-amber-300 font-medium">
-              {t('affiliate.pendingRevenueAmount')}
+          <div className="bg-white/80 dark:bg-gray-900/80 rounded-xl p-4 border border-amber-200/80 dark:border-amber-900/60 shadow-xs flex items-center justify-between">
+            <div>
+              <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wider block">
+                {t('affiliate.pendingBuyersCount')}
+              </span>
+              <span className="text-2xl font-black text-amber-900 dark:text-amber-100 mt-0.5 block">
+                {pendingApproval.pendingBuyersCount}
+              </span>
             </div>
-            <div className="text-lg font-extrabold text-amber-900 dark:text-amber-100">
-              {formatVnd(pendingApproval.pendingRevenue)}
-            </div>
-            <div className="text-[11px] text-amber-700 dark:text-amber-400">
-              {pendingApproval.pendingBuyersCount} {t('affiliate.pendingBuyersCount').toLowerCase()}
+            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
             </div>
           </div>
         </div>
 
-        {/* Danh sách các event đang chờ đủ điều kiện */}
+        {/* Danh sách các event đang chờ đủ điều kiện (thông tin phụ) */}
         {pendingApproval.events && pendingApproval.events.length > 0 ? (
           <div className="overflow-x-auto rounded-xl border border-amber-200/80 dark:border-amber-900/60 bg-white/70 dark:bg-gray-900/60">
             <table className="w-full text-left text-xs">
               <thead className="bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 font-bold">
                 <tr>
                   <th className="px-4 py-2.5">{t('affiliate.buyerEmail')}</th>
-                  <th className="px-4 py-2.5">{t('affiliate.buyerName')}</th>
                   <th className="px-4 py-2.5">{t('affiliate.orderAmount')}</th>
                   <th className="px-4 py-2.5">{t('affiliate.orderDate')}</th>
                 </tr>
@@ -323,8 +341,9 @@ export default function AffiliatePage() {
               <tbody className="divide-y divide-amber-100/60 dark:divide-amber-900/40 text-gray-700 dark:text-gray-300">
                 {pendingApproval.events.map((ev) => (
                   <tr key={ev.id} className="hover:bg-amber-50/50 dark:hover:bg-amber-950/20">
-                    <td className="px-4 py-2.5 font-medium">{ev.buyerEmail}</td>
-                    <td className="px-4 py-2.5">{ev.buyerName || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium font-mono text-gray-800 dark:text-gray-200">
+                      {ev.buyerEmailMasked || ev.buyerEmail}
+                    </td>
                     <td className="px-4 py-2.5 font-semibold text-amber-800 dark:text-amber-300">
                       {formatVnd(ev.amount)}
                     </td>

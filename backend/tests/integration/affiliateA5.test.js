@@ -15,13 +15,14 @@
  * - adminListWithdrawals: giải mã CCCD gốc qua decryptAffiliatePii
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, jest } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser } from './helpers/db.js';
-import { resolveCurrentMonthKey } from '../../src/services/affiliate/affiliateWithdrawal.service.js';
+import { resolveCurrentMonthKey, maskEmail } from '../../src/services/affiliate/affiliateWithdrawal.service.js';
+import auditService from '../../src/services/audit.service.js';
 
 let app;
 const originalPiiKey = process.env.AFFILIATE_PII_SECRET_KEY;
@@ -221,6 +222,48 @@ describe('Affiliate PR-A5 — Admin Ledger Adjustment & Overview APIs', () => {
 
       expect(res.status).toBe(403);
     });
+
+    it('giả lập auditService.log ném lỗi → endpoint vẫn trả THÀNH CÔNG, và SUM(amount) trên affiliate_ledger chỉ thay đổi ĐÚNG MỘT LẦN', async () => {
+      const admin = await createUser({ email: 'admin_audit_err@test.com', username: 'admin_audit_err', role: 'admin' });
+      const partner = await createUser({ email: 'partner_audit_err@test.com', username: 'partner_audit_err', role: 'user' });
+
+      // Nạp ban đầu 2.000.000đ
+      await insertLedger(partner.id, 2000000, 'commission', 'Hoa hồng cũ');
+      expect(await getLedgerSum(partner.id)).toBe(2000000);
+
+      // Mock auditService.log ném lỗi (giả lập audit log failure)
+      const auditSpy = jest.spyOn(auditService, 'log').mockRejectedValueOnce(new Error('Audit DB is down'));
+
+      const adminToken = createAuthToken(admin);
+      const res = await request(app)
+        .post('/api/admin/affiliate/ledger-adjustment')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          userId: partner.id,
+          amount: -500000,
+          note: 'Trừ tiền khi audit log bị hỏng',
+        });
+
+      // Endpoint vẫn trả THÀNH CÔNG 201 vì tiền đã vào sổ an toàn
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.balanceBefore).toBe(2000000);
+      expect(res.body.data.balanceAfter).toBe(1500000);
+
+      // SUM(amount) trên affiliate_ledger chỉ thay đổi ĐÚNG MỘT LẦN: 2.000.000 - 500.000 = 1.500.000
+      const sumAfter = await getLedgerSum(partner.id);
+      expect(sumAfter).toBe(1500000);
+
+      // Khẳng định chỉ có duy nhất 1 bản ghi adjustment trong affiliate_ledger
+      const { rows: ledgerRows } = await db.query(
+        `SELECT * FROM affiliate_ledger WHERE user_id = $1 AND entry_type = 'adjustment'`,
+        [partner.id]
+      );
+      expect(ledgerRows.length).toBe(1);
+      expect(Number(ledgerRows[0].amount)).toBe(-500000);
+
+      auditSpy.mockRestore();
+    });
   });
 
   describe('GET /api/affiliate/overview (Trang đối tác)', () => {
@@ -299,12 +342,64 @@ describe('Affiliate PR-A5 — Admin Ledger Adjustment & Overview APIs', () => {
       expect(data.nextTier.level).toBe(3);
       expect(data.amountToNextTier).toBe(5000000); // 20tr - 15tr = 5tr
 
-      // 🔴 BẮT BUỘC: Mục "ĐANG CHỜ ĐỦ ĐIỀU KIỆN"
+      // 🔴 BẮT BUỘC: Mục "ĐANG CHỜ ĐỦ ĐIỀU KIỆN" (Nghị định 330: chỉ trả email che, không trả tên)
       expect(data.pendingApproval.pendingBuyersCount).toBe(1);
       expect(data.pendingApproval.pendingRevenue).toBe(3000000);
       expect(data.pendingApproval.events.length).toBe(1);
-      expect(data.pendingApproval.events[0].buyerEmail).toBe('buyer2_ov@test.com');
+      expect(data.pendingApproval.events[0].buyerEmailMasked).toBe('buy***@test.com');
+      expect(data.pendingApproval.events[0].buyerEmail).toBeUndefined();
+      expect(data.pendingApproval.events[0].buyerName).toBeUndefined();
+      expect(data.pendingApproval.events[0].buyer_id).toBeUndefined();
+      expect(data.pendingApproval.events[0].buyerId).toBeUndefined();
       expect(data.pendingApproval.events[0].amount).toBe(3000000);
+    });
+
+    it('Khẳng định response trang đối tác KHÔNG chứa email gốc và KHÔNG chứa họ tên người mua (Nghị định 330/2026/NĐ-CP)', async () => {
+      const partner = await createUser({
+        email: 'partner_privacy@test.com',
+        username: 'partner_privacy',
+        role: 'user',
+      });
+      const buyerSecret = await createUser({
+        email: 'secret_buyer_330@gmail.com',
+        username: 'secret_buyer_330',
+        role: 'user',
+        full_name: 'Nguyễn Bí Mật Tuyệt Đối',
+        phone: null,
+      });
+
+      const currentMonthKey = resolveCurrentMonthKey();
+      const { rows: order } = await db.query(
+        `INSERT INTO orders (order_code, user_id, amount, status, created_at)
+         VALUES (1700000099, $1, 5000000, 'success', NOW()) RETURNING id`,
+        [buyerSecret.id]
+      );
+      await db.query(
+        `INSERT INTO affiliate_revenue_events (referrer_user_id, buyer_user_id, order_id, amount, month_key)
+         VALUES ($1, $2, $3, 5000000, $4)`,
+        [partner.id, buyerSecret.id, order[0].id, currentMonthKey]
+      );
+
+      const partnerToken = createAuthToken(partner);
+      const res = await request(app)
+        .get('/api/affiliate/overview')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(200);
+
+      // Khẳng định toàn bộ chuỗi response JSON text KHÔNG chứa email gốc và KHÔNG chứa họ tên của buyer
+      const rawText = res.text;
+      expect(rawText).not.toContain('secret_buyer_330@gmail.com');
+      expect(rawText).not.toContain('Nguyễn Bí Mật Tuyệt Đối');
+
+      // Kiểm tra object pendingApproval.events
+      const event = res.body.data.pendingApproval.events[0];
+      expect(event).toBeDefined();
+      expect(event.buyerEmailMasked).toBe('sec***@gmail.com');
+      expect(event.buyerEmail).toBeUndefined();
+      expect(event.buyerName).toBeUndefined();
+      expect(event.buyer_id).toBeUndefined();
+      expect(event.buyerId).toBeUndefined();
     });
   });
 
@@ -382,6 +477,18 @@ describe('Affiliate PR-A5 — Admin Ledger Adjustment & Overview APIs', () => {
       expect(item.id_card_number).toBe('079199001234');
       // id_card_number_enc vẫn là chuỗi mã hóa
       expect(item.id_card_number_enc).toContain('enc:v1:');
+    });
+  });
+
+  describe('maskEmail (Nghị định 330/2026/NĐ-CP)', () => {
+    it('che đúng quy tắc: giữ 3 ký tự đầu trước @, thay còn lại bằng ***, giữ domain', () => {
+      expect(maskEmail('nguyenvanan@gmail.com')).toBe('ngu***@gmail.com');
+      expect(maskEmail('ab@gmail.com')).toBe('ab***@gmail.com');
+      expect(maskEmail('a@gmail.com')).toBe('a***@gmail.com');
+      expect(maskEmail('admin@uknow.vn')).toBe('adm***@uknow.vn');
+      expect(maskEmail('')).toBe('***');
+      expect(maskEmail(null)).toBe('***');
+      expect(maskEmail('invalid-email')).toBe('***');
     });
   });
 });
