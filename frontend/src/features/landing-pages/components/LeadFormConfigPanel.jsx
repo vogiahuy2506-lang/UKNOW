@@ -73,7 +73,7 @@ export default function LeadFormConfigPanel({ form, setForm, t }) {
     phone: '',
     occupation: '',
     interestArea: '',
-    marketingConsent: true,
+    marketingConsent: false,
     customFields: {},
   };
 
