@@ -1,6 +1,24 @@
 import { normalizeVietnamesePhone, isValidVietnamesePhone } from './vietnamesePhone.util.js';
 
-export const MAX_AI_MANUAL_RECIPIENTS = 1000;
+/**
+ * Trần người nhận cho đường "trợ lý AI" (`directRecipients` trong `ai.controller.js`).
+ *
+ * Tên biến nói "MANUAL" nhưng đường này KHÔNG chỉ là gõ tay: nó còn nhận danh sách
+ * từ **file Excel/CSV kéo thả** (`extractRecipientsFromBuffer` mặc định dùng chính
+ * trần này) và danh sách đã đọc sẵn từ nguồn khác. Giả định cũ "không ai gõ nhiều
+ * hơn 1.000 người" vì thế sai với phần lớn lưu lượng thật đi qua đây.
+ *
+ * Nâng 1.000 → 50.000 ngày 05/09/2026: khách thật có danh sách 13.991 người bị chặn
+ * ở bước "Tạo chiến dịch draft" của trợ lý AI. Đây là **lần thứ ba** cùng một loại
+ * sự cố — trần dành cho gõ tay chặn nhầm danh sách có sẵn (02/09: sheet 8.156;
+ * 05/09: sheet 13.991 ở `MAX_SHEET_RECIPIENTS`; và giờ là đường trợ lý AI).
+ *
+ * Chốt chặn thật cho payload lớn là `express.json({ limit: '5mb' })` (`app.js:132`),
+ * không phải con số này: 50.000 số điện thoại ≈ 650KB, còn xa mức 5MB.
+ */
+const parsedManualLimit = Number.parseInt(process.env.MAX_AI_MANUAL_RECIPIENTS, 10);
+export const MAX_AI_MANUAL_RECIPIENTS =
+  Number.isFinite(parsedManualLimit) && parsedManualLimit > 0 ? parsedManualLimit : 50000;
 
 /**
  * Trần người nhận đọc từ Google Sheet — KHÁC trần nhập tay ở trên.

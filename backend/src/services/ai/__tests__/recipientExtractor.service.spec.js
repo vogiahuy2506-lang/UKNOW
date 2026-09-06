@@ -113,7 +113,7 @@ Pham Thi D,d@example.com,
     );
   });
 
-  it('throws RECIPIENTS_LIMIT_EXCEEDED when count exceeds 1000', () => {
+  it('throws RECIPIENTS_LIMIT_EXCEEDED khi vượt trần được truyền vào', () => {
     const rows = [['Email']];
     for (let i = 0; i < 1005; i++) {
       rows.push([`user${i}@example.com`]);
@@ -123,7 +123,9 @@ Pham Thi D,d@example.com,
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    expect(() => extractRecipientsFromBuffer(buf, 'large.xlsx')).toThrow(
+    // Trần mặc định đã nâng lên 50.000 (05/09/2026) nên 1.005 dòng KHÔNG còn vượt;
+    // truyền trần tường minh để bài này vẫn kiểm đúng thứ nó sinh ra để kiểm.
+    expect(() => extractRecipientsFromBuffer(buf, 'large.xlsx', '', { maxRecipients: 1000 })).toThrow(
       expect.objectContaining({ code: 'RECIPIENTS_LIMIT_EXCEEDED', statusCode: 400 })
     );
   });
@@ -245,10 +247,25 @@ Pham Thi D,d@example.com,
       );
     });
 
-    it('giữ trần nhập tay 1.000 khi không truyền gì (đường tải tệp lên)', () => {
+    /**
+     * ĐẢO NGƯỢC QUYẾT ĐỊNH 02/09/2026 — bản trước của bài này khẳng định đường tải
+     * tệp lên GIỮ trần nhập tay 1.000. Đừng khôi phục.
+     *
+     * Lý do đảo: trần 1.000 sinh ra từ giả định "không ai gõ tay nhiều hơn thế",
+     * nhưng `extractRecipientsFromBuffer` là đường **tải tệp Excel/CSV** — danh sách
+     * có sẵn, không phải gõ. Ngày 05/09/2026 khách thật có 13.991 người bị chặn ở
+     * bước "Tạo chiến dịch draft" của trợ lý AI vì đúng trần này.
+     */
+    it('trần mặc định của đường tải tệp lên là 50.000, không phải trần gõ tay 1.000', () => {
       const buf = buildCsvBuffer(1005);
 
-      expect(() => extractRecipientsFromBuffer(buf, 'lon.csv', 'text/csv')).toThrow(
+      expect(() => extractRecipientsFromBuffer(buf, 'lon.csv', 'text/csv')).not.toThrow();
+    });
+
+    it('vẫn chặn khi vượt trần mặc định mới', () => {
+      const buf = buildCsvBuffer(1005);
+
+      expect(() => extractRecipientsFromBuffer(buf, 'lon.csv', 'text/csv', { maxRecipients: 1000 })).toThrow(
         expect.objectContaining({ code: 'RECIPIENTS_LIMIT_EXCEEDED', limit: 1000 })
       );
     });
