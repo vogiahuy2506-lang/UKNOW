@@ -392,12 +392,17 @@ class CampaignCrudRepository {
     );
   }
 
-  async updateNodeExecutionOrder(client, nodeId, executionOrder) {
-    await db.query(
+  async updateNodeExecutionOrder(clientOrNodeId, nodeIdOrOrder, executionOrder) {
+    const queryable = (executionOrder !== undefined && clientOrNodeId && typeof clientOrNodeId.query === 'function')
+      ? clientOrNodeId
+      : db;
+    const nodeId = executionOrder !== undefined ? nodeIdOrOrder : clientOrNodeId;
+    const order = executionOrder !== undefined ? executionOrder : nodeIdOrOrder;
+    await queryable.query(
       `UPDATE campaign_nodes
        SET execution_order = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2`,
-      [executionOrder, nodeId]
+      [order, nodeId]
     );
   }
 

@@ -51,6 +51,21 @@ describe('schema inventory — 2-way production parity (PR-3)', () => {
     }
   });
 
+  it('Chiều 0: metadata _meta.tables và _meta.columns trong fixture phải khớp chính xác với nội dung thực tế', () => {
+    const fixtureRaw = fs.readFileSync(FIXTURE_PATH, 'utf8');
+    const fixtureData = JSON.parse(fixtureRaw);
+    const declaredTables = fixtureData._meta?.tables;
+    const declaredColumns = fixtureData._meta?.columns;
+    const actualTables = Object.keys(fixtureData.tables || {}).length;
+    const actualColumns = Object.values(fixtureData.tables || {}).reduce(
+      (sum, cols) => sum + cols.length,
+      0
+    );
+
+    expect(actualTables).toBe(declaredTables);
+    expect(actualColumns).toBe(declaredColumns);
+  });
+
   it('Chiều 1: không có bảng nào trong production fixture bị thiếu trong DB test', () => {
     const missingTables = [];
     for (const table of fixtureTables.keys()) {

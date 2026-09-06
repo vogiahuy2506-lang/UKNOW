@@ -1422,8 +1422,17 @@ CREATE TABLE campaign_run_recipient_steps (
 );
 CREATE INDEX idx_crrs_id_run ON campaign_run_recipient_steps(id_run);
 CREATE UNIQUE INDEX uq_crrs_progress
-  ON campaign_run_recipient_steps(id_run, id_node, channel, recipient_key)
-  WHERE id_run IS NOT NULL AND id_node IS NOT NULL AND channel IS NOT NULL AND recipient_key IS NOT NULL;
+  ON campaign_run_recipient_steps(id_run, id_node, channel, recipient_key);
+
+-- ─── Campaign run recipient steps backup (migration 182) ───────────────
+CREATE TABLE campaign_run_recipient_steps_backup_182 (
+  id                  BIGSERIAL PRIMARY KEY,
+  migration_batch_id  UUID NOT NULL,
+  source_id           BIGINT NOT NULL,
+  id_run              BIGINT,
+  source_row          JSONB NOT NULL,
+  backed_up_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ─── Audit logs ─────────────────────────────────────────────────────────
 CREATE TABLE audit_logs (

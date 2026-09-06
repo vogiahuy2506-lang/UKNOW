@@ -15,14 +15,17 @@ import {
   resolveStartupMigrationAction,
 } from './utils/migrationRunner.util.js';
 import { prepareBillingAnchorRepairPreflight } from './utils/billingAnchorRepairBackup.util.js';
-import campaignZaloSenderService from './services/campaign/campaignZaloSender.service.js';
 import { initZaloSessionRestoration } from './utils/zaloSessionRestoration.util.js';
 import zaloInboxService from './services/chatbot/zaloInbox.service.js';
 import landingPageDomainService from './services/landingPage/landingPageDomain.service.js';
-import { decryptZaloCookieRows } from './utils/zaloCookieCrypto.util.js';
 import { validateActivePlanKbLimits } from './services/storage/kbQuota.service.js';
 import { validateStorageEnv } from './utils/storageStartupConfig.util.js';
 import { validateInvoiceEnv } from './utils/invoiceStartupConfig.util.js';
+import {
+  markRuntimeFailed,
+  markRuntimeReady,
+  markRuntimeStarting,
+} from './utils/runtimeReadiness.util.js';
 // Import webhook controller to register debounce processors
 import './controllers/chatbotChannelWebhook.controller.js';
 
@@ -156,43 +159,6 @@ process.on('SIGTERM', () => {
   gracefulShutdown('SIGTERM');
 });
 
-const restoreZaloSessionsOnStartup = async () => {
-  try {
-    const { rows } = await db.query(
-      `SELECT id, id_user, display_name, cookie_text
-       FROM zalo_settings
-       WHERE status = 'connected' AND is_active = true
-         AND cookie_text IS NOT NULL AND TRIM(cookie_text) != ''`
-    );
-    if (!rows.length) return;
-    decryptZaloCookieRows(rows);
-
-    console.log(`[Startup] Restoring ${rows.length} Zalo session(s) from saved cookies...`);
-    let restored = 0;
-    let failed = 0;
-
-    for (const account of rows) {
-      try {
-        await campaignZaloSenderService.tryAutoRestoreSession({
-          accountId: account.id,
-          userId: account.id_user,
-          cookieText: account.cookie_text,
-          fallbackDisplayName: account.display_name || 'Tài khoản Zalo',
-        });
-        restored++;
-        console.log(`[Startup] ✓ Restored Zalo session for account ${account.id} (${account.display_name || '?'})`);
-      } catch (err) {
-        failed++;
-        console.warn(`[Startup] ✗ Failed to restore Zalo session for account ${account.id}: ${err?.message || 'unknown'}`);
-      }
-    }
-
-    console.log(`[Startup] Zalo sessions: ${restored} restored, ${failed} could not restore (marked disconnected).`);
-  } catch (err) {
-    console.warn(`[Startup] Zalo session restore skipped: ${err?.message}`);
-  }
-};
-
 async function validateStartupBeforeListen() {
   try {
     validateStorageEnv();
@@ -205,19 +171,38 @@ async function validateStartupBeforeListen() {
   }
 }
 
+// `/api/health` must stay closed from process start until workers and scheduler
+// have completed their critical initialization below.
+markRuntimeStarting();
+
 await validateStartupBeforeListen().catch((error) => {
+  markRuntimeFailed(error);
   console.error(`[Startup] Refusing to listen: ${error.message}`);
   process.exit(1);
 });
 
-app.listen(PORT, async () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  initializePostListenRuntime().catch((error) => {
+    markRuntimeFailed(error);
+    console.error(`[Startup] Critical runtime initialization failed: ${error.message}`);
+
+    // Do not leave a process that has already bound its port serving a false
+    // positive health response. Closing the listener lets Docker restart policy
+    // handle recovery; the readiness endpoint remains 503 until then.
+    server.close(() => process.exit(1));
+    const forcedExit = setTimeout(() => process.exit(1), 5000);
+    forcedExit.unref();
+  });
+});
+
+async function initializePostListenRuntime() {
   setupCleanupTask();
   initScheduler();
   await outboundMessageQueueService.startWorker();
   await kbDocumentQueue.startWorker();
-  await restoreZaloSessionsOnStartup();
   console.log(`Cleanup task scheduled`);
 
   // Auto-provision SSL for active domains on startup
@@ -228,9 +213,15 @@ app.listen(PORT, async () => {
   // Restore Zalo sessions after all services are initialized
   // This ensures accounts remain connected even after server restart/update
   setTimeout(async () => {
-    initZaloSessionRestoration().catch((error) => {
+    await initZaloSessionRestoration().catch((error) => {
       console.error('[Startup] Failed to restore Zalo sessions:', error.message);
     });
-    await zaloInboxService.start();
+    await zaloInboxService.start().catch((error) => {
+      // This restoration runs asynchronously by design and is not allowed to
+      // crash a process that already completed its primary worker startup.
+      console.error('[Startup] Failed to start Zalo inbox restoration:', error.message);
+    });
   }, 3000);
-});
+
+  markRuntimeReady();
+}

@@ -239,8 +239,8 @@ release rồi gửi lại.
 | `enforce` | Không fallback cache/Redis | Fail closed trước provider, HTTP/service code `SEND_QUOTA_UNAVAILABLE` |
 
 Quota exceeded giữ contract hiện tại (`403`, `RESOURCE_LIMIT_EXCEEDED`, `resetAt`, message tiếng
-Việt). Hạ tầng quota lỗi là `503`, không giả thành “hết gói”. Logical key đang `sending` có thể trả
-`409 SEND_ALREADY_IN_PROGRESS`; đã `consumed` trả kết quả idempotent và tuyệt đối không gọi provider
+Việt). Hạ tầng quota lỗi là `503`, không giả thành “hết gói”. Logical key đang `sending`/`reserved` có thể trả
+`409 CONCURRENT_SEND_IN_PROGRESS`; `uncertain` trả `409 RESERVATION_UNCERTAIN`; đã `consumed` trả kết quả idempotent và tuyệt đối không gọi provider
 lần nữa.
 
 ---
@@ -500,7 +500,8 @@ Với endpoint do người dùng bấm gửi:
 - server tính `request_fingerprint = SHA256(canonical(channel, recipient, payload_hash, options))`;
 - nếu tìm thấy `reservation_key` đã tồn tại nhưng `request_fingerprint` khác: từ chối ngay với HTTP `409 IDEMPOTENCY_KEY_REUSED`, không gọi provider và không trừ quota;
 - nếu `reservation_key` và `request_fingerprint` khớp:
-  - đang ở `sending`: trả `409 SEND_ALREADY_IN_PROGRESS`;
+  - đang ở `sending` hoặc `reserved`: trả `409 CONCURRENT_SEND_IN_PROGRESS`;
+  - đang ở `uncertain`: trả `409 RESERVATION_UNCERTAIN` (chặn resend tự động);
   - đã `consumed`: trả `response_snapshot` đã lưu (hoặc reconstructed result), không gọi provider lần hai;
   - đã `released`: cho phép explicit retry transition cùng row `released -> reserved` dưới lock và cập nhật window snapshot;
 - giai đoạn backward compatible có thể server-generate key cho client cũ, nhưng key đó chỉ bảo vệ
@@ -854,7 +855,7 @@ err.code='RESOURCE_LIMIT_EXCEEDED'`). Mọi call site Q4a/Q4b phải đổi từ
   const requestFingerprint = computeRequestFingerprint({
     channel: 'email', recipient: customer.email, subject, content: htmlBody,
     templateId, sourceType: 'campaign_email',
-  }); // version 'v2' mặc định
+  }); // version 'v3' mặc định
   ```
   `sendMeta.emailStep` đã là logical step 1-based có sẵn trong signature hàm (dùng lại, xác nhận tại
   dòng 506, 516) — không cần query `campaign_run_recipient_steps` để suy ra step.
@@ -1001,10 +1002,10 @@ dù `attempts:1`. Đây chính là kịch bản "job retry sau success/response 
 xác nhận nó là rủi ro thật, không phải giả định, và lý do idempotency key theo Q4a/Q4b (không phụ
 thuộc BullMQ attempt count) là cơ chế phòng vệ đúng chỗ.
 
-- [ ] Viết test giả lập: gọi trực tiếp handler 2 lần với cùng `reservationKey` (mô phỏng stalled-job
+- [x] Viết test giả lập: gọi trực tiếp handler 2 lần với cùng `reservationKey` (mô phỏng stalled-job
       redelivery) → xác nhận provider chỉ được gọi 1 lần nếu lần đầu đã `consumed`, hoặc job thứ hai
-      nhận `409 SEND_ALREADY_IN_PROGRESS` nếu lần đầu còn `sending`.
-- [ ] Reconciliation hook: khi resume một run bị dừng giữa chừng, ngoài
+      nhận `409 CONCURRENT_SEND_IN_PROGRESS` nếu lần đầu còn `reserved`/`sending`, nhận `409 RESERVATION_UNCERTAIN` nếu `uncertain`.
+- [x] Reconciliation hook: khi resume một run bị dừng giữa chừng, ngoài
       `trySyncLedgerFromExistingZaloMessage` hiện có, thêm bước quét reservation `uncertain`/`reserved`
       quá hạn thuộc `sourceType IN ('campaign_email','campaign_zalo')` gắn với `runId` đang resume —
       không tự động release/consume, chỉ log + để sweeper chung (PR-Q5) xử lý, tránh xây riêng một
@@ -1013,13 +1014,24 @@ thuộc BullMQ attempt count) là cơ chế phòng vệ đúng chỗ.
       gồm cả kịch bản "campaign owner/employee context vẫn tính đúng billing owner" — campaign vẫn
       **không truyền `roleCode`** khi gọi `reserveSendQuota` (giữ đúng quy tắc mục 3.2: "Campaign hiện
       chủ ý không truyền role để quota owner luôn được áp dụng"), xác nhận không có regress admin-bypass
-      lọt vào luồng campaign.
+      lọt vào luồng campaign. (Lưu ý: campaignQuotaMatrix.test.js đã phủ replay snapshot/409 concurrent/409 uncertain, owner/employee orchestration, no admin-bypass, definitive no-send release, hard bounce debit, và resume observation hook. Các kịch bản crash-injection trước/sau provider và quiet-hours đa kênh vẫn cần hoàn thiện trước khi tick nghiệm thu).
 - [ ] `npm run test:integration` full suite (không chỉ file mới) xanh — Q4a/Q4b có thể đã sửa
       `campaignEmailSenderRepository`/`zaloMessageRepository` theo cách ảnh hưởng test cũ.
 
 **Gate Q4c:** toàn bộ test bắt buộc gốc của PR-Q4 (7 dòng mục "Test bắt buộc") pass cho cả email và 3
 kênh Zalo; `npm run test:integration` full xanh; staging chạy một campaign concurrency đại diện (song
 song ≥ 2 recipient cùng workspace, ≥ 1 recipient chạm limit) và reconciliation sạch — như Gate gốc.
+
+### Kế hoạch hạ giải hạ tầng sau deploy Wave 2 (Post-Release Decommission)
+
+- [ ] **TASK-DECOMMISSION-CRRS-BACKUP-182**: Dọn dẹp bảng snapshot preflight `campaign_run_recipient_steps_backup_182`
+  - **Owner**: Platform / Database Engineering (`phuong.doan` / Lead DB)
+  - **Deadline**: 30 ngày kể từ ngày deploy Migration 182 lên Production (dự kiến `2026-10-05`)
+  - **Acceptance Gate**:
+    1. Full unique index `uq_crrs_progress` (không predicate WHERE) hoạt động ổn định trên production ≥ 30 ngày, ghi nhận 0 incident liên quan đến PostgreSQL error 42P10 hoặc duplicate progress state.
+    2. Kiểm tra log và số dòng: `SELECT migration_batch_id, COUNT(*), MIN(backed_up_at), MAX(backed_up_at) FROM campaign_run_recipient_steps_backup_182 GROUP BY migration_batch_id;`
+    3. Tạo migration kế tiếp tại thời điểm decommission (thuộc contract phase): `DROP TABLE IF EXISTS campaign_run_recipient_steps_backup_182;`
+    4. Xóa định nghĩa bảng khỏi `tests/integration/sql/bootstrap.sql`, `tests/integration/fixtures/productionSchemaInventory.json`, và `tests/integration/helpers/db.js`.
 
 ---
 
@@ -1051,6 +1063,7 @@ song ≥ 2 recipient cùng workspace, ≥ 1 recipient chạm limit) và reconcil
 - [ ] Đổi tên/comment `quotaCache` thành advisory read cache; không quảng bá nó là enforcement.
 - [ ] Xoá fallback enforcement cũ chỉ khi `rg` và tests chứng minh toàn bộ production paths đã migrate.
 - [ ] Cập nhật `CLAUDE.md`, `docs/CACHE_INVENTORY.md`, walkthrough và runbook sự cố quota.
+- [ ] Đánh giá EXPLAIN / thêm index cho (source_type, ((source_ref->>'runId'))) trên send_quota_reservations nếu dữ liệu staging chứng minh cần (hoãn từ PR-Q4c do migration 181 đang bận).
 
 **Gate:** 7 ngày production không over-quota unexplained, không double debit, không uncertain quá SLO;
 rollback drill thành công.

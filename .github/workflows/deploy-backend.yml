@@ -231,29 +231,119 @@ jobs:
               echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Bỏ qua billing audit: migration 174 đã áp dụng từ release trước."
             fi
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Migration hoàn tất — bắt đầu đổi container"
+            # Đổi tên + STOP (không rm -f) container cũ thay vì xoá thẳng: STOP đã giải
+            # phóng port 5001 (đủ để container mới bind), nhưng container cũ vẫn còn để
+            # khôi phục tức thì nếu readiness check của container mới thất bại bên dưới.
+            # `/api/health` giờ đóng tới khi initializePostListenRuntime() (worker/scheduler/
+            # Zalo restore) xong hẳn — xem runtimeReadiness.util.js — nên container mới có
+            # thể bind cổng thành công nhưng vẫn chưa sẵn sàng nhận traffic thật; trước đây
+            # xoá container cũ trước rồi start container mới nghĩa là mọi thất bại readiness
+            # đều làm mất backend hoàn toàn (không còn gì để rollback).
+            #
+            # Tên standby dùng riêng "-ci-swap" (KHÔNG phải "-standby"): script
+            # backend/scripts/ops/hot_swap_rollback.sh dùng đúng tên
+            # "uknow-campaign-backend-standby" làm đường cứu hộ khẩn cấp thủ công và
+            # fail-closed nếu thấy tên đó đã tồn tại. Trùng tên sẽ khiến một standby
+            # CI để sót khoá luôn lối thoát khẩn cấp đó, và ngược lại.
+            CI_STANDBY_NAME="uknow-campaign-backend-ci-swap"
+            if docker inspect "$CI_STANDBY_NAME" > /dev/null 2>&1; then
+              echo "::error::Phát hiện $CI_STANDBY_NAME còn sót từ lượt deploy trước (có thể do step bị huỷ giữa chừng)."
+              echo "Dán thẳng lệnh dưới đây trên VPS — nó tự kiểm tra health rồi mới chọn nhánh, không cần bạn tự đọc trạng thái rồi chọn tay (chọn nhầm nhánh là xoá mất bản đang chạy tốt):"
+              echo "  if curl -sf http://localhost:5001/api/health >/dev/null; then docker rm -f $CI_STANDBY_NAME; echo 'uknow-campaign-backend đang healthy — đã xoá standby thừa.'; else docker rm -f uknow-campaign-backend 2>/dev/null; docker rename $CI_STANDBY_NAME uknow-campaign-backend && docker update --restart=unless-stopped uknow-campaign-backend && docker start uknow-campaign-backend && echo 'Đã khôi phục uknow-campaign-backend từ standby.'; fi"
+              exit 1
+            fi
+            if docker inspect uknow-campaign-backend-standby > /dev/null 2>&1; then
+              echo "::error::Phát hiện uknow-campaign-backend-standby đang tồn tại — tên này dành riêng cho hot_swap_rollback.sh (rollback khẩn cấp thủ công), có thể một lần chạy script đó trước đây bị ngắt giữa chừng."
+              echo "Kiểm tra container nào đang thực sự phục vụ trên VPS:"
+              echo "  docker ps -a --filter name=uknow-campaign-backend"
+              echo "Reconcile thủ công theo đúng logic khôi phục của chính hot_swap_rollback.sh (hàm restore_previous_container trong backend/scripts/ops/hot_swap_rollback.sh) rồi mới chạy lại deploy tự động."
+              exit 1
+            fi
+
+            HAD_PREVIOUS_CONTAINER=false
+            MUTATION_IN_PROGRESS=false
+            # Trap phòng khi SSH mất kết nối / step bị huỷ giữa lúc đang đổi container:
+            # nếu tiến trình nhận TERM/INT khi mutation đang dở, cố hết sức phục hồi
+            # container cũ thay vì để VPS kẹt ở trạng thái nửa vời (mất cả cũ lẫn mới).
+            # Chỉ là lưới an toàn best-effort — không tự bảo đảm bắt được mọi kiểu mất
+            # kết nối SSH (ví dụ đứt mạng cứng không kịp gửi tín hiệu).
+            # QUAN TRỌNG: trap phải `exit 1` ở cuối, không chỉ chạy lệnh khôi phục rồi
+            # thôi — nếu không, sau khi trap xử lý xong, bash tiếp tục chạy phần script
+            # còn lại NGAY TỪ CHỖ bị ngắt như chưa có gì xảy ra (đây là hành vi trap mặc
+            # định của bash, đã tự kiểm bằng cách gửi SIGTERM thật giữa lúc "docker run"
+            # đang chạy: thiếu `exit 1`, script tự phục hồi container cũ rồi vẫn đi tiếp
+            # tới bước poll health/dọn standby và báo "deploy thành công" — tức CI xanh
+            # giả trong khi container mới chưa từng thực sự chạy).
+            trap 'if [ "$MUTATION_IN_PROGRESS" = "true" ]; then echo "::error::Tín hiệu ngắt giữa lúc đổi container."; if [ "$HAD_PREVIOUS_CONTAINER" = "true" ] && docker inspect "$CI_STANDBY_NAME" > /dev/null 2>&1; then echo "Cố khôi phục $CI_STANDBY_NAME."; docker rename "$CI_STANDBY_NAME" uknow-campaign-backend 2>/dev/null || true; docker update --restart=unless-stopped uknow-campaign-backend 2>/dev/null || true; docker start uknow-campaign-backend 2>/dev/null || true; fi; exit 1; fi' TERM INT
+
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
-              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Removing old backend container..."
+              HAD_PREVIOUS_CONTAINER=true
+              MUTATION_IN_PROGRESS=true
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Chuyển container cũ sang standby (đổi tên + stop, chưa xoá)..."
               docker update --restart=no uknow-campaign-backend || true
-              docker rm -f uknow-campaign-backend || true
+              docker rename uknow-campaign-backend "$CI_STANDBY_NAME" || true
+              docker stop "$CI_STANDBY_NAME" || true
               sleep 2
-              # Fallback: nếu daemon conflict khiến rm -f thất bại, kill PID trực tiếp rồi rm lại
-              if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
-                CPID=$(docker inspect uknow-campaign-backend --format '{{.State.Pid}}' 2>/dev/null || echo "")
+              # Fallback: nếu daemon conflict khiến stop thất bại, kill PID trực tiếp
+              if [ "$(docker inspect "$CI_STANDBY_NAME" --format '{{.State.Running}}' 2>/dev/null || echo false)" = "true" ]; then
+                CPID=$(docker inspect "$CI_STANDBY_NAME" --format '{{.State.Pid}}' 2>/dev/null || echo "")
                 if [ -n "$CPID" ] && [ "$CPID" != "0" ]; then
                   echo "Fallback: kill -9 pid=$CPID"
                   kill -9 "$CPID" 2>/dev/null || true
                   sleep 2
                 fi
-                docker rm -f uknow-campaign-backend || true
               fi
-              if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
-                docker inspect uknow-campaign-backend --format 'Could not remove old container: pid={{.State.Pid}} status={{.State.Status}} running={{.State.Running}} restart={{.HostConfig.RestartPolicy.Name}}'
+              if [ "$(docker inspect "$CI_STANDBY_NAME" --format '{{.State.Running}}' 2>/dev/null || echo false)" = "true" ]; then
+                docker inspect "$CI_STANDBY_NAME" --format 'Could not stop old container: pid={{.State.Pid}} status={{.State.Status}} running={{.State.Running}}'
                 exit 1
               fi
             fi
+
+            # Rollback dùng chung cho MỌI đường thất bại bên dưới (docker run tự nó
+            # lỗi, container không bao giờ healthy, hoặc container rớt readiness ngay
+            # sau khi vừa lên) — trước đây chỉ nhánh "không healthy sau 60s" có rollback;
+            # "docker run" thất bại thẳng thì `set -e` giết script trước khi chạm tới
+            # rollback, để lại VPS không còn container nào chạy cả.
+            # Poll cùng ngân sách 20×3s=60s như đường forward: trước đây rollback chỉ
+            # có 10×2s=20s, ngắn hơn hẳn thời gian initializePostListenRuntime() cần,
+            # dễ báo nhầm "rollback thất bại" trong khi container cũ chỉ đơn giản là
+            # đang khởi động lại.
+            rollback_to_standby() {
+              local reason="$1"
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] ${reason} — rolling back"
+              docker logs --tail 50 uknow-campaign-backend 2>/dev/null || true
+              docker update --restart=no uknow-campaign-backend 2>/dev/null || true
+              docker rm -f uknow-campaign-backend 2>/dev/null || true
+              if [ "$HAD_PREVIOUS_CONTAINER" = "true" ]; then
+                echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Khôi phục container cũ từ standby..."
+                docker rename "$CI_STANDBY_NAME" uknow-campaign-backend || true
+                docker update --restart=unless-stopped uknow-campaign-backend || true
+                docker start uknow-campaign-backend || true
+                ROLLED_BACK=false
+                for i in $(seq 1 40); do
+                  if curl --connect-timeout 2 --max-time 4 -sf http://localhost:5001/api/health > /dev/null 2>&1; then
+                    ROLLED_BACK=true
+                    break
+                  fi
+                  sleep 3
+                done
+                if [ "$ROLLED_BACK" = "true" ]; then
+                  echo "Rollback thành công — container cũ đã phục vụ trở lại. Deploy vẫn FAIL để CI báo động."
+                else
+                  echo "::error::Rollback container cũ KHÔNG phản hồi healthy — cần can thiệp thủ công ngay trên VPS."
+                  docker logs --tail 50 uknow-campaign-backend || true
+                fi
+              else
+                echo "::error::Không có container cũ để rollback (đây là lần deploy đầu tiên) — backend hiện KHÔNG chạy."
+              fi
+              MUTATION_IN_PROGRESS=false
+              trap - TERM INT
+              exit 1
+            }
+
             DOCKER_GID="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 0)"
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Starting new backend container..."
-            docker run -d \
+            if ! docker run -d \
               --name uknow-campaign-backend \
               --network uknow_network \
               --group-add "$DOCKER_GID" \
@@ -267,28 +357,52 @@ jobs:
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
               -v /root/uknow/secrets:/app/secrets:ro \
               -v /root/uknow/scripts/ssl-auto-provision.sh:/opt/uknow/ssl-auto-provision.sh:ro \
-              "$BACKEND_IMAGE"
-            # Dọn image cũ >24h (không dùng plain -af để tránh xoá nhầm image
-            # vừa pull của deploy song song). Cron tuần -af lo dọn sâu.
-            docker image prune -af --filter "until=24h"
-            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Polling backend readiness (DB recovery có thể mất ~30s)..."
+              "$BACKEND_IMAGE"; then
+              rollback_to_standby "docker run failed"
+            fi
+
+            # Ngân sách 40×3s=120s (không phải 60s): BullMQ (outboundMessageQueue +
+            # kbDocumentQueue) mỗi cái có connectTimeout mặc định 60s trước khi
+            # markRuntimeReady() được gọi (xem runtimeReadiness.util.js). Một lần Redis
+            # chậm-nhưng-vẫn-lên có thể chiếm gần hết 60s của MỘT queue; ngân sách 60s
+            # cũ không còn margin cho DB connect + validate + scheduler init chạy trước
+            # đó, dễ rollback nhầm một bản deploy khoẻ mạnh chỉ vì Redis trả lời chậm.
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Polling backend readiness (DB recovery + Redis connect có thể mất ~30-60s)..."
             READY=false
             START_TIME=$(date +%s)
-            for i in $(seq 1 20); do
+            for i in $(seq 1 40); do
               if curl --connect-timeout 2 --max-time 4 -sf http://localhost:5001/api/health > /dev/null 2>&1; then
                 READY=true
                 ELAPSED=$(( $(date +%s) - START_TIME ))
-                echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Smoke test passed — backend healthy after ${ELAPSED}s (attempt $i/20)"
+                echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Smoke test passed — backend healthy after ${ELAPSED}s (attempt $i/40)"
                 break
               fi
               sleep 3
             done
             if [ "$READY" != "true" ]; then
               ELAPSED=$(( $(date +%s) - START_TIME ))
-              echo "Smoke test FAILED after ${ELAPSED}s (20 attempts)"
-              docker logs --tail 50 uknow-campaign-backend
-              exit 1
+              rollback_to_standby "Smoke test FAILED after ${ELAPSED}s (40 attempts)"
             fi
+
+            # Cửa sổ ổn định: endpoint vừa healthy không có nghĩa sẽ tiếp tục healthy —
+            # container có thể crash ngay sau readiness. Chờ thêm một nhịp rồi kiểm lại
+            # TRƯỚC KHI xoá standby; xoá standby ngay thì một crash-ngay-sau-readiness
+            # sẽ không còn đường cứu hộ.
+            sleep 3
+            if ! docker inspect uknow-campaign-backend --format '{{.State.Running}}' 2>/dev/null | grep -qx 'true' \
+               || ! curl --connect-timeout 2 --max-time 4 -sf http://localhost:5001/api/health > /dev/null 2>&1; then
+              rollback_to_standby "Container mất readiness ngay trong cửa sổ ổn định sau khởi động"
+            fi
+
+            MUTATION_IN_PROGRESS=false
+            trap - TERM INT
+            if [ "$HAD_PREVIOUS_CONTAINER" = "true" ]; then
+              docker rm -f "$CI_STANDBY_NAME" || true
+            fi
+            # Dọn image cũ >24h (không dùng plain -af để tránh xoá nhầm image
+            # vừa pull của deploy song song). Cron tuần -af lo dọn sâu. Chạy SAU khi
+            # readiness đã pass để không xoá mất image đang cần dùng cho rollback ở trên.
+            docker image prune -af --filter "until=24h"
 
       - name: Promote deployed image as latest
         shell: bash

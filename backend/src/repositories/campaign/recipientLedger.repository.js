@@ -12,11 +12,12 @@ class RecipientLedgerRepository {
    * @param {number|string} input.nodeId
    * @param {string} input.channel
    * @param {string} input.recipientKey already-normalized (lowercase)
-   * @returns {Promise<{last_completed_step: number, is_fully_completed: boolean, meta: object}|null>}
+   * @returns {Promise<{last_completed_step: number, is_fully_completed: boolean, meta: object, updated_at: Date, updated_at_epoch_us: string}|null>}
    */
   async getRecipientProgress({ runId, nodeId, channel, recipientKey }) {
     const result = await db.query(
-      `SELECT last_completed_step, is_fully_completed, meta
+      `SELECT last_completed_step, is_fully_completed, meta, updated_at,
+              EXTRACT(EPOCH FROM updated_at) * 1000000 AS updated_at_epoch_us
        FROM campaign_run_recipient_steps
        WHERE id_run = $1
          AND id_node = $2
@@ -59,7 +60,7 @@ class RecipientLedgerRepository {
     removeRetryCountFromMeta,
     removeZaloFailureFromMeta,
   }) {
-    await db.query(
+    const { rows } = await db.query(
       `INSERT INTO campaign_run_recipient_steps
        (id_run, id_campaign, id_node, channel, recipient_key, last_completed_step, is_fully_completed, last_sent_at, meta, updated_at)
        VALUES (
@@ -74,24 +75,52 @@ class RecipientLedgerRepository {
          CURRENT_TIMESTAMP
        )
        ON CONFLICT (id_run, id_node, channel, recipient_key)
-       DO UPDATE SET
-         last_completed_step = GREATEST(campaign_run_recipient_steps.last_completed_step, EXCLUDED.last_completed_step),
-         is_fully_completed = campaign_run_recipient_steps.is_fully_completed OR EXCLUDED.is_fully_completed,
-         last_sent_at = CURRENT_TIMESTAMP,
-         meta = CASE
-           WHEN COALESCE($9::boolean, FALSE) THEN
-             CASE WHEN COALESCE($10::boolean, FALSE) THEN (
-               COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-             ) - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason'
-             ELSE (
-               COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-             ) - 'retryCount' END
-           WHEN COALESCE($10::boolean, FALSE) THEN (
-             COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-           ) - 'zaloSendFailureCount' - 'zaloAbandonReason'
-           ELSE COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-         END,
-         updated_at = CURRENT_TIMESTAMP`,
+        DO UPDATE SET
+          last_completed_step = CASE
+            WHEN campaign_run_recipient_steps.is_fully_completed
+                 OR (EXCLUDED.last_completed_step < campaign_run_recipient_steps.last_completed_step) THEN
+              campaign_run_recipient_steps.last_completed_step
+            ELSE EXCLUDED.last_completed_step
+          END,
+          is_fully_completed = CASE
+            WHEN campaign_run_recipient_steps.is_fully_completed
+                 OR (EXCLUDED.last_completed_step < campaign_run_recipient_steps.last_completed_step) THEN
+              campaign_run_recipient_steps.is_fully_completed
+            ELSE (campaign_run_recipient_steps.is_fully_completed OR EXCLUDED.is_fully_completed)
+          END,
+          last_sent_at = CASE
+            WHEN campaign_run_recipient_steps.is_fully_completed
+                 OR (EXCLUDED.last_completed_step < campaign_run_recipient_steps.last_completed_step) THEN
+              campaign_run_recipient_steps.last_sent_at
+            ELSE CURRENT_TIMESTAMP
+          END,
+          meta = CASE
+            WHEN campaign_run_recipient_steps.is_fully_completed
+                 OR (EXCLUDED.last_completed_step < campaign_run_recipient_steps.last_completed_step) THEN
+              campaign_run_recipient_steps.meta
+            ELSE
+              CASE
+                WHEN COALESCE($9::boolean, FALSE) THEN
+                  CASE WHEN COALESCE($10::boolean, FALSE) THEN (
+                    COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
+                  ) - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason'
+                  ELSE (
+                    COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
+                  ) - 'retryCount' END
+                WHEN COALESCE($10::boolean, FALSE) THEN (
+                  COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
+                ) - 'zaloSendFailureCount' - 'zaloAbandonReason'
+                ELSE COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
+              END
+          END,
+          updated_at = CASE
+            WHEN campaign_run_recipient_steps.is_fully_completed
+                 OR (EXCLUDED.last_completed_step < campaign_run_recipient_steps.last_completed_step) THEN
+              campaign_run_recipient_steps.updated_at
+            ELSE CURRENT_TIMESTAMP
+          END
+       RETURNING last_completed_step, is_fully_completed, last_sent_at, meta, updated_at,
+                 EXTRACT(EPOCH FROM updated_at) * 1000000 AS updated_at_epoch_us`,
       [
         runId,
         campaignId,
@@ -105,6 +134,10 @@ class RecipientLedgerRepository {
         removeZaloFailureFromMeta,
       ]
     );
+
+    // ON CONFLICT có thể từ chối stale write. Caller phải dùng row authoritative
+    // này thay vì giữ payload vừa gửi trong in-memory progress map.
+    return rows[0] || null;
   }
 
   /**

@@ -1,5 +1,6 @@
 import db from '../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL } from '../utils/billingCycle.util.js';
+import { getStaleSendingSeconds } from '../config/sendQuota.config.js';
 
 /**
  * Valid state transitions for send_quota_reservations.
@@ -1289,5 +1290,65 @@ export async function getWalletAvailableBalance(queryable, billingUserId, wallet
     debited,
     activeHolds,
     available,
+  };
+}
+
+/**
+ * Tìm các reservation quá hạn lease (reserved, sending, uncertain) thuộc một campaign run đang resume.
+ * Phục vụ reconciliation observation hook (PR-Q4c) — KHÔNG chuyển trạng thái dòng.
+ * Zero PII: chỉ trả về các metadata kỹ thuật và id để log/metric.
+ *
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {object} params
+ * @param {number|string} params.runId ID của lượt chạy chiến dịch
+ * @param {Date} [params.now=new Date()] mốc thời gian đối chiếu quá hạn lease
+ * @param {number} [params.staleSendingSeconds] số giây coi sending là stale (default 300s hoặc từ env SEND_QUOTA_SENDING_UNCERTAIN_SECONDS)
+ * @param {number} [params.limit=50] giới hạn số bản ghi trả về (an toàn, bounded)
+ * @returns {Promise<{rows: Array<object>, totalCount: number, hasMore: boolean}>}
+ */
+export async function findStaleCampaignRunReservations(queryable, {
+  runId,
+  now = new Date(),
+  staleSendingSeconds,
+  limit = 50,
+} = {}) {
+  const safeRunId = Number.parseInt(runId, 10);
+  if (!Number.isFinite(safeRunId) || safeRunId <= 0) {
+    return {
+      rows: [],
+      totalCount: 0,
+      hasMore: false,
+    };
+  }
+  const safeLimit = Math.max(1, Math.min(1000, Number.parseInt(limit, 10) || 50));
+  const safeStaleSendingSecs = getStaleSendingSeconds(staleSendingSeconds);
+
+  const { rows } = await queryable.query(
+    `SELECT id, status, channel, source_type, failure_code,
+            created_at, sending_at, uncertain_at, expires_at,
+            EXTRACT(EPOCH FROM ($2 - COALESCE(uncertain_at, sending_at, created_at)))::int AS age_seconds,
+            COUNT(*) OVER()::int AS total_count
+     FROM send_quota_reservations
+     WHERE source_type IN ('campaign_email', 'campaign_zalo')
+       AND source_ref->>'runId' = $1::text
+       AND (
+         (status = 'reserved' AND (expires_at IS NULL OR expires_at < $2))
+         OR
+         (status = 'sending' AND COALESCE(sending_at, created_at) < $2 - make_interval(secs => $3))
+         OR
+         (status = 'uncertain')
+       )
+     ORDER BY COALESCE(uncertain_at, sending_at, created_at) ASC
+     LIMIT $4`,
+    [safeRunId, now, safeStaleSendingSecs, safeLimit]
+  );
+
+  const totalCount = rows.length > 0 ? Number.parseInt(rows[0].total_count, 10) || 0 : 0;
+  const cleanRows = rows.map(({ total_count, ...rest }) => rest);
+
+  return {
+    rows: cleanRows,
+    totalCount,
+    hasMore: totalCount > cleanRows.length,
   };
 }

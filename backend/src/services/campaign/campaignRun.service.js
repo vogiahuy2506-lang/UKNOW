@@ -42,6 +42,8 @@ import {
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
 import { deriveVariablesForText } from '../../utils/templateVariableAutoMap.util.js';
+import { findStaleCampaignRunReservations } from '../../repositories/sendQuota.repository.js';
+import { shouldReplaceRecipientProgressCache } from './recipientProgressCache.util.js';
 
 export const EMAIL_API_DELAY_MIN_MS = 50;
 export const EMAIL_API_DELAY_MAX_MS = 250;
@@ -850,6 +852,60 @@ class CampaignRunService {
   }
 
   /**
+   * Quan sát các reservation quá hạn lease thuộc run đang resume (PR-Q4c Reconciliation Observation Hook).
+   * Dò các reservation 'reserved' quá expires_at, 'sending' quá stale interval, hoặc 'uncertain' thuộc run.
+   * Không tự động mutate/consume/release — sweeper PR-Q5 sẽ xử lý.
+   * Zero PII: chỉ log runId, reservationId, sourceType, status, ageSeconds.
+   * Không ném lỗi ra ngoài làm gián đoạn luồng thực thi campaign.
+   *
+   * @param {number|string} runId
+   * @param {object} [options]
+   * @param {boolean} [options.isSourceRun]
+   * @returns {Promise<{rows: Array<object>, totalCount: number, hasMore: boolean}>}
+   */
+  async observeStaleReservationsOnRunResume(runId, options = {}) {
+    try {
+      const result = await findStaleCampaignRunReservations(db, {
+        runId,
+        ...options,
+      });
+      const rows = result?.rows || [];
+      const totalCount = typeof result?.totalCount === 'number'
+        ? result.totalCount
+        : rows.length;
+      const hasMore = Boolean(result?.hasMore ?? (totalCount > rows.length));
+
+      if (totalCount > 0) {
+        const sourceContext = options?.isSourceRun ? ' (source run)' : '';
+        console.warn(
+          `[CampaignRun][ReconciliationObservation] run=${runId}${sourceContext} phát hiện ${totalCount} reservation đọng/quá hạn lease (sample ${rows.length}, hasMore=${hasMore}):`,
+          {
+            runId: Number.parseInt(runId, 10),
+            isSourceRun: Boolean(options?.isSourceRun),
+            totalStalledCount: totalCount,
+            sampleCount: rows.length,
+            hasMore,
+            reservations: rows.map((r) => ({
+              reservationId: r.id,
+              sourceType: r.source_type,
+              status: r.status,
+              ageSeconds: r.age_seconds != null ? Number(r.age_seconds) : null,
+            })),
+          }
+        );
+      }
+      return result || { rows: [], totalCount: 0, hasMore: false };
+    } catch (err) {
+      console.warn(`[CampaignRun][ReconciliationObservation] run=${runId} warning:`, err?.message);
+      return {
+        rows: [],
+        totalCount: 0,
+        hasMore: false,
+      };
+    }
+  }
+
+  /**
    * Queue dispatcher cho thực thi chiến dịch.
    *
    * Luồng hoạt động:
@@ -984,6 +1040,12 @@ class CampaignRunService {
    */
   async _doExecuteCampaign(campaignId, runId, userId, runKey, roleCode = null, executionOptions = {}) {
     this.activeRunIds.add(runKey);
+    const isResume = Boolean(
+      executionOptions?.isResume === true
+      || (typeof executionOptions?.resumedBy === 'string' && executionOptions.resumedBy.trim().length > 0)
+      || Boolean(executionOptions?.continueRunId)
+      || Boolean(executionOptions?.resumeFromRunId)
+    );
     const resumeContext = {
       resumedBy: String(executionOptions?.resumedBy || 'manual_or_internal'),
     };
@@ -995,6 +1057,28 @@ class CampaignRunService {
     let failedSends = 0;
     let skippedSends = 0;
     try {
+      // Reconciliation hook: quan sát reservation quá hạn lease ngay đầu run nếu có tín hiệu resume
+      // Chạy trước early-return defer để không bỏ sót reservation đọng khi resume thủ công trước mốc defer.
+      const rawEarlyMetadata = (await campaignRunRepository.getRunMetadata(runId)) || {};
+      const rawEarlyResumeFromRunId = Number.parseInt(
+        rawEarlyMetadata?.resumeFromRunId ?? executionOptions?.resumeFromRunId,
+        10
+      );
+      const effectiveEarlyResumeFromRunId = Number.isFinite(rawEarlyResumeFromRunId)
+        && rawEarlyResumeFromRunId > 0
+        && rawEarlyResumeFromRunId !== Number.parseInt(runId, 10)
+        ? rawEarlyResumeFromRunId
+        : null;
+      const isEarlyRunResume = Boolean(
+        isResume || effectiveEarlyResumeFromRunId !== null
+      );
+      if (isEarlyRunResume) {
+        await this.observeStaleReservationsOnRunResume(runId);
+        if (effectiveEarlyResumeFromRunId !== null) {
+          await this.observeStaleReservationsOnRunResume(effectiveEarlyResumeFromRunId, { isSourceRun: true });
+        }
+      }
+
       // Đã yield slot trước đó do chờ dài; nếu mốc resume chưa tới thì thoát ngay (scheduler gọi lại sau).
       if (await this._exitIfRunDeferredUntilFuture(runId, resumeContext)) {
         return;
@@ -1442,6 +1526,8 @@ class CampaignRunService {
         retryCount: 0,
         /** Số lần gửi Zalo thất bại liên tiếp (continuous), lưu trong meta ledger. */
         zaloSendFailureCount: 0,
+        // Chỉ có khi state đến từ PostgreSQL. Dùng để chặn callback cũ ghi lùi cache.
+        updatedAt: null,
       });
       /**
        * Read recipient step progress from DB ledger; fallback to in-memory map when table not present.
@@ -1488,6 +1574,8 @@ class CampaignRunService {
                   nextDueAt: resumeMeta?.nextDueAt || null,
                   retryCount: Math.max(0, Number.parseInt(resumeMeta?.retryCount, 10) || 0),
                   zaloSendFailureCount: Math.max(0, Number.parseInt(resumeMeta?.zaloSendFailureCount, 10) || 0),
+                  updatedAt: resumeRow.updated_at || null,
+                  updatedAtEpochUs: resumeRow.updated_at_epoch_us ?? null,
                 };
                 resumedRecipientProgress.set(localKey, resumedProgress);
                 return resumedProgress;
@@ -1504,6 +1592,8 @@ class CampaignRunService {
             nextDueAt: meta?.nextDueAt || null,
             retryCount: Math.max(0, Number.parseInt(meta?.retryCount, 10) || 0),
             zaloSendFailureCount: Math.max(0, Number.parseInt(meta?.zaloSendFailureCount, 10) || 0),
+            updatedAt: progressRow.updated_at || null,
+            updatedAtEpochUs: progressRow.updated_at_epoch_us ?? null,
           };
           localRecipientProgress.set(localKey, currentProgress);
           return currentProgress;
@@ -1577,10 +1667,27 @@ class CampaignRunService {
           nextDueAt,
           retryCount: resolvedRetryCount,
           zaloSendFailureCount: resolvedZaloFail,
+          updatedAt: null,
         };
-        localRecipientProgress.set(localKey, memRow);
-        resumedRecipientProgress.set(localKey, memRow);
-        if (!isRecipientLedgerTableAvailable) return;
+        const cacheRecipientProgress = (progress) => {
+          const currentLocal = localRecipientProgress.get(localKey);
+          if (shouldReplaceRecipientProgressCache(currentLocal, progress)) {
+            localRecipientProgress.set(localKey, progress);
+          }
+
+          // `resumedRecipientProgress` chỉ là fallback khi run hiện tại chưa
+          // có row local. Không cho callback cũ làm lùi state đã quan sát.
+          const currentResumed = resumedRecipientProgress.get(localKey);
+          if (shouldReplaceRecipientProgressCache(currentResumed, progress)) {
+            resumedRecipientProgress.set(localKey, progress);
+          }
+        };
+
+        // Các môi trường legacy chưa có bảng ledger chỉ có thể dựa vào memory.
+        if (!isRecipientLedgerTableAvailable) {
+          cacheRecipientProgress(memRow);
+          return;
+        }
         try {
           const metaPayload = {
             ...(firstSentAt ? { firstSentAt } : {}),
@@ -1596,7 +1703,7 @@ class CampaignRunService {
               ? { zaloAbandonReason: String(zaloAbandonReason).trim() }
               : {}),
           };
-          await recipientLedgerRepository.upsertRecipientProgress({
+          const persistedRow = await recipientLedgerRepository.upsertRecipientProgress({
             runId,
             campaignId,
             nodeId,
@@ -1608,9 +1715,28 @@ class CampaignRunService {
             removeRetryCountFromMeta,
             removeZaloFailureFromMeta,
           });
+
+          // PostgreSQL là arbiter cho out-of-order writes. Chỉ cập nhật cache sau
+          // commit và luôn dùng state RETURNING; nếu stale write bị DB từ chối,
+          // worker hiện tại không được đọc lại payload lùi bước của chính nó.
+          const persistedMeta = persistedRow?.meta || {};
+          cacheRecipientProgress(persistedRow
+            ? {
+              lastCompletedStep: Math.max(0, Number.parseInt(persistedRow.last_completed_step, 10) || 0),
+              isFullyCompleted: Boolean(persistedRow.is_fully_completed),
+              firstSentAt: persistedMeta.firstSentAt || null,
+              lastCompletedAt: persistedMeta.lastCompletedAt || null,
+              nextDueAt: persistedMeta.nextDueAt || null,
+              retryCount: Math.max(0, Number.parseInt(persistedMeta.retryCount, 10) || 0),
+              zaloSendFailureCount: Math.max(0, Number.parseInt(persistedMeta.zaloSendFailureCount, 10) || 0),
+              updatedAt: persistedRow.updated_at || null,
+              updatedAtEpochUs: persistedRow.updated_at_epoch_us ?? null,
+            }
+            : memRow);
         } catch (error) {
           if (String(error?.code || '') === '42P01' || String(error?.code || '') === '42703') {
             isRecipientLedgerTableAvailable = false;
+            cacheRecipientProgress(memRow);
             return;
           }
           throw error;
@@ -1955,10 +2081,17 @@ class CampaignRunService {
       const rawContinuousMode = runRow?.run_metadata?.continuousMode;
       isContinuousMode = runSource === 'campaign_run'
         && (rawContinuousMode === true || String(rawContinuousMode).trim().toLowerCase() === 'true');
-      const rawResumeFromRunId = Number.parseInt(runRow?.run_metadata?.resumeFromRunId, 10);
-      if (isContinuousMode && Number.isFinite(rawResumeFromRunId) && rawResumeFromRunId > 0) {
-        const normalizedRunId = Number.parseInt(runId, 10);
-        resumeFromRunId = rawResumeFromRunId !== normalizedRunId ? rawResumeFromRunId : null;
+      const rawResumeFromRunId = Number.parseInt(
+        runRow?.run_metadata?.resumeFromRunId ?? executionOptions?.resumeFromRunId,
+        10
+      );
+      const effectiveResumeFromRunId = Number.isFinite(rawResumeFromRunId)
+        && rawResumeFromRunId > 0
+        && rawResumeFromRunId !== Number.parseInt(runId, 10)
+        ? rawResumeFromRunId
+        : null;
+      if (isContinuousMode && effectiveResumeFromRunId !== null) {
+        resumeFromRunId = effectiveResumeFromRunId;
       }
       const rawPollIntervalMs = Number.parseInt(runRow?.run_metadata?.pollIntervalMs, 10);
       const rawPollIntervalMinutes = Number.parseInt(

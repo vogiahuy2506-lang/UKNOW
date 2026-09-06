@@ -716,7 +716,11 @@ class CampaignController {
       // bắt được treo.
       const executionUserId = Number.parseInt(runRecord?.campaign_owner_id, 10)
         || workspaceContext.workspaceOwnerId;
-      this.executeCampaign(campaignId, runRecord.id, executionUserId, workspaceContext.roleCode).catch(error => {
+      const isResume = continueRunId !== null || Boolean(resumeFromRunId);
+      this.executeCampaign(campaignId, runRecord.id, executionUserId, workspaceContext.roleCode, {
+        isResume,
+        resumedBy: continueRunId !== null ? 'manual_continuous' : (resumeFromRunId ? 'manual_continuous_from' : undefined),
+      }).catch(error => {
         console.error('Execute campaign error:', error);
       });
 

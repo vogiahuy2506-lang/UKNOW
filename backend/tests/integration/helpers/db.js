@@ -70,6 +70,7 @@ const TRUNCATE_ALL_SQL = `
       campaign_schedules,
       campaign_executions,
       campaign_run_recipient_steps,
+      campaign_run_recipient_steps_backup_182,
       campaign_runs,
       campaign_connections,
       campaign_nodes,

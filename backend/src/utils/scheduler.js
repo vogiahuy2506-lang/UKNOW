@@ -343,7 +343,7 @@ const recoverContinuousCampaignRuns = async () => {
     activeContinuousRunIds.add(runKey);
     recovered += 1;
     console.log(`[Scheduler] Phục hồi campaign run continuous #${runId} (campaign #${campaignId})`);
-    campaignController.executeCampaign(campaignId, runId, userId)
+    campaignController.executeCampaign(campaignId, runId, userId, null, { isResume: true, resumedBy: 'scheduler_continuous' })
       .catch((error) => {
         console.error(`[Scheduler] Lỗi phục hồi run #${runId}:`, error.message);
       })
@@ -361,7 +361,7 @@ const triggerNonContinuousResume = ({ runId, campaignId, userId, resumedBy }) =>
   }
 
   activeNonContinuousResumeRunIds.add(runKey);
-  campaignController.executeCampaign(campaignId, runId, userId, null, { resumedBy })
+  campaignController.executeCampaign(campaignId, runId, userId, null, { isResume: true, resumedBy })
     .catch((error) => {
       console.error(`[Scheduler] Lỗi phục hồi non-continuous run #${runId}:`, error.message);
     })

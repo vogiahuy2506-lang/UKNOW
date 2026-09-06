@@ -87,6 +87,7 @@ import { domainResolver } from './middleware/domainResolver.js';
 import { createDynamicCorsMiddleware, publicCorsMiddleware } from './middleware/dynamicCors.middleware.js';
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
 import chatbotRepository from './repositories/ai/chatbot.repository.js';
+import { getRuntimeReadiness } from './utils/runtimeReadiness.util.js';
 
 /**
  * Khởi tạo Express app (không listen).
@@ -220,7 +221,14 @@ export function createApp() {
   app.use('/api/admin/affiliate/withdrawals', adminAffiliateWithdrawalRouter);
 
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    const readiness = getRuntimeReadiness();
+    if (!readiness.ready) {
+      return res.status(503).json({
+        status: readiness.phase === 'failed' ? 'unavailable' : 'starting',
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
   // Zalo domain verification meta tag (skip khi request từ subdomain landing)
