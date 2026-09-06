@@ -30,6 +30,34 @@ describe('Call site của compiler trong aiCampaign.service.js', () => {
     expect(source).not.toMatch(/isCompilableIntent\s*\(\s*intent\s*\)/);
   });
 
+  /**
+   * Bổ sung 06/09/2026 — cùng cái bẫy, dòng khác.
+   *
+   * Bài test phía trên chỉ canh `isCompilableIntent`. Lỗi chuyển sang dòng ngay kế bên:
+   * `compileCampaign(intent)` thay vì `compileCampaign(campaignIntent)`. compileCampaign ném
+   * "Cannot compile incomplete intent: missing intent", bị catch bên dưới nuốt thành log
+   * "Giữ script LLM cũ" — nên compiler KHÔNG BAO GIỜ chạy, y hệt lần trước.
+   *
+   * Bằng chứng production: cờ zalo_group bật từ 31/08, nhưng tới 06/09 audit_logs không có
+   * một dòng via='ai_compiler' nào trong 7 ngày.
+   *
+   * Canh MỌI hàm nhận CampaignIntentV1, không canh từng cái một — nếu không lần thứ tư nó
+   * lại chui sang một dòng khác.
+   */
+  it('KHÔNG hàm nào nhận CampaignIntentV1 được truyền thẳng biến `intent` của hàm bao ngoài', () => {
+    const viPham = [];
+    for (const fn of ['isCompilableIntent', 'compileCampaign', 'deriveIntent']) {
+      const re = new RegExp(`${fn}\\s*\\(\\s*intent\\s*[),]`);
+      if (re.test(source)) viPham.push(`${fn}(intent)`);
+    }
+    expect(viPham).toEqual([]);
+  });
+
+  it('KHÔNG được đọc thuộc tính của `intent` như thể nó là object CampaignIntentV1', () => {
+    // `intent` là CHUỖI phân loại; `intent.channel` luôn undefined.
+    expect(source).not.toMatch(/[^n]intent\.channel/);
+  });
+
   it('phải kiểm cờ COMPILER_ENABLED_FLOWS theo channel của intent đã dựng', () => {
     expect(source).toMatch(/COMPILER_ENABLED_FLOWS/);
     expect(source).toMatch(/campaignIntent\.channel/);

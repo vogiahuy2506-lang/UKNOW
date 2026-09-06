@@ -65,6 +65,7 @@ import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
 import { isCompilableIntent, deriveIntent } from './campaignIntent.schema.js';
 import { compileCampaign } from './campaignCompiler.service.js';
 import { mergeCompiledWithContent, assertNoEmptyContent } from './campaignScriptMerge.service.js';
+import { fillContentSlots } from './campaignSlotFiller.service.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
 
@@ -1719,7 +1720,13 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           } else if (!enabledFlows.includes(campaignIntent.channel)) {
             // Luồng chưa bật cờ
           } else {
-            const compiledGraph = compileCampaign(intent);
+            // Dùng `campaignIntent` (object CampaignIntentV1 dựng ở trên), KHÔNG phải `intent`
+            // — xem CẢNH BÁO TÊN BIẾN cách đây vài dòng. Truyền nhầm `intent` ở đây làm
+            // compileCampaign ném "Cannot compile incomplete intent: missing intent", bị catch
+            // bên dưới nuốt thành log "Giữ script LLM cũ", nên compiler KHÔNG BAO GIỜ chạy.
+            // Đo trên production 06/09: cờ zalo_group bật từ 31/08 nhưng audit_logs không có
+            // một dòng via='ai_compiler' nào trong 7 ngày — đây chính là nguyên nhân.
+            const compiledGraph = compileCampaign(campaignIntent);
             const { script: mergedScript, unmatchedSlots } = mergeCompiledWithContent(compiledGraph, targetScript);
 
             if (unmatchedSlots.length > 0) {
@@ -1739,7 +1746,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
                 finalResponse.data.compilerApplied = true;
                 finalResponse.data._via = 'ai_compiler';
               }
-              console.log(`[CampaignCompiler] ✅ Đã áp dụng graph Compiler cho luồng ${intent.channel} (via: ai_compiler)`);
+              console.log(`[CampaignCompiler] ✅ Đã áp dụng graph Compiler cho luồng ${campaignIntent.channel} (via: ai_compiler)`);
             }
           }
         } catch (compilerApplyErr) {
