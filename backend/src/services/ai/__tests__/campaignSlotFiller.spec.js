@@ -146,6 +146,10 @@ describe('GĐ 4: campaignSlotFiller.service', () => {
       } finally {
         if (prevKey) process.env.GEMINI_API_KEY = prevKey;
       }
-    });
+      // Timeout riêng 30s: đường fail-open có chạm DB, mà bộ unit test không có DB
+      // nên phải chờ hết timeout kết nối. Đo được 18ms khi có DB, 5001ms khi trỏ DB
+      // vào cổng chết — nằm ĐÚNG trên ngưỡng mặc định 5000ms của Jest, nên máy dev
+      // xanh còn CI đỏ (đã làm gãy Deploy Backend run 34020494491 ngày 06/09).
+    }, 30000);
   });
 });
