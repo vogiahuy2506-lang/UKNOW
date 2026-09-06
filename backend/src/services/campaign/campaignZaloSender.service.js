@@ -1519,7 +1519,15 @@ class CampaignZaloSenderService {
     console.log('[CampaignZaloSender] restoreApiFromCookieText called');
     try {
       const api = await restoreZaloSessionFromCookie(cookieText);
-      console.log('[CampaignZaloSender] restoreApiFromCookieText success:', !!api);
+      if (!api) {
+        // restoreZaloSessionFromCookie trả null khi đăng nhập hỏng, KHÔNG ném lỗi. Không chặn
+        // ở đây thì tryAutoRestoreSession gọi markAccountConnected với phiên rỗng: last_connected_at
+        // = now, restore_fail_count = 0 — cron zalo_session_restore (15 phút) xoá cửa sổ 60 phút của
+        // luật needs_reauth nên tài khoản cookie chết kẹt 'connected' mãi và bị đăng nhập lại liên
+        // tục (06/09/2026: 32 tài khoản, 173 lần trong 2 giờ). Controller đã ném đúng ở nhánh này.
+        throw new Error('RESTORE_SESSION_FAILED');
+      }
+      console.log('[CampaignZaloSender] restoreApiFromCookieText success: true');
       return api;
     } catch (error) {
       console.error('[CampaignZaloSender] restoreApiFromCookieText failed:', error.message);
