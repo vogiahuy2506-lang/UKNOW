@@ -5552,6 +5552,19 @@ export default {
     copyCode: 'Sao chép mã',
     copyLink: 'Sao chép link',
     copied: 'Đã sao chép!',
+    // Profile tab - consent history (PR-N3a / Nghị định 330/2026/NĐ-CP)
+    consentHistoryTitle: 'Lịch sử đồng ý điều khoản & xử lý dữ liệu',
+    consentDocTerms: 'Điều khoản dịch vụ',
+    consentDocPrivacy: 'Chính sách bảo mật',
+    consentDocDpa: 'Thoả thuận Xử lý Dữ liệu Cá nhân (Public DPA)',
+    consentDocVersion: 'Phiên bản',
+    consentDocDate: 'Ngày ghi nhận',
+    consentGranted: 'Đã đồng ý',
+    consentPending: 'Chưa ghi nhận',
+    viewDocLink: '(Xem văn bản)',
+    consentWithdrawalNotice: 'Ba văn bản trên là điều kiện tiên quyết để sử dụng dịch vụ. Nếu muốn rút lại sự đồng ý, bạn cần yêu cầu chấm dứt và xoá tài khoản thông qua liên hệ hỗ trợ tại',
+    consentWithdrawalOr: 'hoặc trang',
+    contactPage: 'Liên hệ',
     // Profile tab - account stats
     createdAt: 'Tạo ngày {date}',
     lastLogin: 'Đăng nhập gần nhất {date}',
@@ -6592,6 +6605,23 @@ export default {
     failed: 'Cập nhật số điện thoại thất bại.',
     errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
     versionMismatchError: 'Hệ thống đang được cập nhật. Vui lòng thử lại sau ít phút hoặc liên hệ hỗ trợ.',
+  },
+
+  consentRequired: {
+    title: 'Cập nhật thoả thuận điều khoản & dữ liệu cá nhân',
+    description: 'Theo quy định của Nghị định 330/2026/NĐ-CP về bảo vệ dữ liệu cá nhân, vui lòng xác nhận sự đồng ý của bạn đối với các văn bản pháp lý dưới đây.',
+    agreeTerms: 'Tôi đã đọc và đồng ý với',
+    termsLink: 'Điều khoản dịch vụ',
+    agreePrivacy: 'Tôi đã đọc và đồng ý với',
+    privacyLink: 'Chính sách bảo mật',
+    agreeDpa: 'Tôi đã đọc và đồng ý với',
+    dpaLink: 'Thoả thuận Xử lý Dữ liệu Cá nhân (Public DPA)',
+    validationRequired: 'Vui lòng đồng ý với cả 3 văn bản để tiếp tục.',
+    later: 'Để sau',
+    submit: 'Đồng ý và tiếp tục',
+    saving: 'Đang xử lý...',
+    failed: 'Ghi nhận đồng ý thất bại.',
+    errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   },
 
   // Trial Welcome Modal

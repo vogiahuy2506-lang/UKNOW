@@ -33,6 +33,14 @@ router.put('/invoice-profile', userController.updateInvoiceProfile.bind(userCont
 router.delete('/invoice-profile', userController.deleteInvoiceProfile.bind(userController));
 
 /**
+ * POST /api/users/consents
+ * GET /api/users/consents
+ * Ghi nhận đồng ý bổ sung và lấy lịch sử đồng ý pháp lý (PR-N3a).
+ */
+router.post('/consents', userController.recordReconsent.bind(userController));
+router.get('/consents', userController.getConsents.bind(userController));
+
+/**
  * PATCH /api/users/bot-daily-reply-cap
  * Chủ tài khoản đặt trần lượt bot trả lời mỗi ngày (null/empty = bỏ giới hạn).
  */
