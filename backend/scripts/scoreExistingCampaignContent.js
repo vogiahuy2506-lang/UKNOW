@@ -44,11 +44,12 @@ async function main() {
       if (totalEmails > 0) {
         const { rows: tplRows } = await db.query(`
           SELECT 
-            COUNT(*) FILTER (WHERE id_email_template IS NOT NULL) AS with_template,
-            COUNT(*) FILTER (WHERE id_email_template IS NULL) AS ai_direct,
-            COUNT(*) FILTER (WHERE template_code LIKE 'ai_%') AS ai_via_template,
-            COUNT(*) FILTER (WHERE body_html LIKE '%{{%') AS unrendered_placeholders
-          FROM email_messages
+            COUNT(*) FILTER (WHERE em.id_email_template IS NOT NULL) AS with_template,
+            COUNT(*) FILTER (WHERE em.id_email_template IS NULL) AS ai_direct,
+            COUNT(*) FILTER (WHERE et.template_code LIKE 'ai_%') AS ai_via_template,
+            COUNT(*) FILTER (WHERE em.body_html LIKE '%{{%') AS unrendered_placeholders
+          FROM email_messages em
+          LEFT JOIN email_templates et ON et.id = em.id_email_template
         `);
         emailWithTemplate = Number(tplRows[0]?.with_template || 0);
         emailAiDirect = Number(tplRows[0]?.ai_direct || 0);
@@ -155,11 +156,109 @@ async function main() {
     }
 
     console.log(`Tổng số node gửi Zalo tìm thấy trong DB: ${zaloNodeRows.length} node (trên ${zaloCampaignMap.size} chiến dịch)`);
-    console.log(`Tổng số bước (message steps) Zalo: ${totalZaloSteps}`);
+    console.log(`Tổng số bước cấu hình (message steps) Zalo: ${totalZaloSteps}`);
     if (totalZaloSteps > 0) {
-      console.log(` - Tin dùng mẫu sẵn (có templateId):     ${zaloStepsWithTemplate} (${((zaloStepsWithTemplate / totalZaloSteps) * 100).toFixed(1)}%)`);
-      console.log(` - Tin AI soạn / Tự viết (không templateId): ${zaloStepsCustomOrAi} (${((zaloStepsCustomOrAi / totalZaloSteps) * 100).toFixed(1)}%)`);
+      console.log(` - Bước cấu hình có trỏ mẫu template (có templateId):     ${zaloStepsWithTemplate} (${((zaloStepsWithTemplate / totalZaloSteps) * 100).toFixed(1)}%)`);
+      console.log(` - Bước cấu hình AI soạn / Tự viết (không có templateId): ${zaloStepsCustomOrAi} (${((zaloStepsCustomOrAi / totalZaloSteps) * 100).toFixed(1)}%)`);
     }
+
+    // Đo lường lưu lượng gửi thật (zalo_messages) nối gián tiếp sang node config
+    console.log('\n--- ĐO LƯỜNG THEO LƯU LƯỢNG TIN THẬT ĐÃ GỬI (ZALO_MESSAGES) ---');
+    try {
+      const { rows: zmAllRows } = await db.query(`
+        SELECT id, id_campaign, id_node, channel, tracking_metadata
+        FROM zalo_messages
+      `);
+
+      const nodeMapById = new Map();
+      const campNodeMapByCamp = new Map();
+      for (const node of zaloNodeRows) {
+        nodeMapById.set(Number(node.id), node);
+        const cId = Number(node.id_campaign);
+        if (!campNodeMapByCamp.has(cId)) campNodeMapByCamp.set(cId, []);
+        campNodeMapByCamp.get(cId).push(node);
+      }
+
+      let trafficContentWithTemplate = 0;
+      let trafficContentCustomOrAi = 0;
+      let trafficFriendRequestCount = 0;
+
+      for (const msg of zmAllRows) {
+        if (msg.channel === 'zalo_friend_request') {
+          trafficFriendRequestCount++;
+          continue;
+        }
+
+        let matchedNode = null;
+        if (msg.id_node && nodeMapById.has(Number(msg.id_node))) {
+          matchedNode = nodeMapById.get(Number(msg.id_node));
+        } else if (msg.id_campaign && campNodeMapByCamp.has(Number(msg.id_campaign))) {
+          const candidates = campNodeMapByCamp.get(Number(msg.id_campaign)).filter((n) => {
+            const subtype = getNodeSubtype(n);
+            if (msg.channel === 'zalo_personal') return subtype.includes('personal');
+            if (msg.channel === 'zalo_group') return subtype.includes('group');
+            return false;
+          });
+          if (candidates.length === 1) {
+            matchedNode = candidates[0];
+          }
+        }
+
+        if (!matchedNode) {
+          trafficContentCustomOrAi++;
+          continue;
+        }
+
+        const cfg = typeof matchedNode.config === 'object' && matchedNode.config !== null ? matchedNode.config : {};
+        const subtype = getNodeSubtype(matchedNode);
+        const isPersonal = subtype.includes('personal');
+
+        const steps = isPersonal
+          ? (Array.isArray(cfg.zaloPersonalTemplateSteps) && cfg.zaloPersonalTemplateSteps.length > 0
+              ? cfg.zaloPersonalTemplateSteps
+              : (cfg.messageText || cfg.message ? [{ message: cfg.messageText || cfg.message, templateId: cfg.templateId }] : []))
+          : (Array.isArray(cfg.zaloGroupTemplateSteps) && cfg.zaloGroupTemplateSteps.length > 0
+              ? cfg.zaloGroupTemplateSteps
+              : (cfg.messageText || cfg.message ? [{ message: cfg.messageText || cfg.message, templateId: cfg.templateId }] : []));
+
+        const meta = typeof msg.tracking_metadata === 'object' && msg.tracking_metadata !== null ? msg.tracking_metadata : {};
+        const stepIdx = meta.stepIndex != null ? Number(meta.stepIndex) : null;
+
+        let targetStep = null;
+        if (stepIdx != null && steps[stepIdx]) {
+          targetStep = steps[stepIdx];
+        } else if (steps.length === 1) {
+          targetStep = steps[0];
+        } else if (steps.length > 0) {
+          const allHaveTpl = steps.every((s) => Boolean(s?.templateId));
+          const noneHaveTpl = steps.every((s) => !s?.templateId);
+          if (allHaveTpl) targetStep = { templateId: 'all' };
+          else if (noneHaveTpl) targetStep = { templateId: null };
+          else targetStep = steps[0];
+        }
+
+        if (targetStep && targetStep.templateId) {
+          trafficContentWithTemplate++;
+        } else {
+          trafficContentCustomOrAi++;
+        }
+      }
+
+      const totalContentMsgs = trafficContentWithTemplate + trafficContentCustomOrAi;
+      const totalAllMsgs = totalContentMsgs + trafficFriendRequestCount;
+
+      console.log(`Tổng số tin nhắn trong bảng zalo_messages: ${totalAllMsgs.toLocaleString('vi-VN')}`);
+      console.log(`1. Kênh tin nhắn nội dung (Cá nhân + Nhóm): ${totalContentMsgs.toLocaleString('vi-VN')} tin`);
+      console.log(`   - Tin gửi từ bước có trỏ template:          ${trafficContentWithTemplate.toLocaleString('vi-VN')} (${((trafficContentWithTemplate / totalContentMsgs) * 100).toFixed(2)}%)`);
+      console.log(`   - Tin gửi từ bước AI soạn / Tự viết:         ${trafficContentCustomOrAi.toLocaleString('vi-VN')} (${((trafficContentCustomOrAi / totalContentMsgs) * 100).toFixed(2)}%)`);
+      console.log(`2. Kênh lời mời kết bạn (Friend Request): ${trafficFriendRequestCount.toLocaleString('vi-VN')} lời mời (100% tự viết lời chào trực tiếp)`);
+      console.log(`3. Tổng hợp toàn bộ lưu lượng đã gửi: ${totalAllMsgs.toLocaleString('vi-VN')} tin`);
+      console.log(`   - Có trỏ mẫu template:                     ${trafficContentWithTemplate.toLocaleString('vi-VN')} (${((trafficContentWithTemplate / totalAllMsgs) * 100).toFixed(2)}%)`);
+      console.log(`   - Tự viết trực tiếp / AI soạn:             ${(trafficContentCustomOrAi + trafficFriendRequestCount).toLocaleString('vi-VN')} (${(((trafficContentCustomOrAi + trafficFriendRequestCount) / totalAllMsgs) * 100).toFixed(2)}%)`);
+    } catch (zmTrafficErr) {
+      console.warn('[Warning] Lỗi khi đo lưu lượng zalo_messages:', zmTrafficErr.message);
+    }
+
 
     // -------------------------------------------------------------------------
     // 3. Việc 3: Chấm điểm nội dung trên Corpus chiến dịch thật
