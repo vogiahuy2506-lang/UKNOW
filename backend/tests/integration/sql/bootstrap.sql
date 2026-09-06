@@ -2959,4 +2959,22 @@ CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_status
 CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliate_withdrawals_one_pending
   ON affiliate_withdrawals (user_id) WHERE status = 'pending';
 
+-- ─── User Consents (Nghị định 330/2026/NĐ-CP, Migration 187) ─────────────────
+CREATE TABLE IF NOT EXISTS user_consents (
+  id               BIGSERIAL PRIMARY KEY,
+  user_id          BIGINT       NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  purpose          VARCHAR(40)  NOT NULL,
+  granted          BOOLEAN      NOT NULL,
+  document_version VARCHAR(20)  NOT NULL,
+  document_hash    CHAR(64),
+  source           VARCHAR(30)  NOT NULL,
+  ip_address       VARCHAR(64),
+  user_agent       TEXT,
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_consents_user_purpose
+  ON user_consents (user_id, purpose, created_at DESC);
+
+
 

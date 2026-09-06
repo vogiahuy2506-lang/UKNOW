@@ -138,6 +138,8 @@ const mapProfileResponse = (userRow) => ({
   avatarUrl: userRow.avatar_url,
   phone: userRow.phone,
   referralCode: userRow.referral_code ?? null,
+  consents: userRow.consents || null,
+  hasConsented: Boolean(userRow.consents?.terms && userRow.consents?.privacy && userRow.consents?.dpa),
   status: userRow.status,
   role: userRow.role || userRow.role_code || 'user',
   roleCode: userRow.role || userRow.role_code || 'user',

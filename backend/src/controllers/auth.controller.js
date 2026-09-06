@@ -22,6 +22,8 @@ import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js'
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
+import userConsentRepository, { recordConsents, getUserLatestConsents } from '../repositories/user/userConsent.repository.js';
+import { validateRegistrationConsents } from '../config/legalDocuments.config.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -62,7 +64,10 @@ class AuthController {
 
     try {
       await client.query('BEGIN');
-      const { username, email, password, fullName, phone, emailVerificationCode } = req.body;
+      const { username, email, password, fullName, phone, emailVerificationCode, consents } = req.body;
+
+      // Nghị định 330/2026/NĐ-CP (PR-N2): Bắt buộc đồng ý đủ 3 văn bản pháp lý
+      validateRegistrationConsents(consents);
 
       // Xác minh OTP email trước khi tạo tài khoản
       // Mọi kiểm tra dưới đây throw (thay vì return trực tiếp) để luôn đi qua catch
@@ -161,6 +166,27 @@ class AuthController {
       );
 
       const user = result.rows[0];
+
+      // Lưu bằng chứng đồng ý vào user_consents trong transaction (PR-N2)
+      const ipAddress = req.ip || req.socket?.remoteAddress;
+      const userAgent = req.headers['user-agent'] || null;
+      await userConsentRepository.recordConsents({
+        userId: user.id,
+        consents: {
+          terms: Boolean(consents.terms),
+          privacy: Boolean(consents.privacy),
+          dpa: Boolean(consents.dpa),
+        },
+        source: 'register',
+        ipAddress,
+        userAgent,
+        client,
+      });
+      user.consents = {
+        terms: Boolean(consents.terms),
+        privacy: Boolean(consents.privacy),
+        dpa: Boolean(consents.dpa),
+      };
 
       // Đánh dấu mã xác minh đã dùng
       await verificationService.markCodeAsUsed(verification.id);
@@ -384,6 +410,7 @@ class AuthController {
    */
   async googleLogin(req, res) {
     const client = await db.getClient();
+    let inNewUserTx = false;
 
     try {
       const { credential, access_token, referralCode } = req.body;
@@ -444,6 +471,12 @@ class AuthController {
 
       // 3. Nếu chưa tồn tại, tạo mới
       if (result.rows.length === 0) {
+        // Nghị định 330/2026/NĐ-CP (PR-N2): Bắt buộc đồng ý đủ 3 văn bản pháp lý cho user mới
+        validateRegistrationConsents(req.body.consents);
+
+        await client.query('BEGIN');
+        inNewUserTx = true;
+
         // Tạo username từ email
         let baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
         if (baseUsername.length < 3) baseUsername += 'user';
@@ -507,7 +540,28 @@ class AuthController {
         );
         user = insertResult.rows[0];
 
-        trial = await grantSignupTrial({ userId: user.id, userEmail: user.email, req });
+        // Lưu bằng chứng đồng ý vào user_consents cho user mới đăng ký Google (PR-N2)
+        const googleConsents = req.body.consents;
+
+        await userConsentRepository.recordConsents({
+          userId: user.id,
+          consents: {
+            terms: googleConsents.terms,
+            privacy: googleConsents.privacy,
+            dpa: googleConsents.dpa,
+          },
+          source: 'google_register',
+          ipAddress,
+          userAgent,
+          client,
+        });
+        user.consents = {
+          terms: googleConsents.terms,
+          privacy: googleConsents.privacy,
+          dpa: googleConsents.dpa,
+        };
+
+        trial = await grantSignupTrialInTx(client, { userId: user.id, userEmail: user.email });
         if (trial) {
           user.active_plan_id = trial.activePlanId;
           user.subscription_expires_at = trial.expiresAt;
@@ -517,6 +571,9 @@ class AuthController {
             expiresAt: trial.expiresAt,
           });
         }
+
+        await client.query('COMMIT');
+        inNewUserTx = false;
 
         // Gửi Welcome Email cho user mới đăng ký qua Google (async)
         const { full_name, email: userEmail } = user;
@@ -596,6 +653,20 @@ class AuthController {
       });
     } catch (error) {
       console.error('Google Login error:', error);
+      if (inNewUserTx) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackErr) {
+          console.error('Google register rollback failed:', rollbackErr?.message || rollbackErr);
+        }
+      }
+      if (error.status && typeof error.message === 'string') {
+        return res.status(error.status).json({
+          success: false,
+          message: error.message,
+          ...(error.code ? { code: error.code } : {}),
+        });
+      }
       return res.status(500).json({ success: false, message: 'Lỗi server khi đăng nhập bằng Google' });
     } finally {
       client.release();
@@ -896,6 +967,10 @@ class AuthController {
     if (!activeBillingPeriod && user.id) {
       activeBillingPeriod = await findActiveBillingPeriod(user.id, user.email);
     }
+    let consents = user.consents;
+    if (consents === undefined && user.id) {
+      consents = await getUserLatestConsents(user.id);
+    }
     return {
       id: user.id,
       username: user.username,
@@ -918,6 +993,9 @@ class AuthController {
       phone: user.phone ?? null,
       // Mã giới thiệu cá nhân (Affiliate PR-A1)
       referralCode: user.referral_code ?? user.referralCode ?? null,
+      // Bằng chứng đồng ý văn bản pháp lý (Nghị định 330/2026/NĐ-CP PR-N2)
+      consents: consents || null,
+      hasConsented: Boolean(consents?.terms && consents?.privacy && consents?.dpa),
     };
   }
 

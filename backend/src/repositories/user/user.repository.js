@@ -86,7 +86,16 @@ export async function findProfileBase(userId) {
             ${PROFILE_LIMIT_COLUMNS},
             u.bot_daily_reply_cap,
             u.ai_handoff_auto_resume_minutes,
-            u.created_at, u.last_login_at, r.role_code, r.role_name
+            u.created_at, u.last_login_at, r.role_code, r.role_name,
+            (
+              SELECT jsonb_object_agg(c.purpose, c.granted)
+              FROM (
+                SELECT DISTINCT ON (purpose) purpose, granted
+                FROM user_consents
+                WHERE user_id = u.id
+                ORDER BY purpose, created_at DESC
+              ) c
+            ) AS consents
      FROM users u
      LEFT JOIN roles r ON u.id_role = r.id
      WHERE u.id = $1`,
@@ -105,7 +114,8 @@ export async function findProfileBaseFallback(userId) {
             NULL::int AS max_zalo_templates, NULL::int AS max_landing_pages,
             NULL::int AS bot_daily_reply_cap,
             NULL::int AS ai_handoff_auto_resume_minutes,
-            u.created_at, u.last_login_at, NULL AS role_code, NULL AS role_name
+            u.created_at, u.last_login_at, NULL AS role_code, NULL AS role_name,
+            NULL::jsonb AS consents
      FROM users u WHERE u.id = $1`,
     [userId]
   );

@@ -39,6 +39,7 @@ describe('POST /api/auth/register', () => {
         fullName: 'New User',
         phone: '0911000001',
         emailVerificationCode: '123456',
+        consents: { terms: true, privacy: true, dpa: true },
       });
 
     expect(res.status).toBe(201);
@@ -46,12 +47,25 @@ describe('POST /api/auth/register', () => {
     expect(res.body.data.user.email).toBe(email);
     expect(res.body.data.user.username).toBe('newuser01');
     expect(res.body.data.user.role).toBe('user');
+    expect(res.body.data.user.consents).toEqual({ terms: true, privacy: true, dpa: true });
+    expect(res.body.data.user.hasConsented).toBe(true);
     expect(res.body.data.accessToken).toEqual(expect.any(String));
 
     // DB phải có user mới + verification code đã đánh dấu used
     const userRow = await db.query('SELECT id, is_verified FROM users WHERE email = $1', [email]);
     expect(userRow.rows[0]).toBeDefined();
     expect(userRow.rows[0].is_verified).toBe(true);
+
+    // user_consents phải có đủ 3 bản ghi
+    const consentRows = await db.query(
+      'SELECT purpose, granted, document_version, document_hash, source, ip_address, user_agent FROM user_consents WHERE user_id = $1 ORDER BY purpose',
+      [userRow.rows[0].id]
+    );
+    expect(consentRows.rows).toHaveLength(3);
+    expect(consentRows.rows.map((r) => r.purpose)).toEqual(['dpa', 'privacy', 'terms']);
+    expect(consentRows.rows.every((r) => r.granted === true)).toBe(true);
+    expect(consentRows.rows.every((r) => r.source === 'register')).toBe(true);
+    expect(consentRows.rows.every((r) => r.document_version && r.document_hash)).toBe(true);
 
     const codeRow = await db.query(
       'SELECT is_used FROM verification_codes WHERE email = $1 LIMIT 1',
@@ -76,6 +90,7 @@ describe('POST /api/auth/register', () => {
       email: 'noverify@test.local',
       password: 'Passw0rd!',
       phone: '0916000001',
+      consents: { terms: true, privacy: true, dpa: true },
     });
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
@@ -92,6 +107,7 @@ describe('POST /api/auth/register', () => {
       password: 'Passw0rd!',
       phone: '0916000002',
       emailVerificationCode: '000000',
+      consents: { terms: true, privacy: true, dpa: true },
     });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/không đúng|hết hạn/i);
@@ -108,6 +124,7 @@ describe('POST /api/auth/register', () => {
       password: 'Passw0rd!',
       phone: '0916000003',
       emailVerificationCode: '123456',
+      consents: { terms: true, privacy: true, dpa: true },
     });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/email/i);
@@ -123,6 +140,7 @@ describe('POST /api/auth/register', () => {
       password: 'Passw0rd!',
       phone: '0916000004',
       emailVerificationCode: '123456',
+      consents: { terms: true, privacy: true, dpa: true },
     });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/tên đăng nhập/i);
@@ -169,6 +187,7 @@ describe('POST /api/auth/register', () => {
         fullName: 'Trial User',
         phone: '0911000002',
         emailVerificationCode: '123456',
+        consents: { terms: true, privacy: true, dpa: true },
       });
 
     expect(res.status).toBe(201);
@@ -216,6 +235,7 @@ describe('POST /api/auth/register', () => {
         fullName: 'No Trial User',
         phone: '0911000003',
         emailVerificationCode: '123456',
+        consents: { terms: true, privacy: true, dpa: true },
       });
 
     expect(res.status).toBe(201);
@@ -257,7 +277,10 @@ describe('POST /api/auth/google-login', () => {
 
     const res = await request(app)
       .post('/api/auth/google-login')
-      .send({ access_token: 'fake_google_access_token' });
+      .send({
+        access_token: 'fake_google_access_token',
+        consents: { terms: true, privacy: true, dpa: true },
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -315,7 +338,10 @@ describe('POST /api/auth/google-login', () => {
     // Lần 1: đăng ký Google lần đầu
     const res1 = await request(app)
       .post('/api/auth/google-login')
-      .send({ access_token: 'fake_token_1' });
+      .send({
+        access_token: 'fake_token_1',
+        consents: { terms: true, privacy: true, dpa: true },
+      });
     expect(res1.status).toBe(200);
     expect(res1.body.data.trial).not.toBeNull();
     expect(res1.body.data.user.active_plan_id).toBe(trialPlan.id);

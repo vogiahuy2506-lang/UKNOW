@@ -44,6 +44,16 @@ router.post('/register',
       .trim()
       .isLength({ max: 32 })
       .withMessage('Mã giới thiệu không được quá 32 ký tự'),
+    body('consents')
+      .custom((value) => {
+        if (!value || typeof value !== 'object') {
+          throw new Error('Vui lòng đồng ý với các điều khoản và chính sách bắt buộc');
+        }
+        if (!value.terms || !value.privacy || !value.dpa) {
+          throw new Error('Bạn cần đồng ý với Điều khoản dịch vụ, Chính sách bảo mật và Thỏa thuận xử lý dữ liệu để đăng ký');
+        }
+        return true;
+      }),
   ],
   handleValidationErrors,
   authController.register.bind(authController)

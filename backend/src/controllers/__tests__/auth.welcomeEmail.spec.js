@@ -88,6 +88,10 @@ describe('auth.controller welcome email invariant', () => {
         },
       ],
     });
+    // 4.5 record consents (PR-N2: terms, privacy, dpa)
+    mockClient.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+    mockClient.query.mockResolvedValueOnce({ rows: [{ id: 2 }] });
+    mockClient.query.mockResolvedValueOnce({ rows: [{ id: 3 }] });
     // 5. COMMIT
     mockClient.query.mockResolvedValueOnce({ rows: [] });
 
@@ -99,6 +103,7 @@ describe('auth.controller welcome email invariant', () => {
         fullName: 'Test User',
         phone: '0912345678',
         emailVerificationCode: '123456',
+        consents: { terms: true, privacy: true, dpa: true },
       },
       headers: {},
       ip: '127.0.0.1',

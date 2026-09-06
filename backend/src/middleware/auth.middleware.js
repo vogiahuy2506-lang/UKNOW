@@ -18,7 +18,16 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
               u.active_plan_id, u.subscription_expires_at, u.must_change_password, u.phone,
               u.referral_code,
               u.updated_at,
-              COALESCE(p.grace_period_days, 0)::int AS grace_period_days
+              COALESCE(p.grace_period_days, 0)::int AS grace_period_days,
+              (
+                SELECT jsonb_object_agg(c.purpose, c.granted)
+                FROM (
+                  SELECT DISTINCT ON (purpose) purpose, granted
+                  FROM user_consents
+                  WHERE user_id = u.id
+                  ORDER BY purpose, created_at DESC
+                ) c
+              ) AS consents
        FROM users u
        LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE u.id = $1 AND u.status IN ('active', 'pending_activation')`,
@@ -30,7 +39,16 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
               NULL AS subscription_expires_at, FALSE AS must_change_password, phone,
               referral_code,
               updated_at,
-              0 AS grace_period_days
+              0 AS grace_period_days,
+              (
+                SELECT jsonb_object_agg(c.purpose, c.granted)
+                FROM (
+                  SELECT DISTINCT ON (purpose) purpose, granted
+                  FROM user_consents
+                  WHERE user_id = users.id
+                  ORDER BY purpose, created_at DESC
+                ) c
+              ) AS consents
        FROM users
        WHERE id = $1 AND status IN ('active', 'pending_activation')`,
       [userId]

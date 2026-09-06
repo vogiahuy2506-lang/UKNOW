@@ -248,7 +248,8 @@ export async function findPurgeBlockers(id) {
          SELECT 1 FROM affiliate_ledger WHERE user_id = $1
          UNION ALL
          SELECT 1 FROM affiliate_withdrawals WHERE user_id = $1
-       ) AS "hasAffiliateActivity"`,
+       ) AS "hasAffiliateActivity",
+       EXISTS(SELECT 1 FROM user_consents WHERE user_id = $1) AS "hasConsents"`,
     [id]
   );
   const row = rows[0] || {};
@@ -256,6 +257,7 @@ export async function findPurgeBlockers(id) {
   if (row.hasOrders) reasons.push('đơn hàng thành công');
   if (row.hasMarketplace) reasons.push('dữ liệu marketplace (đã đăng bán/mua/đánh giá/yêu thích)');
   if (row.hasAffiliateActivity) reasons.push('hoạt động affiliate (doanh thu giới thiệu hoặc được giới thiệu)');
+  if (row.hasConsents) reasons.push('bằng chứng đồng ý điều khoản/dữ liệu cá nhân (user_consents)');
   return reasons;
 }
 
