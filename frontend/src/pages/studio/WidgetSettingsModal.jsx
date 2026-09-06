@@ -194,7 +194,9 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         auto_open: cfg.auto_open,
         chat_height: '600px',
         widget_key: chatbot.widget_key,
-        suggested_questions: [],
+        // KHONG gui suggested_questions tu modal nay.
+        // Truoc day gui [] -> DB bi xoa sach moi lan luu widget settings,
+        // lam mat cau hoi goi y da thiet lap trong ChatbotConfigModal.
         // Persist size + theme even though the UI only uses them as preview hints
         // (avoids a second silent round-trip on next open)
         size: embedSize,
@@ -389,7 +391,13 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                   </section>
 
-                  {/* Launcher label */}
+                  {/* Launcher label - DEPRECATED FIELD.
+                      widget.js chi hien thi SVG icon (xem widget.js dong 122),
+                      khong render launcher_label. Field nay khong co cot DB
+                      tuong ung va khong noi render nao su dung -> an di de
+                      tranh nham lan cho admin. Neu sau nay muon text label
+                      thi can vua sua widget.js vua them cot DB. */}
+                  {false && (
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <h4 className="text-sm font-semibold text-slate-900 mb-3">Nhãn nút mở chat</h4>
                     <input
@@ -400,6 +408,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
                     />
                   </section>
+                  )}
 
                   {/* Script toggles */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
