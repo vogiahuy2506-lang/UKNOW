@@ -101,13 +101,25 @@ export async function runChat({
       throw new Error('AI không phản hồi, vui lòng thử lại.');
     }
 
-    const text = (result.candidates[0].content?.parts || [])
+    const candidate = result.candidates[0];
+    const finishReason = candidate?.finishReason;
+
+    if (finishReason === 'MAX_TOKENS') {
+      console.warn('[AI Chat] Gemini response truncated (finishReason=MAX_TOKENS)');
+      await aiUsageMeter.record(userId, extractGeminiUsage(result), {
+        feature: 'smart_chat',
+        model: modelName,
+      }).catch(() => {});
+      throw new Error('AI trả lời quá dài bị cắt, hãy rút ngắn yêu cầu.');
+    }
+
+    const text = (candidate.content?.parts || [])
       .filter((p) => p.text && !p.thought)
       .map((p) => p.text)
       .join('');
     if (!text) throw new Error('AI trả về kết quả rỗng.');
 
-    console.log('[AI Chat] Gemini response (first 500 chars):', text.substring(0, 500));
+    console.log(`[AI Chat] Gemini response (first 500 chars, finishReason=${finishReason || 'STOP'}):`, text.substring(0, 500));
     await aiUsageMeter.record(userId, extractGeminiUsage(result), {
       feature: 'smart_chat',
       model: modelName,

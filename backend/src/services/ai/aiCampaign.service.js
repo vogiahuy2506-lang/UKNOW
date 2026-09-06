@@ -1,5 +1,6 @@
 import businessProfileService from './businessProfile.service.js';
 import { buildAdminContext } from './adminContext.service.js';
+import aiLandingPageService from './aiLandingPage.service.js';
 import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
@@ -1397,12 +1398,12 @@ Data structure:
 
 ### 8. type: "landing_page"
 Khi người dùng muốn TẠO LANDING PAGE và đã có ĐỦ thông tin.
+TUYỆT ĐỐI KHÔNG viết HTML/CSS trong phản hồi chat này. Chỉ trả về mô tả yêu cầu (prompt) để hệ thống sinh trang riêng biệt.
 
 Data structure:
 {
-  "title": "Tiêu đề trang",
-  "html": "Nội dung HTML (không cần thẻ html/head/body)",
-  "css": "CSS tùy chỉnh"
+  "title": "Gợi ý tiêu đề trang",
+  "prompt": "Mô tả đầy đủ chi tiết về landing page cần tạo, gộp mọi thông tin, sản phẩm, mục tiêu đã thu thập được từ người dùng"
 }
 
 ## ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC JSON):
@@ -1420,13 +1421,13 @@ Khi type="ask_campaign_details": content là câu dẫn ngắn, data chứa ques
 Khi type="confirm_create": content mô tả chiến dịch bằng ngôn ngữ đơn giản, data.summary chứa thông tin chi tiết.
 Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script.
 Khi type="ask_landing_details": content là câu dẫn ngắn, data chứa questions để hỏi user về landing page.
-Khi type="landing_page": content mô tả trang, data chứa html/css.
+Khi type="landing_page": content mô tả trang, data chứa prompt chi tiết (TUYỆT ĐỐI không chứa html/css).
 
 ## QUY TẮC GỢI Ý BƯỚC TIẾP THEO (áp dụng cho MỌI response):
 - LUÔN kết thúc content bằng 1 câu ngắn cho user biết nên làm gì tiếp theo: bấm nút nào bên dưới, trả lời gì, hoặc có thể yêu cầu gì thêm. Ví dụ: "Bạn bấm Lưu vào thư viện để lưu template này nhé.", "Bạn xem kế hoạch rồi bấm Đồng ý bên dưới để tôi soạn nội dung.", "Bạn có thể bấm 'Sửa trang này với AI' để yêu cầu đổi màu/nội dung, hoặc bấm 'Mở trình soạn thảo' nhé."
 - Nếu content đã kết thúc bằng câu hỏi rõ ràng cho user thì không cần thêm.
 - Câu gợi ý phải khớp với nút/card mà frontend hiển thị cho type đó (template_draft có nút "Lưu vào thư viện" và "Chỉnh sửa"; content_plan có nút "Đồng ý"/"Chỉnh lại kế hoạch"; landing_page có nút "Sửa trang này với AI", "Mở trình soạn thảo" và "Tạo trang mới"; confirm_create có nút tạo chiến dịch...), KHÔNG bịa ra nút không tồn tại.
-- Khi tạo landing page (type: "landing_page"): Tuyệt đối KHÔNG tự tuyên bố là đã giữ nguyên hay kế thừa thiết kế/số liệu từ bản trước nếu bạn đang tạo mới từ đầu.
+- Khi tạo landing page (type: "landing_page"): Tuyệt đối KHÔNG tự viết HTML, chỉ trả về prompt chi tiết trong data. Tuyệt đối KHÔNG tự tuyên bố là đã giữ nguyên hay kế thừa thiết kế/số liệu từ bản trước nếu bạn đang tạo mới từ đầu.
 
 ## LOGIC XỬ LÝ CHIẾN DỊCH:
 
@@ -1861,6 +1862,27 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           }
         }
       }
+    }
+
+    if (finalResponse?.type === 'landing_page' && finalResponse.data) {
+      const landingPrompt = String(
+        finalResponse.data.prompt || finalResponse.content || lastUserText || ''
+      ).trim();
+      const generated = await aiLandingPageService.generate({
+        userId: ownerId,
+        actorUserId: userId,
+        prompt: landingPrompt,
+        titleHint: String(finalResponse.data.title || '').trim(),
+        contentLocale: resolvedLocaleContext?.contentLocale || locale || 'vi',
+      });
+      finalResponse = {
+        ...finalResponse,
+        data: {
+          ...finalResponse.data,
+          title: generated.title,
+          html: generated.html,
+        },
+      };
     }
 
     const _wizard = buildWizard(guarded.gateAsked, planChange);

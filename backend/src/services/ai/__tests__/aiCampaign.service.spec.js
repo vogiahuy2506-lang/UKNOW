@@ -43,6 +43,17 @@ jest.unstable_mockModule('../adminContext.service.js', () => ({
   buildAdminContext: jest.fn(),
 }));
 
+const generateLandingPageMock = jest.fn(async () => ({
+  title: 'Landing Mock',
+  html: '<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body><h1>Mock</h1></body></html>',
+}));
+
+jest.unstable_mockModule('../aiLandingPage.service.js', () => ({
+  default: {
+    generate: generateLandingPageMock,
+  },
+}));
+
 jest.unstable_mockModule('../../landingTemplate/landingTemplate.service.js', () => ({
   default: {
     generateLandingPage: jest.fn(),
@@ -707,6 +718,85 @@ describe('aiCampaign.service', () => {
       expect(isUserConfirmingFile('huỷ')).toBe(false);
       expect(isUserConfirmingFile('đổi file khác')).toBe(false);
       expect(isUserConfirmingFile('hạn mức của tôi còn bao nhiêu?')).toBe(false);
+    });
+  });
+
+  describe('PR-0 landing page generation in smart chat', () => {
+    beforeEach(() => {
+      reserve.mockResolvedValue({ maxOutputTokens: 8192 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 10, outputTokens: 5, totalTokens: 15 });
+    });
+
+    it('prompt chat không còn chuỗi "html": "Nội dung HTML"', async () => {
+      axiosPost.mockResolvedValueOnce({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: { parts: [{ text: '{"type":"text","content":"Chào bạn","missing_fields":[],"data":null}' }] },
+            },
+          ],
+        },
+      });
+
+      await aiCampaignService.processSmartChat({
+        history: [{ role: 'user', content: 'Tạo landing page cho tôi' }],
+        userId: 1,
+      });
+
+      expect(axiosPost).toHaveBeenCalled();
+      const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+      const payload = lastCall[1];
+      const systemPrompt = payload.systemInstruction.parts[0].text;
+      expect(systemPrompt).not.toContain('"html": "Nội dung HTML');
+      expect(systemPrompt).toContain('TUYỆT ĐỐI KHÔNG viết HTML');
+    });
+
+    it('khi model trả type landing_page: gọi aiLandingPageService.generate và trả title + html', async () => {
+      axiosPost.mockResolvedValueOnce({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      type: 'landing_page',
+                      content: 'Đã tạo landing page cho bạn',
+                      missing_fields: [],
+                      data: {
+                        title: 'Khoá Học AI Pro',
+                        prompt: 'Trang landing giới thiệu khoá học AI chuyên sâu',
+                      },
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const res = await aiCampaignService.processSmartChat({
+        history: [{ role: 'user', content: 'Tạo trang giới thiệu khoá học AI' }],
+        userId: 1,
+        resourceOwnerUserId: 10,
+      });
+
+      expect(generateLandingPageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 10,
+          actorUserId: 1,
+          prompt: 'Trang landing giới thiệu khoá học AI chuyên sâu',
+          titleHint: 'Khoá Học AI Pro',
+        })
+      );
+      expect(res.type).toBe('landing_page');
+      expect(res.data).toMatchObject({
+        title: 'Landing Mock',
+        html: expect.stringContaining('<!DOCTYPE html>'),
+      });
     });
   });
 });
