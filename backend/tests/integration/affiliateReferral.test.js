@@ -52,6 +52,7 @@ describe('Affiliate PR-A1 — Mã giới thiệu & Gán người giới thiệu'
       password,
       phone,
       emailVerificationCode: '123456',
+      consents: { terms: true, privacy: true, dpa: true },
     };
     if (referralCode !== undefined) {
       payload.referralCode = referralCode;
@@ -183,6 +184,7 @@ describe('Affiliate PR-A1 — Mã giới thiệu & Gán người giới thiệu'
         .send({
           access_token: 'fake_buyer_token',
           referralCode: 'grefcode',
+          consents: { terms: true, privacy: true, dpa: true },
         });
 
       expect(res.status).toBe(200);

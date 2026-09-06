@@ -84,6 +84,7 @@ describe('Đăng ký → đẩy sang Google Sheet', () => {
         fullName: 'Sheet User',
         phone: '0915000001',
         emailVerificationCode: '123456',
+        consents: { terms: true, privacy: true, dpa: true },
       });
     expect(res.status).toBe(201);
 
@@ -123,6 +124,7 @@ describe('Đăng ký → đẩy sang Google Sheet', () => {
           password: 'Passw0rd!',
           phone: '0915000002',
           emailVerificationCode: '123456',
+          consents: { terms: true, privacy: true, dpa: true },
         });
       const elapsedMs = Date.now() - start;
 
@@ -151,6 +153,7 @@ describe('Đăng ký → đẩy sang Google Sheet', () => {
           password: 'Passw0rd!',
           phone: '0915000003',
           emailVerificationCode: '123456',
+          consents: { terms: true, privacy: true, dpa: true },
         });
 
       expect(res.status).toBe(201);

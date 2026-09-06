@@ -228,6 +228,7 @@ describe('Đăng ký chấp nhận mọi định dạng SĐT hợp lý (route kh
       password: 'Passw0rd!',
       phone,
       emailVerificationCode: '123456',
+      consents: { terms: true, privacy: true, dpa: true },
     });
   }
 

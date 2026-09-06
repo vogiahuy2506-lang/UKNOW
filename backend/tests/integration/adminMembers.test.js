@@ -624,6 +624,7 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
         password: 'Passw0rd123',
         phone: '0911000011',
         emailVerificationCode: '123456',
+        consents: { terms: true, privacy: true, dpa: true },
       });
     expect(registerResA.status).toBe(201);
     expect(registerResA.body.data.user.email).toBe('no_release@test.local');
@@ -656,6 +657,7 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
         password: 'Passw0rd123',
         phone: '0911000012',
         emailVerificationCode: '123456',
+        consents: { terms: true, privacy: true, dpa: true },
       });
 
     expect(registerResB.status).toBe(201);

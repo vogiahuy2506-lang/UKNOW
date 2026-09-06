@@ -107,6 +107,7 @@ const TRUNCATE_ALL_SQL = `
       chat_attachments,
       sub_assistants,
       plans,
+      user_consents,
       users
     RESTART IDENTITY CASCADE
   `;
