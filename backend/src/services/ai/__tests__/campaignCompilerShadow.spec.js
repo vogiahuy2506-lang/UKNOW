@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it, jest } from '@jest/globals';
 import {
   compareCompiledWithLegacy,
   getCompiledNodeSubtype,
@@ -165,5 +165,112 @@ describe('PR-2.3 & PR-3.2 & Việc 2: campaignCompilerShadow.service', () => {
 
     expect(res.executed).toBe(true);
     expect(res.match).toBe(true);
+  });
+
+  describe('7A Việc 2: Đấu nối contentQuality vào runCompilerShadowCompare', () => {
+    it('runCompilerShadowCompare trả về contentScore và phát hiện đúng mã lỗi nội dung an toàn', () => {
+      const legacyScript = {
+        nodes: [
+          { tempId: 'trigger_1', node_subtype: 'manual', config: {} },
+          { tempId: 'read_sheet_1', node_subtype: 'read_sheet', config: { sheetUrl: 'https://sheet.link' } },
+          {
+            tempId: 'send_email_1',
+            node_subtype: 'send_email',
+            config: {
+              fromEmailId: 5,
+              recipientSource: 'node',
+              emailSteps: [
+                {
+                  emailSubject: '', // Lỗi EMPTY_SUBJECT
+                  emailBody: 'Chào {{full_name}}! Mã: {{unknown_unmapped_var}}', // Lỗi PLACEHOLDER_UNRESOLVED
+                  templateMappings: [],
+                },
+              ],
+            },
+          },
+        ],
+        connections: [
+          { sourceNodeId: 'trigger_1', targetNodeId: 'read_sheet_1' },
+          { sourceNodeId: 'read_sheet_1', targetNodeId: 'send_email_1' },
+        ],
+      };
+
+      const gateState = {
+        channel: 'email',
+        senderAccountId: 5,
+        dataSource: 'sheet',
+        sheetUrl: 'https://sheet.link',
+        schedule: { mode: 'once' },
+      };
+
+      const res = runCompilerShadowCompare({
+        legacyScript,
+        gateState,
+      });
+
+      expect(res.executed).toBe(true);
+      expect(res.match).toBe(true);
+      expect(res.contentScore).toBeDefined();
+      expect(res.contentScore.ok).toBe(false);
+      const codes = res.contentScore.issues.map((i) => i.code);
+      expect(codes).toContain('EMPTY_SUBJECT');
+      expect(codes).toContain('PLACEHOLDER_UNRESOLVED');
+    });
+
+    it('bảo đảm fail-open: hàm chấm lỗi không làm crash hoặc fail shadow compare', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Script có node mà trường emailBody ném ngoại lệ khi được hàm chấm truy cập
+      const legacyScript = {
+        nodes: [
+          { tempId: 'trigger_1', node_subtype: 'manual', config: {} },
+          { tempId: 'read_sheet_1', node_subtype: 'read_sheet', config: { sheetUrl: 'https://sheet.link' } },
+          {
+            tempId: 'send_email_1',
+            node_subtype: 'send_email',
+            config: {
+              fromEmailId: 5,
+              recipientSource: 'node',
+              emailSteps: [
+                {
+                  emailSubject: 'Subject',
+                  get emailBody() {
+                    throw new Error('Giả lập lỗi bất ngờ khi chấm body');
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        connections: [
+          { sourceNodeId: 'trigger_1', targetNodeId: 'read_sheet_1' },
+          { sourceNodeId: 'read_sheet_1', targetNodeId: 'send_email_1' },
+        ],
+      };
+
+      const gateState = {
+        channel: 'email',
+        senderAccountId: 5,
+        dataSource: 'sheet',
+        sheetUrl: 'https://sheet.link',
+        schedule: { mode: 'once' },
+      };
+
+      const res = runCompilerShadowCompare({
+        legacyScript,
+        gateState,
+      });
+
+      // Vẫn hoàn thành so sánh bình thường, fail-open
+      expect(res.executed).toBe(true);
+      expect(res.match).toBe(true);
+      expect(res.contentScore).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Compiler Shadow Content Quality] Lỗi khi chấm nội dung (fail-open):'),
+        'Giả lập lỗi bất ngờ khi chấm body'
+      );
+
+      warnSpy.mockRestore();
+    });
   });
 });

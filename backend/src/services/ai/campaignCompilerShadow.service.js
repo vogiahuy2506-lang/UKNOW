@@ -8,6 +8,7 @@
 
 import { compileCampaign } from './campaignCompiler.service.js';
 import { deriveIntent, isCompilableIntent } from './campaignIntent.schema.js';
+import { scoreGeneratedContent } from './contentQuality.util.js';
 
 /**
  * Lấy subtype chuẩn của node từ compiler (chỉ chấp nhận nodeSubtype dạng camelCase).
@@ -214,10 +215,35 @@ export function runCompilerShadowCompare({ legacyScript, gateState, brief = null
       console.log(`[Compiler Shadow Compare] ✅ Graph hoàn toàn khớp (${intent.channel}-${intent.schedule?.type})`);
     }
 
+    // 7A - Việc 2: Đấu vào compiler shadow đã có, chấm chất lượng nội dung legacy script
+    let contentScore = null;
+    try {
+      contentScore = scoreGeneratedContent(legacyScript, {
+        gateState,
+        brief: intent?.contentBrief || brief,
+        contentBrief: intent?.contentBrief || brief?.contentBrief || brief,
+        schedule: intent?.schedule || gateState?.schedule,
+      });
+
+      if (!contentScore.ok && contentScore.issues?.length > 0) {
+        const safeIssuesLog = contentScore.issues.map((iss) => ({
+          errorCode: iss.code,
+          nodeSubtype: iss.nodeSubtype,
+          stepIndex: iss.stepIndex,
+        }));
+        console.log('[Compiler Shadow Content Quality] Phát hiện lỗi nội dung:', safeIssuesLog);
+      } else {
+        console.log('[Compiler Shadow Content Quality] ✅ Nội dung đạt chuẩn tất định');
+      }
+    } catch (scoreErr) {
+      console.warn('[Compiler Shadow Content Quality] Lỗi khi chấm nội dung (fail-open):', scoreErr.message);
+    }
+
     return {
       executed: true,
       match: result.match,
       differences: result.differences,
+      contentScore,
     };
   } catch (err) {
     console.warn('[Compiler Shadow Compare] Lỗi khi chạy shadow compare (không ảnh hưởng user):', err.message);
