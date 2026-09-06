@@ -274,7 +274,7 @@ jobs:
             # đang chạy: thiếu `exit 1`, script tự phục hồi container cũ rồi vẫn đi tiếp
             # tới bước poll health/dọn standby và báo "deploy thành công" — tức CI xanh
             # giả trong khi container mới chưa từng thực sự chạy).
-            trap 'if [ "$MUTATION_IN_PROGRESS" = "true" ]; then echo "::error::Tín hiệu ngắt giữa lúc đổi container."; if [ "$HAD_PREVIOUS_CONTAINER" = "true" ] && docker inspect "$CI_STANDBY_NAME" > /dev/null 2>&1; then echo "Cố khôi phục $CI_STANDBY_NAME."; docker rename "$CI_STANDBY_NAME" uknow-campaign-backend 2>/dev/null || true; docker update --restart=unless-stopped uknow-campaign-backend 2>/dev/null || true; docker start uknow-campaign-backend 2>/dev/null || true; fi; exit 1; fi' TERM INT
+            trap 'if [ "$MUTATION_IN_PROGRESS" = "true" ]; then echo "::error::Tín hiệu ngắt giữa lúc đổi container."; if [ "$HAD_PREVIOUS_CONTAINER" = "true" ] && docker inspect "$CI_STANDBY_NAME" > /dev/null 2>&1; then echo "Cố khôi phục $CI_STANDBY_NAME."; docker rename "$CI_STANDBY_NAME" uknow-campaign-backend 2>/dev/null || true; docker update --restart=unless-stopped uknow-campaign-backend 2>/dev/null || true; docker start uknow-campaign-backend 2>/dev/null || true; fi; exit 1; fi' TERM INT HUP
 
             if docker inspect uknow-campaign-backend > /dev/null 2>&1; then
               HAD_PREVIOUS_CONTAINER=true
@@ -337,7 +337,7 @@ jobs:
                 echo "::error::Không có container cũ để rollback (đây là lần deploy đầu tiên) — backend hiện KHÔNG chạy."
               fi
               MUTATION_IN_PROGRESS=false
-              trap - TERM INT
+              trap - TERM INT HUP
               exit 1
             }
 
@@ -395,7 +395,7 @@ jobs:
             fi
 
             MUTATION_IN_PROGRESS=false
-            trap - TERM INT
+            trap - TERM INT HUP
             if [ "$HAD_PREVIOUS_CONTAINER" = "true" ]; then
               docker rm -f "$CI_STANDBY_NAME" || true
             fi
