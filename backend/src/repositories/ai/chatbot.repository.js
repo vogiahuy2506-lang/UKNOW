@@ -601,6 +601,10 @@ class ChatbotRepository {
          widget_key = COALESCE($19, widget_key),
          allow_attachments = COALESCE($20, allow_attachments),
          reply_limit_config = COALESCE($21::jsonb, reply_limit_config),
+         temperature = COALESCE($22::numeric, temperature),
+         max_tokens = COALESCE($23, max_tokens),
+         ai_model = COALESCE($24, ai_model),
+         response_style = COALESCE($25, response_style),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -611,7 +615,8 @@ class ChatbotRepository {
        data.logo_url, data.show_avatar, data.position, data.border_radius,
        data.chat_height, data.widget_key,
        data.allow_attachments === undefined ? null : Boolean(data.allow_attachments),
-       data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config)];
+       data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config),
+       data.temperature, data.max_tokens, data.ai_model, data.response_style];
     } else {
       // Update suggested_questions field
       query = `UPDATE custom_chatbots SET
@@ -635,6 +640,10 @@ class ChatbotRepository {
          widget_key = COALESCE($20, widget_key),
          allow_attachments = COALESCE($21, allow_attachments),
          reply_limit_config = COALESCE($22::jsonb, reply_limit_config),
+         temperature = COALESCE($23::numeric, temperature),
+         max_tokens = COALESCE($24, max_tokens),
+         ai_model = COALESCE($25, ai_model),
+         response_style = COALESCE($26, response_style),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -645,7 +654,8 @@ class ChatbotRepository {
        data.logo_url, data.show_avatar, data.position, data.border_radius,
        data.chat_height, suggestedQuestions, data.widget_key,
        data.allow_attachments === undefined ? null : Boolean(data.allow_attachments),
-       data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config)];
+       data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config),
+       data.temperature, data.max_tokens, data.ai_model, data.response_style];
     }
 
     const { rows } = await db.query(query, params);

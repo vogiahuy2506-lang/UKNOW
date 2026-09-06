@@ -1491,6 +1491,8 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   temperature         DECIMAL(3,2) DEFAULT 0.7,
   max_tokens          INTEGER DEFAULT 2048,
   ai_model            VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  -- Migration 185: phong cach tra loi (friendly/professional/casual/empathetic/concise/creative)
+  response_style      VARCHAR(20) DEFAULT 'friendly',
   allow_attachments   BOOLEAN NOT NULL DEFAULT FALSE,
   reply_limit_config  JSONB NOT NULL DEFAULT '{"version":1,"windows":{}}'::jsonb
     CHECK (jsonb_typeof(reply_limit_config) = 'object'),

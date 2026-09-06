@@ -1371,6 +1371,34 @@ class ChatbotController {
         }
       }
 
+      // Clamp ai_model theo plan cua user (resolveAllowedModel tra fallback neu
+      // model bi plan chan). Ap dung cho ca repo updateCustomChatbots lan
+      // chatbot_settings sync -> custom_chatbots va chatbot_settings luon
+      // dong bo ve model.
+      if (req.body.ai_model !== undefined) {
+        try {
+          updatePayload.ai_model = await resolveAllowedModel(userId, req.body.ai_model);
+        } catch (modelErr) {
+          return res.status(400).json({
+            success: false,
+            message: `ai_model khong hop le: ${modelErr.message}`,
+            code: 'CHATBOT_AI_MODEL_INVALID',
+          });
+        }
+      }
+
+      // Clamp response_style: cac gia tri hop le. Neu khong hop le -> bo qua
+      // (giua nguyen gia tri cu) thay vi ghi gia tri sai vao DB.
+      const ALLOWED_RESPONSE_STYLES = ['friendly', 'professional', 'casual', 'empathetic', 'concise', 'creative'];
+      if (req.body.response_style !== undefined
+          && !ALLOWED_RESPONSE_STYLES.includes(req.body.response_style)) {
+        return res.status(400).json({
+          success: false,
+          message: `response_style khong hop le: ${req.body.response_style}`,
+          code: 'CHATBOT_RESPONSE_STYLE_INVALID',
+        });
+      }
+
       const updated = await chatbotRepository.updateChatbot(id, userId, updatePayload);
 
       if (!updated) {
@@ -1391,12 +1419,13 @@ class ChatbotController {
           req.body.response_style !== undefined ||
           req.body.welcome_message !== undefined ||
           req.body.is_active !== undefined) {
-        const clampedModel = req.body.ai_model !== undefined
-          ? await resolveAllowedModel(userId, req.body.ai_model)
-          : undefined;
+        // updatePayload.ai_model da duoc clamp boi resolveAllowedModel o tren
+        // (ap dung cho ca repo va sync de custom_chatbots va chatbot_settings
+        // dong bo). Neu khong clamp o day, model sai se ghi vao chatbot_settings
+        // nhung custom_chatbots van ghi dung (hoac nguoc lai).
         const aiSettings = {
           system_instruction: req.body.system_instruction,
-          ai_model: clampedModel ?? req.body.ai_model,
+          ai_model: updatePayload.ai_model,
           temperature: req.body.temperature,
           max_tokens: req.body.max_tokens,
           response_style: req.body.response_style,
