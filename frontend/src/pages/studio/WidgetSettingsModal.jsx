@@ -7,11 +7,9 @@ import {
   HiOutlineCode,
   HiOutlineLink,
   HiOutlineColorSwatch,
-  HiOutlineCheck,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
-import ImageUrlInput from '../../features/chatbot/components/AvatarUploader';
 
 const TABS = [
   { id: 'script', label: 'Chat Widget', icon: HiOutlineChat, desc: 'Widget nổi góc màn hình' },
@@ -24,20 +22,6 @@ const POSITIONS = [
   { key: 'bottom-left', label: 'Dưới trái' },
   { key: 'top-right', label: 'Trên phải' },
   { key: 'top-left', label: 'Trên trái' },
-];
-
-const COLOR_PRESETS = [
-  { name: 'Cam', primary: '#ee7518', accent: '#f19342', bg: '#ffffff', text: '#1f2937' },
-  { name: 'Xanh dương', primary: '#2563eb', accent: '#60a5fa', bg: '#ffffff', text: '#1f2937' },
-  { name: 'Tím', primary: '#7c3aed', accent: '#a78bfa', bg: '#ffffff', text: '#1f2937' },
-  { name: 'Xanh lá', primary: '#16a34a', accent: '#4ade80', bg: '#ffffff', text: '#1f2937' },
-  { name: 'Đen', primary: '#18181b', accent: '#52525b', bg: '#ffffff', text: '#1f2937' },
-];
-
-const IFRAME_THEMES = [
-  { key: 'light', label: 'Sáng', primary: '#ee7518', accent: '#f19342', bg: '#ffffff', text: '#1f2937' },
-  { key: 'dark', label: 'Tối', primary: '#ee7518', accent: '#f19342', bg: '#0f172a', text: '#e2e8f0' },
-  { key: 'brand', label: 'Thương hiệu', primary: '#7c3aed', accent: '#a78bfa', bg: '#faf5ff', text: '#1f2937' },
 ];
 
 const SIZES = [
@@ -83,53 +67,19 @@ function ColorRow({ label, value, onChange }) {
   );
 }
 
-function PresetRow({ presets, currentValues, onApply }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {presets.map((p) => {
-        const isActive = currentValues.primary?.toLowerCase() === p.primary.toLowerCase()
-          && currentValues.accent?.toLowerCase() === p.accent.toLowerCase();
-        return (
-          <button
-            key={p.name}
-            type="button"
-            onClick={() => onApply(p)}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-              isActive
-                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white'
-            }`}
-          >
-            <span className="flex gap-0.5">
-              <span className="w-3 h-3 rounded-full border border-white/60" style={{ background: p.primary }} />
-              <span className="w-3 h-3 rounded-full border border-white/60" style={{ background: p.accent }} />
-            </span>
-            {p.name}
-            {isActive && <HiOutlineCheck className="w-3 h-3" />}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose, onUpdate }) {
   const [activeTab, setActiveTab] = useState(embedKind || 'script');
   const [saving, setSaving] = useState(false);
 
   // ── Shared widget config (saved to custom_chatbots columns) ────────────
-  // All 3 embed types (script / iframe / public link) share the same logo,
-  // colors, avatar toggle, border radius, and launcher label. Settings like
-  // position, auto_open, and show_header are embed-specific and live here
-  // so they can be persisted; settings that have no DB column (size, theme)
-  // stay in their respective local states only (read-only preview helpers).
+  // Logo khong co o day nua: luon lay tu avatar_url cua Setting Chatbot.
+  // Khi load, chi fill cac field mau/position/bo goc/toggles vao cfg.
   const [cfg, setCfg] = useState({
     primary_color: '#ee7518',
     background_color: '#ffffff',
     text_color: '#1f2937',
     accent_color: '#f19342',
     position: 'bottom-right',
-    logo_url: '',
     show_avatar: true,
     show_header: true,        // used by iframe & public_link
     welcome_message: '',
@@ -142,15 +92,13 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
 
   // ── iFrame / public_link only fields (no DB column — read-only preview) ─
   const [embedSize, setEmbedSize] = useState('medium');
-  const [embedTheme, setEmbedTheme] = useState('light');
 
   useEffect(() => {
     if (open && chatbot) {
       if (embedKind) setActiveTab(embedKind);
-      // Logo: uu tien avatar_url (Setting chatbot - nguon chinh),
-      // fallback logo_url (Widget cu). Hien tai 2 modal ghi vao 2 cot DB
-      // khac nhau nen logo co the khong dong bo.
-      const sharedLogo = chatbot.avatar_url || chatbot.logo_url || '';
+      // Logo: avatar_url cua Setting Chatbot la NGUON CHINH duy nhat.
+      // Widget settings khong luu logo nua — luon lay tu day de 3 dang
+      // deploy (script / iframe / public link) dong bo logo voi Setting Chatbot.
       const ws = chatbot.widget_settings || {};
       setCfg({
         primary_color: ws.primary_color || chatbot.primary_color || '#ee7518',
@@ -158,7 +106,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         text_color: ws.text_color || chatbot.text_color || '#1f2937',
         accent_color: ws.accent_color || chatbot.accent_color || '#f19342',
         position: ws.position || chatbot.position || 'bottom-right',
-        logo_url: ws.logo_url || sharedLogo,
         show_avatar: ws.show_avatar !== false && chatbot.show_avatar !== false,
         show_header: ws.show_header !== false,
         welcome_message: ws.welcome_message || chatbot.welcome_message || '',
@@ -169,15 +116,12 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         require_name: ws.require_name === true,
       });
       setEmbedSize(ws.size || 'medium');
-      setEmbedTheme(ws.theme || 'light');
     }
   }, [open, chatbot, embedKind]);
 
   if (!open || !chatbot) return null;
 
   const update = (patch) => setCfg((p) => ({ ...p, ...patch }));
-  const applyPreset = (p) => update({ primary_color: p.primary, accent_color: p.accent, background_color: p.bg, text_color: p.text });
-  const applyTheme = (t) => { setEmbedTheme(t.key); update({ primary_color: t.primary, accent_color: t.accent, background_color: t.bg, text_color: t.text }); };
 
   const handleSave = async () => {
     setSaving(true);
@@ -188,12 +132,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         text_color: cfg.text_color,
         accent_color: cfg.accent_color,
         position: cfg.position,
-        logo_url: cfg.logo_url,
-        // Dong bo logo vao avatar_url de Setting chatbot la nguon chinh.
-        // Backend updateChatbot COALESCE avatar_url nen chi ghi khi co gia tri.
-        // Nhu vay logo upload o Widget Settings cung se hien thi o ChatbotConfigModal.
-        // Neu avatar_url da co gia tri va user khong doi logo, ta van gui de dam bao dong bo.
-        avatar_url: cfg.logo_url || chatbot.avatar_url || null,
+        // KHONG gui logo_url / avatar_url: logo luon lay tu avatar_url cua
+        // Setting Chatbot. Widget chi quan ly mau/position/avatar toggle.
         show_avatar: cfg.show_avatar,
         show_header: cfg.show_header,
         welcome_message: cfg.welcome_message,
@@ -205,10 +145,9 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         // KHONG gui suggested_questions tu modal nay.
         // Truoc day gui [] -> DB bi xoa sach moi lan luu widget settings,
         // lam mat cau hoi goi y da thiet lap trong ChatbotConfigModal.
-        // Persist size + theme even though the UI only uses them as preview hints
-        // (avoids a second silent round-trip on next open)
+        // Persist size even though the UI only uses it as a preview hint
+        // (avoids a second silent round-trip on next open).
         size: embedSize,
-        theme: embedTheme,
         show_suggested: cfg.show_suggested,
         require_name: cfg.require_name,
         // Remove dead fields: iframe_settings and public_link_settings had no
@@ -325,17 +264,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 <h3 className="text-base font-semibold text-slate-900">{activeTabMeta.label}</h3>
               </div>
 
-              {/* ── Common to all tabs: color palette + logo + border radius ── */}
-              {/* Presets */}
-              <section className="bg-white rounded-xl border border-slate-200 p-5">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">Bảng màu nhanh</h4>
-                <PresetRow
-                  presets={COLOR_PRESETS}
-                  currentValues={cfg}
-                  onApply={applyPreset}
-                />
-              </section>
-
+              {/* ── Common to all tabs: color palette + logo preview + border radius ── */}
               {/* Color palette */}
               <section className="bg-white rounded-xl border border-slate-200 p-5">
                 <h4 className="text-sm font-semibold text-slate-900 mb-3">Màu sắc</h4>
@@ -347,16 +276,34 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 </div>
               </section>
 
-              {/* Logo URL — shared across all embed types */}
+              {/* Logo preview — read-only. Logo luon lay tu avatar_url cua Setting Chatbot. */}
               <section className="bg-white rounded-xl border border-slate-200 p-5">
                 <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
-                <ImageUrlInput
-                  value={cfg.logo_url}
-                  onChange={(url) => update({ logo_url: url || '' })}
-                  label=""
-                  placeholder="https://example.com/logo.png"
-                  help="Logo dùng chung cho cả 3 kiểu nhúng (script / iframe / public link)."
-                />
+                {chatbot?.avatar_url ? (
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={chatbot.avatar_url}
+                      alt="Logo chatbot"
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-200"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-500 truncate">{chatbot.avatar_url}</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Logo lấy từ <strong>Setting Chatbot</strong>. Đổi logo trong Setting Chatbot để áp dụng cho cả 3 dạng deploy.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs">
+                      No logo
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Chưa có logo. Upload logo trong <strong>Setting Chatbot</strong> để hiển thị trên widget, iframe và public link.
+                    </p>
+                  </div>
+                )}
               </section>
 
               {/* Border radius */}
@@ -441,34 +388,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               {/* ── iFrame + public_link settings ── */}
               {(activeTab === 'iframe' || activeTab === 'public_link') && (
                 <>
-                  {/* Theme presets (iFrame + public_link only) */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Theme</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {IFRAME_THEMES.map((t) => {
-                        const isActive = embedTheme === t.key;
-                        return (
-                          <button
-                            key={t.key}
-                            type="button"
-                            onClick={() => applyTheme(t)}
-                            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
-                              isActive
-                                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                                : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white'
-                            }`}
-                          >
-                            <span className="flex gap-0.5">
-                              <span className="w-3 h-3 rounded-full border border-white/60" style={{ background: t.primary }} />
-                              <span className="w-3 h-3 rounded-full border border-white/60" style={{ background: t.bg, borderColor: 'rgba(0,0,0,0.1)' }} />
-                            </span>
-                            {t.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
                   {/* Size */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <h4 className="text-sm font-semibold text-slate-900 mb-3">Kích thước</h4>
@@ -577,7 +496,8 @@ function ScriptPreview({ cfg, chatbot }) {
   const pos = cfg.position || 'bottom-right';
   const isRight = pos.includes('right');
   const isBottom = pos.includes('bottom');
-  const avatarSrc = cfg.logo_url || chatbot?.avatar_url;
+  // Logo chi lay tu Setting Chatbot (avatar_url). Widget settings khong luu logo.
+  const avatarSrc = chatbot?.avatar_url;
 
   return (
     <div className="relative h-44 bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
@@ -624,8 +544,8 @@ function IframePreview({ cfg, chatbot }) {
   const sizeMap = { small: { w: 200, h: 130 }, medium: { w: 240, h: 160 }, large: { w: 280, h: 190 } };
   const sz = sizeMap[cfg.size] || sizeMap.medium;
 
-  // Determine avatar: logo_url > chatbot.avatar_url > placeholder
-  const avatarSrc = cfg.logo_url || chatbot.avatar_url;
+  // Determine avatar: luon lay tu avatar_url cua Setting Chatbot.
+  const avatarSrc = chatbot.avatar_url;
 
   return (
     <div className="bg-slate-100 rounded-lg p-3 border border-slate-200">
