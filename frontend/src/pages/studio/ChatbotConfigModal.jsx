@@ -77,7 +77,10 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
 
   useEffect(() => {
     if (!open || !chatbot?.id) return;
-    const ws = chatbot.widget_settings || {};
+    // custom_chatbots co cot truc tiep suggested_questions TEXT[] (migration 040/041)
+    // nen doc truc tiep tu chatbot.suggested_questions. Khong dung widget_settings
+    // (vi widget_settings chi la JSON nested chua primary_color, ... khong co
+    // suggested_questions -> truoc day luon fallback [] lam mat data user da luu).
     const loadedForm = {
       name: chatbot.name || '',
       description: chatbot.description || '',
@@ -90,7 +93,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
       welcome_message: chatbot.welcome_message || chatbot.greeting_msg || '',
       is_active: chatbot.is_active !== false,
       allow_attachments: chatbot.allow_attachments === true,
-      suggested_questions: ws.suggested_questions || [],
+      suggested_questions: chatbot.suggested_questions || [],
       reply_limit_config: chatbot.reply_limit_config || null,
     };
     setForm(loadedForm);
