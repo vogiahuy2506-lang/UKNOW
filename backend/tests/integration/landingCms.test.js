@@ -867,10 +867,16 @@ describe('POST /api/public/leads', () => {
     expect(res.status).toBe(400);
   });
 
-  it('marketingConsent=false → 400', async () => {
+  // Nghị định 330/2026 (PR-N1): consent=false KHÔNG còn bị chặn — khách không tick
+  // vẫn phải gửi được form, hệ thống lưu FALSE thay vì từ chối. Ca này trước đây
+  // assert 400 "vui lòng đồng ý"; giữ lại dưới dạng chốt chặn chống thoái lui.
+  // Bảy nhánh đầy đủ của hợp đồng 3 trạng thái nằm ở publicLeadConsent.test.js.
+  it('marketingConsent=false KHÔNG còn bị từ chối vì lý do consent', async () => {
     const res = await request(app).post('/api/public/leads').send({ ...baseLead, marketingConsent: false });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/đồng ý/i);
+    // Vẫn 400 vì thiếu landingPageSlug (xem ca kế tiếp), nhưng tuyệt đối không
+    // được là lỗi consent nữa.
+    expect(res.body.message).not.toMatch(/đồng ý/i);
+    expect(res.body.code).not.toBe('MARKETING_CONSENT_REQUIRED');
   });
 
   it('happy path không có slug → 400, không fallback id_user=1', async () => {
