@@ -147,7 +147,10 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
   useEffect(() => {
     if (open && chatbot) {
       if (embedKind) setActiveTab(embedKind);
-      const sharedLogo = chatbot.logo_url || chatbot.avatar_url || '';
+      // Logo: uu tien avatar_url (Setting chatbot - nguon chinh),
+      // fallback logo_url (Widget cu). Hien tai 2 modal ghi vao 2 cot DB
+      // khac nhau nen logo co the khong dong bo.
+      const sharedLogo = chatbot.avatar_url || chatbot.logo_url || '';
       const ws = chatbot.widget_settings || {};
       setCfg({
         primary_color: ws.primary_color || chatbot.primary_color || '#ee7518',
@@ -186,6 +189,11 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         accent_color: cfg.accent_color,
         position: cfg.position,
         logo_url: cfg.logo_url,
+        // Dong bo logo vao avatar_url de Setting chatbot la nguon chinh.
+        // Backend updateChatbot COALESCE avatar_url nen chi ghi khi co gia tri.
+        // Nhu vay logo upload o Widget Settings cung se hien thi o ChatbotConfigModal.
+        // Neu avatar_url da co gia tri va user khong doi logo, ta van gui de dam bao dong bo.
+        avatar_url: cfg.logo_url || chatbot.avatar_url || null,
         show_avatar: cfg.show_avatar,
         show_header: cfg.show_header,
         welcome_message: cfg.welcome_message,
