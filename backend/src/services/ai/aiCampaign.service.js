@@ -1756,9 +1756,9 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
                   },
                 });
 
-                if (fillRes.success && fillRes.filledGraph) {
-                  assertNoEmptyContent(fillRes.filledGraph);
-                  const filledScript = fillRes.filledGraph;
+                const filledScript = fillRes.filledGraph || fillRes.script;
+                if (fillRes.success && filledScript) {
+                  assertNoEmptyContent(filledScript);
 
                   if (finalResponse.data?.script) {
                     finalResponse.data.script.nodes = filledScript.nodes;

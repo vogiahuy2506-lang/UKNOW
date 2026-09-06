@@ -284,6 +284,7 @@ export async function fillContentSlots({
     return {
       success: true,
       script,
+      filledGraph: script,
       appliedCount: filledSlots.length,
     };
   } catch (err) {
