@@ -91,7 +91,11 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
     } catch {
       setDocuments(chatbot.documents || []);
     }
-  }, [chatbot]);
+    // Phu thuoc chatbot?.id + chatbot.documents: khi doi chatbot hoac documents
+    // truyen tu parent, callback moi duoc tao -> useEffect ben duoi re-fetch.
+    // Neu parent truyen cung id ma object chatbot moi (vd spread {...chatbot, ...}),
+    // chatbot?.id van giu nguyen nen callback van stable - tranh re-fetch.
+  }, [chatbot?.id, chatbot.documents]);
 
   // Only load from API if no initial documents provided
   useEffect(() => {
@@ -102,7 +106,9 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         loadDocuments();
       }
     }
-  }, [chatbot?.id, initialDocuments]);
+    // loadDocuments la useCallback voi deps [chatbot] -> khi chatbot doi thi se
+    // tao callback moi, nhung day la y muon: load lai docs theo chatbot moi.
+  }, [chatbot?.id, initialDocuments, loadDocuments]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];

@@ -79,7 +79,8 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
       setForm(prev => ({ ...prev, chatbotId: chatbot.id, title: chatbot.name || '' }));
       fetchChatbots();
     }
-  }, [open, chatbot]);
+    // fetchChatbots la useCallback voi deps [t] (i18n) -> on dinh, them vao day khong tao vong lap.
+  }, [open, chatbot, fetchChatbots]);
 
   // Reset form when closed
   useEffect(() => {
