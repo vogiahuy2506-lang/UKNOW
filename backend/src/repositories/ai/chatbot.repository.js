@@ -711,12 +711,18 @@ class ChatbotRepository {
 
   // Find chatbot by widget_key (public access)
   async findChatbotByWidgetKey(widgetKey) {
+    // Phai SELECT day du cac cot AI (response_style/temperature/max_tokens/ai_model)
+    // giong findChatbotById de cac endpoint public co the:
+    // 1) Tra ve 4 field AI cho iframe widget khi user set trong ChatbotConfigModal.
+    // 2) Tranh sai lech giua 2 repo (findChatbotById co 4 field nay,
+    //    findChatbotByWidgetKey khong co -> 2 endpoint public tra ve data khac nhau).
     const { rows } = await db.query(
       `SELECT id, id_user, name, description, system_instruction, greeting_msg,
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, allow_attachments,
+              temperature, max_tokens, ai_model, response_style,
               created_at, updated_at
        FROM custom_chatbots
        WHERE widget_key = $1 AND is_active = true`,

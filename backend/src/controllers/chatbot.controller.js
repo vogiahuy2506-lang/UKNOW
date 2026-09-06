@@ -1028,7 +1028,12 @@ class ChatbotController {
           description: chatbot.description || '',
           greeting_msg: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
           welcome_message: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
-          avatar_url: chatbot.avatar_url || null,
+          // avatar_url (Setting Chatbot) la NGUON CHINH cho logo. logo_url
+          // (cot cu cua Widget Settings Modal truoc day) chi la fallback
+          // neu avatar_url NULL. Sau commit 12a2e504, Widget Settings Modal
+          // khong ghi logo_url nua nen cac row moi co logo_url = NULL.
+          // Cac row cu co the con logo_url cu -> uu tien avatar_url.
+          avatar_url: chatbot.avatar_url || chatbot.logo_url || null,
           theme_color: chatbot.theme_color || '#6366f1',
           is_active: chatbot.is_active,
           // Widget UI customization
@@ -1036,7 +1041,9 @@ class ChatbotController {
           background_color: chatbot.background_color || '#FFFFFF',
           text_color: chatbot.text_color || '#1F2937',
           accent_color: chatbot.accent_color || '#60A5FA',
-          logo_url: chatbot.logo_url || null,
+          // avatar_url (Setting Chatbot) la NGUON CHINH cho logo. logo_url chi
+          // la fallback de tuong thich nguoc voi cac row cu. Uu tien avatar_url.
+          logo_url: chatbot.avatar_url || chatbot.logo_url || null,
           show_avatar: chatbot.show_avatar !== false,
           position: chatbot.position || 'bottom-right',
           border_radius: chatbot.border_radius || 16,
@@ -1044,6 +1051,13 @@ class ChatbotController {
           // Suggested questions - applies to all deployment types
           suggested_questions: chatbot.suggested_questions || [],
           allow_attachments: chatbot.allow_attachments === true,
+          // AI settings - public endpoint can doc de iframe render dung
+          // model/temperature/max_tokens user da set trong ChatbotConfigModal.
+          response_style: chatbot.response_style || 'friendly',
+          temperature: chatbot.temperature ?? 0.7,
+          max_tokens: chatbot.max_tokens || 2048,
+          ai_model: chatbot.ai_model || 'gemini-2.5-flash',
+          system_instruction: chatbot.system_instruction || '',
         },
       });
     } catch (err) {
@@ -1082,16 +1096,26 @@ class ChatbotController {
           name: chatbot.name,
           welcomeMessage: chatbot.greeting_msg || chatbot.welcome_message || 'Xin chào! Tôi có thể giúp gì cho bạn?',
           description: chatbot.description,
-          avatarUrl: chatbot.avatar_url,
-          logoUrl: chatbot.logo_url,
+          // avatar_url (Setting Chatbot) la NGUON CHINH cho logo. logo_url
+          // (cot cu cua Widget Settings Modal) chi la fallback de tuong thich
+          // nguoc voi row cu. Uu tien avatar_url.
+          avatarUrl: chatbot.avatar_url || chatbot.logo_url || null,
+          logoUrl: chatbot.avatar_url || chatbot.logo_url || null,
           primaryColor: chatbot.primary_color || '#6366F1',
           backgroundColor: chatbot.background_color || '#FFFFFF',
           textColor: chatbot.text_color || '#1F2937',
           accentColor: chatbot.accent_color || '#60A5FA',
+          themeColor: chatbot.theme_color || '#6366F1',
           showAvatar: chatbot.show_avatar !== false,
           suggestedQuestions: chatbot.suggested_questions || [],
           position: chatbot.position || 'bottom-right',
           allowAttachments: chatbot.allow_attachments === true,
+          // AI settings - widget.js co the dung de tuy bien prompt neu sau nay can
+          responseStyle: chatbot.response_style || 'friendly',
+          temperature: chatbot.temperature ?? 0.7,
+          maxTokens: chatbot.max_tokens || 2048,
+          aiModel: chatbot.ai_model || 'gemini-2.5-flash',
+          systemInstruction: chatbot.system_instruction || '',
         },
       });
     } catch (err) {
