@@ -1459,4 +1459,116 @@ describe('Integration — Campaign Quota Matrix PR-Q4c', () => {
       expect(reservations).toHaveLength(0);
     });
   });
+
+  // ═════════════════════════════════════════════════════════════════════════════
+  // E: QUIET-HOURS / DEFER KHÔNG ĐƯỢC TẠO RESERVATION SỚM
+  //
+  // Vì sao gate này tồn tại: reservation giữ chỗ hạn mức của khách. Nếu một run bị
+  // hoãn (quiet-hours 23:00–06:00, hoặc nextDueAt tương lai) mà vẫn kịp đặt chỗ
+  // trước khi thoát, chỗ đó treo suốt nhiều giờ — hết lease thì thành `uncertain`,
+  // và trong lúc đó khách mất hạn mức mà không gửi được gì.
+  //
+  // Chuỗi bằng chứng gồm hai mảnh, cố ý tách ở hai tầng:
+  //   1. Đơn vị — campaignRunZaloQuotaBoundary.spec.js: quiet-hours GHI được mốc
+  //      defer (`zaloDeferredReason='quiet_hours'`) và dừng trước worker boundary.
+  //   2. Tích hợp — dưới đây: một run MANG mốc defer đó, chạy qua orchestration
+  //      thật trên PostgreSQL thật, phải để lại ĐÚNG 0 dòng send_quota_reservations.
+  //
+  // E1 là positive control và không được bỏ: nếu thiếu nó, "0 dòng" ở E2/E3 có thể
+  // đúng chỉ vì fixture hỏng nên chẳng gửi gì — tức xanh vô nghĩa.
+  // ═════════════════════════════════════════════════════════════════════════════
+
+  describe('Section E — Quiet-hours / defer không được tạo reservation sớm', () => {
+    async function setupEmailCampaignWithNode(recipientEmail) {
+      const { campaignId, runId, emailSettingId } = await setupEmailCampaignFixture();
+      await db.query(
+        `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+         VALUES ($1, 'action', 'send_email', 'Send Email', $2, 1)`,
+        [
+          campaignId,
+          JSON.stringify({
+            recipientSource: 'manual',
+            recipientEmails: recipientEmail,
+            fromEmailId: emailSettingId,
+            emailSubject: 'Section E Subject',
+            emailBody: '<p>Section E Body</p>',
+          }),
+        ]
+      );
+      return { campaignId, runId };
+    }
+
+    async function countReservationsOfUser() {
+      const { rows } = await db.query(
+        'SELECT COUNT(*)::int AS n FROM send_quota_reservations WHERE billing_user_id = $1',
+        [user.id]
+      );
+      return rows[0].n;
+    }
+
+    it('E1 (positive control): run KHÔNG bị hoãn thì thực sự tạo reservation — nếu ca này hỏng thì E2/E3 vô nghĩa', async () => {
+      const recipientEmail = `sec_e_control_${Date.now()}@example.com`;
+      const { campaignId, runId } = await setupEmailCampaignWithNode(recipientEmail);
+
+      await campaignRunService.executeCampaign(campaignId, runId, user.id);
+
+      expect(await countReservationsOfUser()).toBeGreaterThan(0);
+      expect(mockSendMail).toHaveBeenCalled();
+    });
+
+    it('E2: run hoãn theo nextDueAt tương lai → 0 reservation, không gửi, run vẫn running', async () => {
+      const recipientEmail = `sec_e_defer_${Date.now()}@example.com`;
+      const { campaignId, runId } = await setupEmailCampaignWithNode(recipientEmail);
+
+      const futureIso = new Date(Date.now() + 3600 * 1000).toISOString();
+      await db.query(
+        `UPDATE campaign_runs
+         SET run_metadata = jsonb_build_object('nonContinuousDeferredUntil', $1::text)
+         WHERE id = $2`,
+        [futureIso, runId]
+      );
+
+      mockSendMail.mockClear();
+      await campaignRunService.executeCampaign(campaignId, runId, user.id, null, { isResume: true });
+
+      expect(await countReservationsOfUser()).toBe(0);
+      expect(mockSendMail).not.toHaveBeenCalled();
+
+      // Run bị hoãn phải giữ nguyên 'running' để scheduler gọi lại, không được đóng sổ.
+      const { rows: runRows } = await db.query('SELECT status FROM campaign_runs WHERE id = $1', [runId]);
+      expect(runRows[0].status).toBe('running');
+    });
+
+    it('E3: run mang mốc defer quiet_hours của Zalo → 0 reservation và không gửi', async () => {
+      const recipientEmail = `sec_e_quiet_${Date.now()}@example.com`;
+      const { campaignId, runId } = await setupEmailCampaignWithNode(recipientEmail);
+
+      // Đây đúng cặp khoá mà quiet-hours ghi ra ở tầng đơn vị
+      // (campaignRunZaloQuotaBoundary.spec.js), nay đưa vào DB thật để kiểm
+      // orchestration tôn trọng nó TRƯỚC ranh giới đặt chỗ quota.
+      const quietUntilIso = new Date(Date.now() + 4 * 3600 * 1000).toISOString();
+      await db.query(
+        `UPDATE campaign_runs
+         SET run_metadata = jsonb_build_object(
+           'zaloOutboundDeferredUntil', $1::text,
+           'zaloDeferredReason', 'quiet_hours'
+         )
+         WHERE id = $2`,
+        [quietUntilIso, runId]
+      );
+
+      mockSendMail.mockClear();
+      await campaignRunService.executeCampaign(campaignId, runId, user.id, null, { isResume: true });
+
+      expect(await countReservationsOfUser()).toBe(0);
+      expect(mockSendMail).not.toHaveBeenCalled();
+
+      // Mốc defer phải còn nguyên: orchestration không được tự xoá mốc chưa tới hạn.
+      const { rows: metaRows } = await db.query(
+        'SELECT run_metadata FROM campaign_runs WHERE id = $1',
+        [runId]
+      );
+      expect(metaRows[0].run_metadata.zaloDeferredReason).toBe('quiet_hours');
+    });
+  });
 });
