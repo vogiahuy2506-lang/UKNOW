@@ -1707,6 +1707,11 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             .map((s) => s.trim().toLowerCase())
             .filter(Boolean);
 
+          const slotFillingFlows = (process.env.COMPILER_SLOT_FILLING_FLOWS || '')
+            .split(',')
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean);
+
           // CẢNH BÁO TÊN BIẾN: hàm này đã có sẵn tham số `intent` — đó là CHUỖI phân loại ý
           // định (so với 'content_plan_request' ở dòng 397), KHÔNG phải CampaignIntentV1.
           // Bản đầu dùng nhầm biến đó nên `isCompilableIntent` luôn trả false và compiler
@@ -1715,9 +1720,12 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           const { intent: campaignIntent } = deriveIntent(gateState, briefForState || null, { files });
 
           const compilableCheck = isCompilableIntent(campaignIntent);
+          const isCompilerActive =
+            enabledFlows.includes(campaignIntent.channel) || slotFillingFlows.includes(campaignIntent.channel);
+
           if (!compilableCheck.ok) {
             console.log(`[CampaignCompiler] Giữ script LLM cũ — intent khuyết trường: ${compilableCheck.missing.join(', ')}`);
-          } else if (!enabledFlows.includes(campaignIntent.channel)) {
+          } else if (!isCompilerActive) {
             // Luồng chưa bật cờ
           } else {
             // Dùng `campaignIntent` (object CampaignIntentV1 dựng ở trên), KHÔNG phải `intent`
@@ -1727,26 +1735,91 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             // Đo trên production 06/09: cờ zalo_group bật từ 31/08 nhưng audit_logs không có
             // một dòng via='ai_compiler' nào trong 7 ngày — đây chính là nguyên nhân.
             const compiledGraph = compileCampaign(campaignIntent);
-            const { script: mergedScript, unmatchedSlots } = mergeCompiledWithContent(compiledGraph, targetScript);
 
-            if (unmatchedSlots.length > 0) {
-              console.warn(`[CampaignCompiler] Giữ script LLM cũ — merge_failed có ${unmatchedSlots.length} slot chưa khớp`);
-            } else {
-              assertNoEmptyContent(mergedScript);
+            let slotFillingSucceeded = false;
+            // Giai đoạn 4: LLM Content Slot Filling
+            if (
+              slotFillingFlows.includes(campaignIntent.channel) &&
+              Array.isArray(compiledGraph.contentSlots) &&
+              compiledGraph.contentSlots.length > 0
+            ) {
+              try {
+                const fillRes = await fillContentSlots({
+                  compiledGraph,
+                  campaignIntent,
+                  brief: briefForState || null,
+                  userPrompt: intentPrompt || lastUserText || '',
+                  options: {
+                    model,
+                    userId,
+                    teamId: null,
+                  },
+                });
 
-              if (finalResponse.data?.script) {
-                finalResponse.data.script.nodes = mergedScript.nodes;
-                finalResponse.data.script.connections = mergedScript.connections;
-                finalResponse.data.script.compilerApplied = true;
-                finalResponse.data.script._via = 'ai_compiler';
+                if (fillRes.success && fillRes.filledGraph) {
+                  assertNoEmptyContent(fillRes.filledGraph);
+                  const filledScript = fillRes.filledGraph;
+
+                  if (finalResponse.data?.script) {
+                    finalResponse.data.script.nodes = filledScript.nodes;
+                    finalResponse.data.script.connections = filledScript.connections;
+                    finalResponse.data.script.compilerApplied = true;
+                    finalResponse.data.script._via = 'ai_compiler_slot_filling';
+                  }
+                  if (Array.isArray(finalResponse.data?.nodes)) {
+                    finalResponse.data.nodes = filledScript.nodes;
+                    finalResponse.data.connections = filledScript.connections;
+                    finalResponse.data.compilerApplied = true;
+                    finalResponse.data._via = 'ai_compiler_slot_filling';
+                  }
+                  targetScript.nodes = filledScript.nodes;
+                  targetScript.connections = filledScript.connections;
+                  targetScript.compilerApplied = true;
+                  targetScript._via = 'ai_compiler_slot_filling';
+
+                  slotFillingSucceeded = true;
+                  console.log(
+                    `[CampaignCompiler] ✅ Đã áp dụng Slot Filling cho luồng ${campaignIntent.channel} (via: ai_compiler_slot_filling)`
+                  );
+                } else {
+                  console.warn(
+                    `[CampaignCompiler] Slot Filling không thành công (${fillRes.error || 'unknown'}), fail-open về mergeCompiledWithContent`
+                  );
+                }
+              } catch (slotErr) {
+                console.warn(
+                  `[CampaignCompiler] Lỗi khi thực hiện Slot Filling: ${slotErr.message}, fail-open về mergeCompiledWithContent`
+                );
               }
-              if (Array.isArray(finalResponse.data?.nodes)) {
-                finalResponse.data.nodes = mergedScript.nodes;
-                finalResponse.data.connections = mergedScript.connections;
-                finalResponse.data.compilerApplied = true;
-                finalResponse.data._via = 'ai_compiler';
+            }
+
+            if (!slotFillingSucceeded && enabledFlows.includes(campaignIntent.channel)) {
+              const { script: mergedScript, unmatchedSlots } = mergeCompiledWithContent(compiledGraph, targetScript);
+
+              if (unmatchedSlots.length > 0) {
+                console.warn(`[CampaignCompiler] Giữ script LLM cũ — merge_failed có ${unmatchedSlots.length} slot chưa khớp`);
+              } else {
+                assertNoEmptyContent(mergedScript);
+
+                if (finalResponse.data?.script) {
+                  finalResponse.data.script.nodes = mergedScript.nodes;
+                  finalResponse.data.script.connections = mergedScript.connections;
+                  finalResponse.data.script.compilerApplied = true;
+                  finalResponse.data.script._via = 'ai_compiler';
+                }
+                if (Array.isArray(finalResponse.data?.nodes)) {
+                  finalResponse.data.nodes = mergedScript.nodes;
+                  finalResponse.data.connections = mergedScript.connections;
+                  finalResponse.data.compilerApplied = true;
+                  finalResponse.data._via = 'ai_compiler';
+                }
+                targetScript.nodes = mergedScript.nodes;
+                targetScript.connections = mergedScript.connections;
+                targetScript.compilerApplied = true;
+                targetScript._via = 'ai_compiler';
+
+                console.log(`[CampaignCompiler] ✅ Đã áp dụng graph Compiler cho luồng ${campaignIntent.channel} (via: ai_compiler)`);
               }
-              console.log(`[CampaignCompiler] ✅ Đã áp dụng graph Compiler cho luồng ${campaignIntent.channel} (via: ai_compiler)`);
             }
           }
         } catch (compilerApplyErr) {

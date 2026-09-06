@@ -62,6 +62,12 @@ describe('Call site của compiler trong aiCampaign.service.js', () => {
     expect(source).toMatch(/COMPILER_ENABLED_FLOWS/);
     expect(source).toMatch(/campaignIntent\.channel/);
   });
+
+  it('phải kiểm cờ COMPILER_SLOT_FILLING_FLOWS và gọi fillContentSlots', () => {
+    expect(source).toMatch(/COMPILER_SLOT_FILLING_FLOWS/);
+    expect(source).toMatch(/fillContentSlots\s*\(/);
+    expect(source).toMatch(/ai_compiler_slot_filling/);
+  });
 });
 
 describe('Việc 3 & 4: COMPILER_ENABLED_FLOWS feature flag & fallback logic', () => {
@@ -160,3 +166,40 @@ describe('Việc 3 & 4: COMPILER_ENABLED_FLOWS feature flag & fallback logic', (
     expect(() => assertNoEmptyContent(script)).toThrow();
   });
 });
+
+describe('GĐ 4: COMPILER_SLOT_FILLING_FLOWS feature flag & slot filler integration', () => {
+  const originalSlotFillingEnv = process.env.COMPILER_SLOT_FILLING_FLOWS;
+  const originalCompilerEnv = process.env.COMPILER_ENABLED_FLOWS;
+
+  beforeEach(() => {
+    process.env.COMPILER_SLOT_FILLING_FLOWS = '';
+    process.env.COMPILER_ENABLED_FLOWS = '';
+  });
+
+  afterEach(() => {
+    process.env.COMPILER_SLOT_FILLING_FLOWS = originalSlotFillingEnv;
+    process.env.COMPILER_ENABLED_FLOWS = originalCompilerEnv;
+  });
+
+  it('khi cờ COMPILER_SLOT_FILLING_FLOWS tắt (mặc định), không kích hoạt slot filling', () => {
+    process.env.COMPILER_SLOT_FILLING_FLOWS = '';
+    const slotFillingFlows = (process.env.COMPILER_SLOT_FILLING_FLOWS || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    expect(slotFillingFlows.includes('zalo_group')).toBe(false);
+  });
+
+  it('khi bật COMPILER_SLOT_FILLING_FLOWS=zalo_group, luồng zalo_group được nhận diện đúng', () => {
+    process.env.COMPILER_SLOT_FILLING_FLOWS = 'zalo_group';
+    const slotFillingFlows = (process.env.COMPILER_SLOT_FILLING_FLOWS || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    expect(slotFillingFlows.includes('zalo_group')).toBe(true);
+    expect(slotFillingFlows.includes('email')).toBe(false);
+  });
+});
+
