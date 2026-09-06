@@ -4591,6 +4591,8 @@ export default {
     running: 'Đang chạy',
     continuousRunning: 'Chạy liên tục{interval, select, undefined {} other { ({interval} phút/lần)}}',
     quotaPausedUntil: 'Hết lượt gửi — tự chạy lại {until}',
+    smtpPausedUntil: 'Máy chủ email tạm chặn — tự gửi tiếp {until}',
+    zaloPausedUntil: 'Zalo tạm nghỉ theo hạn mức — tự gửi tiếp {until}',
     buyTopup: 'Mua thêm',
     unknown: 'Không xác định',
     runNotFound: 'Không tìm thấy lượt chạy để dừng',

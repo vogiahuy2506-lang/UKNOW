@@ -12,7 +12,7 @@ import {
 import { getCampaignTypeMeta } from '../../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 import { filterSchedulesByCampaignId } from '../utils/campaignRunSchedule.helpers';
-import { getActivePlanQuotaPause } from '../utils/campaignQuotaPause.helpers';
+import { getActiveRunPause, getRunPauseI18nKey } from '../utils/campaignQuotaPause.helpers';
 
 const CampaignRunMainTabs = ({
   activeMainTab,
@@ -161,7 +161,7 @@ const CampaignRunMainTabs = ({
                     : null;
                   const runId = Number.parseInt(runningRun?.id, 10);
                   const isStopping = Number.isFinite(runId) && stoppingRunIds.has(runId);
-                  const quotaPause = getActivePlanQuotaPause(runningRun?.runMetadata);
+                  const activePause = getActiveRunPause(runningRun?.runMetadata);
 
                   return (
                     <tr key={campaign.id} className="hover:bg-gray-50">
@@ -205,19 +205,21 @@ const CampaignRunMainTabs = ({
                                     {t('campaignRun.continuousRunning', { interval: pollIntervalMinutes })}
                                   </span>
                                 )}
-                                {quotaPause && (
+                                {activePause && (
                                   <>
                                     <span className="badge badge-danger text-xs font-normal">
-                                      {t('campaignRun.quotaPausedUntil', {
-                                        until: formatCampaignDateTime(quotaPause.untilIso),
+                                      {t(getRunPauseI18nKey(activePause.kind), {
+                                        until: formatCampaignDateTime(activePause.untilIso),
                                       })}
                                     </span>
-                                    <Link
-                                      to="/app/topup"
-                                      className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
-                                    >
-                                      {t('campaignRun.buyTopup')}
-                                    </Link>
+                                    {activePause.kind === 'plan_quota' && (
+                                      <Link
+                                        to="/app/topup"
+                                        className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                                      >
+                                        {t('campaignRun.buyTopup')}
+                                      </Link>
+                                    )}
                                   </>
                                 )}
                               </div>

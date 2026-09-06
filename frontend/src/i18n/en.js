@@ -4557,6 +4557,8 @@ export default {
     running: 'Running',
     continuousRunning: 'Running continuously{interval, select, undefined {} other { ({interval} min/interval)}}',
     quotaPausedUntil: 'Out of send quota — resumes {until}',
+    smtpPausedUntil: 'Mail server throttled — resumes {until}',
+    zaloPausedUntil: 'Zalo rate limit — resumes {until}',
     buyTopup: 'Buy more',
     unknown: 'Unknown',
     runNotFound: 'Run not found to stop',

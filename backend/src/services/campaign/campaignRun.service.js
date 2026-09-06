@@ -2723,6 +2723,8 @@ class CampaignRunService {
       let hasPendingEmailRetry = false;
       let pendingEmailRetryCount = 0;
       let emailRateLimitPausedUntilMs = null;
+      /** Cờ ghi metadata phản hồi SMTP rate-limit đúng một lần trong phiên chạy để tránh UPDATE lặp cho hàng nghìn recipient. */
+      let hasRecordedEmailRateLimitMetadata = false;
       // SMTP bị provider limit thì khóa campaign 12 giờ trước khi quét/gửi lại.
       const EMAIL_RATE_LIMIT_PAUSE_MS = 12 * 60 * 60 * 1000;
       /** Số bản ghi còn `meta.retryCount` trong nhóm đang chờ `nextDueAt` — chỉ có sau khi sync ledger; null = chưa sync trong phiên. */
@@ -3470,7 +3472,7 @@ class CampaignRunService {
            *
            * Luồng hoạt động:
            * 1. Set cờ pending để run không bị finalize completed sai trong cùng phiên.
-           * 2. Lưu mốc resume tuyệt đối sau 24h để vòng continuous không quét thêm khách mới.
+           * 2. Lưu mốc resume tuyệt đối sau 12h để vòng continuous không quét thêm khách mới.
            * 3. Ưu tiên mốc sớm nhất nếu nhiều recipient cùng báo limit trong một cycle.
            *
            * @returns {number} timestamp (ms) thời điểm resume
@@ -3637,6 +3639,22 @@ class CampaignRunService {
                 if (isRateLimitedRetryScheduled) {
                   const pauseUntilMs = markCampaignPausedByEmailRateLimit();
                   markRunHasPendingEmailRetry();
+                  if (!hasRecordedEmailRateLimitMetadata && sendResult?.providerResponse) {
+                    hasRecordedEmailRateLimitMetadata = true;
+                    const recipientEmail = String(customer?.email || '').trim();
+                    const recipientDomain = recipientEmail.includes('@')
+                      ? recipientEmail.split('@').pop()
+                      : null;
+                    await campaignRunRepository.patchRunMetadata(runId, {
+                      emailRateLimitResponse: sendResult.providerResponse,
+                      emailRateLimitResponseCode: sendResult.providerResponseCode ?? null,
+                      emailRateLimitAt: toHoChiMinhIso(),
+                      emailRateLimitRecipientDomain: recipientDomain,
+                      emailRateLimitSettingId: sendResult.settingId ?? runtimeNode?.config?.fromEmailId ?? null,
+                    }).catch((patchErr) => {
+                      console.error(`[CampaignRun] Failed to patch email rate limit metadata for run=${runId}:`, patchErr.message);
+                    });
+                  }
                   return {
                     success: false,
                     stopRemainingStepsForRecipient: true,

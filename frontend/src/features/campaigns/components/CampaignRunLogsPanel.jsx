@@ -2,7 +2,7 @@ import CampaignExecutionLogWorkspace from '../../../components/campaigns/Campaig
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
-import { getActivePlanQuotaPause } from '../utils/campaignQuotaPause.helpers';
+import { getActiveRunPause, getRunPauseI18nKey } from '../utils/campaignQuotaPause.helpers';
 
 const CampaignRunLogsPanel = ({
   selectedCampaignForLogs,
@@ -21,7 +21,7 @@ const CampaignRunLogsPanel = ({
   const pollIntervalMinutes = Number.isFinite(pollIntervalMs)
     ? Math.max(1, Math.round(pollIntervalMs / 60000))
     : null;
-  const quotaPause = getActivePlanQuotaPause(selectedRunDetail?.runMetadata);
+  const activePause = getActiveRunPause(selectedRunDetail?.runMetadata);
 
   return (
     <div className="card">
@@ -44,19 +44,21 @@ const CampaignRunLogsPanel = ({
           </div>
         ) : (
           <>
-            {quotaPause && (
+            {activePause && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                 <span className="text-sm font-medium text-amber-900">
-                  {t('campaignRun.quotaPausedUntil', {
-                    until: formatCampaignDateTime(quotaPause.untilIso),
+                  {t(getRunPauseI18nKey(activePause.kind), {
+                    until: formatCampaignDateTime(activePause.untilIso),
                   })}
                 </span>
-                <Link
-                  to="/app/topup"
-                  className="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline"
-                >
-                  {t('campaignRun.buyTopup')}
-                </Link>
+                {activePause.kind === 'plan_quota' && (
+                  <Link
+                    to="/app/topup"
+                    className="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                  >
+                    {t('campaignRun.buyTopup')}
+                  </Link>
+                )}
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

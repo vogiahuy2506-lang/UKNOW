@@ -830,8 +830,10 @@ class CampaignEmailSenderService {
       const bounceReason = String(smtpError?.message || '').slice(0, 500);
       const shortBounceReason = bounceReason.slice(0, 180);
       if (providerRateLimitError) {
-        // Không ghi log rate-limit theo yêu cầu nghiệp vụ:
-        // campaignRun sẽ tự xử lý đóng băng run 24h và chạy lại sau.
+        console.warn(
+          `[CampaignRun][Email] smtp_rate_limited run=${runId} to=${customer.email} `
+          + `code=${smtpError?.responseCode ?? 'n/a'} reason=${shortBounceReason}`
+        );
       } else if (smtpConfigError) {
         console.warn(
           `[CampaignRun][Email] smtp_config_error run=${runId} to=${customer.email} `
@@ -877,6 +879,9 @@ class CampaignEmailSenderService {
             error: `SMTP provider đang giới hạn gửi; chiến dịch sẽ thử lại sau ${retryDelayLabel} (lần ${nextRetryCount}/${retryConfig.maxRetries}).`,
             retryScheduledAt: retryScheduleAt.toISOString(),
             retryAttemptCount: nextRetryCount,
+            providerResponse: bounceReason,
+            providerResponseCode: smtpError?.responseCode ?? null,
+            settingId: settings?.id ?? null,
           };
         }
 
@@ -884,7 +889,10 @@ class CampaignEmailSenderService {
           to: customer.email,
           status: 'failed',
           errorType: 'smtp_rate_limited',
-            error: `SMTP provider đang giới hạn gửi và đã vượt số lần retry (${retryConfig.maxRetries}).`,
+          error: `SMTP provider đang giới hạn gửi và đã vượt số lần retry (${retryConfig.maxRetries}).`,
+          providerResponse: bounceReason,
+          providerResponseCode: smtpError?.responseCode ?? null,
+          settingId: settings?.id ?? null,
         };
       }
 
