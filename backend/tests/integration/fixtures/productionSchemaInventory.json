@@ -6,7 +6,7 @@
     "scope": "CHI TEN COT. Anh chup goc co 51/112 bang lech kieu du lieu, chu yeu timestamp naive (prod) vs timestamptz (test). Xem _internal/PLAN_SCHEMA_DRIFT_BOOTSTRAP_2026-08-25.md.",
     "excluded": "3 bang backup tam tren production (courses_backup_20260825, campaign_nodes_backup_20260825, users_plan_backup_minh) khong tinh.",
     "tables": 121,
-    "columns": 1635,
+    "columns": 1636,
     "note": "TU migration 172 tro di, fixture DI TRUOC production cho toi khi deploy: is_preview tren email_messages/zalo_messages chi ton tai o production SAU khi 172 chay. Metadata preflight/result migration 174 cung chi co tren production sau khi deploy release 174. Do lai voi production TRUOC deploy se thay lech — do la binh thuong, khong phai loi."
   },
   "tables": {
