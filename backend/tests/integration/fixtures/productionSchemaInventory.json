@@ -600,6 +600,7 @@
       "position",
       "primary_color",
       "reply_limit_config",
+      "response_style",
       "show_avatar",
       "suggested_questions",
       "system_instruction",
