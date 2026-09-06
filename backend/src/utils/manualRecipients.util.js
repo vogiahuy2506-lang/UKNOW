@@ -9,8 +9,18 @@ export const MAX_AI_MANUAL_RECIPIENTS = 1000;
  * danh sách khách vài nghìn dòng cũng hợp lý, nên dùng chung một con số làm
  * chiến dịch bị từ chối chạy mà người dùng không hiểu vì sao (sự cố 02/09/2026:
  * sheet 8.156 người nhận bị chặn bởi trần vốn dành cho nhập tay).
+ *
+ * Nâng 10.000 → 50.000 ngày 05/09/2026: khách thật bị chặn với sheet 13.991
+ * người nhận. Đây là lần thứ HAI cùng một loại sự cố, nên lần này cho đọc từ
+ * biến môi trường để lần sau chỉnh được mà không phải deploy lại.
+ *
+ * Trần này là chốt chặn vận hành, KHÔNG phải giới hạn kỹ thuật: sheet được đọc
+ * trọn vẹn rồi mới đem ra so trần (`recipientExtractor.service.js`), nên nâng số
+ * không làm việc đọc nặng thêm.
  */
-export const MAX_SHEET_RECIPIENTS = 10000;
+const parsedSheetLimit = Number.parseInt(process.env.MAX_SHEET_RECIPIENTS, 10);
+export const MAX_SHEET_RECIPIENTS =
+  Number.isFinite(parsedSheetLimit) && parsedSheetLimit > 0 ? parsedSheetLimit : 50000;
 
 const splitRecipients = (value) => (Array.isArray(value) ? value : String(value || '').split(/[\s,;\n]+/))
   .map((item) => String(item || '').trim())
