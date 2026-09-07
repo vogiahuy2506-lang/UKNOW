@@ -53,6 +53,13 @@ import {
   isRecentLandingPageContext,
 } from './utils/landingEditContext.js';
 import { extractQuickSendDraftAttachments } from './utils/quickSendHandoff.js';
+import {
+  normalizeChannel,
+  parseWizardMarker,
+  deriveWizardContext,
+  mergeClientWizardContext,
+  applyWizardSelectionsToScript,
+} from './utils/wizardContext.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -60,24 +67,6 @@ const PLAN_APPROVE_REGEX =
   /^\s*(đồng ý|dong y|duyệt|duyet|ok|okay|oke|tạo đi|tao di|tạo luôn|tao luon|chốt|chot|yes|approve|go)\s*$/i;
 const PLAN_CANCEL_REGEX =
   /^\s*(huỷ|hủy|huy|cancel|dừng|dung|thôi|thoi|stop)\s*$/i;
-
-const normalizeChannel = (channel) => {
-  const lower = String(channel || '').trim().toLowerCase();
-  if (lower === 'zalo_personal') return 'zalo';
-  if (lower === 'zalo_group') return 'zalo_group';
-  return lower;
-};
-
-const parseWizardMarker = (content = '') => {
-  const firstLine = String(content || '').split('\n')[0]?.trim();
-  const match = firstLine?.match(/^\[wizard\](\{.*\})/);
-  if (!match) return null;
-  try {
-    return JSON.parse(match[1]);
-  } catch {
-    return null;
-  }
-};
 
 const parseScheduleValue = (value, answers = {}) => {
   const raw = String(value || '').trim();
@@ -224,141 +213,9 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
   }
 };
 
-const GOOGLE_SHEET_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/\S+/i;
-
-const deriveWizardContext = (items = []) => {
-  const context = {
-    channel: null,
-    senderAccountId: null,
-    senderAccountName: null,
-    dataSource: null,
-    sheetUrl: null,
-    zaloGroupIds: [],
-    zaloFriendIds: [],
-    schedule: null,
-    planApproved: false,
-  };
-  items.forEach((message) => {
-    if (message?.role !== 'user') return;
-    const marker = parseWizardMarker(message.content);
-    if (!marker) {
-      // User dán link Google Sheet dưới dạng tin nhắn thường — lấy link mới nhất
-      const sheetMatch = String(message.content || '').match(GOOGLE_SHEET_URL_RE);
-      if (sheetMatch) context.sheetUrl = sheetMatch[0].replace(/[)\]}>.,;'"]+$/, '');
-      return;
-    }
-    if (marker.gate === 'channel') {
-      context.channel = normalizeChannel(marker.channel || marker.value);
-      context.senderAccountId = null;
-      context.senderAccountName = null;
-      context.dataSource = null;
-      context.zaloGroupIds = [];
-      context.zaloFriendIds = [];
-      context.schedule = null;
-      context.planApproved = false;
-    } else if (marker.gate === 'senderAccount') {
-      context.channel = normalizeChannel(marker.channel) || context.channel;
-      context.senderAccountId = marker.accountId ?? null;
-      context.senderAccountName = marker.accountName || null;
-    } else if (marker.gate === 'dataSource') {
-      context.dataSource = marker.value || marker.dataSource || null;
-      if (marker.sheetUrl) {
-        context.sheetUrl = marker.sheetUrl;
-      }
-      if (Array.isArray(marker.friendUids)) {
-        context.zaloFriendIds = marker.friendUids;
-      }
-    } else if (marker.gate === 'zaloGroups') {
-      context.senderAccountId = marker.accountId ?? context.senderAccountId;
-      context.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
-    } else if (marker.gate === 'zaloFriends') {
-      context.senderAccountId = marker.accountId ?? context.senderAccountId;
-      context.zaloFriendIds = Array.isArray(marker.friendIds || marker.friendUids) ? (marker.friendIds || marker.friendUids) : [];
-    } else if (marker.gate === 'schedule') {
-      context.schedule = {
-        mode: marker.mode || marker.value || 'once',
-        days: marker.days,
-        slotsPerDay: marker.slotsPerDay ? Number(marker.slotsPerDay) : 1,
-      };
-    } else if (marker.gate === 'planApproved') {
-      context.planApproved = true;
-    }
-  });
-  return context;
-};
-
-// Fill wizardContext derive từ messages bằng gates persist trên server (chỉ lấp chỗ
-// trống — marker tường minh trong messages luôn thắng, cùng triết lý merge backend)
-const mergeClientWizardContext = (derived, gates) => ({
-  ...derived,
-  channel: derived.channel ?? gates.channel ?? null,
-  senderAccountId: derived.senderAccountId ?? gates.senderAccountId ?? null,
-  senderAccountName: derived.senderAccountName ?? gates.senderAccountName ?? null,
-  dataSource: derived.dataSource ?? gates.dataSource ?? null,
-  sheetUrl: derived.sheetUrl ?? gates.sheetUrl ?? null,
-  zaloGroupIds: derived.zaloGroupIds?.length
-    ? derived.zaloGroupIds
-    : (Array.isArray(gates.zaloGroupIds) ? gates.zaloGroupIds : []),
-  schedule: derived.schedule ?? gates.schedule ?? null,
-  planApproved: Boolean(derived.planApproved || gates.planApproved),
-});
-
-const applyWizardSelectionsToScript = (script, context = {}) => {
-  if (!script) return script;
-  const senderId = context.senderAccountId != null ? Number(context.senderAccountId) : null;
-  const groupIds = Array.isArray(context.zaloGroupIds) ? context.zaloGroupIds : [];
-  const sheetUrl = context.sheetUrl || '';
-  if (!senderId && groupIds.length === 0 && !context.dataSource && !sheetUrl) return script;
-
-  const next = {
-    ...script,
-    campaignType: context.channel || script.campaignType,
-    wizardContext: context,
-    nodes: Array.isArray(script.nodes)
-      ? script.nodes.map((node) => {
-        const config = { ...(node.config || {}) };
-        if (senderId) {
-          if (node.nodeSubtype === 'send_email') config.fromEmailId = config.fromEmailId || senderId;
-          if (node.nodeSubtype === 'select_zalo_account' || node.nodeSubtype === 'send_zalo_personal' || node.nodeSubtype === 'send_zalo_group') {
-            config.zaloAccountId = config.zaloAccountId || senderId;
-          }
-        }
-        if (node.nodeSubtype === 'get_all_groups' && groupIds.length > 0) {
-          config.zaloSelectedGroupIds = groupIds;
-        }
-        if (node.nodeSubtype === 'read_sheet' && sheetUrl && !config.sheetUrl) {
-          config.sheetUrl = sheetUrl;
-        }
-        if (context.dataSource === 'sheet' && node.nodeSubtype === 'interested_customers') {
-          return {
-            ...node,
-            nodeSubtype: 'read_sheet',
-            nodeName: 'Danh sách từ Sheet',
-            nodeDescription: sheetUrl
-              ? 'Danh sách lấy từ Google Sheet bạn đã cung cấp.'
-              : 'Danh sách lấy từ Google Sheet - cần dán URL trong Campaign Builder nếu chưa có.',
-            config: { sheetUrl, headerRow: 1, dataStartRow: 2 },
-          };
-        }
-        if (context.dataSource === 'landing' && node.nodeSubtype === 'interested_customers') {
-          return {
-            ...node,
-            nodeSubtype: 'read_landing_leads',
-            nodeName: 'Lead từ Landing Page',
-            nodeDescription: 'Danh sách đăng ký từ Landing Page.',
-            config: { landingLeadsSlugs: [] },
-          };
-        }
-        return { ...node, config };
-      })
-      : script.nodes,
-  };
-
-  if (context.dataSource && Array.isArray(next.nodes) && context.channel !== 'zalo_group') {
-    next.wizardDataSource = context.dataSource;
-  }
-  return next;
-};
+// deriveWizardContext, mergeClientWizardContext, applyWizardSelectionsToScript,
+// normalizeChannel, parseWizardMarker, GOOGLE_SHEET_URL_RE: tách sang
+// features/ai/utils/wizardContext.js (PLAN_WIZARD_VONG_DOI_2026-09-07 PR-1) — import ở đầu file.
 
 const parseHourFromSendTime = (sendTime) => {
   if (!sendTime) return null;
@@ -661,6 +518,18 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     wizardPatchQueueRef.current = wizardPatchQueueRef.current
       .then(() => aiApi.patchWizardState(sessionId, action, payload))
       .catch(() => {});
+  };
+
+  // Ranh giới "chiến dịch đã tạo xong" — gọi ở ĐỦ 4 nhánh tạo chiến dịch thành công
+  // (PLAN_WIZARD_VONG_DOI_2026-09-07 PR-1). Đẩy mark_campaign_created lên server (reset
+  // wizard_state.gates + ghi tin ranh giới sống qua reload) và dọn state cục bộ
+  // (serverWizardGates, contentPlanWorkflow) — chiến dịch tiếp theo trong CÙNG hội thoại
+  // không kế thừa sender/nhóm/nguồn của chiến dịch vừa tạo.
+  const closeWizardAfterCreate = ({ campaignId, content, type = 'campaign_created', data, appendMessage = setMessages }) => {
+    enqueueWizardPatch('mark_campaign_created', { campaignId: campaignId ?? null, content });
+    setServerWizardGates(null);
+    setContentPlanWorkflow(null);
+    appendMessage((prev) => [...prev, { role: 'assistant', content, type, data: data ?? { campaignId: campaignId ?? null } }]);
   };
 
   // Rebuild contentPlanWorkflow + serverWizardGates từ wizard_state server trả về.
@@ -1447,17 +1316,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const res = await aiApi.createCampaignFromDraft(script, [], directRecipients);
       if (res.success) {
         toast.success('Đã tạo campaign draft thành công!', { id: loadingToast });
-        enqueueWizardPatch('mark_campaign_created', { campaignId: res.campaignId ?? null });
-        setContentPlanWorkflow((prev) => (prev ? {
-          ...prev,
-          isCreatingCampaign: false,
-          awaitingCampaignConfirm: false,
-          status: 'completed',
-        } : prev));
-        setMessages((prev) => [...prev, {
-          role: 'assistant',
+        closeWizardAfterCreate({
+          campaignId: res.campaignId ?? null,
           content: `🎉 Đã tạo chiến dịch draft "${script.campaignName}". Mình mở Campaign Builder để bạn review trước khi chạy.`,
-        }]);
+        });
         if (res.campaignId) {
           navigate(`/app/campaigns/${res.campaignId}/builder`);
           onToggle?.();
@@ -1703,12 +1565,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             setCreatingCampaign(false);
             if (createResult.success) {
               setAutoCreatedCampaign(createResult.data);
-              update(prev => [...prev, {
-                role: 'assistant',
+              closeWizardAfterCreate({
+                campaignId: createResult.data.campaignId,
                 content: `🎉 Chiến dịch "${createResult.data.campaignName}" đã được tạo và đang chạy!\n\nRun ID: ${createResult.data.runId || 'N/A'}\n\nBạn có thể theo dõi tiến trình tại trang Chiến dịch.`,
                 type: 'auto_created_success',
                 data: createResult.data,
-              }]);
+                appendMessage: update,
+              });
             } else {
               update(prev => [...prev, {
                 role: 'assistant',
@@ -2892,10 +2755,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setCurrentScript(null);
         directRecipientsRef.current = null;
         setDirectRecipients(null);
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `🎉 Chiến dịch "${currentScript.campaignName}" đã được tạo thành công!\n\nVào Campaign Builder để xem chi tiết và nhấn "Chạy" khi sẵn sàng.`
-        }]);
+        closeWizardAfterCreate({
+          campaignId: res.campaignId ?? null,
+          content: `🎉 Chiến dịch "${currentScript.campaignName}" đã được tạo thành công!\n\nVào Campaign Builder để xem chi tiết và nhấn "Chạy" khi sẵn sàng.`,
+        });
         // Navigate to the new campaign builder
         if (res.campaignId) {
           navigate(`/app/campaigns/${res.campaignId}/builder`);
@@ -2922,10 +2785,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         toast.success(`Đã đẩy kịch bản vào "${campaign.campaignName}" và kích hoạt!`, { id: t });
         setCurrentScript(null);
         setSelectedScriptForPush(null);
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `🎉 Kịch bản đã được đẩy vào chiến dịch "${campaign.campaignName}" và đang chạy! Theo dõi tại mục Quản lý chiến dịch nhé.`
-        }]);
+        closeWizardAfterCreate({
+          campaignId: campaign.id,
+          content: `🎉 Kịch bản đã được đẩy vào chiến dịch "${campaign.campaignName}" và đang chạy! Theo dõi tại mục Quản lý chiến dịch nhé.`,
+        });
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Không thể đẩy kịch bản.', { id: t });

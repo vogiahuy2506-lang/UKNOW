@@ -600,6 +600,70 @@ describe('aiCampaignWizard.service', () => {
     });
   });
 
+  describe('PLAN_WIZARD_VONG_DOI PR-1: ranh giới campaign_created — hai chiến dịch một hội thoại', () => {
+    // Chiến dịch A: Zalo nhóm, TK 8, nhóm g1 ("ĐI LÀM"), xác nhận, rồi campaign_created.
+    const historyAfterCampaignA = [
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo_group"}\nZalo nhóm' }, // 0
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo_group","accountId":8}\nTK 8' }, // 1
+      { role: 'user', content: '[wizard]{"gate":"zaloGroups","accountId":8,"groupIds":["g1"]}\nChọn nhóm ĐI LÀM' }, // 2
+      { role: 'assistant', type: 'confirm_create', content: 'Xác nhận tạo chiến dịch A?', data: { campaignType: 'zalo_group' } }, // 3
+      { role: 'assistant', type: 'campaign_created', content: '🎉 Chiến dịch A đã được tạo.', data: { campaignId: 100 } }, // 4
+    ];
+
+    it('extractWizardState: campaign_created reset đầy đủ — không còn sender/nhóm của A', () => {
+      const history = [...historyAfterCampaignA, { role: 'user', content: 'tạo thêm chiến dịch Zalo nhóm nữa' }]; // 5
+      const derived = extractWizardState(history);
+
+      expect(derived.isCampaignFlow).toBe(true); // câu mới kích hoạt lại flow
+      expect(derived.senderAccountId).toBeNull(); // KHÔNG còn TK 8 của A
+      expect(derived.zaloGroupIds).toEqual([]); // KHÔNG còn g1 của A
+      expect(derived.markerGates).toEqual([]); // không còn 'senderAccount'/'zaloGroups' của A
+      expect(derived.latestCampaignMessageIndex).toBe(5);
+    });
+
+    it('mergeWizardState + evaluateNextGate: persisted đã reset (mark_campaign_created) → hỏi senderAccount, KHÔNG nhảy thẳng lịch gửi', () => {
+      const history = [...historyAfterCampaignA, { role: 'user', content: 'tạo thêm chiến dịch Zalo nhóm nữa' }];
+      const derived = extractWizardState(history);
+
+      // persisted mô phỏng đúng kết quả applyWizardStateAction('mark_campaign_created', ...):
+      // gates đã reset về rỗng — {} tương đương createEmptyWizardState().gates cho các field liên quan.
+      const merged = mergeWizardState({}, derived, { lastUserText: 'tạo thêm chiến dịch Zalo nhóm nữa' });
+      expect(merged.channel).toBe('zalo_group'); // suy được từ chữ "Zalo nhóm" trong câu
+      expect(merged.senderAccountId).toBeNull();
+
+      const gate = evaluateNextGate({ ...merged, brief: derived.brief }, {
+        zaloAccounts: [
+          { id: 8, name: 'TK 8', status: 'connected' },
+          { id: 9, name: 'TK 9', status: 'connected' },
+        ],
+      });
+
+      expect(gate.gate).toBe('senderAccount');
+      expect(gate.gate).not.toBe('schedule'); // đúng lỗi thật: KHÔNG được nhảy thẳng hỏi lịch gửi
+      expect(gate.gate).not.toBe('zaloGroups'); // nhóm phải hỏi SAU senderAccount, không trước
+    });
+
+    it('lượt thứ hai: nối marker senderAccount 9 của chiến dịch B → chỉ có 9, nhóm vẫn rỗng → gate tiếp là zaloGroups', () => {
+      const history = [
+        ...historyAfterCampaignA,
+        { role: 'user', content: 'tạo thêm chiến dịch Zalo nhóm nữa' }, // 5
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo_group","accountId":9}\nTK 9' }, // 6
+      ];
+      const derived = extractWizardState(history);
+
+      expect(derived.senderAccountId).toBe(9); // TK của B, không phải TK 8 của A
+      expect(derived.zaloGroupIds).toEqual([]); // vẫn rỗng — chưa chọn nhóm cho B
+
+      const merged = mergeWizardState({}, derived, { lastUserText: 'TK 9' });
+      const gate = evaluateNextGate({ ...merged, brief: derived.brief }, {
+        zaloAccounts: [{ id: 9, name: 'TK 9', status: 'connected' }],
+      });
+
+      expect(gate.gate).toBe('zaloGroups');
+      expect(gate.response?.data?.accountId).toBe(9);
+    });
+  });
+
   describe('PR-3: routeSaysActionRequest router integration', () => {
     it('activates isCampaignFlow and infers channel when routeSaysActionRequest is true', () => {
       const history = [

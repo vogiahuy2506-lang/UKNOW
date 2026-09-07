@@ -534,6 +534,18 @@ class AiController {
 
       result.state.meta.updatedAt = new Date().toISOString();
       const saved = await aiSessionRepo.writeWizardState(sessionId, userId, result.state);
+
+      // Ranh giới "chiến dịch đã tạo xong" phải SỐNG TRÊN SERVER (không chỉ local) — tải lại
+      // trang là ai_chat_messages vẫn còn tin này, ba nơi suy trạng thái đều thấy được.
+      if (action === 'mark_campaign_created') {
+        const content = String(payload?.content || '').trim().slice(0, 500) || '🎉 Chiến dịch đã được tạo.';
+        await aiSessionRepo.saveAssistantMessage(sessionId, userId, {
+          type: 'campaign_created',
+          content,
+          data: { campaignId: payload?.campaignId ?? null },
+        });
+      }
+
       return res.json({ success: true, data: { wizardState: saved, changed: true } });
     } catch (error) {
       console.error('Patch wizard state error:', error);

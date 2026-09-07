@@ -146,6 +146,45 @@ describe('applyWizardStateAction', () => {
       const { changed } = applyWizardStateAction(first, 'mark_campaign_created', { campaignId: 55 });
       expect(changed).toBe(false);
     });
+
+    it('reset gate: dọn sạch toàn bộ gates về trạng thái rỗng, giữ nguyên plan', () => {
+      const base = stateWithPlan();
+      base.gates.channel = 'zalo_group';
+      base.gates.senderAccountId = '8';
+      base.gates.senderAccountName = 'Tài khoản A';
+      base.gates.zaloGroupIds = ['g1'];
+      base.gates.isCampaignFlow = true;
+
+      const { state, changed } = applyWizardStateAction(base, 'mark_campaign_created', { campaignId: 55 });
+
+      expect(changed).toBe(true);
+      expect(state.gates).toEqual(createEmptyWizardState().gates);
+      // Giữ plan (snapshot của chiến dịch VỪA tạo) — chỉ gates reset, không phải plan.
+      expect(state.plan.snapshot).toEqual(base.plan.snapshot);
+    });
+
+    it('reset meta.lastGate/lastGateCount/deadEndLoggedAt giống abandon_campaign_flow', () => {
+      const base = stateWithPlan();
+      base.meta = { lastGate: 'zaloGroups', lastGateCount: 2, deadEndLoggedAt: 'x', updatedAt: null };
+      const { state } = applyWizardStateAction(base, 'mark_campaign_created', { campaignId: 55 });
+      expect(state.meta).toMatchObject({ lastGate: null, lastGateCount: 0, deadEndLoggedAt: null });
+    });
+
+    it('KHÔNG đặt abandonedAtMessageCount — đây không phải sự kiện bỏ dở', () => {
+      const base = stateWithPlan();
+      const { state } = applyWizardStateAction(base, 'mark_campaign_created', { campaignId: 55 });
+      expect(state.gates.abandonedAtMessageCount).toBeNull();
+    });
+
+    it('idempotent PHẢI xét cả gates rỗng: cùng campaignId nhưng gates đã có dữ liệu mới (chiến dịch tiếp theo) → vẫn changed=true, reset lại', () => {
+      const afterFirst = applyWizardStateAction(stateWithPlan(), 'mark_campaign_created', { campaignId: 55 }).state;
+      // Mô phỏng: người dùng bắt đầu chiến dịch MỚI trong cùng hội thoại, gate đã có dữ liệu,
+      // nhưng client gọi lại mark_campaign_created với campaignId CŨ (retry/trễ mạng).
+      const reStarted = { ...afterFirst, gates: { ...afterFirst.gates, channel: 'email', senderAccountId: '9' } };
+      const { state, changed } = applyWizardStateAction(reStarted, 'mark_campaign_created', { campaignId: 55 });
+      expect(changed).toBe(true);
+      expect(state.gates).toEqual(createEmptyWizardState().gates);
+    });
   });
 
   it('never mutates its input', () => {
