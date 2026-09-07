@@ -28,9 +28,9 @@ class CustomerZaloTrackingRepository {
   async createPlaceholderCustomerByZaloUid(client, userId, zaloUid) {
     const result = await client.query(
       `INSERT INTO customers
-         (id_user, workspace_owner_id, zalo_id, customer_source, utm_source, created_at, updated_at)
+         (id_user, workspace_owner_id, zalo_id, customer_source, utm_source, consent_source, created_at, updated_at)
        VALUES
-         ($1, $1, $2, 'uknow_campaign', 'zalo_person_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ($1, $1, $2, 'uknow_campaign', 'zalo_person_campaign', 'zalo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [userId, zaloUid]
     );

@@ -80,6 +80,8 @@ export const mapLeadRowToCampaignItem = (row) => {
     interestArea: String(row.interestArea ?? row.interest_area ?? '').trim(),
     marketingConsent,
     landingPageSlug: String(row.landingPageSlug ?? row.landing_page_slug ?? '').trim() || null,
+    unsubscribeToken: row.unsubscribeToken ?? row.unsubscribe_token ?? null,
+    consentWithdrawnAt: row.consentWithdrawnAt ?? row.consent_withdrawn_at ?? null,
     createdAt: row.createdAt || row.created_at,
     customFields: customFieldsSnapshotToPrimitives(row.customFields ?? row.custom_fields),
   };
@@ -180,6 +182,65 @@ function buildSharedLeadFilters(config = {}, fieldTypeByKey) {
 /**
  * Dịch vụ nghiệp vụ lead (form landing + preview/node).
  */
+/**
+ * Render trang HTML rút lại đồng ý cho lead (song ngữ Việt - Anh).
+ * Dùng chung cho cả leadService (200, 404) và leadUnsubscribeLimiter (429).
+ *
+ * @param {object} options
+ * @param {string} options.title
+ * @param {string} options.headingVi
+ * @param {string} options.textVi
+ * @param {string} options.headingEn
+ * @param {string} options.textEn
+ * @param {string} [options.privacyPolicyUrl]
+ * @returns {string}
+ */
+export function renderLeadUnsubscribeHtml({
+  title,
+  headingVi,
+  textVi,
+  headingEn,
+  textEn,
+  privacyPolicyUrl,
+}) {
+  const fallbackPrivacyUrl =
+    String(privacyPolicyUrl || "").trim() || "https://campaign.digiso.vn/privacy-policy";
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px}
+  .card{background:#fff;border-radius:8px;padding:28px;max-width:560px;width:100%;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+  h1{font-size:22px;margin:0 0 8px 0;color:#1a1a1a}
+  p{color:#555;font-size:15px;line-height:1.6;margin:0}
+  .block{padding:12px 0}
+  .block + .block{border-top:1px solid #e5e7eb}
+  .lang-label{display:inline-block;font-size:12px;font-weight:700;color:#6b7280;margin-bottom:6px}
+  .helper{margin-top:14px;font-size:13px;color:#6b7280}
+  .helper a{color:#4b5563;text-decoration:underline}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="block">
+      <span class="lang-label">Tiếng Việt</span>
+      <h1>${headingVi}</h1>
+      <p>${textVi}</p>
+    </div>
+    <div class="block">
+      <span class="lang-label">English</span>
+      <h1>${headingEn}</h1>
+      <p>${textEn}</p>
+    </div>
+    <p class="helper">
+      <a href="${fallbackPrivacyUrl}">Chính sách bảo mật / Privacy Policy</a>
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
 class LeadService {
   /**
    * Chuẩn hóa bộ lọc chung; khi có custom filter thì tra type từ schema workspace.
@@ -452,6 +513,74 @@ class LeadService {
       }
     }
     return [...byKey.values()];
+  }
+
+  /**
+   * Xử lý rút lại đồng ý tiếp thị cho lead thông qua public unsubscribe link.
+   *
+   * @param {object} params
+   * @param {string} params.token
+   * @param {string} [params.privacyPolicyUrl]
+   * @returns {Promise<{ statusCode: number, html: string }>}
+   */
+  async withdrawLeadConsent({ token, privacyPolicyUrl }) {
+    const cleanToken = String(token || '').trim();
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const renderHtml = (opts) => renderLeadUnsubscribeHtml({ ...opts, privacyPolicyUrl });
+
+    if (!cleanToken || !UUID_RE.test(cleanToken)) {
+      return {
+        statusCode: 404,
+        html: renderHtml({
+          title: 'Liên kết không hợp lệ / Invalid Link',
+          headingVi: 'Liên kết không hợp lệ',
+          textVi: 'Liên kết rút lại đồng ý không hợp lệ hoặc đã hết hạn.',
+          headingEn: 'Invalid link',
+          textEn: 'The consent withdrawal link is invalid or has expired.',
+        }),
+      };
+    }
+
+    const lead = await leadRepository.findByUnsubscribeToken(cleanToken);
+    if (!lead) {
+      return {
+        statusCode: 404,
+        html: renderHtml({
+          title: 'Liên kết không tồn tại / Link Not Found',
+          headingVi: 'Liên kết không tồn tại',
+          textVi: 'Không tìm thấy thông tin đăng ký tương ứng với liên kết này.',
+          headingEn: 'Link not found',
+          textEn: 'We could not find any registration record matching this link.',
+        }),
+      };
+    }
+
+    const alreadyWithdrawn = lead.marketingConsent === false && lead.consentWithdrawnAt != null;
+    if (alreadyWithdrawn) {
+      return {
+        statusCode: 200,
+        html: renderHtml({
+          title: 'Đã rút lại đồng ý / Consent Already Withdrawn',
+          headingVi: 'Yêu cầu đã được ghi nhận trước đó',
+          textVi: 'Bạn đã rút lại đồng ý nhận thông tin tiếp thị trước đó. Chúng tôi sẽ không gửi thông tin tiếp thị đến bạn.',
+          headingEn: 'Request already recorded',
+          textEn: 'You had already withdrawn your marketing consent previously. We will not send marketing communications to you.',
+        }),
+      };
+    }
+
+    await leadRepository.withdrawConsentById(lead.id);
+
+    return {
+      statusCode: 200,
+      html: renderHtml({
+        title: 'Rút lại đồng ý thành công / Consent Withdrawn',
+        headingVi: 'Rút lại đồng ý thành công',
+        textVi: 'Bạn đã rút lại đồng ý nhận thông tin tiếp thị thành công. Chúng tôi đã ghi nhận và sẽ không gửi thông tin tiếp thị đến bạn.',
+        headingEn: 'Consent withdrawn successfully',
+        textEn: 'You have successfully withdrawn your marketing consent. We will no longer send marketing communications to you.',
+      }),
+    };
   }
 }
 

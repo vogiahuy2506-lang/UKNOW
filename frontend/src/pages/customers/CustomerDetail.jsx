@@ -306,6 +306,16 @@ const CustomerDetail = () => {
             <div className="text-gray-700">
               <span className="font-medium">{t('customerDetail.source')}:</span> {customer.customerSource || '--'}
             </div>
+            <div className="text-gray-700">
+              <span className="font-medium">{t('customerDetail.consentSource')}:</span>{' '}
+              {customer.consentSource ? (
+                <span className="badge badge-info text-xs">
+                  {t(`campaignCustomers.consentSources.${customer.consentSource}`, { defaultValue: customer.consentSource })}
+                </span>
+              ) : (
+                '--'
+              )}
+            </div>
           </div>
         </div>
       </div>

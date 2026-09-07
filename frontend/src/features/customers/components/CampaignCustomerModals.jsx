@@ -268,6 +268,14 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                   <HiOutlineUser className="w-4 h-4 text-gray-400 shrink-0" />
                   <CustomerStatusBadge status={status} t={t} />
                 </div>
+                {customer?.consentSource ? (
+                  <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                    <span className="text-gray-500 font-medium">{t('campaignCustomers.consentSource')}:</span>
+                    <span className="badge badge-info text-xs">
+                      {t(`campaignCustomers.consentSources.${customer.consentSource}`, { defaultValue: customer.consentSource })}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

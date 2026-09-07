@@ -25,7 +25,7 @@ class CustomerReadRepository {
     const result = await db.query(
       `SELECT
           c.id, c.id_user, c.email, c.phone, c.zalo_id, c.zalo_phone, c.facebook_id,
-          c.full_name, c.gender, c.customer_source, c.source_landing_page, c.source_form_id,
+          c.full_name, c.gender, c.customer_source, c.consent_source, c.source_landing_page, c.source_form_id,
           c.utm_source, c.utm_medium, c.utm_campaign,
           c.zalo_in_group, c.id_zalo_group,
           c.zalo_group_joined_at::timestamptz AS zalo_group_joined_at,
@@ -269,6 +269,7 @@ class CustomerReadRepository {
     status,
     search,
     source,
+    consentSource,
     campaignId,
     purchaseOrderStatusExpr,
   }) {
@@ -301,7 +302,7 @@ class CustomerReadRepository {
       : 'NULL';
 
     let query = `
-      SELECT c.id, c.email, c.phone, c.full_name, c.customer_source,
+      SELECT c.id, c.email, c.phone, c.full_name, c.customer_source, c.consent_source,
              c.has_purchased, c.total_orders, c.total_spent, c.email_subscribed,
              COALESCE((
                SELECT COUNT(*)
@@ -355,6 +356,12 @@ class CustomerReadRepository {
       } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
         query += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
       }
+    }
+
+    const normalizedConsentSource = typeof consentSource === 'string' ? consentSource.trim().toLowerCase() : '';
+    if (normalizedConsentSource) {
+      params.push(normalizedConsentSource);
+      query += ` AND LOWER(c.consent_source) = $${params.length}`;
     }
 
     if (Number.isFinite(parsedCampaignId)) {
@@ -421,6 +428,10 @@ class CustomerReadRepository {
       } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
         countQuery += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
       }
+    }
+    if (normalizedConsentSource) {
+      countParams.push(normalizedConsentSource);
+      countQuery += ` AND LOWER(c.consent_source) = $${countParams.length}`;
     }
     if (Number.isFinite(parsedCampaignId)) {
       countParams.push(parsedCampaignId);

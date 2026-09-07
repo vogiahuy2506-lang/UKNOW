@@ -104,6 +104,8 @@ class LeadRepository {
          utm_term AS "utmTerm",
          COALESCE(workspace_owner_id, id_user) AS "idUser",
          custom_fields AS "customFields",
+         unsubscribe_token AS "unsubscribeToken",
+         consent_withdrawn_at AS "consentWithdrawnAt",
          created_at AS "createdAt"`,
       [
         payload.lastName,
@@ -164,6 +166,8 @@ class LeadRepository {
          marketing_consent AS "marketingConsent",
          landing_page_slug AS "landingPageSlug",
          custom_fields AS "customFields",
+         unsubscribe_token AS "unsubscribeToken",
+         consent_withdrawn_at AS "consentWithdrawnAt",
          created_at AS "createdAt"
        FROM leads
        ${whereClause}
@@ -180,6 +184,55 @@ class LeadRepository {
    * @param {object} filters Cùng shape với findFiltered (bỏ limit).
    * @returns {Promise<number>}
    */
+
+  /**
+   * Tìm lead theo unsubscribe_token (UUID).
+   *
+   * @param {string} token
+   * @returns {Promise<object|null>}
+   */
+  async findByUnsubscribeToken(token) {
+    const result = await db.query(
+      `SELECT
+         id,
+         last_name AS "lastName",
+         first_name AS "firstName",
+         email,
+         phone,
+         marketing_consent AS "marketingConsent",
+         unsubscribe_token AS "unsubscribeToken",
+         consent_withdrawn_at AS "consentWithdrawnAt",
+         created_at AS "createdAt"
+       FROM leads
+       WHERE unsubscribe_token = $1
+       LIMIT 1`,
+      [token]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Rút lại đồng ý tiếp thị cho lead theo id.
+   * Cập nhật tại chỗ: marketing_consent = FALSE, consent_withdrawn_at = COALESCE(consent_withdrawn_at, NOW()).
+   *
+   * @param {number|string} id
+   * @returns {Promise<object|null>}
+   */
+  async withdrawConsentById(id) {
+    const result = await db.query(
+      `UPDATE leads
+       SET marketing_consent = FALSE,
+           consent_withdrawn_at = COALESCE(consent_withdrawn_at, NOW())
+       WHERE id = $1
+       RETURNING
+         id,
+         marketing_consent AS "marketingConsent",
+         consent_withdrawn_at AS "consentWithdrawnAt",
+         unsubscribe_token AS "unsubscribeToken"`,
+      [id]
+    );
+    return result.rows[0] || null;
+  }
   async countFiltered(filters) {
     const { whereClause, params } = buildLeadWhere(filters);
     const result = await db.query(`SELECT COUNT(*)::bigint AS c FROM leads ${whereClause}`, params);

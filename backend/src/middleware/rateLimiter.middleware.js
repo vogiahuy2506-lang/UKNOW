@@ -1,4 +1,5 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { renderLeadUnsubscribeHtml } from '../services/lead/lead.service.js';
 
 const isTest = process.env.NODE_ENV === 'test';
 const skipInTest = () => isTest;
@@ -232,6 +233,28 @@ export const publicLeadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `public-lead:${clientIpKey(req)}`,
+});
+
+// Public lead unsubscribe — chống flood/lạm dụng link rút lại đồng ý (không auth)
+export const leadUnsubscribeLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `lead-unsubscribe:${clientIpKey(req)}`,
+  // Người bấm link là người thật đang mở trình duyệt — phải trả HTML, không trả JSON.
+  handler: (req, res) => {
+    res.status(429).send(
+      renderLeadUnsubscribeHtml({
+        title: 'Quá nhiều yêu cầu / Too Many Requests',
+        headingVi: 'Vui lòng thử lại sau',
+        textVi: 'Bạn đã thực hiện quá nhiều yêu cầu rút lại đồng ý. Vui lòng thử lại sau ít phút.',
+        headingEn: 'Too many requests',
+        textEn: 'Too many consent withdrawal requests. Please try again after a few minutes.',
+      })
+    );
+  },
 });
 
 // Public landing analytics view — giới hạn nhẹ hơn lead nhưng vẫn chống flood

@@ -59,6 +59,7 @@ const CampaignCustomers = () => {
   const [isLoading,      setIsLoading]     = useState(true);
   const [pendingSearch,  setPendingSearch] = useState('');
   const [search,         setSearch]        = useState('');
+  const [consentSource,  setConsentSource] = useState('');
   const [pagination,     setPagination]    = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
 
   const [selectedCustomer,   setSelectedCustomer]   = useState(null);
@@ -94,7 +95,7 @@ const CampaignCustomers = () => {
     }
   }, [activeTab, isZaloGroupCampaign]);
 
-  const fetchCustomers = useCallback(async (page, currentSearch) => {
+  const fetchCustomers = useCallback(async (page, currentSearch, currentConsentSource) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -102,6 +103,7 @@ const CampaignCustomers = () => {
         limit: 20,
         campaignId,
         ...(currentSearch && { search: currentSearch }),
+        ...(currentConsentSource && { consentSource: currentConsentSource }),
       });
       const res = await customerApiService.getCustomersByQueryString(params.toString());
       const payload = res.data?.data || {};
@@ -145,9 +147,9 @@ const CampaignCustomers = () => {
 
   useEffect(() => {
     if (isZaloGroupCampaign && activeTab !== 'customers') return;
-    fetchCustomers(pagination.page, search);
+    fetchCustomers(pagination.page, search, consentSource);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignId, pagination.page, search, activeTab, isZaloGroupCampaign]);
+  }, [campaignId, pagination.page, search, consentSource, activeTab, isZaloGroupCampaign]);
 
   useEffect(() => {
     if (!isZaloGroupCampaign || activeTab !== 'messages') return;
@@ -230,7 +232,7 @@ const CampaignCustomers = () => {
       {/* Search bar */}
       {(!isZaloGroupCampaign || activeTab === 'customers') && (
         <div className="card p-4">
-          <form onSubmit={handleSearch} className="flex gap-3">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
             <div className="flex items-center flex-1 min-w-0 rounded-lg border border-gray-300 bg-white transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
               <span className="pl-3 pr-2 text-gray-400 pointer-events-none shrink-0">
                 <HiOutlineSearch className="w-4 h-4" />
@@ -242,6 +244,23 @@ const CampaignCustomers = () => {
                 placeholder={t('campaignCustomers.searchCustomer')}
                 className="w-full py-2 pr-3 text-sm bg-transparent border-0 focus:outline-none"
               />
+            </div>
+            <div className="w-full sm:w-48 shrink-0">
+              <select
+                value={consentSource}
+                onChange={(e) => {
+                  setConsentSource(e.target.value);
+                  setPagination((p) => ({ ...p, page: 1 }));
+                }}
+                className="w-full py-2 px-3 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500 text-gray-700"
+              >
+                <option value="">{t('campaignCustomers.consentSources.all')}</option>
+                <option value="manual">{t('campaignCustomers.consentSources.manual')}</option>
+                <option value="import">{t('campaignCustomers.consentSources.import')}</option>
+                <option value="landing_lead">{t('campaignCustomers.consentSources.landing_lead')}</option>
+                <option value="webhook">{t('campaignCustomers.consentSources.webhook')}</option>
+                <option value="zalo">{t('campaignCustomers.consentSources.zalo')}</option>
+              </select>
             </div>
             <button type="submit" className="btn btn-secondary shrink-0">
               {t('campaignCustomers.search')}
@@ -269,6 +288,7 @@ const CampaignCustomers = () => {
                     <th>{t('campaignCustomers.email')}</th>
                     <th>{t('campaignCustomers.phone')}</th>
                     <th>{t('campaignCustomers.status')}</th>
+                    <th>{t('campaignCustomers.consentSource')}</th>
                     <th>{t('campaignCustomers.joinDate')}</th>
                     <th className="text-right">{t('campaignCustomers.actions')}</th>
                   </tr>
@@ -276,13 +296,13 @@ const CampaignCustomers = () => {
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center">
+                      <td colSpan={7} className="py-10 text-center">
                         <div className="spinner w-8 h-8 mx-auto" />
                       </td>
                     </tr>
                   ) : customers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-400">
+                      <td colSpan={7} className="py-12 text-center text-gray-400">
                         {t('customers.noCustomersInCampaign')}
                       </td>
                     </tr>
@@ -320,6 +340,15 @@ const CampaignCustomers = () => {
                             status={resolveCampaignStatus(c)}
                             campaignType={campaign?.campaignType}
                           />
+                        </td>
+                        <td>
+                          {c.consentSource ? (
+                            <span className="badge badge-info text-xs">
+                              {t(`campaignCustomers.consentSources.${c.consentSource}`, { defaultValue: c.consentSource })}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">--</span>
+                          )}
                         </td>
                         <td>
                           <div className="flex items-center gap-1.5 text-sm text-gray-500">

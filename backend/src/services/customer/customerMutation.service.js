@@ -54,7 +54,7 @@ class CustomerMutationService {
   }
 
   async create({ workspaceOwnerId, actorUserId, payload }) {
-    const { email, phone, fullName, gender, customerSource, notes } = payload;
+    const { email, phone, fullName, gender, customerSource, consentSource, notes } = payload;
     const normalizedCustomerSource = this.validateCustomerSource(customerSource);
 
     const customer = await customerMutationRepository.createCustomer({ workspaceOwnerId, actorUserId }, {
@@ -63,6 +63,7 @@ class CustomerMutationService {
       fullName,
       gender,
       customerSource: normalizedCustomerSource,
+      consentSource: consentSource || 'manual',
       notes,
     });
 
@@ -99,6 +100,16 @@ class CustomerMutationService {
           continue;
         }
 
+        const isLandingLead = Boolean(
+          item.sourceLandingPage ||
+          item.source_landing_page ||
+          item.landingPageSlug ||
+          item.landing_page_slug ||
+          item.leadId ||
+          item.lead_id
+        );
+        const resolvedConsentSource = item.consentSource || item.consent_source || (isLandingLead ? 'landing_lead' : 'import');
+
         const participationCampaignId = Number.isFinite(campaignIdNum) ? campaignIdNum : null;
         const customer = {
           email,
@@ -111,6 +122,7 @@ class CustomerMutationService {
           customerSource:
             this.normalizeCustomerSource(item.customerSource || item.customer_source) ||
             (Number.isFinite(participationCampaignId) ? 'uknow_campaign' : null),
+          consentSource: resolvedConsentSource,
           sourceLandingPage: this.normalizeString(item.sourceLandingPage || item.source_landing_page),
           sourceFormId: this.normalizeString(item.sourceFormId || item.source_form_id),
           utmSource: this.normalizeString(item.utmSource || item.utm_source),

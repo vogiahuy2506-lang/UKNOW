@@ -4,8 +4,8 @@ class CustomerMutationRepository {
   async createCustomer({ workspaceOwnerId, actorUserId }, payload) {
     const result = await db.query(
       `INSERT INTO customers
-         (id_user, workspace_owner_id, created_by, email, phone, full_name, gender, customer_source, notes)
-       VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8)
+         (id_user, workspace_owner_id, created_by, email, phone, full_name, gender, customer_source, consent_source, notes)
+       VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         workspaceOwnerId,
@@ -15,6 +15,7 @@ class CustomerMutationRepository {
         payload.fullName,
         payload.gender,
         payload.customerSource,
+        payload.consentSource || 'manual',
         payload.notes,
       ]
     );
@@ -89,8 +90,9 @@ class CustomerMutationRepository {
         utm_campaign = COALESCE($13, utm_campaign),
         notes = COALESCE($14, notes),
         custom_fields = COALESCE($15, custom_fields),
+        consent_source = COALESCE($16, consent_source),
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $16 AND COALESCE(workspace_owner_id, id_user) = $17`,
+       WHERE id = $17 AND COALESCE(workspace_owner_id, id_user) = $18`,
       [
         customer.email,
         customer.phone,
@@ -107,6 +109,7 @@ class CustomerMutationRepository {
         customer.utmCampaign,
         customer.notes,
         customer.customFields ? JSON.stringify(customer.customFields) : null,
+        customer.consentSource || null,
         customerId,
         userId,
       ]
@@ -117,8 +120,8 @@ class CustomerMutationRepository {
     const result = await client.query(
       `INSERT INTO customers
         (id_user, workspace_owner_id, created_by, email, phone, zalo_id, zalo_phone, facebook_id, full_name, gender,
-         customer_source, source_landing_page, source_form_id, utm_source, utm_medium, utm_campaign, notes, custom_fields)
-       VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         customer_source, consent_source, source_landing_page, source_form_id, utm_source, utm_medium, utm_campaign, notes, custom_fields)
+       VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING id`,
       [
         workspaceOwnerId,
@@ -131,6 +134,7 @@ class CustomerMutationRepository {
         customer.fullName,
         customer.gender,
         customer.customerSource,
+        customer.consentSource || null,
         customer.sourceLandingPage,
         customer.sourceFormId,
         customer.utmSource,
@@ -235,10 +239,10 @@ class CustomerMutationRepository {
   }) {
     const result = await db.query(
       `INSERT INTO customers
-         (id_user, workspace_owner_id, email, phone, zalo_id, zalo_phone, full_name, customer_source,
+         (id_user, workspace_owner_id, email, phone, zalo_id, zalo_phone, full_name, customer_source, consent_source,
           zalo_is_friend, zalo_friend_added_at, created_at, updated_at)
        VALUES
-         ($1, $1, NULLIF($2, ''), $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7,
+         ($1, $1, NULLIF($2, ''), $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7, 'zalo',
           TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [userId, email, phone, uid, phone, fullName, 'uknow_campaign']
@@ -283,8 +287,8 @@ class CustomerMutationRepository {
   async insertMinimalCustomerByPhoneUid(userId, phone, uid) {
     await db.query(
       `INSERT INTO customers
-         (id_user, workspace_owner_id, phone, zalo_id, zalo_phone, customer_source, created_at, updated_at)
-       VALUES ($1, $1, $2, $3, $2, 'uknow_campaign', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         (id_user, workspace_owner_id, phone, zalo_id, zalo_phone, customer_source, consent_source, created_at, updated_at)
+       VALUES ($1, $1, $2, $3, $2, 'uknow_campaign', 'zalo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT DO NOTHING`,
       [userId, phone, uid]
     );
@@ -355,9 +359,9 @@ class CustomerMutationRepository {
   }) {
     const result = await db.query(
       `INSERT INTO customers
-         (id_user, workspace_owner_id, email, phone, zalo_id, zalo_phone, full_name, customer_source, utm_source, created_at, updated_at)
+         (id_user, workspace_owner_id, email, phone, zalo_id, zalo_phone, full_name, customer_source, consent_source, utm_source, created_at, updated_at)
        VALUES
-         ($1, $1, NULLIF($2, ''), NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ($1, $1, NULLIF($2, ''), NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), $7, 'zalo', $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [userId, email, phone, uid, phone, fullName, 'uknow_campaign', utmSource]
     );

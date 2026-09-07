@@ -2,8 +2,14 @@ import express from 'express';
 import leadController from '../controllers/lead.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
+import { leadUnsubscribeLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
+
+/**
+ * GET /api/leads/unsubscribe/:token — đường rút lại đồng ý công khai cho lead (không cần auth).
+ */
+router.get('/unsubscribe/:token', leadUnsubscribeLimiter, leadController.unsubscribe.bind(leadController));
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);

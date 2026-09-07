@@ -820,7 +820,9 @@ CREATE TABLE leads (
   phone               VARCHAR(50),
   occupation          VARCHAR(100),
   interest_area       VARCHAR(100),
-  marketing_consent   BOOLEAN      NOT NULL DEFAULT FALSE,
+  marketing_consent   BOOLEAN,
+  unsubscribe_token   UUID         NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+  consent_withdrawn_at TIMESTAMPTZ,
   landing_page_slug   VARCHAR(100),
   utm_source          VARCHAR(255),
   utm_medium          VARCHAR(255),
@@ -874,6 +876,7 @@ CREATE TABLE customers (
   full_name               VARCHAR(255),
   gender                  VARCHAR(10),
   customer_source         VARCHAR(50),
+  consent_source          VARCHAR(30),
   source_landing_page     VARCHAR(255),
   source_form_id          VARCHAR(255),
   utm_source              VARCHAR(255),
@@ -906,6 +909,7 @@ CREATE INDEX idx_customers_effective_workspace_owner ON customers((COALESCE(work
 CREATE INDEX idx_customers_created_by ON customers(created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_customers_email ON customers(email);
 CREATE INDEX idx_customers_phone ON customers(phone);
+CREATE INDEX idx_customers_consent_source ON customers(consent_source);
 
 -- ─── Courses (WooCommerce sync) ────────────────────────────────────────
 CREATE TABLE courses (

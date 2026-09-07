@@ -139,7 +139,7 @@ class CampaignNodeDataRepository {
    * @param {object} params
    * @returns {Promise<void>}
    */
-  async updateCustomer(client, { email, phone, fullName, gender, customerSource, notes, id, userId }) {
+  async updateCustomer(client, { email, phone, fullName, gender, customerSource, consentSource, notes, id, userId }) {
     await client.query(
       `UPDATE customers SET
          email = COALESCE($1, email),
@@ -147,10 +147,11 @@ class CampaignNodeDataRepository {
          full_name = COALESCE($3, full_name),
          gender = COALESCE($4, gender),
          customer_source = COALESCE($5, customer_source),
-         notes = COALESCE($6, notes),
+         consent_source = COALESCE($6, consent_source),
+         notes = COALESCE($7, notes),
          updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7 AND id_user = $8`,
-      [email, phone, fullName, gender, customerSource, notes, id, userId]
+       WHERE id = $8 AND id_user = $9`,
+      [email, phone, fullName, gender, customerSource, consentSource || null, notes, id, userId]
     );
   }
 
@@ -161,12 +162,12 @@ class CampaignNodeDataRepository {
    * @param {object} params
    * @returns {Promise<object>} inserted row
    */
-  async insertCustomer(client, { userId, email, phone, fullName, gender, customerSource, notes }) {
+  async insertCustomer(client, { userId, email, phone, fullName, gender, customerSource, consentSource, notes }) {
     const result = await client.query(
-      `INSERT INTO customers (id_user, email, phone, full_name, gender, customer_source, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO customers (id_user, email, phone, full_name, gender, customer_source, consent_source, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [userId, email, phone, fullName, gender, customerSource, notes]
+      [userId, email, phone, fullName, gender, customerSource, consentSource || null, notes]
     );
     return result.rows[0];
   }

@@ -90,6 +90,7 @@ class CustomerQueryService {
     status,
     search,
     source,
+    consentSource,
     campaignId,
     purchaseOrderStatusExpr,
   }) {
@@ -100,6 +101,7 @@ class CustomerQueryService {
       status,
       search,
       source,
+      consentSource,
       campaignId,
       purchaseOrderStatusExpr,
     });
@@ -116,6 +118,7 @@ class CustomerQueryService {
         campaignHasOpened: item.campaign_has_opened ?? null,
         campaignEmailReceivedCount: item.campaign_email_received_count ?? null,
         customerSource: item.customer_source,
+        consentSource: item.consent_source || null,
         hasPurchased: item.has_purchased,
         totalOrders: item.total_orders,
         totalSpent: item.total_spent,

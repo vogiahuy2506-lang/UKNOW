@@ -216,6 +216,21 @@ class LeadController {
       });
     }
   }
+  /**
+   * Public endpoint xử lý rút lại đồng ý nhận tiếp thị từ link của lead.
+   * GET /api/leads/unsubscribe/:token
+   * Trả về HTML song ngữ, không yêu cầu auth.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async unsubscribe(req, res) {
+    const token = String(req.params.token || '').trim();
+    const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
+      || 'https://campaign.digiso.vn/privacy-policy';
+    const { statusCode, html } = await leadService.withdrawLeadConsent({ token, privacyPolicyUrl });
+    return res.status(statusCode).send(html);
+  }
 }
 
 export default new LeadController();

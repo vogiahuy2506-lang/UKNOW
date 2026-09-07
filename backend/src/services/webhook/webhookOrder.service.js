@@ -280,10 +280,10 @@ class WebhookOrderService {
 
       const insertResult = await client.query(
         `INSERT INTO customers
-           (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source, utm_source,
+           (id_user, email, phone, zalo_id, zalo_phone, full_name, customer_source, consent_source, utm_source,
             has_purchased, total_orders, total_spent, last_order_at, created_at, updated_at)
          VALUES
-           ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           ($1, $2, $3, $4, $5, $6, $7, 'webhook', $8, $9, 1, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING id`,
         [
           userId,

@@ -698,6 +698,15 @@ class CampaignNodeDataService {
             const gender = customerData.gender;
             const customerSource = customerData.customerSource || 'campaign';
             const notes = customerData.notes;
+            const isLandingLead = Boolean(
+              customerData.leadId ||
+              customerData.lead_id ||
+              customerData.landingPageSlug ||
+              customerData.landing_page_slug ||
+              customerData.sourceLandingPage ||
+              customerData.source_landing_page
+            );
+            const consentSource = customerData.consentSource || customerData.consent_source || (isLandingLead ? 'landing_lead' : 'import');
 
             if (!email && !phone) {
               skipped += 1;
@@ -720,7 +729,7 @@ class CampaignNodeDataService {
               } else {
                 unindexCustomerRow(existingRow);
                 await campaignNodeDataRepository.updateCustomer(client, {
-                  email, phone, fullName, gender, customerSource, notes,
+                  email, phone, fullName, gender, customerSource, consentSource, notes,
                   id: existingRow.id, userId,
                 });
                 // Đồng bộ object + map để lượt sau trong cùng transaction thấy đúng COALESCE như DB
@@ -729,6 +738,7 @@ class CampaignNodeDataService {
                 existingRow.full_name = fullName != null ? fullName : existingRow.full_name;
                 existingRow.gender = gender != null ? gender : existingRow.gender;
                 existingRow.customer_source = customerSource != null ? customerSource : existingRow.customer_source;
+                existingRow.consent_source = consentSource != null ? consentSource : existingRow.consent_source;
                 existingRow.notes = notes != null ? notes : existingRow.notes;
                 indexCustomerRow(existingRow);
                 updated += 1;
@@ -736,7 +746,7 @@ class CampaignNodeDataService {
               await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, existingRow.id, runId);
             } else {
               const insertedRow = await campaignNodeDataRepository.insertCustomer(client, {
-                userId, email, phone, fullName, gender, customerSource, notes,
+                userId, email, phone, fullName, gender, customerSource, consentSource, notes,
               });
               saved += 1;
               if (insertedRow?.id) {
