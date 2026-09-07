@@ -73,6 +73,8 @@ CREATE TABLE users (
   referral_code           VARCHAR(16),
   referred_by_user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
   referred_at             TIMESTAMPTZ,
+  -- migration 189: mốc thời gian chấm dứt tài khoản
+  deleted_at              TIMESTAMPTZ,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -83,6 +85,8 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE UNIQUE INDEX idx_users_phone_unique ON users (phone) WHERE phone IS NOT NULL;
 -- migration 180: mã giới thiệu duy nhất
 CREATE UNIQUE INDEX idx_users_referral_code ON users (referral_code) WHERE referral_code IS NOT NULL;
+-- migration 189: mốc thời gian chấm dứt tài khoản
+CREATE INDEX idx_users_deleted_at ON users (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_users_referred_by ON users (referred_by_user_id);
 
 CREATE TABLE user_members (

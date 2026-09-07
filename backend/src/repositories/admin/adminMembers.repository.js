@@ -181,9 +181,10 @@ export async function detachMemberEmail(id, { originalEmail = null, releaseTrial
              username = LEFT(username, 50 - LENGTH('_freed_' || id)) || '_freed_' || id,
              phone = NULL,
              status = 'deleted',
+             deleted_at = NOW(),
              updated_at = NOW()
        WHERE id = $1 AND status != 'deleted'
-       RETURNING id, email, username, status`,
+       RETURNING id, email, username, status, deleted_at`,
       [id]
     );
     const updatedUser = rows[0] || null;

@@ -583,6 +583,24 @@ export const initScheduler = () => {
     }
   }, { timezone: HANOI_TIME_ZONE });
 
+  // ── Dọn dữ liệu quá hạn lưu trữ (NĐ 13/2023) — 01:30 mỗi ngày ─────────────
+  cron.schedule('30 1 * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('data_retention_cleanup', async () => {
+        const { runDataRetentionCleanup } = await import('../services/admin/dataRetentionCleanup.service.js');
+        const result = await runDataRetentionCleanup();
+        console.log(
+          `[Scheduler] data_retention_cleanup: enabled=${result.enabled} `
+          + `totalDeleted=${result.totalDeleted} durationMs=${result.durationMs}`
+        );
+        return result;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi dọn dữ liệu quá hạn lưu trữ:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');
