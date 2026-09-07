@@ -117,6 +117,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <li><strong>Thông tin tài khoản:</strong> Thông tin tài khoản người dùng trên nền tảng, lịch sử hoạt động trực tuyến, địa chỉ IP, cookie, tùy chọn ngôn ngữ</li>
             <li><strong>Dữ liệu học tập (founderai.biz):</strong> Tiến độ khóa học, kết quả kiểm tra, bài tập, chứng chỉ hoàn thành, lịch sử học tập, hoạt động trên nền tảng</li>
             <li><strong>Dữ liệu chiến dịch marketing:</strong> Thông tin đăng ký sự kiện, phản hồi chiến dịch, lịch sử tương tác với email, SMS, Zalo, tùy chọn nhận thông tin</li>
+            <li><strong>Dữ liệu biểu mẫu liên hệ:</strong> Họ tên, địa chỉ email, số điện thoại, tên doanh nghiệp, nội dung yêu cầu và địa chỉ IP tại thời điểm gửi biểu mẫu</li>
           </ul>
           <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
             <li><strong>Personal information:</strong> Full name, date of birth, gender, nationality, ethnicity, residence, permanent address, temporary address</li>
@@ -125,6 +126,7 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <li><strong>Account information:</strong> User account information on the platform, online activity history, IP address, cookies, language preferences</li>
             <li><strong>Learning data (founderai.biz):</strong> Course progress, assessment results, assignments, completion certificates, learning history, platform activity</li>
             <li><strong>Marketing campaign data:</strong> Event registration information, campaign responses, history of interactions with email, SMS, Zalo, information subscription preferences</li>
+            <li><strong>Contact form data:</strong> Full name, email address, phone number, company name, inquiry content, and IP address at the time of form submission</li>
           </ul>
         </div>
         <div className="mt-[18px]">
@@ -178,11 +180,13 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <li><strong>Cookie và tracking:</strong> Dữ liệu cookie, clickstream, lịch sử duyệt web, hành vi trên website</li>
             <li><strong>Dữ liệu email marketing:</strong> Phản hồi với email marketing, tỷ lệ mở email, tỷ lệ nhấp liên kết, lựa chọn hủy đăng ký</li>
             <li><strong>Phân tích:</strong> Thông tin từ Google Analytics và các công cụ phân tích khác</li>
+            <li><strong>Theo dõi lượt truy cập trang đích:</strong> Đối với mọi lượt xem trang đích do hệ thống vận hành, chúng tôi tự động ghi nhận một mã nhận diện ngẫu nhiên lưu tại trình duyệt (để nhận biết lượt quay lại), loại trình duyệt và thiết bị, trang web nguồn dẫn đến (referrer), và các tham số chiến dịch quảng cáo. Dữ liệu này chỉ phục vụ mục đích thống kê lượt truy cập cho chủ sở hữu trang.</li>
           </ul>
           <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
             <li><strong>Cookie and tracking:</strong> Cookie data, clickstream, browsing history, website behavior</li>
             <li><strong>Email marketing data:</strong> Marketing email responses, email open rates, link click rates, unsubscribe preferences</li>
             <li><strong>Analytics:</strong> Information from Google Analytics and other analytics tools</li>
+            <li><strong>Landing page visit tracking:</strong> For all visits to landing pages operated on our platform, we automatically record a randomized identifier stored in the browser (to recognize returning visits), browser and device type, referring URL, and advertising campaign parameters. This data is collected solely to provide traffic statistics to the page owner.</li>
           </ul>
         </div>
       </section>
@@ -210,10 +214,10 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <strong>Đăng ký dịch vụ:</strong> Thông tin cung cấp khi đăng ký tài khoản trên digiso.vn, founderai.biz, bao gồm thông tin cá nhân, thông tin công ty, thông tin thanh toán.
           </li>
           <li>
-            <strong>Điền form trên website:</strong> Thông tin cung cấp khi điền vào các biểu mẫu trên website như form liên hệ, form đăng ký tư vấn, form tham gia sự kiện, webinar.
+            <strong>Điền form trên website:</strong> Thông tin cung cấp khi điền vào các biểu mẫu trên website như form liên hệ, form đăng ký tư vấn, form tham gia sự kiện, webinar. Khi bạn gửi biểu mẫu liên hệ, hệ thống tự động lưu địa chỉ IP và thời gian gửi nhằm mục đích an toàn và phòng chống thư rác. <em>Ràng buộc mục đích bắt buộc:</em> Địa chỉ email và thông tin thu thập từ biểu mẫu liên hệ chỉ dùng duy nhất để phản hồi yêu cầu đó; DIGISO cam kết không dùng thông tin này để gửi tiếp thị khi chưa có sự đồng ý riêng.
           </li>
           <li>
-            <strong>Tự động thu thập:</strong> Cookie, web beacon, địa chỉ IP, thông tin thiết bị, lịch sử truy cập được thu thập tự động khi truy cập website.
+            <strong>Tự động thu thập:</strong> Cookie, địa chỉ IP, thông tin thiết bị, lịch sử truy cập website và dữ liệu thống kê lượt xem trang đích (định danh ngẫu nhiên trình duyệt, nguồn truy cập và tham số chiến dịch quảng cáo) được thu thập tự động khi truy cập trang.
           </li>
           <li>
             <strong>Dịch vụ tích hợp bên thứ ba:</strong> Google, Apple ID khi đăng nhập qua tài khoản bên thứ ba; thông tin từ các nền tảng mạng xã hội khi tương tác.
@@ -233,10 +237,10 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
             <strong>Service registration:</strong> Information provided when registering accounts on digiso.vn, founderai.biz, including personal information, company information, payment information.
           </li>
           <li>
-            <strong>Website form submissions:</strong> Information provided when filling out forms on the website such as contact forms, consultation registration forms, event registration forms, webinars.
+            <strong>Website form submissions:</strong> Information provided when filling out forms on the website such as contact forms, consultation registration forms, event registration forms, webinars. When you submit a contact form, the system automatically records the sender&apos;s IP address and submission timestamp for security and spam prevention. <em>Mandatory limitation:</em> Email addresses and information collected from contact forms are used solely to respond to that specific inquiry; DIGISO commits not to use this data for marketing purposes without separate consent.
           </li>
           <li>
-            <strong>Automatic collection:</strong> Cookies, web beacons, IP addresses, device information, access history automatically collected when visiting the website.
+            <strong>Automatic collection:</strong> Cookies, IP addresses, device information, website access history, and landing page visit analytics (randomized browser identifier, referring source, and campaign parameters) automatically collected when visiting the website.
           </li>
           <li>
             <strong>Third-party integrated services:</strong> Google, Apple ID when signing in via third-party accounts; information from social media platforms when interacting.
@@ -622,13 +626,29 @@ export default function PrivacyPolicyControllerPanel({ language, lc }) {
           DIGISO commits to storing and processing personal data safely and in compliance with the law:
         </p>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
-          <li><strong>Thời gian lưu trữ:</strong> Dữ liệu cá nhân được lưu trữ trong thời gian cần thiết để thực hiện mục đích thu thập hoặc theo quy định pháp luật. Dữ liệu giao dịch được giữ tối thiểu <strong>5 năm</strong> theo quy định về thuế và kế toán.</li>
+          <li>
+            <strong>Thời gian lưu trữ:</strong> Dữ liệu cá nhân được lưu trữ theo các thời hạn cụ thể:
+            <ul className="list-[circle] ml-6 mt-1 space-y-1">
+              <li><strong>Thống kê lượt xem và dữ liệu truy cập trang đích:</strong> Lưu trữ trong <strong>13 tháng</strong>.</li>
+              <li><strong>Dữ liệu biểu mẫu liên hệ (địa chỉ IP và nội dung):</strong> Lưu trữ trong <strong>24 tháng</strong> kể từ ngày gửi.</li>
+              <li><strong>Chứng từ kế toán (đơn hàng, hoa hồng, hoá đơn):</strong> Lưu trữ tối thiểu <strong>10 năm</strong> theo quy định của Luật Kế toán và pháp luật thuế.</li>
+              <li><strong>Dữ liệu tài khoản người dùng:</strong> Lưu trữ trong suốt thời gian tài khoản hoạt động và được xóa hoặc ẩn danh hóa an toàn sau khi chấm dứt tài khoản.</li>
+            </ul>
+          </li>
           <li><strong>Địa điểm lưu trữ:</strong> Dữ liệu được lưu trữ tại Việt Nam (FPT Smart Cloud) và GCP Singapore theo cơ chế backup.</li>
           <li><strong>Chuyển dữ liệu xuyên biên giới:</strong> Mọi chuyển dữ liệu ra nước ngoài đều tuân thủ đầy đủ quy định pháp luật Việt Nam, bao gồm đánh giá tác động và các thủ tục cần thiết.</li>
           <li><strong>Xóa dữ liệu:</strong> Sau khi hết thời hạn lưu trữ hoặc khi nhận được yêu cầu xóa hợp lệ, dữ liệu sẽ được xóa an toàn không thể phục hồi hoặc ẩn danh hóa theo tiêu chuẩn.</li>
         </ul>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
-          <li><strong>Retention period:</strong> Personal data is retained for the time necessary to achieve the collection purpose or as required by law. Transaction data is kept for a minimum of <strong>5 years</strong> under tax and accounting regulations.</li>
+          <li>
+            <strong>Retention period:</strong> Personal data is retained in accordance with specific periods:
+            <ul className="list-[circle] ml-6 mt-1 space-y-1">
+              <li><strong>Page view analytics and landing page access data:</strong> Retained for <strong>13 months</strong>.</li>
+              <li><strong>Contact form submissions (including IP address):</strong> Retained for <strong>24 months</strong> from the submission date.</li>
+              <li><strong>Accounting records (orders, commissions, invoices):</strong> Retained for at least <strong>10 years</strong> pursuant to accounting and tax laws.</li>
+              <li><strong>User account data:</strong> Retained throughout active account duration and deleted or anonymized upon account termination.</li>
+            </ul>
+          </li>
           <li><strong>Storage location:</strong> Data is stored in Vietnam (FPT Smart Cloud) and GCP Singapore under backup mechanisms.</li>
           <li><strong>Cross-border transfer:</strong> All cross-border data transfers comply fully with Vietnamese law, including impact assessments and necessary procedures.</li>
           <li><strong>Data deletion:</strong> After the retention period expires or upon receiving a valid deletion request, data will be securely and irreversibly deleted or anonymized according to standards.</li>

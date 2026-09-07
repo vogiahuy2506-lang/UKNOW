@@ -1,5 +1,5 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
-import { renderLeadUnsubscribeHtml } from '../services/lead/lead.service.js';
+import { renderLeadUnsubscribeHtml } from '../utils/leadUnsubscribeHtml.util.js';
 
 const isTest = process.env.NODE_ENV === 'test';
 const skipInTest = () => isTest;

@@ -406,10 +406,20 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
           </ul>
         </div>
         <div className={`mt-[14px] rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm ${lc(language, 'vi')}`}>
-          <strong>Thực thi quyền:</strong> Để thực hiện quyền của mình, chủ thể dữ liệu vui lòng liên hệ trực tiếp với <strong>Khách hàng (Bên kiểm soát dữ liệu)</strong> — đơn vị đã ủy quyền cho DIGISO xử lý dữ liệu. Mọi yêu cầu gửi trực tiếp về DIGISO sẽ được chuyển tiếp đến Khách hàng tương ứng để xử lý.
+          <p className="mb-2">
+            <strong>Thực thi quyền:</strong> Để thực hiện quyền của mình, chủ thể dữ liệu vui lòng liên hệ trực tiếp với <strong>Khách hàng (Bên kiểm soát dữ liệu)</strong> — đơn vị đã ủy quyền cho DIGISO xử lý dữ liệu. Mọi yêu cầu gửi trực tiếp về DIGISO sẽ được chuyển tiếp đến Khách hàng tương ứng để xử lý.
+          </p>
+          <p className="m-0">
+            <strong>Rút lại đồng ý tiếp thị cho khách hàng tiềm năng (lead):</strong> Đối với cá nhân đã để lại thông tin qua các biểu mẫu trên trang đích, mỗi email hoặc thông điệp tiếp thị gửi đi đều kèm theo một liên kết hủy nhận tin / rút lại đồng ý riêng biệt. Bạn có thể nhấn vào liên kết này bất cứ lúc nào để lập tức rút lại sự đồng ý tiếp thị trực tuyến mà không cần đăng nhập hay trải qua thủ tục phức tạp. Hệ thống sẽ tự động ghi nhận và ngừng gửi các thông điệp tiếp thị đến bạn.
+          </p>
         </div>
         <div className={`mt-[14px] rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm ${lc(language, 'en')}`}>
-          <strong>Exercising rights:</strong> To exercise your rights, please contact the <strong>Customer (Data Controller)</strong> directly — the entity that authorized DIGISO to process your data. Any requests sent directly to DIGISO will be forwarded to the relevant Customer for handling.
+          <p className="mb-2">
+            <strong>Exercising rights:</strong> To exercise your rights, please contact the <strong>Customer (Data Controller)</strong> directly — the entity that authorized DIGISO to process your data. Any requests sent directly to DIGISO will be forwarded to the relevant Customer for handling.
+          </p>
+          <p className="m-0">
+            <strong>Marketing consent withdrawal for prospective customers (leads):</strong> For individuals who submitted information through landing page forms, every marketing email or message sent includes a dedicated unsubscribe / consent withdrawal link. You may click this link at any time to immediately withdraw marketing consent online without needing to log in or undergo complex procedures. The system will automatically record your request and cease sending marketing communications to you.
+          </p>
         </div>
       </section>
 
@@ -522,13 +532,29 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
           Personal data is retained only while the account is active or as long as required for the original collection purpose and applicable law. DIGISO does not own Customer or User data — this data belongs to the Customer.
         </p>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
-          <li><strong>Thời gian lưu trữ:</strong> Theo thỏa thuận với Khách hàng trong Hợp đồng, tối thiểu 5 năm đối với dữ liệu giao dịch theo quy định pháp luật Việt Nam</li>
+          <li>
+            <strong>Thời gian lưu trữ:</strong> Dữ liệu xử lý theo ủy thác được lưu trữ theo các thời hạn chuẩn sau:
+            <ul className="list-[circle] ml-6 mt-1 space-y-1">
+              <li><strong>Khách hàng do người dùng đưa vào:</strong> Lưu trữ trong thời gian tài khoản còn hoạt động và tối đa <strong>90 ngày</strong> sau khi tài khoản người dùng chấm dứt để hỗ trợ trích xuất dữ liệu trước khi xóa an toàn vĩnh viễn.</li>
+              <li><strong>Khách hàng tiềm năng (lead) từ trang đích:</strong> Lưu trữ trong vòng <strong>24 tháng</strong> kể từ lần tương tác cuối cùng của chủ thể dữ liệu.</li>
+              <li><strong>Lịch sử gửi chiến dịch (email, tin nhắn, thông báo):</strong> Lưu trữ trong vòng <strong>24 tháng</strong> phục vụ đối soát, thống kê và báo cáo hiệu quả.</li>
+              <li><strong>Dữ liệu giao dịch và chứng từ liên quan:</strong> Lưu trữ tối thiểu theo thời hạn quy định của pháp luật kế toán và thuế.</li>
+            </ul>
+          </li>
           <li><strong>Địa điểm lưu trữ:</strong> Dữ liệu được lưu trữ tại GCP Singapore và máy chủ đặt tại Việt Nam (FPT Smart Cloud)</li>
           <li><strong>Chuyển dữ liệu xuyên biên giới:</strong> Khi có chuyển dữ liệu ra nước ngoài, DIGISO đảm bảo tuân thủ đầy đủ quy định pháp luật hiện hành về chuyển dữ liệu cá nhân ra nước ngoài</li>
           <li><strong>Xóa dữ liệu:</strong> Sau khi hết thời hạn lưu trữ hoặc theo yêu cầu của Khách hàng, dữ liệu sẽ được xóa an toàn không thể phục hồi hoặc ẩn danh hóa</li>
         </ul>
         <ul className={`list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
-          <li><strong>Retention period:</strong> Per agreement with Customer in the Contract, minimum 5 years for transaction data under Vietnamese law</li>
+          <li>
+            <strong>Retention period:</strong> Data processed under delegation is retained according to the following standard timeframes:
+            <ul className="list-[circle] ml-6 mt-1 space-y-1">
+              <li><strong>Customer data imported by users:</strong> Retained during active account duration and up to <strong>90 days</strong> after user account termination to support data export before permanent deletion.</li>
+              <li><strong>Prospective customer (lead) data from landing pages:</strong> Retained for <strong>24 months</strong> from the data subject&apos;s last interaction.</li>
+              <li><strong>Campaign delivery history (emails, messages, notifications):</strong> Retained for <strong>24 months</strong> for reconciliation, reporting, and performance analytics.</li>
+              <li><strong>Transaction and billing-related records:</strong> Retained for the minimum duration required by applicable accounting regulations.</li>
+            </ul>
+          </li>
           <li><strong>Storage location:</strong> Data is stored at GCP Singapore and servers located in Vietnam (FPT Smart Cloud)</li>
           <li><strong>Cross-border transfer:</strong> For any cross-border transfers, DIGISO ensures full compliance with applicable regulations on personal data transfer abroad</li>
           <li><strong>Data deletion:</strong> After the retention period expires or upon Customer request, data will be securely and irreversibly deleted or anonymized</li>
