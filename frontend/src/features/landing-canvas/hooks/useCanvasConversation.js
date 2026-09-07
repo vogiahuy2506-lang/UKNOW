@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   generateLandingHtmlWithAi,
   editLandingHtmlWithAi,
 } from '../../landing-pages/services/landingPagesAdminApi.service.js';
+import { useI18n } from '../../../i18n';
 
 /**
  * Tạo INTENTS với translation function.
@@ -144,6 +145,18 @@ function makeIntents(tc) {
 
 function detectIntent(prompt, { setForm, openTab, intents }) {
   const p = prompt.trim();
+
+  // Guard 1: chỉ match intent khi prompt ngắn. Prompt dài (> 60 ký tự)
+  // thường là user đang yêu cầu sửa nội dung landing page — để cho AI xử lý,
+  // tránh false-positive (vd: "...slug thành landing-moi" bị nuốt nhầm vào intent set-slug).
+  // Guard 2: nếu prompt không có extract() thì cũng cho qua để tránh cắt ý user.
+  const INTENT_MAX_LENGTH = 60;
+  const allowIntent = p.length <= INTENT_MAX_LENGTH;
+
+  if (!allowIntent) {
+    return { matched: false };
+  }
+
   for (const intent of intents) {
     if (intent.test(p)) {
       const value = intent.extract ? intent.extract(p) : null;
@@ -156,13 +169,17 @@ function detectIntent(prompt, { setForm, openTab, intents }) {
   return { matched: false };
 }
 
-export default function useCanvasConversation({ form, setForm, hasExistingHtml, openTab, tc }) {
+export default function useCanvasConversation({ form, setForm, hasExistingHtml, openTab }) {
+  // Hook dùng riêng namespace 'landingCanvas.canvasConversation' cho intent + AI messages
+  // (CanvasChatPanel truyền tc của namespace 'landingCanvas.chat' — không trùng key với intent).
+  const tc = useI18n('landingCanvas.canvasConversation');
+  const { locale } = useI18n();
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const idCounterRef = useRef(0);
 
   // Build intents with current language
-  const intents = makeIntents(tc);
+  const intents = useMemo(() => makeIntents(tc), [tc]);
 
   const nextId = useCallback(() => {
     idCounterRef.current += 1;
@@ -222,9 +239,10 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
           result = await editLandingHtmlWithAi({
             currentHtml,
             instruction: trimmedPrompt,
+            locale,
           });
         } else {
-          result = await generateLandingHtmlWithAi({ prompt: trimmedPrompt });
+          result = await generateLandingHtmlWithAi({ prompt: trimmedPrompt, locale });
         }
 
         const suggestedHtml =
@@ -279,7 +297,7 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
         setIsStreaming(false);
       }
     },
-    [appendMessage, form.htmlContent, hasExistingHtml, intents, nextId, openTab, setForm, tc]
+    [appendMessage, form.htmlContent, hasExistingHtml, intents, locale, nextId, openTab, setForm, tc]
   );
 
   /**

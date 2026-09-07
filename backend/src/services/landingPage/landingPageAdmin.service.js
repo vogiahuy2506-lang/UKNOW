@@ -11,10 +11,6 @@ import {
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
 } from '../../utils/landingHtmlInjection.util.js';
-import {
-  mergeLeadFormIntoCustomConfig,
-  toPublicLeadFormConfig,
-} from '../../utils/landingLeadFormConfig.util.js';
 import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 import {
   invalidateDomainResolverPayload,
@@ -26,11 +22,9 @@ const RESERVED_SLUG_FIXED_LANDING = 'l';
 
 function toAdminLandingDto(row) {
   if (!row) return null;
-  const { customConfig, ...rest } = row;
-  return {
-    ...rest,
-    leadFormConfig: toPublicLeadFormConfig(customConfig),
-  };
+  // Strip internal customConfig — admin không cần thấy leadFormConfig nữa.
+  const { customConfig: _c, ...rest } = row;
+  return rest;
 }
 
 /**
@@ -118,7 +112,7 @@ class LandingPageAdminService {
         throw err;
       }
     }
-    /** Khi lưu: gỡ khối Founder AI cũ, đổi href http(s) sang link tracking, chèn lp-track.js (không tự chèn iframe). */
+    /** Khi lưu: gỡ khối script cũ, đổi href http(s) sang link tracking, chèn lp-track.js + founderai-capture.js. */
     const htmlContent = prepareLandingHtmlOnSave(body?.htmlContent ?? '', {
       slug,
       frontendOrigin: resolveFrontendOriginFromEnv(),
@@ -144,7 +138,7 @@ class LandingPageAdminService {
         createdBy: context.actorUserId,
         domainType,
         domainSubtype,
-        customConfig: mergeLeadFormIntoCustomConfig({}, body?.leadFormConfig),
+        // customConfig không còn dùng cho lead form config — giữ trống.
       }, client);
       await client.query('COMMIT');
     } catch (error) {
@@ -225,9 +219,8 @@ class LandingPageAdminService {
       : null;
     const typeChanged = nextDomainType !== (current.domainType || 'system');
 
-    const nextCustomConfig = Object.prototype.hasOwnProperty.call(body || {}, 'leadFormConfig')
-      ? mergeLeadFormIntoCustomConfig(current.customConfig, body.leadFormConfig)
-      : mergeLeadFormIntoCustomConfig(current.customConfig, undefined);
+    // customConfig không còn dùng cho lead form config — preserve existing value để không mất dữ liệu cũ.
+    const nextCustomConfig = current.customConfig;
 
     const updated = await landingPageRepository.updateByIdInScope(id, {
       slug,

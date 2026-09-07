@@ -217,19 +217,19 @@ class LeadService {
    * @returns {Promise<{ row: object, item: object }>}
    */
   async createPublicLead(body) {
+    const rawName = String(body?.name ?? body?.fullName ?? '').trim();
     const lastName = String(body?.lastName ?? body?.last_name ?? '').trim();
     const firstName = String(body?.firstName ?? body?.first_name ?? '').trim();
     const email = String(body?.email ?? '').trim().toLowerCase();
     const phone = normalizePhone(body?.phone);
 
-    if (!lastName && !firstName) {
+    // Ưu tiên: name (full name chung) > lastName + firstName split
+    const effectiveName = rawName || `${lastName} ${firstName}`.trim();
+    if (!effectiveName) {
       const err = new Error('Vui lòng nhập Họ và Tên');
       err.statusCode = 400;
       throw err;
     }
-    // Nếu chỉ có lastName hoặc firstName (form cũ dùng field "name" chung) → dùng giá trị có được
-    const effectiveLastName  = lastName  || firstName;
-    const effectiveFirstName = firstName || lastName;
     if (!email || !EMAIL_RE.test(email)) {
       const err = new Error('Email không hợp lệ');
       err.statusCode = 400;
@@ -281,9 +281,14 @@ class LeadService {
     const utmContent = body?.utmContent != null ? String(body.utmContent).trim().slice(0, 255) || null : null;
     const utmTerm = body?.utmTerm != null ? String(body.utmTerm).trim().slice(0, 255) || null : null;
 
+    // Split full name để lưu vào DB: last_name + first_name
+    const parts = effectiveName.split(/\s+/);
+    const dbLastName  = parts[0] || '';
+    const dbFirstName = parts.slice(1).join(' ');
+
     const row = await leadRepository.insertLead({
-      lastName:       effectiveLastName,
-      firstName:      effectiveFirstName,
+      lastName:       dbLastName,
+      firstName:      dbFirstName,
       email,
       phone,
       occupation,
@@ -349,7 +354,17 @@ class LeadService {
         });
     }
 
-    return { row, item: mapLeadRowToCampaignItem(row) };
+    return {
+      row,
+      item: mapLeadRowToCampaignItem(row),
+      successRedirect: leadForm.successRedirect?.enabled && leadForm.successRedirect?.url
+        ? {
+            url: leadForm.successRedirect.url,
+            delayMs: leadForm.successRedirect.delayMs ?? 0,
+            openInNewTab: leadForm.successRedirect.openInNewTab === true,
+          }
+        : null,
+    };
   }
 
   /**

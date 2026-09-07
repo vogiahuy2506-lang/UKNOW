@@ -142,13 +142,13 @@ export async function fetchLandingPagesDashboardStats(params = {}) {
 /**
  * Sinh HTML landing đầy đủ (Tailwind + Gemini + context hồ sơ DN).
  *
- * @param {{ prompt: string, title?: string }} params
+ * @param {{ prompt: string, title?: string, locale?: string }} params
  * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
  */
-export async function generateLandingHtmlWithAi({ prompt, title } = {}) {
+export async function generateLandingHtmlWithAi({ prompt, title, locale } = {}) {
   const { data } = await api.post(
     '/ai/generate-landing-html',
-    { prompt, title },
+    { prompt, title, locale },
     { timeout: 120000 }
   );
   return data;

@@ -193,17 +193,6 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {onGenerateWithAi && (
-              <button
-                onClick={onGenerateWithAi}
-                className="btn btn-secondary text-sm flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Tạo với AI
-              </button>
-            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -355,17 +344,6 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                     ? 'Tạo landing page và lưu lại làm template'
                     : 'Hãy tạo template đầu tiên của bạn'}
                 </p>
-                {onGenerateWithAi && (
-                  <button
-                    onClick={onGenerateWithAi}
-                    className="btn btn-primary text-sm flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Tạo với AI
-                  </button>
-                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

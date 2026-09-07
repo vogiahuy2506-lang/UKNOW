@@ -495,7 +495,6 @@ class CloudflareService {
 
     if (slug) {
       urls.push(`${backendOrigin}/api/public/landing-pages/${slug}`);
-      urls.push(`${backendOrigin}/api/public/landing-pages/${slug}/form-config`);
       urls.push(`${frontendOrigin}/l/${slug}`);
       urls.push(`https://${slug}.${lpSubdomainBase}/`);
       urls.push(`https://${slug}.${lpSubdomainBase}/api/public/lp`);

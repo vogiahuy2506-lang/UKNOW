@@ -8,6 +8,7 @@ import {
   HiOutlineSearch,
   HiOutlineClipboard,
   HiOutlineCalendar,
+  HiOutlineX,
 } from 'react-icons/hi';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
 import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
@@ -50,6 +51,27 @@ export default function LandingLeadsListPage() {
 
   const [customDefs, setCustomDefs] = useState([]);
 
+  // Quick search trong trang hiện tại (FE-only, không gọi lại API).
+  // Backend chưa hỗ trợ filter theo text nên search chỉ áp dụng cho items đã load.
+  const [quickSearch, setQuickSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(quickSearch.trim().toLowerCase()), 250);
+    return () => clearTimeout(id);
+  }, [quickSearch]);
+
+  // Đếm số bộ lọc đang áp dụng (dùng cho badge trên trigger button).
+  const appliedCount = useMemo(() => {
+    let n = 0;
+    if (appliedFilters.landingLeadsUseDateRange) n += 1;
+    if (Array.isArray(appliedFilters.landingLeadsSlugs) && appliedFilters.landingLeadsSlugs.length > 0) n += 1;
+    if (Array.isArray(appliedFilters.landingLeadsCustomFilters) && appliedFilters.landingLeadsCustomFilters.length > 0) {
+      n += appliedFilters.landingLeadsCustomFilters.length;
+    }
+    return n;
+  }, [appliedFilters]);
+
   // Lấy definitions để render label + options cho customFields trong từng dòng.
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +90,17 @@ export default function LandingLeadsListPage() {
 
   const totalPages = pagination.totalPages || 1;
   const total = pagination.total ?? 0;
+
+  const visibleItems = useMemo(() => {
+    if (!debouncedSearch) return items;
+    const q = debouncedSearch;
+    return items.filter((row) => {
+      const fullName = String(getLeadFullName(row) || '').toLowerCase();
+      const email = String(row.email || '').toLowerCase();
+      const phone = String(row.phone || '').toLowerCase();
+      return fullName.includes(q) || email.includes(q) || phone.includes(q);
+    });
+  }, [items, debouncedSearch]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -112,7 +145,27 @@ export default function LandingLeadsListPage() {
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">{t('landingLeads.pageTitle')}</h1>
           <p className="text-sm text-gray-500 mt-1">{t('landingLeads.pageDescription')}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="search"
+              value={quickSearch}
+              onChange={(e) => setQuickSearch(e.target.value)}
+              placeholder={t('landingLeads.quickSearchPlaceholder')}
+              className="w-full sm:w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-200"
+            />
+            {quickSearch ? (
+              <button
+                type="button"
+                onClick={() => setQuickSearch('')}
+                aria-label={t('landingLeads.clearSearch')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+              >
+                <HiOutlineX className="w-3.5 h-3.5" />
+              </button>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => reload()}
@@ -125,15 +178,18 @@ export default function LandingLeadsListPage() {
         </div>
       </div>
 
-      {/* Filter card */}
-      <LandingLeadsAdminFilters
-        draftFilters={draftFilters}
-        setDraftFilters={setDraftFilters}
-        onApply={applyFilters}
-        onReset={resetFilters}
-        onExportExcel={handleExport}
-        isExporting={isExporting}
-      />
+      {/* Filter trigger (drawer) + Export Excel */}
+      <div className="flex flex-wrap items-center gap-2">
+        <LandingLeadsAdminFilters
+          draftFilters={draftFilters}
+          setDraftFilters={setDraftFilters}
+          onApply={applyFilters}
+          onReset={resetFilters}
+          onExportExcel={handleExport}
+          isExporting={isExporting}
+          appliedCount={appliedCount}
+        />
+      </div>
 
       {/* Applied filters summary */}
       {appliedChips.length > 0 || dateRangeText ? (
@@ -176,6 +232,11 @@ export default function LandingLeadsListPage() {
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
           <p className="text-sm text-gray-600">
             <span className="font-semibold text-gray-900">{total.toLocaleString('vi-VN')}</span> {t('landingLeads.records')}
+            {debouncedSearch && visibleItems.length !== items.length ? (
+              <span className="ml-2 text-xs text-gray-500">
+                · {t('landingLeads.showingOf', { shown: visibleItems.length, total: items.length })}
+              </span>
+            ) : null}
           </p>
           <p className="text-sm text-gray-500">
             {t('landingLeads.pageOf', { page, total: totalPages })}
@@ -213,25 +274,42 @@ export default function LandingLeadsListPage() {
                 </tr>
               ) : null}
 
-              {!isLoading && items.length === 0 ? (
+              {!isLoading && visibleItems.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-16 text-center">
                     <HiOutlineSearch className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">{t('landingLeads.noRecords')}</p>
-                    {appliedChips.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={resetFilters}
-                        className="mt-3 text-xs text-orange-600 hover:underline"
-                      >
-                        Xoá bộ lọc để thấy tất cả
-                      </button>
-                    ) : null}
+                    {debouncedSearch ? (
+                      <>
+                        <p className="text-sm text-gray-500">
+                          {t('landingLeads.noMatchInPage', { query: debouncedSearch })}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setQuickSearch('')}
+                          className="mt-3 text-xs text-orange-600 hover:underline"
+                        >
+                          {t('landingLeads.clearSearch')}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-500">{t('landingLeads.noRecords')}</p>
+                        {appliedChips.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={resetFilters}
+                            className="mt-3 text-xs text-orange-600 hover:underline"
+                          >
+                            Xoá bộ lọc để thấy tất cả
+                          </button>
+                        ) : null}
+                      </>
+                    )}
                   </td>
                 </tr>
               ) : null}
 
-              {items.map((row) => {
+              {visibleItems.map((row) => {
                 const fullName = getLeadFullName(row);
                 const initials = getLeadInitials(row);
                 const cfSummary = renderCustomFieldsSummary(row.customFields, customDefs, 'vi');
@@ -372,30 +450,6 @@ function formatRelativeTime(raw) {
  */
 function buildAppliedChips(filters, customDefs, t) {
   const chips = [];
-  const occLabels = {
-    student: 'Sinh viên', freelancer: 'Freelancer', employee: 'Nhân viên',
-    manager: 'Quản lý', founder: 'Founder', other: 'Khác',
-  };
-  const intLabels = {
-    marketing: 'Marketing', tech: 'Tech / IT', design: 'Thiết kế',
-    sales: 'Sales', content: 'Content / Sáng tạo', finance: 'Tài chính',
-  };
-  const occ = Array.isArray(filters.landingLeadsOccupations) ? filters.landingLeadsOccupations : [];
-  if (occ.length > 0) {
-    chips.push({
-      id: 'occ',
-      label: t('landingLeads.occupationLabel'),
-      value: occ.map((v) => occLabels[v] || v).join(', '),
-    });
-  }
-  const ints = Array.isArray(filters.landingLeadsInterests) ? filters.landingLeadsInterests : [];
-  if (ints.length > 0) {
-    chips.push({
-      id: 'ints',
-      label: t('landingLeads.interestLabel'),
-      value: ints.map((v) => intLabels[v] || v).join(', '),
-    });
-  }
   const slugs = Array.isArray(filters.landingLeadsSlugs) ? filters.landingLeadsSlugs : [];
   if (slugs.length > 0) {
     chips.push({

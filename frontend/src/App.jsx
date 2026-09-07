@@ -58,7 +58,6 @@ import HelpArticlePage from './pages/docs/HelpArticlePage';
 import LandingHtmlModeGate from './features/landing-customizer/components/LandingHtmlModeGate.jsx';
 import LpRendererPage from './pages/public/LpRendererPage';
 import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
-import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import PublicChatbotPage from './pages/public/PublicChatbotPage';
 import LearningPage from './pages/learning/LearningPage';
 import CheckoutPage from './pages/checkout/CheckoutPage';
@@ -365,7 +364,6 @@ function AppContent() {
 
           {/* Các route hỗ trợ khác */}
           <Route path="/lp/:slug" element={<LpRendererPage />} />
-          <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
           <Route path="/chat/:chatbotId" element={<PublicChatbotPage />} />
           <Route path="/learning" element={<LearningPage />} />
 

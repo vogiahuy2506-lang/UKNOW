@@ -31,7 +31,7 @@ export default function CanvasChatPanel({ form, setForm, openTab, collapsed, onT
     isStreaming,
     handleSend,
     handleUndo,
-  } = useCanvasConversation({ form, setForm, hasExistingHtml, openTab, tc });
+  } = useCanvasConversation({ form, setForm, hasExistingHtml, openTab });
 
   if (collapsed) {
     return (
@@ -149,10 +149,10 @@ function ModernEmptyState({ onPick, disabled }) {
 
       {/* Capabilities (decorative cards) */}
       <div className="grid grid-cols-2 gap-2">
-        <CapCard icon={HiOutlinePencilAlt} label="Chỉnh sửa" tone="orange" />
-        <CapCard icon={HiOutlineColorSwatch} label="Đổi màu" tone="amber" />
-        <CapCard icon={HiOutlineLightBulb} label="Ý tưởng" tone="yellow" />
-        <CapCard icon={HiOutlineCode} label="Sinh code" tone="red" />
+        <CapCard icon={HiOutlinePencilAlt} label={tc('capabilities.edit')} tone="orange" />
+        <CapCard icon={HiOutlineColorSwatch} label={tc('capabilities.color')} tone="amber" />
+        <CapCard icon={HiOutlineLightBulb} label={tc('capabilities.idea')} tone="yellow" />
+        <CapCard icon={HiOutlineCode} label={tc('capabilities.code')} tone="red" />
       </div>
 
       {/* Quick picks */}
@@ -161,7 +161,7 @@ function ModernEmptyState({ onPick, disabled }) {
           <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.08em]">
             {tc('quickPicksTitle')}
           </p>
-          <span className="text-[11px] text-gray-400">{quickPicks.length} mẫu</span>
+          <span className="text-[11px] text-gray-400">{tc('quickPicksCount', { n: quickPicks.length })}</span>
         </div>
         <div className="space-y-2">
           {quickPicks.map((pick) => {

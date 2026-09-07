@@ -9,10 +9,6 @@ const router = express.Router();
 
 router.get('/landing-pages-by-host', (req, res) => landingPagePublicController.getPublishedByHost(req, res));
 
-router.get('/landing-pages/:slug/form-config', (req, res) =>
-  landingPagePublicController.getPublishedFormConfig(req, res)
-);
-
 router.get('/landing-pages/:slug', async (req, res) => {
   try {
     const { slug } = req.params;

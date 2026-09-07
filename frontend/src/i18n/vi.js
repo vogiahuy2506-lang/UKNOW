@@ -397,6 +397,7 @@ export default {
     notificationCenter: 'Trung tâm thông báo',
     helpArticles: 'Bài viết hướng dẫn',
     helpUnanswered: 'Câu hỏi chưa trả lời',
+    affiliateProgram: 'Chương trình đối tác',
     website: 'Trang web',
     siteHome: 'Trang chủ',
     sitePricing: 'Bảng giá',
@@ -643,6 +644,7 @@ export default {
   landingCanvas: {
     back: 'Quay lại danh sách',
     topbar: {
+      settings: 'Cài đặt',
       form: 'Lead Form',
       domain: 'Tên miền',
       pageSettings: 'Thông tin trang',
@@ -740,6 +742,13 @@ export default {
       undoTooltip: 'Khôi phục lại HTML trước khi AI sửa',
       clear: 'Xóa cuộc trò chuyện',
       quickPicksTitle: 'Mẫu nhanh',
+      quickPicksCount: '{n} mẫu',
+      capabilities: {
+        edit: 'Chỉnh sửa',
+        color: 'Đổi màu',
+        idea: 'Ý tưởng',
+        code: 'Sinh code',
+      },
     },
     preview: {
       view: 'Xem trước',
@@ -752,10 +761,8 @@ export default {
       empty: 'Nhập nội dung HTML để xem trước',
     },
     settingsModal: {
-      title: 'Cài đặt',
-      leadForm: 'Lead Form',
-      domain: 'Tên miền',
-      page: 'Thông tin',
+      title: 'Cài đặt trang',
+      untitled: 'Chưa có tiêu đề',
       close: 'Đóng',
       back: 'Quay lại',
       headerEyebrow: 'Cài đặt',
@@ -765,20 +772,28 @@ export default {
       publishLabel: 'Publish',
       published: 'Đã xuất bản',
       draft: 'Bản nháp',
-      tabs: {
-        leadForm: { label: 'Lead Form', desc: 'Trường thu lead' },
-        domain: { label: 'Tên miền', desc: 'URL truy cập' },
-        page: { label: 'Thông tin', desc: 'Tiêu đề & publish' },
-      },
-      headings: {
-        leadForm: 'Cấu hình form thu lead',
-        domain: 'Cấu hình tên miền',
-        page: 'Thông tin landing page',
-      },
-      descriptions: {
-        leadForm: 'Chọn các trường sẽ hiển thị trên form đăng ký. Mọi thay đổi sẽ áp dụng khi lưu.',
-        domain: 'Đặt URL truy cập: dùng subdomain miễn phí của hệ thống hoặc tên miền riêng của bạn.',
-        page: 'Tiêu đề hiển thị nội bộ và trạng thái xuất bản của landing page.',
+      sections: {
+        page: {
+          title: 'Thông tin trang',
+          titleLabel: 'Tiêu đề landing page',
+          titlePlaceholder: 'VD: Khóa học FounderAI',
+          publishLabel: 'Xuất bản ngay',
+          publishOnDesc: 'Trang có thể truy cập công khai',
+          publishOffDesc: 'Trang chỉ hiển thị với bạn',
+        },
+        domain: {
+          title: 'Tên miền & URL',
+          slugLabel: 'Đường dẫn (slug)',
+          hostnameLabel: 'Tên miền riêng',
+          hostnamePlaceholder: 'VD: lp.doanhnghiep.com',
+          typeLabel: 'Loại domain',
+          guideTitle: 'Hướng dẫn cài đặt DNS',
+          dnsStep1: 'Đăng nhập vào nhà cung cấp domain của bạn',
+          dnsStep2: 'Tìm phần DNS Records / Zone Records',
+          dnsStep3: 'Thêm record bên dưới',
+          apexHint: 'Apex domain (example.com) cần A record với IP từ FounderAI',
+          subHint: 'Subdomain (lp.example.com) dùng CNAME trỏ về FounderAI',
+        },
       },
     },
     pageSettingsPanel: {
@@ -966,6 +981,17 @@ export default {
       radio: 'Chọn một',
       checkbox: 'Hộp kiểm',
     },
+    successRedirectTitle: 'Sau khi đăng ký',
+    successRedirectDesc: 'Tự động chuyển sang landing page khác hoặc URL tuỳ chỉnh ngay khi form submit thành công.',
+    successRedirectEnable: 'Bật chuyển trang',
+    successRedirectUrlLabel: 'URL đích',
+    successRedirectUrlPlaceholder: 'https://example.com/thank-you hoặc slug landing khác',
+    successRedirectUrlHelp: 'Có thể là URL đầy đủ (https://...) hoặc slug landing page khác trong hệ thống.',
+    successRedirectUrlRequired: 'Vui lòng nhập URL đích trước khi bật.',
+    successRedirectDelayLabel: 'Chờ',
+    successRedirectDelayHelp: 'Đợi khoảng thời gian này (ms) trước khi chuyển — đủ để user đọc thông báo thành công.',
+    successRedirectTargetLabel: 'Cách mở',
+    successRedirectOpenNewTab: 'Mở trong tab mới',
   },
 
   // Visual Block Editor translations
@@ -4060,6 +4086,21 @@ export default {
     exportSuccess: 'Đã tải file Excel',
     exportFailed: 'Không xuất được Excel',
     exportTruncated: 'File Excel đã bị cắt vì vượt giới hạn số dòng.',
+    // Drawer UI
+    closeFilter: 'Đóng bộ lọc',
+    searchOptionPlaceholder: 'Tìm trong danh sách…',
+    clearThis: 'Xoá nhóm này',
+    noOptionsMatch: 'Không có tuỳ chọn nào khớp.',
+    loadingOptions: 'Đang tải tuỳ chọn…',
+    loadingCustomFields: 'Đang tải trường tùy chỉnh…',
+    presetToday: 'Hôm nay',
+    preset7Days: '7 ngày qua',
+    preset30Days: '30 ngày qua',
+    // Quick search (FE-only trong trang hiện tại)
+    quickSearchPlaceholder: 'Tìm tên, email hoặc SĐT…',
+    clearSearch: 'Xoá tìm kiếm',
+    noMatchInPage: 'Không có dòng nào trong trang này khớp "{query}".',
+    showingOf: 'đang hiển thị {shown}/{total}',
   },
 
   landingInbox: {

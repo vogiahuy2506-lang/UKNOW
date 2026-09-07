@@ -11,12 +11,10 @@ import {
 
 describe('landingHtmlInjection.util', () => {
   describe('stripFounderLandingAutoBlocks', () => {
-    it('xóa <section data-founder-lp-embed>', () => {
-      const html = '<p>before</p><section data-founder-lp-embed="1"><iframe></iframe></section><p>after</p>';
+    it('giữ HTML không có block auto', () => {
+      const html = '<p>before</p><section>regular section</section><p>after</p>';
       const out = stripFounderLandingAutoBlocks(html);
-      expect(out).not.toContain('data-founder-lp-embed');
-      expect(out).toContain('<p>before</p>');
-      expect(out).toContain('<p>after</p>');
+      expect(out).toBe(html);
     });
 
     it('xóa <div data-founder-lp-injected>', () => {
@@ -33,8 +31,15 @@ describe('landingHtmlInjection.util', () => {
       expect(out).toContain('<p>ok</p>');
     });
 
+    it('xóa <script ...founderai-capture.js...>', () => {
+      const html = '<script src="https://host/founderai-capture.js" defer></script><p>ok</p>';
+      const out = stripFounderLandingAutoBlocks(html);
+      expect(out).not.toContain('founderai-capture.js');
+      expect(out).toContain('<p>ok</p>');
+    });
+
     it('idempotent: chạy 2 lần ra cùng kết quả', () => {
-      const html = '<section data-founder-lp-embed="1">x</section><script src="lp-track.js"></script><div data-founder-lp-injected="1"></div>';
+      const html = '<script src="lp-track.js"></script><script src="founderai-capture.js"></script><div data-founder-lp-injected="1"></div>';
       const once = stripFounderLandingAutoBlocks(html);
       const twice = stripFounderLandingAutoBlocks(once);
       expect(twice).toBe(once);
@@ -169,14 +174,34 @@ describe('landingHtmlInjection.util', () => {
       apiBase: 'http://localhost:5001/api',
     };
 
-    it('chèn marker + script trước </body>', () => {
+    it('chèn marker + lp-track + founderai-capture trước </body>', () => {
       const html = '<html><body><p>hello</p></body></html>';
       const out = injectLandingEnhancements(html, opts);
       expect(out).toContain('data-founder-lp-injected="1"');
       expect(out).toContain('<script src="http://localhost:5174/lp-track.js"');
+      expect(out).toContain('<script src="http://localhost:5174/founderai-capture.js"');
       expect(out).toContain('data-slug="promo"');
       expect(out).toContain('data-api-base="http://localhost:5001/api"');
       expect(out.indexOf('lp-track.js')).toBeLessThan(out.indexOf('</body>'));
+      expect(out.indexOf('founderai-capture.js')).toBeLessThan(out.indexOf('</body>'));
+    });
+
+    it('capture script được inject kể cả khi HTML đã có lp-track.js (idempotent cho track, luôn inject capture)', () => {
+      const html = '<html><body><script src="lp-track.js"></script></body></html>';
+      const out = injectLandingEnhancements(html, opts);
+      // Không tăng số lần lp-track.js
+      expect((out.match(/lp-track\.js/g) || []).length).toBe(1);
+      // Nhưng founderai-capture.js được inject mới
+      expect(out).toContain('founderai-capture.js');
+    });
+
+    it('capture script cũng idempotent: không chèn lần 2 nếu đã có sẵn', () => {
+      const html = '<html><body><script src="lp-track.js"></script><script src="founderai-capture.js"></script></body></html>';
+      const out = injectLandingEnhancements(html, opts);
+      expect((out.match(/founderai-capture\.js/g) || []).length).toBe(1);
+      expect((out.match(/lp-track\.js/g) || []).length).toBe(1);
+      // Không chèn thẻ <script> thứ 3
+      expect((out.match(/<script/g) || []).length).toBe(2);
     });
 
     it('bỏ qua nếu marker đã tồn tại (idempotent)', () => {
@@ -247,18 +272,19 @@ describe('landingHtmlInjection.util', () => {
       apiBase: 'http://localhost:5001/api',
     };
 
-    it('chạy đủ pipeline: strip → rewrite link → auto-inject form (khi thiếu) → inject script', () => {
+    it('chạy đủ pipeline: strip → rewrite link → inject script', () => {
       const html =
         '<html><body>' +
         '<section data-founder-lp-embed="1">old</section>' +
         '<a href="https://target.com">click</a>' +
         '</body></html>';
       const out = prepareLandingHtmlOnSave(html, opts);
-      // Khối auto cũ đã bị strip, form mới được tự chèn → vẫn còn 1 section.
-      expect(out).toMatch(/data-founder-lp-embed="1"/);
-      expect(out).toContain('/embed/lead-form?slug=promo');
+      // Khối auto-injected section cũ đã strip, không tự chèn form — chỉ inject script.
+      expect(out).not.toContain('data-founder-lp-embed="1"');
+      expect(out).not.toContain('/embed/lead-form');
       expect(out).toContain('landing-track/go');
       expect(out).toContain('lp-track.js');
+      expect(out).toContain('founderai-capture.js');
       expect(out).toContain('data-slug="promo"');
     });
 
@@ -272,14 +298,15 @@ describe('landingHtmlInjection.util', () => {
       expect(twice).toBe(once);
     });
 
-    it('HTML đã có iframe form → không chèn thêm', () => {
+    it('HTML có iframe form cũ → iframe bị strip nhưng script vẫn inject', () => {
       const html =
         '<html><body>' +
         '<iframe src="http://localhost:5174/embed/lead-form?slug=promo"></iframe>' +
         '</body></html>';
       const out = prepareLandingHtmlOnSave(html, opts);
-      const matches = out.match(/\/embed\/lead-form\?/g) || [];
-      expect(matches).toHaveLength(1);
+      expect(out).not.toContain('/embed/lead-form');
+      expect(out).toContain('lp-track.js');
+      expect(out).toContain('founderai-capture.js');
     });
 
     it('slug rỗng → trả nguyên HTML không xử lý', () => {

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlineChevronLeft, HiOutlineX, HiOutlineTemplate, HiOutlineViewGrid, HiOutlineClock, HiOutlineUserCircle, HiOutlineGlobeAlt, HiOutlineCog, HiOutlineDocumentText, HiOutlineBookmark } from 'react-icons/hi';
+import { HiOutlineChevronLeft, HiOutlineX, HiOutlineTemplate, HiOutlineViewGrid, HiOutlineClock, HiOutlineCog, HiOutlineDocumentText, HiOutlineBookmark } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 /**
@@ -34,9 +34,6 @@ export default function LandingCanvasTopbar({
   onOpenSaveTemplate,
 }) {
   const tc = useI18n('landingCanvas.topbar');
-  // Debug: test the translation function
-  const testResult = tc('templates');
-  console.log('[Topbar] tc test:', { templates: testResult, type: typeof testResult });
   const closeBtnRef = useRef(null);
 
   const titleMaxLength = useMemo(() => 200, []);
@@ -87,26 +84,21 @@ export default function LandingCanvasTopbar({
       {/* Spacer */}
       <div className="flex-1 min-w-[8px]" />
 
-      {/* Right: Setting icons group */}
+      {/* Right: Actions */}
       <div className="flex items-center gap-0.5">
-        <IconButton
-          icon={HiOutlineUserCircle}
-          onClick={() => onOpenSettingTab?.('leadForm')}
-          title={tc('form')}
-          active={activeModalTab === 'leadForm'}
-        />
-        <IconButton
-          icon={HiOutlineGlobeAlt}
-          onClick={() => onOpenSettingTab?.('domain')}
-          title={tc('domain')}
-          active={activeModalTab === 'domain'}
-        />
-        <IconButton
-          icon={HiOutlineCog}
+        {/* Settings button */}
+        <button
+          type="button"
           onClick={() => onOpenSettingTab?.('page')}
-          title={tc('pageSettings')}
-          active={activeModalTab === 'page'}
-        />
+          className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all flex items-center gap-1.5 ${
+            activeModalTab
+              ? 'bg-orange-500 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <HiOutlineCog className="w-4 h-4" />
+          <span>{tc('settings')}</span>
+        </button>
         <div className="w-px h-5 bg-gray-200 mx-1" />
         <IconButton
           icon={HiOutlineTemplate}

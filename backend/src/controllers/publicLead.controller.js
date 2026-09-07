@@ -18,13 +18,16 @@ class PublicLeadController {
    */
   async create(req, res) {
     try {
-      const { row } = await leadService.createPublicLead(req.body || {});
+      const { row, successRedirect } = await leadService.createPublicLead(req.body || {});
       return res.status(201).json({
         success: true,
         message: 'Đăng ký thành công',
         data: {
           id: row.id,
         },
+        // Sau khi đăng ký thành công, trả về URL chuyển trang (nếu admin đã bật).
+        // Universal Capture Script (`/founderai-capture.js`) sẽ đọc field này để redirect.
+        ...(successRedirect ? { successRedirect } : {}),
       });
     } catch (error) {
       const status = error.statusCode || 500;

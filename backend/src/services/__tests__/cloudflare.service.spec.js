@@ -129,7 +129,6 @@ describe('CloudflareService purge methods', () => {
 
     expect(purgeSpy).toHaveBeenCalledWith([
       'https://founderai.biz/api/public/landing-pages/summer-sale',
-      'https://founderai.biz/api/public/landing-pages/summer-sale/form-config',
       'https://founderai.biz/l/summer-sale',
       'https://summer-sale.lp.uknow.vn/',
       'https://summer-sale.lp.uknow.vn/api/public/lp',

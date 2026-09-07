@@ -184,6 +184,11 @@ class LeadRepository {
    * @param {object} filters Cùng shape với findFiltered (bỏ limit).
    * @returns {Promise<number>}
    */
+  async countFiltered(filters) {
+    const { whereClause, params } = buildLeadWhere(filters);
+    const result = await db.query(`SELECT COUNT(*)::bigint AS c FROM leads ${whereClause}`, params);
+    return Number(result.rows[0]?.c || 0);
+  }
 
   /**
    * Tìm lead theo unsubscribe_token (UUID).

@@ -23,15 +23,11 @@ import {
   updateLandingPageAdmin,
   createLandingTemplate,
 } from '../services/landingPagesAdminApi.service.js';
-import { getLandingManualInsertSnippets } from '../utils/injectLandingEnhancements.js';
-import { normalizeLandingLpTrackApiBase } from '../utils/normalizeLandingLpTrackApiBase.js';
 import TemplateGallery from './TemplateGallery.jsx';
 import VisualBlockEditor from './VisualBlockEditor.jsx';
-import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
 import LandingVersionModal from './LandingVersionModal.jsx';
 import { getAiQuotaErrorMessage } from '../../../utils/aiLimitError.util';
 
-const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
 const BASE_DOMAIN = 'founderai.biz';
 
 const getAiErrorMessage = (error, t, fallbackKey) => {
@@ -812,18 +808,10 @@ export default function LandingPageFullEditor({
   onCreatePageWithCustomDomain,
 }) {
   const { t } = useI18n();
-  const snippetContext = useMemo(() => {
+  const publicUrl = useMemo(() => {
     const slug = String(form.slug || '').trim().toLowerCase();
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const apiBase = normalizeLandingLpTrackApiBase(
-      String(import.meta.env.VITE_API_URL || `${origin}/api`)
-    );
-    const result = getLandingManualInsertSnippets({ slug, frontendOrigin: origin, apiBase }, t);
-    return {
-      ...result,
-      publicUrl: slug ? `https://${encodeURIComponent(slug)}.${BASE_DOMAIN}` : '',
-    };
-  }, [form.slug, t]);
+    return slug ? `https://${encodeURIComponent(slug)}.${BASE_DOMAIN}` : '';
+  }, [form.slug]);
 
   const [aiOpen, setAiOpen] = useState(false);
   const [aiMode, setAiMode] = useState('select'); // 'edit' | 'select' | 'custom'
@@ -938,11 +926,8 @@ export default function LandingPageFullEditor({
       if (!res?.success || !res?.data?.html) {
         throw new Error(res?.message || t('landingPageEditor.invalidResponse'));
       }
-      let html = String(res.data.html);
+      const html = String(res.data.html);
       const nextTitle = String(res.data.title || '').trim();
-      if (snippetContext.iframeBlock && html.includes(LP_FORM_MARKER)) {
-        html = html.split(LP_FORM_MARKER).join(snippetContext.iframeBlock);
-      }
       overwriteHtmlWithSnapshot(html, nextTitle);
       toast.success('Đã chỉnh sửa landing page bằng AI thành công!');
       setAiOpen(false);
@@ -970,15 +955,8 @@ export default function LandingPageFullEditor({
       if (!res?.success || !res?.data?.html) {
         throw new Error(res?.message || t('landingPageEditor.invalidResponse'));
       }
-      let html = String(res.data.html);
+      const html = String(res.data.html);
       const nextTitle = String(res.data.title || '').trim();
-      if (snippetContext.iframeBlock && html.includes(LP_FORM_MARKER)) {
-        html = html.split(LP_FORM_MARKER).join(snippetContext.iframeBlock);
-      } else if (snippetContext.iframeBlock && !html.includes(LP_FORM_MARKER)) {
-        toast(t('landingPageEditor.noFormPosition'), { icon: 'ℹ️' });
-      } else if (!snippetContext.iframeBlock) {
-        toast(t('landingPageEditor.enterSlugForEmbed'), { icon: 'ℹ️' });
-      }
       overwriteHtmlWithSnapshot(html, nextTitle);
       toast.success(t('landingPageEditor.htmlGenerated'));
       setAiOpen(false);
@@ -1006,15 +984,8 @@ export default function LandingPageFullEditor({
       if (!res?.success || !res?.data?.html) {
         throw new Error(res?.message || t('landingPageEditor.invalidResponse'));
       }
-      let html = String(res.data.html);
+      const html = String(res.data.html);
       const nextTitle = String(res.data.title || '').trim();
-      if (snippetContext.iframeBlock && html.includes(LP_FORM_MARKER)) {
-        html = html.split(LP_FORM_MARKER).join(snippetContext.iframeBlock);
-      } else if (snippetContext.iframeBlock && !html.includes(LP_FORM_MARKER)) {
-        toast(t('landingPageEditor.noFormPosition'), { icon: 'ℹ️' });
-      } else if (!snippetContext.iframeBlock) {
-        toast(t('landingPageEditor.enterSlugForEmbed'), { icon: 'ℹ️' });
-      }
       overwriteHtmlWithSnapshot(html, nextTitle);
       toast.success(t('landingPageEditor.htmlGenerated'));
       setAiOpen(false);
@@ -1028,11 +999,7 @@ export default function LandingPageFullEditor({
   };
 
   const handleTemplateSelect = ({ template, html, cssVariables: _cssVariables, defaultConfig: _defaultConfig }) => {
-    let finalHtml = html;
-    if (!finalHtml.includes(LP_FORM_MARKER) && snippetContext?.iframeBlock) {
-      finalHtml += `\n${LP_FORM_MARKER}`;
-    }
-    overwriteHtmlWithSnapshot(finalHtml, '', {
+    overwriteHtmlWithSnapshot(html, '', {
       templateId: template.id,
       templateName: template.name,
     });
@@ -1040,13 +1007,9 @@ export default function LandingPageFullEditor({
   };
 
   const handleVisualEditorSave = ({ html, data: _data }) => {
-    let finalHtml = html;
-    if (!finalHtml.includes(LP_FORM_MARKER) && snippetContext?.iframeBlock) {
-      finalHtml += `\n${LP_FORM_MARKER}`;
-    }
     setForm((prev) => ({
       ...prev,
-      htmlContent: finalHtml,
+      htmlContent: html,
     }));
     toast.success(t('landingPageEditor.visualSaved'));
     setVisualEditorOpen(false);
@@ -1189,8 +1152,6 @@ export default function LandingPageFullEditor({
           slug: form.slug || '',
           htmlContent: form.htmlContent || '',
           isPublished: Boolean(form.isPublished),
-          leadFormConfig: form.leadFormConfig,
-          leadFormPersistedMeta: form.leadFormPersistedMeta,
         },
         h,
         cdIsApexDomain
@@ -1301,9 +1262,6 @@ export default function LandingPageFullEditor({
     if (isCustomDomainMode) return cdHostnameDraft?.trim() || slug;
     return `${slug}.${BASE_DOMAIN}`;
   })();
-  const publicUrl = isCustomDomainMode
-    ? (slug ? `https://${slug}` : '')
-    : (slug ? `https://${slug}.${BASE_DOMAIN}` : '');
 
   const overlay = (
     <div
@@ -1446,10 +1404,6 @@ export default function LandingPageFullEditor({
               />
               {t('landingPageEditor.publish')}
             </label>
-
-            <SectionCard title={t('leadFormConfig.title')} icon={HiOutlinePencilAlt} defaultOpen={true}>
-              <LeadFormConfigPanel form={form} setForm={setForm} t={t} />
-            </SectionCard>
 
             {/* Custom Domain Section */}
             <SectionCard title="Custom Domain" icon={HiOutlineGlobeAlt} defaultOpen={true}>

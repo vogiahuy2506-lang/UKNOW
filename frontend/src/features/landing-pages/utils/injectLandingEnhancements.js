@@ -1,14 +1,15 @@
 import { normalizeLandingLpTrackApiBase } from './normalizeLandingLpTrackApiBase.js';
 
 /**
- * Gỡ khối iframe/script do Founder AI chèn (đồng bộ backend `stripFounderLandingAutoBlocks`).
+ * Gỡ khối script do hệ thống tự chèn (để lần lưu sau idempotent, tránh nhân đôi script).
  */
 export function stripFounderLandingAutoBlocks(html) {
   let out = String(html ?? '');
-  out = out.replace(/<section\s[^>]*data-founder-lp-embed\s*=[^>]*>[\s\S]*?<\/section>\s*/gi, '');
   out = out.replace(/<div\s[^>]*data-founder-lp-injected\s*=[^>]*>[\s\S]*?<\/div>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*\/>\s*/gi, '');
+  out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*>\s*<\/script>\s*/gi, '');
+  out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*\/>\s*/gi, '');
   return out;
 }
 
@@ -36,7 +37,6 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
           return `href=${q}${trackPrefix}${encodeURIComponent(raw)}${q}`;
         });
     let next = rewriteQuoted(attrs);
-    /** Đồng bộ backend: link http(s)/tracking mở tab mới khi không qua lp-track. */
     const hasHttpOrTrackHref =
       /\bhref\s*=\s*["']https?:\/\//i.test(next) || /\bhref\s*=\s*["'][^"']*landing-track\/go/i.test(next);
     if (hasHttpOrTrackHref) {
@@ -49,7 +49,7 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
 }
 
 /**
- * Xem trước gần đúng bản sẽ lưu (strip + rewrite + chỉ inject script tracking) — dùng origin + VITE_API_URL hiện tại.
+ * Xem trước gần đúng bản sẽ lưu (strip + rewrite + inject script) — dùng origin + VITE_API_URL hiện tại.
  */
 export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBase }) {
   const s = String(slug || '').trim().toLowerCase();
@@ -61,77 +61,8 @@ export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBa
 }
 
 /**
- * Sinh khối HTML để admin copy (iframe tách riêng; khi Lưu chỉ server chèn `lp-track.js`).
- *
- * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
- * @returns {{ iframeBlock: string, scriptBlock: string, combined: string }}
- */
-export function getLandingManualInsertSnippets({ slug, frontendOrigin, apiBase }, t = (k) => k) {
-  const s = String(slug || '').trim().toLowerCase();
-  const origin = String(frontendOrigin || '').replace(/\/+$/, '');
-  const api = normalizeLandingLpTrackApiBase(apiBase);
-  if (!s || !origin || !api) {
-    return { iframeBlock: '', scriptBlock: '', combined: '' };
-  }
-  const embedUrl = `${origin}/embed/lead-form?slug=${encodeURIComponent(s)}`;
-  const scriptSrc = `${origin}/lp-track.js`;
-  /** Không bọc section — dán đúng vị trí layout; chiều cao iframe được lp-track.js chỉnh qua postMessage từ trang embed. */
-  const iframeBlock = `<iframe src="${embedUrl}" width="430" height="720" style="border:0;display:block;width:430px;max-width:100%;vertical-align:top;overflow:hidden" title="${t('landingEnhancements.registerFounderAI')}" loading="lazy"></iframe>\n`;
-  const scriptBlock = `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
-  return {
-    iframeBlock,
-    scriptBlock,
-    combined: `${iframeBlock}${scriptBlock}`,
-  };
-}
-
-/**
- * Marker giữ vị trí form đăng ký. Khi render, runtime replace bằng iframe thật
- * (đồng bộ backend `LANDING_FORM_PLACEHOLDER`). Giữ nguyên tên này để tương
- * thích ngược với template/AI Edit đã lưu trong DB.
- */
-export const LP_FORM_MARKER = '<!-- UKNOW_LP_FORM -->';
-
-/**
- * Idempotent: đảm bảo iframe form tồn tại trong HTML.
- *
- * 3 trường hợp:
- *  - HTML đã có iframe thật: giữ nguyên.
- *  - HTML đã có section với marker placeholder: chèn iframe vào section đó.
- *  - HTML không có gì: chèn wrapped mới trước `</body>`.
- */
-export function insertLeadFormIntoHtml(html, { iframeBlock }) {
-  const src = String(html ?? '');
-  const block = String(iframeBlock || '').trim();
-  if (!src || !block) return src;
-  if (src.includes('/embed/lead-form')) return src;
-
-  // Đã có section với marker placeholder → chèn iframe vào section đó.
-  const markerIdx = src.indexOf(LP_FORM_MARKER);
-  if (markerIdx !== -1) {
-    const closeIdx = src.indexOf('</section>', markerIdx);
-    if (closeIdx !== -1) {
-      return src.slice(0, closeIdx) + block + '\n' + src.slice(closeIdx);
-    }
-  }
-
-  // Marker placeholder đặt TRONG `<section>` (nhưng NGOÀI `<h2>`) để cờ này
-  // bị strip pattern của `stripFounderLandingAutoBlocks` xóa cùng section ở
-  // lần save sau (đồng bộ BE), đồng thời vẫn giữ `</h2>` đúng vị trí khi
-  // strip phần sau marker.
-  const wrapped = `\n<section data-founder-lp-embed="1" class="py-8 px-4 max-w-3xl mx-auto">\n  <h2 class="text-xl font-semibold text-gray-900 mb-4">Đăng ký tư vấn</h2>\n  ${LP_FORM_MARKER}\n  ${block}\n</section>\n`;
-
-  if (/<\/body>/i.test(src)) {
-    return src.replace(/<\/body>/i, `${wrapped}</body>`);
-  }
-  if (/<\/html>/i.test(src)) {
-    return src.replace(/<\/html>/i, `${wrapped}</html>`);
-  }
-  return `${src}${wrapped}`;
-}
-
-/**
- * Giống backend `landingHtmlInjection.util.js`: chỉ chèn `lp-track.js` (iframe form dán tay).
+ * Chèn `lp-track.js` vào HTML landing page (tracking view + click).
+ * `founderai-capture.js` đã bị gỡ bỏ — không còn auto-capture form nữa.
  *
  * @param {string} html
  * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
@@ -150,17 +81,17 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
     return out;
   }
 
-  const scriptSrc = `${origin}/lp-track.js`;
+  const trackScriptSrc = `${origin}/lp-track.js`;
 
   const hasTrackScript = /lp-track\.js/i.test(out);
 
-  const scriptBlock = hasTrackScript
+  const trackBlock = hasTrackScript
     ? ''
-    : `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+    : `<script src="${trackScriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
 
-  const injectBlock = `${scriptBlock}`;
-  if (!injectBlock.trim()) return out;
+  if (!trackBlock.trim()) return out;
 
+  const injectBlock = `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n${trackBlock}`;
   if (/<\/body>/i.test(out)) {
     return out.replace(/<\/body>/i, `${injectBlock}</body>`);
   }

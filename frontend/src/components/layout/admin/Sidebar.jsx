@@ -59,7 +59,7 @@ function SubmenuPanel({ item, onClose }) {
             const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
               ? t('sidebar.editCampaign')
               : child.name;
-            const baseClass = `w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all ${
+            const baseClass = `w-full flex items-center gap-2 pl-3 pr-2 py-1.5 text-[12px] rounded-lg transition-all ${
               isActive ? 'bg-orange-50 text-orange-600 font-semibold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`;
 
@@ -163,7 +163,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
         ? t('sidebar.editCampaign')
         : child.name;
-      const baseClassName = `flex items-center gap-2 py-1.5 px-2 text-[13px] rounded-xl transition-colors ${
+      const baseClassName = `flex items-center gap-2 py-1.5 pl-4 pr-2 text-[12px] rounded-lg transition-colors ${
         isActiveChild ? 'text-orange-600 font-semibold bg-orange-50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
       }`;
 
@@ -173,7 +173,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
             key={child.path}
             type="button"
             onClick={() => { navigate('/app/campaigns', { state: { openCreateCampaignModal: true } }); handleNavClose(); }}
-            className={`${baseClassName} w-full text-left`}
+            className={`${baseClassName} w-full text-left pl-4`}
           >
             {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
             <span>{displayName}</span>
@@ -186,7 +186,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
             key={child.path}
             type="button"
             onClick={() => { navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } }); handleNavClose(); }}
-            className={`${baseClassName} w-full text-left`}
+            className={`${baseClassName} w-full text-left pl-4`}
           >
             {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
             <span>{displayName}</span>
@@ -200,7 +200,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
           to={child.path}
           end={child.end}
           onClick={handleNavClose}
-          className={() => baseClassName}
+          className={() => `${baseClassName} pl-4`}
         >
           {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
           <span>{displayName}</span>
@@ -270,7 +270,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
 
                   {/* Inline submenu (expanded sidebar or mobile) */}
                   {item.children && (isOpen || isMobile) && isSubmenuOpen && (
-                    <div className="mt-1 ml-0 pl-0 border-l-0 flex flex-col gap-1">
+                    <div className="mt-1 ml-0 pl-0 border-l border-orange-100 flex flex-col gap-0.5">
                       {renderChildItems(item.children)}
                     </div>
                   )}

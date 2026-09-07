@@ -54,7 +54,35 @@ export function defaultLeadFormConfig() {
       interestArea: { visible: true },
     },
     customFields: [],
+    successRedirect: defaultSuccessRedirect(),
   };
+}
+
+export const MIN_SUCCESS_REDIRECT_DELAY_MS = 0;
+export const MAX_SUCCESS_REDIRECT_DELAY_MS = 30000;
+const DEFAULT_SUCCESS_REDIRECT_DELAY_MS = 1500;
+
+export function defaultSuccessRedirect() {
+  return {
+    enabled: false,
+    url: '',
+    delayMs: DEFAULT_SUCCESS_REDIRECT_DELAY_MS,
+    openInNewTab: false,
+  };
+}
+
+function normalizePersistedSuccessRedirect(raw) {
+  const fallback = defaultSuccessRedirect();
+  if (!isPlainObject(raw)) return fallback;
+  const enabled = raw.enabled === true;
+  const url = asTrimmed(raw.url, 2000);
+  const delayRaw = Number(raw.delayMs);
+  const delayMs =
+    Number.isFinite(delayRaw) && delayRaw >= MIN_SUCCESS_REDIRECT_DELAY_MS
+      ? Math.min(delayRaw, MAX_SUCCESS_REDIRECT_DELAY_MS)
+      : fallback.delayMs;
+  const openInNewTab = raw.openInNewTab === true;
+  return { enabled, url, delayMs, openInNewTab };
 }
 
 function configError(message, statusCode = 400) {
@@ -113,6 +141,7 @@ export function normalizePersistedLeadForm(customConfigOrLeadForm) {
       interestArea: { visible: interestVisible },
     },
     customFields,
+    successRedirect: normalizePersistedSuccessRedirect(leadForm.successRedirect),
   };
 }
 
@@ -187,6 +216,12 @@ export function toPublicLeadFormConfig(customConfigOrLeadForm) {
         labelEn: opt.labelEn,
       })),
     })),
+    successRedirect: {
+      enabled: Boolean(normalized.successRedirect.enabled),
+      url: normalized.successRedirect.url || '',
+      delayMs: normalized.successRedirect.delayMs,
+      openInNewTab: Boolean(normalized.successRedirect.openInNewTab),
+    },
   };
 }
 
@@ -340,7 +375,42 @@ export function validateAdminLeadFormConfig(input, opts = {}) {
       interestArea: { visible: interestVisible },
     },
     customFields,
+    successRedirect: normalizeAdminSuccessRedirectInput(input.successRedirect),
   };
+}
+
+function normalizeAdminSuccessRedirectInput(raw) {
+  const fallback = defaultSuccessRedirect();
+  if (raw == null) return fallback;
+  if (!isPlainObject(raw)) {
+    throw configError('successRedirect không hợp lệ');
+  }
+  const enabled = raw.enabled === true;
+  const url = asTrimmed(raw.url, 2000);
+  if (enabled && !url) {
+    throw configError('URL chuyển trang sau khi đăng ký là bắt buộc khi bật successRedirect');
+  }
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw configError('URL chuyển trang phải bắt đầu bằng http:// hoặc https://');
+      }
+    } catch (e) {
+      if (e?.statusCode) throw e;
+      throw configError('URL chuyển trang không hợp lệ');
+    }
+  }
+  const delayRaw = Number(raw.delayMs);
+  let delayMs = fallback.delayMs;
+  if (raw.delayMs != null) {
+    if (!Number.isFinite(delayRaw) || delayRaw < MIN_SUCCESS_REDIRECT_DELAY_MS) {
+      throw configError('delayMs phải là số không âm');
+    }
+    delayMs = Math.min(delayRaw, MAX_SUCCESS_REDIRECT_DELAY_MS);
+  }
+  const openInNewTab = raw.openInNewTab === true;
+  return { enabled, url, delayMs, openInNewTab };
 }
 
 /**

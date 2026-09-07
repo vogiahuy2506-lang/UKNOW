@@ -94,35 +94,6 @@
   );
 
   // ============================================================
-  // 3. RESIZE HANDLER cho iframe embed form
-  // ============================================================
-  /**
-   * Form nhúng `/embed/lead-form` gửi chiều cao thật qua postMessage — chỉnh iframe để không bị scrollbar dọc.
-   */
-  window.addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.type !== 'uknow-lp-embed-resize') return;
-
-    var h = Number(d.height);
-    if (!isFinite(h) || h < 80 || h > 25000) return;
-
-    var iframes = document.getElementsByTagName('iframe');
-    for (var i = 0; i < iframes.length; i++) {
-      var f = iframes[i];
-      var src = String(f.getAttribute('src') || '');
-      if (src.indexOf('embed/lead-form') === -1) continue;
-
-      try {
-        if (f.contentWindow === ev.source) {
-          f.style.height = Math.ceil(h) + 'px';
-          f.style.overflow = 'hidden';
-          break;
-        }
-      } catch (e) {}
-    }
-  });
-
-  // ============================================================
   // KHỞI TẠO - Đếm view khi page load xong
   // ============================================================
   if (document.readyState === 'loading') {

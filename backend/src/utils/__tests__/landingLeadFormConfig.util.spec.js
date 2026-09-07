@@ -204,6 +204,112 @@ describe('landingLeadFormConfig.util', () => {
     expect(applied.customFields[0].type).toBe('text');
     expect(applied.customFields[0].labelVi).toBe('Quy mô');
   });
+
+  describe('successRedirect (sau khi submit)', () => {
+    it('defaultLeadFormConfig có successRedirect mặc định disabled', () => {
+      const d = defaultLeadFormConfig();
+      expect(d.successRedirect).toEqual({
+        enabled: false,
+        url: '',
+        delayMs: 1500,
+        openInNewTab: false,
+      });
+    });
+
+    it('normalizePersistedLeadForm giữ successRedirect hợp lệ từ leadForm', () => {
+      const out = normalizePersistedLeadForm({
+        leadForm: {
+          version: 1,
+          fixedFields: { occupation: { visible: true }, interestArea: { visible: true } },
+          customFields: [],
+          successRedirect: { enabled: true, url: 'https://example.com/thank-you', delayMs: 2000, openInNewTab: true },
+        },
+      });
+      expect(out.successRedirect).toEqual({
+        enabled: true,
+        url: 'https://example.com/thank-you',
+        delayMs: 2000,
+        openInNewTab: true,
+      });
+    });
+
+    it('normalizePersistedLeadForm fallback default khi successRedirect malformed', () => {
+      const out = normalizePersistedLeadForm({
+        leadForm: {
+          version: 1,
+          fixedFields: {},
+          customFields: [],
+          // url là số → coerce thành chuỗi, không reset về rỗng.
+          // delayMs âm → fallback default.
+          // enabled không phải boolean → false.
+          successRedirect: { enabled: 'yes', url: 123, delayMs: -50, openInNewTab: 'no' },
+        },
+      });
+      expect(out.successRedirect.enabled).toBe(false);
+      expect(out.successRedirect.url).toBe('123');
+      expect(out.successRedirect.delayMs).toBe(1500);
+      expect(out.successRedirect.openInNewTab).toBe(false);
+    });
+
+    it('toPublicLeadFormConfig expose successRedirect với shape chuẩn', () => {
+      const dto = toPublicLeadFormConfig({
+        leadForm: {
+          version: 1,
+          fixedFields: {},
+          customFields: [],
+          successRedirect: { enabled: true, url: 'https://lp.example.com/x', delayMs: 3000, openInNewTab: false },
+        },
+      });
+      expect(dto.successRedirect).toEqual({
+        enabled: true,
+        url: 'https://lp.example.com/x',
+        delayMs: 3000,
+        openInNewTab: false,
+      });
+    });
+
+    it('validateAdminLeadFormConfig reject khi enabled=true nhưng url rỗng', () => {
+      expect(() => validateAdminLeadFormConfig({
+        successRedirect: { enabled: true, url: '' },
+      })).toThrow(/URL chuyển trang/i);
+    });
+
+    it('validateAdminLeadFormConfig reject khi url không phải http/https', () => {
+      expect(() => validateAdminLeadFormConfig({
+        successRedirect: { enabled: true, url: 'javascript:alert(1)' },
+      })).toThrow(/http/i);
+    });
+
+    it('validateAdminLeadFormConfig reject khi delayMs âm', () => {
+      expect(() => validateAdminLeadFormConfig({
+        successRedirect: { enabled: true, url: 'https://x.com', delayMs: -1 },
+      })).toThrow(/delayMs/i);
+    });
+
+    it('validateAdminLeadFormConfig cap delayMs tối đa 30s', () => {
+      const out = validateAdminLeadFormConfig({
+        successRedirect: { enabled: true, url: 'https://x.com', delayMs: 99999 },
+      });
+      expect(out.successRedirect.delayMs).toBe(30000);
+    });
+
+    it('mergeLeadFormIntoCustomConfig preserve successRedirect khi input=undefined', () => {
+      const merged = mergeLeadFormIntoCustomConfig(
+        {
+          leadForm: {
+            version: 1,
+            fixedFields: {},
+            customFields: [],
+            successRedirect: { enabled: true, url: 'https://x.com', delayMs: 2500, openInNewTab: false },
+          },
+        },
+        undefined
+      );
+      expect(merged.leadForm.successRedirect.enabled).toBe(true);
+      expect(merged.leadForm.successRedirect.url).toBe('https://x.com');
+      expect(merged.leadForm.successRedirect.delayMs).toBe(2500);
+    });
+  });
 });
 
 describe('landingLeadCustomFilters.util', () => {

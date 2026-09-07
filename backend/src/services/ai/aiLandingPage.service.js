@@ -4,7 +4,6 @@ import { normalizeAssistantLocale } from '../../utils/assistantLocale.util.js';
 import {
   extractHtmlFromModelText,
   validateEditHtmlOutput,
-  LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
 } from '../../utils/landingEditGuard.util.js';
 
@@ -39,7 +38,6 @@ class AiLandingPageService {
   }) {
     const locale = normalizeAssistantLocale(contentLocale, 'vi');
     const htmlLang = locale === 'en' ? 'en' : 'vi';
-    const formHeading = locale === 'en' ? 'Sign up' : 'Đăng ký';
     const businessCtx = await businessProfileService.getContextForLandingAi(userId, prompt);
     const hasBusinessCtx = String(businessCtx || '').trim().length > 0;
     const hasBrief = String(landingBriefContext || '').trim().length > 0;
@@ -81,11 +79,8 @@ QUY TẮC KỸ THUẬT (bắt buộc):
    - <script src="https://cdn.tailwindcss.com"></script>
 4) Styling — NGHIÊM CẤM TUYỆT ĐỐI dùng thuộc tính style="..." inline trên BẤT KỲ thẻ HTML nào. KHÔNG được viết style="color:...", style="background-color:...", style="font-size:...", style="padding:...", style="margin:..." hay bất kỳ thuộc tính style inline nào. CHỈ được dùng class Tailwind utility (ví dụ class="bg-orange-500 text-white px-6 py-3"). Không dùng <style> block lớn; chỉ được vài dòng cho keyframe animation nếu thật sự cần.
 5) Không dùng JavaScript ngoài script Tailwind CDN ở trên (không thư viện khác, không inline script logic).
-6) Trang phải có vùng đăng ký lead: tại vị trí form (ví dụ sau khối CTA chính), chèn ĐÚNG một dòng comment HTML sau, đứng một mình giữa các thẻ cha phù hợp (ví dụ trong <section>):
-   ${LANDING_FORM_PLACEHOLDER}
-   Không bọc comment trong <script>. Không thay nội dung comment — giữ nguyên ký tự.
-7) Toàn bộ chữ hiển thị phải theo CUSTOMER_CONTENT_LANGUAGE ở trên. Link ngoài dùng https, ngắn gọn.
-8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, dùng gradient/icon Unicode hoặc bỏ ảnh.
+6) Toàn bộ chữ hiển thị phải theo CUSTOMER_CONTENT_LANGUAGE ở trên. Link ngoài dùng https, ngắn gọn.
+7) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, dùng gradient/icon Unicode hoặc bỏ ảnh.
 
 Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 {"title":"...","html":"<!DOCTYPE html>..."}`;
@@ -157,14 +152,6 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
-    if (!html.includes(LANDING_FORM_PLACEHOLDER)) {
-      if (/<\/body>/i.test(html)) {
-        html = html.replace(/<\/body>/i, `  <section class="py-10 px-4 max-w-3xl mx-auto">\n    <h2 class="text-xl font-semibold text-gray-900 mb-4">${formHeading}</h2>\n    ${LANDING_FORM_PLACEHOLDER}\n  </section>\n</body>`);
-      } else {
-        html = `${html}\n<!-- appended -->\n<section class="py-10 px-4">${LANDING_FORM_PLACEHOLDER}</section>`;
-      }
-    }
-
     return { title, html };
   }
 
@@ -216,7 +203,7 @@ ${contentLanguageInstruction(locale)}
 
 QUY TẮC CHỈNH SỬA TỐI QUAN TRỌNG:
 1) Dưới đây là HTML hiện tại của trang. Nhiệm vụ của bạn là CHỈ thay đổi đúng phần người dùng yêu cầu.
-2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và comment "${LANDING_FORM_PLACEHOLDER}" (hoặc thẻ iframe form nhúng "/embed/lead-form/..."). Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
+2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind. Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
 3) Trả về JSON { "title": "...", "html": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích.
 
 QUY TẮC KỸ THUẬT:
