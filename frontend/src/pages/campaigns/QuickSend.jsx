@@ -159,6 +159,7 @@ const QuickSend = () => {
   const [isLoadingUidSearch, setIsLoadingUidSearch] = useState(false);
   const [isLoadingUidContacts, setIsLoadingUidContacts] = useState(false);
   const zaloFriendsMapRef = useRef(new Map()); // uid -> friend object (cả trang đã tải)
+  const resolvedForAccountIdRef = useRef(null); // id tài khoản Zalo lần đối chiếu gần nhất
   const uidSearchTimerRef = useRef(null);
 
   // Sender accounts state
@@ -359,9 +360,16 @@ const QuickSend = () => {
   const finalRecipients = useCallback(() => {
     if (selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID) {
       // Chỉ những dòng người dùng đã tick (UID không có trong danh bạ mặc định KHÔNG tick — Bẫy 4).
+      // Tên hiển thị ở bước Xem lại KHÔNG được rơi xuống UID trần: dòng chưa đối chiếu được
+      // (name: null, dù đã tick thủ công) vẫn phải hiện nhãn "không có trong danh bạ", không
+      // phải chuỗi số — Bẫy 4 áp dụng cho MỌI nơi hiển thị, không chỉ bước chọn người nhận.
       return uidRows
         .filter((r) => r.checked)
-        .map((r) => ({ email: r.uid, phone: r.uid, name: r.name || r.uid }));
+        .map((r) => ({
+          email: r.uid,
+          phone: r.uid,
+          name: r.name || t('quickSend.uidNotInContacts', { last4: r.uid.slice(-4) }),
+        }));
     }
     const manualList = (selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones)
       .split(/[\n,]/)
@@ -369,7 +377,7 @@ const QuickSend = () => {
       .filter((s) => s && (selectedChannel === CHANNEL_TYPES.EMAIL ? s.includes('@') : /^\d+$/.test(s)));
 
     return manualList.map((contact) => ({ email: contact, phone: contact, name: contact }));
-  }, [selectedChannel, manualEmails, manualPhones, zaloRecipientType, uidRows]);
+  }, [selectedChannel, manualEmails, manualPhones, zaloRecipientType, uidRows, t]);
 
   // Check if has manual recipients
   const hasManualRecipients = () => {
@@ -413,6 +421,14 @@ const QuickSend = () => {
   useEffect(() => {
     if (selectedChannel !== CHANNEL_TYPES.ZALO || zaloRecipientType !== ZALO_RECIPIENT_TYPES.UID) return;
     if (!selectedZaloAccount?.id) return;
+    // Đổi tài khoản gửi (khác id trước đó) → danh bạ khác hẳn, mọi dòng đã đối chiếu (tên,
+    // trạng thái "có/không trong danh bạ") thuộc về tài khoản CŨ không còn đúng nghĩa. Reset
+    // về chưa đối chiếu (inContacts: null) để load lại đúng danh bạ tài khoản mới, tránh hiện
+    // nhãn/tick sai chủ (Bẫy 4 áp cho cả trường hợp đổi tài khoản, không chỉ lần nạp đầu).
+    if (resolvedForAccountIdRef.current != null && resolvedForAccountIdRef.current !== selectedZaloAccount.id) {
+      setUidRows((prev) => prev.map((row) => ({ ...row, inContacts: null, checked: false, name: null })));
+    }
+    resolvedForAccountIdRef.current = selectedZaloAccount.id;
     loadZaloContactsAndResolve(selectedZaloAccount.id);
   }, [selectedChannel, zaloRecipientType, selectedZaloAccount, loadZaloContactsAndResolve]);
 
@@ -886,6 +902,7 @@ const QuickSend = () => {
     setUidManualInput('');
     setUidSearch('');
     setUidSearchResults([]);
+    resolvedForAccountIdRef.current = null;
     setSendResult(null);
     setFailedRecipients([]);
   };
@@ -1155,7 +1172,7 @@ const QuickSend = () => {
                   {/* Thêm từ danh bạ (tìm theo tên) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {t('quickSend.zaloRecipientTypeUid')}
+                      {t('quickSend.uidAddFromContactsLabel')}
                     </label>
                     <input
                       type="text"
@@ -1194,7 +1211,7 @@ const QuickSend = () => {
                   {/* Dán tay UID */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {t('quickSend.uidManualAddPlaceholder')}
+                      {t('quickSend.uidManualAddLabel')}
                     </label>
                     <textarea
                       value={uidManualInput}
