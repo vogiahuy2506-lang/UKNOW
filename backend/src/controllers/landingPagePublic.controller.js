@@ -188,6 +188,32 @@ class LandingPagePublicController {
       return res.status(status).json({ success: false, message });
     }
   }
+
+  /**
+   * GET /api/public/landing-pages/:slug/form-config
+   *
+   * Trả lead form config (DTO hẹp) cho landing đã publish — không lộ raw custom_config.
+   * Trả 404 nếu slug không tồn tại hoặc chưa publish.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async getPublishedFormConfig(req, res) {
+    try {
+      const slug = String(req.params.slug || '').trim().toLowerCase();
+      const data = await landingPagePublicService.getPublishedFormConfig(slug);
+      if (!data) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy landing page hoặc chưa được xuất bản',
+        });
+      }
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('[LandingPagePublicController.getPublishedFormConfig]', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
 }
 
 

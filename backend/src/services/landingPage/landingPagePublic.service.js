@@ -1,6 +1,7 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
 import { isValidPublicLandingRedirectUrl } from '../../utils/landingRedirectTarget.util.js';
+import { toPublicLeadFormConfig } from '../../utils/landingLeadFormConfig.util.js';
 import landingPageDomainService from './landingPageDomain.service.js';
 
 /**
@@ -203,6 +204,21 @@ class LandingPagePublicService {
     });
 
     return finalUrl;
+  }
+
+  /**
+   * Lấy lead form config (DTO hẹp) cho landing đã publish. Trả `null` nếu chưa publish / không tồn tại.
+   * Không lộ raw `custom_config` — chỉ trả cấu hình đã chuẩn hoá.
+   *
+   * @param {string} slug
+   * @returns {Promise<{ leadFormConfig: object }|null>}
+   */
+  async getPublishedFormConfig(slug) {
+    const row = await landingPageRepository.findPublishedBySlug(slug);
+    if (!row) return null;
+    return {
+      leadFormConfig: toPublicLeadFormConfig(row.customConfig),
+    };
   }
 }
 
