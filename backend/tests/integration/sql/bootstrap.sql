@@ -2871,3 +2871,103 @@ ALTER TABLE usage_logs
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ul_quota_reservation_id
   ON usage_logs (quota_reservation_id)
   WHERE quota_reservation_id IS NOT NULL;
+
+-- ─── Migration 181: affiliate_revenue_events ─────────────────────────────
+CREATE TABLE IF NOT EXISTS affiliate_revenue_events (
+  id                BIGSERIAL PRIMARY KEY,
+  referrer_user_id  BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  buyer_user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  order_id          INTEGER       NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+  amount            NUMERIC(12,2) NOT NULL,
+  month_key         CHAR(7)       NOT NULL,
+  created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_are_referrer_month ON affiliate_revenue_events (referrer_user_id, month_key);
+CREATE INDEX IF NOT EXISTS idx_are_buyer_user_id  ON affiliate_revenue_events (buyer_user_id);
+
+-- ─── Migration 182: campaign_run_recipient_steps_backup_182 ─────────────
+CREATE TABLE IF NOT EXISTS campaign_run_recipient_steps_backup_182 (
+  id                  BIGSERIAL PRIMARY KEY,
+  migration_batch_id  UUID NOT NULL,
+  source_id           BIGINT NOT NULL,
+  id_run              BIGINT,
+  source_row          JSONB NOT NULL,
+  backed_up_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── Migration 183: affiliate_periods + affiliate_ledger ────────────────
+CREATE TABLE IF NOT EXISTS affiliate_periods (
+  id                BIGSERIAL PRIMARY KEY,
+  referrer_user_id  BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  month_key         CHAR(7)       NOT NULL,
+  gross_revenue     NUMERIC(12,2) NOT NULL,
+  tier_level        SMALLINT      NOT NULL,
+  rate_percent      SMALLINT      NOT NULL,
+  commission_amount NUMERIC(12,2) NOT NULL,
+  closed_at         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  UNIQUE (referrer_user_id, month_key)
+);
+
+CREATE TABLE IF NOT EXISTS affiliate_ledger (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  entry_type  VARCHAR(20)   NOT NULL CHECK (entry_type IN ('commission','withdrawal','adjustment')),
+  amount      NUMERIC(12,2) NOT NULL,
+  ref_type    VARCHAR(20),
+  ref_id      BIGINT,
+  note        TEXT,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_ledger_user ON affiliate_ledger (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_affiliate_periods_month ON affiliate_periods (month_key);
+
+-- ─── Migration 184: affiliate_withdrawals ───────────────────────────────
+CREATE TABLE IF NOT EXISTS affiliate_withdrawals (
+  id                    BIGSERIAL PRIMARY KEY,
+  user_id               BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  partner_type          VARCHAR(10)   NOT NULL DEFAULT 'personal'
+    CHECK (partner_type IN ('personal', 'company')),
+  amount_gross          NUMERIC(12,2) NOT NULL,
+  tax_amount            NUMERIC(12,2) NOT NULL,
+  amount_net            NUMERIC(12,2) NOT NULL,
+  full_name             VARCHAR(255)  NOT NULL,
+  tax_code              VARCHAR(20),
+  bank_name             VARCHAR(255)  NOT NULL,
+  bank_account_number   VARCHAR(50)   NOT NULL,
+  bank_account_name     VARCHAR(255)  NOT NULL,
+  id_card_number_enc    TEXT,
+  id_card_issued_date   DATE,
+  id_card_issued_place  VARCHAR(255),
+  company_name          VARCHAR(255),
+  company_address       TEXT,
+  invoice_reference     VARCHAR(100),
+  status                VARCHAR(20)   NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','paid','rejected')),
+  requested_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  processed_at          TIMESTAMPTZ,
+  processed_by          BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  note                  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_user
+  ON affiliate_withdrawals (user_id, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_status
+  ON affiliate_withdrawals (status, requested_at);
+
+-- ─── Migration 185: custom_chatbots.response_style ──────────────────────
+ALTER TABLE custom_chatbots
+  ADD COLUMN IF NOT EXISTS response_style VARCHAR(20) DEFAULT 'friendly';
+
+-- ─── Migration 187: user_consents (Nghị định 330/2026/NĐ-CP) ──────────
+CREATE TABLE IF NOT EXISTS user_consents (
+  id               BIGSERIAL PRIMARY KEY,
+  user_id          BIGINT       NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  purpose          VARCHAR(40)  NOT NULL,
+  granted          BOOLEAN      NOT NULL,
+  document_version VARCHAR(20)  NOT NULL,
+  document_hash    CHAR(64),
+  source           VARCHAR(30)  NOT NULL,
+  ip_address       VARCHAR(64),
+  user_agent       TEXT,
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_consents_user_purpose ON user_consents (user_id, purpose, created_at DESC);
