@@ -10,7 +10,6 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
-import SaveTemplateModal from './SaveTemplateModal.jsx';
 
 /**
  * Block definitions - each block has a default HTML template
@@ -312,7 +311,6 @@ export default function VisualBlockEditor({
   const [hoveredBlockId, setHoveredBlockId] = useState(null);
   const [expandedBlockId, setExpandedBlockId] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const canvasRef = useRef(null);
 
   // Toggle expanded state for a block
@@ -354,11 +352,7 @@ export default function VisualBlockEditor({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (showTemplateModal) {
-          setShowTemplateModal(false);
-        } else {
-          onClose?.();
-        }
+        onClose?.();
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
@@ -369,7 +363,7 @@ export default function VisualBlockEditor({
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, blocks, showTemplateModal]);
+  }, [isOpen, blocks]);
 
   const selectedBlock = blocks.find(b => b.id === selectedBlockId);
 
@@ -546,7 +540,7 @@ ${blocksHtml}
         <div className="flex items-center gap-3">
           {onSaveAsTemplate && blocks.length > 0 && (
             <button
-              onClick={() => setShowTemplateModal(true)}
+              onClick={onSaveAsTemplate}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors text-sm"
             >
               <HiOutlineTemplate className="w-4 h-4" />
@@ -913,17 +907,6 @@ ${blocksHtml}
         <span className="mx-3">|</span>
         <span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded mr-1">Esc</span> để đóng
       </div>
-
-      {/* Save as Template Modal */}
-      <SaveTemplateModal
-        isOpen={showTemplateModal}
-        onClose={() => setShowTemplateModal(false)}
-        htmlContent={generateHtml()}
-        landingPageTitle={`Visual Editor (${blocks.length} blocks)`}
-        onSuccess={() => {
-          toast.success('Đã lưu template thành công');
-        }}
-      />
     </div>,
     document.body
   );

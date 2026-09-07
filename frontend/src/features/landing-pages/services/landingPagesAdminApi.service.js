@@ -34,6 +34,16 @@ export async function fetchLandingTemplateById(id) {
 }
 
 /**
+ * Lấy templates của user hiện tại.
+ * 
+ * @returns {Promise<object[]>}
+ */
+export async function fetchMyLandingTemplates() {
+  const { data } = await api.get('/landing-templates/my');
+  return data?.success ? (data.data || []) : [];
+}
+
+/**
  * Lấy HTML structure của template.
  * 
  * @param {number} id
@@ -204,6 +214,18 @@ export async function postLandingCustomDomainProvisionSsl(landingPageId) {
 export async function deleteLandingCustomDomain(landingPageId) {
   const { data } = await api.delete(`/admin/landing-pages/${landingPageId}/custom-domain`);
   return data;
+}
+
+/**
+ * Tạo template landing page mới.
+ *
+ * @param {object} body - { name, description, category, htmlContent, thumbnailUrl, isPublic }
+ * @returns {Promise<object>}
+ */
+export async function createLandingTemplate(body) {
+  const { data } = await api.post('/landing-templates', body);
+  if (!data?.success || !data?.data) throw new Error(data?.message || 'Không tạo được template');
+  return data.data;
 }
 
 /**

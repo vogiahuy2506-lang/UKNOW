@@ -8,6 +8,7 @@ import {
   fetchLandingTemplates,
   fetchLandingTemplateCategories,
   fetchLandingTemplateHtml,
+  fetchMyLandingTemplates,
 } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
@@ -30,7 +31,7 @@ function useStableI18n() {
  *  - onApply: (html: string, title: string) => void
  *  - onClose: () => void
  */
-export default function TemplateGalleryModal({ open, currentHtml, onApply, onClose }) {
+export default function TemplateGalleryModal({ open, onApply, onClose }) {
   const tc = useStableI18n();
   const [activeTab, setActiveTab] = useState('public'); // 'public' | 'my'
   const [templates, setTemplates] = useState([]);
@@ -73,10 +74,8 @@ export default function TemplateGalleryModal({ open, currentHtml, onApply, onClo
 
   const fetchMyTemplates = useCallback(async () => {
     try {
-      const res = await fetch('/api/landing-templates/my');
-      const json = await res.json();
-      const arr = json?.success ? (json.data || []) : [];
-      setMyTemplates(arr);
+      const arr = await fetchMyLandingTemplates();
+      setMyTemplates(Array.isArray(arr) ? arr : []);
     } catch (e) {
       console.warn('[TemplateGallery] Failed to fetch my templates:', e);
     }

@@ -1,5 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
-import { useState } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 
 /**
  * Hook cho phép chọn trực tiếp các phần tử HTML bên trong iframe preview.

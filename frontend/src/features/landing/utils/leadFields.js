@@ -18,7 +18,7 @@ export function getLeadFullName(row) {
 /**
  * Lấy initials cho avatar (dùng nếu cần).
  */
-export function getLeadInitials(row, locale = 'vi') {
+export function getLeadInitials(row) {
   const name = getLeadFullName(row);
   if (!name) return '?';
   const parts = name.split(/\s+/).filter(Boolean);

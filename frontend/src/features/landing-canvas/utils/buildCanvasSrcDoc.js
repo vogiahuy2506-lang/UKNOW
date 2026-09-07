@@ -51,7 +51,7 @@ function buildEmptyHint(text) {
  * @param {string} [params.emptyHint] Nội dung placeholder khi chưa có HTML (nên truyền từ i18n)
  * @returns {string} srcDoc HTML hoàn chỉnh
  */
-export function buildCanvasSrcDoc({ html, title, slug, publicUrl, emptyHint }) {
+export function buildCanvasSrcDoc({ html, title, slug, emptyHint }) {
   const rawTrim = String(html || '').trim();
   const trimmedSlug = String(slug || '').trim().toLowerCase();
 

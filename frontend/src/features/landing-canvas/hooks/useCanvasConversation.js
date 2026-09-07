@@ -17,7 +17,7 @@ function makeIntents(tc) {
       test: (p) => /(đổi\s*tên|đặt\s*tên|sửa\s*tên|rename\s*(?:thành|to)?|set\s*title)/i.test(p),
       extract: (p) => {
         const m =
-          p.match(/(?:đổi\s*tên|đặt\s*tên|sửa\s*tên|rename\s*(?:thành|to)?|set\s*title)\s*[-:]?\s*[""']?(.+?)[""']?$/i) ||
+          p.match(/(?:đổi\s*tên|đặt\s*tên|sửa\s*tên|rename\s*(?:thành|to)?|set\s*title)\s*[:-]?\s*[""']?(.+?)[""']?$/i) ||
           p.match(/thành\s*[""']?(.+?)[""']?$/i) ||
           p.match(/to\s*[""']?(.+?)[""']?$/i);
         return m ? m[1].trim() : null;

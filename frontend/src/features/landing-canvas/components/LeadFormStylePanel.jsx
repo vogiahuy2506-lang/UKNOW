@@ -29,7 +29,7 @@ import { useI18n } from '../../../i18n';
  *  - nameMode: 'split' | 'single' (từ LeadFormSettingsPanel)
  *  - onNameModeChange: callback để cập nhật nameMode ở parent
  */
-export default function LeadFormStylePanel({ form, setForm, slug, editingId, nameMode, onNameModeChange }) {
+export default function LeadFormStylePanel({ form, setForm, slug, editingId, nameMode }) {
   const tc = useI18n('landingCanvas.leadFormStylePanel');
   const [copied, setCopied] = useState(false);
 
@@ -226,31 +226,6 @@ function RangeRow({ label, value, min, max, step, unit, onChange }) {
           {value}
           {unit || ''}
         </span>
-      </div>
-    </div>
-  );
-}
-
-function SegmentRow({ label, value, options, onChange }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <label className="text-[16px] text-gray-700 flex-1">{label}</label>
-      <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-100">
-        {options.map((opt) => {
-          const active = opt.value === value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onChange(opt.value)}
-              className={`px-4 py-2.5 rounded-md text-[14px] font-medium transition-colors ${
-                active ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
       </div>
     </div>
   );

@@ -125,7 +125,6 @@
   // ============================================================
   // KHỞI TẠO - Đếm view khi page load xong
   // ============================================================
->>>>>>> Stashed changes
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', trackView);
   } else {

@@ -3,6 +3,38 @@ export const MAX_CUSTOM_FIELDS = 20;
 export const CUSTOM_FIELD_TYPES = ['text', 'textarea', 'select', 'radio', 'checkbox'];
 export const CUSTOM_FIELD_KEY_RE = /^cf_[a-z0-9_]{4,40}$/;
 
+export const LEAD_FORM_THEME_DEFAULTS = Object.freeze({
+  primary: '#f97316',
+  accent: '#ea580c',
+  bg: '#ffffff',
+  text: '#1f2937',
+  border: '#e5e7eb',
+  radius: 12,
+  titleText: 'Đăng ký nhận tư vấn',
+  subtitleText: 'Điền thông tin — đội ngũ sẽ liên hệ bạn trong 24h.',
+  buttonText: 'Đăng ký ngay →',
+});
+
+export function defaultLeadFormTheme() {
+  return { ...LEAD_FORM_THEME_DEFAULTS };
+}
+
+export function normalizeLeadFormTheme(raw) {
+  const defaults = LEAD_FORM_THEME_DEFAULTS;
+  if (!raw || typeof raw !== 'object') return { ...defaults };
+  const out = { ...defaults };
+  for (const key of Object.keys(defaults)) {
+    if (raw[key] === undefined || raw[key] === null) continue;
+    if (key === 'radius') {
+      const n = Number(raw[key]);
+      out.radius = Number.isFinite(n) ? Math.max(0, Math.min(24, Math.round(n))) : defaults.radius;
+    } else if (typeof defaults[key] === 'string') {
+      out[key] = String(raw[key]).trim().slice(0, 200) || defaults[key];
+    }
+  }
+  return out;
+}
+
 export function defaultLeadFormConfig() {
   return {
     version: LEAD_FORM_CONFIG_VERSION,
@@ -11,6 +43,7 @@ export function defaultLeadFormConfig() {
       interestArea: { visible: true },
     },
     customFields: [],
+    theme: defaultLeadFormTheme(),
   };
 }
 
@@ -49,6 +82,7 @@ export function normalizeLeadFormConfig(raw) {
         labelEn: o.labelEn ? String(o.labelEn).trim() : '',
       })) : [],
     })),
+    theme: normalizeLeadFormTheme(leadForm.theme),
   };
 }
 

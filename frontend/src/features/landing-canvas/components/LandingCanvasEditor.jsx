@@ -1,17 +1,19 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import LandingCanvasLayout from './LandingCanvasLayout.jsx';
 import SettingsModal from './SettingsModal.jsx';
-import BlockEditorModal from './BlockEditorModal.jsx';
-import TemplateGalleryModal from './TemplateGalleryModal.jsx';
-import VersionHistoryModal from './VersionHistoryModal.jsx';
 import { useI18n } from '../../../i18n';
 import {
   createLandingPageAdmin,
-  createLandingTemplate,
   updateLandingPageAdmin,
 } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import { prepareLeadFormConfigForSave } from '../../landing-pages/utils/landingLeadFormConfig.js';
+// Import components từ GitHub (landing-pages)
+import TemplateGallery from '../../landing-pages/components/TemplateGallery.jsx';
+import SaveTemplateModal from '../../landing-pages/components/SaveTemplateModal.jsx';
+import VisualBlockEditor from '../../landing-pages/components/VisualBlockEditor.jsx';
+import LandingVersionModal from '../../landing-pages/components/LandingVersionModal.jsx';
 
 /**
  * Main canvas editor component.
@@ -34,6 +36,7 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
   const [blockEditorOpen, setBlockEditorOpen] = useState(false);
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
 
   const handleOpenSettingTab = useCallback((tab) => {
     setActiveModalTab((cur) => (cur === tab ? null : tab));
@@ -133,52 +136,14 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
     setVersionHistoryOpen(true);
   }, [editingId]);
 
-  // Save directly as template - no modal
-  const handleOpenSaveTemplate = useCallback(async () => {
+  // Open save template modal
+  const handleOpenSaveTemplate = useCallback(() => {
     if (!form?.htmlContent?.trim()) {
       toast.error('Không có nội dung để lưu');
       return;
     }
-    try {
-      await createLandingTemplate({
-        name: form.title || 'Landing Page Template',
-        description: '',
-        htmlStructure: form.htmlContent,
-      });
-      toast.success('Đã lưu vào gallery');
-    } catch (e) {
-      toast.error(e?.message || 'Không thể lưu template');
-    }
+    setSaveTemplateOpen(true);
   }, [form]);
-
-  // Callbacks khi modal trả kết quả
-  const handleTemplateApply = useCallback(
-    (html, title) => {
-      setForm((prev) => ({
-        ...prev,
-        htmlContent: html,
-        ...(title ? { title } : {}),
-      }));
-      toast.success(tc('templateApplied'));
-    },
-    [setForm]
-  );
-
-  const handleBlockEditorApply = useCallback(
-    (html) => {
-      setForm((prev) => ({ ...prev, htmlContent: html }));
-      toast.success(tc('blockEditorUpdated'));
-    },
-    [setForm]
-  );
-
-  const handleVersionRestore = useCallback(
-    (html) => {
-      setForm((prev) => ({ ...prev, htmlContent: html }));
-      toast.success(tc('versionRestored'));
-    },
-    [setForm]
-  );
 
   return (
     <>
@@ -207,26 +172,62 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
         editingId={editingId}
       />
 
-      <BlockEditorModal
-        open={blockEditorOpen}
-        html={form?.htmlContent || ''}
-        onApply={handleBlockEditorApply}
+      {/* Visual Block Editor Modal */}
+      <VisualBlockEditor
+        isOpen={blockEditorOpen}
         onClose={() => setBlockEditorOpen(false)}
+        initialHtml={form?.htmlContent || ''}
+        onSave={(result) => {
+          setForm((prev) => ({ ...prev, htmlContent: result.html }));
+          toast.success(tc('blockEditorUpdated'));
+          setBlockEditorOpen(false);
+        }}
+        onSaveAsTemplate={() => {
+          setBlockEditorOpen(false);
+          handleOpenSaveTemplate();
+        }}
       />
 
-      <TemplateGalleryModal
-        open={templateGalleryOpen}
-        currentHtml={form?.htmlContent || ''}
-        onApply={handleTemplateApply}
+      {/* Template Gallery Modal */}
+      <TemplateGallery
+        isOpen={templateGalleryOpen}
         onClose={() => setTemplateGalleryOpen(false)}
+        onSelect={({ template, html }) => {
+          setForm((prev) => ({
+            ...prev,
+            htmlContent: html,
+            templateId: template.id,
+            templateName: template.name,
+          }));
+          toast.success(tc('templateApplied'));
+          setTemplateGalleryOpen(false);
+        }}
+        onGenerateWithAi={() => {
+          setTemplateGalleryOpen(false);
+          // TODO: Open AI modal
+        }}
       />
 
-      <VersionHistoryModal
+      {/* Save Template Modal */}
+      <SaveTemplateModal
+        isOpen={saveTemplateOpen}
+        onClose={() => setSaveTemplateOpen(false)}
+        htmlContent={form?.htmlContent || ''}
+        landingPageTitle={form?.title || ''}
+        onSuccess={() => {
+          toast.success('Đã lưu template');
+        }}
+      />
+
+      {/* Landing Page Version History Modal */}
+      <LandingVersionModal
         open={versionHistoryOpen}
-        landingId={editingId}
-        currentHtml={form?.htmlContent || ''}
-        onRestore={handleVersionRestore}
         onClose={() => setVersionHistoryOpen(false)}
+        landingPageId={editingId}
+        onRestoreVersion={(htmlContent) => {
+          setForm((prev) => ({ ...prev, htmlContent }));
+          toast.success(tc('versionRestored'));
+        }}
       />
     </>
   );

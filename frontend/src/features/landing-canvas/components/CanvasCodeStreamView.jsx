@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
  *  - speed: ký tự / frame (mặc định 8)
  *  - onDone?: callback khi gõ xong
  */
-export default function CanvasCodeStreamView({ text = '', streaming = false, speed = 8, onDone }) {
+export default function CanvasCodeStreamView({ text = '', streaming = false, speed: _speed = 8, onDone }) {
   const [shown, setShown] = useState('');
   const rafRef = useRef(null);
   const idxRef = useRef(0);

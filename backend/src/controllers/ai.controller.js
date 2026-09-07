@@ -33,7 +33,6 @@ import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { getNodeSubtype } from '../utils/nodeSubtype.util.js';
-import { resolveCampaignVia } from '../utils/campaignVia.util.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -587,7 +586,7 @@ class AiController {
         const campaignId = createRes.data.data.id;
         const runReq = {
           ...req,
-          campaignVia: resolveCampaignVia(req.body),
+          campaignVia: 'ai',
           params: { id: campaignId },
           body: {
             runName: `AI Auto Run - ${new Date().toLocaleString()}`,
@@ -690,7 +689,7 @@ class AiController {
       const createReq = {
         ...req,
         // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI, Compiler và Builder.
-        campaignVia: resolveCampaignVia(preparedScript, script),
+        campaignVia: (preparedScript?.compilerApplied || preparedScript?._via === 'ai_compiler') ? 'ai_compiler' : 'ai',
         body: {
           campaignName: preparedScript.campaignName,
           description: preparedScript.description || '',
@@ -853,7 +852,7 @@ class AiController {
       // Re-use campaignController.update logic to push nodes/connections
       const updateReq = {
         ...req,
-        campaignVia: resolveCampaignVia(script),
+        campaignVia: 'ai',
         params: { id: campaignId },
         body: {
           campaignName: script.campaignName,
@@ -882,7 +881,7 @@ class AiController {
       if (autoRun) {
         const runReq = {
           ...req,
-          campaignVia: resolveCampaignVia(script),
+          campaignVia: 'ai',
           params: { id: campaignId },
           body: {
             runName: `AI Auto Run - ${new Date().toLocaleString()}`,
@@ -1022,7 +1021,7 @@ class AiController {
       const createReq = {
         ...req,
         // Đánh dấu nguồn để audit CAMPAIGN_CREATED phân biệt được đường AI, Compiler và Builder.
-        campaignVia: resolveCampaignVia(script),
+        campaignVia: (script?.compilerApplied || script?._via === 'ai_compiler') ? 'ai_compiler' : 'ai',
         body: {
           campaignName: script.campaignName,
           description: script.description || '',
@@ -1094,7 +1093,7 @@ class AiController {
       // Bước 3: Tạo run và thực thi
       const runReq = {
         ...req,
-        campaignVia: resolveCampaignVia(script),
+        campaignVia: 'ai',
         params: { id: campaignId },
         body: {
           runName: `AI Auto Run - ${new Date().toLocaleString('vi-VN')}`,

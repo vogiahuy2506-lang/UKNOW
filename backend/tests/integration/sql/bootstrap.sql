@@ -353,8 +353,8 @@ CREATE TABLE orders (
   invoice_info JSONB,
   custom_plan_config JSONB,
   paid_at     TIMESTAMPTZ,
-  created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT orders_order_code_key UNIQUE (order_code)
 );
 
@@ -820,7 +820,7 @@ CREATE TABLE leads (
   phone               VARCHAR(50),
   occupation          VARCHAR(100),
   interest_area       VARCHAR(100),
-  marketing_consent   BOOLEAN,
+  marketing_consent   BOOLEAN      NOT NULL DEFAULT FALSE,
   landing_page_slug   VARCHAR(100),
   utm_source          VARCHAR(255),
   utm_medium          VARCHAR(255),
@@ -1422,17 +1422,8 @@ CREATE TABLE campaign_run_recipient_steps (
 );
 CREATE INDEX idx_crrs_id_run ON campaign_run_recipient_steps(id_run);
 CREATE UNIQUE INDEX uq_crrs_progress
-  ON campaign_run_recipient_steps(id_run, id_node, channel, recipient_key);
-
--- ─── Campaign run recipient steps backup (migration 182) ───────────────
-CREATE TABLE campaign_run_recipient_steps_backup_182 (
-  id                  BIGSERIAL PRIMARY KEY,
-  migration_batch_id  UUID NOT NULL,
-  source_id           BIGINT NOT NULL,
-  id_run              BIGINT,
-  source_row          JSONB NOT NULL,
-  backed_up_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+  ON campaign_run_recipient_steps(id_run, id_node, channel, recipient_key)
+  WHERE id_run IS NOT NULL AND id_node IS NOT NULL AND channel IS NOT NULL AND recipient_key IS NOT NULL;
 
 -- ─── Audit logs ─────────────────────────────────────────────────────────
 CREATE TABLE audit_logs (
@@ -1500,8 +1491,6 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   temperature         DECIMAL(3,2) DEFAULT 0.7,
   max_tokens          INTEGER DEFAULT 2048,
   ai_model            VARCHAR(50) DEFAULT 'gemini-2.5-flash',
-  -- Migration 185: phong cach tra loi (friendly/professional/casual/empathetic/concise/creative)
-  response_style      VARCHAR(20) DEFAULT 'friendly',
   allow_attachments   BOOLEAN NOT NULL DEFAULT FALSE,
   reply_limit_config  JSONB NOT NULL DEFAULT '{"version":1,"windows":{}}'::jsonb
     CHECK (jsonb_typeof(reply_limit_config) = 'object'),
@@ -2882,99 +2871,3 @@ ALTER TABLE usage_logs
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ul_quota_reservation_id
   ON usage_logs (quota_reservation_id)
   WHERE quota_reservation_id IS NOT NULL;
-
--- Affiliate revenue events (migration 181)
-CREATE TABLE IF NOT EXISTS affiliate_revenue_events (
-  id                BIGSERIAL PRIMARY KEY,
-  referrer_user_id  BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  buyer_user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  order_id          INTEGER       NOT NULL UNIQUE REFERENCES orders(id) ON DELETE RESTRICT,
-  amount            NUMERIC(12,2) NOT NULL,
-  month_key         CHAR(7)       NOT NULL,
-  created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_are_referrer_month ON affiliate_revenue_events (referrer_user_id, month_key);
-CREATE INDEX IF NOT EXISTS idx_are_buyer_user_id  ON affiliate_revenue_events (buyer_user_id);
-
--- Affiliate periods and ledger (migration 183)
-CREATE TABLE IF NOT EXISTS affiliate_periods (
-  id                BIGSERIAL PRIMARY KEY,
-  referrer_user_id  BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  month_key         CHAR(7)       NOT NULL,
-  gross_revenue     NUMERIC(12,2) NOT NULL,
-  tier_level        SMALLINT      NOT NULL,
-  rate_percent      SMALLINT      NOT NULL,
-  commission_amount NUMERIC(12,2) NOT NULL,
-  closed_at         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  UNIQUE (referrer_user_id, month_key)
-);
-
-CREATE TABLE IF NOT EXISTS affiliate_ledger (
-  id          BIGSERIAL PRIMARY KEY,
-  user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  entry_type  VARCHAR(20)   NOT NULL CHECK (entry_type IN ('commission','withdrawal','adjustment')),
-  amount      NUMERIC(12,2) NOT NULL,
-  ref_type    VARCHAR(20),
-  ref_id      BIGINT,
-  note        TEXT,
-  created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_affiliate_ledger_user ON affiliate_ledger (user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_affiliate_periods_month ON affiliate_periods (month_key);
-
--- Affiliate withdrawals (migration 184)
-CREATE TABLE IF NOT EXISTS affiliate_withdrawals (
-  id                    BIGSERIAL PRIMARY KEY,
-  user_id               BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  partner_type          VARCHAR(10)   NOT NULL DEFAULT 'personal'
-    CHECK (partner_type IN ('personal', 'company')),
-  amount_gross          NUMERIC(12,2) NOT NULL,
-  tax_amount            NUMERIC(12,2) NOT NULL,
-  amount_net            NUMERIC(12,2) NOT NULL,
-  full_name             VARCHAR(255)  NOT NULL,
-  tax_code              VARCHAR(20),
-  bank_name             VARCHAR(255)  NOT NULL,
-  bank_account_number   VARCHAR(50)   NOT NULL,
-  bank_account_name     VARCHAR(255)  NOT NULL,
-  id_card_number_enc    TEXT,
-  id_card_issued_date   DATE,
-  id_card_issued_place  VARCHAR(255),
-  company_name          VARCHAR(255),
-  company_address       TEXT,
-  invoice_reference     VARCHAR(100),
-  status                VARCHAR(20)   NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','paid','rejected')),
-  requested_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  processed_at          TIMESTAMPTZ,
-  processed_by          BIGINT REFERENCES users(id) ON DELETE SET NULL,
-  note                  TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_user
-  ON affiliate_withdrawals (user_id, requested_at DESC);
-CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_status
-  ON affiliate_withdrawals (status, requested_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliate_withdrawals_one_pending
-  ON affiliate_withdrawals (user_id) WHERE status = 'pending';
-
--- ─── User Consents (Nghị định 330/2026/NĐ-CP, Migration 187) ─────────────────
-CREATE TABLE IF NOT EXISTS user_consents (
-  id               BIGSERIAL PRIMARY KEY,
-  user_id          BIGINT       NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  purpose          VARCHAR(40)  NOT NULL,
-  granted          BOOLEAN      NOT NULL,
-  document_version VARCHAR(20)  NOT NULL,
-  document_hash    CHAR(64),
-  source           VARCHAR(30)  NOT NULL,
-  ip_address       VARCHAR(64),
-  user_agent       TEXT,
-  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_user_consents_user_purpose
-  ON user_consents (user_id, purpose, created_at DESC);
-
-
-

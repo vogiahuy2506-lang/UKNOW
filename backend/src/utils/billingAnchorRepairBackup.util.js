@@ -206,6 +206,17 @@ export async function prepareBillingAnchorRepairPreflight(queryable, { backupDir
     return { skipped: true };
   }
 
+  // Kiểm tra xem có backup gần đây (trong vòng 3 giờ) chưa — nếu có thì KHÔNG tạo lại
+  // để tránh tạo backup liên tục mỗi lần startup trong development
+  const { rows: existingBackupRows } = await queryable.query(
+    `SELECT 1 FROM ${PREFLIGHT_TABLE} WHERE migration_filename = $1 AND created_at >= NOW() - INTERVAL '3 hours' LIMIT 1`,
+    [BILLING_ANCHOR_REPAIR_MIGRATION]
+  );
+  if (existingBackupRows.length > 0) {
+    console.log('[billing-anchor-backup] Đã có backup gần đây (trong 3 giờ); không cần tạo lại.');
+    return { skipped: true };
+  }
+
   // A failed/retried preflight must never let migration 174 reuse an old
   // manifest. Delete it before writing the replacement file.
   await queryable.query(

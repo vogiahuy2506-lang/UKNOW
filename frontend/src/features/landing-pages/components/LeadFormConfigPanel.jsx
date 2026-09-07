@@ -96,7 +96,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
     phone: '',
     occupation: '',
     interestArea: '',
-    marketingConsent: false,
+    marketingConsent: true,
     customFields: {},
   };
 

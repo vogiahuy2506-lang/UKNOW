@@ -301,7 +301,7 @@ function buildAutoHostname(slug) {
  */
 function buildDomainResponse(row) {
   if (!row) {
-    return { configured: false, instructions: null, record: null };
+    return { configured: false, instructions: null, record: null, dnsRecords: [] };
   }
 
   const isActive = row.status === 'active';
@@ -339,6 +339,23 @@ function buildDomainResponse(row) {
     }
   }
 
+  // Build dnsRecords array — frontend dùng để hiển thị bảng DNS instructions.
+  // Apex → A record trỏ về platformIp. Subdomain → CNAME trỏ về cnameTarget.
+  const dnsRecords = [];
+  if (isCfManaged) {
+    // Platform subdomain do Cloudflare quản lý → user không cần tự thêm DNS.
+  } else if (isApex && platformIp) {
+    dnsRecords.push({ type: 'A', host: '@', value: platformIp, ttl: 3600 });
+  } else {
+    dnsRecords.push({
+      type: 'CNAME',
+      host: row.hostname?.split('.')[0] || 'lp',
+      value: `${target}.`,
+      ttl: 3600,
+      note: 'Trỏ về domain chính',
+    });
+  }
+
   return {
     configured: true,
     hostname: row.hostname,
@@ -349,6 +366,7 @@ function buildDomainResponse(row) {
     verifiedAt: row.verifiedAt,
     instructions,
     record,
+    dnsRecords,
     cnameTarget: target,
     apexFixedIp: platformIp,
     isApexDomain: isApex,

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { HiOutlineX, HiOutlineClock, HiOutlineRefresh, HiOutlineTrash, HiOutlineCheck } from 'react-icons/hi';
@@ -31,7 +32,7 @@ function useStableI18n() {
  *  - onRestore: (html: string) => void
  *  - onClose: () => void
  */
-export default function VersionHistoryModal({ open, landingId, currentHtml, onRestore, onClose }) {
+export default function VersionHistoryModal({ open, landingId, onRestore, onClose }) {
   const tc = useStableI18n();
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -128,6 +129,7 @@ export default function VersionHistoryModal({ open, landingId, currentHtml, onRe
     if (!versions.length) return;
     await handleRestore(versions[0]);
   }, [versions, handleRestore]);
+  void handleRestoreLatest; // kept for potential future export
 
   if (!open) return null;
 

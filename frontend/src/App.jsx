@@ -101,8 +101,6 @@ import MarketplaceCreateRedirect from './pages/marketplace/MarketplaceCreateRedi
 import AdminMarketplace from './pages/marketplace/AdminMarketplace';
 import MarketplaceAnalytics from './pages/marketplace/MarketplaceAnalytics';
 import ListingSettings from './pages/marketplace/ListingSettings';
-import AffiliatePage from './pages/affiliate/AffiliatePage';
-import AdminAffiliatePage from './pages/admin/AdminAffiliatePage';
 import { getPostAuthPath } from './utils/authRedirect';
 
 const LoadingScreen = () => {
@@ -411,7 +409,6 @@ function AppContent() {
             <Route path="orders" element={<FeatureFlagRoute flag="VITE_FEATURE_ORDERS"><OwnerRoute><Orders /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="billing" element={<OwnerRoute><BillingHubPage /></OwnerRoute>} />
             <Route path="topup" element={<OwnerRoute><TopupPage /></OwnerRoute>} />
-            <Route path="affiliate" element={<OwnerRoute><AffiliatePage /></OwnerRoute>} />
 
             {/* Settings — permission based (employee có thể vào nếu được cấp quyền) */}
             <Route path="settings/templates" element={<PermissionRoute permission={['email_templates', 'zalo_templates']}><ChannelTemplates /></PermissionRoute>} />
@@ -455,7 +452,6 @@ function AppContent() {
             <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
             <Route path="einvoices" element={<AdminEinvoicesPage />} />
-            <Route path="affiliate" element={<AdminAffiliatePage />} />
             <Route path="alerts" element={<AdminAlertsPage />} />
             <Route path="funnel" element={<AdminFunnelPage />} />
             <Route path="health" element={<AdminSystemHealthPage />}>

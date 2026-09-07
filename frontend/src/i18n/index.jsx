@@ -28,7 +28,7 @@ export function I18nProvider({ children }) {
   const t = useCallback((key, params = {}) => {
     const keys = key.split('.');
     let value = translations[locale];
-
+    
     for (const k of keys) {
       if (value && typeof value === 'object') {
         value = value[k];
@@ -56,6 +56,7 @@ export function I18nProvider({ children }) {
       return value.replace(/\{(\w+)\}/g, (_, param) => params[param] ?? `{${param}}`);
     }
 
+    console.log('[i18n t] returning non-string for key:', key, 'value:', value, 'type:', typeof value);
     return value || key;
   }, [locale]);
 

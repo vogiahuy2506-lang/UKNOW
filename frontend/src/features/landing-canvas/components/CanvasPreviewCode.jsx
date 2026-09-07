@@ -1,4 +1,3 @@
-import { HiOutlineCode } from 'react-icons/hi';
 import MonacoCanvasEditor from './MonacoCanvasEditor.jsx';
 
 /**

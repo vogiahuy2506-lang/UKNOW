@@ -1,5 +1,10 @@
 import { getOptionLabel, founder_INTEREST_OPTIONS, founder_OCCUPATION_OPTIONS } from '../constants/founder-landing-options.js';
-import { fieldLabel, normalizeLeadFormConfig, optionLabel } from '../../landing-pages/utils/landingLeadFormConfig.js';
+import {
+  fieldLabel,
+  normalizeLeadFormConfig,
+  normalizeLeadFormTheme,
+  optionLabel,
+} from '../../landing-pages/utils/landingLeadFormConfig.js';
 
 /**
  * Thẻ form đăng ký lead — khớp mock `.form-card`; link chính sách nội bộ `/privacy-policy`.
@@ -27,13 +32,52 @@ export function FounderLeadFormCard({
   variant = 'default',
   leadFormConfig,
   previewMode = false,
+  theme: themeProp,
+  nameMode = 'split', // 'split' | 'single'
 }) {
   const isEmbed = variant === 'embed';
+  const isFullName = nameMode === 'single';
   const config = normalizeLeadFormConfig(leadFormConfig);
   const showOccupation = config.fixedFields.occupation.visible;
   const showInterest = config.fixedFields.interestArea.visible;
   const customFields = config.customFields || [];
   const customValues = form.customFields && typeof form.customFields === 'object' ? form.customFields : {};
+
+  /**
+   * T: theme style sheet — chỉ áp dụng khi themeProp được truyền (preview trong canvas editor).
+   * Mặc định (iframe landing chính) giữ style founder cố định để không phá nhận diện thương hiệu.
+   */
+  const themed = Boolean(themeProp);
+  const T = themed
+    ? (() => {
+        const t = normalizeLeadFormTheme(themeProp);
+        const radius = Number(t.radius) || 0;
+        return {
+          card: {
+            background: t.bg,
+            color: t.text,
+            borderColor: t.border,
+            borderRadius: radius + 4,
+          },
+          title: { color: t.text },
+          subtitle: { color: t.text, opacity: 0.7 },
+          field: {
+            background: '#fff',
+            color: t.text,
+            borderColor: t.border,
+            borderRadius: radius - 2 < 0 ? 0 : radius - 2,
+          },
+          fieldFocus: { borderColor: t.primary },
+          button: {
+            background: `linear-gradient(135deg, ${t.primary}, ${t.accent})`,
+            borderRadius: radius - 2 < 0 ? 0 : radius - 2,
+          },
+          accent: { color: t.primary },
+          radio: { accentColor: t.primary },
+          checkbox: { accentColor: t.primary },
+        };
+      })()
+    : null;
   const setCustom = (key, value) => {
     setField('customFields', { ...customValues, [key]: value });
   };
@@ -104,23 +148,41 @@ export function FounderLeadFormCard({
           ? 'relative z-[2] w-full max-w-[430px] rounded-xl border border-gray-200 bg-white px-6 pb-6 pt-7 shadow-sm'
           : 'relative z-[2] w-full max-w-[430px] animate-founder-fade-up rounded-[20px] border border-founder-border bg-white px-[34px] pb-9 pt-10 shadow-[0_24px_64px_rgba(11,85,99,0.1),0_4px_16px_rgba(0,0,0,0.04)] [animation-delay:350ms]'
       }
+      style={themed ? T.card : undefined}
     >
       {!isEmbed ? (
         <div
           className="pointer-events-none absolute left-0 right-0 top-0 h-1 rounded-t-[20px] bg-gradient-to-r from-founder-teal to-founder-gold-light"
           aria-hidden
+          style={themed ? { background: `linear-gradient(90deg, ${T.card.borderColor ? 'transparent' : ''}, transparent)` } : undefined}
         />
       ) : (
-        <div
-          className="pointer-events-none absolute left-0 right-0 top-0 h-0.5 rounded-t-xl bg-founder-teal"
-          aria-hidden
-        />
+        themed ? null : (
+          <div
+            className="pointer-events-none absolute left-0 right-0 top-0 h-0.5 rounded-t-xl bg-founder-teal"
+            aria-hidden
+          />
+        )
       )}
       {isEmbed ? (
         <div className="mb-5">
-          <h2 className="font-landing text-base sm:text-lg font-bold leading-snug tracking-tight text-gray-900">
-            {formCopy.embedTitle}
-          </h2>
+          {themed && themeProp.titleText ? (
+            <h2
+              className="font-landing text-base sm:text-lg font-bold leading-snug tracking-tight"
+              style={T.title}
+            >
+              {themeProp.titleText}
+            </h2>
+          ) : (
+            <h2 className="font-landing text-base sm:text-lg font-bold leading-snug tracking-tight text-gray-900">
+              {formCopy.embedTitle}
+            </h2>
+          )}
+          {themed && themeProp.subtitleText ? (
+            <p className="mt-1.5 text-[11.5px] leading-relaxed" style={T.subtitle}>
+              {themeProp.subtitleText}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="mb-6">
@@ -144,38 +206,56 @@ export function FounderLeadFormCard({
         }}
       >
         {/* Embed: gutter rõ giữa Họ / Tên để hai cột không dính sát. */}
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isEmbed ? 'gap-4' : 'gap-2.5'}`}>
+        {isFullName ? (
           <div>
-            <label htmlFor="founder-last" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
-              {formCopy.lastName} <span className="text-red-500">*</span>
+            <label htmlFor="founder-fullname" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
+              {formCopy.fullName || formCopy.lastName} <span className="text-red-500">*</span>
             </label>
             <input
-              id="founder-last"
+              id="founder-fullname"
               type="text"
-              autoComplete="family-name"
-              placeholder={formCopy.placeholders.lastName}
+              autoComplete="name"
+              placeholder={formCopy.placeholders.fullName || formCopy.placeholders.lastName}
               required
-              value={form.lastName}
-              onChange={(e) => setField('lastName', e.target.value)}
+              value={form.fullName}
+              onChange={(e) => setField('fullName', e.target.value)}
               className={`w-full rounded-lg border-[1.5px] px-3.5 py-2.5 text-[0.875rem] text-founder-ink outline-none transition focus:shadow-[0_0_0_3px_rgba(11,85,99,0.1)] ${fieldSurface}`}
             />
           </div>
-          <div>
-            <label htmlFor="founder-first" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
-              {formCopy.firstName} <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="founder-first"
-              type="text"
-              autoComplete="given-name"
-              placeholder={formCopy.placeholders.firstName}
-              required
-              value={form.firstName}
-              onChange={(e) => setField('firstName', e.target.value)}
-              className={`w-full rounded-lg border-[1.5px] px-3.5 py-2.5 text-[0.875rem] text-founder-ink outline-none transition focus:shadow-[0_0_0_3px_rgba(11,85,99,0.1)] ${fieldSurface}`}
-            />
+        ) : (
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isEmbed ? 'gap-4' : 'gap-2.5'}`}>
+            <div>
+              <label htmlFor="founder-last" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
+                {formCopy.lastName} <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="founder-last"
+                type="text"
+                autoComplete="family-name"
+                placeholder={formCopy.placeholders.lastName}
+                required
+                value={form.lastName}
+                onChange={(e) => setField('lastName', e.target.value)}
+                className={`w-full rounded-lg border-[1.5px] px-3.5 py-2.5 text-[0.875rem] text-founder-ink outline-none transition focus:shadow-[0_0_0_3px_rgba(11,85,99,0.1)] ${fieldSurface}`}
+              />
+            </div>
+            <div>
+              <label htmlFor="founder-first" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
+                {formCopy.firstName} <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="founder-first"
+                type="text"
+                autoComplete="given-name"
+                placeholder={formCopy.placeholders.firstName}
+                required
+                value={form.firstName}
+                onChange={(e) => setField('firstName', e.target.value)}
+                className={`w-full rounded-lg border-[1.5px] px-3.5 py-2.5 text-[0.875rem] text-founder-ink outline-none transition focus:shadow-[0_0_0_3px_rgba(11,85,99,0.1)] ${fieldSurface}`}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div>
           <label htmlFor="founder-email" className="mb-1.5 block text-[0.78rem] font-semibold text-[#3a3a3a]">
@@ -359,8 +439,9 @@ export function FounderLeadFormCard({
           type="submit"
           disabled={submitting || previewMode}
           className="relative w-full overflow-hidden rounded-lg bg-gradient-to-br from-founder-teal to-founder-teal-mid py-3.5 text-[0.975rem] font-bold tracking-wide text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(11,85,99,0.35)] active:translate-y-0 disabled:opacity-60"
+          style={themed ? { ...T.button, background: T.button.background } : undefined}
         >
-          {submitting ? formCopy.submitting : `${formCopy.submit} →`}
+          {submitting ? formCopy.submitting : (themed && themeProp.buttonText ? themeProp.buttonText : `${formCopy.submit} →`)}
         </button>
 
         {/* Embed: cùng dòng bảo mật dưới nút như landing chính (icon khóa + chữ). */}

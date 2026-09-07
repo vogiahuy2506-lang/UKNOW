@@ -21,9 +21,9 @@ import {
   postLandingCustomDomainProvisionSsl,
   putLandingCustomDomain,
   updateLandingPageAdmin,
+  createLandingTemplate,
 } from '../services/landingPagesAdminApi.service.js';
 import { getLandingManualInsertSnippets } from '../utils/injectLandingEnhancements.js';
-import SaveTemplateModal from './SaveTemplateModal.jsx';
 import { normalizeLandingLpTrackApiBase } from '../utils/normalizeLandingLpTrackApiBase.js';
 import TemplateGallery from './TemplateGallery.jsx';
 import VisualBlockEditor from './VisualBlockEditor.jsx';
@@ -835,7 +835,6 @@ export default function LandingPageFullEditor({
   const [htmlBeforeOverwrite, setHtmlBeforeOverwrite] = useState(null);
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
   const [visualEditorOpen, setVisualEditorOpen] = useState(false);
-  const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
   const [versionModalOpen, setVersionModalOpen] = useState(false);
 
   const [editorSplit, setEditorSplit] = useState(50);
@@ -883,7 +882,6 @@ export default function LandingPageFullEditor({
       setAiTemplate('saas');
       setTemplateGalleryOpen(false);
       setVisualEditorOpen(false);
-      setSaveTemplateModalOpen(false);
       setHtmlBeforeOverwrite(null);
     }
   }, [open]);
@@ -1054,13 +1052,22 @@ export default function LandingPageFullEditor({
     setVisualEditorOpen(false);
   };
 
-  // Save current landing page as template - uses SaveTemplateModal instead
-  const handleSaveAsTemplate = () => {
+  // Save current landing page as template - direct save, no modal
+  const handleSaveAsTemplate = async () => {
     if (!form.htmlContent || !form.htmlContent.trim()) {
       toast.error('Không có nội dung để lưu template');
       return;
     }
-    setSaveTemplateModalOpen(true);
+    try {
+      await createLandingTemplate({
+        name: form.title || 'Landing Page Template',
+        description: '',
+        htmlStructure: form.htmlContent,
+      });
+      toast.success('Đã lưu vào gallery');
+    } catch (e) {
+      toast.error(e?.message || 'Không thể lưu template');
+    }
   };
 
   const copyText = async (label, text) => {
@@ -1860,17 +1867,6 @@ export default function LandingPageFullEditor({
         onSave={handleVisualEditorSave}
         onClose={() => setVisualEditorOpen(false)}
         onSaveAsTemplate={handleSaveAsTemplate}
-      />
-
-      {/* Save Template Modal */}
-      <SaveTemplateModal
-        isOpen={saveTemplateModalOpen}
-        onClose={() => setSaveTemplateModalOpen(false)}
-        htmlContent={form.htmlContent}
-        landingPageTitle={form.title}
-        onSuccess={() => {
-          // Refresh template list if template gallery is open
-        }}
       />
 
       {/* Landing Page Version History Modal */}

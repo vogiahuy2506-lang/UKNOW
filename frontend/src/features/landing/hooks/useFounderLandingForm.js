@@ -12,7 +12,7 @@ const initialForm = () => ({
   phone: '',
   occupation: '',
   interestArea: '',
-  marketingConsent: false,
+  marketingConsent: true,
   customFields: {},
 });
 
@@ -69,6 +69,9 @@ export function useFounderLandingForm(locale = 'vi', options = {}) {
     if (!phone || phone.replace(/\D/g, '').length < 8) {
       return v.phone;
     }
+    if (!form.marketingConsent) {
+      return v.consent;
+    }
     for (const field of leadFormConfig.customFields || []) {
       if (!field.required) continue;
       const raw = form.customFields?.[field.key];
@@ -115,6 +118,5 @@ export function useFounderLandingForm(locale = 'vi', options = {}) {
     error,
     success,
     submit,
-    validate,
   };
 }

@@ -31,9 +31,10 @@ const FilterCheckboxRow = memo(function FilterCheckboxRow({ value, label, checke
  * @param {string[]} props.selected
  * @param {function} props.setDraftFilters
  */
-function MultiFilterBlock({ title, options, fieldKey, selected, setDraftFilters }) {
+function MultiFilterBlock({ title, options, fieldKey, selected, setDraftFilters, isLoading = false }) {
   const { t } = useI18n();
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const total = options.length;
 
   const toggleOne = useCallback(
     (value) => {
@@ -63,34 +64,47 @@ function MultiFilterBlock({ title, options, fieldKey, selected, setDraftFilters 
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-gray-700">{title}</span>
+        <span className="text-sm font-medium text-gray-700">
+          {title}
+          <span className="ml-1.5 text-[11px] font-normal text-gray-400">
+            ({selectedSet.size}/{total})
+          </span>
+        </span>
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={selectAll}
-            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            disabled={isLoading || total === 0}
+            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-40"
           >
             {t('landingLeads.selectAll')}
           </button>
           <button
             type="button"
             onClick={clearAll}
-            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            disabled={isLoading || selectedSet.size === 0}
+            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-40"
           >
             {t('landingLeads.deselectAll')}
           </button>
         </div>
       </div>
       <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 [content-visibility:auto]">
-        {options.map((opt) => (
-          <FilterCheckboxRow
-            key={opt.value}
-            value={opt.value}
-            label={opt.labelVi}
-            checked={selectedSet.has(opt.value)}
-            onToggle={toggleOne}
-          />
-        ))}
+        {isLoading ? (
+          <p className="text-xs text-gray-400 italic py-2 text-center">Đang tải…</p>
+        ) : options.length === 0 ? (
+          <p className="text-xs text-gray-400 italic py-2 text-center">Không có tuỳ chọn.</p>
+        ) : (
+          options.map((opt) => (
+            <FilterCheckboxRow
+              key={opt.value}
+              value={opt.value}
+              label={opt.labelVi}
+              checked={selectedSet.has(opt.value)}
+              onToggle={toggleOne}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -129,13 +143,20 @@ export function LandingLeadsAdminFilters({
 
   const [slugOptions, setSlugOptions] = useState([{ value: 'l', labelVi: 'Landing React (/l)' }]);
   const [customDefs, setCustomDefs] = useState([]);
+  const [slugsLoading, setSlugsLoading] = useState(true);
+  const [customDefsLoading, setCustomDefsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setSlugsLoading(true);
     (async () => {
-      const raw = await fetchLandingLeadsSlugFilterOptions();
-      if (cancelled) return;
-      setSlugOptions(raw.map((o) => ({ value: o.value, labelVi: o.label })));
+      try {
+        const raw = await fetchLandingLeadsSlugFilterOptions();
+        if (cancelled) return;
+        setSlugOptions(raw.map((o) => ({ value: o.value, labelVi: o.label })));
+      } finally {
+        if (!cancelled) setSlugsLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -144,12 +165,15 @@ export function LandingLeadsAdminFilters({
 
   useEffect(() => {
     let cancelled = false;
+    setCustomDefsLoading(true);
     (async () => {
       try {
         const items = await fetchLandingLeadsCustomFieldDefinitions();
         if (!cancelled) setCustomDefs(Array.isArray(items) ? items : []);
       } catch {
         if (!cancelled) setCustomDefs([]);
+      } finally {
+        if (!cancelled) setCustomDefsLoading(false);
       }
     })();
     return () => {
@@ -256,11 +280,17 @@ export function LandingLeadsAdminFilters({
         fieldKey="landingLeadsSlugs"
         selected={slugs}
         setDraftFilters={setDraftFilters}
+        isLoading={slugsLoading}
       />
 
-      {customDefs.length > 0 ? (
+      {customDefs.length > 0 || customDefsLoading ? (
         <div className="space-y-3">
           <span className="text-sm font-medium text-gray-700">{t('landingLeads.customFieldsLabel')}</span>
+          {customDefsLoading ? (
+            <div className="rounded-lg border border-gray-200 p-3 text-xs text-gray-400 italic">
+              Đang tải trường tùy chỉnh…
+            </div>
+          ) : null}
           {customDefs.map((field) => {
             const current = customFilters.find((f) => f.key === field.key) || null;
             const isChoice = field.type === 'select' || field.type === 'radio' || field.type === 'checkbox';

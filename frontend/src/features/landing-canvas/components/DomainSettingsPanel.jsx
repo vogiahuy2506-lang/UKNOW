@@ -35,7 +35,7 @@ const BASE_DOMAIN = 'founderai.biz';
  *  7. Auto provisioning SSL khi DNS active
  */
 export default function DomainSettingsPanel({ form, setForm, editingId }) {
-  const tc = useI18n('landingCanvas.domainSettings');
+  const tc = useI18n('landingCanvas');
   const [cdInfo, setCdInfo] = useState(null);
   const [cdLoading, setCdLoading] = useState(false);
   const [cdBusy, setCdBusy] = useState(false);
@@ -105,17 +105,17 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
       customDomainIsApex: false,
     }));
     setMode('system');
-    toast.success(tc('freeSlugSuccess'));
+    toast.success(tc('topbar.freeSlugSuccess'));
   };
 
   const handleSaveHostname = async () => {
     if (!editingId) {
-      toast.error(tc('notSavedError'));
+      toast.error(tc('topbar.notSavedError'));
       return;
     }
     const hostname = String(hostnameDraft || '').trim().toLowerCase();
     if (!hostname || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(hostname)) {
-      toast.error(tc('hostnameInvalid'));
+      toast.error(tc('topbar.hostnameInvalid'));
       return;
     }
     setCdBusy(true);
@@ -132,11 +132,11 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
       const waitTime = tc(isApex ? 'dnsWaitApex' : 'dnsWaitSub');
       toast.success(
         result?.data?.status === 'ACTIVE'
-          ? tc('saveHostnameAutoVerified')
+          ? tc('topbar.saveHostnameAutoVerified')
           : tc('saveHostnameSuccess', { waitTime })
       );
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || tc('saveHostnameError'));
+      toast.error(e?.response?.data?.message || e?.message || tc('topbar.saveHostnameError'));
     } finally {
       setCdBusy(false);
     }
@@ -149,13 +149,13 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
       const result = await postLandingCustomDomainVerify(editingId);
       setCdInfo((prev) => ({ ...(prev || {}), ...(result?.data || {}) }));
       if (result?.data?.status === 'ACTIVE') {
-        toast.success(tc('verifyActiveSuccess'));
+        toast.success(tc('topbar.verifyActiveSuccess'));
       } else {
         const recordType = isApex ? 'A record' : 'CNAME record';
         toast.error(tc('verifyPending', { recordType }));
       }
     } catch (e) {
-      toast.error(e?.response?.data?.message || tc('verifyError'));
+      toast.error(e?.response?.data?.message || tc('topbar.verifyError'));
     } finally {
       setCdBusy(false);
     }
@@ -163,7 +163,7 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
 
   const handleRemove = async () => {
     if (!editingId) return;
-    if (!window.confirm(tc('confirmRemove'))) return;
+    if (!window.confirm(tc('topbar.confirmRemove'))) return;
     setCdBusy(true);
     try {
       await deleteLandingCustomDomain(editingId);
@@ -176,20 +176,20 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
         customDomainHostname: null,
         customDomainIsApex: false,
       }));
-      toast.success(tc('removeSuccess'));
+      toast.success(tc('topbar.removeSuccess'));
     } catch (e) {
-        toast.error(e?.response?.data?.message || tc('removeError'));
+        toast.error(e?.response?.data?.message || tc('topbar.removeError'));
     } finally {
       setCdBusy(false);
     }
   };
 
-  const copyToClipboard = async (text, label) => {
+  const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(tc('copied'));
+      toast.success(tc('topbar.copied'));
     } catch {
-      toast.error(tc('copyError'));
+      toast.error(tc('topbar.copyError'));
     }
   };
 
@@ -207,8 +207,8 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
           }`}
         >
           <HiOutlineGlobeAlt className="w-5 h-5" />
-          {tc('modeFree')}
-          <span className="text-[14px] text-green-600 font-medium">{tc('modeFreeBadge')}</span>
+          {tc('topbar.modeFree')}
+          <span className="text-[14px] text-green-600 font-medium">{tc('topbar.modeFreeBadge')}</span>
         </button>
         <button
           type="button"
@@ -220,8 +220,8 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
           }`}
         >
           <HiOutlineGlobeAlt className="w-5 h-5" />
-          {tc('modeCustom')}
-          <span className="text-[14px] text-purple-500 font-medium">{tc('modeCustomBadge')}</span>
+          {tc('topbar.modeCustom')}
+          <span className="text-[14px] text-purple-500 font-medium">{tc('topbar.modeCustomBadge')}</span>
         </button>
       </div>
 
@@ -230,12 +230,12 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
         <section className="rounded-xl border border-gray-200 bg-white p-7 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <HiOutlineGlobeAlt className="w-7 h-7 text-orange-600" />
-            <p className="text-[20px] font-semibold text-gray-900">{tc('freeTitle')}</p>
+            <p className="text-[20px] font-semibold text-gray-900">{tc('topbar.freeTitle')}</p>
           </div>
           <p className="text-[17px] text-gray-500 mb-5">
-            {tc('freeDesc')}{' '}
+            {tc('topbar.freeDesc')}{' '}
             <code className="text-[16px] bg-gray-100 px-2 py-0.5 rounded font-mono">
-              {form?.slug || tc('freeSlugPlaceholder')}.{BASE_DOMAIN}
+              {form?.slug || tc('topbar.freeSlugPlaceholder')}.{BASE_DOMAIN}
             </code>
           </p>
           <div className="flex items-center gap-3">
@@ -247,7 +247,7 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                   slug: e.target.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''),
                 }))
               }
-              placeholder={tc('freeSlugPlaceholder')}
+              placeholder={tc('topbar.freeSlugPlaceholder')}
               className="flex-1 rounded-lg border border-gray-300 px-5 py-3.5 text-[18px] focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition"
             />
             <button
@@ -255,11 +255,11 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
               onClick={handleSaveSlug}
               className="px-6 h-[56px] rounded-lg bg-orange-500 text-white text-[18px] font-semibold hover:bg-orange-600 transition-colors"
             >
-              {tc('freeSaveBtn')}
+              {tc('topbar.freeSaveBtn')}
             </button>
           </div>
           <p className="text-[15px] text-gray-500 mt-3">
-            {tc('freeSlugHelp')}
+            {tc('topbar.freeSlugHelp')}
           </p>
         </section>
       ) : (
@@ -268,30 +268,30 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HiOutlineGlobeAlt className="w-6 h-6 text-purple-600" />
-            <p className="text-[20px] font-semibold text-gray-900">{tc('customTitle')}</p>
+            <p className="text-[20px] font-semibold text-gray-900">{tc('topbar.customTitle')}</p>
           </div>
           {cdInfo?.hostname ? <StatusBadge status={status} tc={tc} /> : null}
         </div>
 
         {!editingId ? (
           <p className="text-[16px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-4">
-            {tc('customNotSavedWarning')}
+            {tc('topbar.customNotSavedWarning')}
           </p>
         ) : cdLoading ? (
           <div className="flex items-center gap-2 text-[16px] text-gray-500">
             <div className="w-5 h-5 border-2 border-gray-300 border-t-orange-500 rounded-full animate-spin" />
-            {tc('customLoading')}
+            {tc('topbar.customLoading')}
           </div>
         ) : (
           <>
             {/* Input hostname */}
             <div>
-              <label className="text-[16px] font-medium text-gray-700 mb-2 block">{tc('hostnameLabel')}</label>
+              <label className="text-[16px] font-medium text-gray-700 mb-2 block">{tc('topbar.hostnameLabel')}</label>
               <div className="flex items-center gap-3">
                 <input
                   value={hostnameDraft}
                   onChange={(e) => setHostnameDraft(e.target.value)}
-                  placeholder={tc('hostnamePlaceholder')}
+                  placeholder={tc('topbar.hostnamePlaceholder')}
                   className="flex-1 rounded-lg border border-gray-300 px-5 py-3.5 text-[18px] font-mono focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition"
                 />
                 <button
@@ -300,14 +300,14 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                   disabled={cdBusy || !hostnameDraft.trim()}
                   className="px-6 h-[56px] rounded-lg bg-purple-600 text-white text-[18px] font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {tc('save')}
+                  {tc('topbar.save')}
                 </button>
               </div>
             </div>
 
             {/* Radio Sub/Apex (override auto-detect) */}
             <div className="flex flex-wrap items-center gap-5 text-[16px]">
-              <span className="text-gray-600 font-medium">{tc('domainTypeLabel')}</span>
+              <span className="text-gray-600 font-medium">{tc('topbar.domainTypeLabel')}</span>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -316,7 +316,7 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                   onChange={() => setApexMode(false)}
                   className="text-purple-600 focus:ring-purple-500 w-4 h-4"
                 />
-                <span className="text-gray-700">{tc('subdomainLabel')}</span>
+                <span className="text-gray-700">{tc('topbar.subdomainLabel')}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -326,7 +326,7 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                   onChange={() => setApexMode(true)}
                   className="text-purple-600 focus:ring-purple-500 w-4 h-4"
                 />
-                <span className="text-gray-700">{tc('apexLabel')}</span>
+                <span className="text-gray-700">{tc('topbar.apexLabel')}</span>
               </label>
             </div>
 
@@ -350,9 +350,9 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                 <span>
                   SSL:{' '}
                   {cdInfo.sslActive ? (
-                    <span className="text-green-700 font-medium">{tc('sslActive')}</span>
+                    <span className="text-green-700 font-medium">{tc('topbar.sslActive')}</span>
                   ) : (
-                    <span className="text-amber-700">{tc('sslPending')}</span>
+                    <span className="text-amber-700">{tc('topbar.sslPending')}</span>
                   )}
                 </span>
               </div>
@@ -367,7 +367,7 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                   disabled={cdBusy}
                   className="px-5 h-12 rounded-lg bg-white border border-gray-300 text-[16px] text-gray-700 hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-2"
                 >
-                  <HiOutlineRefresh className="w-5 h-5" /> {tc('verifyDns')}
+                  <HiOutlineRefresh className="w-5 h-5" /> {tc('topbar.verifyDns')}
                 </button>
                 {cdInfo.hostname ? (
                   <a
@@ -376,7 +376,7 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                     rel="noopener noreferrer"
                     className="px-5 h-12 rounded-lg bg-white border border-gray-300 text-[16px] text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2"
                   >
-                    <HiOutlineExternalLink className="w-5 h-5" /> {tc('openDomain')}
+                    <HiOutlineExternalLink className="w-5 h-5" /> {tc('topbar.openDomain')}
                   </a>
                 ) : null}
                 <button
@@ -385,7 +385,7 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
                   disabled={cdBusy}
                   className="px-5 h-12 rounded-lg bg-white border border-red-300 text-[16px] text-red-600 hover:bg-red-50 disabled:opacity-50 ml-auto"
                 >
-                  {tc('removeDomain')}
+                  {tc('topbar.removeDomain')}
                 </button>
               </div>
             ) : null}
@@ -406,10 +406,10 @@ export default function DomainSettingsPanel({ form, setForm, editingId }) {
  */
 function StatusTimeline({ status, isApex, tc }) {
   const steps = [
-    { key: 'added', label: tc('stepAddDomain'), always: true },
-    { key: 'dns', label: isApex ? tc('stepDnsApex') : tc('stepDnsSub') },
-    { key: 'verified', label: tc('stepVerifyDns'), activeOn: ['ACTIVE'] },
-    { key: 'ssl', label: tc('stepSsl'), activeOn: ['ACTIVE'] },
+    { key: 'added', label: tc('topbar.stepAddDomain'), always: true },
+    { key: 'dns', label: isApex ? tc('topbar.stepDnsApex') : tc('topbar.stepDnsSub') },
+    { key: 'verified', label: tc('topbar.stepVerifyDns'), activeOn: ['ACTIVE'] },
+    { key: 'ssl', label: tc('topbar.stepSsl'), activeOn: ['ACTIVE'] },
   ];
 
   const activeIdx = steps.findIndex((s) => s.activeOn?.includes(status));
@@ -417,7 +417,7 @@ function StatusTimeline({ status, isApex, tc }) {
   return (
     <div className="rounded-xl bg-gray-50 border border-gray-200 p-5">
       <p className="text-[14px] font-semibold text-gray-500 mb-3.5 uppercase tracking-[1.2px]">
-        {tc('stepsTitle')}
+        {tc('topbar.stepsTitle')}
       </p>
       <ol className="space-y-3">
         {steps.map((step, i) => {
@@ -496,7 +496,7 @@ function DnsInstructions({ cdInfo, isApex, onCopy, tc }) {
         host,
         value,
         ttl: 3600,
-        note: isApex && !envServerIp ? tc('dnsMissingValue') : undefined,
+        note: isApex && !envServerIp ? tc('topbar.dnsMissingValue') : undefined,
       },
     ];
   }
@@ -510,20 +510,20 @@ function DnsInstructions({ cdInfo, isApex, onCopy, tc }) {
     <div className="rounded-xl bg-purple-50/40 border border-purple-200 p-5 space-y-3.5">
       <div className="flex items-center justify-between">
         <p className="text-[14px] font-semibold text-purple-700 uppercase tracking-[1.2px]">
-          {tc('dnsGuideTitle')}
+          {tc('topbar.dnsGuideTitle')}
         </p>
         <span className="text-[14px] text-gray-500">
-          {tc('dnsWaitTime')} <strong className="text-gray-700">{waitTime}</strong>
+          {tc('topbar.dnsWaitTime')} <strong className="text-gray-700">{waitTime}</strong>
         </span>
       </div>
       <p className="text-[17px] text-gray-600 leading-relaxed">
-        {tc('dnsGuideDesc')} <strong>{records.length}</strong> {tc('dnsGuideDescSuffix')}
+        {tc('topbar.dnsGuideDesc')} <strong>{records.length}</strong> {tc('topbar.dnsGuideDescSuffix')}
       </p>
       {missingValue ? (
         <div className="flex items-start gap-2 text-[15px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
           <HiOutlineExclamationCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <span>
-            {tc('dnsMissingValue')} <strong>{tc('dnsMissingValueBtn')}</strong> {tc('dnsMissingValueSuffix')}
+            {tc('topbar.dnsMissingValue')} <strong>{tc('topbar.dnsMissingValueBtn')}</strong> {tc('topbar.dnsMissingValueSuffix')}
           </span>
         </div>
       ) : null}
@@ -538,11 +538,11 @@ function DnsInstructions({ cdInfo, isApex, onCopy, tc }) {
             </span>
             <div className="min-w-0">
               <div className="text-[15px] text-gray-500 font-mono truncate">
-                <span className="text-gray-400">{tc('dnsHost')}</span> {r.host}
+                <span className="text-gray-400">{tc('topbar.dnsHost')}</span> {r.host}
               </div>
               <div className={`text-[17px] font-mono truncate ${r.value ? 'text-gray-800' : 'text-gray-400 italic'}`}>
-                <span className="text-gray-400">{tc('dnsValue')}</span>{' '}
-                {r.value || tc('dnsValuePending')}
+                <span className="text-gray-400">{tc('topbar.dnsValue')}</span>{' '}
+                {r.value || tc('topbar.dnsValuePending')}
               </div>
               {r.note ? (
                 <div className="text-[14px] text-gray-500 mt-0.5">{r.note}</div>
@@ -550,10 +550,10 @@ function DnsInstructions({ cdInfo, isApex, onCopy, tc }) {
             </div>
             <button
               type="button"
-              onClick={() => onCopy(`${r.type} ${r.host} → ${r.value}`, tc('dnsRecordCopied'))}
+              onClick={() => onCopy(`${r.type} ${r.host} → ${r.value}`, tc('topbar.dnsRecordCopied'))}
               disabled={!r.value}
               className="p-2.5 rounded hover:bg-purple-100 text-purple-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-              title={tc('dnsCopyBtn')}
+              title={tc('topbar.dnsCopyBtn')}
             >
               <HiOutlineClipboardCopy className="w-5 h-5" />
             </button>
@@ -562,7 +562,7 @@ function DnsInstructions({ cdInfo, isApex, onCopy, tc }) {
       </div>
       {cdInfo?.verificationRecord ? (
         <div className="text-[15px] text-gray-600 pt-3 border-t border-purple-100 mt-1.5 leading-relaxed">
-          {tc('dnsTxtRecord')}{' '}
+          {tc('topbar.dnsTxtRecord')}{' '}
           <code className="bg-white px-2.5 py-1.5 rounded border border-purple-200 text-gray-700 font-mono text-[15px]">
             {cdInfo.verificationRecord}
           </code>
@@ -576,21 +576,21 @@ function StatusBadge({ status, tc }) {
   if (status === 'ACTIVE') {
     return (
       <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[14px] font-semibold bg-green-50 text-green-700 border border-green-200">
-        <HiOutlineCheckCircle className="w-4 h-4" /> {tc('statusActive')}
+        <HiOutlineCheckCircle className="w-4 h-4" /> {tc('topbar.statusActive')}
       </span>
     );
   }
   if (status === 'PENDING') {
     return (
       <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[14px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-        <HiOutlineClock className="w-4 h-4" /> {tc('statusPending')}
+        <HiOutlineClock className="w-4 h-4" /> {tc('topbar.statusPending')}
       </span>
     );
   }
   if (status === 'ERROR') {
     return (
       <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[14px] font-semibold bg-red-50 text-red-700 border border-red-200">
-        <HiOutlineExclamationCircle className="w-4 h-4" /> {tc('statusError')}
+        <HiOutlineExclamationCircle className="w-4 h-4" /> {tc('topbar.statusError')}
       </span>
     );
   }

@@ -1,107 +1,54 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
-import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencil, HiOutlineExternalLink, HiOutlineClipboard, HiOutlineGlobeAlt } from 'react-icons/hi';
 import {
-  createLandingPageAdmin,
+  HiOutlinePlus,
+  HiOutlineRefresh,
+  HiOutlineTrash,
+  HiOutlinePencil,
+  HiOutlineExternalLink,
+  HiOutlineClipboard,
+  HiOutlineGlobeAlt,
+} from 'react-icons/hi';
+import {
   deleteLandingPageAdmin,
   fetchLandingPagesAdminList,
-  fetchLandingPageAdminById,
-  putLandingCustomDomain,
-  updateLandingPageAdmin,
   fetchLandingPagesDashboardStats,
 } from '../../features/landing-pages/services/landingPagesAdminApi.service.js';
-import LandingPageFullEditor from '../../features/landing-pages/components/LandingPageFullEditor.jsx';
-import { prepareLandingHtmlForPreview } from '../../features/landing-pages/utils/injectLandingEnhancements.js';
-import { normalizeLandingLpTrackApiBase } from '../../features/landing-pages/utils/normalizeLandingLpTrackApiBase.js';
-import {
-  applyLeadFormDraft,
-  defaultLeadFormConfig,
-  normalizeLeadFormConfig,
-  prepareLeadFormConfigForSave,
-  snapshotLeadFormPersistedMeta,
-} from '../../features/landing-pages/utils/landingLeadFormConfig.js';
 
 const BASE_DOMAIN = 'founderai.biz';
 
 /**
- * Tự sinh slug từ hostname kiểu subdomain.
- * VD: lp.example.com → 'lp' ; landing2.shop.example.com → 'landing2-shop' (fallback).
- * Trả về null nếu không thể sinh slug hợp lệ.
+ * List page cho Landing Pages admin.
+ *
+ * Phase 1 (Gemini Canvas redesign): edit/create flow đã chuyển sang sub-route
+ *   - /app/settings/landing-pages/new      → LandingCanvasPage
+ *   - /app/settings/landing-pages/:id/edit → LandingCanvasPage
+ *
+ * Page này chỉ phục vụ:
+ *   - List các landing page (table + stats)
+ *   - Navigate tới canvas editor khi user click "Tạo mới" hoặc icon Edit
+ *   - Delete landing page (vẫn giữ tại đây)
  */
-function deriveSubSlugFromHostname(hostname) {
-  const h = String(hostname || '').trim().toLowerCase().replace(/^https?:\/\//, '');
-  if (!h) return null;
-  const firstLabel = h.split('.')[0];
-  const cleaned = firstLabel.replace(/[^a-z0-9_-]/gi, '');
-  return cleaned || null;
-}
-
-const emptyForm = () => ({
-  slug: '',
-  title: '',
-  htmlContent: '',
-  isPublished: false,
-  domainType: 'system',
-  domainSubtype: 'subdomain',
-  leadFormConfig: defaultLeadFormConfig(),
-  leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
-  leadFormFieldErrors: {},
-});
-
-function resolveLeadFormConfigForSave(form, setForm) {
-  const { config, errors } = prepareLeadFormConfigForSave(
-    form.leadFormConfig,
-    form.leadFormPersistedMeta
-  );
-  if (errors.length) {
-    setForm((prev) => ({
-      ...prev,
-      leadFormFieldErrors: Object.fromEntries(errors.map((e) => [e.key, e.message])),
-    }));
-    toast.error(errors[0].message);
-    return null;
-  }
-  return config;
-}
-
 export default function LandingPagesAdminPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
   const [statsPack, setStatsPack] = useState({ filters: {}, rows: [] });
   const location = useLocation();
 
+  // Nếu AiChatbot điều hướng sang đây với aiDraft → chuyển tiếp sang canvas new route.
   useEffect(() => {
     const aiDraft = location.state?.aiDraft;
     if (!aiDraft) return;
-    setEditingId(null);
-    setForm({
-      slug: '',
-      title: aiDraft.title || '',
-      htmlContent: (() => {
-        if (!aiDraft.html) return '';
-        const isFullDoc = /<!doctype\s+html/i.test(aiDraft.html) || /<html[\s>]/i.test(aiDraft.html);
-        if (isFullDoc) return aiDraft.html;
-        return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${aiDraft.title || ''}</title><script src="https://cdn.tailwindcss.com"></script><style>${aiDraft.css || ''}</style></head><body>${aiDraft.html}</body></html>`;
-      })(),
-      isPublished: false,
-      domainType: 'system',
-      domainSubtype: 'subdomain',
-      leadFormConfig: aiDraft.leadFormDraft
-        ? applyLeadFormDraft(aiDraft.leadFormDraft)
-        : defaultLeadFormConfig(),
-      leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
-      leadFormFieldErrors: {},
+    navigate('/app/settings/landing-pages/new', {
+      state: { aiDraft },
+      replace: true,
     });
-    setModalOpen(true);
     window.history.replaceState({}, '');
-  }, [location.state]);
+  }, [location.state, navigate]);
 
   const reloadAll = useCallback(async () => {
     setLoading(true);
@@ -117,7 +64,7 @@ export default function LandingPagesAdminPage() {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -149,215 +96,16 @@ export default function LandingPagesAdminPage() {
     });
   }, [rows, statsBySlug]);
 
-  const previewSrcDoc = useMemo(() => {
-    const slug = String(form.slug || '').trim().toLowerCase();
-    const rawTrim = (form.htmlContent || '').trim();
-    const emptyHint =
-      `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body><p class="p-4 text-gray-500 text-sm">${t('landingPagesAdmin.previewPlaceholder')}</p></body></html>`;
-    /**
-     * Đảm bảo HTML preview luôn có CDN Tailwind để các class utility (do AI generate)
-     * render đúng. Nếu thiếu `<head>` thì tự thêm; nếu đã có CDN thì bỏ qua.
-     */
-    const ensureTailwindCdn = (html) => {
-      if (!html) return html;
-      if (/cdn\.tailwindcss\.com/i.test(html)) return html;
-      const cdnTag = '<script src="https://cdn.tailwindcss.com"></script>';
-      if (/<head\b[^>]*>/i.test(html)) {
-        return html.replace(/<head\b([^>]*)>/i, `<head$1>\n  ${cdnTag}`);
-      }
-      if (/<html\b[^>]*>/i.test(html)) {
-        return html.replace(/<html\b([^>]*)>/i, `<html$1><head>\n  <meta charset="utf-8"/>\n  ${cdnTag}\n</head>`);
-      }
-      return `<!DOCTYPE html><html><head><meta charset="utf-8"/>\n  ${cdnTag}</head><body>${html}</body></html>`;
-    };
-
-    if (!slug) {
-      return ensureTailwindCdn(rawTrim || emptyHint);
-    }
-    if (typeof window === 'undefined') {
-      return ensureTailwindCdn(rawTrim || emptyHint);
-    }
-    // Filter out Node.js code (require, __dirname, __filename, module.exports, process, etc.)
-    // Remove entire script blocks containing Node.js syntax
-    let cleanHtml = rawTrim
-      // Remove <script>...</script> blocks containing Node.js keywords
-      .replace(/<script(?:\s[^>]*)?>(?:[^<]|<(?!\/script))*?(?:require|__dirname|__filename|module\.exports|process\.|global\.)(?:[^<]|<(?!\/script))*?<\/script>/gi, '')
-      // Remove <script src="..."> with Node.js-related filenames
-      .replace(/<script[^>]*src\s*=[^>]*require[^>]*><\/script>/gi, '')
-      // Replace any remaining require() calls in scripts with safe comment
-      .replace(/require\s*\([^)]*\)/gi, '/* require removed */');
-
-    // Handle case where rawTrim is a full HTML document vs just content
-    const isFullHtml = /<html[\s>]/i.test(cleanHtml);
-    const origin = window.location.origin;
-    const apiBase = normalizeLandingLpTrackApiBase(
-      String(import.meta.env.VITE_API_URL || `${origin}/api`)
-    );
-
-    let baseHtml;
-    if (isFullHtml) {
-      // Giữ nguyên <head> gốc (Tailwind CDN, custom CSS, meta tags...) — chỉ
-      // set/update <title> nếu form.title có giá trị; không rebuild document
-      // để tránh vứt mất head làm preview hiển thị text thô.
-      const title = String(form.title || '').trim();
-      let out = cleanHtml;
-      if (title) {
-        if (/<title[^>]*>[\s\S]*?<\/title>/i.test(out)) {
-          out = out.replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${title}</title>`);
-        } else if (/<head\b[^>]*>/i.test(out)) {
-          out = out.replace(/<head\b([^>]*)>/i, `<head$1><title>${title}</title>`);
-        } else {
-          // Không có <head> nhưng có <html>: chèn head + title trước <body> hoặc trước <html> nội dung
-          if (/<body\b[^>]*>/i.test(out)) {
-            out = out.replace(/<body\b([^>]*)>/i, `<head><meta charset="utf-8"/><title>${title}</title></head><body$1>`);
-          } else {
-            out = `<head><meta charset="utf-8"/><title>${title}</title></head>${out}`;
-          }
-        }
-      }
-      baseHtml = out;
-    } else {
-      baseHtml = cleanHtml
-        ? `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${form.title || ''}</title></head><body>${cleanHtml}</body></html>`
-        : '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body></body></html>';
-    }
-
-    const preview = prepareLandingHtmlForPreview(baseHtml, { slug, frontendOrigin: origin, apiBase });
-    return ensureTailwindCdn(preview);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.htmlContent, form.slug, form.title]);
-
-  const previewExternalUrl = useMemo(() => {
-    const slug = String(form.slug || '').trim().toLowerCase();
-    if (!slug || typeof window === 'undefined') return '';
-    return `https://${encodeURIComponent(slug)}.${BASE_DOMAIN}`;
-  }, [form.slug]);
-
   const openCreate = () => {
-    setEditingId(null);
-    setForm(emptyForm());
-    setModalOpen(true);
+    navigate('/app/settings/landing-pages/new');
   };
 
-  const openEdit = async (row) => {
-    try {
-      const full = await fetchLandingPageAdminById(row.id);
-      setEditingId(full.id);
-      setForm({
-        slug: full.slug || '',
-        title: full.title || '',
-        htmlContent: full.htmlContent || '',
-        isPublished: Boolean(full.isPublished),
-        domainType: full.domainType === 'custom' ? 'custom' : 'system',
-        domainSubtype: full.domainSubtype === 'apex' ? 'apex' : 'subdomain',
-        leadFormConfig: normalizeLeadFormConfig(full.leadFormConfig),
-        leadFormPersistedMeta: snapshotLeadFormPersistedMeta(full.leadFormConfig),
-        leadFormFieldErrors: {},
-      });
-      setModalOpen(true);
-    } catch (e) {
-      toast.error(e?.response?.data?.message || t('landingPagesAdmin.loadDetailFailed'));
-    }
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditingId(null);
-    setForm(emptyForm());
-  };
-
-  const save = async () => {
-    const slug = String(form.slug || '').trim().toLowerCase();
-    if (!form.title || !form.title.trim()) {
-      toast.error('Vui lòng nhập tên landing page.');
+  const openEdit = (row) => {
+    if (!row?.id) {
+      toast.error('ID landing page không hợp lệ');
       return;
     }
-    const leadFormConfig = resolveLeadFormConfigForSave(form, setForm);
-    if (!leadFormConfig) return;
-    setSaving(true);
-    try {
-      if (editingId) {
-        const updated = await updateLandingPageAdmin(editingId, {
-          slug: slug || null,
-          title: form.title,
-          htmlContent: form.htmlContent,
-          isPublished: form.isPublished,
-          domainType: form.domainType,
-          domainSubtype: form.domainSubtype,
-          leadFormConfig,
-        });
-        toast.success(t('landingPagesAdmin.updated'));
-        if (updated?.warning) {
-          toast(updated.warning, { icon: '⚠️', duration: 6000 });
-        }
-      } else {
-        const created = await createLandingPageAdmin({
-          slug: slug || null,
-          title: form.title,
-          htmlContent: form.htmlContent,
-          isPublished: form.isPublished,
-          domainType: form.domainType,
-          domainSubtype: form.domainSubtype,
-          leadFormConfig,
-        });
-        toast.success(t('landingPagesAdmin.created'));
-        if (created?.customDomainProvisioned === false) {
-          toast.error(created.customDomainMessage || 'Landing đã tạo nhưng subdomain chưa được cấp qua Cloudflare.');
-        }
-      }
-      closeModal();
-      reloadAll();
-    } catch (e) {
-      if (!e._upgradeToastShown) {
-        toast.error(e?.response?.data?.message || e?.message || t('landingPagesAdmin.saveFailed'));
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCreateWithCustomDomain = async (payload, hostname, isApex) => {
-    if (!hostname) {
-      toast.error('Vui lòng nhập hostname.');
-      throw new Error('Hostname is required');
-    }
-    const title = String(payload.title || '').trim();
-    if (!title) {
-      toast.error('Vui lòng nhập tên landing page.');
-      throw new Error('Title is required');
-    }
-    // Tự sinh slug nếu để trống:
-    //  - Apex (example.com) → slug = null (chỉ dùng hostname, không có subdomain miễn phí).
-    //  - Sub (lp.example.com) → lấy label đầu tiên (lp). Nếu rỗng thì bỏ slug.
-    let slug = String(payload.slug || '').trim();
-    if (!slug) {
-      slug = isApex ? null : deriveSubSlugFromHostname(hostname);
-    }
-    const leadFormConfig = resolveLeadFormConfigForSave(payload, setForm);
-    if (!leadFormConfig) {
-      throw new Error('leadFormConfig không hợp lệ');
-    }
-    const created = await createLandingPageAdmin({
-      slug,
-      title,
-      htmlContent: payload.htmlContent,
-      isPublished: payload.isPublished,
-      domainType: 'custom',
-      domainSubtype: isApex ? 'apex' : 'subdomain',
-      leadFormConfig,
-    });
-    const newId = created?.id ?? created?.data?.id;
-    if (!newId) throw new Error('Không có id từ create');
-    const cd = await putLandingCustomDomain(newId, hostname, isApex);
-    setEditingId(newId);
-    setForm((p) => ({
-      ...p,
-      id: newId,
-      slug: slug || '',
-      domainType: 'custom',
-      domainSubtype: isApex ? 'apex' : 'subdomain',
-    }));
-    return { id: newId, cdInfo: cd?.data ?? null };
+    navigate(`/app/settings/landing-pages/${row.id}/edit`);
   };
 
   const remove = async (row) => {
@@ -385,148 +133,154 @@ export default function LandingPagesAdminPage() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div className="space-y-6 flex-1 min-h-0 overflow-auto pr-1">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{t('landingPagesAdmin.title')}</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {t('landingPagesAdmin.description')}
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button type="button" className="btn btn-secondary flex items-center gap-2" onClick={() => reloadAll()} disabled={loading}>
-            <HiOutlineRefresh className="w-4 h-4" />
-            {t('landingPagesAdmin.reload')}
-          </button>
-          <button type="button" className="btn btn-primary flex items-center gap-2" onClick={openCreate}>
-            <HiOutlinePlus className="w-4 h-4" />
-            {t('landingPagesAdmin.createNew')}
-          </button>
-        </div>
-      </div>
-
-
-
-      <div className="card overflow-x-auto">
-        {loading ? (
-          <div className="flex items-center justify-center p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">{t('landingPagesAdmin.title')}</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {t('landingPagesAdmin.description')}
+            </p>
           </div>
-        ) : tableRows.length === 0 ? (
-          <div className="text-center py-12">
-            <HiOutlineGlobeAlt className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 mb-4">{t('landingPagesAdmin.noDynamicYet')}</p>
-            <button type="button" className="btn btn-primary" onClick={openCreate}>
-              <HiOutlinePlus className="w-4 h-4 mr-2 inline" />
+          <div className="flex gap-2 flex-wrap">
+            <button
+              type="button"
+              className="btn btn-secondary flex items-center gap-2"
+              onClick={() => reloadAll()}
+              disabled={loading}
+            >
+              <HiOutlineRefresh className="w-4 h-4" />
+              {t('landingPagesAdmin.reload')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary flex items-center gap-2"
+              onClick={openCreate}
+            >
+              <HiOutlinePlus className="w-4 h-4" />
               {t('landingPagesAdmin.createNew')}
             </button>
           </div>
-        ) : (
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-100 bg-gray-50/50">
-                <th className="p-3 font-medium">{t('landingPagesAdmin.titleCol')}</th>
-                <th className="p-3 font-medium">{t('landingPagesAdmin.domainCol') || 'Domain'}</th>
-                <th className="p-3 font-medium">{t('landingPagesAdmin.published')}</th>
-                <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.views')}</th>
-                <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.clicks')}</th>
-                <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.forms')}</th>
-                <th className="p-3 font-medium">{t('landingPagesAdmin.updated')}</th>
-                <th className="p-3 w-32" />
-              </tr>
-            </thead>
-            <tbody>
-              {tableRows.map((r) => (
-                <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
-                  <td className="p-3 font-medium text-gray-900">{r.title || '—'}</td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <code className={`font-mono text-xs px-2 py-1 rounded ${
-                        r.isCustomDomain ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {r.displayDomain}
-                      </code>
-                      {r.isCustomDomain && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-600">
-                          {r.isApexDomain ? 'Apex' : 'Sub'}
+        </div>
+
+        <div className="card overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : tableRows.length === 0 ? (
+            <div className="text-center py-12">
+              <HiOutlineGlobeAlt className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 mb-4">{t('landingPagesAdmin.noDynamicYet')}</p>
+              <button type="button" className="btn btn-primary" onClick={openCreate}>
+                <HiOutlinePlus className="w-4 h-4 mr-2 inline" />
+                {t('landingPagesAdmin.createNew')}
+              </button>
+            </div>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-100 bg-gray-50/50">
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.titleCol')}</th>
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.domainCol') || 'Domain'}</th>
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.published')}</th>
+                  <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.views')}</th>
+                  <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.clicks')}</th>
+                  <th className="p-3 font-medium tabular-nums">{t('landingPagesAdmin.forms')}</th>
+                  <th className="p-3 font-medium">{t('landingPagesAdmin.updated')}</th>
+                  <th className="p-3 w-32" />
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors"
+                  >
+                    <td className="p-3 font-medium text-gray-900">{r.title || '—'}</td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <code
+                          className={`font-mono text-xs px-2 py-1 rounded ${
+                            r.isCustomDomain
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {r.displayDomain}
+                        </code>
+                        {r.isCustomDomain && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-600">
+                            {r.isApexDomain ? 'Apex' : 'Sub'}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(getPublicUrl(r), 'Đã copy URL')}
+                          className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                          title="Copy URL"
+                        >
+                          <HiOutlineClipboard className="w-3.5 h-3.5" />
+                        </button>
+                        <a
+                          href={getPublicUrl(r)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="Mở trong tab mới"
+                        >
+                          <HiOutlineExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      {r.isPublished ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                          {t('common.yes')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                          {t('common.no')}
                         </span>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(getPublicUrl(r), 'Đã copy URL')}
-                        className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                        title="Copy URL"
-                      >
-                        <HiOutlineClipboard className="w-3.5 h-3.5" />
-                      </button>
-                      <a
-                        href={getPublicUrl(r)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        title="Mở trong tab mới"
-                      >
-                        <HiOutlineExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  </td>
-                  <td className="p-3">
-                    {r.isPublished ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                        {t('common.yes')}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                        {t('common.no')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3 tabular-nums text-gray-700">{Number(r.viewCount || 0).toLocaleString('vi-VN')}</td>
-                  <td className="p-3 tabular-nums text-gray-700">{Number(r.clickCount || 0).toLocaleString('vi-VN')}</td>
-                  <td className="p-3 tabular-nums text-gray-700">{Number(r.submitCount || 0).toLocaleString('vi-VN')}</td>
-                  <td className="p-3 text-xs text-gray-500">
-                    {r.updatedAt ? new Date(r.updatedAt).toLocaleString('vi-VN') : '—'}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex gap-1 justify-end">
-                      <button
-                        type="button"
-                        className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-                        title={t('common.edit')}
-                        onClick={() => openEdit(r)}
-                      >
-                        <HiOutlinePencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
-                        title={t('common.delete')}
-                        onClick={() => remove(r)}
-                      >
-                        <HiOutlineTrash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                    </td>
+                    <td className="p-3 tabular-nums text-gray-700">
+                      {Number(r.viewCount || 0).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="p-3 tabular-nums text-gray-700">
+                      {Number(r.clickCount || 0).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="p-3 tabular-nums text-gray-700">
+                      {Number(r.submitCount || 0).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="p-3 text-xs text-gray-500">
+                      {r.updatedAt ? new Date(r.updatedAt).toLocaleString('vi-VN') : '—'}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-1 justify-end">
+                        <button
+                          type="button"
+                          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                          title={t('common.edit')}
+                          onClick={() => openEdit(r)}
+                        >
+                          <HiOutlinePencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                          title={t('common.delete')}
+                          onClick={() => remove(r)}
+                        >
+                          <HiOutlineTrash className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
-
-      </div>
-
-      <LandingPageFullEditor
-        open={modalOpen}
-        editingId={editingId}
-        form={form}
-        setForm={setForm}
-        saving={saving}
-        previewSrcDoc={previewSrcDoc}
-        links={{ preview: previewExternalUrl }}
-        onClose={closeModal}
-        onSave={save}
-        onCreatePageWithCustomDomain={handleCreateWithCustomDomain}
-      />
     </div>
   );
 }
