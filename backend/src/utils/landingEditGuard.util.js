@@ -97,6 +97,12 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
     throw err;
   }
 
+  if (current.includes('data-uknow-lead-form') && !next.includes('data-uknow-lead-form')) {
+    const err = new Error('AI đã làm mất form đăng ký nhúng (snippet). Vui lòng thử lại.');
+    err.status = 502;
+    throw err;
+  }
+
   // Chốt chặn 3: Kiểm tra inline-style tương đối so với bản cũ
   const oldStyleCount = (current.match(/\bstyle\s*=/gi) || []).length;
   const newStyleCount = (next.match(/\bstyle\s*=/gi) || []).length;

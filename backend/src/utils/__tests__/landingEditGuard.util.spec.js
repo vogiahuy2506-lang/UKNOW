@@ -136,6 +136,34 @@ describe('landingEditGuard.util', () => {
     }).toThrow(/mất khối form đăng ký nhúng/i);
   });
 
+  it('bản cũ có data-uknow-lead-form (snippet tự chứa) nhưng bản mới bị mất → ném lỗi 502', () => {
+    const snippetForm = '<form data-uknow-lead-form data-slug="demo" data-api-base="https://api.test/api"><input name="email"/></form>';
+    const htmlWithSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, snippetForm);
+    const htmlWithoutSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '<p>Khách đã mất form</p>');
+
+    expect(() => {
+      validateEditHtmlOutput({
+        currentHtml: htmlWithSnippet,
+        newHtml: htmlWithoutSnippet,
+      });
+    }).toThrow(/mất form đăng ký nhúng \(snippet\)/i);
+  });
+
+  it('bản cũ có data-uknow-lead-form, bản mới vẫn giữ nguyên form đó → hợp lệ', () => {
+    const snippetForm = '<form data-uknow-lead-form data-slug="demo" data-api-base="https://api.test/api"><input name="email"/></form>';
+    const htmlWithSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, snippetForm);
+    const editedHtml = htmlWithSnippet.replace(
+      'class="text-2xl font-bold">Tiêu đề',
+      'class="text-3xl font-extrabold text-blue-600">Tiêu đề mới cập nhật'
+    );
+
+    const isValid = validateEditHtmlOutput({
+      currentHtml: htmlWithSnippet,
+      newHtml: editedHtml,
+    });
+    expect(isValid).toBe(true);
+  });
+
   it('bản cũ KHÔNG có marker form (hoặc đã bỏ từ trước) → bản mới không bắt buộc phải có marker', () => {
     const currentWithoutForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '');
     const newWithoutForm = currentWithoutForm.replace('Tiêu đề', 'Tiêu đề mới');

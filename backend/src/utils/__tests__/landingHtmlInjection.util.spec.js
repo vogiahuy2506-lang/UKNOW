@@ -5,6 +5,7 @@ import {
   normalizeLandingLpTrackApiBase,
   prepareLandingHtmlOnSave,
   injectLandingEnhancements,
+  autoInjectLeadFormIfMissing,
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
 } from '../landingHtmlInjection.util.js';
@@ -48,6 +49,19 @@ describe('landingHtmlInjection.util', () => {
     it('input null/undefined → trả chuỗi rỗng', () => {
       expect(stripFounderLandingAutoBlocks(null)).toBe('');
       expect(stripFounderLandingAutoBlocks(undefined)).toBe('');
+    });
+
+    it('KHÔNG xóa form snippet tự chứa (data-uknow-lead-form) — không khớp pattern data-founder-lp-embed/injected/lp-track.js', () => {
+      const html =
+        '<p>before</p>' +
+        '<form data-uknow-lead-form data-slug="demo" data-api-base="https://api.test/api" style="max-width:430px">' +
+        '<input name="email"/><button type="submit">Gửi</button>' +
+        '<script>(function(){var f=document.currentScript.previousElementSibling;})();</script>' +
+        '</form>' +
+        '<p>after</p>';
+      const out = stripFounderLandingAutoBlocks(html);
+      expect(out).toBe(html);
+      expect(out).toContain('data-uknow-lead-form');
     });
   });
 
@@ -292,6 +306,31 @@ describe('landingHtmlInjection.util', () => {
       expect(typeof out).toBe('string');
       expect(out).toContain('lp-track.js');
       expect(out).toContain('data-slug="promo"');
+    });
+  });
+
+  describe('autoInjectLeadFormIfMissing', () => {
+    const opts = { slug: 'promo', frontendOrigin: 'http://localhost:5174' };
+
+    it('HTML đã có iframe thật (/embed/lead-form) → không chèn thêm, trả nguyên HTML', () => {
+      const html = '<html><body><iframe src="http://x/embed/lead-form?slug=promo"></iframe></body></html>';
+      expect(autoInjectLeadFormIfMissing(html, opts)).toBe(html);
+    });
+
+    it('HTML đã có form snippet tự chứa (data-uknow-lead-form) → không chèn iframe, trả nguyên HTML', () => {
+      const html =
+        '<html><body>' +
+        '<form data-uknow-lead-form data-slug="promo" data-api-base="http://api.test/api"><input name="email"/></form>' +
+        '</body></html>';
+      const out = autoInjectLeadFormIfMissing(html, opts);
+      expect(out).toBe(html);
+      expect(out).not.toContain('/embed/lead-form');
+    });
+
+    it('HTML không có form nào → chèn iframe (đường dự phòng còn nguyên)', () => {
+      const html = '<html><body><p>x</p></body></html>';
+      const out = autoInjectLeadFormIfMissing(html, opts);
+      expect(out).toContain('/embed/lead-form?slug=promo');
     });
   });
 

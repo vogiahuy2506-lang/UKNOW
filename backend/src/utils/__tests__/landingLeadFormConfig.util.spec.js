@@ -204,6 +204,89 @@ describe('landingLeadFormConfig.util', () => {
     expect(applied.customFields[0].type).toBe('text');
     expect(applied.customFields[0].labelVi).toBe('Quy mô');
   });
+
+  it('theme: default có đủ 5 màu + radius + 3 text khi chưa cấu hình', () => {
+    const d = defaultLeadFormConfig();
+    expect(d.theme).toEqual({
+      primary: '#f97316',
+      accent: '#ea580c',
+      bg: '#ffffff',
+      text: '#1f2937',
+      border: '#e5e7eb',
+      radius: 12,
+      titleText: 'Đăng ký nhận tư vấn',
+      subtitleText: expect.any(String),
+      buttonText: 'Đăng ký ngay →',
+    });
+    expect(normalizePersistedLeadForm(null).theme).toEqual(d.theme);
+    expect(toPublicLeadFormConfig(null).theme).toEqual(d.theme);
+  });
+
+  it('theme: round-trip qua validate → merge → persisted → public DTO', () => {
+    const input = {
+      customFields: [],
+      theme: {
+        primary: '#123456',
+        accent: '#abc',
+        bg: '#FFFFFF00',
+        text: '#000',
+        border: '#e5e7eb',
+        radius: 8,
+        titleText: 'Đăng ký ngay',
+        subtitleText: 'Ưu đãi hôm nay',
+        buttonText: 'Gửi →',
+      },
+    };
+    const validated = validateAdminLeadFormConfig(input);
+    expect(validated.theme).toEqual(input.theme);
+
+    const merged = mergeLeadFormIntoCustomConfig({}, input);
+    expect(merged.leadForm.theme).toEqual(input.theme);
+
+    const persisted = normalizePersistedLeadForm(merged);
+    expect(persisted.theme).toEqual(input.theme);
+
+    const dto = toPublicLeadFormConfig(merged);
+    expect(dto.theme).toEqual(input.theme);
+  });
+
+  it('theme: giá trị bẩn bị kẹp về default/hợp lệ, không throw', () => {
+    const d = defaultLeadFormConfig();
+    const validated = validateAdminLeadFormConfig({
+      customFields: [],
+      theme: {
+        primary: 'red', // không phải hex → rơi về default
+        accent: '" onmouseover="alert(1)', // cố breakout style attr → rơi về default
+        bg: '#zzzzzz', // hex sai ký tự → rơi về default
+        text: '#000', // hợp lệ → giữ
+        border: 123, // không phải string → rơi về default
+        radius: 999, // ngoài 0-24 → kẹp 24
+        titleText: 'x'.repeat(500), // vượt 200 → cắt còn 200
+        subtitleText: '   ', // trim rỗng → rơi về default
+        buttonText: null,
+      },
+    });
+    expect(validated.theme.primary).toBe(d.theme.primary);
+    expect(validated.theme.accent).toBe(d.theme.accent);
+    expect(validated.theme.bg).toBe(d.theme.bg);
+    expect(validated.theme.text).toBe('#000');
+    expect(validated.theme.border).toBe(d.theme.border);
+    expect(validated.theme.radius).toBe(24);
+    expect(validated.theme.titleText).toHaveLength(200);
+    expect(validated.theme.subtitleText).toBe(d.theme.subtitleText);
+    expect(validated.theme.buttonText).toBe(d.theme.buttonText);
+  });
+
+  it('theme: radius âm kẹp về 0, số thập phân được làm tròn', () => {
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: { radius: -5 } }).theme.radius).toBe(0);
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: { radius: 7.6 } }).theme.radius).toBe(8);
+  });
+
+  it('theme: input không phải object → toàn bộ về default', () => {
+    const d = defaultLeadFormConfig();
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: 'not-an-object' }).theme).toEqual(d.theme);
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: null }).theme).toEqual(d.theme);
+  });
 });
 
 describe('landingLeadCustomFilters.util', () => {

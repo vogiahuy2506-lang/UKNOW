@@ -166,6 +166,9 @@ export function autoInjectLeadFormIfMissing(html, { slug, frontendOrigin }) {
   if (!out) return out;
   // Đã có iframe thật → xong.
   if (out.includes('/embed/lead-form')) return out;
+  // Đã có form snippet tự chứa (buildLeadFormHtmlSnippet, data-uknow-lead-form) → xong,
+  // không chèn thêm iframe chồng lên (hai form trên cùng trang).
+  if (out.includes('data-uknow-lead-form')) return out;
 
   const embedUrl = `${origin}/embed/lead-form?slug=${encodeURIComponent(s)}`;
   const iframeBlock = `<iframe src="${embedUrl}" width="430" height="720" style="border:0;display:block;width:430px;max-width:100%;vertical-align:top;overflow:hidden" title="Đăng ký Founder AI" loading="lazy"></iframe>\n`;
