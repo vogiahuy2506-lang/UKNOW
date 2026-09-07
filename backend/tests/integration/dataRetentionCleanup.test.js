@@ -438,4 +438,35 @@ describe('PR-N4 — Dọn dẹp dữ liệu lưu trữ & bảo vệ chứng từ
     expect(run2.landingPageEventsDeleted).toBe(0);
     expect(run2.contactSubmissionsDeleted).toBe(0);
   });
+
+  it('8. MIGRATION 190 BACKFILL: user status="deleted" có deleted_at = NULL được cập nhật thành NOW(), và khách hàng được bảo lưu trọn 90 ngày', async () => {
+    const user = await createUser({ email: 'backfill_u@test.com', username: 'backfill_u' });
+    await db.query(`UPDATE users SET status = 'deleted', deleted_at = NULL WHERE id = $1`, [user.id]);
+
+    const { rows: cust } = await db.query(
+      `INSERT INTO customers (id_user, email, full_name, created_at, updated_at)
+       VALUES ($1, 'backfill_cust@test.com', 'Khách User Backfill', NOW() - INTERVAL '1 year', NOW() - INTERVAL '1 year')
+       RETURNING id`,
+      [user.id]
+    );
+
+    // Chạy logic backfill của migration 190
+    await db.query(`
+      UPDATE users
+         SET deleted_at = NOW()
+       WHERE status = 'deleted' AND deleted_at IS NULL;
+    `);
+
+    // Verify deleted_at đã được gán
+    const { rows: userAfter } = await db.query('SELECT deleted_at FROM users WHERE id = $1', [user.id]);
+    expect(userAfter[0].deleted_at).not.toBeNull();
+
+    // Chạy cleanup: vì mới backfill (NOW() < 90 days), khách hàng KHÔNG bị xoá
+    const result = await runDataRetentionCleanup({ force: true });
+    expect(result.customersDeleted).toBe(0);
+
+    const checkCust = await db.query('SELECT id FROM customers WHERE id = $1', [cust[0].id]);
+    expect(checkCust.rowCount).toBe(1);
+  });
 });
+

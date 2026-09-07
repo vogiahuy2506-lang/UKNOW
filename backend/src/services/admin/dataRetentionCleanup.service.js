@@ -3,6 +3,13 @@ import db from '../../config/database.js';
 /**
  * Danh sách bảng kế toán & tài chính TUYỆT ĐỐI KHÔNG ĐƯỢC PHÉP XOÁ.
  * Đây là chứng từ luật định bắt buộc lưu giữ tối thiểu 10 năm theo Luật Kế toán.
+ *
+ * ⚠️ RÀNG BUỘC NGẦM VỀ CASCADE:
+ * Whitelist này bảo vệ ở TẦNG ỨNG DỤNG. Nó KHÔNG CHẶN ĐƯỢC `ON DELETE CASCADE`:
+ * Nếu sau này ai thêm một khoá ngoại CASCADE từ bảng kế toán trỏ về `campaign_runs` / `customers` / `leads`,
+ * xoá dòng cha sẽ kéo theo dòng kế toán và whitelist không hay biết gì.
+ * Hiện trạng an toàn: Không bảng kế toán nào có FK CASCADE tới 3 bảng đó, và
+ * `campaign_run_recipient_steps_backup_182` chỉ có `id_run BIGINT` không kèm `REFERENCES`.
  */
 export const EXCLUDED_ACCOUNTING_TABLES = Object.freeze([
   'affiliate_ledger',
