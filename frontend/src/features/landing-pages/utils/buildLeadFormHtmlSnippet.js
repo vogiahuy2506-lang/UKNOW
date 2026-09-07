@@ -75,7 +75,7 @@ export function buildLeadFormHtmlSnippet({
       <input type="tel" name="phone" required pattern="[0-9+\\s\\-]{8,15}" style="${inputStyle}" placeholder="0901234567" />
     </div>
     <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:${text};opacity:0.85">
-      <input type="checkbox" name="marketingConsent" required checked style="margin-top:2px" />
+      <input type="checkbox" name="marketingConsent" style="margin-top:2px" />
       <span>Tôi đồng ý nhận thông tin từ Founder AI.</span>
     </label>
   </div>
