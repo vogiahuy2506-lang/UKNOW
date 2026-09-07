@@ -41,6 +41,8 @@ import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.uti
 import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
+import { validateRegistrationConsents } from '../config/legalDocuments.config.js';
+import { recordConsents, getUserConsentHistory } from '../repositories/user/userConsent.repository.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -974,6 +976,95 @@ class UserController {
     } catch (error) {
       console.error('Delete invoice profile error:', error.message);
       res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * POST /api/users/consents
+   * Ghi nhận đồng ý bổ sung điều khoản cho người dùng cũ (PR-N3a).
+   */
+  async recordReconsent(req, res) {
+    try {
+      const consents = req.body?.consents && typeof req.body.consents === 'object' ? req.body.consents : req.body;
+      validateRegistrationConsents(consents);
+
+      const ipAddress = req.ip || req.socket?.remoteAddress || null;
+      const userAgent = req.headers['user-agent'] || null;
+
+      const recorded = await recordConsents({
+        userId: req.user.id,
+        consents: {
+          terms: Boolean(consents.terms),
+          privacy: Boolean(consents.privacy),
+          dpa: Boolean(consents.dpa),
+        },
+        source: 'reconsent',
+        ipAddress,
+        userAgent,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Đã ghi nhận đồng ý điều khoản',
+        data: {
+          consents: {
+            terms: true,
+            privacy: true,
+            dpa: true,
+          },
+          hasConsented: true,
+          recorded,
+        },
+      });
+    } catch (error) {
+      if (error?.status) {
+        return res.status(error.status).json({
+          success: false,
+          error: error.message,
+          message: error.message,
+          code: error.code,
+        });
+      }
+      console.error('recordReconsent error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Không thể ghi nhận đồng ý',
+        message: 'Không thể ghi nhận đồng ý',
+      });
+    }
+  }
+
+  /**
+   * GET /api/users/consents
+   * Lấy lịch sử đồng ý của người dùng (PR-N3a).
+   */
+  async getConsents(req, res) {
+    try {
+      const history = await getUserConsentHistory(req.user.id);
+      return res.json({
+        success: true,
+        data: history.map((row) => ({
+          id: row.id,
+          userId: row.user_id,
+          purpose: row.purpose,
+          granted: row.granted,
+          documentVersion: row.document_version,
+          document_version: row.document_version,
+          documentHash: row.document_hash,
+          source: row.source,
+          ipAddress: row.ip_address,
+          userAgent: row.user_agent,
+          createdAt: row.created_at,
+          created_at: row.created_at,
+        })),
+      });
+    } catch (error) {
+      console.error('getConsents error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Không thể lấy lịch sử đồng ý',
+        message: 'Không thể lấy lịch sử đồng ý',
+      });
     }
   }
 }

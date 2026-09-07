@@ -82,3 +82,24 @@ export async function updateMyPhone({ phone }) {
   const response = await api.put('/users/me/phone', { phone });
   return response.data;
 }
+
+/**
+ * Ghi nhận đồng ý bổ sung điều khoản cho người dùng cũ (PR-N3a).
+ *
+ * @param {{ terms: boolean, privacy: boolean, dpa: boolean }} payload
+ * @returns {Promise<{ success: boolean, message?: string, data?: Record<string, any> }>}
+ */
+export async function submitUserConsents(payload) {
+  const response = await api.post('/users/consents', payload);
+  return response.data;
+}
+
+/**
+ * Lấy lịch sử đồng ý pháp lý của người dùng (PR-N3a).
+ *
+ * @returns {Promise<{ success: boolean, data: Array<object> }>}
+ */
+export async function getUserConsentHistory() {
+  const response = await api.get('/users/consents');
+  return response.data;
+}

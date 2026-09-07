@@ -413,4 +413,115 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       expect(['23001', '23503']).toContain(dbError.code);
     });
   });
+
+  describe('PR-N3a: Xin đồng ý bổ sung (reconsent) & Lịch sử đồng ý', () => {
+    it('User cũ (0 dòng consent): GET /api/auth/me trả hasConsented = false, không có lỗi', async () => {
+      const user = await createUser({ username: 'olduser01', email: 'olduser01@test.local' });
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ username: user.username, password: user.plainPassword });
+      expect(loginRes.status).toBe(200);
+      const token = loginRes.body.data.accessToken;
+
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+      expect(meRes.status).toBe(200);
+      expect(meRes.body.data.user.hasConsented).toBe(false);
+      expect(meRes.body.data.user.consents).toBeNull();
+    });
+
+    it('POST /api/users/consents chưa đăng nhập → 401', async () => {
+      const res = await request(app)
+        .post('/api/users/consents')
+        .send({ terms: true, privacy: true, dpa: true });
+      expect(res.status).toBe(401);
+    });
+
+    it('POST /api/users/consents gửi thiếu 1 ô → 400, 0 dòng user_consents', async () => {
+      const user = await createUser({ username: 'olduser02', email: 'olduser02@test.local' });
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ username: user.username, password: user.plainPassword });
+      const token = loginRes.body.data.accessToken;
+
+      const res = await request(app)
+        .post('/api/users/consents')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ terms: true, privacy: false, dpa: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.code).toBe('CONSENT_REQUIRED');
+
+      // user_consents vẫn phải là 0 dòng
+      const { rows } = await db.query('SELECT * FROM user_consents WHERE user_id = $1', [user.id]);
+      expect(rows).toHaveLength(0);
+    });
+
+    it('POST /api/users/consents tick đủ 3 ô → 200, 3 dòng source=reconsent, đủ version/hash/IP/UA', async () => {
+      const user = await createUser({ username: 'olduser03', email: 'olduser03@test.local' });
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ username: user.username, password: user.plainPassword });
+      const token = loginRes.body.data.accessToken;
+
+      const res = await request(app)
+        .post('/api/users/consents')
+        .set('Authorization', `Bearer ${token}`)
+        .set('User-Agent', 'Mozilla/5.0 ReconsentClient')
+        .send({
+          terms: true,
+          privacy: true,
+          dpa: true,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.hasConsented).toBe(true);
+      expect(res.body.data.consents).toEqual({ terms: true, privacy: true, dpa: true });
+
+      // DB phải có 3 dòng với source 'reconsent'
+      const { rows } = await db.query(
+        `SELECT purpose, granted, document_version, document_hash, source, user_agent, ip_address
+         FROM user_consents
+         WHERE user_id = $1
+         ORDER BY purpose ASC`,
+        [user.id]
+      );
+      expect(rows).toHaveLength(3);
+      expect(rows.map((r) => r.purpose)).toEqual(['dpa', 'privacy', 'terms']);
+      for (const row of rows) {
+        expect(row.granted).toBe(true);
+        expect(row.source).toBe('reconsent');
+        expect(row.document_version).toBe(LEGAL_DOCUMENTS[row.purpose].version);
+        expect(row.document_hash).toBe(LEGAL_DOCUMENTS[row.purpose].hash);
+        expect(row.user_agent).toBe('Mozilla/5.0 ReconsentClient');
+        expect(row.ip_address).toBeDefined();
+      }
+
+      // Sau khi đồng ý, GET /api/auth/me trả hasConsented = true
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+      expect(meRes.status).toBe(200);
+      expect(meRes.body.data.user.hasConsented).toBe(true);
+      expect(meRes.body.data.user.consents).toEqual({ terms: true, privacy: true, dpa: true });
+
+      // GET /api/users/consents trả về đúng lịch sử
+      const historyRes = await request(app)
+        .get('/api/users/consents')
+        .set('Authorization', `Bearer ${token}`);
+      expect(historyRes.status).toBe(200);
+      expect(historyRes.body.success).toBe(true);
+      expect(historyRes.body.data).toHaveLength(3);
+      const historyItems = historyRes.body.data;
+      for (const item of historyItems) {
+        expect(item.userId).toBe(user.id);
+        expect(item.source).toBe('reconsent');
+        expect(item.documentVersion).toBeDefined();
+        expect(item.createdAt).toBeDefined();
+      }
+    });
+  });
 });

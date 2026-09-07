@@ -15,7 +15,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../../stores/authStore';
-import { getMyProfile, updateMyProfile } from '../services/authApi.service';
+import { getMyProfile, updateMyProfile, getUserConsentHistory } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
 import { isPlausiblePhone } from '../../../utils/phoneValidation';
 import PlanSection from '../../billing/PlanSection';
@@ -182,6 +182,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [formValues, setFormValues] = useState(PROFILE_FORM_INITIAL_STATE);
   const [profileData, setProfileData] = useState(null);
+  const [consentHistory, setConsentHistory] = useState([]);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -232,16 +233,26 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
       setError('');
       setSuccess('');
       try {
-        const response = await getMyProfile();
-        const nextProfile = response?.data || null;
-        if (isCancelled || !nextProfile) return;
-        setProfileData(nextProfile);
-        syncBillingFromProfile(nextProfile);
-        setFormValues({
-          fullName: String(nextProfile.fullName || ''),
-          email: String(nextProfile.email || ''),
-          phone: String(nextProfile.phone || ''),
-        });
+        const [profileRes, consentRes] = await Promise.allSettled([
+          getMyProfile(),
+          getUserConsentHistory(),
+        ]);
+        if (isCancelled) return;
+        if (profileRes.status === 'fulfilled' && profileRes.value?.data) {
+          const nextProfile = profileRes.value.data;
+          setProfileData(nextProfile);
+          syncBillingFromProfile(nextProfile);
+          setFormValues({
+            fullName: String(nextProfile.fullName || ''),
+            email: String(nextProfile.email || ''),
+            phone: String(nextProfile.phone || ''),
+          });
+        } else if (profileRes.status === 'rejected') {
+          setError(profileRes.reason?.response?.data?.message || t('accountProfileModal.loadError'));
+        }
+        if (consentRes.status === 'fulfilled' && Array.isArray(consentRes.value?.data)) {
+          setConsentHistory(consentRes.value.data);
+        }
       } catch (loadError) {
         if (!isCancelled) {
           setError(loadError?.response?.data?.message || t('accountProfileModal.loadError'));
@@ -496,6 +507,110 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                 </div>
               </div>
             )}
+
+            {/* Lịch sử đồng ý điều khoản & xử lý dữ liệu (PR-N3a / Nghị định 330/2026/NĐ-CP) */}
+            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <HiOutlineShieldCheck className="w-4 h-4 text-primary-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                  {t('accountProfileModal.consentHistoryTitle')}
+                </span>
+              </div>
+
+              <div className="divide-y divide-gray-100">
+                {[
+                  {
+                    purpose: 'terms',
+                    title: t('accountProfileModal.consentDocTerms'),
+                    href: '/terms',
+                    record: consentHistory.find((item) => item.purpose === 'terms'),
+                  },
+                  {
+                    purpose: 'privacy',
+                    title: t('accountProfileModal.consentDocPrivacy'),
+                    href: '/privacy-policy',
+                    record: consentHistory.find((item) => item.purpose === 'privacy'),
+                  },
+                  {
+                    purpose: 'dpa',
+                    title: t('accountProfileModal.consentDocDpa'),
+                    href: '/public-dpa',
+                    record: consentHistory.find((item) => item.purpose === 'dpa'),
+                  },
+                ].map((doc) => {
+                  const isGranted = doc.record?.granted === true;
+                  const version = doc.record?.documentVersion || doc.record?.document_version || null;
+                  const dateStr = doc.record?.createdAt || doc.record?.created_at;
+                  const formattedDate = dateStr ? formatDate(dateStr, t) : null;
+
+                  return (
+                    <div key={doc.purpose} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">{doc.title}</span>
+                          <a
+                            href={doc.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary-600 hover:underline font-medium inline-flex items-center gap-0.5"
+                          >
+                            {t('accountProfileModal.viewDocLink')}
+                          </a>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-gray-500 mt-1">
+                          {version && (
+                            <span>
+                              {t('accountProfileModal.consentDocVersion')}: <strong className="font-semibold text-gray-700">{version}</strong>
+                            </span>
+                          )}
+                          {formattedDate && (
+                            <span>
+                              {t('accountProfileModal.consentDocDate')}: <strong className="font-semibold text-gray-700">{formattedDate}</strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {isGranted ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
+                            <HiOutlineCheckCircle className="w-3.5 h-3.5" />
+                            {t('accountProfileModal.consentGranted')}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                            <HiOutlineClock className="w-3.5 h-3.5" />
+                            {t('accountProfileModal.consentPending')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Thông điệp minh bạch về việc rút lại đồng ý */}
+              <div className="rounded-lg bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 leading-relaxed">
+                <p>
+                  {t('accountProfileModal.consentWithdrawalNotice')}{' '}
+                  <a
+                    href="mailto:hotro.digibook@gmail.com"
+                    className="font-semibold text-amber-950 underline hover:text-black"
+                  >
+                    hotro.digibook@gmail.com
+                  </a>{' '}
+                  {t('accountProfileModal.consentWithdrawalOr')}{' '}
+                  <a
+                    href="/contact"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-amber-950 underline hover:text-black"
+                  >
+                    {t('accountProfileModal.contactPage')}
+                  </a>.
+                </p>
+              </div>
+            </div>
 
             {(isUserAdmin || isEmployeeCtx) && (
               <div>
