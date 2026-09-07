@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import affiliateService from '../../services/affiliate.service';
+import { getWithdrawalUrgency } from './affiliateWithdrawalUrgency.util.js';
 
 function formatVnd(amount) {
   return `${Number(amount || 0).toLocaleString('vi-VN')} đ`;
@@ -176,6 +177,12 @@ export default function AdminAffiliatePage() {
     }
   };
 
+  // Đếm trên danh sách withdrawals ĐANG HIỂN THỊ (theo statusFilter hiện tại) — mặc định
+  // filter rỗng ("Tất cả") đã gồm pending nên số này đúng ngay khi mở tab, không cần cuộn.
+  const overdueCount = withdrawals.filter(
+    (w) => getWithdrawalUrgency(w)?.level === 'overdue'
+  ).length;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
       {/* Header & Quick Action */}
@@ -246,6 +253,18 @@ export default function AdminAffiliatePage() {
             </select>
           </div>
 
+          {/* Bộ đếm quá hạn 7 ngày làm việc (ToS 15.3) — đặt ngay đầu, không phải cuộn mới thấy */}
+          {overdueCount > 0 && (
+            <div className="px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 flex items-center gap-2">
+              <svg className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-sm font-semibold text-red-700 dark:text-red-300">
+                {overdueCount} yêu cầu quá hạn
+              </span>
+            </div>
+          )}
+
           {/* Table */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/80 dark:border-gray-700 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
@@ -291,6 +310,8 @@ export default function AdminAffiliatePage() {
                         );
                       }
 
+                      const urgency = getWithdrawalUrgency(w);
+
                       return (
                         <tr key={w.id} className="hover:bg-gray-50/60 dark:hover:bg-gray-700/30">
                           <td className="px-4 py-3 font-mono text-xs text-gray-500">#{w.id}</td>
@@ -325,8 +346,19 @@ export default function AdminAffiliatePage() {
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-xs text-gray-500">
-                            {formatDate(w.requested_at)}
+                          <td className="px-4 py-3 text-xs">
+                            <span className="text-gray-500 dark:text-gray-400">{formatDate(w.requested_at)}</span>
+                            {urgency && (
+                              <div
+                                className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                  urgency.level === 'overdue'
+                                    ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                }`}
+                              >
+                                {urgency.text}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
@@ -449,6 +481,14 @@ export default function AdminAffiliatePage() {
                         </td>
                         <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">
                           {formatVnd(p.grossRevenue)}
+                          {p.manualRevenue > 0 && (
+                            <div
+                              className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                              title="Đơn super admin gán gói tay (payment_method=manual) — kế toán tự đối chiếu trước khi duyệt rút, không tự chặn."
+                            >
+                              gồm {Number(p.manualRevenue).toLocaleString('vi-VN')}đ đơn gán tay
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
