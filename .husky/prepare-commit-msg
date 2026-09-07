@@ -5,5 +5,13 @@
 COMMIT_MSG_FILE="$1"
 [ -f "$COMMIT_MSG_FILE" ] || exit 0
 
-# Use sed (available in MSYS2/Git Bash) to remove Co-authored-by lines.
-sed -i '/^[Cc][Oo]-[Aa]uthored-[Bb][Yy]:/d' "$COMMIT_MSG_FILE"
+# KHONG dung `sed -i`: cu phap do khong di duoc giua cac he.
+#   GNU sed (Linux):  -i khong nhan tham so
+#   BSD sed (macOS):  -i BAT BUOC co tham so duoi mo rong
+# Nen tren macOS, `sed -i '/pattern/d' file` bi doc thanh -i voi duoi la
+# '/pattern/d', roi chinh file tro thanh script -> loi "invalid command code"
+# va hook thoat khac 0, CHAN MOI COMMIT tren may do.
+#
+# Ghi ra file tam roi doi cho: chay dung tren ca BSD lan GNU, khong can mktemp.
+sed '/^[Cc][Oo]-[Aa]uthored-[Bb][Yy]:/d' "$COMMIT_MSG_FILE" > "$COMMIT_MSG_FILE.tmp" \
+  && mv "$COMMIT_MSG_FILE.tmp" "$COMMIT_MSG_FILE"
