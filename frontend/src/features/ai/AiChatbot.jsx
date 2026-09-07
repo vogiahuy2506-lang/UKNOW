@@ -2486,9 +2486,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
     const attachments = extractQuickSendDraftAttachments(config, singleStep);
 
+    // recipientType chỉ có ý nghĩa cho Zalo cá nhân (config.zaloRecipientType 'phone'|'uid').
+    // Không có nhãn bạn bè để mang theo (config chưa từng lưu nhãn) — trang Gửi nhanh tự đối
+    // chiếu lại với danh bạ thật, đây chỉ đưa đúng UID/số để trang đích xử lý (Bẫy 4).
+    const recipientType = (channel === 'zalo' || channel === 'zalo_personal')
+      ? (config.zaloRecipientType || 'phone')
+      : undefined;
+
     const draft = {
       channel: channel === 'zalo_personal' ? 'zalo' : channel,
       recipients,
+      recipientType,
       subject,
       body,
       accountId: accountId ? Number(accountId) : null,
