@@ -20,9 +20,10 @@ describe('PR-N5: Privacy Policy Panels Verification', () => {
       expect(text).toContain('Theo dõi lượt truy cập trang đích');
       expect(text).toContain('mã nhận diện ngẫu nhiên');
 
-      // 2b. Form liên hệ lưu IP + cam kết không tiếp thị nếu chưa có đồng ý
+      // 2b. Form liên hệ lưu IP làm dấu vết kỹ thuật + cam kết không tiếp thị nếu chưa có đồng ý
       expect(text).toContain('Dữ liệu biểu mẫu liên hệ');
       expect(text).toContain('địa chỉ IP');
+      expect(text).toContain('dấu vết kỹ thuật của lượt gửi biểu mẫu');
       expect(text).toContain('chỉ dùng duy nhất để phản hồi yêu cầu đó');
 
       // 2c. Thời hạn lưu: 13 tháng, 24 tháng, 10 năm
@@ -41,9 +42,10 @@ describe('PR-N5: Privacy Policy Panels Verification', () => {
       expect(text).toContain('Landing page visit tracking');
       expect(text).toContain('randomized identifier');
 
-      // 2b. Contact form IP + purpose limitation
+      // 2b. Contact form IP technical record + purpose limitation
       expect(text).toContain('Contact form data');
       expect(text).toContain('IP address');
+      expect(text).toContain('technical record of the submission');
       expect(text).toContain('Mandatory limitation');
 
       // 2c. Retention: 13 months, 24 months, 10 years
@@ -60,9 +62,9 @@ describe('PR-N5: Privacy Policy Panels Verification', () => {
       );
       const text = container.textContent;
 
-      // 2d. Rút lại đồng ý cho lead
+      // 2d. Rút lại đồng ý cho lead (cơ chế trực tuyến)
       expect(text).toContain('Rút lại đồng ý tiếp thị cho khách hàng tiềm năng (lead)');
-      expect(text).toContain('liên kết hủy nhận tin / rút lại đồng ý');
+      expect(text).toContain('liên kết hủy nhận tin');
 
       // 2c. Thời hạn lưu: 90 ngày, 24 tháng
       expect(text).toContain('90 ngày');
@@ -75,9 +77,9 @@ describe('PR-N5: Privacy Policy Panels Verification', () => {
       );
       const text = container.textContent;
 
-      // 2d. Lead consent withdrawal
+      // 2d. Lead consent withdrawal (online mechanism)
       expect(text).toContain('Marketing consent withdrawal for prospective customers (leads)');
-      expect(text).toContain('unsubscribe / consent withdrawal link');
+      expect(text).toContain('unsubscribe link');
 
       // 2c. Retention: 90 days, 24 months
       expect(text).toContain('90 days');

@@ -410,7 +410,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <strong>Thực thi quyền:</strong> Để thực hiện quyền của mình, chủ thể dữ liệu vui lòng liên hệ trực tiếp với <strong>Khách hàng (Bên kiểm soát dữ liệu)</strong> — đơn vị đã ủy quyền cho DIGISO xử lý dữ liệu. Mọi yêu cầu gửi trực tiếp về DIGISO sẽ được chuyển tiếp đến Khách hàng tương ứng để xử lý.
           </p>
           <p className="m-0">
-            <strong>Rút lại đồng ý tiếp thị cho khách hàng tiềm năng (lead):</strong> Đối với cá nhân đã để lại thông tin qua các biểu mẫu trên trang đích, mỗi email hoặc thông điệp tiếp thị gửi đi đều kèm theo một liên kết hủy nhận tin / rút lại đồng ý riêng biệt. Bạn có thể nhấn vào liên kết này bất cứ lúc nào để lập tức rút lại sự đồng ý tiếp thị trực tuyến mà không cần đăng nhập hay trải qua thủ tục phức tạp. Hệ thống sẽ tự động ghi nhận và ngừng gửi các thông điệp tiếp thị đến bạn.
+            <strong>Rút lại đồng ý tiếp thị cho khách hàng tiềm năng (lead):</strong> Chủ thể dữ liệu có quyền yêu cầu rút lại đồng ý tiếp thị bất kỳ lúc nào. Nền tảng hỗ trợ sẵn cơ chế rút lại đồng ý trực tuyến: khi thông điệp tiếp thị được gửi qua nền tảng, nội dung có kèm liên kết hủy nhận tin để bạn rút lại sự đồng ý ngay lập tức mà không cần đăng nhập hay trải qua thủ tục phức tạp.
           </p>
         </div>
         <div className={`mt-[14px] rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm ${lc(language, 'en')}`}>
@@ -418,7 +418,7 @@ export default function PrivacyPolicyProcessorPanel({ language, lc }) {
             <strong>Exercising rights:</strong> To exercise your rights, please contact the <strong>Customer (Data Controller)</strong> directly — the entity that authorized DIGISO to process your data. Any requests sent directly to DIGISO will be forwarded to the relevant Customer for handling.
           </p>
           <p className="m-0">
-            <strong>Marketing consent withdrawal for prospective customers (leads):</strong> For individuals who submitted information through landing page forms, every marketing email or message sent includes a dedicated unsubscribe / consent withdrawal link. You may click this link at any time to immediately withdraw marketing consent online without needing to log in or undergo complex procedures. The system will automatically record your request and cease sending marketing communications to you.
+            <strong>Marketing consent withdrawal for prospective customers (leads):</strong> Data subjects have the right to withdraw marketing consent at any time. The platform provides an online consent withdrawal mechanism: when marketing communications are delivered through the platform, the message includes an unsubscribe link allowing you to immediately withdraw consent without needing to log in or undergo complex procedures.
           </p>
         </div>
       </section>
