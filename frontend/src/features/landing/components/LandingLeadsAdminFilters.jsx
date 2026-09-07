@@ -325,11 +325,11 @@ export function LandingLeadsAdminFilters({
     }));
   }, [setDraftFilters]);
 
-  const presets = [
+  const presets = useMemo(() => [
     { id: 'today', label: t('landingLeads.presetToday') },
     { id: '7d', label: t('landingLeads.preset7Days') },
     { id: '30d', label: t('landingLeads.preset30Days') },
-  ];
+  ], [t]);
 
   // Detect preset đang khớp để highlight
   const activePreset = useMemo(() => {

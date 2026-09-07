@@ -8,7 +8,6 @@ import {
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineExternalLink,
-  HiOutlineShieldCheck,
   HiOutlineClock,
   HiOutlineInformationCircle,
   HiOutlineRefresh,
@@ -39,11 +38,11 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId 
   );
   const [hostname, setHostname] = useState(form?.customDomainHostname || '');
   const [isApex, setIsApex] = useState(form?.customDomainIsApex || false);
-  const [savingDomain, setSavingDomain] = useState(false);
-  const [domainStatus, setDomainStatus] = useState('NONE');
+  const [_savingDomain, _setSavingDomain] = useState(false);
+  const [domainStatus, _setDomainStatus] = useState('NONE');
 
   // Domain info from server
-  const [cdInfo, setCdInfo] = useState(null);
+  const [_cdInfo, _setCdInfo] = useState(null);
 
   // Domain verification
   const [checkingDomain, setCheckingDomain] = useState(false);
@@ -141,7 +140,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId 
     toast.success('Đã lưu tiêu đề');
   };
 
-  const handleSavePublish = () => {
+  const _handleSavePublish = () => {
     toast.success(form?.isPublished ? 'Đã xuất bản!' : 'Đã lưu nháp');
   };
 

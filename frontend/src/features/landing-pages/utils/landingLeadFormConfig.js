@@ -57,7 +57,7 @@ export function normalizeLeadFormConfig(raw) {
 /**
  * Prepare config for save - validates and normalizes
  */
-export function prepareLeadFormConfigForSave(raw, persistedMeta = {}) {
+export function prepareLeadFormConfigForSave(raw, _persistedMeta = {}) {
   const normalized = normalizeLeadFormConfig(raw);
   const errors = [];
 

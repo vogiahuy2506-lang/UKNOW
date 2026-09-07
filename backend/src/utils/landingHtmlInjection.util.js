@@ -55,6 +55,8 @@ export function stripFounderLandingAutoBlocks(html) {
   out = out.replace(/<div\s[^>]*data-founder-lp-injected\s*=[^>]*>[\s\S]*?<\/div>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*\/>\s*/gi, '');
+  out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*>\s*<\/script>\s*/gi, '');
+  out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*\/>\s*/gi, '');
   return out;
 }
 
@@ -205,13 +207,13 @@ export function autoInjectLeadFormIfMissing(html, { slug, frontendOrigin }) {
  *
  * Luồng:
  * 1. Nếu HTML đã có marker `data-founder-lp-injected` thì bỏ qua toàn bộ (tránh lặp).
- * 2. Nếu đã có `lp-track.js` thì không chèn script trùng.
- * 3. Chèn thẻ script `lp-track.js` (defer) với `data-api-base` + `data-slug` trước `</body>`.
+ * 2. Nếu đã có `lp-track.js` và `founderai-capture.js` thì không chèn script trùng.
+ * 3. Chèn thẻ script `lp-track.js` + `founderai-capture.js` (defer) với `data-api-base` + `data-slug` trước `</body>`.
  *
  * @param {string} html
  * @param {object} opts
  * @param {string} opts.slug
- * @param {string} opts.frontendOrigin Gốc frontend (vd http://localhost:5174) — host file `lp-track.js` và route `/embed/lead-form`
+ * @param {string} opts.frontendOrigin Gốc frontend (vd http://localhost:5174) — host file `lp-track.js`, `founderai-capture.js` và route `/embed/lead-form`
  * @param {string} opts.apiBase Gốc API (vd http://localhost:5001/api) cho `data-api-base`
  * @returns {string}
  */
@@ -229,16 +231,23 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
     return out;
   }
 
-  const scriptSrc = `${origin}/lp-track.js`;
+  const lpTrackSrc = `${origin}/lp-track.js`;
+  const captureSrc = `${origin}/founderai-capture.js`;
 
   const hasTrackScript = /lp-track\.js/i.test(out);
+  const hasCaptureScript = /founderai-capture\.js/i.test(out);
 
-  const scriptBlock = hasTrackScript
-    ? ''
-    : `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n<script src="${scriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+  let scriptBlock = '';
+  if (!hasTrackScript) {
+    scriptBlock += `<script src="${lpTrackSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+  }
+  if (!hasCaptureScript) {
+    scriptBlock += `<script src="${captureSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+  }
 
-  const injectBlock = `${scriptBlock}`;
-  if (!injectBlock.trim()) return out;
+  if (!scriptBlock) return out;
+
+  const injectBlock = `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n${scriptBlock}`;
 
   if (/<\/body>/i.test(out)) {
     return out.replace(/<\/body>/i, `${injectBlock}</body>`);

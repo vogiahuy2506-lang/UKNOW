@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   HiOutlineX, HiOutlineSearch, HiOutlineCheck,
@@ -13,14 +13,9 @@ import { updateLandingTemplate } from '../services/landingPagesAdminApi.service.
 
 /**
  * Template Gallery Modal - Browse and select landing page templates
- * 
- * @param {object} props
- * @param {boolean} props.isOpen
- * @param {function} props.onClose
- * @param {function} props.onSelect - Called with { template, html } when user picks a template
- * @param {function} props.onGenerateWithAi - Called when user wants AI generation
  */
 export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateWithAi }) {
+  const modalRef = useRef(null);
   const t = useI18n('templateGallery');
   const [activeTab, setActiveTab] = useState('public'); // 'public' | 'my'
   const [categories, setCategories] = useState([]);
@@ -176,10 +171,10 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/40">
-      <div 
-        className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div
+        ref={modalRef}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-modal-pop"
       >
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -531,7 +526,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
 
       {/* Confirmation Modal */}
       {confirmModal && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/40">
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="p-6">
               <div className={`w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center ${
@@ -585,6 +580,15 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
           </div>
         </div>
       )}
+      <>
+        <style>{`
+          @keyframes modalPop {
+            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+          .animate-modal-pop { animation: modalPop 200ms ease-out; }
+        `}</style>
+      </>
     </div>,
     document.body
   );

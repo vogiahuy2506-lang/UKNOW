@@ -881,6 +881,7 @@ export default {
     },
     templateGallery: {
       title: 'Template Library',
+      subtitle: 'Choose a template for your landing page',
       searchPlaceholder: 'Search templates…',
       empty: 'No templates yet.',
       noMatch: 'No matching templates.',
@@ -931,6 +932,7 @@ export default {
     },
     versionHistory: {
       title: 'Version history',
+      subtitle: 'View and restore previous versions',
       reload: 'Reload',
       current: 'Current',
       currentUnsaved: 'Current version — not yet saved',

@@ -882,6 +882,7 @@ export default {
     },
     templateGallery: {
       title: 'Thư viện Template',
+      subtitle: 'Chọn template cho landing page của bạn',
       searchPlaceholder: 'Tìm kiếm template…',
       empty: 'Chưa có template nào.',
       noMatch: 'Không có template nào phù hợp.',
@@ -932,6 +933,7 @@ export default {
     },
     versionHistory: {
       title: 'Lịch sử phiên bản',
+      subtitle: 'Xem và khôi phục các phiên bản trước đó',
       reload: 'Tải lại',
       current: 'Hiện tại',
       currentUnsaved: 'Phiên bản hiện tại — chưa lưu',
