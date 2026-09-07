@@ -47,3 +47,36 @@ describe('buildLeadFormHtmlSnippet — ô đồng ý marketing', () => {
     expect(form.getAttribute('data-slug')).toBe('demo');
   });
 });
+
+/**
+ * theme.primary/accent/bg/text/border được nội suy trực tiếp vào style="..." (không qua
+ * React). Backend đã siết còn hex hợp lệ (landingLeadFormConfig.util.js normalizeLeadFormTheme),
+ * nhưng hàm này tự đứng được — test phòng thủ khi gọi trực tiếp với giá trị bẩn (preview
+ * canvas editor dùng state frontend, chưa qua backend validate).
+ */
+describe('buildLeadFormHtmlSnippet — escape theme màu chống breakout style attr', () => {
+  it('giá trị chứa dấu ngoặc kép không tạo thêm thuộc tính (onmouseover) trên DOM', () => {
+    const html = buildLeadFormHtmlSnippet({
+      slug: 'demo',
+      apiBase: 'https://api.example.com/api',
+      theme: { primary: '" onmouseover="alert(1)' },
+    });
+    const { form } = parseForm(html);
+    const button = form.querySelector('button[type="submit"]');
+    expect(button.hasAttribute('onmouseover')).toBe(false);
+    expect(Array.from(button.attributes).map((a) => a.name)).toEqual(['type', 'style']);
+  });
+
+  it('escapeHtml chạy trên màu — chuỗi kết quả không chứa chuỗi tấn công thô', () => {
+    const html = buildLeadFormHtmlSnippet({
+      slug: 'demo',
+      apiBase: 'https://api.example.com/api',
+      theme: { text: '"><script>window.__pwn=1</script>' },
+    });
+    expect(html).not.toContain('<script>window.__pwn=1</script>');
+    const { doc } = parseForm(html);
+    // Snippet luôn có đúng 1 <script> hợp lệ (handler submit) — payload chèn qua theme không được thêm script thứ hai.
+    expect(doc.querySelectorAll('script')).toHaveLength(1);
+    expect(doc.querySelector('script').textContent).not.toContain('__pwn');
+  });
+});

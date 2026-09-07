@@ -29,12 +29,13 @@ export function buildLeadFormHtmlSnippet({
   const safeApiBase = String(apiBase || '').trim().replace(/\/+$/, '');
   if (!safeSlug || !safeApiBase) return '';
 
-  const primary = theme.primary || '#f97316';
-  const accent = theme.accent || '#ea580c';
-  const bg = theme.bg || '#ffffff';
-  const text = theme.text || '#1f2937';
-  const border = theme.border || '#e5e7eb';
-  const radius = Number.isFinite(Number(theme.radius)) ? `${theme.radius}px` : '12px';
+  /** escapeHtml chặn breakout khỏi style="..." — theme tới từ leadFormConfig do người dùng nhập. */
+  const primary = escapeHtml(theme.primary || '#f97316');
+  const accent = escapeHtml(theme.accent || '#ea580c');
+  const bg = escapeHtml(theme.bg || '#ffffff');
+  const text = escapeHtml(theme.text || '#1f2937');
+  const border = escapeHtml(theme.border || '#e5e7eb');
+  const radius = Number.isFinite(Number(theme.radius)) ? `${Math.round(Number(theme.radius))}px` : '12px';
   const buttonText = theme.buttonText || 'Đăng ký ngay →';
   const titleText = theme.titleText || 'Đăng ký nhận tư vấn';
   const subtitleText = theme.subtitleText || 'Điền thông tin — đội ngũ sẽ liên hệ bạn trong 24h.';
