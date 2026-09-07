@@ -872,6 +872,14 @@ export async function getAffiliateOverview(userId) {
 
 /**
  * Admin lấy danh sách đóng sổ theo tháng (affiliate_periods).
+ *
+ * manual_revenue: phần gross_revenue của period đến từ đơn payment_method='manual' (super
+ * admin gán gói tay) — chỉ để kế toán THẤY và tự đối chiếu, không chặn duyệt rút.
+ * affiliate_revenue_events không lưu payment_method (affiliateRevenueSweep.service.js chỉ lọc
+ * lúc quét, không ghi lại) nên bắt buộc JOIN orders mới biết được đơn nào là manual.
+ * Điều kiện SĐT buyer PHẢI lặp lại đúng điều kiện affiliateMonthClosing.service.js dùng để
+ * tính gross_revenue — thiếu điều kiện này, manual_revenue sẽ đếm cả event chưa được gross
+ * tính (buyer chưa có SĐT) và có thể LỚN HƠN gross_revenue, hai số không khớp nhau.
  */
 export async function getAdminAffiliatePeriods({ monthKey, limit = 50, offset = 0 } = {}) {
   const conditions = [];
@@ -887,7 +895,16 @@ export async function getAdminAffiliatePeriods({ monthKey, limit = 50, offset = 
 
   const query = `
     SELECT p.id, p.referrer_user_id, p.month_key, p.gross_revenue, p.tier_level, p.rate_percent, p.commission_amount, p.closed_at,
-           u.email AS user_email, u.full_name AS user_full_name, u.phone AS user_phone, u.referral_code
+           u.email AS user_email, u.full_name AS user_full_name, u.phone AS user_phone, u.referral_code,
+           (SELECT COALESCE(SUM(e.amount), 0)
+              FROM affiliate_revenue_events e
+              JOIN orders o ON o.id = e.order_id
+              JOIN users b ON b.id = e.buyer_user_id
+             WHERE e.referrer_user_id = p.referrer_user_id
+               AND e.month_key = p.month_key
+               AND o.payment_method = 'manual'
+               AND b.phone IS NOT NULL AND TRIM(b.phone) <> ''
+           ) AS manual_revenue
     FROM affiliate_periods p
     LEFT JOIN users u ON u.id = p.referrer_user_id
     ${whereClause}
@@ -901,6 +918,7 @@ export async function getAdminAffiliatePeriods({ monthKey, limit = 50, offset = 
     referrerUserId: r.referrer_user_id,
     monthKey: r.month_key,
     grossRevenue: Math.round(Number(r.gross_revenue || 0)),
+    manualRevenue: Math.round(Number(r.manual_revenue || 0)),
     tierLevel: r.tier_level,
     ratePercent: r.rate_percent,
     commissionAmount: Math.round(Number(r.commission_amount || 0)),

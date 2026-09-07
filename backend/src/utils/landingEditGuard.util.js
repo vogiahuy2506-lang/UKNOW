@@ -1,4 +1,9 @@
 /**
+ * Marker comment dùng cho vị trí nhúng form đăng ký.
+ */
+export const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
+
+/**
  * Ngưỡng an toàn độ dài tối đa của currentHtml khi gửi cho AI edit.
  * Tính toán: maxOutputTokens = 32768, ~3 ký tự/token tiếng Việt, trừ escape JSON và phần mở rộng thêm -> ~60.000 ký tự.
  */
@@ -8,7 +13,10 @@ export const MAX_EDIT_HTML_INPUT_CHARS = 60000;
  * Vớt HTML từ phản hồi model khi JSON.parse thất bại (model kèm lời dẫn,
  * bọc code fence, hoặc trả thẳng HTML).
  *
- * Chỉ nhận nội dung code fence khi nó THỰC SỰ mở đầu bằng thẻ HTML.
+ * Chỉ nhận nội dung code fence khi nó THỰC SỰ mở đầu bằng thẻ HTML: regex
+ * ```(?:html)? không khớp ```json nên chữ "json" lọt vào nhóm bắt, và cả
+ * chuỗi JSON thô sẽ bị coi là HTML nếu không chặn ở đây. Với trang gốc dạng
+ * fragment ngắn, rác đó lọt qua được cả ngưỡng teo tóp 60%.
  *
  * @param {string} text
  * @returns {string} HTML vớt được, chuỗi rỗng nếu không có gì dùng được
@@ -32,7 +40,7 @@ export function extractHtmlFromModelText(text) {
 /**
  * Validate HTML kết quả từ chế độ AI Edit Landing Page.
  * Ngăn chặn các lỗi: AI cắt ngang do quá token, AI viết lại từ đầu làm mất layout/nội dung,
- * hoặc AI lạm dụng inline style.
+ * AI làm mất form đăng ký sẵn có, hoặc AI lạm dụng inline style.
  *
  * @param {{ currentHtml: string, newHtml: string, finishReason?: string }} params
  * @returns {boolean}
@@ -76,7 +84,26 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
     throw err;
   }
 
-  // Chốt chặn 2: Kiểm tra inline-style tương đối so với bản cũ
+  // Chốt chặn 2: Kiểm tra form marker có điều kiện
+  if (current.includes(LANDING_FORM_PLACEHOLDER) && !next.includes(LANDING_FORM_PLACEHOLDER)) {
+    const err = new Error('AI đã làm mất vị trí form đăng ký. Vui lòng thử lại.');
+    err.status = 502;
+    throw err;
+  }
+
+  if (current.includes('/embed/lead-form') && !next.includes('/embed/lead-form')) {
+    const err = new Error('AI đã làm mất khối form đăng ký nhúng. Vui lòng thử lại.');
+    err.status = 502;
+    throw err;
+  }
+
+  if (current.includes('data-uknow-lead-form') && !next.includes('data-uknow-lead-form')) {
+    const err = new Error('AI đã làm mất form đăng ký nhúng (snippet). Vui lòng thử lại.');
+    err.status = 502;
+    throw err;
+  }
+
+  // Chốt chặn 3: Kiểm tra inline-style tương đối so với bản cũ
   const oldStyleCount = (current.match(/\bstyle\s*=/gi) || []).length;
   const newStyleCount = (next.match(/\bstyle\s*=/gi) || []).length;
   if (newStyleCount > oldStyleCount + 2) {

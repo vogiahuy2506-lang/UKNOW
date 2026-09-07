@@ -21,6 +21,61 @@ const OPTION_VALUE_MAX = 80;
 const OPTION_LABEL_MAX = 100;
 const MAX_AI_CUSTOM_LABELS = 10;
 
+/** Đồng bộ shape với frontend `landingLeadFormConfig.js` LEAD_FORM_THEME_DEFAULTS. */
+export const LEAD_FORM_THEME_DEFAULTS = Object.freeze({
+  primary: '#f97316',
+  accent: '#ea580c',
+  bg: '#ffffff',
+  text: '#1f2937',
+  border: '#e5e7eb',
+  radius: 12,
+  titleText: 'Đăng ký nhận tư vấn',
+  subtitleText: 'Điền thông tin — đội ngũ sẽ liên hệ bạn trong 24h.',
+  buttonText: 'Đăng ký ngay →',
+});
+
+const THEME_COLOR_KEYS = Object.freeze(['primary', 'accent', 'bg', 'text', 'border']);
+const THEME_TEXT_KEYS = Object.freeze(['titleText', 'subtitleText', 'buttonText']);
+const THEME_TEXT_MAX = 200;
+/** Hex only — frontend chỉ có color picker nên đây không thắt nhu cầu thật, chỉ chặn CSS/HTML injection qua style="..." (buildLeadFormHtmlSnippet.js nội suy trực tiếp). */
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+export function defaultLeadFormTheme() {
+  return { ...LEAD_FORM_THEME_DEFAULTS };
+}
+
+/**
+ * Chuẩn hoá theme: màu phải khớp mã hex hợp lệ (khác luật lỏng ≤200 ký tự bên frontend —
+ * siết chặt hơn vì giá trị này được nội suy thẳng vào style="..." lúc render snippet),
+ * radius kẹp số nguyên 0-24, text ≤200 ký tự. Giá trị bẩn → rơi về default, không throw.
+ *
+ * @param {unknown} raw
+ * @returns {object}
+ */
+export function normalizeLeadFormTheme(raw) {
+  const defaults = LEAD_FORM_THEME_DEFAULTS;
+  if (!isPlainObject(raw)) return { ...defaults };
+  const out = { ...defaults };
+  for (const key of THEME_COLOR_KEYS) {
+    const v = raw[key];
+    if (typeof v === 'string' && HEX_COLOR_RE.test(v.trim())) {
+      out[key] = v.trim();
+    }
+  }
+  const r = Number(raw.radius);
+  if (Number.isFinite(r)) {
+    out.radius = Math.max(0, Math.min(24, Math.round(r)));
+  }
+  for (const key of THEME_TEXT_KEYS) {
+    const v = raw[key];
+    if (typeof v === 'string') {
+      const trimmed = v.trim().slice(0, THEME_TEXT_MAX);
+      if (trimmed) out[key] = trimmed;
+    }
+  }
+  return out;
+}
+
 /** Khớp `founder_OCCUPATION_OPTIONS` — value lưu DB. */
 export const OCCUPATION_VALUES = Object.freeze([
   'Sinh viên / Học sinh',
@@ -54,35 +109,8 @@ export function defaultLeadFormConfig() {
       interestArea: { visible: true },
     },
     customFields: [],
-    successRedirect: defaultSuccessRedirect(),
+    theme: defaultLeadFormTheme(),
   };
-}
-
-export const MIN_SUCCESS_REDIRECT_DELAY_MS = 0;
-export const MAX_SUCCESS_REDIRECT_DELAY_MS = 30000;
-const DEFAULT_SUCCESS_REDIRECT_DELAY_MS = 1500;
-
-export function defaultSuccessRedirect() {
-  return {
-    enabled: false,
-    url: '',
-    delayMs: DEFAULT_SUCCESS_REDIRECT_DELAY_MS,
-    openInNewTab: false,
-  };
-}
-
-function normalizePersistedSuccessRedirect(raw) {
-  const fallback = defaultSuccessRedirect();
-  if (!isPlainObject(raw)) return fallback;
-  const enabled = raw.enabled === true;
-  const url = asTrimmed(raw.url, 2000);
-  const delayRaw = Number(raw.delayMs);
-  const delayMs =
-    Number.isFinite(delayRaw) && delayRaw >= MIN_SUCCESS_REDIRECT_DELAY_MS
-      ? Math.min(delayRaw, MAX_SUCCESS_REDIRECT_DELAY_MS)
-      : fallback.delayMs;
-  const openInNewTab = raw.openInNewTab === true;
-  return { enabled, url, delayMs, openInNewTab };
 }
 
 function configError(message, statusCode = 400) {
@@ -141,7 +169,7 @@ export function normalizePersistedLeadForm(customConfigOrLeadForm) {
       interestArea: { visible: interestVisible },
     },
     customFields,
-    successRedirect: normalizePersistedSuccessRedirect(leadForm.successRedirect),
+    theme: normalizeLeadFormTheme(leadForm.theme),
   };
 }
 
@@ -216,12 +244,7 @@ export function toPublicLeadFormConfig(customConfigOrLeadForm) {
         labelEn: opt.labelEn,
       })),
     })),
-    successRedirect: {
-      enabled: Boolean(normalized.successRedirect.enabled),
-      url: normalized.successRedirect.url || '',
-      delayMs: normalized.successRedirect.delayMs,
-      openInNewTab: Boolean(normalized.successRedirect.openInNewTab),
-    },
+    theme: normalized.theme,
   };
 }
 
@@ -375,42 +398,8 @@ export function validateAdminLeadFormConfig(input, opts = {}) {
       interestArea: { visible: interestVisible },
     },
     customFields,
-    successRedirect: normalizeAdminSuccessRedirectInput(input.successRedirect),
+    theme: normalizeLeadFormTheme(input.theme),
   };
-}
-
-function normalizeAdminSuccessRedirectInput(raw) {
-  const fallback = defaultSuccessRedirect();
-  if (raw == null) return fallback;
-  if (!isPlainObject(raw)) {
-    throw configError('successRedirect không hợp lệ');
-  }
-  const enabled = raw.enabled === true;
-  const url = asTrimmed(raw.url, 2000);
-  if (enabled && !url) {
-    throw configError('URL chuyển trang sau khi đăng ký là bắt buộc khi bật successRedirect');
-  }
-  if (url) {
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        throw configError('URL chuyển trang phải bắt đầu bằng http:// hoặc https://');
-      }
-    } catch (e) {
-      if (e?.statusCode) throw e;
-      throw configError('URL chuyển trang không hợp lệ');
-    }
-  }
-  const delayRaw = Number(raw.delayMs);
-  let delayMs = fallback.delayMs;
-  if (raw.delayMs != null) {
-    if (!Number.isFinite(delayRaw) || delayRaw < MIN_SUCCESS_REDIRECT_DELAY_MS) {
-      throw configError('delayMs phải là số không âm');
-    }
-    delayMs = Math.min(delayRaw, MAX_SUCCESS_REDIRECT_DELAY_MS);
-  }
-  const openInNewTab = raw.openInNewTab === true;
-  return { enabled, url, delayMs, openInNewTab };
 }
 
 /**

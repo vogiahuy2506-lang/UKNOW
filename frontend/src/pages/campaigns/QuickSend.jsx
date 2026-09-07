@@ -6,6 +6,7 @@ import emailTemplateApiService from '../../features/templates/services/emailTemp
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
+import chatbotApiService from '../../features/chatbot/services/chatbotApi.service';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
@@ -50,6 +51,27 @@ const CHANNEL_TYPES = {
   EMAIL: 'email',
   ZALO: 'zalo',
 };
+
+const ZALO_RECIPIENT_TYPES = {
+  PHONE: 'phone',
+  UID: 'uid',
+};
+
+/**
+ * Đối chiếu 1 dòng UID với map danh bạ đã tải (uid -> friend object từ chatbotApiService.getZaloFriends).
+ * Chỉ đối chiếu (và tự tick) MỘT LẦN — dòng đã có `inContacts !== null` giữ nguyên `checked`
+ * người dùng đã chọn, không bị ghi đè mỗi lần danh bạ tải lại (Bẫy 4: không tự tick UID lạ).
+ */
+function resolveUidRowAgainstFriendsMap(row, friendsMap) {
+  if (row.inContacts !== null) return row;
+  const friend = friendsMap.get(row.uid);
+  if (!friend) return { ...row, inContacts: false, checked: false, name: null };
+  // Bạn bè có trong danh bạ nhưng không đặt tên hiển thị (hiếm) — vẫn KHÔNG được rơi xuống
+  // UID trần, dù đã xác nhận đúng người (Bẫy 4 áp cho mọi nơi hiển thị, không chỉ ca chưa
+  // đối chiếu được).
+  const name = friend.display_name || friend.displayName || `…${row.uid.slice(-4)}`;
+  return { ...row, inContacts: true, checked: true, name };
+}
 
 /**
  * Map an axios/fetch error from /email-settings/send-email and
@@ -131,6 +153,18 @@ const QuickSend = () => {
   const [manualEmails, setManualEmails] = useState('');
   const [manualPhones, setManualPhones] = useState('');
 
+  // Zalo UID recipient state — xem resolveUidRowAgainstFriendsMap ở trên.
+  const [zaloRecipientType, setZaloRecipientType] = useState(ZALO_RECIPIENT_TYPES.PHONE);
+  const [uidRows, setUidRows] = useState([]); // [{ uid, name, checked, inContacts }]
+  const [uidManualInput, setUidManualInput] = useState('');
+  const [uidSearch, setUidSearch] = useState('');
+  const [uidSearchResults, setUidSearchResults] = useState([]);
+  const [isLoadingUidSearch, setIsLoadingUidSearch] = useState(false);
+  const [isLoadingUidContacts, setIsLoadingUidContacts] = useState(false);
+  const zaloFriendsMapRef = useRef(new Map()); // uid -> friend object (cả trang đã tải)
+  const resolvedForAccountIdRef = useRef(null); // id tài khoản Zalo lần đối chiếu gần nhất
+  const uidSearchTimerRef = useRef(null);
+
   // Sender accounts state
   const [emailAccounts, setEmailAccounts] = useState([]);
   const [zaloAccounts, setZaloAccounts] = useState([]);
@@ -164,6 +198,19 @@ const QuickSend = () => {
   const [isTesting, setIsTesting] = useState(false);
   const testSendActionKeyRef = useRef({ key: null, signature: null });
   const testSendPreparationRef = useRef(false);
+  // Khoá idempotency cho CẢ ĐỢT gửi hàng loạt (runSendLoop) — mỗi người nhận trong đợt dùng
+  // `${key}-${index}` dẫn xuất từ đây. Bấm gửi hai lần với cùng nội dung/người nhận sẽ tái
+  // dùng đúng key này (resolveActionIdempotencyKey so signature), nên mỗi cặp key-người nhận
+  // giống hệt lần trước → backend dedupe đúng. Reset về null sau khi đợt gửi kết thúc (thành
+  // công lẫn thất bại) để lần gửi MỚI sau đó (kể cả trùng nội dung) không bị coi nhầm là trùng.
+  const sendActionKeyRef = useRef({ key: null, signature: null });
+  // Chốt đồng bộ chặn double-click thật (giống testSendPreparationRef ở Gửi thử) — khoá
+  // idempotency một mình không đủ: 2 click gần như đồng thời có thể cùng đọc
+  // sendActionKeyRef.current TRƯỚC khi request đầu ghi lại (resolveActionIdempotencyKey là
+  // async), ra 2 khoá gốc khác nhau cho CÙNG một đợt. state (isSending/isRetrying) không
+  // đáng tin cho việc này vì cập nhật bị React batch, không tức thời như ref.
+  const sendPreparationRef = useRef(false);
+  const retryPreparationRef = useRef(false);
 
   // Nạp bản nháp từ Trợ lý AI (quickSendDraft) nếu có
   useEffect(() => {
@@ -174,7 +221,19 @@ const QuickSend = () => {
       setSelectedChannel(draft.channel);
     }
 
-    if (Array.isArray(draft.recipients)) {
+    const isZaloUidDraft = draft.channel === CHANNEL_TYPES.ZALO && draft.recipientType === ZALO_RECIPIENT_TYPES.UID;
+
+    if (isZaloUidDraft) {
+      setZaloRecipientType(ZALO_RECIPIENT_TYPES.UID);
+      const rawList = Array.isArray(draft.recipients)
+        ? draft.recipients
+        : String(draft.recipients || '').split(/[\n,;]+/);
+      const uids = rawList.map((r) => String(r || '').trim()).filter(Boolean);
+      // Chưa đối chiếu danh bạ (inContacts: null) — chưa tick sẵn, đợi effect tải danh bạ resolve.
+      // Nhãn bạn bè (nếu bản nháp có mang sang trong tương lai) chỉ là gợi ý ban đầu, trang này
+      // vẫn đối chiếu lại với danh bạ thật (Bẫy 4) — không tin nhãn từ nguồn không kiểm chứng được.
+      setUidRows(uids.map((uid) => ({ uid, name: null, checked: false, inContacts: null })));
+    } else if (Array.isArray(draft.recipients)) {
       const clean = draft.recipients.map((r) => String(r || '').trim()).filter(Boolean).join('\n');
       if (draft.channel === CHANNEL_TYPES.ZALO) {
         setManualPhones(clean);
@@ -315,18 +374,154 @@ const QuickSend = () => {
 
   // Get final recipients from manual input only
   const finalRecipients = useCallback(() => {
+    if (selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID) {
+      // Chỉ những dòng người dùng đã tick (UID không có trong danh bạ mặc định KHÔNG tick — Bẫy 4).
+      // Tên hiển thị ở bước Xem lại KHÔNG được rơi xuống UID trần: dòng chưa đối chiếu được
+      // (name: null, dù đã tick thủ công) vẫn phải hiện nhãn "không có trong danh bạ", không
+      // phải chuỗi số — Bẫy 4 áp dụng cho MỌI nơi hiển thị, không chỉ bước chọn người nhận.
+      return uidRows
+        .filter((r) => r.checked)
+        .map((r) => ({
+          email: r.uid,
+          phone: r.uid,
+          name: r.name || t('quickSend.uidNotInContacts', { last4: r.uid.slice(-4) }),
+        }));
+    }
     const manualList = (selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones)
       .split(/[\n,]/)
       .map((s) => s.trim())
       .filter((s) => s && (selectedChannel === CHANNEL_TYPES.EMAIL ? s.includes('@') : /^\d+$/.test(s)));
 
     return manualList.map((contact) => ({ email: contact, phone: contact, name: contact }));
-  }, [selectedChannel, manualEmails, manualPhones]);
+  }, [selectedChannel, manualEmails, manualPhones, zaloRecipientType, uidRows, t]);
 
   // Check if has manual recipients
   const hasManualRecipients = () => {
+    if (selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID) {
+      return uidRows.some((r) => r.checked);
+    }
     const input = selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones;
     return input.trim().length > 0;
+  };
+
+  // Tải toàn bộ danh bạ Zalo của tài khoản đã chọn (phân trang), đối chiếu uidRows hiện có.
+  // Trần 50 trang (~5.000 bạn ở limit 100/trang) đủ cho tài khoản cá nhân, tránh vòng lặp vô hạn nếu API trả sai totalPages.
+  const loadZaloContactsAndResolve = useCallback(async (accountId) => {
+    if (!accountId) return;
+    setIsLoadingUidContacts(true);
+    try {
+      const map = new Map();
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const res = await chatbotApiService.getZaloFriends({ accountId, page, limit: 100 });
+        const payload = res?.data?.data || res?.data || {};
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        items.forEach((f) => {
+          const id = String(f.friend_id || f.friendId || f.id || '').trim();
+          if (id) map.set(id, f);
+        });
+        totalPages = Number(payload.totalPages) > 0 ? Number(payload.totalPages) : 1;
+        page += 1;
+      } while (page <= totalPages && page <= 50);
+      zaloFriendsMapRef.current = map;
+      setUidRows((prev) => prev.map((row) => resolveUidRowAgainstFriendsMap(row, map)));
+    } catch (err) {
+      console.error('Load Zalo contacts for UID resolve failed:', err);
+      toast.error(t('quickSend.loadCustomersFailed'));
+    } finally {
+      setIsLoadingUidContacts(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (selectedChannel !== CHANNEL_TYPES.ZALO || zaloRecipientType !== ZALO_RECIPIENT_TYPES.UID) return;
+    if (!selectedZaloAccount?.id) return;
+    // Đổi tài khoản gửi (khác id trước đó) → danh bạ khác hẳn, mọi dòng đã đối chiếu (tên,
+    // trạng thái "có/không trong danh bạ") thuộc về tài khoản CŨ không còn đúng nghĩa. Reset
+    // về chưa đối chiếu (inContacts: null) để load lại đúng danh bạ tài khoản mới, tránh hiện
+    // nhãn/tick sai chủ (Bẫy 4 áp cho cả trường hợp đổi tài khoản, không chỉ lần nạp đầu).
+    if (resolvedForAccountIdRef.current != null && resolvedForAccountIdRef.current !== selectedZaloAccount.id) {
+      setUidRows((prev) => prev.map((row) => ({ ...row, inContacts: null, checked: false, name: null })));
+    }
+    resolvedForAccountIdRef.current = selectedZaloAccount.id;
+    loadZaloContactsAndResolve(selectedZaloAccount.id);
+  }, [selectedChannel, zaloRecipientType, selectedZaloAccount, loadZaloContactsAndResolve]);
+
+  // Tìm bạn bè để thêm thủ công (ngoài danh sách bản nháp mang sang) — debounce 300ms giống ZaloFriendPickerCard.
+  useEffect(() => {
+    if (selectedChannel !== CHANNEL_TYPES.ZALO || zaloRecipientType !== ZALO_RECIPIENT_TYPES.UID) return;
+    if (!selectedZaloAccount?.id) {
+      setUidSearchResults([]);
+      return;
+    }
+    if (uidSearchTimerRef.current) clearTimeout(uidSearchTimerRef.current);
+    uidSearchTimerRef.current = setTimeout(async () => {
+      setIsLoadingUidSearch(true);
+      try {
+        const res = await chatbotApiService.getZaloFriends({
+          accountId: selectedZaloAccount.id,
+          search: uidSearch,
+          page: 1,
+          limit: 30,
+        });
+        const payload = res?.data?.data || res?.data || {};
+        setUidSearchResults(Array.isArray(payload.items) ? payload.items : []);
+      } catch (err) {
+        console.error('Search Zalo friends failed:', err);
+      } finally {
+        setIsLoadingUidSearch(false);
+      }
+    }, 300);
+    return () => {
+      if (uidSearchTimerRef.current) clearTimeout(uidSearchTimerRef.current);
+    };
+  }, [uidSearch, selectedChannel, zaloRecipientType, selectedZaloAccount]);
+
+  // Bật/tắt 1 UID: nếu chưa có trong uidRows (vd. vừa bấm từ kết quả tìm danh bạ) thì thêm mới
+  // đã tick sẵn (người dùng chủ động chọn từ danh bạ thật = đáng tin); nếu đã có thì đảo checked.
+  const toggleUidChecked = useCallback((uid, friendHint) => {
+    setUidRows((prev) => {
+      const idx = prev.findIndex((r) => r.uid === uid);
+      if (idx === -1) {
+        const friend = friendHint || zaloFriendsMapRef.current.get(uid);
+        const name = friend ? (friend.display_name || friend.displayName || `…${uid.slice(-4)}`) : uid;
+        return [...prev, { uid, name, checked: true, inContacts: Boolean(friend) }];
+      }
+      const next = [...prev];
+      next[idx] = { ...next[idx], checked: !next[idx].checked };
+      return next;
+    });
+  }, []);
+
+  const removeUidRow = useCallback((uid) => {
+    setUidRows((prev) => prev.filter((r) => r.uid !== uid));
+  }, []);
+
+  // Dán tay danh sách UID (đúng hợp đồng backend validateManualRecipients: /^\d{6,32}$/).
+  // Dòng mới luôn bắt đầu CHƯA tick — chỉ tick sau khi loadZaloContactsAndResolve xác nhận có trong danh bạ.
+  const handleAddUidManual = () => {
+    const rawItems = uidManualInput.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+    const validItems = rawItems.filter((s) => /^\d{6,32}$/.test(s));
+    const invalidCount = rawItems.length - validItems.length;
+    if (validItems.length === 0) {
+      toast.error(t('quickSend.uidInvalidFormat'));
+      return;
+    }
+    setUidRows((prev) => {
+      const existing = new Set(prev.map((r) => r.uid));
+      const additions = validItems
+        .filter((uid) => !existing.has(uid))
+        .map((uid) => resolveUidRowAgainstFriendsMap(
+          { uid, name: null, checked: false, inContacts: null },
+          zaloFriendsMapRef.current
+        ));
+      return [...prev, ...additions];
+    });
+    setUidManualInput('');
+    if (invalidCount > 0) {
+      toast.error(t('quickSend.uidSomeInvalid', { count: invalidCount }));
+    }
   };
 
   // Select template
@@ -504,10 +699,28 @@ const QuickSend = () => {
     let quotaExceededEarly = false;
     const failed = [];
 
+    // Một khoá cho CẢ ĐỢT (không phải mỗi request một khoá ngẫu nhiên như trước — bấm gửi
+    // 2 lần với cùng nội dung/người nhận trước đây ra 2 khoá khác nhau, gửi trùng thật).
+    // Mỗi người nhận trong đợt dùng `${baseKey}-${index}` — chỉ số trong CHÍNH danh sách
+    // recipients của lần gọi này, nên đợt gửi lại (retry, danh sách con) tự nhiên có chữ ký
+    // khác đợt gửi đầu (recipients khác) → không bị coi nhầm là trùng với đợt đã gửi trước.
+    const idempotencyPayload = {
+      channel: selectedChannel,
+      accountId: isEmail ? selectedEmailAccount?.id : selectedZaloAccount?.id,
+      recipientType: isEmail ? undefined : zaloRecipientType,
+      recipients: recipients.map((r) => r.email || r.phone),
+      templateId: selectedTemplate?.id || null,
+      subject: templateContent.subject || '',
+      body: templateContent.body || '',
+      attachments: attachments.map((a) => a?.key || a?.name || ''),
+    };
+    sendActionKeyRef.current = await resolveActionIdempotencyKey(sendActionKeyRef.current, idempotencyPayload);
+    const baseKey = sendActionKeyRef.current.key;
+
     if (isEmail) {
       const { html, text } = resolveEmailBody();
       const subject = templateContent.subject || selectedTemplate?.subject || 'Không có tiêu đề';
-      for (const recipient of recipients) {
+      for (const [idx, recipient] of recipients.entries()) {
         try {
           await emailSettingsApiService.sendEmail({
             fromEmailId: parseInt(selectedEmailAccount.id, 10),
@@ -516,7 +729,7 @@ const QuickSend = () => {
             content: text,
             htmlContent: html,
             attachments,
-          });
+          }, { idempotencyKey: `${baseKey}-${idx}` });
           successCount++;
         } catch (err) {
           console.error('Send email error to:', recipient.email, err);
@@ -537,14 +750,15 @@ const QuickSend = () => {
       }
     } else {
       const message = resolveZaloBody();
-      for (const recipient of recipients) {
+      for (const [idx, recipient] of recipients.entries()) {
         try {
           await zaloSettingsApiService.sendMessage({
             accountId: selectedZaloAccount.id,
             phone: recipient.phone,
+            recipientType: zaloRecipientType,
             message,
             attachments,
-          });
+          }, { idempotencyKey: `${baseKey}-${idx}` });
           successCount++;
         } catch (err) {
           console.error('Send Zalo error to:', recipient.phone, err);
@@ -560,6 +774,10 @@ const QuickSend = () => {
         }
       }
     }
+    // Đợt đã xong (thành công lẫn thất bại) — reset để lần gửi MỚI sau đó (kể cả trùng nội
+    // dung) tính khoá mới, không bị coi nhầm là trùng với đợt vừa xong (cùng pattern
+    // testSendActionKeyRef đã dùng ở handleTestSend).
+    sendActionKeyRef.current = { key: null, signature: null };
     return { isEmail, successCount, failCount, failureSamples, failed };
   }, [
     selectedChannel,
@@ -568,12 +786,15 @@ const QuickSend = () => {
     resolveEmailBody,
     resolveZaloBody,
     templateContent.subject,
+    templateContent.body,
     selectedTemplate,
     extraAttachments,
+    zaloRecipientType,
   ]);
 
   // Send quick campaign - gửi trực tiếp không cần tạo campaign
   const handleSend = async () => {
+    if (isSending || sendPreparationRef.current) return;
     const recipients = finalRecipients();
     if (recipients.length === 0) {
       toast.error(t('quickSend.noRecipients'));
@@ -622,6 +843,7 @@ const QuickSend = () => {
       return;
     }
 
+    sendPreparationRef.current = true;
     setIsSending(true);
     setCurrentStep(QUICK_SEND_STEPS.SENDING);
 
@@ -662,6 +884,7 @@ const QuickSend = () => {
       toast.error(error?.response?.data?.message || error?.message || t('quickSend.sendFailed'));
       setCurrentStep(QUICK_SEND_STEPS.PREVIEW);
     } finally {
+      sendPreparationRef.current = false;
       setIsSending(false);
     }
   };
@@ -671,11 +894,13 @@ const QuickSend = () => {
   // the failure wasn't caused by quota exhaustion, since that would never
   // succeed on the same sender anyway.
   const handleRetryFailed = async () => {
+    if (isRetrying || retryPreparationRef.current) return;
     if (failedRecipients.length === 0) return;
     if ((sendResult?.failureTypes || []).includes('quota_exceeded')) {
       toast.error(t('quickSend.retryQuotaBlocked') || 'Đã vượt hạn mức — không thể gửi lại.');
       return;
     }
+    retryPreparationRef.current = true;
     setIsRetrying(true);
     try {
       const result = await runSendLoop(failedRecipients);
@@ -705,6 +930,7 @@ const QuickSend = () => {
       console.error('Retry error:', error);
       toast.error(error?.response?.data?.message || t('quickSend.sendFailed'));
     } finally {
+      retryPreparationRef.current = false;
       setIsRetrying(false);
     }
   };
@@ -716,6 +942,13 @@ const QuickSend = () => {
     setTemplateContent({ subject: '', body: '' });
     setManualEmails('');
     setManualPhones('');
+    setZaloRecipientType(ZALO_RECIPIENT_TYPES.PHONE);
+    setUidRows([]);
+    setUidManualInput('');
+    setUidSearch('');
+    setUidSearchResults([]);
+    resolvedForAccountIdRef.current = null;
+    sendActionKeyRef.current = { key: null, signature: null };
     setSendResult(null);
     setFailedRecipients([]);
   };
@@ -905,29 +1138,178 @@ const QuickSend = () => {
                 <HiOutlinePlus className="w-5 h-5 text-orange-500" />
                 <h2 className="text-lg font-semibold text-gray-900">{t('quickSend.manualInput')}</h2>
               </div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {selectedChannel === CHANNEL_TYPES.EMAIL
-                  ? t('quickSend.manualEmails')
-                  : t('quickSend.manualPhones')}
-              </label>
-              <textarea
-                value={selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones}
-                onChange={(e) =>
-                  selectedChannel === CHANNEL_TYPES.EMAIL
-                    ? setManualEmails(e.target.value)
-                    : setManualPhones(e.target.value)
-                }
-                placeholder={
-                  selectedChannel === CHANNEL_TYPES.EMAIL
-                    ? 'email1@example.com\nemail2@example.com'
-                    : '0901234567\n0902345678'
-                }
-                rows={6}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                {t('quickSend.manualInputHint')}
-              </p>
+
+              {selectedChannel === CHANNEL_TYPES.ZALO && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('quickSend.zaloRecipientTypeLabel')}
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="zaloRecipientType"
+                        checked={zaloRecipientType === ZALO_RECIPIENT_TYPES.PHONE}
+                        onChange={() => setZaloRecipientType(ZALO_RECIPIENT_TYPES.PHONE)}
+                        className="w-4 h-4 text-orange-500"
+                      />
+                      {t('quickSend.zaloRecipientTypePhone')}
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="zaloRecipientType"
+                        checked={zaloRecipientType === ZALO_RECIPIENT_TYPES.UID}
+                        onChange={() => setZaloRecipientType(ZALO_RECIPIENT_TYPES.UID)}
+                        className="w-4 h-4 text-orange-500"
+                      />
+                      {t('quickSend.zaloRecipientTypeUid')}
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID ? (
+                <div className="space-y-4">
+                  {!selectedZaloAccount?.id && (
+                    <p className="text-sm text-amber-600">{t('quickSend.uidNoAccountSelected')}</p>
+                  )}
+
+                  {/* Danh sách UID đã chọn / chờ xác nhận */}
+                  {uidRows.length > 0 && (
+                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                      {uidRows.map((row) => (
+                        <label
+                          key={row.uid}
+                          className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={row.checked}
+                            onChange={() => toggleUidChecked(row.uid)}
+                            className="w-4 h-4 text-orange-500 rounded"
+                          />
+                          <div className="flex-1 min-w-0">
+                            {row.inContacts === null ? (
+                              <p className="text-sm text-gray-400 italic">{t('quickSend.uidLoadingContacts')}</p>
+                            ) : row.inContacts ? (
+                              <p className="text-sm font-medium text-gray-900 truncate">{row.name}</p>
+                            ) : (
+                              <p className="text-sm text-amber-700 truncate">
+                                {t('quickSend.uidNotInContacts', { last4: row.uid.slice(-4) })}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); removeUidRow(row.uid); }}
+                            className="text-gray-400 hover:text-red-500 text-xs font-medium"
+                          >
+                            ✕
+                          </button>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {uidRows.some((r) => r.inContacts === false) && (
+                    <p className="text-xs text-amber-600">{t('quickSend.uidConfirmHint')}</p>
+                  )}
+
+                  {/* Thêm từ danh bạ (tìm theo tên) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('quickSend.uidAddFromContactsLabel')}
+                    </label>
+                    <input
+                      type="text"
+                      value={uidSearch}
+                      onChange={(e) => setUidSearch(e.target.value)}
+                      placeholder={t('quickSend.uidSearchPlaceholder')}
+                      disabled={!selectedZaloAccount?.id}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50"
+                    />
+                    {isLoadingUidSearch ? (
+                      <p className="text-xs text-gray-400 mt-2">{t('quickSend.uidLoadingContacts')}</p>
+                    ) : uidSearch && uidSearchResults.length === 0 ? (
+                      <p className="text-xs text-gray-400 mt-2">{t('quickSend.uidNoSearchResults')}</p>
+                    ) : uidSearchResults.length > 0 ? (
+                      <div className="mt-2 border border-gray-100 rounded-lg divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                        {uidSearchResults.map((friend) => {
+                          const id = String(friend.friend_id || friend.friendId || friend.id || '');
+                          const name = friend.display_name || friend.displayName || id;
+                          const isChecked = uidRows.some((r) => r.uid === id && r.checked);
+                          return (
+                            <label key={id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleUidChecked(id, friend)}
+                                className="w-4 h-4 text-orange-500 rounded"
+                              />
+                              <span className="truncate text-gray-800">{name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Dán tay UID */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('quickSend.uidManualAddLabel')}
+                    </label>
+                    <textarea
+                      value={uidManualInput}
+                      onChange={(e) => setUidManualInput(e.target.value)}
+                      placeholder={t('quickSend.uidManualAddPlaceholder')}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddUidManual}
+                      disabled={!uidManualInput.trim()}
+                      className="mt-2 px-4 py-2 text-sm font-medium text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {t('quickSend.uidManualAddButton')}
+                    </button>
+                  </div>
+
+                  {isLoadingUidContacts && (
+                    <p className="text-xs text-gray-400">{t('quickSend.uidLoadingContacts')}</p>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    {t('quickSend.uidSelectedCount', { count: uidRows.filter((r) => r.checked).length })}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {selectedChannel === CHANNEL_TYPES.EMAIL
+                      ? t('quickSend.manualEmails')
+                      : t('quickSend.manualPhones')}
+                  </label>
+                  <textarea
+                    value={selectedChannel === CHANNEL_TYPES.EMAIL ? manualEmails : manualPhones}
+                    onChange={(e) =>
+                      selectedChannel === CHANNEL_TYPES.EMAIL
+                        ? setManualEmails(e.target.value)
+                        : setManualPhones(e.target.value)
+                    }
+                    placeholder={
+                      selectedChannel === CHANNEL_TYPES.EMAIL
+                        ? 'email1@example.com\nemail2@example.com'
+                        : '0901234567\n0902345678'
+                    }
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    {t('quickSend.manualInputHint')}
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Next Button */}

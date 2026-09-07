@@ -20,8 +20,9 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser } from './helpers/db.js';
+import { truncateAll, createUser, createPlan, createOrder } from './helpers/db.js';
 import { resolveCurrentMonthKey, maskEmail } from '../../src/services/affiliate/affiliateWithdrawal.service.js';
+import { closeAffiliateMonth } from '../../src/services/affiliate/affiliateMonthClosing.service.js';
 import auditService from '../../src/services/audit.service.js';
 
 let app;
@@ -434,6 +435,123 @@ describe('Affiliate PR-A5 — Admin Ledger Adjustment & Overview APIs', () => {
       expect(periodsRes.body.data[0].monthKey).toBe('2026-08');
       expect(periodsRes.body.data[0].commissionAmount).toBe(5000000);
       expect(periodsRes.body.data[0].userEmail).toBe('partner_p@test.com');
+    });
+  });
+
+  describe('GET /api/admin/affiliate/periods — manualRevenue (đơn gán tay payment_method=manual)', () => {
+    let originalClosingFlag;
+
+    beforeEach(() => {
+      originalClosingFlag = process.env.AFFILIATE_CLOSING_ENABLED;
+      process.env.AFFILIATE_CLOSING_ENABLED = 'true';
+    });
+
+    afterEach(() => {
+      if (originalClosingFlag !== undefined) {
+        process.env.AFFILIATE_CLOSING_ENABLED = originalClosingFlag;
+      } else {
+        delete process.env.AFFILIATE_CLOSING_ENABLED;
+      }
+    });
+
+    /** Giống insertRevenueEvent của affiliateMonthClosing.test.js, thêm paymentMethod cấu hình được. */
+    async function insertRevenueEventWithPaymentMethod({ referrerId, buyerId, amount, monthKey, paymentMethod }) {
+      const plan = await createPlan({ name: `Plan-manualrev-${Date.now()}-${Math.floor(Math.random() * 100000)}`, price: amount });
+      const order = await createOrder({
+        planId: plan.id,
+        userId: buyerId,
+        userEmail: `buyer-${buyerId}@test.com`,
+        amount,
+        status: 'success',
+        paymentMethod,
+      });
+      const { rows } = await db.query(
+        `INSERT INTO affiliate_revenue_events (
+           referrer_user_id, buyer_user_id, order_id, amount, month_key
+         ) VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [referrerId, buyerId, order.id, amount, monthKey]
+      );
+      return rows[0];
+    }
+
+    it('Period có 1 đơn manual 5tr + 1 đơn PayOS 3tr, cả hai buyer có SĐT → grossRevenue 8tr, manualRevenue 5tr', async () => {
+      const admin = await createUser({ email: 'admin_manual_rev@test.com', username: 'admin_manual_rev', role: 'admin' });
+      const referrer = await createUser({ email: 'ref_manual_rev@test.com', username: 'ref_manual_rev' });
+      const buyerManual = await createUser({ email: 'buyer_manual@test.com', username: 'buyer_manual', phone: '0901111111' });
+      const buyerPayos = await createUser({ email: 'buyer_payos@test.com', username: 'buyer_payos', phone: '0902222222' });
+
+      await insertRevenueEventWithPaymentMethod({
+        referrerId: referrer.id, buyerId: buyerManual.id, amount: 5000000, monthKey: '2026-08', paymentMethod: 'manual',
+      });
+      await insertRevenueEventWithPaymentMethod({
+        referrerId: referrer.id, buyerId: buyerPayos.id, amount: 3000000, monthKey: '2026-08', paymentMethod: 'payos',
+      });
+
+      // Dùng đúng job đóng sổ thật (không tự chép công thức gross_revenue) — đảm bảo
+      // grossRevenue trả về khớp với số thật sự đã ghi vào affiliate_periods.
+      const closeResult = await closeAffiliateMonth('2026-08');
+      expect(closeResult.insertedPeriods).toBe(1);
+
+      const adminToken = createAuthToken(admin);
+      const res = await request(app)
+        .get('/api/admin/affiliate/periods?monthKey=2026-08')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      const period = res.body.data.find((p) => Number(p.referrerUserId) === Number(referrer.id));
+      expect(period).toBeDefined();
+      expect(period.grossRevenue).toBe(8000000);
+      expect(period.manualRevenue).toBe(5000000);
+    });
+
+    it('Period có đơn manual nhưng buyer CHƯA có SĐT → manualRevenue = 0, khớp với gross_revenue cũng chưa tính event đó', async () => {
+      const admin = await createUser({ email: 'admin_manual_nophone@test.com', username: 'admin_manual_nophone', role: 'admin' });
+      const referrer = await createUser({ email: 'ref_manual_nophone@test.com', username: 'ref_manual_nophone' });
+      const buyerNoPhone = await createUser({ email: 'buyer_nophone@test.com', username: 'buyer_nophone', phone: null });
+
+      await insertRevenueEventWithPaymentMethod({
+        referrerId: referrer.id, buyerId: buyerNoPhone.id, amount: 5000000, monthKey: '2026-08', paymentMethod: 'manual',
+      });
+
+      const closeResult = await closeAffiliateMonth('2026-08');
+      // Job vẫn tạo period (referrer có event trong tháng) nhưng gross = 0 vì buyer chưa có SĐT.
+      expect(closeResult.insertedPeriods).toBe(1);
+
+      const adminToken = createAuthToken(admin);
+      const res = await request(app)
+        .get('/api/admin/affiliate/periods?monthKey=2026-08')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      const period = res.body.data.find((p) => Number(p.referrerUserId) === Number(referrer.id));
+      expect(period).toBeDefined();
+      expect(period.grossRevenue).toBe(0);
+      // Đúng điểm mà thiếu điều kiện SĐT trong subquery sẽ làm sai: nếu manualRevenue tính
+      // luôn event này (5tr) trong khi grossRevenue vẫn là 0, hai số sẽ không khớp nhau.
+      expect(period.manualRevenue).toBe(0);
+    });
+
+    it('Period toàn đơn PayOS → manualRevenue = 0, không có gì để gắn nhãn', async () => {
+      const admin = await createUser({ email: 'admin_manual_none@test.com', username: 'admin_manual_none', role: 'admin' });
+      const referrer = await createUser({ email: 'ref_manual_none@test.com', username: 'ref_manual_none' });
+      const buyer = await createUser({ email: 'buyer_allpayos@test.com', username: 'buyer_allpayos', phone: '0903333333' });
+
+      await insertRevenueEventWithPaymentMethod({
+        referrerId: referrer.id, buyerId: buyer.id, amount: 4000000, monthKey: '2026-08', paymentMethod: 'payos',
+      });
+
+      await closeAffiliateMonth('2026-08');
+
+      const adminToken = createAuthToken(admin);
+      const res = await request(app)
+        .get('/api/admin/affiliate/periods?monthKey=2026-08')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      const period = res.body.data.find((p) => Number(p.referrerUserId) === Number(referrer.id));
+      expect(period).toBeDefined();
+      expect(period.grossRevenue).toBe(4000000);
+      expect(period.manualRevenue).toBe(0);
     });
   });
 

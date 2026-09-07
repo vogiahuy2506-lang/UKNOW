@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   extractHtmlFromModelText,
   validateEditHtmlOutput,
+  LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
 } from '../landingEditGuard.util.js';
 
@@ -17,11 +18,12 @@ describe('landingEditGuard.util', () => {
   <header class="py-6 px-4"><h1 class="text-2xl font-bold">Tiêu đề</h1></header>
   <main class="py-10">
     <section class="max-w-4xl mx-auto"><p>Nội dung chính của trang landing marketing.</p></section>
+    <!-- UKNOW_LP_FORM -->
   </main>
 </body>
 </html>`;
 
-  it('hợp lệ khi AI chỉnh sửa đúng quy cách', () => {
+  it('hợp lệ khi AI chỉnh sửa đúng quy cách và giữ nguyên form marker', () => {
     const editedHtml = baseValidHtml.replace(
       'class="text-2xl font-bold">Tiêu đề',
       'class="text-3xl font-extrabold text-blue-600">Tiêu đề mới cập nhật'
@@ -100,13 +102,77 @@ describe('landingEditGuard.util', () => {
   });
 
   it('kết quả mới quá ngắn (< 0.6 độ dài cũ) → ném lỗi 502', () => {
-    const shortHtml = `<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body><p>Quá ngắn</p></body></html>`;
+    const shortHtml = `<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body><p>Quá ngắn</p><!-- UKNOW_LP_FORM --></body></html>`;
     expect(() => {
       validateEditHtmlOutput({
         currentHtml: baseValidHtml,
         newHtml: shortHtml,
       });
     }).toThrow(/viết lại toàn bộ trang/i);
+  });
+
+  it('bản cũ có <!-- UKNOW_LP_FORM --> nhưng bản mới bị mất → ném lỗi 502', () => {
+    const withoutFormHtml = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '');
+    expect(() => {
+      validateEditHtmlOutput({
+        currentHtml: baseValidHtml,
+        newHtml: withoutFormHtml,
+      });
+    }).toThrow(/mất vị trí form đăng ký/i);
+  });
+
+  it('bản cũ có /embed/lead-form (iframe nhúng) nhưng bản mới bị mất → ném lỗi 502', () => {
+    const htmlWithIframe = baseValidHtml.replace(
+      LANDING_FORM_PLACEHOLDER,
+      '<iframe src="/embed/lead-form/slug-123" style="border:0;display:block;width:100%;"></iframe>'
+    );
+    const htmlWithoutIframe = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '<p>Khách đã mất form</p>');
+
+    expect(() => {
+      validateEditHtmlOutput({
+        currentHtml: htmlWithIframe,
+        newHtml: htmlWithoutIframe,
+      });
+    }).toThrow(/mất khối form đăng ký nhúng/i);
+  });
+
+  it('bản cũ có data-uknow-lead-form (snippet tự chứa) nhưng bản mới bị mất → ném lỗi 502', () => {
+    const snippetForm = '<form data-uknow-lead-form data-slug="demo" data-api-base="https://api.test/api"><input name="email"/></form>';
+    const htmlWithSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, snippetForm);
+    const htmlWithoutSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '<p>Khách đã mất form</p>');
+
+    expect(() => {
+      validateEditHtmlOutput({
+        currentHtml: htmlWithSnippet,
+        newHtml: htmlWithoutSnippet,
+      });
+    }).toThrow(/mất form đăng ký nhúng \(snippet\)/i);
+  });
+
+  it('bản cũ có data-uknow-lead-form, bản mới vẫn giữ nguyên form đó → hợp lệ', () => {
+    const snippetForm = '<form data-uknow-lead-form data-slug="demo" data-api-base="https://api.test/api"><input name="email"/></form>';
+    const htmlWithSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, snippetForm);
+    const editedHtml = htmlWithSnippet.replace(
+      'class="text-2xl font-bold">Tiêu đề',
+      'class="text-3xl font-extrabold text-blue-600">Tiêu đề mới cập nhật'
+    );
+
+    const isValid = validateEditHtmlOutput({
+      currentHtml: htmlWithSnippet,
+      newHtml: editedHtml,
+    });
+    expect(isValid).toBe(true);
+  });
+
+  it('bản cũ KHÔNG có marker form (hoặc đã bỏ từ trước) → bản mới không bắt buộc phải có marker', () => {
+    const currentWithoutForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '');
+    const newWithoutForm = currentWithoutForm.replace('Tiêu đề', 'Tiêu đề mới');
+
+    const isValid = validateEditHtmlOutput({
+      currentHtml: currentWithoutForm,
+      newHtml: newWithoutForm,
+    });
+    expect(isValid).toBe(true);
   });
 
   it('tăng quá 2 inline style so với bản cũ → ném lỗi 502', () => {

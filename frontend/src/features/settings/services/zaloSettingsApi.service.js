@@ -30,13 +30,13 @@ const zaloSettingsApiService = {
     return api.get(`/zalo/accounts/login-qr/${sessionKey}/status`);
   },
 
-  // Gửi tin nhắn Zalo cá nhân (dùng cho Quick Send)
+  // Gửi tin nhắn Zalo cá nhân (dùng cho Quick Send) — recipientType mặc định 'phone' để không đổi hành vi hiện có.
   sendMessage(payload, options = {}) {
     const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
     return api.post('/zalo/preview/send-personal', {
       accountId: payload.accountId,
       recipients: [payload.phone],
-      recipientType: 'phone',
+      recipientType: payload.recipientType || 'phone',
       message: payload.message || '',
       attachments: Array.isArray(payload.attachments) ? payload.attachments : [],
     }, {

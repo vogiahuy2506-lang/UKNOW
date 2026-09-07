@@ -45,6 +45,28 @@ describe('zaloSettingsApiService', () => {
     );
   });
 
+  it('sendMessage nhận recipientType=uid từ payload thay vì cứng phone', async () => {
+    api.post.mockResolvedValue({ data: { success: true } });
+
+    const payload = {
+      accountId: 'acc-123',
+      phone: '4603890323834564223',
+      recipientType: 'uid',
+      message: 'Xin chào',
+    };
+
+    await zaloSettingsApiService.sendMessage(payload);
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/zalo/preview/send-personal',
+      expect.objectContaining({
+        recipients: ['4603890323834564223'],
+        recipientType: 'uid',
+      }),
+      expect.anything()
+    );
+  });
+
   it('sendMessage khi không truyền attachments thì mặc định gửi mảng rỗng []', async () => {
     api.post.mockResolvedValue({ data: { success: true } });
 

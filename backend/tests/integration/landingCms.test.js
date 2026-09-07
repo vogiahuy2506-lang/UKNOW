@@ -352,6 +352,70 @@ describe('PUT /api/admin/landing-pages/:id', () => {
     expect(res.body.data.isPublished).toBe(true);
   });
 
+  it('update leadFormConfig có theme → GET trả đúng theme (round-trip)', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-u-theme' } });
+    const row = await insertLandingPage({ idUser: me.id, slug: 'theme-page' });
+    const token = await loginAs(me);
+
+    const theme = {
+      primary: '#123456',
+      accent: '#abcdef',
+      bg: '#ffffff',
+      text: '#000000',
+      border: '#e5e7eb',
+      radius: 8,
+      titleText: 'Đăng ký ngay hôm nay',
+      subtitleText: 'Ưu đãi có hạn',
+      buttonText: 'Gửi ngay →',
+    };
+    const putRes = await request(app)
+      .put(`/api/admin/landing-pages/${row.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        slug: 'theme-page',
+        title: 'Theme page',
+        htmlContent: '<div>v2</div>',
+        leadFormConfig: {
+          version: 1,
+          fixedFields: { occupation: { visible: true }, interestArea: { visible: true } },
+          customFields: [],
+          theme,
+        },
+      });
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.leadFormConfig.theme).toEqual(theme);
+
+    const getRes = await request(app)
+      .get(`/api/admin/landing-pages/${row.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.leadFormConfig.theme).toEqual(theme);
+  });
+
+  it('update leadFormConfig.theme với màu bẩn → GET trả về giá trị đã kẹp, không throw', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-u-theme-dirty' } });
+    const row = await insertLandingPage({ idUser: me.id, slug: 'theme-dirty' });
+    const token = await loginAs(me);
+
+    const putRes = await request(app)
+      .put(`/api/admin/landing-pages/${row.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        slug: 'theme-dirty',
+        title: 'Theme dirty',
+        htmlContent: '<div>v2</div>',
+        leadFormConfig: {
+          version: 1,
+          fixedFields: { occupation: { visible: true }, interestArea: { visible: true } },
+          customFields: [],
+          theme: { primary: 'not-a-color', radius: 999 },
+        },
+      });
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.leadFormConfig.theme.primary).toBe('#f97316');
+    expect(putRes.body.data.leadFormConfig.theme.radius).toBe(24);
+  });
+
   it('update slug trùng với landing khác → 409', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'lp-u3' } });
     const row1 = await insertLandingPage({ idUser: me.id, slug: 'one' });

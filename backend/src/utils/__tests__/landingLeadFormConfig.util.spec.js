@@ -205,110 +205,87 @@ describe('landingLeadFormConfig.util', () => {
     expect(applied.customFields[0].labelVi).toBe('Quy mô');
   });
 
-  describe('successRedirect (sau khi submit)', () => {
-    it('defaultLeadFormConfig có successRedirect mặc định disabled', () => {
-      const d = defaultLeadFormConfig();
-      expect(d.successRedirect).toEqual({
-        enabled: false,
-        url: '',
-        delayMs: 1500,
-        openInNewTab: false,
-      });
+  it('theme: default có đủ 5 màu + radius + 3 text khi chưa cấu hình', () => {
+    const d = defaultLeadFormConfig();
+    expect(d.theme).toEqual({
+      primary: '#f97316',
+      accent: '#ea580c',
+      bg: '#ffffff',
+      text: '#1f2937',
+      border: '#e5e7eb',
+      radius: 12,
+      titleText: 'Đăng ký nhận tư vấn',
+      subtitleText: expect.any(String),
+      buttonText: 'Đăng ký ngay →',
     });
+    expect(normalizePersistedLeadForm(null).theme).toEqual(d.theme);
+    expect(toPublicLeadFormConfig(null).theme).toEqual(d.theme);
+  });
 
-    it('normalizePersistedLeadForm giữ successRedirect hợp lệ từ leadForm', () => {
-      const out = normalizePersistedLeadForm({
-        leadForm: {
-          version: 1,
-          fixedFields: { occupation: { visible: true }, interestArea: { visible: true } },
-          customFields: [],
-          successRedirect: { enabled: true, url: 'https://example.com/thank-you', delayMs: 2000, openInNewTab: true },
-        },
-      });
-      expect(out.successRedirect).toEqual({
-        enabled: true,
-        url: 'https://example.com/thank-you',
-        delayMs: 2000,
-        openInNewTab: true,
-      });
-    });
+  it('theme: round-trip qua validate → merge → persisted → public DTO', () => {
+    const input = {
+      customFields: [],
+      theme: {
+        primary: '#123456',
+        accent: '#abc',
+        bg: '#FFFFFF00',
+        text: '#000',
+        border: '#e5e7eb',
+        radius: 8,
+        titleText: 'Đăng ký ngay',
+        subtitleText: 'Ưu đãi hôm nay',
+        buttonText: 'Gửi →',
+      },
+    };
+    const validated = validateAdminLeadFormConfig(input);
+    expect(validated.theme).toEqual(input.theme);
 
-    it('normalizePersistedLeadForm fallback default khi successRedirect malformed', () => {
-      const out = normalizePersistedLeadForm({
-        leadForm: {
-          version: 1,
-          fixedFields: {},
-          customFields: [],
-          // url là số → coerce thành chuỗi, không reset về rỗng.
-          // delayMs âm → fallback default.
-          // enabled không phải boolean → false.
-          successRedirect: { enabled: 'yes', url: 123, delayMs: -50, openInNewTab: 'no' },
-        },
-      });
-      expect(out.successRedirect.enabled).toBe(false);
-      expect(out.successRedirect.url).toBe('123');
-      expect(out.successRedirect.delayMs).toBe(1500);
-      expect(out.successRedirect.openInNewTab).toBe(false);
-    });
+    const merged = mergeLeadFormIntoCustomConfig({}, input);
+    expect(merged.leadForm.theme).toEqual(input.theme);
 
-    it('toPublicLeadFormConfig expose successRedirect với shape chuẩn', () => {
-      const dto = toPublicLeadFormConfig({
-        leadForm: {
-          version: 1,
-          fixedFields: {},
-          customFields: [],
-          successRedirect: { enabled: true, url: 'https://lp.example.com/x', delayMs: 3000, openInNewTab: false },
-        },
-      });
-      expect(dto.successRedirect).toEqual({
-        enabled: true,
-        url: 'https://lp.example.com/x',
-        delayMs: 3000,
-        openInNewTab: false,
-      });
-    });
+    const persisted = normalizePersistedLeadForm(merged);
+    expect(persisted.theme).toEqual(input.theme);
 
-    it('validateAdminLeadFormConfig reject khi enabled=true nhưng url rỗng', () => {
-      expect(() => validateAdminLeadFormConfig({
-        successRedirect: { enabled: true, url: '' },
-      })).toThrow(/URL chuyển trang/i);
-    });
+    const dto = toPublicLeadFormConfig(merged);
+    expect(dto.theme).toEqual(input.theme);
+  });
 
-    it('validateAdminLeadFormConfig reject khi url không phải http/https', () => {
-      expect(() => validateAdminLeadFormConfig({
-        successRedirect: { enabled: true, url: 'javascript:alert(1)' },
-      })).toThrow(/http/i);
+  it('theme: giá trị bẩn bị kẹp về default/hợp lệ, không throw', () => {
+    const d = defaultLeadFormConfig();
+    const validated = validateAdminLeadFormConfig({
+      customFields: [],
+      theme: {
+        primary: 'red', // không phải hex → rơi về default
+        accent: '" onmouseover="alert(1)', // cố breakout style attr → rơi về default
+        bg: '#zzzzzz', // hex sai ký tự → rơi về default
+        text: '#000', // hợp lệ → giữ
+        border: 123, // không phải string → rơi về default
+        radius: 999, // ngoài 0-24 → kẹp 24
+        titleText: 'x'.repeat(500), // vượt 200 → cắt còn 200
+        subtitleText: '   ', // trim rỗng → rơi về default
+        buttonText: null,
+      },
     });
+    expect(validated.theme.primary).toBe(d.theme.primary);
+    expect(validated.theme.accent).toBe(d.theme.accent);
+    expect(validated.theme.bg).toBe(d.theme.bg);
+    expect(validated.theme.text).toBe('#000');
+    expect(validated.theme.border).toBe(d.theme.border);
+    expect(validated.theme.radius).toBe(24);
+    expect(validated.theme.titleText).toHaveLength(200);
+    expect(validated.theme.subtitleText).toBe(d.theme.subtitleText);
+    expect(validated.theme.buttonText).toBe(d.theme.buttonText);
+  });
 
-    it('validateAdminLeadFormConfig reject khi delayMs âm', () => {
-      expect(() => validateAdminLeadFormConfig({
-        successRedirect: { enabled: true, url: 'https://x.com', delayMs: -1 },
-      })).toThrow(/delayMs/i);
-    });
+  it('theme: radius âm kẹp về 0, số thập phân được làm tròn', () => {
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: { radius: -5 } }).theme.radius).toBe(0);
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: { radius: 7.6 } }).theme.radius).toBe(8);
+  });
 
-    it('validateAdminLeadFormConfig cap delayMs tối đa 30s', () => {
-      const out = validateAdminLeadFormConfig({
-        successRedirect: { enabled: true, url: 'https://x.com', delayMs: 99999 },
-      });
-      expect(out.successRedirect.delayMs).toBe(30000);
-    });
-
-    it('mergeLeadFormIntoCustomConfig preserve successRedirect khi input=undefined', () => {
-      const merged = mergeLeadFormIntoCustomConfig(
-        {
-          leadForm: {
-            version: 1,
-            fixedFields: {},
-            customFields: [],
-            successRedirect: { enabled: true, url: 'https://x.com', delayMs: 2500, openInNewTab: false },
-          },
-        },
-        undefined
-      );
-      expect(merged.leadForm.successRedirect.enabled).toBe(true);
-      expect(merged.leadForm.successRedirect.url).toBe('https://x.com');
-      expect(merged.leadForm.successRedirect.delayMs).toBe(2500);
-    });
+  it('theme: input không phải object → toàn bộ về default', () => {
+    const d = defaultLeadFormConfig();
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: 'not-an-object' }).theme).toEqual(d.theme);
+    expect(validateAdminLeadFormConfig({ customFields: [], theme: null }).theme).toEqual(d.theme);
   });
 });
 

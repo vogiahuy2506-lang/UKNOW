@@ -288,7 +288,8 @@ describe('QuickSend Attachments Flow', () => {
       expect.objectContaining({
         to: 'client@example.com',
         attachments: [sampleAttachment],
-      })
+      }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
   });
 
@@ -327,7 +328,8 @@ describe('QuickSend Attachments Flow', () => {
       expect.objectContaining({
         phone: '0987654321',
         attachments: [sampleAttachment],
-      })
+      }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
   });
 
@@ -361,7 +363,8 @@ describe('QuickSend Attachments Flow', () => {
       expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(1);
     });
     expect(emailSettingsApiService.sendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ attachments: [] })
+      expect.objectContaining({ attachments: [] }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
   });
 
@@ -432,7 +435,8 @@ describe('QuickSend Attachments Flow', () => {
         to: 'partner@digiso.vn',
         subject: 'Hợp đồng dịch vụ 2026',
         attachments: [sampleAttachment],
-      })
+      }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
   });
 });

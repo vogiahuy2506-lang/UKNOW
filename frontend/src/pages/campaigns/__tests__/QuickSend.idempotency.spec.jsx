@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import QuickSend from '../QuickSend';
 import emailTemplateApiService from '../../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../../features/templates/services/zaloTemplateApi.service';
@@ -214,5 +214,129 @@ describe('QuickSend Component Boundary (Idempotency Key Retention & Rotation)', 
     const key2 = campaignApiService.testSendQuickCampaign.mock.calls[1][1].idempotencyKey;
 
     expect(key2).not.toBe(key1);
+  });
+});
+
+/**
+ * runSendLoop (Gửi ngay / Gửi lại hàng loạt) trước đây KHÔNG truyền idempotencyKey — mỗi
+ * lệnh gọi zaloSettingsApiService.sendMessage / emailSettingsApiService.sendEmail tự sinh
+ * một UUID ngẫu nhiên bên trong service, nên bấm Gửi hai lần luôn ra hai khoá khác nhau và
+ * gửi trùng thật. Chỉ nút "Gửi thử" có resolveActionIdempotencyKey; vòng gửi hàng loạt thì
+ * không — tình trạng có sẵn từ trước với số điện thoại, không phải hồi quy của UID.
+ */
+describe('QuickSend Bulk Send (runSendLoop Idempotency)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    emailTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [] } } });
+    emailTemplateApiService.getTemplateById.mockResolvedValue({ data: { data: null } });
+    zaloTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [] } } });
+    zaloTemplateApiService.getTemplateById.mockResolvedValue({ data: { data: null } });
+    emailSettingsApiService.listEmailSettings.mockResolvedValue({
+      data: { data: { items: [{ id: 1, name: 'Sender Email', email: 'sender@uknow.vn', isDefault: true }] } },
+    });
+    zaloSettingsApiService.listAccounts.mockResolvedValue({ data: { data: { items: [] } } });
+    campaignApiService.getQuickSendEstimate.mockResolvedValue({ data: { data: { unit: 'immediate', value: 0 } } });
+  });
+
+  it('một đợt gửi 2 người nhận dùng CHUNG một khoá gốc, mỗi người nối chỉ số riêng', async () => {
+    emailSettingsApiService.sendEmail.mockResolvedValue({ data: { success: true } });
+    mockLocationState = {
+      quickSendDraft: {
+        channel: 'email',
+        recipients: ['r1@example.com', 'r2@example.com'],
+        subject: 'Đợt gửi 2 người',
+        body: 'Nội dung',
+        accountId: 1,
+        attachments: [],
+        startStep: 'preview',
+      },
+    };
+
+    render(<QuickSend />);
+    fireEvent.click(await screen.findByRole('button', { name: /quickSend\.sendNow/i }));
+
+    await waitFor(() => {
+      expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(2);
+    });
+
+    const key0 = emailSettingsApiService.sendEmail.mock.calls[0][1].idempotencyKey;
+    const key1 = emailSettingsApiService.sendEmail.mock.calls[1][1].idempotencyKey;
+    expect(key0).toBeTruthy();
+    expect(key1).toBeTruthy();
+    expect(key0).not.toBe(key1);
+    // Cùng gốc, chỉ khác hậu tố chỉ số.
+    const base = key0.slice(0, key0.lastIndexOf('-'));
+    expect(key0).toBe(`${base}-0`);
+    expect(key1).toBe(`${base}-1`);
+  });
+
+  it('double-click "Gửi ngay" KHÔNG tạo 2 đợt gửi — chốt đồng bộ chặn lần bấm thứ hai', async () => {
+    emailSettingsApiService.sendEmail.mockResolvedValue({ data: { success: true } });
+    mockLocationState = {
+      quickSendDraft: {
+        channel: 'email',
+        recipients: ['once@example.com'],
+        subject: 'Chống double-click',
+        body: 'Nội dung',
+        accountId: 1,
+        attachments: [],
+        startStep: 'preview',
+      },
+    };
+
+    render(<QuickSend />);
+    const sendBtn = await screen.findByRole('button', { name: /quickSend\.sendNow/i });
+
+    // Cả 2 click trong CÙNG một act() — React chỉ flush state (disabled=true) sau khi khối
+    // này chạy xong, nên lúc click thứ hai diễn ra, nút DOM vẫn chưa "disabled" thật sự.
+    // fireEvent.click() riêng lẻ (2 lần, act() tách biệt) sẽ để React flush giữa hai lần,
+    // khiến test không còn phản ánh race thật — đã xác minh: test đó xanh cả khi gỡ ref-guard.
+    act(() => {
+      sendBtn.click();
+      sendBtn.click();
+    });
+
+    await waitFor(() => {
+      expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(1);
+    });
+    // Giữ nguyên sau khi mọi promise đã settle — không có lệnh gọi trễ nào lọt qua.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('double-click "Gửi lại" KHÔNG gửi trùng cho người nhận thất bại', async () => {
+    emailSettingsApiService.sendEmail.mockRejectedValue(new Error('SMTP down'));
+    mockLocationState = {
+      quickSendDraft: {
+        channel: 'email',
+        recipients: ['fail@example.com'],
+        subject: 'Retry double-click',
+        body: 'Nội dung',
+        accountId: 1,
+        attachments: [],
+        startStep: 'preview',
+      },
+    };
+
+    render(<QuickSend />);
+    fireEvent.click(await screen.findByRole('button', { name: /quickSend\.sendNow/i }));
+
+    const retryBtn = await screen.findByRole('button', { name: /quickSend\.retryFailed/i });
+
+    await waitFor(() => {
+      expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      retryBtn.click();
+      retryBtn.click();
+    });
+
+    // Đợt đầu (1) + đúng 1 đợt gửi lại (1) = 2, không phải 3 nếu lần bấm thứ hai lọt qua.
+    await waitFor(() => {
+      expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(2);
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(2);
   });
 });

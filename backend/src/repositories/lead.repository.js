@@ -238,11 +238,6 @@ class LeadRepository {
     );
     return result.rows[0] || null;
   }
-  async countFiltered(filters) {
-    const { whereClause, params } = buildLeadWhere(filters);
-    const result = await db.query(`SELECT COUNT(*)::bigint AS c FROM leads ${whereClause}`, params);
-    return Number(result.rows[0]?.c || 0);
-  }
 
   /**
    * Đếm lead submit theo landing_page_slug trong khoảng ngày (dashboard LP).
