@@ -216,10 +216,30 @@ Nghĩa là một người có vài Gmail vẫn mở được nhiều tài khoả
 Điều kiện "phải có SĐT mới được tính" ở mục 6 nâng chi phí gian lận lên đúng mức mà một
 dòng SQL làm được — mỗi tài khoản rác tốn một số thật — nhưng không hơn.
 
-Phần còn lại giao cho **cảnh báo mềm ở màn hình duyệt rút**: trùng SĐT, trùng tên chủ
-tài khoản ngân hàng, hoặc trùng số tài khoản giữa người rút và người mua dưới họ.
-**Không tự động chặn** — kế toán nhìn rồi quyết. Chặn tự động sẽ chặn nhầm người nhà
-thật sự giới thiệu nhau.
+### Chốt 07/09/2026 — tự giới thiệu được CHẤP NHẬN, không xây hàng rào thêm
+
+Sếp chốt: *"Cũng không sao, chấp nhận coi như một tí chiết khấu cho họ, họ vẫn nạp tiền vào
+cho chúng ta."*
+
+Lý do đúng, và nó đảo cách nhìn của cả mục này: ai tự mua qua tài khoản phụ **luôn trả
+nhiều hơn nhận** (bỏ 15tr lấy về 2,25tr). Họ không moi tiền công ty — họ tự cho mình mức
+giảm giá 10–30% mà chính sách không định cho. Đó là **rò rỉ chiết khấu**, không phải gian
+lận, và chi phí của mọi hàng rào chống nó (chặn nhầm người nhà giới thiệu nhau thật, vốn là
+kênh bán chính ở Việt Nam) cao hơn khoản rò rỉ.
+
+Hệ quả cho code, ghi rõ để đừng ai xây lại:
+- **Không** so khớp tên chủ tài khoản ngân hàng với họ tên CCCD. Sếp: *"cho họ dùng tài
+  khoản nào cũng được."* (Trang AI Hành Chính yêu cầu trùng tên — mình **cố ý** khác.)
+- **Không** xây cảnh báo mềm trùng SĐT/STK ở màn duyệt rút — plan gốc có yêu cầu, **bỏ**.
+- Điều khoản 15.2 vẫn giữ nguyên câu cấm tự mua qua tài khoản khác. Cấm trên giấy nhưng
+  dung thứ trong vận hành **không mâu thuẫn**: ToS ghi *"có quyền"* thu hồi, không phải
+  *"phải"* — nó giữ cho công ty quyền hành động nếu một ngày muốn, mà không bắt buộc hành
+  động hôm nay.
+
+**Phép thử đúng để phân loại một kịch bản** (rút ra sau khi một ví dụ sai bị bác): *"nó có
+cho phép lấy ra nhiều hơn bỏ vào không?"* Chỉ hai thứ qua được phép thử đó — **đơn `manual`**
+(hoa hồng từ tiền chưa từng thu) và **hoàn tiền sau khi đã rút** — và cả hai đều không phải
+việc của đối tác, mà là chuyện admin gán nhầm hoặc ngân hàng đảo giao dịch.
 
 ## 8. Luồng rút tiền — thứ tự các bước là phần quan trọng nhất
 
@@ -253,6 +273,11 @@ service, không trả 500 thô.
 viết *"chỉ từ 1.000.000đ số dư"*; nếu chỉ kiểm số dư thì người có 5tr vẫn xin rút được
 20.000đ và kế toán phải chuyển khoản tay từng món lặt vặt — đúng thứ ngưỡng tối thiểu
 sinh ra để tránh. Hệ quả chấp nhận: phần dư dưới 1tr kẹt lại tới khi tích đủ.
+
+> **Sếp chốt 07/09/2026, giữ cách này** — *"giới hạn mỗi lần rút tối thiểu 1tr, tránh rút
+> lắt nhắt, kế toán phải chuyển thủ công nhiều."* Đây là chỗ **cố ý khác** trang AI Hành
+> Chính (họ áp cho số dư). Điều khoản 15.3 của mình đã ghi đúng theo cách này. Đừng "sửa
+> cho khớp trang" — lệch là có chủ đích.
 
 ## 9. Hai loại đối tác — mượn khuôn hoá đơn, đừng chế cái mới
 
