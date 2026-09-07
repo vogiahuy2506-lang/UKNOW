@@ -66,7 +66,10 @@ function resolveUidRowAgainstFriendsMap(row, friendsMap) {
   if (row.inContacts !== null) return row;
   const friend = friendsMap.get(row.uid);
   if (!friend) return { ...row, inContacts: false, checked: false, name: null };
-  const name = friend.display_name || friend.displayName || row.uid;
+  // Bạn bè có trong danh bạ nhưng không đặt tên hiển thị (hiếm) — vẫn KHÔNG được rơi xuống
+  // UID trần, dù đã xác nhận đúng người (Bẫy 4 áp cho mọi nơi hiển thị, không chỉ ca chưa
+  // đối chiếu được).
+  const name = friend.display_name || friend.displayName || `…${row.uid.slice(-4)}`;
   return { ...row, inContacts: true, checked: true, name };
 }
 
@@ -195,6 +198,19 @@ const QuickSend = () => {
   const [isTesting, setIsTesting] = useState(false);
   const testSendActionKeyRef = useRef({ key: null, signature: null });
   const testSendPreparationRef = useRef(false);
+  // Khoá idempotency cho CẢ ĐỢT gửi hàng loạt (runSendLoop) — mỗi người nhận trong đợt dùng
+  // `${key}-${index}` dẫn xuất từ đây. Bấm gửi hai lần với cùng nội dung/người nhận sẽ tái
+  // dùng đúng key này (resolveActionIdempotencyKey so signature), nên mỗi cặp key-người nhận
+  // giống hệt lần trước → backend dedupe đúng. Reset về null sau khi đợt gửi kết thúc (thành
+  // công lẫn thất bại) để lần gửi MỚI sau đó (kể cả trùng nội dung) không bị coi nhầm là trùng.
+  const sendActionKeyRef = useRef({ key: null, signature: null });
+  // Chốt đồng bộ chặn double-click thật (giống testSendPreparationRef ở Gửi thử) — khoá
+  // idempotency một mình không đủ: 2 click gần như đồng thời có thể cùng đọc
+  // sendActionKeyRef.current TRƯỚC khi request đầu ghi lại (resolveActionIdempotencyKey là
+  // async), ra 2 khoá gốc khác nhau cho CÙNG một đợt. state (isSending/isRetrying) không
+  // đáng tin cho việc này vì cập nhật bị React batch, không tức thời như ref.
+  const sendPreparationRef = useRef(false);
+  const retryPreparationRef = useRef(false);
 
   // Nạp bản nháp từ Trợ lý AI (quickSendDraft) nếu có
   useEffect(() => {
@@ -469,7 +485,7 @@ const QuickSend = () => {
       const idx = prev.findIndex((r) => r.uid === uid);
       if (idx === -1) {
         const friend = friendHint || zaloFriendsMapRef.current.get(uid);
-        const name = friend ? (friend.display_name || friend.displayName || uid) : uid;
+        const name = friend ? (friend.display_name || friend.displayName || `…${uid.slice(-4)}`) : uid;
         return [...prev, { uid, name, checked: true, inContacts: Boolean(friend) }];
       }
       const next = [...prev];
@@ -683,10 +699,28 @@ const QuickSend = () => {
     let quotaExceededEarly = false;
     const failed = [];
 
+    // Một khoá cho CẢ ĐỢT (không phải mỗi request một khoá ngẫu nhiên như trước — bấm gửi
+    // 2 lần với cùng nội dung/người nhận trước đây ra 2 khoá khác nhau, gửi trùng thật).
+    // Mỗi người nhận trong đợt dùng `${baseKey}-${index}` — chỉ số trong CHÍNH danh sách
+    // recipients của lần gọi này, nên đợt gửi lại (retry, danh sách con) tự nhiên có chữ ký
+    // khác đợt gửi đầu (recipients khác) → không bị coi nhầm là trùng với đợt đã gửi trước.
+    const idempotencyPayload = {
+      channel: selectedChannel,
+      accountId: isEmail ? selectedEmailAccount?.id : selectedZaloAccount?.id,
+      recipientType: isEmail ? undefined : zaloRecipientType,
+      recipients: recipients.map((r) => r.email || r.phone),
+      templateId: selectedTemplate?.id || null,
+      subject: templateContent.subject || '',
+      body: templateContent.body || '',
+      attachments: attachments.map((a) => a?.key || a?.name || ''),
+    };
+    sendActionKeyRef.current = await resolveActionIdempotencyKey(sendActionKeyRef.current, idempotencyPayload);
+    const baseKey = sendActionKeyRef.current.key;
+
     if (isEmail) {
       const { html, text } = resolveEmailBody();
       const subject = templateContent.subject || selectedTemplate?.subject || 'Không có tiêu đề';
-      for (const recipient of recipients) {
+      for (const [idx, recipient] of recipients.entries()) {
         try {
           await emailSettingsApiService.sendEmail({
             fromEmailId: parseInt(selectedEmailAccount.id, 10),
@@ -695,7 +729,7 @@ const QuickSend = () => {
             content: text,
             htmlContent: html,
             attachments,
-          });
+          }, { idempotencyKey: `${baseKey}-${idx}` });
           successCount++;
         } catch (err) {
           console.error('Send email error to:', recipient.email, err);
@@ -716,7 +750,7 @@ const QuickSend = () => {
       }
     } else {
       const message = resolveZaloBody();
-      for (const recipient of recipients) {
+      for (const [idx, recipient] of recipients.entries()) {
         try {
           await zaloSettingsApiService.sendMessage({
             accountId: selectedZaloAccount.id,
@@ -724,7 +758,7 @@ const QuickSend = () => {
             recipientType: zaloRecipientType,
             message,
             attachments,
-          });
+          }, { idempotencyKey: `${baseKey}-${idx}` });
           successCount++;
         } catch (err) {
           console.error('Send Zalo error to:', recipient.phone, err);
@@ -740,6 +774,10 @@ const QuickSend = () => {
         }
       }
     }
+    // Đợt đã xong (thành công lẫn thất bại) — reset để lần gửi MỚI sau đó (kể cả trùng nội
+    // dung) tính khoá mới, không bị coi nhầm là trùng với đợt vừa xong (cùng pattern
+    // testSendActionKeyRef đã dùng ở handleTestSend).
+    sendActionKeyRef.current = { key: null, signature: null };
     return { isEmail, successCount, failCount, failureSamples, failed };
   }, [
     selectedChannel,
@@ -748,6 +786,7 @@ const QuickSend = () => {
     resolveEmailBody,
     resolveZaloBody,
     templateContent.subject,
+    templateContent.body,
     selectedTemplate,
     extraAttachments,
     zaloRecipientType,
@@ -755,6 +794,7 @@ const QuickSend = () => {
 
   // Send quick campaign - gửi trực tiếp không cần tạo campaign
   const handleSend = async () => {
+    if (isSending || sendPreparationRef.current) return;
     const recipients = finalRecipients();
     if (recipients.length === 0) {
       toast.error(t('quickSend.noRecipients'));
@@ -803,6 +843,7 @@ const QuickSend = () => {
       return;
     }
 
+    sendPreparationRef.current = true;
     setIsSending(true);
     setCurrentStep(QUICK_SEND_STEPS.SENDING);
 
@@ -843,6 +884,7 @@ const QuickSend = () => {
       toast.error(error?.response?.data?.message || error?.message || t('quickSend.sendFailed'));
       setCurrentStep(QUICK_SEND_STEPS.PREVIEW);
     } finally {
+      sendPreparationRef.current = false;
       setIsSending(false);
     }
   };
@@ -852,11 +894,13 @@ const QuickSend = () => {
   // the failure wasn't caused by quota exhaustion, since that would never
   // succeed on the same sender anyway.
   const handleRetryFailed = async () => {
+    if (isRetrying || retryPreparationRef.current) return;
     if (failedRecipients.length === 0) return;
     if ((sendResult?.failureTypes || []).includes('quota_exceeded')) {
       toast.error(t('quickSend.retryQuotaBlocked') || 'Đã vượt hạn mức — không thể gửi lại.');
       return;
     }
+    retryPreparationRef.current = true;
     setIsRetrying(true);
     try {
       const result = await runSendLoop(failedRecipients);
@@ -886,6 +930,7 @@ const QuickSend = () => {
       console.error('Retry error:', error);
       toast.error(error?.response?.data?.message || t('quickSend.sendFailed'));
     } finally {
+      retryPreparationRef.current = false;
       setIsRetrying(false);
     }
   };
@@ -903,6 +948,7 @@ const QuickSend = () => {
     setUidSearch('');
     setUidSearchResults([]);
     resolvedForAccountIdRef.current = null;
+    sendActionKeyRef.current = { key: null, signature: null };
     setSendResult(null);
     setFailedRecipients([]);
   };
