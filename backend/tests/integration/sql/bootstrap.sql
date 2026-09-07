@@ -1430,8 +1430,7 @@ CREATE TABLE campaign_run_recipient_steps (
 );
 CREATE INDEX idx_crrs_id_run ON campaign_run_recipient_steps(id_run);
 CREATE UNIQUE INDEX uq_crrs_progress
-  ON campaign_run_recipient_steps(id_run, id_node, channel, recipient_key)
-  WHERE id_run IS NOT NULL AND id_node IS NOT NULL AND channel IS NOT NULL AND recipient_key IS NOT NULL;
+  ON campaign_run_recipient_steps(id_run, id_node, channel, recipient_key);
 
 -- ─── Audit logs ─────────────────────────────────────────────────────────
 CREATE TABLE audit_logs (
@@ -2885,7 +2884,7 @@ CREATE TABLE IF NOT EXISTS affiliate_revenue_events (
   id                BIGSERIAL PRIMARY KEY,
   referrer_user_id  BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   buyer_user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  order_id          INTEGER       NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+  order_id          INTEGER       NOT NULL UNIQUE REFERENCES orders(id) ON DELETE RESTRICT,
   amount            NUMERIC(12,2) NOT NULL,
   month_key         CHAR(7)       NOT NULL,
   created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
@@ -2960,6 +2959,8 @@ CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_user
   ON affiliate_withdrawals (user_id, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_affiliate_withdrawals_status
   ON affiliate_withdrawals (status, requested_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliate_withdrawals_one_pending
+  ON affiliate_withdrawals (user_id) WHERE status = 'pending';
 
 -- ─── Migration 185: custom_chatbots.response_style ──────────────────────
 ALTER TABLE custom_chatbots
