@@ -79,7 +79,12 @@ const MainLayout = () => {
   const isInboxPage = location.pathname.includes('/settings/inbox');
   const isChatbotStudio = location.pathname.includes('/chatbot-studio');
   const isAiHomePage = location.pathname === '/app' || location.pathname === '/app/';
-  const showAiSidePanel = aiPanelOpen && !isAiHomePage;
+  // Gemini Canvas landing-page editor: dashboard chrome vẫn hiện, nhưng AI panel phải ẩn
+  // để nhường chỗ cho chat panel riêng của canvas.
+  const isLandingCanvas = /^\/app\/settings\/landing-pages\/(new|\d+\/edit)$/.test(
+    location.pathname
+  );
+  const showAiSidePanel = aiPanelOpen && !isAiHomePage && !isLandingCanvas;
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -217,11 +222,11 @@ const MainLayout = () => {
           onClose={handleCloseTrialWelcome}
         />
 
-        {!isAiHomePage && !isChatbotStudio && (
+        {!isAiHomePage && !isChatbotStudio && !isLandingCanvas && (
           <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         )}
 
-        {!aiPanelOpen && !isAiHomePage && !isChatbotStudio && (
+        {!aiPanelOpen && !isAiHomePage && !isChatbotStudio && !isLandingCanvas && (
           <button
             onClick={() => setAiPanelOpen(true)}
             className="fixed bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full shadow-2xl z-30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
@@ -276,7 +281,7 @@ const MainLayout = () => {
       </div>
 
       {/* AI Side Panel */}
-      {!isAiHomePage && (
+      {!isAiHomePage && !isLandingCanvas && (
         <AiChatbot
           isOpen={aiPanelOpen}
           onToggle={() => setAiPanelOpen(false)}
@@ -288,7 +293,7 @@ const MainLayout = () => {
       )}
 
       {/* AI Toggle Bar (Desktop) */}
-      {!aiPanelOpen && !isChatbotStudio && !isAiHomePage && (
+      {!aiPanelOpen && !isChatbotStudio && !isAiHomePage && !isLandingCanvas && (
         <div className="fixed top-0 right-0 h-full w-1 z-50 group cursor-pointer"
           onClick={() => setAiPanelOpen(true)}
           title={t('mainLayout.openAIAssistant')}

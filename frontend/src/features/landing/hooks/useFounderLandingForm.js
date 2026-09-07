@@ -3,6 +3,7 @@ import { LANDING_COPY } from '../constants/landingCopy.js';
 import { postPublicLead } from '../services/leadPublicApi.js';
 import { getOrCreateLandingVisitorId } from '../../landing-pages/utils/landingVisitorId.js';
 import { normalizeLeadFormConfig } from '../../landing-pages/utils/landingLeadFormConfig.js';
+import { buildPublicLeadPayload } from '../utils/leadFields.js';
 
 const initialForm = () => ({
   lastName: '',
@@ -89,33 +90,13 @@ export function useFounderLandingForm(locale = 'vi', options = {}) {
     setSubmitting(true);
     setError('');
     try {
-      const phone = String(form.phone).replace(/\s+/g, ' ').trim();
-      const payload = {
-        lastName: String(form.lastName).trim(),
-        firstName: String(form.firstName).trim(),
-        email: String(form.email).trim().toLowerCase(),
-        phone,
-        marketingConsent: form.marketingConsent,
-      };
-      if (leadFormConfig.fixedFields.occupation.visible) {
-        payload.occupation = String(form.occupation ?? '').trim();
-      }
-      if (leadFormConfig.fixedFields.interestArea.visible) {
-        payload.interestArea = String(form.interestArea ?? '').trim();
-      }
-      const customFields = {};
-      for (const field of leadFormConfig.customFields || []) {
-        if (Object.prototype.hasOwnProperty.call(form.customFields || {}, field.key)) {
-          customFields[field.key] = form.customFields[field.key];
-        }
-      }
-      if (Object.keys(customFields).length > 0) {
-        payload.customFields = customFields;
-      }
-      if (landingPageSlug) {
-        payload.landingPageSlug = landingPageSlug;
-        payload.visitorId = getOrCreateLandingVisitorId();
-      }
+      const visitorId = landingPageSlug ? getOrCreateLandingVisitorId() : null;
+      const payload = buildPublicLeadPayload({
+        form,
+        leadFormConfig,
+        landingPageSlug,
+        visitorId,
+      });
       await postPublicLead(payload);
       setSuccess(true);
     } catch (e) {

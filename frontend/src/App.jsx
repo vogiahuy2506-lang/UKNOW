@@ -34,6 +34,7 @@ import EmployeeManagement from './pages/settings/EmployeeManagement';
 import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesPage';
 import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
 import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
+import LandingCanvasPage from './features/landing-canvas/pages/LandingCanvasPage.jsx';
 import BusinessProfilePage from './pages/settings/BusinessProfilePage';
 import InboxOutboxPage from './pages/settings/InboxOutboxPage';
 import MediaLibraryPage from './pages/settings/MediaLibraryPage';
@@ -401,6 +402,8 @@ function AppContent() {
             <Route path="settings/landing-featured-courses" element={<FeatureFlagRoute flag="VITE_FEATURE_LANDING_CMS"><OwnerRoute><LandingFeaturedCoursesPage /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="settings/landing-testimonials" element={<FeatureFlagRoute flag="VITE_FEATURE_LANDING_CMS"><OwnerRoute><LandingTestimonialsPage /></OwnerRoute></FeatureFlagRoute>} />
             <Route path="settings/landing-pages" element={<PermissionRoute permission="landing_pages"><LandingPagesAdminPage /></PermissionRoute>} />
+            <Route path="settings/landing-pages/new" element={<PermissionRoute permission="landing_pages"><LandingCanvasPage /></PermissionRoute>} />
+            <Route path="settings/landing-pages/:id/edit" element={<PermissionRoute permission="landing_pages"><LandingCanvasPage /></PermissionRoute>} />
             <Route path="settings/ai-profile" element={<OwnerRoute><BusinessProfilePage /></OwnerRoute>} />
             <Route path="chatbot-studio" element={<PermissionRoute permission="chatbots_manage"><ChatbotStudioPage /></PermissionRoute>} />
             <Route path="settings/inbox" element={<PermissionRoute permission="inbox_view"><InboxOutboxPage /></PermissionRoute>} />
