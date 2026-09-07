@@ -62,6 +62,7 @@ const poolConfig = {
   password: process.env.DB_PASSWORD || 'password',
   // Hiển thị trong pg_stat_activity.application_name (DBeaver/DataGrip) để phân biệt backend vs IDE.
   application_name: String(process.env.DB_APPLICATION_NAME || 'founderai-campaign-backend').trim() || 'founderai-campaign-backend',
+  options: '-c timezone=Asia/Ho_Chi_Minh',
   // Kích thước pool cấu hình qua env; mặc định 20 kết nối tối đa mỗi process.
   max: Number.parseInt(process.env.DB_POOL_MAX, 10) || (isNeon ? 3 : 20),
   // Neon serverless: giảm idle timeout để tránh connection bị server đóng
@@ -98,12 +99,7 @@ const pool = new Pool(poolConfig);
 
 let hasLoggedFirstPoolConnection = false;
 
-pool.on('connect', async (client) => {
-  try {
-    await client.query("SET TIME ZONE 'Asia/Ho_Chi_Minh'");
-  } catch (error) {
-    console.error('Failed to set DB timezone:', error.message);
-  }
+pool.on('connect', () => {
   // Mỗi lần pool mở socket mới sẽ gọi handler này — không log mặc định để tránh spam log khi tải cao.
   if (process.env.DB_DEBUG_LOG_CONNECTIONS === '1') {
     console.log('[PostgreSQL] Mở kết nối mới trong pool');
