@@ -170,3 +170,11 @@ Checklist regression cho route nhạy cảm: `employee-route-policy-matrix.md`.
 - Báo động deploy đỏ chưa tới người vận hành; 07/09 có 3 lần deploy đỏ không ai biết.
 - Lỗi cron restore đếm kết quả bị lock thành "đã khôi phục" trong `cron_job_runs`.
 - Ops ngoài hệ thống: GA4 measurement id, UptimeRobot (`_internal/Todo.md`).
+- Còn lại từ danh sách 21/08 và master todo tháng 8, đều là quyết định hoặc vận hành, không phải
+  code: modal gói dùng thử khi đăng ký bằng Google (P2-1, cần test trình duyệt); `mv uploads` trên
+  VPS rồi bật bán lẻ dung lượng; nhập bảng giá theo kênh vào `/admin/plans`; chốt cột `stackable`
+  của voucher (bỏ hay làm cho chạy); bài trợ giúp "Liên hệ hỗ trợ"; ETA và nút gửi thử ở Gửi nhanh.
+- Nợ bảo mật P2-5 (chỉ hiển thị): `usageTracking.service.js` tính phần trăm 0 khi `limit = 0`,
+  màn hạn mức hiện 0% thay vì "đã hết". Đường chặn gửi đã đúng, không ảnh hưởng thu tiền.
+- Gửi nhanh cho Zalo nhóm: thẻ xác nhận chỉ mở nút cho `email` và `zalo_personal`, chọn Zalo nhóm
+  gửi một lần vẫn tạo chiến dịch. Là PR-2 của `PLAN_GUI_NHANH_MOI_KENH_2026-09-04.md`.
