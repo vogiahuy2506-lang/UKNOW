@@ -52,7 +52,11 @@
     apiBase = apiBase.replace(/\/api\/api$/i, '/api');
   }
   var slug = (sc.getAttribute('data-slug') || '').trim().toLowerCase();
-  var autoMode = sc.getAttribute('data-auto') === '1';
+  // Mặc định bật auto mode khi landing page không có form data-founderai-capture
+  // → capture form đầu tiên tìm được trong trang. Admin muốn TẮT có thể thêm
+  // data-auto="0" vào <script>.
+  var autoAttr = sc.getAttribute('data-auto');
+  var autoMode = autoAttr !== '0';
   var debug = sc.getAttribute('data-debug') === '1';
 
   if (!apiBase || !slug) {

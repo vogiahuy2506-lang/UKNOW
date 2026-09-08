@@ -286,10 +286,10 @@ describe('landingHtmlInjection.util', () => {
       apiBase: 'http://localhost:5001/api',
     };
 
-    it('chạy đủ pipeline: strip → rewrite link → inject script → auto-inject form nếu thiếu', () => {
+    it('chạy đủ pipeline: strip script cũ → rewrite link → inject scripts tracking', () => {
       const html =
         '<html><body>' +
-        '<section data-founder-lp-embed="1">old</section>' +
+        '<section data-founder-lp-embed="1">admin-thiết-kế-riêng</section>' +
         '<a href="https://target.com">click</a>' +
         '</body></html>';
       const out = prepareLandingHtmlOnSave(html, opts);
@@ -299,9 +299,11 @@ describe('landingHtmlInjection.util', () => {
       expect(out).toContain('lp-track.js');
       expect(out).toContain('founderai-capture.js');
       expect(out).toContain('data-slug="promo"');
-      // Form được auto-inject lại (sau khi strip form cũ)
+      // Section admin thiết kế riêng được giữ nguyên (KHÔNG strip)
       expect(out).toContain('data-founder-lp-embed="1"');
-      expect(out).toContain('/embed/lead-form');
+      expect(out).toContain('admin-thiết-kế-riêng');
+      // KHÔNG có iframe tự động chèn (v2.0 trở đi)
+      expect(out).not.toContain('/embed/lead-form');
     });
 
     it('idempotent: gọi 2 lần kết quả không thay đổi', () => {
@@ -311,7 +313,7 @@ describe('landingHtmlInjection.util', () => {
       expect(twice).toBe(once);
     });
 
-    it('HTML có iframe form cũ → strip rồi inject lại form + scripts', () => {
+    it('HTML có iframe form cũ → KHÔNG chèn lại iframe, chỉ thêm scripts tracking', () => {
       const html =
         '<html><body>' +
         '<iframe src="http://localhost:5174/embed/lead-form?slug=promo"></iframe>' +
@@ -320,7 +322,7 @@ describe('landingHtmlInjection.util', () => {
       // Scripts được inject
       expect(out).toContain('lp-track.js');
       expect(out).toContain('founderai-capture.js');
-      // Form vẫn còn (auto-inject lại sau khi strip)
+      // Form iframe cũ vẫn còn (KHÔNG bị strip vì admin có thể đã dán cố ý)
       expect(out).toContain('/embed/lead-form');
     });
 
@@ -337,28 +339,23 @@ describe('landingHtmlInjection.util', () => {
     });
   });
 
-  describe('autoInjectLeadFormIfMissing', () => {
+  describe('autoInjectLeadFormIfMissing (deprecated no-op)', () => {
     const opts = { slug: 'promo', frontendOrigin: 'http://localhost:5174' };
 
-    it('HTML đã có iframe thật (/embed/lead-form) → không chèn thêm, trả nguyên HTML', () => {
+    it('trả nguyên HTML — không chèn iframe tự động nữa (v2.0)', () => {
+      const html = '<html><body><p>x</p></body></html>';
+      expect(autoInjectLeadFormIfMissing(html, opts)).toBe(html);
+      expect(autoInjectLeadFormIfMissing(html, opts)).not.toContain('/embed/lead-form');
+    });
+
+    it('input null/undefined → trả chuỗi rỗng', () => {
+      expect(autoInjectLeadFormIfMissing(null, opts)).toBe('');
+      expect(autoInjectLeadFormIfMissing(undefined, opts)).toBe('');
+    });
+
+    it('HTML có iframe / form snippet — vẫn trả nguyên HTML (idempotent)', () => {
       const html = '<html><body><iframe src="http://x/embed/lead-form?slug=promo"></iframe></body></html>';
       expect(autoInjectLeadFormIfMissing(html, opts)).toBe(html);
-    });
-
-    it('HTML đã có form snippet tự chứa (data-uknow-lead-form) → không chèn iframe, trả nguyên HTML', () => {
-      const html =
-        '<html><body>' +
-        '<form data-uknow-lead-form data-slug="promo" data-api-base="http://api.test/api"><input name="email"/></form>' +
-        '</body></html>';
-      const out = autoInjectLeadFormIfMissing(html, opts);
-      expect(out).toBe(html);
-      expect(out).not.toContain('/embed/lead-form');
-    });
-
-    it('HTML không có form nào → chèn iframe (đường dự phòng còn nguyên)', () => {
-      const html = '<html><body><p>x</p></body></html>';
-      const out = autoInjectLeadFormIfMissing(html, opts);
-      expect(out).toContain('/embed/lead-form?slug=promo');
     });
   });
 

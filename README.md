@@ -115,6 +115,44 @@ sự gấp** — đường đi thường ngày vẫn chạy đủ test.
 - [`backend/tests/integration/README.md`](./backend/tests/integration/README.md) — guide integration test
 - [`backend/ARCHITECTURE_REFACTOR_MAP.md`](./backend/ARCHITECTURE_REFACTOR_MAP.md) — refactor map
 
+## Landing Page CMS — luồng lead (v2.0)
+
+Từ 09/2026, hệ thống **KHÔNG còn tự động chèn iframe form** mỗi khi lưu landing page.
+Admin tự thiết kế form đăng ký trong HTML, script `founderai-capture.js` sẽ tự bắt:
+
+```html
+<!-- Ví dụ: form admin tự thiết kế trong landing page -->
+<form data-founderai-capture>
+  <input type="text"  name="name"  placeholder="Họ tên" required />
+  <input type="email" name="email" placeholder="Email"  required />
+  <input type="tel"   name="phone" placeholder="SĐT"    required />
+  <button type="submit">Gửi</button>
+</form>
+```
+
+**Cách hoạt động:**
+
+1. Mỗi lần lưu landing page, hệ thống tự động chèn 2 script tracking trước `</body>`:
+   - `lp-track.js` — ghi lượt xem + tracking click trên `<a href>`
+   - `founderai-capture.js` — auto-detect form đầu tiên trong trang, bắt submit
+2. Khi khách điền form và submit, script sẽ gọi `POST /api/public/leads`
+   với payload `{ name, email, phone, landingPageSlug, customFields }`.
+3. Lead được lưu vào bảng `leads` với `id_user = chủ landing page`.
+4. Trang `/app/landing-leads` sẽ hiển thị lead mới.
+
+**Tùy chọn nâng cao:**
+
+- `<form data-founderai-capture>` — đánh dấu form cụ thể cần capture (ưu tiên form này).
+- Form có input `name="cf_xxx"` (lowercase, dài 4-40 ký tự) sẽ được gom vào `customFields`.
+- Admin có thể cấu hình form (`fixedFields`, `customFields`, `theme`) trong tab
+  Lead Form Config → endpoint `/api/public/landing-pages/:slug/form-config`.
+- Muốn TẮT auto-capture: thêm `data-auto="0"` vào thẻ `<script src=".../founderai-capture.js">`.
+
+**Lưu ý cho landing page cũ:** Nếu landing page hiện tại đang có iframe `/embed/lead-form`
+do phiên bản cũ chèn, admin cần **xóa thủ công 1 lần** (edit → xóa `<iframe>`
+và `<section data-founder-lp-embed>` nếu có), sau đó Lưu. Hệ thống sẽ không tự
+chèn lại iframe nữa.
+
 ## Vận hành quan trọng — campaign
 
 Backend campaign engine giữ state trong RAM (`activeRunIds`, rate-limit Zalo, mutex tài khoản). **Chỉ chạy 1 container/replica backend** cho luồng chạy campaign. Thêm replica thứ 2 mà chưa chuyển guard sang Redis/DB lock = gửi trùng + nhân đôi hạn mức Zalo.
