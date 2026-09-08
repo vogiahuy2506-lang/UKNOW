@@ -159,3 +159,105 @@ describe('PATCH /api/ai/sessions/:id/wizard-state — mark_campaign_created', ()
     expect(boundaryMsgs).toHaveLength(1);
   });
 });
+
+/**
+ * PLAN_WIZARD_VONG_DOI_2026-09-07 PR-2 — mục 7: cùng cơ chế ranh giới cho abandon_campaign_flow.
+ */
+describe('PATCH /api/ai/sessions/:id/wizard-state — abandon_campaign_flow', () => {
+  it('reset gates, ghi đúng 1 tin campaign_abandoned sống trên server', async () => {
+    const user = await createUser({ email: 'wizard-abandon@test.com', username: 'wizard_abandon' });
+    const session = await createSession(user.id, 'Chat wizard abandon test');
+
+    // Gates có dữ liệu của chiến dịch đang làm dở — phải bị reset sau abandon.
+    await seedWizardState(session.id, {
+      isCampaignFlow: true,
+      channel: 'email',
+      senderAccountId: 7,
+      senderAccountName: null,
+      dataSource: 'db',
+      sheetUrl: null,
+      sheetCheck: null,
+      zaloGroupIds: [],
+      zaloFriendIds: [],
+      schedule: null,
+      planApproved: false,
+      senderOtherRequested: false,
+      hasContentPlan: false,
+      hasAttachedFile: false,
+      hasAttachedSpreadsheet: false,
+      fileUsage: null,
+      abandonedAtMessageCount: null,
+    });
+
+    const token = createAuthToken(user);
+    const res = await request(app)
+      .patch(`/api/ai/sessions/${session.id}/wizard-state`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        action: 'abandon_campaign_flow',
+        payload: { messageCount: 4, content: 'Đã dừng theo yêu cầu.' },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.changed).toBe(true);
+
+    const gates = res.body.data.wizardState.gates;
+    expect(gates.isCampaignFlow).toBe(false);
+    expect(gates.channel).toBeNull();
+    expect(gates.senderAccountId).toBeNull();
+    expect(gates.dataSource).toBeNull();
+    expect(gates.abandonedAtMessageCount).toBe(4);
+
+    const msgsRes = await request(app)
+      .get(`/api/ai/sessions/${session.id}/messages`)
+      .set('Authorization', `Bearer ${token}`);
+    const boundaryMsgs = msgsRes.body.data.filter((m) => m.type === 'campaign_abandoned');
+    expect(boundaryMsgs).toHaveLength(1);
+    expect(boundaryMsgs[0].content).toBe('Đã dừng theo yêu cầu.');
+    expect(boundaryMsgs[0].role).toBe('assistant');
+  });
+
+  it('content rỗng → dùng câu mặc định "Đã dừng."', async () => {
+    const user = await createUser({ email: 'wizard-abandon-default@test.com', username: 'wizard_abandon_default' });
+    const session = await createSession(user.id, 'Chat wizard abandon test 2');
+    const token = createAuthToken(user);
+
+    const res = await request(app)
+      .patch(`/api/ai/sessions/${session.id}/wizard-state`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'abandon_campaign_flow', payload: { messageCount: 2 } });
+
+    expect(res.status).toBe(200);
+
+    const msgsRes = await request(app)
+      .get(`/api/ai/sessions/${session.id}/messages`)
+      .set('Authorization', `Bearer ${token}`);
+    const boundaryMsgs = msgsRes.body.data.filter((m) => m.type === 'campaign_abandoned');
+    expect(boundaryMsgs).toHaveLength(1);
+    expect(boundaryMsgs[0].content).toBe('Đã dừng.');
+  });
+
+  it('idempotent: PATCH lặp cùng messageCount khi gates đã ở đúng trạng thái đã bỏ dở → changed=false, KHÔNG ghi thêm tin', async () => {
+    const user = await createUser({ email: 'wizard-abandon-idem@test.com', username: 'wizard_abandon_idem' });
+    const session = await createSession(user.id, 'Chat wizard abandon test 3');
+    const token = createAuthToken(user);
+
+    const first = await request(app)
+      .patch(`/api/ai/sessions/${session.id}/wizard-state`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'abandon_campaign_flow', payload: { messageCount: 3 } });
+    expect(first.body.data.changed).toBe(true);
+
+    const second = await request(app)
+      .patch(`/api/ai/sessions/${session.id}/wizard-state`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'abandon_campaign_flow', payload: { messageCount: 3 } });
+    expect(second.body.data.changed).toBe(false);
+
+    const msgsRes = await request(app)
+      .get(`/api/ai/sessions/${session.id}/messages`)
+      .set('Authorization', `Bearer ${token}`);
+    const boundaryMsgs = msgsRes.body.data.filter((m) => m.type === 'campaign_abandoned');
+    expect(boundaryMsgs).toHaveLength(1);
+  });
+});

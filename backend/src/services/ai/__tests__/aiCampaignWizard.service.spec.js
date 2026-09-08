@@ -664,6 +664,49 @@ describe('aiCampaignWizard.service', () => {
     });
   });
 
+  describe('PLAN_WIZARD_VONG_DOI PR-2: ranh giới campaign_abandoned — lượt thứ hai sau khi kích hoạt lại', () => {
+    // Chiến dịch A bị bỏ dở: channel email, TK 7, nguồn DB, rồi "thôi" + tin ranh giới
+    // campaign_abandoned. mergeWizardState (KHÔNG sửa ở PR-2) đã tự xoá abandonedAtMessageCount
+    // ngay lượt kích hoạt lại — mô phỏng đúng thực tế bằng cách gọi extractWizardState với
+    // abandonedAtMessageCount: null (mốc không còn), để chứng minh tin ranh giới trong lịch sử
+    // — không phải mốc chỉ số — mới là thứ chặn kế thừa dataSource/sender của A.
+    const historyAfterAbandonA = [
+      { role: 'user', content: '[wizard]{"gate":"channel","channel":"email"}\nEmail' }, // 0
+      { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"email","accountId":7}\nTK 7' }, // 1
+      { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nDB' }, // 2
+      { role: 'user', content: 'thôi' }, // 3
+      { role: 'assistant', type: 'campaign_abandoned', content: 'Đã dừng.' }, // 4
+    ];
+
+    it('extractWizardState: lượt thứ hai (marker senderAccount 9) không kế thừa dataSource=db/sender 7 của A', () => {
+      const history = [
+        ...historyAfterAbandonA,
+        { role: 'user', content: 'tạo chiến dịch Zalo mới' }, // 5
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo_group","accountId":9}\nTK 9' }, // 6
+      ];
+
+      const derived = extractWizardState(history, { abandonedAtMessageCount: null });
+      expect(derived.senderAccountId).toBe(9);
+      expect(derived.dataSource).toBeNull();
+      expect(derived.channel).not.toBe('email');
+      expect(derived.markerGates).not.toContain('dataSource');
+    });
+
+    it('không có tin ranh giới (bỏ campaign_abandoned khỏi lịch sử) → kế thừa lại dataSource=db của A — chứng minh đỏ nếu thiếu ranh giới', () => {
+      const historyWithoutBoundary = historyAfterAbandonA.filter((m) => m.type !== 'campaign_abandoned');
+      const history = [
+        ...historyWithoutBoundary,
+        { role: 'user', content: 'tạo chiến dịch Zalo mới' },
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo_group","accountId":9}\nTK 9' },
+      ];
+
+      const derived = extractWizardState(history, { abandonedAtMessageCount: null });
+      // Không có ranh giới trong lịch sử → marker dataSource cũ vẫn được đọc lại (đúng lỗ
+      // "lượt thứ hai kế thừa" mô tả trong plan mục "Vì sao KHÔNG dùng lại mốc chỉ số").
+      expect(derived.dataSource).toBe('db');
+    });
+  });
+
   describe('PR-3: routeSaysActionRequest router integration', () => {
     it('activates isCampaignFlow and infers channel when routeSaysActionRequest is true', () => {
       const history = [

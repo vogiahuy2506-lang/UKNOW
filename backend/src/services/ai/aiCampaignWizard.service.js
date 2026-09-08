@@ -32,11 +32,13 @@ const CAMPAIGN_RESPONSE_TYPES = new Set([
   'create_and_run',
 ]);
 
-// Ranh giới "chiến dịch đã tạo xong" trong lịch sử — một SỰ KIỆN, không phụ thuộc chỉ số tin
-// nhắn (khác abandonedAtMessageCount). Cố ý KHÔNG nằm trong CAMPAIGN_RESPONSE_TYPES ở trên:
-// bộ đó nghĩa là "đang trong luồng", ranh giới này nghĩa ngược lại — đã ra khỏi luồng.
+// Ranh giới "chiến dịch đã tạo xong / đã bỏ dở" trong lịch sử — một SỰ KIỆN, không phụ thuộc
+// chỉ số tin nhắn (khác abandonedAtMessageCount, PR-2 giữ nguyên mốc chỉ số làm dự phòng,
+// không thay thế). Cố ý KHÔNG nằm trong CAMPAIGN_RESPONSE_TYPES ở trên: bộ đó nghĩa là "đang
+// trong luồng", ranh giới này nghĩa ngược lại — đã ra khỏi luồng. 'campaign_abandoned' thêm ở
+// PR-2 (PLAN_WIZARD_VONG_DOI) — dùng chung khối reset bên dưới, không cần nhánh riêng.
 // Khai lại y hệt ở frontend (wizardContext.js) — test wizardContext.spec.js so khớp trực tiếp.
-export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success']);
+export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success', 'campaign_abandoned']);
 
 export const normalizeChannel = (value = '') => {
   const raw = String(value || '').trim().toLowerCase();
@@ -1505,9 +1507,22 @@ export function applyWizardStateAction(state, action, payload = {}) {
     }
     case 'abandon_campaign_flow': {
       const messageCount = Number(payload?.messageCount ?? 0);
+      const normalizedMessageCount = Number.isFinite(messageCount) && messageCount >= 0 ? messageCount : 0;
+      // Idempotent (PR-2): gọi lặp cùng messageCount khi gates đã ở đúng trạng thái "đã bỏ dở"
+      // này rồi (double-click dismiss, PATCH bắn lại) → changed:false, không ghi thêm tin
+      // ranh giới. So sánh bỏ qua abandonedAtMessageCount trước, rồi so riêng vì nó chính là
+      // phần đổi theo mỗi lần gọi.
+      const emptyGates = createEmptyWizardState().gates;
+      const currentWithoutMark = { ...current.gates, abandonedAtMessageCount: null };
+      const emptyWithoutMark = { ...emptyGates, abandonedAtMessageCount: null };
+      const alreadyAbandonedSameCount = current.gates.abandonedAtMessageCount === normalizedMessageCount
+        && JSON.stringify(currentWithoutMark) === JSON.stringify(emptyWithoutMark);
+      if (alreadyAbandonedSameCount) {
+        return { state: current, changed: false };
+      }
       next.gates = {
-        ...createEmptyWizardState().gates,
-        abandonedAtMessageCount: Number.isFinite(messageCount) && messageCount >= 0 ? messageCount : 0,
+        ...emptyGates,
+        abandonedAtMessageCount: normalizedMessageCount,
       };
       next.plan = createEmptyWizardState().plan;
       next.meta.lastGate = null;

@@ -187,6 +187,49 @@ describe('applyWizardStateAction', () => {
     });
   });
 
+  describe('abandon_campaign_flow', () => {
+    it('resets gates and records abandonedAtMessageCount', () => {
+      const base = stateWithPlan();
+      base.gates.channel = 'email';
+      base.gates.senderAccountId = '7';
+      base.gates.isCampaignFlow = true;
+
+      const { state, changed } = applyWizardStateAction(base, 'abandon_campaign_flow', { messageCount: 5 });
+      expect(changed).toBe(true);
+      expect(state.gates.channel).toBeNull();
+      expect(state.gates.senderAccountId).toBeNull();
+      expect(state.gates.isCampaignFlow).toBe(false);
+      expect(state.gates.abandonedAtMessageCount).toBe(5);
+      expect(state.plan.snapshot).toBeNull();
+    });
+
+    // PLAN_WIZARD_VONG_DOI PR-2 mục 7 (GIẢ ĐỊNH kiểm): reducer trước đây luôn changed:true —
+    // đã thêm idempotent "gates đã ở đúng trạng thái đã bỏ dở, cùng messageCount → changed:false"
+    // vì rẻ (cùng khuôn mark_campaign_created) — tránh PATCH lặp (double-click dismiss) ghi
+    // thêm tin ranh giới trùng.
+    it('idempotent: gọi lại với cùng messageCount khi gates đã ở đúng trạng thái đã bỏ dở → changed=false', () => {
+      const afterFirst = applyWizardStateAction(stateWithPlan(), 'abandon_campaign_flow', { messageCount: 5 }).state;
+      const { changed } = applyWizardStateAction(afterFirst, 'abandon_campaign_flow', { messageCount: 5 });
+      expect(changed).toBe(false);
+    });
+
+    it('messageCount KHÁC (đợt bỏ dở mới, tin nhắn đã nhiều hơn) → vẫn changed=true dù gates đã rỗng', () => {
+      const afterFirst = applyWizardStateAction(stateWithPlan(), 'abandon_campaign_flow', { messageCount: 5 }).state;
+      const { state, changed } = applyWizardStateAction(afterFirst, 'abandon_campaign_flow', { messageCount: 12 });
+      expect(changed).toBe(true);
+      expect(state.gates.abandonedAtMessageCount).toBe(12);
+    });
+
+    it('gates đã có dữ liệu MỚI (chiến dịch tiếp theo đang làm dở) dù cùng messageCount cũ → vẫn changed=true', () => {
+      const afterFirst = applyWizardStateAction(stateWithPlan(), 'abandon_campaign_flow', { messageCount: 5 }).state;
+      const reStarted = { ...afterFirst, gates: { ...afterFirst.gates, channel: 'zalo_group', senderAccountId: '9' } };
+      const { state, changed } = applyWizardStateAction(reStarted, 'abandon_campaign_flow', { messageCount: 5 });
+      expect(changed).toBe(true);
+      expect(state.gates.channel).toBeNull();
+      expect(state.gates.senderAccountId).toBeNull();
+    });
+  });
+
   it('never mutates its input', () => {
     const base = stateWithPlan();
     const frozen = JSON.stringify(base);
