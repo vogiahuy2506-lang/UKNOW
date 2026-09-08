@@ -103,6 +103,15 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
     throw err;
   }
 
+  // Ba chốt trên chỉ canh marker/iframe/snippet cũ — form data-founderai-capture (hợp đồng
+  // mới, AI sinh từ 07/09 qua aiLandingPage.service.js quy tắc 6 + chốt :171) chưa có chốt
+  // nào bảo vệ ở đường AI-edit: nhờ AI "sửa màu nút" là có thể mất form trong im lặng.
+  if (current.includes('data-founderai-capture') && !next.includes('data-founderai-capture')) {
+    const err = new Error('AI đã làm mất form đăng ký. Vui lòng thử lại.');
+    err.status = 502;
+    throw err;
+  }
+
   // Chốt chặn 3: Kiểm tra inline-style tương đối so với bản cũ
   const oldStyleCount = (current.match(/\bstyle\s*=/gi) || []).length;
   const newStyleCount = (next.match(/\bstyle\s*=/gi) || []).length;
