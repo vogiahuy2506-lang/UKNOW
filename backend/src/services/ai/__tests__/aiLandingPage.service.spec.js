@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../../utils/landingLeadFormConfig.util.js';
 
 const getContextForLandingAi = jest.fn(async () => '');
 const generateWithBudget = jest.fn();
@@ -65,5 +66,94 @@ describe('aiLandingPageService.generate — chốt form data-founderai-capture',
     await expect(
       aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
     ).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/email/) });
+  });
+});
+
+/**
+ * PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b (bản sửa Review 08/09 tối): leadFormDraft
+ * chỉ còn điều khiển occupation/interestArea — KHÔNG có cf_sugg_NN_text (suggestedCustomFieldLabels
+ * thành hàng chết, không có đường lưu customFields nào sống được qua LandingCanvasEditor.jsx).
+ */
+describe('aiLandingPageService.generate — leadFormDraft điều khiển occupation/interestArea', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getContextForLandingAi.mockResolvedValue('');
+  });
+
+  const withField = (html, name) =>
+    html.replace(
+      '<label><input type="checkbox" name="marketingConsent" />',
+      `<select name="${name}"><option value="">x</option></select>` +
+        '<label><input type="checkbox" name="marketingConsent" />'
+    );
+
+  it('leadFormDraft.fixedFields.occupation.visible=true → prompt chứa đúng khoá OCCUPATION_VALUES', async () => {
+    mockGenerateReturns(withField(validFormHtml, 'occupation'));
+    await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'landing khoá học',
+      leadFormDraft: { fixedFields: { occupation: { visible: true }, interestArea: { visible: false } } },
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toContain('name="occupation"');
+    for (const value of OCCUPATION_VALUES) {
+      expect(sentPrompt).toContain(`<option value="${value}">${value}</option>`);
+    }
+    // interestArea không yêu cầu → không nhúng option interestArea vào prompt
+    expect(sentPrompt).not.toContain('name="interestArea"');
+  });
+
+  it('leadFormDraft.fixedFields.interestArea.visible=true → prompt chứa đúng khoá INTEREST_AREA_VALUES', async () => {
+    mockGenerateReturns(withField(validFormHtml, 'interestArea'));
+    await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'landing khoá học',
+      leadFormDraft: { fixedFields: { occupation: { visible: false }, interestArea: { visible: true } } },
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toContain('name="interestArea"');
+    for (const value of INTEREST_AREA_VALUES) {
+      expect(sentPrompt).toContain(`<option value="${value}">${value}</option>`);
+    }
+  });
+
+  it('leadFormDraft không có (hoặc cả hai visible=false) → prompt KHÔNG thêm rule 9, hành vi như cũ', async () => {
+    mockGenerateReturns(validFormHtml);
+    await aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).not.toContain('name="occupation"');
+    expect(sentPrompt).not.toContain('name="interestArea"');
+  });
+
+  it('occupation.visible=true nhưng HTML thiếu name="occupation" → 502', async () => {
+    mockGenerateReturns(validFormHtml); // không có field occupation
+    await expect(
+      aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'landing khoá học',
+        leadFormDraft: { fixedFields: { occupation: { visible: true } } },
+      })
+    ).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/occupation/) });
+  });
+
+  it('interestArea.visible=true nhưng HTML thiếu name="interestArea" → 502', async () => {
+    mockGenerateReturns(validFormHtml); // không có field interestArea
+    await expect(
+      aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'landing khoá học',
+        leadFormDraft: { fixedFields: { interestArea: { visible: true } } },
+      })
+    ).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/interestArea/) });
+  });
+
+  it('occupation.visible=true và HTML CÓ name="occupation" → pass, không 502', async () => {
+    mockGenerateReturns(withField(validFormHtml, 'occupation'));
+    const result = await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'landing khoá học',
+      leadFormDraft: { fixedFields: { occupation: { visible: true } } },
+    });
+    expect(result.html).toContain('name="occupation"');
   });
 });

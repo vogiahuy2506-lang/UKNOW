@@ -7,6 +7,7 @@ import {
   LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
 } from '../../utils/landingEditGuard.util.js';
+import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
 
 function stripJsonFences(raw) {
   let t = String(raw || '').trim();
@@ -14,6 +15,40 @@ function stripJsonFences(raw) {
     t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   }
   return t.trim();
+}
+
+/**
+ * Đoạn prompt yêu cầu AI thêm <select name="occupation">/<select name="interestArea"> khi
+ * cấu hình form của trang (leadFormDraft, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b)
+ * đánh dấu trường đó `visible`. Value của mỗi <option> PHẢI khớp tuyệt đối với
+ * OCCUPATION_VALUES/INTEREST_AREA_VALUES (landingLeadFormConfig.util.js) — normalizeOccupationValue/
+ * normalizeInterestAreaValue chỉ nhận đúng chuỗi trong danh sách, sai một ký tự thì lead.service.js
+ * âm thầm bỏ trống giá trị (không 400, nhưng mất dữ liệu). Không nhúng cf_sugg_NN_text (trường
+ * thêm từ suggestedCustomFieldLabels) — chưa có đường lưu customFields nào sống được sau khi
+ * trang qua LandingCanvasEditor.jsx (schema tối giản không có customFields/fixedFields), AI sinh
+ * field đó sẽ khiến buildTrustedCustomFieldsSnapshot từ chối CẢ lead của khách (Review 08/09 tối).
+ *
+ * @param {{ fixedFields?: { occupation?: { visible?: boolean }, interestArea?: { visible?: boolean } } }|null} leadFormDraft
+ * @returns {string} rỗng nếu không cần thêm gì
+ */
+function buildLeadFormExtraFieldsPromptBlock(leadFormDraft) {
+  const needOccupation = Boolean(leadFormDraft?.fixedFields?.occupation?.visible);
+  const needInterestArea = Boolean(leadFormDraft?.fixedFields?.interestArea?.visible);
+  if (!needOccupation && !needInterestArea) return '';
+
+  const selectBlock = (name, placeholder, values) =>
+    [
+      `   <select name="${name}" required>`,
+      `     <option value="">${placeholder}</option>`,
+      ...values.map((v) => `     <option value="${v}">${v}</option>`),
+      `   </select>`,
+    ].join('\n');
+
+  const blocks = [];
+  if (needOccupation) blocks.push(selectBlock('occupation', 'Chọn nghề nghiệp', OCCUPATION_VALUES));
+  if (needInterestArea) blocks.push(selectBlock('interestArea', 'Chọn chủ đề quan tâm', INTEREST_AREA_VALUES));
+
+  return `9) Cấu hình trang này YÊU CẦU thêm ${blocks.length > 1 ? 'các trường' : 'trường'} sau vào TRONG CÙNG form (không tạo form thứ 2), đặt sau ô phone và trước checkbox marketingConsent. Value của mỗi <option> phải COPY Y NGUYÊN chuỗi bên dưới — không dịch, không viết lại, không thêm/bớt lựa chọn:\n${blocks.join('\n')}\n`;
 }
 
 function contentLanguageInstruction(contentLocale) {
@@ -26,7 +61,7 @@ class AiLandingPageService {
   /**
    * Sinh một tài liệu HTML5 đầy đủ (Tailwind CDN), JSON { title, html }.
    *
-   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null, contentLocale?: string }} opts
+   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null, contentLocale?: string, leadFormDraft?: object|null }} opts
    * @returns {Promise<{ title: string, html: string }>}
    */
   async generate({
@@ -36,6 +71,7 @@ class AiLandingPageService {
     landingBriefContext = null,
     actorUserId = null,
     contentLocale = 'vi',
+    leadFormDraft = null,
   }) {
     const locale = normalizeAssistantLocale(contentLocale, 'vi');
     const htmlLang = locale === 'en' ? 'en' : 'vi';
@@ -94,7 +130,7 @@ QUY TẮC KỸ THUẬT (bắt buộc):
    Bắt buộc: đúng 3 trường name="name"/"email"/"phone" như trên (không đổi tên, không thêm form thứ 2 nào khác trong trang). Checkbox "marketingConsent" mặc định KHÔNG được tick sẵn (không thêm thuộc tính checked). KHÔNG dùng tên "cf_agree_checkbox" hay bất kỳ tên nào khác cho ô đồng ý này — phải đúng "marketingConsent". KHÔNG thêm thuộc tính action hoặc onsubmit trên thẻ <form> — script capture ngoài trang tự bắt sự kiện submit.
 7) Toàn bộ chữ hiển thị phải theo CUSTOMER_CONTENT_LANGUAGE ở trên. Link ngoài dùng https, ngắn gọn.
 8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, dùng gradient/icon Unicode hoặc bỏ ảnh.
-
+${buildLeadFormExtraFieldsPromptBlock(leadFormDraft)}
 Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 {"title":"...","html":"<!DOCTYPE html>..."}`;
 
@@ -175,6 +211,20 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     }
     if (!/\bname\s*=\s*["']email["']/i.test(html)) {
       const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
+      err.status = 502;
+      throw err;
+    }
+    // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: leadFormDraft yêu cầu occupation/
+    // interestArea visible thì HTML phải có field tương ứng — không fallback, vì thiếu field
+    // không gây lỗi cho khách (lead.service.js chỉ để trống) nhưng khiến trang mất dữ liệu mà
+    // cấu hình vốn đòi hỏi, âm thầm và mãi mãi (trang đã publish, không sinh lại).
+    if (leadFormDraft?.fixedFields?.occupation?.visible && !/\bname\s*=\s*["']occupation["']/i.test(html)) {
+      const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường occupation (name="occupation") dù cấu hình yêu cầu. Vui lòng thử lại.');
+      err.status = 502;
+      throw err;
+    }
+    if (leadFormDraft?.fixedFields?.interestArea?.visible && !/\bname\s*=\s*["']interestArea["']/i.test(html)) {
+      const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường interestArea (name="interestArea") dù cấu hình yêu cầu. Vui lòng thử lại.');
       err.status = 502;
       throw err;
     }

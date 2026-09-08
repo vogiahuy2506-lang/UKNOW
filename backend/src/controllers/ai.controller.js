@@ -1257,6 +1257,14 @@ class AiController {
         locale: contentLocale,
       });
 
+      // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: dựng leadFormDraft TRƯỚC khi gọi
+      // generate() (không phải sau) để prompt biết cần thêm select occupation/interestArea
+      // hay không — trước đây dựng sau nên AI luôn sinh form 3 trường cố định, không bao giờ
+      // khớp cấu hình trang yêu cầu.
+      const leadFormDraft = resolvedBrief
+        ? buildLeadFormDraftFromBrief(resolvedBrief.normalizedBrief)
+        : null;
+
       const data = await aiLandingPageService.generate({
         userId: ownerUserId,
         actorUserId: req.user.id,
@@ -1264,11 +1272,9 @@ class AiController {
         titleHint: title != null ? String(title) : '',
         landingBriefContext,
         contentLocale,
+        leadFormDraft,
       });
 
-      const leadFormDraft = resolvedBrief
-        ? buildLeadFormDraftFromBrief(resolvedBrief.normalizedBrief)
-        : null;
       if (leadFormDraft) {
         data.leadFormDraft = leadFormDraft;
       }

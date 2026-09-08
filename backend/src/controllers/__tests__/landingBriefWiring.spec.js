@@ -157,6 +157,31 @@ describe('LandingBrief endpoint wiring', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
+  it('POST /ai/generate-landing-html: dựng leadFormDraft TRƯỚC và truyền vào generate() (PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b — thứ tự cũ dựng SAU nên prompt không bao giờ biết cần select occupation/interestArea)', async () => {
+    mockResolveLandingBrief.mockResolvedValue({
+      ownerUserId: 5,
+      normalizedBrief: { productMode: 'other', formFields: { preset: 'extended' } },
+      resolvedProduct: null,
+    });
+    const req = {
+      body: { prompt: 'Tạo landing page lead', landingBrief: { version: 1, source: 'assistant_wizard', productMode: 'other' } },
+      user: { id: 5 },
+    };
+    const res = makeRes();
+    await aiController.generateLandingHtml(req, res);
+
+    expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({
+      leadFormDraft: expect.objectContaining({
+        preset: 'extended',
+        fixedFields: {
+          occupation: { visible: true },
+          interestArea: { visible: true },
+        },
+      }),
+    }));
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
   it('POST /landing-templates/generate: invalid brief blocks before Gemini', async () => {
     const err = new Error('not found');
     err.status = 404;
