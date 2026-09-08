@@ -61,7 +61,6 @@ import {
   isCampaignScriptShaped,
   pickChannelByExplicitSignal,
 } from '../../utils/campaignQuickSend.util.js';
-import { runShadowIntentExtraction } from './intentExtractor.service.js';
 import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
 import { isCompilableIntent, deriveIntent } from './campaignIntent.schema.js';
 import { compileCampaign } from './campaignCompiler.service.js';
@@ -622,19 +621,6 @@ QUY TẮC:
       files,
     });
     const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
-
-    // PR-3: Shadow Intent Extraction (GĐ 1: chỉ chạy song song và ghi log, không can thiệp luồng)
-    if (process.env.INTENT_SHADOW_ENABLED === 'true' && lastUserText) {
-      runShadowIntentExtraction({
-        text: lastUserText,
-        locale: uiLocale,
-        model,
-        regexState: derivedState,
-        turn: Array.isArray(history) ? history.length : 0,
-      }).catch((err) => {
-        console.warn('[IntentShadow] Background shadow extraction error:', err?.message || err);
-      });
-    }
 
     const isRevision = isContentPlanRevisionText(lastUserText);
 
