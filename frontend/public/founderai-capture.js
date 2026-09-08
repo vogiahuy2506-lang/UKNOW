@@ -366,15 +366,15 @@ if (typeof window !== 'undefined') {
   }
 
   // ----------------------------------------------------------------
-  // 5. Submit handler — chạy trong capture phase để ưu tiên hơn handler
-  // của user. Nếu form có custom submit đã preventDefault rồi thì vẫn gửi
-  // request (vì đây là capture phase, sau này mới bubble đến handler kia).
-  // Sau khi gửi thành công → gọi requestIdleCallback để chạy submit gốc
-  // (nếu user vẫn muốn xử lý riêng phía client).
+  // 5. Submit handler — KHÔNG stopPropagation để custom handler của
+  // admin vẫn chạy (hiển thị UI riêng như successMessage, loading…).
+  // Chỉ preventDefault để chặn submit reload trang (form admin có
+  // preventDefault rồi cũng OK — gọi 2 lần không sao).
   // ----------------------------------------------------------------
   function handleSubmit(ev) {
-    ev.preventDefault();
-    ev.stopPropagation();
+    // CHỈ preventDefault — KHÔNG stopPropagation, KHÔNG stopImmediatePropagation
+    // để mọi custom submit handler phía admin vẫn bubble lên bình thường.
+    if (ev.cancelable) ev.preventDefault();
 
     var form = ev.currentTarget;
     var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
