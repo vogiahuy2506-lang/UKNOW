@@ -2299,6 +2299,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
     const sendNode = nodes.find((n) => {
       const type = String(n.nodeSubtype || n.node_subtype || n.subtype || '').trim().toLowerCase();
+      if (channel === 'zalo_group') {
+        return type === 'send_zalo_group' || type === 'zalo_group';
+      }
       if (channel === 'zalo' || channel === 'zalo_personal') {
         return type === 'send_zalo_personal' || type === 'zalo_personal' || type === 'zalo';
       }
@@ -2311,7 +2314,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const config = sendNode?.config || sendNode?.data || {};
 
     let recipients = [];
-    if (channel === 'zalo' || channel === 'zalo_personal') {
+    if (channel === 'zalo_group') {
+      // Id nhóm, không phải người — trang Gửi nhanh tự đối chiếu sang tên nhóm thật (Bẫy 4).
+      recipients = Array.isArray(config.zaloGroupIds)
+        ? config.zaloGroupIds.map((id) => String(id || '').trim()).filter(Boolean)
+        : [];
+    } else if (channel === 'zalo' || channel === 'zalo_personal') {
       const rawPhones = config.zaloRecipientPhones || config.recipientPhones || '';
       if (Array.isArray(rawPhones)) {
         recipients = rawPhones;
@@ -2331,7 +2339,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     let body = '';
     let accountId = null;
 
-    if (channel === 'zalo' || channel === 'zalo_personal') {
+    if (channel === 'zalo_group') {
+      subject = '';
+      body = singleStep?.content?.bodyText ||
+             config.zaloGroupMessage ||
+             config.zaloGroupTemplateSteps?.[0]?.message ||
+             '';
+      accountId = config.zaloAccountId ||
+                  config.zalo_account_id ||
+                  singleStep?.sender?.id ||
+                  null;
+    } else if (channel === 'zalo' || channel === 'zalo_personal') {
       subject = '';
       body = singleStep?.content?.bodyText ||
              config.message ||
@@ -2350,8 +2368,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const attachments = extractQuickSendDraftAttachments(config, singleStep);
 
     // recipientType chỉ có ý nghĩa cho Zalo cá nhân (config.zaloRecipientType 'phone'|'uid').
-    // Không có nhãn bạn bè để mang theo (config chưa từng lưu nhãn) — trang Gửi nhanh tự đối
-    // chiếu lại với danh bạ thật, đây chỉ đưa đúng UID/số để trang đích xử lý (Bẫy 4).
+    // Zalo nhóm không có khái niệm này (recipients đã là id nhóm, không phải người) — để
+    // undefined như email. Không có nhãn bạn bè/nhóm để mang theo (config chưa từng lưu
+    // nhãn) — trang Gửi nhanh tự đối chiếu lại với dữ liệu thật, đây chỉ đưa đúng UID/số/id
+    // để trang đích xử lý (Bẫy 4).
     const recipientType = (channel === 'zalo' || channel === 'zalo_personal')
       ? (config.zaloRecipientType || 'phone')
       : undefined;
