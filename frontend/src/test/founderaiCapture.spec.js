@@ -67,6 +67,49 @@ describe('founderai-capture.js — buildFounderaiCapturePayload', () => {
     const payload = buildFounderaiCapturePayload(form, { slug: 'promo' });
     expect(payload.customFields).toEqual({ cf_company_text: 'Cty X', cf_agree_checkbox: false });
   });
+
+  // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: form AI có thể có <select
+  // name="occupation">/<select name="interestArea"> khi cấu hình trang yêu cầu — gửi 2 khoá
+  // này ở TOP-LEVEL body (lead.service.js:270-275 đọc body?.occupation/body?.interestArea,
+  // không phải customFields).
+  it('form có <select name="occupation"> → payload.occupation lấy đúng giá trị đã chọn', () => {
+    const form = makeForm(`
+      <input type="text" name="name" value="A" />
+      <input type="email" name="email" value="a@b.com" />
+      <select name="occupation">
+        <option value="">Chọn nghề nghiệp</option>
+        <option value="Freelancer" selected>Freelancer</option>
+      </select>
+    `);
+    const payload = buildFounderaiCapturePayload(form, { slug: 'promo' });
+    expect(payload.occupation).toBe('Freelancer');
+  });
+
+  it('form có <select name="interestArea"> → payload.interestArea lấy đúng giá trị đã chọn', () => {
+    const form = makeForm(`
+      <input type="text" name="name" value="A" />
+      <input type="email" name="email" value="a@b.com" />
+      <select name="interestArea">
+        <option value="">Chọn chủ đề</option>
+        <option value="AI cho Giáo dục" selected>AI cho Giáo dục</option>
+      </select>
+    `);
+    const payload = buildFounderaiCapturePayload(form, { slug: 'promo' });
+    expect(payload.interestArea).toBe('AI cho Giáo dục');
+  });
+
+  it('form KHÔNG có ô occupation/interestArea → 2 khoá đó là undefined, không đổi hành vi cũ', () => {
+    const form = makeForm(`
+      <input type="text" name="name" value="A" />
+      <input type="email" name="email" value="a@b.com" />
+    `);
+    const payload = buildFounderaiCapturePayload(form, { slug: 'promo' });
+    expect(payload.occupation).toBeUndefined();
+    expect(payload.interestArea).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(payload, 'occupation')).toBe(true);
+    expect(payload.name).toBe('A');
+    expect(payload.email).toBe('a@b.com');
+  });
 });
 
 describe('founderai-capture.js — readFounderaiMarketingConsent (đơn vị)', () => {

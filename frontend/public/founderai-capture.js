@@ -7,6 +7,10 @@
  *
  * Payload gửi lên backend gồm:
  *   - 3 trường mặc định: name, email, phone (+ landingPageSlug tự inject).
+ *   - Tuỳ chọn: occupation, interestArea — chỉ gửi khi form có input/select tên đúng vậy
+ *     (form không có thì không đổi payload, giữ nguyên hành vi cũ). Value nên khớp đúng
+ *     danh sách OCCUPATION_VALUES/INTEREST_AREA_VALUES backend chấp nhận, sai thì
+ *     lead.service.js âm thầm để trống (không lỗi, chỉ mất dữ liệu trường đó).
  *   - marketingConsent (Nghị định 330/2026): đọc từ input name="marketingConsent".
  *     true/false nếu form có field này (checkbox checked/unchecked), null nếu form
  *     không hỏi (không có field). KHÔNG dùng tên "cf_agree_checkbox" cho ô này — đó
@@ -183,6 +187,14 @@ function buildFounderaiCapturePayload(form, config) {
   var name = '';
   var email = '';
   var phone = '';
+  // occupation/interestArea (PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b): chỉ gửi khi
+  // form THỰC SỰ có input/select tên đó — hasXxxField đánh dấu sự hiện diện của trường (kể cả
+  // giá trị rỗng, vì FormData vẫn liệt kê phần tử có name dù chưa chọn option), phân biệt với
+  // "form không có trường này" để không đổi payload/hành vi của form không có 2 ô này.
+  var occupation = '';
+  var hasOccupationField = false;
+  var interestArea = '';
+  var hasInterestAreaField = false;
   var customFields = {};
 
   // Duyệt FormData: phân biệt checkbox uncheck (FormData không chứa key) — cần quét DOM.
@@ -204,6 +216,14 @@ function buildFounderaiCapturePayload(form, config) {
       case 'tel':
       case 'phoneNumber':
         phone = trimmed;
+        break;
+      case 'occupation':
+        occupation = trimmed;
+        hasOccupationField = true;
+        break;
+      case 'interestArea':
+        interestArea = trimmed;
+        hasInterestAreaField = true;
         break;
       // marketingConsent xử lý riêng qua readFounderaiMarketingConsent (cần phân biệt
       // null/false, FormData không đủ để phân biệt "không hỏi" và "hỏi nhưng bỏ trống").
@@ -250,6 +270,8 @@ function buildFounderaiCapturePayload(form, config) {
     landingPageSlug: slugValue,
     marketingConsent: readFounderaiMarketingConsent(form),
     customFields: hasCustom ? customFields : undefined,
+    occupation: hasOccupationField ? occupation : undefined,
+    interestArea: hasInterestAreaField ? interestArea : undefined,
   };
 }
 
