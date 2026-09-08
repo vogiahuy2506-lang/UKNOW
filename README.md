@@ -134,7 +134,8 @@ Admin tự thiết kế form đăng ký trong HTML, script `founderai-capture.js
 
 1. Mỗi lần lưu landing page, hệ thống tự động chèn 2 script tracking trước `</body>`:
    - `lp-track.js` — ghi lượt xem + tracking click trên `<a href>`
-   - `founderai-capture.js` — auto-detect form đầu tiên trong trang, bắt submit
+   - `founderai-capture.js` — auto-detect form `data-founderai-capture` (nếu có), hoặc
+     form đầu tiên CÓ trường email/phone trong trang, bắt submit
 2. Khi khách điền form và submit, script sẽ gọi `POST /api/public/leads`
    với payload `{ name, email, phone, landingPageSlug, customFields }`.
 3. Lead được lưu vào bảng `leads` với `id_user = chủ landing page`.
@@ -143,7 +144,10 @@ Admin tự thiết kế form đăng ký trong HTML, script `founderai-capture.js
 **Tùy chọn nâng cao:**
 
 - `<form data-founderai-capture>` — đánh dấu form cụ thể cần capture (ưu tiên form này).
-- Form có input `name="cf_xxx"` (lowercase, dài 4-40 ký tự) sẽ được gom vào `customFields`.
+- Trường thêm ngoài name/email/phone: đặt `name="cf_xxx"` **đúng khoá đã khai báo** trong
+  tab Lead Form Config (lowercase, dài 4-40 ký tự) — backend từ chối cả lead (400) nếu gặp
+  khoá `cf_*` không có trong cấu hình. Script **không** tự đoán tên trường thêm từ `id` nữa
+  (từng gây lỗi này khi id không khớp cấu hình) — phải tự đặt `name` đúng.
 - Admin có thể cấu hình form (`fixedFields`, `customFields`, `theme`) trong tab
   Lead Form Config → endpoint `/api/public/landing-pages/:slug/form-config`.
 - Muốn TẮT auto-capture: thêm `data-auto="0"` vào thẻ `<script src=".../founderai-capture.js">`.

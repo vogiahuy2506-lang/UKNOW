@@ -80,8 +80,8 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
  *   2. Rewrite link tracking trên `<a href>`.
  *   3. Chèn lại `lp-track.js` + `founderai-capture.js` (auto mode) để bắt form admin
  *      tự thiết kế và tracking click. KHÔNG auto-inject iframe form nữa — admin
- *      phải tự dùng Lead Form Snippet (data-uknow-lead-form) hoặc tự thiết kế
- *      `<form data-founderai-capture>` trong trang.
+ *      tự thiết kế `<form data-founderai-capture>` trong trang (khuyên dùng), hoặc
+ *      để auto mode tự bắt form đầu tiên CÓ input email/phone/tel/phoneNumber.
  *
  * @param {string} html
  * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
@@ -105,9 +105,11 @@ export function prepareLandingHtmlOnSave(html, { slug, frontendOrigin, apiBase }
  * hệ thống tự chèn iframe đè lên.
  *
  * Nếu admin muốn có form đăng ký chuẩn của hệ thống, họ có thể:
- *   1. Copy snippet HTML từ Lead Form Config Panel → có `data-uknow-lead-form`.
- *   2. Hoặc tự thiết kế form với `<form data-founderai-capture>` — script capture
- *      mặc định auto mode sẽ tự bắt.
+ *   1. Tự thiết kế form với `<form data-founderai-capture>` (khuyên dùng — luôn
+ *      thắng auto mode, không phụ thuộc form đó có trường gì).
+ *   2. Hoặc không gắn thẻ gì cả — auto mode sẽ tự bắt form đầu tiên trong trang
+ *      CÓ input name thuộc email/phone/tel/phoneNumber (founderai-capture.js,
+ *      hàm pickAutoCaptureForm). Không có snippet dựng sẵn nào để copy nữa.
  *
  * Giữ export để tương thích ngược với code khác nếu có import, nhưng không gọi
  * nữa trong pipeline chính.
