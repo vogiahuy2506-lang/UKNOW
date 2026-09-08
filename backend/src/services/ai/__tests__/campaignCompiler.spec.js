@@ -51,41 +51,49 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     expect(graph.contentSlots[0].brief.topic).toBe('Ra mắt tính năng');
   });
 
-  it('biên dịch thành công luồng Zalo cá nhân gửi một lần (bạn bè zalo_contacts)', () => {
+  it('biên dịch thành công luồng Zalo cá nhân gửi một lần (bạn bè zalo_contacts đã chọn qua friendIds)', () => {
+    // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1 (sửa lại theo Review 08/09): KHÔNG còn
+    // dùng node get_all_friends cho zalo_contacts — config schema của nó (campaignNodeRegistry.
+    // service.js:141-158) chỉ có zaloFriendAccountNodeId, không có cách giới hạn xuống danh sách
+    // bạn bè đã CHỌN (audience.friendIds) — dùng node sẽ gửi cho TOÀN BỘ bạn bè tài khoản.
+    // Đường 'manual' đúng, nhưng KHÔNG nhúng audience.friendIds vào zaloRecipientPhones ở đây:
+    // danh sách người nhận thật cho zaloRecipientSource='manual' đi qua lớp phủ riêng tư
+    // directRecipients (ai.controller.js applyDirectRecipients :769-812 ghi MẢNG từ dữ liệu
+    // frontend gửi lúc xác nhận, markManualRecipientsRequired :813-826 coi giá trị không phải
+    // mảng là rỗng rồi ghi đè bằng [], M2 :997-1010 bắt buộc có directRecipients). Chuỗi compiler
+    // tự nhúng luôn bị ghi đè/xoá trước khi tới runtime — patch cũ cũng không nhúng gì
+    // (aiCampaignDraft.service.js:406/:441). Bắt lại ở Review 08/09, không phải lúc viết đầu.
     const intentZaloPersonal = {
       version: 1,
       channel: 'zalo',
       sender: { type: 'zalo_account', id: 12 },
-      audience: { type: 'zalo_contacts', recipientKind: 'phone' },
+      audience: { type: 'zalo_contacts', friendIds: ['1111111111111111111', '2222222222222222222'], recipientKind: 'phone' },
       schedule: { type: 'once' },
       contentBrief: { topic: 'Nhắc lịch hẹn', locale: 'vi' },
     };
 
     const graph = compileCampaign(intentZaloPersonal);
-    expect(graph.nodes.length).toBe(4); // trigger -> select_zalo_account -> get_all_friends -> send_zalo_personal
-    const [triggerNode, selectNode, audienceNode, sendZaloNode] = graph.nodes;
+    expect(graph.nodes.length).toBe(3); // trigger -> select_zalo_account -> send_zalo_personal (không còn node audience riêng)
+    const [triggerNode, selectNode, sendZaloNode] = graph.nodes;
 
     expect(triggerNode.nodeSubtype).toBe('manual');
     expect(selectNode.nodeSubtype).toBe('select_zalo_account');
     expect(selectNode.config.zaloAccountId).toBe(12);
 
-    expect(audienceNode.nodeSubtype).toBe('get_all_friends');
-    expect(audienceNode.config.zaloFriendAccountNodeId).toBe(selectNode.id);
-
     expect(sendZaloNode.nodeSubtype).toBe('send_zalo_personal');
     expect(sendZaloNode.config.zaloAccountId).toBe(12);
-    expect(sendZaloNode.config.zaloRecipientSource).toBe('node');
+    expect(sendZaloNode.config.zaloRecipientSource).toBe('manual');
     expect(sendZaloNode.config.zaloRecipientType).toBe('uid');
+    // Không nhúng danh sách người nhận vào script trả về chat — xem ghi chú phía trên.
+    expect(sendZaloNode.config.zaloRecipientPhones).toBeUndefined();
     expect(Array.isArray(sendZaloNode.config.zaloPersonalTemplateSteps)).toBe(true);
     expect(sendZaloNode.config.zaloPersonalTemplateSteps.length).toBe(1);
 
-    expect(graph.connections.length).toBe(3);
+    expect(graph.connections.length).toBe(2);
     expect(graph.connections[0].sourceNodeId).toBe(triggerNode.id);
     expect(graph.connections[0].targetNodeId).toBe(selectNode.id);
     expect(graph.connections[1].sourceNodeId).toBe(selectNode.id);
-    expect(graph.connections[1].targetNodeId).toBe(audienceNode.id);
-    expect(graph.connections[2].sourceNodeId).toBe(audienceNode.id);
-    expect(graph.connections[2].targetNodeId).toBe(sendZaloNode.id);
+    expect(graph.connections[1].targetNodeId).toBe(sendZaloNode.id);
 
     expect(graph.contentSlots[0].channel).toBe('zalo');
     expect(graph.contentSlots[0].type).toBe('zalo');

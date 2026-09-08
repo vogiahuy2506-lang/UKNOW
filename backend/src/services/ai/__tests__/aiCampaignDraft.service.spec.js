@@ -170,7 +170,7 @@ describe('aiCampaignDraftService.autoCreateZaloTemplates', () => {
   });
 });
 
-describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
+describe('aiCampaignDraftService.patchDeterministicCampaignScript (Zalo)', () => {
   it('handles scenario 1: Zalo cá nhân from zalo_contacts missing select_zalo_account and with unwanted interested_customers', () => {
     const script = {
       nodes: [
@@ -196,7 +196,7 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
       ],
     };
 
-    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
       senderAccountId: 99,
       dataSource: 'zalo_contacts',
       zaloFriendIds: ['friend_1'],
@@ -240,7 +240,7 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
       ],
     };
 
-    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
       senderAccountId: 42,
       dataSource: 'db',
     });
@@ -280,7 +280,7 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
       ],
     };
 
-    const patched = aiCampaignDraftService.patchDeterministicZaloScript(script, {
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
       senderAccountId: 88,
       dataSource: 'db',
     });
@@ -515,5 +515,55 @@ describe('aiCampaignDraftService.patchDeterministicZaloScript', () => {
       schedule: { mode: 'once' },
     });
     expect(patchedOnce.nodes.find((n) => n.id === 'n2').config.sendMode).toBe('all');
+  });
+});
+
+describe('aiCampaignDraftService.prepareScript — compilerApplied skip-guard (PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1)', () => {
+  const minimalScript = () => ({
+    nodes: [
+      { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+      { id: 'n2', tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_email', config: { emailSubject: 'Test' } },
+      { id: 'n3', tempId: 'n3', nodeType: 'end', nodeSubtype: 'end', config: {} },
+    ],
+    connections: [
+      { sourceNodeId: 'n1', targetNodeId: 'n2' },
+      { sourceNodeId: 'n2', targetNodeId: 'n3' },
+    ],
+  });
+
+  it('bỏ qua patchDeterministicCampaignScript và log dòng skip khi script.compilerApplied === true', async () => {
+    const mockRepo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    const zaloSpy = jest.spyOn(mockRepo, 'findDefaultZaloSettingId').mockResolvedValue(null);
+    const emailSpy = jest.spyOn(mockRepo, 'findDefaultEmailSettingId').mockResolvedValue(null);
+    const patchSpy = jest.spyOn(aiCampaignDraftService, 'patchDeterministicCampaignScript');
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const script = { ...minimalScript(), compilerApplied: true };
+    await aiCampaignDraftService.prepareScript(script, 1);
+
+    expect(patchSpy).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith('[AI Patch] skip: compilerApplied');
+
+    patchSpy.mockRestore();
+    logSpy.mockRestore();
+    zaloSpy.mockRestore();
+    emailSpy.mockRestore();
+  });
+
+  it('vẫn gọi patchDeterministicCampaignScript như cũ khi compilerApplied vắng mặt hoặc false (hồi quy)', async () => {
+    const mockRepo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    const zaloSpy = jest.spyOn(mockRepo, 'findDefaultZaloSettingId').mockResolvedValue(null);
+    const emailSpy = jest.spyOn(mockRepo, 'findDefaultEmailSettingId').mockResolvedValue(null);
+    const patchSpy = jest.spyOn(aiCampaignDraftService, 'patchDeterministicCampaignScript');
+
+    await aiCampaignDraftService.prepareScript(minimalScript(), 1);
+    expect(patchSpy).toHaveBeenCalledTimes(1);
+
+    await aiCampaignDraftService.prepareScript({ ...minimalScript(), compilerApplied: false }, 1);
+    expect(patchSpy).toHaveBeenCalledTimes(2);
+
+    patchSpy.mockRestore();
+    zaloSpy.mockRestore();
+    emailSpy.mockRestore();
   });
 });

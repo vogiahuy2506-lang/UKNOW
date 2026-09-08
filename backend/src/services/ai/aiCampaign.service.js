@@ -61,7 +61,6 @@ import {
   isCampaignScriptShaped,
   pickChannelByExplicitSignal,
 } from '../../utils/campaignQuickSend.util.js';
-import { runShadowIntentExtraction } from './intentExtractor.service.js';
 import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
 import { isCompilableIntent, deriveIntent } from './campaignIntent.schema.js';
 import { compileCampaign } from './campaignCompiler.service.js';
@@ -622,19 +621,6 @@ QUY TẮC:
       files,
     });
     const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
-
-    // PR-3: Shadow Intent Extraction (GĐ 1: chỉ chạy song song và ghi log, không can thiệp luồng)
-    if (process.env.INTENT_SHADOW_ENABLED === 'true' && lastUserText) {
-      runShadowIntentExtraction({
-        text: lastUserText,
-        locale: uiLocale,
-        model,
-        regexState: derivedState,
-        turn: Array.isArray(history) ? history.length : 0,
-      }).catch((err) => {
-        console.warn('[IntentShadow] Background shadow extraction error:', err?.message || err);
-      });
-    }
 
     const isRevision = isContentPlanRevisionText(lastUserText);
 
@@ -1674,25 +1660,34 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     if ((finalResponse?.type === 'confirm_create' || finalResponse?.type === 'create_and_run') && finalResponse.data) {
       const targetScript = finalResponse.data.script || finalResponse.data;
       if (targetScript && Array.isArray(targetScript.nodes) && Array.isArray(targetScript.connections)) {
-        console.log(
-          '[AI Patch][gate] senderAccountId=',
-          gateState?.senderAccountId,
-          'channel=',
-          gateState?.channel,
-          'gateKeys=',
-          Object.keys(gateState || {})
-        );
-        aiCampaignDraftService.patchDeterministicCampaignScript(targetScript, {
-          senderAccountId: gateState?.senderAccountId,
-          dataSource: gateState?.dataSource,
-          sheetUrl: gateState?.sheetUrl,
-          zaloGroupIds: gateState?.zaloGroupIds,
-          zaloFriendIds: gateState?.zaloFriendIds,
-          landingPageSlug: gateState?.landingPageSlug || gateState?.landingLeadsSlugs,
-          defaultZaloAccountId: firstZaloAccountId,
-          channel: gateState?.channel,
-          schedule: gateState?.schedule,
-        });
+        // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: targetScript.compilerApplied
+        // === true nghĩa là graph này đã đến từ compileCampaign() (có thể mang qua từ một
+        // lượt trước trong cùng phiên) — campaignCompilerPatchNoop.spec.js chứng minh 11
+        // nhánh [AI Patch] cũ là no-op tuyệt đối trên graph đó, nên bỏ qua an toàn (Bẫy 7:
+        // xoá if này thì test phải rớt).
+        if (targetScript.compilerApplied === true) {
+          console.log('[AI Patch] skip: compilerApplied');
+        } else {
+          console.log(
+            '[AI Patch][gate] senderAccountId=',
+            gateState?.senderAccountId,
+            'channel=',
+            gateState?.channel,
+            'gateKeys=',
+            Object.keys(gateState || {})
+          );
+          aiCampaignDraftService.patchDeterministicCampaignScript(targetScript, {
+            senderAccountId: gateState?.senderAccountId,
+            dataSource: gateState?.dataSource,
+            sheetUrl: gateState?.sheetUrl,
+            zaloGroupIds: gateState?.zaloGroupIds,
+            zaloFriendIds: gateState?.zaloFriendIds,
+            landingPageSlug: gateState?.landingPageSlug || gateState?.landingLeadsSlugs,
+            defaultZaloAccountId: firstZaloAccountId,
+            channel: gateState?.channel,
+            schedule: gateState?.schedule,
+          });
+        }
 
         // Giai đoạn 2 - Việc 2.3: Shadow compare graph của compiler với script cũ
         runCompilerShadowCompare({
