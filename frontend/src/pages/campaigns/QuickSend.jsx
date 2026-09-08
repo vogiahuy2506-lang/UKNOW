@@ -146,6 +146,33 @@ function buildFailureToast(failureSamples, isEmail) {
   return 'Gửi thất bại';
 }
 
+/**
+ * Bẫy 7 (PLAN_GUI_NHANH_MOI_KENH, bước 5): POST /zalo/preview/send-personal và
+ * /send-group luôn trả HTTP 200 + { data: { items, meta } } — kể cả khi người nhận/nhóm
+ * đó thất bại (items[i].status === 'failed'), chỉ 409/503/403 mới là lỗi toàn cục ném
+ * mã khác 200. Không sửa được ở backend (endpoint còn phục vụ preview Campaign Builder,
+ * nơi gửi nhiều người/nhóm một lượt và đọc meta.failed thay vì early-throw).
+ *
+ * runSendLoop gọi hàm này ngay sau await — nếu item đầu (mỗi lần gọi ở đây luôn đúng 1
+ * item vì QuickSend gửi từng người/nhóm một lệnh) không phải 'success', ném lỗi hình
+ * dạng axios để catch() + classifySendError() phía dưới xử lý y hệt lỗi HTTP thật, không
+ * cần nhánh code riêng.
+ *
+ * @param {object} res kết quả axios từ sendMessage/sendGroupMessage
+ * @throws {Error & { response: { status: 200, data: { message: string, code: string } } }}
+ */
+function throwIfZaloItemFailed(res) {
+  const item = res?.data?.data?.items?.[0];
+  if (!item || item.status === 'success') return;
+  const message = item.error || item.errorLabel || 'Gửi thất bại';
+  const err = new Error(message);
+  err.response = {
+    status: 200,
+    data: { message, code: item.errorCode },
+  };
+  throw err;
+}
+
 const QuickSend = () => {
   const { t } = useI18n();
   const location = useLocation();
@@ -810,12 +837,13 @@ const QuickSend = () => {
       for (const [idx, recipient] of recipients.entries()) {
         try {
           // recipient.phone == groupId (xem finalRecipients() — dùng chung shape {email,phone,name}).
-          await zaloSettingsApiService.sendGroupMessage({
+          const res = await zaloSettingsApiService.sendGroupMessage({
             accountId: selectedZaloAccount.id,
             groupId: recipient.phone,
             message,
             attachments,
           }, { idempotencyKey: `${baseKey}-${idx}` });
+          throwIfZaloItemFailed(res);
           successCount++;
         } catch (err) {
           console.error('Send Zalo group error to:', recipient.name, err);
@@ -834,13 +862,14 @@ const QuickSend = () => {
       const message = resolveZaloBody();
       for (const [idx, recipient] of recipients.entries()) {
         try {
-          await zaloSettingsApiService.sendMessage({
+          const res = await zaloSettingsApiService.sendMessage({
             accountId: selectedZaloAccount.id,
             phone: recipient.phone,
             recipientType: zaloRecipientType,
             message,
             attachments,
           }, { idempotencyKey: `${baseKey}-${idx}` });
+          throwIfZaloItemFailed(res);
           successCount++;
         } catch (err) {
           console.error('Send Zalo error to:', recipient.phone, err);
