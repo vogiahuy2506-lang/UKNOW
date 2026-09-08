@@ -32,6 +32,14 @@ const CAMPAIGN_RESPONSE_TYPES = new Set([
   'create_and_run',
 ]);
 
+// Ranh giới "chiến dịch đã tạo xong / đã bỏ dở" trong lịch sử — một SỰ KIỆN, không phụ thuộc
+// chỉ số tin nhắn (khác abandonedAtMessageCount, PR-2 giữ nguyên mốc chỉ số làm dự phòng,
+// không thay thế). Cố ý KHÔNG nằm trong CAMPAIGN_RESPONSE_TYPES ở trên: bộ đó nghĩa là "đang
+// trong luồng", ranh giới này nghĩa ngược lại — đã ra khỏi luồng. 'campaign_abandoned' thêm ở
+// PR-2 (PLAN_WIZARD_VONG_DOI) — dùng chung khối reset bên dưới, không cần nhánh riêng.
+// Khai lại y hệt ở frontend (wizardContext.js) — test wizardContext.spec.js so khớp trực tiếp.
+export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success', 'campaign_abandoned']);
+
 export const normalizeChannel = (value = '') => {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
@@ -270,6 +278,36 @@ export function extractWizardState(history = [], options = {}) {
     // Khi session đã bị huỷ ở mốc abandonedAtMessageCount, toàn bộ tin nhắn / marker
     // trước mốc đó thuộc về chiến dịch đã bỏ → không được dùng để suy ra gates cho phiên mới.
     if (abandonMark != null && index < abandonMark) return;
+
+    // Ranh giới "chiến dịch đã tạo xong" — reset RỘNG HƠN marker channel (đủ để chiến dịch
+    // tiếp theo trong CÙNG hội thoại không kế thừa sender/nhóm/nguồn của chiến dịch trước).
+    // Đặt TRƯỚC khối CAMPAIGN_RESPONSE_TYPES bên dưới — nếu không, chính tin ranh giới lại bị
+    // khối đó bật isCampaignFlow=true ngay sau khi vừa reset false.
+    if (message?.role === 'assistant' && FLOW_BOUNDARY_TYPES.has(message?.type)) {
+      state.isCampaignFlow = false;
+      state.channel = null;
+      state.senderAccountId = null;
+      state.senderAccountName = null;
+      state.dataSource = null;
+      state.sheetUrl = null;
+      state.fileUsage = null;
+      state.zaloGroupIds = [];
+      state.zaloFriendIds = [];
+      state.schedule = null;
+      state.planApproved = false;
+      state.hasContentPlan = false;
+      state.senderOtherRequested = false;
+      state.brief = null;
+      state.markerGates = [];
+      state.latestCampaignMessageIndex = null;
+      state.latestIntentIsQuickSend = null;
+      latestFreeTextCampaign = null;
+      // Chốt :393 (bỏ qua mọi marker <= mốc channel cuối) dùng luôn field này — đặt bằng
+      // index ranh giới để marker của chiến dịch trước (dù không có marker channel) cũng
+      // không lọt qua, và minCampaignFileIndex bên dưới bỏ luôn tệp đính kèm cũ.
+      state.lastChannelMarkerIndex = index;
+      return;
+    }
 
     const content = message?.content || '';
     const marker = message?.role === 'user' ? parseWizardMarker(content) : null;
@@ -1469,9 +1507,22 @@ export function applyWizardStateAction(state, action, payload = {}) {
     }
     case 'abandon_campaign_flow': {
       const messageCount = Number(payload?.messageCount ?? 0);
+      const normalizedMessageCount = Number.isFinite(messageCount) && messageCount >= 0 ? messageCount : 0;
+      // Idempotent (PR-2): gọi lặp cùng messageCount khi gates đã ở đúng trạng thái "đã bỏ dở"
+      // này rồi (double-click dismiss, PATCH bắn lại) → changed:false, không ghi thêm tin
+      // ranh giới. So sánh bỏ qua abandonedAtMessageCount trước, rồi so riêng vì nó chính là
+      // phần đổi theo mỗi lần gọi.
+      const emptyGates = createEmptyWizardState().gates;
+      const currentWithoutMark = { ...current.gates, abandonedAtMessageCount: null };
+      const emptyWithoutMark = { ...emptyGates, abandonedAtMessageCount: null };
+      const alreadyAbandonedSameCount = current.gates.abandonedAtMessageCount === normalizedMessageCount
+        && JSON.stringify(currentWithoutMark) === JSON.stringify(emptyWithoutMark);
+      if (alreadyAbandonedSameCount) {
+        return { state: current, changed: false };
+      }
       next.gates = {
-        ...createEmptyWizardState().gates,
-        abandonedAtMessageCount: Number.isFinite(messageCount) && messageCount >= 0 ? messageCount : 0,
+        ...emptyGates,
+        abandonedAtMessageCount: normalizedMessageCount,
       };
       next.plan = createEmptyWizardState().plan;
       next.meta.lastGate = null;
@@ -1481,11 +1532,22 @@ export function applyWizardStateAction(state, action, payload = {}) {
     }
     case 'mark_campaign_created': {
       const campaignId = payload?.campaignId ?? null;
-      if (current.plan.status === 'completed' && current.plan.campaignId === campaignId) {
+      // Gates rỗng phải nằm trong điều kiện idempotent: nếu chỉ so status+campaignId, một
+      // lần gọi lặp SAU KHI wizard đã bắt đầu chiến dịch MỚI (gates lại có dữ liệu, cùng
+      // campaignId cũ do client gọi trễ/retry) sẽ bị coi là no-op và bỏ sót việc đóng luồng.
+      const gatesAlreadyEmpty = JSON.stringify(current.gates) === JSON.stringify(createEmptyWizardState().gates);
+      if (current.plan.status === 'completed' && current.plan.campaignId === campaignId && gatesAlreadyEmpty) {
         return { state: current, changed: false };
       }
+      // Reset gate như abandon — ranh giới "đã tạo xong" đóng luồng wizard hiện tại, không
+      // để sender/nhóm/nguồn của chiến dịch vừa tạo bị đọc lại cho chiến dịch tiếp theo.
+      // KHÔNG đặt abandonedAtMessageCount — đây không phải sự kiện bỏ dở.
+      next.gates = createEmptyWizardState().gates;
       next.plan.status = 'completed';
       next.plan.campaignId = campaignId;
+      next.meta.lastGate = null;
+      next.meta.lastGateCount = 0;
+      next.meta.deadEndLoggedAt = null;
       return { state: next, changed: true };
     }
     default:

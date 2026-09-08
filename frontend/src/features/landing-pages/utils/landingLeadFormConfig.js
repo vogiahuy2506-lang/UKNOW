@@ -55,7 +55,10 @@ export function normalizeLeadFormConfig(raw) {
 }
 
 /**
- * Prepare config for save - validates and normalizes
+ * Prepare config for save - validates and normalizes.
+ *
+ * `_persistedMeta` không còn dùng từ khi bỏ custom-field-builder (v2, xem đầu file) —
+ * giữ tham số để không phải sửa call site ở LandingCanvasEditor.jsx.
  */
 export function prepareLeadFormConfigForSave(raw, _persistedMeta = {}) {
   const normalized = normalizeLeadFormConfig(raw);
@@ -66,7 +69,7 @@ export function prepareLeadFormConfigForSave(raw, _persistedMeta = {}) {
   const hasContactField = enabledFields.some((f) => f.key === 'name' || f.key === 'phone');
 
   if (!hasContactField) {
-    errors.push('Cần có ít nhất trường Họ tên hoặc Số điện thoại');
+    errors.push({ key: 'contactField', message: 'Cần có ít nhất trường Họ tên hoặc Số điện thoại' });
   }
 
   return {

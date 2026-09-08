@@ -8,6 +8,8 @@ import emailSettingsApiService from '../../features/settings/services/emailSetti
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
 import chatbotApiService from '../../features/chatbot/services/chatbotApi.service';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
+import campaignBuilderApiService from '../../features/campaigns/services/campaignBuilderApi.service';
+import { ZaloGroupPickerCard } from '../../features/ai/components/AiChatbotWizardCards.jsx';
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
 import { resolveActionIdempotencyKey } from '../../utils/idempotency.util.js';
@@ -17,6 +19,7 @@ import {
   HiOutlineMail,
   HiOutlineChat,
   HiOutlineUsers,
+  HiOutlineUserGroup,
   HiOutlineCheckCircle,
   HiOutlineXCircle,
   HiOutlineChevronRight,
@@ -50,6 +53,7 @@ const QUICK_SEND_STEPS = {
 const CHANNEL_TYPES = {
   EMAIL: 'email',
   ZALO: 'zalo',
+  ZALO_GROUP: 'zalo_group',
 };
 
 const ZALO_RECIPIENT_TYPES = {
@@ -142,6 +146,33 @@ function buildFailureToast(failureSamples, isEmail) {
   return 'Gửi thất bại';
 }
 
+/**
+ * Bẫy 7 (PLAN_GUI_NHANH_MOI_KENH, bước 5): POST /zalo/preview/send-personal và
+ * /send-group luôn trả HTTP 200 + { data: { items, meta } } — kể cả khi người nhận/nhóm
+ * đó thất bại (items[i].status === 'failed'), chỉ 409/503/403 mới là lỗi toàn cục ném
+ * mã khác 200. Không sửa được ở backend (endpoint còn phục vụ preview Campaign Builder,
+ * nơi gửi nhiều người/nhóm một lượt và đọc meta.failed thay vì early-throw).
+ *
+ * runSendLoop gọi hàm này ngay sau await — nếu item đầu (mỗi lần gọi ở đây luôn đúng 1
+ * item vì QuickSend gửi từng người/nhóm một lệnh) không phải 'success', ném lỗi hình
+ * dạng axios để catch() + classifySendError() phía dưới xử lý y hệt lỗi HTTP thật, không
+ * cần nhánh code riêng.
+ *
+ * @param {object} res kết quả axios từ sendMessage/sendGroupMessage
+ * @throws {Error & { response: { status: 200, data: { message: string, code: string } } }}
+ */
+function throwIfZaloItemFailed(res) {
+  const item = res?.data?.data?.items?.[0];
+  if (!item || item.status === 'success') return;
+  const message = item.error || item.errorLabel || 'Gửi thất bại';
+  const err = new Error(message);
+  err.response = {
+    status: 200,
+    data: { message, code: item.errorCode },
+  };
+  throw err;
+}
+
 const QuickSend = () => {
   const { t } = useI18n();
   const location = useLocation();
@@ -164,6 +195,11 @@ const QuickSend = () => {
   const zaloFriendsMapRef = useRef(new Map()); // uid -> friend object (cả trang đã tải)
   const resolvedForAccountIdRef = useRef(null); // id tài khoản Zalo lần đối chiếu gần nhất
   const uidSearchTimerRef = useRef(null);
+
+  // Zalo nhóm (PR-2) — [{ id, name }]. name: null khi mới nạp từ bản nháp AI (chỉ có id,
+  // Bẫy 4) và chờ resolveGroupNames đối chiếu; ZaloGroupPickerCard tự có tên ngay khi người
+  // dùng chọn tay (onSubmit nhận kèm danh sách group đầy đủ).
+  const [selectedGroups, setSelectedGroups] = useState([]);
 
   // Sender accounts state
   const [emailAccounts, setEmailAccounts] = useState([]);
@@ -217,13 +253,22 @@ const QuickSend = () => {
     const draft = location.state?.quickSendDraft;
     if (!draft) return;
 
-    if (draft.channel === CHANNEL_TYPES.EMAIL || draft.channel === CHANNEL_TYPES.ZALO) {
+    if ([CHANNEL_TYPES.EMAIL, CHANNEL_TYPES.ZALO, CHANNEL_TYPES.ZALO_GROUP].includes(draft.channel)) {
       setSelectedChannel(draft.channel);
     }
 
     const isZaloUidDraft = draft.channel === CHANNEL_TYPES.ZALO && draft.recipientType === ZALO_RECIPIENT_TYPES.UID;
+    const isZaloGroupDraft = draft.channel === CHANNEL_TYPES.ZALO_GROUP;
 
-    if (isZaloUidDraft) {
+    if (isZaloGroupDraft) {
+      const rawList = Array.isArray(draft.recipients)
+        ? draft.recipients
+        : String(draft.recipients || '').split(/[\n,;]+/);
+      const ids = rawList.map((r) => String(r || '').trim()).filter(Boolean);
+      // Chưa có tên (Bẫy 4) — resolveGroupNames đối chiếu lại với danh sách nhóm thật của
+      // tài khoản đã chọn ngay khi tài khoản sẵn sàng (effect bên dưới).
+      setSelectedGroups(ids.map((id) => ({ id, name: null })));
+    } else if (isZaloUidDraft) {
       setZaloRecipientType(ZALO_RECIPIENT_TYPES.UID);
       const rawList = Array.isArray(draft.recipients)
         ? draft.recipients
@@ -256,7 +301,7 @@ const QuickSend = () => {
     }
 
     if (draft.accountId) {
-      if (draft.channel === CHANNEL_TYPES.ZALO) {
+      if (draft.channel === CHANNEL_TYPES.ZALO || draft.channel === CHANNEL_TYPES.ZALO_GROUP) {
         setSelectedZaloAccount({ id: draft.accountId });
       } else {
         setSelectedEmailAccount({ id: draft.accountId });
@@ -374,6 +419,16 @@ const QuickSend = () => {
 
   // Get final recipients from manual input only
   const finalRecipients = useCallback(() => {
+    if (selectedChannel === CHANNEL_TYPES.ZALO_GROUP) {
+      // Shape {email,phone,name} dùng chung với luồng email/zalo cá nhân để bước Xem lại
+      // (finalRecipients().map(r => r.name)) và vòng gửi (runSendLoop) không cần nhánh
+      // render riêng — id nhóm đặt cả vào email/phone (runSendLoop đọc lại qua .phone).
+      return selectedGroups.map((g) => ({
+        email: g.id,
+        phone: g.id,
+        name: g.name || t('quickSend.groupNotFound', { last4: g.id.slice(-4) }),
+      }));
+    }
     if (selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID) {
       // Chỉ những dòng người dùng đã tick (UID không có trong danh bạ mặc định KHÔNG tick — Bẫy 4).
       // Tên hiển thị ở bước Xem lại KHÔNG được rơi xuống UID trần: dòng chưa đối chiếu được
@@ -393,10 +448,13 @@ const QuickSend = () => {
       .filter((s) => s && (selectedChannel === CHANNEL_TYPES.EMAIL ? s.includes('@') : /^\d+$/.test(s)));
 
     return manualList.map((contact) => ({ email: contact, phone: contact, name: contact }));
-  }, [selectedChannel, manualEmails, manualPhones, zaloRecipientType, uidRows, t]);
+  }, [selectedChannel, manualEmails, manualPhones, zaloRecipientType, uidRows, selectedGroups, t]);
 
   // Check if has manual recipients
   const hasManualRecipients = () => {
+    if (selectedChannel === CHANNEL_TYPES.ZALO_GROUP) {
+      return selectedGroups.length > 0;
+    }
     if (selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID) {
       return uidRows.some((r) => r.checked);
     }
@@ -447,6 +505,32 @@ const QuickSend = () => {
     resolvedForAccountIdRef.current = selectedZaloAccount.id;
     loadZaloContactsAndResolve(selectedZaloAccount.id);
   }, [selectedChannel, zaloRecipientType, selectedZaloAccount, loadZaloContactsAndResolve]);
+
+  // Đối chiếu tên nhóm cho các dòng chỉ có id (bản nháp từ Trợ lý AI mang sang — Bẫy 4:
+  // không hiển thị id trần). Chọn tay qua ZaloGroupPickerCard đã có tên ngay lúc onSubmit,
+  // effect này chỉ cần chạy cho phần còn thiếu (name === null).
+  const resolveGroupNames = useCallback(async (accountId) => {
+    if (!accountId) return;
+    try {
+      const res = await campaignBuilderApiService.getPreviewZaloGroups({ accountId });
+      const payload = res?.data?.data || res?.data || {};
+      const items = Array.isArray(payload) ? payload : (payload.groups || payload.items || []);
+      const byId = new Map(
+        items.map((g) => [String(g.groupId || g.group_id || g.id || ''), g.groupName || g.group_name || g.name])
+      );
+      setSelectedGroups((prev) => prev.map((g) => (
+        g.name !== null ? g : { ...g, name: byId.get(g.id) || t('quickSend.groupNotFound', { last4: g.id.slice(-4) }) }
+      )));
+    } catch (err) {
+      console.error('Load Zalo groups for name resolve failed:', err);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (selectedChannel !== CHANNEL_TYPES.ZALO_GROUP) return;
+    if (!selectedZaloAccount?.id) return;
+    resolveGroupNames(selectedZaloAccount.id);
+  }, [selectedChannel, selectedZaloAccount, resolveGroupNames]);
 
   // Tìm bạn bè để thêm thủ công (ngoài danh sách bản nháp mang sang) — debounce 300ms giống ZaloFriendPickerCard.
   useEffect(() => {
@@ -707,7 +791,7 @@ const QuickSend = () => {
     const idempotencyPayload = {
       channel: selectedChannel,
       accountId: isEmail ? selectedEmailAccount?.id : selectedZaloAccount?.id,
-      recipientType: isEmail ? undefined : zaloRecipientType,
+      recipientType: (isEmail || selectedChannel === CHANNEL_TYPES.ZALO_GROUP) ? undefined : zaloRecipientType,
       recipients: recipients.map((r) => r.email || r.phone),
       templateId: selectedTemplate?.id || null,
       subject: templateContent.subject || '',
@@ -748,17 +832,44 @@ const QuickSend = () => {
           if (quotaExceededEarly) break;
         }
       }
+    } else if (selectedChannel === CHANNEL_TYPES.ZALO_GROUP) {
+      const message = resolveZaloBody();
+      for (const [idx, recipient] of recipients.entries()) {
+        try {
+          // recipient.phone == groupId (xem finalRecipients() — dùng chung shape {email,phone,name}).
+          const res = await zaloSettingsApiService.sendGroupMessage({
+            accountId: selectedZaloAccount.id,
+            groupId: recipient.phone,
+            message,
+            attachments,
+          }, { idempotencyKey: `${baseKey}-${idx}` });
+          throwIfZaloItemFailed(res);
+          successCount++;
+        } catch (err) {
+          console.error('Send Zalo group error to:', recipient.name, err);
+          failCount++;
+          failed.push(recipient);
+          const info = classifySendError(err);
+          if (!failureSamples.has(info.errorType)) {
+            failureSamples.set(info.errorType, {
+              ...info,
+              firstRecipient: recipient.name,
+            });
+          }
+        }
+      }
     } else {
       const message = resolveZaloBody();
       for (const [idx, recipient] of recipients.entries()) {
         try {
-          await zaloSettingsApiService.sendMessage({
+          const res = await zaloSettingsApiService.sendMessage({
             accountId: selectedZaloAccount.id,
             phone: recipient.phone,
             recipientType: zaloRecipientType,
             message,
             attachments,
           }, { idempotencyKey: `${baseKey}-${idx}` });
+          throwIfZaloItemFailed(res);
           successCount++;
         } catch (err) {
           console.error('Send Zalo error to:', recipient.phone, err);
@@ -809,7 +920,7 @@ const QuickSend = () => {
     const hasEmailBody = selectedChannel !== CHANNEL_TYPES.EMAIL
       || Boolean((resolvedBody.html || resolvedBody.text || '').trim())
       || Boolean(selectedTemplate);
-    const hasZaloBody = selectedChannel !== CHANNEL_TYPES.ZALO
+    const hasZaloBody = (selectedChannel !== CHANNEL_TYPES.ZALO && selectedChannel !== CHANNEL_TYPES.ZALO_GROUP)
       || Boolean(resolvedZaloBody.trim())
       || Boolean(selectedTemplate);
     if (!hasEmailBody || !hasZaloBody) {
@@ -836,7 +947,7 @@ const QuickSend = () => {
       setIsSending(false);
       return;
     }
-    if (selectedChannel === CHANNEL_TYPES.ZALO && !selectedZaloAccount) {
+    if ((selectedChannel === CHANNEL_TYPES.ZALO || selectedChannel === CHANNEL_TYPES.ZALO_GROUP) && !selectedZaloAccount) {
       toast.error(t('quickSend.noZaloAccountSelected'));
       setCurrentStep(QUICK_SEND_STEPS.RECIPIENTS);
       setIsSending(false);
@@ -947,6 +1058,7 @@ const QuickSend = () => {
     setUidManualInput('');
     setUidSearch('');
     setUidSearchResults([]);
+    setSelectedGroups([]);
     resolvedForAccountIdRef.current = null;
     sendActionKeyRef.current = { key: null, signature: null };
     setSendResult(null);
@@ -1017,7 +1129,7 @@ const QuickSend = () => {
             {/* Channel Type */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectChannel')}</h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <button
                   onClick={() => setSelectedChannel(CHANNEL_TYPES.EMAIL)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
@@ -1042,6 +1154,19 @@ const QuickSend = () => {
                   <HiOutlineChat className={`w-8 h-8 ${selectedChannel === CHANNEL_TYPES.ZALO ? 'text-orange-500' : 'text-gray-400'}`} />
                   <span className={`font-medium ${selectedChannel === CHANNEL_TYPES.ZALO ? 'text-orange-700' : 'text-gray-700'}`}>
                     Zalo
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSelectedChannel(CHANNEL_TYPES.ZALO_GROUP)}
+                  className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
+                    selectedChannel === CHANNEL_TYPES.ZALO_GROUP
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <HiOutlineUserGroup className={`w-8 h-8 ${selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? 'text-orange-500' : 'text-gray-400'}`} />
+                  <span className={`font-medium ${selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? 'text-orange-700' : 'text-gray-700'}`}>
+                    {t('quickSend.channelZaloGroup')}
                   </span>
                 </button>
               </div>
@@ -1139,6 +1264,39 @@ const QuickSend = () => {
                 <h2 className="text-lg font-semibold text-gray-900">{t('quickSend.manualInput')}</h2>
               </div>
 
+              {selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? (
+                <div className="space-y-3">
+                  {!selectedZaloAccount?.id ? (
+                    <p className="text-sm text-amber-600">{t('quickSend.groupNoAccountSelected')}</p>
+                  ) : (
+                    <ZaloGroupPickerCard
+                      data={{ accountId: selectedZaloAccount.id }}
+                      isActive
+                      t={t}
+                      onSubmit={(ids, groups) => {
+                        const byId = new Map(
+                          groups.map((g) => [String(g.groupId || g.group_id || g.id || ''), g.groupName || g.group_name || g.name])
+                        );
+                        setSelectedGroups(ids.map((id) => ({ id: String(id), name: byId.get(String(id)) || String(id) })));
+                        toast.success(t('quickSend.groupSelected', { count: ids.length }));
+                      }}
+                    />
+                  )}
+                  {selectedGroups.length > 0 && (
+                    <div className="border border-gray-200 rounded-lg p-3">
+                      <p className="text-xs font-medium text-gray-500 mb-2">{t('quickSend.groupSelectedListLabel')}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedGroups.map((g) => (
+                          <span key={g.id} className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-3 py-1 text-xs text-orange-700">
+                            {g.name || t('quickSend.groupNotFound', { last4: g.id.slice(-4) })}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+              <>
               {selectedChannel === CHANNEL_TYPES.ZALO && (
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1309,6 +1467,8 @@ const QuickSend = () => {
                     {t('quickSend.manualInputHint')}
                   </p>
                 </>
+              )}
+              </>
               )}
             </div>
 
@@ -1526,7 +1686,9 @@ const QuickSend = () => {
               </div>
             </div>
 
-            {/* Test Send Box */}
+            {/* Test Send Box — ẩn cho Zalo nhóm: không có khái niệm "gửi thử tới 1 địa chỉ",
+                đích đến CỐ ĐỊNH là nhóm đã chọn, "gửi thử" sẽ tức là gửi thật vào nhóm đó. */}
+            {selectedChannel !== CHANNEL_TYPES.ZALO_GROUP && (
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-center gap-2 mb-1">
                 <HiOutlinePaperAirplane className="w-5 h-5 text-orange-500" />
@@ -1565,6 +1727,7 @@ const QuickSend = () => {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Warning */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">

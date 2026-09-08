@@ -60,6 +60,24 @@ function denyCampaignRun(res) {
   });
 }
 
+// Ranh giới vòng đời wizard (PLAN_WIZARD_VONG_DOI_2026-09-07 PR-1/PR-2) — action nào ghi tin
+// ranh giới lên server sau khi applyWizardStateAction đổi state (changed:true). Gộp thành
+// bảng thay vì hai `if` riêng vì cùng khuôn: content tuỳ chỉnh (cắt 500 ký tự) hoặc mặc định,
+// type khớp FLOW_BOUNDARY_TYPES (aiCampaignWizard.service.js) để extractWizardState/
+// deriveWizardContext nhận ra và reset gate cho phiên/hội thoại tiếp theo.
+const BOUNDARY_MESSAGE_BY_ACTION = {
+  mark_campaign_created: {
+    type: 'campaign_created',
+    defaultContent: '🎉 Chiến dịch đã được tạo.',
+    data: (payload) => ({ campaignId: payload?.campaignId ?? null }),
+  },
+  abandon_campaign_flow: {
+    type: 'campaign_abandoned',
+    defaultContent: 'Đã dừng.',
+    data: () => ({}),
+  },
+};
+
 async function logWorkspaceMutation(req, action, entityType, entityId, details = {}) {
   const context = getWorkspaceAuditContext(req);
   await auditService.log({
@@ -534,6 +552,19 @@ class AiController {
 
       result.state.meta.updatedAt = new Date().toISOString();
       const saved = await aiSessionRepo.writeWizardState(sessionId, userId, result.state);
+
+      // Ranh giới "chiến dịch đã tạo xong / đã bỏ dở" phải SỐNG TRÊN SERVER (không chỉ local)
+      // — tải lại trang là ai_chat_messages vẫn còn tin này, ba nơi suy trạng thái đều thấy được.
+      const boundaryMessage = BOUNDARY_MESSAGE_BY_ACTION[action];
+      if (boundaryMessage) {
+        const content = String(payload?.content || '').trim().slice(0, 500) || boundaryMessage.defaultContent;
+        await aiSessionRepo.saveAssistantMessage(sessionId, userId, {
+          type: boundaryMessage.type,
+          content,
+          data: boundaryMessage.data(payload),
+        });
+      }
+
       return res.json({ success: true, data: { wizardState: saved, changed: true } });
     } catch (error) {
       console.error('Patch wizard state error:', error);

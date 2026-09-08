@@ -81,9 +81,17 @@ QUY TẮC KỸ THUẬT (bắt buộc):
    - <script src="https://cdn.tailwindcss.com"></script>
 4) Styling — NGHIÊM CẤM TUYỆT ĐỐI dùng thuộc tính style="..." inline trên BẤT KỲ thẻ HTML nào. KHÔNG được viết style="color:...", style="background-color:...", style="font-size:...", style="padding:...", style="margin:..." hay bất kỳ thuộc tính style inline nào. CHỈ được dùng class Tailwind utility (ví dụ class="bg-orange-500 text-white px-6 py-3"). Không dùng <style> block lớn; chỉ được vài dòng cho keyframe animation nếu thật sự cần.
 5) Không dùng JavaScript ngoài script Tailwind CDN ở trên (không thư viện khác, không inline script logic).
-6) Trang phải có vùng đăng ký lead: tại vị trí form (ví dụ sau khối CTA chính), chèn ĐÚNG một dòng comment HTML sau, đứng một mình giữa các thẻ cha phù hợp (ví dụ trong <section>):
-   ${LANDING_FORM_PLACEHOLDER}
-   Không bọc comment trong <script>. Không thay nội dung comment — giữ nguyên ký tự.
+6) Trang phải có ĐÚNG MỘT form đăng ký lead thật (không phải placeholder), đặt tại vị trí form (ví dụ sau khối CTA chính, trong <section>), theo ĐÚNG cấu trúc sau (giữ nguyên tên thuộc tính, được đổi class/label/nội dung chữ theo văn phong trang):
+   <form data-founderai-capture>
+     <input type="text" name="name" placeholder="..." required />
+     <input type="email" name="email" placeholder="..." required />
+     <input type="tel" name="phone" placeholder="..." />
+     <label><input type="checkbox" name="marketingConsent" /> ...câu đồng ý nhận thông tin/khuyến mãi...</label>
+     <button type="submit">${formHeading}</button>
+   </form>
+   <div class="founderai-capture-success" style="display:none">...thông báo thành công...</div>
+   <div class="founderai-capture-error" style="display:none"></div>
+   Bắt buộc: đúng 3 trường name="name"/"email"/"phone" như trên (không đổi tên, không thêm form thứ 2 nào khác trong trang). Checkbox "marketingConsent" mặc định KHÔNG được tick sẵn (không thêm thuộc tính checked). KHÔNG dùng tên "cf_agree_checkbox" hay bất kỳ tên nào khác cho ô đồng ý này — phải đúng "marketingConsent". KHÔNG thêm thuộc tính action hoặc onsubmit trên thẻ <form> — script capture ngoài trang tự bắt sự kiện submit.
 7) Toàn bộ chữ hiển thị phải theo CUSTOMER_CONTENT_LANGUAGE ở trên. Link ngoài dùng https, ngắn gọn.
 8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, dùng gradient/icon Unicode hoặc bỏ ảnh.
 
@@ -157,12 +165,18 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
-    if (!html.includes(LANDING_FORM_PLACEHOLDER)) {
-      if (/<\/body>/i.test(html)) {
-        html = html.replace(/<\/body>/i, `  <section class="py-10 px-4 max-w-3xl mx-auto">\n    <h2 class="text-xl font-semibold text-gray-900 mb-4">${formHeading}</h2>\n    ${LANDING_FORM_PLACEHOLDER}\n  </section>\n</body>`);
-      } else {
-        html = `${html}\n<!-- appended -->\n<section class="py-10 px-4">${LANDING_FORM_PLACEHOLDER}</section>`;
-      }
+    // Chốt chặn form bắt lead: AI phải tự sinh <form data-founderai-capture> với
+    // trường email thật (quy tắc 6 ở trên) — không còn fallback tự chèn placeholder,
+    // vì placeholder không được founderai-capture.js bắt được submit.
+    if (!/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
+      const err = new Error('AI không tạo form đăng ký lead (thiếu data-founderai-capture). Vui lòng thử lại.');
+      err.status = 502;
+      throw err;
+    }
+    if (!/\bname\s*=\s*["']email["']/i.test(html)) {
+      const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
+      err.status = 502;
+      throw err;
     }
 
     return { title, html };
@@ -216,7 +230,7 @@ ${contentLanguageInstruction(locale)}
 
 QUY TẮC CHỈNH SỬA TỐI QUAN TRỌNG:
 1) Dưới đây là HTML hiện tại của trang. Nhiệm vụ của bạn là CHỈ thay đổi đúng phần người dùng yêu cầu.
-2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và comment "${LANDING_FORM_PLACEHOLDER}" (hoặc thẻ iframe form nhúng "/embed/lead-form/...", hoặc form có thuộc tính "data-uknow-lead-form"). Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
+2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và form đăng ký lead hiện có của trang — comment "${LANDING_FORM_PLACEHOLDER}" (trang cũ), hoặc thẻ iframe form nhúng "/embed/lead-form/..." (trang cũ), hoặc form có thuộc tính "data-founderai-capture" cùng đủ 3 trường name="name"/"email"/"phone" và checkbox name="marketingConsent" (trang mới) — GIỮ NGUYÊN VĂN toàn bộ form đó, không đổi tên thuộc tính, không xóa trường nào. Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
 3) Trả về JSON { "title": "...", "html": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích.
 
 QUY TẮC KỸ THUẬT:
