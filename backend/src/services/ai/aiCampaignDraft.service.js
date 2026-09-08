@@ -737,21 +737,24 @@ class AiCampaignDraftService {
     return script;
   }
 
-  // Alias for backward compatibility
-  patchDeterministicZaloScript(script, options = {}) {
-    return this.patchDeterministicCampaignScript(script, options);
-  }
-
-  patchDeterministicScript(script, options = {}) {
-    return this.patchDeterministicCampaignScript(script, options);
-  }
-
   async prepareScript(script, userId, context = {}) {
-    const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(userId).catch(() => null);
-    const patched = this.patchDeterministicCampaignScript(script, {
-      defaultZaloAccountId: defaultAccountId,
-      ...context,
-    });
+    let patched;
+    // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: script.compilerApplied === true
+    // nghĩa là graph đến từ compileCampaign() (aiCampaign.service.js:~1738), không phải LLM —
+    // campaignCompilerPatchNoop.spec.js chứng minh 11 nhánh [AI Patch] cũ là no-op tuyệt đối
+    // trên graph đó, nên bỏ qua an toàn (Bẫy 7: xoá if này thì test phải rớt). Cờ này sống
+    // được qua vòng frontend (Bẫy 5, AiChatbot.jsx gửi lại nguyên script nhận được, không
+    // lược trường lạ — đã kiểm khi phản biện plan).
+    if (script?.compilerApplied === true) {
+      console.log('[AI Patch] skip: compilerApplied');
+      patched = script;
+    } else {
+      const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(userId).catch(() => null);
+      patched = this.patchDeterministicCampaignScript(script, {
+        defaultZaloAccountId: defaultAccountId,
+        ...context,
+      });
+    }
     const canonical = this.canonicalizeScript(patched);
     const nodes = this.normalizeNodes(canonical.nodes);
     await this.autoFillEmailChannels(nodes, userId);

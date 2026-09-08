@@ -173,7 +173,11 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, a
       positionX: 350,
       positionY: 200,
       config: {
-        landingPageSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
+        // landingLeadsSlugs (không phải landingPageSlugs): lead.service.js:176
+        // buildSharedLeadFilters đọc đúng field này để lọc lead theo slug landing đã chọn —
+        // đặt sai tên thì node chạy nhưng đọc TOÀN BỘ lead mọi landing page, không phải chỉ
+        // slug đã chọn (bắt được nhờ test no-op mục 1.1, không phải review đọc mắt).
+        landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
       },
     });
   }
@@ -192,11 +196,18 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, a
     positionY: 200,
     config: {
       fromEmailId: Number(sender.id),
+      // emailSenderId: alias lịch sử, không còn ai đọc ở runtime (chỉ fromEmailId — xem
+      // campaignEmailSender.service.js) nhưng patchDeterministicCampaignScript (11 [AI Patch]
+      // cũ) vẫn gán field này — giữ để graph compiler thật sự no-op dưới patch (mục 1.1).
+      emailSenderId: Number(sender.id),
       recipientSource,
       recipientNodeId: audienceNodeId || '',
       recipientField: 'email',
       ccEnabled: false,
       saveMessageLog: true,
+      // sendMode: campaignRun.service.js đọc field này để biết gửi ngay toàn bộ ('all') hay
+      // theo lịch từng bước ('schedule') — Once luôn 'all'.
+      sendMode: 'all',
       emailSteps: [
         {
           templateId: null,
@@ -336,7 +347,11 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
       positionX: 350,
       positionY: 200,
       config: {
-        landingPageSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
+        // landingLeadsSlugs (không phải landingPageSlugs): lead.service.js:176
+        // buildSharedLeadFilters đọc đúng field này để lọc lead theo slug landing đã chọn —
+        // đặt sai tên thì node chạy nhưng đọc TOÀN BỘ lead mọi landing page, không phải chỉ
+        // slug đã chọn (bắt được nhờ test no-op mục 1.1, không phải review đọc mắt).
+        landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
       },
     });
   }
@@ -391,11 +406,13 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
     positionY: 200,
     config: {
       fromEmailId: Number(sender.id),
+      emailSenderId: Number(sender.id),
       recipientSource,
       recipientNodeId: audienceNodeId || '',
       recipientField: 'email',
       ccEnabled: false,
       saveMessageLog: true,
+      sendMode: 'schedule',
       emailSteps,
     },
   });
@@ -483,24 +500,21 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
   let audienceNodeId = null;
   let recipientField = 'phone';
   let recipientType = 'phone';
+  // Chỉ khác null khi audience.type === 'zalo_contacts' — xem ghi chú dưới.
+  let manualRecipientPhones = null;
 
   if (audience.type === 'zalo_contacts') {
-    audienceNodeId = `${prefix}_get_all_friends_1`;
+    // KHÔNG dùng node get_all_friends: config schema của nó (campaignNodeRegistry.
+    // service.js:141-158) chỉ có zaloFriendAccountNodeId — không có cách giới hạn xuống
+    // audience.friendIds mà người dùng đã CHỌN trong wizard (ZaloFriendPickerCard). Dùng node
+    // này sẽ gửi cho TOÀN BỘ bạn bè của tài khoản, không phải danh sách đã chọn — không phải
+    // lỗi no-op vặt, là gửi nhầm người thật. Đường 'manual' (audienceNodeId giữ null, như
+    // audience.type không khớp nhánh nào) đã có sẵn cho đúng ca này: nạp UID trực tiếp vào
+    // zaloRecipientPhones (field dùng chung cho cả phone lẫn uid tuỳ zaloRecipientType — xem
+    // campaignRun.service.js:4363).
     recipientField = 'uid';
     recipientType = 'uid';
-    nodes.push({
-      id: audienceNodeId,
-      tempId: audienceNodeId,
-      nodeType: 'data',
-      nodeSubtype: 'get_all_friends',
-      nodeName: 'Lấy danh sách bạn bè Zalo',
-      nodeDescription: 'Lấy danh sách bạn bè từ tài khoản Zalo đã chọn',
-      positionX: 500,
-      positionY: 200,
-      config: {
-        zaloFriendAccountNodeId: selectAccountId,
-      },
-    });
+    manualRecipientPhones = (Array.isArray(audience.friendIds) ? audience.friendIds : []).join('\n');
   } else if (audience.type === 'sheet') {
     audienceNodeId = `${prefix}_read_sheet_1`;
     nodes.push({
@@ -548,7 +562,11 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
       positionX: 500,
       positionY: 200,
       config: {
-        landingPageSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
+        // landingLeadsSlugs (không phải landingPageSlugs): lead.service.js:176
+        // buildSharedLeadFilters đọc đúng field này để lọc lead theo slug landing đã chọn —
+        // đặt sai tên thì node chạy nhưng đọc TOÀN BỘ lead mọi landing page, không phải chỉ
+        // slug đã chọn (bắt được nhờ test no-op mục 1.1, không phải review đọc mắt).
+        landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
       },
     });
   }
@@ -571,6 +589,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
       zaloRecipientNodeId: audienceNodeId || '',
       zaloRecipientField: recipientField,
       zaloRecipientType: recipientType,
+      ...(manualRecipientPhones != null ? { zaloRecipientPhones: manualRecipientPhones } : {}),
       zaloPersonalSendMode: 'all',
       saveMessageLog: true,
       zaloPersonalTemplateSteps: [
@@ -691,24 +710,15 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
   let audienceNodeId = null;
   let recipientField = 'phone';
   let recipientType = 'phone';
+  // Chỉ khác null khi audience.type === 'zalo_contacts' — xem ghi chú ở
+  // compileZaloPersonalOnceCampaign (không dùng node get_all_friends, không giới hạn được
+  // xuống audience.friendIds đã chọn).
+  let manualRecipientPhones = null;
 
   if (audience.type === 'zalo_contacts') {
-    audienceNodeId = `${prefix}_get_all_friends_1`;
     recipientField = 'uid';
     recipientType = 'uid';
-    nodes.push({
-      id: audienceNodeId,
-      tempId: audienceNodeId,
-      nodeType: 'data',
-      nodeSubtype: 'get_all_friends',
-      nodeName: 'Lấy danh sách bạn bè Zalo',
-      nodeDescription: 'Lấy danh sách bạn bè từ tài khoản Zalo đã chọn',
-      positionX: 500,
-      positionY: 200,
-      config: {
-        zaloFriendAccountNodeId: selectAccountId,
-      },
-    });
+    manualRecipientPhones = (Array.isArray(audience.friendIds) ? audience.friendIds : []).join('\n');
   } else if (audience.type === 'sheet') {
     audienceNodeId = `${prefix}_read_sheet_1`;
     nodes.push({
@@ -756,7 +766,11 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
       positionX: 500,
       positionY: 200,
       config: {
-        landingPageSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
+        // landingLeadsSlugs (không phải landingPageSlugs): lead.service.js:176
+        // buildSharedLeadFilters đọc đúng field này để lọc lead theo slug landing đã chọn —
+        // đặt sai tên thì node chạy nhưng đọc TOÀN BỘ lead mọi landing page, không phải chỉ
+        // slug đã chọn (bắt được nhờ test no-op mục 1.1, không phải review đọc mắt).
+        landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
       },
     });
   }
@@ -818,6 +832,7 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
       zaloRecipientNodeId: audienceNodeId || '',
       zaloRecipientField: recipientField,
       zaloRecipientType: recipientType,
+      ...(manualRecipientPhones != null ? { zaloRecipientPhones: manualRecipientPhones } : {}),
       zaloPersonalSendMode: 'schedule',
       saveMessageLog: true,
       zaloPersonalTemplateSteps,
@@ -914,6 +929,11 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, fileUsag
   });
 
   // 3. Get All Groups Node
+  // zaloGroupIds/zaloSelectedGroupIds: nhóm CỤ THỂ người dùng đã chọn (audience.groupIds).
+  // get_all_groups không có cách nào khác để giới hạn — thiếu 2 field này thì node fetch
+  // TOÀN BỘ nhóm của tài khoản, không chỉ nhóm đã chọn (bắt được nhờ test no-op mục 1.1 so
+  // với patchDeterministicCampaignScript nhánh 3 — cùng 2 field cùng giá trị).
+  const selectedGroupIds = Array.isArray(audience?.groupIds) ? audience.groupIds : [];
   nodes.push({
     id: groupAudienceId,
     tempId: groupAudienceId,
@@ -925,6 +945,7 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, fileUsag
     positionY: 200,
     config: {
       zaloGroupAccountNodeId: selectAccountId,
+      ...(selectedGroupIds.length > 0 ? { zaloGroupIds: selectedGroupIds, zaloSelectedGroupIds: selectedGroupIds } : {}),
     },
   });
 
@@ -945,6 +966,8 @@ function compileZaloGroupOnceCampaign({ sender, audience, contentBrief, fileUsag
       zaloGroupNodeId: groupAudienceId,
       zaloGroupField: 'groupId',
       saveMessageLog: true,
+      zaloGroupSendMode: 'all',
+      ...(selectedGroupIds.length > 0 ? { zaloGroupIds: selectedGroupIds, zaloSelectedGroupIds: selectedGroupIds } : {}),
       zaloGroupTemplateSteps: [
         {
           templateId: null,
@@ -1045,6 +1068,8 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
     },
   });
 
+  // zaloGroupIds/zaloSelectedGroupIds: xem ghi chú ở compileZaloGroupOnceCampaign.
+  const selectedGroupIds = Array.isArray(audience?.groupIds) ? audience.groupIds : [];
   nodes.push({
     id: groupAudienceId,
     tempId: groupAudienceId,
@@ -1056,6 +1081,7 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
     positionY: 200,
     config: {
       zaloGroupAccountNodeId: selectAccountId,
+      ...(selectedGroupIds.length > 0 ? { zaloGroupIds: selectedGroupIds, zaloSelectedGroupIds: selectedGroupIds } : {}),
     },
   });
 
@@ -1108,6 +1134,8 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
       zaloGroupNodeId: groupAudienceId,
       zaloGroupField: 'groupId',
       saveMessageLog: true,
+      zaloGroupSendMode: 'schedule',
+      ...(selectedGroupIds.length > 0 ? { zaloGroupIds: selectedGroupIds, zaloSelectedGroupIds: selectedGroupIds } : {}),
       zaloGroupTemplateSteps,
     },
   });

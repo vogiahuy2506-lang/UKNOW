@@ -51,41 +51,45 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     expect(graph.contentSlots[0].brief.topic).toBe('Ra mắt tính năng');
   });
 
-  it('biên dịch thành công luồng Zalo cá nhân gửi một lần (bạn bè zalo_contacts)', () => {
+  it('biên dịch thành công luồng Zalo cá nhân gửi một lần (bạn bè zalo_contacts đã chọn qua friendIds)', () => {
+    // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: KHÔNG còn dùng node get_all_friends
+    // cho zalo_contacts — config schema của node đó (campaignNodeRegistry.service.js:141-158)
+    // chỉ có zaloFriendAccountNodeId, không có cách giới hạn xuống danh sách bạn bè đã CHỌN
+    // (audience.friendIds) — dùng node sẽ gửi cho TOÀN BỘ bạn bè tài khoản, không phải người
+    // dùng đã chọn trong wizard (ZaloFriendPickerCard). Đường 'manual' + zaloRecipientPhones
+    // (UID nối bằng \n, cùng field patchDeterministicCampaignScript từng gán tay) đúng và an
+    // toàn hơn — phát hiện khi viết campaignCompilerPatchNoop.spec.js (mục 1.1), không phải
+    // review đọc mắt.
     const intentZaloPersonal = {
       version: 1,
       channel: 'zalo',
       sender: { type: 'zalo_account', id: 12 },
-      audience: { type: 'zalo_contacts', recipientKind: 'phone' },
+      audience: { type: 'zalo_contacts', friendIds: ['1111111111111111111', '2222222222222222222'], recipientKind: 'phone' },
       schedule: { type: 'once' },
       contentBrief: { topic: 'Nhắc lịch hẹn', locale: 'vi' },
     };
 
     const graph = compileCampaign(intentZaloPersonal);
-    expect(graph.nodes.length).toBe(4); // trigger -> select_zalo_account -> get_all_friends -> send_zalo_personal
-    const [triggerNode, selectNode, audienceNode, sendZaloNode] = graph.nodes;
+    expect(graph.nodes.length).toBe(3); // trigger -> select_zalo_account -> send_zalo_personal (không còn node audience riêng)
+    const [triggerNode, selectNode, sendZaloNode] = graph.nodes;
 
     expect(triggerNode.nodeSubtype).toBe('manual');
     expect(selectNode.nodeSubtype).toBe('select_zalo_account');
     expect(selectNode.config.zaloAccountId).toBe(12);
 
-    expect(audienceNode.nodeSubtype).toBe('get_all_friends');
-    expect(audienceNode.config.zaloFriendAccountNodeId).toBe(selectNode.id);
-
     expect(sendZaloNode.nodeSubtype).toBe('send_zalo_personal');
     expect(sendZaloNode.config.zaloAccountId).toBe(12);
-    expect(sendZaloNode.config.zaloRecipientSource).toBe('node');
+    expect(sendZaloNode.config.zaloRecipientSource).toBe('manual');
     expect(sendZaloNode.config.zaloRecipientType).toBe('uid');
+    expect(sendZaloNode.config.zaloRecipientPhones).toBe('1111111111111111111\n2222222222222222222');
     expect(Array.isArray(sendZaloNode.config.zaloPersonalTemplateSteps)).toBe(true);
     expect(sendZaloNode.config.zaloPersonalTemplateSteps.length).toBe(1);
 
-    expect(graph.connections.length).toBe(3);
+    expect(graph.connections.length).toBe(2);
     expect(graph.connections[0].sourceNodeId).toBe(triggerNode.id);
     expect(graph.connections[0].targetNodeId).toBe(selectNode.id);
     expect(graph.connections[1].sourceNodeId).toBe(selectNode.id);
-    expect(graph.connections[1].targetNodeId).toBe(audienceNode.id);
-    expect(graph.connections[2].sourceNodeId).toBe(audienceNode.id);
-    expect(graph.connections[2].targetNodeId).toBe(sendZaloNode.id);
+    expect(graph.connections[1].targetNodeId).toBe(sendZaloNode.id);
 
     expect(graph.contentSlots[0].channel).toBe('zalo');
     expect(graph.contentSlots[0].type).toBe('zalo');

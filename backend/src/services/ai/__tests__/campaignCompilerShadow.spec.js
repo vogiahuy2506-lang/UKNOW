@@ -131,7 +131,17 @@ describe('PR-2.3 & PR-3.2 & Việc 2: campaignCompilerShadow.service', () => {
     expect(res.match).toBe(true);
   });
 
-  it('runCompilerShadowCompare chạy thành công với Zalo cá nhân bạn bè', () => {
+  it('runCompilerShadowCompare: Zalo cá nhân bạn bè — legacy get_all_friends vs compiler manual (lệch CÓ CHỦ ĐÍCH)', () => {
+    // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: compiler KHÔNG còn dựng node
+    // get_all_friends cho audience.type='zalo_contacts' — node đó (campaignNodeRegistry.
+    // service.js:141-158) chỉ có thể fetch TOÀN BỘ bạn bè tài khoản, không có cách giới hạn
+    // xuống danh sách đã CHỌN (gateState.zaloFriendIds). Compiler dùng đường 'manual' +
+    // zaloRecipientPhones (an toàn hơn — không gửi nhầm người ngoài danh sách đã chọn).
+    // legacyScript ở đây mô phỏng ĐÚNG script LLM cũ (có node get_all_friends) — shadow-compare
+    // BÁO LỆCH là tín hiệu ĐÚNG (hai bên cố ý khác nhau), không phải bug — trước đây test này
+    // kỳ vọng match:true vì cả hai cùng dựng get_all_friends; sau fix, compiler CHỦ ĐỘNG không
+    // theo legacy nữa. Kênh zalo (cá nhân) chưa bật compiler ở production
+    // (COMPILER_ENABLED_FLOWS hiện chỉ có zalo_group,email) nên lệch này chưa ảnh hưởng thật.
     const legacyScript = {
       nodes: [
         { tempId: 'trigger_1', node_subtype: 'manual', config: {} },
@@ -164,7 +174,8 @@ describe('PR-2.3 & PR-3.2 & Việc 2: campaignCompilerShadow.service', () => {
     });
 
     expect(res.executed).toBe(true);
-    expect(res.match).toBe(true);
+    expect(res.match).toBe(false);
+    expect(res.differences.some((d) => d.includes('Số lượng nodes không khớp'))).toBe(true);
   });
 
   describe('7A Việc 2: Đấu nối contentQuality vào runCompilerShadowCompare', () => {
