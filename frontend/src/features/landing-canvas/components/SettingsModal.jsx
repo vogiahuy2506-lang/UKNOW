@@ -11,9 +11,11 @@ import {
   HiOutlineClock,
   HiOutlineInformationCircle,
   HiOutlineRefresh,
+  HiOutlineClipboardList,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
+import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
 
 const BASE_DOMAIN = 'founderai.biz';
 
@@ -21,16 +23,33 @@ const BASE_DOMAIN = 'founderai.biz';
  * Settings Modal - Modal nhỏ gọn để chỉnh sửa landing page.
  * Dễ dùng cho người non-tech với các section có thể mở rộng.
  */
-export default function SettingsModal({ open, onClose, form, setForm, editingId }) {
+export default function SettingsModal({ open, onClose, form, setForm, editingId, tab }) {
   const modalRef = useRef(null);
   const tc = useI18n('landingCanvas.settingsModal');
   const tcDomain = useI18n('landingCanvas');
+  // LeadFormConfigPanel (khôi phục nguyên vẹn từ 3c514bc8^) gọi t('leadFormConfig.xxx') với
+  // khoá ĐẦY ĐỦ — leadFormConfig là namespace GỐC (vi.js:962/en.js:961), không nằm dưới
+  // landingCanvas.settingsModal, nên phải dùng t KHÔNG scope (khác tc/tcDomain ở trên).
+  const { t } = useI18n();
 
-  // Section expand state
+  // Section expand state. Khoá 'lead-form' (không phải leadForm) khớp ĐÚNG chuỗi tab-id dùng
+  // xuyên suốt hệ thống: openTab('lead-form') ở useCanvasConversation.js, và LandingCanvasLayout.jsx
+  // extract() cũng trả về đúng chuỗi này — lệch tên khoá thì useEffect bên dưới ghi nhầm khoá
+  // mới thay vì cập nhật đúng section.
   const [expandedSections, setExpandedSections] = useState({
     page: true,
     domain: true,
+    'lead-form': true,
   });
+
+  // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 2: prop `tab` được LandingCanvasEditor.jsx
+  // truyền xuống (openTab('lead-form') từ ý định chat) nhưng trước đây không được component này
+  // đọc — modal mở đúng (open=Boolean(activeModalTab)) nhưng không đảm bảo section đích đang mở.
+  // Đảm bảo section đó luôn expanded mỗi khi tab đích thay đổi lúc modal mở.
+  useEffect(() => {
+    if (!open || !tab) return;
+    setExpandedSections((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
+  }, [open, tab]);
 
   // Domain state
   const [domainMode, setDomainMode] = useState(
@@ -485,6 +504,18 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId 
                 </div>
               )}
             </div>
+          </SectionCard>
+
+          {/* ═══ SECTION: Form đăng ký ═══ */}
+          <SectionCard
+            expanded={expandedSections['lead-form']}
+            onToggle={() => toggleSection('lead-form')}
+            icon={<HiOutlineClipboardList className="w-5 h-5" />}
+            title={tc('sections.leadForm.title')}
+            badge={`${(form?.leadFormConfig?.customFields || []).length}/20`}
+            badgeClass="bg-blue-100 text-blue-700"
+          >
+            <LeadFormConfigPanel form={form} setForm={setForm} t={t} />
           </SectionCard>
         </div>
 

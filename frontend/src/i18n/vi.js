@@ -794,6 +794,9 @@ export default {
           apexHint: 'Apex domain (example.com) cần A record với IP từ FounderAI',
           subHint: 'Subdomain (lp.example.com) dùng CNAME trỏ về FounderAI',
         },
+        leadForm: {
+          title: 'Form đăng ký',
+        },
       },
     },
     pageSettingsPanel: {

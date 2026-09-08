@@ -793,6 +793,9 @@ export default {
           apexHint: 'Apex domain (example.com) needs A record with IP from FounderAI',
           subHint: 'Subdomain (lp.example.com) uses CNAME pointing to FounderAI',
         },
+        leadForm: {
+          title: 'Registration Form',
+        },
       },
     },
     pageSettingsPanel: {
