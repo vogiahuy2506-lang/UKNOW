@@ -96,6 +96,13 @@ export default function LandingCanvasPage() {
           domainType: full.domainType === 'custom' ? 'custom' : 'system',
           customDomainHostname: full.customDomainHostname || null,
           customDomainIsApex: Boolean(full.customDomainIsApex),
+          // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1 việc 3: full.leadFormConfig đến từ
+          // toPublicLeadFormConfig (backend, landingPageAdmin.service.js:35-38) — đã LUÔN đầy đủ
+          // fixedFields/customFields. normalizeLeadFormConfig/snapshotLeadFormPersistedMeta ở
+          // đây trước kia là bản tối giản, rơi mất 2 khoá đó ngay lúc đọc — nay đã là bản schema
+          // đầy đủ (khôi phục ở landingLeadFormConfig.js), khoá key/option đã lưu giữ đúng để UI
+          // tương lai (PR-2d-2) khoá được bất biến kiểu/mã option. Không đổi gì ở call site này —
+          // sửa ở nguồn (utils) là đủ.
           leadFormConfig: normalizeLeadFormConfig(full.leadFormConfig),
           leadFormPersistedMeta: snapshotLeadFormPersistedMeta(full.leadFormConfig),
           leadFormFieldErrors: {},
