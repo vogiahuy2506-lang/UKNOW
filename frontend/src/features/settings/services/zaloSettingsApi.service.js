@@ -47,6 +47,25 @@ const zaloSettingsApiService = {
       },
     });
   },
+
+  // Gửi tin nhắn nhóm Zalo (dùng cho Quick Send PR-2) — cùng cơ chế Idempotency-Key với
+  // sendMessage. Body backend là { accountId, groupIds: string[], message } (khác sendMessage
+  // dùng `recipients`) — xem backend/src/routes/zaloSettings.routes.js:122.
+  sendGroupMessage(payload, options = {}) {
+    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
+    return api.post('/zalo/preview/send-group', {
+      accountId: payload.accountId,
+      groupIds: [payload.groupId],
+      message: payload.message || '',
+      attachments: Array.isArray(payload.attachments) ? payload.attachments : [],
+    }, {
+      ...options,
+      headers: {
+        'Idempotency-Key': key,
+        ...(options.headers || {}),
+      },
+    });
+  },
 };
 
 export default zaloSettingsApiService;
