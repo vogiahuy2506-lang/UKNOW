@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
  */
 import '../../public/founderai-capture.js';
 
-const { buildFounderaiCapturePayload, readFounderaiMarketingConsent } = window.__founderaiCaptureTestHooks;
+const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, autoMapFormInputsByIdOrLabel } = window.__founderaiCaptureTestHooks;
 
 function makeForm(innerHtml) {
   const form = document.createElement('form');
@@ -74,5 +74,56 @@ describe('founderai-capture.js — readFounderaiMarketingConsent (đơn vị)', 
     expect(readFounderaiMarketingConsent(makeForm('<input type="checkbox" name="marketingConsent" checked />'))).toBe(true);
     expect(readFounderaiMarketingConsent(makeForm('<input type="checkbox" name="marketingConsent" />'))).toBe(false);
     expect(readFounderaiMarketingConsent(makeForm('<input type="text" name="name" />'))).toBeNull();
+  });
+});
+
+describe('founderai-capture.js — autoMapFormInputsByIdOrLabel', () => {
+  it('id="fullName" → name="name" (case nhập của workshop L\'Atelier Floral)', () => {
+    const form = makeForm(`
+      <input type="text" id="fullName" />
+      <input type="tel" id="phone" />
+      <input type="email" id="email" />
+    `);
+    autoMapFormInputsByIdOrLabel(form);
+    expect(form.querySelector('#fullName').name).toBe('name');
+    expect(form.querySelector('#phone').name).toBe('phone');
+    expect(form.querySelector('#email').name).toBe('email');
+  });
+
+  it('id="phone" (chuẩn hóa → match alias phone) → name="phone"', () => {
+    const form = makeForm('<input type="tel" id="phone" value="0901234567" />');
+    autoMapFormInputsByIdOrLabel(form);
+    expect(form.querySelector('#phone').name).toBe('phone');
+  });
+
+  it('blacklist chặn id="submit", id="workshopForm", id="sessionDate"', () => {
+    const form = makeForm(`
+      <input type="text" id="submit" />
+      <input type="text" id="workshopForm" />
+      <input type="text" id="sessionDate" />
+      <input type="text" id="submitBtn" />
+    `);
+    autoMapFormInputsByIdOrLabel(form);
+    expect(form.querySelector('#submit').name).toBe('');
+    expect(form.querySelector('#workshopForm').name).toBe('');
+    expect(form.querySelector('#sessionDate').name).toBe('');
+    expect(form.querySelector('#submitBtn').name).toBe('');
+  });
+
+  it('id chưa khai báo (vd: company, message) → auto gắn name="cf_*"', () => {
+    const form = makeForm(`
+      <input type="text" id="company" />
+      <textarea id="notes"></textarea>
+    `);
+    autoMapFormInputsByIdOrLabel(form);
+    expect(form.querySelector('#company').name).toBe('cf_company');
+    // notes trùng alias 'notes' → name="notes" (không phải cf_notes vì match alias trước)
+    expect(form.querySelector('#notes').name).toBe('notes');
+  });
+
+  it('input đã có name → KHÔNG bị đè', () => {
+    const form = makeForm('<input type="text" id="fullName" name="customName" />');
+    autoMapFormInputsByIdOrLabel(form);
+    expect(form.querySelector('#fullName').name).toBe('customName');
   });
 });

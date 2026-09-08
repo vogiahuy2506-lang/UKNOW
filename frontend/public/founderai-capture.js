@@ -84,19 +84,34 @@ function inferAutoName(el, form) {
   for (var i = 0; i < candidates.length; i++) {
     var norm = normalizeAutoNameKey(candidates[i]);
     if (!norm) continue;
+    // Ưu tiên match CHÍNH XÁC trước (toàn chuỗi == alias).
+    // VD 'phone' === 'phone' → name="phone" (thay vì 'phone' chứa 'ho' → name="name").
     for (var key in FOUNDERAI_AUTO_NAME_KEYS) {
       if (!Object.prototype.hasOwnProperty.call(FOUNDERAI_AUTO_NAME_KEYS, key)) continue;
       var aliases = FOUNDERAI_AUTO_NAME_KEYS[key];
       for (var j = 0; j < aliases.length; j++) {
-        if (norm === aliases[j] || norm.indexOf(aliases[j]) !== -1) {
+        if (norm === aliases[j]) {
           return key;
+        }
+      }
+    }
+    // Sau đó mới tìm theo substring (chứa alias).
+    for (var key2 in FOUNDERAI_AUTO_NAME_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(FOUNDERAI_AUTO_NAME_KEYS, key2)) continue;
+      var aliases2 = FOUNDERAI_AUTO_NAME_KEYS[key2];
+      for (var k = 0; k < aliases2.length; k++) {
+        if (norm.indexOf(aliases2[k]) !== -1) {
+          // Match alias ngắn hơn 3 ký tự (ho, ten, mail, tel, sdt) thì yêu cầu
+          // nằm ở đầu (indexOf === 0) để tránh 'phone' match 'ho', 'ten', 'tel'…
+          if (aliases2[k].length < 4 && norm.indexOf(aliases2[k]) !== 0) continue;
+          return key2;
         }
       }
     }
     // Match custom field — id kiểu "company" hoặc label công ty.
     if (/^[a-z][a-z0-9_]{2,40}$/.test(norm)) {
       // Tránh các id hệ thống Tailwind không phải custom field.
-      var blacklist = ['submit', 'submitbtn', 'workshopform', 'sessiondate', 'participants', 'experience'];
+      var blacklist = ['submit', 'submitbtn', 'workshopform', 'sessiondate', 'participants', 'experience', 'workshopsession', 'successtext', 'submitform', 'registerform'];
       if (blacklist.indexOf(norm) !== -1) return null;
       return 'cf_' + norm;
     }
@@ -242,6 +257,7 @@ if (typeof window !== 'undefined') {
   window.__founderaiCaptureTestHooks = {
     buildFounderaiCapturePayload: buildFounderaiCapturePayload,
     readFounderaiMarketingConsent: readFounderaiMarketingConsent,
+    autoMapFormInputsByIdOrLabel: autoMapFormInputsByIdOrLabel,
   };
 }
 
