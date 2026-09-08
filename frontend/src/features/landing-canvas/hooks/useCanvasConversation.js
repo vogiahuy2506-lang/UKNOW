@@ -9,8 +9,11 @@ import { useI18n } from '../../../i18n';
 /**
  * Tạo INTENTS với translation function.
  * (Đặt trong function để có access tới i18n hook)
+ *
+ * Export riêng (cùng detectIntent) để test được logic match/ghi state bằng hàm thật, không
+ * phải dựng cả React hook (mock generateLandingHtmlWithAi/editLandingHtmlWithAi/useI18n/toast).
  */
-function makeIntents(tc) {
+export function makeIntents(tc) {
   return [
     // ---- Title ----
     {
@@ -86,38 +89,38 @@ function makeIntents(tc) {
       },
     },
 
-    // ---- Lead form: toggle a field ----
+    // ---- Lead form: toggle a fixed field ----
+    // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1 việc 4: schema đầy đủ (khôi phục ở việc 1)
+    // chỉ có 2 trường CỐ ĐỊNH bật/tắt được: fixedFields.occupation.visible/interestArea.visible.
+    // Các khoá cũ (phone/name/email/address/company/note) không còn nghĩa gì — bản schema tối
+    // giản từng có "fields" dạng mảng-theo-khoá đã bị xoá, ghi lên đó là no-op câm lặng. Giữ
+    // match các khoá cũ để trả lời hướng dẫn thay vì im lặng không làm gì.
     {
       key: 'lead-form-toggle',
-      test: (p) => /(bật|tắt|ẩn|hiện|thêm)\s*(trường|field)\s*(sđt|số\s*điện\s*thoại|phone|tên|name|email|địa\s*chỉ|address|công\s*ty|company|ghi\s*chú|note|message)/i.test(p),
+      test: (p) => /(bật|tắt|ẩn|hiện|thêm)\s*(trường|field)\s*(nghề\s*nghiệp|occupation|chủ\s*đề\s*quan\s*tâm|quan\s*tâm|interest\s*area|sđt|số\s*điện\s*thoại|phone|tên|name|email|địa\s*chỉ|address|công\s*ty|company|ghi\s*chú|note|message)/i.test(p),
       extract: (p) => {
         const action = /(bật|hiện|thêm)/i.test(p) ? 'enable' : 'disable';
-        const fieldMatch = p.match(/(sđt|số\s*điện\s*thoại|phone|tên|name|email|địa\s*chỉ|address|công\s*ty|company|ghi\s*chú|note|message)/i);
-        return { action, field: fieldMatch ? fieldMatch[1].toLowerCase() : null };
+        const fieldMatch = p.match(/(nghề\s*nghiệp|occupation|chủ\s*đề\s*quan\s*tâm|quan\s*tâm|interest\s*area|sđt|số\s*điện\s*thoại|phone|tên|name|email|địa\s*chỉ|address|công\s*ty|company|ghi\s*chú|note|message)/i);
+        return { action, field: fieldMatch ? fieldMatch[1].toLowerCase().replace(/\s+/g, ' ').trim() : null };
       },
       apply: ({ value, setForm, openTab }) => {
         const map = {
-          'sđt': 'phone',
-          'số điện thoại': 'phone',
-          'phone': 'phone',
-          'tên': 'name',
-          'name': 'name',
-          'email': 'email',
-          'địa chỉ': 'address',
-          'address': 'address',
-          'công ty': 'company',
-          'company': 'company',
-          'ghi chú': 'note',
-          'note': 'note',
-          'message': 'note',
+          'nghề nghiệp': 'occupation',
+          'occupation': 'occupation',
+          'chủ đề quan tâm': 'interestArea',
+          'quan tâm': 'interestArea',
+          'interest area': 'interestArea',
         };
         const key = map[value.field];
-        if (!key) return null;
+        if (!key) {
+          openTab?.('lead-form');
+          return tc('intentLeadFormFieldUnsupported', { field: value.field });
+        }
         setForm((prev) => {
           const cfg = { ...(prev.leadFormConfig || {}) };
-          cfg.fields = { ...(cfg.fields || {}) };
-          cfg.fields[key] = { ...(cfg.fields[key] || {}), enabled: value.action === 'enable' };
-          return { ...prev, leadFormConfig: cfg };
+          const fixedFields = { ...(cfg.fixedFields || {}) };
+          fixedFields[key] = { ...(fixedFields[key] || {}), visible: value.action === 'enable' };
+          return { ...prev, leadFormConfig: { ...cfg, fixedFields } };
         });
         openTab?.('lead-form');
         return tc(value.action === 'enable' ? 'intentEnableField' : 'intentDisableField', { field: value.field });
@@ -143,7 +146,7 @@ function makeIntents(tc) {
   ];
 }
 
-function detectIntent(prompt, { setForm, openTab, intents }) {
+export function detectIntent(prompt, { setForm, openTab, intents }) {
   const p = prompt.trim();
 
   // Guard 1: chỉ match intent khi prompt ngắn. Prompt dài (> 60 ký tự)

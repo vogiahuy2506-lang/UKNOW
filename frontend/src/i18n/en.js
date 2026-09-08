@@ -853,6 +853,7 @@ export default {
       intentSetDomain: 'Custom domain set to "{value}".',
       intentEnableField: 'Enabled {field} field in contact form.',
       intentDisableField: 'Disabled {field} field in contact form.',
+      intentLeadFormFieldUnsupported: 'Can\'t toggle "{field}" via chat yet — open the Registration Form section to add/edit this field.',
       intentOpenTab: 'Opened tab "{value}".',
       aiGeneratedContent: 'AI generated new content.',
       aiAppliedDirect: 'AI updated the landing page directly.',

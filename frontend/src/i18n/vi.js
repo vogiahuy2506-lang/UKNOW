@@ -854,6 +854,7 @@ export default {
       intentSetDomain: 'Đã đặt tên miền riêng thành "{value}".',
       intentEnableField: 'Đã bật trường {field} trong form liên hệ.',
       intentDisableField: 'Đã tắt trường {field} trong form liên hệ.',
+      intentLeadFormFieldUnsupported: 'Chưa chỉnh được trường "{field}" qua chat — vào phần Form đăng ký để thêm/sửa trường này.',
       intentOpenTab: 'Đã mở tab "{value}".',
       aiGeneratedContent: 'AI đã tạo nội dung mới.',
       aiAppliedDirect: 'AI đã sửa landing page trực tiếp.',
