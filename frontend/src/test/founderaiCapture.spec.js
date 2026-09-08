@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
  */
 import '../../public/founderai-capture.js';
 
-const { buildFounderaiCapturePayload, readFounderaiMarketingConsent } = window.__founderaiCaptureTestHooks;
+const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, pickAutoCaptureForm } = window.__founderaiCaptureTestHooks;
 
 function makeForm(innerHtml) {
   const form = document.createElement('form');
@@ -74,5 +74,64 @@ describe('founderai-capture.js — readFounderaiMarketingConsent (đơn vị)', 
     expect(readFounderaiMarketingConsent(makeForm('<input type="checkbox" name="marketingConsent" checked />'))).toBe(true);
     expect(readFounderaiMarketingConsent(makeForm('<input type="checkbox" name="marketingConsent" />'))).toBe(false);
     expect(readFounderaiMarketingConsent(makeForm('<input type="text" name="name" />'))).toBeNull();
+  });
+});
+
+/**
+ * PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md, PR-2a việc 2 (Review 08/09, lỗ mới #2).
+ *
+ * Trước bản vá này, auto mode (không có <form data-founderai-capture> tường minh) bắt
+ * NGUYÊN VĂN form đầu tiên trong trang bất kể là gì (`document.querySelector('form')`).
+ * 15/22 trang production đo được 08/09 có form đầu tiên KHÔNG phải form đăng ký (tìm kiếm,
+ * khảo sát...) — auto mode chiếm submit của form đó và chặn khách với lỗi "Vui lòng nhập
+ * email hợp lệ" dù khách chưa từng thấy ô email nào. pickAutoCaptureForm(forms) sửa bằng
+ * cách chỉ chọn form ĐẦU TIÊN có input name thuộc {email, phone, tel, phoneNumber} — đúng
+ * bộ tên buildFounderaiCapturePayload đọc ra payload.email/phone ở trên.
+ */
+describe('founderai-capture.js — pickAutoCaptureForm (auto mode chỉ bắt form CÓ email/phone)', () => {
+  it('form tìm kiếm đứng trước form đăng ký → auto mode chọn form đăng ký, không phải form tìm kiếm', () => {
+    const searchForm = makeForm('<input type="text" name="q" placeholder="Tìm kiếm sản phẩm" />');
+    const registrationForm = makeForm(`
+      <input type="text" name="name" />
+      <input type="email" name="email" />
+      <input type="tel" name="phone" />
+    `);
+
+    const picked = pickAutoCaptureForm([searchForm, registrationForm]);
+    expect(picked).toBe(registrationForm);
+  });
+
+  it('không form nào có email/phone/tel/phoneNumber → trả về null (findForms() rỗng → bind() không gắn submit handler → submit native của trang không bị preventDefault)', () => {
+    const searchForm = makeForm('<input type="text" name="q" />');
+    const surveyForm = makeForm('<input type="text" name="rating" /><input type="text" name="comment" />');
+
+    const picked = pickAutoCaptureForm([searchForm, surveyForm]);
+    expect(picked).toBeNull();
+    // Hệ quả trực tiếp đọc từ founderai-capture.js: bind() có `if (forms.length === 0) { ...; return; }`
+    // trước khi gọi form.addEventListener('submit', handleSubmit, true) — không có form nào được
+    // chọn thì không handler nào được gắn, nên submit gốc của trình duyệt không hề bị preventDefault.
+  });
+
+  it('form data-founderai-capture tường minh vẫn thắng auto mode dù form đó không có email/phone', () => {
+    document.body.innerHTML = '';
+    // Đứng TRƯỚC trong DOM và CÓ email — nếu đi qua pickAutoCaptureForm sẽ được chọn.
+    const autoEligibleForm = makeForm('<input type="email" name="email" />');
+    const explicitForm = document.createElement('form');
+    explicitForm.setAttribute('data-founderai-capture', '');
+    explicitForm.innerHTML = '<input type="text" name="q" />'; // cố tình không có email/phone
+    document.body.appendChild(explicitForm);
+
+    // Mô phỏng đúng 2 bước của findForms() (founderai-capture.js): query form[data-founderai-capture]
+    // trước — có kết quả thì dùng NGAY, không bao giờ gọi tới pickAutoCaptureForm.
+    const explicit = document.querySelectorAll('form[data-founderai-capture]');
+    const picked = explicit.length > 0
+      ? Array.prototype.slice.call(explicit)
+      : (() => {
+          const p = pickAutoCaptureForm(document.querySelectorAll('form'));
+          return p ? [p] : [];
+        })();
+
+    expect(picked).toEqual([explicitForm]);
+    expect(picked).not.toContain(autoEligibleForm);
   });
 });

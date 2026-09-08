@@ -36,7 +36,9 @@
  *           defer></script>
  *
  * Luồng xử lý:
- *   1. Auto-detect form: tìm <form data-founderai-capture> hoặc form đầu tiên khi data-auto="1".
+ *   1. Auto-detect form: tìm <form data-founderai-capture>, hoặc (auto mode, data-auto khác "0")
+ *      form đầu tiên CÓ input name thuộc email/phone/tel/phoneNumber — form không có trường
+ *      nào trong số này (tìm kiếm, khảo sát…) bị bỏ qua, không chiếm submit.
  *   2. Inject hidden input `landingPageSlug`.
  *   3. Intercept submit → POST JSON tới `${apiBase}/public/leads`.
  *      Payload gồm 6 field: name, email, phone, landingPageSlug, marketingConsent, customFields.
@@ -235,6 +237,35 @@ function buildFounderaiCapturePayload(form, config) {
   };
 }
 
+// Bộ tên input mà buildFounderaiCapturePayload đọc ra email/phone (xem switch-case ở trên:
+// 'email' → payload.email, 'phone'/'tel'/'phoneNumber' → payload.phone).
+var FOUNDERAI_AUTO_CAPTURE_NAME_KEYS = ['email', 'phone', 'tel', 'phoneNumber'];
+
+/**
+ * Hàm thuần: trong danh sách form ứng viên (auto mode — trang không có thẻ
+ * data-founderai-capture tường minh), chọn form ĐẦU TIÊN có ít nhất một input mang
+ * name thuộc FOUNDERAI_AUTO_CAPTURE_NAME_KEYS. Form không có trường nào trong số này
+ * (form tìm kiếm, form khảo sát, form đăng ký workshop dùng tên khác…) không phải form
+ * thu lead — auto mode trước đây bắt LUÔN form đầu tiên bất kể là gì, chiếm submit và
+ * chặn khách với lỗi "Vui lòng nhập email hợp lệ" nếu form đó đứng trước form đăng ký thật.
+ *
+ * @param {HTMLFormElement[]|NodeList} forms
+ * @returns {HTMLFormElement|null}
+ */
+function pickAutoCaptureForm(forms) {
+  var list = Array.prototype.slice.call(forms || []);
+  var selector = FOUNDERAI_AUTO_CAPTURE_NAME_KEYS.map(function (key) {
+    return '[name="' + key + '"]';
+  }).join(', ');
+  for (var i = 0; i < list.length; i++) {
+    var form = list[i];
+    if (form && typeof form.querySelector === 'function' && form.querySelector(selector)) {
+      return form;
+    }
+  }
+  return null;
+}
+
 // Hook test-only: cho phép Vitest/jsdom import file này và gọi thẳng hàm thuần, không
 // phải giả lập document.currentScript. Vô hại trên trình duyệt thật (chỉ gắn thêm 1
 // object nhỏ vào window, không ai gọi tới nếu không phải test).
@@ -242,6 +273,7 @@ if (typeof window !== 'undefined') {
   window.__founderaiCaptureTestHooks = {
     buildFounderaiCapturePayload: buildFounderaiCapturePayload,
     readFounderaiMarketingConsent: readFounderaiMarketingConsent,
+    pickAutoCaptureForm: pickAutoCaptureForm,
   };
 }
 
@@ -258,8 +290,8 @@ if (typeof window !== 'undefined') {
   }
   var slug = (sc.getAttribute('data-slug') || '').trim().toLowerCase();
   // Mặc định bật auto mode khi landing page không có form data-founderai-capture
-  // → capture form đầu tiên tìm được trong trang. Admin muốn TẮT có thể thêm
-  // data-auto="0" vào <script>.
+  // → capture form đầu tiên CÓ input email/phone/tel/phoneNumber (pickAutoCaptureForm).
+  // Admin muốn TẮT có thể thêm data-auto="0" vào <script>.
   var autoAttr = sc.getAttribute('data-auto');
   var autoMode = autoAttr !== '0';
   var debug = sc.getAttribute('data-debug') === '1';
@@ -283,8 +315,8 @@ if (typeof window !== 'undefined') {
     var explicit = document.querySelectorAll('form[data-founderai-capture]');
     if (explicit.length > 0) return Array.prototype.slice.call(explicit);
     if (autoMode) {
-      var fallback = document.querySelector('form');
-      return fallback ? [fallback] : [];
+      var picked = pickAutoCaptureForm(document.querySelectorAll('form'));
+      return picked ? [picked] : [];
     }
     return [];
   }
