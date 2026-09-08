@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
  */
 import '../../public/founderai-capture.js';
 
-const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, pickAutoCaptureForm } = window.__founderaiCaptureTestHooks;
+const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, pickAutoCaptureForm, inferAutoName } = window.__founderaiCaptureTestHooks;
 
 function makeForm(innerHtml) {
   const form = document.createElement('form');
@@ -133,5 +133,41 @@ describe('founderai-capture.js — pickAutoCaptureForm (auto mode chỉ bắt fo
 
     expect(picked).toEqual([explicitForm]);
     expect(picked).not.toContain(autoEligibleForm);
+  });
+});
+
+/**
+ * PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md, CẬP NHẬT 08/09 17:30 — Lỗ 4 + Lỗ 5.
+ *
+ * Lỗ 4: inferAutoName duyệt khoá theo thứ tự name → email → phone, so khớp bằng indexOf
+ * tự do — alias 'ho' (name) là substring của "phone"/"telephone", alias 'ten' (name) là
+ * substring của "content"/"attendees". Form có id="phone" không có name bị tự gán
+ * name="name" thay vì name="phone" → mất số điện thoại trong payload.
+ * Lỗ 5: id không khớp gì tự sinh name="cf_<id>" (vd id="company" → "cf_company").
+ * buildTrustedCustomFieldsSnapshot (backend) từ chối MỌI khoá cf_* không có trong cấu hình
+ * form của trang → 400 cho CẢ lead, không riêng field lạ đó.
+ */
+describe('founderai-capture.js — inferAutoName (Lỗ 4: substring sai; Lỗ 5: tự sinh cf_<id>)', () => {
+  function makeInputWithId(id) {
+    const form = document.createElement('form');
+    document.body.appendChild(form);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = id;
+    form.appendChild(input);
+    return { form, input };
+  }
+
+  it.each([
+    ['phone', 'phone'],
+    ['telephone', 'phone'],
+    ['email', 'email'],
+    ['sdt', 'phone'],
+    ['fullName', 'name'],
+    ['content', null],
+    ['company', null],
+  ])('id="%s" → suy ra %s', (id, expected) => {
+    const { form, input } = makeInputWithId(id);
+    expect(inferAutoName(input, form)).toBe(expected);
   });
 });

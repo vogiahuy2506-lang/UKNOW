@@ -52,20 +52,40 @@
 // backend cần name để ghi vào leads.name / leads.email / leads.phone. Hàm này chỉ gắn
 // name khi CHƯA CÓ — không đè name user đặt sẵn.
 // ----------------------------------------------------------------
+// Thứ tự khoá CỐ Ý: email/phone TRƯỚC name. Alias ngắn của name ('ho','ten') từng khớp
+// nhầm SUBSTRING ở giữa các từ khác — 'ho' nằm trong "phone"/"telephone", 'ten' nằm trong
+// "content"/"attendees" — khiến id="phone" tự gán name="name", mất số điện thoại (Lỗ 4,
+// PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md, CẬP NHẬT 08/09 17:30). Kiểm email/phone
+// trước thu hẹp phần lớn ca; phần còn lại do aliasMatchesAutoName xử lý (xem dưới).
+// Bỏ khoá "notes": buildFounderaiCapturePayload không có field nào tên "notes" trong
+// switch-case (chỉ name/email/phone + cf_* whitelisted) — gán tự động chỉ tạo field
+// chết, không bao giờ vào payload.
 var FOUNDERAI_AUTO_NAME_KEYS = {
-  // common keys → input id / placeholder / label substring → name attribute suy ra
-  name: ['name', 'fullname', 'ho', 'ten', 'hovaten', 'yourname', 'username'],
   email: ['email', 'e-mail', 'mail', 'gmail', 'youremail'],
   phone: ['phone', 'tel', 'mobile', 'sdt', 'dienthoai', 'zalo', 'sodienthoai', 'yourphone'],
-  notes: ['notes', 'note', 'message', 'loinhan', 'ghichu', 'yeucau', 'comments', 'content'],
+  name: ['name', 'fullname', 'ho', 'ten', 'hovaten', 'yourname', 'username'],
 };
-// Trường cf_ đi kèm slug tự sinh theo id (vd id="company" → cf_company).
-var FOUNDERAI_AUTO_NAME_LABEL_RE = /(cong ty|company|ten cong ty|workplace)/i;
 
 function normalizeAutoNameKey(raw) {
   return String(raw || '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * So khớp id/label/placeholder đã chuẩn hoá (norm) với 1 alias.
+ * Alias DÀI (> 3 ký tự — "phone", "email"…) vẫn khớp SUBSTRING ở bất kỳ vị trí — id kiểu
+ * "yourPhoneNumber" hay "companyEmail" cần bắt được. Alias NGẮN (≤ 3 ký tự — "ho", "ten",
+ * "tel", "sdt") CHỈ khớp khi bằng nhau hoặc đứng ĐẦU chuỗi: indexOf tự do từng khiến "ho"
+ * lọt vào giữa "phone"/"telephone", "ten" lọt vào giữa "content"/"attendees" (Lỗ 4).
+ *
+ * @param {string} norm
+ * @param {string} alias
+ * @returns {boolean}
+ */
+function aliasMatchesAutoName(norm, alias) {
+  if (alias.length <= 3) return norm === alias || norm.indexOf(alias) === 0;
+  return norm.indexOf(alias) !== -1;
 }
 
 function inferAutoName(el, form) {
@@ -90,19 +110,17 @@ function inferAutoName(el, form) {
       if (!Object.prototype.hasOwnProperty.call(FOUNDERAI_AUTO_NAME_KEYS, key)) continue;
       var aliases = FOUNDERAI_AUTO_NAME_KEYS[key];
       for (var j = 0; j < aliases.length; j++) {
-        if (norm === aliases[j] || norm.indexOf(aliases[j]) !== -1) {
+        if (aliasMatchesAutoName(norm, aliases[j])) {
           return key;
         }
       }
     }
-    // Match custom field — id kiểu "company" hoặc label công ty.
-    if (/^[a-z][a-z0-9_]{2,40}$/.test(norm)) {
-      // Tránh các id hệ thống Tailwind không phải custom field.
-      var blacklist = ['submit', 'submitbtn', 'workshopform', 'sessiondate', 'participants', 'experience'];
-      if (blacklist.indexOf(norm) !== -1) return null;
-      return 'cf_' + norm;
-    }
   }
+  // KHÔNG tự sinh cf_<id> nữa (Lỗ 5): backend (buildTrustedCustomFieldsSnapshot) từ chối
+  // MỌI khoá cf_* không có trong cấu hình form của trang — đoán bừa từ id lạ (vd
+  // id="company" → "cf_company") khiến CẢ lead bị từ chối 400, không riêng field đó. Admin
+  // muốn trường thêm phải tự đặt name="cf_..." đúng khoá khai báo trong Lead Form Config
+  // (README).
   return null;
 }
 
@@ -274,6 +292,7 @@ if (typeof window !== 'undefined') {
     buildFounderaiCapturePayload: buildFounderaiCapturePayload,
     readFounderaiMarketingConsent: readFounderaiMarketingConsent,
     pickAutoCaptureForm: pickAutoCaptureForm,
+    inferAutoName: inferAutoName,
   };
 }
 
