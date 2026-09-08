@@ -246,6 +246,26 @@ describe('landingLeadFormConfig.util', () => {
     expect(applied.customFields[0].labelVi).toBe('Quy mô');
   });
 
+  /**
+   * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1, GIẢ ĐỊNH lúc phản biện: khoá cf_sugg_NN_text
+   * phải TẤT ĐỊNH (không ngẫu nhiên) vì prompt AI cần biết trước khoá để đặt name="..." cho ô
+   * tương ứng trong HTML (Bẫy khoá ngẫu nhiên, mục 1 plan) — chốt case thiếu này trước khi
+   * ai.controller.js bắt đầu gọi hàm để trả leadFormConfig cho frontend.
+   */
+  it('applyLeadFormDraftToConfig sinh khoá cf_sugg_NN_text TẤT ĐỊNH theo thứ tự nhãn', () => {
+    const draft = buildLeadFormDraftFromBrief({
+      formFields: { preset: 'custom', customText: 'Công ty\nQuy mô' },
+      contentLocale: 'vi',
+    });
+    const applied = applyLeadFormDraftToConfig(draft);
+    expect(applied.customFields.map((f) => f.key)).toEqual(['cf_sugg_01_text', 'cf_sugg_02_text']);
+    expect(applied.customFields[0].labelVi).toBe('Công ty');
+    expect(applied.customFields[1].labelVi).toBe('Quy mô');
+    // Gọi lại với CÙNG input phải ra CÙNG khoá — tất định, không có yếu tố ngẫu nhiên/thời gian.
+    const appliedAgain = applyLeadFormDraftToConfig(draft);
+    expect(appliedAgain.customFields.map((f) => f.key)).toEqual(['cf_sugg_01_text', 'cf_sugg_02_text']);
+  });
+
   it('theme: default có đủ 5 màu + radius + 3 text khi chưa cấu hình', () => {
     const d = defaultLeadFormConfig();
     expect(d.theme).toEqual({

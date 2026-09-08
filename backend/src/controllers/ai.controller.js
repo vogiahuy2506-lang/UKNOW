@@ -24,7 +24,7 @@ import {
   buildLandingBriefContext,
   resolveOwnerUserId,
 } from '../services/ai/landingBrief.service.js';
-import { buildLeadFormDraftFromBrief } from '../utils/landingLeadFormConfig.util.js';
+import { buildLeadFormDraftFromBrief, applyLeadFormDraftToConfig } from '../utils/landingLeadFormConfig.util.js';
 import {
   normalizeAssistantLocale,
   resolveAssistantLocaleContext,
@@ -1275,8 +1275,13 @@ class AiController {
         leadFormDraft,
       });
 
+      // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1 việc 2: leadFormConfig do BACKEND áp
+      // dụng (applyLeadFormDraftToConfig, khoá cf_sugg_NN_text tất định) — không còn để frontend
+      // tự sinh khoá ngẫu nhiên (applyLeadFormDraft cũ, generateCustomFieldKey + 4 ký tự random
+      // ở trình duyệt sau khi HTML đã sinh, nên AI không thể biết khoá để đặt name cho ô).
       if (leadFormDraft) {
         data.leadFormDraft = leadFormDraft;
+        data.leadFormConfig = applyLeadFormDraftToConfig(leadFormDraft);
       }
 
       // Lưu vào session nếu có sessionId (actor, not owner)
@@ -1289,7 +1294,7 @@ class AiController {
           data: {
             title: data.title,
             html: data.html || '',
-            ...(leadFormDraft ? { leadFormDraft } : {}),
+            ...(leadFormDraft ? { leadFormDraft, leadFormConfig: data.leadFormConfig } : {}),
           },
         };
         await aiSessionRepo.saveMessages(sid, req.user.id, userContent, assistantMsg).catch(() => {});

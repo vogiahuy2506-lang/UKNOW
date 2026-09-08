@@ -10,7 +10,6 @@ import {
   defaultLeadFormConfig,
   normalizeLeadFormConfig,
   snapshotLeadFormPersistedMeta,
-  applyLeadFormDraft,
 } from '../../landing-pages/utils/landingLeadFormConfig.js';
 import { useI18n } from '../../../i18n';
 
@@ -63,8 +62,11 @@ export default function LandingCanvasPage() {
       domainType: 'system',
       customDomainHostname: null,
       customDomainIsApex: false,
-      leadFormConfig: draft?.leadFormDraft
-        ? applyLeadFormDraft(draft.leadFormDraft)
+      // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1 việc 2: leadFormConfig đã được BACKEND
+      // áp dụng sẵn (applyLeadFormDraftToConfig, ai.controller.js) — dùng nguyên, không tự sinh
+      // khoá cf_* ở trình duyệt nữa (applyLeadFormDraft cũ là nguồn khoá ngẫu nhiên).
+      leadFormConfig: draft?.leadFormConfig
+        ? normalizeLeadFormConfig(draft.leadFormConfig)
         : defaultLeadFormConfig(),
       leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
       leadFormFieldErrors: {},

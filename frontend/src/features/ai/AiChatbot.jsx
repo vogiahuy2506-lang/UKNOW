@@ -2597,12 +2597,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       );
       if (response.success) {
         refreshAiCredits();
-        const { title, html, css, leadFormDraft } = response.data;
+        const { title, html, css, leadFormDraft, leadFormConfig } = response.data;
         update(prev => [...prev, {
           role: 'assistant',
           content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
           type: 'landing_page',
-          data: { title, html, css, ...(leadFormDraft ? { leadFormDraft } : {}) },
+          data: { title, html, css, ...(leadFormDraft ? { leadFormDraft, leadFormConfig } : {}) },
         }]);
         setPendingLandingPrompt(null);
         setPendingLandingData(null);

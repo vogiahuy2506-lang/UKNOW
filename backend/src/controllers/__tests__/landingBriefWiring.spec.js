@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { buildLeadFormDraftFromBrief, applyLeadFormDraftToConfig } from '../../utils/landingLeadFormConfig.util.js';
 
 const mockGenerate = jest.fn();
 const mockGenerateLandingPage = jest.fn();
@@ -180,6 +181,34 @@ describe('LandingBrief endpoint wiring', () => {
       }),
     }));
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  /**
+   * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1 việc 2: response.data.leadFormConfig phải
+   * là kết quả THẬT của applyLeadFormDraftToConfig (backend, khoá tất định) — không phải
+   * leadFormDraft thô (frontend từng tự áp dụng qua applyLeadFormDraft, nguồn khoá ngẫu nhiên).
+   */
+  it('POST /ai/generate-landing-html: trả data.leadFormConfig = applyLeadFormDraftToConfig(leadFormDraft) thật', async () => {
+    const normalizedBrief = { productMode: 'other', formFields: { preset: 'custom', customText: 'Công ty\nQuy mô' }, contentLocale: 'vi' };
+    mockResolveLandingBrief.mockResolvedValue({
+      ownerUserId: 7,
+      normalizedBrief,
+      resolvedProduct: null,
+    });
+    const req = {
+      body: { prompt: 'Tạo landing page lead', landingBrief: { version: 1, source: 'assistant_wizard', productMode: 'other' } },
+      user: { id: 7 },
+    };
+    const res = makeRes();
+    await aiController.generateLandingHtml(req, res);
+
+    const expectedDraft = buildLeadFormDraftFromBrief(normalizedBrief);
+    const expectedConfig = applyLeadFormDraftToConfig(expectedDraft);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({ leadFormConfig: expectedConfig }),
+    }));
   });
 
   it('POST /landing-templates/generate: invalid brief blocks before Gemini', async () => {
