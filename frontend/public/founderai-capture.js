@@ -303,35 +303,65 @@ if (typeof window !== 'undefined') {
   }
 
   // ----------------------------------------------------------------
-  // 4. UI helpers: show success / error inline nếu user có sẵn markup
+  // 4. UI helpers: show success / error inline nếu user có sẵn markup.
+  // Tìm theo class (founderai-capture-success/error) HOẶC id thường gặp
+  // trong template (successMessage, errorMessage, successDetails).
   // ----------------------------------------------------------------
-  function findClosestByClass(form, className) {
+  function findClosestByClassOrId(form, className, idName) {
     if (!form) return null;
     var parent = form.parentElement;
     while (parent && parent !== document.body) {
       var el = parent.querySelector('.' + className);
       if (el) return el;
+      if (idName) {
+        el = parent.querySelector('#' + idName);
+        if (el) return el;
+      }
       parent = parent.parentElement;
+    }
+    // Fallback: tìm trong form parent
+    if (idName) {
+      var fallback = form.parentElement ? form.parentElement.querySelector('#' + idName) : null;
+      if (fallback) return fallback;
     }
     return form.parentElement ? form.parentElement.querySelector('.' + className) : null;
   }
 
   function showSuccess(form) {
-    var ok = findClosestByClass(form, 'founderai-capture-success');
+    // Tìm success box — ưu tiên class, sau đó id="successMessage"
+    var ok = findClosestByClassOrId(form, 'founderai-capture-success', 'successMessage');
     if (ok) {
-      ok.style.display = 'block';
-      var err = findClosestByClass(form, 'founderai-capture-error');
-      if (err) err.style.display = 'none';
+      // Nếu tìm thấy bằng id → hiển thị (remove hidden class)
+      if (ok.id === 'successMessage') {
+        ok.classList.remove('hidden');
+      } else {
+        ok.style.display = 'block';
+      }
+      // Ẩn error box nếu có
+      var err = findClosestByClassOrId(form, 'founderai-capture-error', 'errorMessage');
+      if (err) {
+        if (err.id === 'errorMessage') err.classList.add('hidden');
+        else err.style.display = 'none';
+      }
     }
   }
 
   function showError(form, message) {
-    var err = findClosestByClass(form, 'founderai-capture-error');
+    // Tìm error box — ưu tiên class, sau đó id="errorMessage"
+    var err = findClosestByClassOrId(form, 'founderai-capture-error', 'errorMessage');
     if (err) {
-      err.textContent = message || 'Có lỗi xảy ra. Vui lòng thử lại.';
-      err.style.display = 'block';
-      var ok = findClosestByClass(form, 'founderai-capture-success');
-      if (ok) ok.style.display = 'none';
+      if (message) err.textContent = message;
+      if (err.id === 'errorMessage') {
+        err.classList.remove('hidden');
+      } else {
+        err.style.display = 'block';
+      }
+      // Ẩn success box nếu có
+      var ok = findClosestByClassOrId(form, 'founderai-capture-success', 'successMessage');
+      if (ok) {
+        if (ok.id === 'successMessage') ok.classList.add('hidden');
+        else ok.style.display = 'none';
+      }
     }
   }
 
@@ -388,8 +418,17 @@ if (typeof window !== 'undefined') {
       })
       .then(function (body) {
         log('success', body);
-        showSuccess(form);
-        try { form.reset(); } catch (e) { /* ignore */ }
+
+        // Chỉ hiển thị success/error box của capture script nếu form KHÔNG có sẵn UI riêng.
+        // VD: form có id="successMessage" (custom success) → giữ nguyên, không đụng.
+        var hasCustomSuccess = form.parentElement && (
+          form.parentElement.querySelector('#successMessage') ||
+          form.parentElement.querySelector('.founderai-capture-success')
+        );
+        if (!hasCustomSuccess) {
+          showSuccess(form);
+          try { form.reset(); } catch (e) { /* ignore */ }
+        }
 
         var sr = body && body.successRedirect;
         if (sr && sr.url) {
