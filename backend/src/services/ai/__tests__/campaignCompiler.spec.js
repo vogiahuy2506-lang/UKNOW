@@ -52,14 +52,17 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
   });
 
   it('biên dịch thành công luồng Zalo cá nhân gửi một lần (bạn bè zalo_contacts đã chọn qua friendIds)', () => {
-    // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: KHÔNG còn dùng node get_all_friends
-    // cho zalo_contacts — config schema của node đó (campaignNodeRegistry.service.js:141-158)
-    // chỉ có zaloFriendAccountNodeId, không có cách giới hạn xuống danh sách bạn bè đã CHỌN
-    // (audience.friendIds) — dùng node sẽ gửi cho TOÀN BỘ bạn bè tài khoản, không phải người
-    // dùng đã chọn trong wizard (ZaloFriendPickerCard). Đường 'manual' + zaloRecipientPhones
-    // (UID nối bằng \n, cùng field patchDeterministicCampaignScript từng gán tay) đúng và an
-    // toàn hơn — phát hiện khi viết campaignCompilerPatchNoop.spec.js (mục 1.1), không phải
-    // review đọc mắt.
+    // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1 (sửa lại theo Review 08/09): KHÔNG còn
+    // dùng node get_all_friends cho zalo_contacts — config schema của nó (campaignNodeRegistry.
+    // service.js:141-158) chỉ có zaloFriendAccountNodeId, không có cách giới hạn xuống danh sách
+    // bạn bè đã CHỌN (audience.friendIds) — dùng node sẽ gửi cho TOÀN BỘ bạn bè tài khoản.
+    // Đường 'manual' đúng, nhưng KHÔNG nhúng audience.friendIds vào zaloRecipientPhones ở đây:
+    // danh sách người nhận thật cho zaloRecipientSource='manual' đi qua lớp phủ riêng tư
+    // directRecipients (ai.controller.js applyDirectRecipients :769-812 ghi MẢNG từ dữ liệu
+    // frontend gửi lúc xác nhận, markManualRecipientsRequired :813-826 coi giá trị không phải
+    // mảng là rỗng rồi ghi đè bằng [], M2 :997-1010 bắt buộc có directRecipients). Chuỗi compiler
+    // tự nhúng luôn bị ghi đè/xoá trước khi tới runtime — patch cũ cũng không nhúng gì
+    // (aiCampaignDraft.service.js:406/:441). Bắt lại ở Review 08/09, không phải lúc viết đầu.
     const intentZaloPersonal = {
       version: 1,
       channel: 'zalo',
@@ -81,7 +84,8 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     expect(sendZaloNode.config.zaloAccountId).toBe(12);
     expect(sendZaloNode.config.zaloRecipientSource).toBe('manual');
     expect(sendZaloNode.config.zaloRecipientType).toBe('uid');
-    expect(sendZaloNode.config.zaloRecipientPhones).toBe('1111111111111111111\n2222222222222222222');
+    // Không nhúng danh sách người nhận vào script trả về chat — xem ghi chú phía trên.
+    expect(sendZaloNode.config.zaloRecipientPhones).toBeUndefined();
     expect(Array.isArray(sendZaloNode.config.zaloPersonalTemplateSteps)).toBe(true);
     expect(sendZaloNode.config.zaloPersonalTemplateSteps.length).toBe(1);
 

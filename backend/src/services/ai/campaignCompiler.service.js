@@ -500,8 +500,6 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
   let audienceNodeId = null;
   let recipientField = 'phone';
   let recipientType = 'phone';
-  // Chỉ khác null khi audience.type === 'zalo_contacts' — xem ghi chú dưới.
-  let manualRecipientPhones = null;
 
   if (audience.type === 'zalo_contacts') {
     // KHÔNG dùng node get_all_friends: config schema của nó (campaignNodeRegistry.
@@ -509,12 +507,19 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
     // audience.friendIds mà người dùng đã CHỌN trong wizard (ZaloFriendPickerCard). Dùng node
     // này sẽ gửi cho TOÀN BỘ bạn bè của tài khoản, không phải danh sách đã chọn — không phải
     // lỗi no-op vặt, là gửi nhầm người thật. Đường 'manual' (audienceNodeId giữ null, như
-    // audience.type không khớp nhánh nào) đã có sẵn cho đúng ca này: nạp UID trực tiếp vào
-    // zaloRecipientPhones (field dùng chung cho cả phone lẫn uid tuỳ zaloRecipientType — xem
-    // campaignRun.service.js:4363).
+    // audience.type không khớp nhánh nào) đã có sẵn cho đúng ca này.
+    //
+    // KHÔNG nhúng audience.friendIds vào config ở đây (đã thử bằng zaloRecipientPhones dạng
+    // chuỗi, review 08/09 bắt lại): danh sách người nhận thật cho zaloRecipientSource='manual'
+    // đi qua lớp phủ riêng tư directRecipients — ai.controller.js applyDirectRecipients
+    // (:769-812) ghi zaloRecipientPhones dạng MẢNG từ dữ liệu frontend gửi lúc xác nhận, và
+    // markManualRecipientsRequired (:813-826) coi mọi giá trị KHÔNG PHẢI mảng là rỗng rồi ghi
+    // đè bằng []. M2 (:997-1010) còn bắt buộc phải có directRecipients khi
+    // zaloRecipientSource==='manual'. Vậy giá trị compiler tự nhúng ở đây luôn bị ghi đè hoặc
+    // xoá trước khi tới runtime — patch cũ (aiCampaignDraft.service.js:406 bỏ get_all_friends,
+    // :441 đặt zaloRecipientSource='manual') cũng không nhúng gì, để trống là đúng khuôn.
     recipientField = 'uid';
     recipientType = 'uid';
-    manualRecipientPhones = (Array.isArray(audience.friendIds) ? audience.friendIds : []).join('\n');
   } else if (audience.type === 'sheet') {
     audienceNodeId = `${prefix}_read_sheet_1`;
     nodes.push({
@@ -589,7 +594,6 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
       zaloRecipientNodeId: audienceNodeId || '',
       zaloRecipientField: recipientField,
       zaloRecipientType: recipientType,
-      ...(manualRecipientPhones != null ? { zaloRecipientPhones: manualRecipientPhones } : {}),
       zaloPersonalSendMode: 'all',
       saveMessageLog: true,
       zaloPersonalTemplateSteps: [
@@ -710,15 +714,15 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
   let audienceNodeId = null;
   let recipientField = 'phone';
   let recipientType = 'phone';
-  // Chỉ khác null khi audience.type === 'zalo_contacts' — xem ghi chú ở
-  // compileZaloPersonalOnceCampaign (không dùng node get_all_friends, không giới hạn được
-  // xuống audience.friendIds đã chọn).
-  let manualRecipientPhones = null;
 
   if (audience.type === 'zalo_contacts') {
+    // Xem ghi chú đầy đủ ở compileZaloPersonalOnceCampaign: không dùng get_all_friends (không
+    // giới hạn được xuống audience.friendIds đã chọn), và KHÔNG nhúng danh sách người nhận vào
+    // config ở đây — zaloRecipientSource='manual' đi qua lớp phủ riêng tư directRecipients
+    // (ai.controller.js applyDirectRecipients :769-812, markManualRecipientsRequired :813-826,
+    // M2 :997-1010), giá trị compiler tự nhúng luôn bị ghi đè/xoá trước khi tới runtime.
     recipientField = 'uid';
     recipientType = 'uid';
-    manualRecipientPhones = (Array.isArray(audience.friendIds) ? audience.friendIds : []).join('\n');
   } else if (audience.type === 'sheet') {
     audienceNodeId = `${prefix}_read_sheet_1`;
     nodes.push({
@@ -832,7 +836,6 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
       zaloRecipientNodeId: audienceNodeId || '',
       zaloRecipientField: recipientField,
       zaloRecipientType: recipientType,
-      ...(manualRecipientPhones != null ? { zaloRecipientPhones: manualRecipientPhones } : {}),
       zaloPersonalSendMode: 'schedule',
       saveMessageLog: true,
       zaloPersonalTemplateSteps,
