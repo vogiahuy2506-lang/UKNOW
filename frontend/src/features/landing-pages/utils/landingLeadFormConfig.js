@@ -1,101 +1,221 @@
-/**
- * Minimal lead form config utilities.
- * 
- * Kept for compatibility - the lead form config is stored but not configurable
- * via UI anymore (removed in v2).
- */
+export const LEAD_FORM_CONFIG_VERSION = 1;
+export const MAX_CUSTOM_FIELDS = 20;
+export const CUSTOM_FIELD_TYPES = ['text', 'textarea', 'select', 'radio', 'checkbox'];
+export const CUSTOM_FIELD_KEY_RE = /^cf_[a-z0-9_]{4,40}$/;
 
-export const DEFAULT_LEAD_FIELDS = [
-  { key: 'name', enabled: true, required: true, label: 'Họ và tên', placeholder: 'Nhập họ và tên' },
-  { key: 'phone', enabled: true, required: true, label: 'Số điện thoại', placeholder: 'Nhập số điện thoại' },
-  { key: 'email', enabled: false, required: false, label: 'Email', placeholder: 'Nhập email' },
-  { key: 'note', enabled: false, required: false, label: 'Ghi chú', placeholder: 'Nhập ghi chú' },
-];
+export const LEAD_FORM_THEME_DEFAULTS = Object.freeze({
+  primary: '#f97316',
+  accent: '#ea580c',
+  bg: '#ffffff',
+  text: '#1f2937',
+  border: '#e5e7eb',
+  radius: 12,
+  titleText: 'Đăng ký nhận tư vấn',
+  subtitleText: 'Điền thông tin — đội ngũ sẽ liên hệ bạn trong 24h.',
+  buttonText: 'Đăng ký ngay →',
+});
 
-export const DEFAULT_LEAD_FORM_THEME = {
-  primaryColor: '#f97316',    // orange-500
-  accentColor: '#ea580c',     // orange-600
-  cardBg: '#ffffff',
-  textColor: '#1f2937',       // gray-800
-  borderColor: '#d1d5db',     // gray-300
-  borderRadius: 8,
-  formTitle: 'Đăng ký tư vấn',
-  formDescription: 'Để lại thông tin, chúng tôi sẽ liên hệ bạn sớm nhất!',
-  submitButton: 'Gửi đăng ký',
-  successMessage: 'Cảm ơn bạn! Chúng tôi sẽ liên hệ trong 24h.',
-  errorMessage: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
-};
+export function defaultLeadFormTheme() {
+  return { ...LEAD_FORM_THEME_DEFAULTS };
+}
+
+export function normalizeLeadFormTheme(raw) {
+  const defaults = LEAD_FORM_THEME_DEFAULTS;
+  if (!raw || typeof raw !== 'object') return { ...defaults };
+  const out = { ...defaults };
+  for (const key of Object.keys(defaults)) {
+    if (raw[key] === undefined || raw[key] === null) continue;
+    if (key === 'radius') {
+      const n = Number(raw[key]);
+      out.radius = Number.isFinite(n) ? Math.max(0, Math.min(24, Math.round(n))) : defaults.radius;
+    } else if (typeof defaults[key] === 'string') {
+      out[key] = String(raw[key]).trim().slice(0, 200) || defaults[key];
+    }
+  }
+  return out;
+}
 
 export function defaultLeadFormConfig() {
   return {
-    fields: DEFAULT_LEAD_FIELDS,
-    theme: { ...DEFAULT_LEAD_FORM_THEME },
-    nameMode: 'split', // 'split' | 'single'
-    submitEndpoint: '/api/public/leads',
-  };
-}
-
-/**
- * Normalize raw config to full config with defaults
- */
-export function normalizeLeadFormConfig(raw) {
-  if (!raw) return defaultLeadFormConfig();
-  
-  const defaults = defaultLeadFormConfig();
-  
-  return {
-    fields: raw.fields || defaults.fields,
-    theme: {
-      ...defaults.theme,
-      ...(raw.theme || {}),
+    version: LEAD_FORM_CONFIG_VERSION,
+    fixedFields: {
+      occupation: { visible: true },
+      interestArea: { visible: true },
     },
-    nameMode: raw.nameMode || defaults.nameMode,
-    submitEndpoint: raw.submitEndpoint || defaults.submitEndpoint,
+    customFields: [],
+    theme: defaultLeadFormTheme(),
   };
 }
 
-/**
- * Prepare config for save - validates and normalizes.
- *
- * `_persistedMeta` không còn dùng từ khi bỏ custom-field-builder (v2, xem đầu file) —
- * giữ tham số để không phải sửa call site ở LandingCanvasEditor.jsx.
- */
-export function prepareLeadFormConfigForSave(raw, _persistedMeta = {}) {
-  const normalized = normalizeLeadFormConfig(raw);
-  const errors = [];
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
-  // Validate: at least name or phone must be enabled
-  const enabledFields = normalized.fields?.filter((f) => f.enabled) || [];
-  const hasContactField = enabledFields.some((f) => f.key === 'name' || f.key === 'phone');
-
-  if (!hasContactField) {
-    errors.push({ key: 'contactField', message: 'Cần có ít nhất trường Họ tên hoặc Số điện thoại' });
+export function normalizeLeadFormConfig(raw) {
+  const defaults = defaultLeadFormConfig();
+  const leadForm = isPlainObject(raw) && raw.leadForm ? raw.leadForm : raw;
+  if (!isPlainObject(leadForm) || Number(leadForm.version) !== LEAD_FORM_CONFIG_VERSION) {
+    return defaults;
   }
-
+  const occupationVisible = leadForm.fixedFields?.occupation?.visible !== false;
+  const interestVisible = leadForm.fixedFields?.interestArea?.visible !== false;
+  const customFields = Array.isArray(leadForm.customFields)
+    ? leadForm.customFields.filter((f) => f && CUSTOM_FIELD_KEY_RE.test(String(f.key || ''))).slice(0, MAX_CUSTOM_FIELDS)
+    : [];
   return {
-    config: normalized,
-    errors,
+    version: LEAD_FORM_CONFIG_VERSION,
+    fixedFields: {
+      occupation: { visible: occupationVisible },
+      interestArea: { visible: interestVisible },
+    },
+    customFields: customFields.map((field) => ({
+      key: field.key,
+      type: CUSTOM_FIELD_TYPES.includes(field.type) ? field.type : 'text',
+      labelVi: String(field.labelVi || '').trim(),
+      labelEn: field.labelEn ? String(field.labelEn).trim() : '',
+      placeholderVi: field.placeholderVi ? String(field.placeholderVi).trim() : '',
+      placeholderEn: field.placeholderEn ? String(field.placeholderEn).trim() : '',
+      required: Boolean(field.required),
+      options: Array.isArray(field.options) ? field.options.map((o) => ({
+        value: String(o.value || '').trim(),
+        labelVi: String(o.labelVi || '').trim(),
+        labelEn: o.labelEn ? String(o.labelEn).trim() : '',
+      })) : [],
+    })),
+    theme: normalizeLeadFormTheme(leadForm.theme),
   };
 }
 
+export function generateCustomFieldKey(label = 'field') {
+  const slug = String(label)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 24) || 'field';
+  const rand = Math.random().toString(36).slice(2, 6);
+  const rest = `${slug}_${rand}`.replace(/[^a-z0-9_]/g, '').slice(0, 40);
+  return `cf_${rest.padEnd(4, 'x')}`;
+}
+
 /**
- * Snapshot the persisted meta (keys + option values) from raw config.
- * Used for draft tracking.
+ * Mã option chưa dùng: tránh cả mã đang có trên field và mã từng persist (`opt_1`, `opt_2`, …).
+ *
+ * @param {{ value?: string }[]|string[]} [existingOptions]
+ * @param {Iterable<string>} [reservedValues] Mã đã lưu (kể cả option vừa xóa trên UI)
+ * @returns {string}
+ */
+export function nextUnusedOptionValue(existingOptions = [], reservedValues = []) {
+  const used = new Set();
+  const add = (raw) => {
+    const value = String(raw || '').trim();
+    if (value) used.add(value);
+  };
+  for (const item of Array.isArray(existingOptions) ? existingOptions : []) {
+    add(typeof item === 'string' ? item : item?.value);
+  }
+  const reservedList = reservedValues instanceof Set
+    ? reservedValues
+    : (Array.isArray(reservedValues) ? reservedValues : []);
+  for (const item of reservedList) {
+    add(item);
+  }
+  let n = 1;
+  while (used.has(`opt_${n}`)) n += 1;
+  return `opt_${n}`;
+}
+
+export function applyLeadFormDraft(draft, baseConfig) {
+  const base = normalizeLeadFormConfig(baseConfig || defaultLeadFormConfig());
+  if (!draft || typeof draft !== 'object') return base;
+  const occupationVisible = draft.fixedFields?.occupation?.visible === true;
+  const interestVisible = draft.fixedFields?.interestArea?.visible === true;
+  const labels = Array.isArray(draft.suggestedCustomFieldLabels) ? draft.suggestedCustomFieldLabels : [];
+  const locale = draft.contentLocale === 'en' ? 'en' : 'vi';
+  const customFields = labels.slice(0, 10).map((label, i) => {
+    const text = String(label || '').trim().slice(0, 100);
+    return {
+      key: generateCustomFieldKey(`sugg_${i}_${text}`),
+      type: 'text',
+      labelVi: locale === 'en' ? text : text,
+      labelEn: locale === 'en' ? text : '',
+      placeholderVi: '',
+      placeholderEn: '',
+      required: false,
+      options: [],
+    };
+  });
+  return {
+    version: LEAD_FORM_CONFIG_VERSION,
+    fixedFields: {
+      occupation: { visible: occupationVisible },
+      interestArea: { visible: interestVisible },
+    },
+    customFields,
+  };
+}
+
+export function fieldLabel(field, locale = 'vi') {
+  if (!field) return '';
+  if (locale === 'en') return field.labelEn || field.labelVi || field.key;
+  return field.labelVi || field.labelEn || field.key;
+}
+
+export function optionLabel(opt, locale = 'vi') {
+  if (!opt) return '';
+  if (locale === 'en') return opt.labelEn || opt.labelVi || opt.value;
+  return opt.labelVi || opt.labelEn || opt.value;
+}
+
+/**
+ * Snapshot key + option value đã persist — dùng để khóa type/value trên UI và không drop field khi xóa nhãn.
+ *
+ * @param {unknown} raw
+ * @returns {{ keys: string[], optionValuesByKey: Record<string, string[]> }}
  */
 export function snapshotLeadFormPersistedMeta(raw) {
-  if (!raw) return { keys: [], optionValuesByKey: {} };
-
-  const base = normalizeLeadFormConfig(raw);
+  const n = normalizeLeadFormConfig(raw);
   return {
-    keys: base.fields?.map((f) => f.key) || [],
-    optionValuesByKey: {},
+    keys: n.customFields.map((f) => f.key),
+    optionValuesByKey: Object.fromEntries(
+      n.customFields.map((f) => [
+        f.key,
+        (f.options || []).map((o) => String(o.value || '').trim()).filter(Boolean),
+      ])
+    ),
   };
 }
 
 /**
- * Apply a leadFormDraft (from AI) to create a normalized config.
+ * Chuẩn bị config trước khi lưu: bỏ hàng mới chưa điền nhãn; không xóa field đã persist.
+ *
+ * @param {unknown} raw
+ * @param {{ keys?: string[] }} [persistedMeta]
+ * @returns {{ config: object, errors: { key: string, field: string, message: string }[] }}
  */
-export function applyLeadFormDraft(draft) {
-  if (!draft) return defaultLeadFormConfig();
-  return normalizeLeadFormConfig(draft);
+export function prepareLeadFormConfigForSave(raw, persistedMeta = {}) {
+  const n = normalizeLeadFormConfig(raw);
+  const persistedKeys = new Set(persistedMeta.keys || []);
+  const errors = [];
+  const customFields = [];
+  for (const field of n.customFields) {
+    const labelVi = String(field.labelVi || '').trim();
+    const isPersisted = persistedKeys.has(field.key);
+    if (!isPersisted && labelVi.length === 0) {
+      continue;
+    }
+    if (labelVi.length < 2) {
+      errors.push({
+        key: field.key,
+        field: 'labelVi',
+        message: 'Nhãn tiếng Việt phải từ 2 đến 100 ký tự',
+      });
+    }
+    customFields.push({ ...field, labelVi });
+  }
+  return {
+    config: { ...n, customFields },
+    errors,
+  };
 }

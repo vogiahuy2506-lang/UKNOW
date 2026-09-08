@@ -1,25 +1,93 @@
-import { describe, it, expect } from 'vitest';
-import { prepareLeadFormConfigForSave, defaultLeadFormConfig } from '../landingLeadFormConfig.js';
+import { describe, expect, it } from 'vitest';
+import {
+  nextUnusedOptionValue,
+  prepareLeadFormConfigForSave,
+  snapshotLeadFormPersistedMeta,
+} from '../landingLeadFormConfig.js';
 
-/**
- * Bug tìm thấy khi dọn lint (07/09/2026): sau khi landingLeadFormConfig.js được rút gọn còn
- * "minimal for compatibility" (bỏ custom-field-builder), errors trả về là mảng CHUỖI, nhưng
- * caller duy nhất (LandingCanvasEditor.jsx resolveLeadFormConfigForSave) đọc
- * `errors.map((e) => [e.key, e.message])` và `errors[0].message` — trên chuỗi, cả hai đều
- * undefined. Toast lỗi hiện ra rỗng/"undefined" thay vì câu tiếng Việt thật.
- */
-describe('prepareLeadFormConfigForSave — shape lỗi khớp caller (LandingCanvasEditor.jsx)', () => {
-  it('thiếu cả name lẫn phone → errors là mảng object { key, message }, không phải chuỗi', () => {
-    const config = { ...defaultLeadFormConfig(), fields: [{ key: 'note', enabled: true, required: false }] };
-    const { errors } = prepareLeadFormConfigForSave(config);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toHaveProperty('key');
-    expect(errors[0]).toHaveProperty('message');
-    expect(errors[0].message).toMatch(/Họ tên hoặc Số điện thoại/);
+const saved = {
+  version: 1,
+  fixedFields: { occupation: { visible: true }, interestArea: { visible: true } },
+  customFields: [{
+    key: 'cf_note_abcd',
+    type: 'text',
+    labelVi: 'Ghi chú',
+    labelEn: '',
+    required: false,
+    options: [],
+  }],
+};
+
+describe('prepareLeadFormConfigForSave', () => {
+  it('không drop field đã lưu khi xóa nhãn — trả lỗi', () => {
+    const persisted = snapshotLeadFormPersistedMeta(saved);
+    const { config, errors } = prepareLeadFormConfigForSave({
+      ...saved,
+      customFields: [{ ...saved.customFields[0], labelVi: '' }],
+    }, persisted);
+    expect(config.customFields).toHaveLength(1);
+    expect(config.customFields[0].key).toBe('cf_note_abcd');
+    expect(errors[0]).toMatchObject({ key: 'cf_note_abcd', field: 'labelVi' });
   });
 
-  it('có name hoặc phone enabled → không lỗi', () => {
-    const { errors } = prepareLeadFormConfigForSave(defaultLeadFormConfig());
-    expect(errors).toHaveLength(0);
+  it('bỏ hàng mới chưa điền nhãn', () => {
+    const persisted = snapshotLeadFormPersistedMeta(saved);
+    const { config, errors } = prepareLeadFormConfigForSave({
+      ...saved,
+      customFields: [
+        saved.customFields[0],
+        {
+          key: 'cf_new_zzzz',
+          type: 'text',
+          labelVi: '',
+          labelEn: '',
+          required: false,
+          options: [],
+        },
+      ],
+    }, persisted);
+    expect(config.customFields.map((f) => f.key)).toEqual(['cf_note_abcd']);
+    expect(errors).toEqual([]);
+  });
+
+  it('giữ field mới có nhãn 1 ký tự và trả lỗi', () => {
+    const persisted = snapshotLeadFormPersistedMeta(saved);
+    const { config, errors } = prepareLeadFormConfigForSave({
+      ...saved,
+      customFields: [
+        saved.customFields[0],
+        {
+          key: 'cf_new_zzzz',
+          type: 'text',
+          labelVi: 'A',
+          labelEn: '',
+          required: false,
+          options: [],
+        },
+      ],
+    }, persisted);
+    expect(config.customFields.map((f) => f.key)).toEqual(['cf_note_abcd', 'cf_new_zzzz']);
+    expect(errors[0]).toMatchObject({ key: 'cf_new_zzzz', field: 'labelVi' });
+  });
+});
+
+describe('nextUnusedOptionValue', () => {
+  it('bỏ qua mã đang có; lỗ trống chỉ tái dùng khi chưa từng persist', () => {
+    expect(nextUnusedOptionValue([])).toBe('opt_1');
+    expect(nextUnusedOptionValue([{ value: 'opt_1' }])).toBe('opt_2');
+    expect(nextUnusedOptionValue([{ value: 'opt_1' }, { value: 'opt_2' }])).toBe('opt_3');
+    expect(nextUnusedOptionValue([{ value: 'opt_1' }, { value: 'opt_3' }])).toBe('opt_2');
+    expect(nextUnusedOptionValue([{ value: 'small' }, { value: 'opt_1' }])).toBe('opt_2');
+  });
+
+  it('không tái dùng mã đã persist sau khi xóa option trên UI', () => {
+    expect(nextUnusedOptionValue(
+      [{ value: 'opt_1' }, { value: 'opt_3' }],
+      ['opt_1', 'opt_2', 'opt_3'],
+    )).toBe('opt_4');
+    expect(nextUnusedOptionValue(
+      [{ value: 'opt_1' }],
+      new Set(['opt_1', 'opt_2']),
+    )).toBe('opt_3');
   });
 });
