@@ -68,6 +68,20 @@ describe('landingHtmlInjection.util', () => {
       expect(out).toBe(html);
       expect(out).toContain('data-uknow-lead-form');
     });
+
+    it('trang CHỈ có iframe /embed/lead-form, không có <form nào khác → GIỮ iframe (Hệ quả 6, PLAN CẬP NHẬT 08/09 17:30)', () => {
+      const html = '<p>before</p><iframe src="/embed/lead-form?slug=demo"></iframe><p>after</p>';
+      const out = stripFounderLandingAutoBlocks(html);
+      expect(out).toBe(html);
+      expect(out).toContain('/embed/lead-form');
+    });
+
+    it('trang có iframe /embed/lead-form VÀ đã có <form khác → strip iframe như cũ', () => {
+      const html = '<form><input name="email"/></form><iframe src="/embed/lead-form?slug=demo"></iframe>';
+      const out = stripFounderLandingAutoBlocks(html);
+      expect(out).not.toContain('/embed/lead-form');
+      expect(out).toContain('<form>');
+    });
   });
 
   describe('normalizeLandingLpTrackApiBase', () => {
@@ -313,17 +327,30 @@ describe('landingHtmlInjection.util', () => {
       expect(twice).toBe(once);
     });
 
-    it('HTML có iframe form cũ → bị strip khi lưu (v2.0: admin tự paste snippet nếu muốn)', () => {
+    it('HTML CHỈ có iframe form cũ, không có <form khác → GIỮ NGUYÊN iframe khi lưu (PLAN CẬP NHẬT 08/09 17:30, Hệ quả 6)', () => {
       const html =
         '<html><body>' +
         '<iframe src="http://localhost:5174/embed/lead-form?slug=promo"></iframe>' +
         '</body></html>';
       const out = prepareLandingHtmlOnSave(html, opts);
-      // Scripts được inject
+      // Scripts vẫn được inject bình thường
       expect(out).toContain('lp-track.js');
       expect(out).toContain('founderai-capture.js');
-      // Iframe cũ bị strip (không auto-inject nữa từ v2.0)
+      // Trang chưa có cách thu lead nào khác → GIỮ iframe, không strip trong im lặng
+      expect(out).toContain('/embed/lead-form');
+    });
+
+    it('HTML có iframe form cũ VÀ đã có <form khác → strip iframe (đã có đường thu lead thay thế)', () => {
+      const html =
+        '<html><body>' +
+        '<iframe src="http://localhost:5174/embed/lead-form?slug=promo"></iframe>' +
+        '<form data-founderai-capture><input name="email"/></form>' +
+        '</body></html>';
+      const out = prepareLandingHtmlOnSave(html, opts);
+      expect(out).toContain('lp-track.js');
+      // Đã có <form khác → iframe cũ vẫn bị strip như trước
       expect(out).not.toContain('/embed/lead-form');
+      expect(out).toContain('data-founderai-capture');
     });
 
     it('slug rỗng → trả nguyên HTML không xử lý', () => {

@@ -164,6 +164,34 @@ describe('landingEditGuard.util', () => {
     expect(isValid).toBe(true);
   });
 
+  it('bản cũ có data-founderai-capture (form hợp đồng mới) nhưng bản mới bị mất → ném lỗi 502', () => {
+    const capForm = '<form data-founderai-capture><input name="name"/><input name="email"/><input name="phone"/></form>';
+    const htmlWithCapForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, capForm);
+    const htmlWithoutCapForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '<p>Khách đã mất form</p>');
+
+    expect(() => {
+      validateEditHtmlOutput({
+        currentHtml: htmlWithCapForm,
+        newHtml: htmlWithoutCapForm,
+      });
+    }).toThrow(/mất form đăng ký/i);
+  });
+
+  it('bản cũ có data-founderai-capture, bản mới vẫn giữ nguyên form đó → hợp lệ', () => {
+    const capForm = '<form data-founderai-capture><input name="name"/><input name="email"/><input name="phone"/></form>';
+    const htmlWithCapForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, capForm);
+    const editedHtml = htmlWithCapForm.replace(
+      'class="text-2xl font-bold">Tiêu đề',
+      'class="text-3xl font-extrabold text-blue-600">Tiêu đề mới cập nhật'
+    );
+
+    const isValid = validateEditHtmlOutput({
+      currentHtml: htmlWithCapForm,
+      newHtml: editedHtml,
+    });
+    expect(isValid).toBe(true);
+  });
+
   it('bản cũ KHÔNG có marker form (hoặc đã bỏ từ trước) → bản mới không bắt buộc phải có marker', () => {
     const currentWithoutForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '');
     const newWithoutForm = currentWithoutForm.replace('Tiêu đề', 'Tiêu đề mới');

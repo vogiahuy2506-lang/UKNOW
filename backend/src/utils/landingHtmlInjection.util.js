@@ -80,8 +80,8 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
  *   2. Rewrite link tracking trên `<a href>`.
  *   3. Chèn lại `lp-track.js` + `founderai-capture.js` (auto mode) để bắt form admin
  *      tự thiết kế và tracking click. KHÔNG auto-inject iframe form nữa — admin
- *      phải tự dùng Lead Form Snippet (data-uknow-lead-form) hoặc tự thiết kế
- *      `<form data-founderai-capture>` trong trang.
+ *      tự thiết kế `<form data-founderai-capture>` trong trang (khuyên dùng), hoặc
+ *      để auto mode tự bắt form đầu tiên CÓ input email/phone/tel/phoneNumber.
  *
  * @param {string} html
  * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
@@ -105,9 +105,11 @@ export function prepareLandingHtmlOnSave(html, { slug, frontendOrigin, apiBase }
  * hệ thống tự chèn iframe đè lên.
  *
  * Nếu admin muốn có form đăng ký chuẩn của hệ thống, họ có thể:
- *   1. Copy snippet HTML từ Lead Form Config Panel → có `data-uknow-lead-form`.
- *   2. Hoặc tự thiết kế form với `<form data-founderai-capture>` — script capture
- *      mặc định auto mode sẽ tự bắt.
+ *   1. Tự thiết kế form với `<form data-founderai-capture>` (khuyên dùng — luôn
+ *      thắng auto mode, không phụ thuộc form đó có trường gì).
+ *   2. Hoặc không gắn thẻ gì cả — auto mode sẽ tự bắt form đầu tiên trong trang
+ *      CÓ input name thuộc email/phone/tel/phoneNumber (founderai-capture.js,
+ *      hàm pickAutoCaptureForm). Không có snippet dựng sẵn nào để copy nữa.
  *
  * Giữ export để tương thích ngược với code khác nếu có import, nhưng không gọi
  * nữa trong pipeline chính.
@@ -184,9 +186,18 @@ export function stripFounderLandingAutoBlocks(html) {
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*\/>\s*/gi, '');
   // Strip iframe cũ do admin từng paste từ Lead Form Config — không auto-inject nữa từ v2.0.
-  // Loại bỏ mọi iframe nhúng form (embed/lead-form, embed/leadform, embed/form).
-  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*>[\s\S]*?<\/iframe>\s*/gi, '');
-  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*\/?>\s*/gi, '');
+  // CHỈ strip khi trang đã có <form khác (đường thu lead thay thế) — trang CHỈ có iframe
+  // (chưa có form nào khác) thì GIỮ NGUYÊN: strip vô điều kiện từng khiến 7 trang production
+  // (3 khách thật) mất iframe — cách thu lead DUY NHẤT của trang — trong im lặng chỉ vì admin
+  // sửa 1 chữ rồi Lưu (Hệ quả 6, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md CẬP NHẬT 08/09
+  // 17:30). Chốt guard /embed/lead-form ở landingEditGuard.util.js chỉ canh đường AI-edit,
+  // không canh đường save thường này.
+  if (/<form[\s>]/i.test(out)) {
+    out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*>[\s\S]*?<\/iframe>\s*/gi, '');
+    out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*\/?>\s*/gi, '');
+  } else if (/<iframe[^>]*embed\/lead.?form[^>]*/i.test(out)) {
+    console.log('[landingHtmlInjection] Giữ iframe /embed/lead-form vì trang chưa có <form nào khác để thu lead.');
+  }
   return out;
 }
 

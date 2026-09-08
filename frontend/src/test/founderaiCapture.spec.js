@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
  */
 import '../../public/founderai-capture.js';
 
-const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, autoMapFormInputsByIdOrLabel } = window.__founderaiCaptureTestHooks;
+const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, pickAutoCaptureForm, inferAutoName, autoMapFormInputsByIdOrLabel } = window.__founderaiCaptureTestHooks;
 
 function makeForm(innerHtml) {
   const form = document.createElement('form');
@@ -77,53 +77,97 @@ describe('founderai-capture.js — readFounderaiMarketingConsent (đơn vị)', 
   });
 });
 
-describe('founderai-capture.js — autoMapFormInputsByIdOrLabel', () => {
-  it('id="fullName" → name="name" (case nhập của workshop L\'Atelier Floral)', () => {
-    const form = makeForm(`
-      <input type="text" id="fullName" />
-      <input type="tel" id="phone" />
-      <input type="email" id="email" />
+/**
+ * PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md, PR-2a việc 2 (Review 08/09, lỗ mới #2).
+ *
+ * Trước bản vá này, auto mode (không có <form data-founderai-capture> tường minh) bắt
+ * NGUYÊN VĂN form đầu tiên trong trang bất kể là gì (`document.querySelector('form')`).
+ * 15/22 trang production đo được 08/09 có form đầu tiên KHÔNG phải form đăng ký (tìm kiếm,
+ * khảo sát...) — auto mode chiếm submit của form đó và chặn khách với lỗi "Vui lòng nhập
+ * email hợp lệ" dù khách chưa từng thấy ô email nào. pickAutoCaptureForm(forms) sửa bằng
+ * cách chỉ chọn form ĐẦU TIÊN có input name thuộc {email, phone, tel, phoneNumber} — đúng
+ * bộ tên buildFounderaiCapturePayload đọc ra payload.email/phone ở trên.
+ */
+describe('founderai-capture.js — pickAutoCaptureForm (auto mode chỉ bắt form CÓ email/phone)', () => {
+  it('form tìm kiếm đứng trước form đăng ký → auto mode chọn form đăng ký, không phải form tìm kiếm', () => {
+    const searchForm = makeForm('<input type="text" name="q" placeholder="Tìm kiếm sản phẩm" />');
+    const registrationForm = makeForm(`
+      <input type="text" name="name" />
+      <input type="email" name="email" />
+      <input type="tel" name="phone" />
     `);
-    autoMapFormInputsByIdOrLabel(form);
-    expect(form.querySelector('#fullName').name).toBe('name');
-    expect(form.querySelector('#phone').name).toBe('phone');
-    expect(form.querySelector('#email').name).toBe('email');
+
+    const picked = pickAutoCaptureForm([searchForm, registrationForm]);
+    expect(picked).toBe(registrationForm);
   });
 
-  it('id="phone" (chuẩn hóa → match alias phone) → name="phone"', () => {
-    const form = makeForm('<input type="tel" id="phone" value="0901234567" />');
-    autoMapFormInputsByIdOrLabel(form);
-    expect(form.querySelector('#phone').name).toBe('phone');
+  it('không form nào có email/phone/tel/phoneNumber → trả về null (findForms() rỗng → bind() không gắn submit handler → submit native của trang không bị preventDefault)', () => {
+    const searchForm = makeForm('<input type="text" name="q" />');
+    const surveyForm = makeForm('<input type="text" name="rating" /><input type="text" name="comment" />');
+
+    const picked = pickAutoCaptureForm([searchForm, surveyForm]);
+    expect(picked).toBeNull();
+    // Hệ quả trực tiếp đọc từ founderai-capture.js: bind() có `if (forms.length === 0) { ...; return; }`
+    // trước khi gọi form.addEventListener('submit', handleSubmit, true) — không có form nào được
+    // chọn thì không handler nào được gắn, nên submit gốc của trình duyệt không hề bị preventDefault.
   });
 
-  it('blacklist chặn id="submit", id="workshopForm", id="sessionDate"', () => {
-    const form = makeForm(`
-      <input type="text" id="submit" />
-      <input type="text" id="workshopForm" />
-      <input type="text" id="sessionDate" />
-      <input type="text" id="submitBtn" />
-    `);
-    autoMapFormInputsByIdOrLabel(form);
-    expect(form.querySelector('#submit').name).toBe('');
-    expect(form.querySelector('#workshopForm').name).toBe('');
-    expect(form.querySelector('#sessionDate').name).toBe('');
-    expect(form.querySelector('#submitBtn').name).toBe('');
-  });
+  it('form data-founderai-capture tường minh vẫn thắng auto mode dù form đó không có email/phone', () => {
+    document.body.innerHTML = '';
+    // Đứng TRƯỚC trong DOM và CÓ email — nếu đi qua pickAutoCaptureForm sẽ được chọn.
+    const autoEligibleForm = makeForm('<input type="email" name="email" />');
+    const explicitForm = document.createElement('form');
+    explicitForm.setAttribute('data-founderai-capture', '');
+    explicitForm.innerHTML = '<input type="text" name="q" />'; // cố tình không có email/phone
+    document.body.appendChild(explicitForm);
 
-  it('id chưa khai báo (vd: company, message) → auto gắn name="cf_*"', () => {
-    const form = makeForm(`
-      <input type="text" id="company" />
-      <textarea id="notes"></textarea>
-    `);
-    autoMapFormInputsByIdOrLabel(form);
-    expect(form.querySelector('#company').name).toBe('cf_company');
-    // notes trùng alias 'notes' → name="notes" (không phải cf_notes vì match alias trước)
-    expect(form.querySelector('#notes').name).toBe('notes');
-  });
+    // Mô phỏng đúng 2 bước của findForms() (founderai-capture.js): query form[data-founderai-capture]
+    // trước — có kết quả thì dùng NGAY, không bao giờ gọi tới pickAutoCaptureForm.
+    const explicit = document.querySelectorAll('form[data-founderai-capture]');
+    const picked = explicit.length > 0
+      ? Array.prototype.slice.call(explicit)
+      : (() => {
+          const p = pickAutoCaptureForm(document.querySelectorAll('form'));
+          return p ? [p] : [];
+        })();
 
-  it('input đã có name → KHÔNG bị đè', () => {
-    const form = makeForm('<input type="text" id="fullName" name="customName" />');
-    autoMapFormInputsByIdOrLabel(form);
-    expect(form.querySelector('#fullName').name).toBe('customName');
+    expect(picked).toEqual([explicitForm]);
+    expect(picked).not.toContain(autoEligibleForm);
+  });
+});
+
+/**
+ * PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md, CẬP NHẬT 08/09 17:30 — Lỗ 4 + Lỗ 5.
+ *
+ * Lỗ 4: inferAutoName duyệt khoá theo thứ tự name → email → phone, so khớp bằng indexOf
+ * tự do — alias 'ho' (name) là substring của "phone"/"telephone", alias 'ten' (name) là
+ * substring của "content"/"attendees". Form có id="phone" không có name bị tự gán
+ * name="name" thay vì name="phone" → mất số điện thoại trong payload.
+ * Lỗ 5: id không khớp gì tự sinh name="cf_<id>" (vd id="company" → "cf_company").
+ * buildTrustedCustomFieldsSnapshot (backend) từ chối MỌI khoá cf_* không có trong cấu hình
+ * form của trang → 400 cho CẢ lead, không riêng field lạ đó.
+ */
+describe('founderai-capture.js — inferAutoName (Lỗ 4: substring sai; Lỗ 5: tự sinh cf_<id>)', () => {
+  function makeInputWithId(id) {
+    const form = document.createElement('form');
+    document.body.appendChild(form);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = id;
+    form.appendChild(input);
+    return { form, input };
+  }
+
+  it.each([
+    ['phone', 'phone'],
+    ['telephone', 'phone'],
+    ['email', 'email'],
+    ['sdt', 'phone'],
+    ['fullName', 'name'],
+    ['content', null],
+    ['company', null],
+  ])('id="%s" → suy ra %s', (id, expected) => {
+    const { form, input } = makeInputWithId(id);
+    expect(inferAutoName(input, form)).toBe(expected);
   });
 });
