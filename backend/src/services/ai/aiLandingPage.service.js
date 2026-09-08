@@ -25,8 +25,9 @@ function stripJsonFences(raw) {
  * normalizeInterestAreaValue chỉ nhận đúng chuỗi trong danh sách, sai một ký tự thì lead.service.js
  * âm thầm bỏ trống giá trị (không 400, nhưng mất dữ liệu). Không nhúng cf_sugg_NN_text (trường
  * thêm từ suggestedCustomFieldLabels) — chưa có đường lưu customFields nào sống được sau khi
- * trang qua LandingCanvasEditor.jsx (schema tối giản không có customFields/fixedFields), AI sinh
- * field đó sẽ khiến buildTrustedCustomFieldsSnapshot từ chối CẢ lead của khách (Review 08/09 tối).
+ * trang qua LandingCanvasEditor.jsx (schema tối giản không có customFields/fixedFields), nên
+ * field đó vẫn vô nghĩa dù buildTrustedCustomFieldsSnapshot đã hết ném 400 cho khoá lạ (fix ở
+ * landingLeadFormConfig.util.js sau Review 08/09 tối) — khách điền vào cũng bị bỏ qua lúc lưu.
  *
  * @param {{ fixedFields?: { occupation?: { visible?: boolean }, interestArea?: { visible?: boolean } } }|null} leadFormDraft
  * @returns {string} rỗng nếu không cần thêm gì

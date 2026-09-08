@@ -16,8 +16,9 @@
  *     không hỏi (không có field). KHÔNG dùng tên "cf_agree_checkbox" cho ô này — đó
  *     chỉ là ví dụ minh hoạ customFields tuỳ chọn, không được backend hiểu là consent.
  *   - Tuỳ chọn: customFields — gom từ mọi input có `name="cf_*"` (vd: name="cf_company_text").
- *     Backend whitelist theo schema của từng landing page (key phải khớp /^cf_[a-z0-9_]{4,40}$/
- *     và tồn tại trong form config). Field không khai báo trong form config sẽ bị BE từ chối.
+ *     Backend hiện KHÔNG có cách khai báo field cf_* nào cho một landing page cụ thể (UI cấu
+ *     hình cũ đã bỏ) — mọi key cf_* gửi lên đều bị bỏ qua lúc submit (log cảnh báo, không
+ *     lưu), KHÔNG làm mất phần còn lại của lead (khác 400 "từ chối cả lead" trước đây).
  *
  * Cách dùng:
  *   <form data-founderai-capture>
@@ -119,10 +120,12 @@ function inferAutoName(el, form) {
         }
       }
     }
-    // KHÔNG tự sinh cf_<id> (xem Lỗ 5 trong README): backend (buildTrustedCustomFieldsSnapshot)
-    // từ chối MỌI khoá cf_* không có trong cấu hình form của trang. Admin muốn trường thêm phải
-    // tự đặt name="cf_..." đúng khoá khai báo trong Lead Form Config.
   }
+  // KHÔNG tự sinh cf_<id> nữa (Lỗ 5): backend hiện KHÔNG có cách khai báo field cf_* cho một
+  // landing page cụ thể — đoán bừa từ id lạ (vd id="company" → "cf_company") chỉ tạo ra một
+  // field trông như được thu thập nhưng thực ra luôn bị bỏ qua lúc submit (không lưu vào lead,
+  // xem buildTrustedCustomFieldsSnapshot). Trước 08/09 việc đoán bừa còn tệ hơn: làm CẢ lead
+  // bị từ chối 400 — đã sửa (không còn 400), nhưng field cf_* tự đoán vẫn vô nghĩa.
   return null;
 }
 
@@ -174,7 +177,8 @@ function readFounderaiMarketingConsent(form) {
  *     • checkbox               → true (nếu checked) / false (nếu không — FormData bỏ qua khi uncheck)
  *     • radio (single checked) → value
  *     • select-multiple         → mảng string (BE nhận primitive qua `values`)
- *     Field không thuộc schema landing page sẽ bị backend từ chối (whitelist an toàn).
+ *     Field không thuộc schema landing page bị backend BỎ QUA (không lưu, không lỗi cho
+ *     phần còn lại của lead) — hiện chưa có UI khai báo cf_* cho một landing page cụ thể.
  *
  * @param {HTMLFormElement} form
  * @param {{ slug?: string }} config

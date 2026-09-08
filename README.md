@@ -144,12 +144,13 @@ Admin tự thiết kế form đăng ký trong HTML, script `founderai-capture.js
 **Tùy chọn nâng cao:**
 
 - `<form data-founderai-capture>` — đánh dấu form cụ thể cần capture (ưu tiên form này).
-- Trường thêm ngoài name/email/phone: đặt `name="cf_xxx"` **đúng khoá đã khai báo** trong
-  tab Lead Form Config (lowercase, dài 4-40 ký tự) — backend từ chối cả lead (400) nếu gặp
-  khoá `cf_*` không có trong cấu hình. Script **không** tự đoán tên trường thêm từ `id` nữa
-  (từng gây lỗi này khi id không khớp cấu hình) — phải tự đặt `name` đúng.
-- Admin có thể cấu hình form (`fixedFields`, `customFields`, `theme`) trong tab
-  Lead Form Config → endpoint `/api/public/landing-pages/:slug/form-config`.
+- Trường occupation/interestArea: form do AI tạo tự sinh `<select name="occupation">`/
+  `<select name="interestArea">` khi brief lúc tạo yêu cầu; script capture tự gửi kèm nếu
+  form có, không cần cấu hình gì thêm.
+- Trường thêm khác (`name="cf_xxx"`): **hiện chưa có cách khai báo** trường này cho một
+  landing page cụ thể (UI cấu hình cũ đã bỏ). Input `cf_*` bạn tự thêm vào form sẽ bị
+  **bỏ qua lúc submit** (không lưu vào lead) nhưng **không** làm mất phần còn lại của lead —
+  tên/email/phone vẫn lưu bình thường.
 - Muốn TẮT auto-capture: thêm `data-auto="0"` vào thẻ `<script src=".../founderai-capture.js">`.
 
 **Lưu ý cho landing page cũ:** Nếu landing page hiện tại đang có iframe `/embed/lead-form`
