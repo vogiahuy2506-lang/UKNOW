@@ -2006,9 +2006,12 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
 
   // Điều kiện hiển thị nút Gửi nhanh:
   // - Đúng 1 bước gửi
-  // - Kênh email hoặc zalo (zalo_personal chấp nhận cả phone lẫn uid — trang đích Gửi nhanh
-  //   tự đối chiếu UID sang tên qua danh bạ thật, không hiển thị UID trần; mọi type lạ khác
-  //   giữ fail-closed)
+  // - Kênh email, zalo_personal hoặc zalo_group (PR-2). zalo_personal chấp nhận cả phone lẫn
+  //   uid — trang đích Gửi nhanh tự đối chiếu UID sang tên qua danh bạ thật, không hiển thị
+  //   UID trần; mọi type lạ khác giữ fail-closed. zalo_group không có khái niệm
+  //   recipients.type (luôn null — campaignConfirmation.service.js:246) nên
+  //   isAllowedRecipientType tự đúng true qua nhánh channel !== 'zalo_personal' bên dưới,
+  //   không cần thêm điều kiện riêng.
   // - Người nhận thủ công (recipients.mode === 'manual')
   // - Gửi 1 lần / gửi ngay (timing anchor 'start' và value 0)
   // - Có callback onQuickSend và canCreate
@@ -2018,7 +2021,7 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
     ? (singleStep.timing.anchor === 'start' && Number(singleStep.timing.value || 0) === 0)
     : true;
   const isManualRecipient = singleStep?.recipients?.mode === 'manual';
-  const isAllowedChannel = singleStep && ['email', 'zalo_personal'].includes(singleStep.channel);
+  const isAllowedChannel = singleStep && ['email', 'zalo_personal', 'zalo_group'].includes(singleStep.channel);
   const isAllowedRecipientType = singleStep?.channel !== 'zalo_personal'
     || ALLOWED_ZALO_PERSONAL_RECIPIENT_TYPES.has(singleStep?.recipients?.type || 'phone');
   const canQuickSend = Boolean(

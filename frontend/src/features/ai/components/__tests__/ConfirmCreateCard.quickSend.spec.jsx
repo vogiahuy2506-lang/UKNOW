@@ -220,6 +220,50 @@ describe('ConfirmCreateCard - Quick Send Gate & Rendering', () => {
     const quickSendBtn = screen.queryByRole('button', { name: /gửi nhanh/i });
     expect(quickSendBtn).toBeNull();
   });
+
+  it('channel === "zalo_group" + recipients.mode === "manual" -> Hiện nút Gửi nhanh (PR-2)', () => {
+    // recipientType: null khớp đầu ra thật của campaignConfirmation.service.js:246
+    // (type chỉ có ý nghĩa cho zalo_personal, zalo_group luôn null) — Bẫy 2.
+    const confirmationView = createMockConfirmationView({ channel: 'zalo_group', mode: 'manual', recipientType: null });
+    const onQuickSend = vi.fn();
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={onQuickSend}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    const viBtn = screen.getByRole('button', { name: /gửi nhanh/i });
+    expect(viBtn).toBeInTheDocument();
+    fireEvent.click(viBtn);
+    expect(onQuickSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('channel === "zalo_group" + recipients.mode === "source" -> KHÔNG hiện nút Gửi nhanh (fail-closed)', () => {
+    const confirmationView = createMockConfirmationView({ channel: 'zalo_group', mode: 'source', recipientType: null });
+    const onQuickSend = vi.fn();
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={onQuickSend}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    const quickSendBtn = screen.queryByRole('button', { name: /gửi nhanh/i });
+    expect(quickSendBtn).toBeNull();
+  });
 });
 
 describe('ConfirmCreateCard - Blocking Issues & Exact Error Messages', () => {
