@@ -484,7 +484,15 @@ export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFie
   for (const key of clientKeys) {
     assertSafeKey(key);
     if (!schemaByKey.has(key)) {
-      throw configError('Trường tùy chỉnh không thuộc form này');
+      // Whitelist cf_* hiện KHÔNG ai khai báo được nữa — LandingCanvasEditor.jsx (v2) dùng
+      // schema tối giản {fields, theme, nameMode, submitEndpoint}, không còn customFields/
+      // fixedFields, nên customFields luôn bị ghi [] ở MỌI lần lưu (validateAdminLeadFormConfig
+      // ở trên). 400 ở đây trước làm MẤT CẢ LEAD (tên/email/phone) chỉ vì 1 khoá cf_* lạ đi
+      // kèm — README từng khuyên admin tự đặt name="cf_..." nhưng không có cách nào khai báo
+      // khoá đó để tránh lỗi này. Bỏ qua khoá lạ, giữ "không lưu dữ liệu ngoài schema" nhưng bỏ
+      // hình phạt mất lead (Review 08/09 tối, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b).
+      console.warn(`[landingLeadFormConfig] Bỏ qua customField lạ không thuộc form (key="${key}")`);
+      continue;
     }
   }
 
