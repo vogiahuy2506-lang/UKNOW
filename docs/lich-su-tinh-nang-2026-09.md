@@ -39,7 +39,9 @@ Code dựng cấu trúc campaign từ `CampaignIntentV1`, LLM chỉ viết nội
 
 **Trạng thái production**: `COMPILER_ENABLED_FLOWS=zalo_group,email`, `COMPILER_SLOT_FILLING_FLOWS=zalo_group`.
 Nghiệm thu bằng sự kiện thật 06/09: chiến dịch 356 có `audit_logs.details->>'via' = 'ai_compiler_slot_filling'`.
-GĐ5 chưa scope lại (chỉ còn một `[AI Patch]` là chuỗi log).
+GĐ5 chưa scope lại. *(Sửa 08/09: bản trước ghi "chỉ còn một `[AI Patch]` là chuỗi log" — sai, viết
+theo trí nhớ. Đếm thật: `grep -c "\[AI Patch\]" aiCampaignDraft.service.js` = 11, cả 11 nhánh vá
+vẫn chạy trên script LLM cũ ở `aiCampaign.service.js:1685` trước khi compiler ghi đè.)*
 
 ### Gửi kèm tệp, biến template, gửi nhanh
 
