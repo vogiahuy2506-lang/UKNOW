@@ -349,6 +349,7 @@ function CustomFieldRow({
           <div className="flex items-center gap-1">
             <button
               type="button"
+              aria-label="Di chuyển lên"
               className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-30"
               onClick={onMoveUp}
               disabled={index === 0}
@@ -357,6 +358,7 @@ function CustomFieldRow({
             </button>
             <button
               type="button"
+              aria-label="Di chuyển xuống"
               className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-30"
               onClick={onMoveDown}
             >
@@ -364,6 +366,7 @@ function CustomFieldRow({
             </button>
             <button
               type="button"
+              aria-label="Xoá trường"
               className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
               onClick={onRemove}
             >
