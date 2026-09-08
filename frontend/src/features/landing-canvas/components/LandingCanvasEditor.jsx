@@ -115,11 +115,33 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
         onClose?.(newId);
       }
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || t('landingPagesAdmin.saveFailed'));
+      const message = e?.response?.data?.message || e?.message || t('landingPagesAdmin.saveFailed');
+      // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 3: lỗi bất biến trường đã lưu
+      // (validateCustomFieldInput, landingLeadFormConfig.util.js backend) không kèm khoá field
+      // nào — configError() backend chỉ ném Error(message) trơn, không có .key (đọc code xác
+      // nhận, "Backend không đổi" nên không thêm ở đây). Vì vậy KHÔNG thể chỉ đúng 1 dòng —
+      // đánh dấu toàn bộ field đã persist (chắc chắn chứa đúng field gây lỗi, vì backend chỉ ném
+      // lỗi này khi field.key đã có trong existingByKey, tức đã persist) để người dùng thấy đúng
+      // vùng nghi vấn thay vì chỉ toast chung chung không biết sửa gì. UI đã khoá kiểu/mã option
+      // cho field đã persist (panel disabled) nên lỗi này chỉ xảy ra trong ca hiếm (persistedMeta
+      // cũ do đa tab/đua cập nhật), không phải luồng thao tác bình thường.
+      if (/không được đổi (loại trường|mã lựa chọn) đã lưu/i.test(message)) {
+        const persistedKeys = form.leadFormPersistedMeta?.keys || [];
+        if (persistedKeys.length > 0) {
+          setForm((prev) => ({
+            ...prev,
+            leadFormFieldErrors: {
+              ...(prev.leadFormFieldErrors || {}),
+              ...Object.fromEntries(persistedKeys.map((key) => [key, message])),
+            },
+          }));
+        }
+      }
+      toast.error(message);
     } finally {
       setSaving(false);
     }
-  }, [editingId, form, onClose, resolveLeadFormConfigForSave, t]);
+  }, [editingId, form, onClose, resolveLeadFormConfigForSave, setForm, t]);
 
   // Handlers cho topbar extras
   const handleOpenTemplateGallery = useCallback(() => {
