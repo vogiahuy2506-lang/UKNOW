@@ -3,10 +3,13 @@
 // (normalizeChannel, parseWizardMarker, GOOGLE_SHEET_URL_RE) di chuyển theo để tránh import
 // vòng (AiChatbot.jsx import lại các hàm này thay vì tự khai báo).
 
-// Ranh giới "chiến dịch đã tạo xong" trong lịch sử — khai lại y hệt backend
-// (aiCampaignWizard.service.js FLOW_BOUNDARY_TYPES). Test wizardContext.spec.js so khớp trực
-// tiếp hai bộ này để không lệch. Cố ý KHÔNG coi là "đang trong luồng" — nghĩa ngược lại.
-export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success']);
+// Ranh giới "chiến dịch đã tạo xong / đã bỏ dở" trong lịch sử — khai lại y hệt backend
+// (aiCampaignWizard.service.js FLOW_BOUNDARY_TYPES). 'campaign_abandoned' thêm ở PR-2
+// (PLAN_WIZARD_VONG_DOI). Cố ý KHÔNG coi là "đang trong luồng" — nghĩa ngược lại.
+// LƯU Ý: wizardContext.spec.js chỉ so với một mảng HẰNG (không import ngược backend, hai dự
+// án chạy hai test runner khác nhau — jest/vitest) — sửa một bên mà quên bên kia sẽ KHÔNG bị
+// bắt tự động, phải tự đối chiếu tay khi đổi bộ này.
+export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success', 'campaign_abandoned']);
 
 export const normalizeChannel = (channel) => {
   const lower = String(channel || '').trim().toLowerCase();

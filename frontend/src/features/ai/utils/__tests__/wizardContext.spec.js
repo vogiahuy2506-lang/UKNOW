@@ -28,8 +28,8 @@ const historyAfterCampaignA = [
 ];
 
 describe('wizardContext — ranh giới campaign_created reset trong CÙNG hội thoại', () => {
-  it('FLOW_BOUNDARY_TYPES khớp đúng backend (aiCampaignWizard.service.js)', () => {
-    expect([...FLOW_BOUNDARY_TYPES].sort()).toEqual(['auto_created_success', 'campaign_created']);
+  it('FLOW_BOUNDARY_TYPES khớp đúng backend (aiCampaignWizard.service.js) — so tay, KHÔNG tự động (2 dự án, 2 test runner khác nhau)', () => {
+    expect([...FLOW_BOUNDARY_TYPES].sort()).toEqual(['auto_created_success', 'campaign_abandoned', 'campaign_created']);
   });
 
   it('deriveWizardContext: ngay sau tin ranh giới, context rỗng — không còn TK 8 / nhóm g1', () => {
@@ -68,5 +68,32 @@ describe('wizardContext — ranh giới campaign_created reset trong CÙNG hội
     const next = applyWizardSelectionsToScript(script, context);
     expect(next).toBe(script);
     expect(next.nodes[0].config.zaloSelectedGroupIds).toEqual(['gExisting']);
+  });
+});
+
+/**
+ * PLAN_WIZARD_VONG_DOI_2026-09-07 PR-2 — mục 6. Mirror kịch bản backend
+ * aiCampaignWizard.service.spec.js mục 5 (lượt thứ hai sau abandon).
+ */
+describe('wizardContext — ranh giới campaign_abandoned reset trong CÙNG hội thoại', () => {
+  const historyAfterAbandonA = [
+    { role: 'user', content: marker({ gate: 'channel', channel: 'email' }) },
+    { role: 'user', content: marker({ gate: 'senderAccount', channel: 'email', accountId: 7, accountName: 'TK 7' }) },
+    { role: 'user', content: marker({ gate: 'dataSource', value: 'db' }) },
+    { role: 'user', content: 'thôi' },
+    { role: 'assistant', type: 'campaign_abandoned', content: 'Đã dừng.' },
+  ];
+
+  it('deriveWizardContext: lượt thứ hai (marker senderAccount 9) không còn sender 7/nguồn db của A', () => {
+    const history = [
+      ...historyAfterAbandonA,
+      { role: 'user', content: 'tạo chiến dịch Zalo mới' },
+      { role: 'user', content: marker({ gate: 'senderAccount', channel: 'zalo_group', accountId: 9, accountName: 'TK 9' }) },
+    ];
+    const context = deriveWizardContext(history);
+    expect(context.senderAccountId).toBe(9);
+    expect(context.senderAccountName).toBe('TK 9');
+    expect(context.dataSource).toBeNull();
+    expect(context.channel).not.toBe('email');
   });
 });

@@ -532,6 +532,24 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     appendMessage((prev) => [...prev, { role: 'assistant', content, type, data: data ?? { campaignId: campaignId ?? null } }]);
   };
 
+  // Ranh giới "chiến dịch đã bỏ dở" — cùng cơ chế closeWizardAfterCreate
+  // (PLAN_WIZARD_VONG_DOI_2026-09-07 PR-2). Gọi ở CẢ HAI nơi bấm/gõ huỷ luồng tạo chiến dịch
+  // (KHÔNG áp dụng cho handleCancelPlanByText — nhánh đó huỷ kế hoạch nội dung, đi đường
+  // reset_plan, ngoài phạm vi). Trước đây 2 nơi này chỉ append tin "Đã dừng…" KHÔNG có `type`
+  // → deriveWizardContext ở local không thấy ranh giới cho tới khi tải lại trang.
+  const closeWizardAfterAbandon = ({ content, messageCount, extraUserMessage, appendMessage = setMessages }) => {
+    enqueueWizardPatch('abandon_campaign_flow', { messageCount, content });
+    setServerWizardGates(null);
+    setContentPlanWorkflow(null);
+    setPendingCampaignData(null);
+    setPendingCampaignPrompt(null);
+    appendMessage((prev) => [
+      ...prev,
+      ...(extraUserMessage ? [{ role: 'user', content: extraUserMessage }] : []),
+      { role: 'assistant', type: 'campaign_abandoned', content },
+    ]);
+  };
+
   // Rebuild contentPlanWorkflow + serverWizardGates từ wizard_state server trả về.
   // Return true nếu đã set workflow (caller bỏ qua fallback lossy từ messages).
   const restoreFromServerWizardState = (wizardState, draftTemplates = []) => {
@@ -1362,16 +1380,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const handleDismissWizardCard = () => {
-    enqueueWizardPatch('abandon_campaign_flow', { messageCount: messages.length });
-    setContentPlanWorkflow(null);
-    setPendingCampaignData(null);
-    setPendingCampaignPrompt(null);
-    setMessages((prev) => [...prev, {
-      role: 'assistant',
+    closeWizardAfterAbandon({
+      messageCount: messages.length,
       content: locale === 'en'
         ? 'Understood, stopped. Tell me if you want to create a campaign or send messages later.'
         : 'Mình hiểu rồi, đã dừng. Khi nào bạn cần tạo chiến dịch hoặc gửi tin thì cứ nói mình nhé.',
-    }]);
+    });
   };
 
   const handlePlanConfirmationByText = async () => {
@@ -1764,19 +1778,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (contentPlanWorkflow) {
           await handleCancelPlanByText();
         } else {
-          enqueueWizardPatch('abandon_campaign_flow', { messageCount: messages.length });
-          setContentPlanWorkflow(null);
-          setPendingCampaignData(null);
-          setPendingCampaignPrompt(null);
-          setMessages((prev) => [...prev, {
-            role: 'user',
-            content: trimmedInput,
-          }, {
-            role: 'assistant',
+          closeWizardAfterAbandon({
+            messageCount: messages.length,
+            extraUserMessage: trimmedInput,
             content: locale === 'en'
               ? 'Stopped. Tell me if you want to create a campaign or send messages later.'
               : 'Đã dừng. Khi nào bạn muốn tạo chiến dịch hoặc gửi tin thì cứ nói mình nhé.',
-          }]);
+          });
         }
       } finally {
         isSendingRef.current = false;
