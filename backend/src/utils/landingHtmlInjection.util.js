@@ -184,9 +184,18 @@ export function stripFounderLandingAutoBlocks(html) {
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*\/>\s*/gi, '');
   // Strip iframe cũ do admin từng paste từ Lead Form Config — không auto-inject nữa từ v2.0.
-  // Loại bỏ mọi iframe nhúng form (embed/lead-form, embed/leadform, embed/form).
-  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*>[\s\S]*?<\/iframe>\s*/gi, '');
-  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*\/?>\s*/gi, '');
+  // CHỈ strip khi trang đã có <form khác (đường thu lead thay thế) — trang CHỈ có iframe
+  // (chưa có form nào khác) thì GIỮ NGUYÊN: strip vô điều kiện từng khiến 7 trang production
+  // (3 khách thật) mất iframe — cách thu lead DUY NHẤT của trang — trong im lặng chỉ vì admin
+  // sửa 1 chữ rồi Lưu (Hệ quả 6, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md CẬP NHẬT 08/09
+  // 17:30). Chốt guard /embed/lead-form ở landingEditGuard.util.js chỉ canh đường AI-edit,
+  // không canh đường save thường này.
+  if (/<form[\s>]/i.test(out)) {
+    out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*>[\s\S]*?<\/iframe>\s*/gi, '');
+    out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*\/?>\s*/gi, '');
+  } else if (/<iframe[^>]*embed\/lead.?form[^>]*/i.test(out)) {
+    console.log('[landingHtmlInjection] Giữ iframe /embed/lead-form vì trang chưa có <form nào khác để thu lead.');
+  }
   return out;
 }
 
