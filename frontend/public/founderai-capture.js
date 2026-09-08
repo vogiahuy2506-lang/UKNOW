@@ -45,6 +45,80 @@
  *   5. Fallback: nếu form có `.founderai-capture-success` / `.founderai-capture-error` → toggle.
  */
 // ----------------------------------------------------------------
+// Auto-map: input/select/textarea thiếu name → tự suy ra từ id / label[for] / placeholder.
+// Lý do: nhiều landing dán HTML form mà admin chỉ đặt id + label (vd Tailwind template),
+// backend cần name để ghi vào leads.name / leads.email / leads.phone. Hàm này chỉ gắn
+// name khi CHƯA CÓ — không đè name user đặt sẵn.
+// ----------------------------------------------------------------
+var FOUNDERAI_AUTO_NAME_KEYS = {
+  // common keys → input id / placeholder / label substring → name attribute suy ra
+  name: ['name', 'fullname', 'ho', 'ten', 'hovaten', 'yourname', 'username'],
+  email: ['email', 'e-mail', 'mail', 'gmail', 'youremail'],
+  phone: ['phone', 'tel', 'mobile', 'sdt', 'dienthoai', 'zalo', 'sodienthoai', 'yourphone'],
+  notes: ['notes', 'note', 'message', 'loinhan', 'ghichu', 'yeucau', 'comments', 'content'],
+};
+// Trường cf_ đi kèm slug tự sinh theo id (vd id="company" → cf_company).
+var FOUNDERAI_AUTO_NAME_LABEL_RE = /(cong ty|company|ten cong ty|workplace)/i;
+
+function normalizeAutoNameKey(raw) {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function inferAutoName(el, form) {
+  if (!el || el.name) return null;
+  var id = String(el.id || '').trim();
+  var placeholder = String(el.placeholder || '').trim();
+  var labelText = '';
+  if (id) {
+    var lbl = form.querySelector('label[for="' + id.replace(/"/g, '\\"') + '"]');
+    if (lbl) labelText = String(lbl.textContent || '').trim();
+  }
+  // Ưu tiên: id > label > placeholder
+  var candidates = [];
+  if (id) candidates.push(id);
+  if (labelText) candidates.push(labelText);
+  if (placeholder) candidates.push(placeholder);
+
+  for (var i = 0; i < candidates.length; i++) {
+    var norm = normalizeAutoNameKey(candidates[i]);
+    if (!norm) continue;
+    for (var key in FOUNDERAI_AUTO_NAME_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(FOUNDERAI_AUTO_NAME_KEYS, key)) continue;
+      var aliases = FOUNDERAI_AUTO_NAME_KEYS[key];
+      for (var j = 0; j < aliases.length; j++) {
+        if (norm === aliases[j] || norm.indexOf(aliases[j]) !== -1) {
+          return key;
+        }
+      }
+    }
+    // Match custom field — id kiểu "company" hoặc label công ty.
+    if (/^[a-z][a-z0-9_]{2,40}$/.test(norm)) {
+      // Tránh các id hệ thống Tailwind không phải custom field.
+      var blacklist = ['submit', 'submitbtn', 'workshopform', 'sessiondate', 'participants', 'experience'];
+      if (blacklist.indexOf(norm) !== -1) return null;
+      return 'cf_' + norm;
+    }
+  }
+  return null;
+}
+
+function autoMapFormInputsByIdOrLabel(form) {
+  if (!form) return;
+  var fields = form.querySelectorAll('input, select, textarea');
+  for (var i = 0; i < fields.length; i++) {
+    var el = fields[i];
+    if (el.name) continue;
+    // Bỏ qua: button, submit, hidden đã có sẵn name, type=hidden không id.
+    var type = String(el.type || '').toLowerCase();
+    if (type === 'submit' || type === 'button' || type === 'reset') continue;
+    var guessed = inferAutoName(el, form);
+    if (guessed) el.name = guessed;
+  }
+}
+
+// ----------------------------------------------------------------
 // Payload builder — tách khỏi IIFE để test được bằng jsdom (không cần
 // document.currentScript). IIFE bên dưới chỉ gọi buildFounderaiCapturePayload(form, config).
 // ----------------------------------------------------------------
@@ -262,7 +336,11 @@ if (typeof window !== 'undefined') {
   }
 
   // ----------------------------------------------------------------
-  // 5. Submit handler
+  // 5. Submit handler — chạy trong capture phase để ưu tiên hơn handler
+  // của user. Nếu form có custom submit đã preventDefault rồi thì vẫn gửi
+  // request (vì đây là capture phase, sau này mới bubble đến handler kia).
+  // Sau khi gửi thành công → gọi requestIdleCallback để chạy submit gốc
+  // (nếu user vẫn muốn xử lý riêng phía client).
   // ----------------------------------------------------------------
   function handleSubmit(ev) {
     ev.preventDefault();
@@ -350,12 +428,22 @@ if (typeof window !== 'undefined') {
       return;
     }
     forms.forEach(function (form) {
-      // Inject landingPageSlug + ghi nhận các input cf_* (customFields) đã có sẵn trong DOM.
+      // Bước 1: Auto-map inputs thiếu name (id/placeholder → suy ra name).
+      // VD: <input id="fullName"> → tự gắn name="name"
+      autoMapFormInputsByIdOrLabel(form);
+
+      // Bước 2: Inject landingPageSlug.
       injectHiddenField(form, 'landingPageSlug', slug);
+
+      // Bước 3: novalidate để tránh browser validation che mất error message ta tự show.
       form.setAttribute('novalidate', 'novalidate');
-      form.addEventListener('submit', handleSubmit);
+
+      // Bước 4: Capture submit — dùng capture phase (third param = true) để
+      // chạy TRƯỚC mọi handler khác (kể cả inline onsubmit). Handler này đã
+      // gọi preventDefault nên submit gốc không reload trang.
+      form.addEventListener('submit', handleSubmit, true);
     });
-    log('Bound', forms.length, 'form(s). Hỗ trợ customFields: input name="cf_*" (text/textarea/select/radio/checkbox).');
+    log('Bound', forms.length, 'form(s). Auto-mapped inputs: id/placeholder → name. Hỗ trợ customFields: input name="cf_*".');
   }
 
   if (document.readyState === 'loading') {

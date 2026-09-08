@@ -313,7 +313,7 @@ describe('landingHtmlInjection.util', () => {
       expect(twice).toBe(once);
     });
 
-    it('HTML có iframe form cũ → KHÔNG chèn lại iframe, chỉ thêm scripts tracking', () => {
+    it('HTML có iframe form cũ → bị strip khi lưu (v2.0: admin tự paste snippet nếu muốn)', () => {
       const html =
         '<html><body>' +
         '<iframe src="http://localhost:5174/embed/lead-form?slug=promo"></iframe>' +
@@ -322,8 +322,8 @@ describe('landingHtmlInjection.util', () => {
       // Scripts được inject
       expect(out).toContain('lp-track.js');
       expect(out).toContain('founderai-capture.js');
-      // Form iframe cũ vẫn còn (KHÔNG bị strip vì admin có thể đã dán cố ý)
-      expect(out).toContain('/embed/lead-form');
+      // Iframe cũ bị strip (không auto-inject nữa từ v2.0)
+      expect(out).not.toContain('/embed/lead-form');
     });
 
     it('slug rỗng → trả nguyên HTML không xử lý', () => {

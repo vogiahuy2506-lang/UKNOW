@@ -183,6 +183,10 @@ export function stripFounderLandingAutoBlocks(html) {
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*\/>\s*/gi, '');
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*\/>\s*/gi, '');
+  // Strip iframe cũ do admin từng paste từ Lead Form Config — không auto-inject nữa từ v2.0.
+  // Loại bỏ mọi iframe nhúng form (embed/lead-form, embed/leadform, embed/form).
+  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*>[\s\S]*?<\/iframe>\s*/gi, '');
+  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*\/?>\s*/gi, '');
   return out;
 }
 

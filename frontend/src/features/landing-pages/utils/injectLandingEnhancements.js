@@ -2,6 +2,7 @@ import { normalizeLandingLpTrackApiBase } from './normalizeLandingLpTrackApiBase
 
 /**
  * Gỡ khối script do hệ thống tự chèn (để lần lưu sau idempotent, tránh nhân đôi script).
+ * Cũng gỡ iframe cũ do admin từng paste từ Lead Form Config.
  */
 export function stripFounderLandingAutoBlocks(html) {
   let out = String(html ?? '');
@@ -10,6 +11,9 @@ export function stripFounderLandingAutoBlocks(html) {
   out = out.replace(/<script\s[^>]*lp-track\.js[^>]*\/>\s*/gi, '');
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*>\s*<\/script>\s*/gi, '');
   out = out.replace(/<script\s[^>]*founderai-capture\.js[^>]*\/>\s*/gi, '');
+  // Strip iframe cũ do admin từng paste từ Lead Form Config.
+  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*>[\s\S]*?<\/iframe>\s*/gi, '');
+  out = out.replace(/<iframe[^>]*embed\/lead.?form[^>]*\/?>\s*/gi, '');
   return out;
 }
 
@@ -50,6 +54,7 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
 
 /**
  * Xem trước gần đúng bản sẽ lưu (strip + rewrite + inject script) — dùng origin + VITE_API_URL hiện tại.
+ * Inject CẢ lp-track.js + founderai-capture.js để preview đồng nhất với backend.
  */
 export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBase }) {
   const s = String(slug || '').trim().toLowerCase();
@@ -61,8 +66,10 @@ export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBa
 }
 
 /**
- * Chèn `lp-track.js` vào HTML landing page (tracking view + click).
- * `founderai-capture.js` đã bị gỡ bỏ — không còn auto-capture form nữa.
+ * Chèn `lp-track.js` + `founderai-capture.js` vào HTML landing page.
+ * * lp-track.js: tracking view + click
+ * * founderai-capture.js: auto-capture form (tự động suy name từ id/placeholder,
+ *   dùng capture phase để ưu tiên hơn custom submit handler).
  *
  * @param {string} html
  * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
@@ -82,16 +89,22 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
   }
 
   const trackScriptSrc = `${origin}/lp-track.js`;
+  const captureScriptSrc = `${origin}/founderai-capture.js`;
 
   const hasTrackScript = /lp-track\.js/i.test(out);
+  const hasCaptureScript = /founderai-capture\.js/i.test(out);
 
-  const trackBlock = hasTrackScript
-    ? ''
-    : `<script src="${trackScriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+  let scriptBlock = '';
+  if (!hasTrackScript) {
+    scriptBlock += `<script src="${trackScriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+  }
+  if (!hasCaptureScript) {
+    scriptBlock += `<script src="${captureScriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
+  }
 
-  if (!trackBlock.trim()) return out;
+  if (!scriptBlock.trim()) return out;
 
-  const injectBlock = `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n${trackBlock}`;
+  const injectBlock = `<div data-founder-lp-injected="1" style="display:none" aria-hidden="true"></div>\n${scriptBlock}`;
   if (/<\/body>/i.test(out)) {
     return out.replace(/<\/body>/i, `${injectBlock}</body>`);
   }
