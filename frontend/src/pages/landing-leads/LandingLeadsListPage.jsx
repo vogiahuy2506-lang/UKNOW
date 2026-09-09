@@ -16,7 +16,7 @@ import { fetchLandingLeadsCustomFieldDefinitions } from '../../features/landing/
 import {
   getLeadFullName,
   getLeadInitials,
-  renderCustomFieldsSummary,
+  renderLeadExtraInfo,
 } from '../../features/landing/utils/leadFields.js';
 import { useI18n } from '../../i18n';
 
@@ -312,7 +312,7 @@ export default function LandingLeadsListPage() {
               {visibleItems.map((row) => {
                 const fullName = getLeadFullName(row);
                 const initials = getLeadInitials(row);
-                const cfSummary = renderCustomFieldsSummary(row.customFields, customDefs, 'vi');
+                const cfSummary = renderLeadExtraInfo(row, customDefs, 'vi');
                 const publicUrl = row.landingPageSlug
                   ? `${window.location.origin}/${row.landingPageSlug}`
                   : null;

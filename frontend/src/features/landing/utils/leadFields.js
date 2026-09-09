@@ -81,6 +81,30 @@ export function normalizeCustomFieldEntry(key, entry, locale = 'vi') {
  * @param {'vi'|'en'} [locale='vi']
  * @returns {string}
  */
+/**
+ * Cột "Thông tin thêm" ở /app/landing-leads: Nghề nghiệp + Lĩnh vực quan tâm (hai cột riêng
+ * của lead, backend trả `occupation`/`interestArea` — lead.service.js mapLeadRowToCampaignItem)
+ * rồi tới các trường thêm cf_*. Nghiệm thu 09/09: form có Nghề nghiệp, lead lưu đúng nhưng danh
+ * sách ghi "Không có" vì không cột nào hiển thị hai giá trị này — cột này trước chỉ gom cf_*.
+ * Giá trị lưu DB chính là chữ hiển thị tiếng Việt (OCCUPATION_VALUES/INTEREST_AREA_VALUES),
+ * nên in thẳng, không tra nhãn.
+ *
+ * @param {{ occupation?: string, interestArea?: string, customFields?: object }} row
+ * @param {Array} definitions
+ * @param {'vi'|'en'} locale
+ * @returns {string}
+ */
+export function renderLeadExtraInfo(row, definitions = [], locale = 'vi') {
+  const occupation = String(row?.occupation ?? '').trim();
+  const interestArea = String(row?.interestArea ?? row?.interest_area ?? '').trim();
+  const parts = [];
+  if (occupation) parts.push(`${locale === 'en' ? 'Occupation' : 'Nghề nghiệp'}: ${occupation}`);
+  if (interestArea) parts.push(`${locale === 'en' ? 'Interest' : 'Lĩnh vực'}: ${interestArea}`);
+  const custom = renderCustomFieldsSummary(row?.customFields, definitions, locale);
+  if (custom) parts.push(custom);
+  return parts.join(' · ');
+}
+
 export function renderCustomFieldsSummary(customFields, definitions = [], locale = 'vi') {
   if (!customFields || typeof customFields !== 'object') return '';
   const keys = Object.keys(customFields);
