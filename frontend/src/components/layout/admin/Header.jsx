@@ -47,11 +47,11 @@ const Header = () => {
   }, []);
 
   const quickItems = [
-    { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
-    { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
     { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
-    { key: 'upgrade', label: t('header.upgrade'), accent: 'primary', onClick: () => navigate('/pricing') },
+    { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
     { key: 'contact', label: t('header.contact'), onClick: () => navigate('/contact') },
+    { key: 'upgrade', label: t('header.upgrade'), accent: 'primary', onClick: () => navigate('/pricing') },
+    { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
   ];
 
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
