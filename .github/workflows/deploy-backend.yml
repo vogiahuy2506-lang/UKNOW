@@ -211,6 +211,11 @@ jobs:
             if printf '%s\n' "$PREFLIGHT_OUTPUT" | grep -Fxq 'BILLING_ANCHOR_PREFLIGHT_STATUS=prepared'; then
               RUN_BILLING_ANCHOR_AUDIT=true
             fi
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Reconcile migration 199 đang kẹt (mark applied nếu constraint đã đúng)..."
+            docker run --rm \
+              --network uknow_network \
+              -v /root/uknow/backend/.env:/app/.env \
+              "$BACKEND_IMAGE" node scripts/reconcileMigration199.js || echo "::warning::reconcileMigration199 thất bại — runner sẽ fail ở bước migrate."
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Chạy migration bằng image mới (container cũ vẫn đang phục vụ; migration chỉ sửa row khớp preflight manifest)..."
             docker run --rm \
               --name uknow-migrate \
