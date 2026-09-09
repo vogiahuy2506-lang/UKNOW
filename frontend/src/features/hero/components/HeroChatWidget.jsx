@@ -47,16 +47,6 @@ function getVisitorId() {
   return id;
 }
 
-async function fetchVisitorIp() {
-  try {
-    const res = await fetch('https://api.ipify.org?format=json');
-    const data = await res.json();
-    return data.ip;
-  } catch {
-    return 'unknown';
-  }
-}
-
 export default function HeroChatWidget() {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
@@ -143,12 +133,11 @@ export default function HeroChatWidget() {
 
     try {
       const visitorId = getVisitorId();
-      const visitorIp = await fetchVisitorIp();
 
       const response = await fetch('/api/public/hero/consultation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visitorId, visitorIp, message: userMessage })
+        body: JSON.stringify({ visitorId, message: userMessage })
       });
 
       const data = await response.json();
@@ -182,19 +171,16 @@ export default function HeroChatWidget() {
   const handleContactSubmit = async (e) => {
     e.preventDefault();
     if (!contactData.name || !contactData.email || !contactData.phone) return;
+    if (!contactData.message.trim() || contactData.message.trim().length < 10) {
+      setContactForm({ error: 'Vui lòng mô tả nhu cầu ít nhất 10 ký tự' });
+      return;
+    }
 
     try {
-      const visitorId = getVisitorId();
-      const visitorIp = await fetchVisitorIp();
-
-      const response = await fetch('/api/public/hero/consultation/contact', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...contactData, 
-          visitorId, 
-          visitorIp 
-        })
+        body: JSON.stringify(contactData)
       });
 
       const data = await response.json();
@@ -340,7 +326,7 @@ export default function HeroChatWidget() {
                   required
                 />
                 <textarea
-                  placeholder="Câu hỏi của bạn (tùy chọn)"
+                  placeholder="Câu hỏi của bạn"
                   value={contactData.message}
                   onChange={(e) => setContactData({...contactData, message: e.target.value})}
                   className="w-full px-3 py-2 text-sm border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
