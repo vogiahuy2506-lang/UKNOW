@@ -17,6 +17,7 @@ import {
   nextUnusedOptionValue,
   normalizeLeadFormConfig,
 } from '../../landing-pages/utils/landingLeadFormConfig.js';
+import { buildAddCustomFieldInstruction, buildAddFixedFieldInstruction } from '../utils/leadFormFieldInstructions.js';
 
 const emptyCustomField = () => ({
   key: generateCustomFieldKey('field'),
@@ -37,42 +38,6 @@ const emptyCustomField = () => ({
 function htmlHasFieldName(html, key) {
   if (!key) return true;
   return new RegExp(`\\bname\\s*=\\s*["']${key}["']`, 'i').test(String(html || ''));
-}
-
-const CUSTOM_FIELD_TYPE_DESCRIPTIONS = {
-  text: 'kiểu chữ ngắn (input text)',
-  textarea: 'kiểu đoạn văn dài (textarea)',
-  select: 'kiểu danh sách chọn (select)',
-  radio: 'kiểu chọn một trong nhiều (radio)',
-  checkbox: 'kiểu hộp kiểm (checkbox)',
-};
-
-/**
- * Câu lệnh dựng sẵn gửi cho đường sửa AI (editLandingHtmlWithAi, rule 2b — PR-2d-3 việc 2) khi
- * bấm "Nhờ AI thêm ô này". Mô tả đủ để model đặt đúng name/kiểu/lựa chọn — KHÔNG cần người
- * dùng tự gõ lại.
- *
- * @param {{ key: string, type: string, labelVi?: string, required?: boolean, options?: Array<{ value: string, labelVi?: string }> }} field
- * @returns {string}
- */
-export function buildAddCustomFieldInstruction(field) {
-  const label = field.labelVi || field.key;
-  const typeDesc = CUSTOM_FIELD_TYPE_DESCRIPTIONS[field.type] || CUSTOM_FIELD_TYPE_DESCRIPTIONS.text;
-  const optionsPart =
-    (field.type === 'select' || field.type === 'radio') && Array.isArray(field.options) && field.options.length
-      ? ` với các lựa chọn: ${field.options.map((o) => o.labelVi || o.value).join(', ')}`
-      : '';
-  const requiredPart = field.required ? ', bắt buộc điền' : '';
-  return `Thêm vào form đăng ký hiện có (giữ nguyên mọi trường khác) một ô ${typeDesc}, name="${field.key}", nhãn "${label}"${optionsPart}${requiredPart}.`;
-}
-
-/**
- * @param {'occupation'|'interestArea'} key
- * @returns {string}
- */
-export function buildAddFixedFieldInstruction(key) {
-  const label = key === 'occupation' ? 'Nghề nghiệp' : 'Lĩnh vực quan tâm';
-  return `Thêm vào form đăng ký hiện có (giữ nguyên mọi trường khác) một select name="${key}", nhãn "${label}", bắt buộc chọn.`;
 }
 
 /**

@@ -16,9 +16,10 @@
  *     không hỏi (không có field). KHÔNG dùng tên "cf_agree_checkbox" cho ô này — đó
  *     chỉ là ví dụ minh hoạ customFields tuỳ chọn, không được backend hiểu là consent.
  *   - Tuỳ chọn: customFields — gom từ mọi input có `name="cf_*"` (vd: name="cf_company_text").
- *     Backend hiện KHÔNG có cách khai báo field cf_* nào cho một landing page cụ thể (UI cấu
- *     hình cũ đã bỏ) — mọi key cf_* gửi lên đều bị bỏ qua lúc submit (log cảnh báo, không
- *     lưu), KHÔNG làm mất phần còn lại của lead (khác 400 "từ chối cả lead" trước đây).
+ *     Khai báo field cf_* cho từng landing page trong Cài đặt trang → section "Form đăng ký"
+ *     (leadFormConfig.customFields) — AI dùng đúng khai báo này để sinh/sửa form. Key cf_*
+ *     KHÔNG nằm trong khai báo của trang đó sẽ bị backend bỏ qua lúc submit (log cảnh báo,
+ *     không lưu), KHÔNG làm mất phần còn lại của lead (khác 400 "từ chối cả lead" trước đây).
  *
  * Cách dùng:
  *   <form data-founderai-capture>
@@ -121,9 +122,11 @@ function inferAutoName(el, form) {
       }
     }
   }
-  // KHÔNG tự sinh cf_<id> nữa (Lỗ 5): backend hiện KHÔNG có cách khai báo field cf_* cho một
-  // landing page cụ thể — đoán bừa từ id lạ (vd id="company" → "cf_company") chỉ tạo ra một
-  // field trông như được thu thập nhưng thực ra luôn bị bỏ qua lúc submit (không lưu vào lead,
+  // KHÔNG tự sinh cf_<id> nữa (Lỗ 5): mỗi landing page chỉ chấp nhận đúng các khoá cf_* đã
+  // khai báo trong Cài đặt trang → Form đăng ký (leadFormConfig.customFields) — đoán bừa từ
+  // id lạ (vd id="company" → "cf_company") gần như chắc chắn không khớp khoá đã khai báo
+  // (khoá thật do AI sinh dạng cf_sugg_NN_text hoặc admin tự đặt), nên chỉ tạo ra một field
+  // trông như được thu thập nhưng thực ra luôn bị bỏ qua lúc submit (không lưu vào lead,
   // xem buildTrustedCustomFieldsSnapshot). Trước 08/09 việc đoán bừa còn tệ hơn: làm CẢ lead
   // bị từ chối 400 — đã sửa (không còn 400), nhưng field cf_* tự đoán vẫn vô nghĩa.
   return null;
@@ -178,7 +181,8 @@ function readFounderaiMarketingConsent(form) {
  *     • radio (single checked) → value
  *     • select-multiple         → mảng string (BE nhận primitive qua `values`)
  *     Field không thuộc schema landing page bị backend BỎ QUA (không lưu, không lỗi cho
- *     phần còn lại của lead) — hiện chưa có UI khai báo cf_* cho một landing page cụ thể.
+ *     phần còn lại của lead) — khai báo schema cf_* cho từng landing page trong Cài đặt
+ *     trang → section "Form đăng ký" (leadFormConfig.customFields).
  *
  * @param {HTMLFormElement} form
  * @param {{ slug?: string }} config
