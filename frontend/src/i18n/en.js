@@ -6963,7 +6963,8 @@ Feel free to ask me anything!`,
 
   phoneRequired: {
     title: 'Add phone number',
-    description: 'Please add your phone number to continue using the system.',
+    description: 'Add your phone number so we can reach you when needed. You can do this later.',
+    later: 'Later',
     phoneLabel: 'Phone number',
     phonePlaceholder: '0901234567',
     submit: 'Confirm',
