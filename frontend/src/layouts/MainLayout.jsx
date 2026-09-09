@@ -316,6 +316,7 @@ const MainLayout = () => {
 
       <PhoneRequiredModal
         isOpen={phoneRequired}
+        onClose={() => setPhoneDismissed(true)}
         onChanged={(phone) => updateUser({ ...user, phone })}
       />
 
