@@ -230,3 +230,56 @@ describe('aiLandingPageService.generate — leadFormConfig điều khiển occup
     expect(result.html).toContain('name="cf_sugg_01_text"');
   });
 });
+
+/**
+ * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 2 — "đường sửa bằng AI" (editHtml)
+ * chưa có test nào trước đây (grep xác nhận trước khi viết). Rule 2 cũ ("Giữ NGUYÊN VĂN...
+ * không xóa trường nào") không phân biệt "AI tự ý xoá field" (cấm) với "người dùng CHỦ ĐỘNG
+ * yêu cầu thêm field" (hợp lệ) — thêm rule 2b làm rõ ngoại lệ, giữ nguyên guard
+ * data-founderai-capture (landingEditGuard.util.js:104, PR-2a) không đổi.
+ */
+describe('aiLandingPageService.editHtml — rule 2b: thêm trường vào form hiện có', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('prompt chứa rule 2b hướng dẫn thêm trường vào ĐÚNG form data-founderai-capture, không tạo form thứ 2, không xoá trường khác', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Thêm ô Tên công ty vào form',
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toContain('data-founderai-capture');
+    expect(sentPrompt).toMatch(/KHÔNG tạo form thứ 2/i);
+    expect(sentPrompt).toMatch(/GIỮ NGUYÊN mọi trường đang có/i);
+    // Yêu cầu người dùng vẫn phải xuất hiện nguyên văn trong prompt gửi Gemini.
+    expect(sentPrompt).toContain('Thêm ô Tên công ty vào form');
+  });
+
+  it('kết quả hợp lệ (giữ nguyên form + đủ 3 trường gốc) → pass, trả đúng html', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    const result = await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Thêm ô Tên công ty vào form',
+    });
+    expect(result.html).toBe(validFormHtml);
+  });
+
+  it('thiếu currentHtml → 400, không gọi Gemini', async () => {
+    await expect(
+      aiLandingPageService.editHtml({ userId: 1, currentHtml: '', instruction: 'Thêm ô Tên công ty' })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(generateWithBudget).not.toHaveBeenCalled();
+  });
+});
