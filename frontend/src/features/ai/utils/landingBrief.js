@@ -30,9 +30,25 @@ export function buildLandingBriefFromAnswers({
       productName = String(answers.productName || '').trim() || null;
       productDescription = String(answers.productDescription || '').trim() || null;
     } else if (answers.product) {
-      productMode = 'catalog';
       const id = Number(answers.product);
-      productId = Number.isFinite(id) && id > 0 ? id : null;
+      if (Number.isInteger(id) && id > 0) {
+        productMode = 'catalog';
+        productId = id;
+      } else {
+        // Thẻ ask_landing_details do LLM sinh; prompt dặn value là <id> số nhưng model có thể
+        // viết tên/slug. Trước đây nhánh này vẫn đặt productMode 'catalog' với productId null
+        // → backend 400 "productId không hợp lệ" (sếp gặp 09/09 lúc nghiệm thu PR-2d-1).
+        // Rơi về 'other' với tên lấy từ nhãn lựa chọn: backend đi đường tên sản phẩm, không
+        // cần id. Bỏ emoji/ký hiệu đầu nhãn để tên sạch.
+        const option = questions
+          .find((q) => q.id === 'product')?.options
+          ?.find((opt) => String(opt?.value) === String(answers.product));
+        const label = String(option?.label || answers.product || '')
+          .replace(/^[^\p{L}\p{N}]+/u, '')
+          .trim();
+        productMode = 'other';
+        productName = label || null;
+      }
     }
   }
 
