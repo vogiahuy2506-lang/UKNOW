@@ -90,20 +90,34 @@ export function renderCustomFieldsSummary(customFields, definitions = [], locale
     if (def?.key) defByKey.set(def.key, def);
   }
   const parts = keys.map((key) => {
+    const raw = customFields[key];
     const def = defByKey.get(key);
+    // Dạng (A) — snapshot backend (buildTrustedCustomFieldsSnapshot): { type, labelVi, labelEn,
+    // value, displayVi, displayEn }. Trước đây bị bọc thành { value: <object> } → in ra
+    // "[object Object]" và nhãn rơi về khoá cf_* (sếp thấy 09/09 ở /app/landing-leads).
+    // Nhãn/hiển thị đã có sẵn trong snapshot, không cần definitions.
+    if (raw && typeof raw === 'object' && !Array.isArray(raw) && ('value' in raw || 'displayVi' in raw)) {
+      const { label, display, value } = normalizeCustomFieldEntry(key, raw, locale);
+      const empty = value === null || value === undefined || value === '' || value === false
+        || (Array.isArray(value) && value.length === 0);
+      if (empty) return null;
+      return `${label}: ${display}`;
+    }
+    // Dạng (B) — giá trị thuần, tra nhãn/option từ definitions.
     const label = def?.labelVi || def?.labelEn || key;
-    const entry = { value: customFields[key] };
-    // Nếu là select/radio, tra label từ options
+    const entry = { value: raw };
     if (def && (def.type === 'select' || def.type === 'radio') && Array.isArray(def.options)) {
-      const opt = def.options.find((o) => o.value === customFields[key]);
+      const opt = def.options.find((o) => o.value === raw);
       if (opt) {
-        entry.labelVi = opt.labelVi || opt.value;
-        entry.labelEn = opt.labelEn || opt.value;
+        // Nhãn lựa chọn là GIÁ TRỊ hiển thị (displayVi/En), không phải nhãn trường (labelVi/En)
+        // — bản cũ gán vào labelVi nên "Quy mô: opt_1" thay vì "Quy mô: Nhỏ".
+        entry.displayVi = opt.labelVi || opt.value;
+        entry.displayEn = opt.labelEn || opt.labelVi || opt.value;
       }
     }
     const { display } = normalizeCustomFieldEntry(key, entry, locale);
     return `${label}: ${display}`;
-  });
+  }).filter(Boolean);
   return parts.join(' · ');
 }
 
