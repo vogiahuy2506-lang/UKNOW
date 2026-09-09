@@ -342,9 +342,13 @@ describe('checksum baseline', () => {
   });
 
   it('stops after a legacy checksum baseline when the same invocation has pending migrations', async () => {
+    // Use a stable checkpoint file (198) to anchor this test so it is not
+    // affected by newly added business migrations (194-197, etc.).
     const files = listMigrationFiles();
-    const pendingFile = files.at(-1);
-    const baselineFile = files[0];
+    const pendingFile = '198_checkpoint_for_tests.sql';
+    const baselineFile = '001_rbac_roles_and_members.sql';
+    const previousReleaseId = process.env.MIGRATION_RELEASE_ID;
+    delete process.env.MIGRATION_RELEASE_ID;
     const checksummedRows = files
       .filter((filename) => filename !== pendingFile)
       .map((filename) => ({
@@ -373,6 +377,8 @@ describe('checksum baseline', () => {
     } finally {
       if (previousBuildSha === undefined) delete process.env.BUILD_SHA;
       else process.env.BUILD_SHA = previousBuildSha;
+      if (previousReleaseId === undefined) delete process.env.MIGRATION_RELEASE_ID;
+      else process.env.MIGRATION_RELEASE_ID = previousReleaseId;
     }
 
     expect(client.query).toHaveBeenCalledWith(
@@ -395,19 +401,20 @@ describe('checksum baseline', () => {
   });
 
   it('rolls back checksum baseline when recording the release checkpoint fails, so a retry cannot cross the boundary', async () => {
-    const files = listMigrationFiles();
-    // Keep this checkpoint test independent from a particular business
-    // migration. The checksum-only release intentionally has no 174 file.
-    const pendingFile = files.at(-1);
-    const baselineFile = files.find((filename) => filename !== pendingFile);
-    const committedRows = files
-      .filter((filename) => filename !== pendingFile)
-      .map((filename) => ({
-        filename,
-        checksum_sha256: filename === baselineFile
-          ? null
-          : hashMigrationContent(fs.readFileSync(path.join(MIGRATIONS_DIR, filename))),
-      }));
+    // Use hardcoded file numbers so this test is not affected by newly added
+    // business migrations.  Baseline = 001, last-committed = 198.
+    const baselineFile = '001_rbac_roles_and_members.sql';
+    const lastCommittedFile = '198_checkpoint_for_tests.sql';
+    const pendingFile = '197_chatbot_channel_connections_baileys.sql';
+    const allFiles = [baselineFile, lastCommittedFile];
+    const previousReleaseId = process.env.MIGRATION_RELEASE_ID;
+    delete process.env.MIGRATION_RELEASE_ID;
+    const committedRows = allFiles.map((filename) => ({
+      filename,
+      checksum_sha256: filename === baselineFile
+        ? null
+        : hashMigrationContent(fs.readFileSync(path.join(MIGRATIONS_DIR, filename))),
+    }));
     let committedCheckpoint = null;
     let workingRows = null;
     let workingCheckpoint = null;
@@ -467,6 +474,8 @@ describe('checksum baseline', () => {
     } finally {
       if (previousBuildSha === undefined) delete process.env.BUILD_SHA;
       else process.env.BUILD_SHA = previousBuildSha;
+      if (previousReleaseId === undefined) delete process.env.MIGRATION_RELEASE_ID;
+      else process.env.MIGRATION_RELEASE_ID = previousReleaseId;
     }
 
     expect(committedRows.find((row) => row.filename === baselineFile).checksum_sha256)
@@ -479,15 +488,15 @@ describe('checksum baseline', () => {
   });
 
   it('refuses a same-artifact retry after checksum checkpoint, then lets a later release run the pending migration', async () => {
-    const files = listMigrationFiles();
-    // The simulated pending file must exist in every checksum-only release.
-    const pendingFile = files.at(-1);
-    const migratedRows = files
-      .filter((filename) => filename !== pendingFile)
-      .map((filename) => ({
-        filename,
-        checksum_sha256: hashMigrationContent(fs.readFileSync(path.join(MIGRATIONS_DIR, filename))),
-      }));
+    // Use hardcoded file numbers so this test is not affected by newly added
+    // business migrations.  Baseline = 001, last-committed = 198, pending = 197.
+    const baselineFile = '001_rbac_roles_and_members.sql';
+    const lastCommittedFile = '198_checkpoint_for_tests.sql';
+    const pendingFile = '197_chatbot_channel_connections_baileys.sql';
+    const migratedRows = [baselineFile, lastCommittedFile].map((filename) => ({
+      filename,
+      checksum_sha256: hashMigrationContent(fs.readFileSync(path.join(MIGRATIONS_DIR, filename))),
+    }));
     const queries = [];
     const client = {
       query: jest.fn(async (sql, params = []) => {
@@ -504,6 +513,8 @@ describe('checksum baseline', () => {
     };
 
     const previousBuildSha = process.env.BUILD_SHA;
+    const previousReleaseId = process.env.MIGRATION_RELEASE_ID;
+    delete process.env.MIGRATION_RELEASE_ID;
     try {
       process.env.BUILD_SHA = 'checksum-checkpoint-c';
       await expect(runMigrationsUnlocked(client))
@@ -515,6 +526,8 @@ describe('checksum baseline', () => {
     } finally {
       if (previousBuildSha === undefined) delete process.env.BUILD_SHA;
       else process.env.BUILD_SHA = previousBuildSha;
+      if (previousReleaseId === undefined) delete process.env.MIGRATION_RELEASE_ID;
+      else process.env.MIGRATION_RELEASE_ID = previousReleaseId;
     }
 
     expect(queries.some(({ text }) => text === 'BEGIN')).toBe(true);
