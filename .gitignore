@@ -36,6 +36,7 @@ db.sql
 ####################
 backend/node_modules/
 backend/.env
+backend/whatsapp-sessions/
 
 # Integration test overrides (Postgres local)
 backend/tests/integration/.env.test
