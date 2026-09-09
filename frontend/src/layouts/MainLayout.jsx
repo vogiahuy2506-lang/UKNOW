@@ -11,6 +11,7 @@ import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
 import ChangePasswordModal from '../features/auth/components/ChangePasswordModal';
 import PhoneRequiredModal from '../features/auth/components/PhoneRequiredModal';
+import ConsentRequiredModal from '../features/auth/components/ConsentRequiredModal';
 import TrialWelcomeModal from '../features/auth/components/TrialWelcomeModal';
 import { trialWelcomeKey } from '../stores/authStore';
 
@@ -36,6 +37,13 @@ const MainLayout = () => {
   // phục 09/09 vì modal không có cách đóng, chặn cả app.
   const [phoneDismissed, setPhoneDismissed] = useState(false);
   const phoneRequired = !mustChangePassword && !user?.phone && user?.role !== 'admin' && !phoneDismissed;
+  // Nhắc bổ sung đồng ý điều khoản & xử lý dữ liệu (PR-N3a / Nghị định 330/2026/NĐ-CP) cho người dùng cũ.
+  // Đóng được ("Để sau" hoặc bấm ra ngoài), hiện lại mỗi lần vào /app.
+  // State lưu trong bộ nhớ (KHÔNG lưu localStorage).
+  // KHÔNG xoá dù ESLint báo "unused" — modal này là yêu cầu tuân thủ Nghị định 330/2026.
+  // Đã bị xoá nhầm một lần ở commit 1a992e76 ("fix lint") và không ai phát hiện trong 2 ngày.
+  const [consentDismissed, setConsentDismissed] = useState(false);
+  const consentRequired = !mustChangePassword && !phoneRequired && !user?.hasConsented && user?.role !== 'admin' && !consentDismissed;
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', false); // default icon-only
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('founder_ai_ai_panel_open', false);
@@ -218,6 +226,18 @@ const MainLayout = () => {
           onChanged={(phone) => updateUser({ ...user, phone })}
         />
 
+        <ConsentRequiredModal
+          isOpen={consentRequired}
+          onClose={() => setConsentDismissed(true)}
+          onConsented={() =>
+            updateUser({
+              ...user,
+              hasConsented: true,
+              consents: { terms: true, privacy: true, dpa: true },
+            })
+          }
+        />
+
         <TrialWelcomeModal
           isOpen={Boolean(trial)}
           trial={trial}
@@ -318,6 +338,18 @@ const MainLayout = () => {
         isOpen={phoneRequired}
         onClose={() => setPhoneDismissed(true)}
         onChanged={(phone) => updateUser({ ...user, phone })}
+      />
+
+      <ConsentRequiredModal
+        isOpen={consentRequired}
+        onClose={() => setConsentDismissed(true)}
+        onConsented={() =>
+          updateUser({
+            ...user,
+            hasConsented: true,
+            consents: { terms: true, privacy: true, dpa: true },
+          })
+        }
       />
 
       <TrialWelcomeModal

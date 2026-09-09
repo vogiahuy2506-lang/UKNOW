@@ -6975,6 +6975,25 @@ Feel free to ask me anything!`,
     versionMismatchError: 'The system is currently being updated. Please try again in a few minutes or contact support.',
   },
 
+  // Removed by mistake in 1a992e76 ("fix lint"), restored 09/09 — ConsentRequiredModal
+  // depends on these keys; without them it shows raw text like "consentRequired.title".
+  consentRequired: {
+    title: 'Terms & Data Processing Consent Update',
+    description: 'Under Decree 330/2026/ND-CP on personal data protection, please confirm your consent to the following legal documents.',
+    agreeTerms: 'I have read and agree to the',
+    termsLink: 'Terms of Service',
+    agreePrivacy: 'I have read and agree to the',
+    privacyLink: 'Privacy Policy',
+    agreeDpa: 'I have read and agree to the',
+    dpaLink: 'Public Data Processing Agreement (Public DPA)',
+    validationRequired: 'Please agree to all 3 documents to continue.',
+    later: 'Later',
+    submit: 'Agree and Continue',
+    saving: 'Processing...',
+    failed: 'Failed to record consent.',
+    errorOccurred: 'An error occurred. Please try again.',
+  },
+
   // Trial Welcome Modal
   trialWelcome: {
     title: 'Welcome to Founder AI!',

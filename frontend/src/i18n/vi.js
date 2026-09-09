@@ -6950,6 +6950,25 @@ export default {
     versionMismatchError: 'Hệ thống đang được cập nhật. Vui lòng thử lại sau ít phút hoặc liên hệ hỗ trợ.',
   },
 
+  // Bị xoá nhầm ở 1a992e76 ("fix lint"), khôi phục 09/09 — modal ConsentRequiredModal dùng
+  // các khoá này, thiếu thì hiện chữ thô kiểu "consentRequired.title" thay vì tiếng Việt.
+  consentRequired: {
+    title: 'Cập nhật thoả thuận điều khoản & dữ liệu cá nhân',
+    description: 'Theo quy định của Nghị định 330/2026/NĐ-CP về bảo vệ dữ liệu cá nhân, vui lòng xác nhận sự đồng ý của bạn đối với các văn bản pháp lý dưới đây.',
+    agreeTerms: 'Tôi đã đọc và đồng ý với',
+    termsLink: 'Điều khoản dịch vụ',
+    agreePrivacy: 'Tôi đã đọc và đồng ý với',
+    privacyLink: 'Chính sách bảo mật',
+    agreeDpa: 'Tôi đã đọc và đồng ý với',
+    dpaLink: 'Thoả thuận Xử lý Dữ liệu Cá nhân (Public DPA)',
+    validationRequired: 'Vui lòng đồng ý với cả 3 văn bản để tiếp tục.',
+    later: 'Để sau',
+    submit: 'Đồng ý và tiếp tục',
+    saving: 'Đang xử lý...',
+    failed: 'Ghi nhận đồng ý thất bại.',
+    errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+  },
+
   // Trial Welcome Modal
   trialWelcome: {
     title: 'Chào mừng bạn đến với Founder AI!',
