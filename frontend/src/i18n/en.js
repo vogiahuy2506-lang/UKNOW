@@ -964,7 +964,7 @@ export default {
 
   leadFormConfig: {
     title: 'Signup form',
-    help: 'Toggle Occupation and Interest; add custom fields. The public iframe loads the latest config — no HTML rewrite needed.',
+    help: 'Toggle Occupation and Interest; add custom fields. AI includes these fields when it generates or edits the page — if an existing page is missing a field, use the "Ask AI to add this field" button.',
     showOccupation: 'Show Occupation',
     showInterest: 'Show Interest area',
     customFields: 'Custom fields',

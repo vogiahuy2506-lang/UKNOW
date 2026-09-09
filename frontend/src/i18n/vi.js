@@ -965,7 +965,7 @@ export default {
 
   leadFormConfig: {
     title: 'Form đăng ký',
-    help: 'Bật/tắt Nghề nghiệp và Lĩnh vực; thêm trường tùy chỉnh. Iframe public lấy cấu hình mới nhất, không cần sửa HTML.',
+    help: 'Bật/tắt Nghề nghiệp và Lĩnh vực; thêm trường tùy chỉnh. AI sẽ đưa đúng các trường này vào form khi tạo/sửa trang — trang đã có sẵn mà thiếu trường thì dùng nút "Nhờ AI thêm ô này".',
     showOccupation: 'Hiện Nghề nghiệp',
     showInterest: 'Hiện Lĩnh vực quan tâm',
     customFields: 'Trường tùy chỉnh',

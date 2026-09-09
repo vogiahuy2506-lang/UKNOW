@@ -144,12 +144,17 @@ Admin tự thiết kế form đăng ký trong HTML, script `founderai-capture.js
 **Tùy chọn nâng cao:**
 
 - `<form data-founderai-capture>` — đánh dấu form cụ thể cần capture (ưu tiên form này).
-- Trường occupation/interestArea: form do AI tạo tự sinh `<select name="occupation">`/
-  `<select name="interestArea">` khi brief lúc tạo yêu cầu; script capture tự gửi kèm nếu
-  form có, không cần cấu hình gì thêm.
-- Trường thêm khác (`name="cf_xxx"`): **hiện chưa có cách khai báo** trường này cho một
-  landing page cụ thể (UI cấu hình cũ đã bỏ). Input `cf_*` bạn tự thêm vào form sẽ bị
-  **bỏ qua lúc submit** (không lưu vào lead) nhưng **không** làm mất phần còn lại của lead —
+- Trường occupation/interestArea/tùy chỉnh: khai báo trong panel **"Form đăng ký"** ở
+  settings của trang (Canvas Editor → `LeadFormConfigPanel`), lưu vào `leadFormConfig`
+  của landing page. Khi tạo trang bằng AI hoặc yêu cầu AI sửa trang, các trường này được
+  đưa thẳng vào prompt để model sinh đúng `name="occupation"` / `name="interestArea"` /
+  `name="cf_xxx"` trong form — không cần tự viết HTML tay. Nếu trang đã có sẵn mà thiếu
+  một trường đã khai báo, panel hiện cảnh báo kèm nút **"Nhờ AI thêm ô này"** để AI chỉnh
+  trực tiếp form hiện có (giữ nguyên các trường khác).
+- Backend chỉ lưu các khoá `cf_xxx` đã khai báo trong `leadFormConfig.customFields` của
+  chính trang đó (`leads.custom_fields` JSONB, xem `backend/migrations/126_leads_custom_fields.sql`).
+  Khoá `cf_*` nào form tự thêm mà KHÔNG có trong khai báo sẽ bị **bỏ qua lúc submit**
+  (không lưu, có log cảnh báo) nhưng **không** làm mất phần còn lại của lead —
   tên/email/phone vẫn lưu bình thường.
 - Muốn TẮT auto-capture: thêm `data-auto="0"` vào thẻ `<script src=".../founderai-capture.js">`.
 
