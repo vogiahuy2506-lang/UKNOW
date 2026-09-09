@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LeadFormConfigPanel from '../LeadFormConfigPanel.jsx';
 import { defaultLeadFormConfig } from '../../../landing-pages/utils/landingLeadFormConfig.js';
 import viDict from '../../../../i18n/vi.js';
+import { editLandingHtmlWithAi } from '../../../landing-pages/services/landingPagesAdminApi.service.js';
+
+vi.mock('../../../landing-pages/services/landingPagesAdminApi.service.js', () => ({
+  editLandingHtmlWithAi: vi.fn(),
+}));
 
 /**
  * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 4.
@@ -104,5 +109,130 @@ describe('LeadFormConfigPanel', () => {
     });
     const { container } = render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
     expect(container.textContent).not.toContain('leadFormConfig.');
+  });
+
+  /**
+   * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 3: so name="<khoá>" trong
+   * form.htmlContent với từng trường — thiếu → cảnh báo + nút "Nhờ AI thêm ô này".
+   */
+  describe('cảnh báo thiếu ô trong htmlContent', () => {
+    beforeEach(() => {
+      editLandingHtmlWithAi.mockReset();
+    });
+
+    it('custom field CHƯA có name="<khoá>" trong htmlContent → cảnh báo + nút "Nhờ AI thêm ô này" hiện', () => {
+      const setForm = vi.fn();
+      const field = makeCustomField({ key: 'cf_test_aaaa', labelVi: 'Trường thử' });
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+          customFields: [field],
+        },
+        htmlContent: '<form data-founderai-capture><input name="email" /></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
+
+      expect(screen.getByText(/Trang chưa có ô/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Nhờ AI thêm ô này' })).toBeInTheDocument();
+    });
+
+    it('custom field ĐÃ có name="<khoá>" trong htmlContent → không cảnh báo', () => {
+      const setForm = vi.fn();
+      const field = makeCustomField({ key: 'cf_test_aaaa', labelVi: 'Trường thử' });
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+          customFields: [field],
+        },
+        htmlContent: '<form data-founderai-capture><input name="cf_test_aaaa" /></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
+
+      expect(screen.queryByText(/Trang chưa có ô/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Nhờ AI thêm ô này' })).not.toBeInTheDocument();
+    });
+
+    it('chưa có htmlContent (trang mới, chưa sinh HTML) → không cảnh báo dù thiếu ô', () => {
+      const setForm = vi.fn();
+      const field = makeCustomField({ key: 'cf_test_aaaa', labelVi: 'Trường thử' });
+      const form = makeForm({
+        leadFormConfig: { ...defaultLeadFormConfig(), customFields: [field] },
+        htmlContent: '',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
+
+      expect(screen.queryByText(/Trang chưa có ô/)).not.toBeInTheDocument();
+    });
+
+    it('occupation bật nhưng htmlContent thiếu name="occupation" → cảnh báo hiện; interestArea đã có → không cảnh báo riêng nó', () => {
+      const setForm = vi.fn();
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: {
+            occupation: { visible: true },
+            interestArea: { visible: true },
+          },
+        },
+        htmlContent: '<form data-founderai-capture><select name="interestArea"></select></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
+
+      expect(screen.getByText(/Trang chưa có ô "Nghề nghiệp"/)).toBeInTheDocument();
+      expect(screen.queryByText(/Trang chưa có ô "Lĩnh vực quan tâm"/)).not.toBeInTheDocument();
+    });
+
+    it('bấm "Nhờ AI thêm ô này" → gọi editLandingHtmlWithAi rồi setForm cập nhật htmlContent với HTML mới', async () => {
+      editLandingHtmlWithAi.mockResolvedValueOnce({
+        success: true,
+        data: { html: '<form data-founderai-capture><input name="cf_test_aaaa" /></form>' },
+      });
+      const setForm = vi.fn();
+      const field = makeCustomField({ key: 'cf_test_aaaa', labelVi: 'Trường thử' });
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+          customFields: [field],
+        },
+        htmlContent: '<form data-founderai-capture><input name="email" /></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Nhờ AI thêm ô này' }));
+
+      await waitFor(() => expect(editLandingHtmlWithAi).toHaveBeenCalledTimes(1));
+      expect(editLandingHtmlWithAi.mock.calls[0][0]).toMatchObject({
+        currentHtml: form.htmlContent,
+        instruction: expect.stringContaining('cf_test_aaaa'),
+      });
+
+      await waitFor(() => expect(setForm).toHaveBeenCalled());
+      const updater = setForm.mock.calls[setForm.mock.calls.length - 1][0];
+      const next = updater(form);
+      expect(next.htmlContent).toContain('name="cf_test_aaaa"');
+    });
+
+    it('editLandingHtmlWithAi lỗi → không throw ra ngoài, không gọi setForm cập nhật htmlContent', async () => {
+      editLandingHtmlWithAi.mockRejectedValueOnce(new Error('AI tạo form đăng ký lead nhưng thiếu trường'));
+      const setForm = vi.fn();
+      const field = makeCustomField({ key: 'cf_test_aaaa', labelVi: 'Trường thử' });
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+          customFields: [field],
+        },
+        htmlContent: '<form data-founderai-capture><input name="email" /></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Nhờ AI thêm ô này' }));
+
+      await waitFor(() => expect(editLandingHtmlWithAi).toHaveBeenCalledTimes(1));
+      expect(setForm).not.toHaveBeenCalled();
+    });
   });
 });
