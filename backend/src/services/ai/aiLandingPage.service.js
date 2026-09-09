@@ -17,6 +17,35 @@ function stripJsonFences(raw) {
   return t.trim();
 }
 
+function getOutputTokens(result) {
+  const value = result?.usage?.outputTokens;
+  const outputTokens = Number(value);
+  return Number.isFinite(outputTokens) && outputTokens >= 0 ? outputTokens : null;
+}
+
+function logLandingAiLifecycle({
+  event,
+  mode,
+  startedAt,
+  finishReason = null,
+  promptChars = 0,
+  htmlChars = 0,
+  outputTokens = null,
+  outcome = null,
+}) {
+  const fields = [
+    `[LandingAI] ${event}`,
+    `mode=${mode}`,
+    ...(outcome ? [`outcome=${outcome}`] : []),
+    `ms=${Date.now() - startedAt}`,
+    `finishReason=${finishReason || 'unknown'}`,
+    `promptChars=${promptChars}`,
+    `htmlChars=${htmlChars}`,
+  ];
+  if (outputTokens != null) fields.push(`outputTokens=${outputTokens}`);
+  console.log(fields.join(' '));
+}
+
 /**
  * Đoạn prompt yêu cầu AI thêm field vào form ĐÚNG theo cấu hình trang
  * (leadFormConfig — PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3, đã áp dụng đầy đủ qua
@@ -193,7 +222,18 @@ ${buildLeadFormExtraFieldsPromptBlock(leadFormConfig)}
 Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 {"title":"...","html":"<!DOCTYPE html>..."}`;
 
-    const { text, blockReason, finishReason } = await aiUsageMeter.generateWithBudget(userId, {
+    const telemetry = {
+      mode: 'generate',
+      startedAt: Date.now(),
+      promptChars: fullPrompt.length,
+      finishReason: null,
+      htmlChars: 0,
+      outputTokens: null,
+    };
+    logLandingAiLifecycle({ event: 'start', ...telemetry });
+
+    try {
+    const generation = await aiUsageMeter.generateWithBudget(userId, {
       parts: [{ text: fullPrompt }],
       jsonMode: true,
       maxOutputTokens: 16384,
@@ -204,6 +244,9 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
       },
     });
+    const { text, blockReason, finishReason } = generation;
+    telemetry.finishReason = finishReason;
+    telemetry.outputTokens = getOutputTokens(generation);
 
     if (blockReason) {
       const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử prompt khác.');
@@ -246,6 +289,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       if (titleMatch) title = titleMatch[1].trim();
     }
+    telemetry.htmlChars = html.length;
     if (!html.toLowerCase().includes('<!doctype')) {
       // Mọi chốt "AI sinh không đạt, thử lại" dưới đây dùng 422, KHÔNG dùng 502: production
       // đứng sau Cloudflare, và Cloudflare thay mọi 502/504 của origin bằng trang lỗi của nó —
@@ -335,7 +379,12 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
+    logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
     return { title, html };
+    } catch (error) {
+      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
+      throw error;
+    }
   }
 
   /**
@@ -405,7 +454,18 @@ YÊU CẦU CHỈNH SỬA TỪ NGƯỜI DÙNG:
 Ví dụ định dạng trả về (JSON hợp lệ):
 {"title":"...","html":"..."}`;
 
-    const { text, blockReason, finishReason } = await aiUsageMeter.generateWithBudget(userId, {
+    const telemetry = {
+      mode: 'edit',
+      startedAt: Date.now(),
+      promptChars: fullPrompt.length,
+      finishReason: null,
+      htmlChars: 0,
+      outputTokens: null,
+    };
+    logLandingAiLifecycle({ event: 'start', ...telemetry });
+
+    try {
+    const generation = await aiUsageMeter.generateWithBudget(userId, {
       parts: [{ text: fullPrompt }],
       jsonMode: true,
       maxOutputTokens: 32768,
@@ -417,6 +477,9 @@ Ví dụ định dạng trả về (JSON hợp lệ):
         mode: 'edit',
       },
     });
+    const { text, blockReason, finishReason } = generation;
+    telemetry.finishReason = finishReason;
+    telemetry.outputTokens = getOutputTokens(generation);
 
     if (blockReason) {
       const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử yêu cầu khác.');
@@ -447,6 +510,7 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       if (titleMatch) title = titleMatch[1].trim();
     }
+    telemetry.htmlChars = html.length;
 
     // Chốt chặn kiểm tra chất lượng kết quả
     validateEditHtmlOutput({
@@ -455,7 +519,12 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       finishReason,
     });
 
+    logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
     return { title, html };
+    } catch (error) {
+      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
+      throw error;
+    }
   }
 }
 

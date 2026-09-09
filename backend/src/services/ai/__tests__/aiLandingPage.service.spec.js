@@ -32,11 +32,12 @@ const validFormHtml =
   '<div class="founderai-capture-error" style="display:none"></div>' +
   '</body></html>';
 
-const mockGenerateReturns = (html) => {
+const mockGenerateReturns = (html, usage = undefined) => {
   generateWithBudget.mockResolvedValue({
     text: JSON.stringify({ title: 'T', html }),
     blockReason: null,
     finishReason: 'STOP',
+    ...(usage ? { usage } : {}),
   });
 };
 
@@ -47,9 +48,21 @@ describe('aiLandingPageService.generate — chốt form data-founderai-capture',
   });
 
   it('form đúng hợp đồng (data-founderai-capture + name=email) → pass, không đổi html', async () => {
-    mockGenerateReturns(validFormHtml);
-    const result = await aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
-    expect(result.html).toBe(validFormHtml);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mockGenerateReturns(validFormHtml, { outputTokens: 321 });
+      const result = await aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+      expect(result.html).toBe(validFormHtml);
+
+      const lifecycleLogs = logSpy.mock.calls.map(([line]) => line);
+      expect(lifecycleLogs).toHaveLength(2);
+      expect(lifecycleLogs[0]).toMatch(/^\[LandingAI\] start mode=generate ms=\d+ finishReason=unknown promptChars=\d+ htmlChars=0$/);
+      expect(lifecycleLogs[1]).toMatch(new RegExp(
+        `^\\[LandingAI\\] done mode=generate outcome=success ms=\\d+ finishReason=STOP promptChars=\\d+ htmlChars=${validFormHtml.length} outputTokens=321$`
+      ));
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   it('model trả JSON hỏng nhưng còn nguyên html thoát → giải mã ra HTML thật, không phát hành \\n/\\" chữ (09/09)', async () => {
@@ -73,11 +86,23 @@ describe('aiLandingPageService.generate — chốt form data-founderai-capture',
   });
 
   it('có data-founderai-capture nhưng thiếu name="email" → 422', async () => {
-    const html = validFormHtml.replace('<input type="email" name="email" />', '<input type="email" />');
-    mockGenerateReturns(html);
-    await expect(
-      aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
-    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/email/) });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const html = validFormHtml.replace('<input type="email" name="email" />', '<input type="email" />');
+      mockGenerateReturns(html);
+      await expect(
+        aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
+      ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/email/) });
+
+      expect(logSpy.mock.calls.map(([line]) => line)).toEqual([
+        expect.stringMatching(/^\[LandingAI\] start mode=generate ms=\d+ finishReason=unknown promptChars=\d+ htmlChars=0$/),
+        expect.stringMatching(new RegExp(
+          `^\\[LandingAI\\] done mode=generate outcome=error ms=\\d+ finishReason=STOP promptChars=\\d+ htmlChars=${html.length}$`
+        )),
+      ]);
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 });
 
@@ -340,17 +365,28 @@ describe('aiLandingPageService.editHtml — rule 2b: thêm trường vào form h
   });
 
   it('kết quả hợp lệ (giữ nguyên form + đủ 3 trường gốc) → pass, trả đúng html', async () => {
-    generateWithBudget.mockResolvedValue({
-      text: JSON.stringify({ title: 'T', html: validFormHtml }),
-      blockReason: null,
-      finishReason: 'STOP',
-    });
-    const result = await aiLandingPageService.editHtml({
-      userId: 1,
-      currentHtml: validFormHtml,
-      instruction: 'Thêm ô Tên công ty vào form',
-    });
-    expect(result.html).toBe(validFormHtml);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      generateWithBudget.mockResolvedValue({
+        text: JSON.stringify({ title: 'T', html: validFormHtml }),
+        blockReason: null,
+        finishReason: 'STOP',
+      });
+      const result = await aiLandingPageService.editHtml({
+        userId: 1,
+        currentHtml: validFormHtml,
+        instruction: 'Thêm ô Tên công ty vào form',
+      });
+      expect(result.html).toBe(validFormHtml);
+
+      const doneLog = logSpy.mock.calls.map(([line]) => line)[1];
+      expect(doneLog).toMatch(new RegExp(
+        `^\\[LandingAI\\] done mode=edit outcome=success ms=\\d+ finishReason=STOP promptChars=\\d+ htmlChars=${validFormHtml.length}$`
+      ));
+      expect(doneLog).not.toContain('outputTokens=');
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   it('thiếu currentHtml → 400, không gọi Gemini', async () => {
