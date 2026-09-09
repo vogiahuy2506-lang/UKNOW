@@ -239,6 +239,33 @@ describe('landingEditGuard.util', () => {
   });
 });
 
+describe('extractHtmlFromModelText — HTML nằm trong chuỗi JSON hỏng (09/09: trang đầy \\n và \\")', () => {
+  const doc = '<!DOCTYPE html>\n<html>\n<head><title>A</title></head>\n<body><img alt="FounderAI" src="/x.png" />\n<p class="py-2">Xin chào</p></body>\n</html>';
+  const escaped = JSON.stringify(doc).slice(1, -1); // đúng thứ nằm bên trong "html": "..."
+
+  it('JSON hỏng nhưng còn nguyên đoạn html thoát → giải mã ra HTML thật, không còn \\n/\\" chữ', () => {
+    const broken = `{"title": "A", "html": "${escaped}"` /* thiếu } đóng → JSON.parse fail */;
+    const out = extractHtmlFromModelText(broken);
+    expect(out).toBe(doc);
+    expect(out).not.toMatch(/\\n|\\"/);
+  });
+
+  it('JSON hỏng vì model chèn xuống dòng THẬT vào chuỗi (ca phổ biến) → vẫn giải mã được', () => {
+    const mixed = escaped.replace('\\n<body>', '\n<body>'); // một chỗ là xuống dòng thật
+    const out = extractHtmlFromModelText(`{"html": "${mixed}"}`);
+    expect(out).toBe(doc);
+  });
+
+  it('thoát hỏng không giải mã được → trả rỗng để chốt 422 bắt, không phát hành rác', () => {
+    const bad = '<!DOCTYPE html>\\n<html>\\n<body>\\n<p>\\u00ZZ</p>\\n</body>\\n</html>';
+    expect(extractHtmlFromModelText(bad)).toBe('');
+  });
+
+  it('HTML thật có xuống dòng thật, không ký tự thoát → giữ nguyên (hồi quy)', () => {
+    expect(extractHtmlFromModelText(`Đây là trang:\n${doc}\nHết.`)).toBe(doc);
+  });
+});
+
 describe('extractHtmlFromModelText', () => {
   it('vớt tài liệu đầy đủ dù model kèm lời dẫn', () => {
     const text = 'Đây là kết quả:\n<!DOCTYPE html><html><body><p>Xin chào</p></body></html>\nHy vọng giúp được bạn.';

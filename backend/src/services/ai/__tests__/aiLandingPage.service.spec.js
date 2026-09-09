@@ -52,6 +52,18 @@ describe('aiLandingPageService.generate — chốt form data-founderai-capture',
     expect(result.html).toBe(validFormHtml);
   });
 
+  it('model trả JSON hỏng nhưng còn nguyên html thoát → giải mã ra HTML thật, không phát hành \\n/\\" chữ (09/09)', async () => {
+    const docWithNewlines = validFormHtml.replace(/></g, '>\n<');
+    const escaped = JSON.stringify(docWithNewlines).slice(1, -1);
+    generateWithBudget.mockResolvedValue({
+      text: `{"title": "T", "html": "${escaped}"`, // thiếu } đóng → JSON.parse fail → fallback
+      finishReason: 'STOP',
+    });
+    const result = await aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+    expect(result.html).toBe(docWithNewlines);
+    expect(result.html).not.toMatch(/\\n|\\"/);
+  });
+
   it('thiếu data-founderai-capture → 422', async () => {
     const html = validFormHtml.replace('data-founderai-capture', '');
     mockGenerateReturns(html);

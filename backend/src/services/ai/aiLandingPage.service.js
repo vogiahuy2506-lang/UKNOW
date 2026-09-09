@@ -215,7 +215,16 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         err.status = 422;
         throw err;
       }
-      html = htmlMatch[0].trim();
+      // Dẫn qua extractHtmlFromModelText (landingEditGuard.util.js) thay vì lấy thẳng
+      // htmlMatch[0]: đoạn khớp có thể nằm BÊN TRONG chuỗi JSON hỏng và còn mang `\n`/`\"`
+      // thoát — hàm đó giải mã, giải mã không được thì trả '' → 422 ở dưới (cùng lỗi đường
+      // editHtml sếp gặp 09/09 13:10).
+      html = extractHtmlFromModelText(text);
+      if (!html) {
+        const err = new Error('AI trả về HTML bị mã hoá sai định dạng. Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
       // Lấy title từ thẻ <title> trong HTML
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       if (titleMatch) title = titleMatch[1].trim();

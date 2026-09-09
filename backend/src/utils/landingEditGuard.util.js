@@ -21,18 +21,45 @@ export const MAX_EDIT_HTML_INPUT_CHARS = 60000;
  * @param {string} text
  * @returns {string} HTML vớt được, chuỗi rỗng nếu không có gì dùng được
  */
+/**
+ * HTML lấy ra từ BÊN TRONG một chuỗi JSON hỏng vẫn mang ký tự thoát của JSON (`\n`, `\"`,
+ * `\/`). Sếp gặp 09/09 13:10: model trả `{"title":..., "html":"<!DOCTYPE html>\n..."}` không
+ * parse được, fallback regex bắt đúng đoạn `<!DOCTYPE html ... </html>` nằm trong chuỗi, trang
+ * hiện đầy `\n` và `\"`, chốt chặn không bắt vì có DOCTYPE/Tailwind/đủ dài. Giải mã bằng chính
+ * JSON.parse (bọc lại thành chuỗi JSON); giải mã không được thì trả '' để chốt 422 "không phải
+ * HTML hợp lệ" ở aiLandingPage.service.js xử lý, không phát hành rác.
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+function unescapeJsonStringHtml(html) {
+  const s = String(html || '');
+  // Dấu hiệu còn thoát JSON: nhiều `\n` dạng chữ hoặc có `\"` dạng chữ. KHÔNG đòi "không có
+  // xuống dòng thật" — ca JSON hỏng phổ biến nhất là model chèn xuống dòng thật vào trong
+  // chuỗi, khi đó đoạn HTML có cả hai loại; xuống dòng thật được đổi thành `\n` trước khi parse.
+  const escapedNewlines = (s.match(/\\n/g) || []).length;
+  const looksEscaped = escapedNewlines >= 3 || /\\"/.test(s);
+  if (!looksEscaped) return s;
+  try {
+    const decoded = JSON.parse(`"${s.replace(/\r?\n/g, '\\n').replace(/(?<!\\)"/g, '\\"')}"`);
+    return typeof decoded === 'string' ? decoded : '';
+  } catch {
+    return '';
+  }
+}
+
 export function extractHtmlFromModelText(text) {
   const raw = String(text || '').trim();
   if (!raw) return '';
 
   const fullDocMatch = raw.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
-  if (fullDocMatch) return fullDocMatch[0].trim();
+  if (fullDocMatch) return unescapeJsonStringHtml(fullDocMatch[0].trim());
 
   const codeBlockMatch = raw.match(/```(?:html)?\s*([\s\S]*?)```/i);
   const fenced = codeBlockMatch ? codeBlockMatch[1].trim() : '';
-  if (fenced.startsWith('<')) return fenced;
+  if (fenced.startsWith('<')) return unescapeJsonStringHtml(fenced);
 
-  if (raw.startsWith('<') && raw.endsWith('>')) return raw;
+  if (raw.startsWith('<') && raw.endsWith('>')) return unescapeJsonStringHtml(raw);
 
   return '';
 }
