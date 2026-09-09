@@ -1815,14 +1815,10 @@ CREATE TABLE IF NOT EXISTS chatbot_channel_connections (
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT chatbot_channel_connections_channel_type_check
-    CHECK (channel_type IN ('zalo_oa', 'facebook', 'whatsapp', 'whatsapp_baileys')),
-  CONSTRAINT uq_chatbot_channel_legacy
-    UNIQUE (id_chatbot, channel_type)
-    WHERE channel_type IN ('zalo_oa', 'facebook'),
-  CONSTRAINT uq_chatbot_channel_whatsapp
-    UNIQUE (id_chatbot, channel_type, external_channel_id)
-    WHERE channel_type IN ('whatsapp', 'whatsapp_baileys')
+    CHECK (channel_type IN ('zalo_oa', 'facebook', 'whatsapp', 'whatsapp_baileys'))
 );
+-- Partial UNIQUE indexes (CREATE UNIQUE INDEX is the only form that supports
+-- `WHERE` — PostgreSQL does NOT allow `ADD CONSTRAINT ... UNIQUE ... WHERE`).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_channel_legacy_idx
   ON chatbot_channel_connections(id_chatbot, channel_type)
   WHERE channel_type IN ('zalo_oa', 'facebook');
