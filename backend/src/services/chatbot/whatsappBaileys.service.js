@@ -125,7 +125,9 @@ async function buildSocket(sessionKey, emitter) {
     keepAliveIntervalMs: 15_000,
     // Tự retry handshake sau disconnect transient (không phải loggedOut).
     connectTimeoutMs: 60_000,
-    defaultQueryTimeoutMs: 30_000,
+    // Giảm timeout để init-queries fail nhanh, backoff tự tăng theo số lần retry.
+    // Tránh đợi 30s mỗi lần timeout → gây cảm giác "treo" và spam log.
+    defaultQueryTimeoutMs: 15_000,
     retryRequestDelayMs: 250,
     maxMsgRetryCount: 5,
     // Baileys mặc định tự reconnect ngay khi socket close. Tắt để tránh
@@ -197,11 +199,12 @@ async function buildSocket(sessionKey, emitter) {
         existing.status = 'unrecoverable';
         existing._coolingDownUntil = Date.now() + 5 * 60_000; // 5 min cooldown
       } else {
-        // Exponential backoff: 5s → 10s → 20s → 40s → 60s (max). Backoff
-        // dài hơn so với trước (1.5s) để WhatsApp server không rate-limit,
-        // đặc biệt khi network chập chờn khiến stream-error 440 liên tục.
+        // Exponential backoff: 2s → 4s → 8s → 16s → 32s (max).
+        // Backoff ngắn hơn ở đầu giúp recovery nhanh khi lỗi là transient
+        // (network blip, WhatsApp server hơi lag). Backoff dài hơn nếu
+        // lỗi kéo dài để tránh spam server.
         const attempt = existing.reconnectCount;
-        const delayMs = Math.min(60_000, 5_000 * 2 ** Math.min(attempt - 1, 4));
+        const delayMs = Math.min(32_000, 2_000 * 2 ** Math.min(attempt - 1, 4));
         log(`Session ${sessionKey} reconnecting in ${delayMs}ms (attempt #${attempt})`);
         setTimeout(() => {
           const cur = sessions.get(sessionKey);
@@ -224,7 +227,11 @@ async function buildSocket(sessionKey, emitter) {
       if (record) {
         record.status = 'open';
         record.lastQr = null;
-        record.reconnectCount = 0;
+        // KHÔNG reset reconnectCount ở đây — 'open' event fire ngay khi
+        // WebSocket handshake xong nhưng init queries (fetch contacts, sync
+        // history...) chưa chạy xong. Nếu init-queries timeout → socket close
+        // → reconnectCount++ → lại 'open' → reset 0 → lặp vô tận.
+        // Reset chỉ khi session thật sự ổn định 30s (_stableTimer bên dưới).
         record.lastErrorAt = null;
         record._coolingDownUntil = null;
         // Lưu tên + JID của tài khoản WhatsApp đang kết nối để UI hiển thị
