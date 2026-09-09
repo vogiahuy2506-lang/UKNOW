@@ -36,7 +36,7 @@ describe('landingEditGuard.util', () => {
     expect(isValid).toBe(true);
   });
 
-  it('MAX_TOKENS → ném lỗi 502 thông báo cắt ngắn', () => {
+  it('MAX_TOKENS → ném lỗi 422 thông báo cắt ngắn', () => {
     expect(() => {
       validateEditHtmlOutput({
         currentHtml: baseValidHtml,
@@ -46,7 +46,7 @@ describe('landingEditGuard.util', () => {
     }).toThrow(/cắt ngắn/i);
   });
 
-  it('bản cũ có <!DOCTYPE html> nhưng bản mới bị mất → ném lỗi 502', () => {
+  it('bản cũ có <!DOCTYPE html> nhưng bản mới bị mất → ném lỗi 422', () => {
     const invalidHtml = baseValidHtml.replace('<!DOCTYPE html>', '');
     expect(() => {
       validateEditHtmlOutput({
@@ -56,7 +56,7 @@ describe('landingEditGuard.util', () => {
     }).toThrow(/<!DOCTYPE html>/i);
   });
 
-  it('bản cũ có Tailwind CDN nhưng bản mới bị mất → ném lỗi 502', () => {
+  it('bản cũ có Tailwind CDN nhưng bản mới bị mất → ném lỗi 422', () => {
     const invalidHtml = baseValidHtml.replace('<script src="https://cdn.tailwindcss.com"></script>', '');
     expect(() => {
       validateEditHtmlOutput({
@@ -91,7 +91,7 @@ describe('landingEditGuard.util', () => {
     expect(isValid).toBe(true);
   });
 
-  it('AI sinh thêm placeholder mới {{company_name}} không có trong bản cũ → ném lỗi 502', () => {
+  it('AI sinh thêm placeholder mới {{company_name}} không có trong bản cũ → ném lỗi 422', () => {
     const invalidHtml = baseValidHtml.replace('Tiêu đề', '{{company_name}}');
     expect(() => {
       validateEditHtmlOutput({
@@ -101,7 +101,7 @@ describe('landingEditGuard.util', () => {
     }).toThrow(/\{\{\.\.\.\}\}/);
   });
 
-  it('kết quả mới quá ngắn (< 0.6 độ dài cũ) → ném lỗi 502', () => {
+  it('kết quả mới quá ngắn (< 0.6 độ dài cũ) → ném lỗi 422', () => {
     const shortHtml = `<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body><p>Quá ngắn</p><!-- UKNOW_LP_FORM --></body></html>`;
     expect(() => {
       validateEditHtmlOutput({
@@ -111,7 +111,7 @@ describe('landingEditGuard.util', () => {
     }).toThrow(/viết lại toàn bộ trang/i);
   });
 
-  it('bản cũ có <!-- UKNOW_LP_FORM --> nhưng bản mới bị mất → ném lỗi 502', () => {
+  it('bản cũ có <!-- UKNOW_LP_FORM --> nhưng bản mới bị mất → ném lỗi 422', () => {
     const withoutFormHtml = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '');
     expect(() => {
       validateEditHtmlOutput({
@@ -121,7 +121,7 @@ describe('landingEditGuard.util', () => {
     }).toThrow(/mất vị trí form đăng ký/i);
   });
 
-  it('bản cũ có /embed/lead-form (iframe nhúng) nhưng bản mới bị mất → ném lỗi 502', () => {
+  it('bản cũ có /embed/lead-form (iframe nhúng) nhưng bản mới bị mất → ném lỗi 422', () => {
     const htmlWithIframe = baseValidHtml.replace(
       LANDING_FORM_PLACEHOLDER,
       '<iframe src="/embed/lead-form/slug-123" style="border:0;display:block;width:100%;"></iframe>'
@@ -136,7 +136,7 @@ describe('landingEditGuard.util', () => {
     }).toThrow(/mất khối form đăng ký nhúng/i);
   });
 
-  it('bản cũ có data-uknow-lead-form (snippet tự chứa) nhưng bản mới bị mất → ném lỗi 502', () => {
+  it('bản cũ có data-uknow-lead-form (snippet tự chứa) nhưng bản mới bị mất → ném lỗi 422', () => {
     const snippetForm = '<form data-uknow-lead-form data-slug="demo" data-api-base="https://api.test/api"><input name="email"/></form>';
     const htmlWithSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, snippetForm);
     const htmlWithoutSnippet = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '<p>Khách đã mất form</p>');
@@ -164,7 +164,7 @@ describe('landingEditGuard.util', () => {
     expect(isValid).toBe(true);
   });
 
-  it('bản cũ có data-founderai-capture (form hợp đồng mới) nhưng bản mới bị mất → ném lỗi 502', () => {
+  it('bản cũ có data-founderai-capture (form hợp đồng mới) nhưng bản mới bị mất → ném lỗi 422', () => {
     const capForm = '<form data-founderai-capture><input name="name"/><input name="email"/><input name="phone"/></form>';
     const htmlWithCapForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, capForm);
     const htmlWithoutCapForm = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '<p>Khách đã mất form</p>');
@@ -203,7 +203,7 @@ describe('landingEditGuard.util', () => {
     expect(isValid).toBe(true);
   });
 
-  it('tăng quá 2 inline style so với bản cũ → ném lỗi 502', () => {
+  it('tăng quá 2 inline style so với bản cũ → ném lỗi 422', () => {
     const currentHtmlWith1Style = baseValidHtml.replace('Tiêu đề', '<span style="color:red">Tiêu đề</span>');
     // Thêm 3 inline styles mới (tổng thành 4, tăng 3 so với 1 -> > +2)
     const newHtmlWith4Styles = currentHtmlWith1Style

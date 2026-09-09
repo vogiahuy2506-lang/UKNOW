@@ -171,7 +171,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
             ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy thử yêu cầu ngắn gọn hơn.'
             : 'AI trả về không phải HTML hợp lệ. Thử lại hoặc rút ngắn yêu cầu.'
         );
-        err.status = 502;
+        err.status = 422;
         throw err;
       }
       html = htmlMatch[0].trim();
@@ -180,25 +180,30 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       if (titleMatch) title = titleMatch[1].trim();
     }
     if (!html.toLowerCase().includes('<!doctype')) {
+      // Mọi chốt "AI sinh không đạt, thử lại" dưới đây dùng 422, KHÔNG dùng 502: production
+      // đứng sau Cloudflare, và Cloudflare thay mọi 502/504 của origin bằng trang lỗi của nó —
+      // câu "Vui lòng thử lại" không bao giờ tới trình duyệt, người dùng chỉ thấy "Bad gateway"
+      // và tưởng hạ tầng hỏng (sếp gặp 09/09 10:08, xem PLAN_LANDING_SINH_BAT_DONG_BO). 422
+      // đi thẳng, frontend hiện đúng message.
       const err = new Error('Thiếu <!DOCTYPE html> trong phản hồi AI.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
     if (!html.includes('cdn.tailwindcss.com')) {
       const err = new Error('Thiếu Tailwind CDN trong HTML do AI sinh.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
     if (/\{\{[^}]+\}\}/.test(html)) {
       const err = new Error('AI trả về template chưa điền nội dung ({{...}}). Vui lòng thử lại hoặc bổ sung hồ sơ doanh nghiệp để AI có đủ context.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
     // Đếm số lần dùng inline style — cho phép tối đa 2 (ví dụ: keyframe fallback)
     const inlineStyleCount = (html.match(/\bstyle\s*=/gi) || []).length;
     if (inlineStyleCount > 2) {
       const err = new Error('AI sinh HTML dùng inline style thay vì Tailwind. Vui lòng thử lại.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
 
@@ -207,12 +212,12 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     // vì placeholder không được founderai-capture.js bắt được submit.
     if (!/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
       const err = new Error('AI không tạo form đăng ký lead (thiếu data-founderai-capture). Vui lòng thử lại.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
     if (!/\bname\s*=\s*["']email["']/i.test(html)) {
       const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
     // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: leadFormDraft yêu cầu occupation/
@@ -221,12 +226,12 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     // cấu hình vốn đòi hỏi, âm thầm và mãi mãi (trang đã publish, không sinh lại).
     if (leadFormDraft?.fixedFields?.occupation?.visible && !/\bname\s*=\s*["']occupation["']/i.test(html)) {
       const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường occupation (name="occupation") dù cấu hình yêu cầu. Vui lòng thử lại.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
     if (leadFormDraft?.fixedFields?.interestArea?.visible && !/\bname\s*=\s*["']interestArea["']/i.test(html)) {
       const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường interestArea (name="interestArea") dù cấu hình yêu cầu. Vui lòng thử lại.');
-      err.status = 502;
+      err.status = 422;
       throw err;
     }
 
@@ -335,7 +340,7 @@ Ví dụ định dạng trả về (JSON hợp lệ):
             ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy chia nhỏ yêu cầu sửa đổi.'
             : 'AI trả về không phải HTML hợp lệ. Vui lòng thử lại với yêu cầu cụ thể hơn.'
         );
-        err.status = 502;
+        err.status = 422;
         throw err;
       }
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);

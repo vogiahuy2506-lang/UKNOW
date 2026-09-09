@@ -51,20 +51,22 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
   const next = String(newHtml || '').trim();
 
   if (finishReason === 'MAX_TOKENS') {
+    // 422 chứ không 502 cho mọi chốt trong file này: Cloudflare thay 502 của origin bằng trang
+    // lỗi riêng, message "thử lại" bị nuốt (09/09). Xem ghi chú cùng ý ở aiLandingPage.service.js.
     const err = new Error('AI sinh HTML quá dài bị cắt ngắn. Hãy chia nhỏ yêu cầu sửa đổi.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
   if (current.toLowerCase().includes('<!doctype') && !next.toLowerCase().includes('<!doctype')) {
     const err = new Error('Thiếu <!DOCTYPE html> trong phản hồi AI.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
   if (current.includes('cdn.tailwindcss.com') && !next.includes('cdn.tailwindcss.com')) {
     const err = new Error('Thiếu Tailwind CDN trong HTML do AI sinh.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
@@ -73,33 +75,33 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
   const hasAddedPlaceholder = newPlaceholders.some((p) => !oldPlaceholders.has(p));
   if (hasAddedPlaceholder) {
     const err = new Error('AI trả về template chưa điền nội dung ({{...}}). Vui lòng thử lại.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
   // Chốt chặn 1: Tránh AI viết lại toàn bộ trang làm teo tóp nội dung
   if (current.length > 0 && next.length < 0.6 * current.length) {
     const err = new Error('AI đã viết lại toàn bộ trang thay vì chỉnh sửa. Vui lòng mô tả cụ thể hơn phần cần sửa.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
   // Chốt chặn 2: Kiểm tra form marker có điều kiện
   if (current.includes(LANDING_FORM_PLACEHOLDER) && !next.includes(LANDING_FORM_PLACEHOLDER)) {
     const err = new Error('AI đã làm mất vị trí form đăng ký. Vui lòng thử lại.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
   if (current.includes('/embed/lead-form') && !next.includes('/embed/lead-form')) {
     const err = new Error('AI đã làm mất khối form đăng ký nhúng. Vui lòng thử lại.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
   if (current.includes('data-uknow-lead-form') && !next.includes('data-uknow-lead-form')) {
     const err = new Error('AI đã làm mất form đăng ký nhúng (snippet). Vui lòng thử lại.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
@@ -108,7 +110,7 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
   // nào bảo vệ ở đường AI-edit: nhờ AI "sửa màu nút" là có thể mất form trong im lặng.
   if (current.includes('data-founderai-capture') && !next.includes('data-founderai-capture')) {
     const err = new Error('AI đã làm mất form đăng ký. Vui lòng thử lại.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 
@@ -117,7 +119,7 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
   const newStyleCount = (next.match(/\bstyle\s*=/gi) || []).length;
   if (newStyleCount > oldStyleCount + 2) {
     const err = new Error('AI sinh thêm quá nhiều inline style thay vì dùng class Tailwind. Vui lòng thử lại.');
-    err.status = 502;
+    err.status = 422;
     throw err;
   }
 

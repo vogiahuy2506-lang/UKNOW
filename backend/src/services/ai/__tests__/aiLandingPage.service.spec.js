@@ -18,7 +18,7 @@ const { default: aiLandingPageService } = await import('../aiLandingPage.service
  * Chốt kiểm sau sinh (aiLandingPage.service.js): trang phải có ĐÚNG MỘT
  * <form data-founderai-capture> với name="email" — nếu không, founderai-capture.js
  * không bắt được submit và lead rơi mất lặng lẽ. Trước đây (LANDING_FORM_PLACEHOLDER)
- * server tự chèn placeholder khi AI quên — giờ fail cứng 502 để không phát hành trang
+ * server tự chèn placeholder khi AI quên — giờ fail cứng 422 để không phát hành trang
  * có form không hoạt động.
  */
 const validFormHtml =
@@ -52,20 +52,20 @@ describe('aiLandingPageService.generate — chốt form data-founderai-capture',
     expect(result.html).toBe(validFormHtml);
   });
 
-  it('thiếu data-founderai-capture → 502', async () => {
+  it('thiếu data-founderai-capture → 422', async () => {
     const html = validFormHtml.replace('data-founderai-capture', '');
     mockGenerateReturns(html);
     await expect(
       aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
-    ).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/data-founderai-capture/) });
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/data-founderai-capture/) });
   });
 
-  it('có data-founderai-capture nhưng thiếu name="email" → 502', async () => {
+  it('có data-founderai-capture nhưng thiếu name="email" → 422', async () => {
     const html = validFormHtml.replace('<input type="email" name="email" />', '<input type="email" />');
     mockGenerateReturns(html);
     await expect(
       aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
-    ).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/email/) });
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/email/) });
   });
 });
 
@@ -125,7 +125,7 @@ describe('aiLandingPageService.generate — leadFormDraft điều khiển occupa
     expect(sentPrompt).not.toContain('name="interestArea"');
   });
 
-  it('occupation.visible=true nhưng HTML thiếu name="occupation" → 502', async () => {
+  it('occupation.visible=true nhưng HTML thiếu name="occupation" → 422', async () => {
     mockGenerateReturns(validFormHtml); // không có field occupation
     await expect(
       aiLandingPageService.generate({
@@ -133,10 +133,10 @@ describe('aiLandingPageService.generate — leadFormDraft điều khiển occupa
         prompt: 'landing khoá học',
         leadFormDraft: { fixedFields: { occupation: { visible: true } } },
       })
-    ).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/occupation/) });
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/occupation/) });
   });
 
-  it('interestArea.visible=true nhưng HTML thiếu name="interestArea" → 502', async () => {
+  it('interestArea.visible=true nhưng HTML thiếu name="interestArea" → 422', async () => {
     mockGenerateReturns(validFormHtml); // không có field interestArea
     await expect(
       aiLandingPageService.generate({
@@ -144,10 +144,10 @@ describe('aiLandingPageService.generate — leadFormDraft điều khiển occupa
         prompt: 'landing khoá học',
         leadFormDraft: { fixedFields: { interestArea: { visible: true } } },
       })
-    ).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/interestArea/) });
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/interestArea/) });
   });
 
-  it('occupation.visible=true và HTML CÓ name="occupation" → pass, không 502', async () => {
+  it('occupation.visible=true và HTML CÓ name="occupation" → pass, không 422', async () => {
     mockGenerateReturns(withField(validFormHtml, 'occupation'));
     const result = await aiLandingPageService.generate({
       userId: 1,
