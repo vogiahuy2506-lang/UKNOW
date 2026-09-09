@@ -1028,8 +1028,8 @@ DELAY ĐƠN VỊ (bắt buộc chuyển đúng):
 
 ZALO NHÓM — LỌC THEO TÊN NHÓM:
 - Hệ thống KHÔNG thể lọc nhóm theo tên trong node config
-- Khi user đề cập tên nhóm cụ thể (vd: "nhóm Học viên K2023") → tạo chiến dịch bình thường với get_all_groups, thêm vào description: "⚠️ Vào Campaign Builder → node get_all_groups → chọn đúng nhóm '[tên nhóm]' trước khi chạy"
-- zaloSelectedGroupIds: [] (để trống, user tự chọn trong UI)
+- CHỈ KHI zaloGroupIds ở phần ngữ cảnh RỖNG mà user đề cập tên nhóm cụ thể (vd: "nhóm Học viên K2023") → tạo chiến dịch bình thường với get_all_groups, thêm vào description: "⚠️ Vào Campaign Builder → node get_all_groups → chọn đúng nhóm '[tên nhóm]' trước khi chạy", và zaloSelectedGroupIds: [] (để trống, user tự chọn trong UI)
+- zaloGroupIds ĐÃ CÓ giá trị (user đã chọn nhóm trong wizard) → KHÔNG thêm cảnh báo trên vào description; dùng đúng danh sách theo quy tắc ở phần ngữ cảnh
 
 Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_customers→send_zalo_personal (hoặc trigger→select_zalo_account→send_zalo_personal khi dataSource="zalo_contacts"). Luồng Zalo nhóm ĐÚNG: trigger→select_zalo_account→get_all_groups→send_zalo_group (KHÔNG dùng interested_customers cho nhóm hay cho danh bạ Zalo cá nhân).
 `;
