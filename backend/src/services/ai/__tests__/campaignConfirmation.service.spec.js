@@ -91,6 +91,84 @@ describe('campaignConfirmation.service', () => {
     expect(result.steps[2].content.subject).toBe('Tiêu đề email inline');
   });
 
+  /**
+   * Sự cố 09/09 14:37 (PLAN_GUI_NHANH_MOI_KENH PR-2, Bẫy 8): wizard/compiler luôn sinh
+   * zaloGroupSource 'node' + get_all_groups, nhóm đã chọn nằm ở zaloGroupIds/zaloSelectedGroupIds
+   * trên node gửi. Trước đây mode luôn 'source' → cổng Gửi nhanh không bao giờ mở cho Zalo nhóm.
+   */
+  it('zalo_group nguồn "node" nhưng node gửi đã có zaloSelectedGroupIds → recipients.mode "manual", count đúng, không sourceLabel', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: 1,
+      script: {
+        campaignName: 'Gửi ngay nhóm',
+        nodes: [
+          { tempId: 'grp-1', nodeType: 'data', nodeSubtype: 'get_all_groups', nodeName: 'Lấy thông tin nhóm Zalo', config: {} },
+          {
+            tempId: 'send-1',
+            nodeType: 'action',
+            nodeSubtype: 'send_zalo_group',
+            nodeName: 'Gửi tin nhắn nhóm Zalo',
+            config: {
+              zaloGroupSource: 'node',
+              zaloGroupNodeId: 'grp-1',
+              zaloGroupIds: ['g-111', 'g-222', ' g-111 '],
+              zaloSelectedGroupIds: ['g-111', 'g-222', ' g-111 '],
+              zaloGroupTemplateSteps: [{ message: 'Chào cả nhà', delayValue: 0, delayUnit: 'days' }],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(result.blockingIssues).toHaveLength(0);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0].recipients).toMatchObject({ mode: 'manual', type: null, count: 2, sourceLabel: null });
+  });
+
+  it('zalo_group nguồn "node" KHÔNG có nhóm chọn sẵn → vẫn "source" kèm tên node nguồn (fail-closed, không mở Gửi nhanh)', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: 1,
+      script: {
+        campaignName: 'Nhóm chưa chọn',
+        nodes: [
+          { tempId: 'grp-1', nodeType: 'data', nodeSubtype: 'get_all_groups', nodeName: 'Lấy thông tin nhóm Zalo', config: {} },
+          {
+            tempId: 'send-1',
+            nodeType: 'action',
+            nodeSubtype: 'send_zalo_group',
+            nodeName: 'Gửi tin nhắn nhóm Zalo',
+            config: {
+              zaloGroupSource: 'node',
+              zaloGroupNodeId: 'grp-1',
+              zaloGroupTemplateSteps: [{ message: 'Chào cả nhà', delayValue: 0, delayUnit: 'days' }],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(result.steps[0].recipients).toMatchObject({ mode: 'source', count: null, sourceLabel: 'Lấy thông tin nhóm Zalo' });
+  });
+
+  it('zalo_group nguồn "manual" với chuỗi id → mode "manual", count theo chuỗi (hành vi cũ giữ nguyên)', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: 1,
+      script: {
+        campaignName: 'Manual cũ',
+        nodes: [{
+          tempId: 'send-1',
+          nodeType: 'action',
+          nodeSubtype: 'send_zalo_group',
+          nodeName: 'Gửi nhóm',
+          config: { zaloGroupSource: 'manual', zaloGroupIds: 'g-1, g-2, g-3', zaloGroupMessage: 'Hello' },
+        }],
+      },
+    });
+    expect(result.steps[0].recipients).toMatchObject({ mode: 'manual', count: 3 });
+  });
+
   it('blocks a multi-step action with neither templateId nor message content', async () => {
     const result = await service.default.buildConfirmationView({
       userId: 1,

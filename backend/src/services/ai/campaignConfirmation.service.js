@@ -68,6 +68,25 @@ const manualRecipientCount = (value) => String(value || '')
   .map((item) => item.trim())
   .filter(Boolean).length;
 
+/**
+ * Nhóm Zalo CỤ THỂ đã được chọn cho node gửi. Wizard/compiler luôn sinh `zaloGroupSource: 'node'`
+ * + node get_all_groups, và khi người dùng đã chọn nhóm ở cổng zaloGroups thì compiler ghi
+ * `zaloGroupIds`/`zaloSelectedGroupIds` (mảng) lên CHÍNH node gửi (campaignCompiler.service.js
+ * :968-973; patch cũ aiCampaignDraft.service.js:557-565 cũng vậy). Runtime lọc get_all_groups theo
+ * đúng các id này (campaignRun.service.js:4294) nên về bản chất đây là danh sách cố định — phải
+ * được coi là `manual` để cổng Gửi nhanh (AiChatbotCards.jsx:2023) mở được. Sự cố 09/09 14:37:
+ * "gửi ngay cho nhóm X" ra thẻ chỉ có "Tạo chiến dịch" vì nhánh dưới chỉ nhìn zaloGroupSource.
+ * Chỉ đọc id trên node gửi (không tra sang node nguồn) để khớp handleQuickSendDraft phía frontend,
+ * vốn cũng chỉ đọc config.zaloGroupIds của node gửi.
+ */
+const selectedGroupIdsOnNode = (config) => {
+  const raw = Array.isArray(config?.zaloSelectedGroupIds) && config.zaloSelectedGroupIds.length > 0
+    ? config.zaloSelectedGroupIds
+    : config?.zaloGroupIds;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((value) => String(value || '').trim()).filter((value, idx, arr) => value && arr.indexOf(value) === idx);
+};
+
 class CampaignConfirmationService {
   async assertResourceVersionsCurrent({ resourceVersions, userId }) {
     if (!Array.isArray(resourceVersions)) return;
@@ -215,15 +234,18 @@ class CampaignConfirmationService {
         }
 
         const stepConfig = configuredStep || config;
+        const selectedGroupIds = channel === 'zalo_group' && config.zaloGroupSource !== 'manual'
+          ? selectedGroupIdsOnNode(config)
+          : [];
         const manual = channel === 'email'
           ? config.recipientSource === 'manual'
           : channel === 'zalo_group'
-            ? config.zaloGroupSource === 'manual'
+            ? (config.zaloGroupSource === 'manual' || selectedGroupIds.length > 0)
             : config.zaloRecipientSource === 'manual';
         const recipientList = channel === 'email'
           ? config.recipientEmails
           : channel === 'zalo_group'
-            ? config.zaloGroupIds
+            ? (selectedGroupIds.length > 0 ? selectedGroupIds : config.zaloGroupIds)
             : config.zaloRecipientPhones;
         if (manual && manualRecipientCount(recipientList) === 0) {
           addIssue({ code: 'manual_recipients_required', nodeId: currentNodeId, stepIndex });
