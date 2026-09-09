@@ -102,7 +102,7 @@ async function embedTextRaw(text, options = {}) {
     const body = await response.text().catch(() => '');
     throw Object.assign(
       new Error(`Embedding API lỗi (${response.status}): ${body}`),
-      { status: 502 }
+      { status: 503 }
     );
   }
 

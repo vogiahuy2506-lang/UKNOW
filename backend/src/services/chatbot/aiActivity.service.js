@@ -265,13 +265,13 @@ ${conversationContexts.join('\n\n')}
     } catch (err) {
       console.error('[AiActivityService] JSON parse failed from Gemini summary:', err.message, result.text);
       const parseErr = new Error('AI tóm tắt trả về định dạng không hợp lệ hoặc bị cắt ngắn. Vui lòng thử lại.');
-      parseErr.status = 502;
+      parseErr.status = 422;
       throw parseErr;
     }
 
     if (!Array.isArray(summaries) || summaries.length === 0) {
       const emptyErr = new Error('AI không thể trích xuất tóm tắt từ các hội thoại. Vui lòng thử lại.');
-      emptyErr.status = 502;
+      emptyErr.status = 422;
       throw emptyErr;
     }
 

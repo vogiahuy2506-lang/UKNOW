@@ -109,7 +109,7 @@ export async function generateGeminiContent({
       if (!response.ok) {
         const bodyText = await response.text().catch(() => '');
         const err = new Error(`Gemini API lỗi (${response.status}): ${bodyText || response.statusText}`);
-        err.status = 502;
+        err.status = 503;
         throw err;
       }
 

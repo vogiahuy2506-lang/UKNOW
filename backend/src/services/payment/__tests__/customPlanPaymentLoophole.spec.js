@@ -336,7 +336,7 @@ describe('PR-1 Custom Plan Payment Loophole, Renewal & Downgrade Check', () => {
       userId: 1,
       userEmail: 'test@example.com',
       reusePlanId: 99,
-    })).rejects.toMatchObject({ status: 502 });
+    })).rejects.toMatchObject({ status: 503 });
 
     expect(mockCancelRecentPendingPlanOrders).not.toHaveBeenCalled();
     expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');

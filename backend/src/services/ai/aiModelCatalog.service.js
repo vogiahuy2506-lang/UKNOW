@@ -167,7 +167,7 @@ export async function syncModelsFromGoogle() {
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       const err = new Error(`Google ListModels failed (${response.status}): ${body || response.statusText}`);
-      err.status = 502;
+      err.status = 503;
       throw err;
     }
 

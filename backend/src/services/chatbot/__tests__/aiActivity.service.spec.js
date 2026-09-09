@@ -228,7 +228,7 @@ describe('aiActivity.service', () => {
       );
     });
 
-    it('ném lỗi 502 khi Gemini trả JSON hỏng', async () => {
+    it('ném lỗi 422 khi Gemini trả JSON hỏng', async () => {
       mockZaloPersonalRepository.getAiActivityReport.mockResolvedValue([
         {
           id: 1,
@@ -260,12 +260,12 @@ describe('aiActivity.service', () => {
           date: '2026-08-19',
         })
       ).rejects.toMatchObject({
-        status: 502,
+        status: 422,
         message: expect.stringContaining('không hợp lệ'),
       });
     });
 
-    it('ném lỗi 502 khi Gemini trả mảng rỗng', async () => {
+    it('ném lỗi 422 khi Gemini trả mảng rỗng', async () => {
       mockZaloPersonalRepository.getAiActivityReport.mockResolvedValue([
         {
           id: 1,
@@ -297,7 +297,7 @@ describe('aiActivity.service', () => {
           date: '2026-08-19',
         })
       ).rejects.toMatchObject({
-        status: 502,
+        status: 422,
         message: expect.stringContaining('không thể trích xuất tóm tắt'),
       });
     });

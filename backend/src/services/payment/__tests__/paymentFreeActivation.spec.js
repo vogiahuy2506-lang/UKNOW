@@ -250,7 +250,7 @@ describe('createPaymentLink checkout serialization', () => {
       planCode: 'pro',
       userId: 10,
       userEmail: 'paid@example.com',
-    })).rejects.toMatchObject({ status: 502 });
+    })).rejects.toMatchObject({ status: 503 });
 
     expect(mockCancelRecentPendingPlanOrders).not.toHaveBeenCalled();
     expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');

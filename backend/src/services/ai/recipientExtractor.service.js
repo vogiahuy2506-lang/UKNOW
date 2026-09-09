@@ -274,7 +274,7 @@ export async function extractRecipientsFromGoogleSheet(
   if (response.status >= 400) {
     const error = new Error('Không thể tải dữ liệu từ Google Sheet (lỗi từ Google). Vui lòng kiểm tra lại quyền truy cập.');
     error.code = 'SHEET_FETCH_FAILED';
-    error.statusCode = 502;
+    error.statusCode = 503;
     throw error;
   }
 

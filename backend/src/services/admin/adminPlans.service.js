@@ -34,8 +34,8 @@ const assertPaymentEnv = () => {
 const mapPaymentProviderError = (err) => {
   if (err?.status) return err;
   const message = String(err?.message || err?.desc || err?.response?.data?.desc || '').trim();
-  if (message) return { status: 502, message: `PayOS: ${message}` };
-  return { status: 502, message: 'Không thể tạo link thanh toán PayOS. Kiểm tra cấu hình PAYOS_* trên VPS.' };
+  if (message) return { status: 503, message: `PayOS: ${message}` };
+  return { status: 503, message: 'Không thể tạo link thanh toán PayOS. Kiểm tra cấu hình PAYOS_* trên VPS.' };
 };
 
 export async function listPlans() {

@@ -42,7 +42,7 @@ export async function generateGeminiText({
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data?.error?.message || `Gemini HTTP ${res.status}`;
-    throw Object.assign(new Error(msg), { status: 502 });
+    throw Object.assign(new Error(msg), { status: 503 });
   }
 
   const text = data?.candidates?.[0]?.content?.parts

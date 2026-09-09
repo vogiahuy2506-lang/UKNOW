@@ -273,7 +273,7 @@ export const createPaymentLink = async ({
             } catch (err) {
                 const message = String(err?.message || err?.desc || '').trim();
                 throw {
-                    status: 502,
+                    status: 503,
                     message: message ? `PayOS: ${message}` : 'Không thể tạo link thanh toán PayOS',
                 };
             }
@@ -762,7 +762,7 @@ export const createCustomPaymentLink = async ({
             } catch (err) {
                 const message = String(err?.message || err?.desc || '').trim();
                 throw {
-                    status: 502,
+                    status: 503,
                     message: message ? `PayOS: ${message}` : 'Không thể tạo link thanh toán PayOS',
                 };
             }

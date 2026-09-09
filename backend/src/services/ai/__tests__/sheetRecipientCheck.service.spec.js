@@ -116,15 +116,15 @@ describe('sheetRecipientCheck.service', () => {
   });
 
   it('maps SHEET_FETCH_FAILED or network errors to unknown without throwing', async () => {
-    const error = new Error('Google 502 Bad Gateway');
+    const error = new Error('Google 503 Service Unavailable');
     error.code = 'SHEET_FETCH_FAILED';
-    error.statusCode = 502;
+    error.statusCode = 503;
     const mockExtract = jest.fn().mockRejectedValue(error);
 
     const res = await checkSheetForChannel('https://docs.google.com/spreadsheets/d/abc12345/edit', 'zalo', {
       extractFn: mockExtract,
     });
     expect(res.status).toBe('unknown');
-    expect(res.error).toContain('502');
+    expect(res.error).toContain('503');
   });
 });

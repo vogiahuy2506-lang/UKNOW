@@ -95,10 +95,10 @@ class CustomChatService {
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           const error = new Error(errorData?.error?.message || `Gemini API error: ${response.status}`);
-          // Keep client-facing status as before this feature: 5xx→502, else→500.
+          // Keep client-facing status as before this feature: 5xx→503, else→500.
           // Preserve raw Gemini status only for internal fallback decisions.
           error.geminiStatus = response.status;
-          error.status = response.status >= 500 ? 502 : 500;
+          error.status = response.status >= 500 ? 503 : 500;
           throw error;
         }
 
@@ -156,7 +156,7 @@ class CustomChatService {
         }
 
         if (err.geminiStatus >= 500) {
-          err.status = 502;
+          err.status = 503;
         } else if (err.status == null) {
           err.status = 500;
         }
@@ -269,14 +269,14 @@ QUY TẮC TRẢ LỜI:
       // Return user-friendly error
       if (err.name === 'AbortError' || err.message.includes('timeout')) {
         const error = new Error('AI đang bận, vui lòng thử lại sau vài giây.');
-        error.status = 504;
+        error.status = 503;
         error.code = 'TIMEOUT';
         throw error;
       }
 
-      if (err.status === 502) {
+      if (err.status === 503) {
         const error = new Error('AI gặp sự cố tạm thời, vui lòng thử lại.');
-        error.status = 502;
+        error.status = 503;
         error.code = 'UPSTREAM_ERROR';
         throw error;
       }
@@ -506,7 +506,7 @@ QUY TẮC TRẢ LỜI:
 
         if (!response.ok) {
           const err = new Error(`Không thể truy cập URL: HTTP ${response.status}`);
-          err.status = 502;
+          err.status = 503;
           throw err;
         }
 
@@ -516,12 +516,12 @@ QUY TẮC TRẢ LỜI:
       } catch (fetchErr) {
         if (fetchErr.name === 'AbortError') {
           const error = new Error('Yêu cầu hết thời gian (15 giây)');
-          error.status = 504;
+          error.status = 503;
           throw error;
         }
         if (fetchErr.status) throw fetchErr;
         const error = new Error(`Không thể truy cập URL: ${fetchErr.message}`);
-        error.status = 502;
+        error.status = 503;
         throw error;
       }
     }

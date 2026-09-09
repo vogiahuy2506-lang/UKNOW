@@ -86,7 +86,7 @@ ${glossaryPromptBlock()}
 
   const parsed = extractJsonObject(text);
   if (!parsed?.title) {
-    throw Object.assign(new Error('AI dịch trả về JSON không hợp lệ'), { status: 502 });
+    throw Object.assign(new Error('AI dịch trả về JSON không hợp lệ'), { status: 422 });
   }
 
   const result = {
