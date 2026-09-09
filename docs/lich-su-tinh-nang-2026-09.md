@@ -1,6 +1,6 @@
-# Lịch sử tính năng — 19/08 → 07/09/2026
+# Lịch sử tính năng — 19/08 → 09/09/2026
 
-Tổng hợp các plan đã triển khai xong từ 19/08 tới 07/09/2026, kèm commit làm bằng chứng. Nối tiếp
+Tổng hợp các plan đã triển khai xong từ 19/08 tới 09/09/2026, kèm commit làm bằng chứng. Nối tiếp
 `lich-su-tinh-nang-2026-08.md` (dừng ở 18/08).
 
 Plan chi tiết nằm trong `_internal/` (không được git theo dõi). Khi tính năng lên `main`, plan được
@@ -36,12 +36,15 @@ Code dựng cấu trúc campaign từ `CampaignIntentV1`, LLM chỉ viết nội
 | Compiler chưa từng chạy 7 ngày vì truyền nhầm biến `intent` | `e110e12f` |
 | 7A thước đo nội dung tất định | `f938aeb1` |
 | Audit `via` phân biệt `ai` / `ai_compiler` / `ai_compiler_slot_filling` / `builder` | `f0ffc60f` `9332d019` |
+| GĐ5 PR-1 (08/09): chứng minh 11 nhánh `[AI Patch]` no-op trên graph compiler (36 ca), bỏ qua khi `compilerApplied`; sửa 6 chỗ compiler lệch overlay (`landingLeadsSlugs`, `zaloGroupIds`, `zaloGroupSendMode`, `emailSenderId`, không `get_all_friends` cho zalo_contacts, không nhúng `zaloRecipientPhones`); xoá shadow extraction | `bcde6ccd` `1f972bda` `3f4ce8a4` `6bb3e7c5` |
 
 **Trạng thái production**: `COMPILER_ENABLED_FLOWS=zalo_group,email`, `COMPILER_SLOT_FILLING_FLOWS=zalo_group`.
 Nghiệm thu bằng sự kiện thật 06/09: chiến dịch 356 có `audit_logs.details->>'via' = 'ai_compiler_slot_filling'`.
-GĐ5 chưa scope lại. *(Sửa 08/09: bản trước ghi "chỉ còn một `[AI Patch]` là chuỗi log" — sai, viết
-theo trí nhớ. Đếm thật: `grep -c "\[AI Patch\]" aiCampaignDraft.service.js` = 11, cả 11 nhánh vá
-vẫn chạy trên script LLM cũ ở `aiCampaign.service.js:1685` trước khi compiler ghi đè.)*
+GĐ5 đã scope lại thành 4 PR (`PLAN_COMPILER_GD5_DON_DEP_2026-09-08.md`); PR-2 (bật cờ cho Zalo cá
+nhân, gỡ patch) chờ đủ **7 ngày log không có deploy backend** để đo, mốc tính lại sau mỗi lần deploy
+vì container mới xoá `docker logs`. *(Sửa 08/09: bản trước ghi "chỉ còn một `[AI Patch]` là chuỗi
+log" — sai, viết theo trí nhớ. Đếm thật: `grep -c "\[AI Patch\]" aiCampaignDraft.service.js` = 11,
+cả 11 nhánh vá vẫn chạy trên script LLM cũ ở `aiCampaign.service.js:1685` trước khi compiler ghi đè.)*
 
 ### Gửi kèm tệp, biến template, gửi nhanh
 
@@ -54,6 +57,8 @@ vẫn chạy trên script LLM cũ ở `aiCampaign.service.js:1685` trước khi 
 | Gửi nhanh cho Zalo UID: chọn từ danh bạ, đối chiếu tên thật, không hiện UID trần | `67a7933a` `402f67f2` `3673bbb6` `f1acf558` `271bffb8` `57399ebb` |
 | Sinh landing trong chat đi qua cùng service với nút tạo; đọc `finishReason` | `442f0770` |
 | Wizard đóng luồng khi chiến dịch đã tạo: tin ranh giới `campaign_created` do server lưu, ba nơi suy trạng thái đều reset | `88b6ff53` |
+| Wizard PR-2 (08/09): huỷ luồng dùng cùng cơ chế ranh giới (`campaign_abandoned`), không giữ mốc chỉ số tin nhắn | `10c83e62` `035ddd8f` |
+| Gửi nhanh PR-2 (08/09): kênh Zalo nhóm — `sendGroupMessage`, trang đích, cổng wizard; đọc `items[].status` vì backend trả 200 kèm từng dòng `failed` (Bẫy 7) | `1d7c2b03` `2b4fda48` `cb5f3b60` `c6544e2f` `9545b15d` |
 
 **Quyết định còn hiệu lực**
 - Ranh giới vòng đời wizard là **một tin nhắn trong lịch sử**, không phải mốc chỉ số tin nhắn.
@@ -133,6 +138,40 @@ Checklist regression cho route nhạy cảm: `employee-route-policy-matrix.md`.
 - Form landing theo hướng **form của AI, dữ liệu của hệ thống**: AI vẽ form đúng hợp đồng, script hệ
   thống bắt submit. Iframe chỉ còn là dự phòng cho trang cũ; gỡ sau khi các trang đó được lưu lại.
 
+**Form landing: bắt lead và trường thêm** (08–09/09, plan `PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md`
+và `PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md`)
+
+| Việc | Commit |
+|---|---|
+| PR-2a: `founderai-capture.js` chỉ bắt form có email/SĐT; sửa `inferAutoName` map nhầm SĐT thành tên; thôi tự sinh `cf_<id>`; chỉ strip iframe khi trang đã có form khác; guard AI-edit giữ `data-founderai-capture` | `df078207` `8e23dcee` `8fb28387` `56a0f681` `3f9cfb5f` |
+| PR-2b: AI sinh select `occupation`/`interestArea` theo cấu hình; capture gửi hai trường này top-level; khoá `cf_*` lạ bị bỏ qua thay vì mất cả lead | `89d925e3` `9e213b32` `3ed741ba` `b7022fa4` |
+| PR-2d-1: khôi phục schema đầy đủ `landingLeadFormConfig.js` (bản tối giản của `3c514bc8` làm "mỗi lần lưu là một lần xoá"); backend áp dụng nháp AI thành khoá tất định `cf_sugg_NN_text`; test vòng tròn GET→normalize→prepare | `b8b9725c` `fdfb56cc` `14204724` `5fe0e260` `36efec39` |
+| PR-2d-2: `LeadFormConfigPanel` trở lại trong `SettingsModal` section "Form đăng ký"; lỗi bất biến kiểu/mã option hiện đúng vùng | `67d0e8aa` `e16117bf` `4f9dae2c` `09cc1509` |
+| PR-2d-3: prompt sinh trang ra ô cho từng `customFields` (422 nếu thiếu); rule 2b cho phép AI thêm trường vào form có sẵn; panel cảnh báo "trang chưa có ô" + nút "Nhờ AI thêm ô này" | `ff2286b2` `3a2c587e` `44406150` `6fe955b3` `47e60611` |
+
+Nghiệm thu thật trên production 09/09: PR-2d-1 SQL `jsonb_array_length(customFields) = 2` sau hai lần
+lưu; PR-2d-2 năm trường với select `opt_a,opt_1,opt_2`, kiểu bị khoá sau khi lưu; PR-2d-3 bước 1–2
+đạt, bước 3 bắt được lỗi thật (dòng cuối bảng dưới).
+
+Lỗi có sẵn lộ ra dọc đường nghiệm thu, đều sửa cùng ngày:
+
+| Lỗi | Commit |
+|---|---|
+| `productId` do LLM viết không phải id số → 400 khi tạo trang; rơi về `other` | `c7b6511d` |
+| Nút "Để sau" của modal bổ sung SĐT bị commit dọn lint `1a992e76` xoá mất; khôi phục cả hai mount | `8fedb8b1` `c17d4596` |
+| Chốt "AI sinh không đạt" trả 502 bị Cloudflare thay bằng trang lỗi riêng, message mất; đổi 422 | `a3125f47` |
+| Không gõ được dấu cách trong nhãn trường thêm vì normalizer trim mỗi phím; trim lúc lưu | `dc1d956f` |
+| Danh sách lead hiện `[object Object]` ở cột Thông tin thêm | `9ef3a89b` |
+| Model trả JSON hỏng, fallback vớt HTML còn nguyên `\n` `\"`; giải mã bằng `JSON.parse`, không được thì 422 | `731f63d5` |
+| "Nhờ AI thêm ô này" chỉ đưa nhãn lựa chọn, AI ghi `<option value="Lựa chọn 1">` thay mã `opt_a` → mọi lead bị từ chối; câu lệnh kèm markup đúng mã, panel cảnh báo mức 2 "không khớp mã", backend 422 ở đường sinh | `ce7c7e23` `a3eb89d0` |
+
+**Quyết định còn hiệu lực**
+- Khoá và mã option của trường thêm là **hợp đồng với AI**: mọi câu lệnh sinh/sửa form phải chứa
+  nguyên khối markup có `value="<mã>"`, không bao giờ chỉ đưa nhãn. Kiểm sau sinh phải kiểm cả mã,
+  không chỉ `name`.
+- Chốt chặn AI ở backend trả **422**, không 502: Cloudflare nuốt 502/504 của origin.
+- Nghiệm thu form bằng **lead thật gửi từ trang public**, không bằng "panel hết cảnh báo".
+
 ---
 
 ## Hạ tầng, CI, kiểm thử
@@ -156,18 +195,37 @@ Checklist regression cho route nhạy cảm: `employee-route-policy-matrix.md`.
 - Nhiều agent dùng chung một working tree: `git fetch` và xem `origin/main..HEAD` trước mọi lần push.
 - `schema.sql` lệch production ở cả **kiểu cột**, không chỉ tên: `zalo_settings.last_connected_at` là
   timestamp naive trên production dù file khai `TIMESTAMPTZ`.
+- `docker logs` của backend **mất sau mỗi deploy** vì container tạo mới; đo gì bằng log thì kiểm
+  `docker inspect .Created` trước, số bền lấy từ DB.
+- Traffic `/api` production đi thẳng Cloudflare → cổng `5001`, không qua nginx của frontend; trần
+  timeout thật là 100 giây của Cloudflare. Không tự bind 5001 về localhost.
+- Workflow deploy có chốt "stale": commit mới hơn đổi backend là run cũ tự huỷ (09/09 `a3eb89d0` bị
+  `401f1bd6` vượt). Đây là cố ý, không phải lỗi code.
 
 ---
 
-## Việc còn treo (tính tới 08/09/2026)
+## Việc còn treo (tính tới 09/09/2026)
 
-- **Wizard PR-2**: `abandon_campaign_flow` dùng cùng tin ranh giới; sửa `mergeWizardState` không xoá mốc
-  khi kích hoạt lại. Plan `PLAN_WIZARD_VONG_DOI_2026-09-07.md`.
-- **Gửi nhanh PR-2 (Zalo nhóm), PR-3 (kết bạn)**. PR-3 hỏi có ai cần trước khi làm.
-- **Landing PR-2**: trường thêm `cf_*` khớp cấu hình form; lộ trình gỡ iframe dựa trên số trang còn
-  `/embed/lead-form`. Plan `PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md`.
-- **Compiler GĐ5** scope lại. `PLAN_INTENT_COMPILER_2026-08-30.md`.
+- **`401f1bd6` (WhatsApp Baileys, hoangphuc1capri) làm đỏ cả hai deploy**, production kẹt ở `731f63d5`:
+  `bootstrap.sql:1819-1824` dùng `CONSTRAINT ... UNIQUE ... WHERE` (không tồn tại trong Postgres, migration
+  194 viết đúng bằng partial unique index); `WhatsAppSettings.jsx:1` thừa `eslint-disable`; và thư mục
+  phiên đăng nhập WhatsApp bị commit nhầm — phải bỏ theo dõi, thêm `.gitignore`, và chủ tài khoản gỡ
+  thiết bị liên kết trong WhatsApp vì xoá khỏi git không thu hồi được lịch sử.
+- **Nghiệm thu PR-2d-3 bước 3–4** chờ deploy: trang `slug-test` phải hiện "không khớp mã" → nhờ AI sửa
+  → lead thật có `lươngthưởng: <nhãn>`; trang mới qua chat có sẵn `cf_sugg_01_text`/`cf_sugg_02_text`.
+  Xong thì gỡ publish `slug-test` (đang public với lead giả).
+- **Báo hoangphuc1capri** ba quyết định đã đổi trong `founderai-capture.js` (auto mode, bỏ `cf_<id>`,
+  strip iframe có điều kiện), section "Form đăng ký" mới trong `SettingsModal`, và việc commit dọn lint
+  `1a992e76` đã xoá nút "Để sau" của modal SĐT.
+- **Gửi nhanh PR-3 (kết bạn)**: hỏi có ai cần trước khi làm.
+- **Landing**: lộ trình gỡ iframe dựa trên số trang còn `/embed/lead-form` (7 trang, user 1/39/76/143/156);
+  các service AI khác (`customChat`, `aiActivity`, `geminiClient`, `aiModelCatalog`) vẫn trả 502 bị
+  Cloudflare nuốt; lỗi 520 lúc 08:07 09/09 chưa rõ nguyên nhân, plan đo thời gian sinh và sinh bất đồng
+  bộ ở `PLAN_LANDING_SINH_BAT_DONG_BO_2026-09-09.md`.
+- **Compiler GĐ5 PR-2→4**: chờ 7 ngày log liên tục, mốc tính lại từ lần deploy backend gần nhất.
 - **Bắt bounce bất đồng bộ**: chặn ở phép thử SMTP có tôn trọng `envelope.from` không.
+- Backend unit có 2 test trong một suite đỏ lẻ tẻ (hai lần trong hai ngày, chạy lại xanh), chưa bắt
+  được tên suite.
 - Token Cloudflare thiếu quyền Cache Purge (đã xác minh lỗi `10000`), sửa trên dashboard.
 - Báo động deploy đỏ chưa tới người vận hành; 07/09 có 3 lần deploy đỏ không ai biết.
 - Lỗi cron restore đếm kết quả bị lock thành "đã khôi phục" trong `cron_job_runs`.
