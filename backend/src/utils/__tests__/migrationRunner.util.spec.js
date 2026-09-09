@@ -245,7 +245,7 @@ describe('runSingleMigration', () => {
     expect(queries).toEqual([
       'BEGIN',
       'SELECT 1',
-      "INSERT INTO schema_migrations (filename, checksum_sha256) VALUES ($1, $2)",
+      "INSERT INTO schema_migrations (filename, checksum_sha256)\n       VALUES ($1, $2)\n       ON CONFLICT (filename) DO UPDATE\n         SET checksum_sha256 = EXCLUDED.checksum_sha256, ran_at = NOW()",
       'COMMIT',
     ]);
     expect(client.query.mock.calls[2][1]).toEqual(['099_test.sql', hashMigrationContent('SELECT 1')]);
@@ -265,7 +265,7 @@ describe('runSingleMigration', () => {
     expect(queries).toEqual([
       'BEGIN',
       'SELECT 2;',
-      "INSERT INTO schema_migrations (filename, checksum_sha256) VALUES ($1, $2)",
+      "INSERT INTO schema_migrations (filename, checksum_sha256)\n       VALUES ($1, $2)\n       ON CONFLICT (filename) DO UPDATE\n         SET checksum_sha256 = EXCLUDED.checksum_sha256, ran_at = NOW()",
       'COMMIT',
     ]);
     expect(queries).not.toContain('BEGIN;');
