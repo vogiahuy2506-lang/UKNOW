@@ -268,7 +268,10 @@ export async function runSingleMigration(client, file, sql, checksum = hashMigra
       await client.query(migrationSql);
     }
     await client.query(
-      `INSERT INTO schema_migrations (filename, checksum_sha256) VALUES ($1, $2)`,
+      `INSERT INTO schema_migrations (filename, checksum_sha256)
+       VALUES ($1, $2)
+       ON CONFLICT (filename) DO UPDATE
+         SET checksum_sha256 = EXCLUDED.checksum_sha256, ran_at = NOW()`,
       [file, checksum]
     );
     await client.query('COMMIT');
