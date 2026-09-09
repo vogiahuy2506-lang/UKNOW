@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {

@@ -2,13 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   HiOutlineX,
   HiOutlineCheckCircle,
-  HiOutlineXCircle,
-  HiOutlineLink,
   HiOutlineClipboardCopy,
-  HiOutlineExternalLink,
   HiOutlineRefresh,
   HiOutlineUserCircle,
-  HiOutlineChatAlt2,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -247,7 +243,7 @@ function FacebookForm({ chatbot }) {
   const [pageToken, setPageToken] = useState('');
   const [verifyToken, setVerifyToken] = useState('');
   const [webhook, setWebhook] = useState('');
-  const [pageInfo, setPageInfo] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -260,7 +256,6 @@ function FacebookForm({ chatbot }) {
           setPageId(d.page_id || '');
           setPageToken(d.page_access_token || '');
           setVerifyToken(d.verify_token || '');
-          setPageInfo(d);
         }
       } catch (e) {
         // ignore

@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
  */
 import '../../public/founderai-capture.js';
 
-const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, pickAutoCaptureForm, inferAutoName, autoMapFormInputsByIdOrLabel } = window.__founderaiCaptureTestHooks;
+const { buildFounderaiCapturePayload, readFounderaiMarketingConsent, pickAutoCaptureForm, inferAutoName } = window.__founderaiCaptureTestHooks;
 
 function makeForm(innerHtml) {
   const form = document.createElement('form');

@@ -1815,14 +1815,20 @@ CREATE TABLE IF NOT EXISTS chatbot_channel_connections (
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT chatbot_channel_connections_channel_type_check
-    CHECK (channel_type IN ('zalo_oa', 'facebook', 'whatsapp')),
+    CHECK (channel_type IN ('zalo_oa', 'facebook', 'whatsapp', 'whatsapp_baileys')),
   CONSTRAINT uq_chatbot_channel_legacy
     UNIQUE (id_chatbot, channel_type)
     WHERE channel_type IN ('zalo_oa', 'facebook'),
   CONSTRAINT uq_chatbot_channel_whatsapp
     UNIQUE (id_chatbot, channel_type, external_channel_id)
-    WHERE channel_type = 'whatsapp'
+    WHERE channel_type IN ('whatsapp', 'whatsapp_baileys')
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_channel_legacy_idx
+  ON chatbot_channel_connections(id_chatbot, channel_type)
+  WHERE channel_type IN ('zalo_oa', 'facebook');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_channel_whatsapp_idx
+  ON chatbot_channel_connections(id_chatbot, channel_type, external_channel_id)
+  WHERE channel_type IN ('whatsapp', 'whatsapp_baileys');
 CREATE INDEX IF NOT EXISTS idx_chatbot_channels_chatbot ON chatbot_channel_connections(id_chatbot);
 CREATE INDEX IF NOT EXISTS idx_chatbot_channels_token ON chatbot_channel_connections(webhook_token);
 CREATE INDEX IF NOT EXISTS idx_chatbot_channels_type ON chatbot_channel_connections(channel_type);
@@ -1919,6 +1925,60 @@ CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_settings_channel
   ON chatbot_whatsapp_account_settings(id_channel_connection);
 CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_settings_chatbot
   ON chatbot_whatsapp_account_settings(id_chatbot)
+  WHERE id_chatbot IS NOT NULL;
+
+-- ─── Per-user WhatsApp Cloud API app credentials (migration 195) ─────────
+-- Allows each user to connect their own Meta App instead of sharing backend .env.
+CREATE TABLE IF NOT EXISTS user_whatsapp_app_credentials (
+  id                   BIGSERIAL PRIMARY KEY,
+  id_user              BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_id               VARCHAR(64) NOT NULL,
+  app_secret_encrypted TEXT NOT NULL,              -- AES-256-GCM encrypted with SMTP_SECRET_KEY
+  app_name             VARCHAR(255),               -- Friendly label ("My Shop Dev")
+  webhook_verify_token VARCHAR(128),               -- Optional per-app verify token
+  is_default           BOOLEAN NOT NULL DEFAULT false,
+  is_active            BOOLEAN NOT NULL DEFAULT true,
+  last_used_at         TIMESTAMPTZ,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_whatsapp_app
+  ON user_whatsapp_app_credentials(id_user, app_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_whatsapp_default
+  ON user_whatsapp_app_credentials(id_user)
+  WHERE is_default = true;
+CREATE INDEX IF NOT EXISTS idx_user_whatsapp_app_active
+  ON user_whatsapp_app_credentials(id_user, is_active)
+  WHERE is_active = true;
+
+-- ─── WhatsApp Baileys session settings (migration 196) ───────────────────
+-- Per-(user, WhatsApp Baileys session, chatbot) AI settings.
+-- Independent from chatbot_whatsapp_account_settings (Cloud API).
+CREATE TABLE IF NOT EXISTS chatbot_whatsapp_baileys_settings (
+  id                    BIGSERIAL PRIMARY KEY,
+  id_user               BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_key           VARCHAR(128) NOT NULL,
+  id_chatbot            BIGINT REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  is_enabled            BOOLEAN NOT NULL DEFAULT false,
+  id_sub_assistant      BIGINT REFERENCES sub_assistants(id) ON DELETE SET NULL,
+  welcome_message       TEXT,
+  ai_model              VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  temperature           DECIMAL(3,2) DEFAULT 0.7,
+  max_tokens            INTEGER DEFAULT 2048,
+  response_style        VARCHAR(20) DEFAULT 'friendly',
+  system_instruction    TEXT,
+  settings              JSONB NOT NULL DEFAULT '{}',
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_chatbot_whatsapp_baileys_user_session_chatbot
+    UNIQUE (id_user, session_key, id_chatbot)
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_baileys_user
+  ON chatbot_whatsapp_baileys_settings(id_user);
+CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_baileys_session
+  ON chatbot_whatsapp_baileys_settings(session_key);
+CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_baileys_chatbot
+  ON chatbot_whatsapp_baileys_settings(id_chatbot)
   WHERE id_chatbot IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS web_widget_configs (
