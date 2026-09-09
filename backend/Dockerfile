@@ -21,6 +21,12 @@ COPY --chown=node:node . .
 
 ENV NODE_ENV=production
 
+# Đảm bảo locale UTF-8 để Postgres / pg driver parse được SQL có ký tự
+# multi-byte (em-dash, ký tự tiếng Việt có dấu) mà không lỗi "invalid byte
+# sequence" hoặc "syntax error" khi migration runner chạy trên production.
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
 # Tạo thư mục cho upload và cấp quyền ghi cho user node (tránh chown -R toàn bộ /app để tối ưu build layer)
 RUN mkdir -p temp_uploads uploads && chown -R node:node temp_uploads uploads
 
