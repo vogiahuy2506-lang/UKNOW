@@ -72,6 +72,29 @@ describe('prepareLeadFormConfigForSave', () => {
   });
 });
 
+describe('dấu cách khi đang gõ nhãn (lỗi 09/09: không gõ được "Quy mô")', () => {
+  const field = { key: 'cf_quymo_ab12', type: 'text', labelVi: 'Quy ', labelEn: 'Size ', placeholderVi: 'Nhập ', placeholderEn: '', required: false, options: [] };
+
+  it('normalizeLeadFormConfig GIỮ dấu cách cuối — panel gọi normalize sau mỗi lần gõ', () => {
+    const n = normalizeLeadFormConfig({ version: 1, customFields: [field] });
+    expect(n.customFields[0].labelVi).toBe('Quy ');
+    expect(n.customFields[0].labelEn).toBe('Size ');
+    expect(n.customFields[0].placeholderVi).toBe('Nhập ');
+  });
+
+  it('prepareLeadFormConfigForSave mới trim, và trim đủ mọi ô chữ', () => {
+    const { config, errors } = prepareLeadFormConfigForSave({
+      version: 1,
+      customFields: [{ ...field, options: [{ value: 'opt_1', labelVi: 'Nhỏ ', labelEn: ' Small' }] }],
+    });
+    expect(errors).toEqual([]);
+    expect(config.customFields[0]).toMatchObject({
+      labelVi: 'Quy', labelEn: 'Size', placeholderVi: 'Nhập',
+      options: [{ value: 'opt_1', labelVi: 'Nhỏ', labelEn: 'Small' }],
+    });
+  });
+});
+
 describe('nextUnusedOptionValue', () => {
   it('bỏ qua mã đang có; lỗ trống chỉ tái dùng khi chưa từng persist', () => {
     expect(nextUnusedOptionValue([])).toBe('opt_1');

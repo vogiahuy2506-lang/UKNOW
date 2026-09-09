@@ -68,18 +68,22 @@ export function normalizeLeadFormConfig(raw) {
       occupation: { visible: occupationVisible },
       interestArea: { visible: interestVisible },
     },
+    // KHÔNG trim các ô chữ tự do ở đây: LeadFormConfigPanel gọi normalize sau MỖI lần gõ
+    // (updateField), trim ở đây làm dấu cách cuối biến mất trước khi gõ chữ kế tiếp → không
+    // gõ được "Quy mô", chỉ ra "Quymô" (sếp gặp 09/09). Trim thuộc về lúc lưu:
+    // prepareLeadFormConfigForSave. Mã option (value) vẫn trim vì mã không được có khoảng trắng.
     customFields: customFields.map((field) => ({
       key: field.key,
       type: CUSTOM_FIELD_TYPES.includes(field.type) ? field.type : 'text',
-      labelVi: String(field.labelVi || '').trim(),
-      labelEn: field.labelEn ? String(field.labelEn).trim() : '',
-      placeholderVi: field.placeholderVi ? String(field.placeholderVi).trim() : '',
-      placeholderEn: field.placeholderEn ? String(field.placeholderEn).trim() : '',
+      labelVi: String(field.labelVi || ''),
+      labelEn: field.labelEn ? String(field.labelEn) : '',
+      placeholderVi: field.placeholderVi ? String(field.placeholderVi) : '',
+      placeholderEn: field.placeholderEn ? String(field.placeholderEn) : '',
       required: Boolean(field.required),
       options: Array.isArray(field.options) ? field.options.map((o) => ({
         value: String(o.value || '').trim(),
-        labelVi: String(o.labelVi || '').trim(),
-        labelEn: o.labelEn ? String(o.labelEn).trim() : '',
+        labelVi: String(o.labelVi || ''),
+        labelEn: o.labelEn ? String(o.labelEn) : '',
       })) : [],
     })),
     theme: normalizeLeadFormTheme(leadForm.theme),
@@ -212,7 +216,20 @@ export function prepareLeadFormConfigForSave(raw, persistedMeta = {}) {
         message: 'Nhãn tiếng Việt phải từ 2 đến 100 ký tự',
       });
     }
-    customFields.push({ ...field, labelVi });
+    // Trim mọi ô chữ tự do ở ĐÂY (lúc lưu), không ở normalize — xem ghi chú trong
+    // normalizeLeadFormConfig về dấu cách khi đang gõ.
+    customFields.push({
+      ...field,
+      labelVi,
+      labelEn: String(field.labelEn || '').trim(),
+      placeholderVi: String(field.placeholderVi || '').trim(),
+      placeholderEn: String(field.placeholderEn || '').trim(),
+      options: (field.options || []).map((o) => ({
+        ...o,
+        labelVi: String(o.labelVi || '').trim(),
+        labelEn: String(o.labelEn || '').trim(),
+      })),
+    });
   }
   return {
     config: { ...n, customFields },
