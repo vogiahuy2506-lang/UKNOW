@@ -1788,11 +1788,15 @@ CREATE INDEX IF NOT EXISTS idx_studio_msg_conv
 CREATE INDEX IF NOT EXISTS idx_studio_msg_created
   ON chatbot_studio_messages(id_conversation, created_at DESC);
 
--- ─── Chatbot channel connections (migration 043) ───────────────────────
+-- ─── Chatbot channel connections (migration 043 + 194) ─────────────
+-- Migration 194 added 'whatsapp' to the channel_type CHECK and split the
+-- single UNIQUE(id_chatbot, channel_type) into two partial UNIQUE
+-- constraints so multiple WhatsApp accounts can coexist per chatbot while
+-- legacy Zalo OA / Facebook rows remain single-row.
 CREATE TABLE IF NOT EXISTS chatbot_channel_connections (
   id                  SERIAL PRIMARY KEY,
   id_chatbot          INTEGER NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
-  channel_type        VARCHAR(32) NOT NULL CHECK (channel_type IN ('zalo_oa', 'facebook')),
+  channel_type        VARCHAR(32) NOT NULL,
   credentials         JSONB NOT NULL DEFAULT '{}',
   webhook_token       VARCHAR(64) UNIQUE NOT NULL,
   webhook_url         TEXT,
@@ -1802,14 +1806,28 @@ CREATE TABLE IF NOT EXISTS chatbot_channel_connections (
   connected_at        TIMESTAMPTZ DEFAULT NOW(),
   last_activity_at    TIMESTAMPTZ,
   settings            JSONB DEFAULT '{}',
+  -- WhatsApp Cloud API columns (migration 194). NULL for legacy rows.
+  phone_number        VARCHAR(32),
+  waba_id             VARCHAR(64),
+  phone_number_id     VARCHAR(64),
+  business_id         VARCHAR(64),
+  app_id              VARCHAR(64),
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(id_chatbot, channel_type)
+  CONSTRAINT chatbot_channel_connections_channel_type_check
+    CHECK (channel_type IN ('zalo_oa', 'facebook', 'whatsapp')),
+  CONSTRAINT uq_chatbot_channel_legacy
+    UNIQUE (id_chatbot, channel_type)
+    WHERE channel_type IN ('zalo_oa', 'facebook'),
+  CONSTRAINT uq_chatbot_channel_whatsapp
+    UNIQUE (id_chatbot, channel_type, external_channel_id)
+    WHERE channel_type = 'whatsapp'
 );
 CREATE INDEX IF NOT EXISTS idx_chatbot_channels_chatbot ON chatbot_channel_connections(id_chatbot);
 CREATE INDEX IF NOT EXISTS idx_chatbot_channels_token ON chatbot_channel_connections(webhook_token);
 CREATE INDEX IF NOT EXISTS idx_chatbot_channels_type ON chatbot_channel_connections(channel_type);
 CREATE INDEX IF NOT EXISTS idx_chatbot_channels_active ON chatbot_channel_connections(id_chatbot, channel_type, is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_chatbot_channels_phone_id ON chatbot_channel_connections(phone_number_id) WHERE phone_number_id IS NOT NULL;
 
 -- ─── Chatbot conversations & messages (migration 044) ──────────────────
 CREATE TABLE IF NOT EXISTS chatbot_conversations (
@@ -1870,6 +1888,38 @@ CREATE TABLE IF NOT EXISTS chatbot_zalo_account_settings (
 );
 CREATE INDEX IF NOT EXISTS idx_chatbot_zalo_account_user ON chatbot_zalo_account_settings(id_user);
 CREATE INDEX IF NOT EXISTS idx_chatbot_zalo_account_setting ON chatbot_zalo_account_settings(id_zalo_setting);
+
+-- ─── Chatbot WhatsApp account settings (migration 194) ──────────────
+-- Mirrors chatbot_zalo_account_settings but refs chatbot_channel_connections
+-- (multi-account per chatbot) instead of zalo_settings. UNIQUE
+-- (id_user, id_channel_connection, id_chatbot) lets the same WhatsApp account
+-- be toggled independently for each chatbot.
+CREATE TABLE IF NOT EXISTS chatbot_whatsapp_account_settings (
+  id                    BIGSERIAL PRIMARY KEY,
+  id_user               BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_channel_connection INTEGER NOT NULL REFERENCES chatbot_channel_connections(id) ON DELETE CASCADE,
+  id_chatbot            BIGINT REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  is_enabled            BOOLEAN NOT NULL DEFAULT false,
+  id_sub_assistant      BIGINT REFERENCES sub_assistants(id) ON DELETE SET NULL,
+  welcome_message       TEXT,
+  ai_model              VARCHAR(50) DEFAULT 'gemini-2.5-flash',
+  temperature           DECIMAL(3,2) DEFAULT 0.7,
+  max_tokens            INTEGER DEFAULT 2048,
+  response_style        VARCHAR(20) DEFAULT 'friendly',
+  system_instruction    TEXT,
+  settings              JSONB NOT NULL DEFAULT '{}',
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_chatbot_whatsapp_account_chatbot
+    UNIQUE (id_user, id_channel_connection, id_chatbot)
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_settings_user
+  ON chatbot_whatsapp_account_settings(id_user);
+CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_settings_channel
+  ON chatbot_whatsapp_account_settings(id_channel_connection);
+CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_settings_chatbot
+  ON chatbot_whatsapp_account_settings(id_chatbot)
+  WHERE id_chatbot IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS web_widget_configs (
   id               BIGSERIAL PRIMARY KEY,

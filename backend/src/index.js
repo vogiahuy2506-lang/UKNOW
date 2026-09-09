@@ -4,6 +4,33 @@ import { formatUtcAndVietnamForLog } from './utils/vnTimeFormat.util.js';
 import uploadController from './controllers/upload.controller.js';
 import { createApp } from './app.js';
 
+// ── Global safety net cho Baileys unhandled rejections ─────────────────────
+// Baileys phát ra nhiều async fire-and-forget promises (uploadPreKeys,
+// sendPassiveIq, executeInitQueries...) mà KHÔNG .catch(). Mặc định Node
+// in warning nhưng vẫn có thể làm process exit nếu rejection xảy ra đúng
+// thời điểm nhạy cảm. Patch: nuốt mọi unhandled rejection từ Baileys
+// socket internals để process không crash.
+process.on('unhandledRejection', (reason) => {
+  const msg = reason?.message || String(reason);
+  const stack = reason?.stack || '';
+  // Chỉ nuốt các rejection đến từ Baileys. Rejection từ code UKNOW
+  // vẫn nổi lên để dev phát hiện.
+  if (stack.includes('baileys') || msg.includes('Timed Out') || msg.includes('Stream Errored')) {
+    console.warn('[unhandledRejection] swallowed Baileys internal:', msg);
+    return;
+  }
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  const stack = err?.stack || '';
+  const msg = err?.message || String(err);
+  if (stack.includes('baileys') || msg.includes('Timed Out') || msg.includes('Stream Errored')) {
+    console.warn('[uncaughtException] swallowed Baileys internal:', msg);
+    return;
+  }
+  console.error('[uncaughtException]', err);
+});
+
 import { initScheduler } from './utils/scheduler.js';
 import outboundMessageQueueService from './services/queue/outboundMessageQueue.service.js';
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
@@ -26,8 +53,12 @@ import {
   markRuntimeReady,
   markRuntimeStarting,
 } from './utils/runtimeReadiness.util.js';
-// Import webhook controller to register debounce processors
+// Khôi phục WhatsApp sessions (Baileys) — user khỏi quét lại QR mỗi lần restart server.
+whatsappBaileysService.restorePersistedSessions().catch((err) =>
+  console.warn('[WhatsApp/Baileys] restore failed:', err.message)
+);
 import './controllers/chatbotChannelWebhook.controller.js';
+import * as whatsappBaileysService from './services/chatbot/whatsappBaileys.service.js';
 
 const app = createApp();
 
@@ -221,6 +252,15 @@ async function initializePostListenRuntime() {
       // crash a process that already completed its primary worker startup.
       console.error('[Startup] Failed to start Zalo inbox restoration:', error.message);
     });
+
+    // Subscribe WhatsApp Baileys inbound handler — bắt buộc sau khi
+    // restorePersistedSessions hoàn tất (chạy ở top-level import).
+    try {
+      const { registerAllSessionHandlers } = await import('./services/chatbot/whatsappBaileysInbox.service.js');
+      registerAllSessionHandlers();
+    } catch (err) {
+      console.error('[Startup] Failed to register Baileys inbox handlers:', err.message);
+    }
   }, 3000);
 
   markRuntimeReady();

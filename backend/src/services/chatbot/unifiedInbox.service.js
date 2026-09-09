@@ -3,6 +3,7 @@ import db from '../../config/database.js';
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
+import chatbotChannelRepository from '../../repositories/ai/chatbotChannel.repository.js';
 import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
@@ -1131,6 +1132,13 @@ class UnifiedInboxService {
       case 'webchat': {
         const result = await chatbotRepository.deleteWebChatConversation(conversationId, userId);
         console.log('[UnifiedInboxService] webchat delete result:', result);
+        return result;
+      }
+      case 'channel': {
+        // Covers Zalo OA, Facebook, WhatsApp (whatsapp_baileys) — all use
+        // channel_conversations table via channel_connections join.
+        const result = await chatbotChannelRepository.deleteChannelConversation(conversationId, userId);
+        console.log('[UnifiedInboxService] channel delete result:', result);
         return result;
       }
       default:

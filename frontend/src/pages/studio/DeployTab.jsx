@@ -63,6 +63,13 @@ const CHANNEL_TILES = [
     icon: 'Z',
     iconClass: 'bg-orange-50 text-orange-600',
   },
+  {
+    key: 'whatsapp',
+    title: 'WhatsApp',
+    tooltip: 'WhatsApp Business — Gán AI reply cho từng tài khoản',
+    icon: 'W',
+    iconClass: 'bg-emerald-50 text-emerald-600',
+  },
 ];
 
 const SHARE_OPTIONS = [
@@ -196,6 +203,9 @@ export default function DeployTab({
                 : tile.key === 'facebook'
                 ? !!facebookChannel
                 : null;
+              // WhatsApp can have multiple accounts per chatbot — defer to
+              // modal for the actual count, so we don't draw a static dot here.
+              const isMultiAccountTile = tile.key === 'whatsapp' || tile.key === 'zalo_personal';
               return (
                 <SquareTile
                   key={tile.key}
@@ -203,7 +213,7 @@ export default function DeployTab({
                   iconBg={tile.iconClass}
                   tooltip={tile.tooltip}
                   label={tile.title}
-                  connected={tile.key === 'zalo_personal' ? null : isConnected}
+                  connected={isMultiAccountTile ? null : isConnected}
                 >
                   <span className="text-base">{tile.icon}</span>
                 </SquareTile>

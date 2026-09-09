@@ -7,6 +7,7 @@ import webChatAdapter from './channelAdapters/webChat.adapter.js';
 import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
+import whatsappAdapter from './channelAdapters/whatsapp.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
@@ -22,6 +23,7 @@ const ADAPTERS = {
   zalo_oa: zaloOAAdapter,
   facebook: facebookAdapter,
   zalo_personal: zaloPersonalAdapter,
+  whatsapp: whatsappAdapter,
 };
 
 const MAX_HISTORY_MESSAGES = 20;

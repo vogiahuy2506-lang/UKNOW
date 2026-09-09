@@ -239,6 +239,14 @@ router.put('/zalo-account/:zaloSettingId/chatbot', requirePermission('chatbot_ch
 router.post('/zalo-account/:zaloSettingId/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleZaloAccountChatbot.bind(chatbotController));
 router.get('/zalo-accounts/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.listZaloAccountsWithChatbotSettings.bind(chatbotController));
 
+// ── WhatsApp per-chatbot enable (DeployTab modal) ─────────────────────
+// GET: list Cloud API + Baileys WhatsApp accounts của user.
+// POST: toggle AI cho 1 account (body: session_key | id_channel_connection).
+router.get('/whatsapp-accounts/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.listWhatsAppAccountsWithChatbotSettings.bind(chatbotController));
+router.post('/whatsapp-account/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleWhatsAppAccountChatbot.bind(chatbotController));
+// Giữ route cũ để client cũ không vỡ — nó đọc id từ URL nhưng dispatch tới body.
+router.post('/whatsapp-account/:channelConnectionId/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleWhatsAppAccountChatbot.bind(chatbotController));
+
 // ── Outbox ───────────────────────────────────────────────────────
 
 router.get('/inbox/outbox', requirePermission('inbox_view'), unifiedInboxController.getOutboxMessages.bind(unifiedInboxController));

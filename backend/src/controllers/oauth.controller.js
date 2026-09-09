@@ -1,6 +1,10 @@
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import crypto from 'crypto';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import whatsappOAuthService, {
+  stashPendingOAuth,
+  verifyState,
+} from '../services/chatbot/whatsappOAuth.service.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 const FB_OAUTH_BASE = 'https://www.facebook.com/v18.0/dialog/oauth';
@@ -375,6 +379,113 @@ class OAuthController {
       return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=zalo_callback_error`);
     }
   }
+
+  // ── WhatsApp Embedded Signup OAuth ─────────────────────────────
+
+  /**
+   * GET /api/webhooks/oauth/callback/whatsapp
+   * Public endpoint — no JWT. State carries the userId via HMAC signature
+   * (see whatsappOAuth.service.js signState/verifyState). Embedded Signup
+   * typically delivers waba_id + phone_number_id directly in the query
+   * string (popup → server → redirect). We stash them into the pending
+   * store keyed by `state`, then redirect to the frontend ChannelSettings
+   * tab where the user picks a chatbot + confirms the connection.
+   */
+  async handleWhatsAppCallback(req, res) {
+    try {
+      const {
+        code,
+        state,
+        error,
+        error_description,
+        waba_id: wabaIdFromQuery,
+        phone_number_id: phoneNumberIdFromQuery,
+      } = req.query || {};
+
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+      const settingsPath = '/app/settings/channels';
+
+      if (error) {
+        console.log('[OAuth] WhatsApp user denied or error:', error, error_description);
+        return res.redirect(
+          `${frontendUrl}/oauth-result.html?whatsapp_oauth=denied&reason=${encodeURIComponent(error_description || error)}`
+        );
+      }
+
+      const statePayload = verifyState(String(state || ''));
+      if (!statePayload || statePayload.flow !== 'whatsapp_embedded_signup') {
+        return res.redirect(`${frontendUrl}/oauth-result.html?whatsapp_oauth=invalid_state`);
+      }
+
+      // Exchange code → token. We pass userId from the signed state so the
+      // service can decrypt that user's Meta App Secret at runtime.
+      let exchange = null;
+      if (code) {
+        try {
+          exchange = await whatsappOAuthService.exchangeCodeForToken({
+            code: String(code),
+            redirectUri: whatsappOAuthService.getConfig().redirectUri,
+            userId: statePayload.userId,
+            appId: statePayload.appId,
+            credentialId: statePayload.credentialId,
+          });
+        } catch (exchangeErr) {
+          console.warn('[OAuth] WhatsApp code exchange failed:', exchangeErr.message);
+        }
+      }
+
+      const accessToken = exchange?.accessToken || null;
+      const wabaId = exchange?.wabaId || wabaIdFromQuery || null;
+      let phoneNumbers = [];
+      if (accessToken && wabaId) {
+        phoneNumbers = await whatsappOAuthService.fetchPhoneNumbers(wabaId, accessToken);
+      }
+
+      // Fall back to query-derived single phone when Meta already gave us one
+      // and the user only has the one WABA number.
+      if (!phoneNumbers.length && phoneNumberIdFromQuery) {
+        phoneNumbers = [{
+          id: phoneNumberIdFromQuery,
+          display_phone_number: '',
+          verified_name: '',
+          quality_rating: 'UNKNOWN',
+        }];
+      }
+
+      // Subscribe WABA to webhook so messages actually arrive.
+      if (accessToken && wabaId) {
+        await whatsappOAuthService.subscribeWabaToWebhook(wabaId, accessToken, {
+          userId: statePayload.userId,
+          appId: statePayload.appId,
+        });
+      }
+
+      // Stash under a fresh state key the SPA will return to us.
+      const pendingState = state;
+      stashPendingOAuth(pendingState, {
+        userId: statePayload.userId,
+        appId: statePayload.appId,
+        wabaId,
+        accessToken,
+        phoneNumbers,
+      });
+
+      const params = new URLSearchParams({
+        whatsapp_oauth: 'success',
+        state: pendingState,
+      });
+      if (wabaId) params.set('waba_id', String(wabaId));
+      return res.redirect(`${frontendUrl}/oauth-result.html?${params.toString()}`);
+    } catch (err) {
+      console.error('[OAuth] WhatsApp callback error:', err);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+      return res.redirect(`${frontendUrl}/oauth-result.html?whatsapp_oauth=callback_error`);
+    }
+  }
 }
+
+// pendingOAuthStore lives in whatsappOAuth.service.js and is shared between
+// handleWhatsAppCallback (write) and whatsappSettings.controller.completeOAuth
+// (read). See stashPendingOAuth / consumePendingOAuth in that module.
 
 export default new OAuthController();

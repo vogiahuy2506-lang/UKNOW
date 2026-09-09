@@ -1,9 +1,11 @@
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
+import whatsappAdapter from '../services/chatbot/channelAdapters/whatsapp.adapter.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import chatbotWhatsAppAccountRepository from '../repositories/chatbot/chatbotWhatsAppAccount.repository.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
 import { formatBatchedContent } from '../utils/chatbotReplyBatch.util.js';
@@ -383,6 +385,266 @@ class ChatbotChannelWebhookController {
       await chatbotChannelRepository.updateLastActivity(channel.id);
     } catch (err) {
       console.error('[Facebook Webhook] Handle error:', err.message);
+    }
+  }
+
+  // ── WhatsApp Cloud API Webhook ─────────────────────────────────
+
+  /**
+   * GET /api/webhooks/chatbot/whatsapp/:token
+   * Meta sends `hub.mode=subscribe&hub.verify_token=...&hub.challenge=...`
+   * once when the developer configures the webhook URL in the dashboard.
+   */
+  async verifyWhatsApp(req, res) {
+    try {
+      const { token } = req.params;
+      const channel = await chatbotChannelRepository.findByWebhookToken(token);
+
+      if (!channel || channel.channel_type !== 'whatsapp') {
+        console.warn('[WhatsApp] Channel not found for token');
+        return res.status(404).send('Channel not found');
+      }
+
+      const customVerify = channel.credentials?.verify_token;
+      const verification = whatsappAdapter.verifyWebhook(req.query, customVerify);
+      if (verification) {
+        return res.send(verification.challenge);
+      }
+      return res.status(403).send('Invalid verify token');
+    } catch (err) {
+      console.error('[WhatsApp Webhook] Verify error:', err.message);
+      return res.status(500).send('Internal error');
+    }
+  }
+
+  /**
+   * POST /api/webhooks/chatbot/whatsapp/:token
+   * Inbound text messages. Signature MUST be verified against the channel's
+   * stored app_secret before any business logic runs.
+   */
+  async handleWhatsApp(req, res) {
+    const { token } = req.params;
+
+    // Meta expects a 200 response within 5s. Acknowledge first, then process.
+    res.send('ok');
+
+    try {
+      const channel = await chatbotChannelRepository.findByWebhookToken(token);
+
+      if (!channel || channel.channel_type !== 'whatsapp') {
+        console.warn('[WhatsApp] Channel not found for token');
+        return;
+      }
+
+      // 1. Verify X-Hub-Signature-256. app_secret is stored per channel in
+      //    credentials so multi-app is supported (PR 2 friendly).
+      const appSecret = channel.credentials?.app_secret || process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET;
+      const signatureHeader = req.headers['x-hub-signature-256'];
+      const rawBody = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : null);
+      if (!rawBody || !whatsappAdapter.verifySignature(rawBody, signatureHeader, appSecret)) {
+        console.warn('[WhatsApp] Signature verification failed');
+        return;
+      }
+
+      // Parse body manually when express.raw() is mounted (see webhook.routes.js).
+      let parsedBody = req.body;
+      if (Buffer.isBuffer(req.body)) {
+        try {
+          parsedBody = JSON.parse(req.body.toString('utf8'));
+        } catch (parseErr) {
+          console.warn('[WhatsApp] Invalid JSON body:', parseErr.message);
+          return;
+        }
+      }
+
+      const messages = whatsappAdapter.parseWebhookEvent(parsedBody);
+      if (!messages.length) return;
+
+      const chatbotId = channel.id_chatbot;
+
+      if (!chatbotId) {
+        console.warn('[ChatbotChannel] No chatbot linked to WhatsApp channel', channel.id);
+        return;
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || !chatbot.is_active) {
+        console.warn(`[ChatbotChannel] Chatbot ${chatbotId} not found or inactive — skipping`);
+        return;
+      }
+
+      // Global channel-level guard: webhook only acts on active connections.
+      // (Per-chatbot enable is checked inside _processWhatsAppBatch.)
+      if (!channel.is_active) {
+        console.log(`[WhatsApp] channel=${channel.id} disabled — dropping ${messages.length} message(s)`);
+        return;
+      }
+
+      for (const msg of messages) {
+        const conv = await chatbotChannelRepository.getOrCreateConversation({
+          chatbotId,
+          channelId: channel.id,
+          externalId: msg.senderId,
+          source: 'whatsapp',
+        });
+
+        const savedMessage = await chatbotChannelRepository.addMessage(conv.id, {
+          role: 'visitor',
+          content: msg.message,
+          message_type: 'text',
+          external_id: msg.messageId,
+        });
+
+        if (savedMessage?.isDuplicate) {
+          continue;
+        }
+
+        await chatbotChannelRepository.updateLastActivity(channel.id);
+
+        inboundReplyDebounceService.enqueue({
+          key: `whatsapp:${channel.id}:${conv.id}`,
+          message: {
+            eventId: msg.messageId || null,
+            persistedMessageId: savedMessage?.id || null,
+            receivedAt: msg.timestamp,
+            content: msg.message,
+          },
+          flushCallback: async (batch) => {
+            await this._processWhatsAppBatch({
+              channel,
+              chatbotId,
+              conv,
+              senderId: msg.senderId,
+              batch,
+            });
+          },
+        });
+      }
+    } catch (err) {
+      console.error('[WhatsApp Webhook] Handle error:', err.stack || err.message);
+    }
+  }
+
+  /**
+   * @private
+   * Flushes a batch of inbound messages for one WhatsApp conversation. Same
+   * gating as Zalo OA (rate limit / lock / pause) plus the per-chatbot
+   * WhatsApp enable flag.
+   */
+  async _processWhatsAppBatch({ channel, chatbotId, conv, senderId, batch }) {
+    const prompt = formatBatchedContent(batch.messages);
+    if (!prompt) return;
+
+    try {
+      // 1. Channel + chatbot still active and still paired correctly.
+      const activeChannel = await chatbotChannelRepository.findActiveChannelById(channel.id);
+      if (!activeChannel
+          || Number(activeChannel.id_chatbot) !== Number(chatbotId)
+          || activeChannel.channel_type !== 'whatsapp') {
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
+        return;
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || !chatbot.is_active) {
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
+        return;
+      }
+
+      // 2. Per-chatbot AI toggle — user can disable for a single chatbot
+      //    without disconnecting the WhatsApp account.
+      const isChatbotEnabled = await chatbotWhatsAppAccountRepository.isEnabledForChatbot(
+        channel.id,
+        chatbotId
+      );
+      if (!isChatbotEnabled) {
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=chatbot_disabled`);
+        return;
+      }
+
+      // 3. Topup/resource lock.
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbotId)) {
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=locked`);
+        return;
+      }
+
+      // 4. Handoff pause.
+      if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused`);
+        return;
+      }
+
+      // 5. Rate limit — single check per batch.
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'whatsapp',
+        ownerUserId: chatbot.id_user,
+        chatbotId,
+        senderKey: senderId,
+      });
+      if (!rate.allowed) {
+        if (rate.shouldNotify) {
+          const sent = await whatsappAdapter.sendReply({
+            channelId: channel.id,
+            externalId: senderId,
+            message: rate.staticReply,
+          });
+          if (sent?.success !== false) {
+            await chatbotChannelRepository.addMessage(conv.id, {
+              role: 'bot',
+              content: rate.staticReply,
+              message_type: 'text',
+            });
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'whatsapp',
+              ownerUserId: chatbot.id_user,
+              chatbotId,
+              senderKey: senderId,
+              reason: rate.reason,
+            });
+          }
+        }
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=rate_limited`);
+        return;
+      }
+
+      // 6. Build prompt from history.
+      const historyThroughMessageId = await chatbotChannelRepository.getLatestMessageId(conv.id);
+      const result = await chatRouterService.routeChatbotMessage({
+        chatbotId,
+        message: prompt,
+        conversationId: conv.id,
+        throughMessageId: historyThroughMessageId,
+        excludeMessageIds: batch.messages
+          .map((item) => item.persistedMessageId)
+          .filter((id) => id != null),
+      });
+
+      if (!result?.content) {
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+        return;
+      }
+
+      const sent = await whatsappAdapter.sendReply({
+        channelId: channel.id,
+        externalId: senderId,
+        message: result.content,
+      });
+
+      if (sent?.success === false) {
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+        return;
+      }
+
+      await chatbotChannelRepository.addMessage(conv.id, {
+        role: 'bot',
+        content: result.content,
+        message_type: 'text',
+      });
+
+      console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=sent`);
+    } catch (err) {
+      console.error(`[ChatbotDebounce] Error processing WhatsApp batch for conv ${conv.id}:`, err.stack || err.message);
     }
   }
 }

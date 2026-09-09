@@ -1,14 +1,36 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import EmailSettings from './EmailSettings';
 import ZaloSettings from './ZaloSettings';
+import WhatsAppSettings from './WhatsAppSettings';
 
 const TABS = [
   { key: 'email', label: 'Email' },
-  { key: 'zalo',  label: 'Zalo' },
+  { key: 'zalo', label: 'Zalo' },
+  { key: 'whatsapp', label: 'WhatsApp' },
 ];
 
 const ChannelSettings = () => {
-  const [active, setActive] = useState('email');
+  // Allow opening directly on a tab via /app/settings/channels#tab (used by the
+  // OAuth callback redirect after Embedded Signup).
+  const [active, setActive] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const tab = window.location.hash.replace(/^#/, '');
+      if (TABS.some((t) => t.key === tab)) return tab;
+    }
+    return 'email';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onHashChange = () => {
+      const tab = window.location.hash.replace(/^#/, '');
+      if (TABS.some((t) => t.key === tab)) {
+        setActive(tab);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -18,10 +40,15 @@ const ChannelSettings = () => {
           <button
             key={key}
             type="button"
-            onClick={() => setActive(key)}
+            onClick={() => {
+              setActive(key);
+              if (typeof window !== 'undefined') {
+                window.location.hash = `#${key}`;
+              }
+            }}
             className={`px-5 py-1.5 rounded-md text-sm font-medium transition-colors ${
               active === key
-                ? 'bg-white text-gray-900 shadow-sm'
+                ? 'bg-primary-600 text-white shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -30,7 +57,9 @@ const ChannelSettings = () => {
         ))}
       </div>
 
-      {active === 'email' ? <EmailSettings /> : <ZaloSettings />}
+      {active === 'email' && <EmailSettings />}
+      {active === 'zalo' && <ZaloSettings />}
+      {active === 'whatsapp' && <WhatsAppSettings />}
     </div>
   );
 };

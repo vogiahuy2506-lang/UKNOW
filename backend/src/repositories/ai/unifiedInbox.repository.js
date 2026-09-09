@@ -126,7 +126,7 @@ function buildOutboxChannelGates(channel) {
   };
 }
 
-const CHANNEL_CONNECTION_TYPES = new Set(['zalo_oa', 'facebook']);
+const CHANNEL_CONNECTION_TYPES = new Set(['zalo_oa', 'facebook', 'whatsapp_baileys']);
 
 /** Gate UNION branches when filtering inbox conversations by channel. */
 function buildConversationChannelGates(channel) {

@@ -8,9 +8,11 @@ import {
   HiOutlineExternalLink,
   HiOutlineRefresh,
   HiOutlineUserCircle,
+  HiOutlineChatAlt2,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import WhatsAppChannelModal from '../../features/chatbot/components/WhatsAppChannelModal';
 
 /* ─── ChannelModal — cấu hình từng kênh ─────────────────────────────── */
 
@@ -20,6 +22,19 @@ export function ChannelModal({ open, channel, chatbot, onClose }) {
   }, [open]);
 
   if (!open || !chatbot) return null;
+
+  // WhatsApp uses its own dedicated modal (per-chatbot AI toggle list) — same
+  // pattern as Zalo Personal. The simple inline forms are reserved for
+  // channels that connect directly from inside this dialog.
+  if (channel === 'whatsapp') {
+    return (
+      <WhatsAppChannelModal
+        open={open}
+        onClose={onClose}
+        chatbotId={chatbot.id}
+      />
+    );
+  }
 
   const titles = {
     zalo: 'Cấu hình Zalo OA',
@@ -91,253 +106,267 @@ function ZaloForm({ chatbot }) {
   const [oaId, setOaId] = useState('');
   const [secret, setSecret] = useState('');
   const [webhook, setWebhook] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [oaInfo, setOaInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState(null);
 
   useEffect(() => {
-    const base = typeof window !== 'undefined' ? window.location.origin : '';
-    setWebhook(`${base}/webhooks/zalo/oa?chatbot_id=${chatbot.id}`);
+    const fetchOa = async () => {
+      try {
+        const res = await chatbotApi.getZaloOaConfig(chatbot.id);
+        if (res?.data?.data) {
+          const d = res.data.data;
+          setOaId(d.oa_id || '');
+          setSecret(d.secret_key || '');
+          setOaInfo(d);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOa();
+    setWebhook(`${window.location.origin}/webhooks/zalo/oa?chatbot_id=${chatbot.id}`);
   }, [chatbot.id]);
 
-  const copy = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    toast.success('Đã copy');
-    setTimeout(() => setCopied(false), 2000);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await chatbotApi.saveZaloOaConfig(chatbot.id, { oa_id: oaId, secret_key: secret });
+      toast.success('Đã lưu cấu hình Zalo OA.');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Lưu thất bại.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTest = async () => {
     setTesting(true);
-    setResult(null);
     try {
       const res = await chatbotApi.testInboxConnection('zalo');
-      const ok = !!res.data?.success;
-      setResult({ ok, message: res.data?.message || (ok ? 'Kết nối thành công' : 'Kết nối thất bại') });
-      ok ? toast.success('Zalo OA hoạt động bình thường') : toast.error('Kết nối thất bại');
+      if (res?.data?.ok) toast.success('Webhook đã được gửi thử thành công.');
+      else toast.error('Webhook chưa phản hồi.');
     } catch (err) {
-      setResult({ ok: false, message: err.response?.data?.message || 'Không thể kiểm tra' });
-      toast.error('Không thể kiểm tra');
+      toast.error('Test thất bại.');
     } finally {
       setTesting(false);
     }
   };
 
-  const handleOAuth = async () => {
-    try {
-      const res = await chatbotApi.initZaloOAuth({ chatbot_id: chatbot.id });
-      if (res.data?.oauth_url) {
-        window.open(res.data.oauth_url, '_blank', 'noopener');
-      } else {
-        toast.error('Không lấy được OAuth URL');
-      }
-    } catch {
-      toast.error('Không thể khởi tạo OAuth');
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-slate-400 text-xs">
+        <HiOutlineRefresh className="w-4 h-4 animate-spin mr-2" />
+        Đang tải...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
-        <p className="text-xs text-slate-600 mb-2">
-          Cấu hình Zalo Official Account để tự động phản hồi tin nhắn từ khách hàng.
-        </p>
-        <button
-          type="button"
-          onClick={handleOAuth}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-md transition-colors"
-        >
-          <HiOutlineExternalLink className="w-3.5 h-3.5" />
-          Kết nối qua OAuth
-        </button>
-      </div>
-
       <div>
-        <label className="text-xs font-medium text-slate-700 block mb-1.5">OA ID</label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">OA ID</label>
         <input
           type="text"
           value={oaId}
           onChange={(e) => setOaId(e.target.value)}
-          placeholder="VD: 1234567890123456789"
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
+          placeholder="VD: 1234567890"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       <div>
-        <label className="text-xs font-medium text-slate-700 block mb-1.5">App Secret</label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Secret Key</label>
         <input
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
-          placeholder="••••••••••••••••"
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
+          placeholder="••••••••"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       <div>
-        <label className="text-xs font-medium text-slate-700 block mb-1.5">Webhook URL</label>
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
-          <HiOutlineLink className="w-4 h-4 text-slate-400 shrink-0" />
-          <input type="text" readOnly value={webhook} className="flex-1 bg-transparent text-xs font-mono text-slate-600 outline-none" />
+        <label className="block text-xs font-medium text-slate-700 mb-1">Webhook URL</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={webhook}
+            readOnly
+            className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
+          />
           <button
             type="button"
-            onClick={() => copy(webhook)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 shrink-0"
+            onClick={() => {
+              navigator.clipboard.writeText(webhook);
+              toast.success('Đã copy webhook.');
+            }}
+            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg"
           >
-            <HiOutlineClipboardCopy className="w-3 h-3" />
-            {copied ? 'OK' : 'Copy'}
+            <HiOutlineClipboardCopy className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      {oaInfo?.verified ? (
+        <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg">
+          <HiOutlineCheckCircle className="w-4 h-4" />
+          OA đã xác thực
+        </div>
+      ) : null}
+
+      <div className="flex gap-2 pt-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !oaId || !secret}
+          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+        </button>
         <button
           type="button"
           onClick={handleTest}
           disabled={testing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
         >
-          {testing ? <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
-          {testing ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
+          {testing ? 'Đang test...' : 'Test webhook'}
         </button>
-        {result && (
-          <span className={`inline-flex items-center gap-1 text-xs ${result.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-            {result.ok ? <HiOutlineCheckCircle className="w-3.5 h-3.5" /> : <HiOutlineXCircle className="w-3.5 h-3.5" />}
-            {result.message}
-          </span>
-        )}
       </div>
     </div>
   );
 }
 
-/* ─── Facebook ────────────────────────────────────────────────────── */
+/* ─── Facebook Messenger ─────────────────────────────────────────── */
 
 function FacebookForm({ chatbot }) {
   const [pageId, setPageId] = useState('');
-  const [token, setToken] = useState('');
+  const [pageToken, setPageToken] = useState('');
+  const [verifyToken, setVerifyToken] = useState('');
   const [webhook, setWebhook] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState(null);
+  const [pageInfo, setPageInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const base = typeof window !== 'undefined' ? window.location.origin : '';
-    setWebhook(`${base}/webhooks/facebook/page?chatbot_id=${chatbot.id}`);
+    const fetchPage = async () => {
+      try {
+        const res = await chatbotApi.getFacebookPageConfig(chatbot.id);
+        if (res?.data?.data) {
+          const d = res.data.data;
+          setPageId(d.page_id || '');
+          setPageToken(d.page_access_token || '');
+          setVerifyToken(d.verify_token || '');
+          setPageInfo(d);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPage();
+    setWebhook(`${window.location.origin}/webhooks/facebook/page?chatbot_id=${chatbot.id}`);
   }, [chatbot.id]);
 
-  const copy = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    toast.success('Đã copy');
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleTest = async () => {
-    setTesting(true);
-    setResult(null);
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      const res = await chatbotApi.testInboxConnection('facebook');
-      const ok = !!res.data?.success;
-      setResult({ ok, message: res.data?.message || (ok ? 'Kết nối thành công' : 'Kết nối thất bại') });
-      ok ? toast.success('Facebook hoạt động bình thường') : toast.error('Kết nối thất bại');
+      await chatbotApi.saveFacebookPageConfig(chatbot.id, {
+        page_id: pageId,
+        page_access_token: pageToken,
+        verify_token: verifyToken,
+      });
+      toast.success('Đã lưu cấu hình Facebook Page.');
     } catch (err) {
-      setResult({ ok: false, message: err.response?.data?.message || 'Không thể kiểm tra' });
-      toast.error('Không thể kiểm tra');
+      toast.error(err?.response?.data?.message || 'Lưu thất bại.');
     } finally {
-      setTesting(false);
+      setSaving(false);
     }
   };
 
-  const handleOAuth = async () => {
-    try {
-      const res = await chatbotApi.initFacebookOAuth({ chatbot_id: chatbot.id });
-      if (res.data?.oauth_url) {
-        window.open(res.data.oauth_url, '_blank', 'noopener');
-      } else {
-        toast.error('Không lấy được OAuth URL');
-      }
-    } catch {
-      toast.error('Không thể khởi tạo OAuth');
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-slate-400 text-xs">
+        <HiOutlineRefresh className="w-4 h-4 animate-spin mr-2" />
+        Đang tải...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-3">
-        <p className="text-xs text-slate-600 mb-2">
-          Kết nối Fanpage Facebook để tự động trả lời tin nhắn Messenger.
-        </p>
-        <button
-          type="button"
-          onClick={handleOAuth}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold rounded-md transition-colors"
-        >
-          <HiOutlineExternalLink className="w-3.5 h-3.5" />
-          Kết nối qua OAuth
-        </button>
-      </div>
-
       <div>
-        <label className="text-xs font-medium text-slate-700 block mb-1.5">Page ID</label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Page ID</label>
         <input
           type="text"
           value={pageId}
           onChange={(e) => setPageId(e.target.value)}
           placeholder="VD: 1234567890"
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
 
       <div>
-        <label className="text-xs font-medium text-slate-700 block mb-1.5">Page Access Token</label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Page Access Token</label>
         <input
           type="password"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="EAABwzLixnjY..."
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
+          value={pageToken}
+          onChange={(e) => setPageToken(e.target.value)}
+          placeholder="EAAxxxxxxx..."
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
 
       <div>
-        <label className="text-xs font-medium text-slate-700 block mb-1.5">Webhook URL</label>
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
-          <HiOutlineLink className="w-4 h-4 text-slate-400 shrink-0" />
-          <input type="text" readOnly value={webhook} className="flex-1 bg-transparent text-xs font-mono text-slate-600 outline-none" />
+        <label className="block text-xs font-medium text-slate-700 mb-1">Verify Token</label>
+        <input
+          type="text"
+          value={verifyToken}
+          onChange={(e) => setVerifyToken(e.target.value)}
+          placeholder="Chuỗi bí mật tự đặt"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Webhook URL</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={webhook}
+            readOnly
+            className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
+          />
           <button
             type="button"
-            onClick={() => copy(webhook)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 shrink-0"
+            onClick={() => {
+              navigator.clipboard.writeText(webhook);
+              toast.success('Đã copy webhook.');
+            }}
+            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg"
           >
-            <HiOutlineClipboardCopy className="w-3 h-3" />
-            {copied ? 'OK' : 'Copy'}
+            <HiOutlineClipboardCopy className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={handleTest}
-          disabled={testing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
-        >
-          {testing ? <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
-          {testing ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
-        </button>
-        {result && (
-          <span className={`inline-flex items-center gap-1 text-xs ${result.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-            {result.ok ? <HiOutlineCheckCircle className="w-3.5 h-3.5" /> : <HiOutlineXCircle className="w-3.5 h-3.5" />}
-            {result.message}
-          </span>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving || !pageId || !pageToken}
+        className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+      >
+        {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+      </button>
     </div>
   );
 }
 
-/* ─── Zalo Personal ──────────────────────────────────────────────── */
+/* ─── Shared toggle ──────────────────────────────────────────────── */
 
 function Toggle({ checked, onChange, disabled }) {
   return (
@@ -346,78 +375,77 @@ function Toggle({ checked, onChange, disabled }) {
       role="switch"
       aria-checked={checked}
       disabled={disabled}
-      onClick={() => !disabled && onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? 'bg-primary-600' : 'bg-slate-200'
-      }`}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
+        checked ? 'bg-blue-600' : 'bg-slate-200'
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-6' : 'translate-x-1'
+        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-1'
         }`}
       />
     </button>
   );
 }
 
-/* ─── Zalo Personal ──────────────────────────────────────────────── */
+/* ─── Zalo Personal reload hook ──────────────────────────────────── */
 
 function ZaloPersonalReloadButton() {
+  const onReload = () => window.location.reload();
   return (
     <button
       type="button"
-      onClick={() => window.dispatchEvent(new CustomEvent('zalo-personal:reload'))}
-      className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
-      title="Tải lại danh sách tài khoản"
+      onClick={onReload}
+      className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+      title="Tải lại"
     >
       <HiOutlineRefresh className="w-4 h-4" />
     </button>
   );
 }
 
+/* ─── Zalo Personal (form bật/tắt chatbot cho từng account) ──────── */
+
 function ZaloPersonalForm({ chatbot }) {
   const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
 
-  const loadAccounts = useCallback(async () => {
-    setLoading(true);
+  const fetchAccounts = useCallback(async () => {
     try {
-      // Scope the list to this chatbot so toggling one chatbot does not affect
-      // other chatbots that share the same Zalo account.
-      const res = await chatbotApi.listZaloAccountsWithChatbotSettings(chatbot?.id);
-      // Backend response shape: { success: true, data: [accounts] }
-      // Axios unwraps the HTTP body into res.data, so the array lives at res.data.data.
-      const list = res?.data?.data || res?.data?.accounts || res?.accounts || res?.data || [];
-      console.log('[ZaloPersonal] API response:', res);
-      console.log('[ZaloPersonal] Parsed list:', list);
-      setAccounts(Array.isArray(list) ? list : []);
-    } catch (err) {
-      console.error('[ZaloPersonal] API error:', err);
-      setAccounts([]);
+      const res = await chatbotApi.listZaloAccountsWithChatbotSettings(chatbot.id);
+      // Backend trả { success, data: [...accounts] } — accounts có thể đã
+      // được bật global (is_active) hoặc chưa. Hiện tất cả để user thấy.
+      const rawList = res?.data?.data || [];
+      setAccounts(Array.isArray(rawList) ? rawList : []);
+    } catch (e) {
+      console.error('[ZaloPersonalForm] fetch failed:', e);
+      toast.error('Không thể tải danh sách tài khoản Zalo.');
     } finally {
       setLoading(false);
     }
-  }, [chatbot?.id]);
+  }, [chatbot.id]);
 
   useEffect(() => {
-    loadAccounts();
-    const onReload = () => loadAccounts();
+    fetchAccounts();
+    const onReload = () => fetchAccounts();
     window.addEventListener('zalo-personal:reload', onReload);
     return () => window.removeEventListener('zalo-personal:reload', onReload);
-  }, [loadAccounts]);
+  }, [fetchAccounts]);
 
-  const handleToggle = async (acc, next) => {
+  const handleToggle = async (acc, enabled) => {
     setTogglingId(acc.id);
-    // Optimistic update
-    setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, chatbot_enabled: next } : a)));
     try {
-      await chatbotApi.toggleZaloAccountChatbot(acc.id, next, chatbot?.id);
-      toast.success(next ? `Đã bật chatbot cho ${acc.name || acc.phone || acc.zalo_user_id}` : 'Đã tắt chatbot');
-    } catch {
-      // rollback
-      setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, chatbot_enabled: !next } : a)));
-      toast.error('Không thể cập nhật');
+      // Backend endpoint mong đợi { enabled, id_chatbot } — service đã gói sẵn.
+      await chatbotApi.toggleZaloAccountChatbot(acc.id, enabled, chatbot.id);
+      setAccounts((prev) =>
+        prev.map((a) => (a.id === acc.id ? { ...a, is_enabled: enabled, chatbot_enabled: enabled } : a))
+      );
+      toast.success(enabled ? `Đã bật chatbot cho ${acc.name || acc.phone || acc.zalo_user_id}` : 'Đã tắt chatbot');
+    } catch (err) {
+      console.error('[ZaloPersonalForm] toggle failed:', err);
+      toast.error(err?.response?.data?.message || 'Không thể cập nhật.');
     } finally {
       setTogglingId(null);
     }
@@ -459,24 +487,25 @@ function ZaloPersonalForm({ chatbot }) {
           </div>
         ) : (
           accounts.map((acc) => {
-            const isOn = !!acc.chatbot_enabled;
+            const isOn = !!(acc.chatbot_enabled ?? acc.is_enabled);
             const busy = togglingId === acc.id;
 
-            // Helper to get display name, avoiding Zalo ID
+            // Backend trả về: id, display_name, zalo_name, zalo_phone, zalo_user_id,
+            // is_active, chatbot_enabled. Map sang dạng UI-friendly.
             const isLikelyZaloId = (v) => {
               if (!v) return false;
               const str = String(v).replace(/[\s-]/g, '');
               return /^\d{9,15}$/.test(str);
             };
-            const displayName = !isLikelyZaloId(acc.name) && acc.name
-              ? acc.name
-              : !isLikelyZaloId(acc.display_name) && acc.display_name
-                ? acc.display_name
-                : acc.phone && !isLikelyZaloId(acc.phone)
-                  ? acc.phone
-                  : !isLikelyZaloId(acc.zalo_user_id)
-                    ? acc.zalo_user_id
-                    : 'Zalo Account';
+            const candidates = [acc.display_name, acc.zalo_name, acc.zalo_phone, acc.zalo_user_id, acc.phone];
+            const displayName = candidates.find(
+              (v) => v && !isLikelyZaloId(v)
+            ) || (acc.zalo_user_id && !isLikelyZaloId(acc.zalo_user_id) ? acc.zalo_user_id : 'Zalo Account');
+            const subtitle = acc.zalo_phone && !isLikelyZaloId(acc.zalo_phone)
+              ? acc.zalo_phone
+              : acc.phone && !isLikelyZaloId(acc.phone)
+                ? acc.phone
+                : acc.zalo_user_id || `ID: ${acc.id}`;
             const avatarChar = (displayName || 'Z').charAt(0).toUpperCase();
 
             return (
@@ -496,7 +525,7 @@ function ZaloPersonalForm({ chatbot }) {
                     {displayName}
                   </p>
                   <p className="text-[11px] text-slate-400 truncate">
-                    {acc.phone && !isLikelyZaloId(acc.phone) ? acc.phone : acc.zalo_user_id || `ID: ${acc.id}`}
+                    {subtitle}
                   </p>
                 </div>
                 <Toggle checked={isOn} disabled={busy} onChange={(v) => handleToggle(acc, v)} />

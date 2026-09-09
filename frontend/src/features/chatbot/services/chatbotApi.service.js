@@ -159,6 +159,56 @@ const chatbotApiService = {
     );
   },
 
+  // ── WhatsApp per-chatbot enable (DeployTab modal) ──────────────────────────
+
+  // List all WhatsApp accounts owned by the user, optionally scoped to one chatbot.
+  // The flag `chatbot_enabled` reflects per-chatbot enable for the chosen chatbot.
+  listWhatsAppAccountsWithChatbotSettings(chatbotId) {
+    const params = chatbotId == null || chatbotId === ''
+      ? null
+      : { chatbot_id: chatbotId };
+    return api.get('/ai/chatbot/whatsapp-accounts/chatbot', { params });
+  },
+
+  // Toggle per-chatbot AI enable for a WhatsApp account. Lazily creates the
+  // (user, whatsapp account, chatbot) tuple on first call.
+  //
+  // accountId shape:
+  //   - string starting with "<userId>-" → Baileys session_key (gửi kèm session_key)
+  //   - number                       → Cloud API id_channel_connection (legacy)
+  //   - object { provider, id, session_key } → caller có thể truyền sẵn
+  toggleWhatsAppAccountChatbot(accountId, enabled, idChatbot) {
+    let payload = { enabled, id_chatbot: idChatbot ?? null };
+    let url;
+
+    if (typeof accountId === 'string') {
+      // Baileys: accountId chính là session_key ("${userId}-${shortKey}")
+      payload.session_key = accountId;
+      url = `/ai/chatbot/whatsapp-account/chatbot/toggle`;
+    } else if (typeof accountId === 'object' && accountId !== null) {
+      // Caller đã biết provider
+      if (accountId.provider === 'baileys' && accountId.session_key) {
+        payload.session_key = accountId.session_key;
+        url = `/ai/chatbot/whatsapp-account/chatbot/toggle`;
+      } else if (accountId.id != null) {
+        payload.id_channel_connection = accountId.id;
+        url = `/ai/chatbot/whatsapp-account/${accountId.id}/chatbot/toggle`;
+      } else {
+        url = `/ai/chatbot/whatsapp-account/chatbot/toggle`;
+      }
+    } else {
+      payload.id_channel_connection = accountId;
+      url = `/ai/chatbot/whatsapp-account/${accountId}/chatbot/toggle`;
+    }
+    return api.post(url, payload);
+  },
+
+  // ── Studio chatbots (used by WhatsAppSettings to pick a chatbot) ───────────
+
+  listCustomChatbots(params = {}) {
+    return api.get('/ai/chatbot/custom-chatbots', { params });
+  },
+
   // Delete a conversation
   deleteConversation(conversationId, type = 'zalo_personal') {
     return api.delete(`/ai/chatbot/inbox/conversations/${conversationId}?type=${type}`);

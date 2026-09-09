@@ -57,6 +57,16 @@ router.post('/chatbot/zalo-oa/:token', chatbotChannelWebhookController.handleZal
 router.get('/chatbot/facebook/:token', chatbotChannelWebhookController.verifyFacebook.bind(chatbotChannelWebhookController));
 router.post('/chatbot/facebook/:token', chatbotChannelWebhookController.handleFacebook.bind(chatbotChannelWebhookController));
 
+/**
+ * GET/POST /api/webhooks/chatbot/whatsapp/:token
+ * Webhook cho WhatsApp Cloud API của chatbot cụ thể.
+ *
+ * Raw body signature verification relies on the global express.json()
+ * `verify` hook (see app.js: req.rawBody is populated automatically).
+ */
+router.get('/chatbot/whatsapp/:token', chatbotChannelWebhookController.verifyWhatsApp.bind(chatbotChannelWebhookController));
+router.post('/chatbot/whatsapp/:token', chatbotChannelWebhookController.handleWhatsApp.bind(chatbotChannelWebhookController));
+
 // ── Legacy Webhooks (backwards compatibility) ─────────────────
 
 /**
@@ -91,5 +101,8 @@ router.post('/oauth/facebook/complete', authMiddleware, oauthController.complete
 // Zalo OA OAuth callback (public)
 router.get('/oauth/zalo-oa/init', oauthController.initZaloOAuth.bind(oauthController));
 router.get('/oauth/callback/zalo-oa', oauthController.handleZaloCallback.bind(oauthController));
+
+// WhatsApp Embedded Signup callback (public). state-signed HMAC carries userId.
+router.get('/oauth/callback/whatsapp', oauthController.handleWhatsAppCallback.bind(oauthController));
 
 export default router;

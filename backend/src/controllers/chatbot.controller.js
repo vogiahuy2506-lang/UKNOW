@@ -4,6 +4,9 @@ import subAssistantService from '../services/chatbot/subAssistant.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import chatbotZaloAccountRepository from '../repositories/chatbot/chatbotZaloAccount.repository.js';
+import chatbotWhatsAppAccountRepository from '../repositories/chatbot/chatbotWhatsAppAccount.repository.js';
+import chatbotWhatsAppBaileysRepository from '../repositories/chatbot/chatbotWhatsAppBaileys.repository.js';
+import { listSessions as listBaileysSessions, listPersistedSessions as listBaileysPersistedSessions } from '../services/chatbot/whatsappBaileys.service.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
@@ -585,6 +588,155 @@ class ChatbotController {
       return res.json({ success: true, data: accounts });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // ── WhatsApp per-chatbot enable (mirrors Zalo Personal) ───────────
+
+  /**
+   * GET /api/ai/chatbot/whatsapp-accounts/chatbot?chatbot_id=123
+   *
+   * Trả về MỌI WhatsApp account của user — kết hợp:
+   *   - Cloud API (qua Meta OAuth) — từ `chatbot_channel_connections`
+   *   - Baileys (QR scan cá nhân)  — từ `whatsappBaileys.service` (in-mem
+   *     + on-disk persisted sessions)
+   *
+   * Mỗi account được đánh dấu `provider` ('cloud_api' | 'baileys') và có
+   * session_key Baileys hoặc id_channel_connection Cloud API. Khi
+   * `chatbot_id` được truyền, `chatbot_enabled` phản ánh đúng tuple
+   * (user, account, chatbot). Khi không truyền, lấy most-recently-updated.
+   */
+  async listWhatsAppAccountsWithChatbotSettings(req, res) {
+    try {
+      const rawChatbotId = req.query?.chatbot_id;
+      const chatbotId = rawChatbotId == null || rawChatbotId === ''
+        ? null
+        : parseInt(rawChatbotId, 10);
+      if (chatbotId != null && !Number.isFinite(chatbotId)) {
+        return res.status(400).json({ success: false, message: 'chatbot_id must be a number or empty' });
+      }
+      const userId = resolveWorkspaceOwnerId(req.user);
+
+      // 1. Cloud API accounts (từ chatbot_channel_connections).
+      const cloudAccounts = await chatbotWhatsAppAccountRepository.listAccountsForUser(userId, chatbotId);
+
+      // 2. Baileys accounts (in-mem + persisted files).
+      const allBaileys = listBaileysSessions();
+      const persistedBaileys = listBaileysPersistedSessions();
+      const userPrefix = `${userId}-`;
+      const shortKeys = Array.from(new Set([
+        ...allBaileys.filter((s) => s.sessionKey.startsWith(userPrefix))
+          .map((s) => s.sessionKey.substring(userPrefix.length)),
+        ...persistedBaileys
+          .filter((k) => k.startsWith(userPrefix))
+          .map((k) => k.substring(userPrefix.length)),
+      ]));
+
+      const baileysAccounts = await Promise.all(shortKeys.map(async (shortKey) => {
+        const fullKey = `${userId}-${shortKey}`;
+        const detail = allBaileys.find((s) => s.sessionKey === fullKey) || {};
+        // Lookup AI settings for this (user, session, chatbot).
+        const settings = await chatbotWhatsAppBaileysRepository.getSettings(
+          userId, fullKey, { idChatbot: chatbotId }
+        );
+        const isEnabled = settings?.is_enabled === true;
+        const status = detail.status || 'closed';
+        const phoneRaw = detail.userId || '';
+        const phone = phoneRaw.split('@')[0] || '';
+        return {
+          id: fullKey,                       // session_key làm id duy nhất cho modal
+          provider: 'baileys',
+          session_key: fullKey,
+          short_key: shortKey,
+          display_name: detail.userName || shortKey,
+          phone_number: phone,
+          is_active: status === 'open',      // mirror: status open = connected
+          is_default: false,
+          chatbot_enabled: isEnabled,
+          settings_chatbot_id: settings?.id_chatbot ?? null,
+          chatbot_name: null,                // chatbot join phức tạp — modal chỉ cần enabled
+        };
+      }));
+
+      // 3. Tag Cloud API items + chuẩn hoá provider field.
+      const taggedCloudAccounts = cloudAccounts.map((row) => ({
+        ...row,
+        provider: 'cloud_api',
+        session_key: null,
+        // id đã có sẵn từ chatbot_channel_connections — frontend dùng trực tiếp.
+      }));
+
+      // 4. Merge — Baileys trước (đa số user dùng path này), Cloud API sau.
+      return res.json({
+        success: true,
+        data: [...baileysAccounts, ...taggedCloudAccounts],
+      });
+    } catch (err) {
+      console.error('[ChatbotChannel] listWhatsAppAccounts error:', err);
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * POST /api/ai/chatbot/whatsapp-account/toggle
+   * Body: { enabled: boolean, session_key?: string, id_channel_connection?: number, id_chatbot?: number }
+   *
+   * Dispatch tới Baileys hoặc Cloud API repo tuỳ theo field được truyền.
+   */
+  async toggleWhatsAppAccountChatbot(req, res) {
+    try {
+      const { enabled, id_chatbot, session_key, id_channel_connection } = req.body || {};
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
+      }
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const normalizedChatbotId = id_chatbot == null || id_chatbot === ''
+        ? null
+        : parseInt(id_chatbot, 10);
+      if (normalizedChatbotId != null && !Number.isFinite(normalizedChatbotId)) {
+        return res.status(400).json({ success: false, message: 'id_chatbot must be a number or null' });
+      }
+
+      let settings;
+      if (session_key) {
+        // ── Baileys path ───────────────────────────────────────────
+        settings = await chatbotWhatsAppBaileysRepository.setEnabled(
+          ownerUserId,
+          session_key,
+          normalizedChatbotId,
+          enabled
+        );
+        await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, settings.id, {
+          channelType: 'whatsapp',
+          provider: 'baileys',
+          sessionKey: session_key,
+          chatbotId: normalizedChatbotId,
+          enabled,
+        });
+      } else if (Number.isFinite(Number(id_channel_connection))) {
+        // ── Cloud API path ──────────────────────────────────────────
+        const channelConnectionId = Number(id_channel_connection);
+        settings = await chatbotWhatsAppAccountRepository.setEnabled(
+          ownerUserId,
+          channelConnectionId,
+          normalizedChatbotId,
+          enabled
+        );
+        await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, settings.id, {
+          channelType: 'whatsapp',
+          provider: 'cloud_api',
+          channelConnectionId,
+          chatbotId: normalizedChatbotId,
+          enabled,
+        });
+      } else {
+        return res.status(400).json({ success: false, message: 'Cần truyền session_key (Baileys) hoặc id_channel_connection (Cloud API)' });
+      }
+
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      console.error('[ChatbotChannel] toggleWhatsAppAccountChatbot error:', err);
+      return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
 

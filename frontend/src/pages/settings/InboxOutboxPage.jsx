@@ -714,6 +714,7 @@ const InboxPage = () => {
       zalo_oa: 'Zalo OA',
       facebook: 'Facebook',
       zalo_personal: 'Zalo Cá nhân',
+      whatsapp_baileys: 'WhatsApp',
     };
     return channelMap[channel] || channel || '';
   };

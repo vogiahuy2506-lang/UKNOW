@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp OAuth - Đang xử lý...</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #f8fafc;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      max-width: 400px;
+      width: 90%;
+    }
+    .logo {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px;
+      background: #25D366;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+    h2 { font-size: 18px; color: #1e293b; margin-bottom: 8px; }
+    p { font-size: 14px; color: #64748b; margin-bottom: 24px; line-height: 1.5; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #25D366;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    .error-icon {
+      width: 48px; height: 48px;
+      background: #fee2e2;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 24px;
+    }
+    .success-icon {
+      width: 48px; height: 48px;
+      background: #dcfce7;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 24px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .auto-close { font-size: 12px; color: #94a3b8; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="spinner"></div>
+    <h2>Đang xử lý kết nối WhatsApp...</h2>
+    <p>Vui lòng đợi trong giây lát.</p>
+  </div>
+
+  <script>
+    // Read OAuth result from URL query params set by the backend redirect.
+    // We are in a popup window opened by WhatsAppSettings.jsx.
+    // We send the result to the opener (main window) via postMessage, then close.
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const status = params.get('whatsapp_oauth');
+
+      const card = document.getElementById('card');
+      const opener = window.opener;
+
+      if (status === 'success') {
+        const state = params.get('state') || '';
+        const wabaId = params.get('waba_id') || '';
+
+        card.innerHTML =
+          '<div class="success-icon">✓</div>' +
+          '<h2>Kết nối WhatsApp thành công!</h2>' +
+          '<p>Đang chuyển bạn về Channel Settings...</p>' +
+          '<div class="auto-close">Cửa sổ này sẽ tự động đóng.</div>';
+
+        if (opener) {
+          opener.postMessage({
+            type: 'WHATSAPP_OAUTH_SUCCESS',
+            state,
+            wabaId,
+          }, window.location.origin);
+        }
+
+        setTimeout(() => window.close(), 1800);
+
+      } else if (status === 'denied') {
+        card.innerHTML =
+          '<div class="error-icon">✕</div>' +
+          '<h2>Bạn đã hủy kết nối</h2>' +
+          '<p>Meta đã từ chối ủy quyền. Bạn có thể thử lại.</p>' +
+          '<div class="auto-close">Cửa sổ này sẽ tự động đóng.</div>';
+
+        if (opener) {
+          opener.postMessage({ type: 'WHATSAPP_OAUTH_DENIED' }, window.location.origin);
+        }
+
+        setTimeout(() => window.close(), 3000);
+
+      } else if (status === 'invalid_state') {
+        card.innerHTML =
+          '<div class="error-icon">✕</div>' +
+          '<h2>Phiên OAuth hết hạn</h2>' +
+          '<p>Vui lòng kết nối lại WhatsApp.</p>' +
+          '<div class="auto-close">Cửa sổ này sẽ tự động đóng.</div>';
+
+        if (opener) {
+          opener.postMessage({ type: 'WHATSAPP_OAUTH_INVALID_STATE' }, window.location.origin);
+        }
+
+        setTimeout(() => window.close(), 3000);
+
+      } else if (status === 'callback_error') {
+        card.innerHTML =
+          '<div class="error-icon">✕</div>' +
+          '<h2>Có lỗi xảy ra</h2>' +
+          '<p>Không thể hoàn tất kết nối WhatsApp. Vui lòng thử lại.</p>' +
+          '<div class="auto-close">Cửa sổ này sẽ tự động đóng.</div>';
+
+        if (opener) {
+          opener.postMessage({ type: 'WHATSAPP_OAUTH_ERROR' }, window.location.origin);
+        }
+
+        setTimeout(() => window.close(), 3000);
+
+      } else {
+        // No recognizable status — just close
+        card.innerHTML =
+          '<h2>Đang chuyển hướng...</h2>' +
+          '<div class="auto-close">Cửa sổ này sẽ tự động đóng.</div>';
+        setTimeout(() => window.close(), 1000);
+      }
+    })();
+  </script>
+</body>
+</html>
