@@ -1257,13 +1257,17 @@ class AiController {
         locale: contentLocale,
       });
 
-      // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: dựng leadFormDraft TRƯỚC khi gọi
-      // generate() (không phải sau) để prompt biết cần thêm select occupation/interestArea
-      // hay không — trước đây dựng sau nên AI luôn sinh form 3 trường cố định, không bao giờ
-      // khớp cấu hình trang yêu cầu.
+      // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b + PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md
+      // PR-2d-3 việc 1: dựng leadFormDraft RỒI áp dụng applyLeadFormDraftToConfig (khoá
+      // cf_sugg_NN_text TẤT ĐỊNH) TRƯỚC khi gọi generate() — không phải sau. Review 09/09 tự
+      // bắt: PR-2d-1 đã tính leadFormConfig nhưng vẫn tính SAU generate() và chỉ truyền
+      // leadFormDraft thô (không có customFields, chỉ có suggestedCustomFieldLabels) vào
+      // generate() — nghĩa là buildLeadFormExtraFieldsPromptBlock (PR-2d-3) không bao giờ thấy
+      // được customFields/khoá thật, y hệt lỗi PR-2b từng sửa cho occupation/interestArea.
       const leadFormDraft = resolvedBrief
         ? buildLeadFormDraftFromBrief(resolvedBrief.normalizedBrief)
         : null;
+      const leadFormConfig = leadFormDraft ? applyLeadFormDraftToConfig(leadFormDraft) : null;
 
       const data = await aiLandingPageService.generate({
         userId: ownerUserId,
@@ -1272,16 +1276,12 @@ class AiController {
         titleHint: title != null ? String(title) : '',
         landingBriefContext,
         contentLocale,
-        leadFormDraft,
+        leadFormConfig,
       });
 
-      // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1 việc 2: leadFormConfig do BACKEND áp
-      // dụng (applyLeadFormDraftToConfig, khoá cf_sugg_NN_text tất định) — không còn để frontend
-      // tự sinh khoá ngẫu nhiên (applyLeadFormDraft cũ, generateCustomFieldKey + 4 ký tự random
-      // ở trình duyệt sau khi HTML đã sinh, nên AI không thể biết khoá để đặt name cho ô).
       if (leadFormDraft) {
         data.leadFormDraft = leadFormDraft;
-        data.leadFormConfig = applyLeadFormDraftToConfig(leadFormDraft);
+        data.leadFormConfig = leadFormConfig;
       }
 
       // Lưu vào session nếu có sessionId (actor, not owner)

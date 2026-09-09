@@ -171,16 +171,42 @@ describe('LandingBrief endpoint wiring', () => {
     const res = makeRes();
     await aiController.generateLandingHtml(req, res);
 
+    // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 1: generate() giờ nhận
+    // leadFormConfig (đã áp dụng applyLeadFormDraftToConfig, có customFields khoá tất định)
+    // — KHÔNG còn nhận leadFormDraft thô (Review 09/09 tự bắt: PR-2d-1 tính leadFormConfig
+    // nhưng vẫn tính SAU generate() nên prompt chưa bao giờ thấy customFields thật).
     expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({
-      leadFormDraft: expect.objectContaining({
-        preset: 'extended',
+      leadFormConfig: expect.objectContaining({
         fixedFields: {
           occupation: { visible: true },
           interestArea: { visible: true },
         },
+        customFields: [],
       }),
     }));
+    expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('leadFormDraft');
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('POST /ai/generate-landing-html: preset "custom" → generate() nhận leadFormConfig.customFields có khoá cf_sugg_NN_text THẬT (không phải suggestedCustomFieldLabels thô)', async () => {
+    mockResolveLandingBrief.mockResolvedValue({
+      ownerUserId: 9,
+      normalizedBrief: { productMode: 'other', formFields: { preset: 'custom', customText: 'Công ty\nQuy mô' }, contentLocale: 'vi' },
+      resolvedProduct: null,
+    });
+    const req = {
+      body: { prompt: 'Tạo landing page lead', landingBrief: { version: 1, source: 'assistant_wizard', productMode: 'other' } },
+      user: { id: 9 },
+    };
+    const res = makeRes();
+    await aiController.generateLandingHtml(req, res);
+
+    const calledWith = mockGenerate.mock.calls[0][0];
+    expect(calledWith).not.toHaveProperty('leadFormDraft');
+    expect(calledWith.leadFormConfig.customFields).toEqual([
+      expect.objectContaining({ key: 'cf_sugg_01_text', labelVi: 'Công ty' }),
+      expect.objectContaining({ key: 'cf_sugg_02_text', labelVi: 'Quy mô' }),
+    ]);
   });
 
   /**
