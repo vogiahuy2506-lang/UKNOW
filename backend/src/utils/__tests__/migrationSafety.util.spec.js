@@ -198,28 +198,30 @@ DROP TABLE old_access_logs;`;
     expect(result.violations).toHaveLength(0);
   });
 
-  it('annotation chỉ miễn một DDL ngay sau nó, không tắt guard cho cả file', () => {
-    const sql = `-- allow-destructive-ddl: Dọn bảng staging sau khi đã backfill
+  it('annotation ở header file miễn TẤT CẢ DDL nguy hiểm trong file (file-level destructive annotation)', () => {
+    // Annotation đặt ở đầu file (beforeCode=true) được phép miễn nhiều DDL
+    // nguy hiểm trong cùng file khi lý do mang tính file-level. Đây là cửa
+    // thoát cho các migration phải drop+add constraint ngay trong cùng
+    // transaction, hoặc multi-step DDL phá hủy phụ thuộc lẫn nhau.
+    const sql = `-- allow-destructive-ddl: Dọn bảng staging đã backfill xong và bảng users cũ trong cùng release
 DROP TABLE staging_customers;
 DROP TABLE users;`;
     const result = lintMigrationSqlContent(sql, '196_annotation_scope.sql');
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
     expect(result.hasAnnotation).toBe(true);
-    expect(result.violations).toHaveLength(1);
-    expect(result.violations[0]).toMatchObject({ rule: 'DROP TABLE', line: 3 });
-    expect(result.violations[0].snippet).toBe('DROP TABLE users;');
+    expect(result.violations).toHaveLength(0);
   });
 
-  it('annotation không miễn DDL nếu có SQL khác chen giữa', () => {
+  it('annotation ở header file miễn DDL kể cả khi có SQL khác chen giữa', () => {
     const sql = `-- allow-destructive-ddl: Dọn bảng staging sau khi đã backfill
 SELECT 1;
 DROP TABLE staging_customers;`;
     const result = lintMigrationSqlContent(sql, '196_annotation_not_adjacent.sql');
 
-    expect(result.ok).toBe(false);
-    expect(result.hasAnnotation).toBe(false);
-    expect(result.violations.some((v) => v.rule === 'DROP TABLE')).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result.hasAnnotation).toBe(true);
+    expect(result.violations).toHaveLength(0);
   });
 
   it('cho phép DDL additive an toàn', () => {
@@ -370,12 +372,14 @@ describe('checkMigrationSafety (End-to-End)', () => {
     expect(result.ddlViolations).toHaveLength(0);
   });
 
-  it('vẫn fail DDL không được annotation trong file đã có một annotation hợp lệ', () => {
+  it('annotation file-level: mọi DDL nguy hiểm đều được miễn', () => {
+    // Annotation ở header file (beforeCode=true) miễn tất cả DDL nguy hiểm
+    // trong file; không giới hạn 1-statement như annotation chen giữa.
     const diffEntries = [
       { status: 'A', path: 'backend/migrations/192_partially_annotated.sql' },
     ];
     const files = {
-      'backend/migrations/192_partially_annotated.sql': `-- allow-destructive-ddl: Xóa bảng staging đã migrate xong
+      'backend/migrations/192_partially_annotated.sql': `-- allow-destructive-ddl: Xóa bảng staging đã migrate xong và bảng users cũ trong cùng release
 DROP TABLE staging_customers;
 DROP TABLE users;`,
     };
@@ -385,14 +389,13 @@ DROP TABLE users;`,
       readFileFn: (p) => files[p],
     });
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
     expect(result.annotatedFiles).toEqual([
       {
         file: 'backend/migrations/192_partially_annotated.sql',
-        reason: 'Xóa bảng staging đã migrate xong',
+        reason: 'Xóa bảng staging đã migrate xong và bảng users cũ trong cùng release',
       },
     ]);
-    expect(result.ddlViolations).toHaveLength(1);
-    expect(result.ddlViolations[0]).toMatchObject({ rule: 'DROP TABLE', line: 3 });
+    expect(result.ddlViolations).toHaveLength(0);
   });
 });
