@@ -95,15 +95,19 @@ describe('aiLandingPageService.generate — leadFormConfig điều khiển occup
     getContextForLandingAi.mockResolvedValue('');
   });
 
-  const withField = (html, name) =>
+  // values: mã <option value> kèm theo — ô select/radio (kể cả occupation/interestArea) phải
+  // có ĐỦ mã đã cấu hình, không thì chốt 422 "không đúng mã" (09/09, xem service).
+  const withField = (html, name, values = []) =>
     html.replace(
       '<label><input type="checkbox" name="marketingConsent" />',
-      `<select name="${name}"><option value="">x</option></select>` +
+      `<select name="${name}"><option value="">x</option>` +
+        values.map((v) => `<option value="${v}">${v}</option>`).join('') +
+        '</select>' +
         '<label><input type="checkbox" name="marketingConsent" />'
     );
 
   it('leadFormConfig.fixedFields.occupation.visible=true → prompt chứa đúng khoá OCCUPATION_VALUES', async () => {
-    mockGenerateReturns(withField(validFormHtml, 'occupation'));
+    mockGenerateReturns(withField(validFormHtml, 'occupation', OCCUPATION_VALUES));
     await aiLandingPageService.generate({
       userId: 1,
       prompt: 'landing khoá học',
@@ -119,7 +123,7 @@ describe('aiLandingPageService.generate — leadFormConfig điều khiển occup
   });
 
   it('leadFormConfig.fixedFields.interestArea.visible=true → prompt chứa đúng khoá INTEREST_AREA_VALUES', async () => {
-    mockGenerateReturns(withField(validFormHtml, 'interestArea'));
+    mockGenerateReturns(withField(validFormHtml, 'interestArea', INTEREST_AREA_VALUES));
     await aiLandingPageService.generate({
       userId: 1,
       prompt: 'landing khoá học',
@@ -162,14 +166,36 @@ describe('aiLandingPageService.generate — leadFormConfig điều khiển occup
     ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/interestArea/) });
   });
 
-  it('occupation.visible=true và HTML CÓ name="occupation" → pass, không 422', async () => {
-    mockGenerateReturns(withField(validFormHtml, 'occupation'));
+  it('occupation.visible=true và HTML CÓ name="occupation" đủ OCCUPATION_VALUES → pass, không 422', async () => {
+    mockGenerateReturns(withField(validFormHtml, 'occupation', OCCUPATION_VALUES));
     const result = await aiLandingPageService.generate({
       userId: 1,
       prompt: 'landing khoá học',
       leadFormConfig: { fixedFields: { occupation: { visible: true } } },
     });
     expect(result.html).toContain('name="occupation"');
+  });
+
+  it('occupation có name nhưng option value là nhãn tự chế (không đúng OCCUPATION_VALUES) → 422', async () => {
+    mockGenerateReturns(withField(validFormHtml, 'occupation', ['Sinh viên', 'Đi làm']));
+    await expect(
+      aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'landing khoá học',
+        leadFormConfig: { fixedFields: { occupation: { visible: true } } },
+      })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/occupation.*không đúng danh sách/) });
+  });
+
+  it('interestArea có mã chứa & thoát thành &amp; → vẫn pass (trình duyệt giải mã lại khi gửi)', async () => {
+    const escaped = INTEREST_AREA_VALUES.map((v) => v.replace(/&/g, '&amp;'));
+    mockGenerateReturns(withField(validFormHtml, 'interestArea', escaped));
+    const result = await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'landing khoá học',
+      leadFormConfig: { fixedFields: { interestArea: { visible: true } } },
+    });
+    expect(result.html).toContain('name="interestArea"');
   });
 
   it('customFields text → prompt chứa name="<khoá>" đúng khoá tất định cf_sugg_01_text', async () => {
@@ -189,7 +215,7 @@ describe('aiLandingPageService.generate — leadFormConfig điều khiển occup
   });
 
   it('customFields select → prompt copy NGUYÊN mã option, không đổi/dịch', async () => {
-    mockGenerateReturns(withField(validFormHtml, 'cf_sugg_02_text'));
+    mockGenerateReturns(withField(validFormHtml, 'cf_sugg_02_text', ['small', 'large']));
     await aiLandingPageService.generate({
       userId: 1,
       prompt: 'landing khoá học',
@@ -228,6 +254,45 @@ describe('aiLandingPageService.generate — leadFormConfig điều khiển occup
       status: 422,
       message: expect.stringMatching(/Tên công ty.*cf_sugg_01_text|cf_sugg_01_text.*Tên công ty/),
     });
+  });
+
+  it('customFields select có name nhưng option value là NHÃN thay vì mã (ca slug-test 09/09) → 422 kèm nhãn field', async () => {
+    mockGenerateReturns(withField(validFormHtml, 'cf_field_g2e9', ['Lựa chọn 1']));
+    await expect(
+      aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'landing khoá học',
+        leadFormConfig: {
+          customFields: [
+            {
+              key: 'cf_field_g2e9',
+              type: 'select',
+              labelVi: 'lươngthưởng',
+              required: true,
+              options: [
+                { value: 'opt_a', labelVi: 'Lựa chọn 1' },
+                { value: 'opt_1', labelVi: 'Lựa chọn 2' },
+              ],
+            },
+          ],
+        },
+      })
+    ).rejects.toMatchObject({
+      status: 422,
+      message: expect.stringMatching(/lươngthưởng.*không đúng mã/),
+    });
+  });
+
+  it('customFields text (không có option) → không bị chốt mã option, pass như cũ', async () => {
+    mockGenerateReturns(withField(validFormHtml, 'cf_sugg_01_text'));
+    const result = await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'landing khoá học',
+      leadFormConfig: {
+        customFields: [{ key: 'cf_sugg_01_text', type: 'text', labelVi: 'Tên công ty', required: true, options: [] }],
+      },
+    });
+    expect(result.html).toContain('name="cf_sugg_01_text"');
   });
 
   it('customFields có mặt trong HTML → pass, không 422', async () => {

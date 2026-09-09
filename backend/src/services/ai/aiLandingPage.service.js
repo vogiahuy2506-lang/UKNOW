@@ -99,6 +99,23 @@ function contentLanguageInstruction(contentLocale) {
     : 'CUSTOMER_CONTENT_LANGUAGE: Viết TOÀN BỘ copy landing hiển thị (headline, body, CTA, nhãn form, nút) bằng tiếng Việt tự nhiên. Không trộn tiếng Anh trừ tên riêng/sản phẩm.';
 }
 
+const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeHtmlAttr = (s) =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * HTML có `value="<mã>"` cho một lựa chọn chưa — chấp nhận cả dạng AI thoát thực thể
+ * (`ChatGPT &amp; Prompt Engineering`) vì trình duyệt giải mã lại khi đọc select.value nên
+ * giá trị gửi lên vẫn khớp OCCUPATION_VALUES/field.options[].value. Kiểm lỏng (bất kỳ đâu
+ * trong trang), đủ để bắt ca AI ghi nhãn thay mã; bản chặt theo từng khối select nằm ở
+ * frontend leadFormHtmlChecks.js (cảnh báo trong Cài đặt trang).
+ */
+function htmlHasOptionValue(html, value) {
+  const v = String(value ?? '').trim();
+  if (!v) return true;
+  return new RegExp(`\\bvalue\\s*=\\s*["'](?:${escapeRegExp(v)}|${escapeRegExp(escapeHtmlAttr(v))})["']`, 'i').test(html);
+}
+
 class AiLandingPageService {
   /**
    * Sinh một tài liệu HTML5 đầy đủ (Tailwind CDN), JSON { title, html }.
@@ -287,10 +304,33 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 1: mỗi customFields[] đã áp dụng
     // (khoá cf_sugg_NN_text tất định) đòi đúng 1 field name="<khoá>" trong HTML — thiếu thì
     // publish trang không có ô đó, khách không bao giờ điền được, mãi mãi (trang đã publish).
-    const missingCustomFieldKey = (Array.isArray(leadFormConfig?.customFields) ? leadFormConfig.customFields : [])
+    const customFields = Array.isArray(leadFormConfig?.customFields) ? leadFormConfig.customFields : [];
+    const missingCustomFieldKey = customFields
       .find((field) => !new RegExp(`\\bname\\s*=\\s*["']${field.key}["']`, 'i').test(html));
     if (missingCustomFieldKey) {
       const err = new Error(`AI tạo form đăng ký lead nhưng thiếu trường "${missingCustomFieldKey.labelVi || missingCustomFieldKey.key}" (name="${missingCustomFieldKey.key}") dù cấu hình yêu cầu. Vui lòng thử lại.`);
+      err.status = 422;
+      throw err;
+    }
+    // 09/09 (sự cố slug-test ở đường sửa AI): ô select/radio có mặt nhưng AI ghi value là NHÃN
+    // ("Lựa chọn 1") thay vì mã ("opt_a") → normalizeCustomSubmitValue từ chối MỌI lead với
+    // "<nhãn> không hợp lệ"; occupation/interestArea thì normalizeOptionalSelectValue đổi thành ''
+    // trong im lặng. Đường sinh đã đưa sẵn markup đúng mã (rule 9) nên hiếm gặp, nhưng lọt qua
+    // kiểm name ở trên là trang publish với form không bao giờ gửi được — chặn 422 cho cùng luật.
+    const wrongOptionField = customFields
+      .filter((field) => field.type === 'select' || field.type === 'radio')
+      .find((field) => (Array.isArray(field.options) ? field.options : []).some((o) => !htmlHasOptionValue(html, o?.value)));
+    if (wrongOptionField) {
+      const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường "${wrongOptionField.labelVi || wrongOptionField.key}" (name="${wrongOptionField.key}") không đúng mã đã cấu hình. Vui lòng thử lại.`);
+      err.status = 422;
+      throw err;
+    }
+    const wrongFixedField = [
+      leadFormConfig?.fixedFields?.occupation?.visible ? ['occupation', OCCUPATION_VALUES] : null,
+      leadFormConfig?.fixedFields?.interestArea?.visible ? ['interestArea', INTEREST_AREA_VALUES] : null,
+    ].find((entry) => entry && entry[1].some((v) => !htmlHasOptionValue(html, v)));
+    if (wrongFixedField) {
+      const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường ${wrongFixedField[0]} (name="${wrongFixedField[0]}") không đúng danh sách hệ thống. Vui lòng thử lại.`);
       err.status = 422;
       throw err;
     }
