@@ -59,6 +59,7 @@ import {
   deriveWizardContext,
   mergeClientWizardContext,
   applyWizardSelectionsToScript,
+  findLatestInteractiveIndex,
 } from './utils/wizardContext.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
@@ -3055,10 +3056,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     'confirm_create', 'email_setup_guide', 'zalo_qr_login'
   ];
 
-  const latestInteractiveIndex = messages.reduce(
-    (latest, message, index) => (INTERACTIVE_TYPES.includes(message.type) ? index : latest),
-    -1,
-  );
+  // Thẻ đứng trước tin ranh giới (campaign_created / campaign_abandoned) không còn sống —
+  // xem findLatestInteractiveIndex (wizardContext.js) và nghiệm thu 09/09 PLAN_WIZARD_VONG_DOI PR-2.
+  const latestInteractiveIndex = findLatestInteractiveIndex(messages, INTERACTIVE_TYPES);
   return (
     <div
       className={

@@ -3,6 +3,7 @@ import {
   FLOW_BOUNDARY_TYPES,
   deriveWizardContext,
   applyWizardSelectionsToScript,
+  findLatestInteractiveIndex,
 } from '../wizardContext.js';
 
 /**
@@ -95,5 +96,63 @@ describe('wizardContext — ranh giới campaign_abandoned reset trong CÙNG h�
     expect(context.senderAccountName).toBe('TK 9');
     expect(context.dataSource).toBeNull();
     expect(context.channel).not.toBe('email');
+  });
+});
+
+/**
+ * Nghiệm thu thật 09/09: gõ "huỷ" → "Đã dừng" nhưng thẻ cổng cũ vẫn bấm được và wizard chạy
+ * tiếp; F5 thì thẻ mất. latestInteractiveIndex phải tắt thẻ đứng trước ranh giới ngay tại chỗ.
+ */
+describe('findLatestInteractiveIndex — thẻ trước ranh giới không còn sống', () => {
+  const INTERACTIVE = ['ask_campaign_details', 'ask_sender_account', 'ask_audience', 'confirm_create', 'zalo_group_picker'];
+
+  it('không có ranh giới → chỉ số thẻ tương tác cuối cùng', () => {
+    const history = [
+      { role: 'assistant', type: 'ask_sender_account', content: 'Dùng tài khoản nào?' },
+      { role: 'user', content: marker({ gate: 'senderAccount', accountId: 7 }) },
+      { role: 'assistant', type: 'ask_audience', content: 'Danh sách người nhận lấy từ đâu?' },
+    ];
+    expect(findLatestInteractiveIndex(history, INTERACTIVE)).toBe(2);
+  });
+
+  it('ca production: thẻ dataSource rồi user gõ "huỷ" + tin campaign_abandoned → -1, thẻ cũ tắt', () => {
+    const history = [
+      { role: 'assistant', type: 'ask_audience', content: 'Danh sách người nhận lấy từ đâu?' },
+      { role: 'user', content: 'huỷ' },
+      { role: 'assistant', type: 'campaign_abandoned', content: 'Đã dừng.' },
+    ];
+    expect(findLatestInteractiveIndex(history, INTERACTIVE)).toBe(-1);
+  });
+
+  it('sau ranh giới có thẻ mới → chỉ thẻ mới sống', () => {
+    const history = [
+      { role: 'assistant', type: 'ask_audience', content: 'cũ' },
+      { role: 'assistant', type: 'campaign_abandoned', content: 'Đã dừng.' },
+      { role: 'user', content: 'tạo chiến dịch email' },
+      { role: 'assistant', type: 'ask_sender_account', content: 'mới' },
+    ];
+    expect(findLatestInteractiveIndex(history, INTERACTIVE)).toBe(3);
+  });
+
+  it('campaign_created cũng là ranh giới: thẻ confirm_create trước nó tắt', () => {
+    const history = [
+      { role: 'assistant', type: 'confirm_create', content: 'Xác nhận?' },
+      { role: 'assistant', type: 'campaign_created', content: '🎉', data: { campaignId: 1 } },
+    ];
+    expect(findLatestInteractiveIndex(history, INTERACTIVE)).toBe(-1);
+  });
+
+  it('tin ranh giới do user gửi (không phải assistant) không được tính là ranh giới', () => {
+    const history = [
+      { role: 'assistant', type: 'ask_audience', content: 'thẻ' },
+      { role: 'user', type: 'campaign_abandoned', content: 'giả' },
+    ];
+    expect(findLatestInteractiveIndex(history, INTERACTIVE)).toBe(0);
+  });
+
+  it('nhận Set lẫn mảng cho interactiveTypes; messages không phải mảng → -1', () => {
+    const history = [{ role: 'assistant', type: 'ask_audience', content: 'thẻ' }];
+    expect(findLatestInteractiveIndex(history, new Set(INTERACTIVE))).toBe(0);
+    expect(findLatestInteractiveIndex(null, INTERACTIVE)).toBe(-1);
   });
 });

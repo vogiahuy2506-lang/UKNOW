@@ -11,6 +11,28 @@
 // bắt tự động, phải tự đối chiếu tay khi đổi bộ này.
 export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success', 'campaign_abandoned']);
 
+/**
+ * Chỉ số thẻ tương tác đang "sống" (isActive) trong lịch sử, hoặc -1. Thẻ đứng TRƯỚC một tin
+ * ranh giới (đã tạo xong / đã bỏ dở) không còn sống dù nó là thẻ tương tác cuối cùng.
+ *
+ * Nghiệm thu thật 09/09 (PLAN_WIZARD_VONG_DOI PR-2): gõ "huỷ" → tin `campaign_abandoned` được
+ * thêm, nhưng AiChatbot.jsx tính latestInteractiveIndex bằng "thẻ tương tác cuối cùng" không
+ * nhìn ranh giới → thẻ cổng cũ vẫn bấm được, bấm là wizard chạy tiếp như chưa huỷ. Tải lại
+ * trang thì hết (wizardCardHistory cắt thẻ trước ranh giới) — đúng kiểu "chỉ đúng sau F5" mà
+ * PR-2 tuyên bố đã sửa. Cùng một luật cho campaign_created: thẻ confirm cũ cũng phải tắt.
+ *
+ * @param {Array<{ role?: string, type?: string }>} messages
+ * @param {Iterable<string>} interactiveTypes
+ * @returns {number}
+ */
+export const findLatestInteractiveIndex = (messages = [], interactiveTypes = []) => {
+  const interactive = interactiveTypes instanceof Set ? interactiveTypes : new Set(interactiveTypes);
+  return (Array.isArray(messages) ? messages : []).reduce((latest, message, index) => {
+    if (message?.role === 'assistant' && FLOW_BOUNDARY_TYPES.has(message?.type)) return -1;
+    return interactive.has(message?.type) ? index : latest;
+  }, -1);
+};
+
 export const normalizeChannel = (channel) => {
   const lower = String(channel || '').trim().toLowerCase();
   if (lower === 'zalo_personal') return 'zalo';
