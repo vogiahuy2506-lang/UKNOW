@@ -328,7 +328,9 @@ if (typeof window !== 'undefined') {
 (function founderaiCaptureIife() {
   'use strict';
 
-  var sc = document.currentScript;
+  // Khi script dùng defer, document.currentScript bị null vì HTML parser đã chạy xong.
+  // Fix: query script element theo src URL thay vì dùng currentScript.
+  var sc = document.querySelector('script[src*="founderai-capture"]');
   if (!sc) return;
 
   var apiBase = (sc.getAttribute('data-api-base') || '').replace(/\/+$/, '');
