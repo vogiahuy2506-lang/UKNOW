@@ -18,6 +18,12 @@ import {
   normalizeLeadFormConfig,
 } from '../../landing-pages/utils/landingLeadFormConfig.js';
 import { buildAddCustomFieldInstruction, buildAddFixedFieldInstruction } from '../utils/leadFormFieldInstructions.js';
+import {
+  customFieldOptionValues,
+  fixedFieldOptionValues,
+  htmlHasFieldName,
+  htmlHasFieldOptions,
+} from '../utils/leadFormHtmlChecks.js';
 
 const emptyCustomField = () => ({
   key: generateCustomFieldKey('field'),
@@ -32,12 +38,17 @@ const emptyCustomField = () => ({
 
 /**
  * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 3: form.htmlContent có thật sự chứa
- * ô name="<khoá>" của trường này chưa — dùng để hiện cảnh báo "trang chưa có ô này" +
- * nút "Nhờ AI thêm ô này", KHÔNG chặn lưu (chỉ cảnh báo).
+ * ô name="<khoá>" của trường này chưa — cảnh báo "trang chưa có ô này" + nút "Nhờ AI thêm ô
+ * này". Sửa 09/09: thêm mức 2 — ô có nhưng mã lựa chọn không khớp cấu hình (sự cố slug-test,
+ * xem leadFormHtmlChecks.js) → cảnh báo "không khớp mã" + nút "Nhờ AI sửa ô này". Cả hai KHÔNG
+ * chặn lưu (chỉ cảnh báo).
+ *
+ * @returns {'missing'|'mismatch'|null}
  */
-function htmlHasFieldName(html, key) {
-  if (!key) return true;
-  return new RegExp(`\\bname\\s*=\\s*["']${key}["']`, 'i').test(String(html || ''));
+function fieldHtmlIssue(html, key, optionValues) {
+  if (!htmlHasFieldName(html, key)) return 'missing';
+  if (!htmlHasFieldOptions(html, key, optionValues)) return 'mismatch';
+  return null;
 }
 
 /**
@@ -68,7 +79,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
    * 2b — việc 2) với câu lệnh dựng sẵn, cập nhật form.htmlContent khi thành công. Không chặn
    * lưu nếu lỗi — chỉ toast, admin tự thử lại hoặc tự sửa HTML.
    */
-  const handleAskAiToAddField = async (key, instruction) => {
+  const handleAskAiToAddField = async (key, instruction, optionValues = []) => {
     if (askingKeys.has(key)) return;
     setAskingKeys((prev) => new Set(prev).add(key));
     try {
@@ -82,7 +93,16 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
         throw new Error(result?.message || 'AI không trả về HTML hợp lệ.');
       }
       setForm((prev) => ({ ...prev, htmlContent: nextHtml }));
-      toast.success('AI đã thêm ô vào form.');
+      // Vẫn nhận HTML (admin có Hoàn tác) nhưng báo đúng sự thật: AI có thể thêm ô mà ghi sai mã
+      // lựa chọn — khi đó cảnh báo "không khớp mã" sẽ còn nguyên trên panel.
+      const issue = fieldHtmlIssue(nextHtml, key, optionValues);
+      if (issue === 'missing') {
+        toast.error('AI trả HTML nhưng vẫn chưa có ô này. Hãy thử lại.');
+      } else if (issue === 'mismatch') {
+        toast.error('AI đã thêm ô nhưng mã lựa chọn chưa đúng. Hãy bấm "Nhờ AI sửa ô này" lần nữa.');
+      } else {
+        toast.success('AI đã thêm ô vào form.');
+      }
     } catch (e) {
       toast.error(e?.response?.data?.message || e?.message || 'Không nhờ được AI thêm ô này.');
     } finally {
@@ -174,20 +194,24 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
           label={t('leadFormConfig.showInterest')}
         />
         </div>
-        {hasHtml && config.fixedFields.occupation.visible && !htmlHasFieldName(htmlContent, 'occupation') ? (
-          <MissingFieldWarning
-            fieldLabel="Nghề nghiệp"
-            asking={askingKeys.has('occupation')}
-            onAskAi={() => handleAskAiToAddField('occupation', buildAddFixedFieldInstruction('occupation'))}
-          />
-        ) : null}
-        {hasHtml && config.fixedFields.interestArea.visible && !htmlHasFieldName(htmlContent, 'interestArea') ? (
-          <MissingFieldWarning
-            fieldLabel="Lĩnh vực quan tâm"
-            asking={askingKeys.has('interestArea')}
-            onAskAi={() => handleAskAiToAddField('interestArea', buildAddFixedFieldInstruction('interestArea'))}
-          />
-        ) : null}
+        {[
+          { key: 'occupation', label: 'Nghề nghiệp', visible: config.fixedFields.occupation.visible },
+          { key: 'interestArea', label: 'Lĩnh vực quan tâm', visible: config.fixedFields.interestArea.visible },
+        ].map(({ key, label, visible }) => {
+          if (!hasHtml || !visible) return null;
+          const optionValues = fixedFieldOptionValues(key);
+          const issue = fieldHtmlIssue(htmlContent, key, optionValues);
+          if (!issue) return null;
+          return (
+            <MissingFieldWarning
+              key={key}
+              fieldLabel={label}
+              issue={issue}
+              asking={askingKeys.has(key)}
+              onAskAi={() => handleAskAiToAddField(key, buildAddFixedFieldInstruction(key), optionValues)}
+            />
+          );
+        })}
       </section>
 
       {/* Custom fields card */}
@@ -251,9 +275,11 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
                   onMoveDown={() => moveField(index, 1)}
                   onRemove={() => removeField(index)}
                   t={t}
-                  isMissingFromHtml={hasHtml && !htmlHasFieldName(htmlContent, field.key)}
+                  htmlIssue={hasHtml ? fieldHtmlIssue(htmlContent, field.key, customFieldOptionValues(field)) : null}
                   asking={askingKeys.has(field.key)}
-                  onAskAiToAdd={() => handleAskAiToAddField(field.key, buildAddCustomFieldInstruction(field))}
+                  onAskAiToAdd={() =>
+                    handleAskAiToAddField(field.key, buildAddCustomFieldInstruction(field), customFieldOptionValues(field))
+                  }
                 />
               );
             })}
@@ -315,15 +341,25 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
 
 /**
  * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 3: hiện khi form.htmlContent
- * chưa có ô này (theo name="<khoá>") dù cấu hình yêu cầu. KHÔNG chặn lưu — chỉ cảnh báo
- * + nút gọi đường sửa AI (editHtml rule 2b, việc 2).
+ * chưa có ô này (theo name="<khoá>") dù cấu hình yêu cầu, hoặc (09/09) có ô nhưng mã lựa chọn
+ * không khớp cấu hình. KHÔNG chặn lưu — chỉ cảnh báo + nút gọi đường sửa AI (editHtml rule 2b,
+ * việc 2). Cùng một câu lệnh cho cả hai: câu lệnh đã dặn THAY ô cũ nếu trang có sẵn.
+ *
+ * @param {{ fieldLabel: string, issue?: 'missing'|'mismatch', asking: boolean, onAskAi: () => void }} props
  */
-function MissingFieldWarning({ fieldLabel, asking, onAskAi }) {
+function MissingFieldWarning({ fieldLabel, issue = 'missing', asking, onAskAi }) {
+  const isMismatch = issue === 'mismatch';
   return (
     <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
       <div className="flex items-center gap-1.5 text-[12px] text-amber-800">
         <HiOutlineExclamation className="h-4 w-4 flex-shrink-0" />
-        <span>Trang chưa có ô &quot;{fieldLabel}&quot;.</span>
+        {isMismatch ? (
+          <span>
+            Ô &quot;{fieldLabel}&quot; có trên trang nhưng lựa chọn không khớp mã đã lưu — khách gửi sẽ bị từ chối.
+          </span>
+        ) : (
+          <span>Trang chưa có ô &quot;{fieldLabel}&quot;.</span>
+        )}
       </div>
       <button
         type="button"
@@ -331,7 +367,7 @@ function MissingFieldWarning({ fieldLabel, asking, onAskAi }) {
         onClick={onAskAi}
         disabled={asking}
       >
-        {asking ? 'Đang nhờ AI…' : 'Nhờ AI thêm ô này'}
+        {asking ? 'Đang nhờ AI…' : isMismatch ? 'Nhờ AI sửa ô này' : 'Nhờ AI thêm ô này'}
       </button>
     </div>
   );
@@ -375,7 +411,7 @@ function CustomFieldRow({
   onMoveDown,
   onRemove,
   t,
-  isMissingFromHtml,
+  htmlIssue,
   asking,
   onAskAiToAdd,
 }) {
@@ -472,10 +508,11 @@ function CustomFieldRow({
         </div>
       </div>
 
-      {isMissingFromHtml ? (
+      {htmlIssue ? (
         <div className="px-3 pb-2">
           <MissingFieldWarning
             fieldLabel={String(field.labelVi || '').trim() || field.key}
+            issue={htmlIssue}
             asking={asking}
             onAskAi={onAskAiToAdd}
           />

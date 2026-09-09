@@ -215,6 +215,125 @@ describe('LeadFormConfigPanel', () => {
       expect(next.htmlContent).toContain('name="cf_test_aaaa"');
     });
 
+    /**
+     * 09/09 (slug-test): AI thêm select đúng name nhưng value là nhãn → backend từ chối mọi lead.
+     * Mức 2: có ô nhưng mã lựa chọn không khớp → cảnh báo riêng + nút "Nhờ AI sửa ô này".
+     */
+    it('select có name trong htmlContent nhưng option value là nhãn (không khớp opt_*) → cảnh báo "không khớp mã" + nút "Nhờ AI sửa ô này"', () => {
+      const field = makeCustomField({
+        key: 'cf_field_g2e9',
+        type: 'select',
+        labelVi: 'lươngthưởng',
+        options: [
+          { value: 'opt_a', labelVi: 'Lựa chọn 1', labelEn: '' },
+          { value: 'opt_1', labelVi: 'Lựa chọn 2', labelEn: '' },
+        ],
+      });
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+          customFields: [field],
+        },
+        htmlContent:
+          '<form data-founderai-capture><input name="email" />' +
+          '<select name="cf_field_g2e9" required><option value="">Chọn</option><option value="Lựa chọn 1">Lựa chọn 1</option></select></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={vi.fn()} t={t} />);
+
+      expect(screen.getByText(/không khớp mã đã lưu/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Nhờ AI sửa ô này' })).toBeInTheDocument();
+      expect(screen.queryByText(/Trang chưa có ô/)).not.toBeInTheDocument();
+    });
+
+    it('select có đủ option value đúng mã → không cảnh báo gì', () => {
+      const field = makeCustomField({
+        key: 'cf_field_g2e9',
+        type: 'select',
+        labelVi: 'lươngthưởng',
+        options: [
+          { value: 'opt_a', labelVi: 'Lựa chọn 1', labelEn: '' },
+          { value: 'opt_1', labelVi: 'Lựa chọn 2', labelEn: '' },
+        ],
+      });
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+          customFields: [field],
+        },
+        htmlContent:
+          '<form data-founderai-capture><input name="email" />' +
+          '<select name="cf_field_g2e9"><option value="">Chọn</option><option value="opt_a">Lựa chọn 1</option><option value="opt_1">Lựa chọn 2</option></select></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={vi.fn()} t={t} />);
+
+      expect(screen.queryByText(/không khớp mã đã lưu/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Trang chưa có ô/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Nhờ AI/ })).not.toBeInTheDocument();
+    });
+
+    it('occupation bật, select có name="occupation" nhưng option tự chế → cảnh báo "không khớp mã" cho Nghề nghiệp', () => {
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: true }, interestArea: { visible: false } },
+          customFields: [],
+        },
+        htmlContent:
+          '<form data-founderai-capture><input name="email" />' +
+          '<select name="occupation"><option value="">Chọn</option><option value="Sinh viên">Sinh viên</option></select></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={vi.fn()} t={t} />);
+
+      expect(screen.getByText(/Ô "Nghề nghiệp" có trên trang nhưng lựa chọn không khớp mã/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Nhờ AI sửa ô này' })).toBeInTheDocument();
+    });
+
+    it('bấm "Nhờ AI sửa ô này" → câu lệnh gửi AI chứa markup <option value="opt_a"> đúng mã, và AI trả select đúng → toast thành công', async () => {
+      editLandingHtmlWithAi.mockResolvedValueOnce({
+        success: true,
+        data: {
+          html:
+            '<form data-founderai-capture><input name="email" />' +
+            '<select name="cf_field_g2e9"><option value="">Chọn</option><option value="opt_a">Lựa chọn 1</option><option value="opt_1">Lựa chọn 2</option></select></form>',
+        },
+      });
+      const setForm = vi.fn();
+      const field = makeCustomField({
+        key: 'cf_field_g2e9',
+        type: 'select',
+        labelVi: 'lươngthưởng',
+        options: [
+          { value: 'opt_a', labelVi: 'Lựa chọn 1', labelEn: '' },
+          { value: 'opt_1', labelVi: 'Lựa chọn 2', labelEn: '' },
+        ],
+      });
+      const form = makeForm({
+        leadFormConfig: {
+          ...defaultLeadFormConfig(),
+          fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+          customFields: [field],
+        },
+        htmlContent:
+          '<form data-founderai-capture><input name="email" />' +
+          '<select name="cf_field_g2e9"><option value="Lựa chọn 1">Lựa chọn 1</option></select></form>',
+      });
+      render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Nhờ AI sửa ô này' }));
+
+      await waitFor(() => expect(editLandingHtmlWithAi).toHaveBeenCalledTimes(1));
+      const { instruction } = editLandingHtmlWithAi.mock.calls[0][0];
+      expect(instruction).toContain('<option value="opt_a">Lựa chọn 1</option>');
+      expect(instruction).toContain('<option value="opt_1">Lựa chọn 2</option>');
+      expect(instruction).toMatch(/ĐÃ có ô name="cf_field_g2e9" thì THAY/);
+
+      await waitFor(() => expect(setForm).toHaveBeenCalled());
+      const next = setForm.mock.calls[setForm.mock.calls.length - 1][0](form);
+      expect(next.htmlContent).toContain('value="opt_a"');
+    });
+
     it('editLandingHtmlWithAi lỗi → không throw ra ngoài, không gọi setForm cập nhật htmlContent', async () => {
       editLandingHtmlWithAi.mockRejectedValueOnce(new Error('AI tạo form đăng ký lead nhưng thiếu trường'));
       const setForm = vi.fn();
