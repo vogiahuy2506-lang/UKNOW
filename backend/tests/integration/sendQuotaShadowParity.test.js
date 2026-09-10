@@ -113,4 +113,45 @@ describe('Shadow parity — luật cũ và luật mới phải cùng kết luậ
     expect(m.mismatches).toBe(0);
     expect(m.both_denied).toBe(1);
   });
+
+  /**
+   * Đo trên production 10/09: user gặp lượt lệch có `subscription_expires_at` = 08/09 21:05,
+   * `grace_period_days` = 0 — tức gói ĐÃ HẾT HẠN hai ngày. Bài trên không chạm nhánh này vì
+   * `assignPlanToUser` để `subscription_expires_at` là NULL.
+   *
+   * Cả hai luật dùng CÙNG một công thức hết hạn (`now > expiresAt + graceDays`):
+   * getSubscriptionStatus (cũ) và getWorkspacePlanLimits (mới). Nên chúng phải cùng kết luận.
+   */
+  it('gói HẾT HẠN: hai luật vẫn phải cùng từ chối', async () => {
+    await db.query(
+      `UPDATE users SET subscription_expires_at = NOW() - INTERVAL '2 days' WHERE id = $1`,
+      [user.id]
+    );
+    _clearQuotaCache();
+
+    const legacy = await checkSendQuota({
+      userId: user.id, roleCode: 'user', ownerContextId: user.id, channel: 'email', requiredCount: 1,
+    });
+    expect(legacy.allowed).toBe(false);
+    expect(legacy.limitType).toBe('expired');
+
+    await expect(
+      reserveSendQuota(
+        {
+          userId: user.id,
+          roleCode: 'user',
+          ownerContextId: user.id,
+          channel: 'email',
+          quantity: 1,
+          sourceType: 'quick_send',
+        },
+        { modeOverride: 'shadow' }
+      )
+    ).rejects.toMatchObject({ status: 403 });
+
+    const m = getShadowMismatchMetrics();
+    expect(m.total).toBe(1);
+    expect(m.legacy_deny_atomic_allow).toBe(0);
+    expect(m.both_denied).toBe(1);
+  });
 });
