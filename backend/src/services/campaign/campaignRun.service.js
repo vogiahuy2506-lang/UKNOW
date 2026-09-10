@@ -1331,7 +1331,16 @@ class CampaignRunService {
             campaignId,
             reason: quota.message || 'Vượt giới hạn gửi của gói dịch vụ.',
           });
-          throw new Error(quota.message || 'Vượt giới hạn gửi của gói dịch vụ.');
+          const message = quota.message || 'Vượt giới hạn gửi của gói dịch vụ.';
+          // Đóng sổ TRƯỚC khi ném: các catch site chỉ log + return cho RUN_STOPPED,
+          // không tự đóng sổ — không failRun() ở đây thì run kẹt nguyên 'running' và
+          // scheduler resume lại chính nó, tái lập đúng vòng lặp đang muốn chặn.
+          await campaignRunRepository.failRun(runId, message);
+          const err = new Error(message);
+          err.code = 'RUN_STOPPED';
+          err.quotaBlocked = true;
+          err.quotaLimitType = quota.limitType;
+          throw err;
         }
         const waitMs = Math.max(0, new Date(quota.resetAt).getTime() - Date.now());
         if (waitMs < this.zaloRateLimiter.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS) {
@@ -7733,7 +7742,9 @@ class CampaignRunService {
         return;
       }
       if (error?.code === 'RUN_STOPPED') {
-        console.log(`[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
+        console.log(error?.quotaBlocked
+          ? `[Campaign ${campaignId}] Run ${runId} dừng do hết hạn mức gói: ${error.message}`
+          : `[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
         return;
       }
       if (error?.code === 'RUN_YIELD_SLOT') {
