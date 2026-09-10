@@ -92,6 +92,7 @@ const CheckoutPage = () => {
     const [voucherLoading, setVoucherLoading] = useState(false);
     const [authoritativePayment, setAuthoritativePayment] = useState(null);
     const [invoiceInfo, setInvoiceInfo] = useState({ wantInvoice: false });
+    const [termsConsent, setTermsConsent] = useState(false);
     const invoiceVatUiEnabled = isInvoiceVatUiEnabled();
 
     // Guard đồng bộ chống double-submit (bấm 2 lần trước khi React kịp render loading=true).
@@ -605,8 +606,8 @@ const CheckoutPage = () => {
                                 <button
                                     type="button"
                                     onClick={() => createPayment()}
-                                    disabled={busy || !isInvoiceValid}
-                                    title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : undefined}
+                                    disabled={busy || !isInvoiceValid || !termsConsent}
+                                    title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : !termsConsent ? t('checkout.termsRequired') : undefined}
                                     className="w-full btn btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.01]"
                                 >
                                     {loading ? (
@@ -625,6 +626,31 @@ const CheckoutPage = () => {
                                 <p className="text-[10px] text-center text-slate-400 font-medium">
                                     🔒 {t('checkout.securityBadge')}
                                 </p>
+
+                                {/* Checkbox đồng ý điều khoản trước thanh toán (theo quy định Bộ Công Thương) */}
+                                <label className="flex items-start gap-2 cursor-pointer p-3 bg-slate-50/50 rounded-xl border border-slate-200/50">
+                                    <input
+                                        type="checkbox"
+                                        checked={termsConsent}
+                                        onChange={(e) => setTermsConsent(e.target.checked)}
+                                        className="mt-0.5 w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500"
+                                    />
+                                    <span className="text-[11px] text-slate-600 leading-relaxed">
+                                        {t('checkout.termsConsentLabel') || 'Tôi đã đọc và đồng ý với'}
+                                        {' '}
+                                        <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.termsLink') || 'Điều khoản sử dụng'}</a>
+                                        {', '}
+                                        <a href="/pricing-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.pricingPolicyLink') || 'Chính sách giá'}</a>
+                                        {', '}
+                                        <a href="/payment-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.paymentPolicyLink') || 'Chính sách thanh toán'}</a>
+                                        {', '}
+                                        <a href="/refund-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.refundPolicyLink') || 'Chính sách hoàn tiền'}</a>
+                                        {', '}
+                                        <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.privacyPolicyLink') || 'Chính sách bảo mật'}</a>
+                                        {', '}
+                                        <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.dpaLink') || 'Thoả thuận xử lý dữ liệu'}</a>
+                                    </span>
+                                </label>
                             </div>
                         </div>
                     </div>

@@ -16,21 +16,22 @@ const COLUMNS = (t) => [
     ],
   },
   {
-    title: t('footer.platform'),
+    title: t('footer.policies'),
     links: [
-      { label: t('footer.emailMarketing'), to: '/#features' },
-      { label: t('footer.zaloAutomation'), to: '/#features' },
-      { label: t('footer.crmLead'), to: '/#features' },
-      { label: t('footer.reports'), to: '/#features' },
+      { label: t('footer.privacyPolicy'), href: '/privacy-policy' },
+      { label: t('footer.pricingPolicy'), href: '/pricing-policy' },
+      { label: t('footer.paymentPolicy'), href: '/payment-policy' },
+      { label: t('footer.complaintPolicy'), href: '/complaint-policy' },
+      { label: t('footer.refundPolicy'), href: '/refund-policy' },
+      { label: t('footer.publicDPA'), href: '/public-dpa' },
+      { label: t('footer.termsOfService'), href: '/terms' },
     ],
   },
   {
     title: t('footer.company'),
     links: [
       { label: t('footer.contact'), to: '/contact' },
-      { label: t('footer.privacyPolicy'), href: '/privacy-policy' },
-      { label: t('footer.publicDPA'), href: '/public-dpa' },
-      { label: t('footer.termsOfUse'), href: '/terms' },
+      { label: t('footer.supportPolicy'), href: '/support' },
     ],
   },
 ];
@@ -62,8 +63,16 @@ export default function Footer() {
               />
             </Link>
             <p className="text-[15px] leading-relaxed text-slate-400 max-w-xs">
-              Founder AI là giải pháp Marketing Automation & AI hàng đầu cho doanh nghiệp Việt Nam.
+              {t('footer.publicBrandDesc')}
             </p>
+            
+            {/* Company Info */}
+            <div className="text-sm text-slate-500 space-y-1">
+              <p className="font-medium text-slate-400">{t('footer.companyName')}</p>
+              <p>{t('footer.companyAddress')}</p>
+              <p>{t('footer.companyPhone')}</p>
+              <p><a href="mailto:info@digiso.vn" className="hover:text-orange-400 transition-colors">info@digiso.vn</a></p>
+            </div>
             
             {/* Social links */}
             <div className="flex items-center gap-3">

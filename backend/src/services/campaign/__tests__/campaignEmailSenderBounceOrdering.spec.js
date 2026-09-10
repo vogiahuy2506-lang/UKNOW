@@ -101,6 +101,7 @@ describe('sendEmailToCustomerDirect — rate-limit phải được xét TRƯỚC
     jest.clearAllMocks();
     jest.spyOn(campaignEmailSenderRepository, 'incrementEmailSettingsSentCount').mockResolvedValue();
     jest.spyOn(campaignEmailSenderRepository, 'markEmailMessageFailed').mockResolvedValue();
+    jest.spyOn(campaignEmailSenderRepository, 'markEmailMessageBounced').mockResolvedValue();
     jest.spyOn(emailSettingsController, 'logEmailSent').mockResolvedValue();
     jest.spyOn(campaignEmailSenderService, 'resolveRetryScheduleGuard').mockReturnValue({ remainingDelayMs: 0 });
     jest.spyOn(campaignEmailSenderService, 'getTemplateByRunNodeCache').mockResolvedValue(null);
