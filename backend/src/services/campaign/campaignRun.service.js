@@ -3630,7 +3630,35 @@ class CampaignRunService {
                 }
                 if (isPlanQuotaExceeded) {
                   if (!sendResult.resetAt) {
-                    failedSends += 1;
+                    // resetAt: null → hạn mức không tự reset được (gói hết hạn/không có gói/bị
+                    // khoá) — phải DỪNG HẲN run, không đếm thất bại rồi tiếp tục người kế (PR-1b).
+                    // Kênh email đi qua reserveSendQuota()/campaignEmailSender.service.js, KHÔNG
+                    // qua assertSendQuotaOrYield() nên PR-1 gốc (chỉ sửa hàm đó) không chạm nhánh
+                    // này — xác nhận bằng phép thử production 10/09: gói hết hạn, cả 3 người nhận
+                    // đều bị đếm failedSends rồi tiếp tục, run kết thúc completed thay vì failed.
+                    const message = sendResult.error || 'Vượt giới hạn gửi của gói dịch vụ.';
+                    await campaignExecutionLogService.logExecutionNode({
+                      campaignId,
+                      runId,
+                      node,
+                      customerId: customer.id || null,
+                      recipientEmail: recipientEmailForLog,
+                      status: 'failed',
+                      progressCurrent: successfulSends + failedSends + skippedSends,
+                      progressTotal: totalRecipients,
+                      errorMessage: message,
+                      executionData: buildSendEmailExecutionData({
+                        ...sendResult,
+                        message,
+                      }),
+                    });
+                    this._notifyQuotaStoppedFireAndForget({ campaignId, reason: message });
+                    await campaignRunRepository.failRun(runId, message);
+                    const err = new Error(message);
+                    err.code = 'RUN_STOPPED';
+                    err.quotaBlocked = true;
+                    err.quotaLimitType = sendResult.limitType;
+                    throw err;
                   } else {
                     const failedMessage = sendResult.error
                       || 'Đã đạt giới hạn gửi email của gói dịch vụ.';
@@ -3746,6 +3774,7 @@ class CampaignRunService {
               return { success: true };
             } catch (error) {
               if (error?.code === 'RUN_YIELD_SLOT') throw error;
+              if (error?.code === 'RUN_STOPPED') throw error;
               failedSends += 1;
               const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const failedPayload = {

@@ -1280,15 +1280,18 @@ describe('Integration — Campaign Quota Matrix PR-Q4c', () => {
       );
       expect(calls42P10).toHaveLength(0);
 
-      // Khẳng định: Run kết thúc với status='completed', successful_sends=0, failed_sends=1, error_message=null
+      // Khẳng định: Run DỪNG HẲN (PR-1b) — resetAt:null (limitType='disabled') phải đóng sổ
+      // status='failed' kèm error_message, không đếm failed_sends rồi kết thúc 'completed' như
+      // hành vi cũ (trước PR-1b, xác nhận thật trên production 10/09: gói hết hạn thì mọi người
+      // nhận đều bị đếm fail rồi chạy tiếp, run vẫn 'completed').
       const { rows: runRows } = await db.query(
         'SELECT status, error_message, successful_sends, failed_sends, run_metadata FROM campaign_runs WHERE id = $1',
         [runId]
       );
-      expect(runRows[0].status).toBe('completed');
+      expect(runRows[0].status).toBe('failed');
       expect(Number(runRows[0].successful_sends)).toBe(0);
-      expect(Number(runRows[0].failed_sends)).toBe(1);
-      expect(runRows[0].error_message).toBeNull();
+      expect(Number(runRows[0].failed_sends)).toBe(0);
+      expect(runRows[0].error_message).toContain('không được hỗ trợ trong gói');
 
       // Kiểm tra execution log ghi nhận lý do dừng chính xác là plan_send_limit_exceeded / disabled
       const { rows: execLogs } = await db.query(
