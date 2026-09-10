@@ -298,6 +298,32 @@ class CampaignRunService {
   }
 
   /**
+   * PR-1c — lưới thứ hai cho kênh Zalo: cổng reservation (campaignZaloSender.service.js) ném
+   * PLAN_SEND_LIMIT_EXCEEDED khi reserveSendQuota() từ chối. Hạn mức KHÔNG tự reset được (gói
+   * hết hạn / không có gói / kênh bị khoá, error.resetAt rỗng) thì phải dừng hẳn run — cùng khuôn
+   * PR-1 (assertSendQuotaOrYield) và PR-1b (email). Hạn mức CÓ mốc reset (ngày/tháng) thì bỏ qua,
+   * giữ nguyên hành vi cũ (đếm thất bại rồi tiếp tục) — không phải lỗi, khách vẫn dùng bình thường.
+   *
+   * @param {Error} error
+   * @param {{ runId: number, campaignId: number }} ctx
+   * @returns {Promise<void>}
+   */
+  async _stopRunIfPlanQuotaBlocked(error, { runId, campaignId }) {
+    if (error?.code !== 'PLAN_SEND_LIMIT_EXCEEDED') return;
+    if (error.resetAt) return;
+    const message = error.message || 'Vượt giới hạn gửi của gói dịch vụ.';
+    this._notifyQuotaStoppedFireAndForget({ campaignId, reason: message });
+    // Đóng sổ TRƯỚC khi ném: nhánh log RUN_STOPPED ở catch tổng chỉ console.log + return, không
+    // tự đóng sổ — thiếu bước này run kẹt nguyên 'running' và scheduler resume lại chính nó.
+    await campaignRunRepository.failRun(runId, message);
+    const err = new Error(message);
+    err.code = 'RUN_STOPPED';
+    err.quotaBlocked = true;
+    err.quotaLimitType = error.limitType;
+    throw err;
+  }
+
+  /**
    * Xoá cờ/key quota-defer sau khi run tiến triển lại (gửi thành công hậu-resume).
    * Chỉ đụng DB khi process này đã từng notify pause cho runId.
    *
@@ -5147,6 +5173,7 @@ class CampaignRunService {
               if (error?.code === 'RUN_STOPPED') {
                 throw error;
               }
+              await this._stopRunIfPlanQuotaBlocked(error, { runId, campaignId });
               if (error?.code === 'ALL_ZALO_POOL_ACCOUNTS_UNAVAILABLE') {
                 await campaignCrudRepository.pauseCampaignIfActive(campaignId);
                 const pauseNote = new Error(
@@ -5656,6 +5683,7 @@ class CampaignRunService {
                   // - RUN_YIELD_SLOT: defer outbound Zalo toàn run theo tài khoản.
                   if (recipientError?.code === 'RUN_STOPPED') throw recipientError;
                   if (recipientError?.code === 'RUN_YIELD_SLOT') throw recipientError;
+                  await this._stopRunIfPlanQuotaBlocked(recipientError, { runId, campaignId });
                   console.error(
                     `[CampaignRun][Zalo] run=${runId} recipient=${normalizedRecipient} step_error:`,
                     recipientError.message
@@ -6367,6 +6395,7 @@ class CampaignRunService {
               if (error?.code === 'RUN_YIELD_SLOT') {
                 throw error;
               }
+              await this._stopRunIfPlanQuotaBlocked(error, { runId, campaignId });
               if (isZaloUnreachableRecipientError(error)) {
                 await zaloCampaignRecipientService.markPhoneUnreachableFromError(userId, phone, error, runId);
                 skippedSends += 1;
@@ -7002,6 +7031,7 @@ class CampaignRunService {
             } catch (error) {
               if (error?.code === 'RUN_YIELD_SLOT') throw error;
               if (error?.code === 'RUN_STOPPED') throw error;
+              await this._stopRunIfPlanQuotaBlocked(error, { runId, campaignId });
               const zaloGroupTemplateStepsForLimit = Array.isArray(config.zaloGroupTemplateSteps)
                 ? config.zaloGroupTemplateSteps.filter((step) => Number.isFinite(parseInt(step?.templateId, 10)))
                 : [];
@@ -7422,6 +7452,7 @@ class CampaignRunService {
                   // Lỗi của 1 nhóm không dừng toàn bộ run; chỉ propagate lệnh dừng do user / quota defer.
                   if (groupError?.code === 'RUN_STOPPED') throw groupError;
                   if (groupError?.code === 'RUN_YIELD_SLOT') throw groupError;
+                  await this._stopRunIfPlanQuotaBlocked(groupError, { runId, campaignId });
                   console.error(
                     `[CampaignRun][ZaloGroup] run=${runId} groupId=${normalizedGroupId} step_error:`,
                     groupError.message

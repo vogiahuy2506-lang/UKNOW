@@ -2015,6 +2015,8 @@ class CampaignZaloSenderService {
       }
       const err = new Error(`[PLAN_QUOTA] ${quotaErr.message || 'Vượt giới hạn gửi Zalo của gói dịch vụ.'}`);
       err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
+      err.resetAt = quotaErr.resetAt ?? null;
+      err.limitType = quotaErr.limitType ?? null;
       throw err;
     }
     const active = reservation.mode === 'enforce' || reservation.mode === 'test_enforce';
