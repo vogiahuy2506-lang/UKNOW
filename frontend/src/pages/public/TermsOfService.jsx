@@ -883,10 +883,10 @@ function TermsOfService() {
                 <strong>Company:</strong> DIGISO Digital Solutions Co., Ltd.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:hotro.digibook@gmail.com" className="text-orange-600 hover:underline">hotro.digibook@gmail.com</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:hotro.digibook@gmail.com" className="text-orange-600 hover:underline">hotro.digibook@gmail.com</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Website:</strong> <a href="https://digiso.vn" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">https://digiso.vn</a>
@@ -940,7 +940,7 @@ function TermsOfService() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
+                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
@@ -974,7 +974,7 @@ function TermsOfService() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
+                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
@@ -1023,6 +1023,12 @@ function TermsOfService() {
             <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
               founderai.biz
             </a>
+          </p>
+          <p className={lc(language, 'vi')}>
+            Điều khoản này được cập nhật và có hiệu lực từ ngày 10/09/2026.
+          </p>
+          <p className={lc(language, 'en')}>
+            These terms were last updated and effective from September 10, 2026.
           </p>
         </footer>
       </div>

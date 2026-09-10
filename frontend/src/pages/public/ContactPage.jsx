@@ -20,9 +20,9 @@ const getChannels = (t) => [
     iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600',
     iconRing: 'bg-orange-100',
     label: t('contact.channelEmailLabel'),
-    value: 'hotro.digibook@gmail.com',
+    value: 'info@digiso.vn',
     meta: t('contact.channelEmailMeta'),
-    href: 'mailto:hotro.digibook@gmail.com',
+    href: 'mailto:info@digiso.vn',
   },
   {
     icon: HiOutlinePhone,

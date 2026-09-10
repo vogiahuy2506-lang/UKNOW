@@ -220,7 +220,7 @@ function PrivacyPolicy() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Email Bảo mật</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
+                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
@@ -256,7 +256,7 @@ function PrivacyPolicy() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Privacy Email</div>
                 <div className="break-words text-[13.5px]">
-                  <a href="mailto:hotro.digibook@gmail.com" className="text-orange-400 no-underline hover:underline">hotro.digibook@gmail.com</a>
+                  <a href="mailto:info@digiso.vn" className="text-orange-400 no-underline hover:underline">info@digiso.vn</a>
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
@@ -299,6 +299,12 @@ function PrivacyPolicy() {
             <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
               founderai.biz
             </a>
+          </p>
+          <p className={lc(language, 'vi')}>
+            Chính sách này được cập nhật và có hiệu lực từ ngày 10/09/2026.
+          </p>
+          <p className={lc(language, 'en')}>
+            This policy was last updated and effective from September 10, 2026.
           </p>
         </footer>
       </div>

@@ -48,8 +48,14 @@ import BillingHubPage from './pages/billing/BillingHubPage';
 import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
 import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
 import PublicDPA from './pages/public/PublicDPA';
-import TrialDemoPage from './pages/public/TrialDemoPage';
 import TermsOfService from './pages/public/TermsOfService';
+import PricingPolicy from './pages/public/PricingPolicy';
+import PaymentPolicy from './pages/public/PaymentPolicy';
+import ComplaintPolicy from './pages/public/ComplaintPolicy';
+import RefundPolicy from './pages/public/RefundPolicy';
+import ServiceTerms from './pages/public/ServiceTerms';
+import Support from './pages/public/Support';
+import TrialDemoPage from './pages/public/TrialDemoPage';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
 import ContactPage from './pages/public/ContactPage';
@@ -349,6 +355,18 @@ function AppContent() {
             <Route path="/public-dpa/" element={<PublicDPA />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/terms/" element={<TermsOfService />} />
+            <Route path="/pricing-policy" element={<PricingPolicy />} />
+            <Route path="/pricing-policy/" element={<PricingPolicy />} />
+            <Route path="/payment-policy" element={<PaymentPolicy />} />
+            <Route path="/payment-policy/" element={<PaymentPolicy />} />
+            <Route path="/complaint-policy" element={<ComplaintPolicy />} />
+            <Route path="/complaint-policy/" element={<ComplaintPolicy />} />
+            <Route path="/refund-policy" element={<RefundPolicy />} />
+            <Route path="/refund-policy/" element={<RefundPolicy />} />
+            <Route path="/service-terms" element={<ServiceTerms />} />
+            <Route path="/service-terms/" element={<ServiceTerms />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/support/" element={<Support />} />
           </Route>
 
           {/* Kích hoạt tài khoản nhân viên qua link email */}

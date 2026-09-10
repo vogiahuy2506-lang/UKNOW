@@ -594,10 +594,10 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                 <p>
                   {t('accountProfileModal.consentWithdrawalNotice')}{' '}
                   <a
-                    href="mailto:hotro.digibook@gmail.com"
+                    href="mailto:info@digiso.vn"
                     className="font-semibold text-amber-950 underline hover:text-black"
                   >
-                    hotro.digibook@gmail.com
+                    info@digiso.vn
                   </a>{' '}
                   {t('accountProfileModal.consentWithdrawalOr')}{' '}
                   <a
