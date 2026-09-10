@@ -44,9 +44,16 @@ export const NO_PLAN_MSG =
 export const PERIOD_LIMIT_MSG = (count, limit) =>
   `Đã đạt giới hạn tổng tin nhắn trong kỳ (${count}/${limit} tin). Hạn mức sẽ reset vào chu kỳ mới.`;
 
+// both_allowed + both_denied + mismatches === total, luôn đúng. Hai bộ đếm "đồng thuận" tồn tại
+// vì thiếu chúng thì không đọc được điều quan trọng nhất trước khi bật 'enforce': ranh giới hạn
+// mức ĐÃ bị chạm hay chưa. Trước 10/09/2026 chỉ có total và mismatches, nên "total: 130,
+// mismatches: 0" không phân biệt được "hai luật khớp nhau ở chỗ khó" với "chưa ai chạm trần nên
+// cả hai đều trả cho-phép" — tức đúng phép đo rỗng mà bộ đếm này ra đời để tránh.
 const _initialShadowMetrics = () => ({
   total: 0,
   mismatches: 0,
+  both_allowed: 0,
+  both_denied: 0,
   legacy_allow_atomic_deny: 0,
   legacy_deny_atomic_allow: 0,
   atomic_candidate_error: 0,
@@ -91,6 +98,12 @@ export function recordShadowEvaluation({ legacyAllowed, atomicAllowed, atomicErr
     console.warn(
       `[SendQuota] Shadow mismatch for user ${billingUserId || userId} (${channel}): legacy=${legacyAllowed}, atomic=${atomicAllowed}, error=${atomicError?.message || 'none'}`
     );
+  } else if (legacyAllowed) {
+    _shadowMetrics.both_allowed++;
+  } else {
+    // Hai luật cùng TỪ CHỐI — đây là lượt đánh giá duy nhất chứng minh ranh giới hạn mức đã
+    // thật sự bị chạm. Không có bộ đếm này thì lượt đó lẫn vào total và biến mất.
+    _shadowMetrics.both_denied++;
   }
 }
 

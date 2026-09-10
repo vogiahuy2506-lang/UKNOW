@@ -253,7 +253,7 @@ describe('GET /api/admin/system/send-quota-shadow', () => {
     expect(forbidden.status).toBe(403);
   });
 
-  it('admin → 200 kèm mode, sources và đủ 5 bộ đếm', async () => {
+  it('admin → 200 kèm mode, sources và đủ 7 bộ đếm', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const token = await loginAs(admin);
     const res = await request(app)
@@ -269,12 +269,20 @@ describe('GET /api/admin/system/send-quota-shadow', () => {
     for (const field of [
       'total',
       'mismatches',
+      'both_allowed',
+      'both_denied',
       'legacy_allow_atomic_deny',
       'legacy_deny_atomic_allow',
       'atomic_candidate_error',
     ]) {
       expect(typeof metrics[field]).toBe('number');
     }
+
+    // `both_denied` là trường quyết định: thiếu nó thì "mismatches: 0" không phân biệt được
+    // "hai luật khớp ở ranh giới" với "chưa ai chạm ranh giới". Phải phơi ra qua API, không chỉ
+    // tồn tại trong bộ nhớ.
+    expect(metrics).toHaveProperty('both_denied');
+    expect(metrics.both_allowed + metrics.both_denied + metrics.mismatches).toBe(metrics.total);
   });
 
   it('trả processStartedAt hợp lệ — không có nó thì "total" không đọc được', async () => {
