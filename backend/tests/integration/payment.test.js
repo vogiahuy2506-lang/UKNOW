@@ -31,7 +31,9 @@ jest.unstable_mockModule('../../src/utils/payos.util.js', () => ({
 const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
 const db = (await import('../../src/config/database.js')).default;
-const { truncateAll, createUser, createPlan } = await import('./helpers/db.js');
+const {
+  truncateAll, createUser, createPlan, seedProductionPublicPlans, assignPlanToUser,
+} = await import('./helpers/db.js');
 const { findActiveBillingPeriod } = await import('../../src/repositories/user/user.repository.js');
 const { claimOrderSuccess } = await import('../../src/repositories/payment/payment.repository.js');
 const { fulfillPaidOrder } = await import('../../src/services/payment/payosOrderFulfillment.service.js');
@@ -476,6 +478,94 @@ describe('POST /api/payments/create-payment', () => {
       .send({ planCode: 'free_via_voucher', voucherCode: 'FREE100' });
     expect(second.status).toBe(409);
   });
+});
+
+// ===========================================================================
+// Nâng gói Starter/Basic (tháng/năm) → Pro năm bằng voucher 100%
+// PLAN_CHECKOUT_VOUCHER_RACE_2026-09-09: đối chứng lại 4 ca đã đo tay trên DB giả
+// lập trong phiên điều tra gốc, giờ port thành integration test thật (PostgreSQL
+// + catalog production-shaped qua seedProductionPublicPlans()).
+// ===========================================================================
+describe('POST /api/payments/create-payment — nâng gói Starter/Basic → Pro năm, voucher 100%', () => {
+  let plans;
+
+  beforeEach(async () => {
+    plans = await seedProductionPublicPlans();
+  });
+
+  it.each([
+    { from: 'starter', fromBillingPeriod: 'monthly' },
+    { from: 'starter', fromBillingPeriod: 'yearly' },
+    { from: 'basic', fromBillingPeriod: 'monthly' },
+    { from: 'basic', fromBillingPeriod: 'yearly' },
+  ])(
+    '$from ($fromBillingPeriod) → professional/yearly: đúng 1 order 0đ, 1 redemption, used_count+1, nâng gói, tìm được qua order_code',
+    async ({ from, fromBillingPeriod }) => {
+      const currentPlan = plans.find((p) => p.code === from);
+      const targetPlan = plans.find((p) => p.code === 'professional');
+
+      const user = await createUser({ username: `upgrade-${from}-${fromBillingPeriod}`, withPlan: false });
+      await assignPlanToUser(user.id, currentPlan.id);
+      // Đơn 'success' cũ để findActiveBillingPeriod() nhận đúng kỳ hạn hiện tại của user
+      // (billing period không phải cột trên `users`, mà suy từ order thành công gần nhất).
+      await db.query(
+        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, billing_period, payment_method, paid_at)
+         VALUES ($1, $2, $3, $4, $5, 'success', $6, 'payos', NOW())`,
+        [Date.now() + Math.floor(Math.random() * 1000), currentPlan.id, currentPlan.price, user.email, user.id, fromBillingPeriod]
+      );
+      const token = await loginAs(user);
+
+      const voucherCode = `UPGRADE100_${from.toUpperCase()}_${fromBillingPeriod.toUpperCase()}`;
+      await insertVoucher({ code: voucherCode, discountValue: 100, planCodes: ['professional'] });
+
+      const before = await db.query(`SELECT COUNT(*)::int AS n FROM orders`);
+
+      const res = await request(app)
+        .post('/api/payments/create-payment')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ planCode: 'professional', billingPeriod: 'yearly', explicitVoucherCode: voucherCode });
+
+      expect(res.status).toBe(200);
+      expect(res.body.result.noPayment).toBe(true);
+      expect(mockPaymentRequestsCreate).not.toHaveBeenCalled();
+
+      // Chênh lệch — không chỉ đếm tổng — để chắc đúng 1 order mới được tạo, không hơn.
+      const after = await db.query(`SELECT COUNT(*)::int AS n FROM orders`);
+      expect(after.rows[0].n - before.rows[0].n).toBe(1);
+
+      const order = await db.query(
+        `SELECT status, amount, plan_id, billing_period FROM orders WHERE order_code = $1`,
+        [res.body.result.orderCode]
+      );
+      expect(order.rows[0].status).toBe('success');
+      expect(Number(order.rows[0].amount)).toBe(0);
+      expect(Number(order.rows[0].plan_id)).toBe(Number(targetPlan.id));
+      expect(order.rows[0].billing_period).toBe('yearly');
+
+      const redemption = await db.query(
+        `SELECT COUNT(*)::int AS n FROM voucher_redemptions
+         WHERE user_id = $1 AND voucher_id = (SELECT id FROM vouchers WHERE code = $2)`,
+        [user.id, voucherCode]
+      );
+      expect(redemption.rows[0].n).toBe(1);
+
+      const voucherRow = await db.query(`SELECT used_count FROM vouchers WHERE code = $1`, [voucherCode]);
+      expect(voucherRow.rows[0].used_count).toBe(1);
+
+      const u = await db.query(
+        `SELECT active_plan_id, subscription_expires_at FROM users WHERE id = $1`,
+        [user.id]
+      );
+      expect(Number(u.rows[0].active_plan_id)).toBe(Number(targetPlan.id));
+      const daysRemaining = (new Date(u.rows[0].subscription_expires_at).getTime() - Date.now())
+        / (1000 * 60 * 60 * 24);
+      expect(daysRemaining).toBeGreaterThan(360);
+
+      // Đúng truy vấn admin sẽ dùng để tra đơn theo order_code.
+      const adminLookup = await db.query(`SELECT id FROM orders WHERE order_code = $1`, [res.body.result.orderCode]);
+      expect(adminLookup.rows.length).toBe(1);
+    }
+  );
 });
 
 // ===========================================================================
