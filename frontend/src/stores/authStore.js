@@ -142,6 +142,10 @@ const EMPTY_SEND_USAGE = {
   zalo: { used: 0, limit: null },
 };
 
+// Single-flight cho refreshCurrentUser() — gộp các lần gọi chồng nhau (effect + CTA,
+// StrictMode double-invoke) thành một request thay vì bắn trùng.
+let refreshCurrentUserInFlight = null;
+
 const billingSliceFromProfile = (profile = {}) => ({
   aiCredits: {
     used: Number(profile.aiCreditsUsed || 0),
@@ -224,6 +228,43 @@ export const useAuthStore = create((set, get) => ({
     } else {
       set({ isLoading: false, isAuthenticated: false });
     }
+  },
+
+  /**
+   * Tải lại user hiện tại từ server (vd: ngay sau khi checkout thành công — gói/plan
+   * có thể vừa đổi). Khác `initialize()`: lỗi mạng/5xx KHÔNG xoá token/đăng xuất, chỉ
+   * cập nhật khi có response hợp lệ. 401 thật thì interceptor refresh-token của `api`
+   * đã tự retry trước khi lỗi lọt tới đây — không cần xử lý logout riêng ở action này.
+   * Single-flight: nhiều lời gọi chồng nhau (effect + CTA, StrictMode) dùng chung 1 promise.
+   */
+  refreshCurrentUser: async () => {
+    if (!get().isAuthenticated) return { success: false };
+    if (refreshCurrentUserInFlight) return refreshCurrentUserInFlight;
+
+    refreshCurrentUserInFlight = (async () => {
+      try {
+        const response = await api.get('/auth/me');
+        const rawUser = response.data.data.user;
+        const normalizedUser = normalizeUser(rawUser);
+
+        // Bỏ qua nếu đã logout hoặc đổi sang tài khoản khác trong lúc chờ response —
+        // response này thuộc về phiên cũ, áp lại sẽ ghi đè sai user hiện tại.
+        const current = get();
+        if (!current.isAuthenticated || String(current.user?.id) !== String(normalizedUser?.id)) {
+          return { success: false };
+        }
+
+        set({ user: normalizedUser });
+        return { success: true, user: normalizedUser };
+      } catch (error) {
+        console.error('[AuthStore] refreshCurrentUser failed:', error?.message || error);
+        return { success: false, error };
+      } finally {
+        refreshCurrentUserInFlight = null;
+      }
+    })();
+
+    return refreshCurrentUserInFlight;
   },
 
   /**

@@ -33,14 +33,18 @@ const PaymentSuccessPage = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const location = useLocation();
-    const initialize = useAuthStore((state) => state.initialize);
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+    const refreshCurrentUser = useAuthStore((state) => state.refreshCurrentUser);
 
     const [verified, setVerified] = useState(false);
     const [loading, setLoading] = useState(true);
     const [orderCode, setOrderCode] = useState(null);
     const [needsLogin, setNeedsLogin] = useState(false);
     const [invoiceDelivery, setInvoiceDelivery] = useState(null);
+    // 'idle' | 'syncing' | 'done' | 'failed' — tách biệt "đơn đã thành công" khỏi
+    // "đã đồng bộ xong gói/thông tin tài khoản mới về store". Lỗi đồng bộ KHÔNG đổi
+    // đơn thành failed, không redirect, không tạo lại đơn.
+    const [accountSync, setAccountSync] = useState('idle');
 
     useEffect(() => {
         const verify = async () => {
@@ -79,6 +83,29 @@ const PaymentSuccessPage = () => {
         verify();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Tự đồng bộ user/gói mới nhất từ server ngay khi đơn xác nhận thành công — không
+    // đợi user bấm CTA. Chỉ chạy khi đã authenticated (guest xem trạng thái đơn qua
+    // contract công khai của getPaymentStatus không bị ép gọi /auth/me).
+    useEffect(() => {
+        if (!verified || !isAuthenticated) return undefined;
+        let cancelled = false;
+        setAccountSync('syncing');
+        refreshCurrentUser().then((result) => {
+            if (cancelled) return;
+            setAccountSync(result?.success ? 'done' : 'failed');
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [verified, isAuthenticated, refreshCurrentUser]);
+
+    const handleRetrySync = () => {
+        setAccountSync('syncing');
+        refreshCurrentUser().then((result) => {
+            setAccountSync(result?.success ? 'done' : 'failed');
+        });
+    };
 
     useEffect(() => {
         if (!verified || !orderCode) return undefined;
@@ -294,12 +321,24 @@ const PaymentSuccessPage = () => {
                 <div className="space-y-2">
                     <button
                         type="button"
-                        onClick={async () => { await initialize(); navigate('/app'); }}
-                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-sm hover:shadow-lg hover:shadow-orange-500/30 transition-all group"
+                        onClick={() => navigate('/app')}
+                        disabled={isAuthenticated && accountSync === 'syncing'}
+                        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-sm hover:shadow-lg hover:shadow-orange-500/30 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isAuthenticated ? t('paymentSuccess.goToDashboard') : t('paymentSuccess.loginToConfirm')}
+                        {isAuthenticated && accountSync === 'syncing'
+                            ? t('paymentSuccess.syncingAccount')
+                            : (isAuthenticated ? t('paymentSuccess.goToDashboard') : t('paymentSuccess.loginToConfirm'))}
                         <HiArrowRight className="group-hover:translate-x-0.5 transition-transform" />
                     </button>
+                    {isAuthenticated && accountSync === 'failed' && (
+                        <button
+                            type="button"
+                            onClick={handleRetrySync}
+                            className="w-full text-xs font-semibold text-orange-600 hover:text-orange-700 underline"
+                        >
+                            {t('paymentSuccess.retrySync')}
+                        </button>
+                    )}
                     <p className="text-[10px] text-center text-slate-400 font-medium">
                         🔒 {t('checkout.securityBadge')}
                     </p>

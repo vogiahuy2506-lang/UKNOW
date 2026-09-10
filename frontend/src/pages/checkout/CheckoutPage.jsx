@@ -94,6 +94,17 @@ const CheckoutPage = () => {
     const [invoiceInfo, setInvoiceInfo] = useState({ wantInvoice: false });
     const invoiceVatUiEnabled = isInvoiceVatUiEnabled();
 
+    // Guard đồng bộ chống double-submit (bấm 2 lần trước khi React kịp render loading=true).
+    const submitInFlightRef = useRef(false);
+    // "Phiên bản" của lần validate voucher mới nhất — bỏ qua response cũ nếu user đã
+    // đổi draft/xoá mã/áp mã khác trước khi response đó về, tránh ghi đè bằng dữ liệu cũ.
+    const voucherRequestIdRef = useRef(0);
+    const isMountedRef = useRef(true);
+    useEffect(() => () => { isMountedRef.current = false; }, []);
+
+    // Đang bận (checkout hoặc validate voucher) — khoá mọi thao tác có thể xung đột nhau.
+    const busy = loading || voucherLoading;
+
     const appliedVoucher = manualVoucher || autoPromotion;
     const effectiveOriginalAmount = Number(authoritativePayment?.originalAmount ?? displayPrice);
     const discountAmount = Number(
@@ -188,16 +199,18 @@ const CheckoutPage = () => {
     };
 
     const createPayment = async ({ regenerate = false } = {}) => {
-        if (!isCustomPlan && !plan) {
-            navigate('/pricing', { replace: true });
-            return;
-        }
-        if (isCustomPlan && !customQuantities) {
-            navigate('/pricing', { replace: true });
-            return;
-        }
+        if (submitInFlightRef.current) return;
+        submitInFlightRef.current = true;
 
         try {
+            if (!isCustomPlan && !plan) {
+                navigate('/pricing', { replace: true });
+                return;
+            }
+            if (isCustomPlan && !customQuantities) {
+                navigate('/pricing', { replace: true });
+                return;
+            }
             if (invoiceVatUiEnabled && finalAmount > 0 && !isInvoiceInfoValid(invoiceInfo)) {
                 toast.error(t('invoiceVat.fillRequiredFields'));
                 return;
@@ -294,6 +307,7 @@ const CheckoutPage = () => {
             setError(err?.response?.data?.message || t('checkout.createOrderFailed'));
         } finally {
             setLoading(false);
+            submitInFlightRef.current = false;
         }
     };
 
@@ -306,7 +320,9 @@ const CheckoutPage = () => {
             navigate('/pricing', { replace: true });
             return;
         }
-        setLoading(false);
+        // Không mở khoá một checkout đang thật sự chạy (submitInFlightRef) — effect này
+        // chỉ reset loading còn sót lại từ lần trước, không phải lần submit hiện tại.
+        if (!submitInFlightRef.current) setLoading(false);
         const loadVouchers = async () => {
             try {
                 const voucherParams = {
@@ -331,7 +347,12 @@ const CheckoutPage = () => {
 
     const applyVoucherCode = async (code = voucherCode) => {
         const normalized = String(code || '').trim().toUpperCase();
-        if (!normalized) return;
+        if (!normalized || busy) return;
+        // Đánh dấu "phiên bản" của lần gọi này — nếu có lần gọi mới hơn (đổi draft, xoá mã,
+        // bấm chip khác) xảy ra trước khi response này về thì response này bị coi là cũ, bỏ qua.
+        const requestId = ++voucherRequestIdRef.current;
+        const requestPlanCode = voucherPlanCode;
+        const requestBillingPeriod = billingPeriod;
         setVoucherLoading(true);
         try {
             const { data } = await validateVoucher({
@@ -340,15 +361,25 @@ const CheckoutPage = () => {
                 code: normalized,
                 ...(isCustomPlan ? { amount: displayPrice } : {}),
             });
+            const isStale =
+                !isMountedRef.current ||
+                requestId !== voucherRequestIdRef.current ||
+                requestPlanCode !== voucherPlanCode ||
+                requestBillingPeriod !== billingPeriod;
+            if (isStale) return;
             setManualVoucher(data.data.voucher);
             setAuthoritativePayment(null);
             setVoucherCode(normalized);
             toast.success(t('checkout.voucherApplied'));
         } catch (err) {
+            const isStale = !isMountedRef.current || requestId !== voucherRequestIdRef.current;
+            if (isStale) return;
             const message = err?.response?.data?.message;
             toast.error(message && voucherErrorKeyMap[message] ? t(voucherErrorKeyMap[message]) : t('checkout.invalidVoucher'));
         } finally {
-            setVoucherLoading(false);
+            // Chỉ gỡ loading nếu vẫn là lần gọi mới nhất — lần cũ không được ghi đè trạng thái
+            // loading của lần mới đang chạy.
+            if (requestId === voucherRequestIdRef.current) setVoucherLoading(false);
         }
     };
 
@@ -484,17 +515,21 @@ const CheckoutPage = () => {
                                             value={voucherCode}
                                             onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
                                             placeholder={t('checkout.voucherPlaceholder')}
-                                            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 font-mono uppercase"
+                                            disabled={busy}
+                                            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 font-mono uppercase disabled:opacity-50"
                                         />
                                         {manualVoucher ? (
                                             <button
                                                 type="button"
                                                 onClick={() => {
+                                                    // Huỷ hiệu lực mọi validate còn đang chạy cho mã cũ.
+                                                    voucherRequestIdRef.current += 1;
                                                     setManualVoucher(null);
                                                     setVoucherCode('');
                                                     setAuthoritativePayment(null);
                                                 }}
-                                                className="btn btn-secondary text-xs px-3 py-1.5 shrink-0"
+                                                disabled={busy}
+                                                className="btn btn-secondary text-xs px-3 py-1.5 shrink-0 disabled:opacity-50"
                                             >
                                                 {t('checkout.removeCode')}
                                             </button>
@@ -502,7 +537,7 @@ const CheckoutPage = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => applyVoucherCode()}
-                                                disabled={voucherLoading || !voucherCode.trim()}
+                                                disabled={busy || !voucherCode.trim()}
                                                 className="btn btn-primary text-xs px-3 py-1.5 shrink-0 disabled:opacity-50"
                                             >
                                                 {voucherLoading ? '...' : t('checkout.applyVoucher')}
@@ -518,13 +553,20 @@ const CheckoutPage = () => {
                                                     key={v.code}
                                                     type="button"
                                                     onClick={() => applyVoucherCode(v.code)}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-100/70 hover:bg-orange-200/80 border border-orange-200 text-[10px] font-bold text-orange-700 transition-colors"
+                                                    disabled={busy}
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-100/70 hover:bg-orange-200/80 border border-orange-200 text-[10px] font-bold text-orange-700 transition-colors disabled:opacity-50"
                                                 >
                                                     <span>🏷️ {v.code}</span>
                                                     <span className="opacity-75">(-{fmtVnd(v.discountAmount)})</span>
                                                 </button>
                                             ))}
                                         </div>
+                                    )}
+
+                                    {appliedVoucher && (
+                                        <p className="text-[10px] text-slate-500 mt-2">
+                                            {t('checkout.voucherAppliedHint')}
+                                        </p>
                                     )}
                                 </div>
 
@@ -563,7 +605,7 @@ const CheckoutPage = () => {
                                 <button
                                     type="button"
                                     onClick={() => createPayment()}
-                                    disabled={loading || !isInvoiceValid}
+                                    disabled={busy || !isInvoiceValid}
                                     title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : undefined}
                                     className="w-full btn btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.01]"
                                 >
@@ -571,7 +613,7 @@ const CheckoutPage = () => {
                                         <span>{t('checkout.checkingTransaction')}</span>
                                     ) : (
                                         <>
-                                            <span>{t('checkout.proceedToPayment')}</span>
+                                            <span>{payableAmount === 0 ? t('checkout.confirmZeroCost') : t('checkout.proceedToPayment')}</span>
                                             <span className="bg-black/10 px-2 py-0.5 rounded-full text-xs font-black">
                                                 {fmtVnd(payableAmount)}
                                             </span>
