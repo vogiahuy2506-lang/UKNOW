@@ -136,4 +136,75 @@ describe('CheckoutPage — voucher/submit race guards + zero-cost confirm', () =
       data: { success: true, result: { noPayment: true, orderCode: 999, amount: 0, originalAmount: 12470400, discountAmount: 12470400, voucher, discount: { ...voucher, source: 'public_code' } } },
     }));
   });
+
+  it('gọi Apply 2 lần trong CÙNG một tick (không có re-render chen giữa) vẫn chỉ validate 1 lần — ref đồng bộ, không chỉ dựa React state', async () => {
+    let finishValidation;
+    m.validate.mockReturnValue(new Promise((resolve) => { finishValidation = resolve; }));
+    render(<CheckoutPage />);
+    fireEvent.change(screen.getByPlaceholderText('checkout.voucherPlaceholder'), { target: { value: voucher.code } });
+    const applyBtn = screen.getByRole('button', { name: 'checkout.applyVoucher' });
+    // Bọc cả 2 click trong CÙNG một act() — mô phỏng đúng race thật (2 sự kiện liên tiếp
+    // trước khi React kịp re-render `busy`/thuộc tính disabled ở DOM), khác với gọi
+    // fireEvent.click() 2 lần tách rời (mỗi lần tự có act() riêng của RTL, vô tình để
+    // React re-render và cập nhật disabled giữa 2 lần — không còn tái hiện đúng race).
+    await act(async () => {
+      fireEvent.click(applyBtn);
+      fireEvent.click(applyBtn);
+    });
+    expect(m.validate).toHaveBeenCalledTimes(1);
+    await act(async () => finishValidation({ data: { data: { voucher } } }));
+  });
+
+  it('nhập mã nhưng CHƯA bấm Áp dụng → CTA bị khoá, không âm thầm checkout thiếu mã', async () => {
+    render(<CheckoutPage />);
+    // findByRole (không phải getByRole) để chờ effect tải voucher tự động (auto-promotion/
+    // chip) settle trước, tránh act() warning không liên quan tới điều đang kiểm.
+    const submit = await screen.findByRole('button', { name: /checkout.proceedToPayment/ });
+    fireEvent.change(screen.getByPlaceholderText('checkout.voucherPlaceholder'), { target: { value: 'CHUA_AP_DUNG' } });
+    acceptTerms();
+    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(m.create).not.toHaveBeenCalled();
+    expect(m.free).not.toHaveBeenCalled();
+  });
+
+  it('áp mã A rồi sửa draft thành B mà KHÔNG Apply lại → mã cũ bị vô hiệu ngay, không sống sót tới lúc submit', async () => {
+    render(<CheckoutPage />);
+    await applyCode(); // áp voucher.code (100% off) — CTA giờ là "Xác nhận đơn 0 đồng"
+    screen.getByRole('button', { name: /checkout.confirmZeroCost/ });
+
+    fireEvent.change(screen.getByPlaceholderText('checkout.voucherPlaceholder'), { target: { value: 'MA_KHAC' } });
+
+    // Mã cũ bị vô hiệu ngay: giá preview quay lại đầy đủ (không còn CTA 0 đồng), nút quay
+    // lại thành "Áp dụng" (chứng minh manualVoucher đã bị clear, không còn hiển thị "Xoá mã").
+    expect(screen.queryByRole('button', { name: /checkout.confirmZeroCost/ })).not.toBeInTheDocument();
+    screen.getByRole('button', { name: 'checkout.applyVoucher' });
+
+    // Draft "MA_KHAC" chưa được Apply — submit phải bị khoá, không được âm thầm gửi mã A cũ.
+    acceptTerms();
+    const submit = screen.getByRole('button', { name: /checkout.proceedToPayment/ });
+    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(m.create).not.toHaveBeenCalled();
+  });
+
+  it('sau khi sửa draft và Apply lại mã mới → request gửi đúng mã MỚI, không phải mã cũ', async () => {
+    const voucherB = { code: 'MA_KHAC_100', offerMode: 'public_code', discountAmount: 12470400, finalAmount: 0 };
+    m.validate.mockImplementation(async ({ code }) => {
+      if (code === voucherB.code) return { data: { data: { voucher: voucherB } } };
+      return { data: { data: { voucher } } };
+    });
+
+    render(<CheckoutPage />);
+    await applyCode(); // áp voucher.code trước
+
+    fireEvent.change(screen.getByPlaceholderText('checkout.voucherPlaceholder'), { target: { value: voucherB.code } });
+    fireEvent.click(screen.getByRole('button', { name: 'checkout.applyVoucher' }));
+    await screen.findByRole('button', { name: 'checkout.removeCode' });
+
+    acceptTerms();
+    fireEvent.click(screen.getByRole('button', { name: /checkout.confirmZeroCost/ }));
+    await waitFor(() => expect(m.create).toHaveBeenCalledWith(expect.objectContaining({ explicitVoucherCode: voucherB.code })));
+    expect(m.create).not.toHaveBeenCalledWith(expect.objectContaining({ explicitVoucherCode: voucher.code }));
+  });
 });

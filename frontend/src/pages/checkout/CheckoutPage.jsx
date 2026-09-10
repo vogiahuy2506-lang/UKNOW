@@ -97,14 +97,31 @@ const CheckoutPage = () => {
 
     // Guard đồng bộ chống double-submit (bấm 2 lần trước khi React kịp render loading=true).
     const submitInFlightRef = useRef(false);
+    // Guard đồng bộ tương tự cho validate voucher — "busy" (state) chỉ chặn được sau khi
+    // React re-render; hai lần gọi trong cùng tick (double-click thật, không qua thuộc tính
+    // disabled) vẫn có thể lọt qua nếu chỉ dựa vào state. Ref này chặn ngay tại chỗ.
+    const voucherApplyInFlightRef = useRef(false);
     // "Phiên bản" của lần validate voucher mới nhất — bỏ qua response cũ nếu user đã
     // đổi draft/xoá mã/áp mã khác trước khi response đó về, tránh ghi đè bằng dữ liệu cũ.
     const voucherRequestIdRef = useRef(0);
+    // Giá trị plan/kỳ hạn MỚI NHẤT — đọc qua ref, không qua closure đông cứng của lần
+    // render đã tạo ra applyVoucherCode. So `voucherPlanCode`/`billingPeriod` trực tiếp
+    // trong closure sẽ luôn so một giá trị với chính nó (không bao giờ phát hiện đổi).
+    const voucherContextRef = useRef({ planCode: null, billingPeriod: null });
     const isMountedRef = useRef(true);
     useEffect(() => () => { isMountedRef.current = false; }, []);
+    useEffect(() => {
+        voucherContextRef.current = { planCode: voucherPlanCode, billingPeriod };
+    }, [voucherPlanCode, billingPeriod]);
 
     // Đang bận (checkout hoặc validate voucher) — khoá mọi thao tác có thể xung đột nhau.
     const busy = loading || voucherLoading;
+
+    // Có chữ trong ô nhập nhưng KHÁC mã đang thật sự áp dụng (hoặc chưa áp dụng mã nào) —
+    // nếu cho checkout đi tiếp lúc này, request sẽ gửi mã cũ (hoặc không mã) trong khi màn
+    // hình đang hiển thị chữ khác, im lặng lệch giữa cái user thấy và cái được gửi.
+    const trimmedDraft = voucherCode.trim();
+    const hasUnappliedDraft = trimmedDraft.length > 0 && trimmedDraft !== (manualVoucher?.code || '');
 
     const appliedVoucher = manualVoucher || autoPromotion;
     const effectiveOriginalAmount = Number(authoritativePayment?.originalAmount ?? displayPrice);
@@ -348,7 +365,10 @@ const CheckoutPage = () => {
 
     const applyVoucherCode = async (code = voucherCode) => {
         const normalized = String(code || '').trim().toUpperCase();
-        if (!normalized || busy) return;
+        // voucherApplyInFlightRef chặn NGAY LẬP TỨC (đồng bộ, không phụ thuộc React đã
+        // re-render `busy` hay chưa) — hai lần gọi trong cùng tick chỉ lọt được lần đầu.
+        if (!normalized || busy || voucherApplyInFlightRef.current) return;
+        voucherApplyInFlightRef.current = true;
         // Đánh dấu "phiên bản" của lần gọi này — nếu có lần gọi mới hơn (đổi draft, xoá mã,
         // bấm chip khác) xảy ra trước khi response này về thì response này bị coi là cũ, bỏ qua.
         const requestId = ++voucherRequestIdRef.current;
@@ -362,11 +382,13 @@ const CheckoutPage = () => {
                 code: normalized,
                 ...(isCustomPlan ? { amount: displayPrice } : {}),
             });
+            // So với ref (giá trị MỚI NHẤT qua mọi lần render), không so với closure đông
+            // cứng của lần render đã tạo ra hàm này — closure so với chính nó luôn bằng nhau.
             const isStale =
                 !isMountedRef.current ||
                 requestId !== voucherRequestIdRef.current ||
-                requestPlanCode !== voucherPlanCode ||
-                requestBillingPeriod !== billingPeriod;
+                requestPlanCode !== voucherContextRef.current.planCode ||
+                requestBillingPeriod !== voucherContextRef.current.billingPeriod;
             if (isStale) return;
             setManualVoucher(data.data.voucher);
             setAuthoritativePayment(null);
@@ -381,6 +403,7 @@ const CheckoutPage = () => {
             // Chỉ gỡ loading nếu vẫn là lần gọi mới nhất — lần cũ không được ghi đè trạng thái
             // loading của lần mới đang chạy.
             if (requestId === voucherRequestIdRef.current) setVoucherLoading(false);
+            voucherApplyInFlightRef.current = false;
         }
     };
 
@@ -514,7 +537,18 @@ const CheckoutPage = () => {
                                         <input
                                             type="text"
                                             value={voucherCode}
-                                            onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                                            onChange={(e) => {
+                                                const next = e.target.value.toUpperCase();
+                                                setVoucherCode(next);
+                                                // Sửa draft khác mã đang áp dụng → vô hiệu ngay, bắt áp dụng lại.
+                                                // Không làm vậy thì giá preview + request khi submit vẫn dùng mã
+                                                // cũ trong khi ô nhập đang hiển thị chữ khác.
+                                                if (manualVoucher && next.trim() !== manualVoucher.code) {
+                                                    voucherRequestIdRef.current += 1;
+                                                    setManualVoucher(null);
+                                                    setAuthoritativePayment(null);
+                                                }
+                                            }}
                                             placeholder={t('checkout.voucherPlaceholder')}
                                             disabled={busy}
                                             className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 font-mono uppercase disabled:opacity-50"
@@ -564,9 +598,14 @@ const CheckoutPage = () => {
                                         </div>
                                     )}
 
-                                    {appliedVoucher && (
+                                    {appliedVoucher && !hasUnappliedDraft && (
                                         <p className="text-[10px] text-slate-500 mt-2">
                                             {t('checkout.voucherAppliedHint')}
+                                        </p>
+                                    )}
+                                    {hasUnappliedDraft && (
+                                        <p className="text-[10px] text-amber-600 mt-2 font-medium">
+                                            {t('checkout.voucherDraftUnappliedHint')}
                                         </p>
                                     )}
                                 </div>
@@ -606,8 +645,12 @@ const CheckoutPage = () => {
                                 <button
                                     type="button"
                                     onClick={() => createPayment()}
-                                    disabled={busy || !isInvoiceValid || !termsConsent}
-                                    title={!isInvoiceValid ? t('invoiceVat.fillRequiredFields') : !termsConsent ? t('checkout.termsRequired') : undefined}
+                                    disabled={busy || !isInvoiceValid || !termsConsent || hasUnappliedDraft}
+                                    title={
+                                        hasUnappliedDraft ? t('checkout.voucherDraftUnappliedHint')
+                                            : !isInvoiceValid ? t('invoiceVat.fillRequiredFields')
+                                                : !termsConsent ? t('checkout.termsRequired') : undefined
+                                    }
                                     className="w-full btn btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.01]"
                                 >
                                     {loading ? (

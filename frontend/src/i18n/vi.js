@@ -2624,6 +2624,7 @@ export default {
     applyingVoucher: '...',
     voucherApplied: 'Đã áp dụng voucher',
     voucherAppliedHint: 'Mã đã được áp dụng vào đơn — bấm nút bên dưới để hoàn tất đơn hàng.',
+    voucherDraftUnappliedHint: 'Bạn vừa nhập mã nhưng chưa bấm Áp dụng — bấm "Áp dụng" hoặc xoá mã trước khi thanh toán.',
     invalidVoucher: 'Voucher không hợp lệ',
     discountUpdated: 'Ưu đãi đã được cập nhật theo giá mới nhất',
     planNotFound: 'Gói không tồn tại',

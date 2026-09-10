@@ -2593,6 +2593,7 @@ export default {
     applyingVoucher: '...',
     voucherApplied: 'Voucher applied',
     voucherAppliedHint: 'The code has been applied to your order — tap the button below to finish checkout.',
+    voucherDraftUnappliedHint: 'You typed a code but haven\'t applied it yet — tap "Apply" or clear it before checking out.',
     invalidVoucher: 'Invalid voucher',
     discountUpdated: 'Offer updated to the latest price',
     planNotFound: 'Plan not found',
