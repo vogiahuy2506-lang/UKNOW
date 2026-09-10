@@ -21,12 +21,23 @@ import en from '../en.js';
 
 const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// Khoá đang được gọi nhưng chưa có bản dịch, tính đến 10/09/2026. Phần lớn thuộc Marketplace —
-// tính năng lên route thật nhưng chưa ai dịch. Sửa được khoá nào thì xoá khoá đó khỏi đây.
+// Khoá đang được gọi nhưng chưa có bản dịch, tính đến 10/09/2026. Sửa được khoá nào thì xoá
+// khoá đó khỏi đây.
+//
+// LƯU Ý — phần lớn danh sách này KHÔNG phải bug thật, mà là điểm mù của chính phép quét bên
+// dưới: `detail.*`, `favorites.*`, `myListings.*`, `purchases.*`, `createListing.*` và
+// `common.loadError` đều đã có bản dịch đầy đủ — nhưng nằm ở `marketplace.<key>`, được gọi qua
+// `const t = useI18n('marketplace')` (tự thêm tiếp đầu ngữ lúc runtime). collectCallSites() chỉ
+// bắt chuỗi literal truyền vào `t(...)`, không biết `t` này đã bị scope hoá, nên resolveKey() đi
+// tìm nhầm ở gốc dict và luôn báo "vỡ". Đã xác minh runtime bằng cách đọc thẳng
+// marketplace.detail/favorites/myListings/purchases/createListing trong vi.js/en.js — đủ khoá,
+// đúng chỗ gọi dùng useI18n('marketplace'). Đừng "sửa" các khoá này bằng cách thêm một object
+// top-level trùng tên — sẽ tạo bản dịch song song không ai đọc tới. Muốn xoá thật khỏi danh sách
+// thì phải sửa collectCallSites()/resolveKey() để hiểu namespace scope — cố tình chưa làm ở đây
+// vì rủi ro làm yếu cổng chặn (có thể che luôn khoá vỡ thật) lớn hơn lợi ích rút gọn danh sách.
+// `leadFormConfig.xxx` là điểm mù khác — nằm trong một dòng COMMENT, không phải lời gọi thật.
 const KNOWN_MISSING = {
   vi: [
-  'accountProfileModal.addonsRemaining',
-  'accountProfileModal.addonsRolloverNote',
   'aiChatbot.wizardMaxRecipientsReached',
   'browse.clearSearch',
   'browse.close',
@@ -47,8 +58,6 @@ const KNOWN_MISSING = {
   'browse.viewList',
   'chatbot.clone',
   'chatbot.cloneIncludes',
-  'chatbot.cloneIncludesList',
-  'chatbot.cloneLimitReached',
   'chatbot.cloneNote',
   'chatbot.cloneSubtitle',
   'chatbot.emailPlaceholder',
@@ -56,7 +65,6 @@ const KNOWN_MISSING = {
   'common.cloning',
   'common.loadError',
   'common.loadFailed',
-  'common.logout',
   'common.syncing',
   'createListing.chatbotLoadError',
   'createListing.createError',
@@ -89,21 +97,15 @@ const KNOWN_MISSING = {
   'myListings.pauseSuccess',
   'myListings.publishError',
   'myListings.publishSuccess',
-  'pricing.actionBlocked',
   'purchases.emptyDesc',
   'purchases.emptyTitle',
   'purchases.loadError',
   'purchases.subtitle',
   'purchases.title',
-  'quickSend.failedRecipientCount',
-  'quickSend.retryFailed',
   'quickSend.retryQuotaBlocked',
-  'quickSend.retrySuccess',
   'quickSend.retrying',
   ],
   en: [
-  'accountProfileModal.addonsRemaining',
-  'accountProfileModal.addonsRolloverNote',
   'aiChatbot.wizardMaxRecipientsReached',
   'browse.clearSearch',
   'browse.close',
@@ -124,8 +126,6 @@ const KNOWN_MISSING = {
   'browse.viewList',
   'chatbot.clone',
   'chatbot.cloneIncludes',
-  'chatbot.cloneIncludesList',
-  'chatbot.cloneLimitReached',
   'chatbot.cloneNote',
   'chatbot.cloneSubtitle',
   'chatbot.emailPlaceholder',
@@ -133,7 +133,6 @@ const KNOWN_MISSING = {
   'common.cloning',
   'common.loadError',
   'common.loadFailed',
-  'common.logout',
   'common.syncing',
   'createListing.chatbotLoadError',
   'createListing.createError',
@@ -179,16 +178,12 @@ const KNOWN_MISSING = {
   'myListings.pauseSuccess',
   'myListings.publishError',
   'myListings.publishSuccess',
-  'pricing.actionBlocked',
   'purchases.emptyDesc',
   'purchases.emptyTitle',
   'purchases.loadError',
   'purchases.subtitle',
   'purchases.title',
-  'quickSend.failedRecipientCount',
-  'quickSend.retryFailed',
   'quickSend.retryQuotaBlocked',
-  'quickSend.retrySuccess',
   'quickSend.retrying',
   ],
 };

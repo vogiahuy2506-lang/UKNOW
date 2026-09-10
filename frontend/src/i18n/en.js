@@ -66,6 +66,7 @@ export default {
     sheetConfig: 'Sheet Config',
     connection: 'Connection',
     nodeName: 'Node name',
+    logout: 'Logout',
   },
 
   pagination: {
@@ -3349,6 +3350,8 @@ export default {
   chatbot: {
     cloneTitle: 'Share Chatbot',
     cloneSuccess: 'Chatbot shared with {name}. They can find it in their chatbot list.',
+    cloneIncludesList: 'Conversation settings, widget appearance, knowledge base, and trained embeddings.',
+    cloneLimitReached: 'The recipient has reached their chatbot limit.',
     zaloOaDescription: 'Connect Zalo Official Account to receive customer messages via Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',
@@ -4619,6 +4622,7 @@ export default {
     upgradePending: 'Pay difference',
     yearlyToMonthlyBlocked: 'Yearly active (>30d)',
     pendingDowngradeBlocked: 'Pending change exists',
+    actionBlocked: 'This plan change cannot be completed right now.',
     dayLossWarningTitle: 'Confirm Plan Upgrade',
     dayLossWarningDesc: 'You have {days} days remaining on your current plan. Upgrading immediately will start your new plan today without carrying over remaining days.',
     dayLossWarningConfirm: 'Proceed with upgrade',
@@ -5925,6 +5929,8 @@ export default {
     sendLimits: 'Send Limits',
     addonsTitle: 'Bought extra this cycle',
     addonsExpiryNote: 'Expires with this cycle ({date}); does not roll over',
+    addonsRemaining: '{n} left',
+    addonsRolloverNote: 'Add-ons apply within the current billing cycle and do not carry over to the next.',
     topupOrderTitle: 'Extra quota purchase',
     usingAddonsHint: 'Using purchased add-on quota',
     emailToday: 'Email today',
@@ -7814,6 +7820,9 @@ Feel free to ask me anything!`,
     attachments: 'Attachments',
     templateLoadDetailFailed: 'Failed to load template details (including attachments). Please re-select the template.',
     loadingTemplateDetail: 'Loading template details...',
+    failedRecipientCount: '{count} recipients failed',
+    retryFailed: 'Retry for {count} people',
+    retrySuccess: 'Successfully retried for {count} people.',
   },
 
   helpDocs: {

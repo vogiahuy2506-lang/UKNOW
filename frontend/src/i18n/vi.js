@@ -66,6 +66,7 @@ export default {
     sheetConfig: 'Cấu hình Sheet',
     connection: 'Kết nối',
     nodeName: 'Tên node',
+    logout: 'Đăng xuất',
   },
 
   pagination: {
@@ -3383,6 +3384,8 @@ export default {
   chatbot: {
     cloneTitle: 'Chia sẻ Chatbot',
     cloneSuccess: 'Đã chia sẻ chatbot cho {name}. Họ có thể tìm thấy trong danh sách chatbot của mình.',
+    cloneIncludesList: 'Cấu hình hội thoại, giao diện widget, knowledge base và embeddings đã huấn luyện.',
+    cloneLimitReached: 'Người nhận đã đạt giới hạn số lượng chatbot của họ.',
     zaloOaDescription: 'Kết nối Zalo Official Account để nhận tin nhắn khách hàng qua Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',
@@ -4668,6 +4671,7 @@ export default {
     upgradePending: 'Trả thêm chênh lệch',
     yearlyToMonthlyBlocked: 'Gói năm còn hạn',
     pendingDowngradeBlocked: 'Đã có lệnh hẹn',
+    actionBlocked: 'Không thể thực hiện thay đổi gói vào lúc này.',
     dayLossWarningTitle: 'Xác nhận nâng cấp gói',
     dayLossWarningDesc: 'Bạn còn {days} ngày sử dụng của gói hiện tại. Khi nâng cấp ngay, thời hạn gói mới sẽ được tính từ hôm nay và không cộng dồn số ngày cũ.',
     dayLossWarningConfirm: 'Đồng ý nâng cấp',
@@ -5979,6 +5983,8 @@ export default {
     sendLimits: 'Giới hạn gửi tin',
     addonsTitle: 'Đã mua thêm trong chu kỳ này',
     addonsExpiryNote: 'Hết hạn cùng chu kỳ ({date}), không cộng dồn sang tháng sau',
+    addonsRemaining: 'Còn lại {n}',
+    addonsRolloverNote: 'Phần mua thêm dùng trong chu kỳ hiện tại, không cộng dồn sang chu kỳ sau.',
     topupOrderTitle: 'Mua thêm hạn mức',
     usingAddonsHint: 'Đang dùng phần mua thêm',
     emailToday: 'Email hôm nay',
@@ -7789,6 +7795,9 @@ export default {
     attachments: 'Tệp đính kèm',
     templateLoadDetailFailed: 'Không thể tải chi tiết mẫu tin (kèm đính kèm). Vui lòng chọn lại mẫu.',
     loadingTemplateDetail: 'Đang tải chi tiết mẫu...',
+    failedRecipientCount: '{count} người nhận bị lỗi',
+    retryFailed: 'Gửi lại cho {count} người',
+    retrySuccess: 'Đã gửi lại thành công {count} người.',
   },
 
   helpDocs: {
