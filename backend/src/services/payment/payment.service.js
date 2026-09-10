@@ -262,13 +262,19 @@ export const createPaymentLink = async ({
         } else {
             expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
             try {
+                // Xây dựng description rõ ràng hơn để khách hàng nhận diện giao dịch
+                const planNameShort = plan.name || planCode || 'PACKAGE';
+                const description = `FounderAI ${planNameShort}`.substring(0, 25);
+
                 paymentLink = await payosClient.paymentRequests.create({
                     orderCode: Number(orderCode),
                     amount,
-                    description: `FOUNDERAI ${String(planCode || '').toUpperCase()}`.substring(0, 25),
+                    description,
                     returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
                     cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
                     expiredAt,
+                    buyerName: lockedUser.full_name || effectiveUserEmail.split('@')[0],
+                    buyerEmail: effectiveUserEmail,
                 });
             } catch (err) {
                 const message = String(err?.message || err?.desc || '').trim();
@@ -754,10 +760,12 @@ export const createCustomPaymentLink = async ({
                 paymentLink = await payosClient.paymentRequests.create({
                     orderCode: Number(orderCode),
                     amount,
-                    description: 'FOUNDERAI CUSTOM'.substring(0, 25),
+                    description: `FounderAI Custom`.substring(0, 25),
                     returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
                     cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
                     expiredAt,
+                    buyerName: lockedUser.full_name || effectiveUserEmail.split('@')[0],
+                    buyerEmail: effectiveUserEmail,
                 });
             } catch (err) {
                 const message = String(err?.message || err?.desc || '').trim();
