@@ -7359,7 +7359,7 @@ Feel free to ask me anything!`,
       opened: 'Opened: {opened}',
       totalRuns: 'Total runs: {total}',
       reachRate: 'Reach rate {rate} of {total} intended',
-      runBreakdown: '{total} total · {failed} failed · {running} running',
+      runBreakdown: '{total} total · {failed} failed · {completed} completed',
     },
     chart: {
       email: 'Email',

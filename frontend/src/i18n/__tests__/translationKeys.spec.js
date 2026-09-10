@@ -135,6 +135,41 @@ describe('i18n — mọi khoá được gọi phải có bản dịch', () => {
     expect(broken).toEqual([]);
   });
 
+  it('placeholder phải khớp giữa vi và en trên mọi khoá có ở cả hai ngôn ngữ', () => {
+    // Loại lỗi này đi qua được MỌI cổng chặn khác: khoá tồn tại ở cả hai ngôn ngữ nên phép quét
+    // trên bảo "có bản dịch", nhưng t() thay tham số theo TÊN — `value.replace(/\{(\w+)\}/g,
+    // (_, p) => params[p] ?? `{${p}}`)` (index.jsx) — nên một tên placeholder lệch sẽ in nguyên
+    // văn `{tên}` ra giao diện.
+    //
+    // Bắt được thật ngày 10/09/2026: `adminDeliveryMonitor.kpi.runBreakdown` dùng `{running}` ở
+    // en.js trong khi AdminDeliveryMonitorPage.jsx truyền `completed`, nên admin xem tiếng Anh
+    // thấy "12 total · 3 failed · {running} running". Bản tiếng Việt vẫn đúng, nên lỗi sống
+    // được vì gần như không ai đổi sang tiếng Anh.
+    const placeholders = (value) =>
+      typeof value === 'string' ? [...value.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',') : null;
+
+    const flatten = (obj, prefix = '', out = new Map()) => {
+      for (const [k, v] of Object.entries(obj ?? {})) {
+        const key = prefix ? `${prefix}.${k}` : k;
+        if (v && typeof v === 'object' && !Array.isArray(v)) flatten(v, key, out);
+        else out.set(key, v);
+      }
+      return out;
+    };
+
+    const viLeaves = flatten(vi);
+    const enLeaves = flatten(en);
+    const shared = [...viLeaves.keys()].filter((k) => enLeaves.has(k));
+    expect(shared.length).toBeGreaterThan(5000); // đối chứng dương cho chính phép so
+
+    const mismatched = shared
+      .map((key) => ({ key, viPh: placeholders(viLeaves.get(key)), enPh: placeholders(enLeaves.get(key)) }))
+      .filter(({ viPh, enPh }) => viPh !== null && enPh !== null && viPh !== enPh)
+      .map(({ key, viPh, enPh }) => `${key}  vi{${viPh}} ≠ en{${enPh}}`);
+
+    expect(mismatched).toEqual([]);
+  });
+
   it.each([
     ['vi', vi],
     ['en', en],
