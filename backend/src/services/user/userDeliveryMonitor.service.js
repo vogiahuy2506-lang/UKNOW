@@ -196,7 +196,10 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
       [{ count: 0 }]
     ),
     safeQuery(
-      `SELECT COUNT(*)::int AS count FROM zalo_accounts WHERE id_user = $1 AND is_active = true AND status = 'disconnected'`,
+      `SELECT COUNT(*)::int AS count FROM zalo_settings
+       WHERE id_user = $1
+         AND is_active = true
+         AND (status <> 'connected' OR restore_fail_count > 0)`,
       [userId],
       [{ count: 0 }]
     ),

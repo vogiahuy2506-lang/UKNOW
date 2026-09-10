@@ -158,6 +158,26 @@ describe('GET /api/delivery-monitor/overview — response shape', () => {
     expect(typeof health.zaloQuietHours.inQuietHours).toBe('boolean');
   });
 
+  it('health.zaloDisconnectedCount đọc từ zalo_settings của chính user (PR-1/PR-4: zalo_accounts rỗng trên production)', async () => {
+    const user = await createUser({ username: 'uZs' });
+    await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active, restore_fail_count)
+       VALUES ($1, 'Acc connected', 'connected', true, 0),
+              ($1, 'Acc disconnected', 'disconnected', true, 0),
+              ($1, 'Acc flaky-but-connected', 'connected', true, 3)`,
+      [user.id]
+    );
+
+    const token = await loginAs(user);
+    const res = await request(app)
+      .get('/api/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    // disconnected (active) + connected-nhưng-restore_fail_count>0 (active) = 2.
+    expect(res.body.data.health.zaloDisconnectedCount).toBe(2);
+  });
+
   it('timeline là mảng', async () => {
     const user = await createUser({ username: 'u1' });
     const token = await loginAs(user);
@@ -194,6 +214,36 @@ describe('Tenant isolation — /api/delivery-monitor/overview', () => {
       .get('/api/delivery-monitor/overview')
       .set('Authorization', `Bearer ${tokenB}`);
     expect(resB.body.data.summary.totalRuns).toBe(1);
+  });
+
+  it('health.zaloDisconnectedCount chỉ đếm tài khoản Zalo của chính user, không lộ sang user khác', async () => {
+    const userA = await createUser({ username: 'zsA' });
+    const userB = await createUser({ username: 'zsB' });
+
+    // User A có 2 tài khoản bất thường, user B chỉ có 1 tài khoản đang connected sạch.
+    await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active, restore_fail_count)
+       VALUES ($1, 'A disconnected 1', 'disconnected', true, 0),
+              ($1, 'A disconnected 2', 'disconnected', true, 0)`,
+      [userA.id]
+    );
+    await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active, restore_fail_count)
+       VALUES ($1, 'B connected', 'connected', true, 0)`,
+      [userB.id]
+    );
+
+    const tokenA = await loginAs(userA);
+    const resA = await request(app)
+      .get('/api/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${tokenA}`);
+    expect(resA.body.data.health.zaloDisconnectedCount).toBe(2);
+
+    const tokenB = await loginAs(userB);
+    const resB = await request(app)
+      .get('/api/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${tokenB}`);
+    expect(resB.body.data.health.zaloDisconnectedCount).toBe(0);
   });
 });
 
