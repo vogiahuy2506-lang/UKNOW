@@ -58,7 +58,7 @@ async function evaluateRule(rule) {
       if (m.rate > threshold) {
         return {
           measuredValue: m.rate,
-          message: `Tỉ lệ gửi thất bại ${(m.rate * 100).toFixed(1)}% (${m.failed}/${m.total}) trong ${windowMinutes} phút`,
+          message: `Tỉ lệ gửi thất bại ${(m.rate * 100).toFixed(1)}% (${m.failed}/${m.total} đã thử — không tính người chưa gửi) trong ${windowMinutes} phút`,
           payload: m,
         };
       }

@@ -148,21 +148,31 @@ export async function resolveEvent(eventId, resolvedBy) {
   return rows[0] || null;
 }
 
-/** Metric helpers for evaluators */
+/**
+ * Tỉ lệ gửi thất bại trên số ĐÃ THỬ (sent + failed), không phải toàn bộ danh sách người
+ * nhận (total_recipients) — chiến dịch danh sách càng dài thì total_recipients càng làm
+ * loãng tỉ lệ, che mất chuỗi gửi đang hỏng thật.
+ *
+ * Điều kiện lọc dùng CẢ status='running' LẪN completed_at trong cửa sổ, không lọc theo
+ * started_at: chiến dịch continuous bắt đầu một lần rồi chạy hàng tuần/hàng tháng — lọc
+ * theo started_at nghĩa là nó rơi khỏi cửa sổ sau window_minutes phút đầu tiên và không
+ * bao giờ được đánh giá lại, dù đang hỏng nặng ngay lúc này.
+ */
 export async function metricCampaignFailRate(windowMinutes, minRecipients = 20) {
   const { rows } = await db.query(
     `SELECT
-       COALESCE(SUM(total_recipients), 0)::int AS total,
+       COALESCE(SUM(successful_sends), 0)::int AS sent,
        COALESCE(SUM(failed_sends), 0)::int AS failed
      FROM campaign_runs
-     WHERE started_at >= NOW() - ($1 || ' minutes')::interval
-       AND COALESCE(total_recipients, 0) > 0`,
+     WHERE status = 'running'
+        OR completed_at >= NOW() - ($1 || ' minutes')::interval`,
     [String(windowMinutes)]
   );
-  const total = Number(rows[0]?.total || 0);
+  const sent = Number(rows[0]?.sent || 0);
   const failed = Number(rows[0]?.failed || 0);
-  if (total < minRecipients) return { rate: 0, total, failed, skipped: true };
-  return { rate: failed / total, total, failed, skipped: false };
+  const attempted = sent + failed;
+  if (attempted < minRecipients) return { rate: 0, total: attempted, failed, skipped: true };
+  return { rate: failed / attempted, total: attempted, failed, skipped: false };
 }
 
 export async function metricCampaignRunFailures(windowMinutes) {
