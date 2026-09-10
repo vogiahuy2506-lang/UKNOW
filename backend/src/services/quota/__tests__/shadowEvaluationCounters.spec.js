@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import {
   getShadowMismatchMetrics,
   recordShadowEvaluation,
@@ -109,5 +109,70 @@ describe('recordShadowEvaluation — bộ đếm phải tách được "khớp �
     const m = getShadowMismatchMetrics();
     expect(m.atomic_candidate_error).toBe(0);
     expect(m.both_denied).toBe(1);
+  });
+});
+
+/**
+ * Ngày 10/09/2026 một lượt lệch thật xảy ra trên production — legacy từ chối "2/1 email", atomic
+ * cho phép — và KHÔNG truy được nguyên nhân, vì dòng log chỉ có:
+ *
+ *   Shadow mismatch for user 1 (email): legacy=false, atomic=true, error=none
+ *
+ * Ba thứ thiếu khiến nó vô dụng: không có hạn mức và số đếm mà atomic đọc được (nên không phân
+ * biệt "đọc hụt hạn mức" với "đếm hụt lượt gửi"), và `user 1` in ra là `ownerContextId || userId`
+ * chứ không phải billing user mà atomic thật sự tính. Tiến trình chết là mất luôn manh mối.
+ *
+ * Test này ghim những trường đó phải có mặt trong log.
+ */
+describe('dòng log lệch phải mang đủ số để truy nguyên nhân trong MỘT lần tái hiện', () => {
+  let warnSpy;
+
+  beforeEach(() => {
+    resetShadowMismatchMetrics();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('in ra billingUserId, planId, dailyLimit và dailyCount của nhánh atomic', () => {
+    recordShadowEvaluation({
+      legacyAllowed: false,
+      atomicAllowed: true,
+      userId: 1,
+      billingUserId: 1,
+      channel: 'email',
+      atomicBillingUserId: 77,
+      atomicDiag: { billingUserId: 77, planId: 18, dailyLimit: 1, dailyCount: 2 },
+      legacyDetail: 'limitType=daily limit=1 count=2 billingUserId=1',
+    });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const line = warnSpy.mock.calls[0][0];
+
+    // Vế quyết định: billing user của atomic phải phân biệt được với userId trong ngữ cảnh.
+    expect(line).toContain('billingUserId=77');
+    expect(line).toContain('planId=18');
+    expect(line).toContain('dailyLimit=1');
+    expect(line).toContain('dailyCount=2');
+    expect(line).toContain('limitType=daily');
+    expect(line).toContain('legacy=false');
+    expect(line).toContain('atomic=true');
+  });
+
+  it('thiếu chẩn đoán thì in "?" chứ không in "undefined" hay ném lỗi', () => {
+    recordShadowEvaluation({
+      legacyAllowed: true, atomicAllowed: false, userId: 5, channel: 'zalo',
+    });
+
+    const line = warnSpy.mock.calls[0][0];
+    expect(line).not.toContain('undefined');
+    expect(line).toContain('dailyCount=?');
+  });
+
+  it('không lệch thì KHÔNG log gì', () => {
+    recordShadowEvaluation({ legacyAllowed: true, atomicAllowed: true, userId: 1, channel: 'email' });
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

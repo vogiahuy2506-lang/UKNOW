@@ -81,7 +81,10 @@ export function resetShadowMismatchMetrics() {
 /**
  * Record a shadow mode evaluation outcome.
  */
-export function recordShadowEvaluation({ legacyAllowed, atomicAllowed, atomicError, billingUserId, userId, channel }) {
+export function recordShadowEvaluation({
+  legacyAllowed, atomicAllowed, atomicError, billingUserId, userId, channel,
+  atomicBillingUserId = null, atomicDiag = null, legacyDetail = null,
+}) {
   _shadowMetrics.total++;
   // Distinguish true infrastructure/system errors from legitimate business limit denials (status 403)
   if (atomicError && (!atomicError.status || atomicError.status >= 500)) {
@@ -95,8 +98,17 @@ export function recordShadowEvaluation({ legacyAllowed, atomicAllowed, atomicErr
     } else if (!legacyAllowed && atomicAllowed) {
       _shadowMetrics.legacy_deny_atomic_allow++;
     }
+    // Dòng này là bằng chứng duy nhất còn lại sau khi tiến trình chết, nên phải mang đủ số để
+    // truy nguyên nhân trong MỘT lần tái hiện. Bản trước chỉ có true/false và một `billingUserId`
+    // vốn là `ownerContextId || userId` — không phải billing user mà nhánh atomic thật sự dùng,
+    // nên lượt lệch ngày 10/09/2026 không thể quy được về "đọc hụt hạn mức" hay "đếm hụt".
     console.warn(
-      `[SendQuota] Shadow mismatch for user ${billingUserId || userId} (${channel}): legacy=${legacyAllowed}, atomic=${atomicAllowed}, error=${atomicError?.message || 'none'}`
+      `[SendQuota] Shadow mismatch user=${userId} (${channel}): `
+      + `legacy=${legacyAllowed}${legacyDetail ? ` [${legacyDetail}]` : ''}, `
+      + `atomic=${atomicAllowed} [billingUserId=${atomicBillingUserId ?? '?'} `
+      + `planId=${atomicDiag?.planId ?? '?'} dailyLimit=${atomicDiag?.dailyLimit ?? '?'} `
+      + `dailyCount=${atomicDiag?.dailyCount ?? '?'}], `
+      + `ctxBillingUserId=${billingUserId ?? '?'}, error=${atomicError?.message || 'none'}`
     );
   } else if (legacyAllowed) {
     _shadowMetrics.both_allowed++;
@@ -388,6 +400,17 @@ export async function evaluateReservationQuotaPolicy(client, params) {
   }
 
   const dailyLimit = toInt(isEmail ? planInfo.daily_email_limit : planInfo.daily_zalo_limit);
+  // Ghi lại đúng thứ tier này ĐỌC ĐƯỢC, để khi shadow lệch còn phân biệt được "đọc hụt hạn mức"
+  // với "đếm hụt lượt đã gửi". Ngày 10/09/2026 một lượt lệch thật (legacy từ chối 2/1, atomic cho
+  // phép) không truy được nguyên nhân vì dòng log chỉ có legacy/atomic true-false, không có hai
+  // con số này — và `billingUserId` in ra lại là `ownerContextId || userId` chứ không phải
+  // billing user mà atomic thật sự dùng.
+  const diag = {
+    billingUserId,
+    planId: planInfo.plan_id ?? null,
+    dailyLimit,
+    dailyCount: null,
+  };
   if (dailyLimit !== null) {
     if (dailyLimit === 0) {
       const err = new Error(
@@ -406,6 +429,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
     const dailyCount = isEmail
       ? await countEmailSentTodayWithLedger(client, billingUserId, vnDayStart, vnDayEnd)
       : await countZaloSentTodayWithLedger(client, billingUserId, vnDayStart, vnDayEnd);
+    diag.dailyCount = dailyCount;
     if (dailyCount + quantity > dailyLimit) {
       const err = new Error(
         `Đã đạt giới hạn gửi ${channelLabel} trong ngày (${dailyCount}/${dailyLimit} ${unitLabel}). Hạn mức sẽ reset vào 00:00 ngày mai.`
@@ -511,6 +535,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
     allowed: true,
     walletItemKey,
     walletQuantity,
+    diag,
   };
 }
 
@@ -620,6 +645,8 @@ export async function reserveSendQuota(params, options = {}) {
 
     let atomicAllowed = false;
     let atomicError = null;
+    let atomicDiag = null;
+    let atomicBillingUserId = null;
     let shadowClient = null;
 
     try {
@@ -666,9 +693,12 @@ export async function reserveSendQuota(params, options = {}) {
         cycleEnd,
       });
       atomicAllowed = Boolean(policyResult?.allowed);
+      atomicDiag = policyResult?.diag ?? null;
+      atomicBillingUserId = shadowBillingUserId ?? null;
     } catch (candErr) {
       atomicAllowed = false;
       atomicError = candErr;
+      atomicBillingUserId = candErr?.billingUserId ?? null;
     } finally {
       if (shadowClient) {
         try {
@@ -685,6 +715,11 @@ export async function reserveSendQuota(params, options = {}) {
       billingUserId: ownerContextId || userId,
       userId,
       channel,
+      atomicBillingUserId,
+      atomicDiag,
+      legacyDetail: legacyResult
+        ? `limitType=${legacyResult.limitType ?? '?'} limit=${legacyResult.limit ?? '?'} count=${legacyResult.currentCount ?? '?'} billingUserId=${legacyResult.billingUserId ?? '?'}`
+        : (legacyError ? `error=${legacyError.message}` : null),
     });
 
     const isMismatch = legacyAllowed !== atomicAllowed;
