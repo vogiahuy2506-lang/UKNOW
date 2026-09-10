@@ -68,16 +68,43 @@ export function parseMigrationDiffEntries(rawDiffOutput) {
  * @param {Array<{ status: string, path: string, oldPath?: string }>} diffEntries
  * @returns {{ ok: boolean, failures: string[], addedFiles: string[] }}
  */
-export function checkMigrationImmutability(diffEntries) {
+export function checkMigrationImmutability(diffEntries, readFileFn = null) {
   const failures = [];
   const addedFiles = [];
+  const immutableEdits = [];
+  const allowEditRe = /allow-immutable-edit\s*:\s*([^\r\n*]*\S[^\r\n*]*)/i;
 
   for (const entry of diffEntries) {
     if (entry.status === 'M') {
-      failures.push(
-        `[Immutability] File migration đã tồn tại "${entry.path}" bị chỉnh sửa (Modified). ` +
-        `Các migration lịch sử là append-only và không được sửa sau khi đã release.`
-      );
+      // Cho phép sửa migration đã release khi file chứa annotation
+      // `-- allow-immutable-edit: <lý do>` ở 10 dòng đầu. Cửa thoát duy
+      // nhất để vá syntax bug ở file đã merge mà không có follow-up nào
+      // chạy được (file bị CI runner fail trước khi INSERT vào
+      // schema_migrations, runner halt ở đó, mọi migration sau đều kẹt).
+      let hasAllowEdit = false;
+      let editReason = null;
+      if (typeof readFileFn === 'function') {
+        try {
+          const fileContent = readFileFn(entry.path);
+          const firstLines = String(fileContent || '').split(/\r?\n/).slice(0, 10).join('\n');
+          const match = firstLines.match(allowEditRe);
+          if (match) {
+            hasAllowEdit = true;
+            editReason = match[1].trim();
+          }
+        } catch {
+          // Không đọc được file thì giữ hành vi mặc định (reject).
+        }
+      }
+      if (hasAllowEdit) {
+        immutableEdits.push({ file: entry.path, reason: editReason });
+      } else {
+        failures.push(
+          `[Immutability] File migration đã tồn tại "${entry.path}" bị chỉnh sửa (Modified). ` +
+          `Các migration lịch sử là append-only và không được sửa sau khi đã release.` +
+          ` Nếu fix syntax không thể tránh, thêm annotation '-- allow-immutable-edit: <lý do>' ở 10 dòng đầu.`
+        );
+      }
     } else if (entry.status === 'D') {
       failures.push(
         `[Immutability] File migration đã tồn tại "${entry.path}" bị xóa (Deleted). ` +
@@ -97,6 +124,7 @@ export function checkMigrationImmutability(diffEntries) {
     ok: failures.length === 0,
     failures,
     addedFiles,
+    immutableEdits,
   };
 }
 
@@ -460,11 +488,26 @@ export function lintMigrationSqlContent(sql, filename = '<unnamed>') {
   // Quét theo thứ tự source để một annotation chỉ có thể miễn một DDL ở ngay
   // phía sau. Dollar-quoted body cố ý không được miễn: `DO $$ EXECUTE ... $$`
   // không có ranh giới statement đủ chắc chắn cho annotation regex-based.
+  //
+  // Annotation ở header file (beforeCode=true) được phép miễn NHIỀU statement
+  // nguy hiểm trong cùng file khi lý do mang tính file-level (ví dụ: thêm
+  // "whatsapp_baileys" vào CHECK constraint yêu cầu DROP+ADD ngay trong cùng
+  // transaction; annotation chỉ có một thì logic "annotation-phải-đứng-ngay-trước"
+  // sẽ chỉ match 1 trong 2 statement và reject cái còn lại, dù operator đã
+  // ghi rõ lý do ngay từ đầu file).
   violations.sort((a, b) => a.offset - b.offset || a.line - b.line);
   const usedAnnotations = new Set();
   const appliedAnnotations = [];
+  const fileLevelAnnotation = validAnnotations.find((a) => a.beforeCode);
   const actionableViolations = violations.filter((violation) => {
     if (violation.source !== 'sql') return true;
+    // 1) Annotation ở header file: áp dụng cho tất cả violations sql trong file.
+    if (fileLevelAnnotation) {
+      appliedAnnotations.push(fileLevelAnnotation);
+      return false;
+    }
+    // 2) Annotation ngay-trước (legacy behavior, beforeCode=false thì không
+    // vào được đây vì đã bị filter ở validAnnotations).
     const annotationIndex = validAnnotations.findIndex((annotation, index) => (
       !usedAnnotations.has(index)
       && /^\s*$/.test(strippedSql.slice(annotation.endOffset, violation.offset))
@@ -500,7 +543,7 @@ export function lintMigrationSqlContent(sql, filename = '<unnamed>') {
  * }}
  */
 export function checkMigrationSafety({ diffEntries, readFileFn }) {
-  const immutability = checkMigrationImmutability(diffEntries);
+  const immutability = checkMigrationImmutability(diffEntries, readFileFn);
   const ddlViolations = [];
   const annotatedFiles = [];
 
