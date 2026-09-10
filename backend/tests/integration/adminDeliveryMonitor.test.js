@@ -146,6 +146,9 @@ describe('GET /api/admin/delivery-monitor/overview — response shape', () => {
     expect(health).toHaveProperty('zaloDisconnectedCount');
     expect(health).toHaveProperty('pendingRetryCount');
     expect(health).toHaveProperty('zaloSkipCount');
+    expect(health).toHaveProperty('unreachableByReason');
+    expect(Array.isArray(health.unreachableByReason)).toBe(true);
+    expect(health).toHaveProperty('strangerBlockedCount');
     expect(health).toHaveProperty('zaloQuietHours');
     expect(typeof health.zaloQuietHours.inQuietHours).toBe('boolean');
     expect(health.zaloQuietHours).toHaveProperty('start');
@@ -225,6 +228,110 @@ async function createCampaign({ userId, name = 'C', type = 'zalo' }) {
 function silentDropSignals(data) {
   return (data?.signals || []).filter((item) => item.code === ZALO_SILENT_DROP_SIGNAL_CODE);
 }
+
+describe('GET /api/admin/delivery-monitor/overview — PR-1: zaloDisconnectedCount đọc từ zalo_settings', () => {
+  it('zalo_accounts rỗng không ảnh hưởng — đếm từ zalo_settings.status/restore_fail_count', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin-zs1' });
+    const owner = await createUser({ role: 'user', username: 'owner-zs1' });
+
+    await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active, restore_fail_count)
+       VALUES ($1, 'Acc connected', 'connected', true, 0),
+              ($1, 'Acc disconnected', 'disconnected', true, 0),
+              ($1, 'Acc flaky-but-connected', 'connected', true, 2),
+              ($1, 'Acc inactive-disconnected', 'disconnected', false, 0)`,
+      [owner.id]
+    );
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    // Đếm: disconnected (active) + connected-nhưng-restore_fail_count>0 (active) = 2.
+    // Bỏ qua: connected sạch, và disconnected nhưng is_active=false.
+    expect(res.body.data.health.zaloDisconnectedCount).toBe(2);
+  });
+
+  it('không có tài khoản nào bất thường → 0, không vỡ', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin-zs2' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.health.zaloDisconnectedCount).toBe(0);
+  });
+});
+
+describe('GET /api/admin/delivery-monitor/overview — PR-1: unreachableByReason tách theo reason', () => {
+  it('tách 3 dòng theo reason, stranger_blocked nổi bật thành signal critical riêng', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin-unreach1' });
+    const owner = await createUser({ role: 'user', username: 'owner-unreach1' });
+
+    const phones = [
+      ...Array.from({ length: 3 }, (_, i) => [`090000000${i}`, 'invalid_format']),
+      ...Array.from({ length: 2 }, (_, i) => [`090000001${i}`, 'stranger_blocked']),
+      ['09000002', 'not_found'],
+    ];
+    for (const [phone, reason] of phones) {
+      await db.query(
+        `INSERT INTO zalo_unreachable_phones (id_user, phone_normalized, reason, updated_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [owner.id, phone, reason]
+      );
+    }
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const byReason = res.body.data.health.unreachableByReason;
+    const map = Object.fromEntries(byReason.map((r) => [r.reason, r.count]));
+    expect(map.invalid_format).toBe(3);
+    expect(map.stranger_blocked).toBe(2);
+    expect(map.not_found).toBe(1);
+    expect(res.body.data.health.strangerBlockedCount).toBe(2);
+
+    const strangerSignal = res.body.data.signals.find((s) => s.code === 'stranger_blocked_detected');
+    expect(strangerSignal).toMatchObject({ level: 'critical', value: 2 });
+  });
+
+  it('không có dữ liệu → mảng rỗng, không có signal stranger_blocked, không vỡ', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin-unreach2' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.health.unreachableByReason).toEqual([]);
+    expect(res.body.data.health.strangerBlockedCount).toBe(0);
+    expect(res.body.data.signals.find((s) => s.code === 'stranger_blocked_detected')).toBeUndefined();
+  });
+
+  it('reason NULL/rỗng được gộp vào unknown, không làm vỡ group by', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin-unreach3' });
+    const owner = await createUser({ role: 'user', username: 'owner-unreach3' });
+    await db.query(
+      `INSERT INTO zalo_unreachable_phones (id_user, phone_normalized, reason, updated_at)
+       VALUES ($1, '0900000099', NULL, NOW())`,
+      [owner.id]
+    );
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/delivery-monitor/overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const byReason = res.body.data.health.unreachableByReason;
+    expect(byReason).toEqual([{ reason: 'unknown', count: 1 }]);
+  });
+});
 
 describe('GET /api/admin/delivery-monitor/overview — Zalo silent drop', () => {
   afterAll(async () => {

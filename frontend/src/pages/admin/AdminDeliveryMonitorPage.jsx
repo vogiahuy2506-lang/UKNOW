@@ -208,6 +208,41 @@ const AdminHealthPanel = ({ health, t }) => {
   );
 };
 
+const UnreachableReasonPanel = ({ unreachableByReason, t }) => (
+  <div className="card p-5">
+    <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.unreachableTitle')}</h2>
+    {!unreachableByReason?.length ? (
+      <p className="text-sm text-gray-400">{t('adminDeliveryMonitor.unreachableEmpty')}</p>
+    ) : (
+      <div className="space-y-2">
+        {unreachableByReason.map((row) => {
+          const isStrangerBlocked = row.reason === 'stranger_blocked';
+          return (
+            <div
+              key={row.reason}
+              className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+                isStrangerBlocked ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'
+              }`}
+            >
+              <div className="min-w-0">
+                <p className={`font-semibold ${isStrangerBlocked ? 'text-red-700' : 'text-gray-900'}`}>
+                  {t(`adminDeliveryMonitor.unreachableReason.${row.reason}`)}
+                </p>
+                <p className={`text-xs ${isStrangerBlocked ? 'text-red-600' : 'text-gray-400'}`}>
+                  {t(`adminDeliveryMonitor.unreachableReason.${row.reason}Hint`)}
+                </p>
+              </div>
+              <span className={`shrink-0 text-lg font-bold ${isStrangerBlocked ? 'text-red-700' : 'text-gray-900'}`}>
+                {fmt(row.count)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+);
+
 const SignalsPanel = ({ signals, t }) => (
   <div className="card p-5">
     <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.signals')}</h2>
@@ -522,6 +557,8 @@ export default function AdminDeliveryMonitorPage() {
       </div>
 
       <AdminHealthPanel health={data?.health} t={t} />
+
+      <UnreachableReasonPanel unreachableByReason={data?.health?.unreachableByReason} t={t} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <QueuePanel queue={data?.queue} redis={data?.redis} t={t} />

@@ -76,7 +76,7 @@ const normalizeChannelSummary = ({ sentRows, failedRows, openedClickedRows }) =>
   });
 };
 
-const buildSignals = ({ summary, queueMetrics, stalledRuns, unreachableCount, failureGroups }) => {
+const buildSignals = ({ summary, queueMetrics, stalledRuns, unreachableCount, strangerBlockedCount, failureGroups }) => {
   const signals = [];
   const pendingQueue = toNumber(queueMetrics?.waiting) + toNumber(queueMetrics?.active) + toNumber(queueMetrics?.delayed);
   const failedRate = summary.attempts > 0 ? (summary.failed / summary.attempts) * 100 : 0;
@@ -107,6 +107,15 @@ const buildSignals = ({ summary, queueMetrics, stalledRuns, unreachableCount, fa
       level: 'warning',
       code: 'many_unreachable_zalo',
       value: unreachableCount,
+    });
+  }
+  // stranger_blocked không phải lỗi gửi thường — Zalo đang chặn nhắn người lạ, dấu hiệu
+  // tài khoản sắp bị khoá. Nổi bật riêng (critical), không gộp vào many_unreachable_zalo.
+  if (strangerBlockedCount > 0) {
+    signals.push({
+      level: 'critical',
+      code: 'stranger_blocked_detected',
+      value: strangerBlockedCount,
     });
   }
   if (failureGroups.some((item) => item.category === 'provider_block' || item.category === 'rate_limit')) {
@@ -261,11 +270,13 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
       params
     ),
     safeQuery(
-      `SELECT COUNT(*)::int AS count
+      `SELECT COALESCE(NULLIF(reason, ''), 'unknown') AS reason, COUNT(*)::int AS count
        FROM zalo_unreachable_phones
-       WHERE updated_at >= NOW() - ($1::int * INTERVAL '1 day')`,
+       WHERE updated_at >= NOW() - ($1::int * INTERVAL '1 day')
+       GROUP BY COALESCE(NULLIF(reason, ''), 'unknown')
+       ORDER BY count DESC`,
       params,
-      [{ count: 0 }]
+      []
     ),
     safeQuery(
       `SELECT COUNT(*)::int AS count FROM customers WHERE email_hard_bounced = true`,
@@ -273,7 +284,9 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
       [{ count: 0 }]
     ),
     safeQuery(
-      `SELECT COUNT(*)::int AS count FROM zalo_accounts WHERE is_active = true AND status = 'disconnected'`,
+      `SELECT COUNT(*)::int AS count FROM zalo_settings
+       WHERE is_active = true
+         AND (status <> 'connected' OR restore_fail_count > 0)`,
       [],
       [{ count: 0 }]
     ),
@@ -379,7 +392,14 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
   const stalledRuns = topRuns.filter(
     (row) => row.status === 'running' && row.durationSeconds >= 60 * 60
   ).length;
-  const unreachableCount = toNumber(unreachableRows[0]?.count);
+  // unreachableRows giờ đã GROUP BY reason — ba loại đòi ba cách xử lý khác nhau
+  // (invalid_format: dọn danh sách, stranger_blocked: rủi ro khoá tài khoản, not_found: bỏ qua).
+  const unreachableByReason = unreachableRows.map((row) => ({
+    reason: row.reason,
+    count: toNumber(row.count),
+  }));
+  const unreachableCount = unreachableByReason.reduce((sum, row) => sum + row.count, 0);
+  const strangerBlockedCount = unreachableByReason.find((row) => row.reason === 'stranger_blocked')?.count || 0;
   const hardBounceCount = toNumber(hardBounceRows[0]?.count);
   const zaloDisconnectedCount = toNumber(zaloDisconnectedRows[0]?.count);
   const pendingRetryCount = toNumber(pendingRetryRows[0]?.count);
@@ -403,12 +423,14 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     queue: queueMetrics || { available: false },
     redis: redisStats || { available: false },
     signals: [
-      ...buildSignals({ summary, queueMetrics, stalledRuns, unreachableCount, failureGroups }),
+      ...buildSignals({ summary, queueMetrics, stalledRuns, unreachableCount, strangerBlockedCount, failureGroups }),
       ...buildZaloSilentDropSignals(silentDropAccountRows),
     ],
     health: {
       hardBounceCount,
       zaloDisconnectedCount,
+      unreachableByReason,
+      strangerBlockedCount,
       pendingRetryCount,
       zaloSkipCount,
       zaloQuietHours: { inQuietHours, start: quietStart, end: quietEnd, currentHourVN },
