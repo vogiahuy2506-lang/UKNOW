@@ -2627,6 +2627,15 @@ export default {
     trustBadge1: 'Secure payment via PayOS, 256-bit SSL encryption',
     trustBadge2: 'Plan activates instantly after payment',
     trustBadge3: '24/7 support team ready to help',
+    // Terms consent (required by Ministry of Industry and Trade)
+    termsRequired: 'Please read and agree to the terms before continuing',
+    termsConsentLabel: 'I have read and agree to the',
+    termsLink: 'Terms of Use',
+    pricingPolicyLink: 'Pricing Policy',
+    paymentPolicyLink: 'Payment Policy',
+    refundPolicyLink: 'Refund Policy',
+    privacyPolicyLink: 'Privacy Policy',
+    dpaLink: 'Data Processing Agreement',
     // QR section
     qrHintTitle: 'Open your banking app to scan',
     qrHintSubtitle: 'Camera unavailable? Scroll down and enter details manually.',
@@ -6927,6 +6936,11 @@ Feel free to ask me anything!`,
     quickLinks: 'Quick Links',
     register: 'Register',
     login: 'Login',
+    companyName: 'DIGISO JOINT STOCK COMPANY',
+    companyAddress: 'Room I101B, Software Technology Park, VNU-HCM, Vo Truong Toan Street, Quarter 6, Linh Xuan Ward, Ho Chi Minh City, Vietnam',
+    companyRep: 'Representative: Nguyen Minh Huy',
+    companyLicense: 'Business Registration No. 0317670711 issued by the Department of Planning and Investment of Ho Chi Minh City',
+    companyPhone: 'Hotline: 0877 909 606',
   },
 
   // Contact Page

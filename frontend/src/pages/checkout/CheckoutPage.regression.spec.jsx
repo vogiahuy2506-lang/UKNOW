@@ -33,6 +33,12 @@ const applyCode = async (code = voucher.code) => {
   fireEvent.click(screen.getByRole('button', { name: 'checkout.applyVoucher' }));
   await screen.findByRole('button', { name: 'checkout.removeCode' });
 };
+const acceptTerms = () => {
+  const checkbox = document.querySelector('input[type="checkbox"]');
+  if (checkbox && !checkbox.checked) {
+    fireEvent.click(checkbox);
+  }
+};
 
 describe('CheckoutPage — voucher/submit race guards + zero-cost confirm', () => {
   beforeEach(() => {
@@ -60,6 +66,7 @@ describe('CheckoutPage — voucher/submit race guards + zero-cost confirm', () =
   it('bấm xác nhận đơn 0 đồng gửi đúng plan/kỳ hạn/mã rồi mới điều hướng success', async () => {
     render(<CheckoutPage />);
     await applyCode();
+    acceptTerms();
     fireEvent.click(screen.getByRole('button', { name: /checkout.confirmZeroCost/ }));
     await waitFor(() => expect(m.navigate).toHaveBeenCalledWith('/payment-success', expect.objectContaining({ state: { orderCode: 999, fromCheckout: true } })));
     expect(m.create).toHaveBeenCalledWith(expect.objectContaining({ planCode: 'professional', billingPeriod: 'yearly', explicitVoucherCode: voucher.code }));
@@ -70,6 +77,7 @@ describe('CheckoutPage — voucher/submit race guards + zero-cost confirm', () =
     m.create.mockRejectedValue({ response: { status: 409, data: { message: 'DIAGNOSTIC_PLAN_BLOCKED' } } });
     render(<CheckoutPage />);
     await applyCode();
+    acceptTerms();
     fireEvent.click(screen.getByRole('button', { name: /checkout.confirmZeroCost/ }));
     await screen.findByText('DIAGNOSTIC_PLAN_BLOCKED');
     expect(m.navigate).not.toHaveBeenCalled();
@@ -94,6 +102,7 @@ describe('CheckoutPage — voucher/submit race guards + zero-cost confirm', () =
     await screen.findByRole('button', { name: 'checkout.removeCode' });
 
     // Giá đã về 0 sau khi validate xong — CTA đổi nhãn, user phải bấm lại để xác nhận thật.
+    acceptTerms();
     const confirmBtn = screen.getByRole('button', { name: /checkout.confirmZeroCost/ });
     expect(confirmBtn).not.toBeDisabled();
     fireEvent.click(confirmBtn);
@@ -118,6 +127,7 @@ describe('CheckoutPage — voucher/submit race guards + zero-cost confirm', () =
     m.create.mockReturnValue(new Promise((resolve) => { finishCreate = resolve; }));
     render(<CheckoutPage />);
     await applyCode();
+    acceptTerms();
     const confirmBtn = screen.getByRole('button', { name: /checkout.confirmZeroCost/ });
     fireEvent.click(confirmBtn);
     fireEvent.click(confirmBtn); // nút đã disabled ngay sau lần 1 — no-op
