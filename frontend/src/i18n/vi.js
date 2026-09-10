@@ -59,6 +59,9 @@ export default {
     copyCode: 'Sao chép mã',
     retry: 'Thử lại',
     saving: 'Đang lưu...',
+    cloning: 'Đang chia sẻ...',
+    syncing: 'Đang đồng bộ...',
+    loadFailed: 'Không thể tải dữ liệu',
     selectOption: 'Chọn...',
     addTag: 'Thêm tag...',
     selectFirst: 'Vui lòng chọn {name} trước',
@@ -164,6 +167,7 @@ export default {
     },
     createListing: {
       loadError: 'Không thể tải danh sách chiến dịch',
+      chatbotLoadError: 'Không thể tải danh sách chatbot',
       invalidForm: 'Vui lòng kiểm tra lại thông tin',
       createSuccess: 'Tạo template thành công!',
       createError: 'Không thể tạo template',
@@ -3383,9 +3387,15 @@ export default {
 
   chatbot: {
     cloneTitle: 'Chia sẻ Chatbot',
+    cloneSubtitle: 'Mời đồng đội cùng sử dụng chatbot này',
     cloneSuccess: 'Đã chia sẻ chatbot cho {name}. Họ có thể tìm thấy trong danh sách chatbot của mình.',
+    cloneIncludes: 'Bản sao bao gồm',
     cloneIncludesList: 'Cấu hình hội thoại, giao diện widget, knowledge base và embeddings đã huấn luyện.',
     cloneLimitReached: 'Người nhận đã đạt giới hạn số lượng chatbot của họ.',
+    recipientEmail: 'Email người nhận',
+    emailPlaceholder: 'nguyen@example.com',
+    cloneNote: 'Người nhận phải có tài khoản trong hệ thống.',
+    clone: 'Chia sẻ ngay',
     zaloOaDescription: 'Kết nối Zalo Official Account để nhận tin nhắn khách hàng qua Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',
@@ -3864,6 +3874,7 @@ export default {
     wizardSelectedCount: 'Đã chọn: {count} / {max}',
     wizardUseFriends: 'Dùng {count} bạn bè đã chọn',
     wizardReSync: 'Đồng bộ lại',
+    wizardMaxRecipientsReached: 'Tối đa {max} người nhận.',
     wizardLastSynced: 'Đồng bộ gần nhất',
     wizardNoFriendsFound: 'Chưa có bạn bè nào trong danh bạ đã đồng bộ.',
     wizardClearSearch: 'Xoá từ khoá',
@@ -7798,6 +7809,8 @@ export default {
     failedRecipientCount: '{count} người nhận bị lỗi',
     retryFailed: 'Gửi lại cho {count} người',
     retrySuccess: 'Đã gửi lại thành công {count} người.',
+    retryQuotaBlocked: 'Đã vượt hạn mức — không thể gửi lại.',
+    retrying: 'Đang gửi lại…',
   },
 
   helpDocs: {

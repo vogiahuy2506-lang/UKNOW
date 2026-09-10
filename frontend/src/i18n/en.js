@@ -59,6 +59,9 @@ export default {
     copyCode: 'Copy code',
     retry: 'Retry',
     saving: 'Saving...',
+    cloning: 'Sharing...',
+    syncing: 'Syncing...',
+    loadFailed: 'Could not load data',
     selectOption: 'Select...',
     addTag: 'Add tag...',
     selectFirst: 'Please select {name} first',
@@ -164,6 +167,7 @@ export default {
     },
     createListing: {
       loadError: 'Failed to load campaigns',
+      chatbotLoadError: 'Could not load chatbot list',
       invalidForm: 'Please check your input',
       createSuccess: 'Listing created successfully!',
       createError: 'Could not create listing',
@@ -3349,9 +3353,15 @@ export default {
 
   chatbot: {
     cloneTitle: 'Share Chatbot',
+    cloneSubtitle: 'Invite teammates to use this chatbot',
     cloneSuccess: 'Chatbot shared with {name}. They can find it in their chatbot list.',
+    cloneIncludes: 'Copy includes',
     cloneIncludesList: 'Conversation settings, widget appearance, knowledge base, and trained embeddings.',
     cloneLimitReached: 'The recipient has reached their chatbot limit.',
+    recipientEmail: 'Recipient email',
+    emailPlaceholder: 'jane@example.com',
+    cloneNote: 'The recipient must have an account on the platform.',
+    clone: 'Share now',
     zaloOaDescription: 'Connect Zalo Official Account to receive customer messages via Zalo.',
     knowledgeBase: {
       title: 'Train Your AI',
@@ -3826,6 +3836,7 @@ export default {
     wizardSelectedCount: 'Selected: {count} / {max}',
     wizardUseFriends: 'Use {count} selected friends',
     wizardReSync: 'Re-sync',
+    wizardMaxRecipientsReached: 'Maximum {max} recipients.',
     wizardLastSynced: 'Last synced',
     wizardNoFriendsFound: 'No synced friends found in contact list.',
     wizardClearSearch: 'Clear search',
@@ -4073,6 +4084,21 @@ export default {
     exportSuccess: 'Excel file downloaded',
     exportFailed: 'Could not export Excel',
     exportTruncated: 'Excel export was truncated at the row limit.',
+    // Drawer UI
+    closeFilter: 'Close filter',
+    searchOptionPlaceholder: 'Search in list…',
+    clearThis: 'Clear this group',
+    noOptionsMatch: 'No options match.',
+    loadingOptions: 'Loading options…',
+    loadingCustomFields: 'Loading custom fields…',
+    presetToday: 'Today',
+    preset7Days: 'Last 7 days',
+    preset30Days: 'Last 30 days',
+    // Quick search (FE-only, current page)
+    quickSearchPlaceholder: 'Search name, email or phone…',
+    clearSearch: 'Clear search',
+    noMatchInPage: 'No rows on this page match "{query}".',
+    showingOf: 'showing {shown}/{total}',
   },
 
   landingInbox: {
@@ -7823,6 +7849,8 @@ Feel free to ask me anything!`,
     failedRecipientCount: '{count} recipients failed',
     retryFailed: 'Retry for {count} people',
     retrySuccess: 'Successfully retried for {count} people.',
+    retryQuotaBlocked: 'Quota exceeded — cannot retry.',
+    retrying: 'Retrying…',
   },
 
   helpDocs: {

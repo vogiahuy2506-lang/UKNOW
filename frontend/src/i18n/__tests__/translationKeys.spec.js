@@ -44,56 +44,15 @@ import en from '../en.js';
 
 const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// Khoá đang được gọi nhưng chưa có bản dịch, tính đến 10/09/2026. Sửa được khoá nào thì xoá
-// khoá đó khỏi đây — nhánh test thứ ba bên dưới sẽ đỏ nếu quên.
-//
-// Cả 13 khoá `vi` đều có sẵn `|| 'chữ tiếng Việt'` ngay tại chỗ gọi, nên hiện KHÔNG có khoá nào
-// hiện chuỗi thô trong giao diện tiếng Việt; phần nợ còn lại thuần là bản tiếng Anh (26 khoá,
-// trong đó 13 khoá `landingLeads.*` đã có trong vi.js và chỉ thiếu en.js).
+// Khoá đang được gọi nhưng chưa có bản dịch. Sửa được khoá nào thì xoá khoá đó khỏi đây —
+// nhánh test thứ ba bên dưới sẽ đỏ nếu quên. Rỗng kể từ 10/09/2026: 13 khoá thiếu cả vi/en
+// (chatbot.clone/cloneIncludes/cloneNote/cloneSubtitle/emailPlaceholder/recipientEmail,
+// common.cloning/loadFailed/syncing, createListing.chatbotLoadError,
+// quickSend.retryQuotaBlocked/retrying, aiChatbot.wizardMaxRecipientsReached) đã có bản dịch;
+// 13 khoá landingLeads.* vốn chỉ thiếu en.js cũng đã thêm.
 const KNOWN_MISSING = {
-  vi: [
-    'aiChatbot.wizardMaxRecipientsReached',
-    'chatbot.clone',
-    'chatbot.cloneIncludes',
-    'chatbot.cloneNote',
-    'chatbot.cloneSubtitle',
-    'chatbot.emailPlaceholder',
-    'chatbot.recipientEmail',
-    'common.cloning',
-    'common.loadFailed',
-    'common.syncing',
-    'createListing.chatbotLoadError',
-    'quickSend.retryQuotaBlocked',
-    'quickSend.retrying',
-  ],
-  en: [
-    'aiChatbot.wizardMaxRecipientsReached',
-    'chatbot.clone',
-    'chatbot.cloneIncludes',
-    'chatbot.cloneNote',
-    'chatbot.cloneSubtitle',
-    'chatbot.emailPlaceholder',
-    'chatbot.recipientEmail',
-    'common.cloning',
-    'common.loadFailed',
-    'common.syncing',
-    'createListing.chatbotLoadError',
-    'landingLeads.clearSearch',
-    'landingLeads.clearThis',
-    'landingLeads.closeFilter',
-    'landingLeads.loadingCustomFields',
-    'landingLeads.loadingOptions',
-    'landingLeads.noMatchInPage',
-    'landingLeads.noOptionsMatch',
-    'landingLeads.preset30Days',
-    'landingLeads.preset7Days',
-    'landingLeads.presetToday',
-    'landingLeads.quickSearchPlaceholder',
-    'landingLeads.searchOptionPlaceholder',
-    'landingLeads.showingOf',
-    'quickSend.retryQuotaBlocked',
-    'quickSend.retrying',
-  ],
+  vi: [],
+  en: [],
 };
 
 /** `const t = useI18n('marketplace')` — namespace được thêm vào trước mọi khoá của file đó. */
