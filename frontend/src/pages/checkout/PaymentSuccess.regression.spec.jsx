@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   status: vi.fn(),
   invoice: vi.fn(),
   refresh: vi.fn(),
+  fetchAiCredits: vi.fn(),
   isAuthenticated: true,
 }));
 vi.mock('react-router-dom', () => ({
@@ -16,7 +17,11 @@ vi.mock('react-router-dom', () => ({
   useSearchParams: () => [new URLSearchParams('orderCode=999')],
 }));
 vi.mock('../../stores/authStore', () => ({
-  useAuthStore: (s) => s({ isAuthenticated: m.isAuthenticated, refreshCurrentUser: m.refresh }),
+  useAuthStore: (s) => s({
+    isAuthenticated: m.isAuthenticated,
+    refreshCurrentUser: m.refresh,
+    fetchAiCredits: m.fetchAiCredits,
+  }),
 }));
 vi.mock('../../i18n', () => ({ useI18n: () => ({ t: (k) => k }) }));
 vi.mock('../../features/checkout/services/checkoutApi.service', () => ({
@@ -31,6 +36,7 @@ describe('PaymentSuccess — tự đồng bộ tài khoản sau khi xác nhận 
     m.status.mockResolvedValue({ status: 'success', amount: 0 });
     m.invoice.mockResolvedValue({ hasInvoice: false });
     m.refresh.mockResolvedValue({ success: true, user: { id: 1, role: 'user' } });
+    m.fetchAiCredits.mockResolvedValue({ used: 0, limit: null });
   });
   afterEach(cleanup);
 
@@ -80,5 +86,18 @@ describe('PaymentSuccess — tự đồng bộ tài khoản sau khi xác nhận 
     render(<PaymentSuccess />);
     await waitFor(() => expect(m.navigate).toHaveBeenCalledWith('/checkout', { replace: true }));
     expect(m.refresh).not.toHaveBeenCalled();
+  });
+
+  it('đồng bộ thành công cũng đồng bộ quota/billing bằng fetchAiCredits() — không chỉ user (finding review)', async () => {
+    render(<PaymentSuccess />);
+    await screen.findByRole('button', { name: 'paymentSuccess.goToDashboard' });
+    expect(m.fetchAiCredits).toHaveBeenCalled();
+  });
+
+  it('fetchAiCredits lỗi KHÔNG rollback accountSync=done (user đã refresh thành công là đủ)', async () => {
+    m.fetchAiCredits.mockRejectedValue(new Error('quota fetch down'));
+    render(<PaymentSuccess />);
+    // Vẫn phải đi tới trạng thái done (nút goToDashboard xuất hiện) dù fetchAiCredits lỗi.
+    await screen.findByRole('button', { name: 'paymentSuccess.goToDashboard' });
   });
 });

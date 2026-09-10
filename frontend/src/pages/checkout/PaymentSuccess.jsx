@@ -35,6 +35,7 @@ const PaymentSuccessPage = () => {
     const location = useLocation();
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
     const refreshCurrentUser = useAuthStore((state) => state.refreshCurrentUser);
+    const fetchAiCredits = useAuthStore((state) => state.fetchAiCredits);
 
     const [verified, setVerified] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -95,16 +96,22 @@ const PaymentSuccessPage = () => {
             if (cancelled) return;
             setAccountSync(result?.success ? 'done' : 'failed');
         });
+        // Đồng bộ quota/billing (aiCredits, sendUsage, addons, billingStatus) song song bằng
+        // action hiện hữu — dùng chung /users/profile, không ghép DTO tuỳ tiện vào user.
+        // Lỗi ở đây KHÔNG được rollback trạng thái user vừa refreshCurrentUser() thành công;
+        // quota là phụ, user mới đồng bộ được mới là điều kiện cần cho accountSync='done'.
+        fetchAiCredits().catch(() => {});
         return () => {
             cancelled = true;
         };
-    }, [verified, isAuthenticated, refreshCurrentUser]);
+    }, [verified, isAuthenticated, refreshCurrentUser, fetchAiCredits]);
 
     const handleRetrySync = () => {
         setAccountSync('syncing');
         refreshCurrentUser().then((result) => {
             setAccountSync(result?.success ? 'done' : 'failed');
         });
+        fetchAiCredits().catch(() => {});
     };
 
     useEffect(() => {
