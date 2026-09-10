@@ -10,5 +10,6 @@ router.use(requireRole('admin'));
 
 router.get('/overview', ctrl.overview);
 router.get('/logs', ctrl.logs);
+router.get('/send-quota-shadow', ctrl.sendQuotaShadow);
 
 export default router;

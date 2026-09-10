@@ -11,6 +11,7 @@
  *   - GET /logs — trả available:false khi Docker socket không có
  *   - GET /logs?service=invalid → 400
  *   - GET /logs?service=frontend → valid service, trả available:false
+ *   - GET /send-quota-shadow — số liệu đối chiếu shadow + mốc thời gian tiến trình
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
@@ -235,5 +236,60 @@ describe('GET /api/admin/system/logs', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveProperty('container');
+  });
+});
+
+// ─── GET /send-quota-shadow ──────────────────────────────────────────────────
+describe('GET /api/admin/system/send-quota-shadow', () => {
+  it('không có token → 401, user thường → 403', async () => {
+    const anon = await request(app).get('/api/admin/system/send-quota-shadow');
+    expect(anon.status).toBe(401);
+
+    const user = await createUser({ role: 'user', username: 'plain' });
+    const userToken = await loginAs(user);
+    const forbidden = await request(app)
+      .get('/api/admin/system/send-quota-shadow')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(forbidden.status).toBe(403);
+  });
+
+  it('admin → 200 kèm mode, sources và đủ 5 bộ đếm', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/system/send-quota-shadow')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const { mode, sources, metrics } = res.body.data;
+
+    expect(typeof mode).toBe('string');
+    expect(sources === null || typeof sources === 'string').toBe(true);
+    for (const field of [
+      'total',
+      'mismatches',
+      'legacy_allow_atomic_deny',
+      'legacy_deny_atomic_allow',
+      'atomic_candidate_error',
+    ]) {
+      expect(typeof metrics[field]).toBe('number');
+    }
+  });
+
+  it('trả processStartedAt hợp lệ — không có nó thì "total" không đọc được', async () => {
+    // `total` là bộ đếm trong bộ nhớ tiến trình, mất sạch mỗi lần deploy. Con số chỉ có nghĩa
+    // khi biết nó đếm từ mốc nào; thiếu mốc thì "0 lệch" không phân biệt được với "chưa đo gì".
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/system/send-quota-shadow')
+      .set('Authorization', `Bearer ${token}`);
+
+    const { processStartedAt, uptimeSeconds } = res.body.data;
+    expect(new Date(processStartedAt).toISOString()).toBe(processStartedAt);
+    expect(new Date(processStartedAt).getTime()).toBeLessThanOrEqual(Date.now());
+    expect(typeof uptimeSeconds).toBe('number');
+    expect(uptimeSeconds).toBeGreaterThanOrEqual(0);
   });
 });
