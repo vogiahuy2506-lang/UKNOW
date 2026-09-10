@@ -18,5 +18,23 @@ setup('authenticate', async ({ page }) => {
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await page.waitForURL(/\/app(\/|$)/, { timeout: 20_000 });
   await expect(page.locator('aside').first()).toBeVisible();
+
+  // Đóng modal nếu có (AccountProfileModal hoặc bất kỳ modal nào block UI)
+  const closeModal = async () => {
+    const overlay = page.locator('.modal-overlay').first();
+    if (await overlay.isVisible({ timeout: 500 }).catch(() => false)) {
+      // Click nút đóng nếu có
+      const closeBtn = overlay.locator('button').filter({ hasText: /Đóng|Close|X|×/i }).first();
+      if (await closeBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+        await closeBtn.click();
+        await page.waitForTimeout(300);
+      }
+      // Escape key cũng đóng được modal
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+    }
+  };
+  await closeModal();
+
   await page.context().storageState({ path: AUTH_FILE });
 });
