@@ -7,6 +7,12 @@ import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import dotenv from 'dotenv';
+// Module thuần (chỉ import crypto), là NGUỒN DUY NHẤT của phiên bản/hash văn bản pháp lý —
+// seed lấy từ đây để dòng đồng ý giống dòng thật do recordConsents() ghi.
+import {
+  getLegalDocument,
+  REQUIRED_REGISTRATION_PURPOSES,
+} from '../../backend/src/config/legalDocuments.config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENV_FILE = path.resolve(__dirname, '..', '.env.test');
@@ -174,12 +180,31 @@ async function main() {
        RETURNING id`,
       [username, email, passwordHash, 'E2E Test User', phone, planId]
     );
+    const userId = userResult.rows[0].id;
+
+    // ĐỒNG Ý VĂN BẢN PHÁP LÝ cũng là BẮT BUỘC, cùng khuôn với SĐT ở trên (lần thứ tư).
+    // `MainLayout.jsx` mở ConsentRequiredModal khi `!user.hasConsented && role !== 'admin'`;
+    // backend tính hasConsented = terms && privacy && dpa từ dòng MỚI NHẤT mỗi purpose trong
+    // user_consents (userConsent.repository.js getUserLatestConsents, không so phiên bản).
+    // Modal có nút "Để sau" nhưng chỉ tắt tới lần tải trang kế tiếp (state React), nên đóng
+    // một lần lúc auth.setup (7a88520e) KHÔNG cứu được: 10/09 E2E đỏ 15 run liên tiếp từ khi
+    // 1b64e515 khôi phục modal này, cả ba ca đều "<div class=\"modal-overlay\"> intercepts
+    // pointer events" mà không dòng nào nhắc tới đồng ý. Thêm đường tạo user mới ở đâu thì
+    // phải ghi đồng ý ở đó — như recordConsents() làm lúc đăng ký thật.
+    for (const purpose of REQUIRED_REGISTRATION_PURPOSES) {
+      const doc = getLegalDocument(purpose);
+      await client.query(
+        `INSERT INTO user_consents (user_id, purpose, granted, document_version, document_hash, source, created_at)
+         VALUES ($1, $2, TRUE, $3, $4, 'e2e_seed', NOW())`,
+        [userId, purpose, doc?.version || '2026-09-01', doc?.hash || null]
+      );
+    }
 
     // Dữ liệu mẫu để chụp ảnh minh hoạ — CHỈ khi được yêu cầu. Bộ test e2e dựa
     // vào trạng thái rỗng, bật mặc định sẽ làm đỏ hàng loạt test không liên quan.
     if (isDemoSeedEnabled()) {
       const { seedDemoData } = await import('./seed-demo-data.js');
-      await seedDemoData(client, { userId: userResult.rows[0].id });
+      await seedDemoData(client, { userId });
     }
 
     console.log(`[e2e-seed] OK — user ${username} / plan id=${planId}`);
