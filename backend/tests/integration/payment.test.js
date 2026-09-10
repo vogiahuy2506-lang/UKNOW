@@ -362,7 +362,7 @@ describe('POST /api/payments/create-payment', () => {
     expect(res.body.result.amount).toBe(80000);
   });
 
-  it('PayOS throw lỗi → 502 và KHÔNG để lại đơn pending mồ côi', async () => {
+  it('PayOS throw lỗi → 503 và KHÔNG để lại đơn pending mồ côi', async () => {
     // Trước đây đơn được commit trước khi gọi PayOS, lỗi là để lại đơn `pending`
     // không bao giờ có link — nguồn của 6 đơn mồ côi trong dữ liệu tháng 5/2026.
     // Nay xoá đơn khi create thất bại, giống đường top-up và gói tự chọn.
@@ -377,8 +377,9 @@ describe('POST /api/payments/create-payment', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ planCode: 'std', userEmail: user.email });
 
-    // 502 = lỗi từ dịch vụ bên ngoài, không phải lỗi nội bộ của mình
-    expect(res.status).toBe(502);
+    // 503 (không phải 502) — def7ac84: Cloudflare thay 502/504 bằng trang lỗi chung, nuốt
+    // message gốc, nhưng để nguyên 500/503 đi qua. payment.service.js cố ý throw 503.
+    expect(res.status).toBe(503);
 
     const pending = await db.query(
       `SELECT COUNT(*)::int AS n FROM orders WHERE user_email = $1 AND status = 'pending'`,
