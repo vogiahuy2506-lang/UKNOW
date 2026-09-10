@@ -238,3 +238,29 @@ export function getZaloErrorCategoryLabel(category) {
   if (category === 'UNKNOWN') return null;
   return CATEGORY_LABELS[category] || category;
 }
+
+/**
+ * Rút gọn category chi tiết của classifyZaloSendError() về bộ mã ngắn dùng chung với
+ * `zalo_unreachable_phones.reason` (invalid_format / stranger_blocked / not_found /
+ * rate_limited / unknown), để lưu vào `campaign_run_recipient_steps.meta.lastFailureReason`
+ * — hai nguồn dữ liệu đối chiếu được với nhau bằng cùng một bộ mã.
+ *
+ * Cố ý KHÔNG trả về message thô của lỗi — chỉ mã ngắn đã phân loại.
+ *
+ * @param {string|null|undefined} category kết quả classifyZaloSendError(...).category
+ * @returns {'invalid_format'|'stranger_blocked'|'not_found'|'rate_limited'|'unknown'}
+ */
+export function mapZaloErrorCategoryToLedgerReason(category) {
+  switch (category) {
+    case 'PHONE_LOOKUP_RATE_LIMIT':
+      return 'rate_limited';
+    case 'NOT_FRIEND_OR_BLOCKED':
+      return 'stranger_blocked';
+    case 'RECIPIENT_NOT_FOUND':
+      return 'not_found';
+    case 'INVALID_PARAMETER':
+      return 'invalid_format';
+    default:
+      return 'unknown';
+  }
+}

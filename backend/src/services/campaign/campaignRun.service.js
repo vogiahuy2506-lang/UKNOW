@@ -15,7 +15,7 @@ import {
 } from '../../utils/zaloPhoneCampaign.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
-import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import { classifyZaloSendError, mapZaloErrorCategoryToLedgerReason } from '../../utils/zaloSendErrorClassifier.util.js';
 import {
   isZaloPartialDeliveryResult,
   mapZaloPartialDelivery,
@@ -1625,6 +1625,11 @@ class CampaignRunService {
        * @param {number|null} [input.zaloSendFailureCount] đếm lỗi gửi Zalo liên tiếp (continuous); null = không ghi đè khóa trong payload merge
        * @param {string|null} [input.zaloAbandonReason] lý do chốt recipient sau quá giới hạn lỗi (vd. max_send_failures)
        * @param {boolean} [input.removeZaloFailureFromMeta] khi true: gỡ `zaloSendFailureCount` và `zaloAbandonReason` khỏi meta (gửi Zalo thành công)
+       * @param {string|null} [input.lastFailureReason] mã lý do lần gửi Zalo hỏng gần nhất, đã chuẩn hoá
+       *   (invalid_format/stranger_blocked/not_found/rate_limited/unknown — cùng bộ mã với
+       *   zalo_unreachable_phones.reason). Ghi đè mỗi lần hỏng, KHÔNG cộng dồn thành nhiều dòng.
+       *   Bị gỡ cùng zaloSendFailureCount khi removeZaloFailureFromMeta=true (gửi lại thành công).
+       * @param {string|null} [input.lastFailureAt] thời điểm ghi nhận lastFailureReason (ISO string)
        * @returns {Promise<void>}
        */
       const upsertRecipientProgress = async ({
@@ -1641,6 +1646,8 @@ class CampaignRunService {
         zaloSendFailureCount = null,
         zaloAbandonReason = null,
         removeZaloFailureFromMeta = false,
+        lastFailureReason = null,
+        lastFailureAt = null,
       }) => {
         const safeRecipientKey = String(recipientKey || '').trim().toLowerCase();
         if (!safeRecipientKey) return;
@@ -1701,6 +1708,12 @@ class CampaignRunService {
               : {}),
             ...(zaloAbandonReason && String(zaloAbandonReason).trim()
               ? { zaloAbandonReason: String(zaloAbandonReason).trim() }
+              : {}),
+            ...(lastFailureReason && String(lastFailureReason).trim()
+              ? {
+                lastFailureReason: String(lastFailureReason).trim(),
+                lastFailureAt: lastFailureAt || new Date().toISOString(),
+              }
               : {}),
           };
           const persistedRow = await recipientLedgerRepository.upsertRecipientProgress({
@@ -5270,6 +5283,7 @@ class CampaignRunService {
                 if (abandon) {
                   failedSends += 1;
                   const observation = buildZaloPersonalErrorObservation(error);
+                  const lastFailureReason = mapZaloErrorCategoryToLedgerReason(observation.errorCategory);
                   const abandonNote = (
                     ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
                   );
@@ -5317,6 +5331,8 @@ class CampaignRunService {
                     nextDueAt: null,
                     zaloSendFailureCount: nextFail,
                     zaloAbandonReason: 'max_send_failures',
+                    lastFailureReason,
+                    lastFailureAt: sentAt,
                   });
                   await updateZaloMessageTrackingMeta(zaloMessageId, {
                     status: 'failed',
@@ -5342,6 +5358,11 @@ class CampaignRunService {
                   );
                   return { success: false };
                 }
+                // Chưa chốt (chưa đạt ngưỡng abandon) nhưng vẫn phải ghi lý do lần này —
+                // "hỏng lần 2 vì lý do khác" thì lastFailureReason phải cập nhật theo, không
+                // chỉ ghi ở lần chốt cuối cùng.
+                const retryObservation = buildZaloPersonalErrorObservation(error);
+                const retryFailureAt = toHoChiMinhIso();
                 // eslint-disable-next-line no-await-in-loop
                 await upsertRecipientProgress({
                   nodeId: node.id,
@@ -5353,6 +5374,8 @@ class CampaignRunService {
                   lastCompletedAt: zp.lastCompletedAt,
                   nextDueAt: zp.nextDueAt,
                   zaloSendFailureCount: nextFail,
+                  lastFailureReason: mapZaloErrorCategoryToLedgerReason(retryObservation.errorCategory),
+                  lastFailureAt: retryFailureAt,
                 });
               }
               failedSends += 1;

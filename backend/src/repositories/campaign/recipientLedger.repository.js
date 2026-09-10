@@ -33,7 +33,8 @@ class RecipientLedgerRepository {
    * Upsert (insert or update) a recipient step progress row.
    *
    * The complex CASE logic handles optional removal of `retryCount` and
-   * `zaloSendFailureCount`/`zaloAbandonReason` from the meta JSONB.
+   * `zaloSendFailureCount`/`zaloAbandonReason`/`lastFailureReason`/`lastFailureAt`
+   * from the meta JSONB.
    *
    * @param {object} input
    * @param {number} input.runId
@@ -67,9 +68,9 @@ class RecipientLedgerRepository {
          $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP,
          CASE
            WHEN COALESCE($9::boolean, FALSE) THEN
-             CASE WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason')
+             CASE WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt')
              ELSE ($8::jsonb - 'retryCount') END
-           WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'zaloSendFailureCount' - 'zaloAbandonReason')
+           WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt')
            ELSE $8::jsonb
          END,
          CURRENT_TIMESTAMP
@@ -103,13 +104,13 @@ class RecipientLedgerRepository {
                 WHEN COALESCE($9::boolean, FALSE) THEN
                   CASE WHEN COALESCE($10::boolean, FALSE) THEN (
                     COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                  ) - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason'
+                  ) - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt'
                   ELSE (
                     COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
                   ) - 'retryCount' END
                 WHEN COALESCE($10::boolean, FALSE) THEN (
                   COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                ) - 'zaloSendFailureCount' - 'zaloAbandonReason'
+                ) - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt'
                 ELSE COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
               END
           END,
