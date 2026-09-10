@@ -561,9 +561,17 @@ describe('POST /api/payments/create-payment — nâng gói Starter/Basic → Pro
         / (1000 * 60 * 60 * 24);
       expect(daysRemaining).toBeGreaterThan(360);
 
-      // Đúng truy vấn admin sẽ dùng để tra đơn theo order_code.
-      const adminLookup = await db.query(`SELECT id FROM orders WHERE order_code = $1`, [res.body.result.orderCode]);
-      expect(adminLookup.rows.length).toBe(1);
+      // Tra đơn qua ĐÚNG API admin thật (không phải raw SQL) — chứng minh super-admin
+      // search theo order_code trên GET /api/admin/orders thấy được đúng đơn này.
+      const admin = await createUser({ role: 'admin', username: `admin-lookup-${from}-${fromBillingPeriod}` });
+      const adminToken = await loginAs(admin);
+      const adminLookup = await request(app)
+        .get(`/api/admin/orders?search=${res.body.result.orderCode}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(adminLookup.status).toBe(200);
+      expect(adminLookup.body.data.orders).toHaveLength(1);
+      expect(Number(adminLookup.body.data.orders[0].orderCode)).toBe(Number(res.body.result.orderCode));
+      expect(adminLookup.body.data.orders[0].status).toBe('success');
     }
   );
 });
