@@ -15,193 +15,119 @@ import en from '../en.js';
  * Affiliate (115 khoá, 145 điểm gọi). Mỗi lần lại vá riêng một khoá.
  *
  * Test này thay cách vá đó: quét mọi lời gọi t('a.b') tĩnh trong frontend/src rồi đối chiếu với
- * từ điển. KNOWN_MISSING là hiện trạng đo được lúc viết test — danh sách chỉ được phép ngắn đi.
- * Thêm một khoá gọi mà quên khai báo, hoặc xoá một khoá đang có người gọi, đều đỏ ngay.
+ * từ điển. KNOWN_MISSING là hiện trạng đo được — danh sách chỉ được phép ngắn đi. Thêm một khoá
+ * gọi mà quên khai báo, hoặc xoá một khoá đang có người gọi, đều đỏ ngay.
+ *
+ * ── Hai điểm mù đã sửa (10/09/2026) ──────────────────────────────────────────────────────────
+ *
+ * Bản đầu của phép quét báo 66 khoá vỡ ở vi. Đo lại thì 53 trong số đó là dương tính giả:
+ *
+ *   1. **`useI18n('<namespace>')` tự thêm tiếp đầu ngữ lúc runtime** (index.jsx:79-88). Sáu
+ *      trang marketplace gọi `const t = useI18n('marketplace')`, nên `t('detail.loadError')`
+ *      thật ra tra `marketplace.detail.loadError` — khoá đã có đủ ở cả hai ngôn ngữ. Phép quét
+ *      cũ chỉ đọc chuỗi literal truyền vào `t(...)` rồi tra ở gốc từ điển nên luôn báo "vỡ".
+ *      Nay `collectCallSites()` ghi lại các namespace mà mỗi file scope hoá, và `isResolvable()`
+ *      nhận khoá là hợp lệ nếu giải được ở gốc HOẶC dưới bất kỳ namespace nào của file đó.
+ *      Chấp nhận cả hai cách giải là cố ý: ba file dùng lẫn `useI18n()` và `useI18n('ns')`
+ *      trong cùng một file, nên không suy ra được lời gọi nào thuộc `t` nào bằng regex.
+ *
+ *   2. **Dòng comment cũng bị quét.** `leadFormConfig.xxx` chỉ xuất hiện trong một câu chú thích
+ *      ở landing-canvas/components/SettingsModal.jsx, không phải lời gọi thật. Nay bỏ qua dòng
+ *      mở đầu bằng `//`, `*` hoặc `/*`.
+ *
+ * Nới phép giải khoá KHÔNG làm yếu cổng chặn với chính sự việc 07/09: các khoá bị xoá hôm đó
+ * (`affiliate.*`, `phoneRequired.later`, `accountProfileModal.consent*`) nằm ở những file KHÔNG
+ * scope hoá, nên chỉ có một cách giải duy nhất. Đã thử đột biến hai chiều để chắc: xoá
+ * `affiliate.title` → đỏ; xoá `marketplace.detail.loadError` → cũng đỏ, tức bản sửa này còn
+ * MỞ RỘNG vùng phủ chứ không chỉ dọn nhiễu (trước đây xoá khoá đó không ai biết).
  */
 
 const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // Khoá đang được gọi nhưng chưa có bản dịch, tính đến 10/09/2026. Sửa được khoá nào thì xoá
-// khoá đó khỏi đây.
+// khoá đó khỏi đây — nhánh test thứ ba bên dưới sẽ đỏ nếu quên.
 //
-// LƯU Ý — phần lớn danh sách này KHÔNG phải bug thật, mà là điểm mù của chính phép quét bên
-// dưới: `detail.*`, `favorites.*`, `myListings.*`, `purchases.*`, `createListing.*` và
-// `common.loadError` đều đã có bản dịch đầy đủ — nhưng nằm ở `marketplace.<key>`, được gọi qua
-// `const t = useI18n('marketplace')` (tự thêm tiếp đầu ngữ lúc runtime). collectCallSites() chỉ
-// bắt chuỗi literal truyền vào `t(...)`, không biết `t` này đã bị scope hoá, nên resolveKey() đi
-// tìm nhầm ở gốc dict và luôn báo "vỡ". Đã xác minh runtime bằng cách đọc thẳng
-// marketplace.detail/favorites/myListings/purchases/createListing trong vi.js/en.js — đủ khoá,
-// đúng chỗ gọi dùng useI18n('marketplace'). Đừng "sửa" các khoá này bằng cách thêm một object
-// top-level trùng tên — sẽ tạo bản dịch song song không ai đọc tới. Muốn xoá thật khỏi danh sách
-// thì phải sửa collectCallSites()/resolveKey() để hiểu namespace scope — cố tình chưa làm ở đây
-// vì rủi ro làm yếu cổng chặn (có thể che luôn khoá vỡ thật) lớn hơn lợi ích rút gọn danh sách.
-// `leadFormConfig.xxx` là điểm mù khác — nằm trong một dòng COMMENT, không phải lời gọi thật.
+// Cả 13 khoá `vi` đều có sẵn `|| 'chữ tiếng Việt'` ngay tại chỗ gọi, nên hiện KHÔNG có khoá nào
+// hiện chuỗi thô trong giao diện tiếng Việt; phần nợ còn lại thuần là bản tiếng Anh (26 khoá,
+// trong đó 13 khoá `landingLeads.*` đã có trong vi.js và chỉ thiếu en.js).
 const KNOWN_MISSING = {
   vi: [
-  'aiChatbot.wizardMaxRecipientsReached',
-  'browse.clearSearch',
-  'browse.close',
-  'browse.headerSubtitle',
-  'browse.headerTitle',
-  'browse.postListing',
-  'browse.priceCreditsShort',
-  'browse.priceFree',
-  'browse.searchPlaceholder',
-  'browse.sortNewest',
-  'browse.sortPopular',
-  'browse.sortPriceAsc',
-  'browse.sortPriceDesc',
-  'browse.sortRating',
-  'browse.tabBrowse',
-  'browse.tabMine',
-  'browse.viewGrid',
-  'browse.viewList',
-  'chatbot.clone',
-  'chatbot.cloneIncludes',
-  'chatbot.cloneNote',
-  'chatbot.cloneSubtitle',
-  'chatbot.emailPlaceholder',
-  'chatbot.recipientEmail',
-  'common.cloning',
-  'common.loadError',
-  'common.loadFailed',
-  'common.syncing',
-  'createListing.chatbotLoadError',
-  'createListing.createError',
-  'createListing.createSuccess',
-  'createListing.invalidForm',
-  'createListing.loadError',
-  'detail.campaignLimitExceeded',
-  'detail.copyLinkError',
-  'detail.copyLinkSuccess',
-  'detail.favoriteAddSuccess',
-  'detail.favoriteError',
-  'detail.favoriteRemoveSuccess',
-  'detail.loadError',
-  'detail.purchaseError',
-  'detail.purchaseSuccess',
-  'favorites.emptyDesc',
-  'favorites.emptyTitle',
-  'favorites.free',
-  'favorites.loadError',
-  'favorites.removeError',
-  'favorites.removeSuccess',
-  'favorites.removeTitle',
-  'favorites.subtitle',
-  'favorites.title',
-  'leadFormConfig.xxx',
-  'myListings.deleteError',
-  'myListings.deleteSuccess',
-  'myListings.loadError',
-  'myListings.pauseError',
-  'myListings.pauseSuccess',
-  'myListings.publishError',
-  'myListings.publishSuccess',
-  'purchases.emptyDesc',
-  'purchases.emptyTitle',
-  'purchases.loadError',
-  'purchases.subtitle',
-  'purchases.title',
-  'quickSend.retryQuotaBlocked',
-  'quickSend.retrying',
+    'aiChatbot.wizardMaxRecipientsReached',
+    'chatbot.clone',
+    'chatbot.cloneIncludes',
+    'chatbot.cloneNote',
+    'chatbot.cloneSubtitle',
+    'chatbot.emailPlaceholder',
+    'chatbot.recipientEmail',
+    'common.cloning',
+    'common.loadFailed',
+    'common.syncing',
+    'createListing.chatbotLoadError',
+    'quickSend.retryQuotaBlocked',
+    'quickSend.retrying',
   ],
   en: [
-  'aiChatbot.wizardMaxRecipientsReached',
-  'browse.clearSearch',
-  'browse.close',
-  'browse.headerSubtitle',
-  'browse.headerTitle',
-  'browse.postListing',
-  'browse.priceCreditsShort',
-  'browse.priceFree',
-  'browse.searchPlaceholder',
-  'browse.sortNewest',
-  'browse.sortPopular',
-  'browse.sortPriceAsc',
-  'browse.sortPriceDesc',
-  'browse.sortRating',
-  'browse.tabBrowse',
-  'browse.tabMine',
-  'browse.viewGrid',
-  'browse.viewList',
-  'chatbot.clone',
-  'chatbot.cloneIncludes',
-  'chatbot.cloneNote',
-  'chatbot.cloneSubtitle',
-  'chatbot.emailPlaceholder',
-  'chatbot.recipientEmail',
-  'common.cloning',
-  'common.loadError',
-  'common.loadFailed',
-  'common.syncing',
-  'createListing.chatbotLoadError',
-  'createListing.createError',
-  'createListing.createSuccess',
-  'createListing.invalidForm',
-  'createListing.loadError',
-  'detail.campaignLimitExceeded',
-  'detail.copyLinkError',
-  'detail.copyLinkSuccess',
-  'detail.favoriteAddSuccess',
-  'detail.favoriteError',
-  'detail.favoriteRemoveSuccess',
-  'detail.loadError',
-  'detail.purchaseError',
-  'detail.purchaseSuccess',
-  'favorites.emptyDesc',
-  'favorites.emptyTitle',
-  'favorites.free',
-  'favorites.loadError',
-  'favorites.removeError',
-  'favorites.removeSuccess',
-  'favorites.removeTitle',
-  'favorites.subtitle',
-  'favorites.title',
-  'landingLeads.clearSearch',
-  'landingLeads.clearThis',
-  'landingLeads.closeFilter',
-  'landingLeads.loadingCustomFields',
-  'landingLeads.loadingOptions',
-  'landingLeads.noMatchInPage',
-  'landingLeads.noOptionsMatch',
-  'landingLeads.preset30Days',
-  'landingLeads.preset7Days',
-  'landingLeads.presetToday',
-  'landingLeads.quickSearchPlaceholder',
-  'landingLeads.searchOptionPlaceholder',
-  'landingLeads.showingOf',
-  'leadFormConfig.xxx',
-  'myListings.deleteError',
-  'myListings.deleteSuccess',
-  'myListings.loadError',
-  'myListings.pauseError',
-  'myListings.pauseSuccess',
-  'myListings.publishError',
-  'myListings.publishSuccess',
-  'purchases.emptyDesc',
-  'purchases.emptyTitle',
-  'purchases.loadError',
-  'purchases.subtitle',
-  'purchases.title',
-  'quickSend.retryQuotaBlocked',
-  'quickSend.retrying',
+    'aiChatbot.wizardMaxRecipientsReached',
+    'chatbot.clone',
+    'chatbot.cloneIncludes',
+    'chatbot.cloneNote',
+    'chatbot.cloneSubtitle',
+    'chatbot.emailPlaceholder',
+    'chatbot.recipientEmail',
+    'common.cloning',
+    'common.loadFailed',
+    'common.syncing',
+    'createListing.chatbotLoadError',
+    'landingLeads.clearSearch',
+    'landingLeads.clearThis',
+    'landingLeads.closeFilter',
+    'landingLeads.loadingCustomFields',
+    'landingLeads.loadingOptions',
+    'landingLeads.noMatchInPage',
+    'landingLeads.noOptionsMatch',
+    'landingLeads.preset30Days',
+    'landingLeads.preset7Days',
+    'landingLeads.presetToday',
+    'landingLeads.quickSearchPlaceholder',
+    'landingLeads.searchOptionPlaceholder',
+    'landingLeads.showingOf',
+    'quickSend.retryQuotaBlocked',
+    'quickSend.retrying',
   ],
 };
 
+/** `const t = useI18n('marketplace')` — namespace được thêm vào trước mọi khoá của file đó. */
+const SCOPED_NS_RE = /useI18n\(\s*['"]([A-Za-z0-9_]+)['"]\s*\)/g;
+const KEY_RE = /\bt\(\s*(['"])([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\1/g;
+const COMMENT_LINE_RE = /^\s*(?:\/\/|\*|\/\*)/;
+
+/**
+ * @returns {Map<string, { files: Set<string>, namespaces: Set<string> }>}
+ */
 function collectCallSites() {
   const sites = new Map();
-  const re = /\bt\(\s*(['"])([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\1/g;
   (function walk(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (!/node_modules|dist/.test(full)) walk(full);
-      } else if (/\.jsx?$/.test(entry.name) && !full.includes(`${path.sep}i18n${path.sep}`)) {
-        const code = fs.readFileSync(full, 'utf8');
+        continue;
+      }
+      if (!/\.jsx?$/.test(entry.name) || full.includes(`${path.sep}i18n${path.sep}`)) continue;
+
+      const code = fs.readFileSync(full, 'utf8');
+      const fileNamespaces = [...code.matchAll(SCOPED_NS_RE)].map((m) => m[1]);
+      const relative = path.relative(SRC_DIR, full);
+
+      for (const line of code.split('\n')) {
+        if (COMMENT_LINE_RE.test(line)) continue;
         let m;
-        while ((m = re.exec(code)) !== null) {
-          if (!sites.has(m[2])) sites.set(m[2], new Set());
-          sites.get(m[2]).add(path.relative(SRC_DIR, full));
+        KEY_RE.lastIndex = 0;
+        while ((m = KEY_RE.exec(line)) !== null) {
+          if (!sites.has(m[2])) sites.set(m[2], { files: new Set(), namespaces: new Set() });
+          const site = sites.get(m[2]);
+          site.files.add(relative);
+          fileNamespaces.forEach((ns) => site.namespaces.add(ns));
         }
       }
     }
@@ -214,11 +140,25 @@ function resolveKey(dict, key) {
 }
 const isTranslated = (value) => typeof value === 'string' || Array.isArray(value);
 
+/** Hợp lệ nếu giải được ở gốc từ điển, hoặc dưới bất kỳ namespace nào mà file gọi đã scope hoá. */
+function isResolvable(dict, key, namespaces) {
+  if (isTranslated(resolveKey(dict, key))) return true;
+  return [...namespaces].some((ns) => isTranslated(resolveKey(dict, `${ns}.${key}`)));
+}
+
 const CALL_SITES = collectCallSites();
 
 describe('i18n — mọi khoá được gọi phải có bản dịch', () => {
   it('quét được lượng điểm gọi hợp lý (đối chứng dương cho chính phép quét)', () => {
     expect(CALL_SITES.size).toBeGreaterThan(3000);
+  });
+
+  it('nhận diện được namespace scope hoá (nếu hỏng, cả phép quét thành vô nghĩa)', () => {
+    // Không có ca này thì một lỗi làm SCOPED_NS_RE ngừng khớp sẽ chỉ hiện ra dưới dạng
+    // "nhiều khoá bỗng vỡ", và người sửa dễ đi thêm bản dịch trùng thay vì sửa phép quét.
+    const marketplaceKey = CALL_SITES.get('detail.loadError');
+    expect(marketplaceKey?.namespaces.has('marketplace')).toBe(true);
+    expect(isResolvable(vi, 'detail.loadError', marketplaceKey.namespaces)).toBe(true);
   });
 
   it.each([
@@ -227,9 +167,11 @@ describe('i18n — mọi khoá được gọi phải có bản dịch', () => {
   ])('%s: không có khoá vỡ nào ngoài danh sách đã biết', (locale, dict) => {
     const allowed = new Set(KNOWN_MISSING[locale]);
     const broken = [];
-    for (const [key, files] of CALL_SITES) {
+    for (const [key, site] of CALL_SITES) {
       if (allowed.has(key)) continue;
-      if (!isTranslated(resolveKey(dict, key))) broken.push(`${key}  ← ${[...files].join(', ')}`);
+      if (!isResolvable(dict, key, site.namespaces)) {
+        broken.push(`${key}  ← ${[...site.files].join(', ')}`);
+      }
     }
     expect(broken).toEqual([]);
   });
@@ -238,9 +180,10 @@ describe('i18n — mọi khoá được gọi phải có bản dịch', () => {
     ['vi', vi],
     ['en', en],
   ])('%s: danh sách đã biết không chứa khoá đã sửa xong hoặc đã hết người gọi', (locale, dict) => {
-    const stale = KNOWN_MISSING[locale].filter(
-      (key) => !CALL_SITES.has(key) || isTranslated(resolveKey(dict, key)),
-    );
+    const stale = KNOWN_MISSING[locale].filter((key) => {
+      const site = CALL_SITES.get(key);
+      return !site || isResolvable(dict, key, site.namespaces);
+    });
     expect(stale).toEqual([]);
   });
 });
