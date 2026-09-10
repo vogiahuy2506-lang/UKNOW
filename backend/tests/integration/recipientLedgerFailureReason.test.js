@@ -36,11 +36,11 @@ describe('RecipientLedgerRepository — lastFailureReason/lastFailureAt (PR-3)',
     runId = rRows[0].id;
   });
 
-  async function readMeta(nodeId, recipientKey) {
+  async function readMeta(nodeId, recipientKey, channel = 'zalo_personal') {
     const { rows } = await db.query(
       `SELECT meta FROM campaign_run_recipient_steps
-       WHERE id_run = $1 AND id_node = $2 AND channel = 'zalo_personal' AND recipient_key = $3`,
-      [runId, nodeId, recipientKey]
+       WHERE id_run = $1 AND id_node = $2 AND channel = $3 AND recipient_key = $4`,
+      [runId, nodeId, channel, recipientKey]
     );
     return rows;
   }
@@ -133,6 +133,109 @@ describe('RecipientLedgerRepository — lastFailureReason/lastFailureAt (PR-3)',
     expect(map.invalid_format).toBe(2);
     expect(map.stranger_blocked).toBe(1);
     expect(map.not_found).toBe(1);
+  });
+});
+
+// PR-4: cùng cơ chế phải hoạt động cho zalo_friend_request và zalo_group — không chỉ
+// zalo_personal. Repository không biết/không quan tâm channel, nhưng đo lại ở cả hai
+// kênh để chứng minh cơ chế ghi/gỡ hoạt động y hệt, không riêng gì nhánh personal.
+describe('RecipientLedgerRepository — lastFailureReason áp dụng cho zalo_friend_request và zalo_group (PR-4)', () => {
+  let user;
+  let campaignId;
+  let runId;
+
+  beforeEach(async () => {
+    await truncateAll();
+    user = await createUser();
+    const { rows: cRows } = await db.query(
+      `INSERT INTO campaigns (id_user, campaign_name, campaign_type, status)
+       VALUES ($1, 'Test Camp Zalo', 'zalo', 'active') RETURNING id`,
+      [user.id]
+    );
+    campaignId = cRows[0].id;
+    const { rows: rRows } = await db.query(
+      `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, status)
+       VALUES ($1, $2, 'running') RETURNING id`,
+      [campaignId, user.id]
+    );
+    runId = rRows[0].id;
+  });
+
+  async function readMeta(nodeId, channel, recipientKey) {
+    const { rows } = await db.query(
+      `SELECT meta FROM campaign_run_recipient_steps
+       WHERE id_run = $1 AND id_node = $2 AND channel = $3 AND recipient_key = $4`,
+      [runId, nodeId, channel, recipientKey]
+    );
+    return rows;
+  }
+
+  it('gửi kết bạn Zalo hỏng → meta có lastFailureReason đúng mã, giống nhánh personal', async () => {
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'nf1', channel: 'zalo_friend_request', recipientKey: '0900000010',
+      completedStep: 0, isFullyCompleted: false,
+      metaPayload: { zaloSendFailureCount: 1, lastFailureReason: 'invalid_format', lastFailureAt: '2026-09-10T01:00:00Z' },
+    });
+    const rows = await readMeta('nf1', 'zalo_friend_request', '0900000010');
+    expect(rows[0].meta.lastFailureReason).toBe('invalid_format');
+    expect(rows[0].meta.zaloSendFailureCount).toBe(1);
+  });
+
+  it('gửi nhóm Zalo hỏng → meta có lastFailureReason đúng mã, giống nhánh personal', async () => {
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'ng1', channel: 'zalo_group', recipientKey: 'group_123',
+      completedStep: 0, isFullyCompleted: false,
+      metaPayload: { zaloSendFailureCount: 1, lastFailureReason: 'stranger_blocked', lastFailureAt: '2026-09-10T01:00:00Z' },
+    });
+    const rows = await readMeta('ng1', 'zalo_group', 'group_123');
+    expect(rows[0].meta.lastFailureReason).toBe('stranger_blocked');
+    expect(rows[0].meta.zaloSendFailureCount).toBe(1);
+  });
+
+  it('gửi kết bạn lại thành công sau khi từng hỏng → lastFailureReason bị gỡ cùng zaloSendFailureCount', async () => {
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'nf2', channel: 'zalo_friend_request', recipientKey: '0900000011',
+      completedStep: 0, isFullyCompleted: false,
+      metaPayload: {
+        zaloSendFailureCount: 2,
+        zaloAbandonReason: 'max_send_failures',
+        lastFailureReason: 'not_found',
+        lastFailureAt: '2026-09-10T01:00:00Z',
+      },
+    });
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'nf2', channel: 'zalo_friend_request', recipientKey: '0900000011',
+      completedStep: 1, isFullyCompleted: true,
+      metaPayload: { lastCompletedAt: '2026-09-10T03:00:00Z' },
+      removeZaloFailureFromMeta: true,
+    });
+    const rows = await readMeta('nf2', 'zalo_friend_request', '0900000011');
+    expect(rows[0].meta.lastFailureReason).toBeUndefined();
+    expect(rows[0].meta.zaloSendFailureCount).toBeUndefined();
+    expect(rows[0].meta.zaloAbandonReason).toBeUndefined();
+  });
+
+  it('gửi nhóm lại thành công sau khi từng hỏng → lastFailureReason bị gỡ cùng zaloSendFailureCount', async () => {
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'ng2', channel: 'zalo_group', recipientKey: 'group_456',
+      completedStep: 0, isFullyCompleted: false,
+      metaPayload: {
+        zaloSendFailureCount: 2,
+        zaloAbandonReason: 'max_send_failures',
+        lastFailureReason: 'rate_limited',
+        lastFailureAt: '2026-09-10T01:00:00Z',
+      },
+    });
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'ng2', channel: 'zalo_group', recipientKey: 'group_456',
+      completedStep: 1, isFullyCompleted: true,
+      metaPayload: { lastCompletedAt: '2026-09-10T03:00:00Z' },
+      removeZaloFailureFromMeta: true,
+    });
+    const rows = await readMeta('ng2', 'zalo_group', 'group_456');
+    expect(rows[0].meta.lastFailureReason).toBeUndefined();
+    expect(rows[0].meta.zaloSendFailureCount).toBeUndefined();
+    expect(rows[0].meta.zaloAbandonReason).toBeUndefined();
   });
 });
 

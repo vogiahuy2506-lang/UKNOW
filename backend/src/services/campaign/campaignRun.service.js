@@ -6534,6 +6534,10 @@ class CampaignRunService {
                       ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
                     );
                     const errText = `${String(error?.message || '').trim()}${abandonNote}`;
+                    const abandonFailureReason = mapZaloErrorCategoryToLedgerReason(
+                      classifyZaloSendError(error, { stage: error?.stage || 'send' }).category
+                    );
+                    const abandonFailureAt = toHoChiMinhIso();
                     const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                     const failedPayload = {
                       channel: 'zalo_friend_request',
@@ -6557,11 +6561,13 @@ class CampaignRunService {
                       recipientKey: phone,
                       completedStep: 1,
                       totalSteps: 1,
-                      firstSentAt: zp.firstSentAt || toHoChiMinhIso(),
-                      lastCompletedAt: toHoChiMinhIso(),
+                      firstSentAt: zp.firstSentAt || abandonFailureAt,
+                      lastCompletedAt: abandonFailureAt,
                       nextDueAt: null,
                       zaloSendFailureCount: nextFail,
                       zaloAbandonReason: 'max_send_failures',
+                      lastFailureReason: abandonFailureReason,
+                      lastFailureAt: abandonFailureAt,
                     });
                     await updateZaloMessageTrackingMeta(zaloMessageId, {
                       status: 'failed',
@@ -6584,6 +6590,11 @@ class CampaignRunService {
                       + `chốt ledger sau ${nextFail} lần lỗi gửi (continuous).`
                     );
                   } else {
+                    // Chưa chốt (chưa đạt ngưỡng abandon) nhưng vẫn phải ghi lý do lần này —
+                    // xem giải thích tương tự ở nhánh zalo_personal.
+                    const retryFailureReason = mapZaloErrorCategoryToLedgerReason(
+                      classifyZaloSendError(error, { stage: error?.stage || 'send' }).category
+                    );
                     // eslint-disable-next-line no-await-in-loop
                     await upsertRecipientProgress({
                       nodeId: node.id,
@@ -6595,6 +6606,8 @@ class CampaignRunService {
                       lastCompletedAt: zp.lastCompletedAt,
                       nextDueAt: zp.nextDueAt,
                       zaloSendFailureCount: nextFail,
+                      lastFailureReason: retryFailureReason,
+                      lastFailureAt: toHoChiMinhIso(),
                     });
                     failedSends += 1;
                     const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
@@ -7070,6 +7083,8 @@ class CampaignRunService {
                     nextDueAt: null,
                     zaloSendFailureCount: nextFail,
                     zaloAbandonReason: 'max_send_failures',
+                    lastFailureReason: mapZaloErrorCategoryToLedgerReason(observation.errorCategory),
+                    lastFailureAt: sentAt,
                   });
                   await updateZaloMessageTrackingMeta(zaloMessageId, {
                     status: 'failed',
@@ -7098,6 +7113,9 @@ class CampaignRunService {
                   );
                   return { success: false, status: 'failed', error: errText };
                 }
+                // Chưa chốt (chưa đạt ngưỡng abandon) nhưng vẫn phải ghi lý do lần này —
+                // xem giải thích tương tự ở nhánh zalo_personal.
+                const retryObservation = buildZaloGroupErrorObservation(error);
                 // eslint-disable-next-line no-await-in-loop
                 await upsertRecipientProgress({
                   nodeId: node.id,
@@ -7109,6 +7127,8 @@ class CampaignRunService {
                   lastCompletedAt: zp.lastCompletedAt,
                   nextDueAt: zp.nextDueAt,
                   zaloSendFailureCount: nextFail,
+                  lastFailureReason: mapZaloErrorCategoryToLedgerReason(retryObservation.errorCategory),
+                  lastFailureAt: toHoChiMinhIso(),
                 });
               }
               failedSends += 1;
