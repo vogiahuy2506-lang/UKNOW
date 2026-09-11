@@ -20,6 +20,7 @@ import { getSystemAuditContext } from '../utils/auditContext.util.js';
 import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
+import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
 import userConsentRepository, { recordConsents, getUserLatestConsents } from '../repositories/user/userConsent.repository.js';
@@ -98,20 +99,28 @@ class AuthController {
       }
 
       // SĐT bắt buộc — một số chỉ được gắn với 1 tài khoản (idx_users_phone_unique, migration 179).
-      const normalizedPhone = normalizePhoneForZaloCampaign(phone);
-      if (!isValidNormalizedPhoneLength(normalizedPhone)) {
-        throw { status: 400, message: 'Số điện thoại không hợp lệ' };
-      }
-      const existingPhone = await client.query(
-        'SELECT id FROM users WHERE phone = $1',
-        [normalizedPhone]
-      );
-      if (existingPhone.rows.length > 0) {
-        throw {
-          status: 409,
-          code: 'PHONE_TAKEN',
-          message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
-        };
+      // PR-1 xác thực SĐT (2026-09-11): khi PHONE_OTP_PROVIDER bật, KHÔNG đòi SĐT ở bước đăng
+      // ký nữa — luồng mới là nhập SĐT + xác thực OTP SAU khi đã có tài khoản (PhoneRequiredModal,
+      // PR-2 frontend). Khi tắt, giữ nguyên hành vi hôm nay — Bẫy #6. phone cột đã nullable
+      // (không NOT NULL), idx_users_phone_unique có WHERE phone IS NOT NULL nên nhiều NULL
+      // không đụng ràng buộc UNIQUE.
+      let normalizedPhone = null;
+      if (!isPhoneOtpEnabled()) {
+        normalizedPhone = normalizePhoneForZaloCampaign(phone);
+        if (!isValidNormalizedPhoneLength(normalizedPhone)) {
+          throw { status: 400, message: 'Số điện thoại không hợp lệ' };
+        }
+        const existingPhone = await client.query(
+          'SELECT id FROM users WHERE phone = $1',
+          [normalizedPhone]
+        );
+        if (existingPhone.rows.length > 0) {
+          throw {
+            status: 409,
+            code: 'PHONE_TAKEN',
+            message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+          };
+        }
       }
 
       const passwordHash = await bcrypt.hash(password, 10);
