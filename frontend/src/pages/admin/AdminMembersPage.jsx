@@ -289,7 +289,7 @@ const TypeToConfirmModal = ({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const AdminMembersPage = () => {
   const { t } = useI18n();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, phoneOtpEnabled } = useAuthStore();
   const [members, setMembers]     = useState([]);
   const [plans, setPlans]         = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -300,6 +300,9 @@ const AdminMembersPage = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [expiryFilter, setExpiryFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('user');
+  // Chỉ có ý nghĩa khi phoneOtpEnabled — UI lọc này không render lúc cờ tắt (xem JSX),
+  // nên state không bao giờ đổi khỏi '' trong trường hợp đó.
+  const [phoneVerifiedFilter, setPhoneVerifiedFilter] = useState('');
 
 
   // Modals
@@ -326,6 +329,7 @@ const AdminMembersPage = () => {
       if (planFilter)   params.planId = planFilter;
       if (statusFilter) params.status = statusFilter;
       if (expiryFilter) params.expiry = expiryFilter;
+      if (phoneOtpEnabled && phoneVerifiedFilter) params.phoneVerified = phoneVerifiedFilter;
       const res = await adminMembersApiService.getMembers(params);
       setMembers(res.data.data || []);
     } catch {
@@ -507,6 +511,17 @@ const AdminMembersPage = () => {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {phoneOtpEnabled && (
+            <select
+              className="input py-1.5 text-sm flex-1 min-w-0"
+              value={phoneVerifiedFilter}
+              onChange={(e) => setPhoneVerifiedFilter(e.target.value)}
+            >
+              <option value="">{t('adminMembers.filter.phoneVerifiedAll')}</option>
+              <option value="verified">{t('adminMembers.filter.phoneVerifiedYes')}</option>
+              <option value="unverified">{t('adminMembers.filter.phoneVerifiedNo')}</option>
+            </select>
+          )}
           <select
             className="input py-1.5 text-sm flex-1 min-w-0"
             value={statusFilter}
@@ -544,10 +559,11 @@ const AdminMembersPage = () => {
                   <th>{t('adminMembers.table.role')}</th>
                   <th>{t('adminMembers.table.servicePlan')}</th>
                   <th>{t('adminMembers.table.employees')}</th>
-                  <th>Đăng nhập gần nhất</th>
-                  <th>% AI</th>
-                  <th>Fail 30d</th>
-                  <th>Rủi ro</th>
+                  <th>{t('adminMembers.table.phone')}</th>
+                  <th>{t('adminMembers.table.lastLogin')}</th>
+                  <th>{t('adminMembers.table.aiUsagePercent')}</th>
+                  <th>{t('adminMembers.table.failedSends30d')}</th>
+                  <th>{t('adminMembers.table.churnRisk')}</th>
                   <th>{t('adminMembers.table.status')}</th>
                   <th>{t('adminMembers.table.expiry')}</th>
                   <th>{t('adminMembers.table.createdAt')}</th>
@@ -582,6 +598,16 @@ const AdminMembersPage = () => {
                         }
                       </td>
                       <td className="text-sm text-gray-600">{m.employeeCount ?? 0}</td>
+                      <td className="text-sm text-gray-600 whitespace-nowrap">
+                        {m.phone || '—'}
+                        {phoneOtpEnabled && m.phone && (
+                          <div className="text-xs mt-0.5">
+                            {m.phoneVerifiedAt
+                              ? <span className="text-green-600">{t('adminMembers.phoneVerified', { date: fmtDate(m.phoneVerifiedAt) })}</span>
+                              : <span className="text-amber-600">{t('adminMembers.phoneNotVerified')}</span>}
+                          </div>
+                        )}
+                      </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
                         {m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleDateString('vi-VN') : '—'}
                       </td>
@@ -595,7 +621,7 @@ const AdminMembersPage = () => {
                       </td>
                       <td>
                         {m.churnRisk
-                          ? <span className="badge badge-warning">Nguy cơ</span>
+                          ? <span className="badge badge-warning">{t('adminMembers.table.churnRiskBadge')}</span>
                           : <span className="text-gray-300">—</span>}
                       </td>
                       <td>
