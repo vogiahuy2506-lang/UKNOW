@@ -35,7 +35,10 @@ import { getStoredReferralCode, captureReferralFromUrl, clearStoredReferralCode 
  * - Improved error handling
  */
 
-const registerSchema = (t) => z.object({
+// phoneOtpEnabled (PR-2, xác thực SĐT): bật → bỏ ô SĐT khỏi bước đăng ký, SĐT được xác thực
+// SAU qua PhoneRequiredModal (OTP). Tắt hoặc không xác định (fetch cờ chưa xong/lỗi) → giữ
+// NGUYÊN schema cũ, bắt buộc + hợp lệ như hôm nay — đường lùi nếu sếp đổi ý thứ Hai.
+const registerSchema = (t, { phoneOtpEnabled = false } = {}) => z.object({
   username: z
     .string()
     .min(3, t('register.usernameMinLen'))
@@ -51,9 +54,11 @@ const registerSchema = (t) => z.object({
     ),
   confirmPassword: z.string(),
   fullName: z.string().optional(),
-  phone: z.string()
-    .min(1, t('register.phoneRequired'))
-    .refine(isPlausiblePhone, { message: t('register.invalidPhone') }),
+  phone: phoneOtpEnabled
+    ? z.string().optional()
+    : z.string()
+      .min(1, t('register.phoneRequired'))
+      .refine(isPlausiblePhone, { message: t('register.invalidPhone') }),
   referralCode: z.string().optional(),
 }).refine((d) => d.password === d.confirmPassword, {
   message: t('auth.passwordMismatch'),
@@ -383,8 +388,21 @@ const Register = () => {
   const [dpaChecked, setDpaChecked]                   = useState(false);
   const [showGoogleConsent, setShowGoogleConsent]   = useState(false);
   const [pendingGoogleToken, setPendingGoogleToken] = useState(null);
-  const { googleLogin }                               = useAuthStore();
+  const { googleLogin, phoneOtpEnabled, fetchPhoneOtpEnabled } = useAuthStore();
   const navigate                                      = useNavigate();
+
+  // PR-2 (xác thực SĐT) — lưới an toàn thứ hai ngoài lần gọi lúc app khởi động
+  // (authStore.js dưới cùng file); single-flight nên gọi lại ở đây không tạo request thừa
+  // nếu app đã fetch xong. Cờ tắt/chưa xong đều mặc định false → schema/UI y hệt hôm nay.
+  useEffect(() => {
+    fetchPhoneOtpEnabled();
+  }, [fetchPhoneOtpEnabled]);
+
+  // resolver của react-hook-form chỉ đọc option lúc useForm() khởi tạo — đọc qua ref để
+  // luôn thấy giá trị phoneOtpEnabled MỚI NHẤT tại thời điểm submit thật, không phải giá
+  // trị đã đóng băng từ lần render đầu tiên (khi cờ còn đang fetch dở, mặc định false).
+  const phoneOtpEnabledRef = useRef(phoneOtpEnabled);
+  phoneOtpEnabledRef.current = phoneOtpEnabled;
 
   const handleGoogleSuccess = (tokenResponse) => {
     setPendingGoogleToken(tokenResponse);
@@ -427,7 +445,8 @@ const Register = () => {
 
   const initialReferralCode = captureReferralFromUrl() || getStoredReferralCode() || '';
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
-    resolver: zodResolver(registerSchema(t)),
+    resolver: (values, context, options) =>
+      zodResolver(registerSchema(t, { phoneOtpEnabled: phoneOtpEnabledRef.current }))(values, context, options),
     defaultValues: {
       referralCode: initialReferralCode,
     },
@@ -562,30 +581,34 @@ const Register = () => {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t('register.phone')} <span className="text-red-500">*</span>
-            </label>
-            <div className="relative group">
-              <HiOutlinePhone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-              <input 
-                type="tel" 
-                {...register('phone')} 
-                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
-                  errors.phone 
-                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
-                }`}
-                placeholder={t('register.phonePlaceholder')} 
-              />
+          {/* PR-2 (xác thực SĐT): cờ bật → bỏ ô này, SĐT được xác thực SAU qua
+              PhoneRequiredModal (OTP). Cờ tắt/chưa xong → giữ nguyên như hôm nay. */}
+          {!phoneOtpEnabled && (
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-700">
+                {t('register.phone')} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative group">
+                <HiOutlinePhone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+                <input
+                  type="tel"
+                  {...register('phone')}
+                  className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                    errors.phone
+                      ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
+                      : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                  }`}
+                  placeholder={t('register.phonePlaceholder')}
+                />
+              </div>
+              {errors.phone && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                  {errors.phone.message}
+                </p>
+              )}
             </div>
-            {errors.phone && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
-                {errors.phone.message}
-              </p>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Password & Confirm */}
