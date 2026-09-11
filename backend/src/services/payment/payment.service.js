@@ -42,6 +42,7 @@ import {
 import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js';
 
 import { resolvePlanChange } from '../../utils/planChange.util.js';
+import { buildPayosDescription } from '../../utils/payosDescription.util.js';
 import { scheduledPlanChangeRepository } from '../../repositories/payment/scheduledPlanChange.repository.js';
 
 const isTrialOrFreePlan = (plan) => {
@@ -262,9 +263,11 @@ export const createPaymentLink = async ({
         } else {
             expiredAt = Math.floor(Date.now() / 1000) + pendingWindowMinutes * 60;
             try {
-                // Xây dựng description rõ ràng hơn để khách hàng nhận diện giao dịch
-                const planNameShort = plan.name || planCode || 'PACKAGE';
-                const description = `FounderAI ${planNameShort}`.substring(0, 25);
+                // Nội dung này là thứ duy nhất kế toán thấy trong tin nhắn ngân hàng để nhận ra
+                // giao dịch thuộc Founder AI. buildPayosDescription() bỏ dấu tiếng Việt (ngân hàng
+                // bỏ dấu không nhất quán) và cắt theo ranh giới TỪ trong trần 25 ký tự của PayOS —
+                // `substring(25)` cũ xén giữa chữ: "FounderAI Gói Doanh nghiệ".
+                const description = buildPayosDescription(plan.name || planCode || 'PACKAGE');
 
                 paymentLink = await payosClient.paymentRequests.create({
                     orderCode: Number(orderCode),
@@ -760,7 +763,7 @@ export const createCustomPaymentLink = async ({
                 paymentLink = await payosClient.paymentRequests.create({
                     orderCode: Number(orderCode),
                     amount,
-                    description: `FounderAI Custom`.substring(0, 25),
+                    description: buildPayosDescription('Custom'),
                     returnUrl: `${process.env.FRONTEND_URL}/payment-success`,
                     cancelUrl: `${process.env.FRONTEND_URL}/checkout`,
                     expiredAt,
