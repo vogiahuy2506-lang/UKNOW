@@ -174,9 +174,15 @@ async function main() {
     // Thêm đường tạo user mới ở đâu thì phải cấp SĐT ở đó.
     const phone = process.env.E2E_PHONE || '0900000001';
 
+    // phone_verified_at cùng khuôn lỗi với comment ở trên (SĐT bắt buộc) — PR-2 xác thực
+    // SĐT (11/09/2026) thêm một điều kiện MỞ modal RIÊNG: `phoneOtpEnabled && !phoneVerifiedAt`
+    // (MainLayout.jsx). Cờ PHONE_OTP_PROVIDER hiện KHÔNG bật trên CI nên điều kiện này chưa
+    // từng kích hoạt thật — set trước ở đây để phòng thân: nếu sau này CI bật cờ mà quên vá
+    // seed, sẽ lại đúng lỗi "modal-overlay intercepts pointer events" y hệt ba lần trước,
+    // chỉ khác nguyên nhân (đã có SĐT nhưng chưa xác thực, thay vì chưa có SĐT).
     const userResult = await client.query(
-      `INSERT INTO users (username, email, password_hash, full_name, phone, status, role, is_verified, verified_at, active_plan_id, subscription_expires_at)
-       VALUES ($1, $2, $3, $4, $5, 'active', 'user', TRUE, NOW(), $6, NOW() + INTERVAL '1 year')
+      `INSERT INTO users (username, email, password_hash, full_name, phone, phone_verified_at, status, role, is_verified, verified_at, active_plan_id, subscription_expires_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), 'active', 'user', TRUE, NOW(), $6, NOW() + INTERVAL '1 year')
        RETURNING id`,
       [username, email, passwordHash, 'E2E Test User', phone, planId]
     );
