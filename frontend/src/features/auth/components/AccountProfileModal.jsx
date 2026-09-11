@@ -18,6 +18,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile, getUserConsentHistory } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
 import { isPlausiblePhone } from '../../../utils/phoneValidation';
+import PhoneRequiredModal from './PhoneRequiredModal';
 import PlanSection from '../../billing/PlanSection';
 import OrderHistoryTab from '../../billing/OrderHistoryTab';
 
@@ -164,7 +165,7 @@ const ROLE_LABELS = {
 
 const AccountProfileModal = ({ isOpen, onClose }) => {
   const { t } = useI18n();
-  const { user, updateUser, activeContext, fetchAiCredits, syncBillingFromProfile } = useAuthStore();
+  const { user, updateUser, activeContext, fetchAiCredits, syncBillingFromProfile, phoneOtpEnabled } = useAuthStore();
   const isEmployeeCtx = activeContext?.type === 'employee';
 
   const TABS = isEmployeeCtx
@@ -187,6 +188,11 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // PR-2 (xác thực SĐT) — mở PhoneRequiredModal ĐÈ LÊN modal này để xác thực OTP. Đọc
+  // trạng thái xác thực từ user.phoneVerifiedAt (authStore toàn cục, PR-1 đã trả đúng field
+  // này qua /auth/me — KHÔNG dùng profileData/getMyProfile() cục bộ vì GET /users/profile
+  // hiện chưa SELECT phone_verified_at, xem bảng phản biện bước 1).
+  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
   const [copiedTarget, setCopiedTarget] = useState(null);
 
   const referralCode = profileData?.referralCode || user?.referralCode || '';
@@ -427,6 +433,32 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                     onChange={handleInputChange('phone')}
                     placeholder={t('accountProfileModal.placeholderPhone')}
                   />
+                  {/* PR-2 (xác thực SĐT) — chỉ hiện khi tính năng bật; cờ tắt thì khái niệm
+                      "đã xác thực" không tồn tại, giữ form y hệt hôm nay. */}
+                  {phoneOtpEnabled && user?.phone && (
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                      {user?.phoneVerifiedAt ? (
+                        <span className="inline-flex items-center gap-1 text-green-700">
+                          <HiOutlineCheckCircle className="w-4 h-4" />
+                          {t('accountProfileModal.phoneVerified', { date: formatDate(user.phoneVerifiedAt) })}
+                        </span>
+                      ) : (
+                        <>
+                          <span className="inline-flex items-center gap-1 text-amber-700">
+                            <HiOutlineBan className="w-4 h-4" />
+                            {t('accountProfileModal.phoneNotVerified')}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-primary-600 hover:text-primary-700 font-medium underline"
+                            onClick={() => setShowPhoneVerify(true)}
+                          >
+                            {t('accountProfileModal.phoneVerifyCta')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -661,6 +693,17 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
           </form>
         )}
       </div>
+      {/* PR-2 (xác thực SĐT) — modal OTP đè lên, tự createPortal riêng khi mở nên đặt ở đâu
+          trong cây này cũng không ảnh hưởng vị trí DOM thật; giữ ở đây (con của modal-overlay)
+          để không phải bọc thêm Fragment/định dạng lại toàn bộ khối JSX bên trên. */}
+      <PhoneRequiredModal
+        isOpen={showPhoneVerify}
+        onClose={() => setShowPhoneVerify(false)}
+        onChanged={(phone, phoneVerifiedAt) => {
+          updateUser({ ...user, phone, ...(phoneVerifiedAt ? { phoneVerifiedAt } : {}) });
+          setShowPhoneVerify(false);
+        }}
+      />
     </div>,
     document.body,
   );

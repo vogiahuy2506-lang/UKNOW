@@ -5939,6 +5939,10 @@ export default {
     fullName: 'Họ và tên',
     email: 'Email',
     phone: 'Số điện thoại',
+    // PR-2 (11/09/2026) — nhãn trạng thái xác thực SĐT, chỉ hiện khi phoneOtpEnabled bật.
+    phoneVerified: 'SĐT đã xác thực · {date}',
+    phoneNotVerified: 'Chưa xác thực',
+    phoneVerifyCta: 'Xác thực ngay',
     // Profile tab - placeholders
     placeholderFullName: 'Nhập họ và tên',
     placeholderEmail: 'Nhập email',

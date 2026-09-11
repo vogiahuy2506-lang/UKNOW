@@ -5900,6 +5900,10 @@ export default {
     fullName: 'Full Name',
     email: 'Email',
     phone: 'Phone Number',
+    // PR-2 (2026-09-11) — phone verification status label, shown only when phoneOtpEnabled.
+    phoneVerified: 'Phone verified · {date}',
+    phoneNotVerified: 'Not verified',
+    phoneVerifyCta: 'Verify now',
     // Profile tab - placeholders
     placeholderFullName: 'Enter full name',
     placeholderEmail: 'Enter email',
