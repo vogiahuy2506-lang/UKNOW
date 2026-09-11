@@ -937,6 +937,22 @@ class AuthController {
   }
 
   /**
+   * Cờ tính năng public (PR-2, xác thực SĐT) — KHÔNG yêu cầu đăng nhập. Trang đăng ký cần
+   * biết TRƯỚC khi user có tài khoản liệu có nên hiện ô SĐT hay không; cờ tắt/lỗi fetch ở
+   * tầng frontend đều coi như tắt — đường lùi nếu sếp đổi ý.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async getFeatures(req, res) {
+    return res.json({
+      success: true,
+      data: {
+        phoneOtpEnabled: isPhoneOtpEnabled(),
+      },
+    });
+  }
+
+  /**
    * Lấy thông tin user đang đăng nhập từ req.user (set bởi authMiddleware).
    * Trả thêm memberships[] — danh sách các tài khoản owner mà user đang là employee.
    * @param {import('express').Request} req

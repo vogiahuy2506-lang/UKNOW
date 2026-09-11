@@ -99,6 +99,11 @@ router.post('/logout', authMiddleware, authController.logout.bind(authController
 // Lấy thông tin user hiện tại
 router.get('/me', authMiddleware, authController.getMe.bind(authController));
 
+// Cờ tính năng public — KHÔNG authMiddleware, trang đăng ký (chưa có token) cần đọc trước
+// khi hiện/ẩn ô SĐT (PR-2, _internal/PLAN_XAC_THUC_SDT_OTP_2026-09-11.md mục 4 PR-2 việc 1).
+// authLimiter đã áp cho toàn router này ở app.js ('/api/auth', authLimiter, authRoutes).
+router.get('/features', authController.getFeatures.bind(authController));
+
 // Quên mật khẩu — gửi email reset
 router.post('/forgot-password',
   [body('email').trim().isEmail().withMessage('Email không hợp lệ')],
