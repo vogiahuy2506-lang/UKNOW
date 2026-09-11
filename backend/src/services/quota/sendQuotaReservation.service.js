@@ -81,6 +81,34 @@ export function resetShadowMismatchMetrics() {
 /**
  * Record a shadow mode evaluation outcome.
  */
+/**
+ * Dựng phần mô tả phía luật cũ cho dòng log lệch.
+ *
+ * CHỈ in limit/count khi luật cũ TỪ CHỐI. Ở nhánh cho phép, `okResult()` trong
+ * userSendLimit.util.js trả `currentCount: 0` và `limit: null` CỨNG cho mọi lượt — đó là giá trị
+ * mặc định, không phải phép đo. Ngày 11/09/2026 dòng log in `count=0` ở một lượt lệch thật, và
+ * đọc nó như số đếm dẫn tới cả một giả thuyết sai (lệch đồng hồ Node/Postgres).
+ *
+ * Luật rút ra: một trường chẩn đoán chỉ được in khi nó thật sự được ĐO; trường mặc định cứng phải
+ * nói rõ là không biết, vì người đọc log không có cách nào phân biệt hai thứ đó.
+ *
+ * Tách thành hàm riêng để test được — bản đầu kiểm chuỗi tự dựng trong test nên đột biến đổi
+ * logic thật vẫn xanh.
+ *
+ * @param {object|null} legacyResult
+ * @param {Error|null} legacyError
+ * @returns {string|null}
+ */
+export function buildLegacyDetail(legacyResult, legacyError) {
+  if (legacyError) return `error=${legacyError.message}`;
+  if (!legacyResult) return null;
+  if (legacyResult.allowed === false) {
+    return `limitType=${legacyResult.limitType ?? '?'} limit=${legacyResult.limit ?? '?'}`
+      + ` count=${legacyResult.currentCount ?? '?'} billingUserId=${legacyResult.billingUserId ?? '?'}`;
+  }
+  return 'allowed, count/limit KHONG do duoc o nhanh cho phep (okResult tra hang so)';
+}
+
 export function recordShadowEvaluation({
   legacyAllowed, atomicAllowed, atomicError, billingUserId, userId, channel,
   atomicBillingUserId = null, atomicDiag = null, legacyDetail = null,
@@ -430,6 +458,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
       ? await countEmailSentTodayWithLedger(client, billingUserId, vnDayStart, vnDayEnd)
       : await countZaloSentTodayWithLedger(client, billingUserId, vnDayStart, vnDayEnd);
     diag.dailyCount = dailyCount;
+    diag.vnDayStart = vnDayStart instanceof Date ? vnDayStart.toISOString() : String(vnDayStart);
     if (dailyCount + quantity > dailyLimit) {
       const err = new Error(
         `Đã đạt giới hạn gửi ${channelLabel} trong ngày (${dailyCount}/${dailyLimit} ${unitLabel}). Hạn mức sẽ reset vào 00:00 ngày mai.`
@@ -441,6 +470,9 @@ export async function evaluateReservationQuotaPolicy(client, params) {
       err.currentCount = dailyCount;
       err.resetAt = vnDayEnd;
       err.billingUserId = billingUserId;
+      // Gắn chẩn đoán vào CẢ lỗi ném ra: nhánh shadow chỉ đọc được `diag` từ đường trả về thành
+      // công, nên mọi lượt lệch mà atomic từ chối đều in ra toàn dấu hỏi (gặp thật 10-11/09).
+      err.diag = diag;
       throw err;
     }
   }
@@ -699,6 +731,7 @@ export async function reserveSendQuota(params, options = {}) {
       atomicAllowed = false;
       atomicError = candErr;
       atomicBillingUserId = candErr?.billingUserId ?? null;
+      atomicDiag = candErr?.diag ?? null;
     } finally {
       if (shadowClient) {
         try {
@@ -717,9 +750,7 @@ export async function reserveSendQuota(params, options = {}) {
       channel,
       atomicBillingUserId,
       atomicDiag,
-      legacyDetail: legacyResult
-        ? `limitType=${legacyResult.limitType ?? '?'} limit=${legacyResult.limit ?? '?'} count=${legacyResult.currentCount ?? '?'} billingUserId=${legacyResult.billingUserId ?? '?'}`
-        : (legacyError ? `error=${legacyError.message}` : null),
+      legacyDetail: buildLegacyDetail(legacyResult, legacyError),
     });
 
     const isMismatch = legacyAllowed !== atomicAllowed;

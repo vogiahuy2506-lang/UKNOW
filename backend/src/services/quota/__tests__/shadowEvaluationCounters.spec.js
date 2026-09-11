@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import {
+  buildLegacyDetail,
   getShadowMismatchMetrics,
   recordShadowEvaluation,
   resetShadowMismatchMetrics,
@@ -174,5 +175,84 @@ describe('dòng log lệch phải mang đủ số để truy nguyên nhân trong
   it('không lệch thì KHÔNG log gì', () => {
     recordShadowEvaluation({ legacyAllowed: true, atomicAllowed: true, userId: 1, channel: 'email' });
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Ngày 11/09/2026, dòng log của một lượt lệch thật in ra:
+ *
+ *   legacy=true [limitType=? limit=? count=0 billingUserId=1], atomic=false ... (2/1 email)
+ *
+ * `count=0` KHÔNG phải số đo được — `okResult()` trong userSendLimit.util.js trả
+ * `currentCount: 0` và `limit: null` cứng cho MỌI lượt cho phép. Đọc nó như số đếm thật dẫn tới
+ * kết luận "luật cũ đếm 0, luật mới đếm 2", và từ đó là cả một giả thuyết sai về lệch đồng hồ
+ * giữa Node và Postgres — mất gần một tiếng mới phát hiện.
+ *
+ * Luật rút ra: một trường chẩn đoán chỉ được in ra khi nó thật sự được ĐO. Trường mặc định cứng
+ * phải nói rõ là không biết, vì người đọc log không có cách nào phân biệt hai thứ đó.
+ */
+describe('buildLegacyDetail — nhánh CHO PHÉP không được in số đếm giả', () => {
+  /** Đúng hình dạng okResult() trả về: count 0 và limit null là HẰNG SỐ, không phải phép đo. */
+  const OK_SHAPED = {
+    allowed: true, limitType: null, limit: null, currentCount: 0, resetAt: null,
+    message: null, billingUserId: 1,
+  };
+
+  /** Đúng hình dạng denyResult() trả về: ở đây count/limit là số đo thật. */
+  const DENY_SHAPED = {
+    allowed: false, limitType: 'daily', limit: 1, currentCount: 2, resetAt: new Date(),
+    message: 'Đã đạt giới hạn gửi email trong ngày (2/1 email).', billingUserId: 1,
+  };
+
+  it('luật cũ cho phép → nói KHÔNG đo được, tuyệt đối không in "count=0"', () => {
+    const detail = buildLegacyDetail(OK_SHAPED, null);
+
+    expect(detail).toContain('KHONG do duoc');
+    expect(detail).not.toContain('count=0');
+    expect(detail).not.toContain('limit=null');
+  });
+
+  it('luật cũ TỪ CHỐI → vẫn in đủ limit/count vì lúc đó chúng là số đo thật', () => {
+    const detail = buildLegacyDetail(DENY_SHAPED, null);
+
+    expect(detail).toContain('limitType=daily');
+    expect(detail).toContain('limit=1');
+    expect(detail).toContain('count=2');
+    expect(detail).toContain('billingUserId=1');
+  });
+
+  it('luật cũ ném lỗi → in nguyên thông điệp lỗi', () => {
+    const detail = buildLegacyDetail(null, new Error('DB connection lost'));
+    expect(detail).toBe('error=DB connection lost');
+  });
+
+  it('không có kết quả lẫn lỗi → null, không dựng chuỗi rỗng gây hiểu nhầm', () => {
+    expect(buildLegacyDetail(null, null)).toBeNull();
+  });
+
+  it('chuỗi dựng ra đi nguyên vẹn vào dòng log', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      resetShadowMismatchMetrics();
+      recordShadowEvaluation({
+        legacyAllowed: true,
+        atomicAllowed: false,
+        userId: 1,
+        billingUserId: 1,
+        channel: 'email',
+        atomicBillingUserId: 1,
+        atomicDiag: { billingUserId: 1, planId: 18, dailyLimit: 1, dailyCount: 2 },
+        legacyDetail: buildLegacyDetail(OK_SHAPED, null),
+      });
+
+      const line = warnSpy.mock.calls[0][0];
+      expect(line).toContain('KHONG do duoc');
+      expect(line).not.toContain('count=0');
+      // Phía atomic vẫn phải có số thật để so — đó mới là bên đo được.
+      expect(line).toContain('dailyCount=2');
+      expect(line).toContain('dailyLimit=1');
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
