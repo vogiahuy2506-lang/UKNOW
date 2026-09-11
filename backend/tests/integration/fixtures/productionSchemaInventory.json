@@ -1,15 +1,22 @@
 {
   "_meta": {
-    "source": "schema ky vong sau khi chay het migrations (goc: anh chup production 25/08/2026, update 194+195+196 ngay 08/09/2026)",
-    "measuredAt": "2026-09-08",
+    "source": "schema ky vong sau khi chay het migrations (goc: anh chup production 25/08/2026, update 194+195+196 ngay 08/09/2026, update 201 ngay 11/09/2026)",
+    "measuredAt": "2026-09-11",
     "method": "So md5(string_agg(column_name ORDER BY column_name)) theo tung bang giua DB test (dung tu bootstrap.sql) va production — ket qua 0 bang lech.",
     "scope": "CHI TEN COT. Anh chup goc co 51/112 bang lech kieu du lieu, chu yeu timestamp naive (prod) vs timestamptz (test). Xem _internal/PLAN_SCHEMA_DRIFT_BOOTSTRAP_2026-08-25.md.",
     "excluded": "3 bang backup tam tren production (courses_backup_20260825, campaign_nodes_backup_20260825, users_plan_backup_minh) khong tinh.",
-    "tables": 125,
-    "columns": 1696,
+    "tables": 126,
+    "columns": 1701,
     "note": "TU migration 172 tro di, fixture DI TRUOC production cho toi khi deploy: is_preview tren email_messages/zalo_messages chi ton tai o production SAU khi 172 chay. Metadata preflight/result migration 174 cung chi co tren production sau khi deploy release 174. Do lai voi production TRUOC deploy se thay lech — do la binh thuong, khong phai loi."
   },
   "tables": {
+    "admin_menu_layouts": [
+      "categories",
+      "created_at",
+      "scope",
+      "updated_at",
+      "updated_by"
+    ],
     "affiliate_ledger": [
       "amount",
       "created_at",
