@@ -181,11 +181,23 @@ COMMIT;`;
       content: fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8'),
     }));
 
+    // Bấm giờ CHỈ quanh stripOuterTransactionStatements. Bản trước gói cả ~1.900 lời gọi
+    // expect() (190 file × ~10 assertion) vào trong vùng đo, nên con số đo được là chi phí của
+    // bộ máy assertion Jest dưới tải CPU chứ không phải của hàm đang benchmark — chạy riêng thì
+    // 5/5 xanh, chạy trong bộ đầy đủ (280 suite song song) thì đỏ 2/3 lượt với 578ms, chặn push.
     const startTime = Date.now();
-    let strippedWrappedFilesCount = 0;
+    const strippedList = fileContents.map(({ content }) => stripOuterTransactionStatements(content));
+    const elapsed = Date.now() - startTime;
 
-    for (const { content } of fileContents) {
-      const stripped = stripOuterTransactionStatements(content);
+    // Giờ vùng đo chỉ còn thao tác chuỗi thuần trong bộ nhớ — thực đo ~10ms. Ngưỡng 500ms vẫn
+    // rộng rãi, nhưng nay nó thật sự canh "hàm không đi làm I/O mỗi file" chứ không canh tải máy.
+    expect(elapsed).toBeLessThan(500);
+
+    let strippedWrappedFilesCount = 0;
+    for (let i = 0; i < fileContents.length; i += 1) {
+      const { content } = fileContents[i];
+      const stripped = strippedList[i];
+
       expect(typeof stripped).toBe('string');
       if (content.trim().length > 0) {
         expect(stripped.length).toBeGreaterThan(0);
@@ -202,9 +214,6 @@ COMMIT;`;
       }
     }
 
-    const elapsed = Date.now() - startTime;
-    // 190 file xử lý trong bộ nhớ phải cực nhanh (thường < 30ms, đặt ngưỡng 500ms chống flaky khi CI tải cao)
-    expect(elapsed).toBeLessThan(500);
     expect(strippedWrappedFilesCount).toBeGreaterThanOrEqual(50);
 
     // Kiểm tra cụ thể các file có outer wrapper điển hình
