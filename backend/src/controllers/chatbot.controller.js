@@ -11,6 +11,8 @@ import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
+import telegramPersonalService from '../services/chatbot/telegramPersonal.service.js';
+import telegramGateway from '../services/chatbot/telegramGateway.client.js';
 import customChatService from '../services/ai/customChat.service.js';
 import aiCreditMeter, { VISITOR_CHAT_UNAVAILABLE_MESSAGE } from '../services/ai/aiCreditMeter.service.js';
 import zaloInboxService from '../services/chatbot/zaloInbox.service.js';
@@ -2396,6 +2398,178 @@ class ChatbotController {
    */
   async revokeShare(req, res) {
     return res.json({ success: true, message: 'Tính năng đã ngừng sử dụng' });
+  }
+
+  // ── Telegram Personal (managed by Python telegram-gateway) ──────────
+
+  /**
+   * POST /ai/chatbot/telegram-accounts/init
+   * Bắt đầu QR login flow, trả về QR code base64.
+   */
+  async initTelegramLogin(req, res) {
+    try {
+      if (!telegramGateway.isConfigured()) {
+        return res.status(503).json({
+          success: false,
+          message: 'Telegram gateway chưa được cấu hình trên máy chủ.',
+        });
+      }
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const result = await telegramPersonalService.startLogin(userId);
+      return res.json({ success: true, data: result });
+    } catch (err) {
+      console.error('[Telegram] initTelegramLogin error:', err.message);
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * GET /ai/chatbot/telegram-accounts/status/:sessionId
+   * Poll trạng thái QR login. Khi success → trả về account row đã tạo.
+   */
+  async checkTelegramLoginStatus(req, res) {
+    try {
+      const result = await telegramPersonalService.checkLoginStatus(req.params.sessionId);
+      if (result.status === 'not_found') {
+        return res.status(404).json({ success: false, message: 'Phiên đăng nhập đã hết hạn' });
+      }
+      return res.json({ success: true, data: result });
+    } catch (err) {
+      console.error('[Telegram] checkTelegramLoginStatus error:', err.message);
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * DELETE /ai/chatbot/telegram-accounts/login/:sessionId
+   * Hủy QR login flow đang chờ.
+   */
+  async cancelTelegramLogin(req, res) {
+    try {
+      await telegramPersonalService.cancelLogin(req.params.sessionId);
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * GET /ai/chatbot/telegram-accounts
+   * List tất cả Telegram accounts của user (Channel Settings).
+   */
+  async listTelegramAccounts(req, res) {
+    try {
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const accounts = await telegramPersonalService.listAccounts(userId);
+      return res.json({ success: true, data: accounts });
+    } catch (err) {
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * DELETE /ai/chatbot/telegram-accounts/:id
+   * Xóa hoàn toàn tài khoản Telegram + cắt session ở gateway.
+   */
+  async deleteTelegramAccount(req, res) {
+    try {
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid Telegram account ID' });
+      }
+      const deleted = await telegramPersonalService.deleteAccount(userId, id);
+      if (!deleted) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Telegram' });
+      }
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_DISCONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, id, { channelType: 'telegram_personal' });
+      return res.json({ success: true, message: 'Đã xóa tài khoản Telegram' });
+    } catch (err) {
+      console.error('[Telegram] deleteTelegramAccount error:', err.message);
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * POST /ai/chatbot/telegram-accounts/:id/logout
+   * Chỉ ngắt kết nối (gateway drop client + file session), giữ row lịch sử.
+   */
+  async logoutTelegramAccount(req, res) {
+    try {
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid Telegram account ID' });
+      }
+      const updated = await telegramPersonalService.logoutAccount(userId, id);
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Telegram' });
+      }
+      return res.json({ success: true, data: updated, message: 'Đã ngắt kết nối Telegram' });
+    } catch (err) {
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * GET /ai/chatbot/telegram-accounts/chatbot?chatbot_id=123
+   * List Telegram accounts kèm trạng thái enable cho một chatbot cụ thể.
+   * Mirror WhatsApp/Zalo Personal endpoint shape so DeployTab modal code
+   * is identical across channels.
+   */
+  async listTelegramAccountsWithChatbotSettings(req, res) {
+    try {
+      const rawChatbotId = req.query?.chatbot_id;
+      const chatbotId = rawChatbotId == null || rawChatbotId === ''
+        ? null
+        : parseInt(rawChatbotId, 10);
+      if (chatbotId != null && !Number.isFinite(chatbotId)) {
+        return res.status(400).json({ success: false, message: 'chatbot_id must be a number or empty' });
+      }
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const accounts = await telegramPersonalService.listAccountsWithChatbotSettings(userId, chatbotId);
+      return res.json({ success: true, data: accounts });
+    } catch (err) {
+      console.error('[Telegram] listTelegramAccountsWithChatbotSettings error:', err.message);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * POST /ai/chatbot/telegram-account/chatbot/toggle
+   * Body: { enabled: boolean, id_account: number, id_chatbot?: number }
+   */
+  async toggleTelegramAccountChatbot(req, res) {
+    try {
+      const { enabled, id_account, id_chatbot } = req.body || {};
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
+      }
+      const accountId = parseInt(id_account, 10);
+      if (!Number.isFinite(accountId)) {
+        return res.status(400).json({ success: false, message: 'id_account is required' });
+      }
+      const normalizedChatbotId = id_chatbot == null || id_chatbot === ''
+        ? null
+        : parseInt(id_chatbot, 10);
+      if (normalizedChatbotId != null && !Number.isFinite(normalizedChatbotId)) {
+        return res.status(400).json({ success: false, message: 'id_chatbot must be a number or null' });
+      }
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const settings = await telegramPersonalService.toggleAccountChatbot(
+        userId, accountId, normalizedChatbotId, enabled
+      );
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, settings.id, {
+        channelType: 'telegram_personal',
+        telegramAccountId: accountId,
+        chatbotId: normalizedChatbotId,
+        enabled,
+      });
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      console.error('[Telegram] toggleTelegramAccountChatbot error:', err.message);
+      return res.status(err.status || 500).json({ success: false, message: err.message });
+    }
   }
 }
 

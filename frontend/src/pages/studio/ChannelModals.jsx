@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import WhatsAppChannelModal from '../../features/chatbot/components/WhatsAppChannelModal';
+import TelegramChannelModal from '../../features/chatbot/components/TelegramChannelModal';
 
 /* ─── ChannelModal — cấu hình từng kênh ─────────────────────────────── */
 
@@ -25,6 +26,18 @@ export function ChannelModal({ open, channel, chatbot, onClose }) {
   if (channel === 'whatsapp') {
     return (
       <WhatsAppChannelModal
+        open={open}
+        onClose={onClose}
+        chatbotId={chatbot.id}
+      />
+    );
+  }
+
+  // Telegram personal accounts use the same per-chatbot toggle pattern as
+  // WhatsApp / Zalo Personal — render the dedicated modal.
+  if (channel === 'telegram_personal') {
+    return (
+      <TelegramChannelModal
         open={open}
         onClose={onClose}
         chatbotId={chatbot.id}

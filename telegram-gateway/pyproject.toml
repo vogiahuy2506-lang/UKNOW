@@ -1,0 +1,17 @@
+[project]
+name = "telegram-gateway"
+version = "0.1.0"
+description = "Lightweight Telethon-based gateway for multi-account Telegram personal account integration"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "telethon>=1.36",
+    "redis>=5.0",
+    "aiosqlite>=0.19",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "python-dotenv>=1.0",
+    "httpx>=0.26",
+    "qrcode[pil]>=7.4",
+]

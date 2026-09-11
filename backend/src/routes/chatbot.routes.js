@@ -247,6 +247,17 @@ router.post('/whatsapp-account/chatbot/toggle', requirePermission('chatbot_chann
 // Giữ route cũ để client cũ không vỡ — nó đọc id từ URL nhưng dispatch tới body.
 router.post('/whatsapp-account/:channelConnectionId/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleWhatsAppAccountChatbot.bind(chatbotController));
 
+// ── Telegram Personal (QR login via Python telegram-gateway) ────────────
+
+router.post('/telegram-accounts/init', requirePermission('chatbot_channels_manage'), chatbotController.initTelegramLogin.bind(chatbotController));
+router.get('/telegram-accounts/status/:sessionId', requirePermission('chatbot_channels_manage'), chatbotController.checkTelegramLoginStatus.bind(chatbotController));
+router.delete('/telegram-accounts/login/:sessionId', requirePermission('chatbot_channels_manage'), chatbotController.cancelTelegramLogin.bind(chatbotController));
+router.get('/telegram-accounts', requirePermission('chatbot_channels_manage'), chatbotController.listTelegramAccounts.bind(chatbotController));
+router.delete('/telegram-accounts/:id', requirePermission('chatbot_channels_manage'), chatbotController.deleteTelegramAccount.bind(chatbotController));
+router.post('/telegram-accounts/:id/logout', requirePermission('chatbot_channels_manage'), chatbotController.logoutTelegramAccount.bind(chatbotController));
+router.get('/telegram-accounts/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.listTelegramAccountsWithChatbotSettings.bind(chatbotController));
+router.post('/telegram-account/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleTelegramAccountChatbot.bind(chatbotController));
+
 // ── Outbox ───────────────────────────────────────────────────────
 
 router.get('/inbox/outbox', requirePermission('inbox_view'), unifiedInboxController.getOutboxMessages.bind(unifiedInboxController));

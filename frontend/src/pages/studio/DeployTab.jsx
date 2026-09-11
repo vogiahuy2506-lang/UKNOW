@@ -70,6 +70,13 @@ const CHANNEL_TILES = [
     icon: 'W',
     iconClass: 'bg-emerald-50 text-emerald-600',
   },
+  {
+    key: 'telegram_personal',
+    title: 'Telegram',
+    tooltip: 'Telegram cá nhân — Quét QR để liên kết, bật chatbot cho từng tài khoản',
+    icon: 'T',
+    iconClass: 'bg-sky-50 text-sky-600',
+  },
 ];
 
 const SHARE_OPTIONS = [
@@ -120,7 +127,7 @@ export default function DeployTab({
 }) {
   const [channels, setChannels] = useState([]);
   const [embedModal, setEmbedModal] = useState(null); // 'script' | 'iframe' | 'public_link' | null
-  const [channelModal, setChannelModal] = useState(null); // 'zalo' | 'facebook' | 'zalo_personal' | null
+  const [channelModal, setChannelModal] = useState(null); // 'zalo' | 'facebook' | 'zalo_personal' | 'whatsapp' | 'telegram_personal' | null
   const [shareModal, setShareModal] = useState(false);
   const [marketplaceModal, setMarketplaceModal] = useState(false);
 
@@ -203,9 +210,13 @@ export default function DeployTab({
                 : tile.key === 'facebook'
                 ? !!facebookChannel
                 : null;
-              // WhatsApp can have multiple accounts per chatbot — defer to
-              // modal for the actual count, so we don't draw a static dot here.
-              const isMultiAccountTile = tile.key === 'whatsapp' || tile.key === 'zalo_personal';
+              // Multi-account channels (WhatsApp, Zalo Personal, Telegram personal)
+              // surface their state inside the modal — we don't draw a static
+              // status dot here so we don't mislead users when only some of
+              // their accounts are linked/enabled.
+              const isMultiAccountTile = tile.key === 'whatsapp'
+                || tile.key === 'zalo_personal'
+                || tile.key === 'telegram_personal';
               return (
                 <SquareTile
                   key={tile.key}

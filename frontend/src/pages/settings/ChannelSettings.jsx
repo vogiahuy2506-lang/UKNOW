@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import EmailSettings from './EmailSettings';
 import ZaloSettings from './ZaloSettings';
 import WhatsAppSettings from './WhatsAppSettings';
+import TelegramSettings from './TelegramSettings';
 
 const TABS = [
   { key: 'email', label: 'Email' },
   { key: 'zalo', label: 'Zalo' },
   { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'telegram', label: 'Telegram' },
 ];
 
 const ChannelSettings = () => {
@@ -60,6 +62,7 @@ const ChannelSettings = () => {
       {active === 'email' && <EmailSettings />}
       {active === 'zalo' && <ZaloSettings />}
       {active === 'whatsapp' && <WhatsAppSettings />}
+      {active === 'telegram' && <TelegramSettings />}
     </div>
   );
 };

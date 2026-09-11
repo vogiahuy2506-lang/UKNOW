@@ -209,6 +209,55 @@ const chatbotApiService = {
     return api.get('/ai/chatbot/custom-chatbots', { params });
   },
 
+  // ── Telegram Personal Account (managed by Python telegram-gateway) ──────
+
+  // Bắt đầu QR login flow, trả về QR image base64.
+  initTelegramLogin() {
+    return api.post('/ai/chatbot/telegram-accounts/init');
+  },
+
+  // Poll trạng thái QR login. Khi success, trả về account row.
+  checkTelegramLoginStatus(sessionId) {
+    return api.get(`/ai/chatbot/telegram-accounts/status/${encodeURIComponent(sessionId)}`);
+  },
+
+  // Hủy QR login flow.
+  cancelTelegramLogin(sessionId) {
+    return api.delete(`/ai/chatbot/telegram-accounts/login/${encodeURIComponent(sessionId)}`);
+  },
+
+  // List Telegram accounts (Channel Settings).
+  listTelegramAccounts() {
+    return api.get('/ai/chatbot/telegram-accounts');
+  },
+
+  // Xóa tài khoản Telegram vĩnh viễn.
+  deleteTelegramAccount(id) {
+    return api.delete(`/ai/chatbot/telegram-accounts/${id}`);
+  },
+
+  // Ngắt kết nối Telegram, giữ row lịch sử.
+  logoutTelegramAccount(id) {
+    return api.post(`/ai/chatbot/telegram-accounts/${id}/logout`);
+  },
+
+  // DeployTab modal: list accounts kèm enable flag cho một chatbot cụ thể.
+  listTelegramAccountsWithChatbotSettings(chatbotId) {
+    const params = chatbotId == null || chatbotId === ''
+      ? null
+      : { chatbot_id: chatbotId };
+    return api.get('/ai/chatbot/telegram-accounts/chatbot', { params });
+  },
+
+  // DeployTab modal: bật/tắt chatbot cho Telegram account.
+  toggleTelegramAccountChatbot(accountId, enabled, idChatbot) {
+    return api.post('/ai/chatbot/telegram-account/chatbot/toggle', {
+      enabled,
+      id_account: accountId,
+      id_chatbot: idChatbot ?? null,
+    });
+  },
+
   // Delete a conversation
   deleteConversation(conversationId, type = 'zalo_personal') {
     return api.delete(`/ai/chatbot/inbox/conversations/${conversationId}?type=${type}`);

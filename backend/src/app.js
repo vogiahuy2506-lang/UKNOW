@@ -71,6 +71,7 @@ import employeeRoutes from './routes/employee.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import chatbotRoutes from './routes/chatbot.routes.js';
 import chatbotPublicRoutes from './routes/chatbotPublic.routes.js';
+import internalRoutes from './routes/internal.routes.js';
 import heroConsultationRoutes from './routes/heroConsultation.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
 import customDomainRoutes from './routes/customDomain.routes.js';
@@ -211,6 +212,9 @@ export function createApp() {
   app.use('/api/admin/system-email-templates', adminSystemEmailTemplateRoutes);
   app.use('/api/delivery-monitor', userDeliveryMonitorRoutes);
   app.use('/api/ai/chatbot', chatbotRoutes);
+  // /api/internal/* - inter-service endpoints (Telegram gateway, etc.)
+  // Mapped BEFORE the global /api limiter so they can keep their own rules.
+  app.use('/api/internal', internalRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/chatbot-public', publicCorsMiddleware, chatbotPublicRoutes);
   app.use('/api/public/hero', heroConsultationRoutes);

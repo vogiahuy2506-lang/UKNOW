@@ -8,6 +8,7 @@ import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import whatsappAdapter from './channelAdapters/whatsapp.adapter.js';
+import telegramAdapter from './channelAdapters/telegram.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
@@ -24,6 +25,7 @@ const ADAPTERS = {
   facebook: facebookAdapter,
   zalo_personal: zaloPersonalAdapter,
   whatsapp: whatsappAdapter,
+  telegram_personal: telegramAdapter,
 };
 
 const MAX_HISTORY_MESSAGES = 20;
@@ -390,8 +392,33 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       if (channel === 'zalo_personal') {
         return this._getZaloPersonalHistory(conversationId, limit, options);
       }
+      if (channel === 'telegram_personal') {
+        return this._getTelegramPersonalHistory(conversationId, limit);
+      }
       return chatbotRepository.getChannelMessages(conversationId, { limit });
     } catch {
+      return [];
+    }
+  }
+
+  async _getTelegramPersonalHistory(conversationId, limit = 20) {
+    try {
+      const db = (await import('../../config/database.js')).default;
+      const { rows } = await db.query(
+        `SELECT role, content, created_at
+         FROM telegram_personal_messages
+         WHERE id_conversation = $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [conversationId, limit]
+      );
+      // Map role: visitor → user, bot/agent → model (matches Gemini mapping).
+      return rows.reverse().map((row) => ({
+        role: row.role,
+        content: row.content || '',
+      }));
+    } catch (err) {
+      console.warn('[ChatRouter] _getTelegramPersonalHistory failed:', err.message);
       return [];
     }
   }
