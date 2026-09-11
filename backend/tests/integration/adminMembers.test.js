@@ -48,6 +48,11 @@ async function setSubscriptionExpiry(userId, date) {
   await db.query(`UPDATE users SET subscription_expires_at = $1 WHERE id = $2`, [date, userId]);
 }
 
+/** Set `phone_verified_at` cho user. Dùng để test filter phoneVerified (PR-3 SĐT admin). */
+async function setPhoneVerifiedAt(userId, date) {
+  await db.query(`UPDATE users SET phone_verified_at = $1 WHERE id = $2`, [date, userId]);
+}
+
 describe('Authorization — /api/admin/members', () => {
   it('không token → 401', async () => {
     const res = await request(app).get('/api/admin/members');
@@ -223,6 +228,71 @@ describe('GET /api/admin/members — listing', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.body.data.map((m) => m.username)).toEqual(['expired_no_plan']);
+  });
+
+  it('trả về phone/phoneVerifiedAt trong danh sách (PR-3, chưa lọc)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const verified = await createUser({ role: 'user', username: 'has_phone_verified', phone: '0911222001' });
+    await setPhoneVerifiedAt(verified.id, new Date('2026-09-01T00:00:00Z'));
+    await createUser({ role: 'user', username: 'has_phone_unverified', phone: '0911222002' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/members')
+      .set('Authorization', `Bearer ${token}`);
+
+    const foundVerified = res.body.data.find((m) => m.username === 'has_phone_verified');
+    const foundUnverified = res.body.data.find((m) => m.username === 'has_phone_unverified');
+    expect(foundVerified.phone).toBe('0911222001');
+    expect(foundVerified.phoneVerifiedAt).not.toBeNull();
+    expect(foundUnverified.phone).toBe('0911222002');
+    expect(foundUnverified.phoneVerifiedAt).toBeNull();
+  });
+
+  it('phoneVerified=verified → chỉ user đã xác thực SĐT', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const verified = await createUser({ role: 'user', username: 'pv_verified' });
+    await setPhoneVerifiedAt(verified.id, new Date());
+    await createUser({ role: 'user', username: 'pv_unverified' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/members?phoneVerified=verified')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.body.data.map((m) => m.username)).toEqual(['pv_verified']);
+  });
+
+  it('phoneVerified=unverified → gồm cả user CHƯA CÓ SĐT (phone IS NULL)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const verified = await createUser({ role: 'user', username: 'pv2_verified' });
+    await setPhoneVerifiedAt(verified.id, new Date());
+    await createUser({ role: 'user', username: 'pv2_has_phone_no_verify' });
+    await createUser({ role: 'user', username: 'pv2_no_phone', phone: null });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/members?phoneVerified=unverified')
+      .set('Authorization', `Bearer ${token}`);
+
+    const usernames = res.body.data.map((m) => m.username).sort();
+    expect(usernames).toEqual(['pv2_has_phone_no_verify', 'pv2_no_phone'].sort());
+  });
+
+  it('phoneVerified=giá trị lạ → bỏ qua filter (không 400, trả về tất cả)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const verified = await createUser({ role: 'user', username: 'junk_verified' });
+    await setPhoneVerifiedAt(verified.id, new Date());
+    await createUser({ role: 'user', username: 'junk_unverified' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/members?phoneVerified=banana')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const usernames = res.body.data.map((m) => m.username).sort();
+    expect(usernames).toEqual(['junk_unverified', 'junk_verified'].sort());
   });
 
   it('trả về planName/planCode khi user có plan', async () => {
