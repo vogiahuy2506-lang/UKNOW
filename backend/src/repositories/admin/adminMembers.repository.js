@@ -4,7 +4,7 @@ import db from '../../config/database.js';
  * Danh sách tất cả user_admin, kèm thông tin gói và số nhân viên.
  * Hỗ trợ tìm kiếm theo tên/email và lọc theo plan/status.
  */
-export async function findAllMembers({ search, planId, status, expiry, role } = {}) {
+export async function findAllMembers({ search, planId, status, expiry, role, phoneVerified } = {}) {
   // Default to role='user' for member listing, allow override
   const roleCondition = role ? `u.role = '${role}'` : "u.role = 'user'";
   const conditions = [roleCondition];
@@ -32,6 +32,12 @@ export async function findAllMembers({ search, planId, status, expiry, role } = 
   } else if (expiry === 'expired') {
     conditions.push(`u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at < NOW() AND u.active_plan_id IS NULL`);
   }
+  if (phoneVerified === 'verified') {
+    conditions.push(`u.phone_verified_at IS NOT NULL`);
+  } else if (phoneVerified === 'unverified') {
+    // Kể cả chưa có số (phone IS NULL) — "chưa xác thực" bao gồm cả chưa nhập.
+    conditions.push(`u.phone_verified_at IS NULL`);
+  }
 
   const where = conditions.join(' AND ');
 
@@ -42,6 +48,7 @@ export async function findAllMembers({ search, planId, status, expiry, role } = 
          u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
          u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt",
          u.last_login_at AS "lastLoginAt",
+         u.phone AS "phone", u.phone_verified_at AS "phoneVerifiedAt",
          p.name AS "planName",
          p.code AS "planCode",
          (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount",
@@ -80,6 +87,7 @@ export async function findAllMembers({ search, planId, status, expiry, role } = 
       `SELECT
          u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
          u.active_plan_id AS "activePlanId", NULL AS "subscriptionExpiresAt",
+         u.phone AS "phone", u.phone_verified_at AS "phoneVerifiedAt",
          p.name AS "planName",
          p.code AS "planCode",
          (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount"
@@ -95,8 +103,9 @@ export async function findAllMembers({ search, planId, status, expiry, role } = 
 
 export async function findMemberById(id) {
   const { rows } = await db.query(
-    `SELECT u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.role, u.created_at AS "createdAt", 
+    `SELECT u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.role, u.created_at AS "createdAt",
             u.active_plan_id AS "activePlanId",
+            u.phone AS "phone", u.phone_verified_at AS "phoneVerifiedAt",
             p.name AS "planName", p.code AS "planCode"
      FROM users u
      LEFT JOIN plans p ON p.id = u.active_plan_id

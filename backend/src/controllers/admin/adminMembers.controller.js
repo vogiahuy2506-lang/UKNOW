@@ -8,11 +8,18 @@ function handleError(res, err) {
   return res.status(500).json({ success: false, message: 'Lỗi server' });
 }
 
-/** GET /api/admin/members?search=&planId=&status=&role= */
+const PHONE_VERIFIED_VALUES = new Set(['verified', 'unverified']);
+
+/** GET /api/admin/members?search=&planId=&status=&role=&phoneVerified= */
 export async function list(req, res) {
   try {
-    const { search, planId, status, expiry, role } = req.query;
-    const members = await adminMembersService.listMembers({ search, planId, status, expiry, role });
+    const { search, planId, status, expiry, role, phoneVerified } = req.query;
+    // Giá trị lạ (không phải verified/unverified) → bỏ qua, không 400 — cùng triết lý
+    // "im lặng bỏ qua filter không hiểu" như planId/status/expiry ở trên.
+    const phoneVerifiedFilter = PHONE_VERIFIED_VALUES.has(phoneVerified) ? phoneVerified : undefined;
+    const members = await adminMembersService.listMembers({
+      search, planId, status, expiry, role, phoneVerified: phoneVerifiedFilter,
+    });
     return res.json({ success: true, data: members });
   } catch (err) { return handleError(res, err); }
 }
