@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import verificationRepository from '../repositories/verification.repository.js';
 import { sendSystemEmail } from '../utils/systemEmail.util.js';
+import { sendOtp } from './sms/otpProvider.service.js';
+import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
 
 const PRODUCT_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
 const LOGO_URL = 'https://founderai.biz/logo.png';
@@ -8,6 +10,28 @@ const LOGO_URL = 'https://founderai.biz/logo.png';
 // ReferenceError → mời nhân viên và quên mật khẩu đều trả 500.
 // Cùng mặc định với auth.controller.js và systemEmail.util.js.
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
+
+// ─── OTP theo SĐT (PR-1, xác thực SĐT) — ba lớp trần vì OTP SMS tốn tiền thật (Bẫy #2:
+// sự cố "ai cũng bắn được mã tới email bất kỳ" 05/08 lặp lại ở SMS là mất tiền, không chỉ
+// phiền). Xem _internal/PLAN_XAC_THUC_SDT_OTP_2026-09-11.md mục 4.4.
+const PHONE_OTP_COOLDOWN_SECONDS = 60;
+const PHONE_OTP_MAX_PER_PHONE_PER_DAY = 5;
+const PHONE_OTP_MAX_PER_USER_PER_DAY = 5;
+const PHONE_OTP_MAX_ATTEMPTS = 5;
+const PHONE_OTP_EXPIRES_MINUTES = 5;
+const PHONE_OTP_DAILY_CAP_DEFAULT = 300;
+
+function resolvePhoneOtpDailyCap() {
+  const raw = Number.parseInt(process.env.PHONE_OTP_DAILY_CAP, 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : PHONE_OTP_DAILY_CAP_DEFAULT;
+}
+
+function phoneCapError(code, message) {
+  const err = new Error(message);
+  err.status = 429;
+  err.code = code;
+  return err;
+}
 
 // ─── Shared Template Builder ─────────────────────────────────────────────────
 
@@ -256,6 +280,102 @@ class VerificationService {
 
   async verifyCode(email, code, type = 'email_verification') {
     return verificationRepository.findValidCode({ email, code, type });
+  }
+
+  // ─── OTP theo SĐT ────────────────────────────────────────────────────────────
+
+  /**
+   * Gửi OTP xác thực SĐT — cooldown 60s/số, trần 5 mã/số/ngày, 5 mã/user/ngày, trần hệ
+   * thống PHONE_OTP_DAILY_CAP (mặc định 300). Ba lớp theo đúng thứ tự rẻ→đắt để trả lỗi
+   * đúng nguyên nhân (không lẫn cooldown với hết trần).
+   *
+   * KHÔNG tự kiểm isPhoneOtpEnabled() ở đây — tầng gọi (route/controller) phải gác trước,
+   * đúng Bẫy #6 (mọi nhánh mới nằm sau if (otpEnabled)); gọi khi tắt sẽ throw ở
+   * otpProviderService.sendOtp() thay vì âm thầm coi như đã gửi.
+   *
+   * @param {{ userId: number, phone: string }} input phone dạng thô hoặc đã chuẩn hoá — hàm
+   *   tự chuẩn hoá qua normalizePhoneForZaloCampaign, một nguồn duy nhất cho toàn bộ luồng.
+   * @returns {Promise<true>}
+   */
+  async sendPhoneOtp({ userId, phone: rawPhone }) {
+    const phone = normalizePhoneForZaloCampaign(rawPhone);
+    const cooldown = await verificationRepository.getPhoneSendCooldown(phone, PHONE_OTP_COOLDOWN_SECONDS);
+    if (cooldown.blocked) {
+      const err = new Error(`Vui lòng đợi ${cooldown.retryAfterSec} giây trước khi gửi lại mã`);
+      err.status = 429;
+      err.code = 'PHONE_OTP_COOLDOWN';
+      err.retryAfterSec = cooldown.retryAfterSec;
+      throw err;
+    }
+
+    const perPhoneCount = await verificationRepository.countPhoneCodesLast24h(phone);
+    if (perPhoneCount >= PHONE_OTP_MAX_PER_PHONE_PER_DAY) {
+      throw phoneCapError(
+        'PHONE_OTP_PHONE_DAILY_CAP',
+        'Số điện thoại này đã đạt giới hạn gửi mã trong ngày. Vui lòng thử lại vào ngày mai.'
+      );
+    }
+
+    const perUserCount = await verificationRepository.countUserPhoneCodesLast24h(userId);
+    if (perUserCount >= PHONE_OTP_MAX_PER_USER_PER_DAY) {
+      throw phoneCapError(
+        'PHONE_OTP_USER_DAILY_CAP',
+        'Tài khoản này đã đạt giới hạn gửi mã trong ngày. Vui lòng thử lại vào ngày mai.'
+      );
+    }
+
+    const systemCount = await verificationRepository.countAllPhoneCodesLast24h();
+    if (systemCount >= resolvePhoneOtpDailyCap()) {
+      throw phoneCapError(
+        'PHONE_OTP_SYSTEM_DAILY_CAP',
+        'Hệ thống tạm thời không gửi thêm mã xác thực SĐT. Vui lòng thử lại sau.'
+      );
+    }
+
+    const code = this.generateCode();
+    await verificationRepository.markUnusedPhoneCodesAsUsed(phone, userId);
+    await verificationRepository.createPhoneCode({
+      phone,
+      userId,
+      code,
+      expiresInMinutes: PHONE_OTP_EXPIRES_MINUTES,
+    });
+    await sendOtp({ phone, code });
+    return true;
+  }
+
+  /**
+   * Xác thực OTP SĐT — sai 5 lần thì mã hiện tại chết (is_used=TRUE), phải xin mã mới.
+   * Đếm attempts trên MÃ CÒN HIỆU LỰC GẦN NHẤT của (phone, userId), không phải toàn cục —
+   * mỗi lần gửi mã mới là một lượt 5-lần-sai mới (markUnusedPhoneCodesAsUsed đã đảm bảo
+   * chỉ có đúng một mã "đang hiệu lực" tại một thời điểm).
+   *
+   * @param {{ userId: number, phone: string, code: string }} input phone dạng thô hoặc đã
+   *   chuẩn hoá — hàm tự chuẩn hoá qua normalizePhoneForZaloCampaign.
+   * @returns {Promise<object>} bản ghi verification_codes vừa xác thực thành công
+   */
+  async verifyPhoneOtp({ userId, phone: rawPhone, code }) {
+    const phone = normalizePhoneForZaloCampaign(rawPhone);
+    const record = await verificationRepository.findValidPhoneCode({ phone, userId, code });
+    if (record) {
+      await verificationRepository.markAsUsed(record.id);
+      return record;
+    }
+
+    // Sai mã (hoặc mã đã dùng/hết hạn) — nếu còn một mã đang hiệu lực, cộng attempts và
+    // khoá nó lại nếu vừa chạm ngưỡng, để lần thử tiếp theo (kể cả đúng mã) cũng bị từ chối.
+    const latest = await verificationRepository.findLatestActivePhoneCode({ phone, userId });
+    if (latest) {
+      const attempts = await verificationRepository.bumpAttempts(latest.id);
+      if (Number.isFinite(attempts) && attempts >= PHONE_OTP_MAX_ATTEMPTS) {
+        await verificationRepository.markAsUsed(latest.id);
+      }
+    }
+
+    const err = new Error('Mã xác thực không đúng hoặc đã hết hạn. Vui lòng thử lại hoặc xin mã mới.');
+    err.status = 400;
+    err.code = 'PHONE_OTP_INVALID';
+    throw err;
   }
 
   async markCodeAsUsed(id) {

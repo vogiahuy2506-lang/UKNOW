@@ -103,6 +103,24 @@ class VerificationRepository {
   }
 
   /**
+   * Vô hiệu các mã 'phone_otp' còn hiệu lực trước đó của (phone, userId) — gọi TRƯỚC
+   * createPhoneCode, cùng khuôn markUnusedCodesAsUsed(email, type) ở trên. Không làm vậy
+   * thì một mã cũ chưa hết hạn vẫn verify được sau khi đã có mã mới hơn — attempts (5 lần
+   * sai mã chết) sẽ tính sai mã vì có nhiều bản ghi "đang hiệu lực" cùng lúc.
+   * @param {string} phone
+   * @param {number} userId
+   * @returns {Promise<void>}
+   */
+  async markUnusedPhoneCodesAsUsed(phone, userId) {
+    await db.query(
+      `UPDATE verification_codes
+       SET is_used = TRUE
+       WHERE phone = $1 AND user_id = $2 AND type = 'phone_otp' AND is_used = FALSE`,
+      [phone, userId]
+    );
+  }
+
+  /**
    * @param {{ phone: string, userId: number, code: string }} input
    * @returns {Promise<object|null>}
    */
