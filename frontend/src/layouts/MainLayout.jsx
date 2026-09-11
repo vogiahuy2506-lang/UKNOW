@@ -24,6 +24,7 @@ const MainLayout = () => {
   const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
+  const phoneOtpEnabled = useAuthStore((s) => s.phoneOtpEnabled);
   const mustChangePassword = user?.mustChangePassword === true;
   // Đổi mật khẩu trước, xong mới tới SĐT — hai cổng cùng đóng là chuyện có thật
   // (nhân viên được mời, hoặc admin reset mật khẩu, đều có thể chưa có SĐT).
@@ -35,8 +36,15 @@ const MainLayout = () => {
   // lần vào /app sau vẫn được nhắc lại. Đây là yêu cầu của sếp, không phải thiếu sót.
   // Bị mất ở 1a992e76 (07/09, "fix lint" xoá khoá i18n trùng kéo theo cả onClose) — khôi
   // phục 09/09 vì modal không có cách đóng, chặn cả app.
+  //
+  // PR-2 (11/09/2026, xác thực SĐT): thêm vế `(phoneOtpEnabled && !user?.phoneVerifiedAt)` —
+  // có SĐT rồi vẫn phải nhắc nếu tính năng OTP đang bật mà số CHƯA được xác thực (tài khoản
+  // cũ, hoặc vừa đổi số qua PUT /profile). Cờ tắt → vế này luôn false, y hệt biểu thức cũ.
   const [phoneDismissed, setPhoneDismissed] = useState(false);
-  const phoneRequired = !mustChangePassword && !user?.phone && user?.role !== 'admin' && !phoneDismissed;
+  const phoneRequired = !mustChangePassword
+    && (!user?.phone || (phoneOtpEnabled && !user?.phoneVerifiedAt))
+    && user?.role !== 'admin'
+    && !phoneDismissed;
   // Nhắc bổ sung đồng ý điều khoản & xử lý dữ liệu (PR-N3a / Nghị định 330/2026/NĐ-CP) cho người dùng cũ.
   // Đóng được ("Để sau" hoặc bấm ra ngoài), hiện lại mỗi lần vào /app.
   // State lưu trong bộ nhớ (KHÔNG lưu localStorage).
@@ -223,7 +231,8 @@ const MainLayout = () => {
         <PhoneRequiredModal
           isOpen={phoneRequired}
           onClose={() => setPhoneDismissed(true)}
-          onChanged={(phone) => updateUser({ ...user, phone })}
+          onChanged={(phone, phoneVerifiedAt) =>
+            updateUser({ ...user, phone, ...(phoneVerifiedAt ? { phoneVerifiedAt } : {}) })}
         />
 
         <ConsentRequiredModal
@@ -337,7 +346,8 @@ const MainLayout = () => {
       <PhoneRequiredModal
         isOpen={phoneRequired}
         onClose={() => setPhoneDismissed(true)}
-        onChanged={(phone) => updateUser({ ...user, phone })}
+        onChanged={(phone, phoneVerifiedAt) =>
+          updateUser({ ...user, phone, ...(phoneVerifiedAt ? { phoneVerifiedAt } : {}) })}
       />
 
       <ConsentRequiredModal
