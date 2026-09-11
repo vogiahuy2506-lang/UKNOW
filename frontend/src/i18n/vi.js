@@ -4351,6 +4351,7 @@ export default {
     activeContext: 'Ngữ cảnh hoạt động',
     personal: 'Cá nhân',
     docs: 'Hướng dẫn',
+    courses: 'Khóa học',
     home: 'Trang chủ',
     pricing: 'Bảng giá',
     upgrade: 'Nâng cấp',

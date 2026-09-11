@@ -11,6 +11,9 @@ import {
   HiOutlineChevronDown,
   HiOutlineShoppingCart,
   HiOutlineSparkles,
+  HiOutlineAcademicCap,
+  HiOutlineDocumentText,
+  HiOutlineExternalLink,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
@@ -32,14 +35,19 @@ const Header = () => {
   const { showMarketplace } = useMarketplaceModal();
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const profileRef = useRef(null);
+  const docsRef = useRef(null);
 
   useEffect(() => {
     const handleClick = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setProfileOpen(false);
+      }
+      if (docsRef.current && !docsRef.current.contains(e.target)) {
+        setDocsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -48,7 +56,7 @@ const Header = () => {
 
   const quickItems = [
     { key: 'home', label: t('header.home'), onClick: () => navigate('/') },
-    { key: 'docs', label: t('header.docs'), onClick: () => navigate('/huong-dan') },
+    { key: 'docs', label: t('header.docs') },
     { key: 'contact', label: t('header.contact'), onClick: () => navigate('/contact') },
     { key: 'upgrade', label: t('header.upgrade'), accent: 'primary', onClick: () => navigate('/pricing') },
     { key: 'marketplace', label: 'Marketplace', accent: true, onClick: () => showMarketplace() },
@@ -77,6 +85,58 @@ const Header = () => {
         {/* Center: quick nav */}
         <nav className="hidden lg:flex items-center gap-1">
           {quickItems.map((item) => {
+            if (item.key === 'docs') {
+              return (
+                <div key={item.key} className="relative" ref={docsRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocsOpen((open) => !open);
+                      setProfileOpen(false);
+                    }}
+                    aria-haspopup="menu"
+                    aria-expanded={docsOpen}
+                    className="inline-flex items-center h-7 px-2 rounded-md text-[12px] font-medium whitespace-nowrap text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all"
+                  >
+                    {item.label}
+                    <HiOutlineChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${docsOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {docsOpen && (
+                    <div
+                      role="menu"
+                      className="absolute left-0 mt-2 w-52 rounded-xl border border-gray-100 bg-white p-1.5 shadow-xl z-50"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setDocsOpen(false);
+                          navigate('/huong-dan');
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                      >
+                        <HiOutlineDocumentText className="w-4 h-4 text-gray-400" />
+                        {item.label}
+                      </button>
+                      <a
+                        href="https://khoahoc.founderai.biz/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        role="menuitem"
+                        onClick={() => setDocsOpen(false)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                      >
+                        <HiOutlineAcademicCap className="w-4 h-4 text-gray-400" />
+                        <span className="flex-1 text-left">{t('header.courses')}</span>
+                        <HiOutlineExternalLink className="w-3.5 h-3.5 text-gray-400" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             const accentClass =
               item.accent === 'primary'
                 ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-sm hover:shadow-md'
@@ -112,7 +172,10 @@ const Header = () => {
         <div className="relative shrink-0" ref={profileRef}>
           <button
             type="button"
-            onClick={() => setProfileOpen((o) => !o)}
+            onClick={() => {
+              setProfileOpen((open) => !open);
+              setDocsOpen(false);
+            }}
             className="flex items-center gap-1.5 h-8 px-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <div

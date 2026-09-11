@@ -4317,6 +4317,7 @@ export default {
     activeContext: 'Active Context',
     personal: 'Personal',
     docs: 'Docs',
+    courses: 'Courses',
     home: 'Home',
     pricing: 'Pricing',
     upgrade: 'Upgrade',
