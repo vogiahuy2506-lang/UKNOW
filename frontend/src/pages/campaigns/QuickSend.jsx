@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
@@ -219,6 +219,27 @@ const QuickSend = () => {
   const [templateDetailError, setTemplateDetailError] = useState(false);
   const activeTemplateSelectionIdRef = useRef(null);
 
+  // Nội dung tự soạn (bước 2, phương án "Soạn nội dung mới") — TÁCH khỏi templateContent để
+  // chuyển qua lại giữa "chọn mẫu" và "soạn mới" không làm mất bản nháp của bên kia. AI
+  // Assistant gửi subject/body không kèm template cũng đi vào đây (xem effect nạp draft ở trên).
+  const [contentMode, setContentMode] = useState('template'); // 'template' | 'custom'
+  const [customContent, setCustomContent] = useState({ subject: '', body: '' });
+
+  // Nguồn nội dung/mẫu/đính kèm ĐANG DÙNG THẬT — mọi nơi validate/preview/gửi phải đọc qua đây,
+  // không đọc trực tiếp templateContent/selectedTemplate, để không lệch giữa hai chế độ.
+  const activeContent = useMemo(
+    () => (contentMode === 'custom' ? customContent : templateContent),
+    [contentMode, customContent, templateContent]
+  );
+  const activeTemplate = useMemo(
+    () => (contentMode === 'custom' ? null : selectedTemplate),
+    [contentMode, selectedTemplate]
+  );
+  const activeAttachments = useMemo(() => [
+    ...(contentMode === 'template' && Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : []),
+    ...(Array.isArray(extraAttachments) ? extraAttachments : []),
+  ], [contentMode, selectedTemplate, extraAttachments]);
+
   // Send state
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
@@ -294,7 +315,9 @@ const QuickSend = () => {
     }
 
     if (draft.subject !== undefined || draft.body !== undefined) {
-      setTemplateContent({
+      // Bản nháp AI mang nội dung trực tiếp, không kèm template — luôn là chế độ "soạn mới".
+      setContentMode('custom');
+      setCustomContent({
         subject: draft.subject || '',
         body: draft.body || '',
       });
@@ -403,19 +426,21 @@ const QuickSend = () => {
   // resolves to the plain-text fallback. Build a real HTML body from it so
   // Gmail renders paragraph structure instead of a single run-on line.
   const resolveEmailBody = useCallback(() => {
-    const raw = templateContent.body || selectedTemplate?.bodyHtml || '';
+    const raw = activeContent.body || activeTemplate?.bodyHtml || '';
     const isLikelyHtml = /<\s*(p|div|h[1-6]|br|hr|strong|em|ul|ol|li|table|span|a)\b/i.test(raw);
+    // Chế độ soạn mới: nội dung là plain text/Markdown cơ bản, không phải HTML — chuyển bằng
+    // miniMarkdownToHtml y hệt template legacy chỉ có bodyText (nhánh isLikelyHtml=false).
     const html = isLikelyHtml ? raw : miniMarkdownToHtml(raw);
     return {
       html,
       text: htmlToPlainText(html),
     };
-  }, [templateContent.body, selectedTemplate]);
+  }, [activeContent.body, activeTemplate]);
 
   // Resolve the Zalo body as plain text only. Zalo OA does not render HTML.
   const resolveZaloBody = useCallback(() => {
-    return templateContent.body || selectedTemplate?.bodyText || '';
-  }, [templateContent.body, selectedTemplate]);
+    return activeContent.body || activeTemplate?.bodyText || '';
+  }, [activeContent.body, activeTemplate]);
 
   // Get final recipients from manual input only
   const finalRecipients = useCallback(() => {
@@ -613,6 +638,7 @@ const QuickSend = () => {
     if (!template?.id) return;
     const templateId = template.id;
     activeTemplateSelectionIdRef.current = templateId;
+    setContentMode('template');
     setSelectedTemplate(template);
     setTemplateDetailError(false);
     setIsLoadingTemplateDetail(true);
@@ -709,15 +735,12 @@ const QuickSend = () => {
         ? selectedEmailAccount?.id
         : selectedZaloAccount?.id;
 
-      const attachments = [
-        ...(Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : []),
-        ...(Array.isArray(extraAttachments) ? extraAttachments : []),
-      ];
+      const attachments = activeAttachments;
 
       const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
       const { html, text } = isEmail ? resolveEmailBody() : { html: null, text: '' };
       const zaloMsg = !isEmail ? resolveZaloBody() : '';
-      const subject = templateContent.subject || selectedTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW';
+      const subject = activeContent.subject || activeTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW';
 
       const testPayloadData = {
         channel: selectedChannel,
@@ -773,10 +796,7 @@ const QuickSend = () => {
   // `recipients` list of previously-failed recipients).
   const runSendLoop = useCallback(async (recipients) => {
     const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
-    const attachments = [
-      ...(Array.isArray(selectedTemplate?.attachments) ? selectedTemplate.attachments : []),
-      ...(Array.isArray(extraAttachments) ? extraAttachments : []),
-    ];
+    const attachments = activeAttachments;
     let successCount = 0;
     let failCount = 0;
     const failureSamples = new Map();
@@ -793,9 +813,9 @@ const QuickSend = () => {
       accountId: isEmail ? selectedEmailAccount?.id : selectedZaloAccount?.id,
       recipientType: (isEmail || selectedChannel === CHANNEL_TYPES.ZALO_GROUP) ? undefined : zaloRecipientType,
       recipients: recipients.map((r) => r.email || r.phone),
-      templateId: selectedTemplate?.id || null,
-      subject: templateContent.subject || '',
-      body: templateContent.body || '',
+      templateId: activeTemplate?.id || null,
+      subject: activeContent.subject || '',
+      body: activeContent.body || '',
       attachments: attachments.map((a) => a?.key || a?.name || ''),
     };
     sendActionKeyRef.current = await resolveActionIdempotencyKey(sendActionKeyRef.current, idempotencyPayload);
@@ -803,7 +823,7 @@ const QuickSend = () => {
 
     if (isEmail) {
       const { html, text } = resolveEmailBody();
-      const subject = templateContent.subject || selectedTemplate?.subject || 'Không có tiêu đề';
+      const subject = activeContent.subject || activeTemplate?.subject || 'Không có tiêu đề';
       for (const [idx, recipient] of recipients.entries()) {
         try {
           await emailSettingsApiService.sendEmail({
@@ -896,10 +916,9 @@ const QuickSend = () => {
     selectedZaloAccount,
     resolveEmailBody,
     resolveZaloBody,
-    templateContent.subject,
-    templateContent.body,
-    selectedTemplate,
-    extraAttachments,
+    activeContent,
+    activeTemplate,
+    activeAttachments,
     zaloRecipientType,
   ]);
 
@@ -911,24 +930,18 @@ const QuickSend = () => {
       toast.error(t('quickSend.noRecipients'));
       return;
     }
-    // Validate body — accept a chosen template even if its body fields are both
-    // blank (rare but possible for a freshly imported template). We treat a
-    // template selection as proof that the user *intended* to send it; let
-    // the backend reject empty bodies with its own clearer error otherwise.
-    const resolvedBody = resolveEmailBody();
-    const resolvedZaloBody = resolveZaloBody();
-    const hasEmailBody = selectedChannel !== CHANNEL_TYPES.EMAIL
-      || Boolean((resolvedBody.html || resolvedBody.text || '').trim())
-      || Boolean(selectedTemplate);
-    const hasZaloBody = (selectedChannel !== CHANNEL_TYPES.ZALO && selectedChannel !== CHANNEL_TYPES.ZALO_GROUP)
-      || Boolean(resolvedZaloBody.trim())
-      || Boolean(selectedTemplate);
-    if (!hasEmailBody || !hasZaloBody) {
-      toast.error(t('quickSend.noTemplate'));
-      return;
-    }
-    if (!selectedTemplate && !templateContent.body) {
-      toast.error(t('quickSend.noTemplate'));
+    // Validate content theo đúng chế độ đang active. Chế độ mẫu: chọn mẫu là đủ, kể cả khi
+    // mẫu đó rỗng cả hai field (hiếm nhưng có thể xảy ra với mẫu mới import) — coi việc chọn
+    // mẫu là bằng chứng người dùng CHỦ Ý gửi nó, để backend tự báo lỗi rõ hơn nếu rỗng thật.
+    // Chế độ soạn mới: bắt buộc nội dung không chỉ gồm khoảng trắng — không có "mẫu" nào để
+    // viện cớ gửi tiếp.
+    if (contentMode === 'template') {
+      if (!selectedTemplate) {
+        toast.error(t('quickSend.noTemplate'));
+        return;
+      }
+    } else if (!(activeContent.body && activeContent.body.trim())) {
+      toast.error(t('quickSend.customContentEmpty'));
       return;
     }
     if (isLoadingTemplateDetail) {
@@ -1049,8 +1062,13 @@ const QuickSend = () => {
   // Reset and start over
   const handleStartOver = () => {
     setCurrentStep(QUICK_SEND_STEPS.RECIPIENTS);
+    setContentMode('template');
     setSelectedTemplate(null);
     setTemplateContent({ subject: '', body: '' });
+    setCustomContent({ subject: '', body: '' });
+    // extraAttachments có thể đến từ bản nháp AI trước đó — "Gửi tiếp" phải xoá, không được
+    // mang đính kèm của lượt gửi cũ sang lượt mới.
+    setExtraAttachments([]);
     setManualEmails('');
     setManualPhones('');
     setZaloRecipientType(ZALO_RECIPIENT_TYPES.PHONE);
@@ -1063,6 +1081,24 @@ const QuickSend = () => {
     sendActionKeyRef.current = { key: null, signature: null };
     setSendResult(null);
     setFailedRecipients([]);
+  };
+
+  // Đổi kênh gửi — Email dùng subject+HTML, Zalo (cá nhân/nhóm) chỉ dùng plain text. Đổi
+  // qua lại giữa hai "họ" này thì nội dung/mẫu đang có không còn hợp kênh mới (mẫu Email/Zalo
+  // cũng là hai danh sách riêng) — xoá để không lỡ tay gửi nội dung của kênh cũ sang kênh mới.
+  // Đổi giữa Zalo cá nhân ↔ Zalo nhóm giữ nguyên vì cùng "họ" (cùng danh sách mẫu, cùng dạng
+  // plain text).
+  const handleChannelChange = (nextChannel) => {
+    if (nextChannel === selectedChannel) return;
+    const wasEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
+    const willBeEmail = nextChannel === CHANNEL_TYPES.EMAIL;
+    if (wasEmail !== willBeEmail) {
+      setContentMode('template');
+      setSelectedTemplate(null);
+      setTemplateContent({ subject: '', body: '' });
+      setCustomContent({ subject: '', body: '' });
+    }
+    setSelectedChannel(nextChannel);
   };
 
   // Step indicators
@@ -1131,7 +1167,7 @@ const QuickSend = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectChannel')}</h2>
               <div className="grid grid-cols-3 gap-4">
                 <button
-                  onClick={() => setSelectedChannel(CHANNEL_TYPES.EMAIL)}
+                  onClick={() => handleChannelChange(CHANNEL_TYPES.EMAIL)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
                     selectedChannel === CHANNEL_TYPES.EMAIL
                       ? 'border-orange-500 bg-orange-50'
@@ -1144,7 +1180,7 @@ const QuickSend = () => {
                   </span>
                 </button>
                 <button
-                  onClick={() => setSelectedChannel(CHANNEL_TYPES.ZALO)}
+                  onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
                     selectedChannel === CHANNEL_TYPES.ZALO
                       ? 'border-orange-500 bg-orange-50'
@@ -1157,7 +1193,7 @@ const QuickSend = () => {
                   </span>
                 </button>
                 <button
-                  onClick={() => setSelectedChannel(CHANNEL_TYPES.ZALO_GROUP)}
+                  onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO_GROUP)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
                     selectedChannel === CHANNEL_TYPES.ZALO_GROUP
                       ? 'border-orange-500 bg-orange-50'
@@ -1486,71 +1522,133 @@ const QuickSend = () => {
           </div>
         )}
 
-        {/* Template Selection */}
+        {/* Content Selection */}
         {currentStep === QUICK_SEND_STEPS.TEMPLATE && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectTemplate')}</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.contentSourceLabel')}</h2>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <button
+                  onClick={() => setContentMode('template')}
+                  className={`p-4 rounded-xl border-2 text-left transition ${
+                    contentMode === 'template'
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <p className={`font-medium ${contentMode === 'template' ? 'text-orange-700' : 'text-gray-700'}`}>
+                    {t('quickSend.contentModeTemplate')}
+                  </p>
+                </button>
+                <button
+                  onClick={() => setContentMode('custom')}
+                  className={`p-4 rounded-xl border-2 text-left transition ${
+                    contentMode === 'custom'
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <p className={`font-medium ${contentMode === 'custom' ? 'text-orange-700' : 'text-gray-700'}`}>
+                    {t('quickSend.contentModeCustom')}
+                  </p>
+                </button>
+              </div>
 
-              {isLoadingTemplates ? (
-                <div className="flex items-center justify-center py-10">
-                  <div className="h-8 w-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(selectedChannel === CHANNEL_TYPES.EMAIL ? emailTemplates : zaloTemplates).map((template) => (
-                    <button
-                      key={template.id}
-                      onClick={() => handleSelectTemplate(template)}
-                      className={`p-4 rounded-xl border-2 text-left transition ${
-                        selectedTemplate?.id === template.id
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <p className="font-medium text-gray-900 truncate">
-                        {template.templateName || template.name || template.title || 'Untitled'}
-                      </p>
-                      {template.subject && (
-                        <p className="text-sm text-gray-500 truncate mt-1">{template.subject}</p>
-                      )}
-                      <p className="text-xs text-gray-400 truncate mt-1">
-                        {template.bodyText || template.body_html || template.body_text || ''}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {selectedTemplate && (
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-700">{t('quickSend.selectedTemplate')}</p>
-                    {isLoadingTemplateDetail && (
-                      <span className="text-xs text-orange-600 flex items-center gap-1.5 font-medium">
-                        <span className="w-3.5 h-3.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                        {t('quickSend.loadingTemplateDetail')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
-                  {selectedTemplate.attachments && selectedTemplate.attachments.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
-                        <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
-                        {t('quickSend.attachments')} ({selectedTemplate.attachments.length})
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedTemplate.attachments.map((att, idx) => (
-                          <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded border border-gray-200 text-xs text-gray-700">
-                            <HiOutlinePaperClip className="w-3 h-3 text-gray-400" />
-                            <span className="truncate max-w-[200px]">{att.originalName || att.name || att.filename || att.key}</span>
-                            {att.size ? <span className="text-gray-400">({formatFileSize(att.size)})</span> : null}
-                          </span>
-                        ))}
-                      </div>
+              {contentMode === 'template' ? (
+                <>
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">{t('quickSend.selectTemplate')}</h3>
+                  {isLoadingTemplates ? (
+                    <div className="flex items-center justify-center py-10">
+                      <div className="h-8 w-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {(selectedChannel === CHANNEL_TYPES.EMAIL ? emailTemplates : zaloTemplates).map((template) => (
+                        <button
+                          key={template.id}
+                          onClick={() => handleSelectTemplate(template)}
+                          className={`p-4 rounded-xl border-2 text-left transition ${
+                            selectedTemplate?.id === template.id
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <p className="font-medium text-gray-900 truncate">
+                            {template.templateName || template.name || template.title || 'Untitled'}
+                          </p>
+                          {template.subject && (
+                            <p className="text-sm text-gray-500 truncate mt-1">{template.subject}</p>
+                          )}
+                          <p className="text-xs text-gray-400 truncate mt-1">
+                            {template.bodyText || template.body_html || template.body_text || ''}
+                          </p>
+                        </button>
+                      ))}
                     </div>
                   )}
+
+                  {selectedTemplate && (
+                    <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-700">{t('quickSend.selectedTemplate')}</p>
+                        {isLoadingTemplateDetail && (
+                          <span className="text-xs text-orange-600 flex items-center gap-1.5 font-medium">
+                            <span className="w-3.5 h-3.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                            {t('quickSend.loadingTemplateDetail')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                      {selectedTemplate.attachments && selectedTemplate.attachments.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+                            <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
+                            {t('quickSend.attachments')} ({selectedTemplate.attachments.length})
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedTemplate.attachments.map((att, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded border border-gray-200 text-xs text-gray-700">
+                                <HiOutlinePaperClip className="w-3 h-3 text-gray-400" />
+                                <span className="truncate max-w-[200px]">{att.originalName || att.name || att.filename || att.key}</span>
+                                {att.size ? <span className="text-gray-400">({formatFileSize(att.size)})</span> : null}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  {selectedChannel === CHANNEL_TYPES.EMAIL && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('quickSend.customSubjectLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        value={customContent.subject}
+                        onChange={(e) => setCustomContent((prev) => ({ ...prev, subject: e.target.value }))}
+                        placeholder={t('quickSend.customSubjectPlaceholder')}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {selectedChannel === CHANNEL_TYPES.EMAIL
+                        ? t('quickSend.customEmailContentLabel')
+                        : t('quickSend.customMessageContentLabel')}
+                    </label>
+                    <textarea
+                      value={customContent.body}
+                      onChange={(e) => setCustomContent((prev) => ({ ...prev, body: e.target.value }))}
+                      placeholder={t('quickSend.customBodyPlaceholder')}
+                      rows={10}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1565,7 +1663,7 @@ const QuickSend = () => {
               </button>
               <button
                 onClick={() => setCurrentStep(QUICK_SEND_STEPS.PREVIEW)}
-                disabled={!selectedTemplate}
+                disabled={contentMode === 'template' ? !selectedTemplate : !(customContent.body && customContent.body.trim())}
                 className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {t('quickSend.next')}
@@ -1636,26 +1734,38 @@ const QuickSend = () => {
               )}
 
               {/* Template / Message Content Preview */}
-              {(selectedTemplate || templateContent.subject || templateContent.body || (extraAttachments && extraAttachments.length > 0)) && (
+              {(activeTemplate || activeContent.subject || activeContent.body || activeAttachments.length > 0) && (
                 <div className="p-4 bg-gray-50 rounded-lg mb-4">
                   <p className="text-sm font-medium text-gray-700">
-                    {selectedTemplate ? t('quickSend.template') : (selectedChannel === CHANNEL_TYPES.EMAIL ? 'Nội dung email' : 'Nội dung tin nhắn')}
+                    {activeTemplate
+                      ? t('quickSend.template')
+                      : (selectedChannel === CHANNEL_TYPES.EMAIL
+                        ? t('quickSend.customEmailContentLabel')
+                        : t('quickSend.customMessageContentLabel'))}
                   </p>
-                  {selectedTemplate ? (
-                    <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                  {activeTemplate ? (
+                    <p className="text-gray-900 font-medium mt-1">{activeTemplate.templateName || activeTemplate.name || activeTemplate.title}</p>
                   ) : (
-                    templateContent.subject && (
-                      <p className="text-gray-900 font-medium mt-1">{templateContent.subject}</p>
-                    )
+                    <>
+                      {activeContent.subject && (
+                        <p className="text-gray-900 font-medium mt-1">{activeContent.subject}</p>
+                      )}
+                      {/* Nội dung tự soạn hiển thị dưới dạng text an toàn (con React tự escape),
+                          KHÔNG dùng dangerouslySetInnerHTML — đây là bản Markdown/plain text thô,
+                          chưa qua miniMarkdownToHtml. */}
+                      {activeContent.body && (
+                        <p className="text-gray-700 text-sm mt-1 whitespace-pre-wrap line-clamp-6">{activeContent.body}</p>
+                      )}
+                    </>
                   )}
-                  {((selectedTemplate?.attachments && selectedTemplate.attachments.length > 0) || (extraAttachments && extraAttachments.length > 0)) && (
+                  {activeAttachments.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-200">
                       <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
                         <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
-                        {t('quickSend.attachments')} ({(selectedTemplate?.attachments?.length || 0) + (extraAttachments?.length || 0)})
+                        {t('quickSend.attachments')} ({activeAttachments.length})
                       </p>
                       <div className="space-y-1.5">
-                        {[...(selectedTemplate?.attachments || []), ...(extraAttachments || [])].map((att, idx) => (
+                        {activeAttachments.map((att, idx) => (
                           <div key={idx} className="flex items-center gap-2 text-xs text-gray-700 bg-white px-3 py-1.5 rounded border border-gray-200">
                             <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                             <span className="font-medium truncate">{att.originalName || att.name || att.filename || att.key}</span>
