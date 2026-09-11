@@ -272,6 +272,24 @@ export const publicLandingAnalyticsLimiter = rateLimit({
   keyGenerator: (req) => `public-analytics:${clientIpKey(req)}`,
 });
 
+// Gửi OTP xác thực SĐT — riêng theo IP, ngoài authLimiter chung. OTP SMS tốn tiền thật
+// (PLAN_XAC_THUC_SDT_OTP_2026-09-11.md Bẫy #2: sự cố "ai cũng bắn được mã tới email bất
+// kỳ" 05/08 lặp lại ở SMS là mất tiền); giới hạn theo user đã có ở tầng service (60s/số,
+// 5/số/ngày, 5/user/ngày) — limiter này chặn một IP dùng nhiều tài khoản để né trần đó.
+export const phoneOtpSendLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    success: false,
+    message: 'Quá nhiều lần gửi mã xác thực SĐT. Vui lòng thử lại sau.',
+    code: 'PHONE_OTP_SEND_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `phone-otp-send:${clientIpKey(req)}`,
+});
+
 // Quick Send Test Message limiter — tối đa 5 lần gửi thử / 1 giờ / tài khoản
 export const quickSendTestLimiter = rateLimit({
   skip: skipInTest,

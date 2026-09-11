@@ -27,10 +27,13 @@ function maskPhone(phone) {
 }
 
 /**
- * @param {{ email: string, phone: string, fullName?: string|null, createdAt?: string|Date|null }} member
+ * @param {{ email: string, phone: string, fullName?: string|null, createdAt?: string|Date|null, phoneVerified?: boolean }} member
+ *   phoneVerified (PR-1 xác thực SĐT, 2026-09-11): mặc định false — chỉ true khi gọi từ
+ *   luồng verify OTP SĐT thành công. updatePhone() (số MỚI, chưa xác thực) và register()
+ *   (chưa có khái niệm xác thực SĐT ở bước này) đều cố ý để mặc định.
  * @returns {Promise<void>}
  */
-export async function pushMemberToSheet({ email, phone, fullName, createdAt }) {
+export async function pushMemberToSheet({ email, phone, fullName, createdAt, phoneVerified = false }) {
   const url = process.env.MEMBER_SHEET_WEBHOOK_URL;
   const secret = process.env.MEMBER_SHEET_WEBHOOK_SECRET;
 
@@ -45,6 +48,7 @@ export async function pushMemberToSheet({ email, phone, fullName, createdAt }) {
     phone: String(phone || ''),
     fullName: String(fullName || ''),
     createdAt: createdAt ? new Date(createdAt).toISOString() : new Date().toISOString(),
+    phoneVerified: phoneVerified ? 'true' : 'false',
   });
 
   let lastErr;
