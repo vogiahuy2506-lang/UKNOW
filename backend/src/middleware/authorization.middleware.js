@@ -1,4 +1,5 @@
 import { isSuperAdmin, isUserAdmin, isEmployeeContext } from '../utils/roleScope.util.js';
+import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 
 /**
  * Middleware yêu cầu user đổi mật khẩu trước khi truy cập.
@@ -55,6 +56,19 @@ export function requirePhone(req, res, next) {
       success: false,
       message: 'Bạn cần bổ sung số điện thoại trước khi sử dụng hệ thống',
       code: 'PHONE_REQUIRED',
+    });
+  }
+
+  // PR-1 xác thực SĐT (2026-09-11): khi PHONE_OTP_PROVIDER bật, có SĐT thôi chưa đủ — còn
+  // phải đã xác thực bằng OTP (phone_verified_at). Tách mã lỗi riêng (PHONE_NOT_VERIFIED
+  // thay vì PHONE_REQUIRED) để tầng gọi phân biệt được "chưa có số" và "có số, chưa xác
+  // thực" — hai màn hình khác nhau ở PhoneRequiredModal (PR-2 frontend). Khi tắt, giữ
+  // nguyên chỉ đòi có SĐT như hôm nay — Bẫy #6.
+  if (isPhoneOtpEnabled() && !req.user?.phone_verified_at) {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn cần xác thực số điện thoại bằng mã OTP trước khi sử dụng hệ thống',
+      code: 'PHONE_NOT_VERIFIED',
     });
   }
 

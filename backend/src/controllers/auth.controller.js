@@ -319,7 +319,7 @@ class AuthController {
       const result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
                 active_plan_id, password_hash, failed_login_attempts, locked_until,
-                must_change_password, phone, referral_code
+                must_change_password, phone, phone_verified_at, referral_code
          FROM users
          WHERE username = $1`,
         [username]
@@ -465,7 +465,8 @@ class AuthController {
       // 2. Check if user exists
       let result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
-                active_plan_id, password_hash, failed_login_attempts, locked_until, phone, referral_code
+                active_plan_id, password_hash, failed_login_attempts, locked_until, phone,
+                phone_verified_at, referral_code
          FROM users
          WHERE LOWER(email) = LOWER($1)`,
         [email]
@@ -992,6 +993,10 @@ class AuthController {
       // Cùng lý do như trên nhưng cho requirePhone — thiếu field này thì frontend
       // không biết mở modal bổ sung SĐT.
       phone: user.phone ?? null,
+      // PR-1 xác thực SĐT (2026-09-11): null = chưa xác thực (kể cả khi đã có `phone`).
+      // Frontend dùng field này để quyết định hiện bước "nhập số" hay bước "nhập mã OTP"
+      // trong PhoneRequiredModal khi PHONE_OTP_PROVIDER bật.
+      phoneVerifiedAt: user.phone_verified_at ?? null,
       // Mã giới thiệu cá nhân (Affiliate PR-A1)
       referralCode: user.referral_code ?? user.referralCode ?? null,
       // Bằng chứng đồng ý văn bản pháp lý (Nghị định 330/2026/NĐ-CP PR-N2)
