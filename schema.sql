@@ -45,6 +45,8 @@ CREATE TABLE users (
   max_zalo_templates      INTEGER,
   max_landing_pages       INTEGER,
   subscription_reminder_count INTEGER NOT NULL DEFAULT 0,
+  -- migration 204: SĐT được xác thực bằng OTP — NULL nghĩa là chưa xác thực
+  phone_verified_at       TIMESTAMPTZ,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -101,15 +103,20 @@ CREATE TABLE login_history (
 -- â”€â”€â”€ Verification codes (OTP/reset/invite) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE verification_codes (
   id         BIGSERIAL PRIMARY KEY,
-  email      VARCHAR(255) NOT NULL,
+  email      VARCHAR(255),
   code       VARCHAR(255) NOT NULL,
   type       VARCHAR(50)  NOT NULL DEFAULT 'email_verification',
   is_used    BOOLEAN      NOT NULL DEFAULT FALSE,
   expires_at TIMESTAMPTZ  NOT NULL,
-  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  -- migration 204: OTP theo SĐT — phone/attempts mới; email nới NOT NULL
+  user_id    BIGINT,
+  phone      VARCHAR(20),
+  attempts   SMALLINT     NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_verification_codes_lookup ON verification_codes(email, code, type);
+CREATE INDEX idx_verification_codes_phone ON verification_codes(phone, type, created_at DESC);
 
 -- â”€â”€â”€ Plans + Orders (payment) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE plans (

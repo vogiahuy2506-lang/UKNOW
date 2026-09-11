@@ -75,6 +75,8 @@ CREATE TABLE users (
   referred_at             TIMESTAMPTZ,
   -- migration 189: mốc thời gian chấm dứt tài khoản
   deleted_at              TIMESTAMPTZ,
+  -- migration 204: SĐT được xác thực bằng OTP — NULL nghĩa là chưa xác thực
+  phone_verified_at       TIMESTAMPTZ,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -153,15 +155,21 @@ CREATE INDEX idx_login_history_email_created ON login_history(email, created_at 
 -- ─── Verification codes (OTP/reset/invite) ─────────────────────────────
 CREATE TABLE verification_codes (
   id         BIGSERIAL PRIMARY KEY,
-  email      VARCHAR(255) NOT NULL,
+  email      VARCHAR(255),
   code       VARCHAR(255) NOT NULL,
   type       VARCHAR(50)  NOT NULL DEFAULT 'email_verification',
   is_used    BOOLEAN      NOT NULL DEFAULT FALSE,
   expires_at TIMESTAMPTZ  NOT NULL,
-  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  -- migration 204: OTP theo SĐT — phone/attempts mới; email nới NOT NULL (mã OTP theo SĐT
+  -- không có email đi kèm). user_id BIGINT cho bảng này đã có sẵn từ trước qua ALTER TABLE
+  -- riêng ở dưới (không có migration file gốc, xem migration 204 cho bối cảnh).
+  phone      VARCHAR(20),
+  attempts   SMALLINT     NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_verification_codes_lookup ON verification_codes(email, code, type);
+CREATE INDEX idx_verification_codes_phone ON verification_codes(phone, type, created_at DESC);
 
 -- ─── Plans + Orders (payment) ──────────────────────────────────────────
 CREATE TABLE plans (

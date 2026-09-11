@@ -1,6 +1,6 @@
-# Lịch sử tính năng — 19/08 → 09/09/2026
+# Lịch sử tính năng — 19/08 → 11/09/2026
 
-Tổng hợp các plan đã triển khai xong từ 19/08 tới 09/09/2026, kèm commit làm bằng chứng. Nối tiếp
+Tổng hợp các plan đã triển khai xong từ 19/08 tới 11/09/2026, kèm commit làm bằng chứng. Nối tiếp
 `lich-su-tinh-nang-2026-08.md` (dừng ở 18/08).
 
 Plan chi tiết nằm trong `_internal/` (không được git theo dõi). Khi tính năng lên `main`, plan được
@@ -204,8 +204,57 @@ Lỗi có sẵn lộ ra dọc đường nghiệm thu, đều sửa cùng ngày:
 
 ---
 
-## Việc còn treo (tính tới 09/09/2026)
+## Hết hạn mức thì phải DỪNG, không được đốt sạch danh sách (10–11/09)
 
+Hai run của một tài khoản sinh **25.165 lượt thất bại / 0 thành công trong 4 ngày**, có lúc quét
+5.908 lượt/giờ và chạy xuyên khung giờ yên lặng 23:00–06:00. Nguyên nhân: gói dịch vụ hết hạn →
+`checkSendQuota` trả `resetAt: null` → lỗi ném ra bị các catch theo từng người nhận đếm thành
+"thất bại" rồi `continue`, nên vòng lặp **không bao giờ chạm tới cổng nhịp** và quét danh sách ở
+tốc độ tối đa. Cùng một lỗi hoá ra nằm ở **ba cơ chế hạn mức khác nhau**, phải vá cả ba.
+
+| Việc | Commit |
+|---|---|
+| PR-1: lỗi hạn mức không tự reset được phải đóng sổ `failed` rồi ném `RUN_STOPPED` | `273bed44` |
+| PR-1b: kênh email đi qua `reserveSendQuota` riêng — cùng lỗi, cơ chế khác | `326e38a2` |
+| PR-1c: cổng reservation Zalo — cơ chế thứ ba, `PLAN_SEND_LIMIT_EXCEEDED` không ai đọc | `ba720f35` |
+| PR-2: kênh kết bạn tuân cooldown tra số; nghỉ tới **00:00 giờ VN** thay vì 3 giờ cố định | `95a3a6f5` `41ea8b18` |
+| PR-2b: cooldown ghi xuống `zalo_settings`, nạp lại lúc khởi động (migration 202) | `93ba1671` |
+| PR-3: cột `zalo_messages.status` nói thật; một điểm đóng sổ duy nhất cho placeholder bỏ lại | `936c42b8` |
+| Fixture schema thiếu `admin_menu_layouts` làm deploy backend đỏ hai lần liên tiếp | `3ba5c173` |
+
+Nghiệm thu bằng sự kiện production, không nhận "test xanh":
+
+- **PR-1b** — run 403: `failed`, `failed_sends=0`, `error_message` có câu hạn mức. Trước vá, run 401
+  cùng chiến dịch kết thúc `completed` với 3 lượt thất bại và `error_message` rỗng.
+- **PR-2** — log 11/09 13:36:38: `channel=zalo_friend_request … cooldown đến 00:00 12/09`, tức 10,39
+  giờ. Luật cũ sẽ quay lại lúc 16:36 cùng ngày, khi Zalo vẫn đang chặn. Dòng log này trước PR-2
+  không thể tồn tại vì nhánh kết bạn chưa bao giờ **đặt** cooldown, chỉ **đọc**.
+- **PR-3** — dọn 61.649 dòng lệch cột `status` + 6.926 placeholder mồ côi → còn **0** dòng `queued`.
+
+Hai bài học đắt hơn cả bản vá:
+
+- **Nhãn `invalid_format` không phải phép kiểm định dạng** — nó chỉ bắt chữ "không hợp lệ"/"invalid"
+  trong câu Zalo trả về. Chẩn đoán ban đầu "danh sách bẩn 89%" là sai: đo thẳng Google Sheet nguồn
+  ra **94,4% số đúng định dạng**, bảng `customers` 99,6%.
+- **Hạn mức tra số của Zalo tính theo NGÀY, reset lúc nửa đêm** — đọc được nguyên văn trong
+  `campaign_executions.error_message`. Điều này giải thích luôn khoảng bị chặn ~15 giờ đo được
+  trước đó: đúng bằng khoảng từ 09:00 tới 00:00 hôm sau.
+
+---
+
+## Việc còn treo (tính tới 11/09/2026)
+
+- **Nghiệm thu PR-3** sau 2–3 ngày: đếm dòng `zalo_messages` còn `tracking_metadata->>'status' =
+  'queued'` theo ngày, phải về 0 (trước vá là 200–350 dòng/tuần). Dấu hiệu sớm tốt: 0 dòng mới
+  trong giờ đầu sau deploy.
+- **Nghiệm thu PR-2b**: chờ lần cooldown đầu tiên được ghi vào `zalo_settings.phone_lookup_cooldown_until`,
+  rồi restart container và xem log có `Đã nạp N cooldown tra số Zalo còn hiệu lực`.
+- **39 tài khoản Zalo ở trạng thái `needs_reauth`** (33 không thuộc tài khoản nội bộ), gồm cụm 31 cái
+  hỏng cùng ngày 06/09. Quy tắc cảnh báo `zalo_disconnected` **cố ý loại** trạng thái này và không có
+  quy tắc nào khác phủ, nên không ai được báo. Chưa gây hỏng vì không chiến dịch nào đang dùng chúng.
+  Cần: báo chủ tài khoản đăng nhập lại, và quyết định có đưa `needs_reauth` vào quy tắc hay không.
+- **Hai run Zalo của tài khoản nội bộ (374, 381) vẫn `running`**, 0 thành công sau 5 ngày. Chỉ chủ
+  tài khoản dừng được.
 - **`401f1bd6` (WhatsApp Baileys, hoangphuc1capri) làm đỏ cả hai deploy**, production kẹt ở `731f63d5`:
   `bootstrap.sql:1819-1824` dùng `CONSTRAINT ... UNIQUE ... WHERE` (không tồn tại trong Postgres, migration
   194 viết đúng bằng partial unique index); `WhatsAppSettings.jsx:1` thừa `eslint-disable`; và thư mục
