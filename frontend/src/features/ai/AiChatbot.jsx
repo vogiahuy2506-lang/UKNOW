@@ -61,6 +61,7 @@ import {
   applyWizardSelectionsToScript,
   findLatestInteractiveIndex,
 } from './utils/wizardContext.js';
+import { isValidGoogleSheetUrl } from './utils/googleSheetUrl.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -2432,6 +2433,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
         if (answers.dataSource === 'sheet') {
+          const sheetUrl = answers.sheetUrl?.trim();
+          // Dán LINK: luôn giữ link. extractedRecipients chỉ để xem trước + cảnh báo lệch cột,
+          // KHÔNG được dùng làm danh sách gửi — nhúng danh sách là đóng băng, sheet cập nhật
+          // sau đó sẽ không tới được ai.
+          if (isValidGoogleSheetUrl(sheetUrl)) {
+            await emitWizardAnswer({ gate: 'dataSource', value: 'sheet', sheetUrl }, summaryText);
+            return;
+          }
+          // Chỉ TẢI TỆP LÊN (.xlsx/.xls/.csv) mới đi đường manual — tệp không có link để đọc lại.
           if (answers.extractedRecipients && answers.extractedRecipients.rowCount > 0) {
             const { emails = [], phones = [], rowCount } = answers.extractedRecipients;
             const channel = wizardContext.channel || pendingCampaignData?.channel || null;
@@ -2449,7 +2459,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             return;
           }
 
-          const sheetUrl = answers.sheetUrl?.trim();
           await emitWizardAnswer(
             {
               gate: 'dataSource',
