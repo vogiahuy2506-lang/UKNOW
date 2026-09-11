@@ -43,6 +43,7 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   updateAiHandoffAutoResumeMinutes: jest.fn(),
   updatePasswordHash: jest.fn(),
   updateProfile: jest.fn(),
+  updatePhoneAndResetVerification: jest.fn(),
 }));
 
 jest.unstable_mockModule('../../utils/billingCycle.util.js', () => ({
