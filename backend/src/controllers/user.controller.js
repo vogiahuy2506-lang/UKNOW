@@ -24,9 +24,11 @@ import {
   updateLegacyEmployeeStatus,
   updatePasswordHash,
   updateProfile as updateProfileInDb,
+  updatePhoneAndResetVerification,
   updateBotDailyReplyCap,
   updateAiHandoffAutoResumeMinutes,
 } from '../repositories/user/user.repository.js';
+import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
 import { generateTempPassword } from '../services/user/employee.service.js';
@@ -469,7 +471,14 @@ class UserController {
         });
       }
 
-      const user = await updateProfileInDb(userId, { phone: normalizedPhone });
+      // PR-1 xác thực SĐT (2026-09-11): khi tính năng bật, đổi số LUÔN reset
+      // phone_verified_at về NULL — số mới chưa từng được xác thực bằng OTP, kể cả khi
+      // trùng với số đã xác thực TRƯỚC ĐÓ của chính user này (không có "nhớ lại" trạng thái
+      // xác thực cũ). Khi tắt, giữ nguyên updateProfileInDb như hôm nay — Bẫy #6.
+      const otpEnabled = isPhoneOtpEnabled();
+      const user = otpEnabled
+        ? await updatePhoneAndResetVerification(userId, normalizedPhone)
+        : await updateProfileInDb(userId, { phone: normalizedPhone });
       if (!user) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
       }
@@ -488,6 +497,9 @@ class UserController {
               phone: user.phone,
               fullName: req.user.full_name,
               createdAt: new Date(),
+              // Số vừa đổi ở đây chưa bao giờ xác thực — đúng khi otpEnabled=false cũng vậy
+              // (mặc định phoneVerified=false của pushMemberToSheet), viết rõ ra cho khỏi ngầm định.
+              phoneVerified: false,
             });
           })
           .catch((err) => console.warn('[MemberSheet] Failed to push:', err.message));

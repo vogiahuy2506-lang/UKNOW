@@ -256,6 +256,31 @@ export async function updateProfile(userId, { fullName, email, phone, avatarUrl 
 }
 
 /**
+ * PUT /users/me/phone khi PHONE_OTP_PROVIDER bật (PR-1 xác thực SĐT, 2026-09-11): đổi số
+ * LUÔN kèm reset phone_verified_at về NULL trong CÙNG một câu UPDATE — số mới coi là chưa
+ * xác thực, và gộp một câu (thay vì set phone rồi update riêng phone_verified_at) để không
+ * có khoảng hở giữa hai bước cho một request khác xen vào giữa.
+ *
+ * Hàm riêng, KHÔNG sửa updateProfile() ở trên — updateProfile() còn được dùng bởi route
+ * profile đa năng khác (user.controller.js updateProfile) mà việc 6 của plan không yêu cầu
+ * đụng tới.
+ *
+ * @param {number} userId
+ * @param {string} phone SĐT đã chuẩn hoá
+ * @returns {Promise<object|null>}
+ */
+export async function updatePhoneAndResetVerification(userId, phone) {
+  const { rows } = await db.query(
+    `UPDATE users
+        SET phone = $1, phone_verified_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, username, email, full_name, avatar_url, phone, phone_verified_at`,
+    [phone, userId]
+  );
+  return rows[0] || null;
+}
+
+/**
  * Owner-only daily bot reply cap. Pass null to clear (system limits only).
  * @param {number} userId
  * @param {number|null} cap
