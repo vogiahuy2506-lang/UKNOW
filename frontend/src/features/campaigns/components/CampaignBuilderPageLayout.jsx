@@ -156,6 +156,10 @@ const CampaignBuilderPageLayout = ({
   nodeTypes,
   edgeTypes,
   setSelectedNode,
+  canCopySelectedNode,
+  canPasteNode,
+  onCopyNode,
+  onPasteNode,
   onDeleteNode,
   setNodeToConfig,
   setShowConfigModal,
@@ -531,6 +535,29 @@ const CampaignBuilderPageLayout = ({
               >
                 {t('campaignBuilder.configureDetails')}
               </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={onCopyNode}
+                  disabled={!canCopySelectedNode}
+                  title={canCopySelectedNode
+                    ? t('campaignBuilder.copyShortcut')
+                    : t('campaignBuilder.cannotCopyTrigger')}
+                  className="px-3 py-2 bg-gray-50 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t('campaignBuilder.copyNode')}
+                </button>
+                <button
+                  type="button"
+                  onClick={onPasteNode}
+                  disabled={!canPasteNode}
+                  title={t('campaignBuilder.pasteShortcut')}
+                  className="px-3 py-2 bg-gray-50 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t('campaignBuilder.pasteNode')}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400">{t('campaignBuilder.copyPasteHint')}</p>
               <button
                 onClick={onDeleteNode}
                 className="w-full px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-lg hover:bg-red-100 transition-colors"

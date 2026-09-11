@@ -30,6 +30,11 @@ import {
 import { edgeTypes, nodeTypes } from '../../features/campaigns/components/CampaignBuilderFlowNodes';
 import { createCampaignNodeRunner } from '../../features/campaigns/utils/campaignBuilderNodeRunner';
 import { executeCampaignRun } from '../../features/campaigns/utils/campaignBuilderRunExecutor';
+import {
+  createCampaignNodeSnapshot,
+  createPastedCampaignNode,
+  isEditableClipboardTarget,
+} from '../../features/campaigns/utils/campaignNodeClipboard';
 import CampaignBuilderPageLayout from '../../features/campaigns/components/CampaignBuilderPageLayout';
 import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCampaignBuilderLayoutState';
 import toast from 'react-hot-toast';
@@ -85,7 +90,10 @@ const CampaignBuilder = () => {
   const runTokenRef = useRef(0);
   const runAbortControllerRef = useRef(null);
   const pendingLeaveActionRef = useRef(null);
+  const copiedNodeRef = useRef(null);
+  const pasteSequenceRef = useRef(0);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [canPasteNode, setCanPasteNode] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useLocalStorageState('founder_ai_builder_expandedCategories', ['Triggers', 'Zalo', 'Data', 'Logic', 'Actions']);
@@ -481,6 +489,82 @@ const CampaignBuilder = () => {
     setSelectedNode(null);
     setSelectedEdgeId((prev) => (prev === edge.id ? null : edge.id));
   }, []);
+
+  const canCopySelectedNode = Boolean(
+    selectedNode && !isTriggerNodeType(selectedNode.data?.nodeType || selectedNode.type)
+  );
+
+  const handleCopyNode = useCallback(() => {
+    if (!selectedNode) return;
+    const currentNode = nodes.find((node) => node.id === selectedNode.id) || selectedNode;
+    if (isTriggerNodeType(currentNode.data?.nodeType || currentNode.type)) {
+      toast.error(t('campaignBuilder.cannotCopyTrigger'));
+      return;
+    }
+
+    copiedNodeRef.current = createCampaignNodeSnapshot(currentNode);
+    pasteSequenceRef.current = 0;
+    setCanPasteNode(true);
+    toast.success(t('campaignBuilder.nodeCopied'));
+  }, [nodes, selectedNode, t]);
+
+  const handlePasteNode = useCallback(() => {
+    const snapshot = copiedNodeRef.current;
+    if (!snapshot) return;
+
+    pasteSequenceRef.current += 1;
+    const sourceLabel = String(snapshot.data?.label || snapshot.data?.nodeType || 'Node').trim();
+    const pastedNode = createPastedCampaignNode({
+      snapshot,
+      nodes,
+      pasteSequence: pasteSequenceRef.current,
+      copyLabel: t('campaignBuilder.nodeCopyName', { name: sourceLabel }),
+    });
+    if (!pastedNode) return;
+
+    setNodes((currentNodes) => [
+      ...currentNodes.map((node) => ({ ...node, selected: false })),
+      pastedNode,
+    ]);
+    setSelectedNode(pastedNode);
+    setSelectedEdgeId(null);
+    setIsDirty(true);
+    toast.success(t('campaignBuilder.nodePasted'));
+  }, [nodes, setNodes, t]);
+
+  useEffect(() => {
+    copiedNodeRef.current = null;
+    pasteSequenceRef.current = 0;
+    setCanPasteNode(false);
+  }, [id]);
+
+  useEffect(() => {
+    const handleClipboardShortcut = (event) => {
+      if (event.repeat || (!event.ctrlKey && !event.metaKey) || event.altKey) return;
+      if (isEditableClipboardTarget(event.target)) return;
+      if (showConfigModal || showDeleteModal || showNameModal || showLeaveConfirmModal) return;
+
+      const key = String(event.key || '').toLowerCase();
+      if (key === 'c' && selectedNode) {
+        event.preventDefault();
+        handleCopyNode();
+      } else if (key === 'v' && copiedNodeRef.current) {
+        event.preventDefault();
+        handlePasteNode();
+      }
+    };
+
+    window.addEventListener('keydown', handleClipboardShortcut);
+    return () => window.removeEventListener('keydown', handleClipboardShortcut);
+  }, [
+    handleCopyNode,
+    handlePasteNode,
+    selectedNode,
+    showConfigModal,
+    showDeleteModal,
+    showLeaveConfirmModal,
+    showNameModal,
+  ]);
 
   const onDragStart = (event, nodeType, nodeData) => {
     event.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, nodeData }));
@@ -922,6 +1006,10 @@ const CampaignBuilder = () => {
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       setSelectedNode={setSelectedNode}
+      canCopySelectedNode={canCopySelectedNode}
+      canPasteNode={canPasteNode}
+      onCopyNode={handleCopyNode}
+      onPasteNode={handlePasteNode}
       onDeleteNode={handleDeleteNode}
       setNodeToConfig={setNodeToConfig}
       setShowConfigModal={setShowConfigModal}
@@ -979,7 +1067,6 @@ const CampaignBuilderWrapper = () => (
 );
 
 export default CampaignBuilderWrapper;
-
 
 
 
