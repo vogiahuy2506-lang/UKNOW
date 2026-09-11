@@ -3101,3 +3101,14 @@ CREATE TABLE IF NOT EXISTS admin_menu_layouts (
   CONSTRAINT admin_menu_layouts_scope_check CHECK (scope = 'super_admin'),
   CONSTRAINT admin_menu_layouts_categories_array_check CHECK (jsonb_typeof(categories) = 'array')
 );
+
+-- ─── Migration 203: editable welcome email ───────────────────────────
+CREATE TABLE IF NOT EXISTS system_email_templates (
+  template_key VARCHAR(64) PRIMARY KEY,
+  subject      TEXT        NOT NULL,
+  body_html    TEXT        NOT NULL,
+  updated_by   BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT system_email_templates_key_check CHECK (template_key = 'welcome')
+);

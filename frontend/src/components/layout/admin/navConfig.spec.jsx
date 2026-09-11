@@ -17,6 +17,7 @@ describe('super admin menu layout', () => {
 
     expect(new Set(assigned).size).toBe(catalog.length);
     expect(assigned).toContain('menu_categories');
+    expect(assigned).toContain('welcome_email');
   });
 
   it('tôn trọng thứ tự chuyên mục/tab đã lưu và tự nối tab mới còn thiếu', () => {

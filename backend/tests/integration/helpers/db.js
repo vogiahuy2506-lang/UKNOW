@@ -109,6 +109,7 @@ const TRUNCATE_ALL_SQL = `
       plans,
       user_consents,
       admin_menu_layouts,
+      system_email_templates,
       users
     RESTART IDENTITY CASCADE
   `;

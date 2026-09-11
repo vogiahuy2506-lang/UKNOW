@@ -59,6 +59,7 @@ import adminAiModelsRoutes from './routes/adminAiModels.routes.js';
 import adminBulkNotificationRoutes from './routes/adminBulkNotification.routes.js';
 import adminNotificationRoutes from './routes/adminNotification.routes.js';
 import adminMenuRoutes from './routes/adminMenu.routes.js';
+import adminSystemEmailTemplateRoutes from './routes/adminSystemEmailTemplate.routes.js';
 import userDeliveryMonitorRoutes from './routes/userDeliveryMonitor.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
@@ -207,6 +208,7 @@ export function createApp() {
   app.use('/api/admin/bulk-notification', adminBulkNotificationRoutes);
   app.use('/api/admin/notifications', adminNotificationRoutes);
   app.use('/api/admin/menu-layout', adminMenuRoutes);
+  app.use('/api/admin/system-email-templates', adminSystemEmailTemplateRoutes);
   app.use('/api/delivery-monitor', userDeliveryMonitorRoutes);
   app.use('/api/ai/chatbot', chatbotRoutes);
   app.use('/api/ai', aiRoutes);

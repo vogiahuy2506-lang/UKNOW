@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
-import { sendSystemEmail, buildWelcomeEmail } from '../utils/systemEmail.util.js';
+import { sendWelcomeEmail } from '../services/email/welcomeEmailTemplate.service.js';
 import {
   findActiveUserByEmail,
   updatePasswordByEmail,
@@ -215,15 +215,11 @@ class AuthController {
 
       // Gửi Welcome Email (async, không block response)
       const { full_name, email: userEmail } = user;
-      const welcome = buildWelcomeEmail({
-        fullName: full_name,
-        email: userEmail,
-        loginUrl: `${FRONTEND_URL}/login`,
-      });
-      sendSystemEmail({
+      sendWelcomeEmail({
         to: userEmail,
-        subject: welcome.subject,
-        html: welcome.html,
+        fullName: full_name,
+        planName: trial?.planName || null,
+        loginUrl: `${FRONTEND_URL}/login`,
       }).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
 
       // Đẩy sang Google Sheet thành viên (async, không block response — xem
@@ -577,15 +573,11 @@ class AuthController {
 
         // Gửi Welcome Email cho user mới đăng ký qua Google (async)
         const { full_name, email: userEmail } = user;
-        const welcome = buildWelcomeEmail({
-          fullName: full_name,
-          email: userEmail,
-          loginUrl: `${FRONTEND_URL}/login`,
-        });
-        sendSystemEmail({
+        sendWelcomeEmail({
           to: userEmail,
-          subject: welcome.subject,
-          html: welcome.html,
+          fullName: full_name,
+          planName: trial?.planName || null,
+          loginUrl: `${FRONTEND_URL}/login`,
         }).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
       } else {
         user = result.rows[0];

@@ -387,9 +387,8 @@ export function buildCampaignStoppedQuotaEmail({ fullName, campaignName, reason,
 
 // ─── Welcome Email ────────────────────────────────────────────────────────────
 
-export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }) {
-  const displayName = fullName || email.split('@')[0];
-  const planSection = planName ? `
+function buildWelcomePlanSection(planName) {
+  return planName ? `
     <!-- Plan Info -->
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin-bottom:24px">
       <tr>
@@ -400,8 +399,10 @@ export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }
       </tr>
     </table>
   ` : '';
+}
 
-  const content = `
+function buildDefaultWelcomeBodyHtml({ displayName, planSection, loginUrl }) {
+  return `
     <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
       Xin chào <strong style="color:#f97316">${displayName}</strong>,
     </p>
@@ -474,12 +475,67 @@ export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl }
     <!-- Help -->
     <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
       Nếu cần hỗ trợ, liên hệ <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a> hoặc
-      xem <a href="${FRONTEND_URL}/docs" style="color:#f97316;text-decoration:none">tài liệu hướng dẫn</a>.
+      xem <a href="${FRONTEND_URL}/huong-dan" style="color:#f97316;text-decoration:none">tài liệu hướng dẫn</a>.
     </p>
   `;
+}
 
+export function getDefaultWelcomeEmailTemplate() {
   return {
     subject: `Chào mừng đến với ${SENDER_NAME}!`,
+    bodyHtml: buildDefaultWelcomeBodyHtml({
+      displayName: '{{user_name}}',
+      planSection: '{{plan_section}}',
+      loginUrl: '{{login_url}}',
+    }),
+  };
+}
+
+function escapeWelcomeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function replaceWelcomeVariables(template, values, { html = false } = {}) {
+  return String(template || '').replace(/{{\s*([a-z_]+)\s*}}/gi, (_match, key) => {
+    const value = values[key.toLowerCase()] ?? '';
+    return html ? escapeWelcomeHtml(value) : String(value).replace(/[\r\n]+/g, ' ');
+  });
+}
+
+export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl, template = null }) {
+  const safeEmail = String(email || '');
+  const displayName = fullName || safeEmail.split('@')[0] || 'bạn';
+  const defaultTemplate = getDefaultWelcomeEmailTemplate();
+  const selectedTemplate = {
+    subject: template?.subject || defaultTemplate.subject,
+    bodyHtml: template?.bodyHtml || defaultTemplate.bodyHtml,
+  };
+  const commonValues = {
+    user_name: displayName,
+    user_email: safeEmail,
+    plan_name: planName || '',
+    login_url: loginUrl || FRONTEND_URL,
+    sender_name: SENDER_NAME,
+    support_email: 'info@digiso.vn',
+    docs_url: `${FRONTEND_URL}/huong-dan`,
+  };
+  const subject = replaceWelcomeVariables(selectedTemplate.subject, {
+    ...commonValues,
+    plan_section: planName || '',
+  }).trim();
+  const bodyWithPlanSection = selectedTemplate.bodyHtml.replace(
+    /{{\s*plan_section\s*}}/gi,
+    buildWelcomePlanSection(escapeWelcomeHtml(planName || ''))
+  );
+  const content = replaceWelcomeVariables(bodyWithPlanSection, commonValues, { html: true });
+
+  return {
+    subject,
     html: buildBaseTemplate({
       subtitle: 'Chào mừng bạn!',
       content,

@@ -87,6 +87,7 @@ import AdminHelpArticlesPage from './pages/admin/AdminHelpArticlesPage';
 import AdminHelpArticleEditPage from './pages/admin/AdminHelpArticleEditPage';
 import AdminHelpUnansweredPage from './pages/admin/AdminHelpUnansweredPage';
 import AdminMenuCategoriesPage from './pages/admin/AdminMenuCategoriesPage';
+import AdminWelcomeEmailPage from './pages/admin/AdminWelcomeEmailPage';
 import AdminAlertsPage from './pages/admin/AdminAlertsPage';
 import AdminFunnelPage from './pages/admin/AdminFunnelPage';
 import AdminSystemHealthPage from './pages/admin/AdminSystemHealthPage';
@@ -496,6 +497,7 @@ function AppContent() {
             <Route path="help-articles" element={<AdminHelpArticlesPage />} />
             <Route path="help-articles/:id" element={<AdminHelpArticleEditPage />} />
             <Route path="menu-categories" element={<AdminMenuCategoriesPage />} />
+            <Route path="welcome-email" element={<AdminWelcomeEmailPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="notification-center" element={<NotificationCenter />} />
             <Route path="landing-customizer" element={<LandingPageCustomizer />} />

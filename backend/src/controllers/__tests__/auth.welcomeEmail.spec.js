@@ -3,18 +3,14 @@ process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-12345';
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-const mockSendSystemEmail = jest.fn().mockResolvedValue(true);
+const mockSendWelcomeEmail = jest.fn().mockResolvedValue(true);
 const mockClient = {
   query: jest.fn(),
   release: jest.fn(),
 };
 
-jest.unstable_mockModule('../../utils/systemEmail.util.js', () => ({
-  sendSystemEmail: mockSendSystemEmail,
-  buildWelcomeEmail: jest.fn(({ fullName, email, loginUrl }) => ({
-    subject: `Chào mừng ${fullName || email}`,
-    html: `<p>Login: ${loginUrl}</p>`,
-  })),
+jest.unstable_mockModule('../../services/email/welcomeEmailTemplate.service.js', () => ({
+  sendWelcomeEmail: mockSendWelcomeEmail,
 }));
 
 jest.unstable_mockModule('../../config/database.js', () => ({
@@ -117,12 +113,12 @@ describe('auth.controller welcome email invariant', () => {
     await authController.register(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
-    expect(mockSendSystemEmail).toHaveBeenCalledWith(
+    expect(mockSendWelcomeEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendWelcomeEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'newuser@example.com',
-        subject: expect.stringContaining('Chào mừng'),
-        html: expect.stringContaining('Login'),
+        fullName: 'Test User',
+        loginUrl: expect.stringContaining('/login'),
       })
     );
   });
