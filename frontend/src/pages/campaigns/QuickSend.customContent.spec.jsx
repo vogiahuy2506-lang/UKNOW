@@ -475,4 +475,58 @@ describe('QuickSend — soạn nội dung mới không cần mẫu', () => {
     expect(payload.htmlContent).not.toContain('<p onclick=');
     expect(payload.htmlContent).toContain('&lt;p onclick=');
   });
+
+  it('chọn mẫu đang tải, chuyển "Soạn nội dung mới" gửi thành công, bấm "Gửi tiếp" rồi response mẫu cũ mới về — không được hồi sinh mẫu/đính kèm cũ', async () => {
+    m.locationState = { quickSendDraft: { channel: 'email', recipients: ['a@example.com'] } };
+    render(<QuickSend />);
+    await waitFor(() => expect(m.listEmailSettings).toHaveBeenCalled());
+    await clickNext();
+
+    // Chọn mẫu nhưng KHÔNG cho request tải chi tiết trả lời ngay — request này chỉ resolve
+    // sau khi cả một lượt gửi khác (custom mode) đã xong, mô phỏng đúng race mà finding mô tả.
+    let resolveTemplateDetail;
+    m.getEmailTemplateById.mockReturnValue(new Promise((resolve) => { resolveTemplateDetail = resolve; }));
+    fireEvent.click(await screen.findByText('Mẫu khuyến mãi'));
+    await waitFor(() => expect(m.getEmailTemplateById).toHaveBeenCalled());
+
+    // Chuyển sang "Soạn nội dung mới" — contentMode !== 'template' nên guard isLoadingTemplateDetail
+    // bị bỏ qua có chủ đích, cho phép gửi dù request mẫu ở trên vẫn còn treo.
+    fireEvent.click(screen.getByText('quickSend.contentModeCustom'));
+    fireEvent.change(screen.getByPlaceholderText('quickSend.customSubjectPlaceholder'), {
+      target: { value: 'Tiêu đề lượt 1' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('quickSend.customBodyPlaceholder'), {
+      target: { value: 'Nội dung lượt 1' },
+    });
+    await clickNext();
+
+    const sendBtn = await screen.findByRole('button', { name: 'quickSend.sendNow' });
+    await act(async () => { fireEvent.click(sendBtn); });
+    await waitFor(() => expect(m.sendEmail).toHaveBeenCalledTimes(1));
+    expect(m.sendEmail.mock.calls[0][0].subject).toBe('Tiêu đề lượt 1');
+
+    // "Gửi tiếp" — phải tăng templateSelectionSeqRef và dọn isLoadingTemplateDetail/
+    // templateDetailError, nếu không response cũ ở trên sẽ vẫn khớp token khi về muộn.
+    const startOverBtn = await screen.findByRole('button', { name: 'quickSend.sendAnother' });
+    await act(async () => { fireEvent.click(startOverBtn); });
+
+    // Giờ mới cho response mẫu cũ (đang treo từ lượt 1) về.
+    await act(async () => {
+      resolveTemplateDetail({ data: { data: emailTemplate } });
+    });
+
+    // Không được thấy dấu vết mẫu/đính kèm của lượt gửi CŨ ở màn hình của lượt gửi MỚI.
+    expect(screen.queryByText('brochure.pdf')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tiêu đề lượt 1')).not.toBeInTheDocument();
+
+    // Lượt gửi mới phải sạch: nhập người nhận, đi tới bước Nội dung, không có mẫu nào được
+    // tự chọn sẵn và cũng chưa có nội dung tự soạn nào — nút Tiếp phải bị khoá.
+    fireEvent.change(screen.getByPlaceholderText(/email1@example.com/), {
+      target: { value: 'b@example.com' },
+    });
+    await clickNext();
+    await screen.findByText('Mẫu khuyến mãi'); // danh sách mẫu vẫn hiện — chỉ là chưa được TỰ CHỌN
+    expect(screen.queryByText('brochure.pdf')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'quickSend.next' })).toBeDisabled();
+  });
 });

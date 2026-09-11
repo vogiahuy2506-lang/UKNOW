@@ -1089,10 +1089,18 @@ const QuickSend = () => {
   // Reset and start over
   const handleStartOver = () => {
     setCurrentStep(QUICK_SEND_STEPS.RECIPIENTS);
+    // Vô hiệu hoá lựa chọn mẫu đang có, giống hệt lý do ở handleChannelChange: một request
+    // getTemplateById() có thể vẫn đang bay từ lượt gửi trước (custom mode chủ đích bỏ qua
+    // guard isLoadingTemplateDetail nên user gửi được trước khi request đó xong) — nếu không
+    // tăng số thứ tự ở đây, response cũ resolve muộn sau khi đã "Gửi tiếp" sẽ vẫn khớp token
+    // và ghi đè template/nội dung của lượt gửi MỚI bằng dữ liệu của lượt gửi CŨ.
+    templateSelectionSeqRef.current += 1;
     setContentMode('template');
     setSelectedTemplate(null);
     setTemplateContent({ subject: '', body: '' });
     setCustomContent({ subject: '', body: '' });
+    setIsLoadingTemplateDetail(false);
+    setTemplateDetailError(false);
     // extraAttachments có thể đến từ bản nháp AI trước đó — "Gửi tiếp" phải xoá, không được
     // mang đính kèm của lượt gửi cũ sang lượt mới.
     setExtraAttachments([]);
