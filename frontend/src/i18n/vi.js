@@ -7026,6 +7026,18 @@ export default {
     failed: 'Cập nhật số điện thoại thất bại.',
     errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
     versionMismatchError: 'Hệ thống đang được cập nhật. Vui lòng thử lại sau ít phút hoặc liên hệ hỗ trợ.',
+    // PR-2 (11/09/2026) — bước xác thực OTP khi PHONE_OTP_PROVIDER bật. Cờ tắt thì các khoá
+    // này không được gọi tới (modal quay về một bước, dùng bốn khoá phía trên).
+    sendCode: 'Gửi mã',
+    sendingCode: 'Đang gửi mã...',
+    otpDescription: 'Nhập mã 6 số vừa gửi tới {phone}',
+    codeLabel: 'Mã xác thực',
+    codeInvalidLength: 'Vui lòng nhập đủ 6 số.',
+    backToPhoneStep: 'Đổi số khác',
+    resendButton: 'Gửi lại mã',
+    resendCountdown: 'Gửi lại sau {seconds}s',
+    verifyButton: 'Xác thực',
+    verifying: 'Đang xác thực...',
   },
 
   // Bị xoá nhầm ở 1a992e76 ("fix lint"), khôi phục 09/09 — modal ConsentRequiredModal dùng

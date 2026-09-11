@@ -84,6 +84,30 @@ export async function updateMyPhone({ phone }) {
 }
 
 /**
+ * Gửi OTP xác thực SĐT (PR-2, PHONE_OTP_PROVIDER bật). Yêu cầu đăng nhập.
+ * Lỗi 429 kèm `retryAfterSec` khi đang trong cooldown 60s hoặc chạm trần/ngày.
+ *
+ * @param {{ phone: string }} payload
+ * @returns {Promise<{ success: boolean, message?: string }>}
+ */
+export async function sendPhoneOtpCode({ phone }) {
+  const response = await api.post('/verification/phone/send-code', { phone });
+  return response.data;
+}
+
+/**
+ * Xác thực mã OTP SĐT (PR-2). Đúng mã → `users.phone_verified_at` được set, trả kèm.
+ * Lỗi 409 PHONE_TAKEN khi số đã được một tài khoản KHÁC xác thực.
+ *
+ * @param {{ phone: string, code: string }} payload
+ * @returns {Promise<{ success: boolean, message?: string, data: { phone: string, phoneVerifiedAt: string } }>}
+ */
+export async function verifyPhoneOtpCode({ phone, code }) {
+  const response = await api.post('/verification/phone/verify', { phone, code });
+  return response.data;
+}
+
+/**
  * Ghi nhận đồng ý bổ sung điều khoản cho người dùng cũ (PR-N3a).
  *
  * @param {{ terms: boolean, privacy: boolean, dpa: boolean }} payload

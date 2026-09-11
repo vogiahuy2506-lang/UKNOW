@@ -7065,6 +7065,18 @@ Feel free to ask me anything!`,
     failed: 'Failed to update phone number.',
     errorOccurred: 'An error occurred. Please try again.',
     versionMismatchError: 'The system is currently being updated. Please try again in a few minutes or contact support.',
+    // PR-2 (2026-09-11) — OTP verification step when PHONE_OTP_PROVIDER is enabled. Unused
+    // when the flag is off (modal falls back to the single-step flow above).
+    sendCode: 'Send code',
+    sendingCode: 'Sending code...',
+    otpDescription: 'Enter the 6-digit code sent to {phone}',
+    codeLabel: 'Verification code',
+    codeInvalidLength: 'Please enter all 6 digits.',
+    backToPhoneStep: 'Use a different number',
+    resendButton: 'Resend code',
+    resendCountdown: 'Resend in {seconds}s',
+    verifyButton: 'Verify',
+    verifying: 'Verifying...',
   },
 
   // Removed by mistake in 1a992e76 ("fix lint"), restored 09/09 — ConsentRequiredModal
