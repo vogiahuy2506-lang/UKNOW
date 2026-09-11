@@ -217,7 +217,14 @@ const QuickSend = () => {
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
   const [templateDetailError, setTemplateDetailError] = useState(false);
-  const activeTemplateSelectionIdRef = useRef(null);
+  // Số thứ tự tăng dần cho MỖI lần chọn mẫu (hoặc đổi kênh) — KHÔNG dùng template.id làm token
+  // staleness: email_templates và zalo_templates là hai bảng riêng, id tự tăng ĐỘC LẬP, nên
+  // Email id=1 và Zalo id=1 hoàn toàn có thể trùng số. Nếu dùng id làm token, kịch bản: chọn
+  // Email id=1 (request treo) -> đổi Zalo -> chọn Zalo id=1 (request mới) -> Zalo về trước ->
+  // Email id=1 về SAU — guard so `id === 1` vẫn khớp, ghi đè nhầm nội dung Zalo bằng Email dù
+  // token đã "đổi" giữa hai request khác nhau. Số thứ tự tăng dần tránh được vì mỗi lần gọi
+  // (kể cả cùng id) luôn nhận một token mới, không thể trùng nhau giữa hai request khác nhau.
+  const templateSelectionSeqRef = useRef(0);
 
   // Nội dung tự soạn (bước 2, phương án "Soạn nội dung mới") — TÁCH khỏi templateContent để
   // chuyển qua lại giữa "chọn mẫu" và "soạn mới" không làm mất bản nháp của bên kia. AI
@@ -648,7 +655,7 @@ const QuickSend = () => {
   const handleSelectTemplate = async (template) => {
     if (!template?.id) return;
     const templateId = template.id;
-    activeTemplateSelectionIdRef.current = templateId;
+    const mySeq = ++templateSelectionSeqRef.current;
     setContentMode('template');
     setSelectedTemplate(template);
     setTemplateDetailError(false);
@@ -658,7 +665,7 @@ const QuickSend = () => {
       let fullTemplate = template;
       if (selectedChannel === CHANNEL_TYPES.EMAIL) {
         const res = await emailTemplateApiService.getTemplateById(templateId);
-        if (activeTemplateSelectionIdRef.current !== templateId) return;
+        if (templateSelectionSeqRef.current !== mySeq) return;
         const data = res?.data?.data || res?.data;
         if (data) {
           fullTemplate = data;
@@ -667,7 +674,7 @@ const QuickSend = () => {
         applyTemplateBody(fullTemplate);
       } else {
         const res = await zaloTemplateApiService.getTemplateById(templateId);
-        if (activeTemplateSelectionIdRef.current !== templateId) return;
+        if (templateSelectionSeqRef.current !== mySeq) return;
         const data = res?.data?.data || res?.data;
         if (data) {
           fullTemplate = data;
@@ -676,12 +683,12 @@ const QuickSend = () => {
         applyTemplateBody(fullTemplate);
       }
     } catch (err) {
-      if (activeTemplateSelectionIdRef.current !== templateId) return;
+      if (templateSelectionSeqRef.current !== mySeq) return;
       console.error('Failed to fetch template detail:', err);
       setTemplateDetailError(true);
       toast.error(t('quickSend.templateLoadDetailFailed'));
     } finally {
-      if (activeTemplateSelectionIdRef.current === templateId) {
+      if (templateSelectionSeqRef.current === mySeq) {
         setIsLoadingTemplateDetail(false);
       }
     }
@@ -1113,14 +1120,15 @@ const QuickSend = () => {
     const wasEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
     const willBeEmail = nextChannel === CHANNEL_TYPES.EMAIL;
     if (wasEmail !== willBeEmail) {
-      // Vô hiệu hoá lựa chọn mẫu đang có — QUAN TRỌNG: phải đặt lại CẢ activeTemplateSelectionIdRef,
-      // không chỉ state. handleSelectTemplate() so sánh ref này để bỏ qua response cũ (double-click,
-      // đổi mẫu nhanh); nếu chỉ setSelectedTemplate(null) mà không đổi ref, response getTemplateById
-      // của mẫu kênh CŨ (ví dụ Email) rớt về sau khi đã đổi sang Zalo vẫn khớp ref, vượt qua guard ở
-      // handleSelectTemplate và ghi đè lại đúng nội dung/mẫu của kênh cũ — gửi nhầm HTML Email vào
-      // tin Zalo. Reset luôn cờ loading/error vì request đó coi như đã bỏ (không có AbortController
-      // thật, nhưng ref-mismatch đã đủ để response bị bỏ qua khi về tới).
-      activeTemplateSelectionIdRef.current = null;
+      // Vô hiệu hoá lựa chọn mẫu đang có — QUAN TRỌNG: phải TĂNG templateSelectionSeqRef, không
+      // chỉ setSelectedTemplate(null). handleSelectTemplate() so token này để bỏ qua response cũ;
+      // tăng số thứ tự ở đây (thay vì chỉ đặt về null/id) đảm bảo MỌI request đang bay tại thời
+      // điểm đổi kênh đều bị vô hiệu — kể cả khi người dùng chọn tiếp một mẫu ở kênh mới CÙNG id
+      // với mẫu đang treo ở kênh cũ (email_templates/zalo_templates là hai bảng id tự tăng độc
+      // lập, Email id=1 và Zalo id=1 hoàn toàn có thể trùng số — so bằng id sẽ không phân biệt
+      // được hai request khác nhau trong kịch bản này, so bằng số thứ tự tăng dần thì luôn phân
+      // biệt được vì mỗi lần gọi handleSelectTemplate là một token mới, không thể trùng nhau).
+      templateSelectionSeqRef.current += 1;
       setContentMode('template');
       setSelectedTemplate(null);
       setTemplateContent({ subject: '', body: '' });

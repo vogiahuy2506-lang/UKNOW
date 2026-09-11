@@ -227,8 +227,12 @@ describe('QuickSend — soạn nội dung mới không cần mẫu', () => {
       target: { value: 'Nội dung email cũ' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
-    fireEvent.click(screen.getByText('Zalo'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Zalo'));
+    });
     await waitFor(() => expect(m.listZaloAccounts).toHaveBeenCalled());
     // manualEmails không đổi thành số điện thoại hợp lệ khi đổi kênh — phải tự nhập số Zalo
     // mới để nút "Tiếp tục" sáng lên (đây là hành vi có sẵn, không phải phần PR này đổi).
@@ -300,12 +304,16 @@ describe('QuickSend — soạn nội dung mới không cần mẫu', () => {
     await waitFor(() => expect(m.getEmailTemplateById).toHaveBeenCalled());
 
     // Đổi kênh TRƯỚC KHI response Email về.
-    fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
-    fireEvent.click(screen.getByText('Zalo'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Zalo'));
+    });
     await waitFor(() => expect(m.listZaloAccounts).toHaveBeenCalled());
 
-    // Giờ mới cho response Email cũ (đang treo) về — activeTemplateSelectionIdRef phải đã bị
-    // handleChannelChange() đặt về null, nên guard trong handleSelectTemplate phải bỏ qua nó.
+    // Giờ mới cho response Email cũ (đang treo) về — templateSelectionSeqRef phải đã bị
+    // handleChannelChange() tăng lên, nên guard trong handleSelectTemplate phải bỏ qua nó.
     await act(async () => {
       resolveTemplateDetail({ data: { data: emailTemplate } });
     });
@@ -316,6 +324,65 @@ describe('QuickSend — soạn nội dung mới không cần mẫu', () => {
     // Không được thấy mẫu Email quay lại ở bước Nội dung của kênh Zalo.
     expect(screen.queryByText('Mẫu khuyến mãi')).not.toBeInTheDocument();
     expect(screen.queryByText('quickSend.selectedTemplate')).not.toBeInTheDocument();
+  });
+
+  it('id trùng giữa mẫu Email và mẫu Zalo (hai bảng độc lập) không làm response cũ thắng response mới', async () => {
+    // email_templates và zalo_templates là hai bảng id tự tăng ĐỘC LẬP — Email id=501 và Zalo
+    // id=501 hoàn toàn có thể cùng tồn tại. Guard staleness so bằng chính template.id (thay vì
+    // số thứ tự) sẽ không phân biệt được hai request này, nên phải kiểm đúng kịch bản: Zalo về
+    // TRƯỚC, Email (id trùng) về SAU — nếu vẫn dùng id, guard cũ ("id ref === id request") vẫn
+    // khớp cho response Email trễ, ghi đè nhầm nội dung Zalo vừa hiện đúng.
+    const zaloTemplateSameId = {
+      id: emailTemplate.id, // CỐ Ý trùng id với emailTemplate (501).
+      templateName: 'Mẫu Zalo trùng ID',
+      bodyText: 'Nội dung Zalo thật',
+    };
+    m.getZaloTemplates.mockResolvedValue({ data: { data: { items: [zaloTemplateSameId] } } });
+
+    m.locationState = { quickSendDraft: { channel: 'email', recipients: ['a@example.com'] } };
+    render(<QuickSend />);
+    await waitFor(() => expect(m.listEmailSettings).toHaveBeenCalled());
+    await clickNext();
+
+    let resolveEmail;
+    m.getEmailTemplateById.mockReturnValue(new Promise((resolve) => { resolveEmail = resolve; }));
+    fireEvent.click(await screen.findByText('Mẫu khuyến mãi'));
+    await waitFor(() => expect(m.getEmailTemplateById).toHaveBeenCalled());
+    // Request Email id=501 đang treo, CHƯA resolve.
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Zalo'));
+    });
+    await waitFor(() => expect(m.listZaloAccounts).toHaveBeenCalled());
+    fireEvent.change(screen.getByPlaceholderText(/0901234567/), { target: { value: '0909999999' } });
+    fireEvent.click(screen.getByRole('button', { name: /quickSend.next/ }));
+
+    let resolveZalo;
+    m.getZaloTemplateById.mockReturnValue(new Promise((resolve) => { resolveZalo = resolve; }));
+    fireEvent.click(await screen.findByText('Mẫu Zalo trùng ID'));
+    await waitFor(() => expect(m.getZaloTemplateById).toHaveBeenCalled());
+
+    // Zalo (id=501) về TRƯỚC.
+    await act(async () => { resolveZalo({ data: { data: zaloTemplateSameId } }); });
+    await waitFor(() => expect(screen.getAllByText('Mẫu Zalo trùng ID').length).toBeGreaterThan(0));
+
+    // Email cũ (CŨNG id=501) về SAU — điểm mấu chốt của bug đã sửa.
+    await act(async () => { resolveEmail({ data: { data: emailTemplate } }); });
+
+    // Nội dung/mẫu đang hiển thị vẫn phải là Zalo — Email không được lọt vào bất kỳ đâu.
+    expect(screen.getAllByText('Mẫu Zalo trùng ID').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Mẫu khuyến mãi')).not.toBeInTheDocument();
+
+    await clickNext();
+    const sendBtn = await screen.findByRole('button', { name: 'quickSend.sendNow' });
+    await act(async () => { fireEvent.click(sendBtn); });
+
+    await waitFor(() => expect(m.sendZaloMessage).toHaveBeenCalled());
+    const [payload] = m.sendZaloMessage.mock.calls[0];
+    expect(payload.message).toBe('Nội dung Zalo thật');
   });
 
   it('chọn mẫu lỗi tải rồi chuyển "Soạn nội dung mới" — cả Gửi thử và Gửi ngay vẫn hoạt động', async () => {
@@ -364,8 +431,12 @@ describe('QuickSend — soạn nội dung mới không cần mẫu', () => {
     await clickNext(); // Recipients -> Content (contentMode đã là 'custom' nhờ draft)
     expect(screen.getByPlaceholderText('quickSend.customSubjectPlaceholder').value).toBe('Tiêu đề nháp');
 
-    fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
-    fireEvent.click(screen.getByText('Zalo'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Zalo'));
+    });
     await waitFor(() => expect(m.listZaloAccounts).toHaveBeenCalled());
     fireEvent.change(screen.getByPlaceholderText(/0901234567/), { target: { value: '0909999999' } });
     fireEvent.click(screen.getByRole('button', { name: /quickSend.next/ }));
