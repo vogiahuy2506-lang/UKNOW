@@ -360,6 +360,7 @@ CREATE TABLE zalo_settings (
   restore_fail_count INT NOT NULL DEFAULT 0,
   first_restore_fail_at TIMESTAMPTZ,
   last_restore_attempt_at TIMESTAMPTZ,
+  phone_lookup_cooldown_until TIMESTAMPTZ,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

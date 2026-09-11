@@ -8,6 +8,7 @@ import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
+import campaignRunService from '../services/campaign/campaignRun.service.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
@@ -433,6 +434,18 @@ export const requestCampaignScheduleRefresh = async () => {
  * này, hành vi không đổi.
  */
 export const initScheduler = () => {
+  // PR-2b: nạp lại cooldown tra số Zalo còn hiệu lực từ DB vào Map trong bộ nhớ — Map mất
+  // trắng mỗi lần container bị thay mới lúc deploy. Không phụ thuộc SCHEDULER_ENABLED vì đây
+  // là khôi phục trạng thái, không phải một scheduled job. Fire-and-forget: lỗi nạp không được
+  // chặn khởi động backend, chỉ log để biết.
+  campaignRunService.hydratePhoneLookupCooldowns()
+    .then((count) => {
+      console.log(`[Scheduler] Đã nạp ${count} cooldown tra số Zalo còn hiệu lực`);
+    })
+    .catch((err) => {
+      console.error('[Scheduler] Lỗi khi nạp cooldown tra số Zalo:', err?.message || err);
+    });
+
   if (String(process.env.SCHEDULER_ENABLED).toLowerCase() === 'false') {
     console.log('[Scheduler] SCHEDULER_ENABLED=false — bỏ qua toàn bộ scheduled job.');
     return;

@@ -34,6 +34,7 @@ import campaignCrudRepository from '../../repositories/campaign/campaignCrud.rep
 import customerMutationRepository from '../../repositories/customer/customerMutation.repository.js';
 import customerZaloTrackingRepository from '../../repositories/customer/customerZaloTracking.repository.js';
 import zaloTemplateRepository from '../../repositories/zalo/zaloTemplate.repository.js';
+import zaloSettingRepository from '../../repositories/zalo/zaloSetting.repository.js';
 import { measureJsonUtf8Bytes } from '../../utils/dataColumnSelection.util.js';
 import {
   QUOTA_DEFER_CLEAR_KEYS,
@@ -530,7 +531,49 @@ class CampaignRunService {
   scheduleZaloPersonalPhoneLookupCooldown(accountId) {
     return this.zaloRateLimiter.scheduleZaloPersonalPhoneLookupCooldown(accountId);
   }
-  
+
+  /**
+   * Ghi cooldown tra số xuống `zalo_settings` để sống sót qua deploy (PR-2b) — Map trong
+   * zaloRateLimiter chỉ ở bộ nhớ tiến trình, mất khi container bị thay mới.
+   *
+   * Lỗi ghi DB KHÔNG được ném ra ngoài: Map trong bộ nhớ vẫn đang có tác dụng cho tiến
+   * trình hiện tại, mất persistence chỉ ảnh hưởng nếu deploy xảy ra ngay sau đó — còn đỡ
+   * hơn làm gãy cả luồng gửi vì một lỗi ghi phụ.
+   *
+   * @param {string|number} accountId
+   * @param {number} untilMs epoch ms mốc hết cooldown
+   * @returns {Promise<void>}
+   */
+  async _persistPhoneLookupCooldown(accountId, untilMs) {
+    try {
+      await zaloSettingRepository.setPhoneLookupCooldown(accountId, new Date(untilMs));
+    } catch (err) {
+      console.warn(`[ZaloCooldown] không ghi được cooldown account=${accountId}:`, err?.message || err);
+    }
+  }
+
+  /**
+   * Nạp lại cooldown tra số còn hiệu lực từ DB vào Map trong bộ nhớ — chạy một lần lúc
+   * khởi động (initScheduler). Production chỉ chạy đúng MỘT container backend cho campaign
+   * (xem CLAUDE.md — "Campaign runtime — single process only"), nên nạp lúc khởi động là đủ,
+   * không cần khoá phân tán.
+   *
+   * @returns {Promise<number>} số cooldown đã nạp
+   */
+  async hydratePhoneLookupCooldowns() {
+    const rows = await zaloSettingRepository.listActivePhoneLookupCooldowns();
+    for (const row of rows) {
+      const accountId = String(row.id ?? '').trim();
+      const untilMs = new Date(row.phone_lookup_cooldown_until).getTime();
+      if (!accountId || !Number.isFinite(untilMs)) continue;
+      // Math.max giống hệt scheduleZaloPersonalPhoneLookupCooldown — nạp lại từ DB cũng
+      // không được rút ngắn một mốc đang có sẵn trong Map (ví dụ nếu hydrate bị gọi lại).
+      const prevUntil = Number(this.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.get(accountId)) || 0;
+      this.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.set(accountId, Math.max(prevUntil, untilMs));
+    }
+    return rows.length;
+  }
+
   /**
    * Nhận diện lỗi tài khoản Zalo mất phiên đăng nhập/không sẵn sàng để loại khỏi pool gửi.
    *
@@ -5219,6 +5262,7 @@ class CampaignRunService {
               }
               if (this.isZaloPersonalPhoneLookupRateLimitError(error)) {
                 const untilMs = this.scheduleZaloPersonalPhoneLookupCooldown(workingAccount.id);
+                await this._persistPhoneLookupCooldown(workingAccount.id, untilMs);
                 const waitMs = Math.max(0, untilMs - Date.now());
                 const observation = buildZaloPersonalErrorObservation(error);
                 console.log(
@@ -6443,6 +6487,7 @@ class CampaignRunService {
               await this._stopRunIfPlanQuotaBlocked(error, { runId, campaignId });
               if (this.isZaloPersonalPhoneLookupRateLimitError(error)) {
                 const untilMs = this.scheduleZaloPersonalPhoneLookupCooldown(workingAccount.id);
+                await this._persistPhoneLookupCooldown(workingAccount.id, untilMs);
                 const waitMs = Math.max(0, untilMs - Date.now());
                 console.log(
                   `[CampaignRun][ZaloFriend] run=${runId} account=${workingAccount.id} `

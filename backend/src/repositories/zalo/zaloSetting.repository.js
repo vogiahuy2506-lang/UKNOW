@@ -302,6 +302,34 @@ class ZaloSettingRepository {
     );
     return decryptZaloCookieRow(rows[0] || null);
   }
+
+  /**
+   * Ghi mốc hết cooldown tra số điện thoại của tài khoản (PR-2b — sống sót qua deploy).
+   *
+   * @param {string|number} accountId
+   * @param {Date} untilDate
+   * @returns {Promise<void>}
+   */
+  async setPhoneLookupCooldown(accountId, untilDate) {
+    await db.query(
+      `UPDATE zalo_settings SET phone_lookup_cooldown_until = $2 WHERE id = $1`,
+      [accountId, untilDate]
+    );
+  }
+
+  /**
+   * Danh sách cooldown tra số còn hiệu lực (dùng để nạp lại Map trong bộ nhớ lúc khởi động).
+   *
+   * @returns {Promise<Array<{id: number, phone_lookup_cooldown_until: Date}>>}
+   */
+  async listActivePhoneLookupCooldowns() {
+    const { rows } = await db.query(
+      `SELECT id, phone_lookup_cooldown_until
+       FROM zalo_settings
+       WHERE phone_lookup_cooldown_until > NOW()`
+    );
+    return rows;
+  }
 }
 
 export default new ZaloSettingRepository();

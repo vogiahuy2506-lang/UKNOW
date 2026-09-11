@@ -755,10 +755,14 @@ CREATE TABLE zalo_settings (
   restore_fail_count INT NOT NULL DEFAULT 0,
   first_restore_fail_at TIMESTAMPTZ,
   last_restore_attempt_at TIMESTAMPTZ,
+  phone_lookup_cooldown_until TIMESTAMPTZ,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_zalo_settings_user ON zalo_settings(id_user);
+CREATE INDEX idx_zalo_settings_phone_lookup_cooldown
+  ON zalo_settings (phone_lookup_cooldown_until)
+  WHERE phone_lookup_cooldown_until IS NOT NULL;
 
 CREATE TABLE zalo_templates (
   id            BIGSERIAL PRIMARY KEY,
