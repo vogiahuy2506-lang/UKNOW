@@ -5562,6 +5562,17 @@ class CampaignRunService {
                 });
               }
               return { success: false };
+            } finally {
+              // PR-3: điểm giải quyết DUY NHẤT cho mọi đường thoát sớm (throw/return) phía trên
+              // mà không cập nhật tracking_metadata — chạy vô hại nếu message đã 'sent'/'failed'
+              // (điều kiện WHERE ...='queued' nằm trong SQL của markAbandonedIfStillQueued).
+              if (zaloMessageId) {
+                try {
+                  await zaloMessageRepository.markAbandonedIfStillQueued(zaloMessageId);
+                } catch (err) {
+                  console.warn(`[ZaloTracking] không đóng sổ được message=${zaloMessageId}:`, err?.message || err);
+                }
+              }
             }
           };
 
@@ -6381,30 +6392,33 @@ class CampaignRunService {
             }
             let zaloMessageId = null;
             const trackingToken = campaignZaloSenderService.createTrackingToken();
-            // eslint-disable-next-line no-await-in-loop
-            zaloMessageId = await createZaloMessageTrackingRecord({
-              nodeId: node.id,
-              channel: 'zalo_friend_request',
-              recipientType: 'phone',
-              recipientValue: phone,
-              uid: null,
-              groupId: null,
-              accountId: workingAccount.id,
-              accountName: workingAccount.displayName,
-              messageText: message,
-              customerId: Number.parseInt(customerId, 10) || null,
-              trackingToken,
-              trackingMetadata: {
-                contentMode,
-                status: 'queued',
-                stepIndex: 1,
-              },
-            });
             try {
               await assertSendQuotaOrYield('zalo');
               await enforceZaloOutboundPolicyBeforeSend({
                 accountId: workingAccount.id,
                 channel: 'zalo_friend_request',
+              });
+              // PR-3: tạo placeholder SAU khi qua cổng nhịp gửi (khớp khuôn nhánh cá nhân/nhóm)
+              // nhưng vẫn TRƯỚC lệnh gửi thật — PR-Q4b cần placeholder tồn tại trước để gắn
+              // quota_reservation_id.
+              // eslint-disable-next-line no-await-in-loop
+              zaloMessageId = await createZaloMessageTrackingRecord({
+                nodeId: node.id,
+                channel: 'zalo_friend_request',
+                recipientType: 'phone',
+                recipientValue: phone,
+                uid: null,
+                groupId: null,
+                accountId: workingAccount.id,
+                accountName: workingAccount.displayName,
+                messageText: message,
+                customerId: Number.parseInt(customerId, 10) || null,
+                trackingToken,
+                trackingMetadata: {
+                  contentMode,
+                  status: 'queued',
+                  stepIndex: 1,
+                },
               });
               const sendResult = await campaignZaloSenderService.sendFriendRequestQueued({
                 userId,
@@ -6851,6 +6865,17 @@ class CampaignRunService {
                     errorMessage: error.message,
                     executionData: buildSendZaloFriendExecutionData(failedPayload),
                   });
+                }
+              }
+            } finally {
+              // PR-3: điểm giải quyết DUY NHẤT cho mọi đường thoát sớm (throw/return) phía trên
+              // mà không cập nhật tracking_metadata — chạy vô hại nếu message đã 'sent'/'failed'
+              // (điều kiện WHERE ...='queued' nằm trong SQL của markAbandonedIfStillQueued).
+              if (zaloMessageId) {
+                try {
+                  await zaloMessageRepository.markAbandonedIfStillQueued(zaloMessageId);
+                } catch (err) {
+                  console.warn(`[ZaloTracking] không đóng sổ được message=${zaloMessageId}:`, err?.message || err);
                 }
               }
             }
@@ -7357,6 +7382,17 @@ class CampaignRunService {
                 executionData: buildSendZaloGroupExecutionData(failedPayload),
               });
               return { success: false, status: 'failed', error: observation.cleanMessage || error.message };
+            } finally {
+              // PR-3: điểm giải quyết DUY NHẤT cho mọi đường thoát sớm (throw/return) phía trên
+              // mà không cập nhật tracking_metadata — chạy vô hại nếu message đã 'sent'/'failed'
+              // (điều kiện WHERE ...='queued' nằm trong SQL của markAbandonedIfStillQueued).
+              if (zaloMessageId) {
+                try {
+                  await zaloMessageRepository.markAbandonedIfStillQueued(zaloMessageId);
+                } catch (err) {
+                  console.warn(`[ZaloTracking] không đóng sổ được message=${zaloMessageId}:`, err?.message || err);
+                }
+              }
             }
           };
 

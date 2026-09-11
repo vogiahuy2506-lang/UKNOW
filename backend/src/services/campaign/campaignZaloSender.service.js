@@ -2063,7 +2063,10 @@ class CampaignZaloSenderService {
    * Consume quota reservation sau khi provider xác nhận thành công (PR-Q4b).
    *
    * `persistSource` gắn `quota_reservation_id` + `status='sent'` vào đúng row `zalo_messages`
-   * (placeholder đã insert trước khi gửi) TRONG CÙNG transaction với consume — nếu không, một
+   * (placeholder đã insert trước khi gửi) TRONG CÙNG transaction với consume — cả cột `status`
+   * LẪN `tracking_metadata->>'status'` (từ PR-3, `mergeZaloMessageTrackingMetadata` ghi cả hai;
+   * trước đó chỉ JSONB được cập nhật, cột `status` giữ nguyên DEFAULT 'pending' vĩnh viễn). Nếu
+   * không chạy trong cùng transaction, một
    * crash giữa lúc consume xong (ví đã trừ) và lúc `updateZaloMessageTrackingMeta` chạy riêng ở
    * campaignRun.service.js sẽ để lại reservation `consumed` nhưng row vẫn `status='queued'`,
    * `quota_reservation_id=NULL`. `updateZaloMessageTrackingMeta` vẫn chạy sau đó để merge thêm

@@ -14,6 +14,7 @@ const mockFinalizeRun = jest.fn().mockResolvedValue(null);
 const mockSendFriendRequestQueued = jest.fn();
 const mockCheckSendQuota = jest.fn().mockResolvedValue({ allowed: true });
 const mockSetPhoneLookupCooldown = jest.fn().mockResolvedValue(undefined);
+const mockMarkAbandonedIfStillQueued = jest.fn().mockResolvedValue(undefined);
 
 jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.js', () => ({
   default: {
@@ -142,6 +143,7 @@ jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.reposit
 jest.unstable_mockModule('../../../repositories/campaign/zaloMessage.repository.js', () => ({
   default: {
     insertCampaignZaloMessage: jest.fn().mockResolvedValue(1),
+    markAbandonedIfStillQueued: mockMarkAbandonedIfStillQueued,
   },
 }));
 
@@ -166,6 +168,7 @@ describe('CampaignRun Zalo kết bạn — lỗi tra số phải ghi cooldown xu
       new Error('Tìm số điện thoại quá nhiều lần trong 1 ngày có thể bị xem là hoạt động bất thường. Bạn hãy thử lại vào 00:00.')
     );
     mockSetPhoneLookupCooldown.mockResolvedValue(undefined);
+    mockMarkAbandonedIfStillQueued.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -202,5 +205,14 @@ describe('CampaignRun Zalo kết bạn — lỗi tra số phải ghi cooldown xu
     );
     expect(mockFailRun).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it('PR-3: lỗi tra số ở nhánh kết bạn → placeholder zalo_messages phải được đóng sổ (markAbandonedIfStillQueued), không bị bỏ lại "queued"', async () => {
+    await campaignRunService.executeCampaign(100, 200, 10);
+
+    // insertCampaignZaloMessage mock resolves 1 → đây chính là zaloMessageId của placeholder
+    // được tạo cho lượt gửi lỗi tra số. finally trong catch phải gọi đóng sổ nó.
+    expect(mockMarkAbandonedIfStillQueued).toHaveBeenCalledTimes(1);
+    expect(mockMarkAbandonedIfStillQueued).toHaveBeenCalledWith(1);
   });
 });

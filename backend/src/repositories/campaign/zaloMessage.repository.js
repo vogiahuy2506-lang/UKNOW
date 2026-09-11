@@ -109,13 +109,59 @@ class ZaloMessageRepository {
     return result.rows[0]?.id ?? null;
   }
 
+  /**
+   * Merge vào `tracking_metadata` (JSONB) và, nếu `metadata.status` có giá trị, ghi luôn cột
+   * `status` (PR-3) — trước đây cột này chỉ có DEFAULT 'pending' lúc INSERT, không câu SQL nào
+   * cập nhật lại, nên 61.649 dòng production từng "pending" vĩnh viễn dù trạng thái thật (sent/
+   * failed) đã nằm trong JSONB.
+   *
+   * `COALESCE($3, status)`: hàm này được gọi với metadata TỪNG PHẦN (vd chỉ `{ linkTargets }`,
+   * không có `status`) — nếu ghi thẳng tham số thì những lần gọi đó sẽ xoá mất trạng thái đang
+   * có bằng NULL.
+   *
+   * @param {number} zaloMessageId
+   * @param {object} metadata
+   * @param {object} [queryable] client/pool — truyền `client` khi cần chạy trong transaction.
+   */
   async mergeZaloMessageTrackingMetadata(zaloMessageId, metadata, queryable = db) {
+    const status = (metadata && typeof metadata === 'object' && metadata.status != null)
+      ? String(metadata.status)
+      : null;
     await queryable.query(
       `UPDATE zalo_messages
        SET tracking_metadata = COALESCE(tracking_metadata, '{}'::jsonb) || $2::jsonb,
+           status = COALESCE($3, status),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [zaloMessageId, JSON.stringify(metadata || {})]
+      [zaloMessageId, JSON.stringify(metadata || {}), status]
+    );
+  }
+
+  /**
+   * Đóng sổ một placeholder `zalo_messages` bị bỏ lại ở trạng thái 'queued' — dùng làm điểm
+   * giải quyết DUY NHẤT cho mọi đường thoát sớm (throw/return) trong luồng gửi Zalo (PR-3),
+   * thay vì vá riêng từng đường (hôm nay có 5 đường ở nhánh cá nhân, PR sau chắc chắn thêm nữa).
+   *
+   * Điều kiện `WHERE ... = 'queued'` nằm trong SQL, không phải một cờ trong JS — nên hàm này
+   * gọi bao nhiêu lần cũng vô hại (idempotent) và không bao giờ ghi đè một trạng thái đã có
+   * ('sent'/'failed'/'aborted').
+   *
+   * Dùng 'aborted', không dùng 'failed': tin chưa từng được gửi, không phải lỗi của người
+   * nhận — đánh 'failed' sẽ thổi phồng tỉ lệ thất bại khi đọc báo cáo chiến dịch.
+   *
+   * @param {number} zaloMessageId
+   * @returns {Promise<void>}
+   */
+  async markAbandonedIfStillQueued(zaloMessageId) {
+    await db.query(
+      `UPDATE zalo_messages
+          SET tracking_metadata = COALESCE(tracking_metadata,'{}'::jsonb)
+                                  || '{"status":"aborted"}'::jsonb,
+              status = 'aborted',
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+          AND COALESCE(tracking_metadata->>'status','') = 'queued'`,
+      [zaloMessageId]
     );
   }
 
