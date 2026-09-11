@@ -109,7 +109,19 @@ class ZaloRateLimiter {
     if (!key) return 0;
     const nowMs = Date.now();
     const prevUntil = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(key)) || 0;
-    const candidateUntil = nowMs + this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS;
+    // Zalo tính hạn mức tra số THEO NGÀY, reset lúc 00:00 giờ VN — không phải "chặn N giờ kể từ
+    // lúc gặp lỗi". Tính mốc 00:00 VN kế tiếp bằng kỹ thuật giống computeNextAllowedSendAtByQuietHours
+    // (cộng offset +7 rồi đọc getUTC*, KHÔNG dùng múi giờ của OS/VPS).
+    const utcPlusSevenOffsetMs = 7 * 60 * 60 * 1000;
+    const shifted = new Date(nowMs + utcPlusSevenOffsetMs);
+    let candidateUntil = Date.UTC(
+      shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1, 0, 0, 0, 0
+    ) - utcPlusSevenOffsetMs;
+    // Dự phòng nếu vì lý do nào đó tính mốc nửa đêm ra giá trị vô lý (không > now) — giữ hành vi
+    // an toàn cũ (cộng thêm ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS) thay vì trả một mốc đã qua.
+    if (!(candidateUntil > nowMs)) {
+      candidateUntil = nowMs + this.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS;
+    }
     const untilMs = Math.max(prevUntil, candidateUntil);
     this.zaloPersonalPhoneLookupCooldownUntil.set(key, untilMs);
     return untilMs;
@@ -335,18 +347,18 @@ class ZaloRateLimiter {
       await ensureRunStillRunning();
       const nowMs = Date.now();
 
-      // Cooldown tra số điện thoại quá nhiều (chỉ áp kênh cá nhân).
-      if (safeChannel === 'zalo_personal') {
-        const phoneLookupUntilMs = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0;
-        if (phoneLookupUntilMs > nowMs) {
-          const waitMs = phoneLookupUntilMs - nowMs;
-          console.log(
-            `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
-            + `phone_lookup_cooldown=true wait_ms=${waitMs}`
-          );
-          await yieldOrSleep(waitMs, 'phone_lookup_cooldown');
-          continue;
-        }
+      // Cooldown tra số điện thoại quá nhiều — cooldown là của TÀI KHOẢN Zalo, không phải của
+      // kênh, nên áp cho mọi kênh (personal/group/friend_request) cùng tài khoản, không chỉ
+      // riêng zalo_personal.
+      const phoneLookupUntilMs = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0;
+      if (phoneLookupUntilMs > nowMs) {
+        const waitMs = phoneLookupUntilMs - nowMs;
+        console.log(
+          `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
+          + `phone_lookup_cooldown=true wait_ms=${waitMs}`
+        );
+        await yieldOrSleep(waitMs, 'phone_lookup_cooldown');
+        continue;
       }
 
       const quietUntilMs = this.computeNextAllowedSendAtByQuietHours(nowMs);

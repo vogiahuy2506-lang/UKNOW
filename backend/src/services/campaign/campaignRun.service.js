@@ -4696,6 +4696,27 @@ class CampaignRunService {
                 const until = this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id));
                 return until <= nowMs;
               });
+              if (notInPhoneCooldown.length === 0 && order.length > 0) {
+                // Mọi tài khoản trong pool đều đang cooldown tra số — KHÔNG được lấy đại một
+                // tài khoản đang bị phạt để gửi tiếp (mỗi lượt như vậy lại cộng thêm vào hạn mức
+                // đang cạn). Phải chờ tới mốc cooldown gần nhất rồi nhả slot cho scheduler resume.
+                const earliestUntilMs = Math.min(
+                  ...order.map((id) => this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id)))
+                );
+                const waitMs = Math.max(0, earliestUntilMs - nowMs);
+                console.log(
+                  `[CampaignRun][ZaloPersonal] run=${runId} tất cả tài khoản trong pool đều đang `
+                  + `cooldown tra số → chờ đến epoch_ms=${earliestUntilMs} wait_ms=${waitMs}`
+                );
+                if (waitMs > 0) {
+                  await this.persistZaloDeferYieldSlot({
+                    runId,
+                    campaignId,
+                    waitMs,
+                    reason: 'all_accounts_phone_lookup_cooldown',
+                  });
+                }
+              }
               const tryOrder = notInPhoneCooldown.length > 0 ? notInPhoneCooldown : order;
               const pickedId = tryOrder[0];
               if (normalized) {
@@ -6141,6 +6162,27 @@ class CampaignRunService {
               const until = this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id));
               return until <= nowMs;
             });
+            if (notInPhoneCooldown.length === 0 && order.length > 0) {
+              // Mọi tài khoản trong pool đều đang cooldown tra số — KHÔNG được lấy đại một tài
+              // khoản đang bị phạt để gửi tiếp (mỗi lượt như vậy lại cộng thêm vào hạn mức đang
+              // cạn). Phải chờ tới mốc cooldown gần nhất rồi nhả slot cho scheduler resume.
+              const earliestUntilMs = Math.min(
+                ...order.map((id) => this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id)))
+              );
+              const waitMs = Math.max(0, earliestUntilMs - nowMs);
+              console.log(
+                `[CampaignRun][ZaloFriend] run=${runId} tất cả tài khoản trong pool đều đang `
+                + `cooldown tra số → chờ đến epoch_ms=${earliestUntilMs} wait_ms=${waitMs}`
+              );
+              if (waitMs > 0) {
+                await this.persistZaloDeferYieldSlot({
+                  runId,
+                  campaignId,
+                  waitMs,
+                  reason: 'all_accounts_phone_lookup_cooldown',
+                });
+              }
+            }
             const tryOrder = notInPhoneCooldown.length > 0 ? notInPhoneCooldown : order;
             const pickedId = tryOrder[0];
             if (normalized) {
@@ -6396,6 +6438,25 @@ class CampaignRunService {
                 throw error;
               }
               await this._stopRunIfPlanQuotaBlocked(error, { runId, campaignId });
+              if (this.isZaloPersonalPhoneLookupRateLimitError(error)) {
+                const untilMs = this.scheduleZaloPersonalPhoneLookupCooldown(workingAccount.id);
+                const waitMs = Math.max(0, untilMs - Date.now());
+                console.log(
+                  `[CampaignRun][ZaloFriend] run=${runId} account=${workingAccount.id} `
+                  + `lỗi_giới_hạn_tra_số → cooldown đến epoch_ms=${untilMs}`
+                );
+                if (waitMs > 0) {
+                  await this.persistZaloDeferYieldSlot({
+                    runId,
+                    campaignId,
+                    waitMs,
+                    reason: 'phone_lookup_cooldown_api_error',
+                  });
+                }
+                // Không có wait hợp lệ thì vẫn thoát yên lặng, không tính failed/log execution —
+                // giống nhánh Zalo cá nhân ở trên.
+                continue;
+              }
               if (isZaloUnreachableRecipientError(error)) {
                 await zaloCampaignRecipientService.markPhoneUnreachableFromError(userId, phone, error, runId);
                 skippedSends += 1;
