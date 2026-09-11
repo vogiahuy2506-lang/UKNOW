@@ -124,6 +124,43 @@ describe('PUT /api/users/profile', () => {
     expect(u.rows[0].phone).toBe('0901234567');
   });
 
+  /**
+   * Review PR-1 xác thực SĐT (11/09/2026): route đa năng này cũng ghi `phone`. Nếu không reset
+   * phone_verified_at thì xác thực số A xong đổi sang số B ở đây vẫn "đã xác thực" — lỗ Gemini tự
+   * bắt ở bước phản biện nhưng để ngoài phạm vi việc 6; bịt tại repository để mọi đường ghi
+   * phone đều reset.
+   */
+  it('đổi phone qua PUT /profile → phone_verified_at về NULL; gửi lại cùng số → giữ nguyên', async () => {
+    const user = await createUser({ username: 'verified', phone: '0901234567' });
+    await db.query(`UPDATE users SET phone_verified_at = NOW() WHERE id = $1`, [user.id]);
+    const token = await loginAs(user);
+
+    const same = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '0901234567' });
+    expect(same.status).toBe(200);
+    let u = await db.query(`SELECT phone, phone_verified_at FROM users WHERE id = $1`, [user.id]);
+    expect(u.rows[0].phone_verified_at).not.toBeNull();
+
+    const noPhone = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'Chỉ đổi tên' });
+    expect(noPhone.status).toBe(200);
+    u = await db.query(`SELECT phone_verified_at FROM users WHERE id = $1`, [user.id]);
+    expect(u.rows[0].phone_verified_at).not.toBeNull();
+
+    const changed = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '0907654321' });
+    expect(changed.status).toBe(200);
+    u = await db.query(`SELECT phone, phone_verified_at FROM users WHERE id = $1`, [user.id]);
+    expect(u.rows[0].phone).toBe('0907654321');
+    expect(u.rows[0].phone_verified_at).toBeNull();
+  });
+
   it('email mới trùng user khác → 400, KHÔNG đổi DB', async () => {
     const me = await createUser({ username: 'a', email: 'a@test.local' });
     await createUser({ username: 'b', email: 'taken@test.local' });

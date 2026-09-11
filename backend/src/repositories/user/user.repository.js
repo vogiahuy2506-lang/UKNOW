@@ -241,15 +241,25 @@ export async function findUserByPhoneExceptId(phone, userId) {
 }
 
 export async function updateProfile(userId, { fullName, email, phone, avatarUrl }) {
+  // Review PR-1 xác thực SĐT (11/09/2026): route profile đa năng cũng ghi `phone`; nếu giữ
+  // nguyên phone_verified_at thì xác thực số A xong đổi sang số B qua đây vẫn "đã xác thực"
+  // — vô hiệu luật một người một số. Reset ngay trong cùng câu UPDATE khi số THẬT SỰ đổi
+  // (vế phải `phone` là giá trị cũ của dòng, theo ngữ nghĩa SET của Postgres); gửi lại cùng
+  // số hoặc không gửi phone thì giữ nguyên mốc xác thực. Không phụ thuộc PHONE_OTP_PROVIDER:
+  // tắt tính năng thì cột luôn NULL, câu này vô hại.
   const { rows } = await db.query(
     `UPDATE users SET
       full_name = COALESCE($1, full_name),
       email = COALESCE($2, email),
+      phone_verified_at = CASE
+        WHEN $3::varchar IS NOT NULL AND $3::varchar IS DISTINCT FROM phone THEN NULL
+        ELSE phone_verified_at
+      END,
       phone = COALESCE($3, phone),
       avatar_url = COALESCE($4, avatar_url),
       updated_at = CURRENT_TIMESTAMP
      WHERE id = $5
-     RETURNING id, username, email, full_name, avatar_url, phone`,
+     RETURNING id, username, email, full_name, avatar_url, phone, phone_verified_at`,
     [fullName, email, phone, avatarUrl, userId]
   );
   return rows[0] || null;
