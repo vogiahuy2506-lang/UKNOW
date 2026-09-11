@@ -5224,7 +5224,10 @@ class CampaignRunService {
                 console.log(
                   `[CampaignRun][ZaloPersonal] run=${runId} account=${workingAccount.id} `
                   + `lỗi_giới_hạn_zalo (tra_số / vượt_request) → cooldown `
-                  + `${Math.round(this.zaloRateLimiter.ZALO_PERSONAL_PHONE_LOOKUP_COOLDOWN_MS / 3600000)}h đến epoch_ms=${untilMs} `
+                  // PR-2 đổi mốc cooldown sang 00:00 giờ VN, nên phải in khoảng chờ THẬT.
+                  // In hằng số env (3h) ở đây là nói dối: log sẽ ghi "3h đến <mốc nửa đêm>",
+                  // người đọc log lúc nghiệm thu sẽ tưởng bản vá chưa ăn.
+                  + `${(waitMs / 3600000).toFixed(1)}h đến epoch_ms=${untilMs} `
                   + `category=${observation.errorCategory} stage=${observation.errorStage || 'lookup'} lookup_ms=${observation.lookupMs ?? '-'}`
                 );
                 if (waitMs > 0) {
