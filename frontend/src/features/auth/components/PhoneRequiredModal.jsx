@@ -254,10 +254,11 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
             </p>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="phoneRequiredCode" className="block text-sm font-medium text-gray-700 mb-1">
                 {t('phoneRequired.codeLabel')}
               </label>
               <input
+                id="phoneRequiredCode"
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
