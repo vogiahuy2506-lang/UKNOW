@@ -427,15 +427,26 @@ const QuickSend = () => {
   // Gmail renders paragraph structure instead of a single run-on line.
   const resolveEmailBody = useCallback(() => {
     const raw = activeContent.body || activeTemplate?.bodyHtml || '';
+    // Chế độ soạn mới: nội dung LUÔN là plain text/Markdown gõ tay, KHÔNG BAO GIỜ được coi là
+    // HTML tin cậy sẵn — ép qua miniMarkdownToHtml() (escapeHtml() trước khi dựng thẻ) để một
+    // đoạn text vô tình/cố ý giống thẻ HTML (vd `<p onclick="...">`) bị thoát ký tự thành chữ
+    // hiển thị, không lọt vào email dưới dạng markup thực thi được. Chỉ mẫu có sẵn (soạn qua
+    // trình soạn thảo riêng, đã coi là nguồn tin cậy) mới được nhận diện "trông giống HTML rồi"
+    // và giữ nguyên.
+    if (contentMode === 'custom') {
+      const html = miniMarkdownToHtml(raw);
+      return {
+        html,
+        text: htmlToPlainText(html),
+      };
+    }
     const isLikelyHtml = /<\s*(p|div|h[1-6]|br|hr|strong|em|ul|ol|li|table|span|a)\b/i.test(raw);
-    // Chế độ soạn mới: nội dung là plain text/Markdown cơ bản, không phải HTML — chuyển bằng
-    // miniMarkdownToHtml y hệt template legacy chỉ có bodyText (nhánh isLikelyHtml=false).
     const html = isLikelyHtml ? raw : miniMarkdownToHtml(raw);
     return {
       html,
       text: htmlToPlainText(html),
     };
-  }, [activeContent.body, activeTemplate]);
+  }, [activeContent.body, activeTemplate, contentMode]);
 
   // Resolve the Zalo body as plain text only. Zalo OA does not render HTML.
   const resolveZaloBody = useCallback(() => {
@@ -710,13 +721,18 @@ const QuickSend = () => {
     // The idempotency signature may await binary hashing. Keep a synchronous
     // guard so a rapid second click cannot begin another logical send first.
     if (isTesting || testSendPreparationRef.current) return;
-    if (isLoadingTemplateDetail) {
-      toast.error(t('quickSend.loadingTemplateDetail'));
-      return;
-    }
-    if (templateDetailError) {
-      toast.error(t('quickSend.templateLoadDetailFailed'));
-      return;
+    // Hai guard này chỉ có nghĩa ở chế độ mẫu — đang tải/tải lỗi CHI TIẾT MẪU. Ở chế độ soạn
+    // mới không có request mẫu nào đang chạy; áp guard vô điều kiện sẽ chặn nhầm nếu người
+    // dùng từng chọn 1 mẫu lỗi mạng rồi chuyển sang "Soạn nội dung mới".
+    if (contentMode === 'template') {
+      if (isLoadingTemplateDetail) {
+        toast.error(t('quickSend.loadingTemplateDetail'));
+        return;
+      }
+      if (templateDetailError) {
+        toast.error(t('quickSend.templateLoadDetailFailed'));
+        return;
+      }
     }
     const cleanRecipient = testRecipient.trim();
     if (!cleanRecipient) {
@@ -944,13 +960,17 @@ const QuickSend = () => {
       toast.error(t('quickSend.customContentEmpty'));
       return;
     }
-    if (isLoadingTemplateDetail) {
-      toast.error(t('quickSend.loadingTemplateDetail'));
-      return;
-    }
-    if (templateDetailError) {
-      toast.error(t('quickSend.templateLoadDetailFailed'));
-      return;
+    // Cùng lý do với handleTestSend: hai guard này chỉ áp dụng khi đang thật sự chờ/lỗi tải
+    // chi tiết một mẫu — vô điều kiện sẽ chặn nhầm chế độ "Soạn nội dung mới".
+    if (contentMode === 'template') {
+      if (isLoadingTemplateDetail) {
+        toast.error(t('quickSend.loadingTemplateDetail'));
+        return;
+      }
+      if (templateDetailError) {
+        toast.error(t('quickSend.templateLoadDetailFailed'));
+        return;
+      }
     }
 
     // Validate sender account
@@ -1093,10 +1113,24 @@ const QuickSend = () => {
     const wasEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
     const willBeEmail = nextChannel === CHANNEL_TYPES.EMAIL;
     if (wasEmail !== willBeEmail) {
+      // Vô hiệu hoá lựa chọn mẫu đang có — QUAN TRỌNG: phải đặt lại CẢ activeTemplateSelectionIdRef,
+      // không chỉ state. handleSelectTemplate() so sánh ref này để bỏ qua response cũ (double-click,
+      // đổi mẫu nhanh); nếu chỉ setSelectedTemplate(null) mà không đổi ref, response getTemplateById
+      // của mẫu kênh CŨ (ví dụ Email) rớt về sau khi đã đổi sang Zalo vẫn khớp ref, vượt qua guard ở
+      // handleSelectTemplate và ghi đè lại đúng nội dung/mẫu của kênh cũ — gửi nhầm HTML Email vào
+      // tin Zalo. Reset luôn cờ loading/error vì request đó coi như đã bỏ (không có AbortController
+      // thật, nhưng ref-mismatch đã đủ để response bị bỏ qua khi về tới).
+      activeTemplateSelectionIdRef.current = null;
       setContentMode('template');
       setSelectedTemplate(null);
       setTemplateContent({ subject: '', body: '' });
       setCustomContent({ subject: '', body: '' });
+      setIsLoadingTemplateDetail(false);
+      setTemplateDetailError(false);
+      // Đính kèm từ bản nháp AI (kênh cũ) không tương thích kênh mới — xoá cùng lúc, không chỉ
+      // xoá mẫu/nội dung. Thiếu bước này thì soạn nội dung mới ở kênh mới vẫn kèm theo file của
+      // kênh cũ khi gửi (activeAttachments luôn cộng extraAttachments bất kể contentMode).
+      setExtraAttachments([]);
     }
     setSelectedChannel(nextChannel);
   };

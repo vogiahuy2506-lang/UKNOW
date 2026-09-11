@@ -21,6 +21,7 @@ const m = vi.hoisted(() => ({
   sendZaloMessage: vi.fn(),
   sendZaloGroupMessage: vi.fn(),
   getQuickSendEstimate: vi.fn(),
+  testSendQuickCampaign: vi.fn(),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -63,7 +64,7 @@ vi.mock('../../features/chatbot/services/chatbotApi.service', () => ({
 vi.mock('../../features/campaigns/services/campaignApi.service', () => ({
   default: {
     getQuickSendEstimate: m.getQuickSendEstimate,
-    testSendQuickCampaign: vi.fn().mockResolvedValue({ data: { message: 'ok' } }),
+    testSendQuickCampaign: m.testSendQuickCampaign,
   },
 }));
 vi.mock('../../features/campaigns/services/campaignBuilderApi.service', () => ({
@@ -95,6 +96,7 @@ beforeEach(() => {
   m.sendZaloMessage.mockResolvedValue({ data: { data: { items: [{ status: 'success' }] } } });
   m.sendZaloGroupMessage.mockResolvedValue({ data: { data: { items: [{ status: 'success' }] } } });
   m.getQuickSendEstimate.mockResolvedValue({ data: { data: { unit: 'immediate' } } });
+  m.testSendQuickCampaign.mockResolvedValue({ data: { message: 'ok' } });
 });
 afterEach(cleanup);
 
@@ -284,5 +286,122 @@ describe('QuickSend — soạn nội dung mới không cần mẫu', () => {
     const [payload] = m.sendEmail.mock.calls[0];
     expect(payload.subject).toBe('AI soạn tiêu đề');
     expect(payload.content).toContain('AI soạn nội dung');
+  });
+
+  it('response tải template Email cũ không được ghi đè sau khi đã đổi sang kênh Zalo (đóng race)', async () => {
+    m.locationState = { quickSendDraft: { channel: 'email', recipients: ['a@example.com'] } };
+    render(<QuickSend />);
+    await waitFor(() => expect(m.listEmailSettings).toHaveBeenCalled());
+    await clickNext();
+
+    let resolveTemplateDetail;
+    m.getEmailTemplateById.mockReturnValue(new Promise((resolve) => { resolveTemplateDetail = resolve; }));
+    fireEvent.click(await screen.findByText('Mẫu khuyến mãi'));
+    await waitFor(() => expect(m.getEmailTemplateById).toHaveBeenCalled());
+
+    // Đổi kênh TRƯỚC KHI response Email về.
+    fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
+    fireEvent.click(screen.getByText('Zalo'));
+    await waitFor(() => expect(m.listZaloAccounts).toHaveBeenCalled());
+
+    // Giờ mới cho response Email cũ (đang treo) về — activeTemplateSelectionIdRef phải đã bị
+    // handleChannelChange() đặt về null, nên guard trong handleSelectTemplate phải bỏ qua nó.
+    await act(async () => {
+      resolveTemplateDetail({ data: { data: emailTemplate } });
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/0901234567/), { target: { value: '0909999999' } });
+    fireEvent.click(screen.getByRole('button', { name: /quickSend.next/ }));
+
+    // Không được thấy mẫu Email quay lại ở bước Nội dung của kênh Zalo.
+    expect(screen.queryByText('Mẫu khuyến mãi')).not.toBeInTheDocument();
+    expect(screen.queryByText('quickSend.selectedTemplate')).not.toBeInTheDocument();
+  });
+
+  it('chọn mẫu lỗi tải rồi chuyển "Soạn nội dung mới" — cả Gửi thử và Gửi ngay vẫn hoạt động', async () => {
+    m.locationState = { quickSendDraft: { channel: 'email', recipients: ['a@example.com'] } };
+    render(<QuickSend />);
+    await waitFor(() => expect(m.listEmailSettings).toHaveBeenCalled());
+    await clickNext();
+
+    m.getEmailTemplateById.mockRejectedValueOnce(new Error('network down'));
+    fireEvent.click(await screen.findByText('Mẫu khuyến mãi'));
+    await waitFor(() => expect(m.getEmailTemplateById).toHaveBeenCalled());
+    // templateDetailError=true tại đây (mẫu lỗi tải) — chuyển sang soạn mới, guard cũ (không
+    // theo contentMode) đáng lẽ vẫn chặn cả hai nút gửi phía dưới.
+    fireEvent.click(screen.getByText('quickSend.contentModeCustom'));
+    fireEvent.change(screen.getByPlaceholderText('quickSend.customBodyPlaceholder'), {
+      target: { value: 'Nội dung không phụ thuộc mẫu đã lỗi' },
+    });
+    await clickNext();
+
+    fireEvent.change(screen.getByPlaceholderText('quickSend.testRecipientEmailPlaceholder'), {
+      target: { value: 'test@example.com' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'quickSend.testSendButton' }));
+    });
+    await waitFor(() => expect(m.testSendQuickCampaign).toHaveBeenCalled());
+
+    const sendBtn = await screen.findByRole('button', { name: 'quickSend.sendNow' });
+    await act(async () => { fireEvent.click(sendBtn); });
+    await waitFor(() => expect(m.sendEmail).toHaveBeenCalled());
+  });
+
+  it('đính kèm của bản nháp AI không lọt sang kênh mới sau khi đổi kênh', async () => {
+    m.locationState = {
+      quickSendDraft: {
+        channel: 'email',
+        recipients: ['a@example.com'],
+        subject: 'Tiêu đề nháp',
+        body: 'Nội dung nháp',
+        attachments: [{ key: 'leak1', name: 'confidential.pdf', size: 4096 }],
+      },
+    };
+    render(<QuickSend />);
+    await waitFor(() => expect(m.listEmailSettings).toHaveBeenCalled());
+
+    await clickNext(); // Recipients -> Content (contentMode đã là 'custom' nhờ draft)
+    expect(screen.getByPlaceholderText('quickSend.customSubjectPlaceholder').value).toBe('Tiêu đề nháp');
+
+    fireEvent.click(screen.getByRole('button', { name: 'quickSend.back' }));
+    fireEvent.click(screen.getByText('Zalo'));
+    await waitFor(() => expect(m.listZaloAccounts).toHaveBeenCalled());
+    fireEvent.change(screen.getByPlaceholderText(/0901234567/), { target: { value: '0909999999' } });
+    fireEvent.click(screen.getByRole('button', { name: /quickSend.next/ }));
+
+    fireEvent.click(await screen.findByText('quickSend.contentModeCustom'));
+    fireEvent.change(screen.getByPlaceholderText('quickSend.customBodyPlaceholder'), {
+      target: { value: 'Nội dung mới sau khi đổi kênh' },
+    });
+    await clickNext();
+
+    const sendBtn = await screen.findByRole('button', { name: 'quickSend.sendNow' });
+    await act(async () => { fireEvent.click(sendBtn); });
+
+    await waitFor(() => expect(m.sendZaloMessage).toHaveBeenCalled());
+    const [payload] = m.sendZaloMessage.mock.calls[0];
+    expect(payload.attachments).toEqual([]);
+  });
+
+  it('nội dung tự soạn chứa thẻ dạng HTML phải được thoát ký tự, không gửi như HTML thô', async () => {
+    m.locationState = { quickSendDraft: { channel: 'email', recipients: ['a@example.com'] } };
+    render(<QuickSend />);
+    await waitFor(() => expect(m.listEmailSettings).toHaveBeenCalled());
+    await clickNext();
+
+    fireEvent.click(await screen.findByText('quickSend.contentModeCustom'));
+    fireEvent.change(screen.getByPlaceholderText('quickSend.customBodyPlaceholder'), {
+      target: { value: '<p onclick="alert(1)">nguy hiểm</p>' },
+    });
+    await clickNext();
+
+    const sendBtn = await screen.findByRole('button', { name: 'quickSend.sendNow' });
+    await act(async () => { fireEvent.click(sendBtn); });
+
+    await waitFor(() => expect(m.sendEmail).toHaveBeenCalled());
+    const [payload] = m.sendEmail.mock.calls[0];
+    expect(payload.htmlContent).not.toContain('<p onclick=');
+    expect(payload.htmlContent).toContain('&lt;p onclick=');
   });
 });
