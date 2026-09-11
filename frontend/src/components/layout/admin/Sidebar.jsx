@@ -4,6 +4,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useScrollPersistence } from '../../../hooks/useScrollPersistence';
 import { useI18n } from '../../../i18n';
 import {
+  HiOutlineCollection,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineX,
@@ -13,6 +14,12 @@ import {
   userMenuItems,
   AVATAR_STYLES,
 } from './navConfig';
+import { groupSuperAdminMenuItems } from './adminMenuLayout';
+import adminMenuApiService, {
+  ADMIN_MENU_LAYOUT_UPDATED_EVENT,
+} from '../../../features/admin/services/adminMenuApi.service';
+
+const getMenuItemKey = (item) => item.key || item.path || item.name;
 
 // ── Floating Submenu Panel (for collapsed sidebar) ──────────────────────────
 
@@ -94,7 +101,7 @@ function SubmenuPanel({ item, onClose }) {
 // ── Sidebar Component ───────────────────────────────────────────────────────
 
 const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const navRef = useRef(null);
@@ -102,11 +109,48 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
 
   const { user, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
-  const menuItems = isSuperAdmin ? superAdminMenuItems(t) : userMenuItems(t);
+  const [adminMenuCategories, setAdminMenuCategories] = useState(null);
+  const menuItems = isSuperAdmin
+    ? groupSuperAdminMenuItems(
+      superAdminMenuItems(t),
+      locale,
+      adminMenuCategories,
+      HiOutlineCollection
+    )
+    : userMenuItems(t);
   const isEmployeeCtx = activeContext?.type === 'employee';
   const ctxPermissions = activeContext?.permissions || {};
 
   const [activeSubmenu, setActiveSubmenu] = useState(null);
+
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setAdminMenuCategories(null);
+      return undefined;
+    }
+    let isMounted = true;
+    adminMenuApiService.getLayout()
+      .then((response) => {
+        if (isMounted) setAdminMenuCategories(response.data?.data?.categories || []);
+      })
+      .catch((error) => {
+        // Sidebar must remain usable while a new backend migration is rolling
+        // out or if the layout endpoint is temporarily unavailable.
+        console.warn('[Sidebar] Falling back to default admin menu:', error?.message);
+      });
+
+    const handleLayoutUpdated = (event) => {
+      if (Array.isArray(event.detail?.categories)) {
+        setAdminMenuCategories(event.detail.categories);
+        setActiveSubmenu(null);
+      }
+    };
+    window.addEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
+    return () => {
+      isMounted = false;
+      window.removeEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
+    };
+  }, [isSuperAdmin]);
 
   useEffect(() => { setActiveSubmenu(null); }, [location.pathname]);
 
@@ -148,7 +192,9 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       handleNavClose();
       return;
     }
-    setActiveSubmenu(activeSubmenu?.name === item.name ? null : item);
+    setActiveSubmenu(
+      activeSubmenu && getMenuItemKey(activeSubmenu) === getMenuItemKey(item) ? null : item
+    );
   };
 
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
@@ -246,10 +292,11 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
           <div className="flex flex-col gap-1">
             {visibleMenuItems.map((item) => {
               const active = item.children ? isParentActive(item) : (item.end ? location.pathname === item.path : location.pathname.startsWith(item.path + '/'));
-              const isSubmenuOpen = activeSubmenu?.name === item.name;
+              const isSubmenuOpen = activeSubmenu
+                && getMenuItemKey(activeSubmenu) === getMenuItemKey(item);
 
               return (
-                <div key={item.name}>
+                <div key={getMenuItemKey(item)}>
                   <button
                     onClick={() => handleParentClick(item)}
                     title={item.name}

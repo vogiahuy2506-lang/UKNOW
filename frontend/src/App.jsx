@@ -86,6 +86,7 @@ import AdminAiModelsPage from './pages/admin/AdminAiModelsPage';
 import AdminHelpArticlesPage from './pages/admin/AdminHelpArticlesPage';
 import AdminHelpArticleEditPage from './pages/admin/AdminHelpArticleEditPage';
 import AdminHelpUnansweredPage from './pages/admin/AdminHelpUnansweredPage';
+import AdminMenuCategoriesPage from './pages/admin/AdminMenuCategoriesPage';
 import AdminAlertsPage from './pages/admin/AdminAlertsPage';
 import AdminFunnelPage from './pages/admin/AdminFunnelPage';
 import AdminSystemHealthPage from './pages/admin/AdminSystemHealthPage';
@@ -494,6 +495,7 @@ function AppContent() {
             <Route path="ai-models" element={<AdminAiModelsPage />} />
             <Route path="help-articles" element={<AdminHelpArticlesPage />} />
             <Route path="help-articles/:id" element={<AdminHelpArticleEditPage />} />
+            <Route path="menu-categories" element={<AdminMenuCategoriesPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="notification-center" element={<NotificationCenter />} />
             <Route path="landing-customizer" element={<LandingPageCustomizer />} />

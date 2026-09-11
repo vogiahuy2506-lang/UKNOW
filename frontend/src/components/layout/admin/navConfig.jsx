@@ -30,6 +30,7 @@ import {
   HiOutlineBell,
   HiOutlineFilter,
   HiOutlineShoppingCart,
+  HiOutlineCollection,
 } from 'react-icons/hi';
 
 /**
@@ -54,25 +55,26 @@ import {
  */
 
 export const superAdminMenuItems = (t) => [
-  { name: t('nav.dashboard'),         section: t('nav.adminNavOverview'),    path: '/admin', icon: HiOutlineHome, end: true },
-  { name: t('nav.memberManagement'),  section: t('nav.adminNavBusiness'),   path: '/admin/members', icon: HiOutlineShieldCheck },
-  { name: t('nav.planManagement'),    section: t('nav.adminNavBusiness'),   path: '/admin/plans', icon: HiOutlineCurrencyDollar },
-  { name: t('nav.voucherManagement'), section: t('nav.adminNavBusiness'),   path: '/admin/vouchers', icon: HiOutlineTicket },
-  { name: t('nav.orders'),            section: t('nav.adminNavBusiness'),   path: '/admin/orders', icon: HiOutlineClipboardList },
-  { name: t('nav.einvoices'),         section: t('nav.adminNavBusiness'),   path: '/admin/einvoices', icon: HiOutlineDocumentText },
-  { name: t('nav.affiliateManagement'), section: t('nav.adminNavBusiness'), path: '/admin/affiliate', icon: HiOutlineCurrencyDollar },
-  { name: t('nav.serverMonitoring'),  section: t('nav.adminNavMonitoring'), path: '/admin/health/system', icon: HiOutlineServer },
-  { name: t('nav.alertCenter'),       section: t('nav.adminNavMonitoring'), path: '/admin/alerts', icon: HiOutlineBell },
-  { name: t('nav.activationFunnel'),  section: t('nav.adminNavOverview'),    path: '/admin/funnel', icon: HiOutlineFilter },
-  { name: t('nav.aiUsageAnalytics'),  section: t('nav.adminNavMessaging'),  path: '/admin/ai-ops/usage', icon: HiOutlineSparkles },
-  { name: t('nav.aiModels'),          section: t('nav.adminNavMessaging'),  path: '/admin/ai-models', icon: HiOutlineCog },
-  { name: t('nav.notificationCenter'), section: t('nav.adminNavMessaging'), path: '/admin/notification-center', icon: HiOutlineMailOpen },
-  { name: t('nav.helpArticles'),      section: t('nav.adminNavMessaging'),  path: '/admin/help-articles', icon: HiOutlineDocumentText },
-  { name: t('nav.helpUnanswered'),    section: t('nav.adminNavMessaging'),  path: '/admin/ai-ops/unanswered', icon: HiOutlineQuestionMarkCircle },
-  { name: t('nav.systemAuditLogs'),   section: t('nav.adminNavMonitoring'), path: '/admin/audit-logs', icon: HiOutlineClipboard },
-  { name: t('nav.landingCustomizer'), section: t('nav.adminNavMonitoring'), path: '/admin/landing-customizer', icon: HiOutlinePencil },
-  { name: t('nav.marketplaceManagement'), section: t('nav.adminNavMarketplace'), path: '/app/admin/marketplace', icon: HiOutlineShoppingCart },
-  { name: t('nav.marketplaceAnalytics'),  section: t('nav.adminNavMarketplace'), path: '/app/admin/marketplace/analytics', icon: HiOutlineFilter },
+  { key: 'dashboard', name: t('nav.dashboard'), defaultCategory: 'overview', path: '/admin', icon: HiOutlineHome, end: true },
+  { key: 'member_management', name: t('nav.memberManagement'), defaultCategory: 'business', path: '/admin/members', icon: HiOutlineShieldCheck },
+  { key: 'plan_management', name: t('nav.planManagement'), defaultCategory: 'business', path: '/admin/plans', icon: HiOutlineCurrencyDollar },
+  { key: 'voucher_management', name: t('nav.voucherManagement'), defaultCategory: 'business', path: '/admin/vouchers', icon: HiOutlineTicket },
+  { key: 'orders', name: t('nav.orders'), defaultCategory: 'business', path: '/admin/orders', icon: HiOutlineClipboardList },
+  { key: 'einvoices', name: t('nav.einvoices'), defaultCategory: 'business', path: '/admin/einvoices', icon: HiOutlineDocumentText },
+  { key: 'affiliate_management', name: t('nav.affiliateManagement'), defaultCategory: 'business', path: '/admin/affiliate', icon: HiOutlineCurrencyDollar },
+  { key: 'server_monitoring', name: t('nav.serverMonitoring'), defaultCategory: 'monitoring', path: '/admin/health/system', icon: HiOutlineServer },
+  { key: 'alert_center', name: t('nav.alertCenter'), defaultCategory: 'monitoring', path: '/admin/alerts', icon: HiOutlineBell },
+  { key: 'activation_funnel', name: t('nav.activationFunnel'), defaultCategory: 'overview', path: '/admin/funnel', icon: HiOutlineFilter },
+  { key: 'ai_usage_analytics', name: t('nav.aiUsageAnalytics'), defaultCategory: 'messaging', path: '/admin/ai-ops/usage', icon: HiOutlineSparkles },
+  { key: 'ai_models', name: t('nav.aiModels'), defaultCategory: 'messaging', path: '/admin/ai-models', icon: HiOutlineCog },
+  { key: 'notification_center', name: t('nav.notificationCenter'), defaultCategory: 'messaging', path: '/admin/notification-center', icon: HiOutlineMailOpen },
+  { key: 'help_articles', name: t('nav.helpArticles'), defaultCategory: 'messaging', path: '/admin/help-articles', icon: HiOutlineDocumentText },
+  { key: 'help_unanswered', name: t('nav.helpUnanswered'), defaultCategory: 'messaging', path: '/admin/ai-ops/unanswered', icon: HiOutlineQuestionMarkCircle },
+  { key: 'system_audit_logs', name: t('nav.systemAuditLogs'), defaultCategory: 'monitoring', path: '/admin/audit-logs', icon: HiOutlineClipboard },
+  { key: 'landing_customizer', name: t('nav.landingCustomizer'), defaultCategory: 'monitoring', path: '/admin/landing-customizer', icon: HiOutlinePencil },
+  { key: 'menu_categories', name: t('nav.menuCategories'), defaultCategory: 'monitoring', path: '/admin/menu-categories', icon: HiOutlineCollection },
+  { key: 'marketplace_management', name: t('nav.marketplaceManagement'), defaultCategory: 'marketplace', path: '/app/admin/marketplace', icon: HiOutlineShoppingCart },
+  { key: 'marketplace_analytics', name: t('nav.marketplaceAnalytics'), defaultCategory: 'marketplace', path: '/app/admin/marketplace/analytics', icon: HiOutlineFilter },
 ];
 
 export const userMenuItems = (t) => [

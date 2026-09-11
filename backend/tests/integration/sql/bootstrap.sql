@@ -3086,3 +3086,14 @@ CREATE TABLE IF NOT EXISTS user_consents (
   created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_user_consents_user_purpose ON user_consents (user_id, purpose, created_at DESC);
+
+-- ─── Migration 201: configurable super-admin menu layout ──────────────
+CREATE TABLE IF NOT EXISTS admin_menu_layouts (
+  scope       VARCHAR(32) PRIMARY KEY,
+  categories  JSONB       NOT NULL DEFAULT '[]'::jsonb,
+  updated_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT admin_menu_layouts_scope_check CHECK (scope = 'super_admin'),
+  CONSTRAINT admin_menu_layouts_categories_array_check CHECK (jsonb_typeof(categories) = 'array')
+);
