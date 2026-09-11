@@ -146,6 +146,13 @@ const EMPTY_SEND_USAGE = {
 // StrictMode double-invoke) thành một request thay vì bắn trùng.
 let refreshCurrentUserInFlight = null;
 
+// Single-flight + cache cho fetchPhoneOtpEnabled() (PR-2, xác thực SĐT). Khác
+// refreshCurrentUserInFlight: KHÔNG reset về null khi thành công — cờ tính năng gần như
+// tĩnh (chỉ đổi khi backend restart với PHONE_OTP_PROVIDER khác), không cần fetch lại mỗi
+// lần gọi. Chỉ reset khi lỗi, để một lần gọi sau (vd Register.jsx mount muộn hơn app khởi
+// động) có cơ hội thử lại nếu lần đầu chỉ là mạng chập chờn.
+let phoneOtpEnabledFetchPromise = null;
+
 const billingSliceFromProfile = (profile = {}) => ({
   aiCredits: {
     used: Number(profile.aiCreditsUsed || 0),
@@ -175,6 +182,10 @@ export const useAuthStore = create((set, get) => ({
   billingStatus: null,
   /** Ngữ cảnh hoạt động hiện tại: { type: 'self' } hoặc { type: 'employee', ownerId, ownerName, ... } */
   activeContext: { type: 'self' },
+  // PR-2 (xác thực SĐT) — mặc định false: chưa fetch xong, lỗi mạng, hay backend tắt tính
+  // năng đều cùng một giá trị an toàn. Không có "đang tải" riêng — false là trạng thái đúng
+  // để hiển thị (ô SĐT hiện, modal một bước) cho tới khi biết chắc là true.
+  phoneOtpEnabled: false,
 
   /**
    * Khởi tạo trạng thái auth từ storage khi load app.
@@ -436,6 +447,37 @@ export const useAuthStore = create((set, get) => ({
     set({ user: normalizeUser(user) });
   },
 
+  /**
+   * Nạp cờ tính năng OTP SĐT (PR-2, public — không cần đăng nhập). Gọi lúc app khởi động
+   * (dưới cùng file này) và lại ở Register.jsx làm lưới an toàn — single-flight nên gọi
+   * nhiều lần chỉ tạo đúng một request đang bay.
+   *
+   * Cờ tắt HOẶC fetch lỗi đều coi như tắt (giữ mặc định `phoneOtpEnabled: false`) — đây là
+   * đường lùi nếu sếp đổi ý thứ Hai: mọi màn hình (Register, PhoneRequiredModal, MainLayout)
+   * phải y như trước khi có PR-2 trong cả hai trường hợp "tắt thật" và "không biết được".
+   *
+   * @returns {Promise<boolean>}
+   */
+  fetchPhoneOtpEnabled: async () => {
+    if (phoneOtpEnabledFetchPromise) return phoneOtpEnabledFetchPromise;
+    phoneOtpEnabledFetchPromise = (async () => {
+      try {
+        const response = await api.get('/auth/features');
+        const enabled = Boolean(response.data?.data?.phoneOtpEnabled);
+        set({ phoneOtpEnabled: enabled });
+        return enabled;
+      } catch (error) {
+        console.warn('[AuthStore] fetchPhoneOtpEnabled lỗi, coi như tắt:', error?.message || error);
+        set({ phoneOtpEnabled: false });
+        // Reset để một lần gọi SAU (không phải lần đang chờ) có cơ hội thử lại — khác
+        // nhánh thành công ở trên, cố ý KHÔNG cache một lỗi mạng tạm thời mãi mãi.
+        phoneOtpEnabledFetchPromise = null;
+        return false;
+      }
+    })();
+    return phoneOtpEnabledFetchPromise;
+  },
+
   /** Xác định user hiện tại có phải admin hay không. */
   isAdmin: () => String(get().user?.roleCode || '').trim().toLowerCase() === 'admin',
 }));
@@ -444,3 +486,7 @@ setAuthStore(useAuthStore);
 
 // Khởi tạo auth khi app load
 useAuthStore.getState().initialize();
+
+// Nạp cờ tính năng OTP SĐT ngay khi app load — KHÔNG phụ thuộc token (public), nên gọi ở
+// đây thay vì trong initialize() (initialize() chỉ chạy nhánh fetch khi có token sẵn).
+useAuthStore.getState().fetchPhoneOtpEnabled();
