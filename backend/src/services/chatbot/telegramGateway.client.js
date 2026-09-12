@@ -24,11 +24,24 @@ if (!GATEWAY_URL) {
   );
 }
 
-const client = axios.create({
-  baseURL: GATEWAY_URL || 'http://localhost:8765',
-  timeout: 20000,
-  headers: GATEWAY_SECRET ? { 'X-Gateway-Secret': GATEWAY_SECRET } : {},
-});
+// Dựng client ở lần gọi ĐẦU TIÊN, không phải lúc import. `axios.create` chạy ngay ở thân
+// module sẽ nổ với mọi test mock axios một phần — courses/founderai/googleSheets đều mock
+// `{ default: { get } }`, và vì chatbot.controller.js nằm trong cây import của createApp(),
+// ba suite đó chết ngay ở bước import với "axios.create is not a function" (CI đỏ 12/09,
+// kéo theo Deploy Backend hỏng). Mọi call site dưới đây đã nằm sau isConfigured() nên hoãn
+// việc dựng client không đổi hành vi lúc chạy thật.
+let cachedClient = null;
+
+function getClient() {
+  if (!cachedClient) {
+    cachedClient = axios.create({
+      baseURL: GATEWAY_URL || 'http://localhost:8765',
+      timeout: 20000,
+      headers: GATEWAY_SECRET ? { 'X-Gateway-Secret': GATEWAY_SECRET } : {},
+    });
+  }
+  return cachedClient;
+}
 
 /**
  * Returns true when the gateway has been configured. Used to short-circuit
@@ -68,36 +81,36 @@ const telegramGateway = {
   baseUrl: GATEWAY_URL,
 
   createSession: wrap('createSession', () =>
-    client.post('/sessions/create')
+    getClient().post('/sessions/create')
   ),
 
   getStatus: wrap('getStatus', (sessionId) =>
-    client.get(`/sessions/${encodeURIComponent(sessionId)}/status`)
+    getClient().get(`/sessions/${encodeURIComponent(sessionId)}/status`)
   ),
 
   cancelSession: wrap('cancelSession', (sessionId) =>
-    client.delete(`/sessions/${encodeURIComponent(sessionId)}`)
+    getClient().delete(`/sessions/${encodeURIComponent(sessionId)}`)
   ),
 
-  listAccounts: wrap('listAccounts', () => client.get('/sessions')),
+  listAccounts: wrap('listAccounts', () => getClient().get('/sessions')),
 
   deleteAccount: wrap('deleteAccount', (telegramUserId) =>
-    client.delete(`/sessions/by-telegram/${telegramUserId}`)
+    getClient().delete(`/sessions/by-telegram/${telegramUserId}`)
   ),
 
   bindAccount: wrap('bindAccount', (telegramUserId, accountId) =>
-    client.post(`/sessions/by-telegram/${telegramUserId}/bind`, { account_id: accountId })
+    getClient().post(`/sessions/by-telegram/${telegramUserId}/bind`, { account_id: accountId })
   ),
 
   sendMessage: wrap('sendMessage', (telegramUserId, chatId, text) =>
-    client.post(`/sessions/by-telegram/${telegramUserId}/send`, {
+    getClient().post(`/sessions/by-telegram/${telegramUserId}/send`, {
       chat_id: chatId,
       text,
     })
   ),
 
   ensureHandler: wrap('ensureHandler', (telegramUserId) =>
-    client.post(`/sessions/by-telegram/${telegramUserId}/ensure-handler`)
+    getClient().post(`/sessions/by-telegram/${telegramUserId}/ensure-handler`)
   ),
 };
 
