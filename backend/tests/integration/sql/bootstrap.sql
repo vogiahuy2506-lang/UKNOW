@@ -3120,3 +3120,78 @@ CREATE TABLE IF NOT EXISTS system_email_templates (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT system_email_templates_key_check CHECK (template_key = 'welcome')
 );
+
+-- ─── Telegram cá nhân (migration 050_create_telegram_accounts.sql — đánh nhầm số, đúng ra 205,
+-- xem ghi chú grandfather trong migrationNumbering.util.spec.js) ─────────────────────────────
+-- Mirror nguyên văn từ file migration (fe86e428, 11/09/2026), chỉ đổi IF NOT EXISTS thành
+-- CREATE thường theo phong cách bootstrap. Bốn bảng, 11+8+15+11 = 45 cột.
+CREATE TABLE telegram_accounts (
+    id SERIAL PRIMARY KEY,
+    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    telegram_user_id BIGINT NOT NULL,
+    phone VARCHAR(32),
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    username VARCHAR(255),
+    is_active BOOLEAN DEFAULT true,
+    last_activity_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(telegram_user_id),
+    UNIQUE(id_user, telegram_user_id)
+);
+CREATE INDEX idx_telegram_accounts_user ON telegram_accounts(id_user);
+CREATE INDEX idx_telegram_accounts_active ON telegram_accounts(id_user, is_active);
+
+CREATE TABLE telegram_chatbot_settings (
+    id SERIAL PRIMARY KEY,
+    id_telegram_account INTEGER NOT NULL REFERENCES telegram_accounts(id) ON DELETE CASCADE,
+    id_chatbot INTEGER NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+    is_enabled BOOLEAN DEFAULT false,
+    is_enabled_dm BOOLEAN DEFAULT true,
+    is_enabled_group BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(id_telegram_account, id_chatbot)
+);
+CREATE INDEX idx_telegram_settings_account ON telegram_chatbot_settings(id_telegram_account);
+CREATE INDEX idx_telegram_settings_chatbot ON telegram_chatbot_settings(id_chatbot);
+CREATE INDEX idx_telegram_settings_enabled ON telegram_chatbot_settings(id_chatbot) WHERE is_enabled = true;
+
+CREATE TABLE telegram_personal_conversations (
+    id SERIAL PRIMARY KEY,
+    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id_telegram_account INTEGER NOT NULL REFERENCES telegram_accounts(id) ON DELETE CASCADE,
+    external_id VARCHAR(128) NOT NULL,
+    display_name VARCHAR(255),
+    visitor_name VARCHAR(255),
+    visitor_info JSONB DEFAULT '{}',
+    id_chatbot INTEGER REFERENCES custom_chatbots(id) ON DELETE SET NULL,
+    ai_paused BOOLEAN DEFAULT false,
+    ai_paused_at TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(16) DEFAULT 'open',
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_message_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(id_telegram_account, external_id, status)
+);
+CREATE INDEX idx_telegram_conv_user ON telegram_personal_conversations(id_user);
+CREATE INDEX idx_telegram_conv_account_peer ON telegram_personal_conversations(id_telegram_account, external_id);
+CREATE INDEX idx_telegram_conv_chatbot ON telegram_personal_conversations(id_chatbot);
+
+CREATE TABLE telegram_personal_messages (
+    id SERIAL PRIMARY KEY,
+    id_conversation INTEGER NOT NULL REFERENCES telegram_personal_conversations(id) ON DELETE CASCADE,
+    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    external_message_id VARCHAR(64),
+    role VARCHAR(16) NOT NULL CHECK (role IN ('visitor', 'bot', 'agent', 'system')),
+    content TEXT,
+    message_type VARCHAR(16) DEFAULT 'text',
+    attachments JSONB DEFAULT '[]',
+    metadata JSONB DEFAULT '{}',
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX idx_telegram_msg_conv ON telegram_personal_messages(id_conversation, created_at DESC);
+CREATE INDEX idx_telegram_msg_user ON telegram_personal_messages(id_user);
