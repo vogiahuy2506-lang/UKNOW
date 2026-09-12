@@ -14,6 +14,7 @@ import {
   isZaloUnreachableRecipientError,
 } from '../../utils/zaloPhoneCampaign.util.js';
 import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
+import { isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { classifyZaloSendError, mapZaloErrorCategoryToLedgerReason } from '../../utils/zaloSendErrorClassifier.util.js';
@@ -4511,6 +4512,7 @@ class CampaignRunService {
 
               const dedupMap = new Map();
               sourceItems.forEach((item) => {
+                let matched = false;
                 for (const field of fallbackFields) {
                   const raw = item?.[field];
                   const values = Array.isArray(raw)
@@ -4526,7 +4528,23 @@ class CampaignRunService {
                     if (recipientType === 'phone') key = normalizePhoneEntryValue(key);
                     if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
                   });
+                  matched = true;
                   break;
+                }
+
+                if (!matched && recipientType === 'phone') {
+                  const headerKey = Object.keys(item || {}).find((k) => isPhoneHeader(k));
+                  if (headerKey) {
+                    const raw = item?.[headerKey];
+                    const values = Array.isArray(raw)
+                      ? raw.flatMap((inner) => campaignZaloSenderService.parseListText(inner))
+                      : campaignZaloSenderService.parseListText(raw);
+                    values.forEach((value) => {
+                      let key = String(value || '').trim();
+                      if (recipientType === 'phone') key = normalizePhoneEntryValue(key);
+                      if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
+                    });
+                  }
                 }
               });
 
