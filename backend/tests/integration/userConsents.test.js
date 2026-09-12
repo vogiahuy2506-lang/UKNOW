@@ -56,8 +56,13 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       const user = res.body.data.user;
-      expect(user.consents).toEqual({ terms: true, privacy: true, dpa: true });
+      expect(user.consents).toEqual({
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
+      });
       expect(user.hasConsented).toBe(true);
+      expect(user.consentVersionOutdated).toBe(false);
 
       // Kiểm tra trong database
       const { rows } = await db.query(
@@ -170,8 +175,13 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       expect(res.body.success).toBe(true);
       const user = res.body.data.user;
       expect(user.email).toBe(googleEmail);
-      expect(user.consents).toEqual({ terms: true, privacy: true, dpa: true });
+      expect(user.consents).toEqual({
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
+      });
       expect(user.hasConsented).toBe(true);
+      expect(user.consentVersionOutdated).toBe(false);
 
       // Kiểm tra 3 dòng trong user_consents
       const { rows } = await db.query(
@@ -339,11 +349,12 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       const meUser = meRes.body.data.user;
 
       expect(meUser.consents).toEqual({
-        terms: true,
-        privacy: true,
-        dpa: true,
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
       });
       expect(meUser.hasConsented).toBe(true);
+      expect(meUser.consentVersionOutdated).toBe(false);
     });
 
     it('GET /api/users/profile → Consent vẫn đọc được đầy đủ', async () => {
@@ -372,11 +383,12 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       const profile = profileRes.body.data;
 
       expect(profile.consents).toEqual({
-        terms: true,
-        privacy: true,
-        dpa: true,
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
       });
       expect(profile.hasConsented).toBe(true);
+      expect(profile.consentVersionOutdated).toBe(false);
     });
   });
 
@@ -479,7 +491,12 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.hasConsented).toBe(true);
-      expect(res.body.data.consents).toEqual({ terms: true, privacy: true, dpa: true });
+      expect(res.body.data.consentVersionOutdated).toBe(false);
+      expect(res.body.data.consents).toEqual({
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
+      });
 
       // DB phải có 3 dòng với source 'reconsent'
       const { rows } = await db.query(
@@ -506,7 +523,12 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
         .set('Authorization', `Bearer ${token}`);
       expect(meRes.status).toBe(200);
       expect(meRes.body.data.user.hasConsented).toBe(true);
-      expect(meRes.body.data.user.consents).toEqual({ terms: true, privacy: true, dpa: true });
+      expect(meRes.body.data.user.consentVersionOutdated).toBe(false);
+      expect(meRes.body.data.user.consents).toEqual({
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
+      });
 
       // GET /api/users/consents trả về đúng lịch sử
       const historyRes = await request(app)
@@ -522,6 +544,57 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
         expect(item.documentVersion).toBeDefined();
         expect(item.createdAt).toBeDefined();
       }
+    });
+
+    it('Tài khoản đã đồng ý bản cũ (document_version = 2026-09-01) → hasConsented=false, consentVersionOutdated=true; đồng ý lại thì hết', async () => {
+      const user = await createUser({ username: 'outdateduser', email: 'outdateduser@test.local' });
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ username: user.username, password: user.plainPassword });
+      const token = loginRes.body.data.accessToken;
+
+      // Giả lập user đã đồng ý bản cũ 2026-09-01
+      await db.query(
+        `INSERT INTO user_consents (user_id, purpose, granted, document_version, document_hash, source, created_at)
+         VALUES
+           ($1, 'terms', true, '2026-09-01', 'old_hash_1', 'register', NOW() - INTERVAL '5 days'),
+           ($1, 'privacy', true, '2026-09-01', 'old_hash_2', 'register', NOW() - INTERVAL '5 days'),
+           ($1, 'dpa', true, '2026-09-01', 'old_hash_3', 'register', NOW() - INTERVAL '5 days')`,
+        [user.id]
+      );
+
+      // GET /api/auth/me báo hasConsented = false và consentVersionOutdated = true
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+      expect(meRes.status).toBe(200);
+      expect(meRes.body.data.user.hasConsented).toBe(false);
+      expect(meRes.body.data.user.consentVersionOutdated).toBe(true);
+
+      // GET /api/users/profile cũng báo hasConsented = false và consentVersionOutdated = true
+      const profileRes = await request(app)
+        .get('/api/users/profile')
+        .set('Authorization', `Bearer ${token}`);
+      expect(profileRes.status).toBe(200);
+      expect(profileRes.body.data.hasConsented).toBe(false);
+      expect(profileRes.body.data.consentVersionOutdated).toBe(true);
+
+      // Gửi reconsent để đồng ý bản mới
+      const reconsentRes = await request(app)
+        .post('/api/users/consents')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ terms: true, privacy: true, dpa: true });
+      expect(reconsentRes.status).toBe(200);
+      expect(reconsentRes.body.data.hasConsented).toBe(true);
+      expect(reconsentRes.body.data.consentVersionOutdated).toBe(false);
+
+      // Kiểm tra lại qua GET /api/auth/me → Đã cập nhật thành công
+      const meAfterRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+      expect(meAfterRes.status).toBe(200);
+      expect(meAfterRes.body.data.user.hasConsented).toBe(true);
+      expect(meAfterRes.body.data.user.consentVersionOutdated).toBe(false);
     });
   });
 });

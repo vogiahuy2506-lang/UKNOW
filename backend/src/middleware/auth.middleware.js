@@ -21,9 +21,15 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
               u.updated_at,
               COALESCE(p.grace_period_days, 0)::int AS grace_period_days,
               (
-                SELECT jsonb_object_agg(c.purpose, c.granted)
+                SELECT jsonb_object_agg(
+                  c.purpose,
+                  jsonb_build_object(
+                    'granted', c.granted,
+                    'document_version', c.document_version
+                  )
+                )
                 FROM (
-                  SELECT DISTINCT ON (purpose) purpose, granted
+                  SELECT DISTINCT ON (purpose) purpose, granted, document_version
                   FROM user_consents
                   WHERE user_id = u.id
                   ORDER BY purpose, created_at DESC
@@ -43,9 +49,15 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
               updated_at,
               0 AS grace_period_days,
               (
-                SELECT jsonb_object_agg(c.purpose, c.granted)
+                SELECT jsonb_object_agg(
+                  c.purpose,
+                  jsonb_build_object(
+                    'granted', c.granted,
+                    'document_version', c.document_version
+                  )
+                )
                 FROM (
-                  SELECT DISTINCT ON (purpose) purpose, granted
+                  SELECT DISTINCT ON (purpose) purpose, granted, document_version
                   FROM user_consents
                   WHERE user_id = users.id
                   ORDER BY purpose, created_at DESC

@@ -986,7 +986,7 @@ class AuthController {
       activeBillingPeriod = await findActiveBillingPeriod(user.id, user.email);
     }
     let consents = user.consents;
-    if (consents === undefined && user.id) {
+    if ((consents === undefined || (consents && typeof consents.terms !== 'object')) && user.id) {
       consents = await getUserLatestConsents(user.id);
     }
     return {
