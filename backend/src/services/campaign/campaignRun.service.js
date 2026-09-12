@@ -44,7 +44,10 @@ import {
   notifyCampaignQuotaStopped,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
-import { deriveVariablesForText } from '../../utils/templateVariableAutoMap.util.js';
+import {
+  deriveVariablesForText,
+  renderTemplateText,
+} from '../../utils/templateVariableAutoMap.util.js';
 import { findStaleCampaignRunReservations } from '../../repositories/sendQuota.repository.js';
 import { shouldReplaceRecipientProgressCache } from './recipientProgressCache.util.js';
 
@@ -1353,11 +1356,6 @@ class CampaignRunService {
           newItems,
         };
       };
-      const renderTemplateText = (templateText, variables = {}) =>
-        String(templateText || '').replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, varName) => {
-          const value = variables?.[varName];
-          return value === undefined || value === null ? '' : String(value);
-        });
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const sleepWithRunCheck = async (ms) => {
         const waitMs = Math.max(0, Number.parseInt(ms, 10) || 0);
