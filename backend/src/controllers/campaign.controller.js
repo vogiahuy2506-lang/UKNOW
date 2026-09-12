@@ -163,7 +163,17 @@ class CampaignController {
    */
   async getAll(req, res) {
     try {
-      const { page = 1, limit = 10, status, type, search, origin } = req.query;
+      const { page = 1, limit = 10, status, type, search, origin, state } = req.query;
+
+      if (state !== undefined && state !== null && state !== '') {
+        if (!['running', 'scheduled', 'inactive'].includes(state)) {
+          return res.status(400).json({
+            success: false,
+            message: 'state không hợp lệ',
+          });
+        }
+      }
+
       const data = await campaignCrudService.getAllCampaigns({
         authUser: req.user,
         page,
@@ -172,6 +182,7 @@ class CampaignController {
         type,
         search,
         origin,
+        state: state || undefined,
       });
 
       res.json({

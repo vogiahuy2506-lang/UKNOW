@@ -134,6 +134,21 @@ async function insertRun({ campaignId, status = 'running', runType = 'manual' })
   return rows[0];
 }
 
+async function insertSchedule({
+  campaignId,
+  scheduleName = 'Schedule 1',
+  scheduleType = 'daily',
+  cronExpression = '0 9 * * *',
+  enabled = true,
+}) {
+  const { rows } = await db.query(
+    `INSERT INTO campaign_schedules (id_campaign, schedule_name, schedule_type, cron_expression, enabled)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [campaignId, scheduleName, scheduleType, cronExpression, enabled]
+  );
+  return rows[0];
+}
+
 // ===========================================================================
 // AUTHORIZATION
 // ===========================================================================
@@ -272,6 +287,80 @@ describe('GET /api/campaigns', () => {
 
     expect(res.body.data.items[0].campaignName).toBe('new');
     expect(res.body.data.items[1].campaignName).toBe('old');
+  });
+
+  it('filter state=running chỉ trả chiến dịch có campaign_runs status=running', async () => {
+    const o = await createUser({ role: 'user', username: 'o_state_run' });
+    const c1 = await insertCampaign({ ownerId: o.id, campaignName: 'running_camp', status: 'active' });
+    const c2 = await insertCampaign({ ownerId: o.id, campaignName: 'completed_camp', status: 'active' });
+    await insertRun({ campaignId: c1.id, status: 'running' });
+    await insertRun({ campaignId: c2.id, status: 'completed' });
+
+    const t = await loginAs(o);
+    const res = await request(app)
+      .get('/api/campaigns?state=running')
+      .set('Authorization', `Bearer ${t}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+    expect(res.body.data.items[0].campaignName).toBe('running_camp');
+    expect(res.body.data.pagination.total).toBe(1);
+  });
+
+  it('filter state=scheduled chỉ trả chiến dịch có campaign_schedules enabled=true', async () => {
+    const o = await createUser({ role: 'user', username: 'o_state_sched' });
+    const c1 = await insertCampaign({ ownerId: o.id, campaignName: 'sched_enabled', status: 'active' });
+    const c2 = await insertCampaign({ ownerId: o.id, campaignName: 'sched_disabled', status: 'active' });
+    const c3 = await insertCampaign({ ownerId: o.id, campaignName: 'no_sched', status: 'active' });
+    await insertSchedule({ campaignId: c1.id, enabled: true });
+    await insertSchedule({ campaignId: c2.id, enabled: false });
+
+    const t = await loginAs(o);
+    const res = await request(app)
+      .get('/api/campaigns?state=scheduled')
+      .set('Authorization', `Bearer ${t}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+    expect(res.body.data.items[0].campaignName).toBe('sched_enabled');
+    expect(res.body.data.items[0].enabledScheduleCount).toBe(1);
+    expect(res.body.data.pagination.total).toBe(1);
+  });
+
+  it('filter state=inactive không trả chiến dịch đang chạy hoặc có lịch bật', async () => {
+    const o = await createUser({ role: 'user', username: 'o_state_inact' });
+    const cRunning = await insertCampaign({ ownerId: o.id, campaignName: 'c_running', status: 'active' });
+    await insertRun({ campaignId: cRunning.id, status: 'running' });
+
+    const cSched = await insertCampaign({ ownerId: o.id, campaignName: 'c_sched', status: 'active' });
+    await insertSchedule({ campaignId: cSched.id, enabled: true });
+
+    const cDraft = await insertCampaign({ ownerId: o.id, campaignName: 'c_draft', status: 'draft' });
+    const cActiveIdle = await insertCampaign({ ownerId: o.id, campaignName: 'c_active_idle', status: 'active' });
+    const cSchedOff = await insertCampaign({ ownerId: o.id, campaignName: 'c_sched_off', status: 'active' });
+    await insertSchedule({ campaignId: cSchedOff.id, enabled: false });
+
+    const t = await loginAs(o);
+    const res = await request(app)
+      .get('/api/campaigns?state=inactive')
+      .set('Authorization', `Bearer ${t}`);
+
+    expect(res.status).toBe(200);
+    const names = res.body.data.items.map((x) => x.campaignName).sort();
+    expect(names).toEqual(['c_active_idle', 'c_draft', 'c_sched_off']);
+    expect(res.body.data.pagination.total).toBe(3);
+  });
+
+  it('filter state lạ trả về 400', async () => {
+    const o = await createUser({ role: 'user', username: 'o_bad_state' });
+    const t = await loginAs(o);
+    const res = await request(app)
+      .get('/api/campaigns?state=xyz')
+      .set('Authorization', `Bearer ${t}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toBe('state không hợp lệ');
   });
 });
 
@@ -443,6 +532,69 @@ describe('Campaign sharing workspace ownership', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('OWNER_ONLY');
+  });
+
+  it('GET /api/campaigns/shared/with-me lọc search theo tên campaign và total khớp', async () => {
+    const owner = await createUser({ role: 'user', username: 'share_owner_search' });
+    const recipient = await createUser({ role: 'user', username: 'share_recipient_search' });
+    const tokenRecipient = await loginAs(recipient);
+
+    const c1 = await insertCampaign({ ownerId: owner.id, campaignName: 'Summer Promo 2026' });
+    const c2 = await insertCampaign({ ownerId: owner.id, campaignName: 'Welcome Customer' });
+
+    await db.query(
+      `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run)
+       VALUES ($1, $2, $3, $4, 'view', false), ($5, $2, $3, $4, 'view', false)`,
+      [c1.id, owner.id, recipient.id, recipient.email, c2.id]
+    );
+
+    const res = await request(app)
+      .get('/api/campaigns/shared/with-me?search=summer')
+      .set('Authorization', `Bearer ${tokenRecipient}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.items).toHaveLength(1);
+    expect(res.body.data.items[0].campaignName).toBe('Summer Promo 2026');
+    expect(res.body.data.pagination.total).toBe(1);
+  });
+
+  // Review Claude 12/09: truy vấn shared đặt alias `cs` cho campaign_shares, còn mệnh đề state
+  // mở subquery `campaign_schedules cs` — alias trong bị che ngoài. Postgres cho phép, nhưng phải
+  // có ca chạy thật chứng minh, không suy đoán.
+  it('GET /api/campaigns/shared/with-me?state=scheduled|inactive lọc đúng dù alias cs bị che, total khớp', async () => {
+    const owner = await createUser({ role: 'user', username: 'share_owner_state' });
+    const recipient = await createUser({ role: 'user', username: 'share_recipient_state' });
+    const tokenRecipient = await loginAs(recipient);
+
+    const cSched = await insertCampaign({ ownerId: owner.id, campaignName: 'Shared with schedule', status: 'active' });
+    const cIdle = await insertCampaign({ ownerId: owner.id, campaignName: 'Shared idle', status: 'active' });
+    await insertSchedule({ campaignId: cSched.id, enabled: true });
+    await db.query(
+      `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run)
+       VALUES ($1, $2, $3, $4, 'view', false), ($5, $2, $3, $4, 'view', false)`,
+      [cSched.id, owner.id, recipient.id, recipient.email, cIdle.id]
+    );
+
+    const scheduled = await request(app)
+      .get('/api/campaigns/shared/with-me?state=scheduled')
+      .set('Authorization', `Bearer ${tokenRecipient}`);
+    expect(scheduled.status).toBe(200);
+    expect(scheduled.body.data.items.map((x) => x.campaignName)).toEqual(['Shared with schedule']);
+    expect(scheduled.body.data.items[0].enabledScheduleCount).toBe(1);
+    expect(scheduled.body.data.pagination.total).toBe(1);
+
+    const inactive = await request(app)
+      .get('/api/campaigns/shared/with-me?state=inactive')
+      .set('Authorization', `Bearer ${tokenRecipient}`);
+    expect(inactive.status).toBe(200);
+    expect(inactive.body.data.items.map((x) => x.campaignName)).toEqual(['Shared idle']);
+    expect(inactive.body.data.pagination.total).toBe(1);
+
+    const bad = await request(app)
+      .get('/api/campaigns/shared/with-me?state=xyz')
+      .set('Authorization', `Bearer ${tokenRecipient}`);
+    expect(bad.status).toBe(400);
   });
 });
 

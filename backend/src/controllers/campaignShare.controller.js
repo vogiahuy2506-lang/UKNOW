@@ -45,12 +45,25 @@ class CampaignShareController {
   async getSharedWithMe(req, res) {
     try {
       const context = getWorkspaceContext(req.user);
-      const { page = 1, limit = 10 } = req.query;
+      const { page = 1, limit = 10, search, status, type, state } = req.query;
+
+      if (state !== undefined && state !== null && state !== '') {
+        if (!['running', 'scheduled', 'inactive'].includes(state)) {
+          return res.status(400).json({
+            success: false,
+            message: 'state không hợp lệ',
+          });
+        }
+      }
 
       const result = await campaignShareService.getSharedWithMe({
         userId: context.actorUserId,
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
+        search,
+        status,
+        type,
+        state: state || undefined,
       });
 
       res.json({

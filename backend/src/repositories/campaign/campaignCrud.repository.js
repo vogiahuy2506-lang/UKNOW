@@ -1,5 +1,50 @@
 import db from '../../config/database.js';
 
+/**
+ * Helper build mệnh đề filter dùng chung cho findCampaigns, countCampaigns, và findSharedWithUser/countSharedWithUser.
+ *
+ * @param {object} filters
+ * @param {string|undefined} filters.status
+ * @param {string|undefined} filters.type
+ * @param {string|undefined} filters.search
+ * @param {string|undefined} filters.origin
+ * @param {string|undefined} filters.state - 'running' | 'scheduled' | 'inactive'
+ * @param {any[]} params - mảng bind parameters của truy vấn SQL
+ * @param {string} [alias='c'] - alias của bảng campaigns ('c' hoặc 'campaigns')
+ * @returns {string} Chuỗi AND ...
+ */
+export function buildCampaignFilterSql({ status, type, search, origin, state } = {}, params = [], alias = 'c') {
+  const p = alias ? `${alias}.` : '';
+  let sql = '';
+
+  if (status) {
+    params.push(status);
+    sql += ` AND ${p}status = $${params.length}`;
+  }
+  if (type) {
+    params.push(type);
+    sql += ` AND ${p}campaign_type = $${params.length}`;
+  }
+  if (search) {
+    params.push(`%${search}%`);
+    sql += ` AND ${p}campaign_name ILIKE $${params.length}`;
+  }
+  if (origin) {
+    params.push(origin);
+    sql += ` AND ${p}origin = $${params.length}`;
+  }
+  if (state === 'running') {
+    sql += ` AND EXISTS (SELECT 1 FROM campaign_runs cr WHERE cr.id_campaign = ${p}id AND cr.status = 'running')`;
+  } else if (state === 'scheduled') {
+    sql += ` AND EXISTS (SELECT 1 FROM campaign_schedules cs WHERE cs.id_campaign = ${p}id AND cs.enabled)`;
+  } else if (state === 'inactive') {
+    sql += ` AND NOT EXISTS (SELECT 1 FROM campaign_runs cr WHERE cr.id_campaign = ${p}id AND cr.status = 'running')`;
+    sql += ` AND NOT EXISTS (SELECT 1 FROM campaign_schedules cs WHERE cs.id_campaign = ${p}id AND cs.enabled)`;
+  }
+
+  return sql;
+}
+
 class CampaignCrudRepository {
   /**
    * Fetch paginated campaigns list with optional filters.
@@ -11,11 +56,12 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.type
    * @param {string|undefined} params.search
    * @param {string|undefined} params.origin - 'self_created' | 'marketplace_purchased'
+   * @param {string|undefined} params.state - 'running' | 'scheduled' | 'inactive'
    * @param {number} params.limit
    * @param {number} params.offset
    * @returns {Promise<object[]>}
    */
-  async findCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, limit, offset }) {
+  async findCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, state, limit, offset }) {
     let query = `
       SELECT c.id, c.campaign_name, c.description, c.campaign_type, c.status,
              c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
@@ -28,7 +74,8 @@ class CampaignCrudRepository {
              c.created_by, c.origin, c.marketplace_purchase_id,
              COALESCE(u.full_name, u.username) AS creator_name,
              COALESCE(run_stats.running_count, 0)::INTEGER AS running_count,
-             COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count
+             COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count,
+             COALESCE(sched_stats.enabled_schedule_count, 0)::INTEGER AS enabled_schedule_count
       FROM campaigns c
       LEFT JOIN users u ON COALESCE(c.created_by, c.id_user) = u.id
       LEFT JOIN LATERAL (
@@ -38,6 +85,10 @@ class CampaignCrudRepository {
         FROM campaign_runs cr
         WHERE cr.id_campaign = c.id
       ) run_stats ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*) FILTER (WHERE cs.enabled)::INTEGER AS enabled_schedule_count
+        FROM campaign_schedules cs WHERE cs.id_campaign = c.id
+      ) sched_stats ON TRUE
       WHERE 1=1
     `;
     const params = [];
@@ -47,22 +98,7 @@ class CampaignCrudRepository {
       query += ` AND COALESCE(c.workspace_owner_id, c.id_user) = $${params.length}`;
     }
 
-    if (status) {
-      params.push(status);
-      query += ` AND c.status = $${params.length}`;
-    }
-    if (type) {
-      params.push(type);
-      query += ` AND c.campaign_type = $${params.length}`;
-    }
-    if (search) {
-      params.push(`%${search}%`);
-      query += ` AND c.campaign_name ILIKE $${params.length}`;
-    }
-    if (origin) {
-      params.push(origin);
-      query += ` AND c.origin = $${params.length}`;
-    }
+    query += buildCampaignFilterSql({ status, type, search, origin, state }, params, 'c');
 
     query += ` ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
@@ -81,32 +117,19 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.type
    * @param {string|undefined} params.search
    * @param {string|undefined} params.origin
+   * @param {string|undefined} params.state
    * @returns {Promise<number>}
    */
-  async countCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin }) {
-    let countQuery = 'SELECT COUNT(*) FROM campaigns WHERE 1=1';
+  async countCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, state }) {
+    let countQuery = 'SELECT COUNT(*) FROM campaigns c WHERE 1=1';
     const countParams = [];
 
     if (!isAdmin) {
       countParams.push(workspaceOwnerId);
-      countQuery += ` AND COALESCE(workspace_owner_id, id_user) = $${countParams.length}`;
+      countQuery += ` AND COALESCE(c.workspace_owner_id, c.id_user) = $${countParams.length}`;
     }
-    if (status) {
-      countParams.push(status);
-      countQuery += ` AND status = $${countParams.length}`;
-    }
-    if (type) {
-      countParams.push(type);
-      countQuery += ` AND campaign_type = $${countParams.length}`;
-    }
-    if (search) {
-      countParams.push(`%${search}%`);
-      countQuery += ` AND campaign_name ILIKE $${countParams.length}`;
-    }
-    if (origin) {
-      countParams.push(origin);
-      countQuery += ` AND origin = $${countParams.length}`;
-    }
+
+    countQuery += buildCampaignFilterSql({ status, type, search, origin, state }, countParams, 'c');
 
     const countResult = await db.query(countQuery, countParams);
     return parseInt(countResult.rows[0].count, 10);
