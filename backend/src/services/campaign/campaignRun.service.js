@@ -13,6 +13,7 @@ import {
   isZaloSenderBlockedError,
   isZaloUnreachableRecipientError,
 } from '../../utils/zaloPhoneCampaign.util.js';
+import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { classifyZaloSendError, mapZaloErrorCategoryToLedgerReason } from '../../utils/zaloSendErrorClassifier.util.js';
@@ -1183,16 +1184,29 @@ class CampaignRunService {
         });
         return Array.from(new Set(values));
       };
+      // Bug: người nhận sheet/DB mất số 0 đầu (Excel/Sheets lưu SĐT dạng số, vd 388180856)
+      // đi thẳng tới tra số Zalo và rớt — xem vietnamesePhone.util.js đầu file. `collectEntries
+      // FromSource` dùng chung cho SĐT (Zalo cá nhân, kết bạn) VÀ groupId (Zalo nhóm) — áp mù
+      // normalizeVietnamesePhone cho groupId là sai domain. `normalizePhoneEntries` mặc định
+      // `false`; caller chỉ bật khi CHẮC nguồn là SĐT.
+      const normalizePhoneEntryValue = (rawValue) => {
+        const trimmed = String(rawValue || '').trim();
+        if (!trimmed) return trimmed;
+        // normalizeVietnamesePhone không nhận diện được thì trả lại chuỗi đã trim nguyên vẹn
+        // (không rỗng) — giữ đúng nguyên tắc "không nhận diện được thì giữ nguyên giá trị gốc".
+        return normalizeVietnamesePhone(trimmed) || trimmed;
+      };
       const collectEntriesFromSource = ({
         sourceMode = 'manual',
         manualValue = '',
         sourceNodeId = '',
         sourceField = '',
+        normalizePhoneEntries = false,
       }) => {
         const mode = String(sourceMode || 'manual').trim();
         if (mode === 'manual') {
           return campaignZaloSenderService.parseListText(manualValue).map((value) => ({
-            value,
+            value: normalizePhoneEntries ? normalizePhoneEntryValue(value) : value,
             row: null,
           }));
         }
@@ -1213,8 +1227,9 @@ class CampaignRunService {
         });
         const dedupMap = new Map();
         entries.forEach((entry) => {
-          const keyValue = String(entry.value || '').trim();
+          let keyValue = String(entry.value || '').trim();
           if (!keyValue) return;
+          if (normalizePhoneEntries) keyValue = normalizePhoneEntryValue(keyValue);
           if (!dedupMap.has(keyValue)) dedupMap.set(keyValue, { ...entry, value: keyValue });
         });
         return Array.from(dedupMap.values());
@@ -4504,7 +4519,11 @@ class CampaignRunService {
                   if (values.length === 0) continue;
                   // First field with data wins for this row; add all its values then stop.
                   values.forEach((value) => {
-                    const key = String(value || '').trim();
+                    let key = String(value || '').trim();
+                    // recipientType 'phone' — chuẩn hoá số mất số 0 đầu (Excel/Sheets). 'uid' thì
+                    // không phải SĐT, không chạm vào (fallbackFields ở nhánh đó cũng chỉ quét
+                    // zalo_id/zaloId/uid, không lẫn giá trị SĐT).
+                    if (recipientType === 'phone') key = normalizePhoneEntryValue(key);
                     if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
                   });
                   break;
@@ -4522,6 +4541,7 @@ class CampaignRunService {
               manualValue: manualPhones,
               sourceNodeId,
               sourceField,
+              normalizePhoneEntries: recipientType === 'phone',
             });
             const rawRecipients = recipientEntries.map((entry) => entry.value);
             const dedupedRecipients = Array.from(
@@ -6108,6 +6128,8 @@ class CampaignRunService {
             manualValue: manualPhones,
             sourceNodeId,
             sourceField,
+            // Lời mời kết bạn luôn là SĐT — không có nhánh uid nào ở node này.
+            normalizePhoneEntries: true,
           });
           const dedupePhoneEntries = (entries = []) => {
             const dedupedPhones = Array.from(
@@ -6135,6 +6157,7 @@ class CampaignRunService {
               manualValue: manualPhones,
               sourceNodeId,
               sourceField,
+              normalizePhoneEntries: true,
             });
             effectivePhoneEntries = dedupePhoneEntries(refreshedPhoneEntries);
           }
