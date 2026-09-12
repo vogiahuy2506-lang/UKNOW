@@ -42,10 +42,17 @@ describe('PaymentSuccess — tự đồng bộ tài khoản sau khi xác nhận 
 
   it('xác nhận thành công tự gọi refreshCurrentUser (store) — không dùng initialize() nữa', async () => {
     render(<PaymentSuccess />);
-    const button = await screen.findByRole('button', { name: 'paymentSuccess.goToDashboard' });
+    await screen.findByRole('button', { name: 'paymentSuccess.goToDashboard' });
     expect(m.status).toHaveBeenCalledWith('999');
     await waitFor(() => expect(m.refresh).toHaveBeenCalledTimes(1));
-    fireEvent.click(button);
+    // Đua thời gian làm CI đỏ 10/09 + 12/09 (xanh ở máy): CTA bị disabled khi accountSync ===
+    // 'syncing' (PaymentSuccess.jsx CTA), và fireEvent.click lên nút disabled thì im lặng —
+    // navigate không bao giờ được gọi. Phải đợi nút MỞ rồi mới bấm, và lấy lại phần tử sau
+    // re-render thay vì giữ tham chiếu cũ.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'paymentSuccess.goToDashboard' })).not.toBeDisabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'paymentSuccess.goToDashboard' }));
     await waitFor(() => expect(m.navigate).toHaveBeenCalledWith('/app'));
     // CTA không gọi refresh lần nữa — đã đồng bộ xong trước đó.
     expect(m.refresh).toHaveBeenCalledTimes(1);
