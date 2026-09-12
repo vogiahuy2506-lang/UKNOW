@@ -88,9 +88,12 @@ export async function findProfileBase(userId) {
             u.ai_handoff_auto_resume_minutes,
             u.created_at, u.last_login_at, r.role_code, r.role_name,
             (
-              SELECT jsonb_object_agg(c.purpose, c.granted)
+              SELECT jsonb_object_agg(
+                c.purpose,
+                jsonb_build_object('granted', c.granted, 'document_version', c.document_version)
+              )
               FROM (
-                SELECT DISTINCT ON (purpose) purpose, granted
+                SELECT DISTINCT ON (purpose) purpose, granted, document_version
                 FROM user_consents
                 WHERE user_id = u.id
                 ORDER BY purpose, created_at DESC

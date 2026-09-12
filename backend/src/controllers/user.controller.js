@@ -43,8 +43,8 @@ import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.uti
 import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
-import { validateRegistrationConsents } from '../config/legalDocuments.config.js';
-import { recordConsents, getUserConsentHistory } from '../repositories/user/userConsent.repository.js';
+import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
+import { recordConsents, getUserConsentHistory, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -143,7 +143,8 @@ const mapProfileResponse = (userRow) => ({
   phone: userRow.phone,
   referralCode: userRow.referral_code ?? null,
   consents: userRow.consents || null,
-  hasConsented: Boolean(userRow.consents?.terms && userRow.consents?.privacy && userRow.consents?.dpa),
+  hasConsented: hasConsentedCurrent(userRow.consents),
+  consentVersionOutdated: isConsentVersionOutdated(userRow.consents),
   status: userRow.status,
   role: userRow.role || userRow.role_code || 'user',
   roleCode: userRow.role || userRow.role_code || 'user',
@@ -1015,16 +1016,19 @@ class UserController {
         userAgent,
       });
 
+      const recordedConsents = {
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
+      };
+
       return res.status(200).json({
         success: true,
         message: 'Đã ghi nhận đồng ý điều khoản',
         data: {
-          consents: {
-            terms: true,
-            privacy: true,
-            dpa: true,
-          },
-          hasConsented: true,
+          consents: recordedConsents,
+          hasConsented: hasConsentedCurrent(recordedConsents),
+          consentVersionOutdated: false,
           recorded,
         },
       });

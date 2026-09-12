@@ -23,8 +23,8 @@ import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
-import userConsentRepository, { recordConsents, getUserLatestConsents } from '../repositories/user/userConsent.repository.js';
-import { validateRegistrationConsents } from '../config/legalDocuments.config.js';
+import userConsentRepository, { recordConsents, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
+import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -192,9 +192,9 @@ class AuthController {
         client,
       });
       user.consents = {
-        terms: Boolean(consents.terms),
-        privacy: Boolean(consents.privacy),
-        dpa: Boolean(consents.dpa),
+        terms: { granted: Boolean(consents.terms), document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: Boolean(consents.privacy), document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: Boolean(consents.dpa), document_version: LEGAL_DOCUMENTS.dpa.version },
       };
 
       // Đánh dấu mã xác minh đã dùng
@@ -562,9 +562,9 @@ class AuthController {
           client,
         });
         user.consents = {
-          terms: googleConsents.terms,
-          privacy: googleConsents.privacy,
-          dpa: googleConsents.dpa,
+          terms: { granted: Boolean(googleConsents.terms), document_version: LEGAL_DOCUMENTS.terms.version },
+          privacy: { granted: Boolean(googleConsents.privacy), document_version: LEGAL_DOCUMENTS.privacy.version },
+          dpa: { granted: Boolean(googleConsents.dpa), document_version: LEGAL_DOCUMENTS.dpa.version },
         };
 
         trial = await grantSignupTrialInTx(client, { userId: user.id, userEmail: user.email });
@@ -1017,7 +1017,8 @@ class AuthController {
       referralCode: user.referral_code ?? user.referralCode ?? null,
       // Bằng chứng đồng ý văn bản pháp lý (Nghị định 330/2026/NĐ-CP PR-N2)
       consents: consents || null,
-      hasConsented: Boolean(consents?.terms && consents?.privacy && consents?.dpa),
+      hasConsented: hasConsentedCurrent(consents),
+      consentVersionOutdated: isConsentVersionOutdated(consents),
     };
   }
 

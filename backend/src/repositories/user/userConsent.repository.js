@@ -81,9 +81,9 @@ export async function getUserLatestConsents(userId, client = null) {
   const queryable = client || db;
 
   const { rows } = await queryable.query(
-    `SELECT purpose, granted
+    `SELECT purpose, granted, document_version
      FROM (
-       SELECT DISTINCT ON (purpose) purpose, granted, created_at
+       SELECT DISTINCT ON (purpose) purpose, granted, document_version, created_at
        FROM user_consents
        WHERE user_id = $1
        ORDER BY purpose, created_at DESC
@@ -95,9 +95,47 @@ export async function getUserLatestConsents(userId, client = null) {
 
   const result = {};
   for (const row of rows) {
-    result[row.purpose] = row.granted;
+    result[row.purpose] = {
+      granted: row.granted,
+      document_version: row.document_version,
+    };
   }
   return result;
+}
+
+/**
+ * Kiểm tra xem người dùng đã đồng ý đủ các mục đích bắt buộc VÀ đúng phiên bản hiện hành hay chưa.
+ *
+ * @param {Record<string, { granted: boolean, document_version: string } | boolean> | null} consents
+ * @returns {boolean}
+ */
+export function hasConsentedCurrent(consents) {
+  if (!consents || typeof consents !== 'object') return false;
+  return REQUIRED_REGISTRATION_PURPOSES.every((purpose) => {
+    const item = consents[purpose];
+    if (!item) return false;
+    const granted = typeof item === 'object' ? item.granted : item;
+    const version = typeof item === 'object' ? item.document_version : consents[`${purpose}_version`];
+    return granted === true && version === LEGAL_DOCUMENTS[purpose]?.version;
+  });
+}
+
+/**
+ * Kiểm tra xem người dùng đã từng đồng ý nhưng có ít nhất một văn bản đã đổi phiên bản (outdated) hay không.
+ * Trả về true khi user đã từng đồng ý nhưng hiện tại chưa đạt hasConsentedCurrent.
+ *
+ * @param {Record<string, { granted: boolean, document_version: string } | boolean> | null} consents
+ * @returns {boolean}
+ */
+export function isConsentVersionOutdated(consents) {
+  if (!consents || typeof consents !== 'object') return false;
+  const hasAnyGranted = REQUIRED_REGISTRATION_PURPOSES.some((purpose) => {
+    const item = consents[purpose];
+    if (!item) return false;
+    return typeof item === 'object' ? Boolean(item.granted) : Boolean(item);
+  });
+  if (!hasAnyGranted) return false;
+  return !hasConsentedCurrent(consents);
 }
 
 /**
@@ -123,7 +161,7 @@ export async function getUserConsentHistory(userId, client = null) {
 }
 
 /**
- * Kiểm tra xem user đã đồng ý đủ các mục đích bắt buộc hay chưa.
+ * Kiểm tra xem user đã đồng ý đủ các mục đích bắt buộc hay chưa (chỉ kiểm tra granted, không so version).
  *
  * @param {number|string} userId
  * @param {string[]} [requiredPurposes] Mặc định ['terms', 'privacy', 'dpa']
@@ -138,7 +176,10 @@ export async function hasUserConsentedToAll(
   const latest = await getUserLatestConsents(userId, client);
   if (!latest) return false;
 
-  return requiredPurposes.every((purpose) => latest[purpose] === true);
+  return requiredPurposes.every((purpose) => {
+    const item = latest[purpose];
+    return typeof item === 'object' ? item.granted === true : item === true;
+  });
 }
 
 export default {
@@ -146,4 +187,7 @@ export default {
   getUserLatestConsents,
   getUserConsentHistory,
   hasUserConsentedToAll,
+  hasConsentedCurrent,
+  isConsentVersionOutdated,
 };
+

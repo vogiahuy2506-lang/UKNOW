@@ -4,6 +4,8 @@ import {
   getUserLatestConsents,
   getUserConsentHistory,
   hasUserConsentedToAll,
+  hasConsentedCurrent,
+  isConsentVersionOutdated,
 } from '../userConsent.repository.js';
 import { LEGAL_DOCUMENTS } from '../../../config/legalDocuments.config.js';
 
@@ -32,7 +34,11 @@ describe('userConsent.repository', () => {
 
     const recorded = await recordConsents({
       userId: 42,
-      consents: { terms: true, privacy: true, dpa: true },
+      consents: {
+        terms: true,
+        privacy: true,
+        dpa: true,
+      },
       source: 'register',
       ipAddress: '127.0.0.1',
       userAgent: 'Mozilla/5.0 JestTest',
@@ -43,10 +49,9 @@ describe('userConsent.repository', () => {
     expect(mockClient.query).toHaveBeenCalledTimes(3);
 
     // Kiểm tra thông tin từng dòng
-    const termsCall = mockClient.query.mock.calls.find((c) => c[1][1] === 'terms');
+    const termsCall = mockClient.query.mock.calls.find((call) => call[1][1] === 'terms');
     expect(termsCall).toBeDefined();
     expect(termsCall[1][0]).toBe(42);
-    expect(termsCall[1][1]).toBe('terms');
     expect(termsCall[1][2]).toBe(true);
     expect(termsCall[1][3]).toBe(LEGAL_DOCUMENTS.terms.version);
     expect(termsCall[1][4]).toBe(LEGAL_DOCUMENTS.terms.hash);
@@ -55,22 +60,22 @@ describe('userConsent.repository', () => {
     expect(termsCall[1][7]).toBe('Mozilla/5.0 JestTest');
   });
 
-  it('getUserLatestConsents trả về map purpose -> granted mới nhất', async () => {
+  it('getUserLatestConsents trả về map purpose -> { granted, document_version } mới nhất', async () => {
     const mockClient = {
       query: jest.fn().mockResolvedValue({
         rows: [
-          { purpose: 'terms', granted: true },
-          { purpose: 'privacy', granted: true },
-          { purpose: 'dpa', granted: true },
+          { purpose: 'terms', granted: true, document_version: '2026-09-10' },
+          { purpose: 'privacy', granted: true, document_version: '2026-09-10' },
+          { purpose: 'dpa', granted: true, document_version: '2026-09-10' },
         ],
       }),
     };
 
     const latest = await getUserLatestConsents(42, mockClient);
     expect(latest).toEqual({
-      terms: true,
-      privacy: true,
-      dpa: true,
+      terms: { granted: true, document_version: '2026-09-10' },
+      privacy: { granted: true, document_version: '2026-09-10' },
+      dpa: { granted: true, document_version: '2026-09-10' },
     });
   });
 
@@ -87,9 +92,9 @@ describe('userConsent.repository', () => {
     const mockClientTrue = {
       query: jest.fn().mockResolvedValue({
         rows: [
-          { purpose: 'terms', granted: true },
-          { purpose: 'privacy', granted: true },
-          { purpose: 'dpa', granted: true },
+          { purpose: 'terms', granted: true, document_version: '2026-09-10' },
+          { purpose: 'privacy', granted: true, document_version: '2026-09-10' },
+          { purpose: 'dpa', granted: true, document_version: '2026-09-10' },
         ],
       }),
     };
@@ -98,9 +103,9 @@ describe('userConsent.repository', () => {
     const mockClientMissingOne = {
       query: jest.fn().mockResolvedValue({
         rows: [
-          { purpose: 'terms', granted: true },
-          { purpose: 'privacy', granted: true },
-          { purpose: 'dpa', granted: false },
+          { purpose: 'terms', granted: true, document_version: '2026-09-10' },
+          { purpose: 'privacy', granted: true, document_version: '2026-09-10' },
+          { purpose: 'dpa', granted: false, document_version: '2026-09-10' },
         ],
       }),
     };
@@ -110,5 +115,46 @@ describe('userConsent.repository', () => {
       query: jest.fn().mockResolvedValue({ rows: [] }),
     };
     expect(await hasUserConsentedToAll(42, undefined, mockClientEmpty)).toBe(false);
+  });
+
+  describe('hasConsentedCurrent & isConsentVersionOutdated (mục 2.4 plan)', () => {
+    it('đủ 3 purpose + đúng version hiện hành → hasConsentedCurrent = true, isConsentVersionOutdated = false', () => {
+      const consents = {
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
+      };
+
+      expect(hasConsentedCurrent(consents)).toBe(true);
+      expect(isConsentVersionOutdated(consents)).toBe(false);
+    });
+
+    it('đủ 3 purpose nhưng 1 purpose có version cũ → hasConsentedCurrent = false, isConsentVersionOutdated = true', () => {
+      const consents = {
+        terms: { granted: true, document_version: '2026-09-01' }, // Cũ hơn 2026-09-10
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+        dpa: { granted: true, document_version: LEGAL_DOCUMENTS.dpa.version },
+      };
+
+      expect(hasConsentedCurrent(consents)).toBe(false);
+      expect(isConsentVersionOutdated(consents)).toBe(true);
+    });
+
+    it('thiếu 1 purpose bắt buộc → hasConsentedCurrent = false', () => {
+      const consents = {
+        terms: { granted: true, document_version: LEGAL_DOCUMENTS.terms.version },
+        privacy: { granted: true, document_version: LEGAL_DOCUMENTS.privacy.version },
+      };
+
+      expect(hasConsentedCurrent(consents)).toBe(false);
+      // Đã có ít nhất 1 consent nhưng chưa đủ/đúng hiện hành → outdated = true
+      expect(isConsentVersionOutdated(consents)).toBe(true);
+
+      // Chưa có bất kỳ consent nào → outdated = false
+      expect(hasConsentedCurrent(null)).toBe(false);
+      expect(isConsentVersionOutdated(null)).toBe(false);
+      expect(hasConsentedCurrent({})).toBe(false);
+      expect(isConsentVersionOutdated({})).toBe(false);
+    });
   });
 });
