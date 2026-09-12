@@ -8191,4 +8191,19 @@ export default {
     filterMonth: 'Chọn tháng',
     allMonths: 'Tất cả các tháng',
   },
+
+  planExpiryModal: {
+    expiredTitle: 'Gói của bạn đã hết hạn',
+    expiredDesc: 'Các chiến dịch marketing của bạn đã tạm dừng. Vui lòng nâng cấp gói để tiếp tục sử dụng dịch vụ.',
+    graceTitle: 'Gói của bạn đã hết hạn',
+    graceDesc: 'Gói dịch vụ đã hết hạn nhưng bạn còn {days} ngày ân hạn. Vui lòng nâng cấp ngay để không làm gián đoạn chiến dịch.',
+    expiringTitle: 'Gói của bạn sắp hết hạn',
+    expiringDesc: 'Gói dịch vụ sẽ hết hạn sau {days} ngày nữa. Các chiến dịch đang chạy sẽ dừng khi hết hạn. Vui lòng nâng cấp sớm.',
+    upgradeNow: 'Nâng cấp ngay',
+    remindLater: 'Để sau',
+    badgeExpired: 'Đã hết hạn',
+    badgeGrace: 'Đang ân hạn',
+    badgeExpiring: 'Sắp hết hạn',
+    daysCount: '{count} ngày',
+  },
 };
