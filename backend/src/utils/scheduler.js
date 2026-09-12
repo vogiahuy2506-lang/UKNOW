@@ -9,92 +9,24 @@ import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.servic
 import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
+// Luật thời gian của lịch chạy (khoá ngày Hà Nội, cron runtime, N ngày) dời sang util để
+// controller tính "lần chạy tiếp" bằng ĐÚNG luật nổ ở đây — xem campaignScheduleCron.util.js.
+import {
+  HANOI_TIME_ZONE,
+  toHanoiDateKey,
+  getDaysDiffFromDateKeys,
+  parseCustomIntervalDaysFromCron,
+  resolveRuntimeCronExpression,
+} from './campaignScheduleCron.util.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
 const activeContinuousRunIds = new Set();
 const activeNonContinuousResumeRunIds = new Set();
-const HANOI_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 const SAFE_QUOTA_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'quotaDeferredUntil'");
 const SAFE_ZALO_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'zaloOutboundDeferredUntil'");
 const SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'nonContinuousDeferredUntil'");
-
-/**
- * Chuyển thời điểm bất kỳ về khóa ngày `YYYY-MM-DD` theo múi giờ Hà Nội.
- *
- * @param {Date|string|null|undefined} rawDate thời điểm đầu vào
- * @returns {string|null} khóa ngày hoặc null nếu input không hợp lệ
- */
-const toHanoiDateKey = (rawDate) => {
-  if (!rawDate) return null;
-  const parsed = rawDate instanceof Date ? rawDate : new Date(rawDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: HANOI_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(parsed);
-};
-
-/**
- * Tính số ngày chênh lệch giữa 2 mốc ngày dạng `YYYY-MM-DD`.
- *
- * @param {string} startKey mốc bắt đầu
- * @param {string} endKey mốc kết thúc
- * @returns {number|null} số ngày chênh lệch hoặc null nếu parse lỗi
- */
-const getDaysDiffFromDateKeys = (startKey, endKey) => {
-  if (!startKey || !endKey) return null;
-  const [startYear, startMonth, startDay] = String(startKey).split('-').map((v) => Number.parseInt(v, 10));
-  const [endYear, endMonth, endDay] = String(endKey).split('-').map((v) => Number.parseInt(v, 10));
-  if (
-    !Number.isFinite(startYear)
-    || !Number.isFinite(startMonth)
-    || !Number.isFinite(startDay)
-    || !Number.isFinite(endYear)
-    || !Number.isFinite(endMonth)
-    || !Number.isFinite(endDay)
-  ) {
-    return null;
-  }
-  const startUtc = Date.UTC(startYear, startMonth - 1, startDay);
-  const endUtc = Date.UTC(endYear, endMonth - 1, endDay);
-  return Math.floor((endUtc - startUtc) / (24 * 60 * 60 * 1000));
-};
-
-/**
- * Parse số ngày lặp lại từ cron custom dạng N ngày ở trường ngày-tháng.
- *
- * @param {string} cronExpression biểu thức cron lưu trong DB
- * @returns {number|null} số ngày lặp hoặc null nếu không parse được
- */
-const parseCustomIntervalDaysFromCron = (cronExpression = '') => {
-  const parts = String(cronExpression).trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 3) return null;
-  const match = String(parts[2]).match(/^\*\/(\d+)$/);
-  if (!match) return null;
-  const intervalDays = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
-  return intervalDays;
-};
-
-/**
- * Với lịch custom, runtime cron luôn chạy hàng ngày tại cùng giờ/phút để tránh lệch mốc N ngày.
- *
- * @param {object} schedule bản ghi lịch chạy
- * @returns {string} cron runtime dùng để đăng ký node-cron
- */
-const resolveRuntimeCronExpression = (schedule) => {
-  const rawCron = String(schedule?.cron_expression || '').trim();
-  if (String(schedule?.schedule_type || '').toLowerCase() !== 'custom') {
-    return rawCron;
-  }
-  const parts = rawCron.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return rawCron;
-  return `${parts[0]} ${parts[1]} * * *`;
-};
 
 /**
  * Quyết định lịch custom có đến hạn chạy ở ngày hiện tại hay chưa.
