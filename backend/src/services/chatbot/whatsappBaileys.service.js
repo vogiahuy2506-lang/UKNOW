@@ -37,8 +37,22 @@ const SESSION_ROOT = path.resolve(
   process.env.WHATSAPP_BAILEYS_SESSION_DIR
     || path.join(process.cwd(), 'whatsapp-sessions')
 );
-if (!existsSync(SESSION_ROOT)) {
-  mkdirSync(SESSION_ROOT, { recursive: true });
+
+let sessionRootReady = false;
+try {
+  if (!existsSync(SESSION_ROOT)) {
+    mkdirSync(SESSION_ROOT, { recursive: true });
+  }
+  sessionRootReady = true;
+} catch (err) {
+  console.error(
+    `[WhatsApp/Baileys] Không tạo được thư mục phiên ${SESSION_ROOT} — kênh WhatsApp sẽ không `
+    + 'khả dụng, phần còn lại của backend vẫn chạy bình thường:', err?.message || err
+  );
+}
+
+export function isSessionRootReady() {
+  return sessionRootReady;
 }
 
 const log = (...args) => console.log('[WhatsApp/Baileys]', ...args);
@@ -95,6 +109,7 @@ export function updateSessionNickname(sessionKey, nickname) {
 }
 
 function persistProfile(sessionKey, profile) {
+  if (!sessionRootReady) return;
   try {
     const dir = sessionDir(sessionKey);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -108,6 +123,9 @@ function persistProfile(sessionKey, profile) {
 }
 
 async function buildSocket(sessionKey, emitter) {
+  if (!sessionRootReady) {
+    throw new Error(`Thư mục lưu phiên WhatsApp không khả dụng (${SESSION_ROOT})`);
+  }
   const dir = sessionDir(sessionKey);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
@@ -430,6 +448,11 @@ async function maybeAutoReply(sock, msg, emitter) {
  * @returns {Promise<{emitter: NodeJS.EventEmitter, status: string, lastQr: string|null}>}
  */
 export async function connectSession(sessionKey) {
+  if (!sessionRootReady) {
+    throw new Error(
+      `Thư mục lưu phiên WhatsApp không khả dụng (${SESSION_ROOT}). Vui lòng kiểm tra quyền hệ thống.`
+    );
+  }
   const existing = sessions.get(sessionKey);
 
   // Nếu session đang trong cooldown (đã hit reconnect cap), user phải
@@ -493,6 +516,7 @@ export async function disconnectSession(sessionKey) {
 }
 
 export function deleteSessionFiles(sessionKey) {
+  if (!sessionRootReady) return false;
   try {
     const dir = sessionDir(sessionKey);
     if (existsSync(dir)) {
@@ -519,7 +543,7 @@ export function listSessions() {
 }
 
 export function listPersistedSessions() {
-  if (!existsSync(SESSION_ROOT)) return [];
+  if (!sessionRootReady || !existsSync(SESSION_ROOT)) return [];
   return readdirSync(SESSION_ROOT).filter((entry) => {
     const dir = path.join(SESSION_ROOT, entry);
     if (!existsSync(path.join(dir, 'creds.json'))) return false;
@@ -631,6 +655,10 @@ export function subscribe(sessionKey, handler) {
 
 /** Boot all persisted sessions at startup so users stay connected across restarts. */
 export async function restorePersistedSessions() {
+  if (!sessionRootReady) {
+    log(`Thư mục lưu phiên không khả dụng (${SESSION_ROOT}) — bỏ qua khôi phục phiên WhatsApp.`);
+    return;
+  }
   const keys = listPersistedSessions();
   log(`Restoring ${keys.length} persisted session(s)…`);
   for (const key of keys) {
@@ -642,4 +670,4 @@ export async function restorePersistedSessions() {
   }
 }
 
-export { SESSION_ROOT };
+export { SESSION_ROOT, sessionRootReady };
