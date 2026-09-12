@@ -131,11 +131,32 @@ describe('getActiveRunPause', () => {
 });
 
 describe('getRunPauseI18nKey', () => {
-  it('map đúng key cho từng kind', () => {
+  it('map đúng key cho từng kind và reason', () => {
     expect(getRunPauseI18nKey('zalo')).toBe('campaignRun.zaloPausedUntil');
-    expect(getRunPauseI18nKey('non_continuous')).toBe('campaignRun.smtpPausedUntil');
     expect(getRunPauseI18nKey('plan_quota')).toBe('campaignRun.quotaPausedUntil');
     expect(getRunPauseI18nKey('other')).toBe('campaignRun.quotaPausedUntil');
+  });
+
+  it('với non_continuous: all_recipients_waiting_next_due trả về waitingNextDueUntil, không ra SMTP', () => {
+    expect(
+      getRunPauseI18nKey('non_continuous', 'all_recipients_waiting_next_due')
+    ).toBe('campaignRun.waitingNextDueUntil');
+    expect(
+      getRunPauseI18nKey({ kind: 'non_continuous', reason: 'all_recipients_waiting_next_due' })
+    ).toBe('campaignRun.waitingNextDueUntil');
+  });
+
+  it('với non_continuous: các lý do SMTP giữ smtpPausedUntil', () => {
+    expect(getRunPauseI18nKey('non_continuous', 'smtp_rate_limited')).toBe('campaignRun.smtpPausedUntil');
+    expect(getRunPauseI18nKey('non_continuous', 'smtp_daily_quota')).toBe('campaignRun.smtpPausedUntil');
+    expect(getRunPauseI18nKey({ kind: 'non_continuous', reason: 'smtp_auth_error' })).toBe('campaignRun.smtpPausedUntil');
+  });
+
+  it('với non_continuous: reason rỗng hoặc không xác định trả về chuỗi trung tính genericPausedUntil', () => {
+    expect(getRunPauseI18nKey('non_continuous')).toBe('campaignRun.genericPausedUntil');
+    expect(getRunPauseI18nKey('non_continuous', '')).toBe('campaignRun.genericPausedUntil');
+    expect(getRunPauseI18nKey('non_continuous', 'some_unknown_reason')).toBe('campaignRun.genericPausedUntil');
+    expect(getRunPauseI18nKey({ kind: 'non_continuous', reason: '' })).toBe('campaignRun.genericPausedUntil');
   });
 });
 

@@ -49,14 +49,28 @@ export function getActiveRunPause(runMetadata) {
 }
 
 /**
- * Map pause kind to corresponding i18n translation key.
+ * Map pause kind or pause object to corresponding i18n translation key.
  *
- * @param {'zalo'|'non_continuous'|'plan_quota'|string} kind
+ * @param {'zalo'|'non_continuous'|'plan_quota'|object|string} pauseOrKind
+ * @param {string} [maybeReason]
  * @returns {string}
  */
-export function getRunPauseI18nKey(kind) {
+export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
+  const kind = typeof pauseOrKind === 'object' ? pauseOrKind?.kind : pauseOrKind;
+  const reason = String(
+    (typeof pauseOrKind === 'object' ? pauseOrKind?.reason : maybeReason) || ''
+  ).trim();
+
   if (kind === 'zalo') return 'campaignRun.zaloPausedUntil';
-  if (kind === 'non_continuous') return 'campaignRun.smtpPausedUntil';
+  if (kind === 'non_continuous') {
+    if (reason === 'all_recipients_waiting_next_due') {
+      return 'campaignRun.waitingNextDueUntil';
+    }
+    if (reason.toLowerCase().includes('smtp')) {
+      return 'campaignRun.smtpPausedUntil';
+    }
+    return 'campaignRun.genericPausedUntil';
+  }
   return 'campaignRun.quotaPausedUntil';
 }
 

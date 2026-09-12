@@ -691,7 +691,7 @@ const Campaigns = () => {
                                 {activePause && (
                                   <>
                                     <span className="badge badge-danger text-xs font-normal">
-                                      {t(getRunPauseI18nKey(activePause.kind), {
+                                      {t(getRunPauseI18nKey(activePause), {
                                         until: formatCampaignDateTime(activePause.untilIso),
                                       })}
                                     </span>

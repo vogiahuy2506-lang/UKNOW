@@ -5003,6 +5003,8 @@ export default {
     quotaPausedUntil: 'Hết lượt gửi — tự chạy lại {until}',
     smtpPausedUntil: 'Máy chủ email tạm chặn — tự gửi tiếp {until}',
     zaloPausedUntil: 'Zalo tạm nghỉ theo hạn mức — tự gửi tiếp {until}',
+    waitingNextDueUntil: 'Đã gửi xong lượt này — tiếp tục lúc {until}',
+    genericPausedUntil: 'Tạm hoãn — tiếp tục lúc {until}',
     buyTopup: 'Mua thêm',
     unknown: 'Không xác định',
     runNotFound: 'Không tìm thấy lượt chạy để dừng',
