@@ -8,7 +8,7 @@ import db from '../../config/database.js';
  * @param {string|undefined} filters.type
  * @param {string|undefined} filters.search
  * @param {string|undefined} filters.origin
- * @param {string|undefined} filters.state - 'running' | 'scheduled' | 'inactive'
+ * @param {string|undefined} filters.state - 'running' | 'scheduled' | 'inactive' | 'draft'
  * @param {any[]} params - mảng bind parameters của truy vấn SQL
  * @param {string} [alias='c'] - alias của bảng campaigns ('c' hoặc 'campaigns')
  * @returns {string} Chuỗi AND ...
@@ -40,6 +40,9 @@ export function buildCampaignFilterSql({ status, type, search, origin, state } =
   } else if (state === 'inactive') {
     sql += ` AND NOT EXISTS (SELECT 1 FROM campaign_runs cr WHERE cr.id_campaign = ${p}id AND cr.status = 'running')`;
     sql += ` AND NOT EXISTS (SELECT 1 FROM campaign_schedules cs WHERE cs.id_campaign = ${p}id AND cs.enabled)`;
+    sql += ` AND ${p}status <> 'draft'`;
+  } else if (state === 'draft') {
+    sql += ` AND ${p}status = 'draft'`;
   }
 
   return sql;
@@ -56,7 +59,7 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.type
    * @param {string|undefined} params.search
    * @param {string|undefined} params.origin - 'self_created' | 'marketplace_purchased'
-   * @param {string|undefined} params.state - 'running' | 'scheduled' | 'inactive'
+   * @param {string|undefined} params.state - 'running' | 'scheduled' | 'inactive' | 'draft'
    * @param {number} params.limit
    * @param {number} params.offset
    * @returns {Promise<object[]>}

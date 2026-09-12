@@ -48,7 +48,7 @@ class CampaignShareController {
       const { page = 1, limit = 10, search, status, type, state } = req.query;
 
       if (state !== undefined && state !== null && state !== '') {
-        if (!['running', 'scheduled', 'inactive'].includes(state)) {
+        if (!['running', 'scheduled', 'inactive', 'draft'].includes(state)) {
           return res.status(400).json({
             success: false,
             message: 'state không hợp lệ',

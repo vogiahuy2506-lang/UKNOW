@@ -327,7 +327,7 @@ describe('GET /api/campaigns', () => {
     expect(res.body.data.pagination.total).toBe(1);
   });
 
-  it('filter state=inactive không trả chiến dịch đang chạy hoặc có lịch bật', async () => {
+  it('filter state=inactive không trả chiến dịch đang chạy, có lịch bật, hoặc nháp (PR-2c: nháp tách riêng)', async () => {
     const o = await createUser({ role: 'user', username: 'o_state_inact' });
     const cRunning = await insertCampaign({ ownerId: o.id, campaignName: 'c_running', status: 'active' });
     await insertRun({ campaignId: cRunning.id, status: 'running' });
@@ -335,7 +335,7 @@ describe('GET /api/campaigns', () => {
     const cSched = await insertCampaign({ ownerId: o.id, campaignName: 'c_sched', status: 'active' });
     await insertSchedule({ campaignId: cSched.id, enabled: true });
 
-    const cDraft = await insertCampaign({ ownerId: o.id, campaignName: 'c_draft', status: 'draft' });
+    await insertCampaign({ ownerId: o.id, campaignName: 'c_draft', status: 'draft' });
     const cActiveIdle = await insertCampaign({ ownerId: o.id, campaignName: 'c_active_idle', status: 'active' });
     const cSchedOff = await insertCampaign({ ownerId: o.id, campaignName: 'c_sched_off', status: 'active' });
     await insertSchedule({ campaignId: cSchedOff.id, enabled: false });
@@ -347,8 +347,30 @@ describe('GET /api/campaigns', () => {
 
     expect(res.status).toBe(200);
     const names = res.body.data.items.map((x) => x.campaignName).sort();
-    expect(names).toEqual(['c_active_idle', 'c_draft', 'c_sched_off']);
-    expect(res.body.data.pagination.total).toBe(3);
+    expect(names).toEqual(['c_active_idle', 'c_sched_off']);
+    expect(res.body.data.pagination.total).toBe(2);
+  });
+
+  it('filter state=draft chỉ trả chiến dịch nháp (PR-2c)', async () => {
+    const o = await createUser({ role: 'user', username: 'o_state_draft' });
+    const cRunning = await insertCampaign({ ownerId: o.id, campaignName: 'c_running', status: 'active' });
+    await insertRun({ campaignId: cRunning.id, status: 'running' });
+
+    await insertCampaign({ ownerId: o.id, campaignName: 'c_active_idle', status: 'active' });
+    await insertCampaign({ ownerId: o.id, campaignName: 'c_draft_1', status: 'draft' });
+    const cDraft2 = await insertCampaign({ ownerId: o.id, campaignName: 'c_draft_2', status: 'draft' });
+    // Nháp nhưng có lịch bật — vẫn phải rơi vào draft, không lọt qua state=scheduled/inactive.
+    await insertSchedule({ campaignId: cDraft2.id, enabled: true });
+
+    const t = await loginAs(o);
+    const res = await request(app)
+      .get('/api/campaigns?state=draft')
+      .set('Authorization', `Bearer ${t}`);
+
+    expect(res.status).toBe(200);
+    const names = res.body.data.items.map((x) => x.campaignName).sort();
+    expect(names).toEqual(['c_draft_1', 'c_draft_2']);
+    expect(res.body.data.pagination.total).toBe(2);
   });
 
   it('filter state lạ trả về 400', async () => {

@@ -1178,6 +1178,7 @@ export default {
     operationRunning: 'Đang chạy',
     operationScheduled: 'Đã lên lịch',
     operationInactive: 'Tạm ngưng · Không hoạt động',
+    operationDraft: 'Nháp',
     operationScheduledCount: 'Đã lên lịch · {count} lịch',
     tabCampaigns: 'Chiến dịch',
     tabSchedules: 'Lịch chạy',

@@ -1178,6 +1178,7 @@ export default {
     operationRunning: 'Running',
     operationScheduled: 'Scheduled',
     operationInactive: 'Paused · Inactive',
+    operationDraft: 'Draft',
     operationScheduledCount: 'Scheduled · {count} schedule(s)',
     tabCampaigns: 'Campaigns',
     tabSchedules: 'Run Schedules',

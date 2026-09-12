@@ -60,7 +60,7 @@ const Campaigns = () => {
 
   const activeTab = searchParams.get('tab') === 'schedules' ? 'schedules' : 'campaigns';
   const rawStateParam = searchParams.get('state') || 'all';
-  const stateFilter = ['all', 'running', 'scheduled', 'inactive'].includes(rawStateParam) ? rawStateParam : 'all';
+  const stateFilter = ['all', 'running', 'scheduled', 'inactive', 'draft'].includes(rawStateParam) ? rawStateParam : 'all';
 
   const [campaigns, setCampaigns] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1 });
@@ -499,6 +499,7 @@ const Campaigns = () => {
               { key: 'running', label: t('campaigns.operationRunning') },
               { key: 'scheduled', label: t('campaigns.operationScheduled') },
               { key: 'inactive', label: t('campaigns.operationInactive') },
+              { key: 'draft', label: t('campaigns.operationDraft') },
             ].map((item) => (
               <button
                 key={item.key}

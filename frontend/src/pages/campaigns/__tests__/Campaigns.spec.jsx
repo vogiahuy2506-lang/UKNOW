@@ -175,7 +175,17 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
       );
     });
 
-    // 4. Bấm nút "Tất cả" -> bỏ param state
+    // 4. Bấm nút "Nháp" (PR-2c, 12/09)
+    const draftBtn = screen.getByRole('button', { name: 'Nháp' });
+    fireEvent.click(draftBtn);
+
+    await waitFor(() => {
+      expect(campaignApiService.getCampaigns).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, limit: 10, state: 'draft' })
+      );
+    });
+
+    // 5. Bấm nút "Tất cả" -> bỏ param state
     const allBtn = screen.getByRole('button', { name: 'Tất cả' });
     fireEvent.click(allBtn);
 
