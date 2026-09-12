@@ -44,7 +44,7 @@ import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
-import { recordConsents, getUserConsentHistory, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
+import { recordConsents, getUserConsentHistory, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -398,9 +398,21 @@ class UserController {
         }
       }
 
+      // Review PR-N3b (12/09/2026): dòng RETURNING của updateProfileInDb KHÔNG có `consents`, mà
+      // mapProfileResponse tính hasConsented từ đúng trường đó → response luôn hasConsented:false.
+      // AccountProfileModal gộp response vào user trong store, và modal đồng ý giờ BẮT BUỘC
+      // (không đóng được) → lưu hồ sơ xong là bị hỏi đồng ý lại, E2E profile.spec đỏ vì overlay.
+      // Nạp trạng thái đồng ý thật trước khi map — cùng nguồn với /auth/me.
+      let latestConsents = null;
+      try {
+        latestConsents = await getUserLatestConsents(userId);
+      } catch (consentErr) {
+        console.warn('[updateProfile] Không đọc được user_consents:', consentErr.message);
+      }
       const userProfileRow = {
         ...user,
         ...(roleAndLimits || {}),
+        consents: latestConsents,
       };
 
       let addons = null;

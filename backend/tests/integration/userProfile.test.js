@@ -16,6 +16,7 @@ import bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
+import { recordConsents } from '../../src/repositories/user/userConsent.repository.js';
 import {
   truncateAll,
   createUser,
@@ -122,6 +123,38 @@ describe('PUT /api/users/profile', () => {
     const u = await db.query(`SELECT full_name, phone FROM users WHERE id = $1`, [user.id]);
     expect(u.rows[0].full_name).toBe('New Name');
     expect(u.rows[0].phone).toBe('0901234567');
+  });
+
+  /**
+   * Review PR-N3b (12/09/2026): response PUT /profile từng map từ dòng RETURNING không có consents
+   * → hasConsented:false → frontend gộp vào store → modal đồng ý (bắt buộc) bật lên sau mỗi lần lưu
+   * hồ sơ; E2E profile.spec đỏ vì overlay che nút Đóng. Response phải phản ánh đồng ý thật.
+   */
+  it('user đã đồng ý đủ 3 văn bản bản hiện hành → PUT /profile trả hasConsented=true, không outdated', async () => {
+    const user = await createUser({ username: 'consented' });
+    await recordConsents({ userId: user.id, consents: { terms: true, privacy: true, dpa: true }, source: 'test' });
+    const token = await loginAs(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'Tên mới' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.hasConsented).toBe(true);
+    expect(res.body.data.consentVersionOutdated).toBe(false);
+    expect(res.body.data.consents).toMatchObject({ terms: { granted: true }, privacy: { granted: true }, dpa: { granted: true } });
+  });
+
+  it('user CHƯA đồng ý → PUT /profile trả hasConsented=false (không tự nhận là đã đồng ý)', async () => {
+    const user = await createUser({ username: 'notyet' });
+    const token = await loginAs(user);
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'Tên mới' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.hasConsented).toBe(false);
   });
 
   /**
