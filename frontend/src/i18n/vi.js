@@ -5021,6 +5021,9 @@ export default {
     enableSchedule2: 'Bật lịch',
     scheduleLockedOneTimeTooltip: 'Lịch chạy một lần đã hoàn thành, tạo lịch mới nếu muốn chạy lại',
     scheduleCannotEnableRunningTooltip: 'Không thể bật lịch khi chiến dịch đang chạy',
+    lastRun: 'Lần chạy gần nhất',
+    nextRun: 'Lần chạy tiếp',
+    times: 'lần',
   },
 
   // Plans

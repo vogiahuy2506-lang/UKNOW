@@ -4987,6 +4987,9 @@ export default {
     enableSchedule2: 'Enable schedule',
     scheduleLockedOneTimeTooltip: 'One-time schedule has completed. Create a new schedule to run again',
     scheduleCannotEnableRunningTooltip: 'Cannot enable schedule while campaign is running',
+    lastRun: 'Last run',
+    nextRun: 'Next run',
+    times: 'runs',
   },
 
   // Plans

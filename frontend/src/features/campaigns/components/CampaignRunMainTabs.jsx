@@ -342,7 +342,8 @@ const CampaignRunMainTabs = ({
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaigns.title')}</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">{t('campaignRun.campaignId')}</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.scheduleType')}</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.cron')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.lastRun')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.nextRun')}</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.status')}</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.toggleSchedule')}</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.actions')}</th>
@@ -381,8 +382,24 @@ const CampaignRunMainTabs = ({
                           : getScheduleTypeLabel(schedule.scheduleType)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <code className="text-xs bg-gray-100 px-2 py-1 rounded">{schedule.cronExpression}</code>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {schedule.lastRunAt ? (
+                        <div>
+                          <div className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.lastRunAt)}</div>
+                          <div className="text-xs text-gray-500">
+                            {schedule.runCount || 0} {t('campaignRun.times')}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {schedule.enabled && schedule.nextRunAt ? (
+                        <span className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.nextRunAt)}</span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`badge ${getScheduleStatusClassName(schedule)}`}>
