@@ -123,6 +123,41 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     ]);
   });
 
+  // Ca chủ tài khoản ở trên chỉ khẳng định 9 TIÊU ĐỀ cấp 1 — nó không thấy mục nào nằm trong
+  // nhóm nào. Đột biến kiểm chứng 12/09: đổi `defaultCategory` của `customers` từ 'campaigns'
+  // sang 'settings' thì toàn bộ 9/9 ca VẪN XANH, dù menu của mọi khách đã đổi. Ca dưới bịt đúng
+  // chỗ đó: nó ghim thành phần con của từng nhóm, là thứ `groupAppMenuItems` thật sự quyết định.
+  it('mỗi nhóm chứa ĐÚNG những mục của nó — ghim defaultCategory, không chỉ ghim tiêu đề', () => {
+    authState.user = { role: 'user', username: 'owner2', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+    vi.stubEnv('VITE_FEATURE_COURSES', 'true');
+    vi.stubEnv('VITE_FEATURE_ORDERS', 'true');
+    vi.stubEnv('VITE_FEATURE_LANDING_CMS', 'true');
+
+    renderAppSidebar();
+
+    // Nhãn lấy nguyên văn từ vi.js (nav.*) — đừng gõ tay, sai chính tả là đỏ giả.
+    const expected = {
+      'AI Chatbot': ['Tạo AI Chatbot', 'Lịch sử trò chuyện', 'Thư viện media'],
+      'Chiến dịch': [
+        'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
+        'Chạy chiến dịch', 'Hiệu quả chiến dịch', 'Khách hàng từ chiến dịch',
+      ],
+      'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page'],
+      'Quản trị': ['Khóa học nổi bật', 'Đánh giá', 'Quản lý khóa học', 'Đơn hàng'],
+      'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
+      'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Nhật ký hoạt động'],
+    };
+
+    for (const [groupTitle, children] of Object.entries(expected)) {
+      fireEvent.click(screen.getByRole('button', { name: groupTitle }));
+      const linkNames = screen.getAllByRole('link').map((l) => l.textContent);
+      expect({ [groupTitle]: linkNames }).toEqual({ [groupTitle]: children });
+      // Đóng lại trước khi mở nhóm kế — getAllByRole('link') lấy cả submenu đang mở.
+      fireEvent.click(screen.getByRole('button', { name: groupTitle }));
+    }
+  });
+
   it('QUAN TRỌNG NHẤT — nhân viên chỉ có quyền campaigns_view: chỉ nhóm Chiến dịch, đúng 2 mục', () => {
     authState.user = { role: 'user', username: 'emp1', fullName: 'Nhân viên A' };
     authState.activeContext = { type: 'employee', permissions: { campaigns_view: true } };
