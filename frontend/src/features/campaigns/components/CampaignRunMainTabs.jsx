@@ -344,6 +344,7 @@ const CampaignRunMainTabs = ({
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.scheduleType')}</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.cron')}</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.status')}</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.toggleSchedule')}</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.actions')}</th>
                 </tr>
               </thead>
@@ -370,25 +371,46 @@ const CampaignRunMainTabs = ({
                       <code className="text-xs bg-gray-100 px-2 py-1 rounded">{schedule.cronExpression}</code>
                     </td>
                     <td className="px-6 py-4">
-                      {(() => {
-                        const isReadonlyStatus = isReadonlyOnceSchedule(schedule);
-                        return (
-                      <button
-                        onClick={() => {
-                          if (isReadonlyStatus) return;
-                          onToggleSchedule(schedule.id, schedule.enabled);
-                        }}
-                        className={`badge ${isReadonlyStatus ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'} ${getScheduleStatusClassName(schedule)}`}
-                        disabled={isReadonlyStatus}
-                      >
+                      <span className={`badge ${getScheduleStatusClassName(schedule)}`}>
                         {getScheduleStatusLabel(schedule)}
-                      </button>
-                        );
-                      })()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={Boolean(schedule.enabled)}
+                          aria-label={schedule.enabled ? t('campaignRun.disableSchedule') : t('campaignRun.enableSchedule2')}
+                          onClick={() => onToggleSchedule(schedule.id, schedule.enabled)}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 cursor-pointer ${
+                            schedule.enabled ? 'bg-primary-600' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                              schedule.enabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        <span className="text-xs font-medium text-gray-700 select-none">
+                          {schedule.enabled ? t('campaignRun.switchOn') : t('campaignRun.switchOff')}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-3">
                         <button
+                          type="button"
+                          onClick={() => onToggleSchedule(schedule.id, schedule.enabled)}
+                          className={`text-xs font-medium hover:underline ${
+                            schedule.enabled ? 'text-amber-600 hover:text-amber-800' : 'text-primary-600 hover:text-primary-800'
+                          }`}
+                        >
+                          {schedule.enabled ? t('campaignRun.disableSchedule') : t('campaignRun.enableSchedule2')}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => onOpenScheduleDetailModal(schedule)}
                           className="text-blue-600 hover:text-blue-800"
                           title={t('campaignRun.viewDetails')}
@@ -396,6 +418,7 @@ const CampaignRunMainTabs = ({
                           <HiOutlineEye className="w-5 h-5" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => onDeleteSchedule(schedule.id)}
                           className="text-red-600 hover:text-red-800"
                           title={t('campaignRun.deleteSchedule')}

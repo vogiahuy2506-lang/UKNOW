@@ -5014,6 +5014,11 @@ export default {
     activating: 'Đang kích hoạt...',
     stop: 'Dừng',
     cron: 'Cron',
+    toggleSchedule: 'Bật/Tắt',
+    switchOn: 'Bật',
+    switchOff: 'Tắt',
+    disableSchedule: 'Tắt lịch',
+    enableSchedule2: 'Bật lịch',
   },
 
   // Plans

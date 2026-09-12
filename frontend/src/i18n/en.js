@@ -4980,6 +4980,11 @@ export default {
     activating: 'Activating...',
     stop: 'Stop',
     cron: 'Cron',
+    toggleSchedule: 'Toggle',
+    switchOn: 'On',
+    switchOff: 'Off',
+    disableSchedule: 'Disable schedule',
+    enableSchedule2: 'Enable schedule',
   },
 
   // Plans
