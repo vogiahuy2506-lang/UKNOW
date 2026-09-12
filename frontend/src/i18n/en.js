@@ -1,4 +1,4 @@
-﻿// English translations for UKNOW platform
+// English translations for UKNOW platform
 
 export default {
   common: {
@@ -7099,6 +7099,7 @@ Feel free to ask me anything!`,
   // depends on these keys; without them it shows raw text like "consentRequired.title".
   consentRequired: {
     title: 'Terms & Data Processing Consent Update',
+    titleOutdated: 'Legal documents have been updated, please confirm again',
     description: 'Under Decree 330/2026/ND-CP on personal data protection, please confirm your consent to the following legal documents.',
     agreeTerms: 'I have read and agree to the',
     termsLink: 'Terms of Service',
@@ -7112,6 +7113,8 @@ Feel free to ask me anything!`,
     saving: 'Processing...',
     failed: 'Failed to record consent.',
     errorOccurred: 'An error occurred. Please try again.',
+    disagreePrompt: 'Do not agree? You can delete your account in',
+    accountSettingsLink: 'Account Settings',
   },
 
   // Trial Welcome Modal

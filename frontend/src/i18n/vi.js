@@ -1,4 +1,4 @@
-﻿// Vietnamese translations for UKNOW platform
+// Vietnamese translations for UKNOW platform
 
 export default {
   common: {
@@ -7060,6 +7060,7 @@ export default {
   // các khoá này, thiếu thì hiện chữ thô kiểu "consentRequired.title" thay vì tiếng Việt.
   consentRequired: {
     title: 'Cập nhật thoả thuận điều khoản & dữ liệu cá nhân',
+    titleOutdated: 'Văn bản pháp lý đã cập nhật, vui lòng xác nhận lại',
     description: 'Theo quy định của Nghị định 330/2026/NĐ-CP về bảo vệ dữ liệu cá nhân, vui lòng xác nhận sự đồng ý của bạn đối với các văn bản pháp lý dưới đây.',
     agreeTerms: 'Tôi đã đọc và đồng ý với',
     termsLink: 'Điều khoản dịch vụ',
@@ -7073,6 +7074,8 @@ export default {
     saving: 'Đang xử lý...',
     failed: 'Ghi nhận đồng ý thất bại.',
     errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+    disagreePrompt: 'Không đồng ý? Bạn có thể xoá tài khoản tại',
+    accountSettingsLink: 'Cài đặt tài khoản',
   },
 
   // Trial Welcome Modal

@@ -5,18 +5,17 @@ import { submitUserConsents } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
 
 /**
- * Modal nhắc bổ sung đồng ý điều khoản & xử lý dữ liệu cá nhân (PR-N3a / Nghị định 330/2026/NĐ-CP).
- * Dành cho người dùng cũ chưa có bản ghi nào trong `user_consents`.
+ * Modal đồng ý điều khoản & xử lý dữ liệu cá nhân (Nghị định 330/2026/NĐ-CP).
  *
- * 🔴 BẮT BUỘC: NHẮC, KHÔNG CHẶN.
- * - Đóng được: bấm "Để sau" hoặc bấm ra ngoài là đóng, user dùng app bình thường.
- * - Hiện lại mỗi lần vào `/app`: MainLayout cố ý giữ trạng thái đã đóng trong bộ nhớ (React state),
- *   KHÔNG lưu `localStorage`. Nạp lại trang hoặc vào lại app sẽ nhắc lại.
- * - Tuyệt đối không chặn 403 ở backend.
+ * 🔴 QUYẾT ĐỊNH 12/09/2026: BẮT BUỘC, KHÔNG CÓ "ĐỂ SAU".
+ * - Bắt buộc đồng ý mới được tiếp tục sử dụng app.
+ * - Không đóng được: không có nút "Để sau", bấm overlay không tắt, không bắt phím Escape.
+ * - Lối ra duy nhất nếu không đồng ý: xoá tài khoản tại trang Cài đặt tài khoản.
+ * - Tự động hiển thị lại khi văn bản pháp lý đổi phiên bản (isOutdated = true).
  *
- * @param {{ isOpen: boolean, onClose: () => void, onConsented?: () => void }} props
+ * @param {{ isOpen: boolean, onConsented?: () => void, isOutdated?: boolean }} props
  */
-const ConsentRequiredModal = ({ isOpen, onClose, onConsented }) => {
+const ConsentRequiredModal = ({ isOpen, onConsented, isOutdated = false }) => {
   const { t } = useI18n();
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
@@ -57,15 +56,17 @@ const ConsentRequiredModal = ({ isOpen, onClose, onConsented }) => {
     }
   };
 
+  const title = isOutdated ? t('consentRequired.titleOutdated') : t('consentRequired.title');
+
   return createPortal(
-    <div className="modal-overlay" onClick={loading ? undefined : onClose}>
+    <div className="modal-overlay">
       <div
         className="modal-content modal-content-animate w-full max-w-lg mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
           <HiOutlineShieldCheck className="w-5 h-5 text-primary-600" />
-          <h2 className="text-base font-semibold text-gray-900">{t('consentRequired.title')}</h2>
+          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
@@ -150,22 +151,23 @@ const ConsentRequiredModal = ({ isOpen, onClose, onConsented }) => {
             </p>
           )}
 
-          <div className="flex justify-end items-center gap-2 pt-2">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-              disabled={loading}
-            >
-              {t('consentRequired.later')}
-            </button>
+          <div className="pt-2 space-y-3">
             <button
               type="submit"
-              className="btn btn-primary"
+              className="btn btn-primary w-full"
               disabled={loading || !allChecked}
             >
               {loading ? t('consentRequired.saving') : t('consentRequired.submit')}
             </button>
+            <p className="text-xs text-center text-gray-500">
+              {t('consentRequired.disagreePrompt')}{' '}
+              <a
+                href="/app/settings/channels"
+                className="text-primary-600 hover:underline font-medium"
+              >
+                {t('consentRequired.accountSettingsLink')}
+              </a>
+            </p>
           </div>
         </form>
       </div>

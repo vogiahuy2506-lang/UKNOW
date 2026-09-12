@@ -45,13 +45,10 @@ const MainLayout = () => {
     && (!user?.phone || (phoneOtpEnabled && !user?.phoneVerifiedAt))
     && user?.role !== 'admin'
     && !phoneDismissed;
-  // Nhắc bổ sung đồng ý điều khoản & xử lý dữ liệu (PR-N3a / Nghị định 330/2026/NĐ-CP) cho người dùng cũ.
-  // Đóng được ("Để sau" hoặc bấm ra ngoài), hiện lại mỗi lần vào /app.
-  // State lưu trong bộ nhớ (KHÔNG lưu localStorage).
-  // KHÔNG xoá dù ESLint báo "unused" — modal này là yêu cầu tuân thủ Nghị định 330/2026.
-  // Đã bị xoá nhầm một lần ở commit 1a992e76 ("fix lint") và không ai phát hiện trong 2 ngày.
-  const [consentDismissed, setConsentDismissed] = useState(false);
-  const consentRequired = !mustChangePassword && !phoneRequired && !user?.hasConsented && user?.role !== 'admin' && !consentDismissed;
+  // Đồng ý điều khoản & xử lý dữ liệu (Nghị định 330/2026/NĐ-CP).
+  // Quyết định 12/09/2026: BẮT BUỘC, không có "Để sau".
+  // Thứ tự ưu tiên modal: mật khẩu -> SĐT -> đồng ý pháp lý.
+  const consentRequired = !mustChangePassword && !phoneRequired && !user?.hasConsented && user?.role !== 'admin';
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', false); // default icon-only
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('founder_ai_ai_panel_open', false);
@@ -237,12 +234,17 @@ const MainLayout = () => {
 
         <ConsentRequiredModal
           isOpen={consentRequired}
-          onClose={() => setConsentDismissed(true)}
+          isOutdated={Boolean(user?.consentVersionOutdated)}
           onConsented={() =>
             updateUser({
               ...user,
               hasConsented: true,
-              consents: { terms: true, privacy: true, dpa: true },
+              consentVersionOutdated: false,
+              consents: {
+                terms: { granted: true, document_version: '2026-09-10' },
+                privacy: { granted: true, document_version: '2026-09-10' },
+                dpa: { granted: true, document_version: '2026-09-10' },
+              },
             })
           }
         />
@@ -352,12 +354,17 @@ const MainLayout = () => {
 
       <ConsentRequiredModal
         isOpen={consentRequired}
-        onClose={() => setConsentDismissed(true)}
+        isOutdated={Boolean(user?.consentVersionOutdated)}
         onConsented={() =>
           updateUser({
             ...user,
             hasConsented: true,
-            consents: { terms: true, privacy: true, dpa: true },
+            consentVersionOutdated: false,
+            consents: {
+              terms: { granted: true, document_version: '2026-09-10' },
+              privacy: { granted: true, document_version: '2026-09-10' },
+              dpa: { granted: true, document_version: '2026-09-10' },
+            },
           })
         }
       />
