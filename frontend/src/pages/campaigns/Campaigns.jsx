@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import {
@@ -17,12 +17,21 @@ import {
   HiOutlineCheckCircle,
   HiOutlineXCircle,
   HiOutlineShoppingBag,
+  HiOutlineClock,
+  HiOutlineEye,
+  HiOutlineRefresh,
 } from 'react-icons/hi';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
+import { getActiveRunPause, getRunPauseI18nKey } from '../../features/campaigns/utils/campaignQuotaPause.helpers';
 import { useAuthStore } from '../../stores/authStore';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import CampaignMarketplaceModal from '../../components/campaigns/CampaignMarketplaceModal';
+import useCampaignRunController from '../../features/campaigns/hooks/useCampaignRunController';
+import useCampaignRunDerivedData from '../../features/campaigns/hooks/useCampaignRunDerivedData';
+import CampaignRunLogsPanel from '../../features/campaigns/components/CampaignRunLogsPanel';
+import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
+import CampaignSchedulesTable from '../../features/campaigns/components/CampaignSchedulesTable';
 
 /**
  * Xác định chiến dịch có đang chạy hay không dựa trên số lượt chạy đang thực thi.
@@ -39,10 +48,20 @@ const isCampaignCurrentlyRunning = (campaign) => Number(campaign?.runningCount |
 const Campaigns = () => {
   const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
+  const activeContext = useAuthStore((state) => state.activeContext) || user?.activeContext;
   const isAdmin = String(user?.roleCode || '').trim().toLowerCase() === 'admin';
-  const isOwner = !user?.activeContext || user.activeContext.type === 'self';
+  const isOwner = !activeContext || activeContext.type === 'self';
+  const canRun = activeContext?.type !== 'employee' || activeContext?.permissions?.campaigns_run === true;
+  const canEditSchedules = activeContext?.type !== 'employee' || activeContext?.permissions?.campaigns_create === true;
+
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const activeTab = searchParams.get('tab') === 'schedules' ? 'schedules' : 'campaigns';
+  const rawStateParam = searchParams.get('state') || 'all';
+  const stateFilter = ['all', 'running', 'scheduled', 'inactive'].includes(rawStateParam) ? rawStateParam : 'all';
+
   const [campaigns, setCampaigns] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1 });
   const [isLoading, setIsLoading] = useState(true);
@@ -50,6 +69,7 @@ const Campaigns = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [originTab, setOriginTab] = useState('self_created'); // 'self_created' | 'marketplace_purchased' | 'shared_with_me'
+  const [scheduledCampaignSearch, setScheduledCampaignSearch] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuButtonRefs = useRef({});
@@ -71,10 +91,21 @@ const Campaigns = () => {
     campaignType: 'email',
   });
 
+  const runController = useCampaignRunController({
+    onCampaignsChanged: () => fetchCampaigns(),
+  });
+
+  const { workspaceLogs, filteredSchedules } = useCampaignRunDerivedData({
+    selectedRunDetail: runController.selectedRunDetail,
+    flowOrderByNodeId: runController.flowOrderByNodeId,
+    schedules: runController.schedules,
+    scheduledCampaignSearch,
+  });
+
   useEffect(() => {
     fetchCampaigns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ refetch theo filter/page/origin
-  }, [pagination.page, statusFilter, typeFilter, originTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ refetch theo filter/page/origin/state
+  }, [pagination.page, statusFilter, typeFilter, originTab, stateFilter]);
 
   useEffect(() => {
     if (!location.state?.openCreateCampaignModal) return;
@@ -85,6 +116,7 @@ const Campaigns = () => {
   const fetchCampaigns = async () => {
     setIsLoading(true);
     try {
+      const stateQuery = stateFilter !== 'all' ? stateFilter : undefined;
       if (originTab === 'shared_with_me') {
         // Fetch shared campaigns
         const params = {
@@ -92,6 +124,7 @@ const Campaigns = () => {
           limit: 10,
           ...(search && { search }),
           ...(statusFilter && { status: statusFilter }),
+          ...(stateQuery && { state: stateQuery }),
         };
         const response = await campaignApiService.getSharedWithMe(params);
         setCampaigns(response.data.data.items);
@@ -104,6 +137,7 @@ const Campaigns = () => {
           ...(search && { search }),
           ...(statusFilter && { status: statusFilter }),
           ...(typeFilter && { type: typeFilter }),
+          ...(stateQuery && { state: stateQuery }),
         };
 
         const response = await campaignApiService.getCampaigns(params);
@@ -121,6 +155,34 @@ const Campaigns = () => {
     e.preventDefault();
     setPagination((prev) => ({ ...prev, page: 1 }));
     fetchCampaigns();
+  };
+
+  const handleTabChange = (tabKey) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tabKey === 'schedules') {
+        next.set('tab', 'schedules');
+      } else {
+        next.delete('tab');
+      }
+      return next;
+    });
+    if (tabKey !== 'campaigns') {
+      runController.closeCampaignLogs();
+    }
+  };
+
+  const handleStateChange = (newState) => {
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newState && newState !== 'all') {
+        next.set('state', newState);
+      } else {
+        next.delete('state');
+      }
+      return next;
+    });
   };
 
   const handlePublish = async (id) => {
@@ -329,8 +391,8 @@ const Campaigns = () => {
               : t('campaigns.userDescription')}
           </p>
         </div>
-        {/* Chỉ hiển thị nút tạo khi ở tab tự tạo */}
-        {originTab === 'self_created' && (
+        {/* Chỉ hiển thị nút tạo khi ở tab tự tạo của tab danh sách chiến dịch */}
+        {activeTab === 'campaigns' && originTab === 'self_created' && (
           <button
             onClick={openCreateModal}
             className="btn btn-primary"
@@ -341,413 +403,631 @@ const Campaigns = () => {
         )}
       </div>
 
-      {/* Origin Tabs - Self Created vs Purchased */}
-      <div className="flex gap-2 border-b border-gray-200">
+      {/* Main Tabs: Chiến dịch (?tab=campaigns) vs Lịch chạy (?tab=schedules) */}
+      <div className="flex gap-6 border-b border-gray-200">
         <button
-          onClick={() => {
-            setOriginTab('self_created');
-            setPagination((prev) => ({ ...prev, page: 1 }));
-          }}
-          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
-            originTab === 'self_created'
-              ? 'border-primary-500 text-primary-600'
+          type="button"
+          onClick={() => handleTabChange('campaigns')}
+          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px ${
+            activeTab === 'campaigns'
+              ? 'border-primary-500 text-primary-600 font-semibold'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          {t('campaigns.selfCreated') || 'Tự tạo'}
+          {t('campaigns.tabCampaigns')}
         </button>
         <button
-          onClick={() => {
-            setOriginTab('marketplace_purchased');
-            setPagination((prev) => ({ ...prev, page: 1 }));
-          }}
-          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
-            originTab === 'marketplace_purchased'
-              ? 'border-primary-500 text-primary-600'
+          type="button"
+          onClick={() => handleTabChange('schedules')}
+          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px ${
+            activeTab === 'schedules'
+              ? 'border-primary-500 text-primary-600 font-semibold'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          {t('campaigns.purchased') || 'Đã mua từ Marketplace'}
-        </button>
-        <button
-          onClick={() => {
-            setOriginTab('shared_with_me');
-            setPagination((prev) => ({ ...prev, page: 1 }));
-          }}
-          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
-            originTab === 'shared_with_me'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          {t('campaigns.sharedWithMe') || 'Được chia sẻ'}
+          {t('campaigns.tabSchedules')}
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="card p-4">
-        <div className="flex flex-wrap gap-4">
-          {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
-            <div className="flex items-center rounded-lg border border-gray-300 bg-white text-sm transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-              <span className="pl-3 flex items-center shrink-0 text-gray-400" aria-hidden>
-                <HiOutlineSearch className="w-5 h-5" />
-              </span>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t('campaigns.searchPlaceholder')}
-                className="flex-1 min-w-0 py-2 pr-3 border-0 bg-white focus:ring-0 focus:outline-none"
-              />
-            </div>
-          </form>
-
-          {/* Status filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPagination((prev) => ({ ...prev, page: 1 }));
-            }}
-            className="input w-auto"
-          >
-            <option value="">{t('campaigns.allStatuses')}</option>
-            <option value="pending_owner_approval">{t('campaigns.pendingOwnerApproval')}</option>
-            <option value="draft">{t('campaigns.draft')}</option>
-            <option value="active">{t('campaigns.active')}</option>
-            <option value="paused">{t('campaigns.paused')}</option>
-            <option value="completed">{t('campaigns.completed')}</option>
-          </select>
-
-          {/* Type filter */}
-          <select
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value);
-              setPagination((prev) => ({ ...prev, page: 1 }));
-            }}
-            className="input w-auto"
-          >
-            <option value="">{t('campaigns.allTypes')}</option>
-            <option value="email">{t('campaigns.email')}</option>
-            <option value="zalo">{t('campaigns.zaloPersonal')}</option>
-            <option value="zalo_group">{t('campaigns.zaloGroup')}</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="card">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="spinner w-8 h-8"></div>
+      {activeTab === 'schedules' ? (
+        <CampaignSchedulesTable
+          schedules={runController.schedules}
+          filteredSchedules={filteredSchedules}
+          scheduledCampaignSearch={scheduledCampaignSearch}
+          onScheduledCampaignSearchChange={setScheduledCampaignSearch}
+          isCampaignRunningById={runController.isCampaignRunningById}
+          getWeeklyDayLabel={runController.getWeeklyDayLabel}
+          getWeeklyDayFromCron={runController.getWeeklyDayFromCron}
+          getScheduleTypeLabel={runController.getScheduleTypeLabel}
+          getScheduleStatusClassName={runController.getScheduleStatusClassName}
+          getScheduleStatusLabel={runController.getScheduleStatusLabel}
+          isReadonlyOnceSchedule={runController.isReadonlyOnceSchedule}
+          onOpenScheduleDetailModal={runController.openScheduleDetailModal}
+          onDeleteSchedule={runController.handleDeleteSchedule}
+          onToggleSchedule={runController.handleToggleSchedule}
+          canEdit={canEditSchedules}
+        />
+      ) : (
+        <>
+          {/* Origin Tabs - Self Created vs Purchased */}
+          <div className="flex gap-2 border-b border-gray-200">
+            <button
+              onClick={() => {
+                setOriginTab('self_created');
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
+              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
+                originTab === 'self_created'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t('campaigns.selfCreated') || 'Tự tạo'}
+            </button>
+            <button
+              onClick={() => {
+                setOriginTab('marketplace_purchased');
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
+              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
+                originTab === 'marketplace_purchased'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t('campaigns.purchased') || 'Đã mua từ Marketplace'}
+            </button>
+            <button
+              onClick={() => {
+                setOriginTab('shared_with_me');
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
+              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
+                originTab === 'shared_with_me'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t('campaigns.sharedWithMe') || 'Được chia sẻ'}
+            </button>
           </div>
-        ) : campaigns.length === 0 ? (
-          <div className="empty-state py-16">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <HiOutlinePlus className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900">{t('campaigns.noCampaigns')}</h3>
-            <p className="text-gray-500 mt-1">{t('campaigns.startFirst')}</p>
-            {originTab === 'self_created' && (
+
+          {/* Thanh trục vận hành (?state=) */}
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { key: 'all', label: t('campaigns.operationAll') },
+              { key: 'running', label: t('campaigns.operationRunning') },
+              { key: 'scheduled', label: t('campaigns.operationScheduled') },
+              { key: 'inactive', label: t('campaigns.operationInactive') },
+            ].map((item) => (
               <button
-                onClick={openCreateModal}
-                className="btn btn-primary mt-4"
+                key={item.key}
+                type="button"
+                onClick={() => handleStateChange(item.key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  stateFilter === item.key
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                }`}
               >
-                <HiOutlinePlus className="w-5 h-5 mr-2" />
-                {t('campaigns.createFirst')}
+                {item.label}
               </button>
-            )}
+            ))}
           </div>
-        ) : (
-          <div className="table-container relative">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{t('campaigns.campaignName')}</th>
-                  <th>{t('common.status')}</th>
-                  <th>{t('campaigns.running')}</th>
-                  <th>{t('campaigns.campaignType')}</th>
-                  <th>{t('campaigns.createdBy')}</th>
-                  <th>{t('campaigns.createdAt')}</th>
-                  <th>{t('campaigns.updatedAt')}</th>
-                  <th>{t('campaigns.completed')}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((campaign) => (
-                  <tr key={campaign.id}>
-                    <td>
-                      <Link
-                        to={`/app/campaigns/${campaign.id}`}
-                        className="text-primary-600 hover:text-primary-700 font-medium"
-                      >
-                        {campaign.campaignName}
-                        {campaign.origin === 'marketplace_purchased' && (
-                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                            {t('campaigns.marketplace') || 'Marketplace'}
-                          </span>
-                        )}
-                        {campaign.origin === 'shared_received' && (
-                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                            {t('campaigns.shared') || 'Được chia sẻ'}
-                          </span>
-                        )}
-                      </Link>
-                    </td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          campaign.status === 'active'
-                            ? 'badge-success'
-                            : campaign.status === 'draft'
-                            ? 'badge-gray'
-                            : campaign.status === 'paused'
-                            ? 'badge-warning'
-                            : campaign.status === 'pending_owner_approval'
-                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                            : 'badge-info'
-                        }`}
-                      >
-                        {campaign.status === 'active'
-                          ? t('campaigns.active')
-                          : campaign.status === 'draft'
-                          ? t('campaigns.draft')
-                          : campaign.status === 'paused'
-                          ? t('campaigns.paused')
-                          : campaign.status === 'pending_owner_approval'
-                          ? t('campaigns.pendingOwnerApproval')
-                          : campaign.status}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${isCampaignCurrentlyRunning(campaign) ? 'badge-success' : 'badge-gray'}`}>
-                        {isCampaignCurrentlyRunning(campaign) ? t('campaigns.running') : t('campaigns.notRunning')}
-                      </span>
-                    </td>
-                    <td>
-                      {(() => {
-                        const typeMeta = getCampaignTypeMeta(campaign.campaignType);
-                        return (
-                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${typeMeta.className}`}>
-                            {typeMeta.label}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td>
-                      <div className="flex items-center">
-                        <div className="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center mr-2">
-                          <span className="text-white text-xs font-medium">{(campaign.createdBy?.name || 'A')[0]?.toUpperCase()}</span>
-                        </div>
-                        <span className="text-sm">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
-                      </div>
-                    </td>
-                    {/* Dùng formatCampaignDateTime để luôn hiển thị theo Asia/Ho_Chi_Minh, khớp dữ liệu DB/API (ISO/UTC). */}
-                    <td className="text-sm text-gray-500">
-                      {formatCampaignDateTime(campaign.createdAt)}
-                    </td>
-                    <td className="text-sm text-gray-500">
-                      {formatCampaignDateTime(campaign.updatedAt)}
-                    </td>
-                    <td className="text-center">{campaign.completedCount ?? 0}</td>
-                    <td>
-                      <div className="flex items-center justify-end">
-                        {campaign.status === 'pending_owner_approval' && isOwner && (
-                          <div className="flex items-center gap-1.5 mr-2">
-                            <button
-                              type="button"
-                              onClick={() => setApproveModal({ show: true, campaign })}
-                              className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
-                              title={t('campaigns.approve')}
-                            >
-                              {t('campaigns.approve')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setRejectModal({ show: true, campaign, reason: '' })}
-                              className="px-2.5 py-1 text-xs font-semibold rounded bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
-                              title={t('campaigns.reject')}
-                            >
-                              {t('campaigns.reject')}
-                            </button>
-                          </div>
-                        )}
-                        <div className="relative inline-block">
-                          <button
-                            ref={(el) => { menuButtonRefs.current[campaign.id] = el; }}
-                            onClick={(e) => {
-                              const id = campaign.id;
-                              if (activeMenu === id) {
-                                setActiveMenu(null);
-                                return;
-                              }
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setMenuPosition({
-                                top: rect.bottom + 4,
-                                left: Math.min(rect.right - 192, window.innerWidth - 208),
-                              });
-                              setActiveMenu(id);
-                            }}
-                            className="p-1 rounded hover:bg-gray-100 transition-colors"
-                          >
-                            <HiOutlineDotsVertical className="w-5 h-5 text-gray-400" />
-                          </button>
 
-                          {activeMenu === campaign.id && createPortal(
-                            <>
-                              <div
-                                className="fixed inset-0 z-[99]"
-                                aria-hidden
-                                onClick={() => setActiveMenu(null)}
-                              />
-                              <div
-                                className="fixed w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[100]"
-                                style={{ top: menuPosition.top, left: menuPosition.left }}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {campaign.status === 'pending_owner_approval' && isOwner && (
+          {/* Filters */}
+          <div className="card p-4">
+            <div className="flex flex-wrap gap-4">
+              {/* Search */}
+              <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
+                <div className="flex items-center rounded-lg border border-gray-300 bg-white text-sm transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+                  <span className="pl-3 flex items-center shrink-0 text-gray-400" aria-hidden>
+                    <HiOutlineSearch className="w-5 h-5" />
+                  </span>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t('campaigns.searchPlaceholder')}
+                    className="flex-1 min-w-0 py-2 pr-3 border-0 bg-white focus:ring-0 focus:outline-none"
+                  />
+                </div>
+              </form>
+
+              {/* Status filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                }}
+                className="input w-auto"
+              >
+                <option value="">{t('campaigns.allStatuses')}</option>
+                <option value="pending_owner_approval">{t('campaigns.pendingOwnerApproval')}</option>
+                <option value="draft">{t('campaigns.draft')}</option>
+                <option value="active">{t('campaigns.active')}</option>
+                <option value="paused">{t('campaigns.paused')}</option>
+              </select>
+
+              {/* Type filter */}
+              <select
+                value={typeFilter}
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                }}
+                className="input w-auto"
+              >
+                <option value="">{t('campaigns.allTypes')}</option>
+                <option value="email">{t('campaigns.email')}</option>
+                <option value="zalo">{t('campaigns.zaloPersonal')}</option>
+                <option value="zalo_group">{t('campaigns.zaloGroup')}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="card">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="spinner w-8 h-8"></div>
+              </div>
+            ) : campaigns.length === 0 ? (
+              <div className="empty-state py-16">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <HiOutlinePlus className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900">{t('campaigns.noCampaigns')}</h3>
+                <p className="text-gray-500 mt-1">{t('campaigns.startFirst')}</p>
+                {originTab === 'self_created' && (
+                  <button
+                    onClick={openCreateModal}
+                    className="btn btn-primary mt-4"
+                  >
+                    <HiOutlinePlus className="w-5 h-5 mr-2" />
+                    {t('campaigns.createFirst')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="table-container relative">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{t('campaigns.campaignName')}</th>
+                      <th>{t('common.status')}</th>
+                      <th>{t('campaigns.operation')}</th>
+                      <th>{t('campaigns.campaignType')}</th>
+                      <th>{t('campaigns.createdBy')}</th>
+                      <th>{t('campaigns.createdAt')}</th>
+                      <th>{t('campaigns.updatedAt')}</th>
+                      <th>{t('campaigns.completed')}</th>
+                      <th className="text-right">{t('common.actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campaigns.map((campaign) => {
+                      const isRunning =
+                        runController.isCampaignRunningById(campaign.id) ||
+                        isCampaignCurrentlyRunning(campaign);
+                      // Review Claude 12/09: hook nhận ID (`getCampaignKey = (campaignId) => String(campaignId)`),
+                      // truyền cả object thì khoá thành "[object Object]" → runningRun luôn null → nút Dừng
+                      // luôn báo "không tìm thấy lượt chạy". Các trường liên tục / tạm dừng hạn mức nằm trong
+                      // `runMetadata`, đọc qua helper như trang Chạy chiến dịch cũ (CampaignRunMainTabs cũ :155-164).
+                      const campaignKey = runController.getCampaignKey(campaign.id);
+                      const runningRun = runController.runningRunByCampaign[campaignKey] || null;
+                      const isContinuous = Boolean(runningRun?.runMetadata?.continuousMode);
+                      const pollIntervalMs = Number.parseInt(runningRun?.runMetadata?.pollIntervalMs, 10);
+                      const pollIntervalMinutes = Number.isFinite(pollIntervalMs)
+                        ? Math.max(1, Math.round(pollIntervalMs / 60000))
+                        : null;
+                      const activePause = getActiveRunPause(runningRun?.runMetadata);
+                      const hasSchedules = Number(campaign.enabledScheduleCount || 0) > 0;
+                      const hasRuns =
+                        Number(campaign.runningCount || 0) > 0 ||
+                        Number(campaign.completedCount || 0) > 0;
+                      const isShowingLogs = runController.isShowingLogsForCampaign(campaign.id);
+                      const runId = Number.parseInt(runningRun?.id, 10);
+                      const isStopping = Number.isFinite(runId) && runController.stoppingRunIds.has(runId);
+
+                      return (
+                        <tr key={campaign.id}>
+                          <td>
+                            <Link
+                              to={`/app/campaigns/${campaign.id}`}
+                              className="text-primary-600 hover:text-primary-700 font-medium"
+                            >
+                              {campaign.campaignName}
+                              {campaign.origin === 'marketplace_purchased' && (
+                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                  {t('campaigns.marketplace') || 'Marketplace'}
+                                </span>
+                              )}
+                              {campaign.origin === 'shared_received' && (
+                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  {t('campaigns.shared') || 'Được chia sẻ'}
+                                </span>
+                              )}
+                            </Link>
+                          </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                campaign.status === 'active'
+                                  ? 'badge-success'
+                                  : campaign.status === 'draft'
+                                  ? 'badge-gray'
+                                  : campaign.status === 'paused'
+                                  ? 'badge-warning'
+                                  : campaign.status === 'pending_owner_approval'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'badge-info'
+                              }`}
+                            >
+                              {campaign.status === 'active'
+                                ? t('campaigns.active')
+                                : campaign.status === 'draft'
+                                ? t('campaigns.draft')
+                                : campaign.status === 'paused'
+                                ? t('campaigns.paused')
+                                : campaign.status === 'pending_owner_approval'
+                                ? t('campaigns.pendingOwnerApproval')
+                                : campaign.status}
+                            </span>
+                          </td>
+                          <td>
+                            {isRunning ? (
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="badge badge-success flex items-center gap-1">
+                                  <HiOutlineRefresh className="w-3 h-3 animate-spin" />
+                                  {t('campaigns.operationRunning')}
+                                </span>
+                                {isContinuous && (
+                                  <span className="text-xs text-emerald-600 font-medium">
+                                    {t('campaignRun.continuousRunning', { interval: pollIntervalMinutes })}
+                                  </span>
+                                )}
+                                {activePause && (
                                   <>
-                                    <button
-                                      onClick={() => {
-                                        setActiveMenu(null);
-                                        setApproveModal({ show: true, campaign });
-                                      }}
-                                      className="w-full flex items-center px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50"
-                                    >
-                                      <HiOutlineCheckCircle className="w-4 h-4 mr-3" />
-                                      {t('campaigns.approve')}
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setActiveMenu(null);
-                                        setRejectModal({ show: true, campaign, reason: '' });
-                                      }}
-                                      className="w-full flex items-center px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                                    >
-                                      <HiOutlineXCircle className="w-4 h-4 mr-3" />
-                                      {t('campaigns.reject')}
-                                    </button>
+                                    <span className="badge badge-danger text-xs font-normal">
+                                      {t(getRunPauseI18nKey(activePause.kind), {
+                                        until: formatCampaignDateTime(activePause.untilIso),
+                                      })}
+                                    </span>
+                                    {activePause.kind === 'plan_quota' && (
+                                      <Link
+                                        to="/app/topup"
+                                        className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                                      >
+                                        {t('campaignRun.buyTopup')}
+                                      </Link>
+                                    )}
                                   </>
                                 )}
-                                <button
-                                  onClick={() => navigate(`/app/campaigns/${campaign.id}/builder`)}
-                                  className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                >
-                                  <HiOutlinePencil className="w-4 h-4 mr-3" />
-                                  {t('common.edit')}
-                                </button>
-                                {campaign.status === 'draft' && (
-                                  <button
-                                    onClick={() => handlePublish(campaign.id)}
-                                    className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
-                                  >
-                                    <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                    {t('campaigns.activate')}
-                                  </button>
-                                )}
-                                {campaign.status === 'active' && (
-                                  <button
-                                    onClick={() => handlePause(campaign.id)}
-                                    className="w-full flex items-center px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-50"
-                                  >
-                                    <HiOutlinePause className="w-4 h-4 mr-3" />
-                                    {t('campaigns.pause')}
-                                  </button>
-                                )}
-                                {campaign.status === 'paused' && (
-                                  <button
-                                    onClick={() => handlePublish(campaign.id)}
-                                    className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
-                                  >
-                                    <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                    {t('campaigns.activate')}
-                                  </button>
-                                )}
-                                {/* Share - only for self-created campaigns */}
-                                {campaign.origin === 'self_created' && (
-                                  <button
-                                    onClick={() => openShareModal(campaign)}
-                                    className="w-full flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
-                                  >
-                                    <HiOutlineMail className="w-4 h-4 mr-3" />
-                                    {t('campaigns.share') || 'Chia sẻ'}
-                                  </button>
-                                )}
-                                {/* Marketplace - only for self-created campaigns */}
-                                {(!campaign.origin || campaign.origin === 'self_created') && (
-                                  <button
-                                    onClick={() => {
-                                      setActiveMenu(null);
-                                      setMarketplaceModal({ show: true, campaign });
-                                    }}
-                                    className="w-full flex items-center px-4 py-2 text-sm text-violet-600 hover:bg-violet-50"
-                                  >
-                                    <HiOutlineShoppingBag className="w-4 h-4 mr-3" />
-                                    Đăng Marketplace
-                                  </button>
-                                )}
-                                {/* Duplicate - only for self-created campaigns (not marketplace, not shared) */}
-                                {originTab !== 'shared_with_me' && (!campaign.origin || campaign.origin === 'self_created') && (
-                                  <button
-                                    onClick={() => openDuplicateModal(campaign)}
-                                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                  >
-                                    <HiOutlineDuplicate className="w-4 h-4 mr-3" />
-                                    {t('campaigns.duplicate')}
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => handleDelete(campaign.id)}
-                                  className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                                >
-                                  <HiOutlineTrash className="w-4 h-4 mr-3" />
-                                  {t('common.delete')}
-                                </button>
                               </div>
-                            </>,
-                            document.body
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                            ) : hasSchedules ? (
+                              <button
+                                type="button"
+                                onClick={() => runController.openCampaignSchedulesSummaryModal(campaign)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                                title={t('campaignRun.viewSchedules')}
+                              >
+                                <span>📅</span>
+                                <span>
+                                  {t('campaigns.operationScheduledCount', { count: campaign.enabledScheduleCount })}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-sm text-gray-500 flex items-center gap-1">
+                                <span className="text-gray-400">—</span>
+                                {t('campaigns.inactive')}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {(() => {
+                              const typeMeta = getCampaignTypeMeta(campaign.campaignType);
+                              return (
+                                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${typeMeta.className}`}>
+                                  {typeMeta.label}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td>
+                            <div className="flex items-center">
+                              <div className="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center mr-2">
+                                <span className="text-white text-xs font-medium">{(campaign.createdBy?.name || 'A')[0]?.toUpperCase()}</span>
+                              </div>
+                              <span className="text-sm">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
+                            </div>
+                          </td>
+                          <td className="text-sm text-gray-500">
+                            {formatCampaignDateTime(campaign.createdAt)}
+                          </td>
+                          <td className="text-sm text-gray-500">
+                            {formatCampaignDateTime(campaign.updatedAt)}
+                          </td>
+                          <td className="text-center">{campaign.completedCount ?? 0}</td>
+                          <td>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Nút hành động vận hành (Chạy/Dừng, Lịch, Nhật ký) */}
+                              {campaign.status === 'active' && canRun && (
+                                <>
+                                  {isRunning ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!runningRun?.id) {
+                                          toast.error(t('campaignRun.runNotFound'));
+                                          return;
+                                        }
+                                        runController.openStopRunConfirmModal(runningRun);
+                                      }}
+                                      disabled={isStopping || !runningRun?.id}
+                                      className="btn btn-sm btn-danger inline-flex items-center gap-1"
+                                      title={t('campaignRun.stopRun')}
+                                    >
+                                      <HiOutlinePause className="w-3.5 h-3.5" />
+                                      <span>
+                                        {isStopping ? t('campaignRun.stopping') : t('campaignRun.stop')}
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => runController.openRunConfirmModal(campaign)}
+                                      className="btn btn-sm btn-primary inline-flex items-center gap-1"
+                                      title={t('campaignRun.runNow')}
+                                    >
+                                      <HiOutlinePlay className="w-3.5 h-3.5" />
+                                      <span>{t('campaignRun.runNow')}</span>
+                                    </button>
+                                  )}
 
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-            <p className="text-sm text-gray-500">
-              {t('common.showing')} {campaigns.length} / {pagination.total} {t('common.results')}
-            </p>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
-                disabled={pagination.page === 1}
-                className="btn btn-secondary disabled:opacity-50"
-              >
-                Trước
-              </button>
-              <span className="px-3 py-1 text-sm">
-                {pagination.page} / {pagination.totalPages}
-              </span>
-              <button
-                onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
-                disabled={pagination.page === pagination.totalPages}
-                className="btn btn-secondary disabled:opacity-50"
-              >
-                {t('common.next')}
-              </button>
-            </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isRunning) {
+                                        toast.error(t('campaignRun.cannotScheduleWhileRunning'));
+                                        return;
+                                      }
+                                      runController.openScheduleModal(campaign);
+                                    }}
+                                    className="btn btn-sm btn-secondary inline-flex items-center gap-1"
+                                    title={t('campaignRun.setupSchedule')}
+                                  >
+                                    <HiOutlineClock className="w-3.5 h-3.5" />
+                                    <span>{t('campaignRun.schedule')}</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {hasRuns && (
+                                <button
+                                  type="button"
+                                  onClick={() => runController.toggleCampaignLogs(campaign)}
+                                  className={`btn btn-sm inline-flex items-center gap-1 ${
+                                    isShowingLogs
+                                      ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-600'
+                                      : 'btn-secondary'
+                                  }`}
+                                  title={isShowingLogs ? t('campaignRun.hideLog') : t('campaignRun.viewLog')}
+                                >
+                                  <HiOutlineEye className="w-3.5 h-3.5" />
+                                  <span>{t('campaigns.logs')}</span>
+                                </button>
+                              )}
+
+                              {campaign.status === 'pending_owner_approval' && isOwner && (
+                                <div className="flex items-center gap-1 mr-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setApproveModal({ show: true, campaign })}
+                                    className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                                    title={t('campaigns.approve')}
+                                  >
+                                    {t('campaigns.approve')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRejectModal({ show: true, campaign, reason: '' })}
+                                    className="px-2.5 py-1 text-xs font-semibold rounded bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
+                                    title={t('campaigns.reject')}
+                                  >
+                                    {t('campaigns.reject')}
+                                  </button>
+                                </div>
+                              )}
+                              <div className="relative inline-block">
+                                <button
+                                  ref={(el) => { menuButtonRefs.current[campaign.id] = el; }}
+                                  onClick={(e) => {
+                                    const id = campaign.id;
+                                    if (activeMenu === id) {
+                                      setActiveMenu(null);
+                                      return;
+                                    }
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setMenuPosition({
+                                      top: rect.bottom + 4,
+                                      left: Math.min(rect.right - 192, window.innerWidth - 208),
+                                    });
+                                    setActiveMenu(id);
+                                  }}
+                                  className="p-1 rounded hover:bg-gray-100 transition-colors"
+                                >
+                                  <HiOutlineDotsVertical className="w-5 h-5 text-gray-400" />
+                                </button>
+
+                                {activeMenu === campaign.id && createPortal(
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-[99]"
+                                      aria-hidden
+                                      onClick={() => setActiveMenu(null)}
+                                    />
+                                    <div
+                                      className="fixed w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[100]"
+                                      style={{ top: menuPosition.top, left: menuPosition.left }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {campaign.status === 'pending_owner_approval' && isOwner && (
+                                        <>
+                                          <button
+                                            onClick={() => {
+                                              setActiveMenu(null);
+                                              setApproveModal({ show: true, campaign });
+                                            }}
+                                            className="w-full flex items-center px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50"
+                                          >
+                                            <HiOutlineCheckCircle className="w-4 h-4 mr-3" />
+                                            {t('campaigns.approve')}
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setActiveMenu(null);
+                                              setRejectModal({ show: true, campaign, reason: '' });
+                                            }}
+                                            className="w-full flex items-center px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                                          >
+                                            <HiOutlineXCircle className="w-4 h-4 mr-3" />
+                                            {t('campaigns.reject')}
+                                          </button>
+                                        </>
+                                      )}
+                                      <button
+                                        onClick={() => navigate(`/app/campaigns/${campaign.id}/builder`)}
+                                        className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                      >
+                                        <HiOutlinePencil className="w-4 h-4 mr-3" />
+                                        {t('common.edit')}
+                                      </button>
+                                      {campaign.status === 'draft' && (
+                                        <button
+                                          onClick={() => handlePublish(campaign.id)}
+                                          className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
+                                        >
+                                          <HiOutlinePlay className="w-4 h-4 mr-3" />
+                                          {t('campaigns.activate')}
+                                        </button>
+                                      )}
+                                      {campaign.status === 'active' && (
+                                        <button
+                                          onClick={() => handlePause(campaign.id)}
+                                          className="w-full flex items-center px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-50"
+                                        >
+                                          <HiOutlinePause className="w-4 h-4 mr-3" />
+                                          {t('campaigns.pause')}
+                                        </button>
+                                      )}
+                                      {campaign.status === 'paused' && (
+                                        <button
+                                          onClick={() => handlePublish(campaign.id)}
+                                          className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
+                                        >
+                                          <HiOutlinePlay className="w-4 h-4 mr-3" />
+                                          {t('campaigns.activate')}
+                                        </button>
+                                      )}
+                                      {/* Share - only for self-created campaigns */}
+                                      {campaign.origin === 'self_created' && (
+                                        <button
+                                          onClick={() => openShareModal(campaign)}
+                                          className="w-full flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                                        >
+                                          <HiOutlineMail className="w-4 h-4 mr-3" />
+                                          {t('campaigns.share') || 'Chia sẻ'}
+                                        </button>
+                                      )}
+                                      {/* Marketplace - only for self-created campaigns */}
+                                      {(!campaign.origin || campaign.origin === 'self_created') && (
+                                        <button
+                                          onClick={() => {
+                                            setActiveMenu(null);
+                                            setMarketplaceModal({ show: true, campaign });
+                                          }}
+                                          className="w-full flex items-center px-4 py-2 text-sm text-violet-600 hover:bg-violet-50"
+                                        >
+                                          <HiOutlineShoppingBag className="w-4 h-4 mr-3" />
+                                          Đăng Marketplace
+                                        </button>
+                                      )}
+                                      {/* Duplicate - only for self-created campaigns (not marketplace, not shared) */}
+                                      {originTab !== 'shared_with_me' && (!campaign.origin || campaign.origin === 'self_created') && (
+                                        <button
+                                          onClick={() => openDuplicateModal(campaign)}
+                                          className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        >
+                                          <HiOutlineDuplicate className="w-4 h-4 mr-3" />
+                                          {t('campaigns.duplicate')}
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => handleDelete(campaign.id)}
+                                        className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                      >
+                                        <HiOutlineTrash className="w-4 h-4 mr-3" />
+                                        {t('common.delete')}
+                                      </button>
+                                    </div>
+                                  </>,
+                                  document.body
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+                <p className="text-sm text-gray-500">
+                  {t('common.showing')} {campaigns.length} / {pagination.total} {t('common.results')}
+                </p>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
+                    disabled={pagination.page === 1}
+                    className="btn btn-secondary disabled:opacity-50"
+                  >
+                    Trước
+                  </button>
+                  <span className="px-3 py-1 text-sm">
+                    {pagination.page} / {pagination.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
+                    disabled={pagination.page === pagination.totalPages}
+                    className="btn btn-secondary disabled:opacity-50"
+                  >
+                    {t('common.next')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Panel Nhật ký chiến dịch */}
+          <CampaignRunLogsPanel
+            selectedCampaignForLogs={runController.selectedCampaignForLogs}
+            isLoadingRunDetail={runController.isLoadingRunDetail}
+            selectedRunDetail={runController.selectedRunDetail}
+            workspaceLogs={workspaceLogs}
+            selectedExecutionLogId={runController.selectedExecutionLogId}
+            onSelectExecutionLogId={runController.setSelectedExecutionLogId}
+            campaignRunHistory={runController.campaignRunHistory}
+            onViewRunDetail={runController.handleViewRunDetail}
+          />
+        </>
+      )}
 
       {/* Modal nhân bản chiến dịch */}
       {duplicateModal.show && createPortal(
@@ -1085,6 +1365,54 @@ const Campaigns = () => {
           onSuccess={() => fetchCampaigns()}
         />
       )}
+
+      {/* Modals chạy và lên lịch chiến dịch */}
+      <CampaignRunModals
+        weeklyDayOptions={runController.weeklyDayOptions}
+        showRunConfirmModal={runController.showRunConfirmModal}
+        closeRunConfirmModal={runController.closeRunConfirmModal}
+        runConfirmCampaign={runController.runConfirmCampaign}
+        runNameInput={runController.runNameInput}
+        setRunNameInput={runController.setRunNameInput}
+        runContinuousMode={runController.runContinuousMode}
+        setRunContinuousMode={runController.setRunContinuousMode}
+        runPollIntervalMinutes={runController.runPollIntervalMinutes}
+        setRunPollIntervalMinutes={runController.setRunPollIntervalMinutes}
+        isRunResumeLocked={runController.isRunResumeLocked}
+        runResumeMode={runController.runResumeMode}
+        setRunResumeMode={runController.setRunResumeMode}
+        runResumeFromId={runController.runResumeFromId}
+        setRunResumeFromId={runController.setRunResumeFromId}
+        continuousResumeRunOptions={runController.continuousResumeRunOptions}
+        isLoadingContinuousResumeOptions={runController.isLoadingContinuousResumeOptions}
+        shouldShowRunContinuousOptions={!runController.isZaloGroupCampaign(runController.runConfirmCampaign)}
+        isSubmittingRun={runController.isSubmittingRun}
+        handleRunNow={runController.handleRunNow}
+        stopRunConfirmTarget={runController.stopRunConfirmTarget}
+        closeStopRunConfirmModal={runController.closeStopRunConfirmModal}
+        handleConfirmStopRun={runController.handleConfirmStopRun}
+        stoppingRunIds={runController.stoppingRunIds}
+        showScheduleModal={runController.showScheduleModal}
+        selectedCampaign={runController.selectedCampaign}
+        closeScheduleModal={runController.closeScheduleModal}
+        scheduleForm={runController.scheduleForm}
+        setScheduleForm={runController.setScheduleForm}
+        handleSaveSchedule={runController.handleSaveSchedule}
+        showScheduleDetailModal={runController.showScheduleDetailModal}
+        selectedSchedule={runController.selectedSchedule}
+        closeScheduleDetailModal={runController.closeScheduleDetailModal}
+        getWeeklyDayLabel={runController.getWeeklyDayLabel}
+        getWeeklyDayFromCron={runController.getWeeklyDayFromCron}
+        getScheduleTypeLabel={runController.getScheduleTypeLabel}
+        getScheduleStatusClassName={runController.getScheduleStatusClassName}
+        getScheduleStatusLabel={runController.getScheduleStatusLabel}
+        scheduleRuns={runController.scheduleRuns}
+        handleToggleSchedule={runController.handleToggleSchedule}
+        isReadonlyOnceSchedule={runController.isReadonlyOnceSchedule}
+        campaignSchedulesModalCampaign={runController.campaignSchedulesModalCampaign}
+        closeCampaignSchedulesSummaryModal={runController.closeCampaignSchedulesSummaryModal}
+        allSchedules={runController.schedules}
+      />
 
     </div>
   );

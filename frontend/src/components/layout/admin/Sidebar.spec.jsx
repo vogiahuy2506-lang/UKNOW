@@ -141,7 +141,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       'AI Chatbot': ['Tạo AI Chatbot', 'Lịch sử trò chuyện', 'Thư viện media'],
       'Chiến dịch': [
         'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
-        'Chạy chiến dịch', 'Hiệu quả chiến dịch', 'Khách hàng từ chiến dịch',
+        'Hiệu quả chiến dịch', 'Khách hàng từ chiến dịch',
       ],
       'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page'],
       'Quản trị': ['Khóa học nổi bật', 'Đánh giá', 'Quản lý khóa học', 'Đơn hàng'],
@@ -177,7 +177,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     const links = screen.getAllByRole('link');
     const linkNames = links.map((l) => l.textContent);
-    // ĐÚNG 2 mục — không phải quick_send/channel_management/message_templates/run_campaign/
+    // ĐÚNG 2 mục — không phải quick_send/channel_management/message_templates/
     // customers (mỗi mục đó cần một permission khác mà nhân viên này không có).
     expect(linkNames).toEqual(['Quản lý chiến dịch', 'Hiệu quả chiến dịch']);
   });

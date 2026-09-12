@@ -1,6 +1,5 @@
 import {
   HiOutlineHome,
-  HiOutlineLightningBolt,
   HiOutlineUsers,
   HiOutlineCog,
   HiOutlineMail,
@@ -92,7 +91,6 @@ export const userMenuItems = (t) => [
   { key: 'channel_management', name: t('nav.channelManagement'), defaultCategory: 'campaigns', path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
   { key: 'message_templates', name: t('nav.messageTemplates'), defaultCategory: 'campaigns', path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
   { key: 'campaign_management', name: t('nav.campaignManagement'), defaultCategory: 'campaigns', path: '/app/campaigns', icon: HiOutlineViewList, permission: ['campaigns_view'], end: true },
-  { key: 'run_campaign', name: t('nav.runCampaign'), defaultCategory: 'campaigns', path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
   { key: 'delivery_monitor', name: t('nav.deliveryMonitor'), defaultCategory: 'campaigns', path: '/app/delivery-monitor', icon: HiOutlineServer, permission: ['campaigns_view'] },
   { key: 'customers', name: t('nav.customers'), defaultCategory: 'campaigns', path: '/app/customers', icon: HiOutlineUsers, permission: ['customers'] },
   { key: 'lead_list', name: t('nav.leadList'), defaultCategory: 'landing_page', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },

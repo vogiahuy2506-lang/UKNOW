@@ -408,6 +408,9 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
       await onCampaignsChanged?.();
       closeRunConfirmModal(true);
     } catch (error) {
+      // Backend trả lý do cụ thể (vượt trần người nhận, sheet không truy cập được,
+      // tài khoản gửi mất kết nối…). Trước đây chỗ này nuốt hết và chỉ hiện chuỗi
+      // chung chung, người dùng không biết vì sao chiến dịch không chạy được.
       toast.error(error.response?.data?.message || t('campaigns.runFailed'));
     } finally {
       setIsSubmittingRun(false);
@@ -465,6 +468,11 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
   /**
    * Đóng khu vực log hiện tại và reset context lượt chạy đã chọn.
    *
+   * Luồng hoạt động:
+   * 1. Xóa campaign đang mở log.
+   * 2. Xóa chi tiết run, danh sách lịch sử và log node đang chọn.
+   * 3. Reset thứ tự node để lần mở sau luôn lấy dữ liệu mới.
+   *
    * @returns {void}
    */
   const closeCampaignLogs = () => {
@@ -497,6 +505,11 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
 
     let isCancelled = false;
 
+    /**
+     * Refresh log list + selected run detail while campaign is running.
+     *
+     * @returns {Promise<void>}
+     */
     const pollRunLogs = async () => {
       try {
         const historyRes = await campaignRunApiService.getCampaignRuns(`campaignId=${campaignId}&limit=20`);

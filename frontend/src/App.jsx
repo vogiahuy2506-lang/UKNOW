@@ -25,7 +25,6 @@ import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/campaigns/Campaigns';
 import CampaignDetail from './pages/campaigns/CampaignDetail';
 import CampaignBuilder from './pages/campaigns/CampaignBuilder';
-import CampaignRun from './pages/campaigns/CampaignRun';
 import QuickSend from './pages/campaigns/QuickSend';
 import Customers from './pages/customers/Customers';
 import CampaignCustomers from './pages/customers/CampaignCustomers';
@@ -407,7 +406,7 @@ function AppContent() {
             <Route path="campaigns/:id" element={<PermissionRoute permission="campaigns_view"><CampaignDetail /></PermissionRoute>} />
             <Route path="campaigns/:id/builder" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaigns/new" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
-            <Route path="campaign-run" element={<PermissionRoute permission="campaigns_run"><CampaignRun /></PermissionRoute>} />
+            <Route path="campaign-run" element={<Navigate to="/app/campaigns?tab=schedules" replace />} />
             <Route path="quick-send" element={<PermissionRoute permission="campaigns_create"><QuickSend /></PermissionRoute>} />
             <Route path="delivery-monitor" element={<PermissionRoute permission="campaigns_view"><UserDeliveryMonitorPage /></PermissionRoute>} />
 

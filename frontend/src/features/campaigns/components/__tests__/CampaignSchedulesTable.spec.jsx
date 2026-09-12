@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import CampaignRunMainTabs from '../CampaignRunMainTabs';
+import CampaignSchedulesTable from '../CampaignSchedulesTable';
 import viTranslations from '../../../../i18n/vi';
 
 // Helper get nested translation
@@ -17,7 +17,7 @@ vi.mock('../../../../i18n', () => ({
   useI18n: () => ({ t: mockT }),
 }));
 
-describe('CampaignRunMainTabs — Tab Đã lên lịch (bật/tắt rõ ràng)', () => {
+describe('CampaignSchedulesTable — Bảng lịch chạy đã thiết lập (bật/tắt rõ ràng, canEdit)', () => {
   let onToggleSchedule;
   let onOpenScheduleDetailModal;
   let onDeleteSchedule;
@@ -32,27 +32,11 @@ describe('CampaignRunMainTabs — Tab Đã lên lịch (bật/tắt rõ ràng)',
 
   const renderComponent = (schedules = [], customProps = {}) => {
     const defaultProps = {
-      activeMainTab: 'scheduled_campaigns',
-      onSwitchMainTab: vi.fn(),
-      activeCampaignSearch: '',
-      onActiveCampaignSearchChange: vi.fn(),
-      scheduledCampaignSearch: '',
-      onScheduledCampaignSearchChange: vi.fn(),
-      pausedCampaignSearch: '',
-      onPausedCampaignSearchChange: vi.fn(),
-      campaigns: [],
-      filteredActiveCampaigns: [],
-      pausedCampaigns: [],
-      filteredPausedCampaigns: [],
       schedules,
       filteredSchedules: schedules,
-      getCampaignKey: (c) => c.id,
+      scheduledCampaignSearch: '',
+      onScheduledCampaignSearchChange: vi.fn(),
       isCampaignRunningById,
-      runningRunByCampaign: {},
-      onOpenRunConfirmModal: vi.fn(),
-      onOpenScheduleModal: vi.fn(),
-      onToggleCampaignLogs: vi.fn(),
-      isShowingLogsForCampaign: vi.fn(() => false),
       getWeeklyDayLabel: (val) => `Thứ ${val}`,
       getWeeklyDayFromCron: () => '1',
       getScheduleTypeLabel: (type) =>
@@ -61,20 +45,15 @@ describe('CampaignRunMainTabs — Tab Đã lên lịch (bật/tắt rõ ràng)',
       getScheduleStatusLabel: (s) => (s.enabled ? 'Đang bật' : 'Đã tắt'),
       isReadonlyOnceSchedule: (s) => Boolean(s.isReadonly),
       onOpenScheduleDetailModal,
-      onOpenCampaignSchedulesSummaryModal: vi.fn(),
       onDeleteSchedule,
       onToggleSchedule,
-      activatingCampaignIds: new Set(),
-      onActivateCampaign: vi.fn(),
-      stoppingRunIds: new Set(),
-      onStopRun: vi.fn(),
-      toastNotifier: { success: vi.fn(), error: vi.fn() },
+      canEdit: true,
       ...customProps,
     };
 
     return render(
       <MemoryRouter>
-        <CampaignRunMainTabs {...defaultProps} />
+        <CampaignSchedulesTable {...defaultProps} />
       </MemoryRouter>
     );
   };
@@ -173,7 +152,7 @@ describe('CampaignRunMainTabs — Tab Đã lên lịch (bật/tắt rõ ràng)',
         scheduleType: 'daily',
         enabled: false,
         lastRunAt: null,
-        nextRunAt: '2026-09-12T15:00:00Z', // Dù API có trả nextRunAt thì khi tắt vẫn phải ẩn
+        nextRunAt: '2026-09-12T15:00:00Z',
         runCount: 0,
       },
     ];
@@ -269,5 +248,34 @@ describe('CampaignRunMainTabs — Tab Đã lên lịch (bật/tắt rõ ràng)',
       'title',
       'Không thể bật lịch khi chiến dịch đang chạy'
     );
+  });
+
+  it('canEdit = false: không có role="switch", không có nút xoá hoặc nút bật/tắt trong Thao tác', () => {
+    const schedules = [
+      {
+        id: 5,
+        scheduleName: 'Lịch của nhân viên view-only',
+        campaignName: 'Chiến dịch E',
+        campaignId: 105,
+        scheduleType: 'daily',
+        enabled: true,
+        lastRunAt: null,
+      },
+    ];
+
+    renderComponent(schedules, { canEdit: false });
+
+    // Không có switch toggle
+    expect(screen.queryByRole('switch')).toBeNull();
+
+    // Không có nút Tắt lịch / Bật lịch
+    expect(screen.queryByRole('button', { name: 'Tắt lịch' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Bật lịch' })).toBeNull();
+
+    // Không có nút Xoá
+    expect(screen.queryByTitle('Xóa lịch')).toBeNull();
+
+    // Nút Xem chi tiết vẫn có
+    expect(screen.getByTitle('Xem chi tiết')).toBeInTheDocument();
   });
 });

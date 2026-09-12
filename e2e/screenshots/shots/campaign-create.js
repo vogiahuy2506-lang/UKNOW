@@ -22,7 +22,7 @@ import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
 } from '../lib/shotHelpers.js';
 
-const RUN_PATH = '/app/campaign-run';
+const RUN_PATH = '/app/campaigns';
 
 /**
  * Mở trình dựng của chiến dịch nháp đã có luồng mẫu.
@@ -207,7 +207,7 @@ export default {
       caption: 'cột thao tác của một chiến dịch, khoanh đỏ hai nút Chạy ngay và Lên lịch',
       async take(page) {
         await page.goto(RUN_PATH);
-        await page.getByRole('heading', { name: 'Chạy chiến dịch' })
+        await page.getByRole('heading', { name: 'Chiến dịch' })
           .first().waitFor({ state: 'visible', timeout: 30_000 });
 
         const row = page.locator('main tbody tr').first();
