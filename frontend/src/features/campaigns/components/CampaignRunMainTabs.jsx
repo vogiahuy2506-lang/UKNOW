@@ -349,7 +349,21 @@ const CampaignRunMainTabs = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredSchedules.map((schedule) => (
+                {filteredSchedules.map((schedule) => {
+                  const isReadonly = isReadonlyOnceSchedule(schedule);
+                  const isCampaignRunning = Boolean(
+                    schedule.campaignId && isCampaignRunningById && isCampaignRunningById(schedule.campaignId)
+                  );
+                  const cannotEnableWhileRunning = !schedule.enabled && isCampaignRunning;
+
+                  let toggleTooltip = '';
+                  if (isReadonly) {
+                    toggleTooltip = t('campaignRun.scheduleLockedOneTimeTooltip');
+                  } else if (cannotEnableWhileRunning) {
+                    toggleTooltip = t('campaignRun.scheduleCannotEnableRunningTooltip');
+                  }
+
+                  return (
                   <tr key={schedule.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{schedule.scheduleName}</div>
@@ -376,16 +390,20 @@ const CampaignRunMainTabs = ({
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2" title={toggleTooltip || undefined}>
                         <button
                           type="button"
                           role="switch"
                           aria-checked={Boolean(schedule.enabled)}
                           aria-label={schedule.enabled ? t('campaignRun.disableSchedule') : t('campaignRun.enableSchedule2')}
-                          onClick={() => onToggleSchedule(schedule.id, schedule.enabled)}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 cursor-pointer ${
-                            schedule.enabled ? 'bg-primary-600' : 'bg-gray-200'
-                          }`}
+                          disabled={isReadonly}
+                          onClick={() => {
+                            if (isReadonly) return;
+                            onToggleSchedule(schedule.id, schedule.enabled);
+                          }}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                            isReadonly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                          } ${schedule.enabled ? 'bg-primary-600' : 'bg-gray-200'}`}
                         >
                           <span
                             className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -393,7 +411,7 @@ const CampaignRunMainTabs = ({
                             }`}
                           />
                         </button>
-                        <span className="text-xs font-medium text-gray-700 select-none">
+                        <span className={`text-xs font-medium select-none ${isReadonly ? 'text-gray-400' : 'text-gray-700'}`}>
                           {schedule.enabled ? t('campaignRun.switchOn') : t('campaignRun.switchOff')}
                         </span>
                       </div>
@@ -402,9 +420,18 @@ const CampaignRunMainTabs = ({
                       <div className="flex items-center justify-end gap-3">
                         <button
                           type="button"
-                          onClick={() => onToggleSchedule(schedule.id, schedule.enabled)}
+                          disabled={isReadonly}
+                          title={toggleTooltip || undefined}
+                          onClick={() => {
+                            if (isReadonly) return;
+                            onToggleSchedule(schedule.id, schedule.enabled);
+                          }}
                           className={`text-xs font-medium hover:underline ${
-                            schedule.enabled ? 'text-amber-600 hover:text-amber-800' : 'text-primary-600 hover:text-primary-800'
+                            isReadonly
+                              ? 'text-gray-400 cursor-not-allowed opacity-60'
+                              : schedule.enabled
+                                ? 'text-amber-600 hover:text-amber-800'
+                                : 'text-primary-600 hover:text-primary-800'
                           }`}
                         >
                           {schedule.enabled ? t('campaignRun.disableSchedule') : t('campaignRun.enableSchedule2')}
@@ -428,7 +455,8 @@ const CampaignRunMainTabs = ({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

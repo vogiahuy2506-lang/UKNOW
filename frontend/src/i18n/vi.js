@@ -5019,6 +5019,8 @@ export default {
     switchOff: 'Tắt',
     disableSchedule: 'Tắt lịch',
     enableSchedule2: 'Bật lịch',
+    scheduleLockedOneTimeTooltip: 'Lịch chạy một lần đã hoàn thành, tạo lịch mới nếu muốn chạy lại',
+    scheduleCannotEnableRunningTooltip: 'Không thể bật lịch khi chiến dịch đang chạy',
   },
 
   // Plans
