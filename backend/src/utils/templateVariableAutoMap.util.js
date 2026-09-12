@@ -12,7 +12,7 @@
  * 3. Log warning với context khi có biến unresolved (không ném lỗi chặn gửi).
  */
 
-import { foldDiacritics, findBestMatchingKey } from './columnHeaderMatch.util.js';
+import { foldDiacritics, normalizeHeaderKey, findBestMatchingKey } from './columnHeaderMatch.util.js';
 
 // Trước đây chỉ nhận [a-zA-Z0-9_.-] — trợ lý AI sinh {{Họ Tên}} (có dấu, có khoảng trắng) thì
 // trích ra mảng RỖNG, trạng thái đó trùng khớp "tin không có biến nào" nên mọi lớp phòng thủ
@@ -65,12 +65,15 @@ export function renderTemplateText(templateText, variables = {}) {
  * @returns {'name'|'email'|'phone'|null}
  */
 export function mapVariableToSemanticTarget(varName) {
-  const norm = foldDiacritics(varName).replace(/[_-]/g, ' ').trim();
+  const norm = normalizeHeaderKey(varName);
   if (
-    /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|recipient name)$/i.test(norm) ||
+    /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|recipient name|ten khach hang)$/i.test(norm) ||
     norm.includes('ho ten') ||
+    norm.includes('ho va ten') ||
     norm.includes('fullname') ||
     norm.includes('full name') ||
+    norm.includes('customer name') ||
+    norm.includes('recipient name') ||
     norm.includes('ten khach')
   ) {
     return 'name';
@@ -83,7 +86,7 @@ export function mapVariableToSemanticTarget(varName) {
     return 'email';
   }
   if (
-    /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|telephone)$/i.test(norm) ||
+    /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|telephone|phone number)$/i.test(norm) ||
     norm.includes('sdt') ||
     norm.includes('dien thoai') ||
     norm.includes('so dt') ||

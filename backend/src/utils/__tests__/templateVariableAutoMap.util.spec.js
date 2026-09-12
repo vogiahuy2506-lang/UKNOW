@@ -305,5 +305,23 @@ describe('templateVariableAutoMap.util', () => {
       expect(() => neutralizeUnresolvedTemplateVariables('Chào {{ten}}!')).not.toThrow();
       expect(neutralizeUnresolvedTemplateVariables('Chào {{ten}}!')).toBe('Chào bạn!');
     });
+
+    it('ca đầu-cuối nghiệm thu 383: sheet có cột full_name, tin có {{Họ Tên}} → render ra tên thật, không ra "bạn"', () => {
+      const text = 'Chào {{Họ Tên}}!';
+      const rendered = renderAutoMappedTemplateText(text, {
+        entry: { row: { full_name: 'Hoàng Phúc' } },
+      });
+      expect(rendered).toBe('Chào Hoàng Phúc!');
+      expect(rendered).not.toContain('bạn');
+    });
+
+    it('sheet có cột customer_name, tin có {{Họ Tên}} → render ra tên thật', () => {
+      const text = 'Chào {{Họ Tên}}!';
+      const rendered = renderAutoMappedTemplateText(text, {
+        entry: { row: { customer_name: 'Thanh Nga' } },
+      });
+      expect(rendered).toBe('Chào Thanh Nga!');
+      expect(rendered).not.toContain('bạn');
+    });
   });
 });
