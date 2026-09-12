@@ -1,6 +1,6 @@
-# Lịch sử tính năng — 19/08 → 11/09/2026
+# Lịch sử tính năng — 19/08 → 13/09/2026
 
-Tổng hợp các plan đã triển khai xong từ 19/08 tới 11/09/2026, kèm commit làm bằng chứng. Nối tiếp
+Tổng hợp các plan đã triển khai xong từ 19/08 tới 13/09/2026, kèm commit làm bằng chứng. Nối tiếp
 `lich-su-tinh-nang-2026-08.md` (dừng ở 18/08).
 
 Plan chi tiết nằm trong `_internal/` (không được git theo dõi). Khi tính năng lên `main`, plan được
@@ -241,6 +241,35 @@ Hai bài học đắt hơn cả bản vá:
   trước đó: đúng bằng khoảng từ 09:00 tới 00:00 hôm sau.
 
 ---
+
+## Chiến dịch: gộp "Quản lý" và "Chạy" về một mục, lọc theo vận hành, sidebar cha/con (12–13/09)
+
+Sếp: hai trang `/app/campaigns` và `/app/campaign-run` "nằm ở 2 tag, khó quản lý, không cần thiết";
+muốn phân loại theo **đang chạy / đã lên lịch / tạm ngưng**; và "phân biệt tag cha tag con". Đọc
+code thấy hai trang phân loại theo hai trục khác nhau ("đang hoạt động" = status active, không phải
+đang chạy; nháp không có ở trang chạy), và sidebar tự đóng nhóm ngay sau khi bấm mục con nên
+người dùng không thấy mình ở đâu. Trục vận hành lọc ở server bằng `EXISTS campaign_runs running`
+/ `EXISTS campaign_schedules enabled`; **không** dùng cột `next_run_at` vì cột đó không có chỗ ghi
+(production 12/09: 29 lịch bật, 0 có giờ). Số thật production để chốt tách "Nháp": draft 158,
+active 101, paused 44.
+
+| Việc | Commit |
+|---|---|
+| Lịch chạy: bật/tắt là công tắc có nhãn, cột lần chạy gần nhất / tiếp theo, badge chỉ là nhãn | `d297a4a5` `293ac208` `975c3b0f` `96bf18e0` |
+| "Lần chạy tiếp" tính lúc đọc từ cron (cùng luật nổ với scheduler, kể cả lịch mỗi N ngày) — cột DB chưa bao giờ được ghi | `14404396` |
+| PR-1 backend: `state=running\|scheduled\|inactive`, `enabledScheduleCount`, helper lọc dùng chung list/đếm; tab "Được chia sẻ" nhận `search/status` (trước đây bỏ qua) | `a1e474c4` |
+| PR-2a: tách 800 dòng logic chạy/lịch/nhật ký ra hook `useCampaignRunController`, trang cũ không đổi pixel | `f1acc758` |
+| PR-2b: một trang `/app/campaigns` — thanh vận hành, nút Chạy/Dừng/Lịch/Nhật ký trên dòng, tab Lịch chạy, `/app/campaign-run` chuyển hướng, bỏ mục sidebar | `0759230c` |
+| PR-2c: tách "Nháp" thành nút riêng (`state=draft`, `inactive` loại nháp) | `e6865b2e` |
+| PR-3: sidebar — nhóm là tiêu đề chữ nhỏ in hoa có vạch cam, trang có rail, nhóm chứa trang đang mở luôn mở | `c3d84131` |
+
+Bốn lỗi review bắt được mà test/ảnh của người implement không bắt: (1) PR lịch chạy nhận bằng ảnh
+dev có seed, còn production toàn "—"; (2) PR-2b ảnh tab "Đang chạy" là trang trống — `getCampaignKey`
+nhận cả object nên nút Dừng luôn báo "không tìm thấy lượt chạy", badge đọc trường bịa; (3) đột biến
+bỏ `state` khỏi hàm đếm để chứng minh assert `pagination.total` bắt được lệch list/đếm; (4) alias `cs`
+bị che trong truy vấn shared phải có ca chạy thật. Nợ ngoài phạm vi đã dọn 13/09: `MainLayout.jsx`
+so `startsWith('/campaigns')` thiếu `/app` từ commit đầu nên trình dựng chưa bao giờ được coi là
+full-screen editor.
 
 ## Việc còn treo (tính tới 11/09/2026)
 
