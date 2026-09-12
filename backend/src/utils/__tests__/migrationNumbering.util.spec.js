@@ -27,6 +27,13 @@ const ENFORCE_FROM_PREFIX = 92;
  */
 const GRANDFATHERED_DUPLICATE_PREFIXES = Object.freeze([
   18, 19, 21, 28, 32, 33, 34, 35, 40, 55, 58, 64, 65, 66, 73, 91,
+  // 50: `050_create_telegram_accounts.sql` (fe86e428, 11/09/2026) bị đánh nhầm số — đúng ra là
+  // 205. Không đổi tên được: file đã nằm trên origin/main, chốt append-only
+  // (migrationSafety.util.js — D/R đều là vi phạm, chỉ có cửa thoát cho sửa nội dung). File chưa
+  // từng chạy ở đâu (deploy backend của fe86e428 đỏ trước bước migrate), runner sắp theo tên nên
+  // nó chạy ngay trước 050_remove_landing_templates.sql — CREATE TABLE IF NOT EXISTS, không đụng
+  // bảng cũ, vô hại. Số 205 trở đi dùng cho migration mới.
+  50,
 ]);
 
 /** SQL files without NNN_ prefix — allowlist only. */
