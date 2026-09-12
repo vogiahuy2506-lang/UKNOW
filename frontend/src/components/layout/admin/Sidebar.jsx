@@ -14,11 +14,14 @@ import {
   userMenuItems,
   AVATAR_STYLES,
 } from './navConfig';
-import { groupSuperAdminMenuItems } from './adminMenuLayout';
+import { groupSuperAdminMenuItems, groupAppMenuItems } from './adminMenuLayout';
 import adminMenuApiService, {
   ADMIN_MENU_LAYOUT_UPDATED_EVENT,
 } from '../../../features/admin/services/adminMenuApi.service';
 
+// Menu khách /app nay luôn có `key` ổn định trên mọi mục sau khi làm phẳng (PR-1,
+// PLAN_MENU_CHUYEN_MUC_APP_2026-09-12, navConfig.jsx:userMenuItems) — `|| item.path ||
+// item.name` chỉ còn là lưới an toàn, không phải đường chính.
 const getMenuItemKey = (item) => item.key || item.path || item.name;
 
 // ── Floating Submenu Panel (for collapsed sidebar) ──────────────────────────
@@ -117,7 +120,10 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       adminMenuCategories,
       HiOutlineCollection
     )
-    : userMenuItems(t);
+    // PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12) — tham số thứ ba `null`: chưa đọc DB, menu
+    // khách luôn dựng từ DEFAULT_APP_MENU_CATEGORIES. PR-2 mới thay `null` bằng cấu hình đọc
+    // qua GET /api/users/app-menu-layout.
+    : groupAppMenuItems(userMenuItems(t), locale, null, HiOutlineCollection);
   const isEmployeeCtx = activeContext?.type === 'employee';
   const ctxPermissions = activeContext?.permissions || {};
 
@@ -183,7 +189,11 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     return item.children.some((child) => {
       if (child.end) return location.pathname === child.path;
       return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
-    }) || (item.name === t('nav.campaigns') && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'));
+    })
+      // PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12, việc 4) — so theo `key` chuyên mục thay vì
+      // tên đã dịch: super admin đổi tên "Chiến dịch" (PR-2) không còn làm hỏng highlight khi
+      // ở /app/campaigns/:id/builder (route không nằm trong children vì :id động).
+      || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'));
   };
 
   const handleParentClick = (item) => {

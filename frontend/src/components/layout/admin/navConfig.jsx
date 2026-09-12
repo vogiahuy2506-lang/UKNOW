@@ -8,7 +8,6 @@ import {
   HiOutlineViewList,
   HiOutlinePlus,
   HiOutlineAcademicCap,
-  HiOutlineCube,
   HiOutlinePlusCircle,
   HiOutlineUserGroup,
   HiOutlineStar,
@@ -78,73 +77,36 @@ export const superAdminMenuItems = (t) => [
   { key: 'marketplace_analytics', name: t('nav.marketplaceAnalytics'), defaultCategory: 'marketplace', path: '/app/admin/marketplace/analytics', icon: HiOutlineFilter },
 ];
 
+// PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12) — làm phẳng từ cây hai tầng thành 24 mục lá có
+// `key` ổn định + `defaultCategory`, để groupAppMenuItems (adminMenuLayout.js) dựng lại đúng
+// cấu trúc nhóm hôm nay từ DEFAULT_APP_MENU_CATEGORIES. Mọi cổng permission/ownerOnly/flag/end
+// giữ NGUYÊN giá trị so với cây cũ — đây là chỗ rủi ro nhất của PR (nhân viên thấy mục ngoài
+// quyền nếu rơi mất một cổng).
 export const userMenuItems = (t) => [
-  { name: t('nav.aiAssistant'), path: '/app', icon: HiOutlineSparkles, end: true },
-  { name: t('nav.dashboard'), path: '/app/reports', icon: HiOutlineHome },
-  {
-    name: t('nav.aiChatbot'),
-    icon: HiOutlineInbox,
-    children: [
-      { name: t('nav.chatbotStudio'), path: '/app/chatbot-studio', icon: HiOutlinePlus, ownerOnly: true },
-      { name: t('nav.inbox'),          path: '/app/settings/inbox', icon: HiOutlineInbox, ownerOnly: true },
-      { name: t('nav.mediaLibrary'),   path: '/app/settings/media-library', icon: HiOutlinePhotograph, ownerOnly: true },
-    ],
-  },
-  {
-    name: t('nav.campaigns'),
-    icon: HiOutlineLightningBolt,
-    permission: ['campaigns_view', 'campaigns_create', 'campaigns_run', 'customers', 'email_settings', 'zalo_settings', 'email_templates', 'zalo_templates'],
-    children: [
-      { name: t('nav.quickSend'),          path: '/app/quick-send',           icon: HiOutlineMail,         permission: ['campaigns_create'] },
-      { name: t('nav.channelManagement'),  path: '/app/settings/channels',    icon: HiOutlineMail,         permission: ['email_settings', 'zalo_settings'] },
-      { name: t('nav.messageTemplates'),   path: '/app/settings/templates',   icon: HiOutlineTemplate,     permission: ['email_templates', 'zalo_templates'] },
-      { name: t('nav.campaignManagement'), path: '/app/campaigns',            icon: HiOutlineViewList,     permission: ['campaigns_view'], end: true },
-      { name: t('nav.runCampaign'),        path: '/app/campaign-run',         icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
-      { name: t('nav.deliveryMonitor'),    path: '/app/delivery-monitor',     icon: HiOutlineServer,       permission: ['campaigns_view'] },
-      { name: t('nav.customers'),          path: '/app/customers',            icon: HiOutlineUsers,        permission: ['customers'] },
-    ],
-  },
-  {
-    name: t('nav.landingPage'),
-    icon: HiOutlineGlobeAlt,
-    children: [
-      { name: t('nav.leadList'),   path: '/app/landing-leads',          icon: HiOutlineUsers,   permission: ['leads'] },
-      { name: t('nav.htmlPages'),  path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
-    ],
-  },
-  {
-    name: t('nav.adminOnlyCluster'),
-    icon: HiOutlineCube,
-    children: [
-      { name: t('nav.featuredCourses'), path: '/app/settings/landing-featured-courses', icon: HiOutlineStar,         flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
-      { name: t('nav.reviews'),         path: '/app/settings/landing-testimonials',    icon: HiOutlineStar,         flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
-      { name: t('nav.courseManagement'), path: '/app/courses',                          icon: HiOutlineAcademicCap,  flag: 'VITE_FEATURE_COURSES' },
-      { name: t('nav.orders'),          path: '/app/orders',                            icon: HiOutlineClipboardList, flag: 'VITE_FEATURE_ORDERS', ownerOnly: true },
-    ],
-  },
-  {
-    name: t('nav.billing'),
-    icon: HiOutlineCurrencyDollar,
-    children: [
-      { name: t('nav.billingOverview'), path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },
-      { name: t('nav.buyTopup'),        path: '/app/topup',   icon: HiOutlinePlusCircle,    ownerOnly: true },
-    ],
-  },
-  {
-    name: t('nav.affiliateProgram'),
-    path: '/app/affiliate',
-    icon: HiOutlineCurrencyDollar,
-    ownerOnly: true,
-  },
-  {
-    name: t('nav.settings'),
-    icon: HiOutlineCog,
-    children: [
-      { name: t('nav.businessProfile'), path: '/app/settings/ai-profile',   icon: HiOutlineOfficeBuilding, ownerOnly: true },
-      { name: t('nav.employees'),       path: '/app/settings/employees',    icon: HiOutlineUserGroup,       ownerOnly: true },
-      { name: t('nav.auditLogs'),       path: '/app/settings/audit-logs',   icon: HiOutlineClipboard,       ownerOnly: true },
-    ],
-  },
+  { key: 'ai_assistant', name: t('nav.aiAssistant'), defaultCategory: 'main', path: '/app', icon: HiOutlineSparkles, end: true },
+  { key: 'dashboard', name: t('nav.dashboard'), defaultCategory: 'main', path: '/app/reports', icon: HiOutlineHome },
+  { key: 'chatbot_studio', name: t('nav.chatbotStudio'), defaultCategory: 'ai_chatbot', path: '/app/chatbot-studio', icon: HiOutlinePlus, ownerOnly: true },
+  { key: 'inbox', name: t('nav.inbox'), defaultCategory: 'ai_chatbot', path: '/app/settings/inbox', icon: HiOutlineInbox, ownerOnly: true },
+  { key: 'media_library', name: t('nav.mediaLibrary'), defaultCategory: 'ai_chatbot', path: '/app/settings/media-library', icon: HiOutlinePhotograph, ownerOnly: true },
+  { key: 'quick_send', name: t('nav.quickSend'), defaultCategory: 'campaigns', path: '/app/quick-send', icon: HiOutlineMail, permission: ['campaigns_create'] },
+  { key: 'channel_management', name: t('nav.channelManagement'), defaultCategory: 'campaigns', path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
+  { key: 'message_templates', name: t('nav.messageTemplates'), defaultCategory: 'campaigns', path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
+  { key: 'campaign_management', name: t('nav.campaignManagement'), defaultCategory: 'campaigns', path: '/app/campaigns', icon: HiOutlineViewList, permission: ['campaigns_view'], end: true },
+  { key: 'run_campaign', name: t('nav.runCampaign'), defaultCategory: 'campaigns', path: '/app/campaign-run', icon: HiOutlineLightningBolt, permission: ['campaigns_run'] },
+  { key: 'delivery_monitor', name: t('nav.deliveryMonitor'), defaultCategory: 'campaigns', path: '/app/delivery-monitor', icon: HiOutlineServer, permission: ['campaigns_view'] },
+  { key: 'customers', name: t('nav.customers'), defaultCategory: 'campaigns', path: '/app/customers', icon: HiOutlineUsers, permission: ['customers'] },
+  { key: 'lead_list', name: t('nav.leadList'), defaultCategory: 'landing_page', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
+  { key: 'html_pages', name: t('nav.htmlPages'), defaultCategory: 'landing_page', path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
+  { key: 'featured_courses', name: t('nav.featuredCourses'), defaultCategory: 'admin_cluster', path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
+  { key: 'reviews', name: t('nav.reviews'), defaultCategory: 'admin_cluster', path: '/app/settings/landing-testimonials', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
+  { key: 'course_management', name: t('nav.courseManagement'), defaultCategory: 'admin_cluster', path: '/app/courses', icon: HiOutlineAcademicCap, flag: 'VITE_FEATURE_COURSES' },
+  { key: 'orders', name: t('nav.orders'), defaultCategory: 'admin_cluster', path: '/app/orders', icon: HiOutlineClipboardList, flag: 'VITE_FEATURE_ORDERS', ownerOnly: true },
+  { key: 'billing_overview', name: t('nav.billingOverview'), defaultCategory: 'billing', path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },
+  { key: 'buy_topup', name: t('nav.buyTopup'), defaultCategory: 'billing', path: '/app/topup', icon: HiOutlinePlusCircle, ownerOnly: true },
+  { key: 'affiliate_program', name: t('nav.affiliateProgram'), defaultCategory: 'main', path: '/app/affiliate', icon: HiOutlineCurrencyDollar, ownerOnly: true },
+  { key: 'business_profile', name: t('nav.businessProfile'), defaultCategory: 'settings', path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
+  { key: 'employees', name: t('nav.employees'), defaultCategory: 'settings', path: '/app/settings/employees', icon: HiOutlineUserGroup, ownerOnly: true },
+  { key: 'audit_logs', name: t('nav.auditLogs'), defaultCategory: 'settings', path: '/app/settings/audit-logs', icon: HiOutlineClipboard, ownerOnly: true },
 ];
 
 export const AVATAR_STYLES = {
