@@ -194,13 +194,77 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     expect(screen.queryByText('Quản lý khoá học')).not.toBeInTheDocument();
   });
 
-  it('vào /app/campaigns/123/builder — nhóm Chiến dịch vẫn được highlight (so theo key, không theo tên)', () => {
+  it('vào /app/campaigns/123/builder — nhóm Chiến dịch vẫn được highlight (dấu hiệu active mới: data-active="true", vạch cam, aria-expanded="true")', () => {
     authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
     authState.activeContext = { type: 'self' };
 
     renderAppSidebar('/app/campaigns/123/builder');
 
     const campaignsButton = screen.getByRole('button', { name: 'Chiến dịch' });
-    expect(campaignsButton.className).toContain('bg-orange-50');
+    expect(campaignsButton).toHaveAttribute('data-menu-level', 'group');
+    expect(campaignsButton).toHaveAttribute('data-active', 'true');
+    expect(campaignsButton).toHaveAttribute('aria-expanded', 'true');
+    expect(campaignsButton.className).toContain('before:bg-orange-500');
+    expect(campaignsButton.className.split(' ')).not.toContain('bg-orange-50');
+  });
+
+  // ── 4 ca test PR-3 (mục 6 việc 5) ──────────────────────────────────────────
+  it('render tại /app/campaigns — nhóm Chiến dịch tự mở, link "Quản lý chiến dịch" có sẵn với aria-current="page"', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/campaigns');
+
+    const campaignManageLink = screen.getByRole('link', { name: 'Quản lý chiến dịch' });
+    expect(campaignManageLink).toBeInTheDocument();
+    expect(campaignManageLink).toHaveAttribute('aria-current', 'page');
+    expect(campaignManageLink).toHaveAttribute('data-menu-level', 'item');
+  });
+
+  it('bấm tiêu đề "Chiến dịch" — accordion đóng lại (link biến mất), bấm lại thì mở ra', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/campaigns');
+
+    const campaignsGroupButton = screen.getByRole('button', { name: 'Chiến dịch' });
+    expect(screen.getByRole('link', { name: 'Quản lý chiến dịch' })).toBeInTheDocument();
+
+    // Bấm đóng
+    fireEvent.click(campaignsGroupButton);
+    expect(screen.queryByRole('link', { name: 'Quản lý chiến dịch' })).not.toBeInTheDocument();
+
+    // Bấm lại để mở
+    fireEvent.click(campaignsGroupButton);
+    expect(screen.getByRole('link', { name: 'Quản lý chiến dịch' })).toBeInTheDocument();
+  });
+
+  it('render tại /app/settings/employees — chỉ nhóm "Cài đặt" mở, nhóm "Chiến dịch" đóng', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/settings/employees');
+
+    expect(screen.getByRole('link', { name: 'Nhân viên' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Quản lý chiến dịch' })).not.toBeInTheDocument();
+  });
+
+  it('tiêu đề nhóm có data-menu-level="group" và aria-expanded phản ánh đúng trạng thái mở/đóng', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/campaigns');
+
+    const campaignsButton = screen.getByRole('button', { name: 'Chiến dịch' });
+    const settingsButton = screen.getByRole('button', { name: 'Cài đặt' });
+
+    expect(campaignsButton).toHaveAttribute('data-menu-level', 'group');
+    expect(campaignsButton).toHaveAttribute('aria-expanded', 'true');
+
+    expect(settingsButton).toHaveAttribute('data-menu-level', 'group');
+    expect(settingsButton).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(campaignsButton);
+    expect(campaignsButton).toHaveAttribute('aria-expanded', 'false');
   });
 });
