@@ -46,7 +46,7 @@ import {
   findLastWizardCardIndex,
   shouldKeepWizardCard,
 } from './utils/wizardCardHistory.js';
-import { enrichTemplateDraftFromDb } from './utils/planWorkflowReconstitution.js';
+import { enrichTemplateDraftFromDb, buildCampaignDescription } from './utils/planWorkflowReconstitution.js';
 import {
   IS_NEW_LANDING_REQ_RE,
   getLastLandingPageMessageIndex,
@@ -313,6 +313,7 @@ const normalizeContentPlanData = (rawData) => {
   return {
     totalDays: Number(rawData?.totalDays) || normalizedDays.length,
     days: normalizedDays,
+    description: typeof rawData?.description === 'string' ? rawData.description.trim() : '',
   };
 };
 
@@ -571,6 +572,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
     setContentPlanWorkflow({
       sourcePrompt: planSection.sourcePrompt || '',
+      description: planSection.description || normalizedPlan.description || '',
       plan: normalizedPlan,
       pendingDay,
       completedDays,
@@ -715,6 +717,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             const normalizedPlan = normalizeContentPlanData(contentPlanMsg.data);
             setContentPlanWorkflow({
               sourcePrompt: lastUserMsg?.content || '',
+              description: contentPlanMsg.data?.description || normalizedPlan.description || '',
               plan: normalizedPlan,
               pendingDay: normalizedPlan.days[0]?.day || null,
               completedDays: [],
@@ -1173,9 +1176,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       : channel === 'zalo_group'
         ? `Zalo nhóm Auto Plan ${new Date().toLocaleDateString('vi-VN')}`
         : `Zalo Auto Plan ${new Date().toLocaleDateString('vi-VN')}`;
-    const description = workflow?.sourcePrompt
-      ? `AI content-plan draft: ${workflow.sourcePrompt}`
-      : 'AI content-plan draft';
+    const description = buildCampaignDescription(workflow);
 
     if (channel === 'email') {
       const emailSteps = ordered.map((slot, idx) => ({
@@ -1194,6 +1195,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         description,
         campaignType: 'email',
         isAiDraft: true,
+        metadata: workflow?.sourcePrompt ? { sourcePrompt: workflow.sourcePrompt } : undefined,
         nodes: [
           { tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', nodeDescription: '', positionX: 100, positionY: 200, config: {} },
           { tempId: 'n2', nodeType: 'data', nodeSubtype: 'interested_customers', nodeName: 'Danh sách khách', nodeDescription: 'Khách từ database', positionX: 350, positionY: 200, config: { interestedCustomerType: 'both', interestedLimit: 1000 } },
@@ -1241,6 +1243,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         description,
         campaignType: 'zalo_group',
         isAiDraft: true,
+        metadata: workflow?.sourcePrompt ? { sourcePrompt: workflow.sourcePrompt } : undefined,
         nodes: [
           { tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', nodeDescription: '', positionX: 100, positionY: 200, config: {} },
           { tempId: 'n2', nodeType: 'action', nodeSubtype: 'select_zalo_account', nodeName: 'Chọn tài khoản Zalo', nodeDescription: '', positionX: 300, positionY: 200, config: { zaloAccountId: null } },
@@ -1289,6 +1292,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       description,
       campaignType: 'zalo',
       isAiDraft: true,
+      metadata: workflow?.sourcePrompt ? { sourcePrompt: workflow.sourcePrompt } : undefined,
       nodes: [
         { tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', nodeDescription: '', positionX: 100, positionY: 200, config: {} },
         { tempId: 'n2', nodeType: 'data', nodeSubtype: 'interested_customers', nodeName: 'Danh sách khách', nodeDescription: 'Khách từ database', positionX: 350, positionY: 200, config: { interestedCustomerType: 'both', interestedLimit: 1000 } },
@@ -1512,6 +1516,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
           setContentPlanWorkflow({
             sourcePrompt: trimmedInput,
+            description: data?.description || normalizedPlan.description || '',
             plan: normalizedPlan,
             pendingDay: normalizedPlan.days[0]?.day || null,
             completedDays: [],

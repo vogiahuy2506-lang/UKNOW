@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { enrichTemplateDraftFromDb } from '../planWorkflowReconstitution';
+import { enrichTemplateDraftFromDb, buildCampaignDescription } from '../planWorkflowReconstitution';
 
 describe('planWorkflowReconstitution — enrichTemplateDraftFromDb', () => {
   it('tái tạo đủ cờ client từ planSlotKey trong DB', () => {
@@ -108,3 +108,45 @@ describe('planWorkflowReconstitution — enrichTemplateDraftFromDb', () => {
     expect(updatedSaved[0].slotId).toBe('d1-s1');
   });
 });
+
+describe('planWorkflowReconstitution — buildCampaignDescription', () => {
+  it('ưu tiên description từ plan do model trả về, không đưa sourcePrompt vào mô tả', () => {
+    const workflow = {
+      sourcePrompt: 'Hãy trả về content_plan JSON… GROUNDING: Use exactly this selected product… (BẮT BUỘC dùng ID này…)',
+      plan: {
+        description: 'Chiến dịch tri ân khách hàng tháng 9',
+      },
+    };
+
+    const desc = buildCampaignDescription(workflow);
+    expect(desc).toBe('Chiến dịch tri ân khách hàng tháng 9');
+    expect(desc).not.toContain('GROUNDING');
+    expect(desc).not.toContain('BẮT BUỘC dùng ID này');
+  });
+
+  it('dùng description từ workflow nếu plan không có', () => {
+    const workflow = {
+      sourcePrompt: 'Prompt nội bộ rất dài...',
+      description: 'Mô tả từ workflow',
+      plan: {},
+    };
+
+    const desc = buildCampaignDescription(workflow);
+    expect(desc).toBe('Mô tả từ workflow');
+    expect(desc).not.toContain('Prompt');
+  });
+
+  it('khi không có description nào thì trả về chuỗi trung tính, tuyệt đối không lộ sourcePrompt', () => {
+    const workflow = {
+      sourcePrompt: 'Hãy trả về content_plan JSON… GROUNDING: Use exactly this… BẮT BUỘC dùng ID này',
+      plan: {},
+    };
+
+    const desc = buildCampaignDescription(workflow);
+    expect(desc).toBe('Chiến dịch tạo bởi trợ lý AI');
+    expect(desc).not.toContain('GROUNDING');
+    expect(desc).not.toContain('BẮT BUỘC');
+    expect(desc).not.toContain('content_plan');
+  });
+});
+
