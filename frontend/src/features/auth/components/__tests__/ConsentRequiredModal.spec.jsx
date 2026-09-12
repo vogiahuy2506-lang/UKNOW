@@ -21,8 +21,8 @@ const mockT = (key) => {
     'consentRequired.submit': 'Đồng ý và tiếp tục',
     'consentRequired.saving': 'Đang lưu...',
     'consentRequired.validationRequired': 'Vui lòng tích chọn đầy đủ cả 3 mục',
-    'consentRequired.disagreePrompt': 'Không đồng ý? Bạn có thể xoá tài khoản tại',
-    'consentRequired.accountSettingsLink': 'Cài đặt tài khoản',
+    'consentRequired.disagreePrompt': 'Không đồng ý? Bạn có thể yêu cầu xoá tài khoản qua trang',
+    'consentRequired.accountSettingsLink': 'Liên hệ hỗ trợ',
   };
   return dict[key] || key;
 };
@@ -48,8 +48,8 @@ describe('ConsentRequiredModal (Bắt buộc theo Nghị định 330, không có
     // Bắt buộc: KHÔNG có nút "Để sau"
     expect(screen.queryByText(/Để sau|Later/i)).not.toBeInTheDocument();
     // Có dòng hướng dẫn xoá tài khoản nếu không đồng ý
-    expect(screen.getByText('Không đồng ý? Bạn có thể xoá tài khoản tại')).toBeInTheDocument();
-    expect(screen.getByText('Cài đặt tài khoản')).toHaveAttribute('href', '/app/settings/channels');
+    expect(screen.getByText('Không đồng ý? Bạn có thể yêu cầu xoá tài khoản qua trang')).toBeInTheDocument();
+    expect(screen.getByText('Liên hệ hỗ trợ')).toHaveAttribute('href', '/contact');
   });
 
   it('đổi tiêu đề khi isOutdated = true', () => {

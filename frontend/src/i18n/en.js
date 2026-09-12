@@ -7113,8 +7113,8 @@ Feel free to ask me anything!`,
     saving: 'Processing...',
     failed: 'Failed to record consent.',
     errorOccurred: 'An error occurred. Please try again.',
-    disagreePrompt: 'Do not agree? You can delete your account in',
-    accountSettingsLink: 'Account Settings',
+    disagreePrompt: 'Do not agree? You can request account deletion via',
+    accountSettingsLink: 'Contact support',
   },
 
   // Trial Welcome Modal

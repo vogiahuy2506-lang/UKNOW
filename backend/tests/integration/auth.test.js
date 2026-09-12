@@ -47,8 +47,15 @@ describe('POST /api/auth/register', () => {
     expect(res.body.data.user.email).toBe(email);
     expect(res.body.data.user.username).toBe('newuser01');
     expect(res.body.data.user.role).toBe('user');
-    expect(res.body.data.user.consents).toEqual({ terms: true, privacy: true, dpa: true });
+    // PR-N3b (12/09/2026): consents mang thêm document_version để so với phiên bản hiện hành
+    // (hasConsentedCurrent) — không còn là map boolean phẳng.
+    expect(res.body.data.user.consents).toEqual({
+      terms: { granted: true, document_version: expect.any(String) },
+      privacy: { granted: true, document_version: expect.any(String) },
+      dpa: { granted: true, document_version: expect.any(String) },
+    });
     expect(res.body.data.user.hasConsented).toBe(true);
+    expect(res.body.data.user.consentVersionOutdated).toBe(false);
     expect(res.body.data.accessToken).toEqual(expect.any(String));
 
     // DB phải có user mới + verification code đã đánh dấu used

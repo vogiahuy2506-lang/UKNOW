@@ -162,7 +162,7 @@ const ConsentRequiredModal = ({ isOpen, onConsented, isOutdated = false }) => {
             <p className="text-xs text-center text-gray-500">
               {t('consentRequired.disagreePrompt')}{' '}
               <a
-                href="/app/settings/channels"
+                href="/contact"
                 className="text-primary-600 hover:underline font-medium"
               >
                 {t('consentRequired.accountSettingsLink')}

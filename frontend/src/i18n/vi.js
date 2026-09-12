@@ -7074,8 +7074,8 @@ export default {
     saving: 'Đang xử lý...',
     failed: 'Ghi nhận đồng ý thất bại.',
     errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
-    disagreePrompt: 'Không đồng ý? Bạn có thể xoá tài khoản tại',
-    accountSettingsLink: 'Cài đặt tài khoản',
+    disagreePrompt: 'Không đồng ý? Bạn có thể yêu cầu xoá tài khoản qua trang',
+    accountSettingsLink: 'Liên hệ hỗ trợ',
   },
 
   // Trial Welcome Modal
