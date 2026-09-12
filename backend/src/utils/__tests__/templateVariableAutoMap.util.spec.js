@@ -20,6 +20,23 @@ describe('templateVariableAutoMap.util', () => {
       const vars = extractTemplateVariableNames(text);
       expect(vars).toEqual(['full_name', 'code_123', 'note.detail']);
     });
+
+    // Bug tái diễn lần 3: TEMPLATE_VARIABLE_REGEX cũ chỉ nhận [a-zA-Z0-9_.-], trợ lý AI sinh
+    // {{Họ Tên}} (có dấu, có khoảng trắng) trích ra RỖNG — trạng thái đó trùng "không có biến"
+    // nên mọi lớp phòng thủ phía sau không có gì để bắt. [^{}]+? nhận diện được thì bug này
+    // không tái diễn lần 4 chỉ vì đổi shape.
+    it('trích được tên biến có dấu tiếng Việt và khoảng trắng ({{Họ Tên}})', () => {
+      expect(extractTemplateVariableNames('Chào {{Họ Tên}}!')).toEqual(['Họ Tên']);
+    });
+
+    it('trích được tên biến có dấu tiếng Việt kèm khoảng trắng thừa quanh {{ }}', () => {
+      expect(extractTemplateVariableNames('Chào {{ Họ Tên }}!')).toEqual(['Họ Tên']);
+    });
+
+    it('không hồi quy — {{ho_ten}} và {{full_name}} (shape cũ) vẫn nhận diện đúng như trước', () => {
+      expect(extractTemplateVariableNames('{{ho_ten}}')).toEqual(['ho_ten']);
+      expect(extractTemplateVariableNames('{{full_name}}')).toEqual(['full_name']);
+    });
   });
 
   describe('renderTemplateText', () => {
@@ -180,6 +197,24 @@ describe('templateVariableAutoMap.util', () => {
       expect(rendered).toBe('Chào bạn! Giá: ');
     });
 
+    it('Bug tái diễn — {{Họ Tên}} khớp thẳng cột "Họ Tên" (không cần fold, khớp key chính xác)', () => {
+      const result = deriveVariablesForText('Chào {{Họ Tên}}!', {
+        mappings: [],
+        entry: { row: { 'Họ Tên': 'Nguyễn Hoàng Phúc' } },
+      });
+      expect(result.variables['Họ Tên']).toBe('Nguyễn Hoàng Phúc');
+      expect(result.unresolved).toEqual([]);
+    });
+
+    it('{{Họ Tên}} vẫn khớp được cột "ho_ten" nhờ foldDiacritics có sẵn từ bản vá 01/09', () => {
+      const result = deriveVariablesForText('Chào {{Họ Tên}}!', {
+        mappings: [],
+        entry: { row: { ho_ten: 'Trần Thị B' } },
+      });
+      expect(result.variables['Họ Tên']).toBe('Trần Thị B');
+      expect(result.unresolved).toEqual([]);
+    });
+
     it('Rule 3: Returns empty variables without processing if text has no variables', () => {
       const result = deriveVariablesForText('Thông báo không có biến', {
         mappings: [],
@@ -197,6 +232,15 @@ describe('templateVariableAutoMap.util', () => {
         entry: { row: { 'Họ và tên': 'Nguyễn Hoàng Phúc', SĐT: '0901234567' } },
       });
       expect(rendered).toBe('Chào Nguyễn Hoàng Phúc! SĐT bạn là 0901234567.');
+    });
+
+    it('Bug tái diễn — sheet có cột "Họ Tên", tin có {{Họ Tên}} → render ra tên, không còn {{', () => {
+      const rendered = renderAutoMappedTemplateText('Chào {{Họ Tên}}!', {
+        mappings: [],
+        entry: { row: { 'Họ Tên': 'Nguyễn Hoàng Phúc', sđt: '0901234567' } },
+      });
+      expect(rendered).toBe('Chào Nguyễn Hoàng Phúc!');
+      expect(rendered).not.toContain('{{');
     });
   });
 });

@@ -14,7 +14,13 @@
 
 import { foldDiacritics, findBestMatchingKey } from './columnHeaderMatch.util.js';
 
-export const TEMPLATE_VARIABLE_REGEX = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
+// Trước đây chỉ nhận [a-zA-Z0-9_.-] — trợ lý AI sinh {{Họ Tên}} (có dấu, có khoảng trắng) thì
+// trích ra mảng RỖNG, trạng thái đó trùng khớp "tin không có biến nào" nên mọi lớp phòng thủ
+// phía sau (deriveVariablesForText, cổng mappings.length...) không có gì để bắt. Dùng [^{}]+?
+// (không liệt kê ký tự cho phép) để MỌI cách đặt tên tương lai đều lọt vào tầm nhìn thay vì trở
+// nên vô hình — bù lại bằng chặn cửa sập ở deriveVariablesForText/neutralizeUnresolvedTemplateVariables
+// (không throw khi khớp nhầm đoạn không phải biến, xem trong hàm).
+export const TEMPLATE_VARIABLE_REGEX = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
 /**
  * Trích xuất danh sách tên biến duy nhất từ một chuỗi template.
@@ -46,7 +52,9 @@ export function extractTemplateVariableNames(text) {
  */
 export function renderTemplateText(templateText, variables = {}) {
   return String(templateText || '').replace(TEMPLATE_VARIABLE_REGEX, (_match, varName) => {
-    const value = variables?.[varName];
+    // trim() để khớp đúng khoá đã lưu trong `variables` — extractTemplateVariableNames() cũng
+    // trim() tên biến trích ra, hai bên phải khớp tuyệt đối kể cả khi regex để lọt khoảng trắng.
+    const value = variables?.[String(varName || '').trim()];
     return value === undefined || value === null ? '' : String(value);
   });
 }
