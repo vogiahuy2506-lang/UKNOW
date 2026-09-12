@@ -5,6 +5,7 @@ import {
   mapVariableToSemanticTarget,
   deriveVariablesForText,
   renderAutoMappedTemplateText,
+  neutralizeUnresolvedTemplateVariables,
 } from '../templateVariableAutoMap.util.js';
 
 describe('templateVariableAutoMap.util', () => {
@@ -241,6 +242,68 @@ describe('templateVariableAutoMap.util', () => {
       });
       expect(rendered).toBe('Chào Nguyễn Hoàng Phúc!');
       expect(rendered).not.toContain('{{');
+    });
+  });
+
+  describe('neutralizeUnresolvedTemplateVariables', () => {
+    it('không có "{{" → trả nguyên văn, không log cảnh báo', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(neutralizeUnresolvedTemplateVariables('Không có biến gì cả', { campaignId: 1, nodeId: 2 })).toBe(
+        'Không có biến gì cả'
+      );
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('biến TÊN chưa giải được → thay bằng "bạn", không còn "{{"', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = neutralizeUnresolvedTemplateVariables('Chào {{Họ Tên}}!', { campaignId: 383, nodeId: 5 });
+      expect(result).toBe('Chào bạn!');
+      expect(result).not.toContain('{{');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[TemplateAutoMap] Chặn cửa sập trước khi gửi — còn biến chưa giải [Họ Tên]')
+      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('campaignId=383'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('nodeId=5'));
+      warnSpy.mockRestore();
+    });
+
+    it('biến KHÔNG phải tên chưa giải được → thay bằng chuỗi rỗng, dọn khoảng trắng/dấu câu lạc', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = neutralizeUnresolvedTemplateVariables('Giá {{gia}} - đã giảm {{discount}}%', {
+        campaignId: 1,
+        nodeId: 2,
+      });
+      expect(result).not.toContain('{{');
+      expect(result).not.toContain('  '); // không còn khoảng trắng đôi
+      warnSpy.mockRestore();
+    });
+
+    it('nhiều biến chưa giải cùng lúc → tất cả đều bị thay, không còn "{{" nào sót lại', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = neutralizeUnresolvedTemplateVariables('Chào {{full_name}}, ưu đãi {{code}}!', {
+        campaignId: 1,
+        nodeId: 2,
+      });
+      expect(result).toBe('Chào bạn, ưu đãi!');
+      expect(result).not.toContain('{{');
+      warnSpy.mockRestore();
+    });
+
+    it('KHÔNG BAO GIỜ throw — kể cả khi [^{}]+? khớp nhầm đoạn văn bản không phải biến', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(() =>
+        neutralizeUnresolvedTemplateVariables('Ký hiệu toán học: {{x + y}} không phải biến thật', {
+          campaignId: 1,
+          nodeId: 2,
+        })
+      ).not.toThrow();
+      warnSpy.mockRestore();
+    });
+
+    it('không có logContext → vẫn hoạt động, không throw khi log', () => {
+      expect(() => neutralizeUnresolvedTemplateVariables('Chào {{ten}}!')).not.toThrow();
+      expect(neutralizeUnresolvedTemplateVariables('Chào {{ten}}!')).toBe('Chào bạn!');
     });
   });
 });

@@ -47,6 +47,7 @@ import { validateCampaignPreflight } from './campaignPreflight.service.js';
 import {
   deriveVariablesForText,
   renderTemplateText,
+  neutralizeUnresolvedTemplateVariables,
 } from '../../utils/templateVariableAutoMap.util.js';
 import { findStaleCampaignRunReservations } from '../../repositories/sendQuota.repository.js';
 import { shouldReplaceRecipientProgressCache } from './recipientProgressCache.util.js';
@@ -5702,7 +5703,10 @@ class CampaignRunService {
                       resolveFromMappings: resolveTemplateVariablesFromMappings,
                       logContext: { runId, nodeId: node.id, stepIndex: nextStepIndex },
                     });
-                    const renderedMessage = renderTemplateText(step.message, variables).trim();
+                    const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                      renderTemplateText(step.message, variables).trim(),
+                      { campaignId, nodeId: node.id }
+                    );
                     if (!renderedMessage) return;
                     const dedupedZaloLedger = await trySyncLedgerFromExistingZaloMessage({
                       nodeId: node.id,
@@ -5864,7 +5868,10 @@ class CampaignRunService {
                 resolveFromMappings: resolveTemplateVariablesFromMappings,
                 logContext: { runId, nodeId: node.id, stepIndex },
               });
-              const renderedMessage = renderTemplateText(step.message, variables).trim();
+              const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                renderTemplateText(step.message, variables).trim(),
+                { campaignId, nodeId: node.id }
+              );
               if (!renderedMessage) {
                 throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
               }
@@ -5951,7 +5958,10 @@ class CampaignRunService {
                     resolveFromMappings: resolveTemplateVariablesFromMappings,
                     logContext: { runId, nodeId: node.id, stepIndex },
                   });
-                  const renderedMessage = renderTemplateText(step.message, variables).trim();
+                  const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                    renderTemplateText(step.message, variables).trim(),
+                    { campaignId, nodeId: node.id }
+                  );
                   if (!renderedMessage) {
                     throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
                   }
@@ -7538,7 +7548,10 @@ class CampaignRunService {
                       resolveFromMappings: resolveTemplateVariablesFromMappings,
                       logContext: { runId, nodeId: node.id, stepIndex: nextStepIndex },
                     });
-                    const renderedMessage = renderTemplateText(step.message, variables).trim();
+                    const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                      renderTemplateText(step.message, variables).trim(),
+                      { campaignId, nodeId: node.id }
+                    );
                     if (!renderedMessage) return;
                     const dedupedZaloGroup = await trySyncLedgerFromExistingZaloMessage({
                       nodeId: node.id,
@@ -7712,7 +7725,10 @@ class CampaignRunService {
                   resolveFromMappings: resolveTemplateVariablesFromMappings,
                   logContext: { runId, nodeId: node.id, stepIndex },
                 });
-                const renderedMessage = renderTemplateText(step.message, variables).trim();
+                const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                  renderTemplateText(step.message, variables).trim(),
+                  { campaignId, nodeId: node.id }
+                );
                 if (!renderedMessage) {
                   throw new Error(`Thiếu nội dung tin nhắn cho nhóm ${normalizedGroupId}`);
                 }

@@ -15,7 +15,10 @@ import { resolveFromAddress, extractBrandDomain, resolveEnvelopeFrom } from '../
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
-import { deriveVariablesForText } from '../../utils/templateVariableAutoMap.util.js';
+import {
+  deriveVariablesForText,
+  neutralizeUnresolvedTemplateVariables,
+} from '../../utils/templateVariableAutoMap.util.js';
 import {
   reserveSendQuota,
   markSendQuotaSending,
@@ -629,6 +632,14 @@ class CampaignEmailSenderService {
       htmlBody = htmlBody.replace(regex, value);
       textBody = textBody.replace(regex, value);
     }
+
+    // Chặn cửa sập ngay trước khi gọi provider — dù auto-map/mappings ở trên có bỏ sót biến
+    // nào (mapping trỏ nhầm cột, key không khớp {{...}} trong text) thì subject/htmlBody/
+    // textBody cuối cùng KHÔNG được còn "{{" khi rời hệ thống.
+    const emailLogContext = { campaignId: campaign.id, nodeId };
+    subject = neutralizeUnresolvedTemplateVariables(subject, emailLogContext);
+    htmlBody = neutralizeUnresolvedTemplateVariables(htmlBody, emailLogContext);
+    textBody = neutralizeUnresolvedTemplateVariables(textBody, emailLogContext);
 
     if (!subject || subject.trim() === '') subject = 'Thông báo từ Founder AI';
     if (!htmlBody || htmlBody.trim() === '') htmlBody = textBody || 'Email từ Founder AI';

@@ -229,3 +229,47 @@ export function renderAutoMappedTemplateText(text, options = {}) {
   const { variables } = deriveVariablesForText(text, options);
   return renderTemplateText(text, variables);
 }
+
+/**
+ * Chặn cửa sập cuối cùng, gọi NGAY TRƯỚC provider (Zalo/email) — không phải chữa hình dạng biến
+ * (đó là TEMPLATE_VARIABLE_REGEX ở trên), mà là chốt chặn tái diễn: bất kể vì lý do gì (mapping
+ * trỏ nhầm cột, sinh biến ngoài mọi hình dạng regex nhận được, resolveFromMappings bỏ sót...)
+ * mà text cuối cùng còn "{{", đây là lần cuối để không gửi "{{...}}" nguyên văn tới khách.
+ *
+ * KHÔNG BAO GIỜ throw. [^{}]+? ở TEMPLATE_VARIABLE_REGEX có thể khớp nhầm đoạn không phải biến
+ * (văn bản thường chứa dấu ngoặc nhọn) — khớp nhầm thì cũng chỉ rơi về giá trị trung tính, ném
+ * lỗi ở đây sẽ làm chết cả lượt gửi vì một câu chữ vô hại.
+ *
+ * @param {string} text văn bản đã render, ngay trước khi gọi provider gửi thật
+ * @param {{campaignId?: string|number, nodeId?: string|number}} [logContext]
+ * @returns {string}
+ */
+export function neutralizeUnresolvedTemplateVariables(text, logContext = null) {
+  const str = String(text || '');
+  if (!str.includes('{{')) return str;
+
+  const leftoverNames = [];
+  const re = new RegExp(TEMPLATE_VARIABLE_REGEX.source, 'g');
+  let cleaned = str.replace(re, (_match, rawVarName) => {
+    const varName = String(rawVarName || '').trim();
+    leftoverNames.push(varName);
+    return mapVariableToSemanticTarget(varName) === 'name' ? 'bạn' : '';
+  });
+
+  if (leftoverNames.length === 0) return cleaned;
+
+  // Dọn khoảng trắng thừa và dấu câu lạc lại do thay biến bằng chuỗi rỗng
+  // (vd "Chào , !" -> "Chào, !" -> "Chào!"; "  " -> " ").
+  cleaned = cleaned
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/([,.!?;:])\s*\1+/g, '$1')
+    .trim();
+
+  console.warn(
+    `[TemplateAutoMap] Chặn cửa sập trước khi gửi — còn biến chưa giải [${leftoverNames.join(', ')}] `
+    + `campaignId=${logContext?.campaignId ?? 'n/a'} nodeId=${logContext?.nodeId ?? 'n/a'}`
+  );
+
+  return cleaned;
+}
