@@ -87,8 +87,12 @@ const MainLayout = () => {
     setTrial(null);
   };
 
+  // Trình dựng chiến dịch là "full-screen editor": không padding quanh canvas, không banner credit,
+  // không ghi nhớ scroll của <main>. Từ commit đầu (e24f6725) route đã nằm dưới `/app` nhưng phép
+  // so vẫn là `startsWith('/campaigns')` → cờ này chưa bao giờ true; sửa 13/09/2026 (dọn nợ sau
+  // PLAN_GOP_TRANG_CHIEN_DICH_MOT_MUC_2026-09-12).
   const isFullLayout =
-    location.pathname.startsWith('/campaigns') &&
+    location.pathname.startsWith('/app/campaigns/') &&
     (location.pathname.endsWith('/new') || location.pathname.includes('/builder'));
 
   const isInboxPage = location.pathname.includes('/settings/inbox');
