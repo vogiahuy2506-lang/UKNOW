@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, Link } from 'react-router-dom';
 import MainLayout from '../MainLayout';
@@ -212,5 +212,42 @@ describe('MainLayout — PlanExpiryModal theo PR-1 mục 3 và 5', () => {
     const { unmount: u2 } = renderLayout();
     expect(screen.queryByTestId('plan-expiry-modal-open')).not.toBeInTheDocument();
     u2();
+  });
+});
+
+/**
+ * MainLayout có HAI nhánh render: `if (isMobile) return (...)` thoát sớm, rồi mới tới nhánh
+ * desktop. Bốn modal cũ đều được render ở CẢ HAI nhánh; PlanExpiryModal (bb6999c5) chỉ có ở
+ * nhánh desktop.
+ *
+ * Mọi ca ở khối trên đều chạy nhánh desktop mà không ai cố ý chọn: jsdom đặt
+ * window.innerWidth = 1024, còn useIsMobile là `innerWidth < 1024` → đúng false. Nên khoảng
+ * trống này không thể lộ ra ở bộ test cũ.
+ */
+describe('MainLayout — PlanExpiryModal trên nhánh mobile', () => {
+  const widthGoc = window.innerWidth;
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    m.user = { id: 100, role: 'user', phone: '0912345678',
+      phoneVerifiedAt: '2026-09-10T00:00:00Z', hasConsented: true, mustChangePassword: false };
+    m.activeContext = { type: 'self' };
+    m.billingStatus = { hasPlan: true, isFullyExpired: true };
+  });
+
+  afterEach(() => {
+    window.innerWidth = widthGoc;
+  });
+
+  it('màn hình hẹp (< 1024px) vẫn phải thấy popup hết hạn', () => {
+    window.innerWidth = 500;
+    renderLayout();
+    expect(screen.getByTestId('plan-expiry-modal-open')).toBeInTheDocument();
+  });
+
+  it('ngưỡng 1024px: desktop thấy popup (chốt chặn dương — nếu ca này đỏ thì phép thử sai, không phải code sai)', () => {
+    window.innerWidth = 1024;
+    renderLayout();
+    expect(screen.getByTestId('plan-expiry-modal-open')).toBeInTheDocument();
   });
 });

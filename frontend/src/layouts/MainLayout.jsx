@@ -303,6 +303,12 @@ const MainLayout = () => {
           onClose={handleCloseTrialWelcome}
         />
 
+        <PlanExpiryModal
+          isOpen={Boolean(planExpiryWarning)}
+          billingStatus={billingStatus}
+          onClose={handleClosePlanExpiry}
+        />
+
         {!isAiHomePage && !isChatbotStudio && !isLandingCanvas && (
           <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         )}
