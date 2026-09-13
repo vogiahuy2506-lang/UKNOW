@@ -225,6 +225,19 @@ const aiApi = {
     });
     return response.data;
   },
+
+  /**
+   * "AI viết hộ" chỉ dẫn hệ thống cho chatbot (PLAN_AI_VIET_HO_CHI_DAN_CHATBOT_2026-09-13).
+   * Mỗi lần gọi trừ 1 credit AI của khách — chỉ gọi khi khách bấm, không tự gọi.
+   * @param {{ hint: string, language?: 'vi'|'en' }} input
+   * @returns {Promise<{ success: boolean, data: { instruction: string, businessContextUsed: boolean } }>}
+   */
+  generateSystemInstruction: async ({ hint, language = 'vi' }) => {
+    const response = await api.post('/ai/generate-system-instruction', { hint, language }, {
+      timeout: 120000,
+    });
+    return response.data;
+  },
 };
 
 export default aiApi;

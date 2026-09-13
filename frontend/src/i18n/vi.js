@@ -8044,6 +8044,24 @@ export default {
 
   // PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 5 (PR-2) — tab "Lịch nhắc hạn" trong cùng
   // trang AdminWelcomeEmailPage. Giờ gửi 08:00 cố định, không sửa được ở đây (mục 1.4 của plan).
+  systemInstructionAiWriter: {
+    toggle: 'AI viết hộ',
+    hintLabel: 'Mô tả ngắn trợ lý bạn muốn tạo',
+    hintPlaceholder: 'VD: Trợ lý tư vấn khoá học tiếng Anh, xưng em, thân thiện',
+    hintRequired: 'Vui lòng nhập gợi ý cho AI',
+    hintTooLong: 'Gợi ý không được quá {max} ký tự',
+    creditNote: 'Mỗi lần viết dùng 1 lượt AI',
+    write: 'Viết',
+    writing: 'Đang viết...',
+    previewTitle: 'Xem trước — chưa áp vào ô hướng dẫn',
+    discard: 'Bỏ',
+    rewrite: 'Viết lại (dùng thêm 1 lượt AI)',
+    apply: 'Dùng cái này',
+    overwriteConfirm: 'Ô hướng dẫn đang có nội dung. Thay bằng bản AI vừa viết?',
+    emptyResult: 'AI chưa viết ra nội dung, vui lòng thử lại',
+    outOfCredit: 'Đã hết lượt AI trong kỳ',
+    writeFailed: 'AI viết hộ thất bại, vui lòng thử lại',
+  },
   adminSubscriptionReminderSchedule: {
     tabLabel: 'Lịch nhắc hạn',
     title: 'Lịch nhắc hạn gói',

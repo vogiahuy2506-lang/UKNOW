@@ -30,6 +30,7 @@ import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
 import chatbotApi from '../services/chatbotApi.service';
 import ZaloPersonalChannelModal from './ZaloPersonalChannelModal';
+import SystemInstructionAiWriter from './SystemInstructionAiWriter';
 
 export function SectionCard({ icon: Icon, title, subtitle, children, accent = 'slate' }) {
   const colors = {
@@ -335,6 +336,10 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
               {(config.system_instruction || '').length} ký tự
             </span>
           </div>
+          <SystemInstructionAiWriter
+            currentValue={config.system_instruction || ''}
+            onApply={(text) => update('system_instruction', text)}
+          />
           <textarea
             value={config.system_instruction || ''}
             onChange={(e) => update('system_instruction', e.target.value)}

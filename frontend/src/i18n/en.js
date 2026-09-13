@@ -8084,6 +8084,24 @@ Feel free to ask me anything!`,
 
   // PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 5 (PR-2) — "Reminder schedule" tab on the same
   // AdminWelcomeEmailPage. Send time is fixed at 08:00, not editable here (plan mục 1.4).
+  systemInstructionAiWriter: {
+    toggle: 'Write with AI',
+    hintLabel: 'Briefly describe the assistant you want',
+    hintPlaceholder: 'E.g. Friendly assistant that advises on English courses',
+    hintRequired: 'Please enter a hint for the AI',
+    hintTooLong: 'The hint must be at most {max} characters',
+    creditNote: 'Each generation uses 1 AI credit',
+    write: 'Write',
+    writing: 'Writing...',
+    previewTitle: 'Preview — not applied to the instruction yet',
+    discard: 'Discard',
+    rewrite: 'Rewrite (uses 1 more AI credit)',
+    apply: 'Use this',
+    overwriteConfirm: 'The instruction box already has content. Replace it with the AI version?',
+    emptyResult: 'The AI returned no content, please try again',
+    outOfCredit: 'You have run out of AI credits for this period',
+    writeFailed: 'AI writing failed, please try again',
+  },
   adminSubscriptionReminderSchedule: {
     tabLabel: 'Reminder schedule',
     title: 'Plan-expiry reminder schedule',
