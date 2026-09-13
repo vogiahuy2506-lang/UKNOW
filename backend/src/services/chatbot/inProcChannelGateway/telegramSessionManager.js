@@ -17,6 +17,19 @@
 
 import { buildDefaultClient, TelegramTransportError, whenReady } from './telegramClient.js';
 
+// `telegramMtProtoStorage.js` imports `@mtcute/core`, which has a
+// transitive dependency on the native `long` package. We pull it
+// in lazily so tests and stub-mode boots that never touch a real
+// session (e.g. `isStubOnly.spec.js`, the health endpoint) don't
+// pay the import cost. The dynamic `import()` is memoised so the
+// second call is free.
+let _mtProtoStorageModule = null;
+async function loadMtProtoStorageModule() {
+  if (_mtProtoStorageModule) return _mtProtoStorageModule;
+  _mtProtoStorageModule = await import('./telegramMtProtoStorage.js');
+  return _mtProtoStorageModule;
+}
+
 const logInfo = (msg, meta) =>
   meta !== undefined ? console.log(msg, meta) : console.log(msg);
 const logWarn = (msg) => console.warn(msg);
@@ -122,17 +135,30 @@ export class TelegramSessionManager {
    * @returns {Promise<{ restored: number, failed: number }>}
    */
   async restoreSessionsFromDb({ userId: _userId = null } = {}) {
-    if (!this._sessionRepo.listAllSessions) {
+    let keys;
+    if (typeof this._sessionRepo.listAllSessionStateKeys === 'function') {
+      // Preferred path — fetches just the keys ordered by
+      // most-recently-active, avoiding the JOIN with
+      // `telegram_accounts` that `listAllSessions` does. Keeps
+      // boot time O(1) round-trip regardless of how many
+      // accounts exist.
+      keys = await this._sessionRepo.listAllSessionStateKeys();
+    } else if (typeof this._sessionRepo.listAllSessions === 'function') {
+      // Legacy fallback — used by tests/mocks that haven't been
+      // updated yet. Maps back to the same key shape.
+      const rows = await this._sessionRepo.listAllSessions();
+      keys = rows
+        .map((r) => Number(r.telegram_user_id))
+        .filter((n) => Number.isFinite(n));
+    } else {
       logWarn(
-        '[TelegramSessionManager] sessionRepo.listAllSessions missing — skipping eager restore'
+        '[TelegramSessionManager] sessionRepo missing both listAllSessionStateKeys and listAllSessions — skipping eager restore'
       );
       return { restored: 0, failed: 0 };
     }
-    const rows = await this._sessionRepo.listAllSessions();
     let restored = 0;
     let failed = 0;
-    for (const row of rows) {
-      const telegramUserId = Number(row.telegram_user_id);
+    for (const telegramUserId of keys) {
       if (!Number.isFinite(telegramUserId)) {
         failed += 1;
         continue;
@@ -148,7 +174,7 @@ export class TelegramSessionManager {
       }
     }
     logInfo(
-      `[TelegramSessionManager] restored ${restored}/${rows.length} telegram clients (failed=${failed})`
+      `[TelegramSessionManager] restored ${restored}/${keys.length} telegram clients (failed=${failed})`
     );
     return { restored, failed };
   }
@@ -172,7 +198,7 @@ export class TelegramSessionManager {
 
   /**
    * Return the connected client for `telegramUserId`, hydrating it
-   * from the persisted session string if necessary. Returns `null` if
+   * from the persisted session blob if necessary. Returns `null` if
    * no session is stored or the stored session is no longer
    * authorised.
    */
@@ -184,10 +210,30 @@ export class TelegramSessionManager {
       return existing.client;
     }
 
-    const sessionString = await this._sessionRepo.getSessionString(
+    // Check up-front whether we have anything to hydrate. The
+    // Postgres-backed driver would also return an empty in-memory
+    // state if the row is missing, but the early-out saves a DB
+    // round-trip and lets the caller distinguish "first QR scan"
+    // (no row) from "row exists, decrypt failed".
+    const sessionBlob = await this._sessionRepo.getSessionString(
       Number(telegramUserId)
     );
-    if (!sessionString) return null;
+    if (!sessionBlob) return null;
+
+    // Build a Postgres-backed storage provider so mtcute reads +
+    // writes the encrypted JSONB row instead of touching the
+    // on-disk SQLite file at `.telegram-sessions/<key>/`. The
+    // provider is constructed even when `sessionBlob` was a
+    // legacy plaintext marker (because `getSessionString` returns
+    // null on a parse failure, this only runs when a real row
+    // exists — so the provider will load() a non-empty blob).
+    // Lazy-imported so the module file stays free of `@mtcute/core`
+    // in stub mode / health probes.
+    const { PostgresBackedTelegramStorage } = await loadMtProtoStorageModule();
+    const storageProvider = new PostgresBackedTelegramStorage({
+      telegramUserId,
+      repo: this._sessionRepo,
+    });
 
     // Wait for the production client class to settle before we
     // instantiate it. Without this, the first request after boot
@@ -195,9 +241,10 @@ export class TelegramSessionManager {
     // back a stub instance.
     await whenReady();
     const client = buildDefaultClient({
-      sessionString,
       apiId: this._telegramCreds.apiId,
       apiHash: this._telegramCreds.apiHash,
+      storageProvider,
+      storageKey: `tg-${telegramUserId}`,
     });
     try {
       await client.connect();

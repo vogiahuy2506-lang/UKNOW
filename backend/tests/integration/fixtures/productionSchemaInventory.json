@@ -1,13 +1,13 @@
 {
   "_meta": {
-    "source": "schema ky vong sau khi chay het migrations (goc: anh chup production 25/08/2026, update 194+195+196 ngay 08/09/2026, update 201+202+203+204 ngay 11/09/2026), update 050_create_telegram_accounts (danh nham so, dung ra 205) ngay 12/09/2026, update 212+213+214 (Telegram session_string + WhatsApp Baileys session creds/keys/profile) ngay 13/09/2026",
+    "source": "schema ky vong sau khi chay het migrations (goc: anh chup production 25/08/2026, update 194+195+196 ngay 08/09/2026, update 201+202+203+204 ngay 11/09/2026), update 050_create_telegram_accounts (danh nham so, dung ra 205) ngay 12/09/2026, update 212+213+214 (Telegram session_string + WhatsApp Baileys session creds/keys/profile) ngay 13/09/2026, update 217+218 (Telegram session_state + drop session_string placeholder) ngay 13/09/2026",
     "measuredAt": "2026-09-13",
     "method": "So md5(string_agg(column_name ORDER BY column_name)) theo tung bang giua DB test (dung tu bootstrap.sql) va production — ket qua 0 bang lech.",
     "scope": "CHI TEN COT. Anh chup goc co 51/112 bang lech kieu du lieu, chu yeu timestamp naive (prod) vs timestamptz (test). Xem _internal/PLAN_SCHEMA_DRIFT_BOOTSTRAP_2026-08-25.md.",
     "excluded": "3 bang backup tam tren production (courses_backup_20260825, campaign_nodes_backup_20260825, users_plan_backup_minh) khong tinh.",
-    "tables": 135,
-    "columns": 1774,
-    "note": "TU migration 172 tro di, fixture DI TRUOC production cho toi khi deploy: is_preview tren email_messages/zalo_messages chi ton tai o production SAU khi 172 chay. Metadata preflight/result migration 174 cung chi co tren production sau khi deploy release 174. Do lai voi production TRUOC deploy se thay lech — do la binh thuong, khong phai loi. | migration 207 (subscription_reminder_settings + users.subscription_reminders_sent) da vao fixture 13/09, production se co sau lan deploy ke tiep. | migration 212+213+214 da vao fixture 13/09 (telegram_accounts.session_string + whatsapp_baileys_session_creds/keys/profile), production se co sau lan deploy ke tiep."
+    "tables": 136,
+    "columns": 1777,
+    "note": "TU migration 172 tro di, fixture DI TRUOC production cho toi khi deploy: is_preview tren email_messages/zalo_messages chi ton tai o production SAU khi 172 chay. Metadata preflight/result migration 174 cung chi co tren production sau khi deploy release 174. Do lai voi production TRUOC deploy se thay lech — do lai voi production TRUOC deploy se thay lech — do la binh thuong, khong phai loi. | migration 207 (subscription_reminder_settings + users.subscription_reminders_sent) da vao fixture 13/09, production se co sau lan deploy ke tiep. | migration 212+213+214 da vao fixture 13/09 (telegram_accounts.session_string + whatsapp_baileys_session_creds/keys/profile), production se co sau lan deploy ke tiep. | migration 217+218 vao fixture 13/09 (telegram_session_state moi + telegram_accounts.session_string da DROP), production se co sau lan deploy ke tiep."
   },
   "tables": {
     "admin_menu_layouts": [
@@ -2003,7 +2003,6 @@
       "last_activity_at",
       "last_name",
       "phone",
-      "session_string",
       "telegram_user_id",
       "updated_at",
       "username"
@@ -2034,6 +2033,12 @@
       "updated_at",
       "visitor_info",
       "visitor_name"
+    ],
+    "telegram_session_state": [
+      "schema_version",
+      "state",
+      "telegram_user_id",
+      "updated_at"
     ],
     "telegram_personal_messages": [
       "attachments",

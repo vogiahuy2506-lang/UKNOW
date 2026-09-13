@@ -86,20 +86,28 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
    * @param {number} [opts.apiId]        TELEGRAM_API_ID
    * @param {string} [opts.apiHash]      TELEGRAM_API_HASH
    * @param {string|null} [opts.sessionString]
-   *   Reserved for forward-compat — mtcute currently uses a
-   *   SqliteStorage driver keyed on the storage path, so we
-   *   accept but don't act on a session string here. Keeping
-   *   the signature matches the base class contract used by
-   *   `telegramAuth.js` when it calls `buildDefaultClient`.
+   *   Legacy marker from the pre-215 era. mtcute's storage now
+   *   comes from `opts.storageProvider` (Postgres-backed); the
+   *   marker is ignored except for the `saveSession()` return
+   *   value, which is preserved for backward compat with the
+   *   `_onLoginSuccess` hook.
+   * @param {Object|null} [opts.storageProvider]
+   *   Optional `ITelegramStorageProvider` instance from
+   *   `telegramMtProtoStorage.js`. When present, mtcute uses it
+   *   as the source of truth for `kv`, `authKeys`, `peers`, and
+   *   `refMessages` — replacing the default on-disk SQLite file
+   *   under `.telegram-sessions/<key>/`. Multi-instance deploys
+   *   pass this so all replicas share the same session state.
    * @param {string} [opts.storagePath]
-   *   Directory for mtcute's SQLite session store. mtcute opens
-   *   `<storagePath>/client.session` via better-sqlite3, which
-   *   requires the directory itself to exist; the file is created
-   *   on first connect. Defaults to `./.telegram-sessions` so that
-   *   operators can mount a persistent volume at exactly that path
-   *   (mirroring how WhatsApp Baileys ships `./whatsapp-sessions`).
-   *   The directory is created lazily on first call, NOT by this
-   *   constructor — Dockerfile ensures it exists with `node` ownership.
+   *   Fallback storage path used when `opts.storageProvider`
+   *   is missing. mtcute opens `<storagePath>/client.session`
+   *   via better-sqlite3; the directory must exist (Dockerfile
+   *   ensures it). Defaults to `./.telegram-sessions` so
+   *   operators can mount a persistent volume at exactly that
+   *   path. New code should pass `storageProvider` instead and
+   *   skip this; the SQLite path is kept only as a graceful
+   *   degradation when the Postgres row is missing on first
+   *   boot (the backfill script will migrate it later).
    * @param {string} [opts.storageKey]
    *   Storage key (mimics Pyrogram's `StringSession` key). Each
    *   distinct value isolates a session — useful when one backend
@@ -110,10 +118,12 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
     apiId = null,
     apiHash = null,
     sessionString = null,
+    storageProvider = null,
     storagePath = '.telegram-sessions',
     storageKey = 'default',
   } = {}) {
     super({ sessionString, apiId, apiHash });
+    this._storageProvider = storageProvider;
     this._storagePath = storagePath;
     this._storageKey = storageKey;
     this._tg = null;
@@ -136,7 +146,14 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
     const clientOpts = {
       apiId: this.apiId,
       apiHash: this.apiHash,
-      storage: this._storagePath,
+      // Prefer the Postgres-backed StorageProvider when one was
+      // injected. mtcute's `storage` option accepts either a string
+      // path (instantiated as `SqliteStorage`) OR a fully-built
+      // `ITelegramStorageProvider` instance — we pass the latter so
+      // the gateway can run as one of N replicas behind a load
+      // balancer without each replica maintaining its own SQLite
+      // file. See `telegramMtProtoStorage.js` for the provider.
+      storage: this._storageProvider ?? this._storagePath,
       // Each (accountId, channel) combo gets a distinct key so
       // simultaneous sessions don't clobber each other.
       storageKey: this._storageKey,
@@ -509,15 +526,28 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
   }
 
   /**
-   * Return an opaque representation of the session. mtcute's
-   * SqliteStorage is the source of truth — we don't serialise
-   * it to a string here because that's lossy and mtcute uses
-   * multiple tables. The gateway's `telegram_accounts.session_blob`
-   * column stays a marker; the actual session lives on disk
-   * at `_storagePath`.
+   * Return an opaque representation of the session. Since
+   * migration 217 the actual session lives in Postgres
+   * (`telegram_session_state`) — the Postgres-backed driver
+   * flushes its in-memory state there automatically on every
+   * `StorageManager.save()` event. We still return a marker
+   * string so the legacy `_onLoginSuccess` hook in
+   * `telegramAuth.js` has something to write into its
+   * existence check; the marker is no longer the source of
+   * truth (and is no longer persisted to `telegram_accounts`,
+   * which lost its `session_string` column in migration 218).
+   *
+   * Before `connect()` runs, the mtcute client is not built yet,
+   * so we have nothing to report — return an empty string (the
+   * pre-215 contract). Once connected, prefer the Postgres
+   * marker when a `storageProvider` was injected; otherwise
+   * fall back to the legacy `mtcute:<storageKey>` shape so
+   * existing SQLite-path deployments keep producing the same
+   * marker.
    */
   saveSession() {
     if (!this._tg) return this.sessionString || '';
+    if (this._storageProvider) return 'postgres:loaded';
     return `mtcute:${this._storageKey}`;
   }
 }

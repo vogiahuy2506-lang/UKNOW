@@ -1,13 +1,15 @@
 /**
  * baileysAuthCrypto.util.js
  *
- * Mã hóa Baileys auth state (creds + Signal keys) at-rest — cùng cơ
- * chế AES-256-GCM + SMTP_SECRET_KEY với Zalo cookies và SMTP passwords
+ * Mã hóa auth state at-rest — cùng cơ chế AES-256-GCM +
+ * SMTP_SECRET_KEY với Zalo cookies và SMTP passwords
  * (`smtpSecretCrypto.js`), nhưng wrap theo shape JSONB-friendly để
  * repo không phải đổi column type.
  *
  * Wire format khi lưu vào cột `whatsapp_baileys_session_creds.creds`
- * (JSONB) hoặc `whatsapp_baileys_session_keys.value` (JSONB):
+ * (JSONB), `whatsapp_baileys_session_keys.value` (JSONB), HOẶC
+ * `telegram_session_state.state` (JSONB — mtcute Postgres-backed
+ * storage kể từ migration 217):
  *
  *   { enc: "enc:v1:<ivHex>:<authTagHex>:<cipherTextHex>" }
  *
@@ -16,12 +18,29 @@
  *   `pg` sẽ trả về string đó (OK) NHƯNG khi save vẫn ổn. Để giữ
  *   symmetric và có chỗ thêm version key, mình wrap object.
  * - Khi đọc: phát hiện `row.enc` thì `decryptSmtpSecret(row.enc)`
- *   rồi `JSON.parse` để trả về object Baileys cần.
+ *   rồi `JSON.parse` để trả về object Baileys/mtcute cần.
  * - Khi ghi: encrypt rồi wrap object.
  *
- * Tương thích ngược: nếu row là object Baileys "thật" (không có
- * field `.enc`) → trả nguyên, không lỗi. Lần ghi kế tiếp sẽ
- * nâng cấp dần.
+ * Tương thích ngược: nếu row là object "thật" (không có field
+ * `.enc`) → trả nguyên, không lỗi. Lần ghi kế tiếp sẽ nâng cấp
+ * dần.
+ *
+ * ── Rename history ────────────────────────────────────────────────────
+ * Originally this module was Baileys-only. After migration 217
+ * Telegram's Postgres-backed storage joined the same wire format
+ * (so we can rotate the encryption key once for the whole channel
+ * surface instead of per-channel), the function names were
+ * generalised:
+ *
+ *   encryptBaileysBlob   → encryptChannelSessionBlob
+ *   decryptBaileysBlob   → decryptChannelSessionBlob
+ *   isEncryptedBaileysBlob → isEncryptedChannelSessionBlob
+ *
+ * The old names are re-exported as deprecated aliases so existing
+ * call sites (notably `useDatabaseAuthState.js` for WhatsApp) keep
+ * working without a rename churn. New code should prefer the
+ * `*ChannelSessionBlob` names — see callers in
+ * `chatbotTelegram.repository.js` and `telegramMtProtoStorage.js`.
  */
 
 import {
@@ -87,12 +106,13 @@ function isEncryptedBlob(value) {
 }
 
 /**
- * Encrypt một object Baileys (creds blob hoặc Signal key value).
+ * Encrypt một auth-state object (Baileys `AuthenticationCreds` /
+ * Signal key value, OR mtcute storage blob).
  *
- * @param {any} plainObject object Baileys (AuthenticationCreds hoặc signal key)
+ * @param {any} plainObject
  * @returns {object} wrapper `{ enc: "enc:v1:..." }` để lưu vào JSONB
  */
-export function encryptBaileysBlob(plainObject) {
+export function encryptChannelSessionBlob(plainObject) {
   if (plainObject === null || plainObject === undefined) return plainObject;
   // Đã được wrap trước đó thì giữ nguyên (tránh double-encrypt)
   if (isEncryptedBlob(plainObject)) return plainObject;
@@ -119,15 +139,15 @@ export function encryptBaileysBlob(plainObject) {
 }
 
 /**
- * Decrypt một blob từ DB về object Baileys.
+ * Decrypt một blob từ DB về auth-state object.
  *
  * @param {any} storedValue giá trị từ JSONB column
- * @returns {any} object Baileys (parsed) hoặc `storedValue` nguyên nếu legacy plaintext
+ * @returns {any} object (parsed) hoặc `storedValue` nguyên nếu legacy plaintext
  */
-export function decryptBaileysBlob(storedValue) {
+export function decryptChannelSessionBlob(storedValue) {
   if (storedValue === null || storedValue === undefined) return storedValue;
   if (!isEncryptedBlob(storedValue)) {
-    // Legacy plaintext row — trả nguyên cho Baileys dùng tiếp.
+    // Legacy plaintext row — trả nguyên để Baileys/mtcute dùng tiếp.
     // Lần write kế tiếp sẽ nâng cấp lên encrypted.
     // Vẫn phải revive Buffer vì plaintext cũ cũng đã trải qua
     // JSONB serialize/parse (mất type).
@@ -137,7 +157,7 @@ export function decryptBaileysBlob(storedValue) {
     const plain = decryptSmtpSecret(storedValue[ENC_FIELD]);
     return reviveBufferInPlace(JSON.parse(plain));
   } catch (err) {
-    // Sai key → trả null để Baileys khởi tạo lại từ QR.
+    // Sai key → trả null để caller khởi tạo lại từ QR.
     // Tốt hơn là ném lỗi vì nếu trả object rỗng thì zalo-js tương
     // đương sẽ lỗi khó hiểu (Baileys cũng vậy — null thì khởi tạo mới).
     console.error(
@@ -146,4 +166,50 @@ export function decryptBaileysBlob(storedValue) {
     );
     return null;
   }
+}
+
+/**
+ * Detect whether a row was written by the new encrypted path.
+ * Exported so call sites can branch on legacy-plaintext rows
+ * without trying to decrypt them (the legacy path is also a
+ * valid input — see `decryptChannelSessionBlob`).
+ */
+export function isEncryptedChannelSessionBlob(value) {
+  return isEncryptedBlob(value);
+}
+
+// ── Deprecated aliases ────────────────────────────────────────────────
+//
+// Kept so existing call sites (notably `useDatabaseAuthState.js`)
+// keep working without a rename churn. New code should prefer the
+// `*ChannelSessionBlob` names above. The aliases log a one-shot
+// warning on first use so we can find stragglers during the next
+// refactor pass.
+
+const _deprecatedAliasNotices = new Set();
+function _deprecatedAliasNotice(oldName, newName) {
+  if (_deprecatedAliasNotices.has(oldName)) return;
+  _deprecatedAliasNotices.add(oldName);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[BaileysAuthCrypto] ${oldName} is deprecated; use ${newName} instead.`
+  );
+}
+
+/** @deprecated Use {@link encryptChannelSessionBlob}. */
+export function encryptBaileysBlob(plainObject) {
+  _deprecatedAliasNotice('encryptBaileysBlob', 'encryptChannelSessionBlob');
+  return encryptChannelSessionBlob(plainObject);
+}
+
+/** @deprecated Use {@link decryptChannelSessionBlob}. */
+export function decryptBaileysBlob(storedValue) {
+  _deprecatedAliasNotice('decryptBaileysBlob', 'decryptChannelSessionBlob');
+  return decryptChannelSessionBlob(storedValue);
+}
+
+/** @deprecated Use {@link isEncryptedChannelSessionBlob}. */
+export function isEncryptedBaileysBlob(value) {
+  _deprecatedAliasNotice('isEncryptedBaileysBlob', 'isEncryptedChannelSessionBlob');
+  return isEncryptedChannelSessionBlob(value);
 }
