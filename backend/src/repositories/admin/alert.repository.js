@@ -153,26 +153,61 @@ export async function resolveEvent(eventId, resolvedBy) {
  * nhận (total_recipients) — chiến dịch danh sách càng dài thì total_recipients càng làm
  * loãng tỉ lệ, che mất chuỗi gửi đang hỏng thật.
  *
- * Điều kiện lọc dùng CẢ status='running' LẪN completed_at trong cửa sổ, không lọc theo
- * started_at: chiến dịch continuous bắt đầu một lần rồi chạy hàng tuần/hàng tháng — lọc
- * theo started_at nghĩa là nó rơi khỏi cửa sổ sau window_minutes phút đầu tiên và không
- * bao giờ được đánh giá lại, dù đang hỏng nặng ngay lúc này.
+ * Đếm trực tiếp từ zalo_messages và email_messages trong cửa sổ windowMinutes phút,
+ * tách riêng số lượng theo kênh (zalo / email) và loại bỏ is_preview = true.
+ *
+ * Không dùng SUM(successful_sends/failed_sends) từ campaign_runs vì với run status='running',
+ * bộ đếm tích luỹ cả đời khiến lỗi cũ từ nhiều ngày trước làm cảnh báo nổ mãi dù hiện tại
+ * đang chạy bình thường (sự cố 50 thông báo từ 10/09/2026).
+ *
+ * - Zalo: status = 'sent' là thành công, status = 'failed' là thất bại.
+ *   Các trạng thái aborted/skipped/queued/pending không tính vào mẫu số (chưa thử gửi).
+ * - Email: status IN ('sent','opened','clicked') là thành công, status IN ('failed','bounced') là thất bại.
  */
 export async function metricCampaignFailRate(windowMinutes, minRecipients = 20) {
   const { rows } = await db.query(
-    `SELECT
-       COALESCE(SUM(successful_sends), 0)::int AS sent,
-       COALESCE(SUM(failed_sends), 0)::int AS failed
-     FROM campaign_runs
-     WHERE status = 'running'
-        OR completed_at >= NOW() - ($1 || ' minutes')::interval`,
+    `WITH z AS (
+       SELECT COUNT(*) FILTER (WHERE status = 'sent') AS ok,
+              COUNT(*) FILTER (WHERE status = 'failed') AS hong
+       FROM zalo_messages
+       WHERE created_at >= NOW() - ($1 || ' minutes')::interval
+         AND COALESCE(is_preview, false) = false
+     ), e AS (
+       SELECT COUNT(*) FILTER (WHERE status IN ('sent','opened','clicked')) AS ok,
+              COUNT(*) FILTER (WHERE status IN ('failed','bounced')) AS hong
+       FROM email_messages
+       WHERE created_at >= NOW() - ($1 || ' minutes')::interval
+         AND COALESCE(is_preview, false) = false
+     )
+     SELECT
+       (z.ok + e.ok)::int AS sent,
+       (z.hong + e.hong)::int AS failed,
+       z.ok::int AS zalo_sent,
+       z.hong::int AS zalo_failed,
+       e.ok::int AS email_sent,
+       e.hong::int AS email_failed
+     FROM z, e`,
     [String(windowMinutes)]
   );
+
   const sent = Number(rows[0]?.sent || 0);
   const failed = Number(rows[0]?.failed || 0);
+  const zaloSent = Number(rows[0]?.zalo_sent || 0);
+  const zaloFailed = Number(rows[0]?.zalo_failed || 0);
+  const emailSent = Number(rows[0]?.email_sent || 0);
+  const emailFailed = Number(rows[0]?.email_failed || 0);
+
   const attempted = sent + failed;
-  if (attempted < minRecipients) return { rate: 0, total: attempted, failed, skipped: true };
-  return { rate: failed / attempted, total: attempted, failed, skipped: false };
+  const zaloTotal = zaloSent + zaloFailed;
+  const emailTotal = emailSent + emailFailed;
+
+  const zalo = { sent: zaloSent, failed: zaloFailed, total: zaloTotal };
+  const email = { sent: emailSent, failed: emailFailed, total: emailTotal };
+
+  if (attempted < minRecipients) {
+    return { rate: 0, total: attempted, failed, skipped: true, zalo, email };
+  }
+  return { rate: failed / attempted, total: attempted, failed, skipped: false, zalo, email };
 }
 
 export async function metricCampaignRunFailures(windowMinutes) {
