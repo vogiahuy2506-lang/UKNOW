@@ -216,6 +216,7 @@ jobs:
               --name uknow-migrate \
               --network uknow_network \
               -v /root/uknow/backend/.env:/app/.env \
+              -e MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR=true \
               "$BACKEND_IMAGE" node scripts/migrate.js
             # Migration 174 deliberately skips a row that changed after the
             # preflight snapshot. Audit only the deploy that created a fresh
