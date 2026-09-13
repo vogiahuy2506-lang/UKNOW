@@ -45,6 +45,7 @@ import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
 import { recordConsents, getUserConsentHistory, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
+import { getAppMenuLayout } from '../services/admin/adminMenu.service.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -1092,6 +1093,38 @@ class UserController {
         success: false,
         error: 'Không thể lấy lịch sử đồng ý',
         message: 'Không thể lấy lịch sử đồng ý',
+      });
+    }
+  }
+
+  /**
+   * GET /api/users/app-menu-layout
+   * Lấy cấu hình chuyên mục menu ứng dụng cho khách (/app).
+   * Chỉ authMiddleware, trả riêng categories (KHÔNG nhét vào /auth/me).
+   */
+  async getAppMenuLayout(_req, res) {
+    try {
+      const data = await getAppMenuLayout();
+      return res.json({
+        success: true,
+        data: {
+          categories: data.categories || [],
+        },
+      });
+    } catch (error) {
+      console.error('[userController.getAppMenuLayout] request failed:', error);
+      // Bảng admin_menu_layouts đã có từ migration 201, nhánh 42P01 chỉ phòng môi trường test/dev lạ.
+      // Lỗi thật khi chưa chạy migration 205 là 23514 (check_violation) lúc PUT scope app_user,
+      // để nguyên 500 vì quy trình deploy luôn chạy migration trước khi khởi động backend.
+      if (error?.code === '42P01') {
+        return res.json({
+          success: true,
+          data: { categories: [] },
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: 'Không thể tải cấu hình menu',
       });
     }
   }

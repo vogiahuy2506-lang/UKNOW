@@ -120,51 +120,11 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       adminMenuCategories,
       HiOutlineCollection
     )
-    // PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12) — tham số thứ ba `null`: chưa đọc DB, menu
-    // khách luôn dựng từ DEFAULT_APP_MENU_CATEGORIES. PR-2 mới thay `null` bằng cấu hình đọc
-    // qua GET /api/users/app-menu-layout.
-    : groupAppMenuItems(userMenuItems(t), locale, null, HiOutlineCollection);
+    : groupAppMenuItems(userMenuItems(t), locale, adminMenuCategories, HiOutlineCollection);
   const isEmployeeCtx = activeContext?.type === 'employee';
   const ctxPermissions = activeContext?.permissions || {};
 
   const [floatingItem, setFloatingItem] = useState(null);
-
-  useEffect(() => {
-    if (!isSuperAdmin) {
-      setAdminMenuCategories(null);
-      return undefined;
-    }
-    let isMounted = true;
-    adminMenuApiService.getLayout()
-      .then((response) => {
-        if (isMounted) setAdminMenuCategories(response.data?.data?.categories || []);
-      })
-      .catch((error) => {
-        // Sidebar must remain usable while a new backend migration is rolling
-        // out or if the layout endpoint is temporarily unavailable.
-        console.warn('[Sidebar] Falling back to default admin menu:', error?.message);
-      });
-
-    const handleLayoutUpdated = (event) => {
-      if (Array.isArray(event.detail?.categories)) {
-        setAdminMenuCategories(event.detail.categories);
-        setFloatingItem(null);
-        setExpandedGroupKey(null);
-      }
-    };
-    window.addEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
-    return () => {
-      isMounted = false;
-      window.removeEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
-    };
-  }, [isSuperAdmin]);
-
-  const handleNavClose = () => {
-    setFloatingItem(null);
-    if (isMobile && onClose) onClose();
-  };
-
-  const isDesktopExpanded = !isMobile && isOpen;
 
   const filterItem = (item) => {
     if (item.hideInProd && import.meta.env.MODE === 'production') return false;
@@ -175,6 +135,84 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     }
     return true;
   };
+
+  const applyLayoutCategories = (rawCats) => {
+    const cats = Array.isArray(rawCats) ? rawCats : [];
+    setAdminMenuCategories(cats);
+    const items = isSuperAdmin
+      ? groupSuperAdminMenuItems(superAdminMenuItems(t), locale, cats, HiOutlineCollection)
+      : groupAppMenuItems(userMenuItems(t), locale, cats, HiOutlineCollection);
+    const visible = items
+      .map((item) => {
+        if (!item.children) return item;
+        return { ...item, children: item.children.filter(filterItem) };
+      })
+      .filter((item) => filterItem(item) && (!item.children || item.children.length > 0));
+    const activeParent = visible.find((item) => item.children && (
+      item.children.some((child) => {
+        if (child.end) return location.pathname === child.path;
+        return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
+      })
+      || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'))
+    ));
+    if (activeParent) {
+      setExpandedGroupKey(getMenuItemKey(activeParent));
+    }
+  };
+
+  const applyLayoutCategoriesRef = useRef(applyLayoutCategories);
+  applyLayoutCategoriesRef.current = applyLayoutCategories;
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isSuperAdmin) {
+      adminMenuApiService.getLayout()
+        .then((response) => {
+          if (isMounted) applyLayoutCategoriesRef.current(response.data?.data?.categories || []);
+        })
+        .catch((error) => {
+          // Sidebar must remain usable while a new backend migration is rolling
+          // out or if the layout endpoint is temporarily unavailable.
+          console.warn('[Sidebar] Falling back to default admin menu:', error?.message);
+        });
+
+      const handleLayoutUpdated = (event) => {
+        if (Array.isArray(event.detail?.categories)) {
+          setFloatingItem(null);
+          // Review Claude 13/09: tính lại nhóm đang mở theo route hiện tại thay vì đóng hết —
+          // super admin vừa lưu bố cục xong không bị mất dấu mình đang đứng ở nhóm nào (cùng
+          // luật với PR-3: nhóm chứa trang đang mở luôn mở).
+          applyLayoutCategoriesRef.current(event.detail.categories);
+        }
+      };
+      window.addEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
+      return () => {
+        isMounted = false;
+        window.removeEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
+      };
+    }
+
+    // PR-2: Đọc cấu hình menu app của khách qua GET /api/users/app-menu-layout lúc mount.
+    // Giữ .catch() fallback về mặc định; không phát / lắng nghe sự kiện live update cho khách.
+    adminMenuApiService.getUserAppMenuLayout()
+      .then((response) => {
+        if (isMounted) applyLayoutCategoriesRef.current(response.data?.data?.categories || []);
+      })
+      .catch((error) => {
+        console.warn('[Sidebar] Falling back to default app menu:', error?.message);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isSuperAdmin]);
+
+  const handleNavClose = () => {
+    setFloatingItem(null);
+    if (isMobile && onClose) onClose();
+  };
+
+  const isDesktopExpanded = !isMobile && isOpen;
 
   const visibleMenuItems = menuItems
     .map((item) => {

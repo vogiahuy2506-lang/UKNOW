@@ -7977,6 +7977,10 @@ Feel free to ask me anything!`,
     loadFailed: 'Could not load the menu layout; using the default layout',
     saveFailed: 'Could not save the menu layout',
     saveSuccess: 'Admin menu layout saved',
+    saveSuccessApp: 'App menu layout saved',
+    discardChangesConfirm: 'Unsaved layout changes will be lost. Switch tab anyway?',
+    scopeSuperAdmin: 'Super Admin Menu',
+    scopeAppUser: 'App Menu (/app)',
   },
 
   adminWelcomeEmail: {

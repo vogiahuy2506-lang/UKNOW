@@ -3106,7 +3106,7 @@ CREATE TABLE IF NOT EXISTS admin_menu_layouts (
   updated_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT admin_menu_layouts_scope_check CHECK (scope = 'super_admin'),
+  CONSTRAINT admin_menu_layouts_scope_check CHECK (scope IN ('super_admin', 'app_user')),
   CONSTRAINT admin_menu_layouts_categories_array_check CHECK (jsonb_typeof(categories) = 'array')
 );
 

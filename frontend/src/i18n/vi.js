@@ -7937,6 +7937,10 @@ export default {
     loadFailed: 'Không thể tải bố cục menu; đang dùng bố cục mặc định',
     saveFailed: 'Không thể lưu bố cục menu',
     saveSuccess: 'Đã lưu bố cục menu quản trị',
+    saveSuccessApp: 'Đã lưu bố cục menu ứng dụng',
+    discardChangesConfirm: 'Bố cục đang sửa chưa lưu sẽ mất. Vẫn chuyển tab?',
+    scopeSuperAdmin: 'Menu Quản trị (Super Admin)',
+    scopeAppUser: 'Menu Ứng dụng (/app)',
   },
 
   adminWelcomeEmail: {

@@ -18,4 +18,12 @@ router.put(
   controller.updateLayout
 );
 
+router.get('/app', controller.getAppLayout);
+router.put(
+  '/app',
+  [body('categories').isArray({ min: 1, max: 30 }).withMessage('Danh sách chuyên mục không hợp lệ')],
+  handleValidationErrors,
+  controller.updateAppLayout
+);
+
 export default router;

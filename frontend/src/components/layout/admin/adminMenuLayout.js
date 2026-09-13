@@ -93,7 +93,7 @@ export function groupSuperAdminMenuItems(items, locale, categories, CategoryIcon
  * super admin tự tạo sau này (PR-2, không có icon riêng).
  */
 export const DEFAULT_APP_MENU_CATEGORIES = Object.freeze([
-  { id: 'main', nameVi: '', nameEn: '' },
+  { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)' },
   { id: 'ai_chatbot', nameVi: 'AI Chatbot', nameEn: 'AI Chatbot', icon: HiOutlineInbox },
   { id: 'campaigns', nameVi: 'Chiến dịch', nameEn: 'Campaigns', icon: HiOutlineLightningBolt },
   { id: 'landing_page', nameVi: 'Landing page', nameEn: 'Landing page', icon: HiOutlineGlobeAlt },

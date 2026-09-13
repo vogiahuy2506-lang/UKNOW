@@ -1,4 +1,6 @@
 import {
+  findLayout,
+  saveLayout,
   findSuperAdminLayout,
   saveSuperAdminLayout,
 } from '../../repositories/admin/adminMenu.repository.js';
@@ -80,6 +82,25 @@ export async function getSuperAdminMenuLayout() {
 export async function updateSuperAdminMenuLayout(categories, actorUserId) {
   const normalized = normalizeAdminMenuCategories(categories);
   const row = await saveSuperAdminLayout(normalized, actorUserId);
+  return {
+    categories: row.categories,
+    updatedBy: row.updated_by ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+export async function getAppMenuLayout() {
+  const row = await findLayout({ scope: 'app_user' });
+  return {
+    categories: Array.isArray(row?.categories) ? row.categories : [],
+    updatedBy: row?.updated_by ?? null,
+    updatedAt: row?.updated_at ?? null,
+  };
+}
+
+export async function updateAppMenuLayout(categories, actorUserId) {
+  const normalized = normalizeAdminMenuCategories(categories);
+  const row = await saveLayout({ categories: normalized, updatedBy: actorUserId, scope: 'app_user' });
   return {
     categories: row.categories,
     updatedBy: row.updated_by ?? null,

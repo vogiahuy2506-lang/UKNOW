@@ -9,6 +9,15 @@ const adminMenuApiService = {
   updateLayout(categories) {
     return api.put('/admin/menu-layout', { categories });
   },
+  getAppLayout() {
+    return api.get('/admin/menu-layout/app');
+  },
+  updateAppLayout(categories) {
+    return api.put('/admin/menu-layout/app', { categories });
+  },
+  getUserAppMenuLayout() {
+    return api.get('/users/app-menu-layout');
+  },
 };
 
 export default adminMenuApiService;

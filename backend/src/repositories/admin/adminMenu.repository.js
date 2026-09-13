@@ -2,18 +2,18 @@ import db from '../../config/database.js';
 
 const SUPER_ADMIN_SCOPE = 'super_admin';
 
-export async function findSuperAdminLayout(queryable = db) {
+export async function findLayout({ scope = SUPER_ADMIN_SCOPE, queryable = db } = {}) {
   const { rows } = await queryable.query(
     `SELECT categories, updated_by, updated_at
      FROM admin_menu_layouts
      WHERE scope = $1
      LIMIT 1`,
-    [SUPER_ADMIN_SCOPE]
+    [scope]
   );
   return rows[0] || null;
 }
 
-export async function saveSuperAdminLayout(categories, updatedBy, queryable = db) {
+export async function saveLayout({ categories, updatedBy, scope = SUPER_ADMIN_SCOPE, queryable = db } = {}) {
   const { rows } = await queryable.query(
     `INSERT INTO admin_menu_layouts (scope, categories, updated_by)
      VALUES ($1, $2::jsonb, $3)
@@ -22,7 +22,15 @@ export async function saveSuperAdminLayout(categories, updatedBy, queryable = db
        updated_by = EXCLUDED.updated_by,
        updated_at = NOW()
      RETURNING categories, updated_by, updated_at`,
-    [SUPER_ADMIN_SCOPE, JSON.stringify(categories), updatedBy]
+    [scope, JSON.stringify(categories), updatedBy]
   );
   return rows[0];
+}
+
+export async function findSuperAdminLayout(queryable = db) {
+  return findLayout({ scope: SUPER_ADMIN_SCOPE, queryable });
+}
+
+export async function saveSuperAdminLayout(categories, updatedBy, queryable = db) {
+  return saveLayout({ categories, updatedBy, scope: SUPER_ADMIN_SCOPE, queryable });
 }

@@ -9,6 +9,10 @@ const router = express.Router();
 // All routes require authentication
 router.use(authMiddleware);
 
+// Bố cục menu ứng dụng cho khách (/app).
+// Đặt trước mọi cổng router-level (nếu có) để người dùng bị chặn SĐT/mật khẩu vẫn tải được menu đầy đủ.
+router.get('/app-menu-layout', userController.getAppMenuLayout.bind(userController));
+
 // Get profile
 router.get('/profile', userController.getProfile.bind(userController));
 

@@ -2,16 +2,22 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockFindSuperAdminLayout = jest.fn();
 const mockSaveSuperAdminLayout = jest.fn();
+const mockFindLayout = jest.fn();
+const mockSaveLayout = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/admin/adminMenu.repository.js', () => ({
   findSuperAdminLayout: mockFindSuperAdminLayout,
   saveSuperAdminLayout: mockSaveSuperAdminLayout,
+  findLayout: mockFindLayout,
+  saveLayout: mockSaveLayout,
 }));
 
 const {
   getSuperAdminMenuLayout,
+  getAppMenuLayout,
   normalizeAdminMenuCategories,
   updateSuperAdminMenuLayout,
+  updateAppMenuLayout,
 } = await import('../adminMenu.service.js');
 
 describe('adminMenu.service', () => {
@@ -79,5 +85,34 @@ describe('adminMenu.service', () => {
       updatedBy: 42,
       updatedAt: savedRow.updated_at,
     });
+  });
+
+  it('lưu và đọc layout của app_user với đúng scope', async () => {
+    mockFindLayout.mockResolvedValue({
+      categories: [{ id: 'campaigns', nameVi: 'Chiến dịch', nameEn: 'Campaigns', itemKeys: ['quick_send'] }],
+      updated_by: 99,
+      updated_at: '2026-09-13T00:00:00.000Z',
+    });
+
+    const fetched = await getAppMenuLayout();
+    expect(mockFindLayout).toHaveBeenCalledWith({ scope: 'app_user' });
+    expect(fetched.categories[0].id).toBe('campaigns');
+
+    mockSaveLayout.mockResolvedValue({
+      categories: [{ id: 'campaigns', nameVi: 'Chiến dịch', nameEn: 'Campaigns', itemKeys: ['quick_send'] }],
+      updated_by: 99,
+      updated_at: '2026-09-13T00:00:00.000Z',
+    });
+
+    const updated = await updateAppMenuLayout([
+      { id: 'campaigns', nameVi: 'Chiến dịch', nameEn: 'Campaigns', itemKeys: ['quick_send'] },
+    ], 99);
+
+    expect(mockSaveLayout).toHaveBeenCalledWith({
+      categories: [{ id: 'campaigns', nameVi: 'Chiến dịch', nameEn: 'Campaigns', itemKeys: ['quick_send'] }],
+      updatedBy: 99,
+      scope: 'app_user',
+    });
+    expect(updated.updatedBy).toBe(99);
   });
 });
