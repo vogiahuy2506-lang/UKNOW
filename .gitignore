@@ -36,7 +36,36 @@ db.sql
 ####################
 backend/node_modules/
 backend/.env
+# Legacy Baileys session folder (migration 213+214). The service no
+# longer reads or writes here — everything is in Postgres. Keep the
+# ignore line so a stale `node_modules`-style leak in a Docker build
+# never gets committed. Operators should run
+# `node scripts/backfillBaileysSessions.js` once and then `rm -rf`
+# the folder manually.
 backend/whatsapp-sessions/
+
+# mtcute's local SQLite storage for the in-process Telegram gateway.
+# These files hold auth keys and DC state. They MUST stay per-machine
+# (committing them leaks auth state across worktrees).
+backend/.telegram-mtcute-storage
+backend/.telegram-mtcute-storage-shm
+backend/.telegram-mtcute-storage-wal
+backend/.telegram-test-storage
+
+# Dev-only scratch helpers (release advisory locks, mint JWT for curl
+# tests, dump DB state, dump process logs). These mutate the database
+# and the running backend — they belong to a developer's terminal,
+# not the repo. Keep them ignored so an accidental `git add .` in the
+# backend folder never picks them up.
+backend/.check_locks.cjs
+backend/.release_locks.cjs
+backend/.make_jwt.cjs
+backend/.start.log
+backend/.start.err
+
+# One-off artefacts from local debugging (a QR image saved during a
+# Baileys reconnect trial). Safe to keep ignored.
+backend/real-qr-from-handler.png
 
 # Integration test overrides (Postgres local)
 backend/tests/integration/.env.test
@@ -104,6 +133,16 @@ backend/sql/
 backend/.tmp_zca/
 backend/curl/
 uknow_campaign_schema.sql
+
+####################
+# LEGACY PYTHON GATEWAYS (removed — kept as a safety net so old
+# `.venv/`, `.pid`, `.secret` files in worktrees don't sneak in)
+####################
+.telegram-gateway.pid
+.telegram-gateway.secret
+__pycache__/
+*.pyc
+.venv/
 
 ####################
 # AI AGENT INSTRUCTIONS (local-only, không đẩy lên repo)

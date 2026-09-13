@@ -82,6 +82,115 @@ class ChatbotTelegramRepository {
     return rows[0] || null;
   }
 
+  /**
+   * Read-only: fetch the raw session string stored alongside an account.
+   * Returns the persisted MTProto session string, or `null` if no
+   * session has been captured yet.
+   */
+  async getSessionString(telegramUserId, { userId } = {}) {
+    const params = [telegramUserId];
+    let userClause = '';
+    if (userId) {
+      params.push(userId);
+      userClause = 'AND id_user = $2';
+    }
+    const { rows } = await db.query(
+      `SELECT session_string FROM telegram_accounts
+       WHERE telegram_user_id = $1 ${userClause}`,
+      params
+    );
+    return rows[0]?.session_string ?? null;
+  }
+
+  /**
+   * Persist a freshly captured session string alongside the profile
+   * row. Called by the in-process gateway (`telegramAuth`) right after
+   * QR login succeeds. If the row does not exist yet, it is created
+   * with `is_active=true`. Safe to call repeatedly.
+   */
+  async upsertSession({
+    telegramUserId,
+    sessionString,
+    phone = null,
+    firstName = null,
+    lastName = null,
+    username = null,
+    userId = null,
+  }) {
+    const { rows } = await db.query(
+      `INSERT INTO telegram_accounts
+         (id_user, telegram_user_id, phone, first_name, last_name, username, session_string)
+       VALUES (COALESCE($1, (SELECT id_user FROM telegram_accounts
+                              WHERE telegram_user_id = $2 LIMIT 1)),
+               $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (telegram_user_id) DO UPDATE SET
+         phone          = COALESCE(EXCLUDED.phone,          telegram_accounts.phone),
+         first_name     = COALESCE(EXCLUDED.first_name,     telegram_accounts.first_name),
+         last_name      = COALESCE(EXCLUDED.last_name,      telegram_accounts.last_name),
+         username       = COALESCE(EXCLUDED.username,       telegram_accounts.username),
+         session_string = EXCLUDED.session_string,
+         is_active      = true,
+         updated_at     = NOW()
+       RETURNING *`,
+      [userId, telegramUserId, phone, firstName, lastName, username, sessionString]
+    );
+    return rows[0];
+  }
+
+  /**
+   * Drop the stored session string without deleting the profile row.
+   * Used when a transport reports the stored session is no longer
+   * authorised.
+   */
+  async clearSessionString(telegramUserId) {
+    await db.query(
+      `UPDATE telegram_accounts SET session_string = NULL, updated_at = NOW()
+       WHERE telegram_user_id = $1`,
+      [telegramUserId]
+    );
+  }
+
+  /**
+   * List every Telegram account that has a stored session. Mirrors the
+   * Python gateway's `storage.list_all()` so the in-process `listAccounts`
+   * facade can produce an `is_loaded` summary.
+   */
+  async listAllSessions() {
+    const { rows } = await db.query(
+      `SELECT id, id_user, telegram_user_id, phone, first_name, last_name, username,
+              session_string, is_active
+       FROM telegram_accounts
+       WHERE session_string IS NOT NULL
+       ORDER BY updated_at DESC NULLS LAST, id DESC`
+    );
+    return rows;
+  }
+
+  /**
+   * Bind a session's owning Telegram user id to a specific
+   * `telegram_accounts.id`. Called right after QR login.
+   */
+  async bindAccount(telegramUserId, accountId) {
+    const { rows } = await db.query(
+      `UPDATE telegram_accounts SET id_user = COALESCE(id_user, $2), updated_at = NOW()
+       WHERE telegram_user_id = $1
+       RETURNING *`,
+      [Number(telegramUserId), Number(accountId)]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Hard-delete an account row by `telegram_user_id`.
+   */
+  async deleteByTelegramUserId(telegramUserId) {
+    const { rows } = await db.query(
+      `DELETE FROM telegram_accounts WHERE telegram_user_id = $1 RETURNING *`,
+      [Number(telegramUserId)]
+    );
+    return rows[0] || null;
+  }
+
   async listAccountsByUser(userId) {
     const { rows } = await db.query(
       `SELECT * FROM telegram_accounts

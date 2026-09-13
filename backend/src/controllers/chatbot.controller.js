@@ -13,6 +13,13 @@ import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 import telegramPersonalService from '../services/chatbot/telegramPersonal.service.js';
 import telegramGateway from '../services/chatbot/telegramGateway.client.js';
+import {
+  ensureGateway as ensureTelegramGateway,
+  isStubOnly,
+  getState,
+} from '../services/chatbot/inProcChannelGateway/index.js';
+
+const isTelegramStubOnly = () => isStubOnly({ channel: 'telegram' });
 import customChatService from '../services/ai/customChat.service.js';
 import aiCreditMeter, { VISITOR_CHAT_UNAVAILABLE_MESSAGE } from '../services/ai/aiCreditMeter.service.js';
 import zaloInboxService from '../services/chatbot/zaloInbox.service.js';
@@ -618,29 +625,61 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'chatbot_id must be a number or empty' });
       }
       const userId = resolveWorkspaceOwnerId(req.user);
+      console.log('[ChatbotChannel] listWhatsAppAccounts userId=%s chatbotId=%s', userId, chatbotId);
 
       // 1. Cloud API accounts (từ chatbot_channel_connections).
-      const cloudAccounts = await chatbotWhatsAppAccountRepository.listAccountsForUser(userId, chatbotId);
+      let cloudAccounts = [];
+      try {
+        cloudAccounts = await chatbotWhatsAppAccountRepository.listAccountsForUser(userId, chatbotId);
+      } catch (e) {
+        console.error('[ChatbotChannel] listAccountsForUser (cloud) failed:', e.message);
+        throw e;
+      }
 
       // 2. Baileys accounts (in-mem + persisted files).
-      const allBaileys = listBaileysSessions();
-      const persistedBaileys = listBaileysPersistedSessions();
+      let allBaileys = [];
+      let persistedBaileys = [];
+      try {
+        allBaileys = listBaileysSessions() || [];
+      } catch (e) {
+        console.error('[ChatbotChannel] listBaileysSessions (mem) failed:', e.message);
+      }
+      try {
+        // `listPersistedSessions` is async (lazy-loads the repo) — it
+        // resolves to an array of session keys. We must `await` it,
+        // otherwise we get a Promise and `.filter` blows up.
+        const result = await listBaileysPersistedSessions();
+        persistedBaileys = Array.isArray(result) ? result : [];
+      } catch (e) {
+        console.error('[ChatbotChannel] listBaileysPersistedSessions failed:', e.message);
+      }
       const userPrefix = `${userId}-`;
+      const safeAllBaileys = Array.isArray(allBaileys) ? allBaileys : [];
+      const safePersistedBaileys = Array.isArray(persistedBaileys) ? persistedBaileys : [];
       const shortKeys = Array.from(new Set([
-        ...allBaileys.filter((s) => s.sessionKey.startsWith(userPrefix))
+        ...safeAllBaileys
+          .filter((s) => s?.sessionKey?.startsWith?.(userPrefix))
           .map((s) => s.sessionKey.substring(userPrefix.length)),
-        ...persistedBaileys
-          .filter((k) => k.startsWith(userPrefix))
+        ...safePersistedBaileys
+          .filter((k) => typeof k === 'string' && k.startsWith(userPrefix))
           .map((k) => k.substring(userPrefix.length)),
       ]));
 
       const baileysAccounts = await Promise.all(shortKeys.map(async (shortKey) => {
         const fullKey = `${userId}-${shortKey}`;
-        const detail = allBaileys.find((s) => s.sessionKey === fullKey) || {};
-        // Lookup AI settings for this (user, session, chatbot).
-        const settings = await chatbotWhatsAppBaileysRepository.getSettings(
-          userId, fullKey, { idChatbot: chatbotId }
-        );
+        const detail = safeAllBaileys.find((s) => s.sessionKey === fullKey) || {};
+        let settings = null;
+        try {
+          settings = await chatbotWhatsAppBaileysRepository.getSettings(
+            userId, fullKey, { idChatbot: chatbotId }
+          );
+        } catch (e) {
+          console.error(
+            '[ChatbotChannel] getSettings (baileys) failed for %s: %s',
+            fullKey, e.message
+          );
+          settings = null;
+        }
         const isEnabled = settings?.is_enabled === true;
         const status = detail.status || 'closed';
         const phoneRaw = detail.userId || '';
@@ -661,7 +700,7 @@ class ChatbotController {
       }));
 
       // 3. Tag Cloud API items + chuẩn hoá provider field.
-      const taggedCloudAccounts = cloudAccounts.map((row) => ({
+      const taggedCloudAccounts = (cloudAccounts || []).map((row) => ({
         ...row,
         provider: 'cloud_api',
         session_key: null,
@@ -2400,6 +2439,143 @@ class ChatbotController {
     return res.json({ success: true, message: 'Tính năng đã ngừng sử dụng' });
   }
 
+  /**
+   * Shared helper that derives the public status shape from the
+   * gateway's `getState()` map. Returns the same object that
+   * `getPersonalAccountStatus` and `getPersonalAccountsHealth` use,
+   * so any reasoning the UI does on the response stays consistent
+   * across the single- and multi-channel endpoints.
+   *
+   * `null` channel → returns null (used by the multi-channel endpoint
+   * to skip unknown channels instead of erroring out).
+   */
+  _pickChannelStatus(channel) {
+    if (channel !== 'telegram') return null;
+    let state;
+    try {
+      const all = getState();
+      state = all?.[channel];
+      if (!state) {
+        // getState() returns an entry per channel that's been
+        // touched at least once. Fall back to a safe default so
+        // the UI can still render — operators will see `canStartLogin:false`.
+        state = {
+          started: false,
+          hasSecret: false,
+          stubOnly: isStubOnly({ channel }),
+        };
+      }
+    } catch (err) {
+      console.error(
+        `[Chatbot] _pickChannelStatus(${channel}) error:`,
+        err.message
+      );
+      return null;
+    }
+    // Reason order matches the controller's initLogin short-circuit
+    // chain. Keep these two in sync.
+    let reason = null;
+    if (state.stubOnly) {
+      reason = 'TELEGRAM_STUB_TRANSPORT';
+    } else if (!state.hasSecret) {
+      reason = 'TELEGRAM_NOT_CONFIGURED';
+    }
+    return {
+      channel,
+      started: Boolean(state.started),
+      hasSecret: Boolean(state.hasSecret),
+      stubOnly: Boolean(state.stubOnly),
+      canStartLogin: !state.stubOnly && Boolean(state.hasSecret),
+      reason,
+    };
+  }
+
+  /**
+   * GET /ai/chatbot/personal-account-status/:channel
+   * Returns the operational status of the in-process personal-account
+   * gateway for `telegram`. The UI uses this to:
+   *   - decide whether to disable the "Connect account" button on page
+   *     load (no need to wait for the user to click and 503)
+   *   - render an inline banner explaining WHY QR login is unavailable
+   *
+   * The endpoint is cheap (no DB calls, just env + in-memory flags),
+   * so the frontend can poll it once after navigating to the settings
+   * page and again after the operator hot-fixes the env. No caching.
+   *
+   * Response shape:
+   *   {
+   *     success: true,
+   *     data: {
+   *       channel: 'telegram',
+   *       started: true,
+   *       hasSecret: true,
+   *       stubOnly: true,
+   *       canStartLogin: false,
+   *       reason: 'TELEGRAM_STUB_TRANSPORT' | 'TELEGRAM_NOT_CONFIGURED' | null
+   *     }
+   *   }
+   */
+  async getPersonalAccountStatus(req, res) {
+    const channel = req.params.channel;
+    const data = this._pickChannelStatus(channel);
+    if (data === null) {
+      // `_pickChannelStatus` returns null for unknown channels OR
+      // when getState() throws (logged inside the helper). We can't
+      // distinguish the two without exposing internals; a 400 covers
+      // the common case while a 500 covers the rare crash, and the
+      // helper has already logged the underlying error.
+      if (channel !== 'telegram') {
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_CHANNEL',
+          message: 'channel must be: telegram',
+        });
+      }
+      return res.status(500).json({ success: false, message: 'gateway status unavailable' });
+    }
+    return res.json({ success: true, data });
+  }
+
+  /**
+   * GET /ai/chatbot/personal-accounts-health
+   * Multi-channel status endpoint that the UI poll loop hits to keep
+   * the Telegram banner in sync. Same shape as the single-channel
+   * endpoint, just nested under `data.channels` and joined by a
+   * top-level `allHealthy` flag so the FE can decide whether to
+   * stop polling in one boolean check.
+   */
+  async getPersonalAccountsHealth(req, res) {
+    const channels = {};
+    let allHealthy = true;
+    for (const ch of ['telegram']) {
+      const data = this._pickChannelStatus(ch);
+      if (data === null) {
+        // Treat as unhealthy but include the channel anyway so the
+        // UI can render a generic "gateway unavailable" hint
+        // instead of a silent gap.
+        channels[ch] = {
+          channel: ch,
+          canStartLogin: false,
+          reason: 'CHANNEL_UNAVAILABLE',
+        };
+        allHealthy = false;
+        continue;
+      }
+      channels[ch] = data;
+      if (!data.canStartLogin) allHealthy = false;
+    }
+    return res.json({
+      success: true,
+      data: {
+        channels,
+        allHealthy,
+        // Single timestamp so the FE can render "Đã kiểm tra lúc ..."
+        // if it wants to.
+        checkedAt: new Date().toISOString(),
+      },
+    });
+  }
+
   // ── Telegram Personal (managed by Python telegram-gateway) ──────────
 
   /**
@@ -2409,9 +2585,32 @@ class ChatbotController {
   async initTelegramLogin(req, res) {
     try {
       if (!telegramGateway.isConfigured()) {
+        // Lazy start: isConfigured() chỉ đọc state hiện tại mà không
+        // kích hoạt ensureGateway. Khi backend vừa boot chưa có ai "đụng" gateway
+        // thì state rỗng → isConfigured=false → 503 oan. Thử ensureGateway ở đây
+        // để cho embedded gateway cơ hội spawn tự động trước khi trả 503.
+        try {
+          await ensureTelegramGateway({ channel: 'telegram' });
+        } catch (startErr) {
+          console.error('[Telegram] ensureGateway error:', startErr.message);
+        }
+      }
+      if (!telegramGateway.isConfigured()) {
         return res.status(503).json({
           success: false,
-          message: 'Telegram gateway chưa được cấu hình trên máy chủ.',
+          message:
+            'Telegram gateway chưa được cấu hình trên máy chủ.',
+          code: 'TELEGRAM_NOT_CONFIGURED',
+        });
+      }
+      if (isTelegramStubOnly()) {
+        return res.status(503).json({
+          success: false,
+          code: 'TELEGRAM_STUB_TRANSPORT',
+          message:
+            'Telegram transport is not implemented on this server. ' +
+            'Set TELEGRAM_GATEWAY_TRANSPORT to a real client class ' +
+            'before starting a QR login.',
         });
       }
       const userId = resolveWorkspaceOwnerId(req.user);
@@ -2419,7 +2618,22 @@ class ChatbotController {
       return res.json({ success: true, data: result });
     } catch (err) {
       console.error('[Telegram] initTelegramLogin error:', err.message);
-      return res.status(err.status || 500).json({ success: false, message: err.message });
+      const code = err.code;
+      if (code === 'TELEGRAM_STUB_TRANSPORT' || code === 'TELEGRAM_NOT_CONFIGURED') {
+        return res.status(err.status || 503).json({
+          success: false,
+          code,
+          message:
+            code === 'TELEGRAM_STUB_TRANSPORT'
+              ? 'Telegram transport is not implemented on this server. ' +
+                'Set TELEGRAM_GATEWAY_TRANSPORT to a real client class ' +
+                'before starting a QR login.'
+              : 'Telegram gateway chưa được cấu hình trên máy chủ.',
+        });
+      }
+      return res
+        .status(err.status || 500)
+        .json({ success: false, message: err.message });
     }
   }
 

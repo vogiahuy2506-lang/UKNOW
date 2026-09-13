@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
@@ -10,6 +11,7 @@ import {
   HiOutlineIdentification,
   HiOutlineUserCircle,
   HiOutlineLogout,
+  HiOutlineRefresh,
 } from 'react-icons/hi';
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -70,41 +72,158 @@ export default function TelegramSettings() {
   const [qrStatus, setQrStatus] = useState('idle'); // idle | awaiting_scan | success | expired | error
   const [qrError, setQrError] = useState(null);
   const pollRef = useRef(null);
+  // Hold the last start-QR error so a navigation that unmounts the
+  // component while a request is still in flight does not lose the
+  // hint for the next mount.
+  const lastStartErrorRef = useRef(null);
+
+  // Operational status of the Telegram gateway as reported by the
+  // backend. See the design rationale comment above.
+  const [gatewayStatus, setGatewayStatus] = useState(null);
+  // True only between the click and the response of init login.
+  const [connecting, setConnecting] = useState(false);
+  // Seconds elapsed since the user clicked "Kết nối"; surfaced in UI
+  // so they don't think the button is frozen while mtcute negotiates
+  // with the Telegram DC (which can take 20-40s on cold paths).
+  const [connectElapsedSec, setConnectElapsedSec] = useState(0);
+  const connectAbortRef = useRef(null);
+  const connectTimerRef = useRef(null);
 
   // Row actions
   const [deleting, setDeleting] = useState(null);
   const [loggingOut, setLoggingOut] = useState(null);
 
-  const fetchAccounts = useCallback(async () => {
+  const fetchAccounts = useCallback(async (signal) => {
     try {
-      const resp = await chatbotApi.listTelegramAccounts();
-      setAccounts(resp?.data || []);
+      const resp = await chatbotApi.listTelegramAccounts({ signal });
+      // Backend trả {success, data}; api wrapper không unwrap, nên lấy data.data.
+      const payload = resp?.data?.data ?? resp?.data;
+      setAccounts(Array.isArray(payload) ? payload : []);
     } catch (err) {
+      // Bỏ qua Abort/CancelError — đây là tín hiệu component đã unmount
+      // hoặc request bị request-deduplication của api.js huỷ do effect
+      // chạy lại (React 18 StrictMode hoặc dependency thay đổi). KHÔNG log
+      // và KHÔNG toast — chỉ là cleanup bình thường.
+      if (axios.isCancel(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+        return;
+      }
       console.error('[TelegramSettings] fetchAccounts:', err);
       toast.error(err?.message || 'Không thể tải danh sách tài khoản Telegram');
+      setAccounts([]);
     }
   }, []);
 
+  const fetchGatewayStatus = useCallback(async (signal) => {
+    try {
+      // Prefer the unified multi-channel endpoint when available —
+      // it returns the Telegram status in one round-trip. Falls
+      // back to the single-channel endpoint if the unified route
+      // 404s during a partial deploy.
+      let status = null;
+      try {
+        const unified = await chatbotApi.getPersonalAccountsHealth({ signal });
+        status = unified?.data?.data?.channels?.telegram ?? null;
+      } catch (unifiedErr) {
+        if (axios.isCancel(unifiedErr) || unifiedErr?.name === 'CanceledError' || unifiedErr?.code === 'ERR_CANCELED') {
+          return; // component unmounted, skip fallback
+        }
+        const resp = await chatbotApi.getTelegramAccountStatus({ signal });
+        status = resp?.data?.data ?? null;
+      }
+      setGatewayStatus(status);
+    } catch (err) {
+      if (axios.isCancel(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+        return;
+      }
+      console.warn(
+        '[TelegramSettings] fetchGatewayStatus:',
+        err?.message || err
+      );
+      setGatewayStatus(null);
+    }
+  }, []);
+
+  // AbortController cho 2 lệnh fetch đầu tiên (mount + initial load) — khi
+  // component unmount TRƯỚC KHI Promise.all resolve, huỷ cả 2 request để
+  // axios không reject với CanceledError → không spam console với false
+  // error log. Effect cleanup xoá ref sau khi đã abort để tránh abort
+  // lần nữa trên controller đã được tiêu thụ.
+  const initialLoadAbortRef = useRef(null);
   useEffect(() => {
+    initialLoadAbortRef.current = new AbortController();
     let mounted = true;
+    // Replay the last start-QR error so a navigation that remounts
+    // the component doesn't hide the operator hint the user just
+    // saw. The ref outlives the component instance; the toast on
+    // its own is easy to miss.
+    if (lastStartErrorRef.current) {
+      setQrError(lastStartErrorRef.current);
+    }
+    const controller = initialLoadAbortRef.current;
     (async () => {
       setLoading(true);
-      await fetchAccounts();
-      if (mounted) setLoading(false);
+      try {
+        await Promise.all([
+          fetchAccounts(controller.signal),
+          fetchGatewayStatus(controller.signal),
+        ]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => {
       mounted = false;
+      controller.abort();
+      initialLoadAbortRef.current = null;
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
       }
+      if (connectTimerRef.current) {
+        clearInterval(connectTimerRef.current);
+        connectTimerRef.current = null;
+      }
+      if (connectAbortRef.current) {
+        connectAbortRef.current.abort();
+        connectAbortRef.current = null;
+      }
     };
-  }, [fetchAccounts]);
+  }, [fetchAccounts, fetchGatewayStatus]);
+
+  // Auto-poll gateway status while the banner is showing. The
+  // short version: a 30s tick detects when the operator flips the
+  // env and restarts the backend, then re-enables the button
+  // without forcing the user to reload the page.
+  const statusPollRef = useRef(null);
+  useEffect(() => {
+    if (!gatewayStatus || gatewayStatus.canStartLogin) {
+      if (statusPollRef.current) {
+        clearInterval(statusPollRef.current);
+        statusPollRef.current = null;
+      }
+      return undefined;
+    }
+    statusPollRef.current = setInterval(() => {
+      fetchGatewayStatus();
+    }, 30000);
+    return () => {
+      if (statusPollRef.current) {
+        clearInterval(statusPollRef.current);
+        statusPollRef.current = null;
+      }
+    };
+  }, [gatewayStatus, fetchGatewayStatus]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchAccounts();
-    setRefreshing(false);
+    // Truyền signal riêng để khi user click refresh rồi navigate away
+    // giữa chừng, request bị huỷ nhưng KHÔNG log/toast lỗi.
+    const controller = new AbortController();
+    try {
+      await fetchAccounts(controller.signal);
+    } finally {
+      setRefreshing(false);
+    }
   }, [fetchAccounts]);
 
   const stopPolling = useCallback(() => {
@@ -119,7 +238,9 @@ export default function TelegramSettings() {
     pollRef.current = setInterval(async () => {
       try {
         const resp = await chatbotApi.checkTelegramLoginStatus(sessionId);
-        const status = resp?.data?.status;
+        // Backend trả `{success, data: {status, ...}}`.
+        const data = resp?.data?.data ?? resp?.data;
+        const status = data?.status;
         if (status === 'awaiting_scan' || status === 'migrating') {
           setQrStatus('awaiting_scan');
           return;
@@ -135,7 +256,7 @@ export default function TelegramSettings() {
         if (status === 'expired' || status === 'error') {
           stopPolling();
           setQrStatus(status);
-          setQrError(resp?.data?.error || 'Mã QR đã hết hạn. Vui lòng thử lại.');
+          setQrError(data?.error || 'Mã QR đã hết hạn. Vui lòng thử lại.');
           return;
         }
         if (status === 'not_found') {
@@ -155,9 +276,24 @@ export default function TelegramSettings() {
   const handleStartQrLogin = useCallback(async () => {
     setQrError(null);
     setQrStatus('connecting');
+    setConnecting(true);
+    setConnectElapsedSec(0);
+    // Tick a 1Hz timer so the button label can show "Đang khởi tạo… (12s)"
+    // — mtcute's first TCP handshake is genuinely slow and would
+    // otherwise look frozen.
+    if (connectTimerRef.current) clearInterval(connectTimerRef.current);
+    connectTimerRef.current = setInterval(() => {
+      setConnectElapsedSec((s) => s + 1);
+    }, 1000);
+    // Wire up an AbortController so the user can cancel instead of
+    // staring at a button for the full 60s axios timeout.
+    const controller = new AbortController();
+    connectAbortRef.current = controller;
     try {
-      const resp = await chatbotApi.initTelegramLogin();
-      const data = resp?.data;
+      const resp = await chatbotApi.initTelegramLogin({ signal: controller.signal });
+      // Backend trả `{success, data: {sessionId, qrImageBase64, ...}}`.
+      // Axios unwraps vào `resp.data` nên ta cần lấy `.data` một lần nữa.
+      const data = resp?.data?.data ?? resp?.data;
       if (!data?.sessionId || !data?.qrImageBase64) {
         throw new Error('Máy chủ không trả về mã QR hợp lệ');
       }
@@ -169,11 +305,69 @@ export default function TelegramSettings() {
       setQrStatus('awaiting_scan');
       startPolling(data.sessionId);
     } catch (err) {
-      console.error('[TelegramSettings] initTelegramLogin:', err);
-      setQrStatus('error');
-      setQrError(err?.message || 'Không thể bắt đầu QR login');
+      // Log a compact line instead of the full AxiosError object —
+      // dumping the whole stack buries the actual server message
+      // under V8 internals.
+      // BỎ QUA hoàn toàn log + toast khi bị cancel (axios.isCancel):
+      //   - User click "Hủy" → chủ đích abort, không phải lỗi
+      //   - Vite HMR reload → cleanup abort controller, không phải lỗi
+      //   - Navigate khỏi page → unmount abort, không phải lỗi
+      // Chỉ log/toast khi thật sự là network error / server error.
+      const isCanceled = axios.isCancel(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED';
+      const code = err?.response?.data?.code;
+      let msg;
+      if (isCanceled) {
+        // Quiet reset — không log, không toast, không hiện banner lỗi.
+        // setQrStatus('idle') đã được set ở nhánh axios.isCancel phía dưới.
+        msg = null;
+      } else {
+        console.error(
+          '[TelegramSettings] initTelegramLogin:',
+          err?.response?.data?.message || err?.message || 'unknown'
+        );
+      }
+      if (code === 'TELEGRAM_STUB_TRANSPORT') {
+        msg =
+          'Telegram transport chưa được cài đặt trên máy chủ này. Vui lòng liên hệ quản trị viên để cấu hình TELEGRAM_GATEWAY_TRANSPORT.';
+      } else if (code === 'TELEGRAM_NOT_CONFIGURED') {
+        msg =
+          'Telegram gateway chưa được cấu hình. Vui lòng liên hệ quản trị viên.';
+      } else if (code === 'TELEGRAM_CONNECT_TIMEOUT') {
+        msg =
+          'Không thể kết nối tới máy chủ Telegram từ môi trường này (timeout 15s). Vui lòng kiểm tra firewall / mạng, hoặc liên hệ quản trị viên.';
+      } else if (isCanceled) {
+        // User clicked "Hủy" mid-request — treat as a quiet reset
+        // rather than an error toast.
+        msg = null;
+        setQrStatus('idle');
+      } else {
+        msg = err?.message || 'Không thể bắt đầu QR login';
+      }
+      lastStartErrorRef.current = msg;
+      setQrError(msg);
+      if (!isCanceled) {
+        // Chỉ set status='error' khi thật sự lỗi — tránh hiện banner đỏ
+        // trong khi user vừa bấm Hủy (cancel là flow bình thường).
+        setQrStatus('error');
+      }
+      // Catch up if the operator just fixed the env between page
+      // load and this click.
+      fetchGatewayStatus();
+    } finally {
+      if (connectTimerRef.current) {
+        clearInterval(connectTimerRef.current);
+        connectTimerRef.current = null;
+      }
+      setConnectElapsedSec(0);
+      connectAbortRef.current = null;
+      setConnecting(false);
     }
-  }, [startPolling]);
+  }, [startPolling, fetchGatewayStatus]);
+
+  const handleAbortInit = useCallback(() => {
+    const controller = connectAbortRef.current;
+    if (controller) controller.abort();
+  }, []);
 
   const handleCancelQr = useCallback(async () => {
     stopPolling();
@@ -249,14 +443,63 @@ export default function TelegramSettings() {
             <button
               type="button"
               onClick={handleStartQrLogin}
-              className="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700"
+              disabled={connecting || gatewayStatus?.canStartLogin === false}
+              title={
+                gatewayStatus?.stubOnly
+                  ? 'Telegram gateway chưa được cấu hình TELEGRAM_GATEWAY_TRANSPORT — liên hệ quản trị viên.'
+                  : gatewayStatus && !gatewayStatus.hasSecret
+                  ? 'Telegram gateway chưa có shared secret — liên hệ quản trị viên.'
+                  : undefined
+              }
+              className="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               <HiOutlineQrcode className="h-4 w-4" />
-              Kết nối tài khoản Telegram
+              {connecting
+                ? `Đang khởi tạo… (${connectElapsedSec}s)`
+                : 'Kết nối tài khoản Telegram'}
+            </button>
+          )}
+          {connecting && (
+            <button
+              type="button"
+              onClick={handleAbortInit}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Hủy
             </button>
           )}
         </div>
       </div>
+
+      {/* Operator hint when the backend reports the gateway can't accept
+          QR logins. Render only after we've fetched the status so we
+          don't flash this banner during a transient auth-failure on a
+          perfectly healthy installation. */}
+      {gatewayStatus && !gatewayStatus.canStartLogin && !qrPayload && (
+        <div
+          className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          data-testid="telegram-gateway-banner"
+        >
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <p className="font-medium">
+              {gatewayStatus.stubOnly
+                ? 'Telegram transport chưa được cài đặt trên máy chủ này.'
+                : 'Telegram gateway chưa được cấu hình trên máy chủ.'}
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700">
+              {gatewayStatus.stubOnly
+                ? 'Quản trị viên cần đặt biến môi trường TELEGRAM_GATEWAY_TRANSPORT trỏ tới một client thật, rồi khởi động lại backend.'
+                : 'Quản trị viên cần đặt TELEGRAM_GATEWAY_SECRET và khởi động lại backend để cấu hình gateway.'}
+              {' '}
+              <span className="inline-flex items-center gap-1">
+                <HiOutlineRefresh className="h-3 w-3 animate-spin" />
+                Đang kiểm tra lại mỗi 30 giây…
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* QR login card */}
       {qrPayload && (

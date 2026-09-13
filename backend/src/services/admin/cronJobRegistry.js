@@ -3,7 +3,7 @@
  * `tracked: true` = đã gọi recordRun.
  * `optional: true` = có thể không được đăng ký lúc khởi động (env).
  * KHÔNG gồm cron động campaign_schedules (scheduler.js ~:270).
- * KHÔNG gồm Zalo keep-alive (startKeepAliveScheduler / setInterval).
+ * KHÔNG gồm Zalo / WhatsApp Baileys keep-alive (setInterval scheduler).
  */
 export const CRON_JOBS = [
   {

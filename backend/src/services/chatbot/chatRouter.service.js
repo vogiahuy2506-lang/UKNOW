@@ -336,6 +336,8 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     });
 
     const fetchOnce = async (generationConfig) => {
+      console.log(`[ChatRouter] fetchOnce: posting to Gemini (model=${modelName}, history=${chatHistory.length})`);
+      const t0 = Date.now();
       const response = await Promise.race([
         fetch(url, {
           method: 'POST',
@@ -348,6 +350,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('AI call timeout (30s)')), 30000)),
       ]);
+      console.log(`[ChatRouter] fetchOnce: response arrived after ${Date.now() - t0}ms, status=${response.status}`);
 
       const data = await response.json();
       if (!response.ok) {
@@ -366,6 +369,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     try {
       data = await fetchOnce(baseConfig);
     } catch (err) {
+      console.warn(`[ChatRouter] fetchOnce baseConfig failed: ${err.message} — retrying without thinkingBudget`);
       if (!isThinkingBudgetRejection(err)) throw err;
       data = await fetchOnce({
         temperature,
@@ -373,6 +377,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       });
     }
 
+    console.log(`[ChatRouter] fetchOnce resolved; candidates=${data?.candidates?.length || 0}, text-len=${(joinGeminiTextParts(data?.candidates?.[0]?.content?.parts) || '').length}`);
     const textResponse = joinGeminiTextParts(data?.candidates?.[0]?.content?.parts);
     if (!textResponse) throw new Error('AI returned empty response');
 

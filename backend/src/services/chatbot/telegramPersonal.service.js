@@ -39,7 +39,7 @@ class TelegramPersonalService {
    * Returns the session_id + QR payload that the SPA renders.
    */
   async startLogin(userId) {
-    const { data } = await telegramGateway.createSession();
+    const { data } = await telegramGateway.createSession(userId);
     const sessionId = data.session_id;
     if (!sessionId) {
       throw new Error('Telegram gateway did not return a session_id');

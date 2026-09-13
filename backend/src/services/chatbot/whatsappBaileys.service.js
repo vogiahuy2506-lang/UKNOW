@@ -4,8 +4,9 @@
  * Per-WhatsApp-number session using @whiskeysockets/baileys (the multi-device
  * library that powers Evolution API). Each `sessionKey` represents one phone
  * number; the session state (creds + app-state-sync keys + signal keys) is
- * persisted to `./whatsapp-sessions/<sessionKey>/` so that the user only needs
- * to scan the QR code ONCE per device.
+ * persisted to Postgres (see `whatsappBaileysSession.repository`) so the user
+ * only needs to scan the QR code ONCE per device, even across restarts and
+ * multi-instance rollouts.
  *
  * Why Baileys instead of Meta Cloud API:
  *   - No Meta App, App ID, App Secret, Business verification required.
@@ -20,7 +21,6 @@
  *   - Use only with WhatsApp Business numbers — sending from a personal
  *     number may trigger Meta policy violations.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   Browsers,
@@ -28,18 +28,26 @@ import {
   downloadMediaMessage,
   fetchLatestBaileysVersion,
   makeWASocket,
-  useMultiFileAuthState,
   jidNormalizedUser,
 } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
+import { useDatabaseAuthState } from './whatsapp/useDatabaseAuthState.js';
 
+// All per-session state for Baileys is now in Postgres:
+//   - AuthenticationCreds + signal keys → whatsapp_baileys_session_creds /
+//     whatsapp_baileys_session_keys (see migration 213).
+//   - Display metadata (meId, meName)  → whatsapp_baileys_session_profile
+//     (see migration 214).
+//
+// This directory is reserved for the legacy `creds.json` fallback
+// scanner in `listPersistedSessions` — it is NOT used for any
+// authoritative state. Operators running an existing 213+ install
+// should set WHATSAPP_BAILEYS_SESSION_DIR=/nonexistent to disable
+// the fallback entirely.
 const SESSION_ROOT = path.resolve(
   process.env.WHATSAPP_BAILEYS_SESSION_DIR
     || path.join(process.cwd(), 'whatsapp-sessions')
 );
-if (!existsSync(SESSION_ROOT)) {
-  mkdirSync(SESSION_ROOT, { recursive: true });
-}
 
 const log = (...args) => console.log('[WhatsApp/Baileys]', ...args);
 
@@ -56,8 +64,100 @@ const log = (...args) => console.log('[WhatsApp/Baileys]', ...args);
 /** @type {Map<string, SessionRecord>} */
 const sessions = new Map();
 
-function sessionDir(sessionKey) {
-  return path.join(SESSION_ROOT, sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_'));
+/**
+ * In-memory mirror of `whatsapp_baileys_session_profile` so
+ * `getSession()` (a synchronous read path called from list/render
+ * routes) doesn't have to hit Postgres for every poll. The map is
+ * seeded by `hydrateProfileCache()` at startup and updated
+ * write-through from `persistProfile()`.
+ *
+ * Why a cache instead of just making getSession async? Because
+ * the controller's list endpoint calls `getSession` once per row
+ * inside a single response — turning each call into a DB round-
+ * trip would add N queries per list page and break the existing
+ * latency budget. The cache is also tiny (a few KB per session).
+ */
+const profileCache = new Map();
+
+/**
+ * Seed the in-memory cache from Postgres. Called once at module
+ * load (fire-and-forget). On multi-instance deploys each Node
+ * process rebuilds its own cache — that's fine because every
+ * write goes through `persistProfile()` which updates BOTH the
+ * local cache AND Postgres, so reads on instance A stay
+ * consistent with writes done on instance B within the same
+ * request lifetime.
+ */
+async function hydrateProfileCache() {
+  try {
+    const { default: sessionRepo } = await import(
+      '../../repositories/chatbot/whatsappBaileysSession.repository.js'
+    );
+    const keys = await sessionRepo.listSessionKeys();
+    await Promise.all(
+      keys.map(async (key) => {
+        const row = await sessionRepo.loadProfile(key);
+        if (row && (row.meId || row.meName)) {
+          profileCache.set(key, row);
+        }
+      })
+    );
+  } catch (err) {
+    log('hydrateProfileCache failed (will retry lazily):', err.message);
+  }
+}
+
+// Kick off at module load — non-blocking. `profileCacheReady`
+// exposes the in-flight Promise so the boot path can `await` it
+// BEFORE opening the HTTP listener, ensuring the very first
+// `GET /api/.../whatsapp-baileys/sessions/:key` call sees a
+// populated cache instead of falling through to the empty `{}`
+// branch in `readPersistedProfile()`.
+//
+// Why not just `await` here at module top-level? Because module
+// evaluation must stay side-effect free for ESM static analysis
+// (and for the existing `import` order in `index.js`). Handing
+// back the Promise lets the caller decide when to block.
+export const profileCacheReady = hydrateProfileCache();
+
+/**
+ * Synchronous profile reader. Returns the cached snapshot (or
+ * `{}` if the cache hasn't been seeded yet / the session has
+ * never had a profile row written).
+ */
+function readPersistedProfile(sessionKey) {
+  return profileCache.get(sessionKey) || {};
+}
+
+/**
+ * Async profile writer. Updates the cache synchronously, then
+ * UPSERTs to Postgres. We don't `await` this from event
+ * handlers — Baileys fires `creds.update` dozens of times per
+ * minute during heavy traffic, so any DB hiccup would queue up
+ * write promises and slow down the event loop. Swallow errors
+ * with a warning: the cache still has the latest value for the
+ * lifetime of this process, and the next `persistProfile` will
+ * overwrite the previous row anyway (UPSERT semantics).
+ */
+async function persistProfile(sessionKey, profile) {
+  const prev = profileCache.get(sessionKey) || {};
+  const next = {
+    meId: profile.meId !== undefined ? profile.meId : prev.meId ?? null,
+    meName: profile.meName !== undefined ? profile.meName : prev.meName ?? null,
+    updatedAt: new Date().toISOString(),
+  };
+  profileCache.set(sessionKey, next);
+  try {
+    const { default: sessionRepo } = await import(
+      '../../repositories/chatbot/whatsappBaileysSession.repository.js'
+    );
+    await sessionRepo.saveProfile(sessionKey, {
+      meId: next.meId,
+      meName: next.meName,
+    });
+  } catch (err) {
+    log(`persistProfile db write failed for ${sessionKey}:`, err.message);
+  }
 }
 
 /**
@@ -75,43 +175,28 @@ function realName(value) {
 }
 
 /**
- * Lưu trữ thông tin profile (tên pushName/verifiedName, JID) xuống disk
- * để UI hiển thị ngay cả khi Baileys chưa có name (vd sau khi reconnect
- * mà sock.user.name bị reset). Đây là file metadata thuần tuý, không
- * liên quan tới Baileys auth state.
+ * Lưu trữ thông tin profile (tên pushName/verifiedName, JID) xuống
+ * Postgres — xem `persistProfile` ở trên. Không còn tương tác
+ * với disk nữa (migration 214).
  */
-function readPersistedProfile(sessionKey) {
-  try {
-    const file = path.join(sessionDir(sessionKey), 'profile.json');
-    if (!existsSync(file)) return {};
-    return JSON.parse(readFileSync(file, 'utf8')) || {};
-  } catch { return {}; }
-}
 
 export function updateSessionNickname(sessionKey, nickname) {
   const record = sessions.get(sessionKey);
   if (record) record.meName = nickname || null;
+  // Fire-and-forget — the cache takes the new value immediately
+  // so the next read reflects the rename without waiting for the
+  // UPSERT to land. A failure here only loses persistence across
+  // a restart, not within this process.
   persistProfile(sessionKey, { meName: nickname || null });
 }
 
-function persistProfile(sessionKey, profile) {
-  try {
-    const dir = sessionDir(sessionKey);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, 'profile.json');
-    let prev = {};
-    try { prev = JSON.parse(readFileSync(file, 'utf8')) || {}; } catch { prev = {}; }
-    writeFileSync(file, JSON.stringify({ ...prev, ...profile, updatedAt: new Date().toISOString() }, null, 2));
-  } catch (err) {
-    log(`persistProfile error for ${sessionKey}:`, err.message);
-  }
-}
-
 async function buildSocket(sessionKey, emitter) {
-  const dir = sessionDir(sessionKey);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-
-  const { state, saveCreds } = await useMultiFileAuthState(dir);
+  // Auth state now lives in Postgres (see whatsappBaileysSession
+  // repository). No on-disk directory is needed at all — the
+  // legacy `./whatsapp-sessions/<key>/` folder was removed when
+  // migration 214 replaced profile.json with the
+  // `whatsapp_baileys_session_profile` table.
+  const { state, saveCreds } = await useDatabaseAuthState(sessionKey);
   const { version, isLatest } = await fetchLatestBaileysVersion();
   log(`Using WA protocol v${version.join('.')} (latest=${isLatest}) for session=${sessionKey}`);
 
@@ -125,9 +210,13 @@ async function buildSocket(sessionKey, emitter) {
     keepAliveIntervalMs: 15_000,
     // Tự retry handshake sau disconnect transient (không phải loggedOut).
     connectTimeoutMs: 60_000,
-    // Giảm timeout để init-queries fail nhanh, backoff tự tăng theo số lần retry.
-    // Tránh đợi 30s mỗi lần timeout → gây cảm giác "treo" và spam log.
-    defaultQueryTimeoutMs: 15_000,
+    // Timeout cho các IQ query (props, blocklist, prekey, ...) mà Baileys
+    // gọi sau khi socket OPEN. Với users ở xa WhatsApp servers hoặc
+    // mạng có latency cao, 15s là không đủ cho lần init đầu tiên
+    // sau restart → throw "Timed Out" 408 trong `executeInitQueries`
+    // → close code=440 → reconnect liên tục trong vòng 30s.
+    // 60s cho phép init chậm mà vẫn succeed trước khi bị kill.
+    defaultQueryTimeoutMs: 60_000,
     retryRequestDelayMs: 250,
     maxMsgRetryCount: 5,
     // Baileys mặc định tự reconnect ngay khi socket close. Tắt để tránh
@@ -159,6 +248,9 @@ async function buildSocket(sessionKey, emitter) {
           if (record) {
             record.lastQr = dataUrl;
             record.status = status || 'connecting';
+            // QR mới = fresh state, reset cả 2 counter.
+            record.reconnectCount = 0;
+            record._initFailureCount = 0;
           }
           emitter.emit('qr', { sessionKey, qr: dataUrl, raw: update.qr });
         })
@@ -178,7 +270,19 @@ async function buildSocket(sessionKey, emitter) {
       if (existing) {
         existing.socket = null;
         existing.status = 'closed';
-        existing.reconnectCount = (existing.reconnectCount || 0) + 1;
+        // Heuristic: nếu close đến ngay sau khi vừa OPEN (<10s) → gần như
+        // chắc chắn do Baileys `executeInitQueries` (fetchProps, blocklist,
+        // prekey) timeout → close 440. Đây KHÔNG phải lỗi "không connect
+        // được" mà là lỗi "connect OK nhưng init không xong". Track riêng
+        // để áp dụng backoff dài hơn và reconnect cap cao hơn.
+        const sinceOpen = existing._lastOpenAt ? Date.now() - existing._lastOpenAt : Infinity;
+        const isInitFailure = sinceOpen < 10_000 && reasonCode === 440;
+        if (isInitFailure) {
+          existing._initFailureCount = (existing._initFailureCount || 0) + 1;
+          log(`Session ${sessionKey} init-queries failed (~${Math.round(sinceOpen / 1000)}s after open, attempt #${existing._initFailureCount})`);
+        } else {
+          existing.reconnectCount = (existing.reconnectCount || 0) + 1;
+        }
       }
       emitter.emit('connection.update', { ...update, sessionKey, status: 'close' });
       // Reconnect policy:
@@ -189,6 +293,11 @@ async function buildSocket(sessionKey, emitter) {
       //   Dừng hẳn, không retry cho đến khi user thao tác lại.
       const RECONNECT_WINDOW_MS = 60_000;
       const MAX_RECONNECTS_PER_WINDOW = 5;
+      // Init-failure cap riêng: vì init-queries timeout thường do mạng
+      // chậm tới WhatsApp servers, KHÔNG nên vội mark unrecoverable — chỉ
+      // cần backoff đủ dài (60s+) để servers phục hồi / jitter mạng hết.
+      // 3 lần liên tiếp với backoff ≥60s là đủ signal để tạm dừng 5 phút.
+      const MAX_INIT_FAILURES_BEFORE_COOLDOWN = 3;
       if (reasonCode === DisconnectReason.loggedOut) {
         log(`Session ${sessionKey} loggedOut — manual re-scan required`);
       } else if (!existing) {
@@ -198,14 +307,24 @@ async function buildSocket(sessionKey, emitter) {
         existing.lastErrorAt = Date.now();
         existing.status = 'unrecoverable';
         existing._coolingDownUntil = Date.now() + 5 * 60_000; // 5 min cooldown
+      } else if ((existing._initFailureCount || 0) >= MAX_INIT_FAILURES_BEFORE_COOLDOWN) {
+        log(`Session ${sessionKey} hit init-failure cap (${existing._initFailureCount} consecutive). Cooling down 5 min before retrying.`);
+        existing.lastErrorAt = Date.now();
+        existing.status = 'unrecoverable';
+        existing._coolingDownUntil = Date.now() + 5 * 60_000;
+        existing._initFailureCount = 0; // reset counter after cooldown so a manual retry can try again
       } else {
-        // Exponential backoff: 2s → 4s → 8s → 16s → 32s (max).
-        // Backoff ngắn hơn ở đầu giúp recovery nhanh khi lỗi là transient
-        // (network blip, WhatsApp server hơi lag). Backoff dài hơn nếu
-        // lỗi kéo dài để tránh spam server.
-        const attempt = existing.reconnectCount;
-        const delayMs = Math.min(32_000, 2_000 * 2 ** Math.min(attempt - 1, 4));
-        log(`Session ${sessionKey} reconnecting in ${delayMs}ms (attempt #${attempt})`);
+        // Exponential backoff khác nhau cho init-failure vs reconnect:
+        // - Init-failure: 60s → 90s → 120s (min 60s vì servers cần thời gian,
+        //   reconnect nhanh chỉ làm tăng load server và gây thêm 440).
+        // - Reconnect thường: 2s → 4s → 8s → 16s → 32s (max). Backoff ngắn
+        //   ở đầu giúp recovery nhanh khi lỗi là transient (network blip).
+        const attempt = existing._initFailureCount || existing.reconnectCount;
+        const isInitFailure = (existing._initFailureCount || 0) > 0;
+        const delayMs = isInitFailure
+          ? Math.min(120_000, 60_000 * Math.max(1, attempt))
+          : Math.min(32_000, 2_000 * 2 ** Math.min(attempt - 1, 4));
+        log(`Session ${sessionKey} reconnecting in ${delayMs}ms (attempt #${attempt}, init-failure=${isInitFailure})`);
         setTimeout(() => {
           const cur = sessions.get(sessionKey);
           if (!cur || cur.socket) return;  // someone else already reconnected
@@ -234,6 +353,10 @@ async function buildSocket(sessionKey, emitter) {
         // Reset chỉ khi session thật sự ổn định 30s (_stableTimer bên dưới).
         record.lastErrorAt = null;
         record._coolingDownUntil = null;
+        // Stamp thời điểm open để close-branch phân biệt init-failure
+        // (close ngay sau open) vs disconnect bình thường (sau khi session
+        // đã live một lúc).
+        record._lastOpenAt = Date.now();
         // Lưu tên + JID của tài khoản WhatsApp đang kết nối để UI hiển thị
         // (vd. "Nguyễn Văn A (+84 84...)"). Baileys set `sock.user` ngay
         // trong frame mở kết nối — name = pushName của owner.
@@ -282,6 +405,7 @@ async function buildSocket(sessionKey, emitter) {
           const r = sessions.get(sessionKey);
           if (r) {
             r.reconnectCount = 0;
+            r._initFailureCount = 0;
             r.lastErrorAt = null;
             log(`Session ${sessionKey} marked stable after 30s.`);
           }
@@ -492,18 +616,22 @@ export async function disconnectSession(sessionKey) {
   return true;
 }
 
-export function deleteSessionFiles(sessionKey) {
+export async function deleteSessionFiles(sessionKey) {
+  // Wipe the DB rows (auth state + profile) and forget the
+  // in-memory mirrors. Migration 214 removed the on-disk
+  // `./whatsapp-sessions/<key>/` folder, so there is nothing to
+  // delete under `SESSION_ROOT` anymore.
   try {
-    const dir = sessionDir(sessionKey);
-    if (existsSync(dir)) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-    sessions.delete(sessionKey);
-    return true;
+    const { default: sessionRepo } = await import(
+      '../../repositories/chatbot/whatsappBaileysSession.repository.js'
+    );
+    await sessionRepo.deleteSession(sessionKey);
   } catch (err) {
-    log('deleteSessionFiles error:', err.message);
-    return false;
+    log('deleteSessionFiles (db) error:', err.message);
   }
+  profileCache.delete(sessionKey);
+  sessions.delete(sessionKey);
+  return true;
 }
 
 export function listSessions() {
@@ -518,24 +646,34 @@ export function listSessions() {
   }));
 }
 
-export function listPersistedSessions() {
-  if (!existsSync(SESSION_ROOT)) return [];
-  return readdirSync(SESSION_ROOT).filter((entry) => {
-    const dir = path.join(SESSION_ROOT, entry);
-    if (!existsSync(path.join(dir, 'creds.json'))) return false;
-    try {
-      const creds = JSON.parse(readFileSync(path.join(dir, 'creds.json'), 'utf8'));
-      return !!creds.me?.id;
-    } catch (_) {
-      return false;
-    }
-  });
+/**
+ * List sessionKeys that have persisted auth state.
+ *
+ * Source of truth: `whatsapp_baileys_session_creds` table. The
+ * legacy file-system fallback was removed because migration 213
+ * has been live for over a release; any operator who still has
+ * on-disk `creds.json` files must run
+ * `node scripts/backfillBaileysSessions.js` once, then `rm -rf`
+ * the legacy folder (see `.gitignore` for details).
+ *
+ * If the DB query throws we deliberately re-throw: `restorePersistedSessions`
+ * already catches and logs the rejection, and silently degrading
+ * to an empty list would leave every user "stuck" until the next
+ * boot with no error surface.
+ */
+export async function listPersistedSessions() {
+  const { default: sessionRepo } = await import(
+    '../../repositories/chatbot/whatsappBaileysSession.repository.js'
+  );
+  return sessionRepo.listSessionKeys();
 }
 
 export function getSession(sessionKey) {
   const record = sessions.get(sessionKey);
-  // Fallback đọc từ profile.json khi session bị reset (vd reload server
-  // mà creds chưa kịp hydrate, hoặc socket đang reconnect).
+  // Fallback đọc profile từ cache (Postgres-backed qua
+  // `whatsapp_baileys_session_profile`) khi session bị reset (vd
+  // reload server mà creds chưa kịp hydrate, hoặc socket đang
+  // reconnect).
   const persisted = readPersistedProfile(sessionKey);
   if (!record) {
     if (!persisted.meId && !persisted.meName) return null;
@@ -631,7 +769,11 @@ export function subscribe(sessionKey, handler) {
 
 /** Boot all persisted sessions at startup so users stay connected across restarts. */
 export async function restorePersistedSessions() {
-  const keys = listPersistedSessions();
+  // `listPersistedSessions` is async — must be awaited or we get
+  // a Promise back, and `Promise.length`/`for-of` then throws
+  // "keys is not iterable". Regression introduced by PR1 when the
+  // function gained its `async` signature.
+  const keys = await listPersistedSessions();
   log(`Restoring ${keys.length} persisted session(s)…`);
   for (const key of keys) {
     try {

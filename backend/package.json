@@ -35,6 +35,9 @@
   "jest": {
     "transform": {},
     "clearMocks": true,
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(@mtcute|@fuman)/)"
+    ],
     "collectCoverageFrom": [
       "src/**/*.js",
       "!src/index.js",
@@ -86,6 +89,8 @@
   "license": "MIT",
   "dependencies": {
     "@google-cloud/storage": "^7.22.0",
+    "@mtcute/dispatcher": "^0.32.1",
+    "@mtcute/node": "^0.32.1",
     "@payos/node": "^2.0.5",
     "@whiskeysockets/baileys": "^6.7.24",
     "axios": "^1.6.2",

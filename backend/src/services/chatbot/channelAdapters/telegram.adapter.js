@@ -71,11 +71,19 @@ class TelegramPersonalAdapter {
   }
 
   /**
-   * Verify the shared-secret header sent by the Python gateway on the
-   * incoming webhook. Throws on mismatch.
+   * Verify the shared-secret header sent by the Telegram transport
+   * (now in-process). Throws on mismatch. The secret is read from the
+   * channel gateway state — populated by the bootstrap with the same
+   * symmetric key the embedded mode used to generate.
    */
-  verifyWebhookSecret(provided) {
-    const expected = process.env.TELEGRAM_GATEWAY_SECRET || '';
+  async verifyWebhookSecret(provided) {
+    let expected = '';
+    try {
+      const { getSecret } = await import('../inProcChannelGateway/index.js');
+      expected = getSecret('telegram') || '';
+    } catch {
+      expected = '';
+    }
     if (!expected) {
       throw new Error('TELEGRAM_GATEWAY_SECRET is not configured');
     }

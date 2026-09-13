@@ -54,9 +54,29 @@ import {
   markRuntimeStarting,
 } from './utils/runtimeReadiness.util.js';
 // Khôi phục WhatsApp sessions (Baileys) — user khỏi quét lại QR mỗi lần restart server.
-whatsappBaileysService.restorePersistedSessions().catch((err) =>
-  console.warn('[WhatsApp/Baileys] restore failed:', err.message)
-);
+//
+// Order matters: we AWAIT `profileCacheReady` first so the in-memory
+// mirror of `whatsapp_baileys_session_profile` is populated before
+// `restorePersistedSessions()` calls `connectSession()` for each
+// sessionKey — otherwise the first render would briefly show
+// "WhatsApp Account" instead of the saved pushName. We also await
+// the restore loop itself so `markRuntimeReady` only fires after
+// every persisted session has had a chance to open / emit a QR.
+whatsappBaileysService.profileCacheReady
+  .then(() => whatsappBaileysService.restorePersistedSessions())
+  .catch((err) =>
+    console.warn('[WhatsApp/Baileys] restore failed:', err.message)
+  );
+
+// Eagerly start the in-process Telegram gateway so the first user
+// request doesn't have to wait for the transport handshake. Fire-
+// and-forget; failures are logged but don't block backend startup.
+if (process.env.TELEGRAM_GATEWAY_EMBEDDED !== 'false') {
+  import('./services/chatbot/inProcChannelGateway/index.js')
+    .then((mod) => mod.ensureGateway({ channel: 'telegram' }))
+    .then(() => console.log('[Telegram] in-process gateway ready'))
+    .catch((err) => console.warn('[Telegram] in-process gateway start failed:', err.message));
+}
 import './controllers/chatbotChannelWebhook.controller.js';
 import * as whatsappBaileysService from './services/chatbot/whatsappBaileys.service.js';
 
@@ -75,7 +95,7 @@ kbDocumentQueue.registerProcessor('kb.document.process', async (payload) => {
 });
 
 const STARTUP_DB_MAX_ATTEMPTS = Number.parseInt(process.env.STARTUP_DB_MAX_ATTEMPTS || '', 10)
-  || (process.env.NODE_ENV === 'production' ? 12 : 1);
+  || (process.env.NODE_ENV === 'production' ? 12 : 3);
 const STARTUP_DB_RETRY_MS = Number.parseInt(process.env.STARTUP_DB_RETRY_MS || '', 10) || 5000;
 
 function isTransientDbStartupError(error) {

@@ -6,6 +6,7 @@ import { findExpiringUsers, findExpiredUsers, expireUserPlan, incrementReminderC
 import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
+import { startKeepAliveScheduler as startWhatsAppKeepAliveScheduler } from '../services/chatbot/whatsappBaileysKeepAlive.service.js';
 import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
@@ -864,6 +865,12 @@ export const initScheduler = () => {
   // Đảm bảo tài khoản Zalo không bị out dù có làm gì
   startKeepAliveScheduler();
   console.log('[Scheduler] Đã khởi tạo Zalo Session Keep-Alive: giữ đăng nhập liên tục');
+
+  // ── WhatsApp Baileys Keep-Alive - rebuild socket cho session bị đứng ─────────────
+  // Chạy mỗi 5 phút (cùng cadence với Zalo). Khác Zalo: creds đã ở DB nên chỉ cần
+  // rebuild WebSocket qua `connectSession()`, không cần re-login.
+  startWhatsAppKeepAliveScheduler();
+  console.log('[Scheduler] Đã khởi tạo WhatsApp Baileys Keep-Alive: rebuild socket mỗi 5 phút');
 
   // ── Custom Domain Auto-Verify - Tự động verify pending domains ─────────────────
   // Chạy mỗi 5 phút để tự động kích hoạt domain khi DNS đã propagate

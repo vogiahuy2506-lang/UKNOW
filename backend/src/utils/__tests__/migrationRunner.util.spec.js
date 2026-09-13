@@ -552,6 +552,33 @@ describe('checksum baseline', () => {
 });
 
 describe('withMigrationLock', () => {
+  // Production reads `MIGRATION_LOCK_TIMEOUT_MS` and
+  // `MIGRATION_STATEMENT_TIMEOUT_MS` directly from
+  // `process.env`. The defaults are 60_000 and 0, which is
+  // what the assertions in this block are written against.
+  // A developer with the variable exported in their shell
+  // (or with a stale `.env`) would otherwise see a confusing
+  // failure here, so we clear both before each test.
+  let previousLockTimeout;
+  let previousStatementTimeout;
+  beforeEach(() => {
+    previousLockTimeout = process.env.MIGRATION_LOCK_TIMEOUT_MS;
+    previousStatementTimeout = process.env.MIGRATION_STATEMENT_TIMEOUT_MS;
+    delete process.env.MIGRATION_LOCK_TIMEOUT_MS;
+    delete process.env.MIGRATION_STATEMENT_TIMEOUT_MS;
+  });
+  afterEach(() => {
+    if (previousLockTimeout === undefined) {
+      delete process.env.MIGRATION_LOCK_TIMEOUT_MS;
+    } else {
+      process.env.MIGRATION_LOCK_TIMEOUT_MS = previousLockTimeout;
+    }
+    if (previousStatementTimeout === undefined) {
+      delete process.env.MIGRATION_STATEMENT_TIMEOUT_MS;
+    } else {
+      process.env.MIGRATION_STATEMENT_TIMEOUT_MS = previousStatementTimeout;
+    }
+  });
   const makeClient = (queries) => ({
     query: jest.fn(async (sql) => {
       const text = String(sql).trim();

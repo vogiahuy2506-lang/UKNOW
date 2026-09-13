@@ -258,6 +258,17 @@ router.post('/telegram-accounts/:id/logout', requirePermission('chatbot_channels
 router.get('/telegram-accounts/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.listTelegramAccountsWithChatbotSettings.bind(chatbotController));
 router.post('/telegram-account/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleTelegramAccountChatbot.bind(chatbotController));
 
+// Cheap status endpoint the UI calls on page load to decide whether
+// to disable the "Connect account" button instead of waiting for a
+// 503. Returns the same shape `getState()` exposes internally.
+router.get('/personal-account-status/:channel', requirePermission('chatbot_channels_manage'), chatbotController.getPersonalAccountStatus.bind(chatbotController));
+
+// Multi-channel status endpoint. The FE poll loop hits this one
+// route instead of two — cheaper when both banners are visible,
+// and the response carries an `allHealthy` flag so the FE can stop
+// polling with a single boolean check.
+router.get('/personal-accounts-health', requirePermission('chatbot_channels_manage'), chatbotController.getPersonalAccountsHealth.bind(chatbotController));
+
 // ── Outbox ───────────────────────────────────────────────────────
 
 router.get('/inbox/outbox', requirePermission('inbox_view'), unifiedInboxController.getOutboxMessages.bind(unifiedInboxController));

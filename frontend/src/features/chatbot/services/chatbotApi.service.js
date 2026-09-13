@@ -211,9 +211,50 @@ const chatbotApiService = {
 
   // ── Telegram Personal Account (managed by Python telegram-gateway) ──────
 
+  /**
+   * Single-channel status for the in-process personal-account
+   * gateway (telegram). Cheap, used when one settings page needs
+   * only its own channel — but `getPersonalAccountsHealth` is
+   * preferred when both pages need to know.
+   */
+  getTelegramAccountStatus({ signal } = {}) {
+    return api.get('/ai/chatbot/personal-account-status/telegram', { signal });
+  },
+
+  /**
+   * Multi-channel status endpoint that covers Telegram in one
+   * round-trip. The poll loop hits this when both banners are
+   * visible so we don't double the auth-chain overhead (JWT verify,
+   * permission check, request log) every 30s.
+   *
+   * Response shape:
+   *   {
+   *     success: true,
+   *     data: {
+   *       channels: { telegram: {...} },
+   *       allHealthy: boolean,
+   *       checkedAt: ISO timestamp
+   *     }
+   *   }
+   */
+  getPersonalAccountsHealth({ signal } = {}) {
+    return api.get('/ai/chatbot/personal-accounts-health', { signal });
+  },
+
   // Bắt đầu QR login flow, trả về QR image base64.
-  initTelegramLogin() {
-    return api.post('/ai/chatbot/telegram-accounts/init');
+  initTelegramLogin({ signal } = {}) {
+    // Server caps the mtcute TCP handshake at TELEGRAM_CONNECT_TIMEOUT_MS
+    // (default 15s, override được qua env). Client timeout đặt CAO HƠN
+    // server cap + buffer rộng để:
+    //   1. Server trả TELEGRAM_CONNECT_TIMEOUT (504) trước → user thấy
+    //      message rõ ràng ("không thể kết nối tới Telegram DC, kiểm
+    //      tra firewall / mạng") thay vì axios ECONNABORTED mơ hồ.
+    //   2. Từ VN tới Telegram DC (Amsterdam/Singapore) latency đo được
+    //      thực tế 300-800ms, nhưng TCP+TLS handshake có thể tốn
+    //      20-40s trong window khởi động lạnh (cold path) do DC IP
+    //      rotation / mtcute tạo encryption keys lần đầu. Đặt 60s
+    //      cho đủ buffer trước khi fallback về server-side cap.
+    return api.post('/ai/chatbot/telegram-accounts/init', {}, { timeout: 60000, signal });
   },
 
   // Poll trạng thái QR login. Khi success, trả về account row.
@@ -227,8 +268,8 @@ const chatbotApiService = {
   },
 
   // List Telegram accounts (Channel Settings).
-  listTelegramAccounts() {
-    return api.get('/ai/chatbot/telegram-accounts');
+  listTelegramAccounts({ signal } = {}) {
+    return api.get('/ai/chatbot/telegram-accounts', { signal });
   },
 
   // Xóa tài khoản Telegram vĩnh viễn.
@@ -256,6 +297,62 @@ const chatbotApiService = {
       id_account: accountId,
       id_chatbot: idChatbot ?? null,
     });
+  },
+
+  // ── Telegram Personal Account (managed by in-process gateway) ───────
+
+  /**
+   * Single-channel status for the in-process personal-account
+   * gateway (telegram). Cheap, used when one settings page needs
+   * only its own channel — but `getPersonalAccountsHealth` is
+   * preferred when both pages need to know.
+   */
+  getTelegramAccountStatus({ signal } = {}) {
+    return api.get('/ai/chatbot/personal-account-status/telegram', { signal });
+  },
+
+  // Bắt đầu QR login flow, trả về QR image base64 + deep link.
+  initTelegramLogin({ signal } = {}) {
+    // Server caps the upstream connect at TELEGRAM_CONNECT_TIMEOUT_MS
+    // (default 15s, override được qua env). Client timeout đặt CAO HƠN
+    // server cap + buffer rộng để user thấy server-side error code
+    // (TELEGRAM_CONNECT_TIMEOUT) thay vì axios ECONNABORTED mơ hồ.
+    // 60s cho đủ buffer khi TCP+TLS handshake tới Telegram DC chậm
+    // trong cold path (lần đầu kết nối từ gateway mới / sau restart).
+    return api.post('/ai/chatbot/telegram-accounts/init', {}, { timeout: 60000, signal });
+  },
+
+  // Poll trạng thái QR login. Khi success, trả về account row.
+  checkTelegramLoginStatus(sessionId) {
+    return api.get(`/ai/chatbot/telegram-accounts/status/${encodeURIComponent(sessionId)}`);
+  },
+
+  // Hủy QR login flow.
+  cancelTelegramLogin(sessionId) {
+    return api.delete(`/ai/chatbot/telegram-accounts/login/${encodeURIComponent(sessionId)}`);
+  },
+
+  // List Telegram accounts (Channel Settings).
+  listTelegramAccounts({ signal } = {}) {
+    return api.get('/ai/chatbot/telegram-accounts', { signal });
+  },
+
+  // Xóa tài khoản Telegram vĩnh viễn.
+  deleteTelegramAccount(id) {
+    return api.delete(`/ai/chatbot/telegram-accounts/${id}`);
+  },
+
+  // Ngắt kết nối Telegram, giữ row lịch sử.
+  logoutTelegramAccount(id) {
+    return api.post(`/ai/chatbot/telegram-accounts/${id}/logout`);
+  },
+
+  // TelegramDeployTab: list accounts kèm enable flag cho một chatbot cụ thể.
+  listTelegramAccountsWithChatbotSettings(chatbotId) {
+    const params = chatbotId == null || chatbotId === ''
+      ? null
+      : { chatbot_id: chatbotId };
+    return api.get('/ai/chatbot/telegram-accounts/chatbot', { params });
   },
 
   // Delete a conversation

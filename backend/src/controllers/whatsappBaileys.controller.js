@@ -68,7 +68,11 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const all = whatsappBaileysService.listSessions();
-      const persisted = whatsappBaileysService.listPersistedSessions();
+      // `listPersistedSessions` is async (Postgres-backed
+      // session_key scan); without `await` here we get a
+      // Promise and `persisted.filter` throws on the next line.
+      // See `restoreAllSessions()` below for the same fix.
+      const persisted = await whatsappBaileysService.listPersistedSessions();
       const myPrefix = `${userId}-`;
       const mine = all.filter((s) => s.sessionKey.startsWith(myPrefix));
       const myPersisted = persisted

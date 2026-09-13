@@ -7,21 +7,26 @@
  */
 import express from 'express';
 import db from '../config/database.js';
-import telegramAdapter from '../services/chatbot/channelAdapters/telegram.adapter.js';
 import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.repository.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
+import telegramAdapter from '../services/chatbot/channelAdapters/telegram.adapter.js';
+import {
+  isStubOnly,
+} from '../services/chatbot/inProcChannelGateway/index.js';
+
+const isTelegramStubOnly = () => isStubOnly({ channel: 'telegram' });
 
 const router = express.Router();
 
 function requireGatewaySecret(req, res, next) {
-  try {
-    telegramAdapter.verifyWebhookSecret(req.headers['x-gateway-secret']);
-    return next();
-  } catch (err) {
-    return res.status(401).json({ success: false, message: err.message });
-  }
+  Promise.resolve()
+    .then(() => telegramAdapter.verifyWebhookSecret(req.headers['x-gateway-secret']))
+    .then(() => next())
+    .catch((err) =>
+      res.status(401).json({ success: false, message: err.message })
+    );
 }
 
 /**
@@ -157,6 +162,132 @@ async function isTelegramAiPaused(conversationId) {
 }
 
 /**
+ * Debounce-flushed handler for a batched personal Telegram conversation.
+ * Encapsulates the policy checks (settings enabled? DM/group honour?
+ * paused?) and the AI call + reply. Pulled out of the inline handler
+ * so the route reads as "validate then enqueue".
+ */
+async function processTelegramPersonalBatch({ account, parsed, batch }) {
+  const peer = parsed.chatId || parsed.senderId;
+  const conversation = await getOrCreateTelegramConversation(
+    account,
+    peer,
+    parsed.senderName
+  );
+
+  const idChatbot = conversation.id_chatbot;
+
+  // Resolve AI settings: prefer the per-(account, chatbot) row, fall
+  // back to the channel-level settings so legacy setups still work.
+  const chatbotSettings = await chatbotRepository.getSettings(
+    account.id_user,
+    'telegram_personal'
+  );
+  let accountSettings = null;
+  if (idChatbot) {
+    const { rows } = await db.query(
+      `SELECT * FROM telegram_chatbot_settings
+       WHERE id_telegram_account = $1 AND id_chatbot = $2`,
+      [account.id, idChatbot]
+    );
+    accountSettings = rows[0] || null;
+  }
+
+  if (!accountSettings?.is_enabled) {
+    console.log(
+      '[Telegram] batch skip: accountSettings.is_enabled=false',
+      { accountId: account.id, idChatbot, hasAccountSettings: !!accountSettings }
+    );
+    return;
+  }
+  if (parsed.isGroup && !accountSettings.is_enabled_group) {
+    console.log('[Telegram] batch skip: group disabled', { accountId: account.id });
+    return;
+  }
+  if (!parsed.isGroup && !accountSettings.is_enabled_dm) {
+    console.log('[Telegram] batch skip: dm disabled', { accountId: account.id });
+    return;
+  }
+  if (await isTelegramAiPaused(conversation?.id)) {
+    console.log('[Telegram] batch skip: AI paused by owner', {
+      conversationId: conversation?.id
+    });
+    return;
+  }
+
+  // Combine the batched messages (if any) with the current one so
+  // bursty inputs become one AI call. Fallback to the original
+  // payload when `batch` is missing the helper aggregation we
+  // expect (older unit-style paths).
+  const batchedContent = Array.isArray(batch) && batch.length
+    ? batch
+        .map((m) => (m && m.content ? String(m.content) : ''))
+        .filter(Boolean)
+        .join('\n')
+    : parsed.message;
+
+  console.log(
+    '[Telegram] batch dispatching to AI',
+    { accountId: account.id, idChatbot, length: batchedContent?.length }
+  );
+
+  // Log visitor messages first so the UI shows them even if the AI
+  // call fails. Best-effort: failures are logged by the helper.
+  for (const item of Array.isArray(batch) && batch.length ? batch : [{ content: parsed.message }]) {
+    if (!item?.content) continue;
+    await logTelegramMessage(conversation, 'visitor', item.content, {
+      external_message_id: item.eventId ?? null,
+      sender_id: parsed.senderId,
+      sender_name: parsed.senderName,
+      chat_id: parsed.chatId,
+      is_group: parsed.isGroup,
+    });
+  }
+
+  const result = await chatRouterService.routeMessageWithSettings({
+    channel: 'telegram_personal',
+    userId: account.id_user,
+    chatbotId: idChatbot,
+    message: batchedContent,
+    conversationId: conversation?.id,
+    chatbotSettings: accountSettings || chatbotSettings || {},
+    visitorInfo: {
+      source: 'telegram_personal',
+      telegram_account_id: account.id,
+      telegram_user_id: parsed.telegramUserId,
+      sender_id: parsed.senderId,
+      sender_name: parsed.senderName,
+      chat_id: parsed.chatId,
+      is_group: parsed.isGroup,
+    },
+  });
+
+  const replyText = result?.content;
+  console.log(
+    `[Telegram] AI replied: ${replyText ? replyText.length + ' chars' : '(empty)'} -> logging + sending`,
+    { conversationId: conversation?.id, peer }
+  );
+  if (replyText) {
+    await logTelegramMessage(conversation, 'bot', replyText, {
+      model:
+        accountSettings?.ai_model || chatbotSettings?.ai_model || 'gemini-2.5-flash',
+    });
+    console.log(`[Telegram] bot message logged, now sendReply → peer=${peer}`);
+    try {
+      await telegramAdapter.sendReply({
+        userId: account.id_user,
+        channelId: account.id,
+        externalId: peer,
+        message: replyText,
+      });
+      console.log(`[Telegram] sendReply OK to ${peer}`);
+    } catch (sendErr) {
+      console.warn('[Telegram] sendReply failed:', sendErr.message);
+    }
+  }
+}
+
+/**
  * POST /api/internal/telegram-webhook
  *
  * Receives incoming messages that the Python gateway has already parsed
@@ -167,109 +298,50 @@ router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
   try {
     const parsed = telegramAdapter.parseWebhookEvent(req.body);
     if (!parsed.message || !parsed.senderId) {
+      console.log('[Telegram] webhook skip: no message/sender', { parsed });
       return res.status(204).end();
     }
 
     const telegramUserId = parsed.telegramUserId;
     if (!telegramUserId) {
+      console.log('[Telegram] webhook skip: no telegramUserId', { parsed });
       return res.status(204).end();
     }
 
     const account = await chatbotTelegramRepository.getAccountByTelegramUserId(telegramUserId);
     if (!account || !account.is_active) {
-      return res.status(204).end();
-    }
-
-    // Debounce so a fast burst of messages gets one AI call.
-    const peer = parsed.chatId || parsed.senderId;
-    const debounceKey = `telegram_personal:${account.id}:${peer}`;
-    const debounced = inboundReplyDebounceService.shouldProcess(debounceKey);
-    if (!debounced.shouldProcess) {
-      return res.status(204).end();
-    }
-
-    const conversation = await getOrCreateTelegramConversation(
-      account,
-      peer,
-      parsed.senderName
-    );
-
-    const idChatbot = conversation.id_chatbot;
-
-    // Resolve AI settings: prefer the per-(account, chatbot) row, fall
-    // back to the channel-level settings so legacy setups still work.
-    const chatbotSettings = await chatbotRepository.getSettings(account.id_user, 'telegram_personal');
-    let accountSettings = null;
-    if (idChatbot) {
-      const { rows } = await db.query(
-        `SELECT * FROM telegram_chatbot_settings
-         WHERE id_telegram_account = $1 AND id_chatbot = $2`,
-        [account.id, idChatbot]
+      console.log(
+        '[Telegram] webhook skip: account not found or inactive',
+        { telegramUserId, accountFound: !!account }
       );
-      accountSettings = rows[0] || null;
-    }
-
-    if (!accountSettings?.is_enabled) {
       return res.status(204).end();
     }
 
-    // Honor the DM-vs-group toggle.
-    if (parsed.isGroup && !accountSettings.is_enabled_group) {
-      return res.status(204).end();
-    }
-    if (!parsed.isGroup && !accountSettings.is_enabled_dm) {
-      return res.status(204).end();
-    }
-
-    // Honor owner handoff (paused AI).
-    if (await isTelegramAiPaused(conversation?.id)) {
-      return res.status(204).end();
-    }
-
-    // Log the visitor message before/after running AI — best-effort.
-    await logTelegramMessage(conversation, 'visitor', parsed.message, {
-      external_message_id: req.body?.message_id || null,
-      sender_id: parsed.senderId,
-      sender_name: parsed.senderName,
-      chat_id: parsed.chatId,
-      is_group: parsed.isGroup,
-    });
-
-    // Run the AI pipeline through the unified router.
-    const result = await chatRouterService.routeMessageWithSettings({
-      channel: 'telegram_personal',
-      userId: account.id_user,
-      chatbotId: idChatbot,
-      message: parsed.message,
-      conversationId: conversation?.id,
-      chatbotSettings: accountSettings || chatbotSettings || {},
-      visitorInfo: {
-        source: 'telegram_personal',
-        telegram_account_id: account.id,
-        telegram_user_id: telegramUserId,
-        sender_id: parsed.senderId,
-        sender_name: parsed.senderName,
-        chat_id: parsed.chatId,
-        is_group: parsed.isGroup,
+    // We enqueue into the debounce service exactly the way the
+    // Zalo / WhatsApp webhooks do: it batches fast bursts into a
+    // single AI call, tracks seen event ids across retries, and
+    // calls `flushCallback` when the bucket drains.
+    const debounceKey = `telegram_personal:${account.id}:${parsed.chatId || parsed.senderId}`;
+    inboundReplyDebounceService.enqueue({
+      key: debounceKey,
+      message: {
+        eventId: req.body?.message_id ?? null,
+        content: parsed.message,
+        metadata: {
+          senderId: parsed.senderId,
+          senderName: parsed.senderName,
+          chatId: parsed.chatId,
+          isGroup: parsed.isGroup,
+        },
+      },
+      flushCallback: async (batch) => {
+        await processTelegramPersonalBatch({
+          account,
+          parsed,
+          batch,
+        });
       },
     });
-
-    const replyText = result?.content;
-    if (replyText) {
-      await logTelegramMessage(conversation, 'bot', replyText, {
-        model: accountSettings?.ai_model || chatbotSettings?.ai_model || 'gemini-2.5-flash',
-      });
-      try {
-        await telegramAdapter.sendReply({
-          userId: account.id_user,
-          channelId: account.id,
-          externalId: peer,
-          message: replyText,
-        });
-      } catch (sendErr) {
-        console.warn('[Telegram] sendReply failed:', sendErr.message);
-      }
-    }
 
     return res.status(204).end();
   } catch (err) {
@@ -282,9 +354,19 @@ router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
 /**
  * GET /api/internal/telegram-health
  * Lightweight readiness check used by the gateway on startup.
+ *
+ * The `stubOnly` flag lets an operator (or a health-monitor dashboard)
+ * spot at a glance whether the channel is running on its stub
+ * transport — in which case all QR login endpoints will return 503
+ * with `code: 'TELEGRAM_STUB_TRANSPORT'`.
  */
 router.get('/telegram-health', requireGatewaySecret, (req, res) => {
-  return res.json({ status: 'ok' });
+  const stubOnly = isTelegramStubOnly();
+  return res.json({
+    status: stubOnly ? 'stub' : 'ok',
+    stubOnly,
+    transport: process.env.TELEGRAM_GATEWAY_TRANSPORT || null,
+  });
 });
 
 export default router;
