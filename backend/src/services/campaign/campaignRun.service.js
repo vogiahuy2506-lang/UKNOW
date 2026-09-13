@@ -5509,26 +5509,36 @@ class CampaignRunService {
                 failureAt,
                 zaloSendFailureCount = null,
               }) => {
-                // eslint-disable-next-line no-await-in-loop
-                const zp = await getRecipientProgress({
-                  nodeId,
-                  channel: 'zalo_personal',
-                  recipientKey,
-                });
-                // eslint-disable-next-line no-await-in-loop
-                await upsertRecipientProgress({
-                  nodeId,
-                  channel: 'zalo_personal',
-                  recipientKey,
-                  completedStep: zp.lastCompletedStep || 0,
-                  totalSteps,
-                  firstSentAt: zp.firstSentAt,
-                  lastCompletedAt: zp.lastCompletedAt,
-                  nextDueAt: zp.nextDueAt,
-                  zaloSendFailureCount,
-                  lastFailureReason: mapZaloErrorCategoryToLedgerReason(errorCategory),
-                  lastFailureAt: failureAt,
-                });
+                // Sổ cái là ghi chép, không được làm hỏng lượt gửi: upsertRecipientProgress ném lại
+                // mọi lỗi DB không phải 42P01/42703 (:1843-1848). Trước PR-1 nhánh hỏng một lần không
+                // ghi sổ cái nên chưa từng lộ; giờ ghi ở mọi chế độ thì phải nuốt lỗi và log.
+                try {
+                  // eslint-disable-next-line no-await-in-loop
+                  const zp = await getRecipientProgress({
+                    nodeId,
+                    channel: 'zalo_personal',
+                    recipientKey,
+                  });
+                  // eslint-disable-next-line no-await-in-loop
+                  await upsertRecipientProgress({
+                    nodeId,
+                    channel: 'zalo_personal',
+                    recipientKey,
+                    completedStep: zp.lastCompletedStep || 0,
+                    totalSteps,
+                    firstSentAt: zp.firstSentAt,
+                    lastCompletedAt: zp.lastCompletedAt,
+                    nextDueAt: zp.nextDueAt,
+                    zaloSendFailureCount,
+                    lastFailureReason: mapZaloErrorCategoryToLedgerReason(errorCategory),
+                    lastFailureAt: failureAt,
+                  });
+                } catch (ledgerError) {
+                  console.warn(
+                    `[CampaignRun][ZaloPersonal] run=${runId} recipient=${String(recipientKey || '').trim()} `
+                    + `không ghi được lastFailureReason vào sổ cái: ${ledgerError?.message || ledgerError}`
+                  );
+                }
               };
               if (isContinuousMode && this.CONTINUOUS_ZALO_MAX_SEND_FAILURES > 0) {
                 // eslint-disable-next-line no-await-in-loop

@@ -248,7 +248,7 @@ export function getZaloErrorCategoryLabel(category) {
  * Cố ý KHÔNG trả về message thô của lỗi — chỉ mã ngắn đã phân loại.
  *
  * @param {string|null|undefined} category kết quả classifyZaloSendError(...).category
- * @returns {'invalid_format'|'stranger_blocked'|'not_found'|'rate_limited'|'unknown'}
+ * @returns {'invalid_parameter'|'stranger_blocked'|'not_found'|'rate_limited'|'unknown'}
  */
 export function mapZaloErrorCategoryToLedgerReason(category) {
   switch (category) {
