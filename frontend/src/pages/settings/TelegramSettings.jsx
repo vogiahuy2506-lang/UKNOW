@@ -67,6 +67,14 @@ export default function TelegramSettings() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Normalize `accounts` to always be an array so render-time code
+  // (accounts.length / accounts.map / accounts.filter) never crashes
+  // with "e.filter is not a function". See production error 13/09:
+  // https://founderai.biz/app/settings/channels#telegram — caused by
+  // a transient backend response shape change (likely the chatbotApi
+  // envelope wrapper returning an object instead of an array).
+  const safeAccounts = Array.isArray(accounts) ? accounts : [];
+
   // QR login flow state
   const [qrPayload, setQrPayload] = useState(null); // { sessionId, qrImageBase64, expiresAt }
   const [qrStatus, setQrStatus] = useState('idle'); // idle | awaiting_scan | success | expired | error
@@ -412,7 +420,21 @@ export default function TelegramSettings() {
     }
   }, [fetchAccounts]);
 
-  const totalActive = accounts.filter((a) => a.is_active && a.is_loaded).length;
+  const totalActive = safeAccounts.filter(
+    (a) => a && a.is_active && a.is_loaded
+  ).length;
+  // Defensive: log shape mismatch so we can spot a backend regression
+  // (e.g. endpoint returning {success,data:{...}} where code expects array)
+  // without crashing the whole settings page.
+  if (!Array.isArray(accounts)) {
+    console.warn(
+      '[TelegramSettings] accounts is not an array — got',
+      accounts,
+      '(typeof:',
+      typeof accounts,
+      '). Falling back to empty list.'
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -579,7 +601,7 @@ export default function TelegramSettings() {
           <h3 className="text-sm font-semibold text-slate-900">
             Tài khoản đã liên kết
             <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-              {totalActive}/{accounts.length} đang hoạt động
+              {totalActive}/{safeAccounts.length} đang hoạt động
             </span>
           </h3>
         </div>
@@ -588,7 +610,7 @@ export default function TelegramSettings() {
           <div className="flex h-40 items-center justify-center text-sm text-slate-500">
             Đang tải…
           </div>
-        ) : accounts.length === 0 ? (
+        ) : safeAccounts.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 px-5 py-12 text-center">
             <FaTelegramPlane className="h-10 w-10 text-slate-300" />
             <p className="text-sm font-medium text-slate-700">Chưa có tài khoản Telegram nào</p>
@@ -598,7 +620,7 @@ export default function TelegramSettings() {
           </div>
         ) : (
           <ul className="divide-y divide-slate-200">
-            {accounts.map((acc) => {
+            {safeAccounts.map((acc) => {
               const fullName = [acc.first_name, acc.last_name].filter(Boolean).join(' ');
               const displayName = fullName || acc.username || acc.phone || 'Telegram User';
               return (
