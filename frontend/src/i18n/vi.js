@@ -401,7 +401,7 @@ export default {
     landingCustomizer: 'Tuỳ chỉnh Landing',
     bulkNotification: 'Gửi thông báo',
     notificationCenter: 'Trung tâm thông báo',
-    welcomeEmail: 'Email chào mừng',
+    welcomeEmail: 'Email & lịch nhắc hạn',
     helpArticles: 'Bài viết hướng dẫn',
     helpUnanswered: 'Câu hỏi chưa trả lời',
     menuCategories: 'Chuyên mục menu',
@@ -7977,6 +7977,9 @@ export default {
     templateSelector: 'Mẫu thư',
     templateSelectorHint: 'Chọn mẫu bên dưới để sửa từng loại thư.',
     switchConfirm: 'Nội dung đang sửa chưa được lưu. Chuyển mẫu khác sẽ bỏ các thay đổi này?',
+    pageTabsLabel: 'Chọn tab',
+    contentTabLabel: 'Nội dung thư',
+    tabSwitchConfirm: 'Nội dung đang sửa chưa được lưu. Chuyển tab khác sẽ bỏ các thay đổi này?',
     templateKeys: {
       welcome: 'Email chào mừng',
       plan_expiring: 'Email nhắc sắp hết hạn gói',
@@ -7991,8 +7994,8 @@ export default {
       },
       plan_expiring: {
         title: 'Email nhắc sắp hết hạn gói',
-        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên còn 7 ngày và còn 3 ngày là hết hạn.',
-        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, hai lần cho mỗi thành viên (còn 7 ngày và còn 3 ngày). Các email đã gửi trước đây không thay đổi.',
+        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên sắp hết hạn, theo các mốc {days} ngày đang đặt ở tab Lịch nhắc hạn.',
+        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, theo các mốc {days} ngày trước hạn (đổi ở tab Lịch nhắc hạn). Các email đã gửi trước đây không thay đổi.',
         previewFrameTitle: 'Bản xem trước email nhắc hết hạn gói',
       },
       plan_expired: {
@@ -8016,6 +8019,34 @@ export default {
       graceDays: 'Số ngày ân hạn',
       upgradeUrl: 'Đường dẫn gia hạn/nâng cấp gói',
     },
+  },
+
+  // PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 5 (PR-2) — tab "Lịch nhắc hạn" trong cùng
+  // trang AdminWelcomeEmailPage. Giờ gửi 08:00 cố định, không sửa được ở đây (mục 1.4 của plan).
+  adminSubscriptionReminderSchedule: {
+    tabLabel: 'Lịch nhắc hạn',
+    title: 'Lịch nhắc hạn gói',
+    subtitle: 'Chọn số ngày trước khi gói hết hạn để gửi thư nhắc. Nội dung thư sửa ở tab "Nội dung thư" (mẫu "Email nhắc sắp hết hạn gói").',
+    fixedTimeNote: 'Giờ gửi cố định 08:00 (giờ Việt Nam), không sửa được ở đây — lịch cron đăng ký lúc hệ thống khởi động, đổi giờ lúc đang chạy là một thay đổi khác.',
+    daysLabel: 'Các mốc nhắc trước hạn',
+    daysHint: 'Mỗi mốc là số ngày còn lại trước khi gói hết hạn. Tối đa 5 mốc, mỗi mốc từ 1 đến 365 ngày. Để trống hết là tắt mọi thư nhắc trước hạn — vẫn còn thư gửi đúng ngày hết hạn.',
+    daysUnit: 'ngày',
+    dayInputLabel: 'Mốc {index}',
+    addDay: 'Thêm mốc',
+    removeDay: 'Xoá mốc này',
+    emptyWarningTitle: 'Chưa có mốc nhắc nào',
+    emptyWarningBody: 'Khách sẽ KHÔNG nhận được thư nhắc trước hạn nào — chỉ còn thư gửi đúng ngày hết hạn.',
+    previewTitle: 'Xem trước dạng người đọc',
+    previewWithDays: 'Khách sẽ nhận thư vào các mốc {days} ngày trước hạn, cộng thêm một thư đúng ngày hết hạn.',
+    previewNoDays: 'Khách sẽ không nhận thư nhắc trước hạn — chỉ nhận thư đúng ngày hết hạn.',
+    errorDuplicate: 'Không được trùng mốc',
+    errorRange: 'Mốc phải từ 1 đến 365 ngày',
+    errorTooMany: 'Tối đa 5 mốc',
+    errorInvalidNumber: 'Mỗi mốc phải là số nguyên hợp lệ',
+    saveSuccess: 'Đã lưu lịch nhắc hạn',
+    saveFailed: 'Không thể lưu lịch nhắc hạn',
+    loadFailed: 'Không thể tải lịch nhắc hạn',
+    updatedAt: 'Cập nhật lần cuối: {time}',
   },
 
   adminHelp: {

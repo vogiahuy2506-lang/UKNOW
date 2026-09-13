@@ -29,6 +29,14 @@ const {
   createUser,
   createPlan,
 } = await import('./helpers/db.js');
+const { saveSettings } = await import('../../src/repositories/admin/subscriptionReminderSettings.repository.js');
+
+async function setSentRecord(userId, sentRecord) {
+  await db.query('UPDATE users SET subscription_reminders_sent = $2::jsonb WHERE id = $1', [
+    userId,
+    JSON.stringify(sentRecord),
+  ]);
+}
 
 let origTestSendEmail;
 
@@ -220,10 +228,12 @@ describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tác
     expect(res1.remindedWeek).toBe(0);
     expect(res1.failed).toBe(1);
 
-    // Kiểm tra DB: active_plan_id VẪN CÒN, reminder_count VẪN LÀ 0
-    const userDb1 = await db.query('SELECT active_plan_id, subscription_reminder_count FROM users WHERE id = $1', [user.id]);
+    // Kiểm tra DB: active_plan_id VẪN CÒN, subscription_reminders_sent VẪN RỖNG (chưa gửi được
+    // lần nào nên chưa có gì để ghi nhớ — PLAN_CAU_HINH_LICH_NHAC_HAN đã đổi cơ chế chống gửi lặp
+    // từ subscription_reminder_count sang cột JSONB này, xem subscriptionExpiry.service.js).
+    const userDb1 = await db.query('SELECT active_plan_id, subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
     expect(userDb1.rows[0].active_plan_id).toBe(plan.id);
-    expect(Number(userDb1.rows[0].subscription_reminder_count)).toBe(0);
+    expect(userDb1.rows[0].subscription_reminders_sent).toEqual({});
 
     // Lượt 2: SMTP phục hồi bình thường -> gửi lại thành công!
     mockSendMail.mockClear();
@@ -234,9 +244,15 @@ describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tác
     expect(res2.failed).toBe(0);
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
-    // DB đã tăng reminder_count = 1
-    const userDb2 = await db.query('SELECT active_plan_id, subscription_reminder_count FROM users WHERE id = $1', [user.id]);
-    expect(Number(userDb2.rows[0].subscription_reminder_count)).toBe(1);
+    // DB đã ghi nhận đã gửi mốc 7 cho đúng chu kỳ hiện tại
+    const userDb2 = await db.query('SELECT active_plan_id, subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
+    expect(userDb2.rows[0].subscription_reminders_sent.days).toEqual([7]);
+
+    // Lượt 3 cùng ngày: mốc 7 đã gửi rồi → không gửi lại (ca 5 của plan, chốt ở tầng DB thật)
+    mockSendMail.mockClear();
+    const res3 = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+    expect(res3.remindedWeek).toBe(0);
+    expect(mockSendMail).not.toHaveBeenCalled();
   });
 
   it('Ca 8: Cron chạy đầy đủ ghi vào cron_job_runs với cấu trúc đủ 5 khoá giám sát trên DB thật', async () => {
@@ -287,6 +303,57 @@ describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tác
       reminderThree: 0,
       synced: 1,
     });
+  });
+
+  // Ca 4 của PLAN_CAU_HINH_LICH_NHAC_HAN mục 4 — QUAN TRỌNG NHẤT: đây đúng là ca mà cơ chế đếm số
+  // lần (subscription_reminder_count) cũ sẽ hỏng (mục 1.3 của plan). Chốt trên Postgres thật.
+  it('Ca 4 — khách đã nhận mốc 7, sếp đổi cấu hình thành [3] → khách VẪN nhận thư 3 ngày', async () => {
+    const plan = await createPlan({ code: 'p-cfg-4', name: 'Gói Đổi Cấu Hình' });
+    const user = await createUser({
+      username: 'user-cfg-4',
+      email: 'cfg4@example.com',
+      full_name: 'Khách Đổi Cấu Hình',
+    });
+    // Còn 2.5 ngày (nằm trong khoảng 2-3), ĐÃ nhận mốc 7 trong CÙNG chu kỳ này.
+    const expiresAt = new Date(Date.now() + 2.5 * 86400000);
+    await setSubscription(user.id, plan.id, expiresAt, 0);
+    const userRow = await db.query('SELECT subscription_expires_at FROM users WHERE id = $1', [user.id]);
+    const cycleIso = new Date(userRow.rows[0].subscription_expires_at).toISOString();
+    await setSentRecord(user.id, { cycle: cycleIso, days: [7] });
+
+    await saveSettings({ daysBefore: [3], updatedBy: null });
+
+    const result = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(result.remindedWeek + result.remindedThreeDay).toBe(1);
+    const after = await db.query('SELECT subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
+    expect(after.rows[0].subscription_reminders_sent.days.sort()).toEqual([3, 7]);
+  });
+
+  // Ca 6 của PLAN_CAU_HINH_LICH_NHAC_HAN mục 4 — khách gia hạn thì cột ghi nhớ tự dọn (cycle không
+  // khớp expires_at mới), không cần cron dọn dẹp riêng.
+  it('Ca 6 — khách gia hạn rồi lại sắp hết hạn → nhận lại đủ mốc của chu kỳ mới', async () => {
+    const plan = await createPlan({ code: 'p-cfg-6', name: 'Gói Gia Hạn Lại' });
+    const user = await createUser({
+      username: 'user-cfg-6',
+      email: 'cfg6@example.com',
+      full_name: 'Khách Gia Hạn Lại',
+    });
+    const oldCycle = new Date(Date.now() - 40 * 86400000).toISOString();
+    await setSentRecord(user.id, { cycle: oldCycle, days: [7, 3] });
+
+    // Gia hạn: subscription_expires_at nhảy sang một mốc MỚI, còn 6.9 ngày (nằm trong 6-7).
+    const newExpiresAt = new Date(Date.now() + 6.9 * 86400000);
+    await setSubscription(user.id, plan.id, newExpiresAt, 0);
+
+    const result = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(result.remindedWeek).toBe(1);
+    const after = await db.query('SELECT subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
+    // Chu kỳ mới, KHÔNG cộng dồn [7,3] cũ của chu kỳ trước.
+    expect(after.rows[0].subscription_reminders_sent.days).toEqual([7]);
   });
 });
 

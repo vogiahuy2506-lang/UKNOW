@@ -1,9 +1,10 @@
 import db from '../../config/database.js';
 import {
   findExpiredUsers,
-  findExpiringUsers,
+  findUsersExpiringInWindow,
   expireUserPlan,
   incrementReminderCount,
+  markReminderSent,
 } from '../../repositories/subscription/subscription.repository.js';
 import {
   buildPlanExpiredEmail,
@@ -11,6 +12,7 @@ import {
   sendSystemEmail,
 } from '../../utils/systemEmail.util.js';
 import { loadCustomSystemEmailTemplate } from '../email/welcomeEmailTemplate.service.js';
+import { getReminderSettings } from './subscriptionReminderSettings.service.js';
 
 /**
  * Xử lý các gói thuê bao đã hết hạn:
@@ -85,66 +87,92 @@ export async function processExpiredSubscriptions({ renewalUrl, queryable = db }
   };
 }
 
+// PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 1.3/3.2 — subscription_reminder_count (một số
+// đếm) hỏng khi danh sách mốc đổi: đổi cấu hình [7,3] → [3] thì count=1 (đã nhận mốc 7) chặn
+// nhầm mốc 3 (đòi count<1). Thay bằng ghi nhớ ĐÃ GỬI MỐC NÀO trong CHU KỲ nào
+// (users.subscription_reminders_sent = {cycle, days}) — hỏi "mốc 7 đã gửi chưa" thay vì "đã gửi
+// mấy lần". cycle khác subscription_expires_at hiện tại (khách gia hạn/đổi gói) → coi days cũ là
+// rỗng, tự dọn không cần cron riêng.
+function parseSentRecord(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { cycle: null, days: [] };
+  const days = Array.isArray(raw.days) ? raw.days.filter(Number.isInteger) : [];
+  return { cycle: raw.cycle ?? null, days };
+}
+
+function isSameCycle(sentRecord, expiresAt) {
+  if (!sentRecord.cycle) return false;
+  return new Date(sentRecord.cycle).getTime() === new Date(expiresAt).getTime();
+}
+
+function hasSentDay(rawSent, expiresAt, day) {
+  const record = parseSentRecord(rawSent);
+  return isSameCycle(record, expiresAt) && record.days.includes(day);
+}
+
+function buildSentRecordAfterSend(rawSent, expiresAt, day) {
+  const record = parseSentRecord(rawSent);
+  const priorDays = isSameCycle(record, expiresAt) ? record.days : [];
+  return { cycle: new Date(expiresAt).toISOString(), days: [...priorDays, day] };
+}
+
 /**
- * Gửi email nhắc nhở sắp hết hạn gói (7 ngày và 3 ngày):
- * 1. Đọc mẫu 'plan_expiring' tuỳ chỉnh một lần cho cả lượt.
- * 2. Nhắc lần 1 (còn 7 ngày, reminder_count = 0, findExpiringUsers(6, 7, 1)).
- * 3. Nhắc lần 2 (còn 3 ngày, reminder_count = 1, findExpiringUsers(2, 3, 2)).
+ * Gửi email nhắc nhở sắp hết hạn gói theo danh sách mốc cấu hình được (mặc định [7,3], xem
+ * subscriptionReminderSettings.service.js):
+ * 1. Đọc mẫu 'plan_expiring' tuỳ chỉnh + danh sách mốc, MỘT lần cho cả lượt cron.
+ * 2. Với mỗi mốc `d` (sắp giảm dần): quét user hết hạn trong cửa sổ (d-1, d] — rộng đúng 24 giờ,
+ *    khớp chu kỳ cron chạy mỗi ngày một lần (cửa sổ (d, d) rộng 0 giây sẽ không ai được gửi).
+ * 3. Lọc tiếp bằng subscription_reminders_sent — mốc đã gửi trong chu kỳ hiện tại thì bỏ qua.
  * 4. Bọc try/catch cho từng user: lỗi 1 user không làm đứt chuỗi và không ảnh hưởng người khác.
- * 5. Chỉ incrementReminderCount khi gửi email thành công.
+ * 5. Chỉ markReminderSent khi gửi email thành công. KHÔNG còn dùng subscription_reminder_count
+ *    cho nhánh này — cột đó giờ chỉ còn processExpiredSubscriptions (thư T-0) đọc/ghi.
+ *
+ * remindedWeek/remindedThreeDay giữ tên cũ vì đó là hợp đồng với cron_job_runs/dashboard giám sát
+ * (buildSubscriptionCronResult) — với cấu hình mặc định [7,3] (2 mốc, chưa đổi gì) hai số này
+ * đúng nghĩa "nhắc 7 ngày"/"nhắc 3 ngày" như hôm nay. Khi admin cấu hình nhiều hơn 2 mốc (PR-2,
+ * chưa làm ở PR-1 này), remindedWeek gộp mốc XA NHẤT, remindedThreeDay gộp TẤT CẢ mốc còn lại —
+ * không mất số liệu (synced vẫn cộng đúng), nhưng không tách riêng được mốc 3/4/5. Đây là giới
+ * hạn thật của hợp đồng 2-khoá cũ, plan không nói tới; nêu ở báo cáo.
  *
  * @param {{ renewalUrl?: string, queryable?: object }} [options]
  * @returns {Promise<{ remindedWeek: number, remindedThreeDay: number, failed: number }>}
  */
 export async function sendExpiringReminders({ renewalUrl, queryable = db } = {}) {
-  const planExpiringTemplate = await loadCustomSystemEmailTemplate('plan_expiring');
+  const [planExpiringTemplate, { daysBefore }] = await Promise.all([
+    loadCustomSystemEmailTemplate('plan_expiring'),
+    getReminderSettings(),
+  ]);
   let remindedWeek = 0;
   let remindedThreeDay = 0;
   let failed = 0;
 
-  // 1. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
-  const week = await findExpiringUsers(6, 7, 1);
-  for (const user of week) {
-    try {
-      const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-      const { subject, html } = buildRenewalReminderEmail({
-        fullName: user.full_name,
-        planName: user.plan_name,
-        expiresAt: user.subscription_expires_at,
-        daysLeft,
-        renewalUrl,
-        template: planExpiringTemplate,
-      });
-      await sendSystemEmail({ to: user.email, subject, html });
-      await incrementReminderCount(user.id, queryable);
-      remindedWeek++;
-      console.log(`[Subscription] Nhắc lần 1 → ${user.email} (còn ${daysLeft} ngày)`);
-    } catch (err) {
-      failed++;
-      console.error(`[Subscription] Gửi email nhắc hạn lần 1 thất bại cho ${user.email}:`, err.message);
-    }
-  }
-
-  // 2. Nhắc lần 2 — còn 3 ngày (reminder_count = 1)
-  const threeDay = await findExpiringUsers(2, 3, 2);
-  for (const user of threeDay) {
-    try {
-      const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-      const { subject, html } = buildRenewalReminderEmail({
-        fullName: user.full_name,
-        planName: user.plan_name,
-        expiresAt: user.subscription_expires_at,
-        daysLeft,
-        renewalUrl,
-        template: planExpiringTemplate,
-      });
-      await sendSystemEmail({ to: user.email, subject, html });
-      await incrementReminderCount(user.id, queryable);
-      remindedThreeDay++;
-      console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
-    } catch (err) {
-      failed++;
-      console.error(`[Subscription] Gửi email nhắc hạn lần 2 thất bại cho ${user.email}:`, err.message);
+  for (let index = 0; index < daysBefore.length; index += 1) {
+    const day = daysBefore[index];
+    const candidates = await findUsersExpiringInWindow(day - 1, day, queryable);
+    for (const user of candidates) {
+      if (hasSentDay(user.subscription_reminders_sent, user.subscription_expires_at, day)) continue;
+      try {
+        const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
+        const { subject, html } = buildRenewalReminderEmail({
+          fullName: user.full_name,
+          planName: user.plan_name,
+          expiresAt: user.subscription_expires_at,
+          daysLeft,
+          renewalUrl,
+          template: planExpiringTemplate,
+        });
+        await sendSystemEmail({ to: user.email, subject, html });
+        await markReminderSent(
+          user.id,
+          buildSentRecordAfterSend(user.subscription_reminders_sent, user.subscription_expires_at, day),
+          queryable
+        );
+        if (index === 0) remindedWeek++;
+        else remindedThreeDay++;
+        console.log(`[Subscription] Nhắc mốc ${day} ngày → ${user.email} (còn ${daysLeft} ngày)`);
+      } catch (err) {
+        failed++;
+        console.error(`[Subscription] Gửi email nhắc hạn mốc ${day} ngày thất bại cho ${user.email}:`, err.message);
+      }
     }
   }
 

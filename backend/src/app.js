@@ -60,6 +60,7 @@ import adminBulkNotificationRoutes from './routes/adminBulkNotification.routes.j
 import adminNotificationRoutes from './routes/adminNotification.routes.js';
 import adminMenuRoutes from './routes/adminMenu.routes.js';
 import adminSystemEmailTemplateRoutes from './routes/adminSystemEmailTemplate.routes.js';
+import adminSubscriptionReminderSettingsRoutes from './routes/adminSubscriptionReminderSettings.routes.js';
 import userDeliveryMonitorRoutes from './routes/userDeliveryMonitor.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import planRoutes from './routes/plan.routes.js';
@@ -210,6 +211,7 @@ export function createApp() {
   app.use('/api/admin/notifications', adminNotificationRoutes);
   app.use('/api/admin/menu-layout', adminMenuRoutes);
   app.use('/api/admin/system-email-templates', adminSystemEmailTemplateRoutes);
+  app.use('/api/admin/subscription-reminder-settings', adminSubscriptionReminderSettingsRoutes);
   app.use('/api/delivery-monitor', userDeliveryMonitorRoutes);
   app.use('/api/ai/chatbot', chatbotRoutes);
   // /api/internal/* - inter-service endpoints (Telegram gateway, etc.)
