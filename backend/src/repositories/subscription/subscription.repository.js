@@ -84,6 +84,46 @@ export async function incrementReminderCount(userId, queryable = db) {
   );
 }
 
+/**
+ * PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 3.4 — quét riêng cho nhắc hạn theo cấu hình
+ * (subscription_reminder_settings), KHÔNG lọc theo subscription_reminder_count như
+ * findExpiringUsers ở trên (hàm đó vẫn giữ nguyên semantics cũ — chỉ subscriptionExpiry.service.js
+ * đã đổi sang dùng hàm này, còn subscriptionRepository.test.js vẫn kiểm findExpiringUsers riêng).
+ * Cơ chế chống gửi lặp cho nhánh này là cột subscription_reminders_sent, lọc ở tầng service.
+ *
+ * @param {number} minDays  số ngày tối thiểu còn lại (loại trừ)
+ * @param {number} maxDays  số ngày tối đa còn lại (bao gồm)
+ */
+export async function findUsersExpiringInWindow(minDays, maxDays, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT u.id, u.email, u.full_name, p.name AS plan_name, u.subscription_expires_at,
+            u.subscription_reminders_sent
+     FROM users u
+     JOIN plans p ON u.active_plan_id = p.id
+     WHERE u.role = 'user'
+       AND u.status = 'active'
+       AND u.subscription_expires_at IS NOT NULL
+       AND u.subscription_expires_at <= NOW() + ($2 || ' days')::INTERVAL
+       AND u.subscription_expires_at > NOW() + ($1 || ' days')::INTERVAL`,
+    [minDays, maxDays]
+  );
+  return rows;
+}
+
+/**
+ * Ghi nhận đã gửi nhắc hạn — thay object subscription_reminders_sent bằng bản đã tính sẵn ở
+ * service (parse/so cycle/gộp mốc đều làm trong JS, không đụng jsonb operator trong SQL).
+ */
+export async function markReminderSent(userId, sentRecord, queryable = db) {
+  await queryable.query(
+    `UPDATE users
+     SET subscription_reminders_sent = $2::jsonb,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [userId, JSON.stringify(sentRecord)]
+  );
+}
+
 
 /**
  * Kiểm tra xem user đã từng mua gói chưa (khách cũ) — dựa vào lịch sử orders.

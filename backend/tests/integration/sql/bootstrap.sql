@@ -77,6 +77,9 @@ CREATE TABLE users (
   deleted_at              TIMESTAMPTZ,
   -- migration 204: SĐT được xác thực bằng OTP — NULL nghĩa là chưa xác thực
   phone_verified_at       TIMESTAMPTZ,
+  -- migration 207: mốc nhắc hạn ĐÃ GỬI trong chu kỳ hiện tại ({cycle, days}) — xem
+  -- subscriptionReminderSettings.repository.js
+  subscription_reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -3122,6 +3125,15 @@ CREATE TABLE IF NOT EXISTS system_email_templates (
   -- sửa được nội dung, giống thư welcome đã có từ 203.
   CONSTRAINT system_email_templates_key_check CHECK (template_key IN ('welcome', 'plan_expiring', 'plan_expired'))
 );
+
+-- ─── Migration 207: super admin tự đặt lịch nhắc hạn gói ──────────────
+CREATE TABLE IF NOT EXISTS subscription_reminder_settings (
+  id          BOOLEAN     PRIMARY KEY DEFAULT TRUE CHECK (id),
+  days_before INTEGER[]   NOT NULL DEFAULT '{7,3}',
+  updated_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO subscription_reminder_settings (id) VALUES (TRUE) ON CONFLICT (id) DO NOTHING;
 
 -- ─── Telegram cá nhân (migration 050_create_telegram_accounts.sql — đánh nhầm số, đúng ra 205,
 -- xem ghi chú grandfather trong migrationNumbering.util.spec.js) ─────────────────────────────
