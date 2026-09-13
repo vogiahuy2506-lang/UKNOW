@@ -169,3 +169,56 @@ describe('chatbotInstructionWriter.service', () => {
     });
   });
 });
+
+/**
+ * Ghim: chữ khách gõ phải vào prompt NGUYÊN VĂN, kể cả khi chứa ký tự `$`.
+ *
+ * String.prototype.replace diễn giải `$$`, `$&`, `` $` ``, `$'` trong chuỗi thay thế kể cả khi
+ * mẫu tìm là chuỗi thường. Bản đầu PR-1 thay biến bằng chuỗi → review 13/09/2026 đo được: gợi ý
+ * chứa `` $` `` làm prompt phình 4303 → 8197 ký tự (JS chèn nguyên phần prompt phía trước vào chỗ
+ * gợi ý — tốn token và credit của khách cho rác), `$$` bị nuốt thành `$`, `$&` thành chữ
+ * `{{user_hint}}`. businessContext là hồ sơ khách tự nhập nên dính y hệt.
+ */
+describe('buildSystemInstructionPrompt — ký tự $ trong chữ khách gõ', () => {
+  const MAU_DOLA = ['99$$', 'Trợ lý $` giá', 'hỗ trợ $& khách', "gói US$' đặc biệt"];
+
+  it.each(MAU_DOLA)('gợi ý %j nằm NGUYÊN VĂN trong prompt, không phình', (hint) => {
+    const goc = buildSystemInstructionPrompt({ language: 'vi', userHint: 'X', businessContext: '' });
+    const prompt = buildSystemInstructionPrompt({ language: 'vi', userHint: hint, businessContext: '' });
+
+    expect(prompt).toContain(hint);
+    // Chỉ được dài thêm đúng phần chênh giữa hai gợi ý — không được chèn thêm nửa cái prompt.
+    expect(prompt.length - goc.length).toBe(hint.length - 1);
+  });
+
+  it.each(MAU_DOLA)('hồ sơ doanh nghiệp chứa %j cũng vào NGUYÊN VĂN', (ctx) => {
+    const prompt = buildSystemInstructionPrompt({ language: 'vi', userHint: 'Trợ lý', businessContext: ctx });
+    expect(prompt).toContain(ctx);
+  });
+});
+
+/**
+ * Ghim: làm sạch KHÔNG được cắt dòng định danh vai trò hợp lệ.
+ *
+ * Bản đầu PR-1 bắt câu dẫn bằng `^đây là .*prompt.*$` — review 13/09/2026 thử một câu mở đầu hợp lệ
+ * của đúng loại chatbot dễ dính nhất (trợ lý về viết prompt) thì mất nguyên dòng định danh vai trò.
+ * Nay câu dẫn phải kết thúc bằng dấu hai chấm mới bị gỡ.
+ */
+describe('cleanInstructionOutput — không cắt nhầm dòng mở đầu hợp lệ', () => {
+  it.each([
+    'Đây là trợ lý chuyên hỗ trợ khách viết prompt cho ChatGPT của [tên công ty].',
+    'Hãy copy đúng phong cách của thương hiệu khi viết prompt cho khách.',
+  ])('giữ nguyên dòng đầu %j', (dongDau) => {
+    const out = cleanInstructionOutput(`${dongDau}\nNhiệm vụ chính: ...`);
+    expect(out.split('\n')[0]).toBe(dongDau);
+  });
+
+  it.each([
+    'Đây là prompt của bạn:',
+    'Hãy copy prompt sau:',
+    'Hãy copy frompt sau:',
+  ])('vẫn gỡ câu dẫn thật %j', (cauDan) => {
+    const out = cleanInstructionOutput(`${cauDan}\nBạn là trợ lý bán hàng.`);
+    expect(out).toBe('Bạn là trợ lý bán hàng.');
+  });
+});

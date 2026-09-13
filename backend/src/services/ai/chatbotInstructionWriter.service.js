@@ -72,9 +72,14 @@ function stripWrappingCodeFence(text) {
 
 // Chỉ gỡ khi câu dẫn đứng MỘT MÌNH ở dòng đầu — chỉ kiểm tra lines[0], không quét toàn bài, để
 // không cắt nhầm một chỉ dẫn hợp lệ có nhắc tới chữ "prompt" ở giữa (Bẫy 2 của plan).
+// Câu dẫn gần như luôn KẾT THÚC BẰNG DẤU HAI CHẤM ("Hãy copy prompt sau:", "Đây là prompt của
+// bạn:"). Bản đầu PR-1 dùng `.*$` nên bắt cả câu mở đầu hợp lệ — review 13/09/2026 thử
+// "Đây là trợ lý chuyên hỗ trợ khách viết prompt cho ChatGPT của [tên công ty]." thì MẤT NGUYÊN
+// DÒNG ĐỊNH DANH VAI TRÒ, dòng quan trọng nhất của chỉ dẫn. Đòi dấu hai chấm cuối dòng: để lọt một
+// câu dẫn hiếm hoi không có dấu hai chấm còn hơn cắt mất vai trò của con chatbot.
 const LEAD_IN_LINE_PATTERNS = [
-  /^h[aã]y\s+copy\s+.*(?:prompt|frompt).*$/i,
-  /^đây\s+là\s+.*(?:prompt|frompt).*$/i,
+  /^h[aã]y\s+copy\s+.*(?:prompt|frompt).*:\s*$/i,
+  /^đây\s+là\s+.*(?:prompt|frompt).*:\s*$/i,
   /^prompt\s*:?\s*$/i,
 ];
 
@@ -113,10 +118,14 @@ export function cleanInstructionOutput(rawText) {
  * @returns {string}
  */
 export function buildSystemInstructionPrompt({ language, userHint, businessContext }) {
+  // Thay bằng HÀM, không bằng chuỗi: String.prototype.replace diễn giải `$$`, `$&`, `` $` ``,
+  // `$'` trong chuỗi thay thế kể cả khi mẫu tìm là chuỗi thường. userHint và businessContext là
+  // chữ khách tự gõ — review 13/09/2026 đo được: gợi ý chứa `` $` `` làm prompt phình 4303 → 8197
+  // ký tự (chèn nguyên phần prompt phía trước vào chỗ gợi ý), `$$` bị nuốt thành `$`.
   const filled = OFFICIAL_PROMPT_TEMPLATE
-    .replace('{{language}}', LANGUAGE_LABELS[language] || LANGUAGE_LABELS.vi)
-    .replace('{{business_context}}', businessContext || '')
-    .replace('{{user_hint}}', userHint);
+    .replace('{{language}}', () => LANGUAGE_LABELS[language] || LANGUAGE_LABELS.vi)
+    .replace('{{business_context}}', () => businessContext || '')
+    .replace('{{user_hint}}', () => userHint);
   return `${filled}\n${JSON_ENVELOPE_INSTRUCTION}`;
 }
 
