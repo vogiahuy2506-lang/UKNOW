@@ -1,0 +1,54 @@
+-- Refresh checksum cho 205_admin_menu_layouts_app_scope.sql
+--
+-- ════════════════════════════════════════════════════════════════════════════
+-- BACKGROUND
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- File migrations/205_admin_menu_layouts_app_scope.sql đã được thêm
+-- annotation comment ('-- allow-immutable-edit', '-- allow-destructive-ddl')
+-- trong commit 6653b049 (13/09/2026) để vượt qua check:migration-safety B2
+-- (Immutability) trong CI. SQL payload không đổi.
+--
+-- Migration runner không đọc annotation — nó tính SHA-256 toàn file bytes
+-- rồi so với schema_migrations.checksum_sha256. DB production đang lưu
+-- checksum của bản pre-annotation, nên mọi deploy fail ở step migrate:
+--
+--   [Migrate] THẤT BẠI: [Migration] Kiểm tra checksum thất bại:
+--     checksum không khớp: 205_admin_menu_layouts_app_scope.sql
+--     (DB=b642dd1efcd020681f33275bd678dd3ec6257dfb378add342793c83c3bfa45d5,
+--      file=81201d594675de0dd9d7a47ba242d55d1910d4b5b95c6d683f4290526d64524f)
+--
+-- ════════════════════════════════════════════════════════════════════════════
+-- INSTRUCTIONS (chạy MỘT LẦN trên production DB trước khi trigger deploy)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+--   psql $DATABASE_URL -f backend/scripts/sql/refresh-205-checksum.sql
+--
+-- Hoặc chạy trực tiếp qua Docker exec vào container backend hiện tại:
+--
+--   docker exec -i $(docker ps -qf name=uknow-backend) \
+--     psql "$DATABASE_URL" < backend/scripts/sql/refresh-205-checksum.sql
+--
+-- Script idempotent: chạy lại vẫn an toàn (UPDATE match no row nếu checksum
+-- đã đúng).
+--
+-- Sau khi script chạy xong, trigger lại job "Deploy Backend" trên GitHub
+-- Actions. Migration runner sẽ thấy 205 checksum khớp và tiếp tục.
+--
+-- ════════════════════════════════════════════════════════════════════════════
+-- SAFETY
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Script này CHỈ update một cột metadata (checksum_sha256). KHÔNG chạm
+-- DDL, KHÔNG touch data, KHÔNG thay đổi constraint hay table. Nếu deploy
+-- fail sau khi chạy script này, rollback an toàn bằng cách đặt lại
+-- checksum cũ:
+--
+--   UPDATE schema_migrations
+--      SET checksum_sha256 = 'b642dd1efcd020681f33275bd678dd3ec6257dfb378add342793c83c3bfa45d5'
+--    WHERE filename = '205_admin_menu_layouts_app_scope.sql';
+
+UPDATE schema_migrations
+   SET checksum_sha256 = '81201d594675de0dd9d7a47ba242d55d1910d4b5b95c6d683f4290526d64524f'
+ WHERE filename = '205_admin_menu_layouts_app_scope.sql'
+   AND checksum_sha256 <> '81201d594675de0dd9d7a47ba242d55d1910d4b5b95c6d683f4290526d64524f';
