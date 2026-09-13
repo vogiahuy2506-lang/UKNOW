@@ -383,37 +383,50 @@ export class TelegramAuth {
       phone: me.phone || null,
     };
 
-    let sessionString = '';
-    try {
-      sessionString = flow.client.saveSession() || '';
-    } catch (err) {
-      logWarn(`[TelegramAuth] saveSession failed: ${err.message}`);
+    // Flush the Postgres-backed driver (if any) before reading the
+    // session marker. mtcute calls `save()` automatically on
+    // disconnect, but we want to be defensive: a backend crash
+    // before the disconnect event would otherwise drop the freshly
+    // scanned auth keys. `flush()` is a no-op for the SQLite
+    // fallback path.
+    if (typeof flow.client.flush === 'function') {
+      try {
+        await flow.client.flush();
+      } catch (err) {
+        logWarn(`[TelegramAuth] pre-persist flush failed: ${err.message}`);
+      }
     }
 
-    if (sessionString) {
-      try {
-        await this._sessionRepo.upsertSession({
-          telegramUserId,
-          // The requesting workspace owner (`userId` from
-          // controller's `req.user`) is the foreign key we need
-          // for telegram_accounts.id_user. Without it the INSERT
-          // violates the NOT NULL constraint and the operator
-          // sees "Failed to persist session: null value in
-          // column \"id_user\" of relation \"telegram_accounts\"
-          // violates not-null constraint".
-          userId: flow.userContext ?? null,
-          sessionString,
-          phone: flow.me.phone,
-          firstName: flow.me.firstName,
-          lastName: flow.me.lastName,
-          username: flow.me.username,
-        });
-      } catch (err) {
-        flow.status = QR_STATUS.ERROR;
-        flow.error = `Failed to persist session: ${err.message}`;
-        flow.endedAt = Date.now();
-        return;
-      }
+    // Save the profile row. The session state itself has already
+    // been persisted by the Postgres-backed driver's `save()`
+    // hook; this call only needs to update `telegram_accounts`'s
+    // user-facing columns (phone, first_name, last_name, username,
+    // owner binding). We pass the legacy `sessionString` marker
+    // for callers that still rely on its presence — the repo's
+    // `upsertSession` now also writes an encrypted state row when
+    // it sees a non-`sessionState` payload.
+    try {
+      await this._sessionRepo.upsertSession({
+        telegramUserId,
+        // The requesting workspace owner (`userId` from
+        // controller's `req.user`) is the foreign key we need
+        // for telegram_accounts.id_user. Without it the INSERT
+        // violates the NOT NULL constraint and the operator
+        // sees "Failed to persist session: null value in
+        // column \"id_user\" of relation \"telegram_accounts\"
+        // violates not-null constraint".
+        userId: flow.userContext ?? null,
+        sessionString: flow.client.saveSession() || '',
+        phone: flow.me.phone,
+        firstName: flow.me.firstName,
+        lastName: flow.me.lastName,
+        username: flow.me.username,
+      });
+    } catch (err) {
+      flow.status = QR_STATUS.ERROR;
+      flow.error = `Failed to persist session: ${err.message}`;
+      flow.endedAt = Date.now();
+      return;
     }
 
     flow.status = QR_STATUS.SUCCESS;

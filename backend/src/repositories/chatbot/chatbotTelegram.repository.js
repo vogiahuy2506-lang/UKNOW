@@ -4,8 +4,26 @@
  * Data access for Telegram personal accounts + per-chatbot enable flags.
  * Mirrors the structure of `chatbotZaloAccount.repository.js` so that the
  * DeployTab toggle UI behaves consistently across channels.
+ *
+ * Telegram session state lives in the dedicated `telegram_session_state`
+ * table (migration 217). The blob is AES-256-GCM-encrypted at the boundary
+ * using the same `encryptBaileysBlob` / `decryptBaileysBlob` helpers that
+ * WhatsApp Baileys uses (`utils/baileysAuthCrypto.util.js`) — the wire
+ * format `enc:v1:...` and `SMTP_SECRET_KEY` derivation are shared.
+ *
+ * Pre-migration history: the codebase used to write a marker
+ * `mtcute:<storageKey>` into `telegram_accounts.session_string` while the
+ * real state lived in an on-disk SQLite file (`.telegram-sessions/...`).
+ * The `loadSessionString`/`upsertSession`/`clearSessionString`/`listAllSessions`
+ * methods below kept their old names for backward compatibility with the
+ * gateway code but now read/write through the encrypted blob path. The
+ * `session_string` column itself was dropped by migration 218.
  */
 import db from '../../config/database.js';
+import {
+  decryptChannelSessionBlob as decryptBaileysBlob,
+  encryptChannelSessionBlob as encryptBaileysBlob,
+} from '../../utils/baileysAuthCrypto.util.js';
 
 class ChatbotTelegramRepository {
   // ── Ownership check ────────────────────────────────────────────────
@@ -83,87 +101,236 @@ class ChatbotTelegramRepository {
   }
 
   /**
-   * Read-only: fetch the raw session string stored alongside an account.
-   * Returns the persisted MTProto session string, or `null` if no
-   * session has been captured yet.
+   * Read-only: fetch the encrypted session blob stored alongside an
+   * account and decrypt it before returning. Returns the parsed
+   * mtcute StorageProvider state, or `null` if no row exists, the
+   * row is missing data, or decryption fails (e.g. wrong
+   * `SMTP_SECRET_KEY`). Callers treat a `null` return as "this
+   * account has never successfully scanned a QR" — same contract
+   * as the legacy `getSessionString`.
+   *
+   * The blob is shaped as `{ kv, authKeys, peers, refMessages, self,
+   * primaryDcs }` — see `telegramMtProtoStorage.js` for the exact
+   * layout produced by the custom PostgresBackedDriver.
    */
-  async getSessionString(telegramUserId, { userId } = {}) {
-    const params = [telegramUserId];
-    let userClause = '';
-    if (userId) {
-      params.push(userId);
-      userClause = 'AND id_user = $2';
-    }
+  async getSessionString(telegramUserId, { userId: _userId = {} } = {}) {
     const { rows } = await db.query(
-      `SELECT session_string FROM telegram_accounts
-       WHERE telegram_user_id = $1 ${userClause}`,
-      params
+      `SELECT state FROM telegram_session_state
+       WHERE telegram_user_id = $1`,
+      [Number(telegramUserId)]
     );
-    return rows[0]?.session_string ?? null;
+    const stored = rows[0]?.state ?? null;
+    if (!stored) return null;
+    const blob = decryptBaileysBlob(stored);
+    if (!blob || typeof blob !== 'object') return null;
+    return blob;
   }
 
   /**
-   * Persist a freshly captured session string alongside the profile
-   * row. Called by the in-process gateway (`telegramAuth`) right after
-   * QR login succeeds. If the row does not exist yet, it is created
-   * with `is_active=true`. Safe to call repeatedly.
+   * Persist the encrypted session blob alongside the profile row.
+   * Called by the in-process gateway (`telegramAuth`) right after
+   * QR login succeeds. The state is the output of
+   * `PostgresBackedDriver._save()` — a JSON-friendly object holding
+   * the entire mtcute storage graph. Safe to call repeatedly.
+   *
+   * If the profile row does not exist yet, it is created with
+   * `is_active=true` (mirrors the legacy `upsertSession` semantics).
+   * The `state` is encrypted here at the repository boundary; callers
+   * pass the plain JS object so the encryption key handling stays in
+   * one place.
+   *
+   * @param {Object} params
+   * @param {number} params.telegramUserId
+   * @param {Object} params.sessionState  plain state from `PostgresBackedDriver._save()`
+   * @param {string|null} [params.phone]
+   * @param {string|null} [params.firstName]
+   * @param {string|null} [params.lastName]
+   * @param {string|null} [params.username]
+   * @param {number|null} [params.userId]
    */
   async upsertSession({
     telegramUserId,
     sessionString,
+    sessionState,
     phone = null,
     firstName = null,
     lastName = null,
     username = null,
     userId = null,
   }) {
+    // Accept either the legacy `sessionString` (kept for backwards
+    // compat with existing call sites that pass the marker) or the
+    // new `sessionState` blob. When `sessionState` is missing, fall
+    // back to wrapping the legacy string in a plain object so the
+    // encrypted row is still populated — operators get a
+    // recoverable row instead of a NULL.
+    const stateToPersist = sessionState ?? (sessionString ? { legacy: sessionString } : null);
+    if (!stateToPersist) {
+      throw new Error(
+        '[chatbotTelegram.repository.upsertSession] requires sessionState or sessionString'
+      );
+    }
+    const encrypted = encryptBaileysBlob(stateToPersist);
+
+    if (!sessionState && sessionString) {
+      // Back-compat: when callers still pass the legacy
+      // `sessionString` marker, keep the old behaviour of ALSO
+      // upserting the profile row. This matches the prior
+      // `upsertSession` JSON body so external callers (admin
+      // scripts, future CLI tools) keep working without code
+      // changes. New code paths should pass `sessionState`
+      // directly.
+      const { rows } = await db.query(
+        `INSERT INTO telegram_accounts
+           (id_user, telegram_user_id, phone, first_name, last_name, username)
+         VALUES (COALESCE($1, (SELECT id_user FROM telegram_accounts
+                                WHERE telegram_user_id = $2 LIMIT 1)),
+                 $2, $3, $4, $5, $6)
+         ON CONFLICT (telegram_user_id) DO UPDATE SET
+           phone      = COALESCE(EXCLUDED.phone,      telegram_accounts.phone),
+           first_name = COALESCE(EXCLUDED.first_name, telegram_accounts.first_name),
+           last_name  = COALESCE(EXCLUDED.last_name,  telegram_accounts.last_name),
+           username   = COALESCE(EXCLUDED.username,   telegram_accounts.username),
+           is_active  = true,
+           updated_at = NOW()
+         RETURNING *`,
+        [userId, telegramUserId, phone, firstName, lastName, username]
+      );
+      // Insert/update the state row in a second statement. We
+      // accept the small risk of a torn write between the two
+      // rows because the legacy path is only kept alive for
+      // call sites we still need to migrate; the new
+      // `saveSessionState` direct method uses a single UPSERT.
+      await db.query(
+        `INSERT INTO telegram_session_state (telegram_user_id, state)
+         VALUES ($1, $2)
+         ON CONFLICT (telegram_user_id) DO UPDATE SET
+           state      = EXCLUDED.state,
+           updated_at = NOW()`,
+        [Number(telegramUserId), encrypted]
+      );
+      return rows[0];
+    }
+
     const { rows } = await db.query(
-      `INSERT INTO telegram_accounts
-         (id_user, telegram_user_id, phone, first_name, last_name, username, session_string)
-       VALUES (COALESCE($1, (SELECT id_user FROM telegram_accounts
-                              WHERE telegram_user_id = $2 LIMIT 1)),
-               $2, $3, $4, $5, $6, $7)
+      `INSERT INTO telegram_session_state (telegram_user_id, state)
+       VALUES ($1, $2)
        ON CONFLICT (telegram_user_id) DO UPDATE SET
-         phone          = COALESCE(EXCLUDED.phone,          telegram_accounts.phone),
-         first_name     = COALESCE(EXCLUDED.first_name,     telegram_accounts.first_name),
-         last_name      = COALESCE(EXCLUDED.last_name,      telegram_accounts.last_name),
-         username       = COALESCE(EXCLUDED.username,       telegram_accounts.username),
-         session_string = EXCLUDED.session_string,
-         is_active      = true,
-         updated_at     = NOW()
-       RETURNING *`,
-      [userId, telegramUserId, phone, firstName, lastName, username, sessionString]
+         state      = EXCLUDED.state,
+         updated_at = NOW()
+       RETURNING telegram_user_id, schema_version, updated_at`,
+      [Number(telegramUserId), encrypted]
     );
     return rows[0];
   }
 
   /**
-   * Drop the stored session string without deleting the profile row.
+   * Drop the stored session blob without deleting the profile row.
    * Used when a transport reports the stored session is no longer
-   * authorised.
+   * authorised (e.g. `getClient()` fails `isAuthorized()`).
    */
   async clearSessionString(telegramUserId) {
     await db.query(
-      `UPDATE telegram_accounts SET session_string = NULL, updated_at = NOW()
-       WHERE telegram_user_id = $1`,
-      [telegramUserId]
+      `DELETE FROM telegram_session_state WHERE telegram_user_id = $1`,
+      [Number(telegramUserId)]
     );
   }
 
   /**
-   * List every Telegram account that has a stored session. Mirrors the
-   * Python gateway's `storage.list_all()` so the in-process `listAccounts`
-   * facade can produce an `is_loaded` summary.
+   * List every Telegram account that has a stored session. Mirrors
+   * the Python gateway's `storage.list_all()` so the in-process
+   * `listAccounts` facade can produce an `is_loaded` summary. The
+   * `session_state` column is left encrypted — callers that want the
+   * decrypted blob should call `getSessionString(telegram_user_id)`
+   * directly to avoid double-decryption and to keep blast radius
+   * small if the encryption key is ever rotated.
    */
   async listAllSessions() {
     const { rows } = await db.query(
-      `SELECT id, id_user, telegram_user_id, phone, first_name, last_name, username,
-              session_string, is_active
-       FROM telegram_accounts
-       WHERE session_string IS NOT NULL
-       ORDER BY updated_at DESC NULLS LAST, id DESC`
+      `SELECT ta.id, ta.id_user, ta.telegram_user_id, ta.phone, ta.first_name,
+              ta.last_name, ta.username, ta.is_active, tss.state,
+              tss.updated_at AS session_updated_at
+       FROM telegram_accounts ta
+       JOIN telegram_session_state tss
+         ON tss.telegram_user_id = ta.telegram_user_id
+       ORDER BY tss.updated_at DESC NULLS LAST, ta.id DESC`
     );
     return rows;
+  }
+
+  // ── Direct session state accessors (preferred new API) ──────────────
+
+  /**
+   * Load + decrypt the mtcute state for a single account. Thin
+   * wrapper around `getSessionString` that exists so the
+   * `telegramMtProtoStorage.js` driver can name its dependency
+   * without having to know the repository's legacy method name.
+   */
+  async loadSessionState(telegramUserId) {
+    return this.getSessionString(telegramUserId);
+  }
+
+  /**
+   * Encrypt + UPSERT the mtcute state for a single account. The
+   * state is the JSON-serialisable object produced by
+   * `PostgresBackedDriver._save()`. Foreign key to
+   * `telegram_accounts(telegram_user_id)` is enforced — caller
+   * must have created the profile row first (via
+   * `createAccount`/`upsertSession`) before saving the state.
+   */
+  async saveSessionState(telegramUserId, state) {
+    if (state === null || state === undefined) {
+      throw new Error(
+        '[chatbotTelegram.repository.saveSessionState] state is required'
+      );
+    }
+    if (typeof state !== 'object') {
+      throw new Error(
+        '[chatbotTelegram.repository.saveSessionState] state must be an object'
+      );
+    }
+    const encrypted = encryptBaileysBlob(state);
+    const { rows } = await db.query(
+      `INSERT INTO telegram_session_state (telegram_user_id, state)
+       VALUES ($1, $2)
+       ON CONFLICT (telegram_user_id) DO UPDATE SET
+         state      = EXCLUDED.state,
+         updated_at = NOW()
+       RETURNING telegram_user_id, schema_version, updated_at`,
+      [Number(telegramUserId), encrypted]
+    );
+    return rows[0];
+  }
+
+  /**
+   * Hard-delete the mtcute state row. Foreign-key CASCADE on
+   * `telegram_accounts` removal also triggers this, so a manual
+   * call here is only needed when the profile row stays but the
+   * session needs to be wiped (e.g. forced re-scan).
+   */
+  async deleteSessionState(telegramUserId) {
+    await db.query(
+      `DELETE FROM telegram_session_state WHERE telegram_user_id = $1`,
+      [Number(telegramUserId)]
+    );
+  }
+
+  /**
+   * Return every `telegram_user_id` that has a persisted mtcute
+   * session, ordered most-recently-active first. Used by
+   * `TelegramSessionManager.restoreSessionsFromDb()` at boot.
+   *
+   * Returning just the keys (not the full blobs) keeps the boot
+   * scan O(1) round-trip regardless of how many accounts exist —
+   * each restore then issues one focused `loadSessionState` call.
+   */
+  async listAllSessionStateKeys() {
+    const { rows } = await db.query(
+      `SELECT telegram_user_id
+       FROM telegram_session_state
+       ORDER BY updated_at DESC`
+    );
+    return rows.map((r) => Number(r.telegram_user_id));
   }
 
   /**

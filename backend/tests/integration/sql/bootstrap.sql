@@ -3205,10 +3205,10 @@ CREATE TABLE telegram_accounts (
     username VARCHAR(255),
     is_active BOOLEAN DEFAULT true,
     last_activity_at TIMESTAMP WITH TIME ZONE,
-    -- Mirror migration 212_add_telegram_session_string.sql: opaque
-    -- session payload from the Telegram transport. Null until first
-    -- successful QR login.
-    session_string TEXT,
+    -- session_string placeholder dropped by migration 218 (was a
+    -- never-populated TEXT column from migration 212). The real
+    -- Telegram session state now lives in `telegram_session_state.state`
+    -- (encrypted JSONB blob), added in migration 217.
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(telegram_user_id),
@@ -3216,6 +3216,32 @@ CREATE TABLE telegram_accounts (
 );
 CREATE INDEX idx_telegram_accounts_user ON telegram_accounts(id_user);
 CREATE INDEX idx_telegram_accounts_active ON telegram_accounts(id_user, is_active);
+
+-- ─── Telegram mtcute session storage (migration 217) ─────────────────────
+-- Mirror nguyên văn từ file migration 217_telegram_session_state.sql.
+-- Một bảng duy nhất thay cho file SQLite `.telegram-sessions/<key>/client.session`.
+-- Mỗi row = một Telegram account, blob JSONB chứa TOÀN BỘ mtcute state
+-- (kv + authKeys + peers + refMessages + self + primaryDcs) đã được mã hoá
+-- AES-256-GCM bằng cùng helper `encryptBaileysBlob` mà WhatsApp đang dùng
+-- (key = SMTP_SECRET_KEY). Opaque đối với Postgres — schema thuộc @mtcute/core.
+CREATE TABLE IF NOT EXISTS telegram_session_state (
+  telegram_user_id BIGINT PRIMARY KEY
+    REFERENCES telegram_accounts(telegram_user_id)
+    ON DELETE CASCADE,
+  state              JSONB        NOT NULL,
+  schema_version     INTEGER      NOT NULL DEFAULT 1,
+  updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE telegram_session_state IS
+  'One row per Telegram account. AES-256-GCM-encrypted JSONB blob holding the entire mtcute StorageProvider state (kv, authKeys, peers, refMessages, self, primaryDcs). Replaces the on-disk SQLite file at .telegram-sessions/<storageKey>/client.session as the source of truth.';
+COMMENT ON COLUMN telegram_session_state.state IS
+  'JSONB blob of the entire mtcute auth state, wrapped as { enc: "enc:v1:..." } at the service layer. Opaque to Postgres — schema lives in @mtcute/core.';
+COMMENT ON COLUMN telegram_session_state.schema_version IS
+  'Bumped when the in-memory state shape produced by `telegramMtProtoStorage.js` changes in a non-backwards-compatible way. Lets future readers detect and reject old-format blobs instead of silently mis-loading them.';
+
+CREATE INDEX IF NOT EXISTS idx_telegram_session_state_updated
+  ON telegram_session_state(updated_at DESC);
 
 CREATE TABLE telegram_chatbot_settings (
     id SERIAL PRIMARY KEY,
