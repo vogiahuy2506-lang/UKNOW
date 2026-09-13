@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  HiChevronDown,
   HiOutlineCheckCircle,
   HiOutlineClock,
   HiOutlineExclamationCircle,
   HiOutlineRefresh,
   HiOutlineTrendingUp,
 } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 import {
   CartesianGrid,
   Line,
@@ -234,69 +236,224 @@ const runRowClass = (run) => {
   return '';
 };
 
-const TopRunsTable = ({ runs, t }) => (
-  <div className="card overflow-hidden">
-    <div className="border-b border-gray-100 px-5 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.topRuns')}</h2>
-          <p className="mt-0.5 text-xs text-gray-400">{t('userDeliveryMonitor.topRunsDesc')}</p>
+const formatAuditExplanation = (audit, t) => {
+  if (!audit) return null;
+  const parts = [];
+  if (audit.skippedNoRecipient > 0) {
+    parts.push(t('userDeliveryMonitor.failures.auditSkippedNoRecipient', { count: audit.skippedNoRecipient }));
+  }
+  if (audit.skippedAlreadySent > 0) {
+    parts.push(t('userDeliveryMonitor.failures.auditSkippedAlreadySent', { count: audit.skippedAlreadySent }));
+  }
+  if (audit.skippedNotDue > 0) {
+    parts.push(t('userDeliveryMonitor.failures.auditSkippedNotDue', { count: audit.skippedNotDue }));
+  }
+  if (audit.skippedCompleted > 0) {
+    parts.push(t('userDeliveryMonitor.failures.auditSkippedCompleted', { count: audit.skippedCompleted }));
+  }
+  const skippedDetail = parts.length > 0 ? `; ${parts.join(', ')}` : '';
+  return t('userDeliveryMonitor.failures.auditSummary', {
+    sourceRows: audit.sourceRows ?? 0,
+    withRecipient: audit.withRecipient ?? 0,
+    attempted: audit.attempted ?? 0,
+    skippedDetail,
+  });
+};
+
+const TopRunsTable = ({ runs, t }) => {
+  const [expandedRunId, setExpandedRunId] = useState(null);
+  const [failuresMap, setFailuresMap] = useState({});
+
+  const toggleRunFailures = useCallback(async (runId) => {
+    if (expandedRunId === runId) {
+      setExpandedRunId(null);
+      return;
+    }
+    setExpandedRunId(runId);
+    if (!failuresMap[runId] || failuresMap[runId].error) {
+      setFailuresMap((prev) => ({
+        ...prev,
+        [runId]: { loading: true, data: null, error: null },
+      }));
+      try {
+        const res = await userDeliveryMonitorApiService.getRunFailures(runId);
+        setFailuresMap((prev) => ({
+          ...prev,
+          [runId]: { loading: false, data: res.data?.data || null, error: null },
+        }));
+      } catch (err) {
+        const errMsg = err?.response?.data?.message || t('userDeliveryMonitor.failures.loadError');
+        toast.error(errMsg);
+        setFailuresMap((prev) => ({
+          ...prev,
+          [runId]: { loading: false, data: null, error: errMsg },
+        }));
+      }
+    }
+  }, [expandedRunId, failuresMap, t]);
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.topRuns')}</h2>
+            <p className="mt-0.5 text-xs text-gray-400">{t('userDeliveryMonitor.topRunsDesc')}</p>
+          </div>
+          <span className="text-xs text-gray-400">{t('userDeliveryMonitor.topRunsCount', { count: runs.length })}</span>
         </div>
-        <span className="text-xs text-gray-400">{t('userDeliveryMonitor.topRunsCount', { count: runs.length })}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.campaign')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.status')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.sentFailed')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.runDuration')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.speed')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.failRate')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {runs.length === 0 ? (
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.noData')}</td></tr>
+            ) : runs.map((run) => {
+              const isExpanded = expandedRunId === run.id;
+              const runFailureState = failuresMap[run.id];
+              const auditText = runFailureState?.data?.recipientAudit
+                ? formatAuditExplanation(runFailureState.data.recipientAudit, t)
+                : null;
+              const failureItems = runFailureState?.data?.failures || [];
+
+              return (
+                <Fragment key={run.id}>
+                  <tr className={runRowClass(run)}>
+                    <td className="px-5 py-3">
+                      <p className="font-semibold text-gray-900">{run.campaignName || run.runName || `#${run.id}`}</p>
+                      <p className="text-xs text-gray-400">{fmtDateTime(run.startedAt)}</p>
+                      {run.hasRunError && run.errorMessage && (
+                        <p className="mt-1 line-clamp-1 text-xs text-orange-600" title={run.errorMessage}>{run.errorMessage}</p>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={`badge text-xs ${runStatusBadgeClass(run.status)}`}>
+                        {run.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={`font-medium ${run.successfulSends > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt(run.successfulSends)}</span>
+                      {run.skippedSends > 0 && <span className="ml-1 text-amber-600">+{fmt(run.skippedSends)} bỏ qua</span>}
+                      {run.failedSends > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleRunFailures(run.id)}
+                          className="ml-1 inline-flex items-center gap-1 font-medium text-red-600 hover:text-red-800 hover:underline cursor-pointer focus:outline-none"
+                          title={isExpanded ? t('userDeliveryMonitor.failures.hideDetails') : t('userDeliveryMonitor.failures.viewDetails')}
+                          aria-expanded={isExpanded}
+                        >
+                          / {fmt(run.failedSends)} {t('userDeliveryMonitor.failures.errorCountLabel')}
+                          <HiChevronDown className={`inline-block h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      ) : (
+                        <span className="text-gray-500"> / {fmt(run.failedSends)} {t('userDeliveryMonitor.failures.errorCountLabel')}</span>
+                      )}
+                      <span className="text-gray-400"> · {t('userDeliveryMonitor.plannedSends', { count: fmt(run.totalRecipients) })}</span>
+                    </td>
+                    <td className="px-5 py-3 text-gray-700">
+                      <span>{fmtDuration(run.durationSeconds)}</span>
+                      {run.completedAt && (
+                        <p className="text-xs text-gray-400">{fmtDateTime(run.completedAt)}</p>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
+                    <td className="px-5 py-3 text-gray-700">
+                      <span className={run.failureRate >= 10 ? 'font-semibold text-red-600' : ''}>{fmtPct(run.failureRate)}</span>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr className="bg-slate-50/75 border-b border-gray-100" data-testid={`run-failures-row-${run.id}`}>
+                      <td colSpan={6} className="px-5 py-4">
+                        {runFailureState?.loading ? (
+                          <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-500" data-testid="failures-loading">
+                            <HiOutlineRefresh className="h-4 w-4 animate-spin text-gray-400" />
+                            <span>{t('userDeliveryMonitor.failures.loading')}</span>
+                          </div>
+                        ) : runFailureState?.data ? (
+                          <div className="space-y-3">
+                            {auditText && (
+                              <div
+                                className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 border border-amber-200/60"
+                                data-testid="recipient-audit-explanation"
+                              >
+                                <HiOutlineExclamationCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                                <span>{auditText}</span>
+                              </div>
+                            )}
+
+                            {failureItems.length === 0 ? (
+                              <p className="text-xs text-gray-500 py-2">{t('userDeliveryMonitor.failures.noFailures')}</p>
+                            ) : (
+                              <div className="overflow-x-auto rounded-lg border border-gray-200/80 bg-white shadow-xs">
+                                <table className="min-w-full text-xs">
+                                  <thead className="bg-gray-50 text-left font-medium text-gray-500 border-b border-gray-100">
+                                    <tr>
+                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.recipient')}</th>
+                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.reason')}</th>
+                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.count')}</th>
+                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.lastAt')}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100 text-gray-700" data-testid="failures-table-body">
+                                    {failureItems.map((item, idx) => {
+                                      const reasonKey = item.reason;
+                                      const reasonLabel = t(`userDeliveryMonitor.failures.reasons.${reasonKey}`) || reasonKey || t('userDeliveryMonitor.failures.reasons.unknown');
+                                      const rawErrorText = item.error || reasonLabel;
+                                      return (
+                                        <tr key={`${item.recipient}-${idx}`} className="hover:bg-gray-50/60" data-testid="failure-item-row">
+                                          <td className="px-4 py-2 font-mono font-medium text-gray-900">
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${item.channel === 'email' ? 'bg-orange-400' : 'bg-blue-500'}`} />
+                                              {item.recipient}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-2">
+                                            <span
+                                              title={rawErrorText}
+                                              className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 border border-red-200/60 cursor-help"
+                                            >
+                                              {reasonLabel}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-2 font-medium text-gray-800">
+                                            {t('userDeliveryMonitor.failures.countText', { count: item.count || 1 })}
+                                          </td>
+                                          <td className="px-4 py-2 text-gray-500">
+                                            {fmtDateTime(item.lastAt)}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-red-500 py-2">{runFailureState?.error || t('userDeliveryMonitor.failures.loadError')}</p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-          <tr>
-            <th className="px-5 py-3">{t('userDeliveryMonitor.campaign')}</th>
-            <th className="px-5 py-3">{t('userDeliveryMonitor.status')}</th>
-            <th className="px-5 py-3">{t('userDeliveryMonitor.sentFailed')}</th>
-            <th className="px-5 py-3">{t('userDeliveryMonitor.runDuration')}</th>
-            <th className="px-5 py-3">{t('userDeliveryMonitor.speed')}</th>
-            <th className="px-5 py-3">{t('userDeliveryMonitor.failRate')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {runs.length === 0 ? (
-            <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.noData')}</td></tr>
-          ) : runs.map((run) => (
-            <tr key={run.id} className={runRowClass(run)}>
-              <td className="px-5 py-3">
-                <p className="font-semibold text-gray-900">{run.campaignName || run.runName || `#${run.id}`}</p>
-                <p className="text-xs text-gray-400">{fmtDateTime(run.startedAt)}</p>
-                {run.hasRunError && run.errorMessage && (
-                  <p className="mt-1 line-clamp-1 text-xs text-orange-600" title={run.errorMessage}>{run.errorMessage}</p>
-                )}
-              </td>
-              <td className="px-5 py-3">
-                <span className={`badge text-xs ${runStatusBadgeClass(run.status)}`}>
-                  {run.status}
-                </span>
-              </td>
-              <td className="px-5 py-3">
-                <span className={`font-medium ${run.successfulSends > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt(run.successfulSends)}</span>
-                {run.skippedSends > 0 && <span className="ml-1 text-amber-600">+{fmt(run.skippedSends)} bỏ qua</span>}
-                <span className={run.failedSends > 0 ? ' text-red-600 font-medium' : ' text-gray-500'}> / {fmt(run.failedSends)} lỗi</span>
-                <span className="text-gray-400"> · {fmt(run.totalRecipients)} người</span>
-              </td>
-              <td className="px-5 py-3 text-gray-700">
-                <span>{fmtDuration(run.durationSeconds)}</span>
-                {run.completedAt && (
-                  <p className="text-xs text-gray-400">{fmtDateTime(run.completedAt)}</p>
-                )}
-              </td>
-              <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
-              <td className="px-5 py-3 text-gray-700">
-                <span className={run.failureRate >= 10 ? 'font-semibold text-red-600' : ''}>{fmtPct(run.failureRate)}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
+  );
+};
 
 const RecentErrorsPanel = ({ recentErrors, t }) => (
   <div className="card p-5">
