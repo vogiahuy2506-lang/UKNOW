@@ -108,3 +108,103 @@ describe('Admin welcome email template API', () => {
     expect(response.body.message).toContain('Biến không được hỗ trợ');
   });
 });
+
+// PR-2b (13/09/2026, PLAN_CANH_BAO_SAP_HET_HAN_GOI mục 4.2) — tổng quát hoá cho plan_expiring/
+// plan_expired sau migration 206. Nghiệm thu mục 5, ca 14 và 15.
+describe('Admin system email template API — đa khoá (plan_expiring/plan_expired)', () => {
+  it('GET/PUT/preview cho plan_expiring hoạt động, biến {{days_left}} đúng whitelist của khoá này', async () => {
+    const admin = await createUser({ role: 'admin', username: 'expiring_admin' });
+    const token = await loginAs(admin);
+
+    const getDefault = await request(app)
+      .get('/api/admin/system-email-templates/plan_expiring')
+      .set('Authorization', `Bearer ${token}`);
+    expect(getDefault.status).toBe(200);
+    expect(getDefault.body.data.isCustomized).toBe(false);
+    expect(getDefault.body.data.bodyHtml).toContain('{{days_left}}');
+    expect(getDefault.body.data.variables).toContain('days_left');
+    expect(getDefault.body.data.variables).toContain('grace_days');
+
+    const template = {
+      subject: 'Còn {{days_left}} ngày cho gói {{plan_name}}',
+      bodyHtml: '<p>{{user_name}} ơi, gói hết hạn ngày {{expires_at}}. <a href="{{upgrade_url}}">Gia hạn</a></p>',
+    };
+    const saved = await request(app)
+      .put('/api/admin/system-email-templates/plan_expiring')
+      .set('Authorization', `Bearer ${token}`)
+      .send(template);
+    expect(saved.status).toBe(200);
+    expect(saved.body.data.isCustomized).toBe(true);
+
+    // Ca 14 của mục 5: bấm xem trước → thấy chữ mới, {{days_left}} được thay bằng số thật (3,
+    // dữ liệu mẫu trong service — xem PREVIEW_SAMPLE_DATA.plan_expiring).
+    const preview = await request(app)
+      .post('/api/admin/system-email-templates/plan_expiring/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .send(template);
+    expect(preview.status).toBe(200);
+    expect(preview.body.data.subject).toContain('Còn 3 ngày');
+    expect(preview.body.data.subject).not.toContain('{{');
+    expect(preview.body.data.html).toContain('Nguyễn Minh Anh');
+    expect(preview.body.data.html).not.toContain('{{days_left}}');
+  });
+
+  it('GET plan_expired trả mẫu mặc định riêng — không lẫn nội dung với plan_expiring', async () => {
+    const admin = await createUser({ role: 'admin', username: 'expired_admin' });
+    const token = await loginAs(admin);
+    const response = await request(app)
+      .get('/api/admin/system-email-templates/plan_expired')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.isCustomized).toBe(false);
+    expect(response.body.data.subject).toContain('đã hết hạn');
+  });
+
+  it('biến hợp lệ của welcome (docs_url) bị từ chối khi lưu cho plan_expiring', async () => {
+    const admin = await createUser({ role: 'admin', username: 'cross_key_admin' });
+    const token = await loginAs(admin);
+    const response = await request(app)
+      .put('/api/admin/system-email-templates/plan_expiring')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ subject: 'Chào', bodyHtml: '<p>{{docs_url}}</p>' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('Biến không được hỗ trợ');
+  });
+
+  // Ca 15 của mục 5, nguyên văn plan — chốt chặn tái diễn (đột biến: nới isIn(...) thành nhận
+  // mọi chuỗi ở route thì ca này phải đỏ).
+  it('ca 15 — PUT .../khong_ton_tai trả 400, không phải 500', async () => {
+    const admin = await createUser({ role: 'admin', username: 'invalid_key_admin' });
+    const token = await loginAs(admin);
+    const response = await request(app)
+      .put('/api/admin/system-email-templates/khong_ton_tai')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ subject: 'X', bodyHtml: '<p>Y</p>' });
+
+    expect(response.status).toBe(400);
+    expect(response.status).not.toBe(500);
+  });
+
+  it('GET .../khong_ton_tai cũng trả 400 — whitelist áp cho mọi verb, không chỉ PUT', async () => {
+    const admin = await createUser({ role: 'admin', username: 'invalid_key_get_admin' });
+    const token = await loginAs(admin);
+    const response = await request(app)
+      .get('/api/admin/system-email-templates/khong_ton_tai')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  // Nghiệm thu bắt buộc thêm (mục 4): INSERT khoá thứ tư trực tiếp vào DB → CHECK vẫn từ chối,
+  // dù đi qua API hay không — chốt chặn ở đúng lớp DB, không chỉ ở validate tầng route.
+  it('INSERT trực tiếp khoá thứ tư vào system_email_templates → DB từ chối (CHECK còn hiệu lực)', async () => {
+    await expect(
+      db.query(
+        `INSERT INTO system_email_templates (template_key, subject, body_html)
+         VALUES ('khong_ton_tai', 'X', 'Y')`
+      )
+    ).rejects.toMatchObject({ code: '23514' }); // check_violation
+  });
+});

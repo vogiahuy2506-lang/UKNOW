@@ -278,4 +278,18 @@ describe('welcomeEmailTemplate.service — tổng quát hoá đa khoá (PR-2b vi
     mockFind.mockRejectedValueOnce(new Error('relation missing'));
     await expect(loadCustomSystemEmailTemplate('plan_expiring')).resolves.toBeNull();
   });
+
+  // Nghiệm thu bắt buộc thêm (mục 4, "Mẫu trong DB có biến lạ {{khong_ton_tai}} → không nổ,
+  // không rò chuỗi thô ra thư"). Hàng trong DB không đi qua validate lúc lưu (vd dữ liệu cũ
+  // trước migration 206, hoặc sửa tay) có thể chứa biến ngoài whitelist —
+  // normalizeSystemEmailTemplate() throw đúng lúc load lại, try/catch của
+  // loadCustomSystemEmailTemplate bắt được và trả null — KHÔNG để lọt bản có biến lạ ra
+  // buildXxxEmail() (nơi mới thật sự ghép chuỗi gửi đi).
+  it('mẫu trong DB có biến lạ (ngoài whitelist của khoá) → coi như lỗi, trả null, không throw', async () => {
+    mockFind.mockResolvedValueOnce({
+      subject: 'Chào {{khong_ton_tai}}',
+      body_html: '<p>{{khong_ton_tai}}</p>',
+    });
+    await expect(loadCustomSystemEmailTemplate('plan_expiring')).resolves.toBeNull();
+  });
 });
