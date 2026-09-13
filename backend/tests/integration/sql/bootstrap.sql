@@ -1992,6 +1992,62 @@ CREATE INDEX IF NOT EXISTS idx_chatbot_whatsapp_baileys_chatbot
   ON chatbot_whatsapp_baileys_settings(id_chatbot)
   WHERE id_chatbot IS NOT NULL;
 
+-- ─── WhatsApp Baileys session storage (migration 213) ────────────────────
+-- Mirror nguyên văn từ file migration 213_whatsapp_baileys_session_db.sql.
+-- Hai bảng thay thế cho on-disk folder `./whatsapp-sessions/<key>/` (creds.json
+-- + app-state-sync-key-*.json) — multi-instance deploy cần share state qua DB.
+-- Composite PK trên (session_key, type, id) giữ UPSERT O(1) cho Baileys'
+-- SignalKeyStore.set.
+CREATE TABLE IF NOT EXISTS whatsapp_baileys_session_creds (
+  session_key VARCHAR(255) PRIMARY KEY,
+  creds       JSONB NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE whatsapp_baileys_session_creds IS
+  'One row per Baileys sessionKey. Stores the latest AuthenticationCreds blob from Baileys''s creds.update event.';
+COMMENT ON COLUMN whatsapp_baileys_session_creds.creds IS
+  'JSONB blob of Baileys AuthenticationCreds. Opaque to Postgres — schema lives in @whiskeysockets/baileys.';
+
+CREATE TABLE IF NOT EXISTS whatsapp_baileys_session_keys (
+  session_key VARCHAR(255) NOT NULL,
+  type        VARCHAR(64)  NOT NULL,
+  id          TEXT         NOT NULL,
+  value       JSONB        NOT NULL,
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (session_key, type, id)
+);
+
+COMMENT ON TABLE whatsapp_baileys_session_keys IS
+  'Per-(session, signal-type, key-id) Signal protocol keys Baileys asks us to persist via SignalKeyStore.set.';
+COMMENT ON COLUMN whatsapp_baileys_session_keys.type IS
+  'One of: app-state-sync-key, pre-key, session, sender-key, app-state-sync-version, lid-mapping, device-list';
+
+-- Index for the legacy lookup `WHERE session_key = ?` done by the
+-- session manager at startup (one query per sessionKey).
+CREATE INDEX IF NOT EXISTS idx_whatsapp_baileys_session_keys_session
+  ON whatsapp_baileys_session_keys(session_key);
+
+-- ─── WhatsApp Baileys session profile (migration 214) ────────────────────
+-- Mirror nguyên văn từ file migration 214_whatsapp_baileys_session_profile.sql.
+-- Thay thế `profile.json` trong folder session — chỉ chứa meId + meName để UI
+-- hiển thị label account trước khi socket hydrate.
+CREATE TABLE IF NOT EXISTS whatsapp_baileys_session_profile (
+  session_key VARCHAR(255) PRIMARY KEY
+    REFERENCES whatsapp_baileys_session_creds(session_key)
+    ON DELETE CASCADE,
+  me_id       VARCHAR(64),
+  me_name     TEXT,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE whatsapp_baileys_session_profile IS
+  'Lightweight display metadata (meId + meName) per Baileys session. Authoritative source as of migration 214; replaces whatsapp-sessions/<key>/profile.json.';
+COMMENT ON COLUMN whatsapp_baileys_session_profile.me_id IS
+  'WhatsApp JID returned by Baileys on connection.open (e.g. "5511…@s.whatsapp.net"). Null until first successful scan.';
+COMMENT ON COLUMN whatsapp_baileys_session_profile.me_name IS
+  'WhatsApp pushName / verifiedName. Null until first successful scan or until the user renames the session.';
+
 CREATE TABLE IF NOT EXISTS web_widget_configs (
   id               BIGSERIAL PRIMARY KEY,
   id_user          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -3149,6 +3205,10 @@ CREATE TABLE telegram_accounts (
     username VARCHAR(255),
     is_active BOOLEAN DEFAULT true,
     last_activity_at TIMESTAMP WITH TIME ZONE,
+    -- Mirror migration 212_add_telegram_session_string.sql: opaque
+    -- session payload from the Telegram transport. Null until first
+    -- successful QR login.
+    session_string TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(telegram_user_id),
