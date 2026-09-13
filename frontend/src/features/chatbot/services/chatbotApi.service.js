@@ -300,60 +300,12 @@ const chatbotApiService = {
   },
 
   // ── Telegram Personal Account (managed by in-process gateway) ───────
-
-  /**
-   * Single-channel status for the in-process personal-account
-   * gateway (telegram). Cheap, used when one settings page needs
-   * only its own channel — but `getPersonalAccountsHealth` is
-   * preferred when both pages need to know.
-   */
-  getTelegramAccountStatus({ signal } = {}) {
-    return api.get('/ai/chatbot/personal-account-status/telegram', { signal });
-  },
-
-  // Bắt đầu QR login flow, trả về QR image base64 + deep link.
-  initTelegramLogin({ signal } = {}) {
-    // Server caps the upstream connect at TELEGRAM_CONNECT_TIMEOUT_MS
-    // (default 15s, override được qua env). Client timeout đặt CAO HƠN
-    // server cap + buffer rộng để user thấy server-side error code
-    // (TELEGRAM_CONNECT_TIMEOUT) thay vì axios ECONNABORTED mơ hồ.
-    // 60s cho đủ buffer khi TCP+TLS handshake tới Telegram DC chậm
-    // trong cold path (lần đầu kết nối từ gateway mới / sau restart).
-    return api.post('/ai/chatbot/telegram-accounts/init', {}, { timeout: 60000, signal });
-  },
-
-  // Poll trạng thái QR login. Khi success, trả về account row.
-  checkTelegramLoginStatus(sessionId) {
-    return api.get(`/ai/chatbot/telegram-accounts/status/${encodeURIComponent(sessionId)}`);
-  },
-
-  // Hủy QR login flow.
-  cancelTelegramLogin(sessionId) {
-    return api.delete(`/ai/chatbot/telegram-accounts/login/${encodeURIComponent(sessionId)}`);
-  },
-
-  // List Telegram accounts (Channel Settings).
-  listTelegramAccounts({ signal } = {}) {
-    return api.get('/ai/chatbot/telegram-accounts', { signal });
-  },
-
-  // Xóa tài khoản Telegram vĩnh viễn.
-  deleteTelegramAccount(id) {
-    return api.delete(`/ai/chatbot/telegram-accounts/${id}`);
-  },
-
-  // Ngắt kết nối Telegram, giữ row lịch sử.
-  logoutTelegramAccount(id) {
-    return api.post(`/ai/chatbot/telegram-accounts/${id}/logout`);
-  },
-
-  // TelegramDeployTab: list accounts kèm enable flag cho một chatbot cụ thể.
-  listTelegramAccountsWithChatbotSettings(chatbotId) {
-    const params = chatbotId == null || chatbotId === ''
-      ? null
-      : { chatbot_id: chatbotId };
-    return api.get('/ai/chatbot/telegram-accounts/chatbot', { params });
-  },
+  // Methods defined above (getTelegramAccountStatus, initTelegramLogin,
+  // checkTelegramLoginStatus, cancelTelegramLogin, listTelegramAccounts,
+  // deleteTelegramAccount, logoutTelegramAccount,
+  // listTelegramAccountsWithChatbotSettings, toggleTelegramAccountChatbot).
+  // Do NOT redeclare them here — duplicate keys break object literal
+  // construction in strict mode and ESLint's no-dupe-keys rule.
 
   // Delete a conversation
   deleteConversation(conversationId, type = 'zalo_personal') {
