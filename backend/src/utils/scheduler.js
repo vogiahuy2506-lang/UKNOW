@@ -3,7 +3,7 @@ import db from '../config/database.js';
 import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
 import { findExpiringUsers, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
-import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
+import { sendSystemEmail, buildRenewalReminderEmail, buildRenewalUrl } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 import notificationService from '../services/admin/notification.service.js';
@@ -549,7 +549,7 @@ export const initScheduler = () => {
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');
-    const renewalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/renewal`;
+    const renewalUrl = buildRenewalUrl();
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
       await cronJobRunRepository.recordRun('subscription_reminder', async () => {

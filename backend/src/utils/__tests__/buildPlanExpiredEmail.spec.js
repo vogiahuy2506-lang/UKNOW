@@ -35,3 +35,43 @@ describe('buildPlanExpiredEmail (Unit) — Nội dung thư hết hạn gói T-0'
     expect(email.html).toContain('/app/billing');
   });
 });
+
+/**
+ * Ghim đích của nút gia hạn trong CẢ BA thư hạn gói.
+ *
+ * Trước 13/09/2026 scheduler.js dựng `${FRONTEND_URL}/renewal`. Đường dẫn đó không có route:
+ * frontend/src/App.jsx:505 bắt mọi đường lạ bằng `<Navigate to="/" replace />`, nên nút trong
+ * thư ném khách về trang bán hàng công khai. Yêu cầu của sếp là "hiện nút nâng cấp lên luôn" —
+ * nút dẫn về trang chủ là hỏng đúng chỗ đó.
+ *
+ * Không kiểm được bằng curl: SPA trả 200 cho mọi path.
+ */
+describe('buildRenewalUrl — đích nút gia hạn phải là route CÓ THẬT', () => {
+  const origFrontendUrl = process.env.FRONTEND_URL;
+  afterEach(() => {
+    if (origFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = origFrontendUrl;
+  });
+
+  it('trỏ /app/billing, KHÔNG phải /renewal (đường dẫn chết)', async () => {
+    const { buildRenewalUrl } = await import('../systemEmail.util.js');
+    process.env.FRONTEND_URL = 'https://founderai.biz';
+
+    const url = buildRenewalUrl();
+    expect(url).toBe('https://founderai.biz/app/billing');
+    expect(url).not.toContain('/renewal');
+  });
+
+  it('thư T-0 dùng đúng URL đó trong thẻ <a> của nút', async () => {
+    const { buildRenewalUrl, buildPlanExpiredEmail } = await import('../systemEmail.util.js');
+    process.env.FRONTEND_URL = 'https://founderai.biz';
+
+    const { html } = buildPlanExpiredEmail({
+      fullName: 'Khách Thử',
+      planName: 'Gói Pro',
+      expiresAt: '2026-09-12T00:00:00.000Z',
+      renewalUrl: buildRenewalUrl(),
+    });
+    expect(html).toContain('href="https://founderai.biz/app/billing"');
+  });
+});
