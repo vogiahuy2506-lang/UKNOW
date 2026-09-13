@@ -1,9 +1,9 @@
-import { HiOutlineCheck, HiOutlineRefresh } from 'react-icons/hi';
+import { HiOutlineCheck, HiOutlineRefresh, HiOutlinePaperClip } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 /**
  * Single chat message bubble.
- * role 'user': bubble orange-50 bên phải
+ * role 'user': bubble orange-50 bên phải, hiển thị content và các chip tệp đính kèm (nếu có).
  * role 'ai':   bubble gray-50 bên trái + trạng thái applied/undo nếu đã auto-apply HTML.
  *
  * Phase 6: AI tự auto-apply HTML lên form. Không còn nút Áp dụng/Bỏ qua — chỉ còn
@@ -11,13 +11,30 @@ import { useI18n } from '../../../i18n';
  */
 export default function ChatMessage({ msg, onUndo }) {
   const tc = useI18n('landingCanvas.chat');
-  const { role, content, status, previousHtml } = msg;
+  const { role, content, status, previousHtml, files } = msg;
 
   if (role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] bg-orange-50 text-gray-900 rounded-2xl px-4 py-2.5 text-[15px] break-words leading-relaxed">
-          {content}
+        <div className="max-w-[85%] bg-orange-50 text-gray-900 rounded-2xl px-4 py-2.5 text-[15px] break-words leading-relaxed space-y-2">
+          {Array.isArray(files) && files.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pb-0.5">
+              {files.map((f, i) => (
+                <div
+                  key={f.tempId || f.storageKey || i}
+                  className="flex items-center gap-1.5 bg-white border border-orange-200 rounded-lg px-2.5 py-1 text-xs text-slate-700 shadow-sm"
+                >
+                  {f.previewUrl ? (
+                    <img src={f.previewUrl} alt="" className="w-4 h-4 object-cover rounded shrink-0" />
+                  ) : (
+                    <HiOutlinePaperClip className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  )}
+                  <span className="truncate max-w-[140px] font-medium">{f.originalName || 'file'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {content ? <div>{content}</div> : null}
         </div>
       </div>
     );

@@ -22,7 +22,7 @@ import { CHAT_QUICK_PICKS } from '../utils/chatPromptTemplates.js';
  *  - collapsed: bool
  *  - onToggleCollapsed: callback toggle mở/thu nhỏ
  */
-export default function CanvasChatPanel({ form, setForm, openTab, collapsed, onToggleCollapsed }) {
+export default function CanvasChatPanel({ form, setForm, openTab, collapsed, onToggleCollapsed, editingId = null }) {
   const tc = useI18n('landingCanvas.chat');
   const hasExistingHtml = Boolean(String(form?.htmlContent || '').trim());
 
@@ -31,7 +31,7 @@ export default function CanvasChatPanel({ form, setForm, openTab, collapsed, onT
     isStreaming,
     handleSend,
     handleUndo,
-  } = useCanvasConversation({ form, setForm, hasExistingHtml, openTab });
+  } = useCanvasConversation({ form, setForm, hasExistingHtml, openTab, editingId });
 
   if (collapsed) {
     return (

@@ -748,6 +748,11 @@ export default {
       undo: 'Hoàn tác',
       undoTooltip: 'Khôi phục lại HTML trước khi AI sửa',
       clear: 'Xóa cuộc trò chuyện',
+      attach: 'Đính kèm tệp',
+      attachHint: 'Đính kèm logo/banner (PNG/JPG/WebP) hoặc brochure PDF/DOCX',
+      uploading: 'Đang tải lên...',
+      removeFile: 'Bỏ tệp',
+      filesOnlyPrompt: 'Dùng các tệp đính kèm cho trang này',
       quickPicksTitle: 'Mẫu nhanh',
       quickPicksCount: '{n} mẫu',
       capabilities: {

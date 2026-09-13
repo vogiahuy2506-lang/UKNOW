@@ -81,6 +81,7 @@ export default function LandingCanvasLayout({
               openTab={openTab}
               collapsed={chatCollapsed}
               onToggleCollapsed={handleToggleChat}
+              editingId={editingId}
             />
           )}
         </aside>

@@ -172,7 +172,7 @@ export function detectIntent(prompt, { setForm, openTab, intents }) {
   return { matched: false };
 }
 
-export default function useCanvasConversation({ form, setForm, hasExistingHtml, openTab }) {
+export default function useCanvasConversation({ form, setForm, hasExistingHtml, openTab, editingId = null }) {
   // Hook dùng riêng namespace 'landingCanvas.canvasConversation' cho intent + AI messages
   // (CanvasChatPanel truyền tc của namespace 'landingCanvas.chat' — không trùng key với intent).
   const tc = useI18n('landingCanvas.canvasConversation');
@@ -194,30 +194,34 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
   }, []);
 
   const handleSend = useCallback(
-    async ({ prompt }) => {
-      if (!prompt?.trim()) return;
-      const trimmedPrompt = prompt.trim();
+    async ({ prompt, files = [] }) => {
+      const hasFiles = Array.isArray(files) && files.length > 0;
+      if (!prompt?.trim() && !hasFiles) return;
+      const trimmedPrompt = prompt?.trim() || '';
 
-      // 1) Thử bắt intent local trước
-      const intentResult = detectIntent(trimmedPrompt, { setForm, openTab, intents });
-      if (intentResult.matched) {
-        appendMessage({
-          id: nextId(),
-          role: 'ai',
-          content: intentResult.message,
-          status: 'done',
-          intent: intentResult.key,
-          ts: Date.now(),
-        });
-        toast.success(intentResult.message);
-        return;
+      // 1) Thử bắt intent local trước (chỉ khi không có file đính kèm)
+      if (!hasFiles) {
+        const intentResult = detectIntent(trimmedPrompt, { setForm, openTab, intents });
+        if (intentResult.matched) {
+          appendMessage({
+            id: nextId(),
+            role: 'ai',
+            content: intentResult.message,
+            status: 'done',
+            intent: intentResult.key,
+            ts: Date.now(),
+          });
+          toast.success(intentResult.message);
+          return;
+        }
       }
 
-      // 2) Không match intent → gọi AI edit/generate HTML
+      // 2) Không match intent (hoặc có file) → gọi AI edit/generate HTML
       const userMsg = {
         id: nextId(),
         role: 'user',
         content: trimmedPrompt,
+        ...(hasFiles ? { files } : {}),
         status: 'sent',
         ts: Date.now(),
       };
@@ -243,9 +247,16 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
             currentHtml,
             instruction: trimmedPrompt,
             locale,
+            files,
+            landingPageId: editingId,
           });
         } else {
-          result = await generateLandingHtmlWithAi({ prompt: trimmedPrompt, locale });
+          result = await generateLandingHtmlWithAi({
+            prompt: trimmedPrompt,
+            locale,
+            files,
+            landingPageId: editingId,
+          });
         }
 
         const suggestedHtml =
@@ -300,7 +311,7 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
         setIsStreaming(false);
       }
     },
-    [appendMessage, form.htmlContent, hasExistingHtml, intents, locale, nextId, openTab, setForm, tc]
+    [appendMessage, editingId, form.htmlContent, hasExistingHtml, intents, locale, nextId, openTab, setForm, tc]
   );
 
   /**

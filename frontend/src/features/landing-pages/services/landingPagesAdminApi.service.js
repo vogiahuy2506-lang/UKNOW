@@ -139,16 +139,41 @@ export async function fetchLandingPagesDashboardStats(params = {}) {
   };
 }
 
+function formatLandingFiles(files) {
+  if (!Array.isArray(files) || files.length === 0) return undefined;
+  return files.map((f) => {
+    const item = {
+      originalName: f.originalName || f.name,
+      contentType: f.contentType || f.type || 'application/octet-stream',
+      size: f.size,
+    };
+    if (f.storageKey || f.storage_key) {
+      item.storageKey = f.storageKey || f.storage_key;
+    } else if (f.tempId) {
+      item.tempId = f.tempId;
+    }
+    return item;
+  });
+}
+
 /**
- * Sinh HTML landing đầy đủ (Tailwind + Gemini + context hồ sơ DN).
+ * Sinh HTML landing page mới bằng AI (Tailwind CDN, nội dung thật).
  *
- * @param {{ prompt: string, title?: string, locale?: string }} params
+ * @param {{ prompt: string, title?: string, locale?: string, files?: Array, landingPageId?: number|null }} params
  * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
  */
-export async function generateLandingHtmlWithAi({ prompt, title, locale } = {}) {
+export async function generateLandingHtmlWithAi({ prompt, title, locale, files = [], landingPageId = null } = {}) {
+  const formattedFiles = formatLandingFiles(files);
+  const payload = {
+    prompt,
+    title,
+    locale,
+    ...(formattedFiles ? { files: formattedFiles } : {}),
+    ...(landingPageId != null ? { landingPageId: Number(landingPageId) } : {}),
+  };
   const { data } = await api.post(
     '/ai/generate-landing-html',
-    { prompt, title, locale },
+    payload,
     { timeout: 120000 }
   );
   return data;
@@ -157,13 +182,21 @@ export async function generateLandingHtmlWithAi({ prompt, title, locale } = {}) 
 /**
  * Chỉnh sửa HTML landing hiện tại (Tailwind + Gemini + giữ nguyên cấu trúc/nội dung).
  *
- * @param {{ instruction: string, currentHtml: string, locale?: string }} params
+ * @param {{ instruction: string, currentHtml: string, locale?: string, files?: Array, landingPageId?: number|null }} params
  * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
  */
-export async function editLandingHtmlWithAi({ instruction, currentHtml, locale } = {}) {
+export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, files = [], landingPageId = null } = {}) {
+  const formattedFiles = formatLandingFiles(files);
+  const payload = {
+    instruction,
+    currentHtml,
+    locale,
+    ...(formattedFiles ? { files: formattedFiles } : {}),
+    ...(landingPageId != null ? { landingPageId: Number(landingPageId) } : {}),
+  };
   const { data } = await api.post(
     '/ai/edit-landing-html',
-    { instruction, currentHtml, locale },
+    payload,
     { timeout: 120000 }
   );
   return data;

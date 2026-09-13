@@ -748,6 +748,11 @@ export default {
       undo: 'Undo',
       undoTooltip: 'Restore the HTML before the AI edited it',
       clear: 'Clear conversation',
+      attach: 'Attach file',
+      attachHint: 'Attach logo/banner (PNG/JPG/WebP) or brochure PDF/DOCX',
+      uploading: 'Uploading…',
+      removeFile: 'Remove file',
+      filesOnlyPrompt: 'Use the attached files for this page',
       quickPicksTitle: 'Quick picks',
       quickPicksCount: '{n} picks',
       capabilities: {
