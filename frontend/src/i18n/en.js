@@ -753,6 +753,7 @@ export default {
       uploading: 'Uploading…',
       removeFile: 'Remove file',
       filesOnlyPrompt: 'Use the attached files for this page',
+      uploadError: 'Upload failed, please try again.',
       quickPicksTitle: 'Quick picks',
       quickPicksCount: '{n} picks',
       capabilities: {

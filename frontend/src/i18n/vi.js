@@ -753,6 +753,7 @@ export default {
       uploading: 'Đang tải lên...',
       removeFile: 'Bỏ tệp',
       filesOnlyPrompt: 'Dùng các tệp đính kèm cho trang này',
+      uploadError: 'Tải tệp lên thất bại, hãy thử lại.',
       quickPicksTitle: 'Mẫu nhanh',
       quickPicksCount: '{n} mẫu',
       capabilities: {
