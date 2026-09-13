@@ -1089,5 +1089,124 @@ describe('POST /api/public/leads', () => {
     expect(rows[0].reference_type).toBe('landing_page');
     expect(rows[0].reference_id).toBe(String(lpId));
   });
+
+  it('POST /api/admin/landing-pages/assets: ảnh PNG không landingPageId → 200, ledger temp + expires_at ≈ +7 ngày', async () => {
+    const user = await createUserWithPlan();
+    const token = await loginAs(user);
+
+    const pngBuffer = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(32, 0),
+    ]);
+
+    const tempRes = await request(app)
+      .post('/api/uploads/temp')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', pngBuffer, { filename: 'my-photo.png', contentType: 'image/png' });
+
+    expect(tempRes.status).toBe(200);
+    const { tempId, originalName, contentType, size } = tempRes.body.data;
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tempId, originalName, contentType, size });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.url).toMatch(/\/lp-assets\/uploads\/\d+\/landing\/.*my-photo\.png$/);
+    expect(res.body.data.storageKey).toMatch(/^uploads\/\d+\/landing\/.*my-photo\.png$/);
+    expect(res.body.data.originalName).toBe('my-photo.png');
+    expect(res.body.data.sizeBytes).toBe(pngBuffer.length);
+    expect(res.body.data.base64).toBeUndefined();
+
+    const { rows } = await db.query(
+      `SELECT state, expires_at, reference_type, reference_id FROM storage_objects WHERE storage_key = $1`,
+      [res.body.data.storageKey]
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].state).toBe('temp');
+    expect(rows[0].reference_type).toBe('landing_asset_draft');
+    expect(rows[0].reference_id).toBeNull();
+    expect(rows[0].expires_at).not.toBeNull();
+    const expiresAt = new Date(rows[0].expires_at).getTime();
+    const expectedApprox = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(expiresAt - expectedApprox)).toBeLessThan(60_000);
+  });
+
+  it('POST /api/admin/landing-pages/assets: có landingPageId của trang mình → 200, ledger active, reference_id = id', async () => {
+    const user = await createUserWithPlan();
+    const token = await loginAs(user);
+
+    const createLpRes = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        slug: 'lp-with-asset-target',
+        title: 'Trang đích cho asset',
+        htmlContent: '<html><body>Hello</body></html>',
+      });
+    expect(createLpRes.status).toBe(201);
+    const lpId = createLpRes.body.data.id;
+
+    const pngBuffer = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(32, 0),
+    ]);
+
+    const tempRes = await request(app)
+      .post('/api/uploads/temp')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', pngBuffer, { filename: 'hero-banner.png', contentType: 'image/png' });
+
+    expect(tempRes.status).toBe(200);
+    const { tempId, originalName, contentType, size } = tempRes.body.data;
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tempId, originalName, contentType, size, landingPageId: lpId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.base64).toBeUndefined();
+
+    const { rows } = await db.query(
+      `SELECT state, expires_at, reference_type, reference_id FROM storage_objects WHERE storage_key = $1`,
+      [res.body.data.storageKey]
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].state).toBe('active');
+    expect(rows[0].expires_at).toBeNull();
+    expect(rows[0].reference_type).toBe('landing_page');
+    expect(rows[0].reference_id).toBe(String(lpId));
+  });
+
+  it('POST /api/admin/landing-pages/assets: PDF → 400 "Chỉ nhận ảnh PNG/JPG/WebP"', async () => {
+    const user = await createUserWithPlan();
+    const token = await loginAs(user);
+
+    const pdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF');
+
+    const tempRes = await request(app)
+      .post('/api/uploads/temp')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', pdfBuffer, { filename: 'document.pdf', contentType: 'application/pdf' });
+
+    expect(tempRes.status).toBe(200);
+    const { tempId, originalName, contentType, size } = tempRes.body.data;
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tempId, originalName, contentType, size });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toMatch(/Chỉ nhận ảnh/);
+  });
 });
+
 

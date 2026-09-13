@@ -2,6 +2,10 @@ import landingPageAdminService from '../services/landingPage/landingPageAdmin.se
 import landingPageDomainService from '../services/landingPage/landingPageDomain.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import landingPageRepository from '../repositories/landingPage.repository.js';
+import { getWorkspaceContext, getWorkspaceScope } from '../utils/workspaceContext.util.js';
+import { ingestLandingAttachments } from '../services/landing/landingAsset.service.js';
+import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 
 /**
  * API quản trị — CRUD landing page HTML (auth + admin).
@@ -392,6 +396,71 @@ class LandingPageAdminController {
       const status = error.statusCode || 500;
       if (status >= 500) console.error('[LandingPageAdminController.putSheetsSync]', error);
       return res.status(status).json({ success: false, message: error.message || 'Không thể lưu cấu hình' });
+    }
+  }
+
+  /**
+   * POST /api/admin/landing-pages/assets
+   *
+   * Tải ảnh cho landing page (không qua AI).
+   * Body: { tempId, originalName, contentType, size, landingPageId? }
+   */
+  async uploadAsset(req, res) {
+    try {
+      const context = getWorkspaceContext(req.user);
+      const { tempId, originalName, contentType, size, landingPageId } = req.body || {};
+
+      if (!tempId) {
+        return res.status(400).json({ success: false, message: 'Thiếu tempId tệp tạm' });
+      }
+
+      let resolvedLandingPageId = null;
+      if (landingPageId) {
+        const scope = getWorkspaceScope(req.user);
+        const lp = await landingPageRepository.findByIdInScope(landingPageId, scope).catch(() => null);
+        if (lp) {
+          resolvedLandingPageId = lp.id;
+        }
+      }
+
+      const { assets, documents } = await ingestLandingAttachments({
+        files: [{ tempId, originalName, contentType, size }],
+        ownerUserId: context.workspaceOwnerId,
+        actorUserId: req.user.id,
+        landingPageId: resolvedLandingPageId,
+      });
+
+      if (documents.length > 0 || assets.length === 0) {
+        return res.status(400).json({ success: false, message: 'Chỉ nhận ảnh PNG/JPG/WebP' });
+      }
+
+      const asset = assets[0];
+      return res.json({
+        success: true,
+        data: {
+          url: asset.url,
+          storageKey: asset.storageKey,
+          originalName: asset.originalName,
+          sizeBytes: asset.sizeBytes,
+        },
+      });
+    } catch (error) {
+      if (error instanceof StorageQuotaExceededError) {
+        return res.status(error.status || 413).json({
+          success: false,
+          code: error.code || 'STORAGE_QUOTA_EXCEEDED',
+          message: error.message,
+          data: error.usage,
+        });
+      }
+      const status = error.status || error.statusCode || 500;
+      if (status >= 500) {
+        console.error('[LandingPageAdminController.uploadAsset]', error);
+      }
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Lỗi khi tải ảnh lên',
+      });
     }
   }
 }

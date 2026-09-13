@@ -325,3 +325,22 @@ export async function deleteLandingPageVersion(landingPageId, versionId) {
   return data;
 }
 
+/**
+ * Tải ảnh cho landing page (không qua AI).
+ *
+ * @param {{ tempId: string, originalName?: string, contentType?: string, size?: number, landingPageId?: number }} payload
+ * @returns {Promise<{ url: string, storageKey: string, originalName: string, sizeBytes: number }>}
+ */
+export async function uploadLandingAsset({ tempId, originalName, contentType, size, landingPageId }) {
+  const { data } = await api.post('/admin/landing-pages/assets', {
+    tempId,
+    originalName,
+    contentType,
+    size,
+    landingPageId: landingPageId ? Number(landingPageId) : undefined,
+  });
+  if (!data?.success) throw new Error(data?.message || 'Không tải được ảnh lên');
+  return data.data;
+}
+
+

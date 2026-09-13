@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   HiOutlineX,
   HiOutlineGlobeAlt,
   HiOutlineDocumentText,
+  HiOutlinePhotograph,
   HiOutlineCheckCircle,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
@@ -15,6 +16,11 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
+import api from '../../../services/api.js';
+import useStorageQuota from '../../storage/useStorageQuota.js';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../storage/validateUpload.js';
+import { notifyStorageQuotaRefresh } from '../../storage/storageEvents.js';
+import { uploadLandingAsset } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
 
 const BASE_DOMAIN = 'founderai.biz';
@@ -30,7 +36,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   // LeadFormConfigPanel (khôi phục nguyên vẹn từ 3c514bc8^) gọi t('leadFormConfig.xxx') với
   // khoá ĐẦY ĐỦ — leadFormConfig là namespace GỐC (vi.js:962/en.js:961), không nằm dưới
   // landingCanvas.settingsModal, nên phải dùng t KHÔNG scope (khác tc/tcDomain ở trên).
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   // Section expand state. Khoá 'lead-form' (không phải leadForm) khớp ĐÚNG chuỗi tab-id dùng
   // xuyên suốt hệ thống: openTab('lead-form') ở useCanvasConversation.js, và LandingCanvasLayout.jsx
@@ -38,9 +44,112 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   // mới thay vì cập nhật đúng section.
   const [expandedSections, setExpandedSections] = useState({
     page: true,
+    images: true,
     domain: true,
     'lead-form': true,
   });
+
+  const [uploadedAssets, setUploadedAssets] = useState([]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(null);
+  const imageInputRef = useRef(null);
+  const { usage: storageQuota } = useStorageQuota();
+
+  // Danh sách ảnh đang có trong HTML của trang
+  const inPageImages = useMemo(() => {
+    const html = form?.htmlContent || '';
+    const regex = /(?:https?:\/\/[^"'()\s<>]*)?\/lp-assets\/uploads\/\d+\/landing\/[A-Za-z0-9._-]+/g;
+    const matches = html.match(regex) || [];
+    const unique = Array.from(new Set(matches));
+    return unique.map((url) => {
+      const lastUnderscore = url.lastIndexOf('_');
+      const lastSlash = url.lastIndexOf('/');
+      const fileName = lastUnderscore > lastSlash
+        ? url.slice(lastUnderscore + 1)
+        : url.slice(lastSlash + 1);
+      return { url, name: decodeURIComponent(fileName) };
+    });
+  }, [form?.htmlContent]);
+
+  // Danh sách ảnh vừa tải lên nhưng chưa được chèn vào trang
+  const pendingUploadedAssets = useMemo(() => {
+    return uploadedAssets.filter((a) => !inPageImages.some((ip) => ip.url === a.url));
+  }, [uploadedAssets, inPageImages]);
+
+  const handleImageUpload = async (e) => {
+    const rawFiles = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!rawFiles.length) return;
+
+    const allowedExts = ['.png', '.jpg', '.jpeg', '.webp'];
+    const invalidFiles = rawFiles.filter((file) => {
+      const name = (file.name || '').toLowerCase();
+      return !allowedExts.some((ext) => name.endsWith(ext));
+    });
+    if (invalidFiles.length > 0) {
+      toast.error(tc('sections.images.onlyImages') || 'Chỉ nhận file ảnh PNG, JPG, JPEG, WebP');
+      return;
+    }
+
+    const validation = validateFilesBeforeUpload(rawFiles, storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t, locale));
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const results = await Promise.all(
+        rawFiles.map(async (file) => {
+          const fd = new FormData();
+          fd.append('file', file);
+          const tempRes = await api.post('/uploads/temp', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const { tempId, originalName, contentType, size } = tempRes.data.data;
+          const asset = await uploadLandingAsset({
+            tempId,
+            originalName,
+            contentType,
+            size,
+            landingPageId: editingId,
+          });
+          return asset;
+        })
+      );
+      setUploadedAssets((prev) => [...prev, ...results]);
+      notifyStorageQuotaRefresh();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Lỗi khi tải ảnh lên');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleCopyUrl = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      toast.success(tc('sections.images.copied') || 'Đã sao chép');
+      setTimeout(() => setCopiedUrl(null), 2000);
+    } catch {
+      toast.error('Không thể sao chép URL');
+    }
+  };
+
+  const handleInsertImage = (asset) => {
+    const currentHtml = form?.htmlContent || '';
+    const imgTag = `<img src="${asset.url}" alt="${asset.originalName || 'image'}" class="mx-auto max-w-full h-auto" />`;
+    let newHtml = '';
+    const bodyCloseIndex = currentHtml.toLowerCase().lastIndexOf('</body>');
+    if (bodyCloseIndex !== -1) {
+      newHtml = currentHtml.slice(0, bodyCloseIndex) + '\n' + imgTag + '\n' + currentHtml.slice(bodyCloseIndex);
+    } else {
+      newHtml = currentHtml + '\n' + imgTag;
+    }
+    setForm((prev) => ({ ...prev, htmlContent: newHtml }));
+    toast.success(tc('sections.images.inserted') || 'Đã chèn vào trang');
+  };
 
   // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 2: prop `tab` được LandingCanvasEditor.jsx
   // truyền xuống (openTab('lead-form') từ ý định chat) nhưng trước đây không được component này
@@ -232,6 +341,121 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
                 </label>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* ═══ SECTION: Ảnh của trang ═══ */}
+          <SectionCard
+            expanded={expandedSections.images}
+            onToggle={() => toggleSection('images')}
+            icon={<HiOutlinePhotograph className="w-5 h-5" />}
+            title={tc('sections.images.title')}
+          >
+            <div className="space-y-4">
+              {/* Dòng gợi ý */}
+              <p className="text-xs text-gray-500 italic bg-amber-50/60 border border-amber-200/60 rounded-lg p-2.5">
+                {tc('sections.images.hint')}
+              </p>
+
+              {/* Nút Tải ảnh lên */}
+              <div>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp"
+                  multiple
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <button
+                  type="button"
+                  disabled={isUploadingImage}
+                  onClick={() => imageInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 transition"
+                >
+                  <HiOutlinePhotograph className="w-4 h-4" />
+                  {isUploadingImage ? tc('sections.images.uploading') : tc('sections.images.upload')}
+                </button>
+              </div>
+
+              {/* Danh sách ảnh vừa tải lên */}
+              {pendingUploadedAssets.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    {tc('sections.images.justUploaded')}
+                  </h4>
+                  <div className="space-y-1.5 divide-y divide-gray-100">
+                    {pendingUploadedAssets.map((asset, idx) => (
+                      <div key={asset.storageKey || asset.url || idx} className="pt-1.5 flex items-center justify-between gap-3 text-sm">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <img
+                            src={asset.url}
+                            alt={asset.originalName}
+                            className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0"
+                          />
+                          <span className="truncate font-medium text-gray-700" title={asset.originalName}>
+                            {asset.originalName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyUrl(asset.url)}
+                            className="px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded hover:bg-gray-50 transition"
+                          >
+                            {copiedUrl === asset.url ? tc('sections.images.copied') : tc('sections.images.copyUrl')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInsertImage(asset)}
+                            className="px-2 py-1 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 rounded hover:bg-orange-50 transition"
+                          >
+                            {tc('sections.images.insert')}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Danh sách ảnh đang có trong trang */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {tc('sections.images.inPage')}
+                </h4>
+                {inPageImages.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic">
+                    {tc('sections.images.empty')}
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 divide-y divide-gray-100">
+                    {inPageImages.map((img, idx) => (
+                      <div key={img.url || idx} className="pt-1.5 flex items-center justify-between gap-3 text-sm">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <img
+                            src={img.url}
+                            alt={img.name}
+                            className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0"
+                          />
+                          <span className="truncate font-medium text-gray-700" title={img.name}>
+                            {img.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyUrl(img.url)}
+                            className="px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded hover:bg-gray-50 transition"
+                          >
+                            {copiedUrl === img.url ? tc('sections.images.copied') : tc('sections.images.copyUrl')}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </SectionCard>

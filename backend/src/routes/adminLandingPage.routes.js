@@ -22,6 +22,8 @@ router.delete('/:id/versions/:versionId', landingPageAdminController.deleteVersi
 router.get('/:id/sheets-sync', landingPageAdminController.getSheetsSync.bind(landingPageAdminController));
 router.put('/:id/sheets-sync', landingPageAdminController.putSheetsSync.bind(landingPageAdminController));
 
+router.post('/assets', landingPageAdminController.uploadAsset.bind(landingPageAdminController));
+
 router.get('/:id', landingPageAdminController.getById.bind(landingPageAdminController));
 router.post('/', landingPageAdminController.create.bind(landingPageAdminController));
 router.put('/:id', landingPageAdminController.update.bind(landingPageAdminController));

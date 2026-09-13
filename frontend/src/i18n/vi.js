@@ -810,6 +810,20 @@ export default {
         leadForm: {
           title: 'Form đăng ký',
         },
+        images: {
+          title: 'Ảnh của trang',
+          hint: 'Muốn ảnh nằm đúng chỗ (logo header, banner hero) thì đính kèm trong chat và nhờ AI đặt.',
+          upload: 'Tải ảnh lên',
+          uploading: 'Đang tải lên...',
+          inPage: 'Đang có trong trang',
+          justUploaded: 'Vừa tải lên',
+          copyUrl: 'Sao chép URL',
+          copied: 'Đã sao chép',
+          insert: 'Chèn vào trang',
+          inserted: 'Đã chèn',
+          empty: 'Chưa có ảnh nào trong trang',
+          onlyImages: 'Chỉ nhận file ảnh PNG, JPG, JPEG, WebP',
+        },
       },
     },
     pageSettingsPanel: {

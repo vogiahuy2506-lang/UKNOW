@@ -810,6 +810,20 @@ export default {
         leadForm: {
           title: 'Registration Form',
         },
+        images: {
+          title: 'Page Images',
+          hint: 'To place images precisely (header logo, hero banner), attach them in chat and ask AI.',
+          upload: 'Upload Image',
+          uploading: 'Uploading...',
+          inPage: 'Images in page',
+          justUploaded: 'Recently uploaded',
+          copyUrl: 'Copy URL',
+          copied: 'Copied',
+          insert: 'Insert into page',
+          inserted: 'Inserted',
+          empty: 'No images in page yet',
+          onlyImages: 'Only PNG, JPG, JPEG, WebP images are supported',
+        },
       },
     },
     pageSettingsPanel: {
