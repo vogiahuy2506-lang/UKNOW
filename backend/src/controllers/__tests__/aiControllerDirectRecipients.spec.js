@@ -66,6 +66,7 @@ jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   createSession: jest.fn(),
   getSessionWizardState: jest.fn(),
   saveAssistantMessage: jest.fn(),
+  listUserFilesSinceLastLanding: jest.fn(async () => []),
 }));
 jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({
   chargeAiCredit: jest.fn(),

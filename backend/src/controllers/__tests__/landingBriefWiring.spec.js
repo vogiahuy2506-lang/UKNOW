@@ -31,6 +31,7 @@ jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   createSession: jest.fn(),
   getSessionWizardState: jest.fn(),
   saveAssistantMessage: jest.fn(),
+  listUserFilesSinceLastLanding: jest.fn(async () => []),
 }));
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => ({ default: {} }));
@@ -39,7 +40,10 @@ jest.unstable_mockModule('../../services/ai/businessProfile.service.js', () => (
 jest.unstable_mockModule('../../services/ai/customChat.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/chatbot/chatbotStudioConversation.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../repositories/ai/chatbot.repository.js', () => ({ default: {} }));
-jest.unstable_mockModule('../../services/chatbot/chatAttachment.service.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../services/chatbot/chatAttachment.service.js', () => ({
+  default: {},
+  validateFile: jest.fn(),
+}));
 jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
   getAllowedModelsForUser: jest.fn(),
   savePreferredModelForUser: jest.fn(),

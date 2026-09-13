@@ -571,5 +571,27 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
     const callArgs = generateWithBudget.mock.calls[0][1];
     expect(callArgs.parts[0].text).not.toContain('=== ẢNH ĐÃ TẢI LÊN');
   });
+
+  it('(vi) hồ sơ doanh nghiệp có Logo URL .png, HTML dùng nó, không asset → không 422', async () => {
+    const companyLogoUrl = 'https://example.com/company-logo.png';
+    getContextForLandingAi.mockResolvedValue(`HỒ SƠ DOANH NGHIỆP: Logo URL: ${companyLogoUrl}`);
+
+    const htmlWithLogo = validFormHtml.replace(
+      '</body>',
+      `<img src="${companyLogoUrl}" alt="Company Logo"></body>`
+    );
+    mockGenerateReturns(htmlWithLogo);
+
+    const result = await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'Tạo landing dùng logo công ty',
+      assets: [],
+      documents: [],
+    });
+
+    expect(result.html).toContain(companyLogoUrl);
+    const callArgs = generateWithBudget.mock.calls[0][1];
+    expect(callArgs.parts[0].text).toContain('chỉ được dùng Logo URL của hồ sơ doanh nghiệp nếu có, không dùng ảnh nào khác');
+  });
 });
 

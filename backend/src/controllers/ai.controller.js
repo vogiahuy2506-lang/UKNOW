@@ -1429,13 +1429,7 @@ class AiController {
         }
       }
 
-      // Gom file từ chat session (nếu có sessionId)
-      const sid = sessionId ? Number(sessionId) : null;
-      let sessionFiles = [];
-      if (sid) {
-        sessionFiles = await listUserFilesSinceLastLanding(sid, req.user.id, ownerUserId).catch(() => []);
-      }
-
+      // Đường sửa chỉ nhận files tường minh từ request body, không gom từ phiên chat
       const rawIncoming = Array.isArray(incomingFiles)
         ? incomingFiles.slice(0, 6).map((f) => ({
             tempId: f?.tempId,
@@ -1446,7 +1440,7 @@ class AiController {
           })).filter((f) => f.tempId || f.storageKey)
         : [];
 
-      const mergedFiles = mergeAndFilterLandingFiles(rawIncoming, sessionFiles);
+      const mergedFiles = mergeAndFilterLandingFiles(rawIncoming);
       const { assets, documents } = await ingestLandingAttachments({
         files: mergedFiles,
         ownerUserId,

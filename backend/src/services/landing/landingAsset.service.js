@@ -28,7 +28,7 @@ export function buildLandingAssetUrl(storageKey) {
  * Trích xuất text tài liệu với timeout an toàn
  */
 async function extractDocWithTimeout(buffer, originalName, mime) {
-  const parsePromise = extractTextFromBuffer(buffer, originalName, mime, { maxPages: PDF_MAX_PAGES });
+  const parsePromise = extractTextFromBuffer(buffer, originalName, mime, { max: PDF_MAX_PAGES });
   let timer;
   const timeoutPromise = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error('PARSE_TIMEOUT')), PARSE_TIMEOUT_MS);
@@ -70,22 +70,32 @@ export async function ingestLandingAttachments({
   for (const file of files) {
     if (!file) continue;
     let buffer = null;
+    const fileName = file.originalName || file.tempId || file.storageKey || 'đính kèm';
 
-    if (file.tempId) {
-      buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
-    } else if (file.storageKey) {
-      const keyStr = String(file.storageKey).trim();
-      const expectedPrefix = `uploads/${ownerId}/`;
-      if (!keyStr.startsWith(expectedPrefix)) {
-        const err = new Error('Không có quyền truy cập file lưu trữ này');
-        err.status = 403;
-        throw err;
+    try {
+      if (file.tempId) {
+        buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+      } else if (file.storageKey) {
+        const keyStr = String(file.storageKey).trim();
+        const expectedPrefix = `uploads/${ownerId}/`;
+        if (!keyStr.startsWith(expectedPrefix)) {
+          const err = new Error('Không có quyền truy cập file lưu trữ này');
+          err.status = 403;
+          throw err;
+        }
+        buffer = await uploadController.readFileBufferByKey(keyStr);
       }
-      buffer = await uploadController.readFileBufferByKey(keyStr);
+    } catch (readErr) {
+      if (readErr.status === 403) throw readErr;
+      const notFoundErr = new Error(`Tệp "${fileName}" đã hết hạn hoặc không còn, hãy đính kèm lại.`);
+      notFoundErr.status = 400;
+      throw notFoundErr;
     }
 
     if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
-      continue;
+      const notFoundErr = new Error(`Tệp "${fileName}" đã hết hạn hoặc không còn, hãy đính kèm lại.`);
+      notFoundErr.status = 400;
+      throw notFoundErr;
     }
 
     // Validate mime, extension, magic bytes (từ chối SVG, GIF, lỗi format...)

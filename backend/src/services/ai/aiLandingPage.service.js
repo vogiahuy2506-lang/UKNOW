@@ -185,7 +185,7 @@ export function buildModelParts(fullPrompt, assets = []) {
   return parts;
 }
 
-export function validateLandingImageUrls({ html, assets = [], currentHtml = '' }) {
+export function validateLandingImageUrls({ html, assets = [], allowedSourceText = '' }) {
   // Chốt 1: mỗi asset.url phải xuất hiện nguyên văn trong html
   for (const asset of assets) {
     if (asset.url && !html.includes(asset.url)) {
@@ -197,9 +197,9 @@ export function validateLandingImageUrls({ html, assets = [], currentHtml = '' }
 
   // Chốt 2: mọi URL http(s) có đuôi ảnh phải thuộc allowlist
   const allowlistUrls = new Set(assets.map((a) => a.url).filter(Boolean));
-  if (currentHtml) {
-    const currentMatches = currentHtml.match(IMAGE_URL_REGEX) || [];
-    currentMatches.forEach((u) => allowlistUrls.add(u));
+  if (allowedSourceText) {
+    const sourceMatches = String(allowedSourceText).match(IMAGE_URL_REGEX) || [];
+    sourceMatches.forEach((u) => allowlistUrls.add(u));
   }
 
   const foundMatches = html.match(IMAGE_URL_REGEX) || [];
@@ -254,7 +254,7 @@ class AiLandingPageService {
     const dataPromptBlock = buildAttachmentPromptBlock(assets, documents);
     const imageRule = assets.length > 0
       ? '8) Ảnh: CHỈ dùng các URL trong ẢNH ĐÃ TẢI LÊN, mỗi URL ít nhất một lần, bằng <img src="..." alt="..." class="..."> (logo ở header, banner làm hero...). Không có ảnh nào được cấp thì không dùng <img>, không bịa URL, không dùng ảnh placeholder.'
-      : '8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, dùng gradient/icon Unicode hoặc bỏ ảnh. Không dùng thẻ <img>.';
+      : '8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, chỉ được dùng Logo URL của hồ sơ doanh nghiệp nếu có, không dùng ảnh nào khác; nếu không có logo thì dùng gradient/icon Unicode hoặc bỏ ảnh.';
 
     const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên landing page marketing.
 
@@ -455,7 +455,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
-    validateLandingImageUrls({ html, assets });
+    validateLandingImageUrls({ html, assets, allowedSourceText: businessCtx });
 
     logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
     return { title, html };
@@ -604,7 +604,7 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       finishReason,
     });
 
-    validateLandingImageUrls({ html, assets, currentHtml: rawCurrent });
+    validateLandingImageUrls({ html, assets, allowedSourceText: rawCurrent });
 
     logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
     return { title, html };

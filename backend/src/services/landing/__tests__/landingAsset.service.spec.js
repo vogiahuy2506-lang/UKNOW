@@ -8,6 +8,11 @@ const mockReadTempFileBuffer = jest.fn();
 const mockReadFileBufferByKey = jest.fn();
 const mockGetPublicBaseUrlFromEnv = jest.fn(() => 'http://localhost:5001');
 const mockSanitizeFileBaseName = jest.fn((name) => String(name || 'file').replace(/[^a-zA-Z0-9-_]/g, '_'));
+const mockExtractTextFromBuffer = jest.fn(async () => 'Nội dung trích xuất');
+
+jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
+  extractTextFromBuffer: mockExtractTextFromBuffer,
+}));
 
 jest.unstable_mockModule('../../storage/storageBackend.js', () => ({
   getStorageBackend: () => ({
@@ -175,4 +180,52 @@ describe('landingAsset.service (Việc 1.6)', () => {
     expect(callArgs.storageKeys).not.toContain('uploads/999/landing/other-owner.png');
     expect(result).toHaveLength(2);
   });
+
+  it('extractDocWithTimeout gọi extractTextFromBuffer với { max: 30 }', async () => {
+    // Buffer PDF có magic bytes %PDF- (0x25, 0x50, 0x44, 0x46)
+    const pdfBuffer = Buffer.from('%PDF-1.4 test document content');
+    mockReadTempFileBuffer.mockResolvedValue(pdfBuffer);
+
+    const file = {
+      tempId: 'temp_pdf',
+      originalName: 'tailieu.pdf',
+      contentType: 'application/pdf',
+    };
+
+    const res = await ingestLandingAttachments({
+      files: [file],
+      ownerUserId: 123,
+    });
+
+    expect(mockExtractTextFromBuffer).toHaveBeenCalledTimes(1);
+    const callArgs = mockExtractTextFromBuffer.mock.calls[0];
+    expect(callArgs[0]).toEqual(pdfBuffer);
+    expect(callArgs[1]).toBe('tailieu.pdf');
+    expect(callArgs[2]).toBe('application/pdf');
+    expect(callArgs[3]).toEqual({ max: 30 });
+    expect(res.documents).toHaveLength(1);
+    expect(res.documents[0].originalName).toBe('tailieu.pdf');
+    expect(res.documents[0].text).toBe('Nội dung trích xuất');
+  });
+
+  it('lỗi đọc file (ENOENT / không còn) → ném 400 "Tệp ... đã hết hạn hoặc không còn, hãy đính kèm lại."', async () => {
+    mockReadTempFileBuffer.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+    const file = {
+      tempId: 'dead_temp_id',
+      originalName: 'expired.png',
+      contentType: 'image/png',
+    };
+
+    await expect(
+      ingestLandingAttachments({
+        files: [file],
+        ownerUserId: 123,
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Tệp "expired.png" đã hết hạn hoặc không còn, hãy đính kèm lại.',
+    });
+  });
 });
+

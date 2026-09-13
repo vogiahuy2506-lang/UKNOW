@@ -53,6 +53,7 @@ jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   saveMessages,
   getSessionWizardState,
   updateWizardStateSections,
+  listUserFilesSinceLastLanding: jest.fn(async () => []),
 }));
 
 const { default: aiController } = await import('../ai.controller.js');
