@@ -1713,6 +1713,12 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
                 ? t('aiChatbot.enterFieldNameToContinue')
                 : t('aiChatbot.selectAllAbove')}
       </button>
+
+      {isActive && (
+        <p className="text-[11px] text-indigo-600/80 text-center leading-relaxed">
+          📎 {t('aiChatbot.landingAttachHint')}
+        </p>
+      )}
     </div>
   );
 };

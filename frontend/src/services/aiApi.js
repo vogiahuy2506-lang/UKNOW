@@ -1,5 +1,22 @@
 import api from './api';
 
+function formatLandingFiles(files) {
+  if (!Array.isArray(files) || files.length === 0) return undefined;
+  return files.map((f) => {
+    const item = {
+      originalName: f.originalName || f.name,
+      contentType: f.contentType || f.type || 'application/octet-stream',
+      size: f.size,
+    };
+    if (f.storageKey || f.storage_key) {
+      item.storageKey = f.storageKey || f.storage_key;
+    } else if (f.tempId) {
+      item.tempId = f.tempId;
+    }
+    return item;
+  });
+}
+
 const aiApi = {
   /**
    * Generate campaign script from AI (V2 - Registry-based, multi-step support).
@@ -158,23 +175,16 @@ const aiApi = {
 
   /**
    * Sinh landing page HTML đầy đủ (Tailwind + nội dung thật, không {{placeholder}}).
-   * Fallback API template cũ chỉ khi có templateId hoặc file đính kèm.
    */
-  generateLandingPage: async (prompt, templateId = null, files = [], sessionId = null, userSummary = null, landingBrief = null) => {
-    const hasTemplate = templateId != null && templateId !== '';
-    const hasFiles = Array.isArray(files) && files.length > 0;
+  generateLandingPage: async (prompt, _templateId = null, files = [], sessionId = null, userSummary = null, landingBrief = null) => {
     const payload = { prompt, sessionId, userSummary };
     if (landingBrief) {
       payload.landingBrief = landingBrief;
       if (landingBrief.contentLocale) payload.locale = landingBrief.contentLocale;
     }
-    if (hasTemplate || hasFiles) {
-      const response = await api.post('/landing-templates/generate', {
-        ...payload,
-        templateId,
-        files,
-      }, { timeout: 120000 });
-      return response.data;
+    const formattedFiles = formatLandingFiles(files);
+    if (formattedFiles) {
+      payload.files = formattedFiles;
     }
     const response = await api.post('/ai/generate-landing-html', payload, { timeout: 120000 });
     return response.data;
@@ -182,10 +192,19 @@ const aiApi = {
 
   /**
    * Chỉnh sửa landing page HTML bằng AI (Tailwind + giữ nguyên cấu trúc/số liệu).
-   * @param {{ instruction: string, currentHtml: string, locale?: string }} params
+   * @param {{ instruction: string, currentHtml: string, locale?: string, sessionId?: string|null, messageId?: string|null, files?: Array }} params
    */
-  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi', sessionId = null, messageId = null }) => {
-    const response = await api.post('/ai/edit-landing-html', { instruction, currentHtml, locale, sessionId, messageId }, {
+  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi', sessionId = null, messageId = null, files = [] }) => {
+    const formattedFiles = formatLandingFiles(files);
+    const payload = {
+      instruction,
+      currentHtml,
+      locale,
+      sessionId,
+      messageId,
+      ...(formattedFiles ? { files: formattedFiles } : {}),
+    };
+    const response = await api.post('/ai/edit-landing-html', payload, {
       timeout: 120000
     });
     return response.data;

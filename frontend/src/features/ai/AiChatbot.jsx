@@ -1838,17 +1838,23 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const recentLanding = isRecentLandingPageContext(messages);
     if (
       trimmedInput
-      && uploadedFiles.length === 0
       && recentLanding
       && !hasActiveWizard
       && !IS_NEW_LANDING_REQ_RE.test(trimmedInput)
     ) {
       isSendingRef.current = true;
+      const files = [...uploadedFiles];
       setInputText('');
-      const baseWithUser = [...messages, { role: 'user', content: trimmedInput }];
+      setUploadedFiles([]);
+      const userMsg = {
+        role: 'user',
+        content: trimmedInput,
+        ...(files.length > 0 ? { files } : {}),
+      };
+      const baseWithUser = [...messages, userMsg];
       setMessages(baseWithUser);
       try {
-        await handleEditLandingPageWithAi(recentLanding.message.data, trimmedInput, recentLanding.index, { historyBase: baseWithUser });
+        await handleEditLandingPageWithAi(recentLanding.message.data, trimmedInput, recentLanding.index, { historyBase: baseWithUser, files });
       } finally {
         isSendingRef.current = false;
       }
@@ -2848,7 +2854,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const handleEditLandingPageWithAi = async (pageData, instruction, messageIndex = null, options = {}) => {
-    const { historyBase = null, messageId = null } = options;
+    const { historyBase = null, messageId = null, files = [] } = options;
     const rawHtml = pageData?.html;
     const trimmedInstr = String(instruction || '').trim();
     if (!rawHtml || !trimmedInstr) {
@@ -2877,6 +2883,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         locale,
         sessionId: mySessionId,
         messageId: targetMessageId,
+        files,
       });
 
       if (response?.success && response?.data) {

@@ -3717,6 +3717,7 @@ export default {
 
   aiChatbot: {
     uploadFreezesList: 'Tệp tải lên sẽ chốt danh sách tại thời điểm này. Muốn chiến dịch tự gửi cho người mới thêm vào sau, hãy dán link Google Sheet ở trên.',
+    landingAttachHint: 'Đính kèm logo/banner (PNG/JPG/WebP) hoặc brochure PDF/DOCX để AI dùng nội dung thật',
     // Tiêu đề cảnh báo khi sheet/tệp thiếu cột dữ liệu mà kênh gửi cần (email hoặc SĐT).
     // Thiếu key này thì giao diện hiện nguyên mã 'aiChatbot.recipientColumnMismatchTitle'
     // cho người dùng thấy — `t()` trả về chính key khi không có bản dịch, nên câu dự phòng
