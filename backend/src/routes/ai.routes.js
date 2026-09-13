@@ -33,6 +33,9 @@ router.post('/generate-campaign-v2', aiLimiter, requirePermission('campaigns_cre
 // Generate full landing page HTML (Tailwind CDN + business context)
 router.post('/generate-landing-html', aiLimiter, requirePermission('landing_pages'), assertAiCreditAvailable('ai_generate_landing_html'), aiController.generateLandingHtml.bind(aiController));
 
+// "AI viết hộ" chỉ dẫn hệ thống cho chatbot (PLAN_AI_VIET_HO_CHI_DAN_CHATBOT_2026-09-13.md)
+router.post('/generate-system-instruction', aiLimiter, requirePermission('chatbots_manage'), assertAiCreditAvailable('ai_generate_system_instruction'), aiController.generateSystemInstruction.bind(aiController));
+
 // Edit existing landing page HTML (Tailwind CDN + preserve untouched sections)
 router.post('/edit-landing-html', aiLimiter, requirePermission('landing_pages'), assertAiCreditAvailable('ai_edit_landing_html'), aiController.editLandingHtml.bind(aiController));
 

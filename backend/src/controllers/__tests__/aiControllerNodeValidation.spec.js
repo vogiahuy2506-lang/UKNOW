@@ -55,6 +55,10 @@ jest.unstable_mockModule('../../repositories/ai/chatbot.repository.js', () => ({
 jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
   getAllowedModelsForUser: jest.fn(),
   savePreferredModelForUser: jest.fn(),
+  // Cần từ khi ai.controller.js import chatbotInstructionWriter.service.js
+  // (PLAN_AI_VIET_HO_CHI_DAN_CHATBOT_2026-09-13.md) → aiChatTransport.service.js gọi
+  // resolveAllowedModel — thiếu export này thì cả file test đứng ngay ở link module.
+  resolveAllowedModel: jest.fn(async () => 'gemini-2.5-flash'),
 }));
 jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => ({
   tryHandleHelpChat: jest.fn(async () => null),

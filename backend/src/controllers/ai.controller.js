@@ -38,6 +38,9 @@ import { ingestLandingAttachments } from '../services/landing/landingAsset.servi
 import { listUserFilesSinceLastLanding } from '../repositories/aiSession.repository.js';
 import landingPageRepository from '../repositories/landingPage.repository.js';
 import { getWorkspaceScope } from '../utils/workspaceContext.util.js';
+import { generateSystemInstruction as generateChatbotSystemInstruction } from '../services/ai/chatbotInstructionWriter.service.js';
+
+const SUPPORTED_SYSTEM_INSTRUCTION_LANGUAGES = ['vi', 'en'];
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -1382,6 +1385,41 @@ class AiController {
         });
       }
       return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi sinh landing HTML'));
+    }
+  }
+
+  /**
+   * POST /ai/generate-system-instruction — "AI viết hộ" chỉ dẫn hệ thống cho chatbot.
+   * PLAN_AI_VIET_HO_CHI_DAN_CHATBOT_2026-09-13.md, mục 3.3 — soi đầu vào ở đây (400, không phải
+   * 500), cùng khuôn generateLandingHtml() ngay dưới (không dùng express-validator ở route, các
+   * endpoint /api/ai/* khác trong file này đều validate inline trong controller).
+   */
+  async generateSystemInstruction(req, res) {
+    try {
+      const { hint, language = 'vi' } = req.body || {};
+      const trimmedHint = String(hint || '').trim();
+      if (!trimmedHint) {
+        return res.status(400).json({ success: false, message: 'Vui lòng nhập gợi ý cho AI' });
+      }
+      if (trimmedHint.length > 500) {
+        return res.status(400).json({ success: false, message: 'Gợi ý không được quá 500 ký tự' });
+      }
+      if (!SUPPORTED_SYSTEM_INSTRUCTION_LANGUAGES.includes(language)) {
+        return res.status(400).json({ success: false, message: 'language chỉ nhận "vi" hoặc "en"' });
+      }
+
+      const data = await generateChatbotSystemInstruction({
+        userId: req.user.id,
+        hint: trimmedHint,
+        language,
+      });
+
+      await chargeAiCredit(req);
+
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('AI generate system instruction error:', error);
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Không thể tạo chỉ dẫn hệ thống'));
     }
   }
 
