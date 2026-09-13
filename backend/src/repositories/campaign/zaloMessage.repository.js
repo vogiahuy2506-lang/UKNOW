@@ -179,6 +179,47 @@ class ZaloMessageRepository {
     );
   }
 
+  /**
+   * Đếm số lần gửi thất bại của một người nhận với lỗi tương tự (dùng để phát hiện lỗi lặp lại như "Tham số không hợp lệ").
+   *
+   * @param {object} input
+   * @param {number} input.userId
+   * @param {string} input.recipientValue
+   * @param {string} input.errorLike
+   * @param {number} [input.sinceDays=30]
+   * @param {number} [input.excludeZaloMessageId=null]
+   * @returns {Promise<number>}
+   */
+  async countFailedByRecipientAndError({
+    userId,
+    recipientValue,
+    errorLike = 'tham số không hợp lệ',
+    sinceDays = 30,
+    excludeZaloMessageId = null,
+  }) {
+    const safeUserId = Number.parseInt(userId, 10);
+    const safeRecipient = String(recipientValue || '').trim();
+    if (!Number.isFinite(safeUserId) || !safeRecipient) return 0;
+    const safeDays = Math.max(1, Number.parseInt(sinceDays, 10) || 30);
+    const safeExcludeId = Number.parseInt(excludeZaloMessageId, 10);
+
+    const result = await db.query(
+      `SELECT COUNT(*)::int AS count
+       FROM zalo_messages zm
+       JOIN campaigns c ON c.id = zm.id_campaign
+       WHERE c.id_user = $1
+         AND LOWER(TRIM(COALESCE(zm.recipient_value, ''))) = LOWER(TRIM($2))
+         AND zm.status = 'failed'
+         AND NOT COALESCE(zm.is_preview, false)
+         AND zm.tracking_metadata->>'error' ILIKE $3
+         AND zm.created_at >= NOW() - ($4::int * INTERVAL '1 day')
+         AND ($5::int IS NULL OR zm.id != $5::int)`,
+      [safeUserId, safeRecipient, `%${errorLike}%`, safeDays, Number.isFinite(safeExcludeId) ? safeExcludeId : null]
+    );
+
+    return Number(result.rows[0]?.count) || 0;
+  }
+
   async withTransaction(callback) {
     const client = await db.getClient();
     try {

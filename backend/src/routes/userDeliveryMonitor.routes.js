@@ -7,5 +7,6 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/overview', ctrl.overview);
+router.get('/runs/:runId/failures', ctrl.runFailures);
 
 export default router;

@@ -15,3 +15,16 @@ export async function overview(req, res) {
     handleError(res, err);
   }
 }
+
+export async function runFailures(req, res) {
+  try {
+    const data = await userDeliveryMonitorService.getRunFailures({
+      userId: req.user.id,
+      runId: req.params.runId,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+

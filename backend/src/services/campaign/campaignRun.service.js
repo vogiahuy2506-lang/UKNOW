@@ -4526,11 +4526,20 @@ class CampaignRunService {
           const sourceField = config.zaloRecipientField
             || config.recipientField
             || (recipientType === 'uid' ? 'uid' : 'phone');
+          let sourceRowsCount = 0;
+          let withRecipientCount = 0;
+          let skippedNoRecipientCount = 0;
+          let skippedAlreadySentCount = 0;
+          let skippedNotDueCount = 0;
+          let skippedCompletedCount = 0;
+          let attemptedSendsCount = 0;
+
           const resolveZaloRecipients = () => {
             // For node source: scan multiple field names per row so customers with
             // zalo_phone (but no phone) or zalo_id (uid mode) are not silently skipped.
             if (recipientSource === 'node' && String(sourceNodeId || '').trim()) {
               const sourceItems = pickNodeItems(sourceNodeId);
+              sourceRowsCount = sourceItems.length;
               const fallbackFields = recipientType === 'uid'
                 ? [sourceField, 'zalo_id', 'zaloId', 'uid'].filter((v, i, arr) => v && arr.indexOf(v) === i)
                 : [sourceField, 'phone', 'zalo_phone', 'zaloPhone'].filter((v, i, arr) => v && arr.indexOf(v) === i);
@@ -4564,12 +4573,21 @@ class CampaignRunService {
                     const values = Array.isArray(raw)
                       ? raw.flatMap((inner) => campaignZaloSenderService.parseListText(inner))
                       : campaignZaloSenderService.parseListText(raw);
-                    values.forEach((value) => {
-                      let key = String(value || '').trim();
-                      if (recipientType === 'phone') key = normalizePhoneEntryValue(key);
-                      if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
-                    });
+                    if (values.length > 0) {
+                      values.forEach((value) => {
+                        let key = String(value || '').trim();
+                        if (recipientType === 'phone') key = normalizePhoneEntryValue(key);
+                        if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
+                      });
+                      matched = true;
+                    }
                   }
+                }
+
+                if (matched) {
+                  withRecipientCount += 1;
+                } else {
+                  skippedNoRecipientCount += 1;
                 }
               });
 
@@ -4586,6 +4604,9 @@ class CampaignRunService {
               sourceField,
               normalizePhoneEntries: recipientType === 'phone',
             });
+            sourceRowsCount = recipientEntries.length;
+            withRecipientCount = recipientEntries.length;
+            skippedNoRecipientCount = 0;
             const rawRecipients = recipientEntries.map((entry) => entry.value);
             const dedupedRecipients = Array.from(
               new Set(rawRecipients.map((item) => String(item || '').trim()).filter(Boolean))
@@ -4596,6 +4617,21 @@ class CampaignRunService {
             return { dedupedRecipients, recipientEntryMap };
           };
           let { dedupedRecipients, recipientEntryMap } = resolveZaloRecipients();
+
+          const syncRecipientAuditMetadata = async () => {
+            const audit = {
+              sourceRows: sourceRowsCount,
+              withRecipient: withRecipientCount,
+              deduped: Array.isArray(dedupedRecipients) ? dedupedRecipients.length : 0,
+              skippedNoRecipient: skippedNoRecipientCount,
+              skippedAlreadySent: skippedAlreadySentCount,
+              skippedNotDue: skippedNotDueCount,
+              skippedCompleted: skippedCompletedCount,
+              attempted: attemptedSendsCount,
+              updatedAt: toHoChiMinhIso(),
+            };
+            await (campaignRunRepository.mergeRunMetadata?.(runId, { recipientAudit: audit }) || Promise.resolve()).catch(() => {});
+          };
           /**
            * Chỉ nhận step có templateId hợp lệ để tránh lỗi runtime khi UI tạo sẵn step rỗng.
            */
@@ -4857,6 +4893,7 @@ class CampaignRunService {
             variables = {},
             entryRow = null,
           }) => {
+            attemptedSendsCount += 1;
             /**
              * Đồng bộ mốc đếm theo template: khi stepIndex đổi (template 1 → template 2),
              * tiến độ hiển thị quay về 1/N trong phạm vi template hiện tại.
@@ -5464,6 +5501,35 @@ class CampaignRunService {
                * Dùng `templateSteps.length` làm tổng bước (cùng số bước với stepsWithMessage khi build).
                */
               const totalStepsForRecipient = templateSteps.length > 0 ? templateSteps.length : 1;
+              const recordZaloFailureToLedger = async ({
+                nodeId,
+                recipientKey,
+                errorCategory,
+                totalSteps,
+                failureAt,
+                zaloSendFailureCount = null,
+              }) => {
+                // eslint-disable-next-line no-await-in-loop
+                const zp = await getRecipientProgress({
+                  nodeId,
+                  channel: 'zalo_personal',
+                  recipientKey,
+                });
+                // eslint-disable-next-line no-await-in-loop
+                await upsertRecipientProgress({
+                  nodeId,
+                  channel: 'zalo_personal',
+                  recipientKey,
+                  completedStep: zp.lastCompletedStep || 0,
+                  totalSteps,
+                  firstSentAt: zp.firstSentAt,
+                  lastCompletedAt: zp.lastCompletedAt,
+                  nextDueAt: zp.nextDueAt,
+                  zaloSendFailureCount,
+                  lastFailureReason: mapZaloErrorCategoryToLedgerReason(errorCategory),
+                  lastFailureAt: failureAt,
+                });
+              };
               if (isContinuousMode && this.CONTINUOUS_ZALO_MAX_SEND_FAILURES > 0) {
                 // eslint-disable-next-line no-await-in-loop
                 const zp = await getRecipientProgress({
@@ -5559,25 +5625,100 @@ class CampaignRunService {
                 // chỉ ghi ở lần chốt cuối cùng.
                 const retryObservation = buildZaloPersonalErrorObservation(error);
                 const retryFailureAt = toHoChiMinhIso();
-                // eslint-disable-next-line no-await-in-loop
-                await upsertRecipientProgress({
+                await recordZaloFailureToLedger({
                   nodeId: node.id,
-                  channel: 'zalo_personal',
                   recipientKey: recipient,
-                  completedStep: zp.lastCompletedStep || 0,
+                  errorCategory: retryObservation.errorCategory,
                   totalSteps: totalStepsForRecipient,
-                  firstSentAt: zp.firstSentAt,
-                  lastCompletedAt: zp.lastCompletedAt,
-                  nextDueAt: zp.nextDueAt,
+                  failureAt: retryFailureAt,
                   zaloSendFailureCount: nextFail,
-                  lastFailureReason: mapZaloErrorCategoryToLedgerReason(retryObservation.errorCategory),
-                  lastFailureAt: retryFailureAt,
                 });
               }
-              failedSends += 1;
+
               const observation = buildZaloPersonalErrorObservation(error);
-              const progressMessage = buildZaloPersonalProgressMessage();
+              const mappedReason = mapZaloErrorCategoryToLedgerReason(observation.errorCategory);
+
+              // Việc 1.2: "Tham số không hợp lệ" lặp lại cùng số → đánh dấu không liên hệ được
+              if (mappedReason === 'invalid_parameter' && recipientType === 'phone') {
+                const repeatedFailCount = (await zaloMessageRepository.countFailedByRecipientAndError?.({
+                  userId,
+                  recipientValue: recipient,
+                  errorLike: 'tham số không hợp lệ',
+                  sinceDays: 30,
+                  excludeZaloMessageId: zaloMessageId,
+                })) ?? 0;
+                if (repeatedFailCount >= 1) {
+                  await zaloCampaignRecipientService.markPhoneUnreachableFromError(
+                    userId,
+                    recipient,
+                    error,
+                    runId
+                  );
+                  skippedSends += 1;
+                  const progressMessage = buildZaloPersonalProgressMessage();
+                  const sentAt = toHoChiMinhIso();
+                  const senderName = resolveZaloSenderName(workingAccount);
+                  const zaloName = resolveZaloRecipientName({
+                    entryRow,
+                    sendResult: null,
+                    fallbackRecipient: recipient,
+                  });
+                  const skipPayload = withZaloPersonalObservation({
+                    channel: 'zalo_personal',
+                    accountId: workingAccount.id,
+                    accountName: workingAccount.displayName,
+                    senderName,
+                    zaloName,
+                    groupName: null,
+                    recipientType,
+                    recipient,
+                    customerId,
+                    zaloMessageId,
+                    phone: recipient,
+                    message,
+                    status: 'skipped',
+                    skipReason: 'zalo_unreachable',
+                    skipDetail: observation.cleanMessage
+                      || 'Tham số không hợp lệ lặp lại — đã đánh dấu không liên hệ được, không tốn slot gửi.',
+                    messageText: progressMessage,
+                    sentAt,
+                    templateId: stepMeta?.templateId || null,
+                    stepIndex: stepMeta?.stepIndex || null,
+                    attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
+                    trackingToken,
+                    variables,
+                  }, observation);
+                  sendResults.push(skipPayload);
+                  {
+                    const zpLog = getZaloPersonalProgressForLog();
+                    await campaignExecutionLogService.logExecutionNode({
+                      campaignId,
+                      runId,
+                      node,
+                      status: 'success',
+                      progressCurrent: zpLog.current,
+                      progressTotal: zpLog.total,
+                      executionData: buildSendZaloPersonalExecutionData(skipPayload),
+                    });
+                  }
+                  return { success: true, skippedUnreachable: true };
+                }
+              }
+
+              failedSends += 1;
               const sentAt = toHoChiMinhIso();
+
+              // Việc 1.1: Ghi lastFailureReason cho mọi lượt hỏng Zalo cá nhân
+              await recordZaloFailureToLedger({
+                nodeId: node.id,
+                recipientKey: recipient,
+                errorCategory: observation.errorCategory,
+                totalSteps: totalStepsForRecipient,
+                failureAt: sentAt,
+                zaloSendFailureCount: null,
+              });
+
+              const progressMessage = buildZaloPersonalProgressMessage();
               const senderName = resolveZaloSenderName(workingAccount);
               const zaloName = resolveZaloRecipientName({
                 entryRow,
@@ -5714,10 +5855,14 @@ class CampaignRunService {
                   const nextStepIndex = Math.max(0, progress.lastCompletedStep || 0);
                   const entry = recipientEntryMap.get(normalizedRecipient) || null;
                   if (templateSteps.length > 0) {
-                    if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) return;
+                    if (progress.isFullyCompleted || nextStepIndex >= stepsWithMessage.length) {
+                      skippedCompletedCount += 1;
+                      return;
+                    }
                     const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
                     if (!dueStatus.isDueNow) {
                       registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
+                      skippedNotDueCount += 1;
                       return;
                     }
                     const step = stepsWithMessage[nextStepIndex];
@@ -5744,7 +5889,10 @@ class CampaignRunService {
                       scheduleSteps: stepsWithMessage,
                       sendMode,
                     });
-                    if (dedupedZaloLedger) return;
+                    if (dedupedZaloLedger) {
+                      skippedAlreadySentCount += 1;
+                      return;
+                    }
                     totalRecipients += 1;
                     const sendOutcome = await sendSingleRecipient({
                       recipient: normalizedRecipient,
@@ -5783,10 +5931,14 @@ class CampaignRunService {
                     }
                     return;
                   }
-                  if (progress.isFullyCompleted || nextStepIndex >= 1) return;
+                  if (progress.isFullyCompleted || nextStepIndex >= 1) {
+                    skippedCompletedCount += 1;
+                    return;
+                  }
                   const dueStatus = resolveNextDueAtStatus(progress.nextDueAt);
                   if (!dueStatus.isDueNow) {
                     registerNextContinuousWakeAt(dueStatus.nextDueAtMs);
+                    skippedNotDueCount += 1;
                     return;
                   }
                   const message = String(config.zaloMessage || config.message || '').trim();
@@ -5801,7 +5953,10 @@ class CampaignRunService {
                     scheduleSteps: [{ message }],
                     sendMode: 'all',
                   });
-                  if (dedupedZaloSingle) return;
+                  if (dedupedZaloSingle) {
+                    skippedAlreadySentCount += 1;
+                    return;
+                  }
                   totalRecipients += 1;
                   const sendOutcome = await sendSingleRecipient({
                     recipient: normalizedRecipient,
@@ -5839,6 +5994,7 @@ class CampaignRunService {
             nodeOutputs[String(node.id)] = sendResults;
             lastOutputItems = sendResults;
             await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
+            await syncRecipientAuditMetadata();
             continue;
           }
 
@@ -5883,6 +6039,7 @@ class CampaignRunService {
                 stepIndex,
                 totalSteps: stepsWithMessage.length,
               })) {
+                skippedCompletedCount += 1;
                 return;
               }
               const entry = recipientEntryMap.get(normalizedRecipient) || null;
@@ -5911,7 +6068,10 @@ class CampaignRunService {
                 scheduleSteps: stepsWithMessage,
                 sendMode,
               });
-              if (dedupedZaloLedger) return;
+              if (dedupedZaloLedger) {
+                skippedAlreadySentCount += 1;
+                return;
+              }
               const sendOutcome = await sendSingleRecipient({
                 recipient: normalizedRecipient,
                 message: renderedMessage,
@@ -6064,6 +6224,7 @@ class CampaignRunService {
                 stepIndex: 0,
                 totalSteps: 1,
               })) {
+                skippedCompletedCount += 1;
                 return;
               }
               const dedupedZaloSingle = await trySyncLedgerFromExistingZaloMessage({
@@ -6076,7 +6237,10 @@ class CampaignRunService {
                 scheduleSteps: [{ message }],
                 sendMode: 'all',
               });
-              if (dedupedZaloSingle) return;
+              if (dedupedZaloSingle) {
+                skippedAlreadySentCount += 1;
+                return;
+              }
               const entry = recipientEntryMap.get(normalizedRecipient) || null;
               const sendOutcome = await sendSingleRecipient({
                 recipient: normalizedRecipient,
@@ -6118,6 +6282,7 @@ class CampaignRunService {
 
           nodeOutputs[String(node.id)] = sendResults;
           lastOutputItems = sendResults;
+          await syncRecipientAuditMetadata();
 
           if (dedupedRecipients.length === 0) {
             await campaignExecutionLogService.logExecutionNode({

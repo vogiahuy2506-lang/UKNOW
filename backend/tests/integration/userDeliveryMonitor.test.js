@@ -379,3 +379,84 @@ describe('GET /api/delivery-monitor/overview — Zalo silent drop tenant', () =>
     expect(silentDropSignals(resB.body.data)).toHaveLength(0);
   });
 });
+
+// ─── Run Failures Endpoint ──────────────────────────────────────────────────
+describe('GET /api/delivery-monitor/runs/:runId/failures', () => {
+  it('không có token → 401', async () => {
+    const res = await request(app).get('/api/delivery-monitor/runs/1/failures');
+    expect(res.status).toBe(401);
+  });
+
+  it('run của user khác hoặc không tồn tại → 404', async () => {
+    const userA = await createUser({ username: 'uFailOwner' });
+    const userB = await createUser({ username: 'uFailStranger' });
+    const campA = await createCampaign({ userId: userA.id, name: 'Camp A', type: 'zalo' });
+    const runA = await createRun({ campaignId: campA.id });
+
+    const tokenB = await loginAs(userB);
+    const res = await request(app)
+      .get(`/api/delivery-monitor/runs/${runA.id}/failures`)
+      .set('Authorization', `Bearer ${tokenB}`);
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('trả đúng nhóm failures và recipientAudit của chính user', async () => {
+    const user = await createUser({ username: 'uFailSelf' });
+    const camp = await createCampaign({ userId: user.id, name: 'Zalo Fail Test', type: 'zalo' });
+    const auditData = {
+      sourceRows: 6,
+      withRecipient: 3,
+      deduped: 3,
+      skippedNoRecipient: 3,
+      skippedAlreadySent: 0,
+      skippedNotDue: 0,
+      skippedCompleted: 0,
+      attempted: 2,
+    };
+    const { rows: runRows } = await db.query(
+      `INSERT INTO campaign_runs (
+         id_campaign, status, started_at, completed_at,
+         total_recipients, successful_sends, failed_sends, run_metadata
+       )
+       VALUES ($1, 'completed', NOW(), NOW(), 6, 0, 2, $2) RETURNING id`,
+      [camp.id, JSON.stringify({ recipientAudit: auditData })]
+    );
+    const runId = runRows[0].id;
+
+    await db.query(
+      `INSERT INTO zalo_messages (
+         id_campaign, id_run, recipient_value, status, channel,
+         tracking_metadata, created_at, sent_at, is_preview
+       ) VALUES
+       ($1, $2, '0388180856', 'failed', 'zalo', '{"error":"Tham số không hợp lệ"}'::jsonb, NOW(), NOW(), false),
+       ($1, $2, '0388180856', 'failed', 'zalo', '{"error":"Tham số không hợp lệ"}'::jsonb, NOW(), NOW(), false)`,
+      [camp.id, runId]
+    );
+
+    await db.query(
+      `INSERT INTO campaign_run_recipient_steps (
+         id_run, channel, recipient_key, last_completed_step, meta, updated_at
+       ) VALUES ($1, 'zalo_personal', '0388180856', 0, '{"lastFailureReason":"invalid_parameter"}'::jsonb, NOW())`,
+      [runId]
+    );
+
+    const token = await loginAs(user);
+    const res = await request(app)
+      .get(`/api/delivery-monitor/runs/${runId}/failures`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.runId).toBe(Number(runId));
+    expect(res.body.data.recipientAudit).toMatchObject(auditData);
+    expect(res.body.data.failures).toHaveLength(1);
+    expect(res.body.data.failures[0]).toMatchObject({
+      channel: 'zalo',
+      recipient: '0388180856',
+      reason: 'invalid_parameter',
+      error: 'Tham số không hợp lệ',
+      count: 2,
+    });
+  });
+});

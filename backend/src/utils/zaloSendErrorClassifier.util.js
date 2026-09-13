@@ -259,7 +259,7 @@ export function mapZaloErrorCategoryToLedgerReason(category) {
     case 'RECIPIENT_NOT_FOUND':
       return 'not_found';
     case 'INVALID_PARAMETER':
-      return 'invalid_format';
+      return 'invalid_parameter';
     default:
       return 'unknown';
   }

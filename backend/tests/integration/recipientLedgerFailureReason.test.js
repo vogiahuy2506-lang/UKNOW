@@ -244,7 +244,7 @@ describe('mapZaloErrorCategoryToLedgerReason — chuẩn hoá về cùng bộ m�
     expect(mapZaloErrorCategoryToLedgerReason('PHONE_LOOKUP_RATE_LIMIT')).toBe('rate_limited');
     expect(mapZaloErrorCategoryToLedgerReason('NOT_FRIEND_OR_BLOCKED')).toBe('stranger_blocked');
     expect(mapZaloErrorCategoryToLedgerReason('RECIPIENT_NOT_FOUND')).toBe('not_found');
-    expect(mapZaloErrorCategoryToLedgerReason('INVALID_PARAMETER')).toBe('invalid_format');
+    expect(mapZaloErrorCategoryToLedgerReason('INVALID_PARAMETER')).toBe('invalid_parameter');
   });
 
   it('category không nằm trong 4 mã trên (TIMEOUT, ACCOUNT_DISCONNECTED, ZALO_GROUP_UNREACHABLE, UNKNOWN...) → unknown', () => {

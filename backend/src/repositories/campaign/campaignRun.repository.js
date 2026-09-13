@@ -73,6 +73,25 @@ class CampaignRunRepository {
   }
 
   /**
+   * Merge metadata vào run_metadata (không ép status = 'running').
+   *
+   * @param {number} runId
+   * @param {object} patch
+   * @returns {Promise<void>}
+   */
+  async mergeRunMetadata(runId, patch) {
+    const safeRunId = Number.parseInt(runId, 10);
+    if (!Number.isFinite(safeRunId) || !patch || typeof patch !== 'object') return;
+    await db.query(
+      `UPDATE campaign_runs
+       SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || $1::jsonb
+       WHERE id = $2`,
+      [JSON.stringify(patch), safeRunId]
+    );
+  }
+
+
+  /**
    * Update run progress counters.
    *
    * @param {number} runId

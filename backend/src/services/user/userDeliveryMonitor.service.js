@@ -5,6 +5,7 @@ import {
   buildZaloSilentDropSignals,
   classifyDeliveryMonitorFailure,
 } from '../../utils/deliveryMonitorSignals.util.js';
+import { inferZaloUnreachableReason } from '../../utils/zaloPhoneCampaign.util.js';
 
 const clampWindowDays = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -402,3 +403,128 @@ export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWi
     },
   };
 }
+
+/**
+ * Lấy chi tiết lỗi người nhận của một lượt chạy (dành cho trang Delivery Monitor).
+ *
+ * @param {object} input
+ * @param {number} input.userId
+ * @param {number|string} input.runId
+ * @returns {Promise<{ runId: number, recipientAudit: object|null, failures: Array }>}
+ */
+export async function getRunFailures({ userId, runId }) {
+  const safeUserId = Number.parseInt(userId, 10);
+  const safeRunId = Number.parseInt(runId, 10);
+  if (!Number.isFinite(safeUserId) || !Number.isFinite(safeRunId)) {
+    const err = new Error('Tham số không hợp lệ');
+    err.status = 400;
+    throw err;
+  }
+
+  // 1. Xác thực quyền sở hữu run
+  const runRows = await safeQuery(
+    `SELECT cr.id, cr.run_metadata
+     FROM campaign_runs cr
+     JOIN campaigns c ON c.id = cr.id_campaign
+     WHERE cr.id = $1 AND c.id_user = $2`,
+    [safeRunId, safeUserId]
+  );
+
+  if (!runRows || runRows.length === 0) {
+    const err = new Error('Không tìm thấy lượt chạy');
+    err.status = 404;
+    throw err;
+  }
+
+  const recipientAudit = runRows[0]?.run_metadata?.recipientAudit || null;
+
+  // 2. Lấy lỗi Zalo
+  const zaloRows = await safeQuery(
+    `SELECT
+       zm.recipient_value AS recipient,
+       zm.tracking_metadata->>'error' AS error,
+       COUNT(*)::int AS count,
+       MAX(COALESCE(zm.sent_at, zm.created_at)) AS last_at,
+       crrs.meta->>'lastFailureReason' AS ledger_reason,
+       crrs.last_completed_step AS ledger_step
+     FROM zalo_messages zm
+     LEFT JOIN campaign_run_recipient_steps crrs
+       ON crrs.id_run = zm.id_run
+      AND LOWER(TRIM(crrs.recipient_key)) = LOWER(TRIM(zm.recipient_value))
+      AND crrs.channel = 'zalo_personal'
+     WHERE zm.id_run = $1
+       AND zm.status IN ('failed', 'aborted')
+       AND NOT COALESCE(zm.is_preview, false)
+     GROUP BY zm.recipient_value, zm.tracking_metadata->>'error', crrs.meta->>'lastFailureReason', crrs.last_completed_step
+     ORDER BY COUNT(*)::int DESC
+     LIMIT 200`,
+    [safeRunId]
+  );
+
+  // 3. Lấy lỗi Email (chỉ cột có trong bootstrap.sql)
+  const emailRows = await safeQuery(
+    `SELECT
+       em.recipient_email AS recipient,
+       COUNT(*)::int AS count,
+       MAX(COALESCE(em.sent_at, em.created_at)) AS last_at,
+       em.bounce_type,
+       em.bounce_code,
+       crrs.meta->>'lastFailureReason' AS ledger_reason,
+       crrs.last_completed_step AS ledger_step
+     FROM email_messages em
+     LEFT JOIN campaign_run_recipient_steps crrs
+       ON crrs.id_run = em.id_run
+      AND LOWER(TRIM(crrs.recipient_key)) = LOWER(TRIM(em.recipient_email))
+      AND crrs.channel = 'email'
+     WHERE em.id_run = $1
+       AND em.status IN ('failed', 'bounced')
+       AND NOT COALESCE(em.is_preview, false)
+     GROUP BY em.recipient_email, em.bounce_type, em.bounce_code, crrs.meta->>'lastFailureReason', crrs.last_completed_step
+     ORDER BY COUNT(*)::int DESC
+     LIMIT 200`,
+    [safeRunId]
+  );
+
+  const zaloFailures = (zaloRows || []).map((row) => {
+    const errorMsg = String(row.error || '').trim();
+    const reason = row.ledger_reason
+      || (errorMsg ? inferZaloUnreachableReason(errorMsg) : null)
+      || 'unknown';
+    return {
+      channel: 'zalo',
+      recipient: row.recipient,
+      reason,
+      error: errorMsg,
+      count: Number(row.count) || 1,
+      lastAt: row.last_at,
+      ledgerStep: row.ledger_step != null ? Number(row.ledger_step) : 0,
+    };
+  });
+
+  const emailFailures = (emailRows || []).map((row) => {
+    const reason = row.ledger_reason || (row.bounce_type ? 'bounced' : 'failed');
+    const errorMsg = row.bounce_type
+      ? `Bounce (${row.bounce_type}${row.bounce_code ? ` - ${row.bounce_code}` : ''})`
+      : 'Gửi email thất bại';
+    return {
+      channel: 'email',
+      recipient: row.recipient,
+      reason,
+      error: errorMsg,
+      count: Number(row.count) || 1,
+      lastAt: row.last_at,
+      ledgerStep: row.ledger_step != null ? Number(row.ledger_step) : 0,
+    };
+  });
+
+  const allFailures = [...zaloFailures, ...emailFailures]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 200);
+
+  return {
+    runId: safeRunId,
+    recipientAudit,
+    failures: allFailures,
+  };
+}
+
