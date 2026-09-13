@@ -11,3 +11,7 @@ dist
 tmp
 uploads
 temp_uploads
+.telegram-mtcute-storage
+.telegram-mtcute-storage-shm
+.telegram-mtcute-storage-wal
+.telegram-test-storage

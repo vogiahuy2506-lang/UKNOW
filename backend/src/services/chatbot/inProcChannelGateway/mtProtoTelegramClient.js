@@ -92,9 +92,14 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
    *   the signature matches the base class contract used by
    *   `telegramAuth.js` when it calls `buildDefaultClient`.
    * @param {string} [opts.storagePath]
-   *   Filesystem path for mtcute's SQLite session store. Defaults
-   *   to `./.telegram-mtcute-storage`. The directory is created
-   *   lazily by mtcute.
+   *   Directory for mtcute's SQLite session store. mtcute opens
+   *   `<storagePath>/client.session` via better-sqlite3, which
+   *   requires the directory itself to exist; the file is created
+   *   on first connect. Defaults to `./.telegram-sessions` so that
+   *   operators can mount a persistent volume at exactly that path
+   *   (mirroring how WhatsApp Baileys ships `./whatsapp-sessions`).
+   *   The directory is created lazily on first call, NOT by this
+   *   constructor — Dockerfile ensures it exists with `node` ownership.
    * @param {string} [opts.storageKey]
    *   Storage key (mimics Pyrogram's `StringSession` key). Each
    *   distinct value isolates a session — useful when one backend
@@ -105,7 +110,7 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
     apiId = null,
     apiHash = null,
     sessionString = null,
-    storagePath = '.telegram-mtcute-storage',
+    storagePath = '.telegram-sessions',
     storageKey = 'default',
   } = {}) {
     super({ sessionString, apiId, apiHash });

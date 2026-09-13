@@ -27,8 +27,13 @@ ENV NODE_ENV=production
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# Tạo thư mục cho upload và cấp quyền ghi cho user node (tránh chown -R toàn bộ /app để tối ưu build layer)
-RUN mkdir -p temp_uploads uploads && chown -R node:node temp_uploads uploads
+# Tạo thư mục cho upload và cấp quyền ghi cho user node (tránh chown -R toàn bộ /app để tối ưu build layer).
+# Cũng tạo `.telegram-sessions/` (directory, không phải file) để mtcute SqliteStorage
+# mở `<dir>/client.session` qua better-sqlite3 — better-sqlite3 yêu cầu dir CHA tồn tại
+# (nếu pass chính path là dir thì throw "unable to open database file"; nếu pass path là
+# file mà không tồn tại + parent dir không writable cũng throw tương tự). Tách riêng khỏi
+# `uploads/` để operator có thể mount volume persistent riêng (giống whatsapp-sessions).
+RUN mkdir -p temp_uploads uploads .telegram-sessions && chown -R node:node temp_uploads uploads .telegram-sessions
 
 # Chạy bằng user không phải root để tăng an toàn khi deploy VPS
 USER node
