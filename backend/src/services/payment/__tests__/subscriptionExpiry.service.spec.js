@@ -8,12 +8,19 @@ const mockSubscriptionRepo = {
 
 const mockSendSystemEmail = jest.fn();
 const mockBuildPlanExpiredEmail = jest.fn();
+const mockLoadCustomSystemEmailTemplate = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/subscription/subscription.repository.js', () => mockSubscriptionRepo);
 jest.unstable_mockModule('../../../config/database.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
   buildPlanExpiredEmail: mockBuildPlanExpiredEmail,
+}));
+// PR-2b (13/09/2026, mục 4.2 Việc 6) — service giờ đọc mẫu plan_expired tuỳ chỉnh qua
+// welcomeEmailTemplate.service.js trước khi build email; mock để giữ test này chỉ soi hành vi
+// gốc của PR-2a (không lẫn logic đọc mẫu, đã có bộ test riêng ở welcomeEmailTemplate.service.spec.js).
+jest.unstable_mockModule('../../email/welcomeEmailTemplate.service.js', () => ({
+  loadCustomSystemEmailTemplate: mockLoadCustomSystemEmailTemplate,
 }));
 
 const { processExpiredSubscriptions } = await import('../subscriptionExpiry.service.js');
@@ -24,6 +31,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
     mockSubscriptionRepo.expireUserPlan.mockResolvedValue();
     mockSubscriptionRepo.incrementReminderCount.mockResolvedValue();
     mockSendSystemEmail.mockResolvedValue();
+    mockLoadCustomSystemEmailTemplate.mockResolvedValue(null);
     mockBuildPlanExpiredEmail.mockImplementation(({ fullName, planName, expiresAt }) => ({
       subject: `[Founder AI] Gói ${planName} của bạn đã hết hạn`,
       html: `<p>Xin chào ${fullName}, Gói ${planName} hết hạn ${expiresAt}</p>`,
@@ -57,6 +65,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
         planName: 'Gói Chuyên Nghiệp',
         expiresAt: '2026-09-12T00:00:00.000Z',
         renewalUrl: 'https://app.uknow.vn/app/billing',
+        template: null,
       });
       expect(mockSendSystemEmail).toHaveBeenCalledWith({
         to: 'user101@example.com',
@@ -231,6 +240,42 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
       });
       expect(mockSubscriptionRepo.expireUserPlan).not.toHaveBeenCalled();
       expect(mockSubscriptionRepo.incrementReminderCount).not.toHaveBeenCalled();
+    });
+
+    // PR-2b (13/09/2026, mục 4.2 Việc 6) — chốt việc NỐI mẫu plan_expired do super admin sửa vào
+    // thư đang chạy thật (không chỉ có API sửa mẫu mà email T-0 vẫn ra bản cứng). Đột biến kiểm:
+    // bỏ dòng loadCustomSystemEmailTemplate ở subscriptionExpiry.service.js hoặc quên truyền
+    // template vào buildPlanExpiredEmail thì ca này phải đỏ.
+    it('Ca thêm 3: mẫu plan_expired đã bị super admin sửa → truyền đúng object mẫu vào buildPlanExpiredEmail, gọi loadCustomSystemEmailTemplate("plan_expired") đúng 1 lần dù có nhiều user', async () => {
+      const customTemplate = { subject: 'Mẫu tuỳ chỉnh', bodyHtml: '<p>Tuỳ chỉnh</p>' };
+      mockLoadCustomSystemEmailTemplate.mockResolvedValue(customTemplate);
+      mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([
+        {
+          id: 201,
+          email: 'user201@example.com',
+          full_name: 'User A',
+          plan_name: 'Gói Pro',
+          subscription_expires_at: '2026-09-12T00:00:00.000Z',
+          subscription_reminder_count: 0,
+        },
+        {
+          id: 202,
+          email: 'user202@example.com',
+          full_name: 'User B',
+          plan_name: 'Gói Pro',
+          subscription_expires_at: '2026-09-12T00:00:00.000Z',
+          subscription_reminder_count: 0,
+        },
+      ]);
+
+      await processExpiredSubscriptions();
+
+      expect(mockLoadCustomSystemEmailTemplate).toHaveBeenCalledWith('plan_expired');
+      expect(mockLoadCustomSystemEmailTemplate).toHaveBeenCalledTimes(1);
+      expect(mockBuildPlanExpiredEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ template: customTemplate })
+      );
+      expect(mockBuildPlanExpiredEmail).toHaveBeenCalledTimes(2);
     });
   });
 });

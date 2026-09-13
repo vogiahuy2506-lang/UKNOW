@@ -8,6 +8,7 @@ import {
   buildPlanExpiredEmail,
   sendSystemEmail,
 } from '../../utils/systemEmail.util.js';
+import { loadCustomSystemEmailTemplate } from '../email/welcomeEmailTemplate.service.js';
 
 /**
  * Xử lý các gói thuê bao đã hết hạn:
@@ -24,6 +25,11 @@ export async function processExpiredSubscriptions({ renewalUrl, queryable = db }
   let expiredCount = 0;
   let emailsSent = 0;
 
+  // PR-2b (13/09/2026, mục 4.2 Việc 6) — đọc mẫu plan_expired do super admin sửa (nếu có) MỘT
+  // lần cho cả lượt cron, dùng chung cho mọi user hết hạn trong lượt này. Trả null khi chưa ai
+  // sửa hoặc DB lỗi tạm thời; buildPlanExpiredEmail tự ngã về bản cứng khi template=null.
+  const planExpiredTemplate = await loadCustomSystemEmailTemplate('plan_expired');
+
   for (const user of expired) {
     // 1. Gửi thư T-0 TRƯỚC expireUserPlan (khi active_plan_id và plan_name vẫn còn)
     const reminderCount = Number(user.subscription_reminder_count || 0);
@@ -35,6 +41,7 @@ export async function processExpiredSubscriptions({ renewalUrl, queryable = db }
             planName: user.plan_name,
             expiresAt: user.subscription_expires_at,
             renewalUrl,
+            template: planExpiredTemplate,
           });
           await sendSystemEmail({ to: user.email, subject, html });
           await incrementReminderCount(user.id, queryable);

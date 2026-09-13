@@ -4,6 +4,7 @@ import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
 import { findExpiringUsers, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
 import { sendSystemEmail, buildRenewalReminderEmail, buildRenewalUrl } from './systemEmail.util.js';
+import { loadCustomSystemEmailTemplate } from '../services/email/welcomeEmailTemplate.service.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 import notificationService from '../services/admin/notification.service.js';
@@ -573,6 +574,12 @@ export const initScheduler = () => {
           console.error('[Subscription] Lỗi khi xử lý gói hết hạn:', expiryErr.message);
         }
 
+        // PR-2b (13/09/2026, mục 4.2 Việc 6) — đọc mẫu plan_expiring do super admin sửa (nếu có)
+        // MỘT lần cho cả cron run, dùng chung cho cả 2 lượt nhắc dưới đây — tránh N truy vấn DB
+        // dư thừa. loadCustomSystemEmailTemplate tự trả null khi chưa ai sửa hoặc DB lỗi tạm thời;
+        // buildRenewalReminderEmail tự ngã về bản cứng khi template=null.
+        const planExpiringTemplate = await loadCustomSystemEmailTemplate('plan_expiring');
+
         // 2. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
         const week = await findExpiringUsers(6, 7, 1);
         for (const user of week) {
@@ -580,6 +587,7 @@ export const initScheduler = () => {
           const { subject, html } = buildRenewalReminderEmail({
             fullName: user.full_name, planName: user.plan_name,
             expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
+            template: planExpiringTemplate,
           });
           await sendSystemEmail({ to: user.email, subject, html });
           await incrementReminderCount(user.id);
@@ -593,6 +601,7 @@ export const initScheduler = () => {
           const { subject, html } = buildRenewalReminderEmail({
             fullName: user.full_name, planName: user.plan_name,
             expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
+            template: planExpiringTemplate,
           });
           await sendSystemEmail({ to: user.email, subject, html });
           await incrementReminderCount(user.id);
