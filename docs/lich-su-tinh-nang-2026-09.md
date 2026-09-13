@@ -285,7 +285,70 @@ tới khi tải lại.
 
 Plan không được cập nhật lúc ship nên bị liệt kê nhầm là nợ tới 13/09.
 
-## Việc còn treo (tính tới 11/09/2026)
+## Giám sát Zalo: Delivery Monitor nói dối, cảnh báo tỉ lệ lỗi mù hoàn toàn (10/09)
+
+Đo trên production: chỉ số "tài khoản Zalo mất kết nối" chưa từng hoạt động, chỉ số "máy không tới
+được" gộp mọi lý do thành một số; cảnh báo `campaign_fail_rate_high` lọc theo `started_at` và chia
+sai mẫu số nên không bao giờ nổ dù dữ liệu thật ra 93,9%. Ledger không ghi lý do hỏng Zalo.
+
+| Việc | Commit |
+|---|---|
+| PR-1: sửa chỉ số Zalo mất kết nối, tách lý do không liên hệ được; vá bản user | `1a2f557a` `81286b2b` |
+| PR-2: cảnh báo tỉ lệ lỗi đổi cả cửa sổ lọc lẫn mẫu số | `5d118059` |
+| PR-3: ghi `lastFailureReason` vào ledger mỗi lần gửi Zalo hỏng, kể cả kết bạn và nhóm | `00e6634e` `fc9a6cf1` |
+
+Ngưỡng giữ 0,30 / 60 phút / 20 người nhận. Còn hỏi: cảnh báo này có phủ **email** không — ngày
+07–08/09 email hỏng 83% suốt hai ngày mà không ai được báo (xem "Việc còn treo").
+
+## Khoá dịch: từ 130 khoá bị xoá nhầm tới 0 khoá vỡ (10/09)
+
+| Việc | Commit |
+|---|---|
+| Khôi phục 130 khoá dịch bị commit "fix lint" xoá nhầm | `3973069b` |
+| Phép quét khoá dịch hiểu `useI18n(namespace)`; 33 "thiếu" hoá ra dương tính giả | `5452485e` `aa4cc7e6` |
+| Bổ sung 26 khoá còn lại: vi 0 khoá vỡ, en 0 khoá vỡ; sửa `{running}` in nguyên ở bản EN | `69381189` `b753fdb1` |
+
+## Trợ lý AI: giữ link Google Sheet, thẻ cổng tắt ngay sau huỷ, gửi nhanh Zalo nhóm (09–13/09)
+
+| Việc | Commit |
+|---|---|
+| Giữ link Google Sheet thay vì đóng băng danh sách người nhận (node `read_sheet` giữ `sheetUrl`) | `2e0510a8` |
+| Dòng nhắc "tệp tải lên chốt danh sách" chuyển sang khoá i18n vi/en | `305c8c38` |
+| Thẻ cổng đứng trước ranh giới huỷ/tạo xong phải tắt ngay, không đợi F5 (`findLatestInteractiveIndex`) | `6c8786c4` |
+| Gửi nhanh: Zalo nhóm đã chọn nhóm thì thẻ xác nhận coi là danh sách cố định, mở được nút | `6cab9c84` |
+| Prompt không thêm cảnh báo "chọn đúng nhóm" khi wizard đã đưa `zaloGroupIds` | `86cfc9b9` |
+
+"Tự gửi cho số mới thêm vào sheet" **không cần code**: là chế độ "Chạy liên tục" lúc bấm chạy, đã
+có sẵn; lịch hẹn thì mỗi lần là một run mới. Câu hỏi lịch hẹn có gửi lại người cũ không trả lời
+bằng SQL, xem "Việc còn treo".
+
+## Đồng ý văn bản pháp lý: bắt buộc, không "Để sau", hỏi lại khi đổi phiên bản (12/09)
+
+Nối tiếp NĐ 330 (05–07/09). Sếp chốt 12/09: bắt buộc đồng ý mới dùng tiếp. Đồng thời phát hiện
+`hasConsented` không so phiên bản: văn bản đổi ngày 10/09 mà không ai bị hỏi lại.
+
+| Việc | Commit |
+|---|---|
+| Backend: `hasConsentedCurrent` so `document_version` với `legalDocuments.config.js`; `consentVersionOutdated` | `4ad979d1` |
+| Modal không có "Để sau", bấm ngoài không tắt; tiêu đề "văn bản đã cập nhật" khi lệch phiên bản | `aa3eb7d2` `145d36d4` |
+| Lối ra thứ hai trỏ về `/contact` — app **không có** chức năng tự xoá tài khoản | `b7b9f33e` |
+| `PUT /users/profile` trả đúng `hasConsented` — lưu hồ sơ xong không bị hỏi đồng ý lại (E2E bắt được, integration không) | `34e440ef` |
+
+Nợ mở ra: **đường tự xoá tài khoản** (NĐ 330 đòi rút đồng ý dễ như cho), chưa có plan.
+
+## Menu chuyên mục: super admin sắp xếp menu quản trị và menu khách (11–13/09)
+
+| Việc | Commit |
+|---|---|
+| Trang quản trị chuyên mục cho menu super admin (migration 201) | `d0b56f08` |
+| PR-1: làm phẳng 24 mục menu khách thành catalog có `key` + `defaultCategory`, dựng lại qua `groupAppMenuItems`, giao diện không đổi; RTL ghim 26 cổng quyền không rơi | `1fc04583` `8af6c303` `3670049c` |
+| PR-2: migration 205 nới scope `app_user`; `GET/PUT /admin/menu-layout/app`; `GET /users/app-menu-layout` chỉ cần đăng nhập; Sidebar đọc cấu hình lúc mount và tính lại nhóm đang mở; tab scope trong trang chuyên mục | `db0950cb` |
+
+Sếp chốt: **một cấu hình chung cho mọi khách, khách không tự sắp**. Bài học CI: migration có
+`DROP CONSTRAINT` phải có dòng `-- allow-destructive-ddl: <lý do>` từ đầu; 205 thiếu nên đỏ một
+đợt, và không được sửa migration đã push vì runner so checksum.
+
+## Việc còn treo (tính tới 13/09/2026)
 
 - **Nghiệm thu PR-3** sau 2–3 ngày: đếm dòng `zalo_messages` còn `tracking_metadata->>'status' =
   'queued'` theo ngày, phải về 0 (trước vá là 200–350 dòng/tuần). Dấu hiệu sớm tốt: 0 dòng mới
@@ -298,24 +361,27 @@ Plan không được cập nhật lúc ship nên bị liệt kê nhầm là nợ
   Cần: báo chủ tài khoản đăng nhập lại, và quyết định có đưa `needs_reauth` vào quy tắc hay không.
 - **Hai run Zalo của tài khoản nội bộ (374, 381) vẫn `running`**, 0 thành công sau 5 ngày. Chỉ chủ
   tài khoản dừng được.
-- **`401f1bd6` (WhatsApp Baileys, hoangphuc1capri) làm đỏ cả hai deploy**, production kẹt ở `731f63d5`:
-  `bootstrap.sql:1819-1824` dùng `CONSTRAINT ... UNIQUE ... WHERE` (không tồn tại trong Postgres, migration
-  194 viết đúng bằng partial unique index); `WhatsAppSettings.jsx:1` thừa `eslint-disable`; và thư mục
-  phiên đăng nhập WhatsApp bị commit nhầm — phải bỏ theo dõi, thêm `.gitignore`, và chủ tài khoản gỡ
-  thiết bị liên kết trong WhatsApp vì xoá khỏi git không thu hồi được lịch sử.
+- **WhatsApp (hoangphuc1capri)**: ba nút thắt deploy đã gỡ 10/09; còn việc của người: chủ tài khoản gỡ
+  thiết bị liên kết trong WhatsApp vì khoá phiên đã lộ trên repo public, xoá khỏi git không thu hồi được.
 - **Nghiệm thu PR-2d-3 bước 3–4** chờ deploy: trang `slug-test` phải hiện "không khớp mã" → nhờ AI sửa
   → lead thật có `lươngthưởng: <nhãn>`; trang mới qua chat có sẵn `cf_sugg_01_text`/`cf_sugg_02_text`.
   Xong thì gỡ publish `slug-test` (đang public với lead giả).
 - **Báo hoangphuc1capri** ba quyết định đã đổi trong `founderai-capture.js` (auto mode, bỏ `cf_<id>`,
-  strip iframe có điều kiện), section "Form đăng ký" mới trong `SettingsModal`, và việc commit dọn lint
-  `1a992e76` đã xoá nút "Để sau" của modal SĐT.
-- **Gửi nhanh PR-3 (kết bạn)**: hỏi có ai cần trước khi làm.
+  strip iframe có điều kiện), section "Form đăng ký" mới trong `SettingsModal`, việc commit dọn lint
+  `1a992e76` đã xoá nút "Để sau" của modal SĐT, và **migration đánh số từ 207** (205, 206 đã dùng).
+- **Gửi nhanh PR-3 (kết bạn)**: đo 13/09, 30 ngày chỉ tài khoản công ty (39) chạy kết bạn, 3 run,
+  7.410 lời mời. Là tiện ích cho đội của sếp, không phải cho khách — sếp quyết có cần không.
 - **Landing**: lộ trình gỡ iframe dựa trên số trang còn `/embed/lead-form` (7 trang, user 1/39/76/143/156);
   các service AI khác (`customChat`, `aiActivity`, `geminiClient`, `aiModelCatalog`) vẫn trả 502 bị
-  Cloudflare nuốt; lỗi 520 lúc 08:07 09/09 chưa rõ nguyên nhân, plan đo thời gian sinh và sinh bất đồng
-  bộ ở `PLAN_LANDING_SINH_BAT_DONG_BO_2026-09-09.md`.
-- **Compiler GĐ5 PR-2→4**: chờ 7 ngày log liên tục, mốc tính lại từ lần deploy backend gần nhất.
-- **Bắt bounce bất đồng bộ**: chặn ở phép thử SMTP có tôn trọng `envelope.from` không.
+  Cloudflare nuốt. Sinh landing đo được 15,7 giây (13/09) — xa trần 100 giây, plan sinh bất đồng bộ
+  tạm gác; hai việc hạ tầng còn lại: `/api` đi thẳng cổng 5001 bỏ qua nginx, và cổng 5001 hở ra Internet.
+- **Compiler GĐ5 PR-2→4**: tiêu chí "7 ngày log liên tục" bất khả thi vì deploy mỗi ngày xoá log;
+  13/09 đặt cron trên host gom dòng compiler vào `/root/uknow/logs/`, **đọc ngày 20/09** rồi bật cờ.
+- **Bắt bounce email**: phép thử envelope ĐẠT 09/09; **code PR-1/PR-2 hoá ra đã có từ 25/08**
+  (`80280020`, commit mang tên sai) — util VERP, bộ đọc IMAP, migration 173, cron 10 phút. Production
+  chưa bật (0 biến `BOUNCE_*`). Còn ba việc vận hành: xoá TXT ký tự đại diện `digiso.vn` ở iNET (đang
+  làm DKIM `permerror`), tạo hộp `bounce@digiso.vn` ở onemail có plus-addressing, điền env rồi deploy.
+  Đáng làm: tài khoản công ty gửi ~11.000 thư/30 ngày tới >5.000 địa chỉ mà chỉ 7 bounce được ghi.
 - Backend unit có 2 test trong một suite đỏ lẻ tẻ (hai lần trong hai ngày, chạy lại xanh), chưa bắt
   được tên suite.
 - Token Cloudflare thiếu quyền Cache Purge (đã xác minh lỗi `10000`), sửa trên dashboard.
@@ -328,5 +394,18 @@ Plan không được cập nhật lúc ship nên bị liệt kê nhầm là nợ
   của voucher (bỏ hay làm cho chạy); bài trợ giúp "Liên hệ hỗ trợ"; ETA và nút gửi thử ở Gửi nhanh.
 - Nợ bảo mật P2-5 (chỉ hiển thị): `usageTracking.service.js` tính phần trăm 0 khi `limit = 0`,
   màn hạn mức hiện 0% thay vì "đã hết". Đường chặn gửi đã đúng, không ảnh hưởng thu tiền.
-- Gửi nhanh cho Zalo nhóm: thẻ xác nhận chỉ mở nút cho `email` và `zalo_personal`, chọn Zalo nhóm
-  gửi một lần vẫn tạo chiến dịch. Là PR-2 của `PLAN_GUI_NHANH_MOI_KENH_2026-09-04.md`.
+- **Sự cố email 07–08/09 (phát hiện 13/09)**: tài khoản SMTP công ty đăng nhập thất bại (535) hai
+  ngày, run không dừng mà đánh hỏng 2.464 lượt; **1.579 địa chỉ của đợt "Khảo sát tặng quà cơ hội AI"
+  (363/364) chưa bao giờ nhận thư**, tệp đã xuất để sếp quyết gửi lại. Lỗi "535 không dừng run" đã sửa
+  `a8c75d27`. Còn hỏi: cảnh báo tỉ lệ hỏng có phủ email không.
+- **Sếp nghiệm thu production**: trang Chiến dịch gộp (5 nút vận hành, Chạy ngay → Dừng, tab Lịch chạy,
+  sidebar cha/con, trình dựng full-screen); super admin đổi tên nhóm menu khách; thẻ cổng wizard mờ ngay
+  sau "huỷ" không cần F5.
+- **OTP số điện thoại**: code PR-1→3 trên production sau cờ; bật `PHONE_OTP_PROVIDER=mock` để thử, sếp
+  quyết luồng hai bước 15/09; cần tài khoản eSMS/SpeedSMS hoặc Zalo OA để bật thật.
+- **PayOS thông báo khi có tiền**: sếp chọn **SMS** (như ảnh) hay **Zalo** (có sẵn); kế toán gửi ảnh SMS
+  ngân hàng một giao dịch PayOS đã có. Việc 1 (nội dung chuyển khoản) làm được không cần chờ kênh.
+- **Đường tự xoá tài khoản** (NĐ 330): chưa có plan, lộ ra khi modal đồng ý cần lối ra thứ hai.
+- **Lịch hẹn có gửi lại người cũ không**: SQL ghi trong `PLAN_AI_GIU_LINK_SHEET` (archive), chạy khi tiện.
+- **Bảng câu hỏi của sếp chưa làm**: digest hội thoại chatbot, tự lưu contact từ chatbot, giờ hoạt động
+  chatbot (Huy).
