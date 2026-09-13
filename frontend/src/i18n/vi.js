@@ -7974,6 +7974,34 @@ export default {
     resetFailed: 'Không thể khôi phục mẫu mặc định',
     resetSuccess: 'Đã khôi phục mẫu email mặc định',
     previewFailed: 'Không thể tạo bản xem trước',
+    templateSelector: 'Mẫu thư',
+    templateSelectorHint: 'Chọn mẫu bên dưới để sửa từng loại thư.',
+    switchConfirm: 'Nội dung đang sửa chưa được lưu. Chuyển mẫu khác sẽ bỏ các thay đổi này?',
+    templateKeys: {
+      welcome: 'Email chào mừng',
+      plan_expiring: 'Email nhắc sắp hết hạn gói',
+      plan_expired: 'Email báo đã hết hạn gói',
+    },
+    templateMeta: {
+      welcome: {
+        title: 'Email chào mừng thành viên',
+        subtitle: 'Chỉnh nội dung email tự động gửi khi một thành viên đăng ký tài khoản mới.',
+        behaviorNote: 'Áp dụng cho thành viên đăng ký mới bằng email hoặc Google. Các email đã gửi trước đây không thay đổi.',
+        previewFrameTitle: 'Bản xem trước email chào mừng',
+      },
+      plan_expiring: {
+        title: 'Email nhắc sắp hết hạn gói',
+        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên còn 7 ngày và còn 3 ngày là hết hạn.',
+        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, hai lần cho mỗi thành viên (còn 7 ngày và còn 3 ngày). Các email đã gửi trước đây không thay đổi.',
+        previewFrameTitle: 'Bản xem trước email nhắc hết hạn gói',
+      },
+      plan_expired: {
+        title: 'Email báo gói đã hết hạn',
+        subtitle: 'Chỉnh nội dung email báo khi gói của thành viên đã hết hạn.',
+        behaviorNote: 'Gửi tự động lúc 08:00 vào ngày gói hết hạn. Các email đã gửi trước đây không thay đổi.',
+        previewFrameTitle: 'Bản xem trước email báo hết hạn gói',
+      },
+    },
     variableLabels: {
       userName: 'Tên thành viên',
       userEmail: 'Email thành viên',
@@ -7983,6 +8011,10 @@ export default {
       senderName: 'Tên thương hiệu gửi email',
       supportEmail: 'Email hỗ trợ',
       docsUrl: 'Đường dẫn tài liệu hướng dẫn',
+      expiresAt: 'Ngày hết hạn gói',
+      daysLeft: 'Số ngày còn lại',
+      graceDays: 'Số ngày ân hạn',
+      upgradeUrl: 'Đường dẫn gia hạn/nâng cấp gói',
     },
   },
 

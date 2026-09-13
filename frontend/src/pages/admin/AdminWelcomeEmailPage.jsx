@@ -9,6 +9,11 @@ import {
 import { useI18n } from '../../i18n';
 import adminSystemEmailTemplateApiService from '../../features/admin/services/adminSystemEmailTemplateApi.service';
 
+// PR-2b (13/09/2026, PLAN_CANH_BAO_SAP_HET_HAN_GOI mục 4.2) — trang này giờ sửa được cả 3 mẫu thư
+// hạn gói (không chỉ welcome), qua bộ chọn mẫu bên dưới. Tên file/route/component giữ nguyên
+// (welcome-email) — đổi tên không phải yêu cầu của PR này.
+const TEMPLATE_KEYS = ['welcome', 'plan_expiring', 'plan_expired'];
+
 const VARIABLE_LABEL_KEYS = {
   user_name: 'userName',
   user_email: 'userEmail',
@@ -18,6 +23,10 @@ const VARIABLE_LABEL_KEYS = {
   sender_name: 'senderName',
   support_email: 'supportEmail',
   docs_url: 'docsUrl',
+  expires_at: 'expiresAt',
+  days_left: 'daysLeft',
+  grace_days: 'graceDays',
+  upgrade_url: 'upgradeUrl',
 };
 
 function readTemplate(response) {
@@ -34,6 +43,7 @@ function readTemplate(response) {
 export default function AdminWelcomeEmailPage() {
   const { t, locale } = useI18n();
   const bodyRef = useRef(null);
+  const [templateKey, setTemplateKey] = useState('welcome');
   const [template, setTemplate] = useState({ subject: '', bodyHtml: '' });
   const [savedTemplate, setSavedTemplate] = useState({ subject: '', bodyHtml: '' });
   const [metadata, setMetadata] = useState({ isCustomized: false, updatedAt: null, variables: [] });
@@ -45,10 +55,36 @@ export default function AdminWelcomeEmailPage() {
 
   const isDirty = template.subject !== savedTemplate.subject || template.bodyHtml !== savedTemplate.bodyHtml;
 
-  const requestPreview = useCallback(async (draft) => {
+  const templateKeyLabels = {
+    welcome: t('adminWelcomeEmail.templateKeys.welcome'),
+    plan_expiring: t('adminWelcomeEmail.templateKeys.plan_expiring'),
+    plan_expired: t('adminWelcomeEmail.templateKeys.plan_expired'),
+  };
+  const templateMeta = {
+    welcome: {
+      title: t('adminWelcomeEmail.templateMeta.welcome.title'),
+      subtitle: t('adminWelcomeEmail.templateMeta.welcome.subtitle'),
+      behaviorNote: t('adminWelcomeEmail.templateMeta.welcome.behaviorNote'),
+      previewFrameTitle: t('adminWelcomeEmail.templateMeta.welcome.previewFrameTitle'),
+    },
+    plan_expiring: {
+      title: t('adminWelcomeEmail.templateMeta.plan_expiring.title'),
+      subtitle: t('adminWelcomeEmail.templateMeta.plan_expiring.subtitle'),
+      behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expiring.behaviorNote'),
+      previewFrameTitle: t('adminWelcomeEmail.templateMeta.plan_expiring.previewFrameTitle'),
+    },
+    plan_expired: {
+      title: t('adminWelcomeEmail.templateMeta.plan_expired.title'),
+      subtitle: t('adminWelcomeEmail.templateMeta.plan_expired.subtitle'),
+      behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expired.behaviorNote'),
+      previewFrameTitle: t('adminWelcomeEmail.templateMeta.plan_expired.previewFrameTitle'),
+    },
+  }[templateKey];
+
+  const requestPreview = useCallback(async (draft, key) => {
     setIsPreviewing(true);
     try {
-      const response = await adminSystemEmailTemplateApiService.previewWelcomeTemplate(draft);
+      const response = await adminSystemEmailTemplateApiService.previewTemplate(key, draft);
       setPreview(response.data?.data || { subject: '', html: '' });
     } catch (error) {
       toast.error(error?.response?.data?.message || t('adminWelcomeEmail.previewFailed'));
@@ -57,10 +93,10 @@ export default function AdminWelcomeEmailPage() {
     }
   }, [t]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (key) => {
     setIsLoading(true);
     try {
-      const response = await adminSystemEmailTemplateApiService.getWelcomeTemplate();
+      const response = await adminSystemEmailTemplateApiService.getTemplate(key);
       const loaded = readTemplate(response);
       const content = { subject: loaded.subject, bodyHtml: loaded.bodyHtml };
       setTemplate(content);
@@ -70,7 +106,7 @@ export default function AdminWelcomeEmailPage() {
         updatedAt: loaded.updatedAt,
         variables: loaded.variables,
       });
-      await requestPreview(content);
+      await requestPreview(content, key);
     } catch (error) {
       toast.error(error?.response?.data?.message || t('adminWelcomeEmail.loadFailed'));
     } finally {
@@ -79,8 +115,14 @@ export default function AdminWelcomeEmailPage() {
   }, [requestPreview, t]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load(templateKey);
+  }, [load, templateKey]);
+
+  const selectTemplateKey = (nextKey) => {
+    if (nextKey === templateKey) return;
+    if (isDirty && !window.confirm(t('adminWelcomeEmail.switchConfirm'))) return;
+    setTemplateKey(nextKey);
+  };
 
   const save = async () => {
     if (!template.subject.trim() || !template.bodyHtml.trim()) {
@@ -89,7 +131,7 @@ export default function AdminWelcomeEmailPage() {
     }
     setIsSaving(true);
     try {
-      const response = await adminSystemEmailTemplateApiService.updateWelcomeTemplate(template);
+      const response = await adminSystemEmailTemplateApiService.updateTemplate(templateKey, template);
       const saved = readTemplate(response);
       const content = { subject: saved.subject, bodyHtml: saved.bodyHtml };
       setTemplate(content);
@@ -99,7 +141,7 @@ export default function AdminWelcomeEmailPage() {
         isCustomized: saved.isCustomized,
         updatedAt: saved.updatedAt,
       }));
-      await requestPreview(content);
+      await requestPreview(content, templateKey);
       toast.success(t('adminWelcomeEmail.saveSuccess'));
     } catch (error) {
       toast.error(error?.response?.data?.message || t('adminWelcomeEmail.saveFailed'));
@@ -112,7 +154,7 @@ export default function AdminWelcomeEmailPage() {
     if (!window.confirm(t('adminWelcomeEmail.resetConfirm'))) return;
     setIsResetting(true);
     try {
-      const response = await adminSystemEmailTemplateApiService.resetWelcomeTemplate();
+      const response = await adminSystemEmailTemplateApiService.resetTemplate(templateKey);
       const restored = readTemplate(response);
       const content = { subject: restored.subject, bodyHtml: restored.bodyHtml };
       setTemplate(content);
@@ -123,7 +165,7 @@ export default function AdminWelcomeEmailPage() {
         updatedAt: null,
         variables: restored.variables.length ? restored.variables : current.variables,
       }));
-      await requestPreview(content);
+      await requestPreview(content, templateKey);
       toast.success(t('adminWelcomeEmail.resetSuccess'));
     } catch (error) {
       toast.error(error?.response?.data?.message || t('adminWelcomeEmail.resetFailed'));
@@ -155,9 +197,9 @@ export default function AdminWelcomeEmailPage() {
         <div>
           <div className="flex items-center gap-2">
             <HiOutlineMail className="h-7 w-7 text-orange-500" />
-            <h1 className="text-2xl font-bold text-gray-900">{t('adminWelcomeEmail.title')}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{templateMeta.title}</h1>
           </div>
-          <p className="mt-1 text-sm text-gray-500">{t('adminWelcomeEmail.subtitle')}</p>
+          <p className="mt-1 text-sm text-gray-500">{templateMeta.subtitle}</p>
           <p className="mt-2 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
             {t('adminWelcomeEmail.locationNote')}
           </p>
@@ -184,9 +226,31 @@ export default function AdminWelcomeEmailPage() {
         </div>
       </div>
 
+      <div className="space-y-1.5">
+        <span className="text-sm font-medium text-gray-700">{t('adminWelcomeEmail.templateSelector')}</span>
+        <p className="text-xs text-gray-500">{t('adminWelcomeEmail.templateSelectorHint')}</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label={t('adminWelcomeEmail.templateSelector')}>
+          {TEMPLATE_KEYS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => selectTemplateKey(key)}
+              aria-pressed={key === templateKey}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                key === templateKey
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {templateKeyLabels[key]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
         <p className="font-semibold">{t('adminWelcomeEmail.behaviorTitle')}</p>
-        <p className="mt-1">{t('adminWelcomeEmail.behaviorNote')}</p>
+        <p className="mt-1">{templateMeta.behaviorNote}</p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -262,7 +326,7 @@ export default function AdminWelcomeEmailPage() {
             <button
               type="button"
               className="btn btn-secondary inline-flex items-center gap-2"
-              onClick={() => requestPreview(template)}
+              onClick={() => requestPreview(template, templateKey)}
               disabled={isPreviewing}
             >
               <HiOutlineEye className="h-4 w-4" />
@@ -271,7 +335,7 @@ export default function AdminWelcomeEmailPage() {
           </div>
           {preview.html ? (
             <iframe
-              title={t('adminWelcomeEmail.previewFrameTitle')}
+              title={templateMeta.previewFrameTitle}
               srcDoc={preview.html}
               sandbox=""
               className="h-[760px] w-full bg-white"
