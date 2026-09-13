@@ -75,6 +75,7 @@ import chatbotPublicRoutes from './routes/chatbotPublic.routes.js';
 import internalRoutes from './routes/internal.routes.js';
 import heroConsultationRoutes from './routes/heroConsultation.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
+import landingAssetRoutes from './routes/landingAsset.routes.js';
 import customDomainRoutes from './routes/customDomain.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import mediaLibraryRoutes from './routes/mediaLibrary.routes.js';
@@ -168,6 +169,7 @@ export function createApp() {
   app.use('/api/attachments', attachmentsRoutes);
   app.use('/file', downloadRoutes);
   app.use('/download', downloadRoutes);
+  app.use('/lp-assets', landingAssetRoutes);
   app.use('/track', trackingRoutes);
   app.use('/t', trackingShortLinkRoutes);
   app.use('/api/webhooks', webhookLimiter, webhookRoutes);

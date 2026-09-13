@@ -550,3 +550,53 @@ describe('GET /api/uploads/signed-url/:key', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('GET /lp-assets/* (Landing Assets)', () => {
+  it('GET /lp-assets/<khoá active> → 200 + Cache-Control: public, max-age=3600', async () => {
+    const owner = await createUser({ username: 'lp-asset-user' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${owner.id}/landing/sample-logo.png`,
+      content: 'PNGDATA',
+    });
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+       VALUES ('workspace', $1, $1, $2, 'landing_asset', 'active', 7)`,
+      [owner.id, storageKey]
+    );
+
+    const res = await request(app)
+      .get(`/lp-assets/${storageKey}`)
+      .buffer(true)
+      .parse((response, cb) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('public, max-age=3600');
+    expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    expect(res.body.toString('utf8')).toBe('PNGDATA');
+  });
+
+  it('khoá category="chat" → 404', async () => {
+    const owner = await createUser({ username: 'lp-asset-chat' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${owner.id}/landing/not-landing.png`,
+      content: 'CHATDATA',
+    });
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+       VALUES ('workspace', $1, $1, $2, 'chat', 'active', 8)`,
+      [owner.id, storageKey]
+    );
+
+    const res = await request(app).get(`/lp-assets/${storageKey}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('khoá .. → 404', async () => {
+    const res = await request(app).get('/lp-assets/uploads/1/landing/../../etc/passwd');
+    expect(res.status).toBe(404);
+  });
+});
+

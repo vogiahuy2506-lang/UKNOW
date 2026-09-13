@@ -1052,4 +1052,42 @@ describe('POST /api/public/leads', () => {
     const none = await db.query(`SELECT 1 FROM leads WHERE email = 'badcf@u.local'`);
     expect(none.rows).toHaveLength(0);
   });
+
+  it('tạo trang có img /lp-assets/... với ledger temp → sau create chuyển active, expires_at null, reference_id = lp.id', async () => {
+    const user = await createUserWithPlan();
+    const token = await loginAs(user);
+    const storageKey = `uploads/${user.id}/landing/sample-logo.png`;
+
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes, expires_at, reference_type, reference_id)
+       VALUES ('workspace', $1, $1, $2, 'landing_asset', 'temp', 100, NOW() + INTERVAL '7 days', 'landing_asset_draft', NULL)`,
+      [user.id, storageKey]
+    );
+
+    const htmlContent = `<!DOCTYPE html><html><body><img src="https://example.com/lp-assets/${storageKey}" alt="Logo" /></body></html>`;
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        slug: 'lp-asset-bind',
+        title: 'Trang có asset',
+        htmlContent,
+      });
+
+    expect(res.status).toBe(201);
+    const lpId = res.body.data.id;
+
+    const { rows } = await db.query(
+      `SELECT state, expires_at, reference_type, reference_id FROM storage_objects WHERE storage_key = $1`,
+      [storageKey]
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].state).toBe('active');
+    expect(rows[0].expires_at).toBeNull();
+    expect(rows[0].reference_type).toBe('landing_page');
+    expect(rows[0].reference_id).toBe(String(lpId));
+  });
 });
+

@@ -166,3 +166,26 @@ export async function markStorageObjectCleanupPending(id, queryable = db) {
     [id]
   );
 }
+
+export async function activateLandingAssetStorageObjects(
+  { storageKeys, ownerUserId, landingPageId },
+  queryable = db
+) {
+  if (!Array.isArray(storageKeys) || storageKeys.length === 0) return [];
+  const { rows } = await queryable.query(
+    `UPDATE storage_objects
+        SET state = 'active',
+            expires_at = NULL,
+            reference_type = 'landing_page',
+            reference_id = $3,
+            updated_at = NOW()
+      WHERE storage_key = ANY($1::text[])
+        AND owner_user_id = $2
+        AND category = 'landing_asset'
+        AND state IN ('temp', 'active')
+    RETURNING *`,
+    [storageKeys, ownerUserId, String(landingPageId)]
+  );
+  return rows;
+}
+

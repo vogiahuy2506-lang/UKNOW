@@ -127,7 +127,7 @@ export class GcsStorageBackend {
    * @param {object} [options]
    * @returns {Promise<boolean>}
    */
-  async stream(key, res, { fileName = 'file', mimeType = '', preview = false } = {}) {
+  async stream(key, res, { fileName = 'file', mimeType = '', preview = false, signedUrlTtlMs = null } = {}) {
     const cleanKey = this.normalizeKey(key);
     if (!cleanKey) return false;
 
@@ -138,10 +138,11 @@ export class GcsStorageBackend {
     const safeName = String(fileName || 'file').replace(/"/g, '');
     const disposition = preview ? 'inline' : `attachment; filename="${safeName}"`;
 
+    const ttl = Number(signedUrlTtlMs) > 0 ? Number(signedUrlTtlMs) : 15 * 60 * 1000;
     const signOptions = {
       version: 'v4',
       action: 'read',
-      expires: Date.now() + 15 * 60 * 1000, // 15 phút
+      expires: Date.now() + ttl,
       responseDisposition: disposition,
     };
     if (mimeType) {

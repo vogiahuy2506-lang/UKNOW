@@ -38,6 +38,61 @@ export async function getSessionMessages(sessionId, userId) {
   return { messages: rows, wizardState: sessions[0].wizard_state || null };
 }
 
+/**
+ * Lấy các file đính kèm từ các tin user sau tin landing_page gần nhất trong session.
+ * Chỉ nhận file đã promote vào uploads/<ownerUserId>/chat/.
+ */
+export async function listUserFilesSinceLastLanding(sessionId, userId, ownerUserId) {
+  const sid = Number(sessionId);
+  const uid = Number(userId);
+  if (!sid || !uid) return [];
+
+  const { rows: sessions } = await db.query(
+    `SELECT id FROM ai_chat_sessions WHERE id = $1 AND id_user = $2`,
+    [sid, uid]
+  );
+  if (!sessions.length) return [];
+
+  const { rows } = await db.query(
+    `WITH last_landing AS (
+       SELECT COALESCE(MAX(id), 0) AS max_id
+       FROM ai_chat_messages
+       WHERE session_id = $1 AND role = 'assistant' AND type = 'landing_page'
+     )
+     SELECT data->'files' AS files
+     FROM ai_chat_messages, last_landing
+     WHERE session_id = $1
+       AND role = 'user'
+       AND id > last_landing.max_id
+       AND data->'files' IS NOT NULL
+     ORDER BY id DESC`,
+    [sid]
+  );
+
+  const prefix = `uploads/${ownerUserId}/chat/`;
+  const result = [];
+  const seenKeys = new Set();
+
+  for (const row of rows) {
+    const list = Array.isArray(row.files) ? row.files : [];
+    for (const f of list) {
+      const sk = f?.storage_key || f?.storageKey;
+      if (typeof sk === 'string' && sk.startsWith(prefix) && !seenKeys.has(sk)) {
+        seenKeys.add(sk);
+        result.push({
+          storageKey: sk,
+          originalName: f.originalName || f.displayName || 'file',
+          contentType: f.contentType || '',
+          size: f.size ?? 0,
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+
 // Trả { id, wizard_state } hoặc null (không tồn tại / không thuộc userId)
 export async function getSessionWizardState(sessionId, userId) {
   const { rows } = await db.query(

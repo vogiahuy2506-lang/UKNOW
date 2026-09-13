@@ -30,10 +30,14 @@ import {
   resolveAssistantLocaleContext,
 } from '../utils/assistantLocale.util.js';
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits.util.js';
-import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { resolveWorkspaceOwnerId, StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { getNodeSubtype } from '../utils/nodeSubtype.util.js';
 import { resolveCampaignVia } from '../utils/campaignVia.util.js';
+import { ingestLandingAttachments } from '../services/landing/landingAsset.service.js';
+import { listUserFilesSinceLastLanding } from '../repositories/aiSession.repository.js';
+import landingPageRepository from '../repositories/landingPage.repository.js';
+import { getWorkspaceScope } from '../utils/workspaceContext.util.js';
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -59,6 +63,32 @@ function denyCampaignRun(res) {
     code: 'PERMISSION_DENIED',
   });
 }
+
+function mergeAndFilterLandingFiles(incomingFiles = [], sessionFiles = []) {
+  const combined = [...incomingFiles, ...sessionFiles];
+  const seen = new Set();
+  const images = [];
+  const docs = [];
+
+  for (const f of combined) {
+    const key = f?.storageKey || f?.tempId;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+
+    const name = String(f?.originalName || '').toLowerCase();
+    const type = String(f?.contentType || '').toLowerCase();
+    const isImg = type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(name);
+
+    if (isImg) {
+      if (images.length < 3) images.push(f);
+    } else {
+      if (docs.length < 3) docs.push(f);
+    }
+  }
+
+  return [...images, ...docs];
+}
+
 
 // Ranh giới vòng đời wizard (PLAN_WIZARD_VONG_DOI_2026-09-07 PR-1/PR-2) — action nào ghi tin
 // ranh giới lên server sau khi applyWizardStateAction đổi state (changed:true). Gộp thành
@@ -1230,6 +1260,8 @@ class AiController {
         homepagePage,
         locale,
         landingBrief,
+        files: incomingFiles = [],
+        landingPageId = null,
       } = req.body;
       if (!String(prompt || '').trim()) {
         return res.status(400).json({
@@ -1257,6 +1289,41 @@ class AiController {
         locale: contentLocale,
       });
 
+      // Xác thực landingPageId nếu có truyền lên
+      let resolvedLandingPageId = null;
+      if (landingPageId) {
+        const scope = getWorkspaceScope(req.user);
+        const lp = await landingPageRepository.findByIdInScope(landingPageId, scope).catch(() => null);
+        if (lp) {
+          resolvedLandingPageId = lp.id;
+        }
+      }
+
+      // Gom file từ chat session (nếu có sessionId)
+      const sid = sessionId ? Number(sessionId) : null;
+      let sessionFiles = [];
+      if (sid) {
+        sessionFiles = await listUserFilesSinceLastLanding(sid, req.user.id, ownerUserId).catch(() => []);
+      }
+
+      const rawIncoming = Array.isArray(incomingFiles)
+        ? incomingFiles.slice(0, 6).map((f) => ({
+            tempId: f?.tempId,
+            storageKey: f?.storageKey || f?.storage_key,
+            originalName: f?.originalName || f?.name || f?.displayName,
+            contentType: f?.contentType || f?.mimeType || f?.type,
+            size: f?.size,
+          })).filter((f) => f.tempId || f.storageKey)
+        : [];
+
+      const mergedFiles = mergeAndFilterLandingFiles(rawIncoming, sessionFiles);
+      const { assets, documents } = await ingestLandingAttachments({
+        files: mergedFiles,
+        ownerUserId,
+        actorUserId: req.user.id,
+        landingPageId: resolvedLandingPageId,
+      });
+
       // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b + PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md
       // PR-2d-3 việc 1: dựng leadFormDraft RỒI áp dụng applyLeadFormDraftToConfig (khoá
       // cf_sugg_NN_text TẤT ĐỊNH) TRƯỚC khi gọi generate() — không phải sau. Review 09/09 tự
@@ -1277,6 +1344,8 @@ class AiController {
         landingBriefContext,
         contentLocale,
         leadFormConfig,
+        assets,
+        documents,
       });
 
       if (leadFormDraft) {
@@ -1285,7 +1354,6 @@ class AiController {
       }
 
       // Lưu vào session nếu có sessionId (actor, not owner)
-      const sid = sessionId ? Number(sessionId) : null;
       if (sid && data?.title) {
         const userContent = String(userSummary || prompt).trim();
         const assistantMsg = {
@@ -1305,6 +1373,14 @@ class AiController {
       return res.json({ success: true, data });
     } catch (error) {
       console.error('AI generate landing HTML error:', error);
+      if (error instanceof StorageQuotaExceededError) {
+        return res.status(error.status || 413).json({
+          success: false,
+          code: error.code || 'STORAGE_QUOTA_EXCEEDED',
+          message: error.message,
+          data: error.usage,
+        });
+      }
       return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi sinh landing HTML'));
     }
   }
@@ -1320,6 +1396,8 @@ class AiController {
         locale = 'vi',
         sessionId = null,
         messageId = null,
+        files: incomingFiles = [],
+        landingPageId = null,
       } = req.body || {};
 
       if (!String(currentHtml || '').trim()) {
@@ -1341,12 +1419,49 @@ class AiController {
         : req.user.id);
       const contentLocale = normalizeAssistantLocale(locale, 'vi');
 
+      // Xác thực landingPageId nếu có truyền lên
+      let resolvedLandingPageId = null;
+      if (landingPageId) {
+        const scope = getWorkspaceScope(req.user);
+        const lp = await landingPageRepository.findByIdInScope(landingPageId, scope).catch(() => null);
+        if (lp) {
+          resolvedLandingPageId = lp.id;
+        }
+      }
+
+      // Gom file từ chat session (nếu có sessionId)
+      const sid = sessionId ? Number(sessionId) : null;
+      let sessionFiles = [];
+      if (sid) {
+        sessionFiles = await listUserFilesSinceLastLanding(sid, req.user.id, ownerUserId).catch(() => []);
+      }
+
+      const rawIncoming = Array.isArray(incomingFiles)
+        ? incomingFiles.slice(0, 6).map((f) => ({
+            tempId: f?.tempId,
+            storageKey: f?.storageKey || f?.storage_key,
+            originalName: f?.originalName || f?.name || f?.displayName,
+            contentType: f?.contentType || f?.mimeType || f?.type,
+            size: f?.size,
+          })).filter((f) => f.tempId || f.storageKey)
+        : [];
+
+      const mergedFiles = mergeAndFilterLandingFiles(rawIncoming, sessionFiles);
+      const { assets, documents } = await ingestLandingAttachments({
+        files: mergedFiles,
+        ownerUserId,
+        actorUserId: req.user.id,
+        landingPageId: resolvedLandingPageId,
+      });
+
       const data = await aiLandingPageService.editHtml({
         userId: ownerUserId,
         actorUserId: req.user.id,
         currentHtml: String(currentHtml),
         instruction: String(instruction).trim(),
         contentLocale,
+        assets,
+        documents,
       });
 
       await chargeAiCredit(req);
@@ -1373,6 +1488,14 @@ class AiController {
       return res.json({ success: true, data });
     } catch (error) {
       console.error('AI edit landing HTML error:', error);
+      if (error instanceof StorageQuotaExceededError) {
+        return res.status(error.status || 413).json({
+          success: false,
+          code: error.code || 'STORAGE_QUOTA_EXCEEDED',
+          message: error.message,
+          data: error.usage,
+        });
+      }
       return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi chỉnh sửa landing page bằng AI'));
     }
   }

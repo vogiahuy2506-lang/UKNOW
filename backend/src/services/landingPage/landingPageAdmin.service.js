@@ -3,6 +3,7 @@ import landingPageDomainRepository from '../../repositories/landingPageDomain.re
 import landingPageDomainService from './landingPageDomain.service.js';
 import landingPageVersionService from './landingPageVersion.service.js';
 import cloudflareService from '../cloudflare.service.js';
+import { linkAssetsToLandingPage } from '../landing/landingAsset.service.js';
 
 import db from '../../config/database.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
@@ -157,6 +158,12 @@ class LandingPageAdminService {
         domainSubtype,
         customConfig,
       }, client);
+      await linkAssetsToLandingPage({
+        html: htmlContent,
+        ownerUserId: context.workspaceOwnerId,
+        landingPageId: lp.id,
+        client,
+      });
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -257,6 +264,12 @@ class LandingPageAdminService {
       err.statusCode = 404;
       throw err;
     }
+
+    await linkAssetsToLandingPage({
+      html: htmlContent,
+      ownerUserId: resourceOwnerId,
+      landingPageId: id,
+    });
 
     // Nếu HTML thay đổi và bản hiện tại đã có HTML, chụp lại phiên bản cũ lên GCS sau khi update DB thành công
     let snapshotWarning = null;

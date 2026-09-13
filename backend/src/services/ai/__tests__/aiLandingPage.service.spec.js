@@ -396,3 +396,180 @@ describe('aiLandingPageService.editHtml — rule 2b: thêm trường vào form h
     expect(generateWithBudget).not.toHaveBeenCalled();
   });
 });
+
+describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getContextForLandingAi.mockResolvedValue('');
+  });
+
+  it('(i) có 2 asset → prompt chứa cả 2 URL và parts có đúng số inlineData bằng số inlineForModel', async () => {
+    const asset1 = {
+      url: 'https://example.com/lp-assets/uploads/1/landing/logo.png',
+      originalName: 'logo.png',
+      contentType: 'image/png',
+      inlineForModel: true,
+      base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    };
+    const asset2 = {
+      url: 'https://example.com/lp-assets/uploads/1/landing/banner.jpg',
+      originalName: 'banner.jpg',
+      contentType: 'image/jpeg',
+      inlineForModel: false,
+      base64: null,
+    };
+    const doc = {
+      originalName: 'brochure.pdf',
+      text: 'Nội dung khoá học lập trình 2026',
+    };
+
+    const generatedHtml = validFormHtml.replace(
+      '</body>',
+      `<img src="${asset1.url}" alt="Logo"><img src="${asset2.url}" alt="Banner"></body>`
+    );
+    mockGenerateReturns(generatedHtml);
+
+    const res = await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'Tạo landing khoá học',
+      assets: [asset1, asset2],
+      documents: [doc],
+    });
+
+    expect(res.html).toContain(asset1.url);
+    expect(res.html).toContain(asset2.url);
+
+    const callArgs = generateWithBudget.mock.calls[0][1];
+    const fullPromptText = callArgs.parts[0].text;
+    expect(fullPromptText).toContain(asset1.url);
+    expect(fullPromptText).toContain(asset2.url);
+    expect(fullPromptText).toContain('brochure.pdf');
+    expect(fullPromptText).toContain('Nội dung khoá học lập trình 2026');
+
+    // Số inlineData phải bằng 1 (vì chỉ asset1 có inlineForModel = true)
+    const inlineDataParts = callArgs.parts.filter((p) => p.inlineData);
+    expect(inlineDataParts).toHaveLength(1);
+    expect(inlineDataParts[0].inlineData.mimeType).toBe('image/png');
+    expect(inlineDataParts[0].inlineData.data).toBe(asset1.base64);
+  });
+
+  it('(ii) HTML thiếu 1 URL → 422 đúng message "AI không dùng ảnh..."', async () => {
+    const asset1 = {
+      url: 'https://example.com/lp-assets/uploads/1/landing/logo.png',
+      originalName: 'logo.png',
+      contentType: 'image/png',
+      inlineForModel: false,
+    };
+    const asset2 = {
+      url: 'https://example.com/lp-assets/uploads/1/landing/banner.jpg',
+      originalName: 'banner.jpg',
+      contentType: 'image/jpeg',
+      inlineForModel: false,
+    };
+
+    // Model chỉ dùng asset1, quên asset2
+    const generatedHtml = validFormHtml.replace(
+      '</body>',
+      `<img src="${asset1.url}" alt="Logo"></body>`
+    );
+    mockGenerateReturns(generatedHtml);
+
+    await expect(
+      aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'Tạo landing',
+        assets: [asset1, asset2],
+      })
+    ).rejects.toMatchObject({
+      status: 422,
+      message: 'AI không dùng ảnh "banner.jpg" đã đính kèm. Vui lòng thử lại.',
+    });
+  });
+
+  it('(iii) HTML có https://images.unsplash.com/x.jpg → 422 "AI bịa URL ảnh ngoài hệ thống"', async () => {
+    const asset1 = {
+      url: 'https://example.com/lp-assets/uploads/1/landing/logo.png',
+      originalName: 'logo.png',
+      contentType: 'image/png',
+      inlineForModel: false,
+    };
+
+    const generatedHtml = validFormHtml.replace(
+      '</body>',
+      `<img src="${asset1.url}"><img src="https://images.unsplash.com/photo-123.jpg"></body>`
+    );
+    mockGenerateReturns(generatedHtml);
+
+    await expect(
+      aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'Tạo landing',
+        assets: [asset1],
+      })
+    ).rejects.toMatchObject({
+      status: 422,
+      message: 'AI bịa URL ảnh ngoài hệ thống. Vui lòng thử lại.',
+    });
+  });
+
+  it('(iv) đường sửa: URL ảnh đã có trong currentHtml được giữ, không 422', async () => {
+    const existingImgUrl = 'https://example.com/existing-image.png';
+    const currentHtmlWithImg = validFormHtml.replace(
+      '</body>',
+      `<img src="${existingImgUrl}" alt="Old Image"></body>`
+    );
+
+    const assetNew = {
+      url: 'https://example.com/lp-assets/uploads/1/landing/new-logo.png',
+      originalName: 'new-logo.png',
+      contentType: 'image/png',
+      inlineForModel: false,
+    };
+
+    const newHtml = validFormHtml.replace(
+      '</body>',
+      `<img src="${existingImgUrl}" alt="Old Image"><img src="${assetNew.url}" alt="New Logo"></body>`
+    );
+
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: newHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+
+    const result = await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: currentHtmlWithImg,
+      instruction: 'Thêm new logo',
+      assets: [assetNew],
+    });
+
+    expect(result.html).toContain(existingImgUrl);
+    expect(result.html).toContain(assetNew.url);
+  });
+
+  it('(v) không asset → prompt không có khối ẢNH, <img> lạ vẫn 422', async () => {
+    const htmlWithFakeImg = validFormHtml.replace(
+      '</body>',
+      `<img src="https://fake.cdn.com/test.webp" alt="Fake"></body>`
+    );
+    mockGenerateReturns(htmlWithFakeImg);
+
+    await expect(
+      aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'Tạo landing không ảnh',
+        assets: [],
+        documents: [],
+      })
+    ).rejects.toMatchObject({
+      status: 422,
+      message: 'AI bịa URL ảnh ngoài hệ thống. Vui lòng thử lại.',
+    });
+
+    // Kiểm tra prompt không có khối ẢNH ĐÃ TẢI LÊN
+    const callArgs = generateWithBudget.mock.calls[0][1];
+    expect(callArgs.parts[0].text).not.toContain('=== ẢNH ĐÃ TẢI LÊN');
+  });
+});
+
