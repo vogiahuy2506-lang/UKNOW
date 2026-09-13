@@ -239,6 +239,86 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
   };
 }
 
+// ─── Plan Expired (T-0) ───────────────────────────────────────────────────────
+
+/**
+ * Tạo email thông báo gói dịch vụ đã hết hạn (T-0).
+ * Cùng khuôn HTML với buildRenewalReminderEmail, đổi sang thì quá khứ và bỏ huy hiệu đếm ngược.
+ *
+ * @param {{ fullName?: string|null, planName: string, expiresAt?: string|Date, renewalUrl?: string }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildPlanExpiredEmail({ fullName, planName, expiresAt, renewalUrl }) {
+  const expiryStr = expiresAt ? new Date(expiresAt).toLocaleDateString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  }) : 'gần đây';
+
+  const accentColor = '#dc2626';
+  const targetUrl = renewalUrl || `${process.env.FRONTEND_URL || 'http://localhost:5174'}/app/billing`;
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${fullName || 'bạn'}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Gói <strong>${planName}</strong> của bạn đã hết hạn vào ngày <strong>${expiryStr}</strong>.
+    </p>
+
+    <!-- Expired Warning Box (bỏ huy hiệu đếm ngược, thay bằng cảnh báo trạng thái) -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px 20px;text-align:center">
+          <p style="margin:0;font-size:13px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.5px">
+            ⚠️ Gói dịch vụ đã hết hạn
+          </p>
+          <p style="margin:6px 0 0;font-size:14px;color:#7f1d1d;line-height:1.6">
+            Quyền lợi gửi tin và tài nguyên theo gói đã tạm dừng. <strong>Các chiến dịch marketing đang chạy đã dừng.</strong>
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Guidance Box -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-left:4px solid ${accentColor};border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.6">
+            Để tiếp tục sử dụng dịch vụ và khởi động lại các chiến dịch, vui lòng gia hạn hoặc nâng cấp gói dịch vụ của bạn.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${targetUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Gia hạn / Nâng gói ngay →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Help -->
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu bạn đã gia hạn hoặc cần hỗ trợ thêm, vui lòng liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Gói ${planName} của bạn đã hết hạn`,
+    html: buildBaseTemplate({
+      subtitle: 'Thông báo hết hạn dịch vụ',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
 // ─── Campaign paused / stopped vì plan send-quota ─────────────────────────────
 
 function formatResetAtVi(resetAt) {

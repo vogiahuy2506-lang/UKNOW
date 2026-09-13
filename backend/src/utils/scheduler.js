@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import db from '../config/database.js';
 import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
-import { findExpiringUsers, findExpiredUsers, expireUserPlan, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
+import { findExpiringUsers, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
 import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
@@ -564,11 +564,13 @@ export const initScheduler = () => {
           console.error('[Subscription] Lỗi khi kích hoạt lệnh hẹn đổi gói:', err.message);
         }
 
-        // 1. Hết hạn: revoke active_plan_id
-        const expired = await findExpiredUsers();
-        for (const user of expired) {
-          await expireUserPlan(user.id);
-          console.log(`[Subscription] Đã thu hồi gói của ${user.email} (${user.plan_name})`);
+        // 1. Hết hạn: gửi thư T-0 và thu hồi active_plan_id qua service
+        let expiryResult = { expiredCount: 0, emailsSent: 0 };
+        try {
+          const { processExpiredSubscriptions } = await import('../services/payment/subscriptionExpiry.service.js');
+          expiryResult = await processExpiredSubscriptions({ renewalUrl });
+        } catch (expiryErr) {
+          console.error('[Subscription] Lỗi khi xử lý gói hết hạn:', expiryErr.message);
         }
 
         // 2. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
@@ -651,10 +653,10 @@ export const initScheduler = () => {
           console.error('[TopupLock] reconcile/reminders failed:', lockErr.message);
         }
 
-        const processed = expired.length + week.length + threeDay.length + lockedUsers
+        const processed = expiryResult.expiredCount + week.length + threeDay.length + lockedUsers
           + reminderWeek + reminderThree;
         return {
-          expired: expired.length,
+          expired: expiryResult.expiredCount,
           remindedWeek: week.length,
           remindedThreeDay: threeDay.length,
           lockedUsers,
