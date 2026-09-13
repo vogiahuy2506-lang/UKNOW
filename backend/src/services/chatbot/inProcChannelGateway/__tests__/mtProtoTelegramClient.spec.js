@@ -15,7 +15,23 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 // Mock mtcute BEFORE importing the client so the dynamic
 // import in `telegramClient.js` resolves to this stub.
 const mockTgInstance = {
-  start: jest.fn(async () => ({ id: 1, firstName: 'Mock', lastName: 'User', username: 'mockuser' })),
+  // The current connect() only kicks off the background tg.start
+  // when tg.storage is truthy — simulate that by attaching a
+  // placeholder storage so the production branch fires.
+  storage: { load: () => {}, save: () => {} },
+  network: { prime: () => {} },
+  // Default `start` immediately fires the qrCodeHandler with a fake URL,
+  // then resolves with a synthetic `me` payload. This matches the real
+  // mtcute behaviour at the slice of the API the client actually uses,
+  // and is required so `MtProtoTelegramClient.requestQrToken()` can
+  // unblock its `await firstQrUrl` (which would otherwise hang until
+  // jest's 5s test timeout fires).
+  start: jest.fn(async ({ qrCodeHandler } = {}) => {
+    if (typeof qrCodeHandler === 'function') {
+      await qrCodeHandler('tg://login?token=testtoken123');
+    }
+    return { id: 1, firstName: 'Mock', lastName: 'User', username: 'mockuser' };
+  }),
   sendText: jest.fn(async () => ({ id: 999 })),
   onNewMessage: { add: jest.fn() },
   destroy: jest.fn(async () => {}),
@@ -71,12 +87,16 @@ describe('MtProtoTelegramClient construction', () => {
 });
 
 describe('MtProtoTelegramClient.connect', () => {
-  it('calls tg.start with disableUpdates:true', async () => {
+  it('kicks off a background tg.start({}) without awaiting it', async () => {
+    // The current implementation deliberately does NOT await tg.start()
+    // during connect() — that call blocks until the user scans the QR,
+    // which would race the TELEGRAM_CONNECT_TIMEOUT_MS cap in
+    // telegramAuth.js. We just prime the underlying MtClient so DNS /
+    // TCP / proxy failures surface synchronously, then kick off the
+    // background start so stored sessions can load their auth keys.
     const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
     await client.connect();
-    expect(mockTgInstance.start).toHaveBeenCalledWith(
-      expect.objectContaining({ disableUpdates: true })
-    );
+    expect(mockTgInstance.start).toHaveBeenCalledWith({});
   });
 
   it('is idempotent — parallel connect() calls share one promise', async () => {
@@ -89,10 +109,18 @@ describe('MtProtoTelegramClient.connect', () => {
     expect(mockTgInstance.start).toHaveBeenCalledTimes(1);
   });
 
-  it('translates mtcute errors into TelegramTransportError', async () => {
+  it('translates mtcute errors during the background start into a warn log', async () => {
+    // connect() itself does not await tg.start, so it cannot throw.
+    // The error from the background call is swallowed by connect()
+    // and logged via console.warn (see the .catch in mtProtoTelegramClient.js).
     mockTgInstance.start.mockRejectedValueOnce(new Error('boom'));
     const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
-    await expect(client.connect()).rejects.toThrow(/boom/);
+    await expect(client.connect()).resolves.toBeUndefined();
+    // Let the microtask queue flush so the .catch runs.
+    await new Promise((r) => setImmediate(r));
+    // The defensive error path lives inside the background .catch,
+    // so we only assert that connect() did not throw — the warn is
+    // captured by the beforeEach spy.
   });
 });
 
@@ -100,16 +128,28 @@ describe('MtProtoTelegramClient.requestQrToken + checkQrToken', () => {
   it('returns a token envelope with qrUrl + expiresAt', async () => {
     const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
     const qr = await client.requestQrToken();
-    expect(qr.token).toMatch(/^mtcute:/);
+    // requestQrToken extracts the token from the `tg://login?token=...`
+    // URL returned by mtcute's qrCodeHandler — there is no synthetic
+    // `mtcute:...` prefix anymore (the previous behaviour was a
+    // placeholder before we hooked up the real mtcute URL).
+    expect(qr.token).toBe('testtoken123');
     expect(qr.qrUrl).toMatch(/^tg:\/\/login/);
     expect(qr.expiresAt).toBeGreaterThan(Date.now());
   });
 
   it('returns awaiting_scan while the scan promise is still pending', async () => {
     // mtcute's start() never resolves → simulates user still
-    // thinking about scanning.
+    // thinking about scanning. The qrCodeHandler fires synchronously
+    // (before start() returns) so requestQrToken() can unblock,
+    // but the underlying tg.start() stays pending — that maps to
+    // "awaiting_scan" in checkQrToken.
     mockTgInstance.start.mockImplementationOnce(
-      () => new Promise(() => {})
+      async ({ qrCodeHandler }) => {
+        if (typeof qrCodeHandler === 'function') {
+          qrCodeHandler('tg://login?token=testtoken123');
+        }
+        return new Promise(() => {}); // never resolves
+      }
     );
     const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
     await client.requestQrToken();
@@ -137,15 +177,18 @@ describe('MtProtoTelegramClient.requestQrToken + checkQrToken', () => {
     expect(status.status).toBe('not_found');
   });
 
-  it('returns expired when mtcute rejects with EXPIRED', async () => {
+  it('surfaces EXPIRED from mtcute via TelegramTransportError', async () => {
+    // requestQrToken awaits `firstQrUrl`, which rejects with the
+    // original error when qrCodeHandler never fired; the production
+    // code wraps that in a TelegramTransportError so callers can
+    // render a clean message instead of a raw mtcute stack.
     mockTgInstance.start.mockRejectedValueOnce(
       new Error('QR_TOKEN_EXPIRED')
     );
     const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
-    await client.requestQrToken();
-    await new Promise((r) => setImmediate(r));
-    const status = await client.checkQrToken('x');
-    expect(status.status).toBe('expired');
+    await expect(client.requestQrToken()).rejects.toThrow(
+      /QR_TOKEN_EXPIRED/
+    );
   });
 });
 

@@ -58,6 +58,24 @@ function wrap(name, fn) {
   };
 }
 
+/**
+ * Wrap a gateway method that requires the gateway to be configured first.
+ * If `gateway.isConfigured()` is false, throw a clean 503-style error BEFORE
+ * touching the DB / underlying client. This mirrors the old embedded-mode
+ * behaviour where calls without TELEGRAM_GATEWAY_URL/SECRET failed fast
+ * instead of returning empty lists that look healthy.
+ */
+function guard(name, fn) {
+  return async (...args) => {
+    if (!gateway.isConfigured()) {
+      const err = new Error('Telegram gateway is not configured on the backend');
+      err.status = 503;
+      throw err;
+    }
+    return wrap(name, fn)(...args);
+  };
+}
+
 const telegramGateway = {
   isConfigured: () => gateway.isConfigured(),
   baseUrl: 'in-process',
@@ -68,21 +86,21 @@ const telegramGateway = {
 
   cancelSession: wrap('cancelSession', (sessionId) => gateway.cancelSession(sessionId)),
 
-  listAccounts: wrap('listAccounts', () => gateway.listAccounts()),
+  listAccounts: guard('listAccounts', () => gateway.listAccounts()),
 
-  deleteAccount: wrap('deleteAccount', (telegramUserId) =>
+  deleteAccount: guard('deleteAccount', (telegramUserId) =>
     gateway.deleteAccount(telegramUserId)
   ),
 
-  bindAccount: wrap('bindAccount', (telegramUserId, accountId) =>
+  bindAccount: guard('bindAccount', (telegramUserId, accountId) =>
     gateway.bindAccount(telegramUserId, accountId)
   ),
 
-  sendMessage: wrap('sendMessage', (telegramUserId, chatId, text) =>
+  sendMessage: guard('sendMessage', (telegramUserId, chatId, text) =>
     gateway.sendMessage(telegramUserId, chatId, text)
   ),
 
-  ensureHandler: wrap('ensureHandler', (telegramUserId) => gateway.ensureHandler(telegramUserId)),
+  ensureHandler: guard('ensureHandler', (telegramUserId) => gateway.ensureHandler(telegramUserId)),
 
   /**
    * Test-only / migration aid: returns the raw in-process facade.

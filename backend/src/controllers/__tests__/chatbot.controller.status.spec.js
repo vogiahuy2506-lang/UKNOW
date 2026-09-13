@@ -5,6 +5,8 @@
  * without booting the real gateway.
  */
 
+import { jest } from '@jest/globals';
+
 // Both must be ESM so `unstable_mockModule` can intercept them.
 const gatewayPath = '../../services/chatbot/inProcChannelGateway/index.js';
 const controllerPath = '../../controllers/chatbot.controller.js';
