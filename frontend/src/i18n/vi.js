@@ -7597,6 +7597,8 @@ export default {
         policy_violation: 'Vi phạm chính sách',
         rate_limited: 'Giới hạn tần suất',
         unknown: 'Lỗi không xác định',
+        bounced: 'Thư bị trả lại',
+        failed: 'Gửi thất bại',
       },
     },
     speed: 'Tốc độ',
