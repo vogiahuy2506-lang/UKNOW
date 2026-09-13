@@ -3709,8 +3709,34 @@ class CampaignRunService {
               if (sendResult.status === 'failed') {
                 const isRateLimitedRetryScheduled = sendResult.errorType === 'smtp_rate_limited_retry_scheduled';
                 const isPlanQuotaExceeded = sendResult.errorType === 'plan_send_limit_exceeded';
-                if (!isRateLimitedRetryScheduled && !isPlanQuotaExceeded) {
+                const isSmtpConfigError = sendResult.errorType === 'smtp_config';
+                if (!isRateLimitedRetryScheduled && !isPlanQuotaExceeded && !isSmtpConfigError) {
                   failedSends += 1;
+                }
+                if (isSmtpConfigError) {
+                  // Lỗi cấu hình SMTP (ví dụ 535 authentication failed) là lỗi hạ tầng/cấu hình của toàn bộ
+                  // chiến dịch/tài khoản gửi, KHÔNG phải lỗi riêng lẻ của người nhận. Phải DỪNG HẲN run ngay lập tức,
+                  // tránh lặp hết danh sách người nhận (bằng chứng prod 07-08/09: 2.464 email failed vì 535).
+                  const message = sendResult.error || 'Lỗi cấu hình tài khoản gửi email (SMTP).';
+                  await campaignExecutionLogService.logExecutionNode({
+                    campaignId,
+                    runId,
+                    node,
+                    customerId: customer.id || null,
+                    recipientEmail: recipientEmailForLog,
+                    status: 'failed',
+                    progressCurrent: successfulSends + failedSends + skippedSends,
+                    progressTotal: totalRecipients,
+                    errorMessage: message,
+                    executionData: buildSendEmailExecutionData({
+                      ...sendResult,
+                      message,
+                    }),
+                  });
+                  await campaignRunRepository.failRun(runId, message);
+                  const err = new Error(message);
+                  err.code = 'RUN_STOPPED';
+                  throw err;
                 }
                 if (isPlanQuotaExceeded) {
                   if (!sendResult.resetAt) {
