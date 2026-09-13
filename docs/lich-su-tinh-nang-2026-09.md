@@ -271,6 +271,20 @@ bị che trong truy vấn shared phải có ca chạy thật. Nợ ngoài phạm
 so `startsWith('/campaigns')` thiếu `/app` từ commit đầu nên trình dựng chưa bao giờ được coi là
 full-screen editor.
 
+## Checkout: voucher không còn đua với nút thanh toán, gói tự đồng bộ sau khi trả (10/09)
+
+Hai lỗi frontend từ plan 09/09: bấm thanh toán khi mã voucher đang được kiểm có thể gửi
+`explicitVoucherCode: null` (mất giảm giá), và sau thanh toán xong trang chủ vẫn hiện gói cũ cho
+tới khi tải lại.
+
+| Việc | Commit |
+|---|---|
+| Khoá nút thanh toán khi voucher đang validate; sau validate phải xác nhận lại mới gửi đúng mã; `PaymentSuccess` gọi `refreshCurrentUser` + `fetchAiCredits` | `5d2d363f` |
+| Chặn lệch giữa mã voucher đang hiển thị và mã thực gửi (đổi mã giữa chừng) | `6b6b7e9e` |
+| Sửa đua trong spec `PaymentSuccess.regression` làm CI đỏ ở máy chậm | `26afb80c` |
+
+Plan không được cập nhật lúc ship nên bị liệt kê nhầm là nợ tới 13/09.
+
 ## Việc còn treo (tính tới 11/09/2026)
 
 - **Nghiệm thu PR-3** sau 2–3 ngày: đếm dòng `zalo_messages` còn `tracking_metadata->>'status' =
