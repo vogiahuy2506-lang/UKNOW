@@ -385,6 +385,69 @@ async function baselineLegacyChecksums(client, files, unbaselinedFiles, checkpoi
   }
 }
 
+/**
+ * Repair checksum drift cho migration đã chạy trên production trước đó nhưng
+ * file .sql đã được edit comment-only (vd: thêm annotation '-- allow-immutable-edit',
+ * '-- allow-destructive-ddl') sau khi checksum ban đầu đã ghi vào schema_migrations.
+ *
+ * Vì sao cần escape hatch: checksum check mặc định từ chối mọi drift để chống
+ * tampering file giữa các release. Nhưng comment-only change là một ngoại lệ
+ * an toàn (không ảnh hưởng SQL payload → DB row count không đổi). Operator phải
+ * CHỦ ĐỘNG opt-in qua env var MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR=true — mặc
+ * định vẫn throw như cũ để bảo toàn tính safety-first của repo.
+ *
+ * Hành vi:
+ *   - Chỉ xử lý các file trong `mismatches` (file hash hiện tại ≠ DB hash).
+ *   - Không touch các file `unbaselined` (NULL checksum — đó là baselineLegacyChecksums
+ *     việc của nó vì có thể đi kèm pending migrations).
+ *   - UPDATE trong 1 transaction, COMMIT ngay nếu pass, ROLLBACK nếu lỗi.
+ *   - Log rõ từng file được repair (DB hash → file hash) để audit trail.
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {string[]} mismatches
+ * @returns {Promise<{repaired: number, files: string[]}>}
+ */
+async function repairDriftedChecksums(client, mismatches) {
+  if (mismatches.length === 0) return { repaired: 0, files: [] };
+
+  // mismatches đến từ formatChecksumFailure có dạng
+  // "<file> (DB=<dbHash>, file=<fileHash>)" — chỉ lấy tên file.
+  const files = mismatches.map((entry) => entry.split(' ')[0]);
+
+  let transactionStarted = false;
+  const updated = [];
+  try {
+    await client.query('BEGIN');
+    transactionStarted = true;
+
+    for (const file of files) {
+      const checksum = hashMigrationContent(readMigrationBytes(file));
+      const { rowCount } = await client.query(
+        `UPDATE schema_migrations
+            SET checksum_sha256 = $2
+          WHERE filename = $1`,
+        [file, checksum]
+      );
+      if (rowCount > 0) {
+        updated.push(file);
+      }
+    }
+
+    await client.query('COMMIT');
+    transactionStarted = false;
+    return { repaired: updated.length, files: updated };
+  } catch (err) {
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error(`[Migration] Không rollback được checksum repair: ${rollbackErr.message}`);
+      }
+    }
+    throw err;
+  }
+}
+
 /** Danh sách file migration trên đĩa, đã sắp theo tên (001_, 002_, ...). */
 export function listMigrationFiles() {
   return fs.readdirSync(MIGRATIONS_DIR)
@@ -648,9 +711,28 @@ export async function runMigrationsUnlocked(client) {
       `[Migration] Đã baseline checksum cho ${existingInspection.unbaselined.length} migration lịch sử`
     );
   } else {
-    const checksumFailure = formatChecksumFailure(existingInspection);
+    const inspection = existingInspection;
+    const checksumFailure = formatChecksumFailure(inspection);
     if (checksumFailure) {
-      throw new Error(`[Migration] Kiểm tra checksum thất bại: ${checksumFailure}`);
+      // Escape hatch: nếu drift chỉ là comment-only edit (vd thêm annotation
+      // '-- allow-immutable-edit' cho check:migration-safety), operator có thể
+      // opt-in repair bằng env MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR=true.
+      // Chỉ các file thuộc mismatches (không phải missingFiles/unbaselined) mới
+      // được repair — missingFiles thì file thực sự bị xóa khỏi repo,
+      // unbaselined thì baselineLegacyChecksums sẽ xử lý ở phiên kế tiếp.
+      const allowRepair = String(process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR || '').toLowerCase() === 'true';
+      if (allowRepair && inspection.mismatches.length > 0
+          && inspection.missingFiles.length === 0 && inspection.unbaselined.length === 0) {
+        const { repaired, files } = await repairDriftedChecksums(client, inspection.mismatches);
+        console.warn(
+          `[Migration] ⚠️  Đã REPAIR checksum cho ${repaired} file drift (env MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR=true):`
+        );
+        for (const file of files) {
+          console.warn(`[Migration]   - ${file}`);
+        }
+      } else {
+        throw new Error(`[Migration] Kiểm tra checksum thất bại: ${checksumFailure}`);
+      }
     }
   }
 

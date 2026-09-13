@@ -549,6 +549,91 @@ describe('checksum baseline', () => {
       params: ['checksum_baseline_with_pending'],
     }));
   });
+
+  it('throws khi checksum drift khi env MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR không set', async () => {
+    // Mô phỏng file 205_admin_menu_layouts_app_scope.sql: comment đã edit sau
+    // khi DB đã ghi checksum ban đầu. Inspection trả về 1 mismatch.
+    const target = '205_admin_menu_layouts_app_scope.sql';
+    const files = listMigrationFiles();
+    const staleRows = files.map((filename) => {
+      if (filename !== target) {
+        return {
+          filename,
+          checksum_sha256: hashMigrationContent(fs.readFileSync(path.join(MIGRATIONS_DIR, filename))),
+        };
+      }
+      // Simulate "stale" DB checksum: different from current file
+      return { filename, checksum_sha256: 'b642dd1efcd020681f33275bd678dd3ec6257dfb378add342793c83c3bfa45d5' };
+    });
+
+    const client = {
+      query: jest.fn(async (sql) => {
+        if (String(sql).includes('SELECT filename, checksum_sha256 FROM schema_migrations')) {
+          return { rows: staleRows };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    const previousEnv = process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR;
+    delete process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR;
+    try {
+      await expect(runMigrationsUnlocked(client))
+        .rejects.toThrow(/checksum không khớp.*205_admin_menu_layouts_app_scope\.sql/);
+    } finally {
+      if (previousEnv === undefined) delete process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR;
+      else process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR = previousEnv;
+    }
+  });
+
+  it('repair checksum drift khi env MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR=true', async () => {
+    const target = '205_admin_menu_layouts_app_scope.sql';
+    const files = listMigrationFiles();
+    const staleRows = files.map((filename) => {
+      if (filename !== target) {
+        return {
+          filename,
+          checksum_sha256: hashMigrationContent(fs.readFileSync(path.join(MIGRATIONS_DIR, filename))),
+        };
+      }
+      return { filename, checksum_sha256: 'b642dd1efcd020681f33275bd678dd3ec6257dfb378add342793c83c3bfa45d5' };
+    });
+
+    const queries = [];
+    const client = {
+      query: jest.fn(async (sql, params = []) => {
+        const text = String(sql);
+        queries.push({ text, params });
+        if (text.includes('SELECT filename, checksum_sha256 FROM schema_migrations')) {
+          return { rows: staleRows };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    const previousEnv = process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR;
+    process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR = 'true';
+    try {
+      // Repair chỉ UPDATE DB; do đó DB thấy checksum mới nhưng không chạy DDL
+      // nghiệp vụ. Test này gọi hàm trực tiếp nên không cần thiết phải pass
+      // phần chạy migration tiếp theo — chỉ cần verify UPDATE đã được gọi.
+      await runMigrationsUnlocked(client);
+    } finally {
+      if (previousEnv === undefined) delete process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR;
+      else process.env.MIGRATION_ALLOW_CHECKSUM_DRIFT_REPAIR = previousEnv;
+    }
+
+    const repairCall = queries.find(({ text }) => (
+      text.includes('UPDATE schema_migrations') && text.includes('SET checksum_sha256 = $2')
+    ));
+    expect(repairCall).toBeDefined();
+    expect(repairCall.params[0]).toBe(target);
+    expect(repairCall.params[1])
+      .toBe(hashMigrationContent(fs.readFileSync(path.join(MIGRATIONS_DIR, target))));
+    // Repair phải nằm trong transaction
+    expect(queries.some(({ text }) => text === 'BEGIN')).toBe(true);
+    expect(queries.some(({ text }) => text === 'COMMIT')).toBe(true);
+  });
 });
 
 describe('withMigrationLock', () => {
