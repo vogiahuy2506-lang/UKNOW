@@ -5,6 +5,7 @@ import {
   mapVariableToSemanticTarget,
   deriveVariablesForText,
   renderAutoMappedTemplateText,
+  neutralizeUnresolvedTemplateVariables,
 } from '../templateVariableAutoMap.util.js';
 
 describe('templateVariableAutoMap.util', () => {
@@ -19,6 +20,23 @@ describe('templateVariableAutoMap.util', () => {
       const text = 'Chào {{full_name}}! Mã của {{ full_name }} là {{code_123}} và {{note.detail}}.';
       const vars = extractTemplateVariableNames(text);
       expect(vars).toEqual(['full_name', 'code_123', 'note.detail']);
+    });
+
+    // Bug tái diễn lần 3: TEMPLATE_VARIABLE_REGEX cũ chỉ nhận [a-zA-Z0-9_.-], trợ lý AI sinh
+    // {{Họ Tên}} (có dấu, có khoảng trắng) trích ra RỖNG — trạng thái đó trùng "không có biến"
+    // nên mọi lớp phòng thủ phía sau không có gì để bắt. [^{}]+? nhận diện được thì bug này
+    // không tái diễn lần 4 chỉ vì đổi shape.
+    it('trích được tên biến có dấu tiếng Việt và khoảng trắng ({{Họ Tên}})', () => {
+      expect(extractTemplateVariableNames('Chào {{Họ Tên}}!')).toEqual(['Họ Tên']);
+    });
+
+    it('trích được tên biến có dấu tiếng Việt kèm khoảng trắng thừa quanh {{ }}', () => {
+      expect(extractTemplateVariableNames('Chào {{ Họ Tên }}!')).toEqual(['Họ Tên']);
+    });
+
+    it('không hồi quy — {{ho_ten}} và {{full_name}} (shape cũ) vẫn nhận diện đúng như trước', () => {
+      expect(extractTemplateVariableNames('{{ho_ten}}')).toEqual(['ho_ten']);
+      expect(extractTemplateVariableNames('{{full_name}}')).toEqual(['full_name']);
     });
   });
 
@@ -180,6 +198,24 @@ describe('templateVariableAutoMap.util', () => {
       expect(rendered).toBe('Chào bạn! Giá: ');
     });
 
+    it('Bug tái diễn — {{Họ Tên}} khớp thẳng cột "Họ Tên" (không cần fold, khớp key chính xác)', () => {
+      const result = deriveVariablesForText('Chào {{Họ Tên}}!', {
+        mappings: [],
+        entry: { row: { 'Họ Tên': 'Nguyễn Hoàng Phúc' } },
+      });
+      expect(result.variables['Họ Tên']).toBe('Nguyễn Hoàng Phúc');
+      expect(result.unresolved).toEqual([]);
+    });
+
+    it('{{Họ Tên}} vẫn khớp được cột "ho_ten" nhờ foldDiacritics có sẵn từ bản vá 01/09', () => {
+      const result = deriveVariablesForText('Chào {{Họ Tên}}!', {
+        mappings: [],
+        entry: { row: { ho_ten: 'Trần Thị B' } },
+      });
+      expect(result.variables['Họ Tên']).toBe('Trần Thị B');
+      expect(result.unresolved).toEqual([]);
+    });
+
     it('Rule 3: Returns empty variables without processing if text has no variables', () => {
       const result = deriveVariablesForText('Thông báo không có biến', {
         mappings: [],
@@ -197,6 +233,95 @@ describe('templateVariableAutoMap.util', () => {
         entry: { row: { 'Họ và tên': 'Nguyễn Hoàng Phúc', SĐT: '0901234567' } },
       });
       expect(rendered).toBe('Chào Nguyễn Hoàng Phúc! SĐT bạn là 0901234567.');
+    });
+
+    it('Bug tái diễn — sheet có cột "Họ Tên", tin có {{Họ Tên}} → render ra tên, không còn {{', () => {
+      const rendered = renderAutoMappedTemplateText('Chào {{Họ Tên}}!', {
+        mappings: [],
+        entry: { row: { 'Họ Tên': 'Nguyễn Hoàng Phúc', sđt: '0901234567' } },
+      });
+      expect(rendered).toBe('Chào Nguyễn Hoàng Phúc!');
+      expect(rendered).not.toContain('{{');
+    });
+  });
+
+  describe('neutralizeUnresolvedTemplateVariables', () => {
+    it('không có "{{" → trả nguyên văn, không log cảnh báo', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(neutralizeUnresolvedTemplateVariables('Không có biến gì cả', { campaignId: 1, nodeId: 2 })).toBe(
+        'Không có biến gì cả'
+      );
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('biến TÊN chưa giải được → thay bằng "bạn", không còn "{{"', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = neutralizeUnresolvedTemplateVariables('Chào {{Họ Tên}}!', { campaignId: 383, nodeId: 5 });
+      expect(result).toBe('Chào bạn!');
+      expect(result).not.toContain('{{');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[TemplateAutoMap] Chặn cửa sập trước khi gửi — còn biến chưa giải [Họ Tên]')
+      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('campaignId=383'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('nodeId=5'));
+      warnSpy.mockRestore();
+    });
+
+    it('biến KHÔNG phải tên chưa giải được → thay bằng chuỗi rỗng, dọn khoảng trắng/dấu câu lạc', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = neutralizeUnresolvedTemplateVariables('Giá {{gia}} - đã giảm {{discount}}%', {
+        campaignId: 1,
+        nodeId: 2,
+      });
+      expect(result).not.toContain('{{');
+      expect(result).not.toContain('  '); // không còn khoảng trắng đôi
+      warnSpy.mockRestore();
+    });
+
+    it('nhiều biến chưa giải cùng lúc → tất cả đều bị thay, không còn "{{" nào sót lại', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = neutralizeUnresolvedTemplateVariables('Chào {{full_name}}, ưu đãi {{code}}!', {
+        campaignId: 1,
+        nodeId: 2,
+      });
+      expect(result).toBe('Chào bạn, ưu đãi!');
+      expect(result).not.toContain('{{');
+      warnSpy.mockRestore();
+    });
+
+    it('KHÔNG BAO GIỜ throw — kể cả khi [^{}]+? khớp nhầm đoạn văn bản không phải biến', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(() =>
+        neutralizeUnresolvedTemplateVariables('Ký hiệu toán học: {{x + y}} không phải biến thật', {
+          campaignId: 1,
+          nodeId: 2,
+        })
+      ).not.toThrow();
+      warnSpy.mockRestore();
+    });
+
+    it('không có logContext → vẫn hoạt động, không throw khi log', () => {
+      expect(() => neutralizeUnresolvedTemplateVariables('Chào {{ten}}!')).not.toThrow();
+      expect(neutralizeUnresolvedTemplateVariables('Chào {{ten}}!')).toBe('Chào bạn!');
+    });
+
+    it('ca đầu-cuối nghiệm thu 383: sheet có cột full_name, tin có {{Họ Tên}} → render ra tên thật, không ra "bạn"', () => {
+      const text = 'Chào {{Họ Tên}}!';
+      const rendered = renderAutoMappedTemplateText(text, {
+        entry: { row: { full_name: 'Hoàng Phúc' } },
+      });
+      expect(rendered).toBe('Chào Hoàng Phúc!');
+      expect(rendered).not.toContain('bạn');
+    });
+
+    it('sheet có cột customer_name, tin có {{Họ Tên}} → render ra tên thật', () => {
+      const text = 'Chào {{Họ Tên}}!';
+      const rendered = renderAutoMappedTemplateText(text, {
+        entry: { row: { customer_name: 'Thanh Nga' } },
+      });
+      expect(rendered).toBe('Chào Thanh Nga!');
+      expect(rendered).not.toContain('bạn');
     });
   });
 });

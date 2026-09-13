@@ -47,7 +47,7 @@ const CampaignRunLogsPanel = ({
             {activePause && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                 <span className="text-sm font-medium text-amber-900">
-                  {t(getRunPauseI18nKey(activePause.kind), {
+                  {t(getRunPauseI18nKey(activePause), {
                     until: formatCampaignDateTime(activePause.untilIso),
                   })}
                 </span>

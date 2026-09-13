@@ -36,7 +36,7 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object>}
    */
-  async getAllCampaigns({ authUser, userId, roleCode, workspaceOwnerId, page = 1, limit = 10, status, type, search, origin }) {
+  async getAllCampaigns({ authUser, userId, roleCode, workspaceOwnerId, page = 1, limit = 10, status, type, search, origin, state }) {
     const offset = (page - 1) * limit;
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
     const isAdmin = context.isSuperAdmin;
@@ -46,8 +46,8 @@ class CampaignCrudService {
       workspaceOwnerId: context.workspaceOwnerId,
       isAdmin,
     };
-    const rows = await campaignCrudRepository.findCampaigns({ ...scope, status, type, search, origin, limit, offset });
-    const total = await campaignCrudRepository.countCampaigns({ ...scope, status, type, search, origin });
+    const rows = await campaignCrudRepository.findCampaigns({ ...scope, status, type, search, origin, state, limit, offset });
+    const total = await campaignCrudRepository.countCampaigns({ ...scope, status, type, search, origin, state });
 
     return {
       items: rows.map((item) => ({
@@ -71,6 +71,7 @@ class CampaignCrudService {
         lastRunAt: item.last_run_at,
         runningCount: item.running_count,
         completedCount: item.completed_count,
+        enabledScheduleCount: item.enabled_schedule_count ?? 0,
         createdBy: item.creator_name ? { name: item.creator_name } : null,
         origin: item.origin,
       })),

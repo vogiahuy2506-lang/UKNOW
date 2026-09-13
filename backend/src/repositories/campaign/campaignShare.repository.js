@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { buildCampaignFilterSql } from './campaignCrud.repository.js';
 
 class CampaignShareRepository {
   /**
@@ -40,13 +41,15 @@ class CampaignShareRepository {
   /**
    * Get all campaigns shared WITH the user (as recipient)
    */
-  async findSharedWithUser({ userId, page = 1, limit = 10 }) {
+  async findSharedWithUser({ userId, page = 1, limit = 10, search, status, type, state }) {
     const offset = (page - 1) * limit;
-    const { rows } = await db.query(
-      `SELECT c.*, cs.share_type, cs.can_run, cs.created_at as shared_at,
+    const params = [userId];
+    let query = `
+      SELECT c.*, cs.share_type, cs.can_run, cs.created_at as shared_at,
               u.id as owner_id, COALESCE(u.full_name, u.username) as owner_name, u.email as owner_email,
               COALESCE(run_stats.running_count, 0)::INTEGER AS running_count,
-              COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count
+              COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count,
+              COALESCE(sched_stats.enabled_schedule_count, 0)::INTEGER AS enabled_schedule_count
        FROM campaign_shares cs
        JOIN campaigns c ON cs.id_campaign = c.id
        JOIN users u ON cs.id_owner = u.id
@@ -57,22 +60,40 @@ class CampaignShareRepository {
          FROM campaign_runs cr
          WHERE cr.id_campaign = c.id
        ) run_stats ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) FILTER (WHERE csched.enabled)::INTEGER AS enabled_schedule_count
+         FROM campaign_schedules csched WHERE csched.id_campaign = c.id
+       ) sched_stats ON TRUE
        WHERE cs.id_recipient = $1
-       ORDER BY cs.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
-    );
+    `;
+
+    query += buildCampaignFilterSql({ status, type, search, origin: undefined, state }, params, 'c');
+
+    query += ` ORDER BY cs.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, offset);
+
+    const { rows } = await db.query(query, params);
     return rows;
   }
 
   /**
    * Count campaigns shared with user
    */
-  async countSharedWithUser(userId) {
-    const { rows } = await db.query(
-      `SELECT COUNT(*) FROM campaign_shares WHERE id_recipient = $1`,
-      [userId]
-    );
+  async countSharedWithUser(input) {
+    const { userId, search, status, type, state } =
+      typeof input === 'object' && input !== null ? input : { userId: input };
+
+    const params = [userId];
+    let query = `
+      SELECT COUNT(*)
+      FROM campaign_shares cs
+      JOIN campaigns c ON cs.id_campaign = c.id
+      WHERE cs.id_recipient = $1
+    `;
+
+    query += buildCampaignFilterSql({ status, type, search, origin: undefined, state }, params, 'c');
+
+    const { rows } = await db.query(query, params);
     return parseInt(rows[0].count, 10);
   }
 

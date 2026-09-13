@@ -2,100 +2,31 @@ import cron from 'node-cron';
 import db from '../config/database.js';
 import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
-import { findExpiringUsers, findExpiredUsers, expireUserPlan, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
-import { sendSystemEmail, buildRenewalReminderEmail } from './systemEmail.util.js';
+import { sendSystemEmail, buildRenewalUrl } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 import { startKeepAliveScheduler as startWhatsAppKeepAliveScheduler } from '../services/chatbot/whatsappBaileysKeepAlive.service.js';
 import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
+// Luật thời gian của lịch chạy (khoá ngày Hà Nội, cron runtime, N ngày) dời sang util để
+// controller tính "lần chạy tiếp" bằng ĐÚNG luật nổ ở đây — xem campaignScheduleCron.util.js.
+import {
+  HANOI_TIME_ZONE,
+  toHanoiDateKey,
+  getDaysDiffFromDateKeys,
+  parseCustomIntervalDaysFromCron,
+  resolveRuntimeCronExpression,
+} from './campaignScheduleCron.util.js';
 
 const campaignScheduleTasks = new Map();
 let isRefreshingCampaignSchedules = false;
 const activeContinuousRunIds = new Set();
 const activeNonContinuousResumeRunIds = new Set();
-const HANOI_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 const SAFE_QUOTA_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'quotaDeferredUntil'");
 const SAFE_ZALO_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'zaloOutboundDeferredUntil'");
 const SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'nonContinuousDeferredUntil'");
-
-/**
- * Chuyển thời điểm bất kỳ về khóa ngày `YYYY-MM-DD` theo múi giờ Hà Nội.
- *
- * @param {Date|string|null|undefined} rawDate thời điểm đầu vào
- * @returns {string|null} khóa ngày hoặc null nếu input không hợp lệ
- */
-const toHanoiDateKey = (rawDate) => {
-  if (!rawDate) return null;
-  const parsed = rawDate instanceof Date ? rawDate : new Date(rawDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: HANOI_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(parsed);
-};
-
-/**
- * Tính số ngày chênh lệch giữa 2 mốc ngày dạng `YYYY-MM-DD`.
- *
- * @param {string} startKey mốc bắt đầu
- * @param {string} endKey mốc kết thúc
- * @returns {number|null} số ngày chênh lệch hoặc null nếu parse lỗi
- */
-const getDaysDiffFromDateKeys = (startKey, endKey) => {
-  if (!startKey || !endKey) return null;
-  const [startYear, startMonth, startDay] = String(startKey).split('-').map((v) => Number.parseInt(v, 10));
-  const [endYear, endMonth, endDay] = String(endKey).split('-').map((v) => Number.parseInt(v, 10));
-  if (
-    !Number.isFinite(startYear)
-    || !Number.isFinite(startMonth)
-    || !Number.isFinite(startDay)
-    || !Number.isFinite(endYear)
-    || !Number.isFinite(endMonth)
-    || !Number.isFinite(endDay)
-  ) {
-    return null;
-  }
-  const startUtc = Date.UTC(startYear, startMonth - 1, startDay);
-  const endUtc = Date.UTC(endYear, endMonth - 1, endDay);
-  return Math.floor((endUtc - startUtc) / (24 * 60 * 60 * 1000));
-};
-
-/**
- * Parse số ngày lặp lại từ cron custom dạng N ngày ở trường ngày-tháng.
- *
- * @param {string} cronExpression biểu thức cron lưu trong DB
- * @returns {number|null} số ngày lặp hoặc null nếu không parse được
- */
-const parseCustomIntervalDaysFromCron = (cronExpression = '') => {
-  const parts = String(cronExpression).trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 3) return null;
-  const match = String(parts[2]).match(/^\*\/(\d+)$/);
-  if (!match) return null;
-  const intervalDays = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
-  return intervalDays;
-};
-
-/**
- * Với lịch custom, runtime cron luôn chạy hàng ngày tại cùng giờ/phút để tránh lệch mốc N ngày.
- *
- * @param {object} schedule bản ghi lịch chạy
- * @returns {string} cron runtime dùng để đăng ký node-cron
- */
-const resolveRuntimeCronExpression = (schedule) => {
-  const rawCron = String(schedule?.cron_expression || '').trim();
-  if (String(schedule?.schedule_type || '').toLowerCase() !== 'custom') {
-    return rawCron;
-  }
-  const parts = rawCron.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return rawCron;
-  return `${parts[0]} ${parts[1]} * * *`;
-};
 
 /**
  * Quyết định lịch custom có đến hạn chạy ở ngày hiện tại hay chưa.
@@ -618,7 +549,7 @@ export const initScheduler = () => {
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');
-    const renewalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/renewal`;
+    const renewalUrl = buildRenewalUrl();
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
       await cronJobRunRepository.recordRun('subscription_reminder', async () => {
@@ -633,37 +564,22 @@ export const initScheduler = () => {
           console.error('[Subscription] Lỗi khi kích hoạt lệnh hẹn đổi gói:', err.message);
         }
 
-        // 1. Hết hạn: revoke active_plan_id
-        const expired = await findExpiredUsers();
-        for (const user of expired) {
-          await expireUserPlan(user.id);
-          console.log(`[Subscription] Đã thu hồi gói của ${user.email} (${user.plan_name})`);
+        // 1. Hết hạn: gửi thư T-0 và thu hồi active_plan_id qua service
+        let expiryResult = { expiredCount: 0, emailsSent: 0 };
+        try {
+          const { processExpiredSubscriptions } = await import('../services/payment/subscriptionExpiry.service.js');
+          expiryResult = await processExpiredSubscriptions({ renewalUrl });
+        } catch (expiryErr) {
+          console.error('[Subscription] Lỗi khi xử lý gói hết hạn:', expiryErr.message);
         }
 
-        // 2. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
-        const week = await findExpiringUsers(6, 7, 1);
-        for (const user of week) {
-          const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-          const { subject, html } = buildRenewalReminderEmail({
-            fullName: user.full_name, planName: user.plan_name,
-            expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
-          });
-          await sendSystemEmail({ to: user.email, subject, html });
-          await incrementReminderCount(user.id);
-          console.log(`[Subscription] Nhắc lần 1 → ${user.email} (còn ${daysLeft} ngày)`);
-        }
-
-        // 3. Nhắc lần 2 — còn 3 ngày (reminder_count = 1)
-        const threeDay = await findExpiringUsers(2, 3, 2);
-        for (const user of threeDay) {
-          const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-          const { subject, html } = buildRenewalReminderEmail({
-            fullName: user.full_name, planName: user.plan_name,
-            expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
-          });
-          await sendSystemEmail({ to: user.email, subject, html });
-          await incrementReminderCount(user.id);
-          console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
+        // 2 & 3. Nhắc hạn: gửi thư nhắc lần 1 (7 ngày) và lần 2 (3 ngày) qua service
+        let reminderResult = { remindedWeek: 0, remindedThreeDay: 0, failed: 0 };
+        try {
+          const { sendExpiringReminders } = await import('../services/payment/subscriptionExpiry.service.js');
+          reminderResult = await sendExpiringReminders({ renewalUrl });
+        } catch (reminderErr) {
+          console.error('[Subscription] Lỗi khi gửi thư nhắc hạn:', reminderErr.message);
         }
 
         let lockedUsers = 0;
@@ -720,17 +636,12 @@ export const initScheduler = () => {
           console.error('[TopupLock] reconcile/reminders failed:', lockErr.message);
         }
 
-        const processed = expired.length + week.length + threeDay.length + lockedUsers
-          + reminderWeek + reminderThree;
-        return {
-          expired: expired.length,
-          remindedWeek: week.length,
-          remindedThreeDay: threeDay.length,
-          lockedUsers,
-          reminderWeek,
-          reminderThree,
-          synced: processed,
-        };
+        // Hình dạng 5 khoá giám sát là hợp đồng với dashboard — dựng bằng hàm có test,
+        // đừng gõ tay lại ở đây (xem buildSubscriptionCronResult).
+        const { buildSubscriptionCronResult } = await import('../services/payment/subscriptionExpiry.service.js');
+        return buildSubscriptionCronResult({
+          expiryResult, reminderResult, lockedUsers, reminderWeek, reminderThree,
+        });
       });
     } catch (error) {
       console.error('[Subscription] Lỗi khi kiểm tra gói:', error.message);

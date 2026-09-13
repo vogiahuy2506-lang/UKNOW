@@ -233,11 +233,11 @@ export class BounceMailboxService {
     const imapSecure = String(process.env.BOUNCE_IMAP_SECURE ?? 'true').toLowerCase() !== 'false';
 
     if (!bounceDomain || !imapHost || !imapUser || !imapPass) {
-      return { skipped: true, reason: 'missing_bounce_imap_config' };
+      return { status: 'skipped', skipped: true, reason: 'missing_bounce_imap_config' };
     }
 
     if (this.isSyncing) {
-      return { skipped: true, reason: 'already_syncing' };
+      return { status: 'skipped', skipped: true, reason: 'already_syncing' };
     }
 
     this.isSyncing = true;

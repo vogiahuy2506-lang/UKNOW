@@ -2,24 +2,21 @@ import { useMemo } from 'react';
 import { buildWorkspaceLogsFromExecution } from '../../../utils/campaignExecutionLogs';
 
 /**
- * Build derived display data for Campaign Run page.
+ * Build derived display data for Campaign Run workspace logs and schedules.
  *
  * @param {Object} params source state bundle
- * @returns {{workspaceLogs: Array, filteredActiveCampaigns: Array, filteredSchedules: Array, filteredPausedCampaigns: Array}}
+ * @param {Object} [params.selectedRunDetail] Chi tiết lượt chạy đang chọn
+ * @param {Map} [params.flowOrderByNodeId] Map thứ tự node trong luồng
+ * @param {Array} [params.schedules] Danh sách toàn bộ lịch chạy
+ * @param {string} [params.scheduledCampaignSearch] Từ khóa tìm kiếm lịch chạy
+ * @returns {{workspaceLogs: Array, filteredSchedules: Array}}
  */
 const useCampaignRunDerivedData = ({
   selectedRunDetail,
   flowOrderByNodeId,
-  selectedCampaignForLogs,
-  campaigns,
-  activeCampaignSearch,
-  schedules,
-  scheduledCampaignSearch,
-  pausedCampaigns,
-  pausedCampaignSearch,
+  schedules = [],
+  scheduledCampaignSearch = '',
 }) => {
-  const selectedLogCampaignId = selectedCampaignForLogs?.id;
-
   const workspaceLogs = useMemo(() => {
     if (!selectedRunDetail) return [];
     const nodeLogs = buildWorkspaceLogsFromExecution(selectedRunDetail?.executionLogs || [], {
@@ -74,28 +71,11 @@ const useCampaignRunDerivedData = ({
     return runEndLog ? [...systemLogs, ...nodeLogs, runEndLog] : [...systemLogs, ...nodeLogs];
   }, [selectedRunDetail, flowOrderByNodeId]);
 
-  const filteredActiveCampaigns = useMemo(() => {
-    if (selectedLogCampaignId) {
-      return campaigns.filter(
-        (campaign) => Number(campaign?.id) === Number(selectedLogCampaignId)
-      );
-    }
-
-    const keyword = activeCampaignSearch.trim().toLowerCase();
-    if (!keyword) return campaigns;
-    // Khớp theo tên hoặc theo chuỗi con của ID (gõ một phần số vẫn lọc được)
-    return campaigns.filter((campaign) => {
-      const name = String(campaign?.campaignName || '').toLowerCase();
-      const idStr = campaign?.id != null ? String(campaign.id).toLowerCase() : '';
-      return name.includes(keyword) || (idStr && idStr.includes(keyword));
-    });
-  }, [campaigns, activeCampaignSearch, selectedLogCampaignId]);
-
   const filteredSchedules = useMemo(() => {
-    const keyword = scheduledCampaignSearch.trim().toLowerCase();
-    if (!keyword) return schedules;
+    const keyword = (scheduledCampaignSearch || '').trim().toLowerCase();
+    if (!keyword) return schedules || [];
     // Cho phép lọc thêm theo ID chiến dịch gắn với lịch
-    return schedules.filter((schedule) => {
+    return (schedules || []).filter((schedule) => {
       const scheduleName = String(schedule?.scheduleName || '').toLowerCase();
       const campaignName = String(schedule?.campaignName || '').toLowerCase();
       const campaignIdStr =
@@ -108,28 +88,9 @@ const useCampaignRunDerivedData = ({
     });
   }, [schedules, scheduledCampaignSearch]);
 
-  const filteredPausedCampaigns = useMemo(() => {
-    if (selectedLogCampaignId) {
-      return pausedCampaigns.filter(
-        (campaign) => Number(campaign?.id) === Number(selectedLogCampaignId)
-      );
-    }
-
-    const keyword = pausedCampaignSearch.trim().toLowerCase();
-    if (!keyword) return pausedCampaigns;
-    // Giống tab đang hoạt động: tên hoặc chuỗi con ID
-    return pausedCampaigns.filter((campaign) => {
-      const name = String(campaign?.campaignName || '').toLowerCase();
-      const idStr = campaign?.id != null ? String(campaign.id).toLowerCase() : '';
-      return name.includes(keyword) || (idStr && idStr.includes(keyword));
-    });
-  }, [pausedCampaigns, pausedCampaignSearch, selectedLogCampaignId]);
-
   return {
     workspaceLogs,
-    filteredActiveCampaigns,
     filteredSchedules,
-    filteredPausedCampaigns,
   };
 };
 

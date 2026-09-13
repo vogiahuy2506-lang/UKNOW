@@ -436,7 +436,6 @@ export default {
     leadList: 'Khách hàng từ Landing page',
     campaignManagement: 'Quản lý chiến dịch',
     createCampaign: 'Tạo chiến dịch mới',
-    runCampaign: 'Chạy chiến dịch',
     deliveryMonitor: 'Hiệu quả chiến dịch',
     quickSend: 'Gửi nhanh',
     marketplace: 'Marketplace',
@@ -1173,7 +1172,17 @@ export default {
     lastRun: 'Lần chạy cuối',
     runCampaign: 'Chạy chiến dịch',
     scheduleCampaign: 'Lên lịch chiến dịch',
-    runningCampaignBlock: 'Chiến dịch đang chạy. Vui lòng dừng lượt chạy tại trang Chạy chiến dịch (CampaignRun) trước khi tạm dừng.',
+    runningCampaignBlock: 'Chiến dịch đang chạy. Vui lòng bấm Dừng trên dòng chiến dịch trước khi tạm dừng.',
+    operation: 'Vận hành',
+    operationAll: 'Tất cả',
+    operationRunning: 'Đang chạy',
+    operationScheduled: 'Đã lên lịch',
+    operationInactive: 'Tạm ngưng · Không hoạt động',
+    operationDraft: 'Nháp',
+    operationScheduledCount: 'Đã lên lịch · {count} lịch',
+    tabCampaigns: 'Chiến dịch',
+    tabSchedules: 'Lịch chạy',
+    inactive: 'Không hoạt động',
     createCampaign: 'Tạo chiến dịch',
     campaignDetails: 'Chi tiết chiến dịch',
     selectCampaign: 'Chọn chiến dịch',
@@ -3707,6 +3716,7 @@ export default {
   },
 
   aiChatbot: {
+    uploadFreezesList: 'Tệp tải lên sẽ chốt danh sách tại thời điểm này. Muốn chiến dịch tự gửi cho người mới thêm vào sau, hãy dán link Google Sheet ở trên.',
     // Tiêu đề cảnh báo khi sheet/tệp thiếu cột dữ liệu mà kênh gửi cần (email hoặc SĐT).
     // Thiếu key này thì giao diện hiện nguyên mã 'aiChatbot.recipientColumnMismatchTitle'
     // cho người dùng thấy — `t()` trả về chính key khi không có bản dịch, nên câu dự phòng
@@ -4995,6 +5005,8 @@ export default {
     quotaPausedUntil: 'Hết lượt gửi — tự chạy lại {until}',
     smtpPausedUntil: 'Máy chủ email tạm chặn — tự gửi tiếp {until}',
     zaloPausedUntil: 'Zalo tạm nghỉ theo hạn mức — tự gửi tiếp {until}',
+    waitingNextDueUntil: 'Đã gửi xong lượt này — tiếp tục lúc {until}',
+    genericPausedUntil: 'Tạm hoãn — tiếp tục lúc {until}',
     buyTopup: 'Mua thêm',
     unknown: 'Không xác định',
     runNotFound: 'Không tìm thấy lượt chạy để dừng',
@@ -5014,6 +5026,16 @@ export default {
     activating: 'Đang kích hoạt...',
     stop: 'Dừng',
     cron: 'Cron',
+    toggleSchedule: 'Bật/Tắt',
+    switchOn: 'Bật',
+    switchOff: 'Tắt',
+    disableSchedule: 'Tắt lịch',
+    enableSchedule2: 'Bật lịch',
+    scheduleLockedOneTimeTooltip: 'Lịch chạy một lần đã hoàn thành, tạo lịch mới nếu muốn chạy lại',
+    scheduleCannotEnableRunningTooltip: 'Không thể bật lịch khi chiến dịch đang chạy',
+    lastRun: 'Lần chạy gần nhất',
+    nextRun: 'Lần chạy tiếp',
+    times: 'lần',
   },
 
   // Plans
@@ -7916,6 +7938,10 @@ export default {
     loadFailed: 'Không thể tải bố cục menu; đang dùng bố cục mặc định',
     saveFailed: 'Không thể lưu bố cục menu',
     saveSuccess: 'Đã lưu bố cục menu quản trị',
+    saveSuccessApp: 'Đã lưu bố cục menu ứng dụng',
+    discardChangesConfirm: 'Bố cục đang sửa chưa lưu sẽ mất. Vẫn chuyển tab?',
+    scopeSuperAdmin: 'Menu Quản trị (Super Admin)',
+    scopeAppUser: 'Menu Ứng dụng (/app)',
   },
 
   adminWelcomeEmail: {
@@ -7948,6 +7974,34 @@ export default {
     resetFailed: 'Không thể khôi phục mẫu mặc định',
     resetSuccess: 'Đã khôi phục mẫu email mặc định',
     previewFailed: 'Không thể tạo bản xem trước',
+    templateSelector: 'Mẫu thư',
+    templateSelectorHint: 'Chọn mẫu bên dưới để sửa từng loại thư.',
+    switchConfirm: 'Nội dung đang sửa chưa được lưu. Chuyển mẫu khác sẽ bỏ các thay đổi này?',
+    templateKeys: {
+      welcome: 'Email chào mừng',
+      plan_expiring: 'Email nhắc sắp hết hạn gói',
+      plan_expired: 'Email báo đã hết hạn gói',
+    },
+    templateMeta: {
+      welcome: {
+        title: 'Email chào mừng thành viên',
+        subtitle: 'Chỉnh nội dung email tự động gửi khi một thành viên đăng ký tài khoản mới.',
+        behaviorNote: 'Áp dụng cho thành viên đăng ký mới bằng email hoặc Google. Các email đã gửi trước đây không thay đổi.',
+        previewFrameTitle: 'Bản xem trước email chào mừng',
+      },
+      plan_expiring: {
+        title: 'Email nhắc sắp hết hạn gói',
+        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên còn 7 ngày và còn 3 ngày là hết hạn.',
+        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, hai lần cho mỗi thành viên (còn 7 ngày và còn 3 ngày). Các email đã gửi trước đây không thay đổi.',
+        previewFrameTitle: 'Bản xem trước email nhắc hết hạn gói',
+      },
+      plan_expired: {
+        title: 'Email báo gói đã hết hạn',
+        subtitle: 'Chỉnh nội dung email báo khi gói của thành viên đã hết hạn.',
+        behaviorNote: 'Gửi tự động lúc 08:00 vào ngày gói hết hạn. Các email đã gửi trước đây không thay đổi.',
+        previewFrameTitle: 'Bản xem trước email báo hết hạn gói',
+      },
+    },
     variableLabels: {
       userName: 'Tên thành viên',
       userEmail: 'Email thành viên',
@@ -7957,6 +8011,10 @@ export default {
       senderName: 'Tên thương hiệu gửi email',
       supportEmail: 'Email hỗ trợ',
       docsUrl: 'Đường dẫn tài liệu hướng dẫn',
+      expiresAt: 'Ngày hết hạn gói',
+      daysLeft: 'Số ngày còn lại',
+      graceDays: 'Số ngày ân hạn',
+      upgradeUrl: 'Đường dẫn gia hạn/nâng cấp gói',
     },
   },
 
@@ -8169,5 +8227,20 @@ export default {
     adjSuccess: 'Ghi nhận bút toán điều chỉnh thành công',
     filterMonth: 'Chọn tháng',
     allMonths: 'Tất cả các tháng',
+  },
+
+  planExpiryModal: {
+    expiredTitle: 'Gói của bạn đã hết hạn',
+    expiredDesc: 'Các chiến dịch marketing của bạn đã tạm dừng. Vui lòng nâng cấp gói để tiếp tục sử dụng dịch vụ.',
+    graceTitle: 'Gói của bạn đã hết hạn',
+    graceDesc: 'Gói dịch vụ đã hết hạn nhưng bạn còn {days} ngày ân hạn. Vui lòng nâng cấp ngay để không làm gián đoạn chiến dịch.',
+    expiringTitle: 'Gói của bạn sắp hết hạn',
+    expiringDesc: 'Gói dịch vụ sẽ hết hạn sau {days} ngày nữa. Các chiến dịch đang chạy sẽ dừng khi hết hạn. Vui lòng nâng cấp sớm.',
+    upgradeNow: 'Nâng cấp ngay',
+    remindLater: 'Để sau',
+    badgeExpired: 'Đã hết hạn',
+    badgeGrace: 'Đang ân hạn',
+    badgeExpiring: 'Sắp hết hạn',
+    daysCount: '{count} ngày',
   },
 };

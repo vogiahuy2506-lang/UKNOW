@@ -43,6 +43,40 @@ describe('columnHeaderMatch.util — Khớp tiêu đề cột theo ngữ nghĩa 
     });
   });
 
+  it('khớp chính xác các tiêu đề có gạch dưới và gạch ngang (full_name, customer_name, Full-Name, v.v.)', () => {
+    const additionalHeaders = [
+      { header: 'full_name', expected: 'name' },
+      { header: 'customer_name', expected: 'name' },
+      { header: 'Full-Name', expected: 'name' },
+      { header: 'fullname', expected: 'name' },
+      { header: 'name', expected: 'name' },
+      { header: 'Họ Tên', expected: 'name' },
+      { header: 'ho ten', expected: 'name' },
+      { header: 'so_dien_thoai', expected: 'phone' },
+      { header: 'phone_number', expected: 'phone' },
+      { header: 'email_address', expected: 'email' },
+      { header: 'note', expected: null },
+      { header: 'address', expected: null },
+      { header: 'company', expected: null },
+    ];
+
+    additionalHeaders.forEach(({ header, expected }) => {
+      const isEmail = isEmailHeader(header);
+      const isPhone = isPhoneHeader(header);
+      const isName = isNameHeader(header);
+
+      if (expected === 'email') {
+        expect({ header, isEmail, isPhone, isName }).toEqual({ header, isEmail: true, isPhone: false, isName: false });
+      } else if (expected === 'phone') {
+        expect({ header, isEmail, isPhone, isName }).toEqual({ header, isEmail: false, isPhone: true, isName: false });
+      } else if (expected === 'name') {
+        expect({ header, isEmail, isPhone, isName }).toEqual({ header, isEmail: false, isPhone: false, isName: true });
+      } else {
+        expect({ header, isEmail, isPhone, isName }).toEqual({ header, isEmail: false, isPhone: false, isName: false });
+      }
+    });
+  });
+
   describe('findBestMatchingKey', () => {
     it('ưu tiên cột khớp chính xác nhất khi có nhiều cột (Email vs Email phụ)', () => {
       const keys = ['Ghi chú', 'Email phụ', 'Email', 'SĐT'];
@@ -57,6 +91,16 @@ describe('columnHeaderMatch.util — Khớp tiêu đề cột theo ngữ nghĩa 
     it('tìm đúng cột Thư điện tử cho target email', () => {
       const keys = ['Họ Tên', 'Thư điện tử', 'Ghi chú'];
       expect(findBestMatchingKey(keys, 'email')).toBe('Thư điện tử');
+    });
+
+    it('tìm đúng cột full_name cho target name', () => {
+      const keys = ['Ghi chú', 'full_name', 'email_address'];
+      expect(findBestMatchingKey(keys, 'name')).toBe('full_name');
+    });
+
+    it('tìm đúng cột customer_name cho target name', () => {
+      const keys = ['Ghi chú', 'customer_name', 'so_dien_thoai'];
+      expect(findBestMatchingKey(keys, 'name')).toBe('customer_name');
     });
 
     it('trả về null khi không có cột nào khớp', () => {

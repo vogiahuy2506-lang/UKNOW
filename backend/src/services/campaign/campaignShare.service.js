@@ -49,9 +49,9 @@ class CampaignShareService {
   /**
    * Get campaigns shared with the current user
    */
-  async getSharedWithMe({ userId, page = 1, limit = 10 }) {
-    const rows = await campaignShareRepository.findSharedWithUser({ userId, page, limit });
-    const total = await campaignShareRepository.countSharedWithUser(userId);
+  async getSharedWithMe({ userId, page = 1, limit = 10, search, status, type, state }) {
+    const rows = await campaignShareRepository.findSharedWithUser({ userId, page, limit, search, status, type, state });
+    const total = await campaignShareRepository.countSharedWithUser({ userId, search, status, type, state });
 
     return {
       items: rows.map((item) => ({
@@ -75,6 +75,7 @@ class CampaignShareService {
         lastRunAt: item.last_run_at,
         runningCount: item.running_count,
         completedCount: item.completed_count,
+        enabledScheduleCount: item.enabled_schedule_count ?? 0,
         shareType: item.share_type,
         canRun: item.can_run,
         sharedAt: item.shared_at,

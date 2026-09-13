@@ -3106,7 +3106,7 @@ CREATE TABLE IF NOT EXISTS admin_menu_layouts (
   updated_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT admin_menu_layouts_scope_check CHECK (scope = 'super_admin'),
+  CONSTRAINT admin_menu_layouts_scope_check CHECK (scope IN ('super_admin', 'app_user')),
   CONSTRAINT admin_menu_layouts_categories_array_check CHECK (jsonb_typeof(categories) = 'array')
 );
 
@@ -3118,7 +3118,9 @@ CREATE TABLE IF NOT EXISTS system_email_templates (
   updated_by   BIGINT      REFERENCES users(id) ON DELETE SET NULL,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT system_email_templates_key_check CHECK (template_key = 'welcome')
+  -- Migration 206: nới CHECK cho 2 thư hạn gói mới (plan_expiring, plan_expired) — super admin
+  -- sửa được nội dung, giống thư welcome đã có từ 203.
+  CONSTRAINT system_email_templates_key_check CHECK (template_key IN ('welcome', 'plan_expiring', 'plan_expired'))
 );
 
 -- ─── Telegram cá nhân (migration 050_create_telegram_accounts.sql — đánh nhầm số, đúng ra 205,

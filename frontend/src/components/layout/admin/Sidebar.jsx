@@ -120,52 +120,11 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       adminMenuCategories,
       HiOutlineCollection
     )
-    // PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12) — tham số thứ ba `null`: chưa đọc DB, menu
-    // khách luôn dựng từ DEFAULT_APP_MENU_CATEGORIES. PR-2 mới thay `null` bằng cấu hình đọc
-    // qua GET /api/users/app-menu-layout.
-    : groupAppMenuItems(userMenuItems(t), locale, null, HiOutlineCollection);
+    : groupAppMenuItems(userMenuItems(t), locale, adminMenuCategories, HiOutlineCollection);
   const isEmployeeCtx = activeContext?.type === 'employee';
   const ctxPermissions = activeContext?.permissions || {};
 
-  const [activeSubmenu, setActiveSubmenu] = useState(null);
-
-  useEffect(() => {
-    if (!isSuperAdmin) {
-      setAdminMenuCategories(null);
-      return undefined;
-    }
-    let isMounted = true;
-    adminMenuApiService.getLayout()
-      .then((response) => {
-        if (isMounted) setAdminMenuCategories(response.data?.data?.categories || []);
-      })
-      .catch((error) => {
-        // Sidebar must remain usable while a new backend migration is rolling
-        // out or if the layout endpoint is temporarily unavailable.
-        console.warn('[Sidebar] Falling back to default admin menu:', error?.message);
-      });
-
-    const handleLayoutUpdated = (event) => {
-      if (Array.isArray(event.detail?.categories)) {
-        setAdminMenuCategories(event.detail.categories);
-        setActiveSubmenu(null);
-      }
-    };
-    window.addEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
-    return () => {
-      isMounted = false;
-      window.removeEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
-    };
-  }, [isSuperAdmin]);
-
-  useEffect(() => { setActiveSubmenu(null); }, [location.pathname]);
-
-  const handleNavClose = () => {
-    setActiveSubmenu(null);
-    if (isMobile && onClose) onClose();
-  };
-
-  const isDesktopExpanded = !isMobile && isOpen;
+  const [floatingItem, setFloatingItem] = useState(null);
 
   const filterItem = (item) => {
     if (item.hideInProd && import.meta.env.MODE === 'production') return false;
@@ -176,6 +135,84 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     }
     return true;
   };
+
+  const applyLayoutCategories = (rawCats) => {
+    const cats = Array.isArray(rawCats) ? rawCats : [];
+    setAdminMenuCategories(cats);
+    const items = isSuperAdmin
+      ? groupSuperAdminMenuItems(superAdminMenuItems(t), locale, cats, HiOutlineCollection)
+      : groupAppMenuItems(userMenuItems(t), locale, cats, HiOutlineCollection);
+    const visible = items
+      .map((item) => {
+        if (!item.children) return item;
+        return { ...item, children: item.children.filter(filterItem) };
+      })
+      .filter((item) => filterItem(item) && (!item.children || item.children.length > 0));
+    const activeParent = visible.find((item) => item.children && (
+      item.children.some((child) => {
+        if (child.end) return location.pathname === child.path;
+        return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
+      })
+      || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'))
+    ));
+    if (activeParent) {
+      setExpandedGroupKey(getMenuItemKey(activeParent));
+    }
+  };
+
+  const applyLayoutCategoriesRef = useRef(applyLayoutCategories);
+  applyLayoutCategoriesRef.current = applyLayoutCategories;
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isSuperAdmin) {
+      adminMenuApiService.getLayout()
+        .then((response) => {
+          if (isMounted) applyLayoutCategoriesRef.current(response.data?.data?.categories || []);
+        })
+        .catch((error) => {
+          // Sidebar must remain usable while a new backend migration is rolling
+          // out or if the layout endpoint is temporarily unavailable.
+          console.warn('[Sidebar] Falling back to default admin menu:', error?.message);
+        });
+
+      const handleLayoutUpdated = (event) => {
+        if (Array.isArray(event.detail?.categories)) {
+          setFloatingItem(null);
+          // Review Claude 13/09: tính lại nhóm đang mở theo route hiện tại thay vì đóng hết —
+          // super admin vừa lưu bố cục xong không bị mất dấu mình đang đứng ở nhóm nào (cùng
+          // luật với PR-3: nhóm chứa trang đang mở luôn mở).
+          applyLayoutCategoriesRef.current(event.detail.categories);
+        }
+      };
+      window.addEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
+      return () => {
+        isMounted = false;
+        window.removeEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
+      };
+    }
+
+    // PR-2: Đọc cấu hình menu app của khách qua GET /api/users/app-menu-layout lúc mount.
+    // Giữ .catch() fallback về mặc định; không phát / lắng nghe sự kiện live update cho khách.
+    adminMenuApiService.getUserAppMenuLayout()
+      .then((response) => {
+        if (isMounted) applyLayoutCategoriesRef.current(response.data?.data?.categories || []);
+      })
+      .catch((error) => {
+        console.warn('[Sidebar] Falling back to default app menu:', error?.message);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isSuperAdmin]);
+
+  const handleNavClose = () => {
+    setFloatingItem(null);
+    if (isMobile && onClose) onClose();
+  };
+
+  const isDesktopExpanded = !isMobile && isOpen;
 
   const visibleMenuItems = menuItems
     .map((item) => {
@@ -196,15 +233,34 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'));
   };
 
+  const [expandedGroupKey, setExpandedGroupKey] = useState(() => {
+    const activeParent = visibleMenuItems.find((item) => item.children && isParentActive(item));
+    return activeParent ? getMenuItemKey(activeParent) : null;
+  });
+
+  useEffect(() => {
+    setFloatingItem(null);
+    const activeParent = visibleMenuItems.find((item) => item.children && isParentActive(item));
+    setExpandedGroupKey(activeParent ? getMenuItemKey(activeParent) : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   const handleParentClick = (item) => {
-    if (!item.children) {
-      navigate(item.path);
-      handleNavClose();
-      return;
+    const itemKey = getMenuItemKey(item);
+    if (isDesktopExpanded || isMobile) {
+      if (item.children) {
+        setExpandedGroupKey((prev) => (prev === itemKey ? null : itemKey));
+      } else {
+        navigate(item.path);
+        handleNavClose();
+      }
+    } else {
+      if (item.children) {
+        setFloatingItem((prev) => (prev && getMenuItemKey(prev) === itemKey ? null : item));
+      } else {
+        navigate(item.path);
+      }
     }
-    setActiveSubmenu(
-      activeSubmenu && getMenuItemKey(activeSubmenu) === getMenuItemKey(item) ? null : item
-    );
   };
 
   const avatarGradient = AVATAR_STYLES[user?.role] || AVATAR_STYLES['user'];
@@ -219,8 +275,10 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
         ? t('sidebar.editCampaign')
         : child.name;
-      const baseClassName = `flex items-center gap-2 py-1.5 pl-4 pr-2 text-[12px] rounded-lg transition-colors ${
-        isActiveChild ? 'text-orange-600 font-semibold bg-orange-50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+      const baseClassName = `w-[calc(100%-18px)] flex items-center gap-2 py-1.5 pl-3 pr-2 text-[13px] ml-[18px] border-l-2 rounded-r-lg transition-colors ${
+        isActiveChild
+          ? 'border-l-orange-500 text-orange-600 font-medium bg-orange-50'
+          : 'border-l-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-l-gray-300'
       }`;
 
       if (child.action === 'openCreateCampaignModal') {
@@ -228,10 +286,11 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
           <button
             key={child.path}
             type="button"
+            data-menu-level="item"
             onClick={() => { navigate('/app/campaigns', { state: { openCreateCampaignModal: true } }); handleNavClose(); }}
-            className={`${baseClassName} w-full text-left pl-4`}
+            className={`${baseClassName} text-left`}
           >
-            {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+            {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600' : 'text-gray-400'}`} />}
             <span>{displayName}</span>
           </button>
         );
@@ -241,10 +300,11 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
           <button
             key={child.path}
             type="button"
+            data-menu-level="item"
             onClick={() => { navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } }); handleNavClose(); }}
-            className={`${baseClassName} w-full text-left pl-4`}
+            className={`${baseClassName} text-left`}
           >
-            {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+            {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600' : 'text-gray-400'}`} />}
             <span>{displayName}</span>
           </button>
         );
@@ -255,10 +315,12 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
           key={child.path}
           to={child.path}
           end={child.end}
+          data-menu-level="item"
+          aria-current={isActiveChild ? 'page' : undefined}
           onClick={handleNavClose}
-          className={() => `${baseClassName} pl-4`}
+          className={() => baseClassName}
         >
-          {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+          {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600' : 'text-gray-400'}`} />}
           <span>{displayName}</span>
         </NavLink>
       );
@@ -271,13 +333,13 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
   return (
     <>
       {/* Backdrop */}
-      {activeSubmenu && (
-        <div className="fixed inset-0 z-40" onClick={() => setActiveSubmenu(null)} />
+      {floatingItem && (
+        <div className="fixed inset-0 z-40" onClick={() => setFloatingItem(null)} />
       )}
 
       {/* Floating submenu panel (for collapsed sidebar) */}
-      {activeSubmenu && !isDesktopExpanded && (
-        <SubmenuPanel item={activeSubmenu} onClose={() => setActiveSubmenu(null)} />
+      {floatingItem && !isDesktopExpanded && (
+        <SubmenuPanel item={floatingItem} onClose={() => setFloatingItem(null)} />
       )}
 
       <aside
@@ -301,36 +363,93 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
         <nav ref={navRef} className={`flex-1 overflow-y-auto py-3 min-h-0 ${isOpen || isMobile ? 'px-3' : 'px-2'}`}>
           <div className="flex flex-col gap-1">
             {visibleMenuItems.map((item) => {
-              const active = item.children ? isParentActive(item) : (item.end ? location.pathname === item.path : location.pathname.startsWith(item.path + '/'));
-              const isSubmenuOpen = activeSubmenu
-                && getMenuItemKey(activeSubmenu) === getMenuItemKey(item);
+              const itemKey = getMenuItemKey(item);
+
+              if (!isOpen && !isMobile) {
+                const isItemActive = item.children
+                  ? isParentActive(item)
+                  : (item.end ? location.pathname === item.path : (location.pathname === item.path || location.pathname.startsWith(item.path + '/')));
+                const isFloatingOpen = floatingItem && getMenuItemKey(floatingItem) === itemKey;
+
+                return (
+                  <div key={itemKey}>
+                    <button
+                      type="button"
+                      onClick={() => handleParentClick(item)}
+                      title={item.name}
+                      className={`w-full flex items-center justify-center rounded-xl py-2.5 transition-all ${
+                        isFloatingOpen
+                          ? 'bg-orange-100 text-orange-600'
+                          : isItemActive
+                          ? 'bg-orange-50 text-orange-600'
+                          : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <item.icon className="w-5 h-5 flex-shrink-0" />
+                    </button>
+                  </div>
+                );
+              }
+
+              if (item.children) {
+                const isGroupActive = isParentActive(item);
+                const isExpanded = expandedGroupKey === itemKey;
+
+                return (
+                  <div key={itemKey}>
+                    <button
+                      type="button"
+                      onClick={() => handleParentClick(item)}
+                      title={item.name}
+                      data-menu-level="group"
+                      data-active={isGroupActive ? 'true' : 'false'}
+                      aria-expanded={isExpanded}
+                      className={`w-full flex items-center rounded-xl py-2 px-3 transition-all relative text-[11px] font-semibold uppercase tracking-wider ${
+                        isGroupActive
+                          ? 'text-gray-900 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-orange-500 before:rounded-r'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <item.icon className={`w-4 h-4 flex-shrink-0 mr-2.5 ${isGroupActive ? 'text-orange-500' : 'text-gray-400'}`} />
+                      <span className="truncate flex-1 text-left">{item.name}</span>
+                      <HiOutlineChevronRight
+                        className={`w-4 h-4 text-gray-400 shrink-0 ml-auto transition-transform duration-200 ${
+                          isExpanded ? 'rotate-90' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {/* Inline submenu (expanded sidebar or mobile) */}
+                    {isExpanded && (
+                      <div className="mt-1 flex flex-col gap-0.5">
+                        {renderChildItems(item.children)}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              const isLeafActive = item.end
+                ? location.pathname === item.path
+                : (location.pathname === item.path || location.pathname.startsWith(item.path + '/'));
 
               return (
-                <div key={getMenuItemKey(item)}>
+                <div key={itemKey}>
                   <button
+                    type="button"
                     onClick={() => handleParentClick(item)}
                     title={item.name}
-                    className={`w-full flex items-center rounded-xl py-2.5 transition-all ${
-                      isSubmenuOpen ? 'bg-orange-100 text-orange-600' : active ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
-                    } ${isOpen || isMobile ? 'px-3' : 'justify-center'}`}
+                    data-menu-level="item"
+                    aria-current={isLeafActive ? 'page' : undefined}
+                    className={`w-full flex items-center rounded-xl py-2 px-3 text-[13px] transition-colors ${
+                      isLeafActive
+                        ? 'bg-orange-50 text-orange-600 font-medium'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
                   >
-                    <item.icon className="w-5 h-5 flex-shrink-0" />
-                    {(isOpen || isMobile) && (
-                      <>
-                        <span className="ml-2.5 text-[13px] font-medium flex-1 text-left">{item.name}</span>
-                        {item.children && (
-                          <HiOutlineChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isSubmenuOpen ? 'rotate-90' : ''}`} />
-                        )}
-                      </>
-                    )}
+                    <item.icon className={`w-4 h-4 flex-shrink-0 mr-2.5 ${isLeafActive ? 'text-orange-600' : 'text-gray-400'}`} />
+                    <span className="flex-1 text-left truncate">{item.name}</span>
                   </button>
-
-                  {/* Inline submenu (expanded sidebar or mobile) */}
-                  {item.children && (isOpen || isMobile) && isSubmenuOpen && (
-                    <div className="mt-1 ml-0 pl-0 border-l border-orange-100 flex flex-col gap-0.5">
-                      {renderChildItems(item.children)}
-                    </div>
-                  )}
                 </div>
               );
             })}

@@ -12,9 +12,15 @@
  * 3. Log warning với context khi có biến unresolved (không ném lỗi chặn gửi).
  */
 
-import { foldDiacritics, findBestMatchingKey } from './columnHeaderMatch.util.js';
+import { foldDiacritics, normalizeHeaderKey, findBestMatchingKey } from './columnHeaderMatch.util.js';
 
-export const TEMPLATE_VARIABLE_REGEX = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
+// Trước đây chỉ nhận [a-zA-Z0-9_.-] — trợ lý AI sinh {{Họ Tên}} (có dấu, có khoảng trắng) thì
+// trích ra mảng RỖNG, trạng thái đó trùng khớp "tin không có biến nào" nên mọi lớp phòng thủ
+// phía sau (deriveVariablesForText, cổng mappings.length...) không có gì để bắt. Dùng [^{}]+?
+// (không liệt kê ký tự cho phép) để MỌI cách đặt tên tương lai đều lọt vào tầm nhìn thay vì trở
+// nên vô hình — bù lại bằng chặn cửa sập ở deriveVariablesForText/neutralizeUnresolvedTemplateVariables
+// (không throw khi khớp nhầm đoạn không phải biến, xem trong hàm).
+export const TEMPLATE_VARIABLE_REGEX = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
 /**
  * Trích xuất danh sách tên biến duy nhất từ một chuỗi template.
@@ -46,7 +52,9 @@ export function extractTemplateVariableNames(text) {
  */
 export function renderTemplateText(templateText, variables = {}) {
   return String(templateText || '').replace(TEMPLATE_VARIABLE_REGEX, (_match, varName) => {
-    const value = variables?.[varName];
+    // trim() để khớp đúng khoá đã lưu trong `variables` — extractTemplateVariableNames() cũng
+    // trim() tên biến trích ra, hai bên phải khớp tuyệt đối kể cả khi regex để lọt khoảng trắng.
+    const value = variables?.[String(varName || '').trim()];
     return value === undefined || value === null ? '' : String(value);
   });
 }
@@ -57,12 +65,15 @@ export function renderTemplateText(templateText, variables = {}) {
  * @returns {'name'|'email'|'phone'|null}
  */
 export function mapVariableToSemanticTarget(varName) {
-  const norm = foldDiacritics(varName).replace(/[_-]/g, ' ').trim();
+  const norm = normalizeHeaderKey(varName);
   if (
-    /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|recipient name)$/i.test(norm) ||
+    /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|recipient name|ten khach hang)$/i.test(norm) ||
     norm.includes('ho ten') ||
+    norm.includes('ho va ten') ||
     norm.includes('fullname') ||
     norm.includes('full name') ||
+    norm.includes('customer name') ||
+    norm.includes('recipient name') ||
     norm.includes('ten khach')
   ) {
     return 'name';
@@ -75,7 +86,7 @@ export function mapVariableToSemanticTarget(varName) {
     return 'email';
   }
   if (
-    /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|telephone)$/i.test(norm) ||
+    /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|telephone|phone number)$/i.test(norm) ||
     norm.includes('sdt') ||
     norm.includes('dien thoai') ||
     norm.includes('so dt') ||
@@ -220,4 +231,48 @@ export function renderAutoMappedTemplateText(text, options = {}) {
   }
   const { variables } = deriveVariablesForText(text, options);
   return renderTemplateText(text, variables);
+}
+
+/**
+ * Chặn cửa sập cuối cùng, gọi NGAY TRƯỚC provider (Zalo/email) — không phải chữa hình dạng biến
+ * (đó là TEMPLATE_VARIABLE_REGEX ở trên), mà là chốt chặn tái diễn: bất kể vì lý do gì (mapping
+ * trỏ nhầm cột, sinh biến ngoài mọi hình dạng regex nhận được, resolveFromMappings bỏ sót...)
+ * mà text cuối cùng còn "{{", đây là lần cuối để không gửi "{{...}}" nguyên văn tới khách.
+ *
+ * KHÔNG BAO GIỜ throw. [^{}]+? ở TEMPLATE_VARIABLE_REGEX có thể khớp nhầm đoạn không phải biến
+ * (văn bản thường chứa dấu ngoặc nhọn) — khớp nhầm thì cũng chỉ rơi về giá trị trung tính, ném
+ * lỗi ở đây sẽ làm chết cả lượt gửi vì một câu chữ vô hại.
+ *
+ * @param {string} text văn bản đã render, ngay trước khi gọi provider gửi thật
+ * @param {{campaignId?: string|number, nodeId?: string|number}} [logContext]
+ * @returns {string}
+ */
+export function neutralizeUnresolvedTemplateVariables(text, logContext = null) {
+  const str = String(text || '');
+  if (!str.includes('{{')) return str;
+
+  const leftoverNames = [];
+  const re = new RegExp(TEMPLATE_VARIABLE_REGEX.source, 'g');
+  let cleaned = str.replace(re, (_match, rawVarName) => {
+    const varName = String(rawVarName || '').trim();
+    leftoverNames.push(varName);
+    return mapVariableToSemanticTarget(varName) === 'name' ? 'bạn' : '';
+  });
+
+  if (leftoverNames.length === 0) return cleaned;
+
+  // Dọn khoảng trắng thừa và dấu câu lạc lại do thay biến bằng chuỗi rỗng
+  // (vd "Chào , !" -> "Chào, !" -> "Chào!"; "  " -> " ").
+  cleaned = cleaned
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/([,.!?;:])\s*\1+/g, '$1')
+    .trim();
+
+  console.warn(
+    `[TemplateAutoMap] Chặn cửa sập trước khi gửi — còn biến chưa giải [${leftoverNames.join(', ')}] `
+    + `campaignId=${logContext?.campaignId ?? 'n/a'} nodeId=${logContext?.nodeId ?? 'n/a'}`
+  );
+
+  return cleaned;
 }

@@ -15,18 +15,35 @@ export function foldDiacritics(value) {
     .trim();
 }
 
+/**
+ * Chuẩn hoá tiêu đề cột hoặc tên biến:
+ * 1. Bỏ dấu tiếng Việt và chuyển chữ thường (`foldDiacritics`)
+ * 2. Thay thế dấu gạch dưới `_` và gạch ngang `-` thành khoảng trắng
+ * 3. Thu gọn nhiều khoảng trắng liên tiếp và trim()
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function normalizeHeaderKey(value) {
+  return foldDiacritics(value)
+    .replace(/[_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function isEmailHeader(h) {
-  const norm = foldDiacritics(h);
+  const norm = normalizeHeaderKey(h);
   return (
-    /^(email|e-mail|thu|mail|dia chi email|email address|thu dien tu)$/i.test(norm) ||
+    /^(email|e-mail|e mail|thu|mail|dia chi email|email address|thu dien tu)$/i.test(norm) ||
     norm.includes('email') ||
+    norm.includes('e mail') ||
     norm.includes('thu dien tu') ||
     norm === 'mail'
   );
 }
 
 export function isPhoneHeader(h) {
-  const norm = foldDiacritics(h);
+  const norm = normalizeHeaderKey(h);
   return (
     /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|phone number|telephone)$/i.test(norm) ||
     norm.includes('sdt') ||
@@ -39,11 +56,15 @@ export function isPhoneHeader(h) {
 }
 
 export function isNameHeader(h) {
-  const norm = foldDiacritics(h);
+  const norm = normalizeHeaderKey(h);
   return (
-    /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|ten khach hang)$/i.test(norm) ||
+    /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|recipient name|ten khach hang)$/i.test(norm) ||
     norm.includes('ho ten') ||
+    norm.includes('ho va ten') ||
     norm.includes('fullname') ||
+    norm.includes('full name') ||
+    norm.includes('customer name') ||
+    norm.includes('recipient name') ||
     norm.includes('ten khach hang')
   );
 }
@@ -66,13 +87,13 @@ export function findBestMatchingKey(keys, targetField) {
   let exactRe;
   if (target === 'email') {
     testFn = isEmailHeader;
-    exactRe = /^(email|e-mail|mail|dia chi email|email address|thu dien tu)$/i;
+    exactRe = /^(email|e-mail|e mail|mail|dia chi email|email address|thu dien tu)$/i;
   } else if (target === 'phone') {
     testFn = isPhoneHeader;
     exactRe = /^(phone|sdt|dien thoai|so dt|so dien thoai|mobile|tel|phone number|telephone)$/i;
   } else if (target === 'name') {
     testFn = isNameHeader;
-    exactRe = /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|ten khach hang)$/i;
+    exactRe = /^(name|ten|ho ten|ho va ten|fullname|full name|customer name|recipient name|ten khach hang)$/i;
   } else {
     return null;
   }
@@ -83,13 +104,13 @@ export function findBestMatchingKey(keys, targetField) {
 
   // Nếu có nhiều cột cùng khớp:
   // 1. Ưu tiên cột khớp exact regex
-  const exactMatch = matchingKeys.find((key) => exactRe.test(foldDiacritics(key)));
+  const exactMatch = matchingKeys.find((key) => exactRe.test(normalizeHeaderKey(key)));
   if (exactMatch) return exactMatch;
 
   // 2. Ưu tiên cột có độ dài sau khi chuẩn hoá ngắn nhất (ít từ phụ nhất)
   return matchingKeys.slice().sort((a, b) => {
-    const normA = foldDiacritics(a);
-    const normB = foldDiacritics(b);
+    const normA = normalizeHeaderKey(a);
+    const normB = normalizeHeaderKey(b);
     return normA.length - normB.length;
   })[0];
 }

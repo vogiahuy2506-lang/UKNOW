@@ -44,7 +44,8 @@ import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
-import { recordConsents, getUserConsentHistory, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
+import { recordConsents, getUserConsentHistory, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
+import { getAppMenuLayout } from '../services/admin/adminMenu.service.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -398,9 +399,21 @@ class UserController {
         }
       }
 
+      // Review PR-N3b (12/09/2026): dòng RETURNING của updateProfileInDb KHÔNG có `consents`, mà
+      // mapProfileResponse tính hasConsented từ đúng trường đó → response luôn hasConsented:false.
+      // AccountProfileModal gộp response vào user trong store, và modal đồng ý giờ BẮT BUỘC
+      // (không đóng được) → lưu hồ sơ xong là bị hỏi đồng ý lại, E2E profile.spec đỏ vì overlay.
+      // Nạp trạng thái đồng ý thật trước khi map — cùng nguồn với /auth/me.
+      let latestConsents = null;
+      try {
+        latestConsents = await getUserLatestConsents(userId);
+      } catch (consentErr) {
+        console.warn('[updateProfile] Không đọc được user_consents:', consentErr.message);
+      }
       const userProfileRow = {
         ...user,
         ...(roleAndLimits || {}),
+        consents: latestConsents,
       };
 
       let addons = null;
@@ -1080,6 +1093,38 @@ class UserController {
         success: false,
         error: 'Không thể lấy lịch sử đồng ý',
         message: 'Không thể lấy lịch sử đồng ý',
+      });
+    }
+  }
+
+  /**
+   * GET /api/users/app-menu-layout
+   * Lấy cấu hình chuyên mục menu ứng dụng cho khách (/app).
+   * Chỉ authMiddleware, trả riêng categories (KHÔNG nhét vào /auth/me).
+   */
+  async getAppMenuLayout(_req, res) {
+    try {
+      const data = await getAppMenuLayout();
+      return res.json({
+        success: true,
+        data: {
+          categories: data.categories || [],
+        },
+      });
+    } catch (error) {
+      console.error('[userController.getAppMenuLayout] request failed:', error);
+      // Bảng admin_menu_layouts đã có từ migration 201, nhánh 42P01 chỉ phòng môi trường test/dev lạ.
+      // Lỗi thật khi chưa chạy migration 205 là 23514 (check_violation) lúc PUT scope app_user,
+      // để nguyên 500 vì quy trình deploy luôn chạy migration trước khi khởi động backend.
+      if (error?.code === '42P01') {
+        return res.json({
+          success: true,
+          data: { categories: [] },
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: 'Không thể tải cấu hình menu',
       });
     }
   }

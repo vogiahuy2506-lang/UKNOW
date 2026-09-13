@@ -13,6 +13,8 @@ import {
   isZaloSenderBlockedError,
   isZaloUnreachableRecipientError,
 } from '../../utils/zaloPhoneCampaign.util.js';
+import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
+import { isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { classifyZaloSendError, mapZaloErrorCategoryToLedgerReason } from '../../utils/zaloSendErrorClassifier.util.js';
@@ -42,7 +44,11 @@ import {
   notifyCampaignQuotaStopped,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
-import { deriveVariablesForText } from '../../utils/templateVariableAutoMap.util.js';
+import {
+  deriveVariablesForText,
+  renderTemplateText,
+  neutralizeUnresolvedTemplateVariables,
+} from '../../utils/templateVariableAutoMap.util.js';
 import { findStaleCampaignRunReservations } from '../../repositories/sendQuota.repository.js';
 import { shouldReplaceRecipientProgressCache } from './recipientProgressCache.util.js';
 
@@ -1183,16 +1189,29 @@ class CampaignRunService {
         });
         return Array.from(new Set(values));
       };
+      // Bug: người nhận sheet/DB mất số 0 đầu (Excel/Sheets lưu SĐT dạng số, vd 388180856)
+      // đi thẳng tới tra số Zalo và rớt — xem vietnamesePhone.util.js đầu file. `collectEntries
+      // FromSource` dùng chung cho SĐT (Zalo cá nhân, kết bạn) VÀ groupId (Zalo nhóm) — áp mù
+      // normalizeVietnamesePhone cho groupId là sai domain. `normalizePhoneEntries` mặc định
+      // `false`; caller chỉ bật khi CHẮC nguồn là SĐT.
+      const normalizePhoneEntryValue = (rawValue) => {
+        const trimmed = String(rawValue || '').trim();
+        if (!trimmed) return trimmed;
+        // normalizeVietnamesePhone không nhận diện được thì trả lại chuỗi đã trim nguyên vẹn
+        // (không rỗng) — giữ đúng nguyên tắc "không nhận diện được thì giữ nguyên giá trị gốc".
+        return normalizeVietnamesePhone(trimmed) || trimmed;
+      };
       const collectEntriesFromSource = ({
         sourceMode = 'manual',
         manualValue = '',
         sourceNodeId = '',
         sourceField = '',
+        normalizePhoneEntries = false,
       }) => {
         const mode = String(sourceMode || 'manual').trim();
         if (mode === 'manual') {
           return campaignZaloSenderService.parseListText(manualValue).map((value) => ({
-            value,
+            value: normalizePhoneEntries ? normalizePhoneEntryValue(value) : value,
             row: null,
           }));
         }
@@ -1213,8 +1232,9 @@ class CampaignRunService {
         });
         const dedupMap = new Map();
         entries.forEach((entry) => {
-          const keyValue = String(entry.value || '').trim();
+          let keyValue = String(entry.value || '').trim();
           if (!keyValue) return;
+          if (normalizePhoneEntries) keyValue = normalizePhoneEntryValue(keyValue);
           if (!dedupMap.has(keyValue)) dedupMap.set(keyValue, { ...entry, value: keyValue });
         });
         return Array.from(dedupMap.values());
@@ -1337,11 +1357,6 @@ class CampaignRunService {
           newItems,
         };
       };
-      const renderTemplateText = (templateText, variables = {}) =>
-        String(templateText || '').replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, varName) => {
-          const value = variables?.[varName];
-          return value === undefined || value === null ? '' : String(value);
-        });
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const sleepWithRunCheck = async (ms) => {
         const waitMs = Math.max(0, Number.parseInt(ms, 10) || 0);
@@ -3694,8 +3709,34 @@ class CampaignRunService {
               if (sendResult.status === 'failed') {
                 const isRateLimitedRetryScheduled = sendResult.errorType === 'smtp_rate_limited_retry_scheduled';
                 const isPlanQuotaExceeded = sendResult.errorType === 'plan_send_limit_exceeded';
-                if (!isRateLimitedRetryScheduled && !isPlanQuotaExceeded) {
+                const isSmtpConfigError = sendResult.errorType === 'smtp_config';
+                if (!isRateLimitedRetryScheduled && !isPlanQuotaExceeded && !isSmtpConfigError) {
                   failedSends += 1;
+                }
+                if (isSmtpConfigError) {
+                  // Lỗi cấu hình SMTP (ví dụ 535 authentication failed) là lỗi hạ tầng/cấu hình của toàn bộ
+                  // chiến dịch/tài khoản gửi, KHÔNG phải lỗi riêng lẻ của người nhận. Phải DỪNG HẲN run ngay lập tức,
+                  // tránh lặp hết danh sách người nhận (bằng chứng prod 07-08/09: 2.464 email failed vì 535).
+                  const message = sendResult.error || 'Lỗi cấu hình tài khoản gửi email (SMTP).';
+                  await campaignExecutionLogService.logExecutionNode({
+                    campaignId,
+                    runId,
+                    node,
+                    customerId: customer.id || null,
+                    recipientEmail: recipientEmailForLog,
+                    status: 'failed',
+                    progressCurrent: successfulSends + failedSends + skippedSends,
+                    progressTotal: totalRecipients,
+                    errorMessage: message,
+                    executionData: buildSendEmailExecutionData({
+                      ...sendResult,
+                      message,
+                    }),
+                  });
+                  await campaignRunRepository.failRun(runId, message);
+                  const err = new Error(message);
+                  err.code = 'RUN_STOPPED';
+                  throw err;
                 }
                 if (isPlanQuotaExceeded) {
                   if (!sendResult.resetAt) {
@@ -4496,6 +4537,7 @@ class CampaignRunService {
 
               const dedupMap = new Map();
               sourceItems.forEach((item) => {
+                let matched = false;
                 for (const field of fallbackFields) {
                   const raw = item?.[field];
                   const values = Array.isArray(raw)
@@ -4504,10 +4546,30 @@ class CampaignRunService {
                   if (values.length === 0) continue;
                   // First field with data wins for this row; add all its values then stop.
                   values.forEach((value) => {
-                    const key = String(value || '').trim();
+                    let key = String(value || '').trim();
+                    // recipientType 'phone' — chuẩn hoá số mất số 0 đầu (Excel/Sheets). 'uid' thì
+                    // không phải SĐT, không chạm vào (fallbackFields ở nhánh đó cũng chỉ quét
+                    // zalo_id/zaloId/uid, không lẫn giá trị SĐT).
+                    if (recipientType === 'phone') key = normalizePhoneEntryValue(key);
                     if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
                   });
+                  matched = true;
                   break;
+                }
+
+                if (!matched && recipientType === 'phone') {
+                  const headerKey = Object.keys(item || {}).find((k) => isPhoneHeader(k));
+                  if (headerKey) {
+                    const raw = item?.[headerKey];
+                    const values = Array.isArray(raw)
+                      ? raw.flatMap((inner) => campaignZaloSenderService.parseListText(inner))
+                      : campaignZaloSenderService.parseListText(raw);
+                    values.forEach((value) => {
+                      let key = String(value || '').trim();
+                      if (recipientType === 'phone') key = normalizePhoneEntryValue(key);
+                      if (key && !dedupMap.has(key)) dedupMap.set(key, { value: key, row: item || null });
+                    });
+                  }
                 }
               });
 
@@ -4522,6 +4584,7 @@ class CampaignRunService {
               manualValue: manualPhones,
               sourceNodeId,
               sourceField,
+              normalizePhoneEntries: recipientType === 'phone',
             });
             const rawRecipients = recipientEntries.map((entry) => entry.value);
             const dedupedRecipients = Array.from(
@@ -5666,7 +5729,10 @@ class CampaignRunService {
                       resolveFromMappings: resolveTemplateVariablesFromMappings,
                       logContext: { runId, nodeId: node.id, stepIndex: nextStepIndex },
                     });
-                    const renderedMessage = renderTemplateText(step.message, variables).trim();
+                    const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                      renderTemplateText(step.message, variables).trim(),
+                      { campaignId, nodeId: node.id }
+                    );
                     if (!renderedMessage) return;
                     const dedupedZaloLedger = await trySyncLedgerFromExistingZaloMessage({
                       nodeId: node.id,
@@ -5828,7 +5894,10 @@ class CampaignRunService {
                 resolveFromMappings: resolveTemplateVariablesFromMappings,
                 logContext: { runId, nodeId: node.id, stepIndex },
               });
-              const renderedMessage = renderTemplateText(step.message, variables).trim();
+              const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                renderTemplateText(step.message, variables).trim(),
+                { campaignId, nodeId: node.id }
+              );
               if (!renderedMessage) {
                 throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
               }
@@ -5915,7 +5984,10 @@ class CampaignRunService {
                     resolveFromMappings: resolveTemplateVariablesFromMappings,
                     logContext: { runId, nodeId: node.id, stepIndex },
                   });
-                  const renderedMessage = renderTemplateText(step.message, variables).trim();
+                  const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                    renderTemplateText(step.message, variables).trim(),
+                    { campaignId, nodeId: node.id }
+                  );
                   if (!renderedMessage) {
                     throw new Error(`Thiếu nội dung tin nhắn cho người nhận ${recipient}`);
                   }
@@ -6108,6 +6180,8 @@ class CampaignRunService {
             manualValue: manualPhones,
             sourceNodeId,
             sourceField,
+            // Lời mời kết bạn luôn là SĐT — không có nhánh uid nào ở node này.
+            normalizePhoneEntries: true,
           });
           const dedupePhoneEntries = (entries = []) => {
             const dedupedPhones = Array.from(
@@ -6135,6 +6209,7 @@ class CampaignRunService {
               manualValue: manualPhones,
               sourceNodeId,
               sourceField,
+              normalizePhoneEntries: true,
             });
             effectivePhoneEntries = dedupePhoneEntries(refreshedPhoneEntries);
           }
@@ -7499,7 +7574,10 @@ class CampaignRunService {
                       resolveFromMappings: resolveTemplateVariablesFromMappings,
                       logContext: { runId, nodeId: node.id, stepIndex: nextStepIndex },
                     });
-                    const renderedMessage = renderTemplateText(step.message, variables).trim();
+                    const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                      renderTemplateText(step.message, variables).trim(),
+                      { campaignId, nodeId: node.id }
+                    );
                     if (!renderedMessage) return;
                     const dedupedZaloGroup = await trySyncLedgerFromExistingZaloMessage({
                       nodeId: node.id,
@@ -7673,7 +7751,10 @@ class CampaignRunService {
                   resolveFromMappings: resolveTemplateVariablesFromMappings,
                   logContext: { runId, nodeId: node.id, stepIndex },
                 });
-                const renderedMessage = renderTemplateText(step.message, variables).trim();
+                const renderedMessage = neutralizeUnresolvedTemplateVariables(
+                  renderTemplateText(step.message, variables).trim(),
+                  { campaignId, nodeId: node.id }
+                );
                 if (!renderedMessage) {
                   throw new Error(`Thiếu nội dung tin nhắn cho nhóm ${normalizedGroupId}`);
                 }

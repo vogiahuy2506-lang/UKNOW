@@ -1,16 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import campaignRunApiService from '../../features/campaigns/services/campaignRunApi.service';
+import campaignRunApiService from '../services/campaignRunApi.service';
 import {
   fetchCampaignRunDetailAllExecutionLogs,
   getMaxExecutionLogUpdatedAt,
-} from '../../features/campaigns/utils/campaignRunExecutionLogLoader';
+} from '../utils/campaignRunExecutionLogLoader';
 import toast from 'react-hot-toast';
-import { buildFlowOrderIndex } from '../../utils/campaignExecutionLogs';
-import CampaignRunMainTabs from '../../features/campaigns/components/CampaignRunMainTabs';
-import CampaignRunLogsPanel from '../../features/campaigns/components/CampaignRunLogsPanel';
-import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
-import useCampaignRunDerivedData from '../../features/campaigns/hooks/useCampaignRunDerivedData';
-import { useI18n } from '../../i18n';
+import { buildFlowOrderIndex } from '../../../utils/campaignExecutionLogs';
+import { useI18n } from '../../../i18n';
 import {
   buildDelayedRunDate,
   buildCronExpression,
@@ -23,7 +19,7 @@ import {
   isCompletedOnceSchedule,
   isReadonlyOnceSchedule,
   isStoppedOnceSchedule,
-} from '../../features/campaigns/utils/campaignRunSchedule.helpers';
+} from '../utils/campaignRunSchedule.helpers';
 
 const WEEKLY_DAY_OPTIONS = (t) => [
   { value: '1', label: t('campaigns.monday') },
@@ -67,12 +63,17 @@ const normalizeContinuousPollIntervalMinutes = (rawValue) => {
   return parsed;
 };
 
-const CampaignRun = () => {
+/**
+ * Hook điều khiển toàn bộ logic chạy chiến dịch, quản lý lịch và nhật ký thực thi.
+ *
+ * @param {object} [options]
+ * @param {() => (void|Promise<void>)} [options.onCampaignsChanged] Callback khi chiến dịch thay đổi trạng thái (run, stop, activate)
+ * @returns {object} Các state và handlers phục vụ giao diện chạy chiến dịch
+ */
+export default function useCampaignRunController({ onCampaignsChanged } = {}) {
   const { t } = useI18n();
   const weeklyDayOptions = WEEKLY_DAY_OPTIONS(t);
-  const [campaigns, setCampaigns] = useState([]);
-  const [pausedCampaigns, setPausedCampaigns] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showScheduleDetailModal, setShowScheduleDetailModal] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -113,12 +114,9 @@ const CampaignRun = () => {
   const [selectedCampaignForLogs, setSelectedCampaignForLogs] = useState(null);
   const [selectedExecutionLogId, setSelectedExecutionLogId] = useState(null);
   const [flowOrderByNodeId, setFlowOrderByNodeId] = useState(new Map());
-  const [activeMainTab, setActiveMainTab] = useState('active_campaigns');
-  const [activeCampaignSearch, setActiveCampaignSearch] = useState('');
-  const [scheduledCampaignSearch, setScheduledCampaignSearch] = useState('');
-  const [pausedCampaignSearch, setPausedCampaignSearch] = useState('');
   const [activatingCampaignIds, setActivatingCampaignIds] = useState(new Set());
   const [stoppingRunIds, setStoppingRunIds] = useState(new Set());
+
   const selectedResumeRunId = Number.parseInt(runResumeFromId, 10);
   const isResumeRunSelected = Number.isFinite(selectedResumeRunId) && selectedResumeRunId > 0;
   const isRunResumeLocked = Boolean(runContinuousMode && runResumeMode && isResumeRunSelected);
@@ -161,16 +159,14 @@ const CampaignRun = () => {
   }, [selectedRunDetail]);
 
   useEffect(() => {
-    fetchActiveCampaigns();
-    fetchPausedCampaigns();
     fetchSchedules();
     checkRunningCampaigns();
-    
+
     // Poll running status every 5 seconds
     const interval = setInterval(() => {
       checkRunningCampaigns();
     }, 5000);
-    
+
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy 1 lần lúc mount + setup poller
   }, []);
@@ -180,27 +176,6 @@ const CampaignRun = () => {
     setRunResumeMode(false);
     setRunResumeFromId('');
   }, [runContinuousMode]);
-
-  const fetchActiveCampaigns = async () => {
-    setIsLoading(true);
-    try {
-      const response = await campaignRunApiService.getCampaignsByStatus('active', 100);
-      setCampaigns(response.data.data.items || []);
-    } catch (error) {
-      toast.error(t('campaigns.loadFailed'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchPausedCampaigns = async () => {
-    try {
-      const response = await campaignRunApiService.getCampaignsByStatus('paused', 100);
-      setPausedCampaigns(response.data.data.items || []);
-    } catch (error) {
-      toast.error(t('campaigns.loadPausedFailed'));
-    }
-  };
 
   const fetchSchedules = async () => {
     try {
@@ -215,12 +190,12 @@ const CampaignRun = () => {
     try {
       const response = await campaignRunApiService.getCampaignRuns('limit=100');
       const runs = response.data.data || [];
-      
+
       // Lấy danh sách campaign đang chạy
       const running = new Set(
         runs
-          .filter(run => run.status === 'running')
-          .map(run => getCampaignKey(run.campaignId))
+          .filter((run) => run.status === 'running')
+          .map((run) => getCampaignKey(run.campaignId))
       );
       const runningMap = {};
       runs
@@ -229,7 +204,7 @@ const CampaignRun = () => {
           const campaignKey = getCampaignKey(run.campaignId);
           if (!runningMap[campaignKey]) runningMap[campaignKey] = run;
         });
-      
+
       setRunningCampaigns(running);
       setRunningRunByCampaign(runningMap);
     } catch (error) {
@@ -269,7 +244,7 @@ const CampaignRun = () => {
       toast.error(t('campaigns.loadHistoryFailed'));
     }
   };
-  
+
   const openScheduleDetailModal = async (schedule) => {
     setSelectedSchedule(schedule);
     setShowScheduleDetailModal(true);
@@ -430,6 +405,7 @@ const CampaignRun = () => {
       });
       toast.success(t('campaigns.startSuccess'));
       await checkRunningCampaigns();
+      await onCampaignsChanged?.();
       closeRunConfirmModal(true);
     } catch (error) {
       // Backend trả lý do cụ thể (vượt trần người nhận, sheet không truy cập được,
@@ -519,20 +495,6 @@ const CampaignRun = () => {
     await openCampaignLogs(campaign);
   };
 
-  /**
-   * Switch main tab and reset log workspace on non-log tab.
-   *
-   * @param {'active_campaigns'|'scheduled_campaigns'|'paused_campaigns'} tabKey target tab key
-   * @returns {void}
-   */
-  const handleSwitchMainTab = (tabKey) => {
-    setActiveMainTab(tabKey);
-    // Chỉ tab chiến dịch hoạt động mới cho phép hiển thị panel log.
-    if (tabKey !== 'active_campaigns') {
-      closeCampaignLogs();
-    }
-  };
-
   useEffect(() => {
     const campaignId = selectedCampaignForLogs?.id;
     if (!campaignId) return;
@@ -611,23 +573,6 @@ const CampaignRun = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- isCampaignRunningById đọc từ runningCampaigns đã có trong deps
   }, [runningCampaigns, selectedCampaignForLogs?.id, selectedRunDetail?.id, selectedRunDetail?.status]);
 
-  const {
-    workspaceLogs,
-    filteredActiveCampaigns,
-    filteredSchedules,
-    filteredPausedCampaigns,
-  } = useCampaignRunDerivedData({
-    selectedRunDetail,
-    flowOrderByNodeId,
-    selectedCampaignForLogs,
-    campaigns,
-    activeCampaignSearch,
-    schedules,
-    scheduledCampaignSearch,
-    pausedCampaigns,
-    pausedCampaignSearch,
-  });
-
   const openScheduleModal = (campaign) => {
     if (isCampaignRunningById(campaign.id)) {
       toast.error(t('campaigns.runningBlockSchedule'));
@@ -705,7 +650,7 @@ const CampaignRun = () => {
     }
 
     const cronExpression = buildCronExpression(scheduleForm);
-    
+
     if (!cronExpression) {
       toast.error(t('campaigns.createCronFailed'));
       return;
@@ -719,7 +664,7 @@ const CampaignRun = () => {
         cronExpression,
         enabled: scheduleForm.enabled,
       });
-      
+
       toast.success(t('campaigns.scheduleCreated'));
       closeScheduleModal();
       fetchSchedules();
@@ -791,7 +736,7 @@ const CampaignRun = () => {
       });
       toast.success(currentStatus ? t('campaigns.scheduleDisabled') : t('campaigns.scheduleEnabled'));
       fetchSchedules();
-      
+
       // Nếu đang mở modal detail, cập nhật selectedSchedule
       if (selectedSchedule && selectedSchedule.id === scheduleId) {
         setSelectedSchedule({
@@ -821,7 +766,7 @@ const CampaignRun = () => {
     try {
       await campaignRunApiService.publishCampaign(campaignId);
       toast.success(t('campaigns.campaignActivated'));
-      await Promise.all([fetchActiveCampaigns(), fetchPausedCampaigns()]);
+      await onCampaignsChanged?.();
     } catch (error) {
       toast.error(t('campaigns.activateCampaignFailed'));
     } finally {
@@ -864,6 +809,7 @@ const CampaignRun = () => {
       await campaignRunApiService.stopCampaignRun(runId);
       toast.success(t('campaigns.runStopped'));
       await checkRunningCampaigns();
+      await onCampaignsChanged?.();
       if (selectedRunDetail?.id === runId && selectedCampaignForLogs?.id) {
         executionLogDeltaCursorRef.current = null;
         const [full, historyRes] = await Promise.all([
@@ -894,121 +840,83 @@ const CampaignRun = () => {
   const getWeeklyDayFromCronByOptions = (cronExpression = '') =>
     getWeeklyDayFromCron(cronExpression, weeklyDayOptions);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner w-8 h-8"></div>
-      </div>
-    );
-  }
+  return {
+    weeklyDayOptions,
+    schedules,
+    runningCampaigns,
+    runningRunByCampaign,
+    selectedCampaign,
+    selectedSchedule,
+    scheduleRuns,
+    scheduleForm,
+    setScheduleForm,
+    showScheduleModal,
+    showScheduleDetailModal,
+    selectedRunDetail,
+    campaignRunHistory,
+    isLoadingRunDetail,
+    showRunConfirmModal,
+    runConfirmCampaign,
+    runNameInput,
+    setRunNameInput,
+    runContinuousMode,
+    setRunContinuousMode,
+    runPollIntervalMinutes,
+    setRunPollIntervalMinutes,
+    runResumeMode,
+    setRunResumeMode,
+    runResumeFromId,
+    setRunResumeFromId,
+    continuousResumeRunOptions,
+    isLoadingContinuousResumeOptions,
+    isRunResumeLocked,
+    isSubmittingRun,
+    stopRunConfirmTarget,
+    stoppingRunIds,
+    campaignSchedulesModalCampaign,
+    selectedCampaignForLogs,
+    selectedExecutionLogId,
+    setSelectedExecutionLogId,
+    flowOrderByNodeId,
+    activatingCampaignIds,
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('campaigns.runCampaign')}</h1>
-        <p className="text-gray-500 mt-1">{t('campaigns.runCampaignDescription')}</p>
-      </div>
+    // Helpers
+    getCampaignKey,
+    isCampaignRunningById,
+    isZaloGroupCampaign,
+    loadCampaignFlowOrder,
+    checkRunningCampaigns,
+    fetchSchedules,
+    getWeeklyDayLabel: getWeeklyDayLabelByOptions,
+    getWeeklyDayFromCron: getWeeklyDayFromCronByOptions,
+    getScheduleTypeLabel,
+    getScheduleStatusClassName,
+    getScheduleStatusLabel,
+    isReadonlyOnceSchedule,
 
-      <CampaignRunMainTabs
-        activeMainTab={activeMainTab}
-        onSwitchMainTab={handleSwitchMainTab}
-        activeCampaignSearch={activeCampaignSearch}
-        onActiveCampaignSearchChange={setActiveCampaignSearch}
-        scheduledCampaignSearch={scheduledCampaignSearch}
-        onScheduledCampaignSearchChange={setScheduledCampaignSearch}
-        pausedCampaignSearch={pausedCampaignSearch}
-        onPausedCampaignSearchChange={setPausedCampaignSearch}
-        campaigns={campaigns}
-        filteredActiveCampaigns={filteredActiveCampaigns}
-        pausedCampaigns={pausedCampaigns}
-        filteredPausedCampaigns={filteredPausedCampaigns}
-        schedules={schedules}
-        filteredSchedules={filteredSchedules}
-        getCampaignKey={getCampaignKey}
-        isCampaignRunningById={isCampaignRunningById}
-        runningRunByCampaign={runningRunByCampaign}
-        onOpenRunConfirmModal={openRunConfirmModal}
-        onOpenScheduleModal={openScheduleModal}
-        onToggleCampaignLogs={toggleCampaignLogs}
-        isShowingLogsForCampaign={isShowingLogsForCampaign}
-        getWeeklyDayLabel={getWeeklyDayLabelByOptions}
-        getWeeklyDayFromCron={getWeeklyDayFromCronByOptions}
-        getScheduleTypeLabel={getScheduleTypeLabel}
-        getScheduleStatusClassName={getScheduleStatusClassName}
-        getScheduleStatusLabel={getScheduleStatusLabel}
-        isReadonlyOnceSchedule={isReadonlyOnceSchedule}
-        onOpenScheduleDetailModal={openScheduleDetailModal}
-        onOpenCampaignSchedulesSummaryModal={openCampaignSchedulesSummaryModal}
-        onDeleteSchedule={handleDeleteSchedule}
-        onToggleSchedule={handleToggleSchedule}
-        activatingCampaignIds={activatingCampaignIds}
-        onActivateCampaign={handleActivateCampaign}
-        stoppingRunIds={stoppingRunIds}
-        onStopRun={openStopRunConfirmModal}
-        toastNotifier={toast}
-      />
-
-      {activeMainTab === 'active_campaigns' && (
-        <CampaignRunLogsPanel
-          selectedCampaignForLogs={selectedCampaignForLogs}
-          isLoadingRunDetail={isLoadingRunDetail}
-          selectedRunDetail={selectedRunDetail}
-          workspaceLogs={workspaceLogs}
-          selectedExecutionLogId={selectedExecutionLogId}
-          onSelectExecutionLogId={setSelectedExecutionLogId}
-          campaignRunHistory={campaignRunHistory}
-          onViewRunDetail={handleViewRunDetail}
-        />
-      )}
-
-      <CampaignRunModals
-        weeklyDayOptions={weeklyDayOptions}
-        showRunConfirmModal={showRunConfirmModal}
-        closeRunConfirmModal={closeRunConfirmModal}
-        runConfirmCampaign={runConfirmCampaign}
-        runNameInput={runNameInput}
-        setRunNameInput={setRunNameInput}
-        runContinuousMode={runContinuousMode}
-        setRunContinuousMode={setRunContinuousMode}
-        runPollIntervalMinutes={runPollIntervalMinutes}
-        setRunPollIntervalMinutes={setRunPollIntervalMinutes}
-        isRunResumeLocked={isRunResumeLocked}
-        runResumeMode={runResumeMode}
-        setRunResumeMode={setRunResumeMode}
-        runResumeFromId={runResumeFromId}
-        setRunResumeFromId={setRunResumeFromId}
-        continuousResumeRunOptions={continuousResumeRunOptions}
-        isLoadingContinuousResumeOptions={isLoadingContinuousResumeOptions}
-        shouldShowRunContinuousOptions={!isZaloGroupCampaign(runConfirmCampaign)}
-        isSubmittingRun={isSubmittingRun}
-        handleRunNow={handleRunNow}
-        stopRunConfirmTarget={stopRunConfirmTarget}
-        closeStopRunConfirmModal={closeStopRunConfirmModal}
-        handleConfirmStopRun={handleConfirmStopRun}
-        stoppingRunIds={stoppingRunIds}
-        showScheduleModal={showScheduleModal}
-        selectedCampaign={selectedCampaign}
-        closeScheduleModal={closeScheduleModal}
-        scheduleForm={scheduleForm}
-        setScheduleForm={setScheduleForm}
-        handleSaveSchedule={handleSaveSchedule}
-        showScheduleDetailModal={showScheduleDetailModal}
-        selectedSchedule={selectedSchedule}
-        closeScheduleDetailModal={closeScheduleDetailModal}
-        getWeeklyDayLabel={getWeeklyDayLabelByOptions}
-        getWeeklyDayFromCron={getWeeklyDayFromCronByOptions}
-        getScheduleTypeLabel={getScheduleTypeLabel}
-        getScheduleStatusClassName={getScheduleStatusClassName}
-        getScheduleStatusLabel={getScheduleStatusLabel}
-        scheduleRuns={scheduleRuns}
-        handleToggleSchedule={handleToggleSchedule}
-        isReadonlyOnceSchedule={isReadonlyOnceSchedule}
-        campaignSchedulesModalCampaign={campaignSchedulesModalCampaign}
-        closeCampaignSchedulesSummaryModal={closeCampaignSchedulesSummaryModal}
-        allSchedules={schedules}
-      />
-    </div>
-  );
-};
-
-export default CampaignRun;
+    // Handlers
+    handleViewRunDetail,
+    fetchScheduleRuns,
+    openScheduleDetailModal,
+    closeScheduleDetailModal,
+    openCampaignSchedulesSummaryModal,
+    closeCampaignSchedulesSummaryModal,
+    loadContinuousResumeRunOptions,
+    openRunConfirmModal,
+    closeRunConfirmModal,
+    handleRunNow,
+    openCampaignLogs,
+    closeCampaignLogs,
+    toggleCampaignLogs,
+    isShowingLogsForCampaign,
+    openScheduleModal,
+    closeScheduleModal,
+    handleSaveSchedule,
+    handleDeleteSchedule,
+    handleToggleSchedule,
+    handleActivateCampaign,
+    openStopRunConfirmModal,
+    closeStopRunConfirmModal,
+    handleConfirmStopRun,
+  };
+}

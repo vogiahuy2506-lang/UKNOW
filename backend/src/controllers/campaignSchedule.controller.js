@@ -2,6 +2,9 @@ import { serverError } from '../helpers.js';
 import { requestCampaignScheduleRefresh } from '../utils/scheduler.js';
 import campaignScheduleRepository from '../repositories/campaign/campaignSchedule.repository.js';
 import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.util.js';
+// Cột `next_run_at` không có chỗ ghi (production 12/09/2026: 29/29 lịch bật đều NULL) → tính lúc
+// đọc, cùng luật nổ với scheduler.
+import { computeScheduleNextRunAt } from '../utils/campaignScheduleCron.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 function normalizeOptionalBoolean(value) {
@@ -48,7 +51,7 @@ class CampaignScheduleController {
         enabled: row.enabled,
         lastRunAt: row.last_run_at,
         lastRunStatus: row.last_run_status || null,
-        nextRunAt: row.next_run_at,
+        nextRunAt: computeScheduleNextRunAt(row),
         runCount: row.run_count,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -93,7 +96,7 @@ class CampaignScheduleController {
         enabled: row.enabled,
         lastRunAt: row.last_run_at,
         lastRunStatus: row.last_run_status || null,
-        nextRunAt: row.next_run_at,
+        nextRunAt: computeScheduleNextRunAt(row),
         runCount: row.run_count,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -173,7 +176,7 @@ class CampaignScheduleController {
         enabled: row.enabled,
         lastRunAt: row.last_run_at,
         lastRunStatus: null,
-        nextRunAt: row.next_run_at,
+        nextRunAt: computeScheduleNextRunAt(row),
         runCount: row.run_count,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -275,7 +278,7 @@ class CampaignScheduleController {
         enabled: row.enabled,
         lastRunAt: row.last_run_at,
         lastRunStatus: null,
-        nextRunAt: row.next_run_at,
+        nextRunAt: computeScheduleNextRunAt(row),
         runCount: row.run_count,
         createdAt: row.created_at,
         updatedAt: row.updated_at,

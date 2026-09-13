@@ -29,9 +29,10 @@ export async function findExpiringUsers(minDays, maxDays, reminderThreshold) {
 /**
  * Lấy danh sách user_admin đã hết hạn gói (sau cả ân hạn grace_period_days).
  */
-export async function findExpiredUsers() {
-  const { rows } = await db.query(
-    `SELECT u.id, u.email, u.full_name, p.name AS plan_name
+export async function findExpiredUsers(queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT u.id, u.email, u.full_name, p.name AS plan_name,
+            u.subscription_expires_at, u.subscription_reminder_count
      FROM users u
      JOIN plans p ON u.active_plan_id = p.id
      WHERE u.role = 'user'
@@ -73,8 +74,8 @@ export async function expireUserPlan(userId, queryable = db) {
 /**
  * Tăng reminder_count sau khi gửi nhắc nhở.
  */
-export async function incrementReminderCount(userId) {
-  await db.query(
+export async function incrementReminderCount(userId, queryable = db) {
+  await queryable.query(
     `UPDATE users
      SET subscription_reminder_count = subscription_reminder_count + 1,
          updated_at = CURRENT_TIMESTAMP

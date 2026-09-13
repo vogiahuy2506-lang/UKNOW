@@ -163,10 +163,62 @@ export function buildBaseTemplate({ subtitle, content, footerNote }) {
 
 // ─── Renewal Reminder ─────────────────────────────────────────────────────────
 
-export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysLeft, renewalUrl }) {
+/**
+ * Đích của nút "Gia hạn / Nâng cấp" trong CẢ BA thư hạn gói: nhắc 7 ngày, nhắc 3 ngày, và T-0.
+ *
+ * Tách ra thành hàm riêng vì trước 13/09/2026 chỗ dựng URL này (scheduler.js) trỏ `/renewal` —
+ * một đường dẫn **không có route**. `frontend/src/App.jsx:505` bắt mọi đường lạ bằng
+ * `<Route path="*" element={<Navigate to="/" replace />} />`, nên khách bấm nút trong thư bị ném
+ * về trang bán hàng công khai chứ không tới trang thanh toán. `RenewalScreen.jsx` có tồn tại
+ * nhưng không ai import — code chết.
+ *
+ * Cạm bẫy khi kiểm: `curl https://founderai.biz/renewal` trả **200** và trông như đường dẫn sống.
+ * Đây là SPA, server trả `index.html` cho mọi path; thứ quyết định là router phía client.
+ *
+ * `/app/billing` là route thật (`App.jsx:433` — `BillingHubPage`, bọc `OwnerRoute`). Ba thư này
+ * chỉ gửi cho chủ tài khoản (`findExpiredUsers` / `findExpiringUsers` đều lọc `u.role = 'user'`)
+ * nên `OwnerRoute` không cản.
+ *
+ * @returns {string}
+ */
+export function buildRenewalUrl() {
+  return `${process.env.FRONTEND_URL || 'http://localhost:5174'}/app/billing`;
+}
+
+/**
+ * PR-2b (13/09/2026) — `template` là bản super admin đã sửa (đọc qua
+ * loadCustomSystemEmailTemplate('plan_expiring'), xem welcomeEmailTemplate.service.js), rỗng thì
+ * dùng đúng nội dung cứng như hôm nay (không đổi hành vi khi chưa ai sửa).
+ *
+ * `graceDays` mặc định 0 vì CHƯA có caller nào truyền số ân hạn thật (cả 9 gói production hôm
+ * nay đều grace_period_days=0 — xem Bẫy 1 của plan). Để sẵn tham số cho lúc có gói ân hạn > 0,
+ * không tự đi lấy dữ liệu plans ở đây — ngoài phạm vi PR này.
+ */
+export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysLeft, renewalUrl, template = null, graceDays = 0 }) {
   const expiryStr = new Date(expiresAt).toLocaleDateString('vi-VN', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   });
+
+  if (template) {
+    const values = {
+      user_name: fullName || 'bạn',
+      plan_name: planName || '',
+      expires_at: expiryStr,
+      days_left: String(daysLeft),
+      grace_days: String(graceDays),
+      upgrade_url: renewalUrl,
+      sender_name: SENDER_NAME,
+      support_email: 'info@digiso.vn',
+    };
+    return {
+      subject: replaceSystemEmailVariables(template.subject, values).trim(),
+      html: buildBaseTemplate({
+        subtitle: 'Thông báo gia hạn dịch vụ',
+        content: replaceSystemEmailVariables(template.bodyHtml, values, { html: true }),
+        footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+      }),
+    };
+  }
 
   const isUrgent = daysLeft <= 3;
   const accentColor = isUrgent ? '#dc2626' : '#d97706';
@@ -236,6 +288,232 @@ export function buildRenewalReminderEmail({ fullName, planName, expiresAt, daysL
       content,
       footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
     }),
+  };
+}
+
+/**
+ * Mẫu mặc định (có {{...}}) cho super admin sửa qua trang admin — PR-2b, cùng khuôn
+ * getDefaultWelcomeEmailTemplate(). Bỏ badge đếm-ngược-màu-động (isUrgent) của bản cứng: mẫu
+ * lưu DB là tĩnh, admin có thể tự thêm màu khác nếu muốn khi sửa HTML.
+ *
+ * @returns {{ subject: string, bodyHtml: string }}
+ */
+export function getDefaultPlanExpiringEmailTemplate() {
+  return {
+    subject: `[${SENDER_NAME}] Gói {{plan_name}} của bạn sắp hết hạn (còn {{days_left}} ngày)`,
+    bodyHtml: `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">{{user_name}}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Gói <strong>{{plan_name}}</strong> của bạn sẽ hết hạn vào ngày <strong>{{expires_at}}</strong>.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px 20px;text-align:center">
+          <p style="margin:0;font-size:13px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.5px">
+            📅 Còn lại
+          </p>
+          <p style="margin:4px 0 0;font-size:36px;font-weight:800;color:#d97706;line-height:1">
+            {{days_left}} ngày
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border-left:4px solid #d97706;border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0;font-size:13px;color:#991b1b;line-height:1.6">
+            ⚠️ <strong>Sau khi hết hạn:</strong> Tài khoản sẽ không còn quyền gửi email và Zalo theo gói hiện tại.
+            Các chiến dịch đang chạy sẽ dừng. Hãy gia hạn ngay để tránh gián đoạn.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="{{upgrade_url}}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Gia hạn ngay →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu bạn đã gia hạn hoặc không muốn nhận thông báo này, vui lòng liên hệ
+      <a href="mailto:{{support_email}}" style="color:#f97316;text-decoration:none">{{support_email}}</a>.
+    </p>
+    `,
+  };
+}
+
+// ─── Plan Expired (T-0) ───────────────────────────────────────────────────────
+
+/**
+ * Tạo email thông báo gói dịch vụ đã hết hạn (T-0).
+ * Cùng khuôn HTML với buildRenewalReminderEmail, đổi sang thì quá khứ và bỏ huy hiệu đếm ngược.
+ *
+ * PR-2b (13/09/2026) — `template` là bản super admin đã sửa (đọc qua
+ * loadCustomSystemEmailTemplate('plan_expired')), rỗng thì dùng đúng nội dung cứng như hôm nay.
+ * `graceDays` mặc định 0, cùng lý do như buildRenewalReminderEmail — xem đó.
+ *
+ * @param {{ fullName?: string|null, planName: string, expiresAt?: string|Date, renewalUrl?: string, template?: {subject: string, bodyHtml: string}|null, graceDays?: number }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildPlanExpiredEmail({ fullName, planName, expiresAt, renewalUrl, template = null, graceDays = 0 }) {
+  const expiryStr = expiresAt ? new Date(expiresAt).toLocaleDateString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  }) : 'gần đây';
+
+  const accentColor = '#dc2626';
+  const targetUrl = renewalUrl || `${process.env.FRONTEND_URL || 'http://localhost:5174'}/app/billing`;
+
+  if (template) {
+    const values = {
+      user_name: fullName || 'bạn',
+      plan_name: planName || '',
+      expires_at: expiryStr,
+      days_left: '0',
+      grace_days: String(graceDays),
+      upgrade_url: targetUrl,
+      sender_name: SENDER_NAME,
+      support_email: 'info@digiso.vn',
+    };
+    return {
+      subject: replaceSystemEmailVariables(template.subject, values).trim(),
+      html: buildBaseTemplate({
+        subtitle: 'Thông báo hết hạn dịch vụ',
+        content: replaceSystemEmailVariables(template.bodyHtml, values, { html: true }),
+        footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+      }),
+    };
+  }
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${fullName || 'bạn'}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Gói <strong>${planName}</strong> của bạn đã hết hạn vào ngày <strong>${expiryStr}</strong>.
+    </p>
+
+    <!-- Expired Warning Box (bỏ huy hiệu đếm ngược, thay bằng cảnh báo trạng thái) -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px 20px;text-align:center">
+          <p style="margin:0;font-size:13px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.5px">
+            ⚠️ Gói dịch vụ đã hết hạn
+          </p>
+          <p style="margin:6px 0 0;font-size:14px;color:#7f1d1d;line-height:1.6">
+            Quyền lợi gửi tin và tài nguyên theo gói đã tạm dừng. <strong>Các chiến dịch marketing đang chạy đã dừng.</strong>
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Guidance Box -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-left:4px solid ${accentColor};border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.6">
+            Để tiếp tục sử dụng dịch vụ và khởi động lại các chiến dịch, vui lòng gia hạn hoặc nâng cấp gói dịch vụ của bạn.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${targetUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Gia hạn / Nâng gói ngay →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Help -->
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu bạn đã gia hạn hoặc cần hỗ trợ thêm, vui lòng liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Gói ${planName} của bạn đã hết hạn`,
+    html: buildBaseTemplate({
+      subtitle: 'Thông báo hết hạn dịch vụ',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
+/**
+ * Mẫu mặc định (có {{...}}) cho super admin sửa — cùng khuôn getDefaultPlanExpiringEmailTemplate().
+ *
+ * @returns {{ subject: string, bodyHtml: string }}
+ */
+export function getDefaultPlanExpiredEmailTemplate() {
+  return {
+    subject: `[${SENDER_NAME}] Gói {{plan_name}} của bạn đã hết hạn`,
+    bodyHtml: `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">{{user_name}}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Gói <strong>{{plan_name}}</strong> của bạn đã hết hạn vào ngày <strong>{{expires_at}}</strong>.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:16px 20px;text-align:center">
+          <p style="margin:0;font-size:13px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.5px">
+            ⚠️ Gói dịch vụ đã hết hạn
+          </p>
+          <p style="margin:6px 0 0;font-size:14px;color:#7f1d1d;line-height:1.6">
+            Quyền lợi gửi tin và tài nguyên theo gói đã tạm dừng. <strong>Các chiến dịch marketing đang chạy đã dừng.</strong>
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-left:4px solid #dc2626;border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.6">
+            Để tiếp tục sử dụng dịch vụ và khởi động lại các chiến dịch, vui lòng gia hạn hoặc nâng cấp gói dịch vụ của bạn.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="{{upgrade_url}}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Gia hạn / Nâng gói ngay →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu bạn đã gia hạn hoặc cần hỗ trợ thêm, vui lòng liên hệ
+      <a href="mailto:{{support_email}}" style="color:#f97316;text-decoration:none">{{support_email}}</a>.
+    </p>
+    `,
   };
 }
 
@@ -491,7 +769,10 @@ export function getDefaultWelcomeEmailTemplate() {
   };
 }
 
-function escapeWelcomeHtml(value) {
+// Đổi tên 13/09/2026 (PR-2b việc 6) — hai hàm riêng của welcome, giờ dùng chung cho cả
+// buildRenewalReminderEmail/buildPlanExpiredEmail (mẫu thư sắp/đã hết hạn, cũng do super admin
+// sửa được từ nay). Không có consumer nào khác import hai hàm này (đều private, chỉ file này).
+function escapeSystemEmailHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -500,10 +781,10 @@ function escapeWelcomeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function replaceWelcomeVariables(template, values, { html = false } = {}) {
+function replaceSystemEmailVariables(template, values, { html = false } = {}) {
   return String(template || '').replace(/{{\s*([a-z_]+)\s*}}/gi, (_match, key) => {
     const value = values[key.toLowerCase()] ?? '';
-    return html ? escapeWelcomeHtml(value) : String(value).replace(/[\r\n]+/g, ' ');
+    return html ? escapeSystemEmailHtml(value) : String(value).replace(/[\r\n]+/g, ' ');
   });
 }
 
@@ -524,15 +805,15 @@ export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl, 
     support_email: 'info@digiso.vn',
     docs_url: `${FRONTEND_URL}/huong-dan`,
   };
-  const subject = replaceWelcomeVariables(selectedTemplate.subject, {
+  const subject = replaceSystemEmailVariables(selectedTemplate.subject, {
     ...commonValues,
     plan_section: planName || '',
   }).trim();
   const bodyWithPlanSection = selectedTemplate.bodyHtml.replace(
     /{{\s*plan_section\s*}}/gi,
-    buildWelcomePlanSection(escapeWelcomeHtml(planName || ''))
+    buildWelcomePlanSection(escapeSystemEmailHtml(planName || ''))
   );
-  const content = replaceWelcomeVariables(bodyWithPlanSection, commonValues, { html: true });
+  const content = replaceSystemEmailVariables(bodyWithPlanSection, commonValues, { html: true });
 
   return {
     subject,

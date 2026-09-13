@@ -12,11 +12,18 @@ import {
 import { useI18n } from '../../i18n';
 import {
   superAdminMenuItems,
+  userMenuItems,
 } from '../../components/layout/admin/navConfig';
-import { normalizeSuperAdminMenuCategories } from '../../components/layout/admin/adminMenuLayout';
+import {
+  normalizeSuperAdminMenuCategories,
+  normalizeAppMenuCategories,
+} from '../../components/layout/admin/adminMenuLayout';
 import adminMenuApiService, {
   ADMIN_MENU_LAYOUT_UPDATED_EVENT,
 } from '../../features/admin/services/adminMenuApi.service';
+
+const SCOPE_SUPER_ADMIN = 'super_admin';
+const SCOPE_APP_USER = 'app_user';
 
 function moveEntry(list, index, delta) {
   const target = index + delta;
@@ -33,11 +40,19 @@ function createCategoryId() {
 
 export default function AdminMenuCategoriesPage() {
   const { t } = useI18n();
-  const catalog = useMemo(() => superAdminMenuItems(t), [t]);
+  const [activeScope, setActiveScope] = useState(SCOPE_SUPER_ADMIN);
+  const isAppScope = activeScope === SCOPE_APP_USER;
+
+  const catalog = useMemo(
+    () => (isAppScope ? userMenuItems(t) : superAdminMenuItems(t)),
+    [isAppScope, t]
+  );
   const itemByKey = useMemo(
     () => new Map(catalog.map((item) => [item.key, item])),
     [catalog]
   );
+  const normalizer = isAppScope ? normalizeAppMenuCategories : normalizeSuperAdminMenuCategories;
+
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,20 +63,31 @@ export default function AdminMenuCategoriesPage() {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await adminMenuApiService.getLayout();
-      setCategories(normalizeSuperAdminMenuCategories(response.data?.data?.categories, catalog));
+      const response = isAppScope
+        ? await adminMenuApiService.getAppLayout()
+        : await adminMenuApiService.getLayout();
+      setCategories(normalizer(response.data?.data?.categories, catalog));
       setIsDirty(false);
     } catch (error) {
-      setCategories(normalizeSuperAdminMenuCategories(null, catalog));
+      setCategories(normalizer(null, catalog));
       toast.error(error?.response?.data?.message || t('adminMenu.loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, [catalog, t]);
+  }, [isAppScope, normalizer, catalog, t]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleTabChange = (nextScope) => {
+    if (nextScope === activeScope) return;
+    // Đổi tab là load() lại từ API → mọi thứ đang sắp dở bị mất. Hỏi trước khi vứt.
+    if (isDirty && !window.confirm(t('adminMenu.discardChangesConfirm'))) return;
+    setActiveScope(nextScope);
+    setNewNameVi('');
+    setNewNameEn('');
+  };
 
   const updateCategories = (updater) => {
     setCategories((current) => updater(current));
@@ -131,7 +157,7 @@ export default function AdminMenuCategoriesPage() {
   };
 
   const restoreDefaults = () => {
-    setCategories(normalizeSuperAdminMenuCategories(null, catalog));
+    setCategories(normalizer(null, catalog));
     setIsDirty(true);
   };
 
@@ -142,14 +168,20 @@ export default function AdminMenuCategoriesPage() {
     }
     setIsSaving(true);
     try {
-      const response = await adminMenuApiService.updateLayout(categories);
-      const saved = normalizeSuperAdminMenuCategories(response.data?.data?.categories, catalog);
+      const response = isAppScope
+        ? await adminMenuApiService.updateAppLayout(categories)
+        : await adminMenuApiService.updateLayout(categories);
+      const saved = normalizer(response.data?.data?.categories, catalog);
       setCategories(saved);
       setIsDirty(false);
-      window.dispatchEvent(new CustomEvent(ADMIN_MENU_LAYOUT_UPDATED_EVENT, {
-        detail: { categories: saved },
-      }));
-      toast.success(t('adminMenu.saveSuccess'));
+      // Chỉ phát sự kiện cập nhật trực tiếp cho menu Super Admin.
+      // Menu khách không cần cập nhật sống, đọc 1 lần lúc mount là đủ.
+      if (!isAppScope) {
+        window.dispatchEvent(new CustomEvent(ADMIN_MENU_LAYOUT_UPDATED_EVENT, {
+          detail: { categories: saved },
+        }));
+      }
+      toast.success(isAppScope ? (t('adminMenu.saveSuccessApp') || 'Đã lưu bố cục menu ứng dụng') : t('adminMenu.saveSuccess'));
     } catch (error) {
       toast.error(error?.response?.data?.message || t('adminMenu.saveFailed'));
     } finally {
@@ -186,6 +218,31 @@ export default function AdminMenuCategoriesPage() {
             {isSaving ? t('common.saving') : t('common.save')}
           </button>
         </div>
+      </div>
+
+      <div className="flex border-b border-gray-200 gap-2">
+        <button
+          type="button"
+          onClick={() => handleTabChange(SCOPE_SUPER_ADMIN)}
+          className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+            activeScope === SCOPE_SUPER_ADMIN
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }`}
+        >
+          {t('adminMenu.scopeSuperAdmin')}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange(SCOPE_APP_USER)}
+          className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+            activeScope === SCOPE_APP_USER
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }`}
+        >
+          {t('adminMenu.scopeAppUser')}
+        </button>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">

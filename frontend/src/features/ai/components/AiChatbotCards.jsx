@@ -1308,8 +1308,8 @@ export const AskCampaignDetailsCard = ({
                   <HiOutlinePaperClip className="w-4 h-4" />
                   Chọn file đính kèm
                 </button>
-                <p className="text-[11px] text-orange-700 mt-2 max-w-sm leading-relaxed">
-                  Tệp tải lên sẽ chốt danh sách tại thời điểm này. Muốn chiến dịch tự gửi cho người mới thêm vào sau, hãy dán link Google Sheet ở trên.
+                <p className="text-xs text-gray-500 mt-2 max-w-sm leading-relaxed">
+                  {t('aiChatbot.uploadFreezesList')}
                 </p>
                 {uploadedFiles && uploadedFiles.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2 justify-center">

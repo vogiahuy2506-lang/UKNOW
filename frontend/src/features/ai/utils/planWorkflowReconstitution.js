@@ -29,3 +29,24 @@ export function enrichTemplateDraftFromDb(data, savedTemplates = []) {
     ...(saved ? { _fromLibrary: true, _libraryTemplateId: saved.templateId } : {}),
   };
 }
+
+/**
+ * Lấy mô tả chiến dịch từ content plan workflow.
+ * Ưu tiên:
+ * 1. Mô tả ngắn do model sinh ra trong plan (`plan.description` hoặc `workflow.description`)
+ * 2. Chuỗi ngắn trung tính 'Chiến dịch tạo bởi trợ lý AI'
+ * TUYỆT ĐỐI không đưa prompt nội bộ (`sourcePrompt`, `GROUNDING`, chỉ dẫn hệ thống...) vào mô tả.
+ *
+ * @param {object} workflow
+ * @returns {string}
+ */
+export function buildCampaignDescription(workflow) {
+  const plan = workflow?.plan;
+  const rawDesc = (typeof plan?.description === 'string' && plan.description.trim())
+    || (typeof workflow?.description === 'string' && workflow.description.trim())
+    || '';
+  if (rawDesc) {
+    return rawDesc;
+  }
+  return 'Chiến dịch tạo bởi trợ lý AI';
+}

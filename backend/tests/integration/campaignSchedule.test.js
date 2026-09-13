@@ -161,6 +161,29 @@ describe('GET /api/campaign-schedules', () => {
     const res = await request(app).get('/api/campaign-schedules').set('Authorization', `Bearer ${t}`);
     expect(res.body.data[0].lastRunStatus).toBeNull();
   });
+
+  // Production 12/09/2026: 29 lịch đang bật, 0 lịch có next_run_at (cột không ai ghi) → cột
+  // "Lần chạy tiếp" hiện "—" cho mọi lịch. nextRunAt nay tính lúc đọc từ cron, KHÔNG đọc cột.
+  it('nextRunAt tính từ cron lúc đọc: lịch bật có giờ trong 24h tới đúng 09:00 Hà Nội, lịch tắt null', async () => {
+    const o = await createUser({ role: 'user', username: 'u' });
+    const c = await insertCampaign({ ownerId: o.id });
+    await insertSchedule({ campaignId: c.id, scheduleName: 'ON', cronExpression: '0 9 * * *', enabled: true });
+    await insertSchedule({ campaignId: c.id, scheduleName: 'OFF', cronExpression: '0 9 * * *', enabled: false });
+
+    const t = await loginAs(o);
+    const res = await request(app).get('/api/campaign-schedules').set('Authorization', `Bearer ${t}`);
+    const on = res.body.data.find((x) => x.scheduleName === 'ON');
+    const off = res.body.data.find((x) => x.scheduleName === 'OFF');
+
+    const next = new Date(on.nextRunAt);
+    expect(Number.isNaN(next.getTime())).toBe(false);
+    expect(next.getTime()).toBeGreaterThan(Date.now());
+    expect(next.getTime() - Date.now()).toBeLessThanOrEqual(24 * 60 * 60 * 1000 + 60 * 1000);
+    // 09:00 Asia/Ho_Chi_Minh = 02:00 UTC, không phụ thuộc TZ của máy chạy test
+    expect(next.getUTCHours()).toBe(2);
+    expect(next.getUTCMinutes()).toBe(0);
+    expect(off.nextRunAt).toBeNull();
+  });
 });
 
 describe('Campaign schedule employee workspace ownership', () => {

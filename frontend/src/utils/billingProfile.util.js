@@ -16,6 +16,18 @@ export function buildBillingStatusFromProfile(profile = {}) {
     activePlanId: profile.activePlanId ?? null,
     subscriptionExpiresAt: profile.subscriptionExpiresAt ?? null,
     planGracePeriodDays: Number(profile.planGracePeriodDays) || 0,
+    planRevokedAfterExpiry:
+      !profile.activePlanId
+      && Boolean(profile.subscriptionExpiresAt)
+      && new Date(profile.subscriptionExpiresAt).getTime() < Date.now(),
     ...subscription,
   };
 }
+
+/**
+ * Khoá lưu trạng thái tắt popup cảnh báo hết hạn gói trong sessionStorage.
+ *
+ * @param {string|number} userId
+ * @returns {string}
+ */
+export const planExpiryDismissKey = (userId) => `founderai_plan_expiry_dismissed_${userId}`;

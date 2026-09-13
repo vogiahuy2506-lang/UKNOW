@@ -13,7 +13,10 @@ import ChangePasswordModal from '../features/auth/components/ChangePasswordModal
 import PhoneRequiredModal from '../features/auth/components/PhoneRequiredModal';
 import ConsentRequiredModal from '../features/auth/components/ConsentRequiredModal';
 import TrialWelcomeModal from '../features/auth/components/TrialWelcomeModal';
+import PlanExpiryModal from '../features/auth/components/PlanExpiryModal';
 import { trialWelcomeKey } from '../stores/authStore';
+import { shouldWarnPlanExpiry } from '../utils/subscriptionStatus.util';
+import { planExpiryDismissKey } from '../utils/billingProfile.util';
 
 const SIDEBAR_WIDTH_COLLAPSED = 44; // icon-only desktop width
 const SIDEBAR_WIDTH_EXPANDED = 220; // expanded desktop width
@@ -87,8 +90,53 @@ const MainLayout = () => {
     setTrial(null);
   };
 
+  // Modal cảnh báo sắp hết hạn / đã hết hạn gói (PR-1 — mục 3)
+  const billingStatus = useAuthStore((state) => state.billingStatus);
+  const [expiryDismissed, setExpiryDismissed] = useState(() => {
+    if (!user?.id) return false;
+    try {
+      return sessionStorage.getItem(planExpiryDismissKey(user.id)) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (!user?.id) {
+      setExpiryDismissed(false);
+      return;
+    }
+    try {
+      setExpiryDismissed(sessionStorage.getItem(planExpiryDismissKey(user.id)) === 'true');
+    } catch {
+      setExpiryDismissed(false);
+    }
+  }, [user?.id]);
+
+  const handleClosePlanExpiry = () => {
+    if (user?.id) {
+      try {
+        sessionStorage.setItem(planExpiryDismissKey(user.id), 'true');
+      } catch {
+        // ignore
+      }
+    }
+    setExpiryDismissed(true);
+  };
+
+  const planExpiryWarning =
+    !mustChangePassword && !phoneRequired && !consentRequired && !trial
+    && activeContext?.type === 'self'
+    && user?.role !== 'admin'
+    && shouldWarnPlanExpiry(billingStatus)
+    && !expiryDismissed;
+
+  // Trình dựng chiến dịch là "full-screen editor": không padding quanh canvas, không banner credit,
+  // không ghi nhớ scroll của <main>. Từ commit đầu (e24f6725) route đã nằm dưới `/app` nhưng phép
+  // so vẫn là `startsWith('/campaigns')` → cờ này chưa bao giờ true; sửa 13/09/2026 (dọn nợ sau
+  // PLAN_GOP_TRANG_CHIEN_DICH_MOT_MUC_2026-09-12).
   const isFullLayout =
-    location.pathname.startsWith('/campaigns') &&
+    location.pathname.startsWith('/app/campaigns/') &&
     (location.pathname.endsWith('/new') || location.pathname.includes('/builder'));
 
   const isInboxPage = location.pathname.includes('/settings/inbox');
@@ -255,6 +303,12 @@ const MainLayout = () => {
           onClose={handleCloseTrialWelcome}
         />
 
+        <PlanExpiryModal
+          isOpen={Boolean(planExpiryWarning)}
+          billingStatus={billingStatus}
+          onClose={handleClosePlanExpiry}
+        />
+
         {!isAiHomePage && !isChatbotStudio && !isLandingCanvas && (
           <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         )}
@@ -373,6 +427,12 @@ const MainLayout = () => {
         isOpen={Boolean(trial)}
         trial={trial}
         onClose={handleCloseTrialWelcome}
+      />
+
+      <PlanExpiryModal
+        isOpen={Boolean(planExpiryWarning)}
+        billingStatus={billingStatus}
+        onClose={handleClosePlanExpiry}
       />
     </div>
   );

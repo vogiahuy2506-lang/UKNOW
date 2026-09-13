@@ -56,9 +56,17 @@ async function evaluateRule(rule) {
       const m = await alertRepo.metricCampaignFailRate(windowMinutes, minRecipients);
       if (m.skipped) return null;
       if (m.rate > threshold) {
+        const channelDetails = [];
+        if (m.zalo && m.zalo.total > 0) {
+          channelDetails.push(`Zalo ${m.zalo.failed}/${m.zalo.total} hỏng`);
+        }
+        if (m.email && m.email.total > 0) {
+          channelDetails.push(`Email ${m.email.failed}/${m.email.total} hỏng`);
+        }
+        const detailStr = channelDetails.length > 0 ? ` — ${channelDetails.join(', ')}` : '';
         return {
           measuredValue: m.rate,
-          message: `Tỉ lệ gửi thất bại ${(m.rate * 100).toFixed(1)}% (${m.failed}/${m.total} đã thử — không tính người chưa gửi) trong ${windowMinutes} phút`,
+          message: `Tỉ lệ gửi thất bại ${(m.rate * 100).toFixed(1)}% (${m.failed}/${m.total} đã thử${detailStr}) trong ${windowMinutes} phút`,
           payload: m,
         };
       }

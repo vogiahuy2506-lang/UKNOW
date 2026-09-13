@@ -62,10 +62,14 @@ backend/.release_locks.cjs
 backend/.make_jwt.cjs
 backend/.start.log
 backend/.start.err
-
 # One-off artefacts from local debugging (a QR image saved during a
 # Baileys reconnect trial). Safe to keep ignored.
 backend/real-qr-from-handler.png
+
+# Conflict-resolution helper used during a one-shot merge back from
+# origin/main. Keeps the script around so a follow-up `git pull
+# --rebase` of similar shape can reuse it; not part of the runtime.
+.resolve-conflicts.mjs
 
 # Integration test overrides (Postgres local)
 backend/tests/integration/.env.test

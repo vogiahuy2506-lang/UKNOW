@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../i18n';
 import Sidebar from './Sidebar';
 
-const { mockGetLayout, authState } = vi.hoisted(() => ({
+const { mockGetLayout, mockGetUserAppMenuLayout, authState } = vi.hoisted(() => ({
   mockGetLayout: vi.fn(),
+  mockGetUserAppMenuLayout: vi.fn(),
   authState: {
     user: { role: 'admin', username: 'superadmin' },
     activeContext: { type: 'self' },
@@ -22,7 +23,10 @@ vi.mock('../../../hooks/useScrollPersistence', () => ({
 
 vi.mock('../../../features/admin/services/adminMenuApi.service', () => ({
   ADMIN_MENU_LAYOUT_UPDATED_EVENT: 'founder-admin-menu-layout-updated',
-  default: { getLayout: mockGetLayout },
+  default: {
+    getLayout: mockGetLayout,
+    getUserAppMenuLayout: mockGetUserAppMenuLayout,
+  },
 }));
 
 describe('Sidebar super admin menu layout', () => {
@@ -52,7 +56,9 @@ describe('Sidebar super admin menu layout', () => {
     );
 
     const categoryButton = await screen.findByRole('button', { name: 'Ưu tiên' });
-    fireEvent.click(categoryButton);
+    if (categoryButton.getAttribute('aria-expanded') !== 'true') {
+      fireEvent.click(categoryButton);
+    }
 
     await waitFor(() => {
       const links = screen.getAllByRole('link');
@@ -73,8 +79,12 @@ describe('Sidebar super admin menu layout', () => {
       }));
     });
 
-    expect(screen.getByRole('button', { name: 'Vận hành' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Đơn hàng' })).not.toBeInTheDocument();
+    const operationsButton = screen.getByRole('button', { name: 'Vận hành' });
+    expect(operationsButton).toBeInTheDocument();
+    // Review Claude 13/09: đang đứng ở /admin (dashboard) và bố cục mới xếp dashboard vào
+    // "Vận hành" → nhóm đó phải TỰ MỞ sau khi lưu (cùng luật PR-3), không đóng hết như trước.
+    expect(operationsButton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'Đơn hàng' })).toBeInTheDocument();
   });
 });
 
@@ -96,6 +106,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
   beforeEach(() => {
     localStorage.clear();
+    mockGetUserAppMenuLayout.mockResolvedValue({ data: { data: { categories: [] } } });
   });
 
   afterEach(() => {
@@ -141,7 +152,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       'AI Chatbot': ['Tạo AI Chatbot', 'Lịch sử trò chuyện', 'Thư viện media'],
       'Chiến dịch': [
         'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
-        'Chạy chiến dịch', 'Hiệu quả chiến dịch', 'Khách hàng từ chiến dịch',
+        'Hiệu quả chiến dịch', 'Khách hàng từ chiến dịch',
       ],
       'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page'],
       'Quản trị': ['Khóa học nổi bật', 'Đánh giá', 'Quản lý khóa học', 'Đơn hàng'],
@@ -177,7 +188,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     const links = screen.getAllByRole('link');
     const linkNames = links.map((l) => l.textContent);
-    // ĐÚNG 2 mục — không phải quick_send/channel_management/message_templates/run_campaign/
+    // ĐÚNG 2 mục — không phải quick_send/channel_management/message_templates/
     // customers (mỗi mục đó cần một permission khác mà nhân viên này không có).
     expect(linkNames).toEqual(['Quản lý chiến dịch', 'Hiệu quả chiến dịch']);
   });
@@ -194,13 +205,135 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     expect(screen.queryByText('Quản lý khoá học')).not.toBeInTheDocument();
   });
 
-  it('vào /app/campaigns/123/builder — nhóm Chiến dịch vẫn được highlight (so theo key, không theo tên)', () => {
+  it('vào /app/campaigns/123/builder — nhóm Chiến dịch vẫn được highlight (dấu hiệu active mới: data-active="true", vạch cam, aria-expanded="true")', () => {
     authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
     authState.activeContext = { type: 'self' };
 
     renderAppSidebar('/app/campaigns/123/builder');
 
     const campaignsButton = screen.getByRole('button', { name: 'Chiến dịch' });
-    expect(campaignsButton.className).toContain('bg-orange-50');
+    expect(campaignsButton).toHaveAttribute('data-menu-level', 'group');
+    expect(campaignsButton).toHaveAttribute('data-active', 'true');
+    expect(campaignsButton).toHaveAttribute('aria-expanded', 'true');
+    expect(campaignsButton.className).toContain('before:bg-orange-500');
+    expect(campaignsButton.className.split(' ')).not.toContain('bg-orange-50');
+  });
+
+  // ── 4 ca test PR-3 (mục 6 việc 5) ──────────────────────────────────────────
+  it('render tại /app/campaigns — nhóm Chiến dịch tự mở, link "Quản lý chiến dịch" có sẵn với aria-current="page"', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/campaigns');
+
+    const campaignManageLink = screen.getByRole('link', { name: 'Quản lý chiến dịch' });
+    expect(campaignManageLink).toBeInTheDocument();
+    expect(campaignManageLink).toHaveAttribute('aria-current', 'page');
+    expect(campaignManageLink).toHaveAttribute('data-menu-level', 'item');
+  });
+
+  it('bấm tiêu đề "Chiến dịch" — accordion đóng lại (link biến mất), bấm lại thì mở ra', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/campaigns');
+
+    const campaignsGroupButton = screen.getByRole('button', { name: 'Chiến dịch' });
+    expect(screen.getByRole('link', { name: 'Quản lý chiến dịch' })).toBeInTheDocument();
+
+    // Bấm đóng
+    fireEvent.click(campaignsGroupButton);
+    expect(screen.queryByRole('link', { name: 'Quản lý chiến dịch' })).not.toBeInTheDocument();
+
+    // Bấm lại để mở
+    fireEvent.click(campaignsGroupButton);
+    expect(screen.getByRole('link', { name: 'Quản lý chiến dịch' })).toBeInTheDocument();
+  });
+
+  it('render tại /app/settings/employees — chỉ nhóm "Cài đặt" mở, nhóm "Chiến dịch" đóng', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/settings/employees');
+
+    expect(screen.getByRole('link', { name: 'Nhân viên' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Quản lý chiến dịch' })).not.toBeInTheDocument();
+  });
+
+  it('tiêu đề nhóm có data-menu-level="group" và aria-expanded phản ánh đúng trạng thái mở/đóng', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/campaigns');
+
+    const campaignsButton = screen.getByRole('button', { name: 'Chiến dịch' });
+    const settingsButton = screen.getByRole('button', { name: 'Cài đặt' });
+
+    expect(campaignsButton).toHaveAttribute('data-menu-level', 'group');
+    expect(campaignsButton).toHaveAttribute('aria-expanded', 'true');
+
+    expect(settingsButton).toHaveAttribute('data-menu-level', 'group');
+    expect(settingsButton).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(campaignsButton);
+    expect(campaignsButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('đọc cấu hình app đổi tên "Chiến dịch" thành "Marketing" thì tiêu đề nhóm đổi mà nhân viên campaigns_view vẫn chỉ thấy 2 mục', async () => {
+    authState.user = { role: 'user', username: 'emp1', fullName: 'Nhân viên A' };
+    authState.activeContext = { type: 'employee', permissions: { campaigns_view: true } };
+
+    mockGetUserAppMenuLayout.mockResolvedValue({
+      data: {
+        data: {
+          categories: [
+            { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)', itemKeys: ['ai_assistant', 'dashboard'] },
+            { id: 'campaigns', nameVi: 'Marketing', nameEn: 'Marketing', itemKeys: ['quick_send', 'campaign_management', 'delivery_monitor'] },
+          ],
+        },
+      },
+    });
+
+    renderAppSidebar();
+
+    const marketingButton = await screen.findByRole('button', { name: 'Marketing' });
+    expect(marketingButton).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Chiến dịch' })).not.toBeInTheDocument();
+
+    fireEvent.click(marketingButton);
+
+    const links = screen.getAllByRole('link');
+    const linkNames = links.map((l) => l.textContent);
+    // Vẫn chỉ đúng 2 mục có quyền campaigns_view
+    expect(linkNames).toEqual(['Quản lý chiến dịch', 'Hiệu quả chiến dịch']);
+  });
+
+  it('render tại /app/campaigns, mock cấu hình dời campaign_management vào chuyên mục "Vận hành" → nhóm "Vận hành" tự mở, link có aria-current="page"', async () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    mockGetUserAppMenuLayout.mockResolvedValue({
+      data: {
+        data: {
+          categories: [
+            { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)', itemKeys: ['ai_assistant', 'dashboard'] },
+            { id: 'operations', nameVi: 'Vận hành', nameEn: 'Operations', itemKeys: ['campaign_management'] },
+            { id: 'campaigns', nameVi: 'Chiến dịch', nameEn: 'Campaigns', itemKeys: ['quick_send'] },
+          ],
+        },
+      },
+    });
+
+    renderAppSidebar('/app/campaigns');
+
+    // Sau khi layout load từ API, nhóm "Vận hành" phải tự mở và chứa link active
+    await waitFor(() => {
+      const operationsButton = screen.getByRole('button', { name: 'Vận hành' });
+      expect(operationsButton).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    const campaignLink = screen.getByRole('link', { name: 'Quản lý chiến dịch' });
+    expect(campaignLink).toBeInTheDocument();
+    expect(campaignLink).toHaveAttribute('aria-current', 'page');
   });
 });

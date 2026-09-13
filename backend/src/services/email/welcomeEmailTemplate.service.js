@@ -1,13 +1,17 @@
 import sanitizeHtml from 'sanitize-html';
 import {
   buildWelcomeEmail,
+  buildRenewalReminderEmail,
+  buildPlanExpiredEmail,
   getDefaultWelcomeEmailTemplate,
+  getDefaultPlanExpiringEmailTemplate,
+  getDefaultPlanExpiredEmailTemplate,
   sendSystemEmail,
 } from '../../utils/systemEmail.util.js';
 import {
-  deleteWelcomeEmailTemplate,
-  findWelcomeEmailTemplate,
-  saveWelcomeEmailTemplate,
+  deleteSystemEmailTemplate,
+  findSystemEmailTemplate,
+  saveSystemEmailTemplate,
 } from '../../repositories/admin/systemEmailTemplate.repository.js';
 
 export const WELCOME_EMAIL_VARIABLES = Object.freeze([
@@ -20,6 +24,38 @@ export const WELCOME_EMAIL_VARIABLES = Object.freeze([
   'support_email',
   'docs_url',
 ]);
+
+// PR-2b (13/09/2026, PLAN_CANH_BAO_SAP_HET_HAN_GOI mục 4.2) — biến cho hai mẫu mới, danh sách
+// RIÊNG với welcome (không dùng chung một danh sách cho cả ba, dù nội dung hai mẫu này hôm nay
+// trùng nhau — để lệch nhau về sau không phải sửa cấu trúc).
+const PLAN_EXPIRING_EMAIL_VARIABLES = Object.freeze([
+  'user_name', 'plan_name', 'expires_at', 'days_left', 'grace_days',
+  'upgrade_url', 'sender_name', 'support_email',
+]);
+const PLAN_EXPIRED_EMAIL_VARIABLES = Object.freeze([
+  'user_name', 'plan_name', 'expires_at', 'days_left', 'grace_days',
+  'upgrade_url', 'sender_name', 'support_email',
+]);
+
+/**
+ * Nguồn sự thật duy nhất cho khoá mẫu thư hợp lệ + danh sách biến mỗi khoá.
+ * `SYSTEM_EMAIL_TEMPLATE_KEYS` (Object.keys của map này) là whitelist mà route
+ * adminSystemEmailTemplate.routes.js dùng để validate `:templateKey` — đổi map này thì whitelist
+ * route tự cập nhật, không có nơi thứ hai để quên.
+ */
+export const SYSTEM_EMAIL_TEMPLATE_VARIABLES = Object.freeze({
+  welcome: WELCOME_EMAIL_VARIABLES,
+  plan_expiring: PLAN_EXPIRING_EMAIL_VARIABLES,
+  plan_expired: PLAN_EXPIRED_EMAIL_VARIABLES,
+});
+
+export const SYSTEM_EMAIL_TEMPLATE_KEYS = Object.freeze(Object.keys(SYSTEM_EMAIL_TEMPLATE_VARIABLES));
+
+const DEFAULT_TEMPLATE_GETTERS = Object.freeze({
+  welcome: getDefaultWelcomeEmailTemplate,
+  plan_expiring: getDefaultPlanExpiringEmailTemplate,
+  plan_expired: getDefaultPlanExpiredEmailTemplate,
+});
 
 const MAX_SUBJECT_LENGTH = 200;
 const MAX_BODY_LENGTH = 100_000;
@@ -51,11 +87,12 @@ function sanitizeBodyHtml(value) {
   });
 }
 
-function assertSupportedVariables(subject, bodyHtml) {
+function assertSupportedVariables(templateKey, subject, bodyHtml) {
+  const allowed = SYSTEM_EMAIL_TEMPLATE_VARIABLES[templateKey] || [];
   const unsupported = new Set();
   for (const value of [subject, bodyHtml]) {
     for (const match of String(value || '').matchAll(VARIABLE_RE)) {
-      if (!WELCOME_EMAIL_VARIABLES.includes(match[1].toLowerCase())) {
+      if (!allowed.includes(match[1].toLowerCase())) {
         unsupported.add(match[1]);
       }
     }
@@ -65,7 +102,12 @@ function assertSupportedVariables(subject, bodyHtml) {
   }
 }
 
-export function normalizeWelcomeEmailTemplate(input) {
+/**
+ * @param {'welcome'|'plan_expiring'|'plan_expired'} templateKey
+ * @param {{subject?: string, bodyHtml?: string}} input
+ * @returns {{subject: string, bodyHtml: string}}
+ */
+export function normalizeSystemEmailTemplate(templateKey, input) {
   const rawSubject = String(input?.subject || '').replace(/[\r\n]+/g, ' ').trim();
   const rawBodyHtml = String(input?.bodyHtml || '').trim();
 
@@ -78,17 +120,18 @@ export function normalizeWelcomeEmailTemplate(input) {
     throw badRequest(`Nội dung email không được quá ${MAX_BODY_LENGTH} ký tự`);
   }
 
-  assertSupportedVariables(rawSubject, rawBodyHtml);
+  assertSupportedVariables(templateKey, rawSubject, rawBodyHtml);
   const bodyHtml = sanitizeBodyHtml(rawBodyHtml).trim();
   if (!bodyHtml) throw badRequest('Nội dung email không hợp lệ');
 
   return { subject: rawSubject, bodyHtml };
 }
 
-function toTemplateDto(row) {
+function toTemplateDto(templateKey, row) {
   if (!row) {
+    const getDefault = DEFAULT_TEMPLATE_GETTERS[templateKey];
     return {
-      ...getDefaultWelcomeEmailTemplate(),
+      ...(getDefault ? getDefault() : { subject: '', bodyHtml: '' }),
       isCustomized: false,
       updatedBy: null,
       updatedAt: null,
@@ -103,33 +146,111 @@ function toTemplateDto(row) {
   };
 }
 
-export async function getWelcomeEmailTemplate() {
-  return toTemplateDto(await findWelcomeEmailTemplate());
+export async function getSystemEmailTemplate(templateKey) {
+  return toTemplateDto(templateKey, await findSystemEmailTemplate(templateKey));
 }
 
-export async function updateWelcomeEmailTemplate(input, actorUserId) {
-  const normalized = normalizeWelcomeEmailTemplate(input);
-  const row = await saveWelcomeEmailTemplate({
+export async function updateSystemEmailTemplate(templateKey, input, actorUserId) {
+  const normalized = normalizeSystemEmailTemplate(templateKey, input);
+  const row = await saveSystemEmailTemplate(templateKey, {
     ...normalized,
     updatedBy: actorUserId,
   });
-  return toTemplateDto(row);
+  return toTemplateDto(templateKey, row);
 }
 
-export async function resetWelcomeEmailTemplate() {
-  await deleteWelcomeEmailTemplate();
-  return toTemplateDto(null);
+export async function resetSystemEmailTemplate(templateKey) {
+  await deleteSystemEmailTemplate(templateKey);
+  return toTemplateDto(templateKey, null);
 }
 
-export function previewWelcomeEmailTemplate(input) {
-  const template = normalizeWelcomeEmailTemplate(input);
-  return buildWelcomeEmail({
+// Dữ liệu mẫu cho xem trước — welcome giữ đúng dữ liệu cũ (previewWelcomeEmailTemplate trước
+// đây), hai khoá mới dùng dữ liệu hư cấu tương tự cho nhất quán.
+const PREVIEW_SAMPLE_DATA = Object.freeze({
+  welcome: () => ({
     fullName: 'Nguyễn Minh Anh',
     email: 'minhanh@example.com',
     planName: 'Dùng thử',
     loginUrl: 'https://founderai.biz/login',
-    template,
-  });
+  }),
+  plan_expiring: () => ({
+    fullName: 'Nguyễn Minh Anh',
+    planName: 'Chuyên nghiệp',
+    expiresAt: new Date(Date.now() + 3 * 86400000).toISOString(),
+    daysLeft: 3,
+    renewalUrl: 'https://founderai.biz/app/billing',
+  }),
+  plan_expired: () => ({
+    fullName: 'Nguyễn Minh Anh',
+    planName: 'Chuyên nghiệp',
+    expiresAt: new Date(Date.now() - 86400000).toISOString(),
+    renewalUrl: 'https://founderai.biz/app/billing',
+  }),
+});
+
+const PREVIEW_BUILDERS = Object.freeze({
+  welcome: (template, sample) => buildWelcomeEmail({ ...sample, template }),
+  plan_expiring: (template, sample) => buildRenewalReminderEmail({ ...sample, template }),
+  plan_expired: (template, sample) => buildPlanExpiredEmail({ ...sample, template }),
+});
+
+export function previewSystemEmailTemplate(templateKey, input) {
+  const template = normalizeSystemEmailTemplate(templateKey, input);
+  const sample = PREVIEW_SAMPLE_DATA[templateKey]();
+  return PREVIEW_BUILDERS[templateKey](template, sample);
+}
+
+// ─── Backward-compat cho luồng welcome hiện có ─────────────────────────────────
+// KHÔNG đổi tên hay chữ ký các hàm dưới đây — auth.controller.js:227/:586 gọi thẳng
+// sendWelcomeEmail() trong luồng đăng ký (register + googleLogin lần đầu); hỏng chỗ này là hỏng
+// cửa vào sản phẩm. Test hiện có (auth.welcomeEmail.spec.js, welcomeEmailTemplate.service.spec.js)
+// cũng import theo tên cũ. Mọi hàm dưới đây chỉ ủy quyền sang bản tổng quát ở trên.
+
+export function normalizeWelcomeEmailTemplate(input) {
+  return normalizeSystemEmailTemplate('welcome', input);
+}
+
+export async function getWelcomeEmailTemplate() {
+  return getSystemEmailTemplate('welcome');
+}
+
+export async function updateWelcomeEmailTemplate(input, actorUserId) {
+  return updateSystemEmailTemplate('welcome', input, actorUserId);
+}
+
+export async function resetWelcomeEmailTemplate() {
+  return resetSystemEmailTemplate('welcome');
+}
+
+export function previewWelcomeEmailTemplate(input) {
+  return previewSystemEmailTemplate('welcome', input);
+}
+
+/**
+ * Tải mẫu tuỳ chỉnh từ DB cho một khoá, chuẩn hoá lại (sanitize + kiểm biến) trước khi dùng để
+ * gửi thật. Lỗi migration chưa chạy hay DB tạm lỗi KHÔNG được chặn gửi — trả null, caller tự
+ * ngã về nội dung cứng. Đây là đường dùng chung cho cả ba khoá; trước PR-2b logic này nằm thẳng
+ * trong sendWelcomeEmail(), giờ tách ra để scheduler.js/subscriptionExpiry.service.js dùng lại
+ * cho plan_expiring/plan_expired.
+ *
+ * @param {'welcome'|'plan_expiring'|'plan_expired'} templateKey
+ * @returns {Promise<{subject: string, bodyHtml: string}|null>}
+ */
+export async function loadCustomSystemEmailTemplate(templateKey) {
+  try {
+    const row = await findSystemEmailTemplate(templateKey);
+    if (!row) return null;
+    return normalizeSystemEmailTemplate(templateKey, {
+      subject: row.subject,
+      bodyHtml: row.body_html,
+    });
+  } catch (error) {
+    console.warn(
+      `[SystemEmailTemplate] Could not load custom template for "${templateKey}", using default:`,
+      error.message
+    );
+    return null;
+  }
 }
 
 /**
@@ -138,19 +259,7 @@ export function previewWelcomeEmailTemplate(input) {
  * welcome email: fall back to the code default and let SMTP decide the result.
  */
 export async function sendWelcomeEmail({ to, fullName, planName = null, loginUrl }) {
-  let template = null;
-  try {
-    const row = await findWelcomeEmailTemplate();
-    if (row) {
-      template = normalizeWelcomeEmailTemplate({
-        subject: row.subject,
-        bodyHtml: row.body_html,
-      });
-    }
-  } catch (error) {
-    console.warn('[WelcomeEmail] Could not load custom template, using default:', error.message);
-  }
-
+  const template = await loadCustomSystemEmailTemplate('welcome');
   const rendered = buildWelcomeEmail({
     fullName,
     email: to,
