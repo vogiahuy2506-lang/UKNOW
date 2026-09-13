@@ -296,9 +296,13 @@ sai mẫu số nên không bao giờ nổ dù dữ liệu thật ra 93,9%. Ledge
 | PR-1: sửa chỉ số Zalo mất kết nối, tách lý do không liên hệ được; vá bản user | `1a2f557a` `81286b2b` |
 | PR-2: cảnh báo tỉ lệ lỗi đổi cả cửa sổ lọc lẫn mẫu số | `5d118059` |
 | PR-3: ghi `lastFailureReason` vào ledger mỗi lần gửi Zalo hỏng, kể cả kết bạn và nhóm | `00e6634e` `fc9a6cf1` |
+| 13/09: `campaign_fail_rate_high` đếm lượt gửi **trong cửa sổ** từ `zalo_messages` + `email_messages`, tách kênh trong thông điệp ("Zalo x/y hỏng, Email a/b hỏng") | `dddee31e` |
 
-Ngưỡng giữ 0,30 / 60 phút / 20 người nhận. Còn hỏi: cảnh báo này có phủ **email** không — ngày
-07–08/09 email hỏng 83% suốt hai ngày mà không ai được báo (xem "Việc còn treo").
+Ngưỡng giữ 0,30 / 60 phút / 20 người nhận. Bản PR-2 cộng **bộ đếm cả đời** của run đang `running`,
+nên 5 run continuous của tài khoản công ty (12.299 và 12.866 lượt hỏng cũ từ sự cố 06/09) làm cảnh
+báo nổ 50 lần từ 10/09 với cùng con số 88,1% dù chúng đang gửi tốt. Sau `dddee31e`: 0 sự kiện mới
+trong 6 giờ, `alerts_evaluator` vẫn chạy mỗi 5 phút (`noop`). Cảnh báo nay phủ cả email, trả lời câu
+hỏi từ sự cố 07–08/09. Còn treo cùng bệnh: `zalo_disconnected` nổ mỗi giờ vì nhìn cửa sổ 7 ngày.
 
 ## Khoá dịch: từ 130 khoá bị xoá nhầm tới 0 khoá vỡ (10/09)
 
@@ -397,7 +401,7 @@ Sếp chốt: **một cấu hình chung cho mọi khách, khách không tự s�
 - **Sự cố email 07–08/09 (phát hiện 13/09)**: tài khoản SMTP công ty đăng nhập thất bại (535) hai
   ngày, run không dừng mà đánh hỏng 2.464 lượt; **1.579 địa chỉ của đợt "Khảo sát tặng quà cơ hội AI"
   (363/364) chưa bao giờ nhận thư**, tệp đã xuất để sếp quyết gửi lại. Lỗi "535 không dừng run" đã sửa
-  `a8c75d27`. Còn hỏi: cảnh báo tỉ lệ hỏng có phủ email không.
+  `a8c75d27`; cảnh báo tỉ lệ hỏng nay đếm cả email theo cửa sổ (`dddee31e`, 13/09).
 - **Sếp nghiệm thu production**: trang Chiến dịch gộp (5 nút vận hành, Chạy ngay → Dừng, tab Lịch chạy,
   sidebar cha/con, trình dựng full-screen); super admin đổi tên nhóm menu khách; thẻ cổng wizard mờ ngay
   sau "huỷ" không cần F5.
@@ -409,3 +413,15 @@ Sếp chốt: **một cấu hình chung cho mọi khách, khách không tự s�
 - **Lịch hẹn có gửi lại người cũ không**: SQL ghi trong `PLAN_AI_GIU_LINK_SHEET` (archive), chạy khi tiện.
 - **Bảng câu hỏi của sếp chưa làm**: digest hội thoại chatbot, tự lưu contact từ chatbot, giờ hoạt động
   chatbot (Huy).
+- **Landing: đính kèm ảnh (logo/banner) và tài liệu (PDF/DOCX) khi tạo/sửa bằng AI** — 5 commit đã
+  review xong tối 13/09 (backend: kho `landing_asset` + route công khai `/lp-assets`, prompt và chốt
+  422; trợ lý AI và chat canvas gửi `files`), **chờ push/deploy** vì `main` đang kẹt build image.
+  Nghiệm thu thật sau deploy: logo lên header, số liệu từ PDF vào trang, `storage_objects` chuyển
+  `active` khi lưu trang, URL ảnh trả 302/200 có `Cache-Control`, `file_access_events` không tăng.
+- **Ba quyết định phát sinh từ commit tối 13/09 trên `main`**: (1) một migration xoá toàn bộ 9 bảng
+  `zalo_*` từng lên `main` rồi được rút lại sau 36 phút, chưa chạy trên production — cần sếp chốt
+  **Zalo còn trong sản phẩm hay bỏ**; (2) image backend đổi Node 20 → 22 để có binary dựng sẵn cho
+  `better-sqlite3` (kéo theo từ thư viện Telegram), trong khi CI vẫn test trên Node 20; (3)
+  `.gitattributes` ép `*.js/*.jsx/*.sql` về LF trong khi repo còn 84 file CRLF — kiểm `git status` sau
+  mỗi lần pull trước khi commit. Migration 212–215 (Telegram/WhatsApp, xoá Viber) chưa áp lên
+  production, sẽ áp ở deploy xanh kế tiếp.
