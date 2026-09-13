@@ -119,6 +119,8 @@ export default function AdminWelcomeEmailPage() {
     })
     : t('adminSubscriptionReminderSchedule.previewNoDays');
 
+  const savedDaysText = [...scheduleSaved].sort((x, y) => y - x).join(', ');
+
   const templateKeyLabels = {
     welcome: t('adminWelcomeEmail.templateKeys.welcome'),
     plan_expiring: t('adminWelcomeEmail.templateKeys.plan_expiring'),
@@ -133,8 +135,11 @@ export default function AdminWelcomeEmailPage() {
     },
     plan_expiring: {
       title: t('adminWelcomeEmail.templateMeta.plan_expiring.title'),
-      subtitle: t('adminWelcomeEmail.templateMeta.plan_expiring.subtitle'),
-      behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expiring.behaviorNote'),
+      // Hai dòng này TỪNG ghi cứng "còn 7 ngày và còn 3 ngày". Từ khi lịch nhắc sửa được
+      // (PR-2), ghi cứng là tự mâu thuẫn: sếp đặt [10,5,2] ở tab bên cạnh mà tab này vẫn nói 7/3.
+      // Lấy từ scheduleSaved (đã lưu), KHÔNG phải scheduleDraft — tab này mô tả hành vi THẬT.
+      subtitle: t('adminWelcomeEmail.templateMeta.plan_expiring.subtitle', { days: savedDaysText }),
+      behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expiring.behaviorNote', { days: savedDaysText }),
       previewFrameTitle: t('adminWelcomeEmail.templateMeta.plan_expiring.previewFrameTitle'),
     },
     plan_expired: {

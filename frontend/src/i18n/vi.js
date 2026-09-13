@@ -7994,8 +7994,8 @@ export default {
       },
       plan_expiring: {
         title: 'Email nhắc sắp hết hạn gói',
-        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên còn 7 ngày và còn 3 ngày là hết hạn.',
-        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, hai lần cho mỗi thành viên (còn 7 ngày và còn 3 ngày). Các email đã gửi trước đây không thay đổi.',
+        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên sắp hết hạn, theo các mốc {days} ngày đang đặt ở tab Lịch nhắc hạn.',
+        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, theo các mốc {days} ngày trước hạn (đổi ở tab Lịch nhắc hạn). Các email đã gửi trước đây không thay đổi.',
         previewFrameTitle: 'Bản xem trước email nhắc hết hạn gói',
       },
       plan_expired: {

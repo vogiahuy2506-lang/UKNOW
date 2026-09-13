@@ -336,3 +336,41 @@ describe('AdminWelcomeEmailPage', () => {
     });
   });
 });
+
+/**
+ * Ghim chữ mô tả ở tab "Nội dung thư" phải THEO lịch đang đặt.
+ *
+ * Trước 13/09/2026 hai chuỗi `templateMeta.plan_expiring.subtitle` và `.behaviorNote` ghi cứng
+ * "còn 7 ngày và còn 3 ngày". Từ khi PR-2 cho sửa lịch, ghi cứng là tự mâu thuẫn NGAY TRONG MỘT
+ * TRANG: sếp đặt [10, 5] ở tab Lịch nhắc hạn, bấm sang tab bên cạnh thì nó vẫn nói 7 và 3.
+ *
+ * Người implement có nêu chuyện này trong báo cáo nhưng xếp là "ngoài phạm vi". Thực ra nó là hệ
+ * quả trực tiếp của chính tính năng PR-2, nên Claude sửa luôn lúc review.
+ */
+describe('AdminWelcomeEmailPage — mô tả mẫu plan_expiring bám theo lịch đã lưu', () => {
+  it('lịch đang là [10, 5] thì chữ mô tả nói 10, 5 — KHÔNG còn 7 và 3', async () => {
+    mockGetScheduleSettings.mockResolvedValue(
+      response({ daysBefore: [10, 5], updatedAt: null, updatedBy: null })
+    );
+
+    render(
+      <I18nProvider>
+        <AdminWelcomeEmailPage />
+      </I18nProvider>
+    );
+    await screen.findByText('Email chào mừng thành viên');
+
+    // Chuyển sang mẫu "sắp hết hạn" ở tab Nội dung thư.
+    fireEvent.click(screen.getByRole('button', { name: welcomeT.templateKeys.plan_expiring }));
+
+    // CẢ HAI chỗ phải động: dòng mô tả (subtitle) và dòng giải thích hành vi (behaviorNote).
+    const mota = await screen.findAllByText((_, el) => {
+      const txt = el?.textContent || '';
+      return el?.tagName === 'P' && txt.includes('10, 5') && txt.includes('ngày');
+    });
+    expect(mota).toHaveLength(2);
+
+    // Không còn dấu vết chuỗi cứng cũ.
+    expect(screen.queryByText(/còn 7 ngày và còn 3 ngày/)).not.toBeInTheDocument();
+  });
+});

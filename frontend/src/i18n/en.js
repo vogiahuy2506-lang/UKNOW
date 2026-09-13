@@ -8034,8 +8034,8 @@ Feel free to ask me anything!`,
       },
       plan_expiring: {
         title: 'Plan-expiring reminder email',
-        subtitle: 'Edit the email that reminds members their plan expires in 7 days, then again at 3 days.',
-        behaviorNote: 'Sent automatically at 08:00 daily, twice per member (7 days left, then 3 days left). Previously sent emails are unchanged.',
+        subtitle: 'Edit the reminder email sent before a member\'s plan expires, at the {days}-day marks set in the Reminder schedule tab.',
+        behaviorNote: 'Sent automatically at 08:00 daily, at the {days}-day marks before expiry (change them in the Reminder schedule tab). Emails already sent are unchanged.',
         previewFrameTitle: 'Plan-expiring reminder preview',
       },
       plan_expired: {
