@@ -157,3 +157,43 @@ describe('Subscription Expiry Cron Integration (PR-2a — Ca 12 & 13 mục 5)', 
     expect(mockSendMail).toHaveBeenCalledTimes(1); // Không gửi thêm thư nào (vẫn chỉ 1 thư cũ)
   });
 });
+
+/**
+ * Ghim SỰ THẬT của nhánh gửi thư thất bại.
+ *
+ * subscriptionExpiry.service.js:44-45 ghi: "KHÔNG incrementReminderCount để tránh mất thư vĩnh
+ * viễn". Câu đó không đúng, và đây là phép thử chứng minh: gói vẫn bị thu hồi ngay ở lượt đó
+ * (service:55), mà findExpiredUsers thì JOIN plans ON u.active_plan_id = p.id
+ * (subscription.repository.js:37) — nên người vừa hỏng thư KHÔNG BAO GIỜ quay lại danh sách.
+ * Thư mất thật, bất kể reminder_count.
+ *
+ * Ca này KHÔNG đòi đổi hành vi. Thu hồi vô điều kiện là lựa chọn an toàn về tiền: nếu bỏ qua
+ * thu hồi khi thư hỏng thì một địa chỉ email hỏng vĩnh viễn = dùng dịch vụ miễn phí vĩnh viễn.
+ * Nó tồn tại để ai định "sửa" theo hướng đó sẽ thấy ngay cái giá.
+ */
+describe('Thư T-0 hỏng — ghim hệ quả thật, không phải lời hứa trong bình luận', () => {
+  it('gửi thư lỗi → gói VẪN bị thu hồi, và lượt sau không còn ai để gửi lại', async () => {
+    const plan = await createPlan({ code: 'p-fail', name: 'Gói Hỏng Thư' });
+    const user = await createUser({
+      username: 'user-mail-fail',
+      email: 'mail-fail@example.com',
+      full_name: 'Khách Hỏng Thư',
+    });
+    await setSubscription(user.id, plan.id, new Date(Date.now() - 2 * 86400000), 2);
+
+    mockSendMail.mockRejectedValueOnce(new Error('SMTP connection timeout'));
+
+    const run1 = await processExpiredSubscriptions();
+    expect(run1.emailsSent).toBe(0);      // thư hỏng
+    expect(run1.expiredCount).toBe(1);    // nhưng gói vẫn bị thu hồi
+
+    const sau = await db.query('SELECT active_plan_id FROM users WHERE id = $1', [user.id]);
+    expect(sau.rows[0].active_plan_id).toBeNull();
+
+    // Lượt sau: không còn trong danh sách → không có cơ hội gửi lại. Thư mất vĩnh viễn.
+    mockSendMail.mockClear();
+    const run2 = await processExpiredSubscriptions();
+    expect(run2.totalFound).toBe(0);
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+});

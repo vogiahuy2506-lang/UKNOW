@@ -41,8 +41,17 @@ export async function processExpiredSubscriptions({ renewalUrl, queryable = db }
           emailsSent++;
           console.log(`[Subscription] Đã gửi thư hết hạn T-0 → ${user.email} (${user.plan_name})`);
         } catch (emailErr) {
-          // Lỗi gửi email cho 1 người không được làm hỏng cả lượt cron,
-          // và KHÔNG incrementReminderCount để tránh mất thư vĩnh viễn
+          // Lỗi gửi thư cho 1 người không được làm hỏng cả lượt cron.
+          //
+          // Không gọi incrementReminderCount ở đây, nhưng ĐỪNG đọc đó là "để gửi lại sau":
+          // ngay dưới đây gói vẫn bị thu hồi, mà findExpiredUsers JOIN plans ON
+          // u.active_plan_id = p.id (subscription.repository.js:37) nên người này KHÔNG BAO GIỜ
+          // quay lại danh sách. Thư mất thật. Ghim ở
+          // tests/integration/subscriptionExpiryCron.test.js — "Thư T-0 hỏng".
+          //
+          // Vẫn thu hồi vô điều kiện vì đó là lựa chọn an toàn về tiền: bỏ qua thu hồi khi thư
+          // hỏng thì một địa chỉ email hỏng vĩnh viễn = dùng dịch vụ miễn phí vĩnh viễn.
+          // Muốn không mất thư thì phải có hàng đợi gửi lại — việc khác, không phải PR này.
           console.error(`[Subscription] Gửi email hết hạn thất bại cho ${user.email}:`, emailErr.message);
         }
       } else {
