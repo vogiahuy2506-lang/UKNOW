@@ -3682,6 +3682,7 @@ export default {
   },
 
   aiChatbot: {
+    uploadFreezesList: 'Uploaded files freeze the recipient list at this moment. To automatically send to newly added recipients later, paste the Google Sheet link above.',
     recipientColumnMismatchTitle: 'Missing the column this channel needs',
     // Welcome messages
     welcomeAdmin: 'Hello Admin! 📊 I can help you analyze Founder AI platform data in real-time.\n\nYou can ask me about:\n- Revenue, orders this month\n- Member count, who\'s expiring soon\n\n- Service package distribution\n- Platform-wide campaign status\n\nFeel free to ask me!',
