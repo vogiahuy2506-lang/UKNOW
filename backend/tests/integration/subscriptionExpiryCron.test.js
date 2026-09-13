@@ -20,7 +20,10 @@ const {
   findExpiredUsers,
 } = await import('../../src/repositories/subscription/subscription.repository.js');
 const { recordRun } = await import('../../src/repositories/admin/cronJobRun.repository.js');
-const { processExpiredSubscriptions } = await import('../../src/services/payment/subscriptionExpiry.service.js');
+const {
+  processExpiredSubscriptions,
+  sendExpiringReminders,
+} = await import('../../src/services/payment/subscriptionExpiry.service.js');
 const {
   truncateAll,
   createUser,
@@ -197,3 +200,93 @@ describe('Thư T-0 hỏng — ghim hệ quả thật, không phải lời hứa 
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 });
+
+describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tách vòng lặp)', () => {
+  it('Bẫy 2 — Thư nhắc hạn thử lại được: gửi lỗi thì gói KHÔNG bị thu hồi, reminder_count không tăng, lượt sau gửi lại thành công', async () => {
+    const plan = await createPlan({ code: 'p-remind-retry', name: 'Gói Nhắc Retry' });
+    const user = await createUser({
+      username: 'user-remind-retry',
+      email: 'remind-retry@example.com',
+      full_name: 'Khách Nhắc Retry',
+    });
+    // Còn 6.8 ngày (nằm trong khoảng 6 đến 7 ngày)
+    const expiresAt = new Date(Date.now() + 6.8 * 86400000);
+    await setSubscription(user.id, plan.id, expiresAt, 0);
+
+    // Lượt 1: Giả lập SMTP lỗi
+    mockSendMail.mockRejectedValueOnce(new Error('SMTP temporary error'));
+
+    const res1 = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+    expect(res1.remindedWeek).toBe(0);
+    expect(res1.failed).toBe(1);
+
+    // Kiểm tra DB: active_plan_id VẪN CÒN, reminder_count VẪN LÀ 0
+    const userDb1 = await db.query('SELECT active_plan_id, subscription_reminder_count FROM users WHERE id = $1', [user.id]);
+    expect(userDb1.rows[0].active_plan_id).toBe(plan.id);
+    expect(Number(userDb1.rows[0].subscription_reminder_count)).toBe(0);
+
+    // Lượt 2: SMTP phục hồi bình thường -> gửi lại thành công!
+    mockSendMail.mockClear();
+    mockSendMail.mockResolvedValueOnce({ messageId: '<retry-success-id>' });
+
+    const res2 = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+    expect(res2.remindedWeek).toBe(1);
+    expect(res2.failed).toBe(0);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+    // DB đã tăng reminder_count = 1
+    const userDb2 = await db.query('SELECT active_plan_id, subscription_reminder_count FROM users WHERE id = $1', [user.id]);
+    expect(Number(userDb2.rows[0].subscription_reminder_count)).toBe(1);
+  });
+
+  it('Ca 8: Cron chạy đầy đủ ghi vào cron_job_runs với cấu trúc đủ 5 khoá giám sát trên DB thật', async () => {
+    const plan = await createPlan({ code: 'p-cron-shape', name: 'Gói Cron Shape' });
+    const user = await createUser({
+      username: 'user-cron-shape',
+      email: 'cron-shape@example.com',
+      full_name: 'Khách Cron Shape',
+    });
+    // Còn 2.5 ngày (nằm trong khoảng 2 đến 3 ngày), reminder_count = 1
+    const expiresAt = new Date(Date.now() + 2.5 * 86400000);
+    await setSubscription(user.id, plan.id, expiresAt, 1);
+
+    await recordRun('subscription_reminder', async () => {
+      const expiryResult = await processExpiredSubscriptions({ renewalUrl: 'https://app.uknow.vn/billing' });
+      const reminderResult = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+      const lockedUsers = 0;
+      const reminderWeek = 0;
+      const reminderThree = 0;
+      const processed = expiryResult.expiredCount + reminderResult.remindedWeek + reminderResult.remindedThreeDay
+        + lockedUsers + reminderWeek + reminderThree;
+      return {
+        expired: expiryResult.expiredCount,
+        remindedWeek: reminderResult.remindedWeek,
+        remindedThreeDay: reminderResult.remindedThreeDay,
+        lockedUsers,
+        reminderWeek,
+        reminderThree,
+        synced: processed,
+      };
+    });
+
+    const runRes = await db.query(
+      `SELECT job_code, status, result
+       FROM cron_job_runs
+       WHERE job_code = 'subscription_reminder'
+       ORDER BY started_at DESC
+       LIMIT 1`
+    );
+    expect(runRes.rows.length).toBe(1);
+    expect(runRes.rows[0].status).toBe('success');
+    expect(runRes.rows[0].result).toEqual({
+      expired: 0,
+      remindedWeek: 0,
+      remindedThreeDay: 1,
+      lockedUsers: 0,
+      reminderWeek: 0,
+      reminderThree: 0,
+      synced: 1,
+    });
+  });
+});
+

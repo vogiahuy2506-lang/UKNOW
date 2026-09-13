@@ -2,9 +2,7 @@ import cron from 'node-cron';
 import db from '../config/database.js';
 import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
-import { findExpiringUsers, incrementReminderCount } from '../repositories/subscription/subscription.repository.js';
-import { sendSystemEmail, buildRenewalReminderEmail, buildRenewalUrl } from './systemEmail.util.js';
-import { loadCustomSystemEmailTemplate } from '../services/email/welcomeEmailTemplate.service.js';
+import { sendSystemEmail, buildRenewalUrl } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 import notificationService from '../services/admin/notification.service.js';
@@ -574,38 +572,13 @@ export const initScheduler = () => {
           console.error('[Subscription] Lỗi khi xử lý gói hết hạn:', expiryErr.message);
         }
 
-        // PR-2b (13/09/2026, mục 4.2 Việc 6) — đọc mẫu plan_expiring do super admin sửa (nếu có)
-        // MỘT lần cho cả cron run, dùng chung cho cả 2 lượt nhắc dưới đây — tránh N truy vấn DB
-        // dư thừa. loadCustomSystemEmailTemplate tự trả null khi chưa ai sửa hoặc DB lỗi tạm thời;
-        // buildRenewalReminderEmail tự ngã về bản cứng khi template=null.
-        const planExpiringTemplate = await loadCustomSystemEmailTemplate('plan_expiring');
-
-        // 2. Nhắc lần 1 — còn 7 ngày (reminder_count = 0)
-        const week = await findExpiringUsers(6, 7, 1);
-        for (const user of week) {
-          const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-          const { subject, html } = buildRenewalReminderEmail({
-            fullName: user.full_name, planName: user.plan_name,
-            expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
-            template: planExpiringTemplate,
-          });
-          await sendSystemEmail({ to: user.email, subject, html });
-          await incrementReminderCount(user.id);
-          console.log(`[Subscription] Nhắc lần 1 → ${user.email} (còn ${daysLeft} ngày)`);
-        }
-
-        // 3. Nhắc lần 2 — còn 3 ngày (reminder_count = 1)
-        const threeDay = await findExpiringUsers(2, 3, 2);
-        for (const user of threeDay) {
-          const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-          const { subject, html } = buildRenewalReminderEmail({
-            fullName: user.full_name, planName: user.plan_name,
-            expiresAt: user.subscription_expires_at, daysLeft, renewalUrl,
-            template: planExpiringTemplate,
-          });
-          await sendSystemEmail({ to: user.email, subject, html });
-          await incrementReminderCount(user.id);
-          console.log(`[Subscription] Nhắc lần 2 → ${user.email} (còn ${daysLeft} ngày)`);
+        // 2 & 3. Nhắc hạn: gửi thư nhắc lần 1 (7 ngày) và lần 2 (3 ngày) qua service
+        let reminderResult = { remindedWeek: 0, remindedThreeDay: 0, failed: 0 };
+        try {
+          const { sendExpiringReminders } = await import('../services/payment/subscriptionExpiry.service.js');
+          reminderResult = await sendExpiringReminders({ renewalUrl });
+        } catch (reminderErr) {
+          console.error('[Subscription] Lỗi khi gửi thư nhắc hạn:', reminderErr.message);
         }
 
         let lockedUsers = 0;
@@ -662,17 +635,12 @@ export const initScheduler = () => {
           console.error('[TopupLock] reconcile/reminders failed:', lockErr.message);
         }
 
-        const processed = expiryResult.expiredCount + week.length + threeDay.length + lockedUsers
-          + reminderWeek + reminderThree;
-        return {
-          expired: expiryResult.expiredCount,
-          remindedWeek: week.length,
-          remindedThreeDay: threeDay.length,
-          lockedUsers,
-          reminderWeek,
-          reminderThree,
-          synced: processed,
-        };
+        // Hình dạng 5 khoá giám sát là hợp đồng với dashboard — dựng bằng hàm có test,
+        // đừng gõ tay lại ở đây (xem buildSubscriptionCronResult).
+        const { buildSubscriptionCronResult } = await import('../services/payment/subscriptionExpiry.service.js');
+        return buildSubscriptionCronResult({
+          expiryResult, reminderResult, lockedUsers, reminderWeek, reminderThree,
+        });
       });
     } catch (error) {
       console.error('[Subscription] Lỗi khi kiểm tra gói:', error.message);
