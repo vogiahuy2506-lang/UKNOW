@@ -82,6 +82,8 @@ CREATE TABLE users (
   subscription_reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
   -- migration 220: công tắc nhận email khi khách để lại SĐT/email trong chatbot
   chatbot_contact_alert_email BOOLEAN NOT NULL DEFAULT true,
+  -- migration 221: tần suất nhận thư tổng hợp hoạt động chatbot
+  chatbot_digest_frequency VARCHAR(10) NOT NULL DEFAULT 'weekly' CHECK (chatbot_digest_frequency IN ('none', 'weekly', 'monthly')),
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -1651,6 +1653,19 @@ CREATE TABLE IF NOT EXISTS chatbot_contact_scan_cursors (
   last_message_id  BIGINT NOT NULL DEFAULT 0,
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ─── Chatbot digest log (migration 221) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS chatbot_digest_log (
+  id            BIGSERIAL PRIMARY KEY,
+  id_user       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  period_key    VARCHAR(16) NOT NULL,
+  period_start  TIMESTAMPTZ NOT NULL,
+  period_end    TIMESTAMPTZ NOT NULL,
+  stats         JSONB NOT NULL DEFAULT '{}',
+  sent_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_chatbot_digest_user_period UNIQUE (id_user, period_key)
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_digest_log_user ON chatbot_digest_log(id_user);
 
 -- ─── Channel connections (migration 031, 042) ──────────────────────────
 CREATE TABLE IF NOT EXISTS channel_connections (

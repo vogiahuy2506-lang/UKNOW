@@ -53,6 +53,7 @@ export default function ContactAlertsPanel({
 
   // Settings
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [digestFrequency, setDigestFrequency] = useState('weekly');
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
@@ -88,6 +89,7 @@ export default function ContactAlertsPanel({
       const res = await chatbotApi.getContactAlertSettings();
       if (res?.data?.success) {
         setEmailEnabled(res.data.data?.emailEnabled ?? true);
+        setDigestFrequency(res.data.data?.digestFrequency || 'weekly');
       }
     } catch (err) {
       console.error('Failed to fetch alert settings:', err);
@@ -120,6 +122,24 @@ export default function ContactAlertsPanel({
       }
     } catch (err) {
       console.error('Failed to update email setting:', err);
+      toast.error(t('inbox.contactAlerts.updateSettingError') || 'Không thể cập nhật cấu hình thông báo');
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  };
+
+  const handleChangeDigestFrequency = async (e) => {
+    const nextFreq = e.target.value;
+    if (isEmployeeContext || isUpdatingSettings) return;
+    setIsUpdatingSettings(true);
+    try {
+      const res = await chatbotApi.updateContactAlertSettings({ digestFrequency: nextFreq });
+      if (res?.data?.success) {
+        setDigestFrequency(nextFreq);
+        toast.success(t('inbox.contactAlerts.digestUpdateSuccess') || 'Đã cập nhật tần suất thư tổng hợp');
+      }
+    } catch (err) {
+      console.error('Failed to update digest frequency:', err);
       toast.error(t('inbox.contactAlerts.updateSettingError') || 'Không thể cập nhật cấu hình thông báo');
     } finally {
       setIsUpdatingSettings(false);
@@ -260,28 +280,48 @@ export default function ContactAlertsPanel({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Email Opt-in/out Toggle (Hidden for employees) */}
+          {/* Settings: Email Opt-in/out & Digest Frequency (Hidden for employees) */}
           {!isEmployeeContext && (
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-medium text-gray-700 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-all">
-              <span>{t('inbox.contactAlerts.emailNotification') || 'Nhận email khi khách để lại liên hệ'}</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={emailEnabled}
-                disabled={isLoadingSettings || isUpdatingSettings}
-                onClick={handleToggleEmailSetting}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  emailEnabled ? 'bg-primary-600' : 'bg-gray-300'
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    emailEnabled ? 'translate-x-4' : 'translate-x-0'
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-medium text-gray-700 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-all">
+                <span>{t('inbox.contactAlerts.emailNotification') || 'Nhận email khi khách để lại liên hệ'}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={emailEnabled}
+                  disabled={isLoadingSettings || isUpdatingSettings}
+                  onClick={handleToggleEmailSetting}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    emailEnabled ? 'bg-primary-600' : 'bg-gray-300'
                   }`}
-                />
-              </button>
-            </label>
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      emailEnabled ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </label>
+
+              <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700">
+                <label htmlFor="digest-frequency-select" className="text-gray-600 select-none">
+                  {t('inbox.contactAlerts.digestFrequency') || 'Thư tổng hợp'}:
+                </label>
+                <select
+                  id="digest-frequency-select"
+                  aria-label={t('inbox.contactAlerts.digestFrequency') || 'Thư tổng hợp hội thoại AI'}
+                  value={digestFrequency}
+                  disabled={isLoadingSettings || isUpdatingSettings}
+                  onChange={handleChangeDigestFrequency}
+                  className="bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="weekly">{t('inbox.contactAlerts.digestWeekly') || 'Hàng tuần'}</option>
+                  <option value="monthly">{t('inbox.contactAlerts.digestMonthly') || 'Hàng tháng'}</option>
+                  <option value="none">{t('inbox.contactAlerts.digestNone') || 'Không gửi'}</option>
+                </select>
+              </div>
+            </div>
           )}
 
           <button

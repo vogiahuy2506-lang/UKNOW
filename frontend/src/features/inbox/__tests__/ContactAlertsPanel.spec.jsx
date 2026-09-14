@@ -232,4 +232,43 @@ describe('ContactAlertsPanel Component', () => {
       visitorName: 'Trần Thị B',
     });
   });
+
+  it('shows digest frequency dropdown for owner and calls updateContactAlertSettings on change', async () => {
+    chatbotApi.getContactAlertSettings.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          emailEnabled: true,
+          digestFrequency: 'weekly',
+        },
+      },
+    });
+
+    chatbotApi.updateContactAlertSettings.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          digestFrequency: 'monthly',
+        },
+      },
+    });
+
+    render(<ContactAlertsPanel isEmployeeContext={false} />);
+
+    await waitFor(() => {
+      expect(chatbotApi.getContactAlertSettings).toHaveBeenCalled();
+    });
+
+    const select = screen.getByLabelText('inbox.contactAlerts.digestFrequency');
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe('weekly');
+
+    fireEvent.change(select, { target: { value: 'monthly' } });
+
+    await waitFor(() => {
+      expect(chatbotApi.updateContactAlertSettings).toHaveBeenCalledWith({
+        digestFrequency: 'monthly',
+      });
+    });
+  });
 });

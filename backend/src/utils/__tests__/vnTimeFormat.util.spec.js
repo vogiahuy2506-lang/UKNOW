@@ -1,5 +1,11 @@
 import { describe, it, expect } from '@jest/globals';
-import { formatUtcAndVietnamForLog, vnDayKey, getVietnamDayRange } from '../vnTimeFormat.util.js';
+import {
+  formatUtcAndVietnamForLog,
+  vnDayKey,
+  getVietnamDayRange,
+  getVietnamWeekRange,
+  getVietnamMonthRange,
+} from '../vnTimeFormat.util.js';
 
 describe('vnTimeFormat.util', () => {
   describe('getVietnamDayRange', () => {
@@ -91,6 +97,71 @@ describe('vnTimeFormat.util', () => {
     it('không throw với input lạ', () => {
       expect(() => formatUtcAndVietnamForLog({})).not.toThrow();
       expect(() => formatUtcAndVietnamForLog([])).not.toThrow();
+    });
+  });
+
+  describe('getVietnamWeekRange', () => {
+    it('thứ Hai ngày 14/09/2026 trả về tuần trước 07/09 đến 14/09 (tuần 37)', () => {
+      const range = getVietnamWeekRange('2026-09-14');
+      expect(range.periodKey).toBe('2026-W37');
+      expect(range.weekNumber).toBe(37);
+      expect(range.startIso).toBe('2026-09-06T17:00:00.000Z'); // 2026-09-07T00:00:00+07:00
+      expect(range.endIso).toBe('2026-09-13T17:00:00.000Z'); // 2026-09-14T00:00:00+07:00
+      expect(range.label).toContain('Tuần 37');
+      expect(range.label).toContain('07/09');
+      expect(range.label).toContain('13/09');
+    });
+
+    it('giữa tuần (thứ Tư 16/09/2026) vẫn tính tuần trước là 07/09 đến 14/09', () => {
+      const range = getVietnamWeekRange('2026-09-16');
+      expect(range.periodKey).toBe('2026-W37');
+      expect(range.startIso).toBe('2026-09-06T17:00:00.000Z');
+      expect(range.endIso).toBe('2026-09-13T17:00:00.000Z');
+    });
+
+    it('ranh giới năm: tuần 1 tháng 1 năm 2026 (05/01/2026) trả về tuần 1 (29/12/2025 - 05/01/2026)', () => {
+      // 2026-01-05 là thứ Hai đầu tiên của năm 2026.
+      // Tuần trước đó: 29/12/2025 đến 05/01/2026.
+      // Thứ Năm của tuần đó là 01/01/2026 -> theo ISO 8601, đây là tuần 1 năm 2026 (2026-W01).
+      const range = getVietnamWeekRange('2026-01-05');
+      expect(range.periodKey).toBe('2026-W01');
+      expect(range.weekNumber).toBe(1);
+      expect(range.startIso).toBe('2025-12-28T17:00:00.000Z');
+      expect(range.endIso).toBe('2026-01-04T17:00:00.000Z');
+    });
+
+    it('ranh giới năm: ngày 01/01/2026 (thứ Năm) trả về tuần cuối năm 2025 (2025-W52)', () => {
+      // 01/01/2026 thuộc tuần 1 năm 2026. Tuần trước nó là 22/12/2025 - 29/12/2025 (2025-W52).
+      const range = getVietnamWeekRange('2026-01-01');
+      expect(range.periodKey).toBe('2025-W52');
+      expect(range.startIso).toBe('2025-12-21T17:00:00.000Z');
+      expect(range.endIso).toBe('2025-12-28T17:00:00.000Z');
+    });
+  });
+
+  describe('getVietnamMonthRange', () => {
+    it('tháng 9/2026 trả về tháng 8/2026', () => {
+      const range = getVietnamMonthRange('2026-09-14');
+      expect(range.periodKey).toBe('2026-08');
+      expect(range.label).toBe('Tháng 08/2026');
+      expect(range.startIso).toBe('2026-07-31T17:00:00.000Z'); // 2026-08-01T00:00:00+07:00
+      expect(range.endIso).toBe('2026-08-31T17:00:00.000Z'); // 2026-09-01T00:00:00+07:00
+    });
+
+    it('tháng 1/2026 trả về tháng 12/2025 (ranh giới năm)', () => {
+      const range = getVietnamMonthRange('2026-01-15');
+      expect(range.periodKey).toBe('2025-12');
+      expect(range.label).toBe('Tháng 12/2025');
+      expect(range.startIso).toBe('2025-11-30T17:00:00.000Z'); // 2025-12-01T00:00:00+07:00
+      expect(range.endIso).toBe('2025-12-31T17:00:00.000Z'); // 2026-01-01T00:00:00+07:00
+    });
+
+    it('tháng 3/2026 trả về tháng 2/2026', () => {
+      const range = getVietnamMonthRange('2026-03-01');
+      expect(range.periodKey).toBe('2026-02');
+      expect(range.label).toBe('Tháng 02/2026');
+      expect(range.startIso).toBe('2026-01-31T17:00:00.000Z'); // 2026-02-01T00:00:00+07:00
+      expect(range.endIso).toBe('2026-02-28T17:00:00.000Z'); // 2026-03-01T00:00:00+07:00
     });
   });
 });

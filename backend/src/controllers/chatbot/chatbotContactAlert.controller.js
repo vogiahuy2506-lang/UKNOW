@@ -1,4 +1,5 @@
 import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
+import chatbotDigestRepository from '../../repositories/chatbot/chatbotDigest.repository.js';
 import { resolveWorkspaceOwnerId } from '../../services/storage/storageQuota.service.js';
 
 class ChatbotContactAlertController {
@@ -79,8 +80,17 @@ class ChatbotContactAlertController {
   async getSettings(req, res) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
-      const emailEnabled = await chatbotContactAlertRepository.getOwnerAlertEmail(userId);
-      return res.json({ success: true, data: { emailEnabled } });
+      const [emailEnabled, digestFrequency] = await Promise.all([
+        chatbotContactAlertRepository.getOwnerAlertEmail(userId),
+        chatbotDigestRepository.getOwnerDigestFrequency(userId),
+      ]);
+      return res.json({
+        success: true,
+        data: {
+          emailEnabled,
+          digestFrequency: digestFrequency || 'weekly',
+        },
+      });
     } catch (err) {
       console.error('[ChatbotContactAlertController] getSettings error:', err);
       return res.status(err.status || 500).json({
@@ -95,7 +105,7 @@ class ChatbotContactAlertController {
    */
   async updateSettings(req, res) {
     try {
-      // Chỉ chủ tài khoản mới được cấu hình công tắc email
+      // Chỉ chủ tài khoản mới được cấu hình thông báo
       if (req.user.activeContext?.type === 'employee') {
         return res.status(403).json({
           success: false,
@@ -104,16 +114,45 @@ class ChatbotContactAlertController {
       }
 
       const userId = resolveWorkspaceOwnerId(req.user);
-      const { emailEnabled } = req.body;
-      if (typeof emailEnabled !== 'boolean') {
+      const { emailEnabled, digestFrequency } = req.body;
+
+      if (emailEnabled !== undefined && typeof emailEnabled !== 'boolean') {
         return res.status(400).json({
           success: false,
           message: 'emailEnabled phải là boolean (true hoặc false)',
         });
       }
 
-      await chatbotContactAlertRepository.setOwnerAlertEmail(userId, emailEnabled);
-      return res.json({ success: true, data: { emailEnabled } });
+      const validFrequencies = ['none', 'weekly', 'monthly'];
+      if (digestFrequency !== undefined && !validFrequencies.includes(digestFrequency)) {
+        return res.status(400).json({
+          success: false,
+          message: 'digestFrequency không hợp lệ (phải là none, weekly hoặc monthly)',
+        });
+      }
+
+      let updatedEmailEnabled;
+      if (emailEnabled !== undefined) {
+        await chatbotContactAlertRepository.setOwnerAlertEmail(userId, emailEnabled);
+        updatedEmailEnabled = emailEnabled;
+      } else {
+        updatedEmailEnabled = await chatbotContactAlertRepository.getOwnerAlertEmail(userId);
+      }
+
+      let updatedDigestFrequency;
+      if (digestFrequency !== undefined) {
+        updatedDigestFrequency = await chatbotDigestRepository.setOwnerDigestFrequency(userId, digestFrequency);
+      } else {
+        updatedDigestFrequency = await chatbotDigestRepository.getOwnerDigestFrequency(userId);
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          emailEnabled: updatedEmailEnabled,
+          digestFrequency: updatedDigestFrequency || 'weekly',
+        },
+      });
     } catch (err) {
       console.error('[ChatbotContactAlertController] updateSettings error:', err);
       return res.status(err.status || 500).json({

@@ -230,6 +230,22 @@ export const CRON_JOBS = [
     impact: 'Chủ shop không nhận được thông báo khi khách để lại liên hệ trong các cuộc hội thoại AI.',
     tracked: true,
   },
+  {
+    code: 'chatbot_digest_weekly',
+    label: 'Tổng hợp hội thoại chatbot theo tuần',
+    schedule: '08:00 thứ Hai hàng tuần',
+    description: 'Gửi email tổng hợp hoạt động chatbot tuần trước (số hội thoại, tin khách, AI/người trả lời, bảng kênh, top hội thoại) cho chủ shop.',
+    impact: 'Chủ shop không nhận được thư tổng kết tuần về hiệu quả hoạt động của trợ lý AI.',
+    tracked: true,
+  },
+  {
+    code: 'chatbot_digest_monthly',
+    label: 'Tổng hợp hội thoại chatbot theo tháng',
+    schedule: '08:00 ngày 1 hàng tháng',
+    description: 'Gửi email tổng hợp hoạt động chatbot tháng trước cho chủ shop có cấu hình nhận theo tháng.',
+    impact: 'Chủ shop không nhận được thư tổng kết tháng về hiệu quả hoạt động của trợ lý AI.',
+    tracked: true,
+  },
 ];
 
 export function getCronJobByCode(code) {

@@ -1045,6 +1045,38 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Chatbot contact alert: mỗi 5 phút');
 
+  // ── Chatbot digest weekly (PR-3 PLAN_BAO_LIEN_HE_KHACH_DE_LAI_TRONG_CHAT) ────
+  cron.schedule('0 8 * * 1', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('chatbot_digest_weekly', async () => {
+        const { default: svc } = await import('../services/chatbot/chatbotDigest.service.js');
+        return svc.sendDigests({ frequency: 'weekly' });
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi gửi digest tuần chatbot:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Chatbot digest weekly: 08:00 thứ Hai hàng tuần');
+
+  // ── Chatbot digest monthly (PR-3 PLAN_BAO_LIEN_HE_KHACH_DE_LAI_TRONG_CHAT) ───
+  cron.schedule('0 8 1 * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('chatbot_digest_monthly', async () => {
+        const { default: svc } = await import('../services/chatbot/chatbotDigest.service.js');
+        return svc.sendDigests({ frequency: 'monthly' });
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi gửi digest tháng chatbot:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Chatbot digest monthly: 08:00 ngày 1 hàng tháng');
+
   // ── Help: backfill embedding NULL / 0-chunk (PLAN_HELP_INDEX_CRASHSAFE) ─────
   cron.schedule('*/30 * * * *', async () => {
     if (process.env.NODE_ENV === 'test') return;
