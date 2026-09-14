@@ -18,6 +18,9 @@ import aiCreditMeter, {
   VISITOR_CHAT_ERROR_MESSAGE,
 } from '../ai/aiCreditMeter.service.js';
 import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
+import { extractContacts } from '../../utils/contactDetect.util.js';
+import { buildContactAck } from '../../utils/contactAck.util.js';
+import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
 
 const ADAPTERS = {
   web: webChatAdapter,
@@ -86,6 +89,13 @@ class ChatRouterService {
       kbId: linkedKbId,
     });
 
+    const extractedContacts = extractContacts(message);
+    let contactAck = null;
+    if (extractedContacts.length > 0) {
+      const ownerContact = await chatbotContactAlertRepository.getOwnerContact(userId);
+      contactAck = buildContactAck(extractedContacts, ownerContact);
+    }
+
     // 5. Build system prompt
     const isFirstMessage = history.length === 0;
     const systemPrompt = this.buildSystemPrompt({
@@ -94,6 +104,7 @@ class ChatRouterService {
       ragContext,
       profileContext,
       isFirstMessage,
+      contactNote: contactAck?.note || null,
     });
 
     let aiResponse;
@@ -123,7 +134,10 @@ class ChatRouterService {
     }
 
     // 8. Strip markdown formatting before sending (Zalo cannot render markdown)
-    const cleanResponse = stripMarkdown(aiResponse.text);
+    let cleanResponse = stripMarkdown(aiResponse.text);
+    if (contactAck?.footer) {
+      cleanResponse = `${cleanResponse.trim()}\n\n${contactAck.footer}`;
+    }
     await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
     await this._logMessage(channel, conversationId, userId, { role: 'bot', content: cleanResponse });
 
@@ -188,6 +202,13 @@ class ChatRouterService {
       customChatbotId: chatbotId,
     });
 
+    const extractedContacts = extractContacts(message);
+    let contactAck = null;
+    if (extractedContacts.length > 0) {
+      const ownerContact = await chatbotContactAlertRepository.getOwnerContact(userId);
+      contactAck = buildContactAck(extractedContacts, ownerContact);
+    }
+
     // Build system prompt with per-account settings
     const isFirstMessage = history.length === 0;
     const systemPrompt = this.buildSystemPrompt({
@@ -196,6 +217,7 @@ class ChatRouterService {
       ragContext,
       profileContext,
       isFirstMessage,
+      contactNote: contactAck?.note || null,
     });
 
     let aiResponse;
@@ -223,7 +245,10 @@ class ChatRouterService {
     }
 
     // Strip markdown formatting before sending (Zalo cannot render markdown)
-    const cleanResponse = stripMarkdown(aiResponse.text);
+    let cleanResponse = stripMarkdown(aiResponse.text);
+    if (contactAck?.footer) {
+      cleanResponse = `${cleanResponse.trim()}\n\n${contactAck.footer}`;
+    }
 
     // Log messages
     await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
@@ -267,9 +292,10 @@ class ChatRouterService {
    * @param {string} [params.ragContext]
    * @param {string} [params.profileContext]
    * @param {boolean} [params.isFirstMessage]
+   * @param {string|null} [params.contactNote]
    * @returns {string}
    */
-  buildSystemPrompt({ subAssistant, settings, chatbot, ragContext, profileContext, isFirstMessage }) {
+  buildSystemPrompt({ subAssistant, settings, chatbot, ragContext, profileContext, isFirstMessage, contactNote }) {
     const name = subAssistant?.name
       || settings?.sub_assistant_name
       || chatbot?.name
@@ -340,6 +366,10 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     // Thêm custom system instruction neu co
     if (settings?.system_instruction?.trim()) {
       prompt += `\n\n## HUONG DAN TUY CHINH\n${settings.system_instruction.trim()}`;
+    }
+
+    if (contactNote?.trim()) {
+      prompt += `\n\n${contactNote.trim()}`;
     }
 
     return prompt;

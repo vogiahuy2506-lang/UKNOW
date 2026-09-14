@@ -68,7 +68,17 @@ jest.unstable_mockModule('../../services/chatbot/channelAdapters/facebook.adapte
 jest.unstable_mockModule('../../repositories/payment/plan.repository.js', () => ({
   getPlanByUserId: jest.fn(),
 }));
-jest.unstable_mockModule('../upload.controller.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../services/chatbot/whatsappBaileys.service.js', () => ({
+  default: {},
+  listSessions: jest.fn(() => []),
+  listPersistedSessions: jest.fn(async () => []),
+}));
+const getOwnerContact = jest.fn();
+jest.unstable_mockModule('../../repositories/chatbot/chatbotContactAlert.repository.js', () => ({
+  default: {
+    getOwnerContact,
+  },
+}));
 // Cổng khoá mua thêm chạm DB thật. Không mock thì unit test phụ thuộc Postgres cục bộ:
 // máy dev có Postgres nên xanh, CI không có nên retry tới quá 5s rồi timeout.
 jest.unstable_mockModule('../../utils/topupLockGate.util.js', () => ({
@@ -258,5 +268,170 @@ describe('chatbot.controller public :chatbotId — widget_key bắt đầu bằn
 
     expect(findChatbotById).toHaveBeenCalledWith(5);
     expect(findChatbotByWidgetKey).toHaveBeenCalledWith('5');
+  });
+});
+
+describe('PR-1c — bot xác nhận khi khách để lại liên hệ & widget nhúng lưu hội thoại', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(chatbot);
+    findChatbotByWidgetKey.mockResolvedValue(chatbot);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'Dạ em chào anh chị ạ.' });
+    consume.mockResolvedValue(undefined);
+    broadcast.mockReturnValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    isAiPaused.mockResolvedValue(false);
+    getOwnerContact.mockResolvedValue({ phone: '0988888888', email: 'owner@example.com' });
+  });
+
+  it('(a) ById: tin có "số 844790999" → chat nhận note chứa 0844790999, res.json content kết thúc bằng footer, addWebChatMessage bot nhận content có footer', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(
+      {
+        params: { chatbotId: '12' },
+        body: { message: 'nhắn tôi qua số 844790999', sessionId: 'sess_1', history: [] },
+      },
+      res
+    );
+
+    expect(chat).toHaveBeenCalledTimes(1);
+    const chatCallArgs = chat.mock.calls[0][0];
+    expect(chatCallArgs.extraSystemNote).toContain('0844790999');
+    expect(chatCallArgs.extraSystemNote).toContain('LƯU Ý HỆ THỐNG');
+
+    const expectedFooter = 'Đã ghi nhận số điện thoại 0844790999. Chủ doanh nghiệp sẽ liên hệ lại với bạn sớm.';
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          role: 'assistant',
+          content: expect.stringContaining(expectedFooter),
+        }),
+      })
+    );
+
+    // addWebChatMessage called twice: 1 for visitor, 1 for assistant
+    expect(addWebChatMessage).toHaveBeenCalledTimes(2);
+    expect(addWebChatMessage.mock.calls[1][2]).toEqual(
+      expect.objectContaining({
+        role: 'assistant',
+        content: expect.stringContaining(expectedFooter),
+      })
+    );
+  });
+
+  it('(b) widget path: có sessionId → getOrCreateWebChatConversation được gọi, addWebChatMessage gọi 2 lần (visitor, assistant)', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbot(
+      {
+        params: { widgetKey: 'wk_abc' },
+        body: { message: 'xin chào tôi muốn tư vấn', sessionId: 'sess_widget_1', history: [] },
+      },
+      res
+    );
+
+    expect(resolveWidgetForChatbot).toHaveBeenCalledWith(chatbot, { create: true });
+    expect(getOrCreateWebChatConversation).toHaveBeenCalledWith({
+      userId: chatbot.id_user,
+      widgetConfigId: 100,
+      sessionId: 'sess_widget_1',
+    });
+    expect(addWebChatMessage).toHaveBeenCalledTimes(2);
+    expect(addWebChatMessage.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ role: 'visitor', content: 'xin chào tôi muốn tư vấn' })
+    );
+    expect(addWebChatMessage.mock.calls[1][2]).toEqual(
+      expect.objectContaining({ role: 'assistant', content: 'Dạ em chào anh chị ạ.' })
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          role: 'assistant',
+          content: 'Dạ em chào anh chị ạ.',
+          sessionId: 'sess_widget_1',
+        }),
+      })
+    );
+  });
+
+  it('(c) widget path: không có sessionId → không gọi lưu DB, vẫn trả lời bình thường', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbot(
+      {
+        params: { widgetKey: 'wk_abc' },
+        body: { message: 'tôi hỏi thông tin', history: [] },
+      },
+      res
+    );
+
+    expect(getOrCreateWebChatConversation).not.toHaveBeenCalled();
+    expect(addWebChatMessage).not.toHaveBeenCalled();
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          role: 'assistant',
+          content: 'Dạ em chào anh chị ạ.',
+        }),
+      })
+    );
+  });
+
+  it('(d) tin không có liên hệ → chat nhận extraSystemNote null, không footer', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(
+      {
+        params: { chatbotId: '12' },
+        body: { message: 'giá gói dịch vụ thế nào?', sessionId: 'sess_1', history: [] },
+      },
+      res
+    );
+
+    expect(chat).toHaveBeenCalledTimes(1);
+    const chatCallArgs = chat.mock.calls[0][0];
+    expect(chatCallArgs.extraSystemNote).toBeNull();
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          role: 'assistant',
+          content: 'Dạ em chào anh chị ạ.',
+        }),
+      })
+    );
+    expect(addWebChatMessage.mock.calls[1][2].content).toBe('Dạ em chào anh chị ạ.');
+  });
+
+  it('(e) tin có SĐT trùng SĐT của chủ shop → loại bỏ, không note, không footer', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(
+      {
+        params: { chatbotId: '12' },
+        body: { message: 'gọi lại cho tôi số 0988888888 nhé', sessionId: 'sess_1', history: [] },
+      },
+      res
+    );
+
+    expect(getOwnerContact).toHaveBeenCalledWith(chatbot.id_user);
+    expect(chat).toHaveBeenCalledTimes(1);
+    const chatCallArgs = chat.mock.calls[0][0];
+    expect(chatCallArgs.extraSystemNote).toBeNull();
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          content: 'Dạ em chào anh chị ạ.',
+        }),
+      })
+    );
+    expect(res.json.mock.calls[0][0].data.content).not.toContain('Đã ghi nhận');
   });
 });

@@ -172,6 +172,7 @@ class CustomChatService {
     chatbotId,
     userId,
     systemInstruction,
+    extraSystemNote,
     temperature,
     maxTokens,
     attachments = [],
@@ -209,7 +210,10 @@ QUY TẮC TRẢ LỜI:
 - Khong dung link markdown dang [ten](https://example.com)
 - Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
-    const systemPrompt = systemInstruction || defaultSystem;
+    const baseSystem = systemInstruction || defaultSystem;
+    const systemPrompt = extraSystemNote?.trim()
+      ? `${baseSystem}\n\n${extraSystemNote.trim()}`
+      : baseSystem;
     const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
     const resolveBind = attachmentBind || (userId != null && chatbotId

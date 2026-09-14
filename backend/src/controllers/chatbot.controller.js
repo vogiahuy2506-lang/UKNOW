@@ -40,6 +40,9 @@ import {
   logWorkspace,
 } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { extractContacts } from '../utils/contactDetect.util.js';
+import { buildContactAck } from '../utils/contactAck.util.js';
+import chatbotContactAlertRepository from '../repositories/chatbot/chatbotContactAlert.repository.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
@@ -1760,7 +1763,8 @@ class ChatbotController {
         }
       }
 
-      const visitorKey = String(sessionId || '').trim()
+      const clientSessionId = String(sessionId || '').trim();
+      const visitorKey = clientSessionId
         || `widget_${widgetKey}_${String(req.ip || 'anon').slice(0, 64)}`;
       const rate = await chatbotRateLimitService.checkBeforeAi({
         channel: 'web',
@@ -1791,32 +1795,30 @@ class ChatbotController {
         });
       }
 
-      // Handoff: if owner paused AI for this webchat session, do not call Gemini.
-      // After migration 098, one canonical widget per chatbot — no more scan-all-widgets loop.
-      const sessionForPause = String(sessionId || '').trim();
-      if (sessionForPause) {
-        try {
-          const widget = await chatbotRepository.resolveWidgetForChatbot(chatbot, { create: false });
-          if (widget) {
-            const convId = await chatbotRepository.findActiveWebChatConversationId({
-              widgetConfigId: widget.id,
-              sessionId: sessionForPause,
-            });
-            if (convId && await unifiedInboxRepository.isAiPaused(convId, 'webchat')) {
-              return res.json({
-                success: true,
-                data: {
-                  role: 'assistant',
-                  content: HANDOFF_VISITOR_ACK,
-                  created_at: new Date().toISOString(),
-                  aiPaused: true,
-                },
-              });
-            }
-          }
-        } catch (pauseErr) {
-          console.warn('[CustomChatbot] ai_paused check failed:', pauseErr.message);
+      let conversation = null;
+      if (clientSessionId) {
+        const widgetConfig = await chatbotRepository.resolveWidgetForChatbot(chatbot, { create: true });
+        if (widgetConfig) {
+          conversation = await chatbotRepository.getOrCreateWebChatConversation({
+            userId: chatbot.id_user,
+            widgetConfigId: widgetConfig.id,
+            sessionId: clientSessionId,
+          });
         }
+      }
+
+      // Handoff: if owner paused AI for this webchat session, do not call Gemini.
+      if (conversation && await unifiedInboxRepository.isAiPaused(conversation.id, 'webchat')) {
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content: HANDOFF_VISITOR_ACK,
+            created_at: new Date().toISOString(),
+            sessionId: clientSessionId,
+            aiPaused: true,
+          },
+        });
       }
 
       const creditPrep = await preparePublicChatCredit(chatbot.id_user);
@@ -1825,7 +1827,7 @@ class ChatbotController {
       }
 
       const currentAttachments = Array.isArray(attachments) ? attachments : [];
-      if (currentAttachments.length && !sessionForPause) {
+      if (currentAttachments.length && !clientSessionId) {
         return res.status(400).json({
           success: false,
           message: 'sessionId is required when sending attachments',
@@ -1833,9 +1835,56 @@ class ChatbotController {
       }
       const userContent = String(message || '').trim()
         || (currentAttachments.length ? '[Đính kèm]' : '');
-      const attachmentBind = sessionForPause
-        ? { chatbotId: chatbot.id, sid: sessionForPause }
+      const attachmentBind = clientSessionId
+        ? { chatbotId: chatbot.id, sid: clientSessionId }
         : null;
+
+      let storedAttachments = [];
+      if (currentAttachments.length && attachmentBind) {
+        storedAttachments = chatAttachmentService.enrichAttachmentsForStorage(
+          currentAttachments,
+          attachmentBind
+        );
+      }
+
+      if (conversation) {
+        await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
+          role: 'visitor',
+          content: userContent,
+          attachments: storedAttachments,
+        });
+
+        if (storedAttachments.length > 0) {
+          await chatAttachmentService.promoteChatAttachments(storedAttachments);
+        }
+
+        await chatbotRepository.maybeSetWebChatVisitorNameFromMessage(
+          conversation.id,
+          userContent
+        ).catch(() => {});
+
+        sseService.broadcast(String(chatbot.id_user), 'inbox:new_message', {
+          conversationId: conversation.id,
+          conversationType: 'webchat',
+          channel: 'web',
+          message: userContent,
+          senderName: 'Khách',
+          timestamp: new Date().toISOString(),
+        });
+
+        sseService.broadcast(String(chatbot.id_user), 'inbox:unread_change', {
+          conversationId: conversation.id,
+          conversationType: 'webchat',
+          change: 1,
+        });
+      }
+
+      const extractedContacts = extractContacts(userContent);
+      let contactAck = null;
+      if (extractedContacts.length > 0) {
+        const ownerContact = await chatbotContactAlertRepository.getOwnerContact(chatbot.id_user);
+        contactAck = buildContactAck(extractedContacts, ownerContact);
+      }
 
       const fullHistory = [
         ...(history || []),
@@ -1847,13 +1896,24 @@ class ChatbotController {
         chatbotId: chatbot.id,
         userId: chatbot.id_user,
         systemInstruction: chatbot.system_instruction,
+        extraSystemNote: contactAck?.note || null,
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
         attachments: currentAttachments,
         attachmentBind,
       });
 
-      const content = result.content;
+      let content = result.content;
+      if (contactAck?.footer) {
+        content = `${content.trim()}\n\n${contactAck.footer}`;
+      }
+
+      if (conversation) {
+        await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
+          role: 'assistant',
+          content: content,
+        });
+      }
 
       await chargePublicChatCredit(chatbot.id_user, creditPrep.creditContext, 'chatbot_public_widget');
 
@@ -1863,6 +1923,7 @@ class ChatbotController {
           role: 'assistant',
           content: content,
           created_at: new Date().toISOString(),
+          sessionId: clientSessionId || undefined,
         },
       });
     } catch (err) {
@@ -2024,6 +2085,13 @@ class ChatbotController {
         });
       }
 
+      const extractedContacts = extractContacts(userContent);
+      let contactAck = null;
+      if (extractedContacts.length > 0) {
+        const ownerContact = await chatbotContactAlertRepository.getOwnerContact(chatbot.id_user);
+        contactAck = buildContactAck(extractedContacts, ownerContact);
+      }
+
       const fullHistory = [
         ...(history || []),
         { role: 'user', content: userContent, attachments: currentAttachments },
@@ -2034,13 +2102,17 @@ class ChatbotController {
         chatbotId: chatbot.id,
         userId: chatbot.id_user,
         systemInstruction: chatbot.system_instruction,
+        extraSystemNote: contactAck?.note || null,
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
         attachments: currentAttachments,
         attachmentBind,
       });
 
-      const content = result.content;
+      let content = result.content;
+      if (contactAck?.footer) {
+        content = `${content.trim()}\n\n${contactAck.footer}`;
+      }
 
       // Save assistant response
       if (conversation) {

@@ -11,6 +11,7 @@ const addChannelMessage = jest.fn();
 
 const assertAvailable = jest.fn();
 const charge = jest.fn();
+const consume = jest.fn();
 const isCreditLimitError = jest.fn(() => false);
 const isUsageLimitError = jest.fn(() => false);
 const reserve = jest.fn();
@@ -57,6 +58,19 @@ jest.unstable_mockModule('../channelAdapters/webChat.adapter.js', () => ({
 jest.unstable_mockModule('../channelAdapters/zaloOA.adapter.js', () => ({ default: {} }));
 jest.unstable_mockModule('../channelAdapters/facebook.adapter.js', () => ({ default: {} }));
 jest.unstable_mockModule('../channelAdapters/zaloPersonal.adapter.js', () => ({ default: {} }));
+jest.unstable_mockModule('../whatsappBaileys.service.js', () => ({
+  default: {},
+  listSessions: jest.fn(() => []),
+  listPersistedSessions: jest.fn(async () => []),
+  sendMessage: jest.fn(async () => ({})),
+}));
+
+const getOwnerContact = jest.fn();
+jest.unstable_mockModule('../../../repositories/chatbot/chatbotContactAlert.repository.js', () => ({
+  default: {
+    getOwnerContact,
+  },
+}));
 
 jest.unstable_mockModule('../../ai/businessProfile.service.js', () => ({
   default: { getFormattedProfileForPrompt },
@@ -87,6 +101,7 @@ jest.unstable_mockModule('../../ai/aiCreditMeter.service.js', () => ({
   default: {
     assertAvailable,
     charge,
+    consume,
     isLimitError: (...args) => isCreditLimitError(...args),
   },
   VISITOR_CHAT_UNAVAILABLE_MESSAGE: 'unavailable',
@@ -320,3 +335,63 @@ describe('ChatRouterService.buildSystemPrompt — natural pronouns + no internal
     expect(prompt).toMatch(/TUYỆT ĐỐI KHÔNG trả lời bằng các câu template/i);
   });
 });
+describe('PR-1c — bot xác nhận khi khách để lại liên hệ trong chatRouter', () => {
+  beforeEach(() => {
+    getSettings.mockReset();
+    getWebChatMessages.mockReset();
+    addWebChatMessage.mockReset();
+    assertAvailable.mockReset();
+    charge.mockReset();
+    buildContext.mockReset();
+    getFormattedProfileForPrompt.mockReset();
+    sendReply.mockReset();
+    getOwnerContact.mockReset();
+
+    getSettings.mockResolvedValue({
+      is_enabled: true,
+      id_sub_assistant: null,
+      ai_model: 'gemini-2.5-flash',
+      temperature: 0.7,
+      max_tokens: 512,
+    });
+    assertAvailable.mockResolvedValue({ skip: false });
+    getWebChatMessages.mockResolvedValue([]);
+    buildContext.mockResolvedValue('');
+    getFormattedProfileForPrompt.mockResolvedValue('');
+    addWebChatMessage.mockResolvedValue({});
+    sendReply.mockResolvedValue(undefined);
+    getOwnerContact.mockResolvedValue({ phone: '0901234567', email: 'owner@example.com' });
+  });
+
+  it('tin có SĐT → prompt chứa note, cleanResponse có footer', async () => {
+    const callAI = jest
+      .spyOn(chatRouterService, '_callAI')
+      .mockResolvedValue({ text: 'Em chào anh chị ạ, em có thể giúp gì thêm không?' });
+
+    const result = await chatRouterService.routeMessage({
+      channel: 'web',
+      userId: 7,
+      message: 'alo tư vấn giúp tôi qua số 844790999 nhé',
+      conversationId: 99,
+    });
+
+    expect(callAI).toHaveBeenCalledTimes(1);
+    const aiArgs = callAI.mock.calls[0][0];
+    expect(aiArgs.systemPrompt).toContain('0844790999');
+    expect(aiArgs.systemPrompt).toContain('LƯU Ý HỆ THỐNG');
+
+    const expectedFooter = 'Đã ghi nhận số điện thoại 0844790999. Chủ doanh nghiệp sẽ liên hệ lại với bạn sớm.';
+    expect(result.content).toContain('Em chào anh chị ạ');
+    expect(result.content).toContain(expectedFooter);
+
+    expect(sendReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 99,
+        message: expect.stringContaining(expectedFooter),
+      })
+    );
+
+    callAI.mockRestore();
+  });
+});
+
