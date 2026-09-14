@@ -2589,11 +2589,33 @@ class ChatbotController {
         // kích hoạt ensureGateway. Khi backend vừa boot chưa có ai "đụng" gateway
         // thì state rỗng → isConfigured=false → 503 oan. Thử ensureGateway ở đây
         // để cho embedded gateway cơ hội spawn tự động trước khi trả 503.
-        try {
-          await ensureTelegramGateway({ channel: 'telegram' });
-        } catch (startErr) {
-          console.error('[Telegram] ensureGateway error:', startErr.message);
-        }
+        //
+        // Bug trước: `await ensureTelegramGateway(...)` block cả request
+        // init cho tới khi `restoreSessionsFromDb()` chạy xong — với N
+        // accounts trong DB, mỗi account dial TCP tới Telegram DC, có thể
+        // mất 30-60s. Trong khi đó Nginx upstream timeout (mặc định 60s)
+        // có thể đã chạm → request này fail với 502 Bad Gateway do proxy,
+        // NGAY CẢ KHI backend xử lý đúng logic.
+        //
+        // Fix: fire-and-forget. `ensureGateway` đã idempotent (chỉ chạy
+        // thật khi `!s.started`), các request init đồng thời sẽ thấy
+        // `isConfigured()=true` ngay sau khi `setSharedSecret()` xong
+        // (sync, không cần restore), và `restoreSessionsFromDb()` chạy
+        // nền để lần QR scan tiếp theo có sẵn client đã load.
+        const initStart = Date.now();
+        ensureTelegramGateway({ channel: 'telegram' })
+          .then(() => {
+            const elapsed = Date.now() - initStart;
+            if (elapsed > 5_000) {
+              console.warn(
+                `[Telegram] ensureGateway background took ${elapsed}ms — ` +
+                  'consider running it at boot instead of on first QR init'
+              );
+            }
+          })
+          .catch((startErr) => {
+            console.error('[Telegram] ensureGateway error:', startErr.message);
+          });
       }
       if (!telegramGateway.isConfigured()) {
         return res.status(503).json({

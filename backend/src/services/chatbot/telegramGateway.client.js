@@ -45,7 +45,19 @@ function wrap(name, fn) {
       }
       return { data: result };
     } catch (err) {
-      const status = err?.status || err?.response?.status || 502;
+      // Bug trước: fallback `|| 502` "nâng cấp" mọi error không có status
+      // (vd. mtcute native throw, import() fail, plain Error từ
+      // `client.connect()`/`requestQrToken()`) thành 502 Bad Gateway. 502
+      // về ngữ nghĩa chỉ dành cho proxy/upstream fail — backend xử lý
+      // lỗi nội bộ phải trả 500 mới đúng. Ngoài ra FE axios mặc định
+      // reject với status 5xx → "Request failed with status code 502"
+      // che đi message thật ("cannot reach Telegram DC", "AUTH_KEY_DUPLICATED",
+      // ...), operator không biết root cause.
+      //
+      // Áp dụng cho cả `wrap()` lẫn `guard()`: ưu tiên `err.status` (đã
+      // chủ động set cho timeout/transport errors), rồi axios-style
+      // `response.status`, mặc định 500 cho mọi trường hợp còn lại.
+      const status = err?.status || err?.response?.status || 500;
       const detail = err?.response?.data?.detail || err?.message;
       logError(`[TelegramGateway] ${name} failed`, { status, detail });
       const wrapped = new Error(
