@@ -483,18 +483,60 @@ class ChatbotTelegramRepository {
 
   async setEnabled(userId, telegramAccountId, chatbotId, enabled) {
     await this.assertOwned(userId, telegramAccountId);
+    // Khi enabled=true, mặc định BẬT cả DM và group (giống UX các kênh
+    // khác: Zalo Personal, WhatsApp Baileys). Khi enabled=false → tắt
+    // tất cả.
+    //
+    // Bug trước: insert values `true, false` luôn set is_enabled_dm=false
+    // và is_enabled_group=false. Kết quả:
+    //   - `pickEnabledChatbotForTelegram` filter
+    //     `(is_enabled_dm = true OR is_enabled_group = true)` loại row
+    //     → idChatbot=null → webhook skip ngay.
+    //   - Nếu vẫn pass được filter (vd row cũ), `processTelegramPersonalBatch`
+    //     vẫn skip với "dm disabled" / "group disabled".
+    // User thấy "đã bật chatbot cho Telegram" (is_enabled=true) nhưng
+    // AI không rep — đúng triệu chứng production 14/09/2026.
+    const dm = Boolean(enabled);
+    const grp = Boolean(enabled);
     const { rows } = await db.query(
       `INSERT INTO telegram_chatbot_settings
          (id_telegram_account, id_chatbot, is_enabled,
           is_enabled_dm, is_enabled_group)
-       VALUES ($1, $2, $3, true, false)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id_telegram_account, id_chatbot) DO UPDATE SET
-         is_enabled = EXCLUDED.is_enabled,
+         is_enabled      = EXCLUDED.is_enabled,
+         is_enabled_dm   = EXCLUDED.is_enabled_dm,
+         is_enabled_group = EXCLUDED.is_enabled_group,
          updated_at = NOW()
        RETURNING *`,
-      [telegramAccountId, chatbotId, enabled]
+      [telegramAccountId, chatbotId, enabled, dm, grp]
     );
     return rows[0];
+  }
+
+  /**
+   * One-off backfill: rows hiện tại có is_enabled=true nhưng
+   * is_enabled_dm/is_enabled_group=false do bug cũ trong setEnabled.
+   * Bật cả 2 lên true để chatbot rep lại được. Idempotent.
+   */
+  async backfillStuckEnabledRows() {
+    const { rows } = await db.query(
+      `UPDATE telegram_chatbot_settings
+         SET is_enabled_dm = true,
+             is_enabled_group = true,
+             updated_at = NOW()
+       WHERE is_enabled = true
+         AND (is_enabled_dm = false OR is_enabled_group = false)
+       RETURNING id, id_telegram_account, id_chatbot`
+    );
+    if (rows.length > 0) {
+      console.log(
+        `[chatbotTelegram.repository] backfill: unstuck ${rows.length} rows ` +
+        `(is_enabled=true nhưng DM/group=false do bug cũ):`,
+        rows.map((r) => `${r.id_telegram_account}/${r.id_chatbot}`).join(', ')
+      );
+    }
+    return rows;
   }
 
   async getEnabledChatbots(telegramAccountId, { isDm = false, isGroup = false } = {}) {

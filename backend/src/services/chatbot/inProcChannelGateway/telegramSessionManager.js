@@ -136,6 +136,24 @@ export class TelegramSessionManager {
    */
   async restoreSessionsFromDb({ userId: _userId = null } = {}) {
     let keys;
+    // One-off backfill: rows có is_enabled=true nhưng is_enabled_dm /
+    // is_enabled_group=false do bug cũ trong setEnabled. Bật cả 2
+    // lên true để webhook KHÔNG skip DM/group messages.
+    //
+    // Bug production (14/09/2026): user "đã bật" chatbot cho Telegram
+    // (is_enabled=true) nhưng AI không rep vì:
+    //   1. pickEnabledChatbotForTelegram filter
+    //      `is_enabled_dm OR is_enabled_group` → return [] → idChatbot=null
+    //   2. processTelegramPersonalBatch skip với "dm/group disabled"
+    // Backfill này idempotent, chạy 1 lần mỗi startup, không cần migration.
+    if (typeof this._sessionRepo.backfillStuckEnabledRows === 'function') {
+      try {
+        await this._sessionRepo.backfillStuckEnabledRows();
+      } catch (err) {
+        logWarn(`[TelegramSessionManager] backfillStuckEnabledRows failed: ${err.message}`);
+      }
+    }
+
     if (typeof this._sessionRepo.listAllSessionStateKeys === 'function') {
       // Preferred path — fetches just the keys ordered by
       // most-recently-active, avoiding the JOIN with

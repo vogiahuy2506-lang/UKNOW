@@ -29,6 +29,7 @@ const repoStub = {
   clearSessionString: jest.fn(async () => {}),
   listAllSessionStateKeys: jest.fn(),
   listAllSessions: jest.fn(),
+  backfillStuckEnabledRows: jest.fn(async () => []),
 };
 
 // Minimal storage provider stub — exposes the 5 fields mtcute

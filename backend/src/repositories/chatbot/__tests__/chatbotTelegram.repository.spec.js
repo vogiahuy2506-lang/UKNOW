@@ -262,4 +262,73 @@ describe('ChatbotTelegramRepository session methods', () => {
       expect(sql).toMatch(/ORDER BY updated_at DESC/);
     });
   });
+
+  describe('setEnabled (Telegram chatbot toggle)', () => {
+    // assertOwned gọi `SELECT 1 FROM telegram_accounts` đầu tiên.
+    // Mock trả về 1 row để vượt qua ownership check, sau đó mới
+    // đến câu INSERT chính.
+    const mockAssertOwned = () =>
+      dbMock.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+
+    it('enabled=true also turns on is_enabled_dm and is_enabled_group', async () => {
+      // Bug production (14/09/2026): setEnabled insert values `true, false`
+      // luôn set is_enabled_dm=false, is_enabled_group=false. Kết quả
+      // webhook skip mọi DM/group message dù user "đã bật" chatbot. Fix:
+      // enabled=true → bật cả DM + group, enabled=false → tắt cả.
+      mockAssertOwned();
+      dbMock.query.mockResolvedValueOnce({
+        rows: [{ id: 1, is_enabled: true, is_enabled_dm: true, is_enabled_group: true }],
+      });
+      await repo.setEnabled(/* userId */ 7, /* telegramAccountId */ 42, /* chatbotId */ 99, /* enabled */ true);
+      // Bỏ qua câu SELECT đầu của assertOwned → xét câu INSERT.
+      const [sql, params] = dbMock.query.mock.calls[1];
+      expect(sql).toMatch(/INSERT INTO telegram_chatbot_settings/);
+      expect(sql).toMatch(/ON CONFLICT \(id_telegram_account, id_chatbot\) DO UPDATE/);
+      // Critical: phải UPDATE cả 3 cờ khi conflict, không chỉ is_enabled.
+      expect(sql).toMatch(/is_enabled_dm\s*=\s*EXCLUDED\.is_enabled_dm/);
+      expect(sql).toMatch(/is_enabled_group\s*=\s*EXCLUDED\.is_enabled_group/);
+      expect(params).toEqual([42, 99, true, true, true]);
+    });
+
+    it('enabled=false turns off all flags', async () => {
+      mockAssertOwned();
+      dbMock.query.mockResolvedValueOnce({
+        rows: [{ id: 1, is_enabled: false, is_enabled_dm: false, is_enabled_group: false }],
+      });
+      await repo.setEnabled(7, 42, 99, false);
+      const [, params] = dbMock.query.mock.calls[1];
+      expect(params).toEqual([42, 99, false, false, false]);
+    });
+
+    it('supports null chatbotId (account-level setting)', async () => {
+      mockAssertOwned();
+      dbMock.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+      await repo.setEnabled(7, 42, null, true);
+      const [, params] = dbMock.query.mock.calls[1];
+      expect(params).toEqual([42, null, true, true, true]);
+    });
+  });
+
+  describe('backfillStuckEnabledRows (idempotent recovery)', () => {
+    it('updates rows with is_enabled=true but DM/group=false', async () => {
+      dbMock.query.mockResolvedValueOnce({
+        rows: [{ id: 1, id_telegram_account: 42, id_chatbot: 99 }],
+      });
+      const updated = await repo.backfillStuckEnabledRows();
+      expect(updated).toHaveLength(1);
+      const [sql] = dbMock.query.mock.calls[0];
+      expect(sql).toMatch(/UPDATE telegram_chatbot_settings/);
+      expect(sql).toMatch(/is_enabled_dm\s*=\s*true/);
+      expect(sql).toMatch(/is_enabled_group\s*=\s*true/);
+      // WHERE: chỉ update row bị stuck (is_enabled=true AND (dm=false OR group=false)).
+      expect(sql).toMatch(/is_enabled = true/);
+      expect(sql).toMatch(/is_enabled_dm = false OR is_enabled_group = false/);
+    });
+
+    it('returns [] when no stuck rows (idempotent)', async () => {
+      dbMock.query.mockResolvedValueOnce({ rows: [] });
+      const updated = await repo.backfillStuckEnabledRows();
+      expect(updated).toEqual([]);
+    });
+  });
 });
