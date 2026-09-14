@@ -164,6 +164,7 @@ const LandingPageCard = ({
         fullHtml,
         messageIndex,
         messageId,
+        mode: 'create',
       });
       setShowSaveForm(false);
       toast.success(t('save.saved'));
@@ -187,6 +188,7 @@ const LandingPageCard = ({
         fullHtml,
         messageIndex,
         messageId,
+        mode: 'toggle',
       });
     } catch (error) {
       toast.error(error?.response?.data?.message || t('save.toggleFailed'));
@@ -205,6 +207,7 @@ const LandingPageCard = ({
         fullHtml,
         messageIndex,
         messageId,
+        mode: 'update',
       });
       toast.success(t('save.updateSaved'));
     } catch (error) {

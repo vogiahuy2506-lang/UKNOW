@@ -8,23 +8,30 @@ const TAG_RE = /<[^>]*>/g;
 /**
  * true nếu `text` trông như một trang HTML dán nguyên vào.
  *
- * `<!doctype html>`/`<html>` là tín hiệu mạnh, đủ tự đứng một mình — không ai gõ câu hỏi bình
- * thường có nguyên cụm đó. Áp thêm ngưỡng "≥ 80% độ dài là thẻ" vào nhánh này sẽ loại nhầm chính
- * những trang landing thật có nội dung tiếng Việt bình thường (đo thực tế: một trang ngắn hợp lệ
- * chỉ ~76% ký tự là thẻ vì chữ hiển thị chiếm phần đáng kể — xem landingPaste.spec.js).
+ * `<!doctype html>`/`<html>` là tín hiệu mạnh — nhưng chỉ riêng nó không đủ: một câu hỏi ngắn
+ * như "sửa thẻ <html lang> giúp mình" cũng khớp regex mà rõ ràng không phải dán cả trang (bắt lên
+ * PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md#Trạng thái PR-2, việc 2 — sẽ tạo thẻ landing
+ * rác + phiên mới). Đòi thêm bằng chứng đây là CẢ một tài liệu: có `</html>` đóng lại, hoặc có
+ * `<body`, hoặc đủ dài (≥ 300 ký tự — không câu hỏi ngắn tự nhiên nào chạm mốc này). Áp thêm
+ * ngưỡng "≥ 80% độ dài là thẻ" vào nhánh này sẽ loại nhầm chính những trang landing thật có nội
+ * dung tiếng Việt bình thường (đo thực tế: một trang ngắn hợp lệ chỉ ~76% ký tự là thẻ — xem
+ * landingPaste.spec.js), nên KHÔNG áp ở đây.
  *
- * `<body>` kèm ≥ 3 thẻ mở là tín hiệu YẾU hơn (một câu hỏi bình thường lỡ nhắc vài thẻ inline vẫn
- * có thể khớp) — CHỈ nhánh này mới cần thêm ngưỡng 80% để không bắt nhầm, ví dụ "sửa cho tôi cái
- * nút <button>Mua ngay</button>".
+ * `<body>` kèm ≥ 3 thẻ mở (không có doctype/`<html>`) là tín hiệu YẾU hơn — CHỈ nhánh này mới cần
+ * thêm ngưỡng 80% để không bắt nhầm, ví dụ "sửa cho tôi cái nút <button>Mua ngay</button>".
  */
 export function looksLikeHtmlDocument(text) {
   const str = String(text || '').trim();
   if (!str) return false;
 
   const hasDoctypeOrHtmlTag = /<!doctype\s+html/i.test(str) || /<html[\s>]/i.test(str);
-  if (hasDoctypeOrHtmlTag) return true;
-
   const hasBodyTag = /<body[\s>]/i.test(str);
+
+  if (hasDoctypeOrHtmlTag) {
+    const hasCloseHtmlTag = /<\/html>/i.test(str);
+    return hasCloseHtmlTag || hasBodyTag || str.length >= 300;
+  }
+
   if (!hasBodyTag) return false;
   const openTagCount = (str.match(OPEN_TAG_RE) || []).length;
   if (openTagCount < 3) return false;

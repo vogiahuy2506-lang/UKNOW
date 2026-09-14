@@ -70,6 +70,7 @@ import {
 import {
   createLandingPageAdmin,
   updateLandingPageAdmin,
+  fetchLandingPageAdminById,
 } from '../landing-pages/services/landingPagesAdminApi.service.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
@@ -2414,21 +2415,45 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   /**
    * "Lưu & xuất bản" (Việc 2.2) — gọi createLandingPageAdmin/updateLandingPageAdmin đã có sẵn
    * (LandingCanvasEditor.jsx:87-116 là mẫu), quyết định tạo mới hay cập nhật bằng page.landingPageId
-   * (Bẫy 5: thẻ đã lưu mà lưu lại thì phải là cập nhật, không tạo trang thứ hai). Dùng lại chính
-   * hàm này cho nút "Xuất bản/Ẩn" và "Cập nhật trang đã lưu" — cả 3 đều là 1 lượt PUT/POST đủ
-   * slug+title+htmlContent (backend ghi đè thẳng, KHÔNG COALESCE — landingPageAdmin.service.js:230,254 —
-   * thiếu 1 trong 3 là mất dữ liệu, không phải "giữ nguyên trường không gửi lên").
+   * (Bẫy 5: thẻ đã lưu mà lưu lại thì phải là cập nhật, không tạo trang thứ hai).
+   *
+   * Review "Trạng thái PR-2" (PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md) bắt đúng: mọi
+   * đường UPDATE (toggle publish / "Cập nhật trang đã lưu") trước đây gửi thẳng `domainType:'system'`
+   * + `htmlContent` CŨ của thẻ chat — nếu người dùng đã gắn tên miền riêng hoặc sửa thêm ở trang
+   * soạn, bấm "Ẩn trang" từ chat sẽ ÂM THẦM trả về subdomain hệ thống và đè mất bản sửa (backend
+   * ghi đè thẳng, không COALESCE — landingPageAdmin.service.js:230,254; domainType đổi ngay khi
+   * body có khoá đó — :237-240). Sửa: mọi đường update đọc lại bản THẬT trên server
+   * (fetchLandingPageAdminById) trước, không bao giờ gửi domainType/domainSubtype/customDomain*
+   * (chỉ create mới cấp domainType:'system' cho trang hoàn toàn mới).
    */
-  const handleSaveAndPublishLandingPage = async ({ page, formValues, fullHtml, messageIndex, messageId }) => {
+  const handleSaveAndPublishLandingPage = async ({ page, formValues, fullHtml, messageIndex, messageId, mode }) => {
     const existingId = page?.landingPageId;
-    const body = {
-      slug: formValues.slug || null,
-      title: formValues.title,
-      htmlContent: fullHtml,
-      isPublished: Boolean(formValues.isPublished),
-      domainType: 'system',
-      ...(page?.leadFormConfig ? { leadFormConfig: page.leadFormConfig } : {}),
-    };
+    let current = null;
+    let body;
+
+    if (!existingId) {
+      body = {
+        slug: formValues.slug || null,
+        title: formValues.title,
+        htmlContent: fullHtml,
+        isPublished: Boolean(formValues.isPublished),
+        domainType: 'system',
+        ...(page?.leadFormConfig ? { leadFormConfig: page.leadFormConfig } : {}),
+      };
+    } else {
+      current = await fetchLandingPageAdminById(existingId);
+      // 'update' ("Cập nhật trang đã lưu") = đúng ý người bấm: đẩy html/title hiện tại của thẻ
+      // lên. 'toggle' (Xuất bản/Ẩn) chỉ đổi isPublished — html/title giữ NGUYÊN bản trên server,
+      // không phải bản (có thể đã cũ) của thẻ chat.
+      const useCardHtml = mode === 'update';
+      body = {
+        slug: current.slug,
+        title: useCardHtml ? formValues.title : current.title,
+        htmlContent: useCardHtml ? fullHtml : current.htmlContent,
+        isPublished: useCardHtml ? current.isPublished : Boolean(formValues.isPublished),
+        leadFormConfig: current.leadFormConfig,
+      };
+    }
 
     const saved = existingId
       ? await updateLandingPageAdmin(existingId, body)
@@ -2440,14 +2465,32 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       isPublished: Boolean(saved.isPublished),
     };
 
+    // Toggle không đẩy html của thẻ lên — nếu bản trên server đã khác bản thẻ đang giữ (sửa ở
+    // trang soạn sau khi lưu từ chat), đồng bộ lại thẻ theo server ngay, kẻo lần "Cập nhật trang
+    // đã lưu" SAU (cùng phiên, trước khi F5) lại vô tình đè mất bản sửa đó.
+    const localPatch = { ...patch };
+    const htmlDrifted = mode === 'toggle' && current && current.htmlContent !== fullHtml;
+    if (htmlDrifted) {
+      localPatch.html = current.htmlContent;
+    }
+
     const mySessionId = currentSessionId;
     const update = makeUpdater(mySessionId, [...messages]);
     update((prev) => prev.map((msg, i) => (
-      i === messageIndex ? { ...msg, data: { ...msg.data, ...patch } } : msg
+      i === messageIndex ? { ...msg, data: { ...msg.data, ...localPatch } } : msg
     )));
+
+    if (htmlDrifted) {
+      toast(
+        t('aiChatbot.landingHtmlSyncedFromEditor') || 'Trang đã được sửa ở trang soạn, thẻ đã cập nhật theo',
+        { icon: '⚠️', duration: 6000 }
+      );
+    }
 
     if (mySessionId) {
       try {
+        // Chỉ 3 khoá landingPageId/slug/isPublished được backend nhận (whitelist Việc 1.2) — html
+        // ở trên chỉ đồng bộ local, không cần/không thể gửi qua endpoint này.
         await aiApi.patchLandingMessage(mySessionId, patch, messageId || undefined);
       } catch (patchErr) {
         // Trang đã lưu/cập nhật thành công ở /admin/landing-pages — lỗi ở đây chỉ nghĩa là

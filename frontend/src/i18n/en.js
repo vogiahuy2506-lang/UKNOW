@@ -3747,6 +3747,7 @@ export default {
     homeSuggestionEmail: 'Write a welcome email',
     homeSuggestionLanding: 'Create a landing page',
     landingPasteHint: "💡 You can also paste a full HTML page here and I'll turn it into a page card right away, no AI rewrite needed.",
+    landingHtmlSyncedFromEditor: 'This page was edited in the editor, the card has been updated to match.',
     dropFilePlaceholder: 'Drop file here...',
     searchCampaignPlaceholder: 'Search campaigns...',
     enterToSend: 'Enter to send',

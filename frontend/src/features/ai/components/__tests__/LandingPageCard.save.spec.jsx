@@ -78,6 +78,7 @@ describe('LandingPageCard — Lưu & xuất bản (chưa lưu)', () => {
     expect(call.page).toBe(basePage);
     expect(call.messageId).toBe(7);
     expect(call.messageIndex).toBe(0);
+    expect(call.mode).toBe('create');
   });
 
   it('!canSave → không hiện nút "Lưu & xuất bản" (chỉ có quyền landing_pages mới thấy)', () => {
@@ -126,19 +127,21 @@ describe('LandingPageCard — đã lưu (page.landingPageId có sẵn)', () => {
     expect(screen.getByText(/trang-test\.founderai\.biz/)).toBeInTheDocument();
   });
 
-  it('bấm "Ẩn trang" (đang published) → onSaveAndPublish với isPublished=false, giữ nguyên title/slug', async () => {
+  it('bấm "Ẩn trang" (đang published) → onSaveAndPublish với isPublished=false, mode "toggle", giữ nguyên title/slug', async () => {
     const { onSaveAndPublish } = renderCard({ page: savedPage });
     fireEvent.click(screen.getByText('landingPageCard.save.unpublish'));
 
     await waitFor(() => expect(onSaveAndPublish).toHaveBeenCalledTimes(1));
-    expect(onSaveAndPublish.mock.calls[0][0].formValues).toEqual({
+    const call = onSaveAndPublish.mock.calls[0][0];
+    expect(call.formValues).toEqual({
       title: savedPage.title,
       slug: savedPage.slug,
       isPublished: false,
     });
+    expect(call.mode).toBe('toggle');
   });
 
-  it('bấm "Cập nhật trang đã lưu" → onSaveAndPublish với fullHtml hiện tại', async () => {
+  it('bấm "Cập nhật trang đã lưu" → onSaveAndPublish mode "update" với fullHtml hiện tại', async () => {
     const { onSaveAndPublish } = renderCard({ page: savedPage });
     fireEvent.click(screen.getByText('landingPageCard.save.updateButton'));
 
@@ -146,6 +149,7 @@ describe('LandingPageCard — đã lưu (page.landingPageId có sẵn)', () => {
     const call = onSaveAndPublish.mock.calls[0][0];
     expect(call.formValues.isPublished).toBe(true);
     expect(call.fullHtml).toContain(savedPage.html);
+    expect(call.mode).toBe('update');
   });
 
   it('!canSave → ẩn nút Xuất bản/Ẩn và Cập nhật trang đã lưu, chỉ còn Mở trang soạn', () => {

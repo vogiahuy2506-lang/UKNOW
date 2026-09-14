@@ -3785,6 +3785,7 @@ export default {
     homeSuggestionEmail: 'Viết email chào mừng',
     homeSuggestionLanding: 'Tạo landing page',
     landingPasteHint: '💡 Bạn cũng có thể dán nguyên một trang HTML vào đây để mình dựng thẻ trang ngay, không cần AI viết lại.',
+    landingHtmlSyncedFromEditor: 'Trang đã được sửa ở trang soạn, thẻ đã cập nhật theo.',
     dropFilePlaceholder: 'Thả file vào đây...',
     searchCampaignPlaceholder: 'Tìm kiếm chiến dịch...',
     enterToSend: 'Enter để gửi',

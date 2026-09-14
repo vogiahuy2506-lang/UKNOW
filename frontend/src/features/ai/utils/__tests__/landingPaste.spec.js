@@ -47,6 +47,25 @@ describe('looksLikeHtmlDocument (Việc 2.1)', () => {
     expect(looksLikeHtmlDocument(text)).toBe(false);
   });
 
+  it('câu hỏi ngắn nhắc "<html lang>" — có <html> nhưng KHÔNG </html>/<body/đủ 300 ký tự → false ' +
+    '(PLAN...#Trạng thái PR-2, việc 2 — trước đây tạo nhầm thẻ landing rác)', () => {
+    const text = 'sửa thẻ <html lang> giúp mình';
+    expect(text.length).toBeLessThan(300);
+    expect(looksLikeHtmlDocument(text)).toBe(false);
+  });
+
+  it('trang thật ngắn có <html>...</html> (dưới 300 ký tự) vẫn phải nhận đúng nhờ có </html>', () => {
+    const html = '<html><body><h1>Chào</h1></body></html>';
+    expect(html.length).toBeLessThan(300);
+    expect(looksLikeHtmlDocument(html)).toBe(true);
+  });
+
+  it('có <html> (không </html>, không <body) nhưng đủ dài ≥ 300 ký tự → true', () => {
+    const text = `<html lang="vi">${'x'.repeat(300)}`;
+    expect(text.length).toBeGreaterThanOrEqual(300);
+    expect(looksLikeHtmlDocument(text)).toBe(true);
+  });
+
   it('chuỗi rỗng → false', () => {
     expect(looksLikeHtmlDocument('')).toBe(false);
     expect(looksLikeHtmlDocument('   ')).toBe(false);
