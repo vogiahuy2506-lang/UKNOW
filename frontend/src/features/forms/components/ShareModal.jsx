@@ -33,7 +33,7 @@ export default function ShareModal({ form, isOpen, onClose }) {
       await navigator.clipboard.writeText(shareUrl);
       toast.success(t('forms.copied'));
     } catch {
-      toast.error('Không thể sao chép liên kết');
+      toast.error(t('forms.shareModal.copyError'));
     }
   };
 
@@ -75,7 +75,7 @@ export default function ShareModal({ form, isOpen, onClose }) {
             />
           ) : (
             <div className="w-48 h-48 flex items-center justify-center text-gray-400 text-sm">
-              Đang tạo QR...
+              {t('forms.shareModal.generatingQr')}
             </div>
           )}
 
@@ -85,7 +85,7 @@ export default function ShareModal({ form, isOpen, onClose }) {
               className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
             >
               <HiOutlineDownload className="w-4 h-4" />
-              Tải ảnh QR về máy
+              {t('forms.shareModal.downloadQr')}
             </button>
           )}
         </div>
@@ -93,7 +93,7 @@ export default function ShareModal({ form, isOpen, onClose }) {
         {/* Link input & copy */}
         <div className="space-y-2">
           <label className="block text-xs font-medium text-gray-700">
-            Đường dẫn trực tiếp
+            {t('forms.shareModal.directLink')}
           </label>
           <div className="flex items-center gap-2">
             <input

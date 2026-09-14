@@ -32,8 +32,8 @@ const DEFAULT_SETTINGS = {
   notifyOwner: true,
   consentEnabled: false,
   sendConfirmation: false,
-  submitButtonText: 'Gửi thông tin',
-  successMessage: 'Cảm ơn bạn đã gửi thông tin!',
+  submitButtonText: '',
+  successMessage: '',
   redirectUrl: '',
 };
 
@@ -50,7 +50,11 @@ export default function FormEditorPage() {
   const [description, setDescription] = useState('');
   const [isPublished, setIsPublished] = useState(false);
   const [fields, setFields] = useState([]);
-  const [settings, setSettings] = useState(() => ({ ...DEFAULT_SETTINGS }));
+  const [settings, setSettings] = useState(() => ({
+    ...DEFAULT_SETTINGS,
+    submitButtonText: t('publicForm.defaultSubmit'),
+    successMessage: t('publicForm.defaultSuccess'),
+  }));
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -59,7 +63,7 @@ export default function FormEditorPage() {
       setFields([
         {
           key: '',
-          label: 'Họ và tên',
+          label: t('forms.editorPage.defaultFieldName'),
           type: 'short_text',
           required: true,
           role: 'name',
@@ -73,7 +77,7 @@ export default function FormEditorPage() {
     fetchFormById(id)
       .then((data) => {
         if (!data) {
-          toast.error('Không tìm thấy biểu mẫu');
+          toast.error(t('forms.editorPage.notFound'));
           navigate('/app/forms');
           return;
         }
@@ -104,23 +108,23 @@ export default function FormEditorPage() {
         });
       })
       .catch((err) => {
-        toast.error(err.response?.data?.message || 'Lỗi tải dữ liệu biểu mẫu');
+        toast.error(err.response?.data?.message || t('forms.editorPage.loadError'));
         navigate('/app/forms');
       })
       .finally(() => setIsLoading(false));
-  }, [id, isEditMode, navigate]);
+  }, [id, isEditMode, navigate, t]);
 
   // Thêm trường mới
   const handleAddField = () => {
     if (fields.length >= 30) {
-      toast.error('Mỗi biểu mẫu tối đa 30 trường thông tin');
+      toast.error(t('forms.editorPage.maxFields'));
       return;
     }
     setFields((prev) => [
       ...prev,
       {
         key: '', // Trường mới key rỗng để server tự sinh
-        label: `Trường mới ${prev.length + 1}`,
+        label: t('forms.editorPage.newFieldLabel', { index: prev.length + 1 }),
         type: 'short_text',
         required: false,
         role: '',
@@ -157,14 +161,14 @@ export default function FormEditorPage() {
       if (key === 'type' && !['select', 'radio', 'checkbox'].includes(value)) {
         copy[idx].options = [];
       } else if (key === 'type' && ['select', 'radio', 'checkbox'].includes(value) && copy[idx].options.length === 0) {
-        copy[idx].options = ['Lựa chọn 1', 'Lựa chọn 2'];
+        copy[idx].options = [t('forms.editorPage.defaultOption1'), t('forms.editorPage.defaultOption2')];
       }
 
       // Đổi role: kiểm tra trùng lặp
       if (key === 'role' && value) {
         for (let i = 0; i < copy.length; i++) {
           if (i !== idx && copy[i].role === value) {
-            toast.error(`Vai trò "${value}" đã được gán cho trường khác. Đã hủy gán ở trường cũ.`);
+            toast.error(t('forms.editorPage.roleDuplicate', { role: value }));
             copy[i].role = '';
           }
         }
@@ -180,12 +184,12 @@ export default function FormEditorPage() {
       const copy = [...prev];
       const currentOpts = copy[fieldIdx].options || [];
       if (currentOpts.length >= 50) {
-        toast.error('Tối đa 50 lựa chọn');
+        toast.error(t('forms.editorPage.maxOptions'));
         return prev;
       }
       copy[fieldIdx] = {
         ...copy[fieldIdx],
-        options: [...currentOpts, `Lựa chọn ${currentOpts.length + 1}`],
+        options: [...currentOpts, t('forms.editorPage.defaultOptionN', { index: currentOpts.length + 1 })],
       };
       return copy;
     });
@@ -215,54 +219,54 @@ export default function FormEditorPage() {
     const errs = {};
 
     if (!title.trim()) {
-      errs.title = 'Tiêu đề biểu mẫu là bắt buộc';
+      errs.title = t('forms.editorPage.validationTitleRequired');
     } else if (title.trim().length > 200) {
-      errs.title = 'Tiêu đề biểu mẫu không được vượt quá 200 ký tự';
+      errs.title = t('forms.editorPage.validationTitleMax');
     }
 
     if (description && description.length > 5000) {
-      errs.description = 'Mô tả biểu mẫu không được vượt quá 5000 ký tự';
+      errs.description = t('forms.editorPage.validationDescMax');
     }
 
     if (fields.length === 0) {
-      errs.fields = 'Biểu mẫu phải có ít nhất 1 trường thông tin';
+      errs.fields = t('forms.editorPage.validationFieldsRequired');
     }
 
     // Validate từng trường
     for (let i = 0; i < fields.length; i++) {
       const f = fields[i];
       if (!f.label || !f.label.trim()) {
-        errs[`field_${i}_label`] = 'Tên trường không được để trống';
+        errs[`field_${i}_label`] = t('forms.editorPage.validationFieldLabelRequired');
       } else if (f.label.trim().length > 200) {
-        errs[`field_${i}_label`] = 'Tên trường không được vượt quá 200 ký tự';
+        errs[`field_${i}_label`] = t('forms.editorPage.validationFieldLabelMax');
       }
 
       if (['select', 'radio', 'checkbox'].includes(f.type)) {
         if (!f.options || f.options.length === 0) {
-          errs[`field_${i}_options`] = 'Phải có ít nhất 1 lựa chọn';
+          errs[`field_${i}_options`] = t('forms.editorPage.validationOptionsRequired');
         }
       }
     }
 
     // Validate settings
     if (settings.submitButtonText && settings.submitButtonText.length > 50) {
-      errs.submitButtonText = 'Chữ nút gửi không quá 50 ký tự';
+      errs.submitButtonText = t('forms.editorPage.validationSubmitTextMax');
     }
     if (settings.successMessage && settings.successMessage.length > 500) {
-      errs.successMessage = 'Thông báo thành công không quá 500 ký tự';
+      errs.successMessage = t('forms.editorPage.validationSuccessMsgMax');
     }
     if (settings.redirectUrl && settings.redirectUrl.trim()) {
       const urlStr = settings.redirectUrl.trim();
       if (urlStr.length > 2000) {
-        errs.redirectUrl = 'Đường dẫn chuyển hướng không quá 2000 ký tự';
+        errs.redirectUrl = t('forms.editorPage.validationRedirectUrlMax');
       } else {
         try {
           const parsed = new URL(urlStr);
           if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            errs.redirectUrl = 'Đường dẫn phải bắt đầu bằng http:// hoặc https://';
+            errs.redirectUrl = t('forms.editorPage.validationRedirectUrlProtocol');
           }
         } catch {
-          errs.redirectUrl = 'Đường dẫn không hợp lệ';
+          errs.redirectUrl = t('forms.editorPage.validationRedirectUrlInvalid');
         }
       }
     }
@@ -307,8 +311,8 @@ export default function FormEditorPage() {
         notifyOwner: Boolean(settings.notifyOwner),
         consentEnabled: Boolean(settings.consentEnabled),
         sendConfirmation: Boolean(settings.sendConfirmation),
-        submitButtonText: settings.submitButtonText?.trim() || 'Gửi thông tin',
-        successMessage: settings.successMessage?.trim() || 'Cảm ơn bạn đã gửi thông tin!',
+        submitButtonText: settings.submitButtonText?.trim() || t('publicForm.defaultSubmit'),
+        successMessage: settings.successMessage?.trim() || t('publicForm.defaultSuccess'),
         redirectUrl: settings.redirectUrl?.trim() || null,
       };
 
@@ -328,7 +332,7 @@ export default function FormEditorPage() {
         navigate(`/app/forms/${created.id}/edit`, { replace: true });
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Không thể lưu biểu mẫu');
+      toast.error(err.response?.data?.message || t('forms.editorPage.saveError'));
     } finally {
       setIsSaving(false);
     }
@@ -338,7 +342,7 @@ export default function FormEditorPage() {
     return (
       <div className="p-12 text-center text-gray-500">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
-        <p className="text-sm">Đang tải biểu mẫu...</p>
+        <p className="text-sm">{t('forms.editorPage.loading')}</p>
       </div>
     );
   }
@@ -373,7 +377,7 @@ export default function FormEditorPage() {
               )}
             </div>
             <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-              {isEditMode ? 'Cập nhật cấu hình và trường biểu mẫu' : 'Thiết lập biểu mẫu thu thập dữ liệu'}
+              {isEditMode ? t('forms.editorPage.editSubtitle') : t('forms.editorPage.createSubtitle')}
             </p>
           </div>
         </div>
@@ -386,7 +390,7 @@ export default function FormEditorPage() {
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white text-sm font-medium rounded-xl shadow-sm transition-all disabled:opacity-50"
           >
             <HiOutlineCheck className="w-5 h-5" />
-            {isSaving ? 'Đang lưu...' : 'Lưu biểu mẫu'}
+            {isSaving ? t('forms.editorPage.saving') : t('forms.editorPage.saveForm')}
           </button>
         </div>
       </div>
@@ -394,7 +398,7 @@ export default function FormEditorPage() {
       <div className="space-y-6">
         {/* Khối 1: Thông tin chung */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-4">
-          <h2 className="text-base font-semibold text-gray-900">Thông tin chung</h2>
+          <h2 className="text-base font-semibold text-gray-900">{t('forms.editorPage.generalInfo')}</h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -405,7 +409,7 @@ export default function FormEditorPage() {
               maxLength={200}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ví dụ: Đăng ký tư vấn lộ trình 1-1"
+              placeholder={t('forms.editorPage.titlePlaceholder')}
               className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                 errors.title
                   ? 'border-red-300 focus:ring-red-200'
@@ -425,7 +429,7 @@ export default function FormEditorPage() {
               maxLength={5000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Mô tả mục đích hoặc hướng dẫn người điền biểu mẫu..."
+              placeholder={t('forms.editorPage.descPlaceholder')}
               className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 resize-y ${
                 errors.description
                   ? 'border-red-300 focus:ring-red-200'
@@ -444,7 +448,7 @@ export default function FormEditorPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-gray-900">{t('forms.fields')}</h2>
-              <p className="text-xs text-gray-500">Mỗi biểu mẫu có thể chứa tối đa 30 trường</p>
+              <p className="text-xs text-gray-500">{t('forms.editorPage.maxFieldsHelp')}</p>
             </div>
             <button
               type="button"
@@ -473,7 +477,7 @@ export default function FormEditorPage() {
                 >
                   <div className="flex items-center justify-between border-b border-gray-200 pb-3">
                     <span className="text-xs font-semibold uppercase text-gray-500">
-                      Trường #{idx + 1}
+                      {t('forms.editorPage.fieldIndex', { index: idx + 1 })}
                     </span>
                     <div className="flex items-center gap-1">
                       <button
@@ -481,7 +485,7 @@ export default function FormEditorPage() {
                         disabled={idx === 0}
                         onClick={() => handleMoveField(idx, -1)}
                         className="p-1.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 rounded"
-                        title="Di chuyển lên"
+                        title={t('forms.editorPage.moveUp')}
                       >
                         <HiOutlineArrowUp className="w-4 h-4" />
                       </button>
@@ -490,7 +494,7 @@ export default function FormEditorPage() {
                         disabled={idx === fields.length - 1}
                         onClick={() => handleMoveField(idx, 1)}
                         className="p-1.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 rounded"
-                        title="Di chuyển xuống"
+                        title={t('forms.editorPage.moveDown')}
                       >
                         <HiOutlineArrowDown className="w-4 h-4" />
                       </button>
@@ -498,7 +502,7 @@ export default function FormEditorPage() {
                         type="button"
                         onClick={() => handleRemoveField(idx)}
                         className="p-1.5 text-red-400 hover:text-red-600 rounded"
-                        title="Xoá trường"
+                        title={t('forms.editorPage.removeField')}
                       >
                         <HiOutlineTrash className="w-4 h-4" />
                       </button>
@@ -516,7 +520,7 @@ export default function FormEditorPage() {
                         maxLength={200}
                         value={field.label}
                         onChange={(e) => handleUpdateField(idx, 'label', e.target.value)}
-                        placeholder="Ví dụ: Họ và tên"
+                        placeholder={t('forms.editorPage.fieldLabelPlaceholder')}
                         className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                           labelError
                             ? 'border-red-300 focus:ring-red-200'
@@ -636,7 +640,7 @@ export default function FormEditorPage() {
                   {t('forms.notifyOwner')}
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Gửi thư thông báo kèm thông tin người nộp về email của chủ tài khoản
+                  {t('forms.editorPage.notifyOwnerHelp')}
                 </p>
               </div>
               <input
@@ -656,7 +660,7 @@ export default function FormEditorPage() {
                   {t('forms.consentEnabled')}
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Hiển thị ô đánh dấu đồng ý tiếp thị trên form để khách hàng xác nhận nhận tin
+                  {t('forms.editorPage.consentEnabledHelp')}
                 </p>
               </div>
               <input
@@ -676,7 +680,7 @@ export default function FormEditorPage() {
                   {t('forms.sendConfirmation')}
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Gửi thư xác nhận tự động tới người điền (nếu có cung cấp email)
+                  {t('forms.editorPage.sendConfirmationHelp')}
                 </p>
               </div>
               <input

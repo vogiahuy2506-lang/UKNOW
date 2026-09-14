@@ -47,7 +47,7 @@ export default function PublicFormPage() {
       if (status === 429) {
         setSubmitError(t('publicForm.rateLimitError'));
       } else {
-        const msg = err.response?.data?.message || 'Không thể gửi biểu mẫu. Vui lòng thử lại sau.';
+        const msg = err.response?.data?.message || t('publicForm.submitError');
         setSubmitError(msg);
       }
       throw err;
@@ -62,7 +62,7 @@ export default function PublicFormPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center text-gray-500">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
-          <p className="text-sm">Đang tải biểu mẫu...</p>
+          <p className="text-sm">{t('publicForm.loading')}</p>
         </div>
       </div>
     );

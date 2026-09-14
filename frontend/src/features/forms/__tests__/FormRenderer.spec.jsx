@@ -256,4 +256,61 @@ describe('FormRenderer component', () => {
     expect(mockOnSubmit).not.toHaveBeenCalled();
     expect(screen.getByText(/Email không hợp lệ/i)).toBeInTheDocument();
   });
+
+  it('bẫy bot: khi bot tự động điền vào ô _hp_website thì payload gửi giá trị thật đó', async () => {
+    const mockOnSubmit = vi.fn().mockResolvedValue({});
+
+    const { container } = render(
+      <I18nProvider>
+        <FormRenderer form={baseForm} onSubmit={mockOnSubmit} />
+      </I18nProvider>
+    );
+
+    const hpInput = container.querySelector('input[name="_hp_website"]');
+    expect(hpInput).toBeInTheDocument();
+    fireEvent.change(hpInput, { target: { value: 'https://spam-bot.example.com' } });
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Spam Bot' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'spambot@example.com' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    const payload = mockOnSubmit.mock.calls[0][0];
+    expect(payload._hp_website).toBe('https://spam-bot.example.com');
+  });
+
+  it('chuẩn hoá SĐT: gõ 090-123-4567 gửi payload 0901234567; gõ abc lỗi tại chỗ không gọi API', async () => {
+    const mockOnSubmit = vi.fn().mockResolvedValue({});
+
+    render(
+      <I18nProvider>
+        <FormRenderer form={baseForm} onSubmit={mockOnSubmit} />
+      </I18nProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Nguyễn Văn Phone' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'phone@example.com' } });
+
+    // 1. Nhập SĐT không hợp lệ: "abc"
+    fireEvent.change(screen.getByLabelText(/Số điện thoại/i), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText(/Số điện thoại không hợp lệ/i)).toBeInTheDocument();
+
+    // 2. Nhập SĐT có dấu gạch: "090-123-4567"
+    fireEvent.change(screen.getByLabelText(/Số điện thoại/i), { target: { value: '090-123-4567' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    const payload = mockOnSubmit.mock.calls[0][0];
+    expect(payload.answers.user_phone).toBe('0901234567');
+  });
 });

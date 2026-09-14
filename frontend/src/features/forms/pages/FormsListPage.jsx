@@ -41,11 +41,11 @@ export default function FormsListPage() {
       const data = await fetchForms();
       setForms(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không thể tải danh sách biểu mẫu');
+      setError(err.response?.data?.message || t('forms.listPage.loadError'));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadForms();
@@ -59,7 +59,7 @@ export default function FormsListPage() {
       );
       toast.success(t('forms.publishSuccess'));
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Không thể cập nhật trạng thái');
+      toast.error(err.response?.data?.message || t('forms.listPage.togglePublishError'));
     }
   };
 
@@ -72,7 +72,7 @@ export default function FormsListPage() {
       toast.success(t('forms.deleteSuccess'));
       setDeleteTarget(null);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Không thể xoá biểu mẫu');
+      toast.error(err.response?.data?.message || t('forms.listPage.deleteError'));
     } finally {
       setIsDeleting(false);
     }
@@ -103,7 +103,7 @@ export default function FormsListPage() {
             onClick={loadForms}
             className="font-medium underline hover:text-red-800"
           >
-            Thử lại
+            {t('forms.listPage.retry')}
           </button>
         </div>
       )}
@@ -112,16 +112,16 @@ export default function FormsListPage() {
       {isLoading ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
-          <p className="text-sm">Đang tải biểu mẫu...</p>
+          <p className="text-sm">{t('forms.listPage.loading')}</p>
         </div>
       ) : forms.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center">
             <HiOutlinePlus className="w-8 h-8" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Chưa có biểu mẫu nào</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">{t('forms.listPage.empty')}</h3>
           <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
-            Tạo biểu mẫu đầu tiên để thu thập thông tin khách hàng, tư vấn dịch vụ hoặc đăng ký sự kiện.
+            {t('forms.listPage.emptyDescription')}
           </p>
           <button
             onClick={() => navigate('/app/forms/new')}
@@ -137,10 +137,10 @@ export default function FormsListPage() {
             <table className="w-full text-left text-sm text-gray-700">
               <thead className="bg-gray-50/75 border-b border-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 <tr>
-                  <th className="py-3.5 px-4 sm:px-6">Biểu mẫu</th>
-                  <th className="py-3.5 px-4 sm:px-6">Trạng thái</th>
-                  <th className="py-3.5 px-4 sm:px-6">Số bài nộp</th>
-                  <th className="py-3.5 px-4 sm:px-6 text-right">Thao tác</th>
+                  <th className="py-3.5 px-4 sm:px-6">{t('forms.listPage.colForm')}</th>
+                  <th className="py-3.5 px-4 sm:px-6">{t('forms.listPage.colStatus')}</th>
+                  <th className="py-3.5 px-4 sm:px-6">{t('forms.listPage.colSubmissions')}</th>
+                  <th className="py-3.5 px-4 sm:px-6 text-right">{t('forms.listPage.colActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -175,7 +175,7 @@ export default function FormsListPage() {
                           className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline"
                         >
                           <HiOutlineInbox className="w-4 h-4" />
-                          <span>{submissionCount} bài nộp</span>
+                          <span>{t('forms.listPage.submissionCount', { count: submissionCount })}</span>
                         </button>
                       </td>
                       <td className="py-4 px-4 sm:px-6 text-right">
@@ -250,12 +250,10 @@ export default function FormsListPage() {
               {t('forms.deleteConfirmTitle')}
             </h3>
             <p className="text-sm text-gray-600 leading-relaxed mb-6">
-              Hành động này sẽ xoá vĩnh viễn biểu mẫu{' '}
-              <strong className="text-gray-900">"{deleteTarget.title}"</strong> và{' '}
-              <strong className="text-red-600 font-bold">
-                {deleteTarget.submissionCount || 0} bài nộp
-              </strong>{' '}
-              liên quan. Dữ liệu sau khi xoá không thể khôi phục!
+              {t('forms.listPage.deleteConfirmMessage', {
+                title: deleteTarget.title,
+                count: deleteTarget.submissionCount || 0,
+              })}
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
@@ -264,7 +262,7 @@ export default function FormsListPage() {
                 disabled={isDeleting}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
               >
-                Huỷ
+                {t('forms.listPage.cancel')}
               </button>
               <button
                 type="button"
@@ -272,7 +270,7 @@ export default function FormsListPage() {
                 disabled={isDeleting}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
               >
-                {isDeleting ? 'Đang xoá...' : 'Xác nhận xoá'}
+                {isDeleting ? t('forms.listPage.deleting') : t('forms.listPage.confirmDelete')}
               </button>
             </div>
           </div>

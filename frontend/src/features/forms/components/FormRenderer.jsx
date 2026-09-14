@@ -28,11 +28,21 @@ export default function FormRenderer({
 
   // Chống bấm đúp bằng useRef để chặn ngay lập tức trong event loop
   const submittingRef = useRef(false);
+  // Ref cho trường bẫy bot không điều khiển (uncontrolled input)
+  const honeypotRef = useRef(null);
 
   const fields = Array.isArray(form?.fields) ? form.fields : [];
   const settings = form?.settings || {};
   const submitButtonText = settings.submitButtonText?.trim() || t('publicForm.defaultSubmit');
   const successMessage = settings.successMessage?.trim() || t('publicForm.defaultSuccess');
+
+  const normalizePhoneClient = (raw) => {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const hasPlus = s.startsWith('+');
+    const digits = s.replace(/\D/g, '');
+    return hasPlus ? `+${digits}` : digits;
+  };
 
   const handleFieldChange = (key, val) => {
     setAnswers((prev) => ({ ...prev, [key]: val }));
@@ -67,24 +77,24 @@ export default function FormRenderer({
         (Array.isArray(val) && val.length === 0);
 
       if (required && isEmpty) {
-        errors[key] = `Vui lòng điền trường "${label}"`;
+        errors[key] = t('publicForm.validation.required', { label });
         continue;
       }
 
       if (!isEmpty) {
         if (type === 'short_text' && String(val).length > 500) {
-          errors[key] = `Trường "${label}" không được vượt quá 500 ký tự`;
+          errors[key] = t('publicForm.validation.shortTextMax', { label });
         } else if (type === 'long_text' && String(val).length > 5000) {
-          errors[key] = `Trường "${label}" không được vượt quá 5000 ký tự`;
+          errors[key] = t('publicForm.validation.longTextMax', { label });
         } else if (type === 'email') {
           const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           if (!emailRe.test(String(val).trim())) {
-            errors[key] = 'Email không hợp lệ';
+            errors[key] = t('publicForm.validation.emailInvalid');
           }
         } else if (type === 'phone') {
-          const digits = String(val).replace(/\D/g, '');
-          if (digits.length < 8 || digits.length > 20) {
-            errors[key] = 'Số điện thoại phải từ 8 đến 20 chữ số';
+          const normalizedPhone = normalizePhoneClient(val);
+          if (!/^\+?[0-9]{8,20}$/.test(normalizedPhone)) {
+            errors[key] = t('publicForm.validation.phoneInvalid');
           }
         }
       }
@@ -112,9 +122,20 @@ export default function FormRenderer({
     submittingRef.current = true;
 
     try {
+      const cleanAnswers = { ...answers };
+
+      for (const field of fields) {
+        if (field.type === 'phone' && cleanAnswers[field.key]) {
+          cleanAnswers[field.key] = normalizePhoneClient(cleanAnswers[field.key]);
+        }
+      }
+
+      // Bẫy bot: lấy giá trị thật từ input honeypot không điều khiển
+      const honeypotVal = honeypotRef.current ? honeypotRef.current.value : '';
+
       const payload = {
-        answers,
-        _hp_website: '',
+        answers: cleanAnswers,
+        _hp_website: honeypotVal,
       };
 
       // Chỉ gửi marketingConsent khi form bật settings.consentEnabled
@@ -197,8 +218,8 @@ export default function FormRenderer({
             name="_hp_website"
             tabIndex={-1}
             autoComplete="off"
-            value=""
-            readOnly
+            ref={honeypotRef}
+            defaultValue=""
           />
         </div>
 
@@ -332,7 +353,7 @@ export default function FormRenderer({
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
                 >
-                  <option value="">-- Chọn lựa chọn --</option>
+                  <option value="">{t('publicForm.selectPlaceholder')}</option>
                   {options.map((opt, i) => {
                     const optVal = typeof opt === 'object' ? opt.value : opt;
                     const optLbl = typeof opt === 'object' ? opt.label : opt;

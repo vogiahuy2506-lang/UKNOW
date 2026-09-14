@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   HiOutlineArrowLeft,
@@ -31,6 +31,16 @@ export default function FormSubmissionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const formKeyOrderMap = useMemo(() => {
+    const map = new Map();
+    if (Array.isArray(form?.fields)) {
+      form.fields.forEach((f, idx) => {
+        if (f.key) map.set(f.key, idx);
+      });
+    }
+    return map;
+  }, [form?.fields]);
+
   const loadData = useCallback(
     async (targetPage = 1) => {
       setIsLoading(true);
@@ -49,12 +59,12 @@ export default function FormSubmissionsPage() {
           totalPages: Number(subsData.totalPages) || 1,
         });
       } catch (err) {
-        setError(err.response?.data?.message || 'Không thể tải danh sách bài nộp');
+        setError(err.response?.data?.message || t('forms.submissionsPage.loadError'));
       } finally {
         setIsLoading(false);
       }
     },
-    [id]
+    [id, t]
   );
 
   useEffect(() => {
@@ -83,7 +93,7 @@ export default function FormSubmissionsPage() {
               {t('forms.submissionsPage.title', { title: form?.title || '...' })}
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-              Danh sách bài nộp và câu trả lời từ khách hàng
+              {t('forms.submissionsPage.subtitle')}
             </p>
           </div>
         </div>
@@ -94,7 +104,7 @@ export default function FormSubmissionsPage() {
               onClick={() => navigate(`/app/forms/${form.id}/edit`)}
               className="text-xs font-medium text-primary-600 hover:text-primary-700 hover:underline"
             >
-              Chỉnh sửa cấu hình form
+              {t('forms.submissionsPage.editFormConfig')}
             </button>
           </div>
         )}
@@ -109,7 +119,7 @@ export default function FormSubmissionsPage() {
       {isLoading ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
-          <p className="text-sm">Đang tải bài nộp...</p>
+          <p className="text-sm">{t('forms.submissionsPage.loading')}</p>
         </div>
       ) : submissions.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
@@ -120,7 +130,7 @@ export default function FormSubmissionsPage() {
             {t('forms.submissionsPage.empty')}
           </h3>
           <p className="text-sm text-gray-500 max-w-sm mx-auto">
-            Khi có khách hàng điền và gửi biểu mẫu, bài nộp sẽ hiển thị tại đây.
+            {t('forms.submissionsPage.emptyDescription')}
           </p>
         </div>
       ) : (
@@ -146,7 +156,12 @@ export default function FormSubmissionsPage() {
               <tbody className="divide-y divide-gray-100">
                 {submissions.map((sub) => {
                   const answersObj = sub.answers || {};
-                  const answerEntries = Object.entries(answersObj);
+                  const answerEntries = Object.entries(answersObj).sort(([keyA], [keyB]) => {
+                    const orderA = formKeyOrderMap.has(keyA) ? formKeyOrderMap.get(keyA) : Number.MAX_SAFE_INTEGER;
+                    const orderB = formKeyOrderMap.has(keyB) ? formKeyOrderMap.get(keyB) : Number.MAX_SAFE_INTEGER;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return keyA.localeCompare(keyB);
+                  });
 
                   return (
                     <tr key={sub.id} className="hover:bg-gray-50/50 transition-colors align-top">
@@ -162,7 +177,7 @@ export default function FormSubmissionsPage() {
                         <div className="space-y-1">
                           <div className="font-medium text-gray-900 flex items-center gap-1.5">
                             <HiOutlineUser className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                            <span>{sub.respondentName || 'Chưa cung cấp'}</span>
+                            <span>{sub.respondentName || t('forms.submissionsPage.notProvided')}</span>
                           </div>
                           {sub.respondentEmail && (
                             <div className="text-xs text-gray-500 flex items-center gap-1.5 break-all">
@@ -200,7 +215,7 @@ export default function FormSubmissionsPage() {
                       <td className="py-4 px-4 sm:px-6">
                         <div className="space-y-1.5 max-w-xl">
                           {answerEntries.length === 0 ? (
-                            <span className="text-xs text-gray-400 italic">Không có câu trả lời</span>
+                            <span className="text-xs text-gray-400 italic">{t('forms.submissionsPage.noAnswers')}</span>
                           ) : (
                             answerEntries.map(([fKey, item]) => {
                               // Snapshot dạng { label, type, value }

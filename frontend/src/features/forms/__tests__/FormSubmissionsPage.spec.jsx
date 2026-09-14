@@ -191,4 +191,65 @@ describe('FormSubmissionsPage component', () => {
       expect(screen.getByText('page2@example.com')).toBeInTheDocument();
     });
   });
+
+  it('xếp câu trả lời theo thứ tự fields của form hiện tại, trường đã xoá xếp sau cùng (Postgres JSONB lộn khoá)', async () => {
+    const customForm = {
+      id: 'form-order-test',
+      title: 'Form kiểm tra thứ tự',
+      fields: [
+        { key: 'f_c9a1', label: 'Họ và tên' },
+        { key: 'f_2b7e', label: 'Email' },
+        { key: 'f_71d0', label: 'Dịch vụ' },
+      ],
+    };
+
+    // Mô phỏng Postgres JSONB trả khoá bị lộn xộn: f_2b7e -> f_deleted -> f_71d0 -> f_c9a1
+    const unorderedSubmissions = {
+      submissions: [
+        {
+          id: 'sub-order-1',
+          respondentName: 'Test Order',
+          respondentEmail: 'test@example.com',
+          marketingConsent: true,
+          createdAt: '2026-09-14T08:00:00.000Z',
+          answers: {
+            f_2b7e: { label: 'Email', type: 'email', value: 'test@example.com' },
+            f_deleted: { label: 'Trường đã xoá', type: 'short_text', value: 'Giá trị cũ' },
+            f_71d0: { label: 'Dịch vụ', type: 'select', value: 'VIP' },
+            f_c9a1: { label: 'Họ và tên', type: 'short_text', value: 'Test Order' },
+          },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    };
+
+    formAdminApi.fetchFormById.mockResolvedValue(customForm);
+    formAdminApi.fetchFormSubmissions.mockResolvedValue(unorderedSubmissions);
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/app/forms/form-order-test/submissions']}>
+        <I18nProvider>
+          <Routes>
+            <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+          </Routes>
+        </I18nProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Test Order').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Lấy các label hiển thị trong cột câu trả lời theo đúng thứ tự xuất hiện trong DOM
+    const renderedLabels = Array.from(
+      container.querySelectorAll('tbody tr td:nth-child(4) span.font-semibold')
+    ).map((el) => el.textContent.replace(':', '').trim());
+
+    // Phải đúng thứ tự fields: f_c9a1 (Họ và tên) -> f_2b7e (Email) -> f_71d0 (Dịch vụ)
+    // Và f_deleted (Trường đã xoá) nằm ở sau cùng
+    expect(renderedLabels).toEqual(['Họ và tên', 'Email', 'Dịch vụ', 'Trường đã xoá']);
+  });
 });
