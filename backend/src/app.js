@@ -36,9 +36,11 @@ import whatsappBaileysRoutes from './routes/whatsappBaileys.routes.js';
 import publicPromotionRoutes from './routes/publicPromotion.routes.js';
 import landingCmsPublicRoutes from './routes/landingCmsPublic.routes.js';
 import leadPublicRoutes from './routes/leadPublic.routes.js';
+import formPublicRoutes from './routes/formPublic.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import verificationRoutes from './routes/verification.routes.js';
 import leadRoutes from './routes/lead.routes.js';
+import formRoutes from './routes/form.routes.js';
 import adminLandingFeaturedCourseRoutes from './routes/adminLandingFeaturedCourse.routes.js';
 import adminLandingTestimonialRoutes from './routes/adminLandingTestimonial.routes.js';
 import adminLandingPageRoutes from './routes/adminLandingPage.routes.js';
@@ -182,6 +184,7 @@ export function createApp() {
   app.use('/api/public', publicRoutes);
   app.use('/api/public', landingCmsPublicRoutes);
   app.use('/api/public/leads', leadPublicRoutes);
+  app.use('/api/public/forms', formPublicRoutes);
   app.use('/api/public', publicPromotionRoutes);
   app.use('/api/admin/landing-featured-courses', adminLandingFeaturedCourseRoutes);
   app.use('/api/admin/landing-testimonials', adminLandingTestimonialRoutes);
@@ -189,6 +192,7 @@ export function createApp() {
   app.use('/api/admin/landing-customizer', adminLandingCustomizerRoutes);
   app.use('/api/admin/landing-sections', adminLandingSectionRoutes);
   app.use('/api/leads', leadRoutes);
+  app.use('/api/forms', formRoutes);
   app.use('/api/verification', verificationRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/plans', planRoutes);

@@ -1,0 +1,48 @@
+import formService from '../services/form.service.js';
+
+class FormPublicController {
+  async getPublic(req, res) {
+    try {
+      const { publicKey } = req.params;
+      const form = await formService.getPublicForm(publicKey);
+      return res.json({
+        success: true,
+        data: form,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.getPublic]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải biểu mẫu',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  async submitPublic(req, res) {
+    try {
+      const { publicKey } = req.params;
+      const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+      const result = await formService.submitPublicForm(publicKey, req.body || {}, clientIp);
+
+      return res.status(201).json({
+        success: true,
+        message: 'Nộp biểu mẫu thành công',
+        data: {
+          accessToken: result.accessToken,
+        },
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.submitPublic]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể nộp biểu mẫu',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+}
+
+export default new FormPublicController();

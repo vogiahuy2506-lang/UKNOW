@@ -101,6 +101,15 @@ export const PERMISSION_CATALOG = {
     riskLevel: 'medium',
     defaultForNewEmployee: false,
   },
+  forms: {
+    key: 'forms',
+    group: PERMISSION_GROUPS.LANDING,
+    labelKey: 'permissions.forms',
+    descriptionKey: 'permissions.description.forms',
+    dependencies: [],
+    riskLevel: 'medium',
+    defaultForNewEmployee: false,
+  },
   customers: {
     key: 'customers',
     group: PERMISSION_GROUPS.CRM,

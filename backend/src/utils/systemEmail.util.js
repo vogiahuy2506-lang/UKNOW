@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
+export const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
 const SENDER_ADDRESS = process.env.MAIL_FROM || 'founderai.noreply@digiso.vn';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 const LOGO_URL = 'https://founderai.biz/logo.png';

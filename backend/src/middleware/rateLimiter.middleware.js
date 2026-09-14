@@ -235,6 +235,28 @@ export const publicLeadLimiter = rateLimit({
   keyGenerator: (req) => `public-lead:${clientIpKey(req)}`,
 });
 
+// Public form submission — chống flood/spam nộp biểu mẫu (không auth)
+export const PUBLIC_FORM_SUBMISSION_CONFIG = Object.freeze({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  code: 'PUBLIC_FORM_RATE_LIMIT_EXCEEDED',
+  message: 'Quá nhiều lần gửi form. Vui lòng thử lại sau 15 phút.',
+});
+
+export const publicFormSubmissionLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: PUBLIC_FORM_SUBMISSION_CONFIG.windowMs,
+  max: PUBLIC_FORM_SUBMISSION_CONFIG.max,
+  message: {
+    success: false,
+    message: PUBLIC_FORM_SUBMISSION_CONFIG.message,
+    code: PUBLIC_FORM_SUBMISSION_CONFIG.code,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `public-form:${clientIpKey(req)}`,
+});
+
 // Public lead unsubscribe — chống flood/lạm dụng link rút lại đồng ý (không auth)
 export const leadUnsubscribeLimiter = rateLimit({
   skip: skipInTest,
