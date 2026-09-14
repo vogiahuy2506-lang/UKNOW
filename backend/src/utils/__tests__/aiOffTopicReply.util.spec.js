@@ -141,15 +141,18 @@ describe('buildOffTopicFallback', () => {
       customerMessage: 'hello em là ai',
     });
     expect(reply).toContain('Lan Anh');
-    expect(reply).toMatch(/hỗ trợ gì/i);
+    // Natural greeting: phải mời hỏi tiếp
+    expect(reply).toMatch(/(hỗ trợ|cần|giúp|giúp gì|hỏi)/i);
   });
 
-  it('includes the customer message excerpt in the fallback', () => {
+  it('does NOT echo the customer message excerpt in the fallback', () => {
+    // Mục đích: tránh spam/echo nội dung gốc của khách (có thể là link hoặc text dài).
+    // Fallback mới chào lịch sự + mời hỏi tiếp, KHÔNG nhắc lại câu hỏi.
     const reply = buildOffTopicFallback({
       assistantName: 'Bot',
       customerMessage: 'rảnh ko shop',
     });
-    expect(reply).toContain('rảnh ko shop');
+    expect(reply).not.toContain('rảnh ko shop');
   });
 
   it('uses greeting when customer message contains a greeting word', () => {
@@ -157,15 +160,16 @@ describe('buildOffTopicFallback', () => {
       assistantName: 'Bot',
       customerMessage: 'hi shop',
     });
-    expect(reply).toMatch(/^Chào bạn/);
+    expect(reply).toMatch(/Chào bạn/i);
   });
 
-  it('uses neutral greeting when customer message has no greeting word', () => {
+  it('uses generic greeting when customer message has no greeting word', () => {
     const reply = buildOffTopicFallback({
       assistantName: 'Bot',
       customerMessage: 'cho hỏi sản phẩm',
     });
-    expect(reply).toMatch(/Mình hiểu rồi/);
+    // Sau redesign: câu không chào cũng dùng 'Xin chào' cho tự nhiên
+    expect(reply).toMatch(/Xin chào|Chào bạn/i);
   });
 
   it('falls back to "trợ lý ảo" when no assistant name provided', () => {
