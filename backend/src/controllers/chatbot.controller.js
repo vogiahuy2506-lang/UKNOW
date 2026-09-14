@@ -155,6 +155,24 @@ function extractTextFromHtml(html) {
   return text.slice(0, 50000);
 }
 
+/**
+ * Phân giải tham số `:chatbotId` của các endpoint CÔNG KHAI (trang chat, gửi tin, lịch sử, đính kèm).
+ * Chỉ coi là id số khi TOÀN BỘ chuỗi là chữ số; còn lại tra theo widget_key.
+ *
+ * Vì sao không dùng parseInt: `parseInt('5db50541')` trả về 5, nên link công khai
+ * /chat/<widget_key> với key bắt đầu bằng chữ số từng mở nhầm chatbot số 5 của người khác
+ * (14/09/2026) — tin nhắn, hội thoại và credit đều tính cho chủ chatbot đó.
+ */
+async function resolvePublicChatbotParam(chatbotId) {
+  const raw = String(chatbotId ?? '').trim();
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) {
+    const byId = await chatbotRepository.findChatbotById(Number(raw));
+    if (byId) return byId;
+  }
+  return chatbotRepository.findChatbotByWidgetKey(raw);
+}
+
 class ChatbotController {
   // ── Knowledge Base ─────────────────────────────────────────────
 
@@ -1186,19 +1204,7 @@ class ChatbotController {
   async getPublicChatbotById(req, res) {
     try {
       const { chatbotId } = req.params;
-      const id = parseInt(chatbotId);
-
-      let chatbot = null;
-
-      if (!isNaN(id)) {
-        // Try finding by numeric ID first
-        chatbot = await chatbotRepository.findChatbotById(id);
-      }
-
-      // If not found by ID, try finding by widget_key (string token)
-      if (!chatbot) {
-        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
-      }
+      const chatbot = await resolvePublicChatbotParam(chatbotId);
 
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
@@ -1398,14 +1404,7 @@ class ChatbotController {
   async uploadPublicChatAttachmentById(req, res) {
     try {
       const { chatbotId } = req.params;
-      const id = parseInt(chatbotId, 10);
-      let chatbot = null;
-      if (!Number.isNaN(id)) {
-        chatbot = await chatbotRepository.findChatbotById(id);
-      }
-      if (!chatbot) {
-        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
-      }
+      const chatbot = await resolvePublicChatbotParam(chatbotId);
       return await this._uploadPublicAttachmentCore(req, res, chatbot);
     } catch (err) {
       console.error('[ChatAttachment] public upload by id error:', err);
@@ -1456,14 +1455,7 @@ class ChatbotController {
   async deletePublicChatAttachmentById(req, res) {
     try {
       const { chatbotId } = req.params;
-      const id = parseInt(chatbotId, 10);
-      let chatbot = null;
-      if (!Number.isNaN(id)) {
-        chatbot = await chatbotRepository.findChatbotById(id);
-      }
-      if (!chatbot) {
-        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
-      }
+      const chatbot = await resolvePublicChatbotParam(chatbotId);
       return await this._deletePublicAttachmentCore(req, res, chatbot);
     } catch (err) {
       console.error('[ChatAttachment] public delete by id error:', err);
@@ -1890,19 +1882,7 @@ class ChatbotController {
     let chatbotUserId = null;
     try {
       const { chatbotId } = req.params;
-      const id = parseInt(chatbotId);
-
-      let chatbot = null;
-
-      if (!isNaN(id)) {
-        // Try finding by numeric ID first
-        chatbot = await chatbotRepository.findChatbotById(id);
-      }
-
-      // If not found by ID, try finding by widget_key (string token)
-      if (!chatbot) {
-        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
-      }
+      const chatbot = await resolvePublicChatbotParam(chatbotId);
 
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
@@ -2104,18 +2084,7 @@ class ChatbotController {
     try {
       const { chatbotId } = req.params;
       const { sessionId, lastMessageId } = req.query;
-      const id = parseInt(chatbotId);
-
-      let chatbot = null;
-
-      if (!isNaN(id)) {
-        chatbot = await chatbotRepository.findChatbotById(id);
-      }
-
-      // If not found by ID, try finding by widget_key
-      if (!chatbot) {
-        chatbot = await chatbotRepository.findChatbotByWidgetKey(chatbotId);
-      }
+      const chatbot = await resolvePublicChatbotParam(chatbotId);
 
       if (!sessionId) {
         return res.status(400).json({ success: false, message: 'sessionId is required' });

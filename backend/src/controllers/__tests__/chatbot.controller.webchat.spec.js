@@ -202,3 +202,61 @@ describe('chatbot.controller webchat widget resolve', () => {
     });
   });
 });
+
+// 14/09/2026: parseInt('5db50541') = 5 → link công khai /chat/<widget_key> mở nhầm chatbot số 5 của
+// người khác. Tham số chỉ được coi là id số khi TOÀN BỘ chuỗi là chữ số.
+describe('chatbot.controller public :chatbotId — widget_key bắt đầu bằng chữ số', () => {
+  const otherOwnersChatbot = { id: 5, id_user: 99, name: 'Bot của người khác', widget_key: 'zz' };
+  const myChatbot = { id: 41, id_user: 7, name: 'Bot của tôi', widget_key: '5db50541' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(otherOwnersChatbot);
+    findChatbotByWidgetKey.mockResolvedValue(myChatbot);
+  });
+
+  it('getPublicChatbotById: "5db50541" tra theo widget_key, KHÔNG gọi findChatbotById(5)', async () => {
+    const res = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '5db50541' } }, res);
+
+    expect(findChatbotById).not.toHaveBeenCalled();
+    expect(findChatbotByWidgetKey).toHaveBeenCalledWith('5db50541');
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: expect.objectContaining({ id: 41 }) })
+    );
+  });
+
+  it('chatWithCustomChatbotById: "5db50541" không rơi vào chatbot số 5', async () => {
+    findChatbotByWidgetKey.mockResolvedValue(null);
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '5db50541' }, body: { message: 'hi', sessionId: 'sess_9', history: [] } },
+      res
+    );
+
+    expect(findChatbotById).not.toHaveBeenCalled();
+    expect(findChatbotByWidgetKey).toHaveBeenCalledWith('5db50541');
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('getChatMessages: "5db50541" không rơi vào chatbot số 5', async () => {
+    findChatbotByWidgetKey.mockResolvedValue(null);
+    const res = makeRes();
+    await chatbotController.getChatMessages(
+      { params: { chatbotId: '5db50541' }, query: { sessionId: 'sess_9' } },
+      res
+    );
+
+    expect(findChatbotById).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('chuỗi toàn chữ số vẫn tra theo id, rồi mới tới widget_key', async () => {
+    findChatbotById.mockResolvedValue(null);
+    const res = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '5' } }, res);
+
+    expect(findChatbotById).toHaveBeenCalledWith(5);
+    expect(findChatbotByWidgetKey).toHaveBeenCalledWith('5');
+  });
+});
