@@ -14,14 +14,12 @@
 import db from '../../config/database.js';
 import { listSessions as listBaileysSessions } from './whatsappBaileys.service.js';
 import whatsappAdapter from './channelAdapters/whatsapp.adapter.js';
-import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 import { VISITOR_CHAT_ERROR_MESSAGE } from '../ai/aiCreditMeter.service.js';
-import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
-import { extractGeminiUsage, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
 import subAssistantService from './subAssistant.service.js';
 import ragEngineService from './ragEngine.service.js';
 import businessProfileService from '../ai/businessProfile.service.js';
+import chatRouterService from './chatRouter.service.js';
 
 const log = (...args) => console.log('[WhatsApp/Baileys/Inbox]', ...args);
 
@@ -253,83 +251,48 @@ async function getHistory(conversationId) {
 }
 
 /**
- * Gọi AI (Gemini) và trả text reply.
+ * Gọi AI (Gemini) và gửi reply cho visitor.
+ * Dùng chung `chatRouterService._callAI` / `.buildSystemPrompt` để:
+ *   - Đồng bộ prompt + rule anti-hallucination ("không tự nhận là WhatsApp") với các kênh khác
+ *   - Được retry thinkingBudget cho Gemini 2.5 + timeout 30s (chatRouter có, bản cũ thiếu)
+ *   - Tái sử dụng 1 code path duy nhất → dễ bảo trì
  */
-async function callAi({ userId, systemPrompt, history, message, model, temperature, maxTokens }) {
-  const chatHistory = history.map((m) => ({
-    role: m.role === 'bot' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-  chatHistory.push({ role: 'user', parts: [{ text: message }] });
+async function buildReplyForChatbot({ ownerUserId, cb, history, messageText }) {
+  const subAssistant = cb.id_sub_assistant
+    ? await subAssistantService.getById(cb.id_sub_assistant, ownerUserId)
+    : null;
+  const profileContext = await businessProfileService
+    .getFormattedProfileForPrompt(ownerUserId)
+    .catch(() => '');
+  const ragContext = await ragEngineService
+    .buildContext(ownerUserId, messageText, { customChatbotId: cb.id_chatbot })
+    .catch(() => '');
+  const isFirstMessage = history.length === 0;
 
-  const modelName = await resolveAllowedModel(userId, model);
-  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const systemInstruction = { parts: [{ text: systemPrompt }] };
-  const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
-    contents: chatHistory,
-    systemInstruction,
-    model: modelName,
-    requestedMaxOutputTokens: maxTokens,
+  const systemPrompt = chatRouterService.buildSystemPrompt({
+    subAssistant,
+    settings: {
+      welcome_message: cb.welcome_message,
+      response_style: cb.response_style,
+      system_instruction: cb.system_instruction,
+    },
+    chatbot: { name: cb.chatbot_name },
+    ragContext,
+    profileContext,
+    isFirstMessage,
   });
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction,
-      contents: chatHistory,
-      generationConfig: {
-        temperature,
-        maxOutputTokens,
-        // Gemini 2.5 yêu cầu thinking mode — bỏ thinkingBudget=0 (model
-        // tự allocate) để không bị reject "Budget 0 is invalid. This model
-        // only works in thinking mode."
-      },
-    }),
+
+  // _callAI trả { text } (không phải string thuần) — unwrap tại đây.
+  const { text: reply } = await chatRouterService._callAI({
+    userId: ownerUserId,
+    systemPrompt,
+    history,
+    message: messageText,
+    model: cb.ai_model || 'gemini-2.5-flash',
+    temperature: parseFloat(cb.temperature || 0.7),
+    maxTokens: cb.max_tokens || 2048,
   });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data?.error?.message || `Gemini API error: ${response.status}`);
-  }
-  const data = await response.json();
-  const text = joinGeminiTextParts(data?.candidates?.[0]?.content?.parts);
-  await aiUsageMeter.record(userId, extractGeminiUsage(data), {
-    feature: 'chatbot_reply',
-    model: modelName,
-  });
-  return text;
-}
-
-function buildSystemPrompt({ chatbot, settings, subAssistant, ragContext, profileContext, isFirstMessage }) {
-  const name = subAssistant?.name || chatbot?.name || 'Trợ lý AI';
-  const welcome = settings.welcome_message || subAssistant?.greeting_msg || 'Xin chào!';
-  const style = settings.response_style || 'friendly';
-  const styleInstructions = {
-    friendly: 'Thân thiện, gần gũi.',
-    professional: 'Chuyên nghiệp, ngắn gọn.',
-    casual: 'Thoải mái, tự nhiên.',
-  };
-  let prompt = `Bạn là ${name}.
-
-## PHONG CÁCH
-${styleInstructions[style] || styleInstructions.friendly}
-
-`;
-  if (isFirstMessage) {
-    prompt += `## CHÀO
-Bắt đầu bằng: "${welcome}"
-
-`;
-  }
-  prompt += `${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\n' : ''}`;
-  if (settings.system_instruction?.trim()) {
-    prompt += `## HƯỚNG DẪN RIÊNG\n${settings.system_instruction.trim()}\n\n`;
-  }
-  prompt += `## QUY TẮC
-- Trả lời bằng văn bản thuần, KHÔNG markdown.
-- Ngắn gọn, rõ ràng.
-- Nếu không biết, nói rõ.`;
-  return prompt;
+  return reply || '';
 }
 
 /**
@@ -408,39 +371,14 @@ async function processIncomingMessage({ sessionKey, msg }) {
         externalMessageId: messageId,
       });
 
-      // Lấy lịch sử + gọi AI.
+      // Lấy lịch sử + gọi AI (qua chatRouterService chung).
       try {
         const history = await getHistory(conversation.id);
-        const subAssistant = cb.id_sub_assistant
-          ? await subAssistantService.getById(cb.id_sub_assistant, ownerUserId)
-          : null;
-        const profileContext = await businessProfileService
-          .getFormattedProfileForPrompt(ownerUserId)
-          .catch(() => '');
-        const ragContext = await ragEngineService
-          .buildContext(ownerUserId, messageText, { customChatbotId: cb.id_chatbot })
-          .catch(() => '');
-        const isFirstMessage = history.length === 0;
-        const systemPrompt = buildSystemPrompt({
-          chatbot: { name: cb.chatbot_name },
-          settings: {
-            welcome_message: cb.welcome_message,
-            response_style: cb.response_style,
-            system_instruction: cb.system_instruction,
-          },
-          subAssistant,
-          ragContext,
-          profileContext,
-          isFirstMessage,
-        });
-        const reply = await callAi({
-          userId: ownerUserId,
-          systemPrompt,
+        const reply = await buildReplyForChatbot({
+          ownerUserId,
+          cb,
           history,
-          message: messageText,
-          model: cb.ai_model || 'gemini-2.5-flash',
-          temperature: parseFloat(cb.temperature || 0.7),
-          maxTokens: cb.max_tokens || 2048,
+          messageText,
         });
         const cleanReply = stripMarkdown(reply);
 

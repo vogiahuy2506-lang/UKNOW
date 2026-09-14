@@ -88,7 +88,7 @@ class ChatRouterService {
 
     // 5. Build system prompt
     const isFirstMessage = history.length === 0;
-    const systemPrompt = this._buildSystemPrompt({
+    const systemPrompt = this.buildSystemPrompt({
       subAssistant,
       settings,
       ragContext,
@@ -190,7 +190,7 @@ class ChatRouterService {
 
     // Build system prompt with per-account settings
     const isFirstMessage = history.length === 0;
-    const systemPrompt = this._buildSystemPrompt({
+    const systemPrompt = this.buildSystemPrompt({
       subAssistant,
       settings: chatbotSettings,
       ragContext,
@@ -249,10 +249,33 @@ class ChatRouterService {
     await aiCreditMeter.consume(userId, { feature, creditContext });
   }
 
-  _buildSystemPrompt({ subAssistant, settings, ragContext, profileContext, isFirstMessage }) {
-    const name = subAssistant?.name || settings?.sub_assistant_name || 'Tro li AI';
-    const welcomeMessage = settings.welcome_message || subAssistant?.greeting_msg || 'Xin chao! Toi co the giup gi cho ban?';
-    const style = settings.response_style || 'friendly';
+  /**
+   * Build system prompt shared by ALL channels (web, zalo_oa, zalo_personal,
+   * facebook, telegram_personal, whatsapp, whatsapp_baileys).
+   *
+   * Lưu ý: phần khung prompt cố ý KHÔNG dấu tiếng Việt để Gemini ổn định (đã được
+   * Zalo/Telegram validate). Các đoạn có dấu (XU LY TIN NHAN DAC BIET,
+   * QUY TAC) vẫn cho phép vì đã chạy ổn.
+   *
+   * @param {object} params
+   * @param {object|null} [params.subAssistant] - row sub_assistants join sẵn
+   * @param {object} [params.settings] - row chatbot_settings /
+   *   chatbot_whatsapp_baileys_settings (welcome_message, response_style,
+   *   system_instruction, sub_assistant_name)
+   * @param {object} [params.chatbot] - row custom_chatbots (chỉ dùng `.name`
+   *   làm fallback cuối khi subAssistant không có tên)
+   * @param {string} [params.ragContext]
+   * @param {string} [params.profileContext]
+   * @param {boolean} [params.isFirstMessage]
+   * @returns {string}
+   */
+  buildSystemPrompt({ subAssistant, settings, chatbot, ragContext, profileContext, isFirstMessage }) {
+    const name = subAssistant?.name
+      || settings?.sub_assistant_name
+      || chatbot?.name
+      || 'Tro li AI';
+    const welcomeMessage = settings?.welcome_message || subAssistant?.greeting_msg || 'Xin chao! Toi co the giup gi cho ban?';
+    const style = settings?.response_style || 'friendly';
 
     const styleInstructions = {
       friendly: 'Than thien, gan gui, dung emoji phu hop.',
@@ -290,6 +313,7 @@ Khi nguoi dung bat dau cuoc tro chuyen, hay bat dau bang loi chao sau: "${welcom
 
 ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\n' : ''}
 ## QUY TAC QUAN TRONG
+- LUON xung ten la "${name}" trong moi cau tra loi. KHONG BAO GIO tu nhan minh la "WhatsApp", "Zalo", "Telegram", "Facebook", "Messenger", "Meta" hay ten bat ky kenh nhan tin nao. Ban la tro ly ao do doanh nghiep cau hinh, khong phai ung dung nhan tin.
 - LUON tra loi bang VAN BAN THUAN, KHONG dung bat ky dinh dang markdown nao
 - Khong dung **bold**, *italic*, __underline__, ~~strikethrough~~, \`code\`, \`\`\`code block\`\`\`
 - Khong dung # heading, - bullet list, 1. numbered list
@@ -303,11 +327,20 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 - Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
     // Thêm custom system instruction neu co
-    if (settings.system_instruction?.trim()) {
+    if (settings?.system_instruction?.trim()) {
       prompt += `\n\n## HUONG DAN TUY CHINH\n${settings.system_instruction.trim()}`;
     }
 
     return prompt;
+  }
+
+  /**
+   * Backward-compatible alias. Cũ gọi `_buildSystemPrompt(args)` vẫn hoạt
+   * động (chatbot default undefined → rơi vào fallback 'Tro li AI'). Giữ
+   * để không phá unit test cũ hoặc caller nào gọi qua tên cũ.
+   */
+  _buildSystemPrompt(args) {
+    return this.buildSystemPrompt(args);
   }
 
   async _callAI({ userId, systemPrompt, history, message, model, temperature, maxTokens }) {
