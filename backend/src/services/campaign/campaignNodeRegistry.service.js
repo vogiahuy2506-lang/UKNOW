@@ -111,6 +111,41 @@ class CampaignNodeRegistryService {
         exampleConfig: {},
       },
 
+      read_form_submissions: {
+        nodeType: 'data',
+        name: 'Dữ liệu Biểu mẫu',
+        description: 'Lấy người đã điền và đồng ý nhận tin từ một biểu mẫu (form) đã tạo',
+        color: '#FCE4EC',
+        configRequired: true,
+        configSchema: {
+          formId: {
+            type: 'number',
+            required: true,
+            label: 'Biểu mẫu',
+          },
+          fieldMap: {
+            type: 'object',
+            label: 'Ánh xạ trường (họ tên/email/SĐT)',
+            description: 'Để trống = lấy theo vai trò (role) của trường trong form',
+          },
+          dataSelectedColumns: {
+            type: 'array',
+            label: 'Cột dữ liệu cần lấy',
+          },
+          formSubmissionsLimit: {
+            type: 'number',
+            default: 1000,
+            label: 'Số lượng tối đa',
+          },
+        },
+        exampleConfig: {
+          formId: null,
+          fieldMap: {},
+          dataSelectedColumns: [],
+          formSubmissionsLimit: 1000,
+        },
+      },
+
       select_zalo_account: {
         nodeType: 'data',
         name: 'Chọn tài khoản Zalo',

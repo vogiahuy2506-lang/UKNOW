@@ -24,5 +24,6 @@ router.delete('/:id', formController.delete.bind(formController));
 router.put('/:id/publish', formController.publish.bind(formController));
 router.get('/:id/submissions', formController.submissions.bind(formController));
 router.post('/:id/submissions/:submissionId/cancel', formController.cancelSubmission.bind(formController));
+router.get('/:id/campaign-preview', formController.campaignPreview.bind(formController));
 
 export default router;

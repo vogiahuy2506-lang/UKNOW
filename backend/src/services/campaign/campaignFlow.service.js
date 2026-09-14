@@ -50,6 +50,9 @@ class CampaignFlowService {
     if (nodeSubtype === 'read_landing_leads') {
       return `Lấy dữ liệu landing page thành công (${fetched} lead)`;
     }
+    if (nodeSubtype === 'read_form_submissions') {
+      return `Lấy dữ liệu biểu mẫu thành công (${fetched} bài nộp)`;
+    }
     if (nodeSubtype === 'save_customer') {
       return `Lưu khách hàng xong (${inserted} mới, ${updated} cập nhật, ${unchanged} giữ nguyên, ${skipped} bỏ qua)`;
     }

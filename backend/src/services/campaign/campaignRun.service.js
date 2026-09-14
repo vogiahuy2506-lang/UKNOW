@@ -51,6 +51,7 @@ import {
 } from '../../utils/templateVariableAutoMap.util.js';
 import { findStaleCampaignRunReservations } from '../../repositories/sendQuota.repository.js';
 import { shouldReplaceRecipientProgressCache } from './recipientProgressCache.util.js';
+import { buildContinuousDataNodeItemKey } from '../../utils/campaignContinuousDedupKey.util.js';
 
 export const EMAIL_API_DELAY_MIN_MS = 50;
 export const EMAIL_API_DELAY_MAX_MS = 250;
@@ -1240,78 +1241,9 @@ class CampaignRunService {
         return Array.from(dedupMap.values());
       };
       const continuousNodeDataState = new Map();
-      const canonicalizeComparableValue = (value) => {
-        if (Array.isArray(value)) {
-          return value.map((item) => canonicalizeComparableValue(item));
-        }
-        if (value && typeof value === 'object') {
-          return Object.keys(value)
-            .sort()
-            .reduce((acc, key) => {
-              acc[key] = canonicalizeComparableValue(value[key]);
-              return acc;
-            }, {});
-        }
-        return value;
-      };
-      const stringifyComparableItem = (item) => {
-        if (item == null) return '';
-        if (typeof item !== 'object') return String(item);
-        try {
-          return JSON.stringify(canonicalizeComparableValue(item));
-        } catch {
-          return String(item);
-        }
-      };
-      /**
-       * Tạo khóa dedupe cho các node dữ liệu trong continuous mode.
-       *
-       * Luồng hoạt động:
-       * 1. Ưu tiên khóa nghiệp vụ ổn định theo từng node (customerId/uid/courseId...).
-       * 2. Fallback về fingerprint object để tránh mất bản ghi khi thiếu khóa chính.
-       *
-       * @param {string} nodeSubtype subtype node hiện tại
-       * @param {Record<string, any>} item bản ghi dữ liệu
-       * @returns {string}
-       */
-      const buildContinuousDataNodeItemKey = (nodeSubtype, item = {}) => {
-        const subtype = String(nodeSubtype || '').trim().toLowerCase();
-        const row = item && typeof item === 'object' ? item : {};
-        if (subtype === 'read_courses_db') {
-          const courseId = row.id ?? row.courseId ?? row.course_code ?? row.courseCode;
-          if (courseId != null && String(courseId).trim()) return `course:${String(courseId).trim()}`;
-        }
-        if (subtype === 'read_products_db') {
-          const productId = row.id ?? row.productId ?? row.product_code ?? row.productCode;
-          if (productId != null && String(productId).trim()) return `product:${String(productId).trim()}`;
-        }
-        if (subtype === 'get_all_friends') {
-          const uid = row.uid ?? row.zalo_id ?? row.zaloId ?? row.id;
-          if (uid != null && String(uid).trim()) return `friend_uid:${String(uid).trim()}`;
-          const phone = row.phone ?? row.phoneNumber ?? row.zaloPhone;
-          if (phone != null && String(phone).trim()) return `friend_phone:${String(phone).trim()}`;
-        }
-        if (subtype === 'read_interested_customers' || subtype === 'interested_customers') {
-          const customerId = row.id_customer ?? row.customer_id ?? row.customerId ?? row.id;
-          if (customerId != null && String(customerId).trim()) return `customer:${String(customerId).trim()}`;
-          const email = String(row.email || '').trim().toLowerCase();
-          const phone = String(row.phone || '').trim();
-          if (email || phone) return `customer_contact:${email}|${phone}`;
-        }
-        if (subtype === 'read_sheet' || subtype === 'google_sheet') {
-          const email = String(row.email || '').trim().toLowerCase();
-          const phone = String(row.phone || row.dien_thoai || '').trim();
-          if (email || phone) return `sheet_contact:${email}|${phone}`;
-        }
-        if (subtype === 'read_landing_leads') {
-          const leadId = row.leadId ?? row.id ?? row.lead_id;
-          if (leadId != null && String(leadId).trim()) return `lead:${String(leadId).trim()}`;
-          const email = String(row.email || '').trim().toLowerCase();
-          const phone = String(row.phone || '').trim();
-          if (email || phone) return `lead_contact:${email}|${phone}`;
-        }
-        return `raw:${stringifyComparableItem(row)}`;
-      };
+      // buildContinuousDataNodeItemKey: tách thành hàm export riêng ở
+      // utils/campaignContinuousDedupKey.util.js (có unit test) — bản cũ định nghĩa cục bộ trong
+      // closure này, không export, không cách nào test độc lập được (PR-6a review).
       /**
        * Merge output node dữ liệu theo chế độ continuous, chỉ giữ item mới.
        *
@@ -3045,6 +2977,7 @@ class CampaignRunService {
           'read_courses_db',
           'read_products_db',
           'read_landing_leads',
+          'read_form_submissions',
           'save_customer',
           'customer_segment',
         ]);
@@ -3205,7 +3138,7 @@ class CampaignRunService {
               continue;
             }
 
-        if (['read_sheet', 'google_sheet', 'read_interested_customers', 'interested_customers', 'read_courses_db', 'read_products_db', 'read_landing_leads'].includes(nodeSubtype)) {
+        if (['read_sheet', 'google_sheet', 'read_interested_customers', 'interested_customers', 'read_courses_db', 'read_products_db', 'read_landing_leads', 'read_form_submissions'].includes(nodeSubtype)) {
           const nodeDataPack = await executeWithTimeoutRetry({
             operationName: `data_node_${nodeSubtype || 'read_data'}`,
             operation: () => campaignNodeDataService.getCustomersFromDataNode(node, userId, nodes),

@@ -43,6 +43,14 @@ jest.unstable_mockModule('../../queue/outboundMessageQueue.service.js', () => ({
   OUTBOUND_MESSAGE_JOB_TYPES: {},
 }));
 
+// PR-6a: campaignNodeData.service.js nhập formService (case read_form_submissions) — file test
+// này không cần nó nên chặn ở mock, tránh phải tải nguyên chuỗi import thật của form.service.js
+// (kéo theo formSubmission.util.js -> lead.service.js parseMarketingConsent không khớp mock rỗng
+// ở trên).
+jest.unstable_mockModule('../../form.service.js', () => ({
+  default: {},
+}));
+
 const { default: campaignNodeDataService } = await import('../campaignNodeData.service.js');
 
 const VALID_SHEET_URL = 'https://docs.google.com/spreadsheets/d/testSpreadsheetId123/edit';

@@ -22,6 +22,8 @@ import {
 import { sendSystemEmail, SENDER_NAME } from '../utils/systemEmail.util.js';
 import { logError } from '../utils/logger.util.js';
 import { escapeHtml } from '../utils/htmlEscape.util.js';
+import { mapFormSubmissionToCampaignItem } from '../utils/formCampaignItem.util.js';
+import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 
 const MAX_SLOTS_DAYS_PARAM = 31;
 const DEFAULT_SLOTS_DAYS_PARAM = 7;
@@ -556,6 +558,85 @@ class FormService {
     }
 
     return { accessToken: submission.accessToken, isBotTrap: false };
+  }
+
+  /**
+   * Tìm form theo id + chủ workspace, ném lỗi rõ ràng (404) nếu không có — dùng CHUNG cho node
+   * chiến dịch "Lấy dữ liệu từ biểu mẫu" (PR-6a) và API preview của nó, để cả hai đường đều báo
+   * lỗi giống nhau khi form đã bị xoá / không thuộc workspace, thay vì trả rỗng lặng lẽ.
+   *
+   * @param {number} formId
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<object>}
+   */
+  async getOwnedFormOrThrow(formId, workspaceOwnerId) {
+    const form = await formRepository.findFormByIdAndOwner(formId, workspaceOwnerId);
+    if (!form) {
+      throw createHttpError(
+        'Biểu mẫu đã bị xoá hoặc không thuộc quyền quản lý của bạn',
+        404,
+        'FORM_NOT_FOUND'
+      );
+    }
+    return form;
+  }
+
+  /**
+   * Dữ liệu cho node chiến dịch "Lấy dữ liệu từ biểu mẫu" (PR-6a): bài nộp đã đồng ý nhận tin,
+   * chưa huỷ, ánh xạ thành item phẳng theo `fieldMap`/field.key (formCampaignItem.util.js).
+   * `workspaceOwnerId` LUÔN là chủ workspace (kể cả chiến dịch do nhân viên tạo/chạy — xem
+   * campaign.controller.js executionUserId = campaign_owner_id || workspaceContext.workspaceOwnerId),
+   * KHÔNG phải người tạo chiến dịch, đúng cách `read_landing_leads` đã dùng `userId`.
+   *
+   * @param {number} formId
+   * @param {number} workspaceOwnerId
+   * @param {{ fieldMap?: object, limit?: number|string }} [options]
+   * @returns {Promise<{ items: Array<object>, form: object }>}
+   */
+  async getCampaignDataForForm(formId, workspaceOwnerId, { fieldMap = {}, limit } = {}) {
+    const form = await this.getOwnedFormOrThrow(formId, workspaceOwnerId);
+    const safeLimit = clampLandingLeadsLimit(limit, 1000);
+    const rows = await formRepository.listConsentedSubmissionsForCampaign(form.id, workspaceOwnerId, safeLimit);
+    const items = rows.map((row) => mapFormSubmissionToCampaignItem(row, form.fields, fieldMap));
+    return { items, form };
+  }
+
+  /**
+   * Preview bài nộp cho khung cấu hình node (PR-6b dùng) — mô phỏng lead.controller.js
+   * preview (`:68-90`): `{ items, columns, pagination: { total, limit, fetched } }`.
+   * `columns` lấy từ `fields` HIỆN TẠI của form (không phải fieldMap) để PR-6b hiện nhãn cho
+   * người dùng chọn ánh xạ.
+   *
+   * @param {number} formId
+   * @param {number} workspaceOwnerId
+   * @param {{ limit?: number|string }} [options]
+   * @returns {Promise<{ items: Array<object>, columns: Array<object>, pagination: object }>}
+   */
+  async getCampaignPreviewForForm(formId, workspaceOwnerId, { limit } = {}) {
+    const form = await this.getOwnedFormOrThrow(formId, workspaceOwnerId);
+    const safeLimit = clampLandingLeadsLimit(limit, 1000);
+
+    const [rows, total] = await Promise.all([
+      formRepository.listConsentedSubmissionsForCampaign(form.id, workspaceOwnerId, safeLimit),
+      formRepository.countConsentedSubmissionsForCampaign(form.id, workspaceOwnerId),
+    ]);
+
+    const items = rows.map((row) => mapFormSubmissionToCampaignItem(row, form.fields, {}));
+    const columns = (Array.isArray(form.fields) ? form.fields : []).map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type,
+    }));
+
+    return {
+      items,
+      columns,
+      pagination: {
+        total,
+        limit: safeLimit,
+        fetched: items.length,
+      },
+    };
   }
 }
 

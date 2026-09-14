@@ -706,6 +706,62 @@ class FormRepository {
       totalPages: Math.ceil(total / parsedPageSize) || 1,
     };
   }
+
+  /**
+   * Bài nộp đủ điều kiện đưa vào node chiến dịch "Lấy dữ liệu từ biểu mẫu" (PR-6a):
+   * thuộc đúng form + đúng chủ workspace, đã đồng ý nhận tin (marketing_consent IS TRUE),
+   * chưa huỷ (status <> 'cancelled'). Xếp created_at tăng dần (bài cũ trước — khớp thứ tự
+   * "chạy liên tục: lần sau chỉ lấy thêm bài mới" của continuous mode).
+   *
+   * @param {number} formId
+   * @param {number} workspaceOwnerId
+   * @param {number} limit
+   * @returns {Promise<Array<object>>}
+   */
+  async listConsentedSubmissionsForCampaign(formId, workspaceOwnerId, limit) {
+    const result = await db.query(
+      `SELECT
+         s.id,
+         s.form_id AS "formId",
+         s.answers,
+         s.respondent_name AS "respondentName",
+         s.respondent_email AS "respondentEmail",
+         s.respondent_phone AS "respondentPhone",
+         s.marketing_consent AS "marketingConsent",
+         s.appointment_at AS "appointmentAt",
+         s.created_at AS "createdAt"
+       FROM form_submissions s
+       WHERE s.form_id = $1
+         AND s.workspace_owner_id = $2
+         AND s.marketing_consent IS TRUE
+         AND s.status <> 'cancelled'
+       ORDER BY s.created_at ASC
+       LIMIT $3`,
+      [formId, workspaceOwnerId, limit]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Tổng số bài nộp khớp cùng điều kiện của `listConsentedSubmissionsForCampaign` (không giới
+   * hạn LIMIT) — dùng cho `pagination.total` của API preview.
+   *
+   * @param {number} formId
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<number>}
+   */
+  async countConsentedSubmissionsForCampaign(formId, workspaceOwnerId) {
+    const result = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM form_submissions
+       WHERE form_id = $1
+         AND workspace_owner_id = $2
+         AND marketing_consent IS TRUE
+         AND status <> 'cancelled'`,
+      [formId, workspaceOwnerId]
+    );
+    return result.rows[0]?.total || 0;
+  }
 }
 
 export default new FormRepository();

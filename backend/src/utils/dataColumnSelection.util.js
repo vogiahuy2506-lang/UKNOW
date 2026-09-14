@@ -9,6 +9,10 @@ const ALWAYS_KEEP_BY_KIND = {
   interested: ['customerId', 'id'],
   landing: ['leadId', 'id'],
   courses_db: [],
+  // PR-6a (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md): landing chỉ giữ leadId/id là lỗ đã
+  // biết (không chọn cột email/phone thì node gửi không tìm được người nhận) — form KHÔNG lặp
+  // lại lỗ đó, giữ luôn cả 3 khoá liên hệ.
+  form: ['submissionId', 'id', 'email', 'phone', 'fullName'],
 };
 
 /**
@@ -40,7 +44,7 @@ export function normalizeDataSelectedColumns(raw) {
  *
  * @param {Array<Record<string, unknown>>} items
  * @param {unknown} rawSelectedColumns config.dataSelectedColumns
- * @param {'sheet'|'interested'|'landing'|'courses_db'} kind
+ * @param {'sheet'|'interested'|'landing'|'courses_db'|'form'} kind
  * @returns {{ items: Array<Record<string, unknown>>, dataLoadMeta: object }}
  */
 export function applyDataColumnSelectionToItems(items, rawSelectedColumns, kind = 'sheet') {

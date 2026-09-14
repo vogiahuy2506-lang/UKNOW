@@ -16,6 +16,7 @@ import {
 } from '../../utils/readSheetConfig.util.js';
 import { applyDataColumnSelectionToItems } from '../../utils/dataColumnSelection.util.js';
 import { isEmailHeader, isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
+import formService from '../form.service.js';
 
 /**
  * Số khách tối đa mỗi transaction khi lưu batch (BEGIN…COMMIT).
@@ -208,6 +209,22 @@ class CampaignNodeDataService {
           idUser: userId,
         });
         return applyDataColumnSelectionToItems(landingItems, config.dataSelectedColumns, 'landing');
+      }
+
+      case 'read_form_submissions': {
+        // Lỗi form đã bị xoá / không thuộc workspace (FormService.getOwnedFormOrThrow) BAY
+        // NGUYÊN lên đây — KHÔNG bắt/nuốt thành rỗng, để campaignRun.service.js's catch-all
+        // (_doExecuteCampaign) đánh failRun(runId, error.message), người dùng thấy lỗi rõ thay
+        // vì chiến dịch chạy xong 0 người nhận trong im lặng (PR-6a phản biện điểm 4).
+        const formIdNum = Number.parseInt(config.formId, 10);
+        if (!Number.isFinite(formIdNum)) {
+          throw new Error('Chưa chọn biểu mẫu cho node "Dữ liệu Biểu mẫu"');
+        }
+        const { items: formItems } = await formService.getCampaignDataForForm(formIdNum, userId, {
+          fieldMap: config.fieldMap,
+          limit: config.formSubmissionsLimit,
+        });
+        return applyDataColumnSelectionToItems(formItems, config.dataSelectedColumns, 'form');
       }
 
       case 'read_courses_db': {

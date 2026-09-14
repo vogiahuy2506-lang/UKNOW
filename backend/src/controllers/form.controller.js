@@ -234,6 +234,41 @@ class FormController {
       });
     }
   }
+
+  /**
+   * GET /api/forms/:id/campaign-preview?limit=
+   * Preview bài nộp cho khung cấu hình node chiến dịch "Lấy dữ liệu từ biểu mẫu" (PR-6a → PR-6b).
+   */
+  async campaignPreview(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const id = Number.parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID biểu mẫu không hợp lệ',
+          code: 'INVALID_ID',
+        });
+      }
+
+      const result = await formService.getCampaignPreviewForForm(id, workspaceContext.workspaceOwnerId, {
+        limit: req.query?.limit,
+      });
+
+      return res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.campaignPreview]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải dữ liệu biểu mẫu cho chiến dịch',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
 }
 
 export default new FormController();
