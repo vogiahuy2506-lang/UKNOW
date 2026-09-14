@@ -81,6 +81,47 @@ describe('contactDetect.util — extractContacts', () => {
     ]);
   });
 
+  // 14/09/2026: khách gõ "liên hệ tôi qua số 844790999" (mất số 0), bot hiểu nhưng máy quét bỏ qua.
+  describe('số 9 chữ số mất số 0 đầu — chỉ nhận khi có ngữ cảnh liên hệ quanh đó', () => {
+    it('có từ liên hệ đứng trước → nhận và phục hồi số 0', () => {
+      expect(extractContacts('liên hệ trực tiếp tôi qua số 844790999')).toEqual([
+        { type: 'phone', value: '0844790999', raw: '844790999' },
+      ]);
+      expect(extractContacts('gọi 912 345 678 nhé')).toEqual([
+        { type: 'phone', value: '0912345678', raw: '912 345 678' },
+      ]);
+      expect(extractContacts('sdt: 987.654.321')).toEqual([
+        { type: 'phone', value: '0987654321', raw: '987.654.321' },
+      ]);
+    });
+
+    it('từ liên hệ đứng sau cũng tính', () => {
+      expect(extractContacts('912345678 là zalo của mình')).toEqual([
+        { type: 'phone', value: '0912345678', raw: '912345678' },
+      ]);
+    });
+
+    it('không có ngữ cảnh liên hệ → bỏ qua (mã đơn, mã khách)', () => {
+      expect(extractContacts('Mã đơn hàng 912345678')).toEqual([]);
+      expect(extractContacts('Mã khách 987654321 đã thanh toán')).toEqual([]);
+    });
+
+    it('có ngữ cảnh nhưng không đúng dạng di động → bỏ qua', () => {
+      // đầu số 2 không phải di động
+      expect(extractContacts('gọi số 212345678')).toEqual([]);
+      // dãy dài hơn 9 chữ số
+      expect(extractContacts('số 123456789012')).toEqual([]);
+      // ngữ cảnh nằm ngoài cửa sổ 24 ký tự trước
+      expect(extractContacts('liên hệ ......................................... 912345678')).toEqual([]);
+    });
+
+    it('không trùng với tầng có tiền tố: cùng số viết hai kiểu chỉ ra một phần tử', () => {
+      expect(extractContacts('số 0912345678 hoặc 912345678')).toEqual([
+        { type: 'phone', value: '0912345678', raw: '0912345678' },
+      ]);
+    });
+  });
+
   it('xử lý an toàn khi tin nhắn rỗng hoặc không có chuỗi string', () => {
     expect(extractContacts('')).toEqual([]);
     expect(extractContacts('   ')).toEqual([]);

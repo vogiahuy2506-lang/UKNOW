@@ -4,12 +4,26 @@ import {
 } from './vietnamesePhone.util.js';
 
 /**
- * Regex ứng viên số điện thoại di động Việt Nam:
- * Yêu cầu có tiền tố rõ ràng (+84, 84, 0, hoặc có ngoặc như (0..., (+84...)
+ * Tầng A — số điện thoại có tiền tố rõ ràng (+84, 84, 0, hoặc có ngoặc như (0..., (+84...)
  * theo sau bởi đúng 9 chữ số (cho phép khoảng trắng, chấm, gạch, ngoặc xen giữa),
- * và ký tự kết thúc không được là chữ số tiếp theo.
+ * và ký tự kết thúc không được là chữ số tiếp theo. Luôn nhận, không cần ngữ cảnh.
  */
 const PHONE_CANDIDATE_REGEX = /(?:\+84|(?<!\d)84|(?<!\d)0|\((?:\+84|84|0))(?:[\s.\-()]*\d){9}(?!\d)/g;
+
+/**
+ * Tầng B — số 9 chữ số dạng di động Việt Nam bị MẤT số 0 đầu ("844790999", "912 345 678").
+ * Khách gõ thiếu số 0 là chuyện rất thường (14/09/2026: khách gõ "liên hệ tôi qua số 844790999",
+ * bot tự hiểu là 0844790999 nhưng máy quét bỏ qua). Chỉ nhận khi CÓ NGỮ CẢNH LIÊN HỆ ở gần
+ * (xem CONTACT_CONTEXT_REGEX) để "Mã đơn hàng 912345678" không thành số điện thoại.
+ * Không được đứng ngay sau chữ số hoặc dấu + (khi đó tầng A đã lo, hoặc là dãy số dài).
+ */
+const BARE_PHONE_CANDIDATE_REGEX = /(?<![\d+])[35789](?:[\s.\-]*\d){8}(?![\s.\-]*\d)/g;
+
+/** Từ ngữ cho thấy dãy số bên cạnh là số liên hệ. Chỉ soi trong cửa sổ hẹp quanh dãy số. */
+const CONTACT_CONTEXT_REGEX =
+  /(số|sđt|sdt|đt|điện thoại|dien thoai|phone|tel|zalo|gọi|goi|alo|liên hệ|lien he|contact|call|hotline|nhắn|nhan tin|mobile|di động|di dong|viber|whatsapp|telegram)/i;
+const CONTEXT_BEFORE_CHARS = 24;
+const CONTEXT_AFTER_CHARS = 16;
 
 /**
  * Regex địa chỉ email tiêu chuẩn trong văn bản tự do
@@ -17,6 +31,12 @@ const PHONE_CANDIDATE_REGEX = /(?:\+84|(?<!\d)84|(?<!\d)0|\((?:\+84|84|0))(?:[\s
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 
 const MAX_EMAIL_LENGTH = 254;
+
+function hasContactContext(text, start, end) {
+  const before = text.slice(Math.max(0, start - CONTEXT_BEFORE_CHARS), start);
+  const after = text.slice(end, end + CONTEXT_AFTER_CHARS);
+  return CONTACT_CONTEXT_REGEX.test(before) || CONTACT_CONTEXT_REGEX.test(after);
+}
 
 /**
  * Nhận diện và trích xuất số điện thoại / email khách để lại trong văn bản hội thoại.
@@ -33,21 +53,24 @@ export function extractContacts(text) {
   const results = [];
   const seenValues = new Set();
 
-  // 1. Quét số điện thoại
-  const phoneMatches = text.matchAll(PHONE_CANDIDATE_REGEX);
-  for (const match of phoneMatches) {
-    const raw = match[0].trim();
+  const pushPhone = (raw) => {
     const normalized = normalizeVietnamesePhone(raw);
-    if (isValidVietnamesePhone(normalized)) {
-      if (!seenValues.has(normalized)) {
-        seenValues.add(normalized);
-        results.push({
-          type: 'phone',
-          value: normalized,
-          raw,
-        });
-      }
-    }
+    if (!isValidVietnamesePhone(normalized) || seenValues.has(normalized)) return;
+    seenValues.add(normalized);
+    results.push({ type: 'phone', value: normalized, raw });
+  };
+
+  // 1A. Số điện thoại có tiền tố rõ ràng
+  for (const match of text.matchAll(PHONE_CANDIDATE_REGEX)) {
+    pushPhone(match[0].trim());
+  }
+
+  // 1B. Số 9 chữ số mất số 0 đầu, chỉ khi có ngữ cảnh liên hệ quanh đó
+  for (const match of text.matchAll(BARE_PHONE_CANDIDATE_REGEX)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (!hasContactContext(text, start, end)) continue;
+    pushPhone(match[0].trim());
   }
 
   // 2. Quét email
