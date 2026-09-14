@@ -20,7 +20,7 @@ import subAssistantService from './subAssistant.service.js';
 import ragEngineService from './ragEngine.service.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import chatRouterService from './chatRouter.service.js';
-import { detectOffTopicReply } from '../../utils/aiOffTopicReply.util.js';
+import { detectOffTopicReply, buildOffTopicFallback } from '../../utils/aiOffTopicReply.util.js';
 
 const log = (...args) => console.log('[WhatsApp/Baileys/Inbox]', ...args);
 
