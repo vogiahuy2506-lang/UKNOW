@@ -283,7 +283,11 @@ class ChatRouterService {
       casual: 'Than thien nhung thoai mai, co the dung tieng long nhe.',
     };
 
-    let prompt = `Ban la ${name} — mot tro li AI thong minh.
+    let moTaBlock = '';
+    if (chatbot?.description) {
+      moTaBlock = `\n\n## MO TA\n${chatbot.description}`;
+    }
+    let prompt = `Ban la ${name} — mot tro li AI thong minh.${moTaBlock}
 
 ## CACH HOAT DONG
 - Tra loi cau hoi dua tren Knowledge Base duoc huấn luyen ben duoi
@@ -603,19 +607,33 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         return '';
       });
 
-      const systemPrompt = `Ban la ${chatbot.name || 'Tro li AI'}.
-
-## MO TA
-${chatbot.description || 'Mot tro li AI huu ich.'}
-
-## HUONG DAN
-${chatbot.system_instruction || 'Hay tra loi cau hoi mot cach huu ich va than thien.'}
-${ragContext ? '\n\n' + ragContext : ''}
-
-## QUY TAC
-- Tra loi bang tieng Viet
-- Khong dung markdown bold/italic
-- Neu khong biet, hay noi ro`;
+      // Build system prompt qua chatRouter.buildSystemPrompt chung để đảm bảo
+      // đồng bộ rule anti-hallucination ('KHONG tu nhan la WhatsApp/Zalo/...') +
+      // rule xưng tên ('LUON xung ten la ${name}') giống các kênh channel khác.
+      // Trước đó Studio path tự build prompt ở đây, dễ quên rule — sửa bằng cách
+      // refactor dùng cùng helper. Chatbot name + description + system_instruction
+      // + description_map lần lượt map vào `subAssistant` / `settings` / `chatbot`.
+      const ownSettings = {
+        welcome_message: chatbot.welcome_message,
+        // response_style trên custom_chatbots không tồn tại — để undefined,
+        // buildSystemPrompt sẽ fallback 'friendly'.
+        system_instruction: chatbot.system_instruction,
+      };
+      const ownSubAssistant = chatbot.description
+        ? {
+            name: chatbot.name,
+            greeting_msg: null,
+            description: chatbot.description,
+          }
+        : null;
+      const systemPrompt = this.buildSystemPrompt({
+        subAssistant: ownSubAssistant,
+        settings: ownSettings,
+        chatbot: { name: chatbot.name },
+        ragContext,
+        profileContext: '',
+        isFirstMessage: chatHistory.length === 0,
+      });
 
       const response = await this._callAI({
         userId: ownerId,
