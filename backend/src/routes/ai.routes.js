@@ -66,6 +66,12 @@ router.get('/sessions/:id/messages', requirePermission('ai_assistant_use'), aiCo
 router.delete('/sessions/:id', requirePermission('ai_assistant_use'), aiController.deleteSession.bind(aiController));
 // Wizard state mutation từ nút bấm (không gọi AI → không aiLimiter, không credit)
 router.patch('/sessions/:id/wizard-state', requirePermission('ai_assistant_use'), aiController.patchWizardState.bind(aiController));
+// Cập nhật data (landingPageId/slug/isPublished) của thẻ landing trong phiên, sau khi lưu qua
+// /admin/landing-pages — không AI, không credit (PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md)
+router.patch('/sessions/:id/landing-message', requirePermission('ai_assistant_use'), aiController.patchLandingMessage.bind(aiController));
+
+// Dán HTML có sẵn vào phiên chat — không AI, không credit (cùng plan trên, Việc 1.1)
+router.post('/landing-from-html', requirePermission('ai_assistant_use'), aiController.landingFromHtml.bind(aiController));
 
 // Trích xuất danh sách người nhận từ tệp bảng tính
 router.post('/extract-recipients', requirePermission('ai_assistant_use'), aiController.extractRecipients.bind(aiController));

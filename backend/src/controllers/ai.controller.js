@@ -42,6 +42,10 @@ import { generateSystemInstruction as generateChatbotSystemInstruction } from '.
 
 const SUPPORTED_SYSTEM_INSTRUCTION_LANGUAGES = ['vi', 'en'];
 
+// PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md, Việc 1.2 — patchLandingMessage() chỉ nhận
+// đúng 3 khoá này trong data, bỏ qua mọi khoá khác client gửi lên.
+const LANDING_MESSAGE_PATCH_KEYS = ['landingPageId', 'slug', 'isPublished'];
+
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
     success: false,
@@ -614,6 +618,113 @@ class AiController {
     } catch (error) {
       console.error('Delete session error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi khi xóa session' });
+    }
+  }
+
+  /**
+   * POST /ai/landing-from-html — dán nguyên một trang HTML vào phiên chat, KHÔNG qua AI, KHÔNG
+   * trừ credit (PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md, Việc 1.1).
+   *
+   * Dùng req.user.id (không phải resolveWorkspaceOwnerId) cho session/message — cùng khuôn
+   * generateLandingHtml():1371 (người tạo landing_page message gần nhất trong cùng luồng này),
+   * để Việc 1.2 (patchLandingMessage) tìm đúng session vừa tạo ở đây khi người dùng đang ở
+   * context nhân viên (resolveWorkspaceOwnerId sẽ trả ID khác req.user.id trong trường hợp đó).
+   */
+  async landingFromHtml(req, res) {
+    try {
+      const { sessionId, html, title } = req.body || {};
+      const rawHtml = typeof html === 'string' ? html : '';
+      if (!rawHtml.includes('<')) {
+        return res.status(400).json({ success: false, message: 'Nội dung dán vào chưa phải HTML' });
+      }
+      if (rawHtml.length > 500000) {
+        return res.status(400).json({ success: false, message: 'HTML quá dài (tối đa 500.000 ký tự)' });
+      }
+
+      const titleMatch = rawHtml.match(/<title[^>]*>([^<]*)<\/title>/i);
+      const nowLabel = new Date().toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23', // h23 = 0–23; hour12:false từng render nửa đêm thành "24" (xem scheduler.js)
+        timeZone: 'Asia/Ho_Chi_Minh',
+      });
+      const resolvedTitle = String(title || '').trim()
+        || String(titleMatch?.[1] || '').trim()
+        || `Landing dán vào lúc ${nowLabel}`;
+
+      let sid = Number(sessionId);
+      let sessionTitle = resolvedTitle;
+      if (Number.isFinite(sid) && sid > 0) {
+        const row = await aiSessionRepo.getSessionWizardState(sid, req.user.id);
+        if (!row) {
+          return res.status(404).json({ success: false, message: 'Session không tồn tại' });
+        }
+      } else {
+        const session = await aiSessionRepo.createSession(req.user.id, resolvedTitle);
+        sid = session.id;
+        sessionTitle = session.title;
+      }
+
+      // Bẫy 1 của plan: KHÔNG lưu HTML vào tin user — lịch sử phiên được gửi nguyên cho Gemini
+      // mỗi lượt chat sau đó, HTML nằm trong tin user sẽ đi kèm mọi câu hỏi kế tiếp.
+      const userContent = `[Dán HTML có sẵn: "${resolvedTitle}", ${rawHtml.length} ký tự]`;
+      const assistantMsg = {
+        content: `Đã nhận trang HTML "${resolvedTitle}". Bạn có thể xem trước, nhờ mình sửa, hoặc lưu và xuất bản ngay tại đây.`,
+        type: 'landing_page',
+        data: { title: resolvedTitle, html: rawHtml, source: 'pasted' },
+      };
+      await aiSessionRepo.saveMessages(sid, req.user.id, userContent, assistantMsg);
+
+      return res.json({ success: true, data: { sessionId: sid, sessionTitle, message: assistantMsg } });
+    } catch (error) {
+      console.error('Landing from HTML error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi khi nhận trang HTML' });
+    }
+  }
+
+  /**
+   * PATCH /ai/sessions/:id/landing-message — cập nhật data của thẻ landing_page trong phiên sau
+   * khi đã lưu/xuất bản qua POST /admin/landing-pages, KHÔNG qua AI, KHÔNG trừ credit
+   * (PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md, Việc 1.2). Whitelist ĐÚNG 3 khoá —
+   * updateLandingPageMessage() đã merge bằng jsonb `||` (không ghi đè), không cần sửa gì ở đó.
+   */
+  async patchLandingMessage(req, res) {
+    try {
+      const sessionId = Number(req.params.id);
+      if (!Number.isFinite(sessionId)) {
+        return res.status(400).json({ success: false, message: 'Session id không hợp lệ' });
+      }
+      const { messageId, data } = req.body || {};
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return res.status(400).json({ success: false, message: 'Thiếu data để cập nhật' });
+      }
+      const patch = {};
+      for (const key of LANDING_MESSAGE_PATCH_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+          patch[key] = data[key];
+        }
+      }
+      if (!Object.keys(patch).length) {
+        return res.status(400).json({
+          success: false,
+          message: 'data phải có ít nhất một trong landingPageId/slug/isPublished',
+        });
+      }
+
+      const row = await aiSessionRepo.getSessionWizardState(sessionId, req.user.id);
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Session không tồn tại' });
+      }
+
+      const updated = await aiSessionRepo.updateLandingPageMessage(sessionId, req.user.id, patch, messageId);
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy tin landing_page để cập nhật' });
+      }
+
+      return res.json({ success: true, data: patch });
+    } catch (error) {
+      console.error('Patch landing message error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi khi cập nhật thông tin trang đã lưu' });
     }
   }
 
