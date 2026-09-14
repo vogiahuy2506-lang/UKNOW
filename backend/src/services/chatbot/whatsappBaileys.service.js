@@ -593,6 +593,27 @@ export async function connectSession(sessionKey) {
   };
   sessions.set(sessionKey, record);
 
+  // Auto-register chatbot inbox handler. Bug trước đó: chỉ controller
+  // `whatsappBaileys.controller.js#connect` mới gọi
+  // `registerSessionHandlers(sessionKey)`. Khi session được tái tạo qua
+  // `restorePersistedSessions()` (boot) hoặc `performKeepAlive()` (sau
+  // crash), handler không bao giờ được đăng ký → `messages.upsert` vẫn
+  // emit trên emitter nhưng không ai nghe → AI không reply, user chỉ
+  // thấy "composing... paused" rồi im (do `maybeAutoReply` stub).
+  //
+  // Fix: subscribe ngay tại đây, là single entry-point cho mọi session
+  // creation. `registerSessionHandlers` đã idempotent nhờ flag
+  // `__baileysInboxRegistered` — gọi nhiều lần là no-op. Dynamic
+  // import để tránh vòng phụ thuộc (inbox import lại service này qua
+  // `listBaileysSessions`). Nếu inbox service throw (vd. lỗi import
+  // do thiếu file), chỉ log warning — không block session khởi tạo.
+  try {
+    const { registerSessionHandlers } = await import('./whatsappBaileysInbox.service.js');
+    registerSessionHandlers(sessionKey);
+  } catch (subErr) {
+    log(`[connectSession] could not auto-subscribe inbox handler for ${sessionKey}:`, subErr.message);
+  }
+
   try {
     record.socket = await buildSocket(sessionKey, emitter);
     return record;

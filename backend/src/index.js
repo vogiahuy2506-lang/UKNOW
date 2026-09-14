@@ -273,8 +273,16 @@ async function initializePostListenRuntime() {
       console.error('[Startup] Failed to start Zalo inbox restoration:', error.message);
     });
 
-    // Subscribe WhatsApp Baileys inbound handler — bắt buộc sau khi
-    // restorePersistedSessions hoàn tất (chạy ở top-level import).
+    // (Defensive) Register WhatsApp Baileys inbound handler cho mọi
+    // session hiện có. `connectSession()` (gọi bởi cả boot-time
+    // `restorePersistedSessions` lẫn controller `#connect`) đã tự
+    // auto-subscribe qua single source of truth; gọi lại ở đây là
+    // idempotent nhờ flag `__baileysInboxRegistered`. Giữ call này
+    // phòng trường hợp restorePersistedSessions fail ngầm (vd. lỗi
+    // DB, import cycle) nhưng vẫn có session cũ còn sống trong memory
+    // — handler sẽ được register ở tick này. Bỏ race-condition 3s
+    // so với việc register ngay sau khi restorePersistedSessions
+    // resolve.
     try {
       const { registerAllSessionHandlers } = await import('./services/chatbot/whatsappBaileysInbox.service.js');
       registerAllSessionHandlers();

@@ -29,14 +29,12 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.body?.sessionKey || req.body?.chatbotId || 'default');
+      // Inbox handler auto-subscribe bên trong `connectSession()` (single
+      // source of truth — áp dụng cho cả boot-time restorePersistedSessions
+      // lẫn user-initiated connect). Không cần gọi `registerSessionHandlers`
+      // ở đây nữa; gọi thêm vẫn idempotent nhờ flag
+      // `__baileysInboxRegistered` nhưng sẽ tạo log duplicate.
       const record = await whatsappBaileysService.connectSession(sessionKey);
-      // Subscribe chatbot inbound handler (chatRouter + persist).
-      try {
-        const { registerSessionHandlers } = await import('../services/chatbot/whatsappBaileysInbox.service.js');
-        registerSessionHandlers(sessionKey);
-      } catch (subErr) {
-        console.warn('[WhatsApp/Baileys] Could not subscribe inbox handler:', subErr.message);
-      }
       return res.json({
         success: true,
         data: {
