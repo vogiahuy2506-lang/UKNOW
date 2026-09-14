@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 import db from '../config/database.js';
-import formRepository from '../repositories/form.repository.js';
+import formRepository, {
+  MAX_FORM_RESPONDENT_EMAILS_PER_24H,
+  MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H,
+} from '../repositories/form.repository.js';
 import {
   normalizeFormFields,
   normalizeFormSettings,
@@ -231,10 +234,18 @@ class FormService {
    * @param {{ page?: number, pageSize?: number, date?: string|null }} pagination
    * @returns {Promise<object>}
    */
-  async getSubmissions(id, workspaceOwnerId, pagination) {
+  async getSubmissions(id, workspaceOwnerId, pagination = {}) {
     const existing = await formRepository.findFormByIdAndOwner(id, workspaceOwnerId);
     if (!existing) {
       throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+
+    // getVietnamDayRange (gọi trong repository) không tự kiểm định dạng — chuỗi rác như "abc" âm
+    // thầm biến thành "hôm nay", "2026-02-31" âm thầm biến thành 03/03. Kiểm khứ hồi TRƯỚC khi gọi
+    // (PR-2a review 14/09).
+    const { date } = pagination;
+    if (date !== undefined && date !== null && date !== '' && !isValidDateParam(date)) {
+      throw createHttpError('Tham số date không hợp lệ (định dạng YYYY-MM-DD)', 400, 'INVALID_DATE');
     }
 
     return formRepository.listSubmissionsByForm(id, workspaceOwnerId, pagination);
@@ -243,6 +254,12 @@ class FormService {
   /**
    * Huỷ một lượt đặt lịch/nộp bài (PR-2a việc 6b). Chỉ cho phép từ submitted/confirmed.
    * Bài không thuộc form này (kể cả form khác cùng chủ) hoặc form của chủ khác -> 404.
+   *
+   * Điều kiện trạng thái nguồn nằm NGAY TRONG câu UPDATE (nguyên tử) — PR-2a review 14/09: đọc
+   * trạng thái rồi mới UPDATE riêng (không điều kiện) để hai request huỷ CÙNG một lượt đồng thời
+   * có thể cả hai đều đọc thấy 'confirmed' trước khi cái nào update xong, khiến cả hai "thắng".
+   * Postgres tự khoá theo dòng khi hai UPDATE cùng where id — request thứ hai chỉ thấy status đã
+   * đổi SAU khi request đầu commit, nên chỉ đúng 1 trong 2 khớp điều kiện.
    *
    * @param {number} formId
    * @param {number} submissionId
@@ -255,18 +272,27 @@ class FormService {
       throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
     }
 
-    const submission = await formRepository.findSubmissionByIdAndForm(submissionId, formId, workspaceOwnerId);
-    if (!submission) {
-      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
-    }
-    if (submission.status === 'cancelled') {
-      throw createHttpError('Bài nộp này đã bị huỷ trước đó', 409, 'SUBMISSION_ALREADY_CANCELLED');
-    }
-    if (!['submitted', 'confirmed'].includes(submission.status)) {
-      throw createHttpError('Không thể huỷ bài nộp ở trạng thái này', 409, 'SUBMISSION_CANCEL_NOT_ALLOWED');
+    const updated = await formRepository.updateSubmissionStatus(
+      submissionId,
+      formId,
+      workspaceOwnerId,
+      'cancelled',
+      ['submitted', 'confirmed']
+    );
+    if (updated) {
+      return updated;
     }
 
-    return formRepository.updateSubmissionStatus(submissionId, formId, workspaceOwnerId, 'cancelled');
+    // 0 dòng khớp — đọc lại để phân biệt 404 (không tồn tại/không thuộc form|chủ này) hay 409
+    // (tồn tại nhưng status hiện tại không cho huỷ, kể cả vừa bị huỷ bởi request đồng thời khác).
+    const existing = await formRepository.findSubmissionByIdAndForm(submissionId, formId, workspaceOwnerId);
+    if (!existing) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+    if (existing.status === 'cancelled') {
+      throw createHttpError('Bài nộp này đã bị huỷ trước đó', 409, 'SUBMISSION_ALREADY_CANCELLED');
+    }
+    throw createHttpError('Không thể huỷ bài nộp ở trạng thái này', 409, 'SUBMISSION_CANCEL_NOT_ALLOWED');
   }
 
   /**
@@ -496,22 +522,37 @@ class FormService {
     // Thư xác nhận lịch hẹn cho người đặt (PR-2a việc 4) — chỉ khi có đặt lịch, có email, và
     // form bật settings.sendConfirmation (dùng CHUNG công tắc với thư xác nhận thường — tự chọn,
     // ghi trong báo cáo). Gửi sau khi đã COMMIT; chỉ ghi confirmation_sent_at khi gửi THÀNH CÔNG.
+    //
+    // Trần thư gửi người đặt (PLAN...#Trần thư gửi người đặt, bổ sung sau review PR-2a 14/09):
+    // lịch vẫn đặt được (201) dù vượt trần — chỉ bỏ gửi thư. Vượt trần thì logError CHỈ kèm form
+    // id, không ghi địa chỉ email ra log.
     if (bookingEnabled && validated.respondentEmail && form.settings?.sendConfirmation) {
-      const subject = `[${SENDER_NAME}] Xác nhận lịch hẹn - ${form.title}`;
-      const html = `
-        <h2>Đã xác nhận lịch hẹn của bạn</h2>
-        <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
-        <p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>
-      `;
+      const formEmailCount = await formRepository.countFormRespondentEmailsLast24h(form.id);
+      const recipientEmailCount = formEmailCount < MAX_FORM_RESPONDENT_EMAILS_PER_24H
+        ? await formRepository.countConfirmationEmailsForRecipientLast24h(validated.respondentEmail)
+        : 0;
 
-      void sendSystemEmail({
-        to: validated.respondentEmail,
-        subject,
-        html,
-      }).then(() => formRepository.markConfirmationSent(submission.id))
-        .catch((emailErr) => {
-          logError(`[FormService] Gửi thư xác nhận lịch hẹn thất bại cho submission ${submission.id}: ${emailErr.message}`);
-        });
+      if (formEmailCount >= MAX_FORM_RESPONDENT_EMAILS_PER_24H) {
+        logError(`[FormService] Bỏ gửi thư xác nhận cho form ${form.id} — đã vượt trần ${MAX_FORM_RESPONDENT_EMAILS_PER_24H} thư/24h`);
+      } else if (recipientEmailCount >= MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H) {
+        logError(`[FormService] Bỏ gửi thư xác nhận cho form ${form.id} — người nhận đã vượt trần ${MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H} thư xác nhận/24h`);
+      } else {
+        const subject = `[${SENDER_NAME}] Xác nhận lịch hẹn - ${form.title}`;
+        const html = `
+          <h2>Đã xác nhận lịch hẹn của bạn</h2>
+          <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
+          <p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>
+        `;
+
+        void sendSystemEmail({
+          to: validated.respondentEmail,
+          subject,
+          html,
+        }).then(() => formRepository.markConfirmationSent(submission.id))
+          .catch((emailErr) => {
+            logError(`[FormService] Gửi thư xác nhận lịch hẹn thất bại cho submission ${submission.id}: ${emailErr.message}`);
+          });
+      }
     }
 
     return { accessToken: submission.accessToken, isBotTrap: false };

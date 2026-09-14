@@ -43,6 +43,11 @@ jest.unstable_mockModule('../../repositories/form.repository.js', () => ({
     findFormByPublicKey: jest.fn().mockResolvedValue(mockForm),
     createSubmission: jest.fn().mockResolvedValue(mockCreatedSubmission),
   },
+  // form.service.js import 2 hằng trần thư (PR-2a review 14/09) trực tiếp từ module này — phải
+  // khai lại ở mock, không dùng tới trong test này (form không bật đặt lịch nên đường gửi thư
+  // xác nhận có kiểm trần không chạy tới), nhưng thiếu named export sẽ vỡ import.
+  MAX_FORM_RESPONDENT_EMAILS_PER_24H: 200,
+  MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H: 3,
 }));
 
 const { default: formService } = await import('../form.service.js');

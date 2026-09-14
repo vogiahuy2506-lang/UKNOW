@@ -22,6 +22,17 @@ export function occupiedSlotConditionSql(alias = '') {
   )`;
 }
 
+/**
+ * Trần thư gửi người đặt (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, "Trần thư gửi người đặt" —
+ * bổ sung sau review PR-2a 14/09). PR-2 là chỗ đầu tiên hệ thống gửi thư tới địa chỉ do người lạ
+ * gõ vào, cùng hộp gửi với thư thanh toán/hoá đơn — không có trần thì form có thể bị lợi dụng làm
+ * máy gửi spam mang tên hộp gửi hệ thống, hoặc dội bounce vì địa chỉ gõ sai. Hằng số đặt DUY NHẤT
+ * ở đây — `form.service.js` (đường gửi thư xác nhận) và `formBookingReminder.service.js` (cron
+ * nhắc) đều import từ đây, không tự định nghĩa lại.
+ */
+export const MAX_FORM_RESPONDENT_EMAILS_PER_24H = 200;
+export const MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H = 3;
+
 class FormRepository {
   /**
    * Lấy danh sách biểu mẫu theo workspace_owner_id kèm số bài nộp.
@@ -456,19 +467,31 @@ class FormRepository {
   }
 
   /**
-   * Đổi trạng thái một bài nộp (dùng cho huỷ lịch, PR-2a việc 6b).
+   * Đổi trạng thái một bài nộp (dùng cho huỷ lịch, PR-2a việc 6b). `fromStatuses` (nếu có) được
+   * kiểm NGAY TRONG câu UPDATE — nguyên tử, tránh race giữa hai request cùng đổi trạng thái một
+   * lượt (PR-2a review 14/09: huỷ 2 lần đồng thời trước đây có thể cả hai đều "thắng" vì
+   * updateSubmissionStatus không tự kiểm status hiện tại, chỉ service tự đọc-rồi-mới-update).
+   * 0 dòng khớp → gọi thêm `findSubmissionByIdAndForm` để phân biệt 404 (không tồn tại) hay 409
+   * (tồn tại nhưng status hiện tại không nằm trong `fromStatuses`).
    *
    * @param {number} submissionId
    * @param {number} formId
    * @param {number} workspaceOwnerId
    * @param {string} status
+   * @param {string[]|null} [fromStatuses] Chỉ đổi khi status HIỆN TẠI nằm trong danh sách này
    * @returns {Promise<object|null>}
    */
-  async updateSubmissionStatus(submissionId, formId, workspaceOwnerId, status) {
+  async updateSubmissionStatus(submissionId, formId, workspaceOwnerId, status, fromStatuses = null) {
+    const params = [submissionId, formId, workspaceOwnerId, status];
+    let statusGuard = '';
+    if (Array.isArray(fromStatuses) && fromStatuses.length > 0) {
+      params.push(fromStatuses);
+      statusGuard = ` AND status = ANY($${params.length}::varchar[])`;
+    }
     const result = await db.query(
       `UPDATE form_submissions
        SET status = $4, updated_at = NOW()
-       WHERE id = $1 AND form_id = $2 AND workspace_owner_id = $3
+       WHERE id = $1 AND form_id = $2 AND workspace_owner_id = $3${statusGuard}
        RETURNING
          id,
          form_id AS "formId",
@@ -476,9 +499,65 @@ class FormRepository {
          status,
          appointment_at AS "appointmentAt",
          updated_at AS "updatedAt"`,
-      [submissionId, formId, workspaceOwnerId, status]
+      params
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Số thư đã gửi cho người đặt (xác nhận + nhắc) của MỘT form trong 24h qua — trần theo form.
+   * Dùng CHUNG cho đường gửi thư xác nhận (form.service.js) và cron nhắc
+   * (formBookingReminder.service.js) qua đúng MAX_FORM_RESPONDENT_EMAILS_PER_24H ở trên.
+   *
+   * Index: lọc `form_id = $1` dùng được phần đầu của idx_form_submissions_form_created
+   * (form_id, created_at DESC) — nhưng điều kiện thời gian ở đây là confirmation_sent_at/
+   * reminder_sent_at (không phải created_at), nên phần lọc "trong 24h" chạy như Filter sau khi đã
+   * thu hẹp theo form_id, KHÔNG có Index Cond cho chính 24h đó. Chấp nhận vì đây là trần MỀM, số
+   * dòng mỗi form thường không lớn — nếu form nào có khối lượng bài nộp rất cao, nên thêm index
+   * riêng cho (form_id, confirmation_sent_at)/(form_id, reminder_sent_at) ở migration sau (không
+   * thêm ở đây theo đúng phạm vi review này — không migration mới).
+   *
+   * @param {number} formId
+   * @returns {Promise<number>}
+   */
+  async countFormRespondentEmailsLast24h(formId) {
+    const result = await db.query(
+      `SELECT COUNT(*)::int AS n
+       FROM form_submissions
+       WHERE form_id = $1
+         AND (
+           (confirmation_sent_at IS NOT NULL AND confirmation_sent_at > NOW() - INTERVAL '24 hours')
+           OR (reminder_sent_at IS NOT NULL AND reminder_sent_at > NOW() - INTERVAL '24 hours')
+         )`,
+      [formId]
+    );
+    return result.rows[0]?.n || 0;
+  }
+
+  /**
+   * Số thư XÁC NHẬN đã gửi cho MỘT địa chỉ email trong 24h qua, trên TOÀN HỆ THỐNG (không lọc
+   * theo form) — trần theo người nhận. So `lower(respondent_email)` để không lách bằng viết hoa.
+   *
+   * Index: KHÔNG có index nào trên `respondent_email` (kiểm `\d form_submissions` — chỉ có index
+   * theo form_id/workspace_owner_id/appointment_at/payment_code) → câu này quét toàn bảng
+   * form_submissions mỗi lần gọi. Ghi rõ trong báo cáo theo yêu cầu review — không tự thêm
+   * migration/index mới ở đây (ngoài phạm vi lần review này); nếu khối lượng bài nộp toàn hệ
+   * thống lớn lên, nên thêm index biểu thức
+   * `(lower(respondent_email), confirmation_sent_at) WHERE confirmation_sent_at IS NOT NULL`.
+   *
+   * @param {string} email
+   * @returns {Promise<number>}
+   */
+  async countConfirmationEmailsForRecipientLast24h(email) {
+    const result = await db.query(
+      `SELECT COUNT(*)::int AS n
+       FROM form_submissions
+       WHERE lower(respondent_email) = lower($1)
+         AND confirmation_sent_at IS NOT NULL
+         AND confirmation_sent_at > NOW() - INTERVAL '24 hours'`,
+      [email]
+    );
+    return result.rows[0]?.n || 0;
   }
 
   /**
@@ -498,12 +577,13 @@ class FormRepository {
    * giờ hẹn còn trong (NOW, NOW+24h], chưa được nhắc, tạo trước giờ hẹn ít nhất 24h, có email,
    * form còn bật sendConfirmation và không bị super admin tắt.
    *
-   * @returns {Promise<Array<{id: number, respondentEmail: string, appointmentAt: Date, formTitle: string}>>}
+   * @returns {Promise<Array<{id: number, formId: number, respondentEmail: string, appointmentAt: Date, formTitle: string}>>}
    */
   async listBookingReminderCandidates() {
     const result = await db.query(
       `SELECT
          s.id,
+         s.form_id AS "formId",
          s.respondent_email AS "respondentEmail",
          s.appointment_at AS "appointmentAt",
          f.title AS "formTitle"

@@ -57,6 +57,19 @@ function futureDate(daysFromNow) {
   return addDaysToDateStr(todayVn(new Date()), daysFromNow);
 }
 
+/**
+ * Chèn thẳng N bài nộp "đã gửi thư" cho form (bỏ qua HTTP — 200 request thật sẽ rất chậm), để
+ * dựng sẵn trạng thái "form đã chạm trần" mà không cần đặt 200 lịch hẹn thật.
+ */
+async function seedSentEmailSubmissions(formId, workspaceOwnerId, count, { column = 'confirmation_sent_at', hoursAgo = 1 } = {}) {
+  await db.query(
+    `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, status, ${column})
+     SELECT $1::bigint, $2::bigint, 'seed_' || $1::text || '_' || g, 'confirmed', NOW() - ($4::text || ' hours')::interval
+     FROM generate_series(1, $3::int) AS g`,
+    [formId, workspaceOwnerId, count, String(hoursAgo)]
+  );
+}
+
 async function createBookingForm(token, overrides = {}) {
   const createRes = await request(app)
     .post('/api/forms')
@@ -445,4 +458,177 @@ describe('Form booking — đặt lịch hẹn (PR-2a)', () => {
     );
     expect(dbRow.rows[0].confirmation_sent_at).not.toBeNull();
   });
+});
+
+describe('Form booking — review PR-2a 14/09: trần thư, ?date= sai, huỷ nguyên tử', () => {
+  it('form đã có 200 thư người đặt trong 24h → đặt lịch mới có email vẫn 201, KHÔNG gửi thư', async () => {
+    const owner = await createUser({ username: 'owner_cap_form' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token, {
+      fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+    });
+    await seedSentEmailSubmissions(form.id, owner.id, 200);
+
+    mockSendMail.mockClear();
+    const emailField = form.fields[0];
+    const bookRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({
+        answers: { [emailField.key]: 'capped_form@example.com' },
+        appointmentDate: futureDate(11),
+        appointmentTime: ALL_WEEK_TIME,
+      });
+    expect(bookRes.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it('cùng một email đã nhận 3 thư xác nhận trong 24h QUA 2 FORM KHÁC NHAU → đặt lịch lần 4 vẫn 201, KHÔNG gửi', async () => {
+    const owner = await createUser({ username: 'owner_cap_recipient' });
+    const token = await loginAs(owner);
+    const formA = await createBookingForm(token, {
+      title: 'Form A',
+      fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+    });
+    const formB = await createBookingForm(token, {
+      title: 'Form B',
+      fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+    });
+
+    const capEmail = 'sniped@example.com';
+    // 3 thư xác nhận đã gửi cho CÙNG email, rải trên 2 form khác nhau.
+    await db.query(
+      `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, status, respondent_email, confirmation_sent_at)
+       VALUES
+         ($1, $3, 'seed_r1', 'confirmed', $4, NOW() - INTERVAL '1 hour'),
+         ($1, $3, 'seed_r2', 'confirmed', $4, NOW() - INTERVAL '2 hours'),
+         ($2, $3, 'seed_r3', 'confirmed', $4, NOW() - INTERVAL '3 hours')`,
+      [formA.id, formB.id, owner.id, capEmail]
+    );
+
+    mockSendMail.mockClear();
+    const emailFieldA = formA.fields[0];
+    const bookRes = await request(app)
+      .post(`/api/public/forms/${formA.publicKey}/submissions`)
+      .send({
+        answers: { [emailFieldA.key]: capEmail },
+        appointmentDate: futureDate(12),
+        appointmentTime: ALL_WEEK_TIME,
+      });
+    expect(bookRes.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it('trần theo người nhận so sánh KHÔNG phân biệt HOA/thường', async () => {
+    const owner = await createUser({ username: 'owner_cap_case' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token, {
+      fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+    });
+
+    await db.query(
+      `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, status, respondent_email, confirmation_sent_at)
+       VALUES
+         ($1, $2, 'seed_c1', 'confirmed', 'MixedCase@Example.com', NOW() - INTERVAL '1 hour'),
+         ($1, $2, 'seed_c2', 'confirmed', 'mixedcase@example.com', NOW() - INTERVAL '2 hours'),
+         ($1, $2, 'seed_c3', 'confirmed', 'MIXEDCASE@EXAMPLE.COM', NOW() - INTERVAL '3 hours')`,
+      [form.id, owner.id]
+    );
+
+    mockSendMail.mockClear();
+    const emailField = form.fields[0];
+    const bookRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({
+        // Viết hoa khác hẳn 3 dòng trên — vẫn phải bị tính chung vào trần.
+        answers: { [emailField.key]: 'mixedCASE@example.com' },
+        appointmentDate: futureDate(13),
+        appointmentTime: ALL_WEEK_TIME,
+      });
+    expect(bookRes.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it('thư CŨ HƠN 24h không tính vào trần — vẫn gửi bình thường', async () => {
+    const owner = await createUser({ username: 'owner_cap_old' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token, {
+      fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+    });
+    // 200 thư nhưng cách đây 25 giờ — ngoài cửa sổ 24h, không được tính vào trần theo form.
+    await seedSentEmailSubmissions(form.id, owner.id, 200, { hoursAgo: 25 });
+
+    mockSendMail.mockClear();
+    const emailField = form.fields[0];
+    const bookRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({
+        answers: { [emailField.key]: 'fresh_again@example.com' },
+        appointmentDate: futureDate(14),
+        appointmentTime: ALL_WEEK_TIME,
+      });
+    expect(bookRes.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+  });
+
+  it('?date=abc và ?date=2026-02-31 → 400 INVALID_DATE; không lặng lẽ đổi thành ngày khác', async () => {
+    const owner = await createUser({ username: 'owner_date_invalid' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token);
+
+    const resAbc = await request(app)
+      .get(`/api/forms/${form.id}/submissions`)
+      .query({ date: 'abc' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(resAbc.status).toBe(400);
+    expect(resAbc.body.code).toBe('INVALID_DATE');
+
+    const resFeb31 = await request(app)
+      .get(`/api/forms/${form.id}/submissions`)
+      .query({ date: '2026-02-31' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(resFeb31.status).toBe(400);
+    expect(resFeb31.body.code).toBe('INVALID_DATE');
+  });
+
+  it('không truyền ?date= vẫn hoạt động như cũ (200, không lọc)', async () => {
+    const owner = await createUser({ username: 'owner_date_absent' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token);
+    const res = await request(app)
+      .get(`/api/forms/${form.id}/submissions`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('huỷ 2 lần đồng thời (Promise.all) cùng một lượt → đúng 1 cái 200, 1 cái 409', async () => {
+    const owner = await createUser({ username: 'owner_cancel_race' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token);
+
+    const appointmentDate = futureDate(15);
+    const bookRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {}, appointmentDate, appointmentTime: ALL_WEEK_TIME });
+    expect(bookRes.status).toBe(201);
+    const subRow = await db.query(`SELECT id FROM form_submissions WHERE form_id = $1`, [form.id]);
+    const submissionId = subRow.rows[0].id;
+
+    const [r1, r2] = await Promise.all([
+      request(app).post(`/api/forms/${form.id}/submissions/${submissionId}/cancel`).set('Authorization', `Bearer ${token}`),
+      request(app).post(`/api/forms/${form.id}/submissions/${submissionId}/cancel`).set('Authorization', `Bearer ${token}`),
+    ]);
+    const statuses = [r1.status, r2.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const finalRow = await db.query(`SELECT status FROM form_submissions WHERE id = $1`, [submissionId]);
+    expect(finalRow.rows[0].status).toBe('cancelled');
+  }, 15000);
 });

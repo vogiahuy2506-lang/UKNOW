@@ -214,4 +214,28 @@ describe('Cron form_booking_reminder (PR-2a việc 5)', () => {
     const row = await db.query(`SELECT reminder_sent_at FROM form_submissions WHERE id = $1`, [submissionId]);
     expect(row.rows[0].reminder_sent_at).toBeNull();
   });
+
+  it('form đã chạm trần 200 thư/24h → cron KHÔNG gửi nhắc, KHÔNG claim (reminder_sent_at vẫn NULL), skippedByCap ≥ 1', async () => {
+    const owner = await createUser({ username: 'owner_reminder_cap' });
+    const token = await loginAs(owner);
+    const { formId, submissionId } = await bookAppointment(token);
+    await backdateSubmission(submissionId, { hoursFromNow: 20, createdDaysBeforeAppointment: 3 });
+
+    // 200 thư đã gửi cho CHÍNH form này trong 24h qua (trộn xác nhận + nhắc, như trần yêu cầu).
+    await db.query(
+      `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, status, confirmation_sent_at)
+       SELECT $1::bigint, $2::bigint, 'seed_' || $1::text || '_' || g, 'confirmed', NOW() - INTERVAL '1 hour'
+       FROM generate_series(1, 200) AS g`,
+      [formId, owner.id]
+    );
+
+    mockSendMail.mockClear();
+    const result = await runFormBookingReminder();
+    expect(result.sent).toBe(0);
+    expect(result.skippedByCap).toBeGreaterThanOrEqual(1);
+    expect(mockSendMail).not.toHaveBeenCalled();
+
+    const row = await db.query(`SELECT reminder_sent_at FROM form_submissions WHERE id = $1`, [submissionId]);
+    expect(row.rows[0].reminder_sent_at).toBeNull();
+  });
 });

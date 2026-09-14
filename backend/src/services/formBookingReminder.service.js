@@ -4,21 +4,33 @@
  * bằng UPDATE có điều kiện TRƯỚC khi gửi (formRepository.claimReminderSlot) để hai lượt cron
  * chạy chồng nhau không gửi trùng; gửi hỏng thì trả reminder_sent_at về NULL để lượt sau thử lại.
  */
-import formRepository from '../repositories/form.repository.js';
+import formRepository, { MAX_FORM_RESPONDENT_EMAILS_PER_24H } from '../repositories/form.repository.js';
 import { sendSystemEmail, SENDER_NAME } from '../utils/systemEmail.util.js';
 import { escapeHtml } from '../utils/htmlEscape.util.js';
 import { formatAppointmentVn } from '../utils/formBooking.util.js';
 import { logError } from '../utils/logger.util.js';
 
 /**
- * @returns {Promise<{ candidates: number, sent: number, failed: number, synced: number }>}
+ * @returns {Promise<{ candidates: number, sent: number, failed: number, skippedByCap: number, synced: number }>}
  */
 export async function runFormBookingReminder() {
   const candidates = await formRepository.listBookingReminderCandidates();
   let sent = 0;
   let failed = 0;
+  let skippedByCap = 0;
 
   for (const row of candidates) {
+    // Trần thư gửi người đặt (PLAN...#Trần thư gửi người đặt) — đếm lại MỖI lần vì một lượt chạy
+    // có thể có nhiều ứng viên cùng form; ứng viên gửi trước làm tăng count cho ứng viên sau
+    // (đúng ý — tính cả xác nhận và nhắc trong 24h qua). Vượt trần thì KHÔNG claim (để
+    // reminder_sent_at NULL), lượt cron sau (15 phút) sẽ tự thử lại khi trần đã hạ.
+    const formEmailCount = await formRepository.countFormRespondentEmailsLast24h(row.formId);
+    if (formEmailCount >= MAX_FORM_RESPONDENT_EMAILS_PER_24H) {
+      skippedByCap += 1;
+      logError(`[formBookingReminder] Bỏ nhắc lịch cho form ${row.formId} — đã vượt trần ${MAX_FORM_RESPONDENT_EMAILS_PER_24H} thư/24h`);
+      continue;
+    }
+
     const claimed = await formRepository.claimReminderSlot(row.id);
     if (!claimed) {
       // Đã bị giành bởi lượt cron khác chạy chồng lên, hoặc đã gửi trước đó — bỏ qua.
@@ -49,6 +61,7 @@ export async function runFormBookingReminder() {
     candidates: candidates.length,
     sent,
     failed,
+    skippedByCap,
     synced: sent,
   };
 }
