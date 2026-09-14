@@ -45,8 +45,47 @@ import { TelegramClient as BaseTelegramClient } from './telegramClient.js';
 import { TelegramTransportError } from './telegramClient.js';
 import { TelegramMessageEvent } from './telegramClient.js';
 import { ProxyTcpTransport } from './proxyTransport.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const QR_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 min — Telegram's own limit.
+
+/**
+ * Resolve a SQLite storage path to an absolute directory and make sure
+ * it exists. mtcute's `SqliteStorage` opens `<path>/<storageKey>/client.session`
+ * — the *parent* directory must exist, writable, and not be a file.
+ *
+ * Resolution order:
+ *   1. `opts.storagePath` nếu caller truyền absolute path
+ *   2. `process.env.TELEGRAM_SESSION_DIR` (set trong .env cho production)
+ *   3. `<process.cwd()>/.telegram-sessions` (default — Dockerfile
+ *      `WORKDIR /app` tạo sẵn thư mục này)
+ *
+ * Bug trước đó: code nhận `'.telegram-sessions'` (relative) và chuyển
+ * thẳng cho `better-sqlite3`. Khi process CWD lệch (volume mount sai,
+ * systemd unit start từ chỗ khác, v.v.), SQLite mở nhầm file → "unable
+ * to open database file". Force absolute path để bug không tái diễn.
+ *
+ * Trả về absolute path đã được `mkdirSync({ recursive: true })`.
+ *
+ * @param {string} requested
+ * @returns {string} absolute path, guaranteed to exist
+ */
+function resolveAndEnsureSessionDir(requested) {
+  let resolved;
+  if (path.isAbsolute(requested)) {
+    resolved = requested;
+  } else if (process.env.TELEGRAM_SESSION_DIR) {
+    resolved = path.resolve(process.env.TELEGRAM_SESSION_DIR);
+  } else {
+    resolved = path.resolve(process.cwd(), requested);
+  }
+  // mkdirSync không throw khi đã tồn tại (recursive: true + idempotent).
+  // Trước đây Dockerfile đảm bảo mkdir — giờ đảm bảo ở app level luôn
+  // để chạy local/dev cũng không lỗi.
+  fs.mkdirSync(resolved, { recursive: true });
+  return resolved;
+}
 
 /**
  * Convert mtcute's User object to the gateway's normalised
@@ -100,11 +139,13 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
    *   pass this so all replicas share the same session state.
    * @param {string} [opts.storagePath]
    *   Fallback storage path used when `opts.storageProvider`
-   *   is missing. mtcute opens `<storagePath>/client.session`
-   *   via better-sqlite3; the directory must exist (Dockerfile
-   *   ensures it). Defaults to `./.telegram-sessions` so
-   *   operators can mount a persistent volume at exactly that
-   *   path. New code should pass `storageProvider` instead and
+   *   is missing. mtcute opens `<storagePath>/<storageKey>/client.session`
+   *   via better-sqlite3; the directory must exist and be writable.
+   *   Defaults to `'.telegram-sessions'` — constructor tự resolve thành
+   *   absolute path (ưu tiên `TELEGRAM_SESSION_DIR` env var, fallback
+   *   `<cwd>/.telegram-sessions`) và `mkdirSync` luôn để tránh lỗi
+   *   "unable to open database file" khi CWD lệch hoặc Dockerfile
+   *   mkdir bị miss. New code should pass `storageProvider` instead and
    *   skip this; the SQLite path is kept only as a graceful
    *   degradation when the Postgres row is missing on first
    *   boot (the backfill script will migrate it later).
@@ -124,7 +165,11 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
   } = {}) {
     super({ sessionString, apiId, apiHash });
     this._storageProvider = storageProvider;
-    this._storagePath = storagePath;
+    // Resolve relative path → absolute + tạo thư mục nếu chưa có.
+    // _buildClient() chỉ dùng _storagePath khi storageProvider=null
+    // (createSession QR login path), nên resolve tại đây là đủ —
+    // restoreSessionsFromDb path vẫn dùng Postgres storage thẳng.
+    this._storagePath = storageProvider ? storagePath : resolveAndEnsureSessionDir(storagePath);
     this._storageKey = storageKey;
     this._tg = null;
     this._connecting = null;
