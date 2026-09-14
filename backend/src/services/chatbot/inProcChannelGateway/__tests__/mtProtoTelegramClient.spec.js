@@ -287,6 +287,79 @@ describe('MtProtoTelegramClient.saveSession', () => {
   });
 });
 
+describe('MtProtoTelegramClient session dir fallback', () => {
+  it('falls back to os.tmpdir() when mkdir throws EACCES', async () => {
+    // Bug production (Docker USER=node, /app bị owned by root):
+    // `mkdir /app/.telegram-sessions/default` → EACCES. Trước đây
+    // throw 500 làm hỏng QR login. Fix: catch EACCES và retry dưới
+    // os.tmpdir() (luôn writable cho mọi user). Path phải giữ
+    // sub-folder `<requested>` (constructor đã join storagePath+key)
+    // — nếu chỉ mkdir tmp/.telegram-sessions mà caller expect
+    // tmp/.telegram-sessions/default thì mtcute vẫn "unable to open".
+    const fsActual = await import('node:fs');
+    const osActual = await import('node:os');
+    const pathActual = await import('node:path');
+    const realMkdir = fsActual.default.mkdirSync;
+    const realTmpdir = osActual.default.tmpdir();
+    let firstCall = true;
+    const mkdirSpy = jest.spyOn(fsActual.default, 'mkdirSync').mockImplementation((p, opts) => {
+      if (firstCall) {
+        firstCall = false;
+        const err = new Error(`EACCES: permission denied, mkdir '${p}'`);
+        err.code = 'EACCES';
+        throw err;
+      }
+      return realMkdir(p, opts);
+    });
+    try {
+      const client = new MtProtoTelegramClient({
+        apiId: 1,
+        apiHash: 'h',
+        storagePath: '.telegram-sessions',
+        storageKey: 'fallback-test',
+      });
+      // Expected fallback path: <os.tmpdir()>/telegram-sessions/.telegram-sessions/fallback-test
+      const expected = pathActual.default.join(
+        realTmpdir,
+        'telegram-sessions',
+        '.telegram-sessions',
+        'fallback-test'
+      );
+      expect(client._storagePath).toBe(expected);
+      expect(mkdirSpy).toHaveBeenCalled();
+      // Verify the fallback dir actually exists on disk
+      const stat = fsActual.default.statSync(expected);
+      expect(stat.isDirectory()).toBe(true);
+      // Cleanup
+      fsActual.default.rmSync(expected, { recursive: true, force: true });
+    } finally {
+      mkdirSpy.mockRestore();
+    }
+  });
+
+  it('rethrows non-permission mkdir errors (does NOT swallow bugs)', async () => {
+    const fsActual = await import('node:fs');
+    const mkdirSpy = jest.spyOn(fsActual.default, 'mkdirSync').mockImplementation(() => {
+      const err = new Error('ENOSPC: no space left on device');
+      err.code = 'ENOSPC';
+      throw err;
+    });
+    try {
+      expect(() => {
+        // eslint-disable-next-line no-new
+        new MtProtoTelegramClient({
+          apiId: 1,
+          apiHash: 'h',
+          storagePath: '/some/path',
+          storageKey: 'k',
+        });
+      }).toThrow(/ENOSPC/);
+    } finally {
+      mkdirSpy.mockRestore();
+    }
+  });
+});
+
 describe('MtProtoTelegramClient.disconnect', () => {
   it('calls tg.destroy and clears the qr promise', async () => {
     const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });

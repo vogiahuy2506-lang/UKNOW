@@ -46,6 +46,7 @@ import { TelegramTransportError } from './telegramClient.js';
 import { TelegramMessageEvent } from './telegramClient.js';
 import { ProxyTcpTransport } from './proxyTransport.js';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const QR_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 min — Telegram's own limit.
@@ -99,7 +100,40 @@ function resolveAndEnsureSessionDir(requested) {
   // mkdirSync không throw khi đã tồn tại (recursive: true + idempotent).
   // Trước đây Dockerfile đảm bảo mkdir — giờ đảm bảo ở app level luôn
   // để chạy local/dev cũng không lỗi.
-  fs.mkdirSync(resolved, { recursive: true });
+  try {
+    fs.mkdirSync(resolved, { recursive: true });
+  } catch (mkdirErr) {
+    // Bug production (Docker USER=node, CWD=/app): mkdir fail với EACCES
+    // khi `/app` hoặc parent dir bị owned by root (image cũ không có
+    // `mkdir -p .telegram-sessions`, hoặc volume mount override perms).
+    // Tuyệt đối KHÔNG throw ở đây — QR login là chức năng chính của
+    // khách hàng, một sai permission của operator không được làm sập
+    // toàn bộ init flow. Fallback về `<os.tmpdir()>/<requested>` (luôn
+    // writable cho mọi user, kể cả khi /app bị lock). Caller đã join
+    // `<storagePath>/<storageKey>` trước khi truyền vào đây (xem
+    // constructor), nên fallback phải mkdir đúng cùng nested path —
+    // nếu chỉ mkdir `<tmp>/.telegram-sessions` mà caller expect
+    // `<tmp>/.telegram-sessions/default` thì mtcute vẫn "unable to
+    // open database file" ở sub-folder.
+    if (mkdirErr.code === 'EACCES' || mkdirErr.code === 'EPERM' || mkdirErr.code === 'EROFS') {
+      const fallback = path.join(os.tmpdir(), 'telegram-sessions', requested);
+      console.warn(
+        `[MtProtoTelegramClient] resolveAndEnsureSessionDir: cannot create "${resolved}" (${mkdirErr.code}: ${mkdirErr.message}). ` +
+        `Falling back to "${fallback}". Set TELEGRAM_SESSION_DIR=/tmp/telegram-sessions in .env for explicit override.`
+      );
+      try {
+        fs.mkdirSync(fallback, { recursive: true });
+        return fallback;
+      } catch (fallbackErr) {
+        console.error(
+          `[MtProtoTelegramClient] resolveAndEnsureSessionDir: fallback mkdir "${fallback}" also failed (${fallbackErr.code}: ${fallbackErr.message}). ` +
+          'Container runtime is broken — no writable tmp dir. This will crash on SQLite open.'
+        );
+        throw mkdirErr; // re-throw original — operator phải sửa deployment
+      }
+    }
+    throw mkdirErr;
+  }
   // Verify writable để fail-fast thay vì để mtcute nổ "unable to open" khó trace.
   try {
     fs.accessSync(resolved, fs.constants.W_OK);
