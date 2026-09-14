@@ -1029,6 +1029,22 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Alert evaluator: mỗi 5 phút');
 
+  // ── Chatbot contact alert (PLAN_BAO_LIEN_HE_KHACH_DE_LAI_TRONG_CHAT) ─────────
+  cron.schedule('*/5 * * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('chatbot_contact_alert', async () => {
+        const { default: svc } = await import('../services/chatbot/chatbotContactAlert.service.js');
+        return svc.scanAndNotify();
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi báo liên hệ khách để lại:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Chatbot contact alert: mỗi 5 phút');
+
   // ── Help: backfill embedding NULL / 0-chunk (PLAN_HELP_INDEX_CRASHSAFE) ─────
   cron.schedule('*/30 * * * *', async () => {
     if (process.env.NODE_ENV === 'test') return;
