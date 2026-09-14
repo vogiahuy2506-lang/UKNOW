@@ -95,6 +95,7 @@ export const userMenuItems = (t) => [
   { key: 'customers', name: t('nav.customers'), defaultCategory: 'campaigns', path: '/app/customers', icon: HiOutlineUsers, permission: ['customers'] },
   { key: 'lead_list', name: t('nav.leadList'), defaultCategory: 'landing_page', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
   { key: 'html_pages', name: t('nav.htmlPages'), defaultCategory: 'landing_page', path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
+  { key: 'forms', name: t('nav.forms'), defaultCategory: 'landing_page', path: '/app/forms', icon: HiOutlineClipboardList, permission: ['forms'] },
   { key: 'featured_courses', name: t('nav.featuredCourses'), defaultCategory: 'admin_cluster', path: '/app/settings/landing-featured-courses', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
   { key: 'reviews', name: t('nav.reviews'), defaultCategory: 'admin_cluster', path: '/app/settings/landing-testimonials', icon: HiOutlineStar, flag: 'VITE_FEATURE_LANDING_CMS', ownerOnly: true },
   { key: 'course_management', name: t('nav.courseManagement'), defaultCategory: 'admin_cluster', path: '/app/courses', icon: HiOutlineAcademicCap, flag: 'VITE_FEATURE_COURSES' },

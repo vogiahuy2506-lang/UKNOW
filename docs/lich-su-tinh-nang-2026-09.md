@@ -352,7 +352,49 @@ Sếp chốt: **một cấu hình chung cho mọi khách, khách không tự s�
 `DROP CONSTRAINT` phải có dòng `-- allow-destructive-ddl: <lý do>` từ đầu; 205 thiếu nên đỏ một
 đợt, và không được sửa migration đã push vì runner so checksum.
 
-## Việc còn treo (tính tới 13/09/2026)
+## Landing page: đính kèm ảnh/tài liệu, dán HTML có sẵn, lưu & xuất bản ngay trong chat (13–14/09)
+
+Task sếp: người dùng tải ảnh (logo/banner) và tài liệu (PDF/DOCX) khi tạo/sửa landing bằng AI,
+hệ thống đưa ảnh lên kho, tạo link và thay vào code; sau đó "tích hợp các chức năng vào Chatbot AI
+chính" (sếp chốt hướng: trợ lý ở `/app` làm được hết, không cần mở trang soạn); và "vẫn giữ chỗ
+nhập mã HTML có sẵn" (chức năng còn nhưng bị giấu sau nút "Mã HTML", trang mới là khung trắng câm).
+
+Ba phát hiện khi đọc code: đính kèm file trong trợ lý đang rẽ sang API template cũ (fragment, form
+hợp đồng cũ); URL file `/file/<token>` ghi `file_access_events` mỗi lượt tải và 302 sang signed URL
+15 phút nên không dùng được cho ảnh trang công khai; prompt sinh landing đang dặn AI "bỏ ảnh".
+
+| Việc | Commit |
+|---|---|
+| PR-1 backend: kho `landing_asset` (`uploads/<owner>/landing/`, ledger `temp` 7 ngày → `active` khi lưu trang), route công khai `/lp-assets/<khoá>` ngoài `/api` có `Cache-Control` + signed URL 24 giờ, nginx thêm `lp-assets`; `generate`/`editHtml` nhận `assets` (inlineData ≤ 4 MB) + `documents` (8k/12k ký tự), chốt 422 "ảnh đính kèm phải được dùng" và "không bịa URL ảnh"; gom file từ phiên chat theo `sessionId` | `e0289988` `bbc05565` |
+| PR-2 trợ lý AI: bỏ rẽ API cũ, gửi `files` vào bộ sinh mới; nhánh sửa landing nhận file | `7d6aaa04` |
+| PR-3 trang soạn: nút kẹp giấy trong chat canvas, `files` + `landingPageId` | `462b09b2` `24e2e243` |
+| PR-4 section "Ảnh của trang": tải ảnh, sao chép URL, chèn `<img>` không qua AI | `6a128a82` |
+| Trợ lý chính PR-1: `POST /ai/landing-from-html` (không AI, không credit; tin user chỉ lưu marker, HTML nằm trong thẻ), `PATCH /ai/sessions/:id/landing-message` whitelist 3 khoá | `08410578` |
+| Trợ lý chính PR-2: dán nguyên trang HTML vào ô chat → thẻ landing ngay; form "Lưu & xuất bản" (tiêu đề, slug tự sinh, xuất bản ngay) gọi đúng API tạo trang; "Mở trang soạn", "Xuất bản/Ẩn", "Cập nhật trang đã lưu" | `f438766b` |
+| Sửa review: mọi đường cập nhật từ chat đọc lại trang trên server, không gửi tên miền (kẻo trang có tên miền riêng tụt về subdomain và mất bản sửa ở trang soạn); nhận diện dán HTML đòi `</html>`/`<body`/≥300 ký tự | `980175a2` |
+| Trang soạn: nút "Nhập HTML" (dán hoặc chọn tệp `.html`, đọc trên trình duyệt, xác nhận thay, Hoàn tác, chặn 500k, cảnh báo thiếu form); trang mới hiện 3 lựa chọn; xoá editor cũ 1.837 dòng | `70092b3b` |
+
+Quyết định: không dùng Cloudinary (ép 512px, ngoài quota); ảnh landing là bản sao riêng, không trỏ
+vào file chat (file chat bị dọn sau 90 ngày); không migration, mọi thứ nằm trong `storage_objects`;
+ảnh của bản nháp còn trong lịch sử chat được job đối soát giữ 90 ngày. Bài học review: một bản sửa
+của Gemini suýt ghi đè trang bằng dữ liệu cũ của thẻ chat, và một commit kéo theo 88 dòng i18n của
+phiên khác đang sửa dở (phải tách bằng amend trước khi push). Deploy xanh đêm 13/09 và sáng 14/09;
+còn sếp nghiệm thu (xem "Việc còn treo").
+
+## Giám sát gửi: lý do hỏng cho mọi lượt, sổ người nhận bị lọc, "hỏng ở ai" ngay trên trang (13/09)
+
+Sếp thấy run "Zalo Auto Plan" báo "2 / 2 lỗi · 6 người" dù tin tới phúc vẫn đến. Truy DB: 2 lượt
+hỏng là số `0388180856` với lỗi Zalo "Tham số không hợp lệ" cả hai ngày; "6 người" thật ra là 6 lượt
+dự kiến (2 người × 3 bước). Ba lỗ hổng: lý do hỏng chỉ được ghi sổ cái ở chế độ chạy liên tục;
+"Tham số không hợp lệ" bị coi là lỗi tạm nên thử lại mỗi ngày; người bị lọc trước khi gửi không đi
+vào cột nào.
+
+| Việc | Commit |
+|---|---|
+| Ghi `lastFailureReason` cho mọi lượt hỏng Zalo cá nhân (mọi chế độ); "Tham số không hợp lệ" lặp lại cùng số trong 30 ngày mới đánh dấu không liên hệ được (bảng đó không có hạn, đánh nhầm là bỏ khách vĩnh viễn); `run_metadata.recipientAudit` đếm hàng nguồn / có số / bị lọc / đã gửi lượt trước; endpoint `GET /delivery-monitor/runs/:id/failures` | `3edfe25e` `c7155362` |
+| Trang Giám sát: nhãn "lượt dự kiến" thay "người"; bấm "N lỗi" mở hàng con `người nhận · lý do · số lần · lần cuối` + dòng giải thích từ `recipientAudit` | `c2427628` `4f208a7c` |
+
+## Việc còn treo (tính tới 14/09/2026)
 
 - **Nghiệm thu PR-3** sau 2–3 ngày: đếm dòng `zalo_messages` còn `tracking_metadata->>'status' =
   'queued'` theo ngày, phải về 0 (trước vá là 200–350 dòng/tuần). Dấu hiệu sớm tốt: 0 dòng mới
@@ -386,8 +428,8 @@ Sếp chốt: **một cấu hình chung cho mọi khách, khách không tự s�
   chưa bật (0 biến `BOUNCE_*`). Còn ba việc vận hành: xoá TXT ký tự đại diện `digiso.vn` ở iNET (đang
   làm DKIM `permerror`), tạo hộp `bounce@digiso.vn` ở onemail có plus-addressing, điền env rồi deploy.
   Đáng làm: tài khoản công ty gửi ~11.000 thư/30 ngày tới >5.000 địa chỉ mà chỉ 7 bounce được ghi.
-- Backend unit có 2 test trong một suite đỏ lẻ tẻ (hai lần trong hai ngày, chạy lại xanh), chưa bắt
-  được tên suite.
+- Backend unit đỏ lẻ tẻ khi chạy cả bộ, chạy riêng xanh: đã bắt được tên 13/09 —
+  `src/utils/__tests__/migrationRunner.util.spec.js` (nhạy thời gian khi máy bận). Chưa sửa.
 - Token Cloudflare thiếu quyền Cache Purge (đã xác minh lỗi `10000`), sửa trên dashboard.
 - Báo động deploy đỏ chưa tới người vận hành; 07/09 có 3 lần deploy đỏ không ai biết.
 - Lỗi cron restore đếm kết quả bị lock thành "đã khôi phục" trong `cron_job_runs`.
@@ -413,15 +455,22 @@ Sếp chốt: **một cấu hình chung cho mọi khách, khách không tự s�
 - **Lịch hẹn có gửi lại người cũ không**: SQL ghi trong `PLAN_AI_GIU_LINK_SHEET` (archive), chạy khi tiện.
 - **Bảng câu hỏi của sếp chưa làm**: digest hội thoại chatbot, tự lưu contact từ chatbot, giờ hoạt động
   chatbot (Huy).
-- **Landing: đính kèm ảnh (logo/banner) và tài liệu (PDF/DOCX) khi tạo/sửa bằng AI** — 5 commit đã
-  review xong tối 13/09 (backend: kho `landing_asset` + route công khai `/lp-assets`, prompt và chốt
-  422; trợ lý AI và chat canvas gửi `files`), **chờ push/deploy** vì `main` đang kẹt build image.
-  Nghiệm thu thật sau deploy: logo lên header, số liệu từ PDF vào trang, `storage_objects` chuyển
-  `active` khi lưu trang, URL ảnh trả 302/200 có `Cache-Control`, `file_access_events` không tăng.
-- **Ba quyết định phát sinh từ commit tối 13/09 trên `main`**: (1) một migration xoá toàn bộ 9 bảng
-  `zalo_*` từng lên `main` rồi được rút lại sau 36 phút, chưa chạy trên production — cần sếp chốt
-  **Zalo còn trong sản phẩm hay bỏ**; (2) image backend đổi Node 20 → 22 để có binary dựng sẵn cho
-  `better-sqlite3` (kéo theo từ thư viện Telegram), trong khi CI vẫn test trên Node 20; (3)
-  `.gitattributes` ép `*.js/*.jsx/*.sql` về LF trong khi repo còn 84 file CRLF — kiểm `git status` sau
-  mỗi lần pull trước khi commit. Migration 212–215 (Telegram/WhatsApp, xoá Viber) chưa áp lên
-  production, sẽ áp ở deploy xanh kế tiếp.
+- **Sếp nghiệm thu các phần lên 13–14/09** (tất cả đã deploy xanh): (1) trợ lý `/app` đính kèm logo +
+  PDF → logo lên header, số liệu PDF vào trang; `storage_objects` dòng `landing_asset` `temp` → `active`
+  khi lưu trang; `curl -sI <URL ảnh>` trả 302 kèm `Cache-Control: public, max-age=3600`;
+  `file_access_events` không tăng vì ảnh. (2) Dán nguyên trang HTML vào ô chat → thẻ hiện, credit không
+  đổi; "Lưu & xuất bản" slug thử → link `slug.founderai.biz` mở được, F5 vẫn thấy "Đã lưu"; sửa ở trang
+  soạn rồi về chat bấm "Ẩn trang" → bản sửa còn nguyên. (3) Trang Giám sát bấm "2 lỗi" của "Zalo Auto
+  Plan" → `0388180856 · Tham số không hợp lệ · 2 lần`, nhãn "6 lượt dự kiến". (4) "Tạo landing page"
+  thấy 3 lựa chọn, dán HTML → Áp dụng → Lưu → mở link public.
+- **Ba việc phát sinh từ commit tối 13/09 trên `main`**: (1) một migration xoá toàn bộ 9 bảng `zalo_*`
+  từng lên `main` rồi được rút lại sau 36 phút, chưa chạy trên production (đã kiểm: 11 bảng còn nguyên);
+  nhiều khả năng nhầm, nhưng cần nhắn thẳng người viết "Zalo vẫn là kênh chính"; (2) image backend đổi
+  Node 20 → 22 để có binary dựng sẵn cho `better-sqlite3` (kéo theo từ thư viện Telegram), CI vẫn
+  test trên Node 20; (3) `.gitattributes` ép `*.js/*.jsx/*.sql` về LF trong khi repo còn nhiều file CRLF —
+  kiểm `git status` sau mỗi lần pull. Migration 212–215 (Telegram/WhatsApp, xoá Viber) áp ở deploy
+  xanh `5edf9ddf` 22:55 13/09 (chưa kiểm lại `schema_migrations` bằng SQL).
+- **Lead tích "không đồng ý" vẫn đi vào chiến dịch** qua node `read_landing_leads` (phát hiện 13/09,
+  chưa sửa) — chuyện tuân thủ NĐ 330, nên làm sớm.
+- **`zalo_disconnected` nổ mỗi giờ nhiều ngày** vì nhìn cửa sổ 7 ngày rồi báo mỗi giờ — cùng bệnh với
+  cảnh báo tỉ lệ hỏng đã sửa 13/09, chưa có plan.
