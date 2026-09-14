@@ -12,7 +12,25 @@ class ChatbotContactAlertRepository {
       `SELECT last_message_id FROM chatbot_contact_scan_cursors WHERE source = $1 LIMIT 1`,
       [source]
     );
-    return rows[0] ? Number(rows[0].last_message_id) || 0 : 0;
+    if (!rows[0]) return null;
+    return Number(rows[0].last_message_id) || 0;
+  }
+
+  /**
+   * Lấy id tin nhắn lớn nhất hiện tại của nguồn để khởi tạo cursor lần đầu
+   * @param {'web'|'channel'|'zalo_personal'} source
+   * @param {object} [queryable=db]
+   * @returns {Promise<number>}
+   */
+  async getMaxMessageId(source, queryable = db) {
+    let tableName = 'webchat_messages';
+    if (source === 'channel') tableName = 'channel_messages';
+    else if (source === 'zalo_personal') tableName = 'zalo_personal_messages';
+
+    const { rows } = await queryable.query(
+      `SELECT COALESCE(MAX(id), 0) AS max_id FROM ${tableName}`
+    );
+    return Number(rows[0]?.max_id) || 0;
   }
 
   /**
@@ -195,13 +213,14 @@ class ChatbotContactAlertRepository {
            ELSE chatbot_contact_alerts.last_excerpt
          END,
          pending_notify = CASE
+           WHEN EXCLUDED.pending_notify = false THEN false
            WHEN chatbot_contact_alerts.pending_notify = true THEN true
            WHEN chatbot_contact_alerts.last_notified_at IS NULL
-                OR chatbot_contact_alerts.last_notified_at < NOW() - INTERVAL '24 hours' THEN EXCLUDED.pending_notify
+                OR chatbot_contact_alerts.last_notified_at < NOW() - INTERVAL '24 hours' THEN true
            ELSE false
          END,
          suppressed_reason = CASE
-           WHEN EXCLUDED.suppressed_reason IS NOT NULL THEN EXCLUDED.suppressed_reason
+           WHEN EXCLUDED.last_message_id >= chatbot_contact_alerts.last_message_id THEN EXCLUDED.suppressed_reason
            ELSE chatbot_contact_alerts.suppressed_reason
          END,
          updated_at = NOW()
@@ -232,14 +251,15 @@ class ChatbotContactAlertRepository {
     const { rows } = await queryable.query(
       `SELECT a.*, u.email AS user_email, u.full_name AS user_full_name,
               COALESCE(wc.visitor_name, cc.visitor_name, zc.visitor_name) AS visitor_name,
-              cc.channel AS channel_type,
-              conn.display_name AS display_name
+              cc.channel AS channel,
+              COALESCE(conn.display_name, zs.display_name) AS display_name
        FROM chatbot_contact_alerts a
        JOIN users u ON u.id = a.id_user
        LEFT JOIN webchat_conversations wc ON a.last_source = 'web' AND wc.id = a.last_conversation_id
        LEFT JOIN channel_conversations cc ON a.last_source = 'channel' AND cc.id = a.last_conversation_id
        LEFT JOIN channel_connections conn ON cc.id_channel = conn.id
        LEFT JOIN zalo_personal_conversations zc ON a.last_source = 'zalo_personal' AND zc.id = a.last_conversation_id
+       LEFT JOIN zalo_settings zs ON zs.id = zc.id_zalo_setting
        WHERE a.pending_notify = true AND u.status = 'active'
        ORDER BY a.id_user ASC, a.created_at ASC`
     );
@@ -288,5 +308,6 @@ const chatbotContactAlertRepository = new ChatbotContactAlertRepository();
 
 export const getCursor = (...args) => chatbotContactAlertRepository.getCursor(...args);
 export const setCursor = (...args) => chatbotContactAlertRepository.setCursor(...args);
+export const getMaxMessageId = (...args) => chatbotContactAlertRepository.getMaxMessageId(...args);
 export { ChatbotContactAlertRepository };
 export default chatbotContactAlertRepository;

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 const mockRepo = {
   getCursor: jest.fn(),
   setCursor: jest.fn(),
+  getMaxMessageId: jest.fn(),
   fetchVisitorMessagesAfter: jest.fn(),
   hasAgentReplySince: jest.fn(),
   getOwnerContact: jest.fn(),
@@ -37,6 +38,7 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
     jest.clearAllMocks();
     mockRepo.getCursor.mockResolvedValue(0);
     mockRepo.setCursor.mockResolvedValue();
+    mockRepo.getMaxMessageId.mockResolvedValue(0);
     mockRepo.fetchVisitorMessagesAfter.mockResolvedValue([]);
     mockRepo.hasAgentReplySince.mockResolvedValue(false);
     mockRepo.getOwnerContact.mockResolvedValue({
@@ -335,5 +337,98 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
     expect(res.emails.sent).toBe(0);
     expect(res.emails.failed).toBe(1);
     expect(mockRepo.markNotified).not.toHaveBeenCalled();
+  });
+
+  it('lần đầu chạy khi cursor null: khởi tạo cursor = maxId và không quét tin', async () => {
+    mockRepo.getCursor.mockResolvedValue(null);
+    mockRepo.getMaxMessageId.mockResolvedValue(555);
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(mockRepo.getMaxMessageId).toHaveBeenCalledWith('web');
+    expect(mockRepo.setCursor).toHaveBeenCalledWith('web', 555);
+    expect(res.scanned).toBe(0);
+    expect(res.initializedSources).toEqual(['web', 'channel', 'zalo_personal']);
+    expect(mockRepo.fetchVisitorMessagesAfter).not.toHaveBeenCalled();
+  });
+
+  it('thư Zalo OA phải chứa "Zalo OA" chứ không phải "Kênh"', async () => {
+    mockRepo.listPendingGroupedByUser.mockResolvedValue([
+      {
+        id: 30,
+        id_user: 1,
+        user_email: 'owner@uknow.vn',
+        contact_type: 'phone',
+        contact_value: '0912345678',
+        last_source: 'channel',
+        channel: 'zalo_oa',
+        display_name: 'Cửa hàng chính hãng',
+        last_conversation_id: 88,
+        visitor_name: 'Khách Zalo',
+      },
+    ]);
+
+    await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+    const mailCall = mockSendSystemEmail.mock.calls[0][0];
+    expect(mailCall.html).toContain('Zalo OA Cửa hàng chính hãng');
+    expect(mailCall.html).not.toContain('Kênh Cửa hàng chính hãng');
+  });
+
+  it('ca (a) service: khi có agent trả lời (human_active) thì gọi upsertContact với pendingNotify = false', async () => {
+    mockRepo.hasAgentReplySince.mockResolvedValue(true);
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 201,
+            id_user: 1,
+            id_conversation: 50,
+            content: 'SĐT em là 0912345678',
+            created_at: fixedNow,
+            visitor_name: 'Khách',
+          },
+        ];
+      }
+      return [];
+    });
+
+    await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingNotify: false,
+        suppressedReason: 'human_active',
+      })
+    );
+  });
+
+  it('ca (b) service: 3 giờ sau khách nhắn lại không có agent thì gọi upsertContact với pendingNotify = true và suppressedReason = null', async () => {
+    mockRepo.hasAgentReplySince.mockResolvedValue(false);
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 202,
+            id_user: 1,
+            id_conversation: 50,
+            content: 'SĐT em là 0912345678',
+            created_at: fixedNow,
+            visitor_name: 'Khách',
+          },
+        ];
+      }
+      return [];
+    });
+
+    await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingNotify: true,
+        suppressedReason: null,
+      })
+    );
   });
 });

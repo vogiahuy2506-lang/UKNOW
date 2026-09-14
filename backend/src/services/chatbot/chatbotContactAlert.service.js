@@ -130,9 +130,19 @@ class ChatbotContactAlertService {
 
     const humanSinceIso = new Date(now.getTime() - HUMAN_WINDOW_MIN * 60 * 1000).toISOString();
 
+    const initializedSources = [];
+
     // ── Pha 1: Quét tin nhắn khách theo từng nguồn ────────────────────────────
     for (const source of SOURCES) {
-      let lastId = await chatbotContactAlertRepository.getCursor(source);
+      const cursor = await chatbotContactAlertRepository.getCursor(source);
+      if (cursor === null) {
+        const maxId = await chatbotContactAlertRepository.getMaxMessageId(source);
+        await chatbotContactAlertRepository.setCursor(source, maxId);
+        initializedSources.push(source);
+        continue;
+      }
+
+      let lastId = cursor;
 
       while (true) {
         const messages = await chatbotContactAlertRepository.fetchVisitorMessagesAfter(
@@ -305,6 +315,7 @@ class ChatbotContactAlertService {
       scannedCount: scanned,
       alertsCreatedOrUpdated: detected,
       emailsSent: emails.sent,
+      initializedSources,
     };
   }
 }

@@ -222,6 +222,14 @@ export const CRON_JOBS = [
     impact: 'Người đặt lịch không nhận được thư nhắc trước giờ hẹn.',
     tracked: true,
   },
+  {
+    code: 'chatbot_contact_alert',
+    label: 'Báo liên hệ khách để lại trong chatbot',
+    schedule: 'Mỗi 5 phút',
+    description: 'Quét tin nhắn mới của khách chứa số điện thoại hoặc email và gửi email thông báo cho chủ shop.',
+    impact: 'Chủ shop không nhận được thông báo khi khách để lại liên hệ trong các cuộc hội thoại AI.',
+    tracked: true,
+  },
 ];
 
 export function getCronJobByCode(code) {
