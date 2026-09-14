@@ -159,6 +159,12 @@ export function detectOffTopicReply({ customerMessage, aiReply }) {
  * Trả về câu fallback tự nhiên khi AI reply bị off-topic. Dùng tên assistant
  * từ settings nếu có, fallback "trợ lý ảo".
  *
+ * Fallback ưu tiên phản hồi tự nhiên, KHÔNG gắn cứng format
+ * "Bạn vừa nhắn X — ..." vì:
+ *   - Tin nhắn có thể rất dài (spam/link) → hiển thị xấu
+ *   - Câu hỏi ngắn "hi" thì KHÔNG cần nhắc lại
+ *   - AI nên self-identify một cách tự nhiên, không theo khuôn mẫu
+ *
  * @param {Object} [opts]
  * @param {string} [opts.assistantName]
  * @param {string} [opts.customerMessage]
@@ -166,14 +172,21 @@ export function detectOffTopicReply({ customerMessage, aiReply }) {
  */
 export function buildOffTopicFallback({ assistantName, customerMessage } = {}) {
   const name = assistantName || 'trợ lý ảo';
-  const greetingMatch =
-    customerMessage &&
-    /(hi|hello|hey|hiii|ê|chào|chao)/i.test(customerMessage);
-  const greeting = greetingMatch ? 'Chào bạn' : 'Mình hiểu rồi';
-  return (
-    `${greeting}, mình là ${name}. Bạn vừa nhắn "${(customerMessage || '').slice(0, 40).trim()}" — ` +
-    `bạn muốn mình hỗ trợ gì nè? Bạn có thể hỏi về sản phẩm, dịch vụ, hoặc bất kỳ câu hỏi nào mình có thể giúp.`
-  );
+
+  // Phát hiện greeting ngắn để chọn lời chào phù hợp
+  const trimmed = (customerMessage || '').trim().toLowerCase();
+  const isGreeting =
+    /^(hi|hello|hey|helo|hiii+|yo|ê|chào|chao|alo|ơi|kìa|zô|vo|hay|sale|sales|mình|mjh)/i.test(trimmed) &&
+    trimmed.length <= 40;
+
+  if (isGreeting) {
+    // Greeting: chào lịch sự, giới thiệu ngắn gọn, mời hỏi tiếp
+    return `Chào bạn! Mình là ${name}. Rất vui được hỗ trợ bạn. Bạn cần mình giúp gì nè?`;
+  }
+
+  // Câu hỏi chung: trả lời ngắn gọn, xưng tên tự nhiên
+  // KHÔNG nhắc lại câu hỏi gốc — để cuộc trò chuyện tự nhiên
+  return `Xin chào! Mình là ${name}. Mình có thể giúp bạn về sản phẩm, dịch vụ hoặc bất kỳ câu hỏi nào khác. Bạn cứ hỏi thoải mái nhé!`;
 }
 
 export default {
