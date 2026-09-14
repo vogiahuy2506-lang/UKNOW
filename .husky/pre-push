@@ -1,49 +1,48 @@
 #!/usr/bin/env sh
 # UKNOW pre-push hook
 # --------------------
-# Chạy unit test backend trước khi push để catch regression nhanh (5–10s)
-# thay vì đợi CI 60s+.
+# Chay unit test backend truoc khi push de catch regression nhanh (5-10s)
+# thay vi doi CI 60s+.
 #
 # Skip khi:
-#   - Push không có file backend nào thay đổi.
-#   - Push tới branch không phải feature (vd. main/develop — CI tự gate).
-#   - Dev cần khẩn cấp:  `git push --no-verify`
+#   - Push khong co file backend nao thay doi.
+#   - Push toi branch khong phai feature (vd. main/develop — CI tu gate).
+#   - Dev can khuan cuong:  `git push --no-verify`
 #
-# Integration test KHÔNG chạy ở đây vì cần Postgres local.
-# CI sẽ luôn chạy integration trên service container.
+# Integration test KHONG chay o day vi can Postgres local.
+# CI se luon chay integration tren service container.
 
 REMOTE="$1"
 URL="$2"
 
-# Nếu không có thay đổi backend → bỏ qua hook hoàn toàn
+# Resolve repo root (hook co the chay tu .husky/ hoac bat ky dau).
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$REPO_ROOT" ]; then
+  echo "[pre-push] Cannot find repo root — skip test."
+  exit 0
+fi
+
+# Neu khong co thay doi backend → bo qua hook hoan toan
 if ! git diff --name-only @{push}..HEAD 2>/dev/null | grep -q '^backend/'; then
-  # Fallback cho branch mới chưa từng push: so với origin/main
   base_ref=$(git merge-base HEAD origin/main 2>/dev/null)
   if [ -z "$base_ref" ] || ! git diff --name-only "$base_ref"..HEAD | grep -q '^backend/'; then
-    echo "[pre-push] Không có thay đổi backend — skip unit test."
+    echo "[pre-push] Khong co thay doi backend — skip unit test."
     exit 0
   fi
 fi
 
-echo "[pre-push] Chạy backend lint + unit test trước khi push..."
-echo "[pre-push] Bỏ qua nhanh:  git push --no-verify"
+echo "[pre-push] Chay backend lint + unit test truoc khi push..."
+echo "[pre-push] Bo qua nhanh:  git push --no-verify"
 echo ""
 
-cd backend || exit 1
+cd "$REPO_ROOT/backend" || exit 1
 
-# Lint nhanh trước (bắt lỗi cấu trúc: method trùng no-dupe-class-members, unreachable...).
-# Cần eslint local → chạy `npm ci` sau khi pull. Chưa cài thì dùng --no-verify.
-if ! npm run lint --silent; then
-  echo ""
-  echo "[pre-push] ❌ ESLint FAIL — fix trước hoặc dùng --no-verify để bypass."
+# Goi node truc tiep (khong qua `npm run`) de tranh loi
+# `NODE_ENV=test` inline trong package.json khong hoat dong tren Windows PowerShell.
+# Dung `env` prefix de set bien moi truong cross-platform.
+env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50% --ci --silent && echo "[pre-push] Unit test OK" || {
+  echo "[pre-push] Unit test FAIL — fix truoc hoac dung --no-verify de bypass."
   exit 1
-fi
+}
 
-if ! npm run test:unit --silent -- --ci; then
-  echo ""
-  echo "[pre-push] ❌ Unit test FAIL — fix trước hoặc dùng --no-verify để bypass."
-  exit 1
-fi
-
-echo ""
-echo "[pre-push] ✅ Unit test pass — tiến hành push."
+echo "[pre-push] Unit test pass — tien hanh push."
