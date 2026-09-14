@@ -262,10 +262,19 @@ describe('FormSubmissionsPage component', () => {
   });
 
   describe('Đặt lịch hẹn (PR-2b)', () => {
+    // API chủ form (GET /api/forms/:id) trả khoá `bookingConfig` đầy đủ 6 khoá (khoá `booking`
+    // rút gọn chỉ có ở API công khai getPublicForm) — form.repository.js findFormByIdAndOwner.
     const bookingForm = {
       id: 'form-booking-789',
       title: 'Form đặt lịch tư vấn',
-      booking: { enabled: true, daysAhead: 30 },
+      bookingConfig: {
+        enabled: true,
+        weeklySlots: { '0': [], '1': ['09:00'], '2': [], '3': [], '4': [], '5': [], '6': [] },
+        slotCapacity: 1,
+        daysAhead: 30,
+        minNoticeMinutes: 60,
+        closedDates: [],
+      },
       fields: [{ key: 'f_name', label: 'Họ tên', type: 'short_text' }],
     };
 
@@ -426,6 +435,35 @@ describe('FormSubmissionsPage component', () => {
       await waitFor(() => {
         expect(formAdminApi.fetchFormSubmissions).toHaveBeenCalledTimes(1);
       });
+    });
+
+    it('form đã tắt đặt lịch (bookingConfig: null) nhưng còn bài nộp mang appointmentAt: vẫn hiện cột Giờ hẹn và nút Huỷ lịch', async () => {
+      const formBookingTurnedOff = {
+        id: 'form-booking-off-1',
+        title: 'Form đã tắt đặt lịch',
+        bookingConfig: null,
+        fields: [{ key: 'f_name', label: 'Họ tên', type: 'short_text' }],
+      };
+      formAdminApi.fetchFormById.mockResolvedValue(formBookingTurnedOff);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(bookingSubmissionsPage1);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-booking-off-1/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('hen1@example.com')).toBeInTheDocument();
+      });
+
+      // Lịch cũ (đặt lúc còn bật) vẫn phải xem/huỷ được dù form đã tắt đặt lịch
+      expect(screen.getByText('00:30 20/09/2026')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Huỷ lịch' })).toBeInTheDocument();
     });
   });
 });

@@ -28,6 +28,12 @@ describe('bookingFormat.util - an toàn múi giờ', () => {
     expect(formatted).toContain('20/09/2026');
   });
 
+  it('formatAppointmentAtVn locale "en" ra 00:30, KHÔNG được ra "24:30" (hour12:false không đáng tin ở en-US, phải dùng hourCycle: "h23")', () => {
+    const formatted = formatAppointmentAtVn('2026-09-19T17:30:00.000Z', 'en');
+    expect(formatted).toContain('00:30');
+    expect(formatted).not.toContain('24:30');
+  });
+
   it('vnToday trả chuỗi YYYY-MM-DD hợp lệ theo giờ VN', () => {
     const today = vnToday(new Date('2026-09-14T20:00:00.000Z'));
     // 20:00 UTC == 03:00 sáng hôm sau giờ VN (+7)

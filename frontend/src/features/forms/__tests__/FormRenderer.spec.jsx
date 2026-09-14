@@ -438,5 +438,43 @@ describe('FormRenderer component', () => {
       expect(screen.getByLabelText(/Họ và tên/i)).toHaveValue('Giữ tên này');
       expect(screen.getByLabelText(/Email/i)).toHaveValue('keep@example.com');
     });
+
+    it('đổi tuần nhanh: phản hồi của tuần cũ về muộn hơn KHÔNG được đè lưới của tuần mới hơn (race condition)', async () => {
+      let resolveWeek1;
+      const week1Promise = new Promise((resolve) => {
+        resolveWeek1 = resolve;
+      });
+      const week2Response = {
+        slots: [{ date: '2026-09-27', time: '11:00', remaining: 2 }],
+      };
+
+      const mockLoadSlots = vi
+        .fn()
+        .mockImplementationOnce(() => week1Promise) // lần gọi đầu (mount, tuần hiện tại) — CHẬM
+        .mockImplementationOnce(() => Promise.resolve(week2Response)); // "Tuần sau" — NHANH
+
+      render(
+        <I18nProvider>
+          <FormRenderer form={bookingForm} onSubmit={vi.fn()} loadSlots={mockLoadSlots} />
+        </I18nProvider>
+      );
+
+      await waitFor(() => expect(mockLoadSlots).toHaveBeenCalledTimes(1));
+
+      // Bấm "Tuần sau" trước khi request đầu (tuần hiện tại) kịp trả lời
+      fireEvent.click(screen.getByRole('button', { name: /Tuần sau/i }));
+      await waitFor(() => expect(mockLoadSlots).toHaveBeenCalledTimes(2));
+
+      // Request thứ 2 (nhanh hơn) render xong trước
+      await screen.findByRole('button', { name: /^11:00/ });
+
+      // Giờ mới cho request đầu (chậm, tuần cũ) trả lời — phải bị bỏ qua vì đã lỗi thời
+      resolveWeek1(mockSlotsResponse);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Vẫn phải thấy đúng lưới của tuần mới nhất (11:00), KHÔNG bị đè lại bởi khung tuần cũ (09:00)
+      expect(screen.getByRole('button', { name: /^11:00/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^09:00/ })).not.toBeInTheDocument();
+    });
   });
 });

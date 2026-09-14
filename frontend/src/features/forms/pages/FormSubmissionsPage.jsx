@@ -40,6 +40,15 @@ export default function FormSubmissionsPage() {
   const [cancelTargetId, setCancelTargetId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
 
+  // API chủ form (GET /api/forms/:id) trả khoá `bookingConfig` (form.repository.js
+  // findFormByIdAndOwner), KHÔNG PHẢI `booking` — khoá đó chỉ có ở API công khai
+  // (getPublicForm, form.service.js). Vẫn hiện cụm UI đặt lịch khi form từng bật rồi tắt
+  // nhưng còn bài nộp mang appointmentAt (huỷ lịch cũ vẫn phải làm được).
+  const showBookingColumns = useMemo(
+    () => Boolean(form?.bookingConfig?.enabled) || submissions.some((s) => Boolean(s.appointmentAt)),
+    [form?.bookingConfig?.enabled, submissions]
+  );
+
   const formKeyOrderMap = useMemo(() => {
     const map = new Map();
     if (Array.isArray(form?.fields)) {
@@ -143,7 +152,7 @@ export default function FormSubmissionsPage() {
         )}
       </div>
 
-      {form?.booking?.enabled && (
+      {showBookingColumns && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <label htmlFor="date-filter" className="text-xs font-medium text-gray-600">
             {t('forms.submissionsPage.dateFilterLabel')}
@@ -210,7 +219,7 @@ export default function FormSubmissionsPage() {
                   <th className="py-3.5 px-4 sm:px-6 w-60">
                     {t('forms.submissionsPage.colRespondent')}
                   </th>
-                  {form?.booking?.enabled && (
+                  {showBookingColumns && (
                     <>
                       <th className="py-3.5 px-4 sm:px-6 w-44">
                         {t('forms.submissionsPage.colAppointment')}
@@ -226,7 +235,7 @@ export default function FormSubmissionsPage() {
                   <th className="py-3.5 px-4 sm:px-6">
                     {t('forms.submissionsPage.colAnswers')}
                   </th>
-                  {form?.booking?.enabled && (
+                  {showBookingColumns && (
                     <th className="py-3.5 px-4 sm:px-6 w-36">
                       {t('forms.submissionsPage.colActions')}
                     </th>
@@ -274,7 +283,7 @@ export default function FormSubmissionsPage() {
                         </div>
                       </td>
 
-                      {form?.booking?.enabled && (
+                      {showBookingColumns && (
                         <>
                           {/* Giờ hẹn — LUÔN theo giờ Việt Nam, không phụ thuộc múi giờ trình duyệt */}
                           <td className="py-4 px-4 sm:px-6 text-xs text-gray-600 whitespace-nowrap">
@@ -347,7 +356,7 @@ export default function FormSubmissionsPage() {
                         </div>
                       </td>
 
-                      {form?.booking?.enabled && (
+                      {showBookingColumns && (
                         <td className="py-4 px-4 sm:px-6">
                           {CANCELLABLE_STATUSES.has(sub.status) && sub.appointmentAt ? (
                             cancelTargetId === sub.id ? (

@@ -57,7 +57,9 @@ export function formatAppointmentAtVn(isoString, locale = 'vi') {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    // h23 = 0–23; hour12:false không đáng tin ở mọi locale — en-US + hour12:false render
+    // nửa đêm thành "24:30" (đo trên Node 20.19.6), khớp bẫy backend đã vá ở formBooking.util.js.
+    hourCycle: 'h23',
     timeZone: 'Asia/Ho_Chi_Minh',
   }).format(d);
 }

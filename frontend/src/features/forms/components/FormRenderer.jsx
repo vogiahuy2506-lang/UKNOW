@@ -50,6 +50,9 @@ export default function FormRenderer({
   const submittingRef = useRef(false);
   // Ref cho trường bẫy bot không điều khiển (uncontrolled input)
   const honeypotRef = useRef(null);
+  // Đếm thứ tự request tải slots — đổi tuần liên tiếp có thể khiến phản hồi về KHÔNG đúng thứ
+  // tự (mạng chậm/nhanh xen kẽ); chỉ áp kết quả của request mới nhất, bỏ phản hồi cũ tới muộn.
+  const loadSlotsSeqRef = useRef(0);
 
   const fields = Array.isArray(form?.fields) ? form.fields : [];
   const settings = form?.settings || {};
@@ -64,16 +67,19 @@ export default function FormRenderer({
   const loadWeek = useCallback(
     async (from) => {
       if (typeof loadSlots !== 'function') return;
+      const seq = ++loadSlotsSeqRef.current;
       setSlotsLoading(true);
       setSlotsLoadError('');
       try {
         const result = await loadSlots(from, 7);
+        if (seq !== loadSlotsSeqRef.current) return; // phản hồi cũ tới muộn — bỏ qua
         setSlots(Array.isArray(result?.slots) ? result.slots : []);
       } catch {
+        if (seq !== loadSlotsSeqRef.current) return;
         setSlots([]);
         setSlotsLoadError(t('publicForm.booking.loadSlotsError'));
       } finally {
-        setSlotsLoading(false);
+        if (seq === loadSlotsSeqRef.current) setSlotsLoading(false);
       }
     },
     [loadSlots, t]
