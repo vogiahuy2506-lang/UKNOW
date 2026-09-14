@@ -66,9 +66,14 @@ const QR_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 min — Telegram's own limit.
  * systemd unit start từ chỗ khác, v.v.), SQLite mở nhầm file → "unable
  * to open database file". Force absolute path để bug không tái diễn.
  *
+ * Bug thứ 2: code chỉ mkdir `<storagePath>` mà KHÔNG mkdir `<storageKey>`
+ * subfolder. Caller (constructor) giờ truyền `path.join(storagePath,
+ * storageKey)` vào đây để mkdir cả 2 cùng lúc — đảm bảo đường dẫn
+ * mtcute mở file SQLite luôn tồn tại.
+ *
  * Trả về absolute path đã được `mkdirSync({ recursive: true })`.
  *
- * @param {string} requested
+ * @param {string} requested - path CẦN mkdir full (bao gồm storageKey nếu dùng SQLite)
  * @returns {string} absolute path, guaranteed to exist
  */
 function resolveAndEnsureSessionDir(requested) {
@@ -80,10 +85,30 @@ function resolveAndEnsureSessionDir(requested) {
   } else {
     resolved = path.resolve(process.cwd(), requested);
   }
+  // Defensive log: helps operators see at runtime which path mtcute will
+  // try to open. The bug "unable to open database file" ở production có
+  // thể do:
+  //   1. CWD lệch → fallback vào thư mục không writable.
+  //   2. TELEGRAM_SESSION_DIR trỏ tới chỗ không tồn tại / không writable.
+  //   3. Subfolder `<path>/<storageKey>/` chưa được tạo (mtcute không tự mkdir)
+  //      → SQLite mở file <path>/<storageKey>/client.session fail.
+  // Log đủ context để debug không cần SSH vào prod.
+  console.log(
+    `[MtProtoTelegramClient] resolveAndEnsureSessionDir requested="${requested}" cwd="${process.cwd()}" envTELEGRAM_SESSION_DIR="${process.env.TELEGRAM_SESSION_DIR || ''}" resolved="${resolved}"`
+  );
   // mkdirSync không throw khi đã tồn tại (recursive: true + idempotent).
   // Trước đây Dockerfile đảm bảo mkdir — giờ đảm bảo ở app level luôn
   // để chạy local/dev cũng không lỗi.
   fs.mkdirSync(resolved, { recursive: true });
+  // Verify writable để fail-fast thay vì để mtcute nổ "unable to open" khó trace.
+  try {
+    fs.accessSync(resolved, fs.constants.W_OK);
+  } catch (err) {
+    console.error(
+      `[MtProtoTelegramClient] resolveAndEnsureSessionDir: directory "${resolved}" is NOT writable (uid=${process.getuid?.() ?? 'n/a'}, gid=${process.getgid?.() ?? 'n/a'}): ${err.message}. ` +
+      'Set TELEGRAM_SESSION_DIR=/path/writable để tránh SQLite crash trên production.'
+    );
+  }
   return resolved;
 }
 
@@ -165,11 +190,19 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
   } = {}) {
     super({ sessionString, apiId, apiHash });
     this._storageProvider = storageProvider;
-    // Resolve relative path → absolute + tạo thư mục nếu chưa có.
-    // _buildClient() chỉ dùng _storagePath khi storageProvider=null
+    // Resolve relative path → absolute + tạo thư mục (và subfolder storageKey)
+    // nếu chưa có. _buildClient() chỉ dùng _storagePath khi storageProvider=null
     // (createSession QR login path), nên resolve tại đây là đủ —
     // restoreSessionsFromDb path vẫn dùng Postgres storage thẳng.
-    this._storagePath = storageProvider ? storagePath : resolveAndEnsureSessionDir(storagePath);
+    //
+    // Bug trước đó: resolveAndEnsureSessionDir chỉ mkdir `<storagePath>` mà
+    // KHÔNG mkdir `<storagePath>/<storageKey>`. mtcute mở SQLite file
+    // `<storagePath>/<storageKey>/client.session` qua better-sqlite3 mà không
+    // tự tạo thư mục con → "unable to open database file" trên production
+    // khi container start lần đầu (subfolder chưa tồn tại).
+    this._storagePath = storageProvider
+      ? storagePath
+      : resolveAndEnsureSessionDir(path.join(storagePath, storageKey));
     this._storageKey = storageKey;
     this._tg = null;
     this._connecting = null;

@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import nodePath from 'node:path';
 
 // Mock mtcute BEFORE importing the client so the dynamic
 // import in `telegramClient.js` resolves to this stub.
@@ -81,7 +82,13 @@ describe('MtProtoTelegramClient construction', () => {
       storagePath: '/tmp/x',
       storageKey: 'acct-7',
     });
-    expect(client._storagePath).toBe('/tmp/x');
+    // Constructor truyền `path.join(storagePath, storageKey)` vào
+    // resolveAndEnsureSessionDir để mkdir cả subfolder, tránh
+    // 'unable to open database file' khi mtcute mở SQLite file
+    // `<storagePath>/<storageKey>/client.session`. Đường dẫn đã resolve
+    // thành absolute và bao gồm storageKey (dùng path.join nên OS-aware —
+    // trên Windows sẽ là '\\tmp\\x\\acct-7').
+    expect(client._storagePath).toBe(nodePath.join('/tmp/x', 'acct-7'));
     expect(client._storageKey).toBe('acct-7');
   });
 });
