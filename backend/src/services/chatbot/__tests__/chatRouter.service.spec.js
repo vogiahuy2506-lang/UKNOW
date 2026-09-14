@@ -301,4 +301,22 @@ describe('ChatRouterService.buildSystemPrompt — natural pronouns + no internal
     });
     expect(prompt).toMatch(/KHÔNG tự suy đoán hình ảnh là "bill thanh toán"/);
   });
+
+  it('instructs AI to answer social greetings naturally without payment-note template', () => {
+    // Bug production (14/09/2026): khách nhắn "hello em là ai" /
+    // "rảnh ko" → AI trả lời "Đang chờ ghi chú thanh toán..." thay
+    // vì giới thiệu bản thân. Fix: thêm section "XU LY CAU HOI
+    // CHUNG" ép AI trả lời tự nhiên cho câu xã giao, KHÔNG dùng
+    // template payment-note khi khách không hỏi về payment.
+    const prompt = chatRouterService.buildSystemPrompt({
+      subAssistant: null,
+      settings: { response_style: 'friendly' },
+      chatbot: { name: 'Bot' },
+    });
+    expect(prompt).toContain('XU LY CAU HOI CHUNG');
+    expect(prompt).toMatch(/xã giao thuần tuý/i);
+    // Phải có anti-template rule: KHÔNG trả lời template payment-note
+    // cho câu chào hỏi thông thường.
+    expect(prompt).toMatch(/TUYỆT ĐỐI KHÔNG trả lời bằng các câu template/i);
+  });
 });

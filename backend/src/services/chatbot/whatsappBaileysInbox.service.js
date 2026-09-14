@@ -20,6 +20,7 @@ import subAssistantService from './subAssistant.service.js';
 import ragEngineService from './ragEngine.service.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import chatRouterService from './chatRouter.service.js';
+import { detectOffTopicReply } from '../../utils/aiOffTopicReply.util.js';
 
 const log = (...args) => console.log('[WhatsApp/Baileys/Inbox]', ...args);
 
@@ -392,7 +393,31 @@ async function processIncomingMessage({ sessionKey, msg }) {
           history,
           messageText,
         });
-        const cleanReply = stripMarkdown(reply);
+        let cleanReply = stripMarkdown(reply);
+
+        // Safety net: phát hiện AI trả lời off-topic (vd nhắc lại template
+        // "Đang chờ ghi chú thanh toán..." cho câu chào hỏi thông thường).
+        // Bug production (14/09/2026): khách "hello em là ai" / "rảnh ko" /
+        // "em làm dc gì" → bot trả lời template payment note không liên
+        // quan. Nguyên nhân: system_instruction hoặc KB trong DB ép AI
+        // dùng template cứng, hoặc RAG context không match. Fix:
+        // detect và thay bằng fallback friendly để khách vẫn nhận được
+        // phản hồi tự nhiên.
+        const offTopicCheck = detectOffTopicReply({
+          customerMessage: messageText,
+          aiReply: cleanReply,
+        });
+        if (offTopicCheck.isOffTopic) {
+          log(
+            `[off-topic] chatbot=${cb.id_chatbot} session=${sessionKey} ` +
+            `customer="${messageText.slice(0, 60)}" → "${cleanReply.slice(0, 80)}..." ` +
+            `reason=${offTopicCheck.reason}`
+          );
+          cleanReply = buildOffTopicFallback({
+            assistantName: cb.sub_assistant_name || cb.chatbot_name || null,
+            customerMessage: messageText,
+          });
+        }
 
         // Persist bot reply.
         await persistMessage({
