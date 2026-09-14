@@ -78,7 +78,10 @@ const MessageBubble = ({
   messageLabels,
 }) => {
   const { t } = useI18n();
-  const isBot = message.role === 'bot';
+  // Web chat (trang công khai + widget nhúng) ghi tin bot với role 'assistant'
+  // (chatbot.controller addWebChatMessage), các kênh khác ghi 'bot'. Không gộp thì tin bot
+  // web hiện bên phía khách như thể khách tự nói (phát hiện 14/09/2026 khi widget bắt đầu lưu tin).
+  const isBot = message.role === 'bot' || message.role === 'assistant';
   const isAgent = message.role === 'agent';
   const isVisitor = message.role === 'visitor';
   
