@@ -180,17 +180,28 @@ class ChatbotDigestService {
    * @param {object} [options]
    * @param {'weekly'|'monthly'} [options.frequency='weekly']
    * @param {Date} [options.now=new Date()]
-   * @returns {Promise<{ frequency: string, periodKey: string, recipients: number, sent: number, skipped: number, failed: number, synced: number }>}
+   * @param {Array<number|string>|null} [options.onlyUserIds=null]
+   * @returns {Promise<{ frequency: string, periodKey: string, recipients: number, sent: number, skipped: number, failed: number, synced: number, onlyUserIds: Array<number>|null }>}
    */
-  async sendDigests({ frequency = 'weekly', now = new Date() } = {}) {
+  async sendDigests({
+    frequency = 'weekly',
+    now = new Date(),
+    onlyUserIds = null,
+  } = {}) {
     const range =
       frequency === 'monthly'
         ? getVietnamMonthRange(now)
         : getVietnamWeekRange(now);
 
+    const targetUserIds =
+      Array.isArray(onlyUserIds) && onlyUserIds.length > 0
+        ? onlyUserIds.map(Number)
+        : null;
+
     const recipients = await chatbotDigestRepository.listDigestRecipients(
       frequency,
-      { startIso: range.startIso, endIso: range.endIso }
+      { startIso: range.startIso, endIso: range.endIso },
+      { onlyUserIds: targetUserIds }
     );
 
     let sent = 0;
@@ -253,6 +264,7 @@ class ChatbotDigestService {
       skipped,
       failed,
       synced: sent,
+      onlyUserIds: targetUserIds,
     };
   }
 }

@@ -8,15 +8,32 @@ class ChatbotDigestRepository {
    *
    * @param {'weekly'|'monthly'} frequency
    * @param {{ startIso: string, endIso: string }} period
+   * @param {object} [options={}]
+   * @param {Array<number|string>|null} [options.onlyUserIds]
    * @param {object} [queryable=db]
    * @returns {Promise<Array<{ id: number, email: string, full_name: string, chatbot_digest_frequency: string }>>}
    */
-  async listDigestRecipients(frequency, { startIso, endIso }, queryable = db) {
+  async listDigestRecipients(
+    frequency,
+    { startIso, endIso },
+    { onlyUserIds = null } = {},
+    queryable = db
+  ) {
+    const hasFilter = Array.isArray(onlyUserIds) && onlyUserIds.length > 0;
+    const params = [frequency, startIso, endIso];
+    let userFilterSql = '';
+
+    if (hasFilter) {
+      params.push(onlyUserIds.map(Number));
+      userFilterSql = 'AND u.id = ANY($4::bigint[])';
+    }
+
     const { rows } = await queryable.query(
       `SELECT u.id, u.email, u.full_name, u.chatbot_digest_frequency
        FROM users u
        WHERE u.status = 'active'
          AND u.chatbot_digest_frequency = $1
+         ${userFilterSql}
          AND (
            EXISTS (
              SELECT 1 FROM webchat_messages wm
@@ -32,7 +49,7 @@ class ChatbotDigestRepository {
            )
          )
        ORDER BY u.id ASC`,
-      [frequency, startIso, endIso]
+      params
     );
     return rows;
   }

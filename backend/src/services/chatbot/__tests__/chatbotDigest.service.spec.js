@@ -154,6 +154,42 @@ describe('chatbotDigest.service — sendDigests', () => {
     expect(mockSendSystemEmail).not.toHaveBeenCalled();
   });
 
+  it('ca onlyUserIds=[7] với recipients mock 2 người → repo được gọi với onlyUserIds [7]', async () => {
+    mockRepo.listDigestRecipients.mockResolvedValue([
+      { id: 7, email: 'user7@example.com', full_name: 'User 7', chatbot_digest_frequency: 'weekly' },
+    ]);
+
+    const result = await chatbotDigestService.sendDigests({
+      frequency: 'weekly',
+      now: fixedNow,
+      onlyUserIds: [7],
+    });
+
+    expect(mockRepo.listDigestRecipients).toHaveBeenCalledWith(
+      'weekly',
+      expect.objectContaining({ startIso: expect.any(String), endIso: expect.any(String) }),
+      { onlyUserIds: [7] }
+    );
+    expect(result.onlyUserIds).toEqual([7]);
+    expect(result.sent).toBe(1);
+  });
+
+  it('ca không truyền onlyUserIds → repo được gọi với null và kết quả onlyUserIds là null', async () => {
+    mockRepo.listDigestRecipients.mockResolvedValue([]);
+
+    const result = await chatbotDigestService.sendDigests({
+      frequency: 'weekly',
+      now: fixedNow,
+    });
+
+    expect(mockRepo.listDigestRecipients).toHaveBeenCalledWith(
+      'weekly',
+      expect.objectContaining({ startIso: expect.any(String), endIso: expect.any(String) }),
+      { onlyUserIds: null }
+    );
+    expect(result.onlyUserIds).toBeNull();
+  });
+
   it('buildDigestEmailHtml format đầy đủ số liệu, escape HTML và cảnh báo stalePaused', () => {
     const html = buildDigestEmailHtml({
       userFullName: 'Tester <script>',

@@ -364,4 +364,57 @@ describe('Chatbot Digest Integration (PR-3)', () => {
       .send({ digestFrequency: 'none' });
     expect(empPutRes.status).toBe(403);
   });
+
+  it('chạy với onlyUserIds: 2 user có hoạt động, onlyUserIds=[user1] → chỉ gửi 1 thư cho user1, log chỉ có user1', async () => {
+    const user1 = await createUser({
+      username: 'digest_only_1',
+      email: 'digest_only_1@example.com',
+    });
+    const user2 = await createUser({
+      username: 'digest_only_2',
+      email: 'digest_only_2@example.com',
+    });
+
+    await db.query(
+      `UPDATE users SET chatbot_digest_frequency = 'weekly' WHERE id IN ($1, $2)`,
+      [user1.id, user2.id]
+    );
+
+    // Cả 2 đều có tin nhắn khách trong kỳ
+    for (const u of [user1, user2]) {
+      const { rows: w } = await db.query(
+        `INSERT INTO web_widget_configs (id_user, widget_key) VALUES ($1, $2) RETURNING id`,
+        [u.id, `k_only_${u.id}`]
+      );
+      const { rows: c } = await db.query(
+        `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id) VALUES ($1, $2, 's') RETURNING id`,
+        [u.id, w[0].id]
+      );
+      await db.query(
+        `INSERT INTO webchat_messages (id_user, id_conversation, role, content, created_at)
+         VALUES ($1, $2, 'visitor', 'tin nhan khach', $3)`,
+        [u.id, c[0].id, inPeriodTime]
+      );
+    }
+
+    const res = await chatbotDigestService.sendDigests({
+      frequency: 'weekly',
+      now: testDate,
+      onlyUserIds: [user1.id],
+    });
+
+    // Chỉ có user1 được gửi
+    expect(res.recipients).toBe(1);
+    expect(res.sent).toBe(1);
+    expect(res.onlyUserIds).toEqual([Number(user1.id)]);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'digest_only_1@example.com' })
+    );
+
+    // Kiểm tra DB log chỉ có đúng 1 dòng cho user1
+    const { rows: logRows } = await db.query(`SELECT * FROM chatbot_digest_log`);
+    expect(logRows).toHaveLength(1);
+    expect(Number(logRows[0].id_user)).toBe(Number(user1.id));
+  });
 });
