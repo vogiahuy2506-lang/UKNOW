@@ -14,7 +14,6 @@ import {
   HiOutlineLogout,
   HiOutlineRefresh,
   HiOutlineX,
-  HiOutlinePlus,
 } from 'react-icons/hi';
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -51,11 +50,11 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
 
   useEffect(() => setMounted(true), []);
 
-  // Countdown timer from expiresAt
+  // Countdown: expiresAt là milliseconds Unix timestamp, tính remaining seconds
   useEffect(() => {
     if (!qrPayload?.expiresAt) { setCountdown(''); return; }
     const tick = () => {
-      const remaining = Math.max(0, qrPayload.expiresAt - Math.floor(Date.now() / 1000));
+      const remaining = Math.max(0, Math.floor((qrPayload.expiresAt - Date.now()) / 1000));
       const mins = Math.floor(remaining / 60);
       const secs = remaining % 60;
       setCountdown(mins > 0 ? `${mins}:${String(secs).padStart(2, '0')}` : `${secs}s`);
@@ -73,58 +72,41 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
 
   const modal = (
     <div
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-md p-0 sm:p-4 animate-[modalIn_0.2s_ease-out]"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 px-4"
       onClick={onClose}
     >
       <div
-        className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md mx-0 sm:mx-4 overflow-hidden flex flex-col animate-[modalIn_0.28s_cubic-bezier(0.16,1,0.3,1)]"
+        className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Gradient header — cam theo brand system */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-orange-500 via-orange-400 to-amber-400 px-5 pt-5 pb-4 shrink-0">
-          <div aria-hidden className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
-          <div aria-hidden className="absolute -bottom-8 -left-4 w-28 h-28 rounded-full bg-orange-300/20 blur-2xl" />
-
-          <div className="relative flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm ring-1 ring-white/30 flex items-center justify-center shrink-0">
-                <FaTelegramPlane className="w-5 h-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-base sm:text-lg font-semibold text-white truncate">
-                  Kết nối Telegram
-                </h3>
-                <p className="text-[11px] sm:text-xs text-orange-100 truncate">
-                  {isSuccess ? 'Liên kết thành công!' : 'Quét QR để đăng nhập'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={onNewQr}
-                disabled={isSuccess}
-                aria-label="Tạo QR mới"
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 transition-colors flex items-center justify-center disabled:opacity-40"
-              >
-                <HiOutlineRefresh className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={onCancel}
-                aria-label="Hủy"
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 transition-colors flex items-center justify-center"
-              >
-                <HiOutlineX className="w-4 h-4" />
-              </button>
-            </div>
+        {/* Header trắng — đồng bộ với WhatsApp */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500 text-white shrink-0">
+            <FaTelegramPlane className="w-5 h-5" />
           </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-slate-900">
+              {isSuccess ? 'Liên kết thành công!' : 'Quét mã QR để kết nối'}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {isSuccess
+                ? 'Tài khoản Telegram đã được kết nối.'
+                : 'Mở Telegram → Cài đặt → Thiết bị đã liên kết → Liên kết thiết bị'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Đóng"
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <HiOutlineX className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Body */}
         <div className="flex flex-col items-center px-5 py-5 gap-4">
           {isSuccess ? (
-            /* ── Success ── */
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
                 <HiOutlineCheckCircle className="w-9 h-9 text-green-500" />
@@ -144,7 +126,6 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
               </button>
             </div>
           ) : (
-            /* ── QR + Guide ── */
             <>
               {/* QR Code */}
               <div className="relative">
@@ -161,7 +142,6 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                     </div>
                   )}
                 </div>
-                {/* Pulsing dot when waiting */}
                 {isWaiting && (
                   <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-orange-500 border-2 border-white flex items-center justify-center">
                     <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -330,10 +310,10 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting }) {
               type="button"
               onClick={() => onLogout(account.id)}
               disabled={loggingOut === account.id}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
             >
               <HiOutlineLogout className="w-3.5 h-3.5" />
-              {loggingOut === account.id ? 'Đang ngắt…' : 'Ngắt kết nối'}
+              {loggingOut === account.id ? 'Đang đăng xuất…' : 'Đăng xuất'}
             </button>
           )}
           <button
@@ -343,7 +323,7 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting }) {
             className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
           >
             <HiOutlineTrash className="w-3.5 h-3.5" />
-            {deleting === account.id ? 'Đang xóa…' : 'Xóa vĩnh viễn'}
+            {deleting === account.id ? 'Đang xóa…' : 'Xóa'}
           </button>
         </div>
       </div>
@@ -536,7 +516,7 @@ export default function TelegramSettings() {
   }, [qrPayload, stopPolling]);
 
   const handleDelete = useCallback(async (id) => {
-    if (!window.confirm('Xóa vĩnh viễn tài khoản Telegram này? Tất cả cuộc trò chuyện liên quan sẽ bị mất.')) return;
+    if (!window.confirm('Xóa tài khoản Telegram này? Tất cả cuộc trò chuyện liên quan sẽ bị mất.')) return;
     setDeleting(id);
     try {
       await chatbotApi.deleteTelegramAccount(id);
@@ -579,8 +559,8 @@ export default function TelegramSettings() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-sm shadow-orange-200">
-              <FaTelegramPlane className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
+              <FaTelegramPlane className="w-5 h-5" />
             </div>
             <h2 className="text-lg font-bold text-slate-900">Telegram cá nhân</h2>
           </div>
@@ -610,10 +590,10 @@ export default function TelegramSettings() {
                 ? 'Telegram gateway chưa có shared secret — liên hệ quản trị viên.'
                 : undefined
             }
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-bold text-white shadow-sm shadow-orange-200 hover:from-orange-600 hover:to-amber-600 hover:shadow-md transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:from-slate-400 disabled:to-slate-400 disabled:shadow-none"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             <HiOutlineQrcode className="w-3.5 h-3.5" />
-            Kết nối Telegram
+            Quét QR
           </button>
         </div>
       </div>
@@ -675,17 +655,17 @@ export default function TelegramSettings() {
             <div>
               <p className="text-sm font-semibold text-slate-700">Chưa có tài khoản Telegram nào</p>
               <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
-                Bấm <strong className="text-primary-600">Kết nối Telegram</strong> ở trên để quét QR bằng app Telegram trên điện thoại.
+                Bấm <strong className="text-primary-600">Quét QR</strong> ở trên để quét mã bằng app Telegram trên điện thoại.
               </p>
             </div>
             <button
               type="button"
               onClick={handleStartQrLogin}
               disabled={!canOpenQr}
-              className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-bold rounded-xl hover:from-orange-600 hover:to-amber-600 shadow-sm shadow-orange-200 transition-all disabled:opacity-50"
+              className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
             >
-              <HiOutlinePlus className="w-4 h-4" />
-              Kết nối tài khoản đầu tiên
+              <HiOutlineQrcode className="w-4 h-4" />
+              Quét QR
             </button>
           </div>
         ) : (
@@ -711,7 +691,7 @@ export default function TelegramSettings() {
         <p className="text-xs text-slate-600 leading-relaxed">
           Sau khi kết nối, vào <strong>Chatbot Studio → Deploy</strong> để chọn chatbot cho từng tài khoản.
           Nếu gateway ngưng hoạt động, tài khoản sẽ tự động chuyển sang trạng thái "Ngắt kết nối" —
-          bấm <strong>Ngắt kết nối</strong> rồi <strong>Kết nối Telegram</strong> lại để khôi phục.
+          bấm <strong>Đăng xuất</strong> rồi <strong>Quét QR</strong> lại để khôi phục.
         </p>
       </div>
 
