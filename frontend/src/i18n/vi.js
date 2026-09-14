@@ -2566,7 +2566,7 @@ export default {
       statusHandled: 'Đã liên hệ',
       statusNotified: 'Đã báo qua email',
       statusOptedOut: 'Tắt thông báo',
-      statusHumanActive: 'Đã có người rep',
+      statusHumanActive: 'Đã có người trả lời',
       statusPending: 'Chờ thông báo',
       emptyTitle: 'Không có thông tin liên hệ nào',
       emptyOpenDesc: 'Tuyệt vời! Bạn đã liên hệ hết tất cả khách hàng để lại thông tin.',

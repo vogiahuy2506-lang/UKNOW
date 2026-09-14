@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import InboxOutboxPage from '../InboxOutboxPage';
 import chatbotApi from '../../../features/chatbot/services/chatbotApi.service';
@@ -53,7 +53,7 @@ vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
       data: { success: true, data: { connected: true, accounts: [] } },
     }),
     getContactAlerts: vi.fn().mockResolvedValue({
-      data: { success: true, data: { items: [], total: 0, openCount: 3 } },
+      data: { success: true, data: { items: [], total: 0, openCount: 0 } },
     }),
     getMessages: vi.fn().mockResolvedValue({
       data: { success: true, data: { items: [], hasMore: false } },
@@ -96,5 +96,29 @@ describe('InboxOutboxPage — deep-link query params', () => {
     await waitFor(() => {
       expect(chatbotApi.getMessages).toHaveBeenCalledWith(41, 'webchat');
     });
+  });
+
+  it('mount với openCount = 3 → tab hiện badge "3" mà chưa bấm vào tab', async () => {
+    chatbotApi.getContactAlerts.mockResolvedValueOnce({
+      data: { success: true, data: { items: [], total: 3, openCount: 3 } },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/app/settings/inbox']}>
+        <Routes>
+          <Route path="/app/settings/inbox" element={<InboxOutboxPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(chatbotApi.getContactAlerts).toHaveBeenCalledWith({
+        status: 'open',
+        limit: 1,
+      });
+    });
+
+    const badge = await screen.findByText('3');
+    expect(badge).toBeInTheDocument();
   });
 });

@@ -316,6 +316,18 @@ const InboxPage = () => {
     }
   }, []);
 
+  const fetchContactAlertsCount = useCallback(async () => {
+    try {
+      const res = await chatbotApi.getContactAlerts({ status: 'open', limit: 1 });
+      const data = res?.data?.data ?? res?.data;
+      if (data && typeof data.openCount === 'number') {
+        setContactAlertsOpenCount(data.openCount);
+      }
+    } catch {
+      // Bỏ qua lỗi im lặng (không toast)
+    }
+  }, []);
+
   const fetchMessages = useCallback(async (conv = null) => {
     const target = conv || selectedConversation;
     if (!target) return;
@@ -346,6 +358,7 @@ const InboxPage = () => {
   }, [selectedConversation, t]);
 
   const handleNewMessage = useCallback((data) => {
+    fetchContactAlertsCount();
     const displayMessage = getDisplayMessage(data.message, data.messageType);
 
     setConversations(prev => {
@@ -480,7 +493,7 @@ const InboxPage = () => {
         };
       });
     }
-  }, [getDisplayMessage, selectedConversation, showNotification, t]);
+  }, [fetchContactAlertsCount, getDisplayMessage, selectedConversation, showNotification, t]);
 
   const handleUnreadChange = useCallback(() => {
     fetchUnreadCount();
@@ -704,6 +717,10 @@ const InboxPage = () => {
       }
     }
   }, [searchParams, handleOpenConversationByRef]);
+
+  useEffect(() => {
+    fetchContactAlertsCount();
+  }, [fetchContactAlertsCount]);
 
   useEffect(() => {
     fetchConversations(true);
