@@ -5,6 +5,7 @@ import { publicFormSubmissionLimiter } from '../middleware/rateLimiter.middlewar
 const router = express.Router();
 
 router.get('/:publicKey', formPublicController.getPublic.bind(formPublicController));
+router.get('/:publicKey/slots', formPublicController.getSlots.bind(formPublicController));
 router.post(
   '/:publicKey/submissions',
   publicFormSubmissionLimiter,

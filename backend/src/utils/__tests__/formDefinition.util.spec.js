@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   normalizeFormFields,
   normalizeFormSettings,
+  normalizeBookingConfig,
   ALLOWED_FIELD_TYPES,
   ALLOWED_ROLES,
   MAX_FIELDS,
@@ -174,5 +175,104 @@ describe('formDefinition.util - normalizeFormSettings', () => {
 
     const validHttp = normalizeFormSettings({ redirectUrl: 'http://example.com/thanks' });
     expect(validHttp.redirectUrl).toBe('http://example.com/thanks');
+  });
+});
+
+describe('normalizeBookingConfig', () => {
+  it('null/undefined/{enabled:false} → null (tắt đặt lịch)', () => {
+    expect(normalizeBookingConfig(null)).toBeNull();
+    expect(normalizeBookingConfig(undefined)).toBeNull();
+    expect(normalizeBookingConfig({ enabled: false })).toBeNull();
+    expect(normalizeBookingConfig({ enabled: false, weeklySlots: { 1: ['09:00'] } })).toBeNull();
+  });
+
+  it('enabled:true nhưng không có khung giờ nào → 400', () => {
+    expect(() => normalizeBookingConfig({ enabled: true })).toThrow('ít nhất 1 khung giờ');
+    expect(() => normalizeBookingConfig({ enabled: true, weeklySlots: { 1: [] } })).toThrow('ít nhất 1 khung giờ');
+  });
+
+  it('giờ dạng "25:00" → 400', () => {
+    expect(() => normalizeBookingConfig({ enabled: true, weeklySlots: { 1: ['25:00'] } })).toThrow('không hợp lệ');
+  });
+
+  it('giờ trùng trong cùng một ngày → 400', () => {
+    expect(() => normalizeBookingConfig({ enabled: true, weeklySlots: { 1: ['09:00', '09:00'] } })).toThrow('trùng lặp');
+  });
+
+  it('quá 48 khung/ngày → 400', () => {
+    const many = Array.from({ length: 49 }, (_, i) => `${String(8 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`);
+    expect(() => normalizeBookingConfig({ enabled: true, weeklySlots: { 1: many } })).toThrow('quá 48 khung giờ');
+  });
+
+  it('xếp giờ tăng dần dù input không theo thứ tự', () => {
+    const config = normalizeBookingConfig({ enabled: true, weeklySlots: { 1: ['10:00', '09:00', '11:30'] } });
+    expect(config.weeklySlots['1']).toEqual(['09:00', '10:00', '11:30']);
+  });
+
+  it('khoá lạ trong weeklySlots (vd "7") bị bỏ, chỉ giữ "0".."6"', () => {
+    const config = normalizeBookingConfig({ enabled: true, weeklySlots: { 1: ['09:00'], 7: ['10:00'], monday: ['11:00'] } });
+    expect(Object.keys(config.weeklySlots).sort()).toEqual(['0', '1', '2', '3', '4', '5', '6']);
+    expect(config.weeklySlots['1']).toEqual(['09:00']);
+  });
+
+  it('slotCapacity: 0 → 400; null → không giới hạn; số nguyên 1-1000 hợp lệ', () => {
+    const base = { enabled: true, weeklySlots: { 1: ['09:00'] } };
+    expect(() => normalizeBookingConfig({ ...base, slotCapacity: 0 })).toThrow('slotCapacity');
+    expect(() => normalizeBookingConfig({ ...base, slotCapacity: 1001 })).toThrow('slotCapacity');
+    expect(() => normalizeBookingConfig({ ...base, slotCapacity: 1.5 })).toThrow('slotCapacity');
+    expect(normalizeBookingConfig({ ...base, slotCapacity: null }).slotCapacity).toBeNull();
+    expect(normalizeBookingConfig({ ...base, slotCapacity: 5 }).slotCapacity).toBe(5);
+  });
+
+  it('daysAhead mặc định 30, phải trong 1-180', () => {
+    const base = { enabled: true, weeklySlots: { 1: ['09:00'] } };
+    expect(normalizeBookingConfig(base).daysAhead).toBe(30);
+    expect(() => normalizeBookingConfig({ ...base, daysAhead: 0 })).toThrow('daysAhead');
+    expect(() => normalizeBookingConfig({ ...base, daysAhead: 181 })).toThrow('daysAhead');
+    expect(normalizeBookingConfig({ ...base, daysAhead: 180 }).daysAhead).toBe(180);
+  });
+
+  it('minNoticeMinutes mặc định 60, phải trong 0-10080', () => {
+    const base = { enabled: true, weeklySlots: { 1: ['09:00'] } };
+    expect(normalizeBookingConfig(base).minNoticeMinutes).toBe(60);
+    expect(normalizeBookingConfig({ ...base, minNoticeMinutes: 0 }).minNoticeMinutes).toBe(0);
+    expect(() => normalizeBookingConfig({ ...base, minNoticeMinutes: -1 })).toThrow('minNoticeMinutes');
+    expect(() => normalizeBookingConfig({ ...base, minNoticeMinutes: 10081 })).toThrow('minNoticeMinutes');
+  });
+
+  it('closedDates: ngày phi lịch (2026-02-31) → 400', () => {
+    const base = { enabled: true, weeklySlots: { 1: ['09:00'] } };
+    expect(() => normalizeBookingConfig({ ...base, closedDates: ['2026-02-31'] })).toThrow('không hợp lệ');
+  });
+
+  it('closedDates: trùng ngày → 400; quá 366 ngày → 400', () => {
+    const base = { enabled: true, weeklySlots: { 1: ['09:00'] } };
+    expect(() => normalizeBookingConfig({ ...base, closedDates: ['2026-01-01', '2026-01-01'] })).toThrow('trùng lặp');
+    const distinctMany = Array.from({ length: 367 }, (_, i) => {
+      const day = new Date(Date.UTC(2027, 0, 1 + i));
+      return day.toISOString().slice(0, 10);
+    });
+    expect(() => normalizeBookingConfig({ ...base, closedDates: distinctMany })).toThrow('366');
+  });
+
+  it('cấu hình hợp lệ đầy đủ → trả đúng shape', () => {
+    const config = normalizeBookingConfig({
+      enabled: true,
+      weeklySlots: { 0: [], 1: ['09:00', '10:00'], 2: ['14:00'] },
+      slotCapacity: 3,
+      daysAhead: 14,
+      minNoticeMinutes: 30,
+      closedDates: ['2026-12-25'],
+    });
+    expect(config).toEqual({
+      enabled: true,
+      weeklySlots: {
+        '0': [], '1': ['09:00', '10:00'], '2': ['14:00'], '3': [], '4': [], '5': [], '6': [],
+      },
+      slotCapacity: 3,
+      daysAhead: 14,
+      minNoticeMinutes: 30,
+      closedDates: ['2026-12-25'],
+    });
   });
 });

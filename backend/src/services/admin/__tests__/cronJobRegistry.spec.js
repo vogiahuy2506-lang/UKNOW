@@ -76,9 +76,10 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 25 cron cố định, không trùng mã', () => {
-    expect(CRON_JOBS).toHaveLength(25);
+  it('đúng 26 cron cố định, không trùng mã', () => {
+    // 25 → 26: thêm form_booking_reminder (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-2a việc 5).
+    expect(CRON_JOBS).toHaveLength(26);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(25);
+    expect(new Set(codes).size).toBe(26);
   });
 });

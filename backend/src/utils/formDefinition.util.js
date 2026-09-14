@@ -259,3 +259,139 @@ export function normalizeFormSettings(rawSettings) {
 
   return settings;
 }
+
+// ─── Booking config (PR-2a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md) ──────────────────
+
+export const WEEKDAY_KEYS = Object.freeze(['0', '1', '2', '3', '4', '5', '6']);
+export const MAX_SLOTS_PER_DAY = 48;
+export const MIN_SLOT_CAPACITY = 1;
+export const MAX_SLOT_CAPACITY = 1000;
+export const MIN_DAYS_AHEAD = 1;
+export const MAX_DAYS_AHEAD = 180;
+export const DEFAULT_DAYS_AHEAD = 30;
+export const MIN_NOTICE_MINUTES_MIN = 0;
+export const MIN_NOTICE_MINUTES_MAX = 10080;
+export const DEFAULT_MIN_NOTICE_MINUTES = 60;
+export const MAX_CLOSED_DATES = 366;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function isValidCalendarDateStr(dateStr) {
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === dateStr;
+}
+
+/**
+ * Chuẩn hóa và xác thực cấu hình đặt lịch (booking_config) của biểu mẫu.
+ * `null`/`undefined`/`{enabled:false}` đều chuẩn hoá về `null` (tắt đặt lịch).
+ *
+ * @param {any} raw
+ * @returns {{
+ *   enabled: true,
+ *   weeklySlots: Record<'0'|'1'|'2'|'3'|'4'|'5'|'6', string[]>,
+ *   slotCapacity: number|null,
+ *   daysAhead: number,
+ *   minNoticeMinutes: number,
+ *   closedDates: string[]
+ * } | null}
+ */
+export function normalizeBookingConfig(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw createValidationError('Cấu hình đặt lịch (bookingConfig) phải là một đối tượng', 'INVALID_BOOKING_CONFIG');
+  }
+  if (!raw.enabled) return null;
+
+  const rawWeekly = (raw.weeklySlots && typeof raw.weeklySlots === 'object' && !Array.isArray(raw.weeklySlots))
+    ? raw.weeklySlots
+    : {};
+
+  const weeklySlots = {};
+  let hasAnySlot = false;
+  for (const dayKey of WEEKDAY_KEYS) {
+    const rawList = Array.isArray(rawWeekly[dayKey]) ? rawWeekly[dayKey] : [];
+    if (rawList.length > MAX_SLOTS_PER_DAY) {
+      throw createValidationError(`Thứ ${dayKey} có quá ${MAX_SLOTS_PER_DAY} khung giờ`, 'INVALID_BOOKING_CONFIG');
+    }
+    const seen = new Set();
+    const times = [];
+    for (const raw_ of rawList) {
+      const timeStr = String(raw_ || '').trim();
+      if (!TIME_RE.test(timeStr)) {
+        throw createValidationError(`Khung giờ "${timeStr}" không hợp lệ (định dạng HH:MM, 00:00–23:59)`, 'INVALID_BOOKING_CONFIG');
+      }
+      if (seen.has(timeStr)) {
+        throw createValidationError(`Khung giờ "${timeStr}" bị trùng lặp`, 'INVALID_BOOKING_CONFIG');
+      }
+      seen.add(timeStr);
+      times.push(timeStr);
+    }
+    times.sort();
+    weeklySlots[dayKey] = times;
+    if (times.length > 0) hasAnySlot = true;
+  }
+
+  if (!hasAnySlot) {
+    throw createValidationError('Bật đặt lịch phải có ít nhất 1 khung giờ trong tuần', 'INVALID_BOOKING_CONFIG');
+  }
+
+  let slotCapacity = null;
+  if (raw.slotCapacity !== undefined && raw.slotCapacity !== null) {
+    const n = Number(raw.slotCapacity);
+    if (!Number.isInteger(n) || n < MIN_SLOT_CAPACITY || n > MAX_SLOT_CAPACITY) {
+      throw createValidationError(
+        `slotCapacity phải là số nguyên ${MIN_SLOT_CAPACITY}-${MAX_SLOT_CAPACITY}, hoặc để trống (không giới hạn)`,
+        'INVALID_BOOKING_CONFIG'
+      );
+    }
+    slotCapacity = n;
+  }
+
+  let daysAhead = DEFAULT_DAYS_AHEAD;
+  if (raw.daysAhead !== undefined && raw.daysAhead !== null) {
+    const n = Number(raw.daysAhead);
+    if (!Number.isInteger(n) || n < MIN_DAYS_AHEAD || n > MAX_DAYS_AHEAD) {
+      throw createValidationError(`daysAhead phải là số nguyên ${MIN_DAYS_AHEAD}-${MAX_DAYS_AHEAD}`, 'INVALID_BOOKING_CONFIG');
+    }
+    daysAhead = n;
+  }
+
+  let minNoticeMinutes = DEFAULT_MIN_NOTICE_MINUTES;
+  if (raw.minNoticeMinutes !== undefined && raw.minNoticeMinutes !== null) {
+    const n = Number(raw.minNoticeMinutes);
+    if (!Number.isInteger(n) || n < MIN_NOTICE_MINUTES_MIN || n > MIN_NOTICE_MINUTES_MAX) {
+      throw createValidationError(
+        `minNoticeMinutes phải là số nguyên ${MIN_NOTICE_MINUTES_MIN}-${MIN_NOTICE_MINUTES_MAX}`,
+        'INVALID_BOOKING_CONFIG'
+      );
+    }
+    minNoticeMinutes = n;
+  }
+
+  const closedDates = [];
+  const rawClosed = Array.isArray(raw.closedDates) ? raw.closedDates : [];
+  if (rawClosed.length > MAX_CLOSED_DATES) {
+    throw createValidationError(`Không được vượt quá ${MAX_CLOSED_DATES} ngày nghỉ`, 'INVALID_BOOKING_CONFIG');
+  }
+  const seenDates = new Set();
+  for (const d of rawClosed) {
+    const dateStr = String(d || '').trim();
+    if (!isValidCalendarDateStr(dateStr)) {
+      throw createValidationError(`Ngày nghỉ "${dateStr}" không hợp lệ (định dạng YYYY-MM-DD, ngày có thật)`, 'INVALID_BOOKING_CONFIG');
+    }
+    if (seenDates.has(dateStr)) {
+      throw createValidationError(`Ngày nghỉ "${dateStr}" bị trùng lặp`, 'INVALID_BOOKING_CONFIG');
+    }
+    seenDates.add(dateStr);
+    closedDates.push(dateStr);
+  }
+
+  return {
+    enabled: true,
+    weeklySlots,
+    slotCapacity,
+    daysAhead,
+    minNoticeMinutes,
+    closedDates,
+  };
+}

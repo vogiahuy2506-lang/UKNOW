@@ -52,7 +52,7 @@ class FormController {
   async create(req, res) {
     try {
       const workspaceContext = getWorkspaceContext(req.user);
-      const { title, description, fields, settings } = req.body || {};
+      const { title, description, fields, settings, bookingConfig } = req.body || {};
 
       const form = await formService.createForm({
         workspaceOwnerId: workspaceContext.workspaceOwnerId,
@@ -61,6 +61,7 @@ class FormController {
         description,
         fields,
         settings,
+        bookingConfig,
       });
 
       return res.status(201).json({
@@ -183,10 +184,11 @@ class FormController {
         });
       }
 
-      const { page, pageSize } = req.query || {};
+      const { page, pageSize, date } = req.query || {};
       const result = await formService.getSubmissions(id, workspaceContext.workspaceOwnerId, {
         page,
         pageSize,
+        date: date || null,
       });
 
       return res.json({
@@ -199,6 +201,35 @@ class FormController {
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể tải danh sách bài nộp',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  async cancelSubmission(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const id = Number.parseInt(req.params.id, 10);
+      const submissionId = Number.parseInt(req.params.submissionId, 10);
+      if (!Number.isFinite(id) || !Number.isFinite(submissionId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID không hợp lệ',
+          code: 'INVALID_ID',
+        });
+      }
+
+      const submission = await formService.cancelSubmission(id, submissionId, workspaceContext.workspaceOwnerId);
+      return res.json({
+        success: true,
+        data: submission,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.cancelSubmission]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể huỷ bài nộp',
         code: error.code || 'INTERNAL_ERROR',
       });
     }

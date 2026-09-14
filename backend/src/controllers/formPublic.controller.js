@@ -20,6 +20,26 @@ class FormPublicController {
     }
   }
 
+  async getSlots(req, res) {
+    try {
+      const { publicKey } = req.params;
+      const { from, days } = req.query || {};
+      const result = await formService.getPublicSlots(publicKey, { from, days });
+      return res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.getSlots]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải danh sách khung giờ',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
   async submitPublic(req, res) {
     try {
       const { publicKey } = req.params;

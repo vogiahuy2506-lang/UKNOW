@@ -771,6 +771,31 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Zalo Session Restoration: kiểm tra và khôi phục mỗi 15 phút');
 
+  // ── Form Booking Reminder - nhắc lịch hẹn 24 giờ trước giờ hẹn ────────────────────
+  // Chạy mỗi 15 phút. PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-2a việc 5.
+  const runFormBookingReminderJob = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+    try {
+      await cronJobRunRepository.recordRun('form_booking_reminder', async () => {
+        const { runFormBookingReminder } = await import('../services/formBookingReminder.service.js');
+        const result = await runFormBookingReminder();
+        if (result.sent > 0 || result.failed > 0) {
+          console.log(`[Scheduler] Nhắc lịch hẹn: gửi ${result.sent}/${result.candidates}, lỗi ${result.failed}`);
+        }
+        return result;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi chạy nhắc lịch hẹn form:', error.message);
+    }
+  };
+
+  // Chạy mỗi 15 phút
+  cron.schedule('*/15 * * * *', async () => {
+    await runFormBookingReminderJob();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Form Booking Reminder: nhắc lịch hẹn mỗi 15 phút');
+
   // ── Zalo Session Keep-Alive - LUÔN giữ đăng nhập ──────────────────────────────────
   // Chạy mỗi 5 phút để kiểm tra và restore session nếu cần
   // Đảm bảo tài khoản Zalo không bị out dù có làm gì

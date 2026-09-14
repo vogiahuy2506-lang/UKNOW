@@ -1,21 +1,39 @@
 import crypto from 'crypto';
+import db from '../config/database.js';
 import formRepository from '../repositories/form.repository.js';
 import {
   normalizeFormFields,
   normalizeFormSettings,
+  normalizeBookingConfig,
   MAX_TITLE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
 } from '../utils/formDefinition.util.js';
 import { validateFormSubmission } from '../utils/formSubmission.util.js';
+import {
+  todayVn,
+  toAppointmentAt,
+  validateSlot,
+  listSlotCandidates,
+  formatAppointmentVn,
+} from '../utils/formBooking.util.js';
 import { sendSystemEmail, SENDER_NAME } from '../utils/systemEmail.util.js';
 import { logError } from '../utils/logger.util.js';
 import { escapeHtml } from '../utils/htmlEscape.util.js';
+
+const MAX_SLOTS_DAYS_PARAM = 31;
+const DEFAULT_SLOTS_DAYS_PARAM = 7;
 
 function createHttpError(message, statusCode = 400, code = 'BAD_REQUEST') {
   const err = new Error(message);
   err.statusCode = statusCode;
   err.code = code;
   return err;
+}
+
+function isValidDateParam(dateStr) {
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === dateStr;
 }
 
 class FormService {
@@ -79,7 +97,7 @@ class FormService {
    * @param {object} params
    * @returns {Promise<object>}
    */
-  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings }) {
+  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, bookingConfig }) {
     const trimmedTitle = String(title || '').trim();
     if (!trimmedTitle) {
       throw createHttpError('Tiêu đề biểu mẫu không được để trống', 400, 'INVALID_FORM_TITLE');
@@ -98,6 +116,7 @@ class FormService {
 
     const normalizedFields = normalizeFormFields(fields || []);
     const safeSettings = normalizeFormSettings(settings);
+    const safeBookingConfig = normalizeBookingConfig(bookingConfig);
 
     // 12 bytes ngẫu nhiên -> 16 ký tự base64url
     const publicKey = crypto.randomBytes(12).toString('base64url');
@@ -110,13 +129,14 @@ class FormService {
       description: trimmedDesc,
       fields: normalizedFields,
       settings: safeSettings,
+      bookingConfig: safeBookingConfig,
     });
   }
 
   /**
    * Cập nhật biểu mẫu.
-   * CHỈ nhận title, description, fields, settings.
-   * Các trường booking_config, payment_config, theme, admin_disabled_at hoàn toàn bị bỏ qua.
+   * Nhận title, description, fields, settings, bookingConfig (PR-2a).
+   * Vẫn bỏ qua hoàn toàn payment_config, theme, admin_disabled_at (PR-3/PR-4).
    *
    * @param {number} id
    * @param {number} workspaceOwnerId
@@ -162,6 +182,10 @@ class FormService {
       updateData.settings = normalizeFormSettings(payload.settings);
     }
 
+    if (payload.bookingConfig !== undefined) {
+      updateData.bookingConfig = normalizeBookingConfig(payload.bookingConfig);
+    }
+
     return formRepository.updateForm(id, workspaceOwnerId, updateData);
   }
 
@@ -199,11 +223,12 @@ class FormService {
   }
 
   /**
-   * Lấy danh sách bài nộp của biểu mẫu có phân trang.
+   * Lấy danh sách bài nộp của biểu mẫu có phân trang. `date` (YYYY-MM-DD, PR-2a việc 6a) lọc
+   * theo lịch hẹn rơi vào ngày đó tính theo giờ Việt Nam.
    *
    * @param {number} id
    * @param {number} workspaceOwnerId
-   * @param {{ page?: number, pageSize?: number }} pagination
+   * @param {{ page?: number, pageSize?: number, date?: string|null }} pagination
    * @returns {Promise<object>}
    */
   async getSubmissions(id, workspaceOwnerId, pagination) {
@@ -213,6 +238,35 @@ class FormService {
     }
 
     return formRepository.listSubmissionsByForm(id, workspaceOwnerId, pagination);
+  }
+
+  /**
+   * Huỷ một lượt đặt lịch/nộp bài (PR-2a việc 6b). Chỉ cho phép từ submitted/confirmed.
+   * Bài không thuộc form này (kể cả form khác cùng chủ) hoặc form của chủ khác -> 404.
+   *
+   * @param {number} formId
+   * @param {number} submissionId
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<object>}
+   */
+  async cancelSubmission(formId, submissionId, workspaceOwnerId) {
+    const form = await formRepository.findFormByIdAndOwner(formId, workspaceOwnerId);
+    if (!form) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+
+    const submission = await formRepository.findSubmissionByIdAndForm(submissionId, formId, workspaceOwnerId);
+    if (!submission) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+    if (submission.status === 'cancelled') {
+      throw createHttpError('Bài nộp này đã bị huỷ trước đó', 409, 'SUBMISSION_ALREADY_CANCELLED');
+    }
+    if (!['submitted', 'confirmed'].includes(submission.status)) {
+      throw createHttpError('Không thể huỷ bài nộp ở trạng thái này', 409, 'SUBMISSION_CANCEL_NOT_ALLOWED');
+    }
+
+    return formRepository.updateSubmissionStatus(submissionId, formId, workspaceOwnerId, 'cancelled');
   }
 
   /**
@@ -250,11 +304,77 @@ class FormService {
         successMessage: form.settings?.successMessage || 'Cảm ơn bạn đã gửi thông tin!',
         redirectUrl: form.settings?.redirectUrl || null,
       },
+      booking: form.bookingConfig?.enabled
+        ? { enabled: true, daysAhead: form.bookingConfig.daysAhead }
+        : null,
     };
   }
 
   /**
-   * Nộp biểu mẫu từ trang công khai.
+   * Danh sách khung giờ còn/đã hết chỗ trong `days` ngày kể từ `from` (mặc định hôm nay giờ VN),
+   * cắt theo daysAhead của form. Đếm chỗ bằng MỘT truy vấn gom nhóm (repository), không phải một
+   * truy vấn mỗi khung.
+   *
+   * @param {string} publicKey
+   * @param {{ from?: string, days?: number|string }} params
+   * @returns {Promise<{ slots: Array<{date: string, time: string, remaining: number|null}> }>}
+   */
+  async getPublicSlots(publicKey, { from, days } = {}) {
+    const key = String(publicKey || '').trim();
+    if (!key) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+
+    const form = await formRepository.findFormByPublicKey(key);
+    if (!form || !form.isPublished || form.adminDisabledAt) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+    this.checkOwnerActivePlan(form);
+
+    const bookingConfig = form.bookingConfig;
+    if (!bookingConfig?.enabled) {
+      throw createHttpError('Biểu mẫu này không bật đặt lịch hẹn', 400, 'BOOKING_NOT_ENABLED');
+    }
+
+    const now = new Date();
+    const fromDate = isValidDateParam(from) ? from : todayVn(now);
+    let daysNum = Number.parseInt(days, 10);
+    if (!Number.isFinite(daysNum) || daysNum < 1) daysNum = DEFAULT_SLOTS_DAYS_PARAM;
+    daysNum = Math.min(daysNum, MAX_SLOTS_DAYS_PARAM);
+
+    const candidates = listSlotCandidates(bookingConfig, fromDate, daysNum, now);
+    if (!candidates.length) {
+      return { slots: [] };
+    }
+
+    const isoTimes = candidates
+      .map((c) => toAppointmentAt(c.date, c.time).toISOString())
+      .sort();
+    const minIso = isoTimes[0];
+    // Chặn trên KHÔNG bao gồm (điều kiện `<`) nên cộng thêm 1ms sau khung muộn nhất.
+    const endIso = new Date(new Date(isoTimes[isoTimes.length - 1]).getTime() + 1).toISOString();
+
+    const occupiedRows = await formRepository.listOccupiedCountsInRange(form.id, minIso, endIso);
+    const occupiedMap = new Map(
+      occupiedRows.map((row) => [new Date(row.appointmentAt).toISOString(), row.occupied])
+    );
+
+    const slotCapacity = bookingConfig.slotCapacity;
+    const slots = candidates.map((c) => {
+      const iso = toAppointmentAt(c.date, c.time).toISOString();
+      const occupied = occupiedMap.get(iso) || 0;
+      const remaining = slotCapacity === null ? null : Math.max(0, slotCapacity - occupied);
+      return { date: c.date, time: c.time, remaining };
+    });
+
+    return { slots };
+  }
+
+  /**
+   * Nộp biểu mẫu từ trang công khai. Có đặt lịch (PR-2a) thì tạo bài nộp trong MỘT giao dịch:
+   * BEGIN → khoá tư vấn theo khung giờ (§4.3) → đếm chỗ đang chiếm → đủ chỗ thì INSERT, hết chỗ
+   * thì 409 → COMMIT/ROLLBACK. Không đặt lịch thì giữ nguyên đường cũ (không giao dịch, không cần
+   * khoá vì không có gì để tranh chấp).
    *
    * @param {string} publicKey
    * @param {object} body
@@ -284,21 +404,72 @@ class FormService {
     // Xác thực câu trả lời
     const validated = validateFormSubmission(form.fields, body.answers, body);
 
+    const bookingConfig = form.bookingConfig;
+    const bookingEnabled = Boolean(bookingConfig?.enabled);
+    let appointmentAt = null;
+    let status = 'submitted';
+
+    if (bookingEnabled) {
+      const { appointmentDate, appointmentTime } = body || {};
+      if (!appointmentDate || !appointmentTime) {
+        throw createHttpError('Vui lòng chọn ngày và giờ hẹn', 400, 'MISSING_APPOINTMENT');
+      }
+      // validateSlot ném lỗi .statusCode=400 sẵn (formBooking.util.js) — để nguyên bay lên.
+      const slotResult = validateSlot(bookingConfig, String(appointmentDate), String(appointmentTime), new Date());
+      appointmentAt = slotResult.appointmentAt;
+      // PR-2a: đặt lịch mà form CHƯA thu tiền (payment_config chưa làm ở PR-3) → confirmed ngay.
+      status = 'confirmed';
+    }
+
     // Sinh access_token và lưu bài nộp vào database (PR-1a để submitter_ip_hash NULL)
     const accessToken = crypto.randomBytes(32).toString('hex');
 
-    const submission = await formRepository.createSubmission({
-      formId: form.id,
-      workspaceOwnerId: form.workspaceOwnerId,
-      accessToken,
-      answers: validated.answers,
-      respondentName: validated.respondentName,
-      respondentEmail: validated.respondentEmail,
-      respondentPhone: validated.respondentPhone,
-      marketingConsent: validated.marketingConsent,
-      status: 'submitted',
-      submitterIpHash: null,
-    });
+    let submission;
+    if (bookingEnabled) {
+      const appointmentAtIso = appointmentAt.toISOString();
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        await formRepository.acquireFormSlotLock(client, form.id, appointmentAtIso);
+        const occupied = await formRepository.countOccupiedForAppointment(form.id, appointmentAtIso, client);
+        const capacity = bookingConfig.slotCapacity;
+        if (capacity !== null && occupied >= capacity) {
+          throw createHttpError('Khung giờ này vừa hết chỗ, vui lòng chọn khung khác', 409, 'FORM_SLOT_FULL');
+        }
+        submission = await formRepository.createSubmission({
+          formId: form.id,
+          workspaceOwnerId: form.workspaceOwnerId,
+          accessToken,
+          answers: validated.answers,
+          respondentName: validated.respondentName,
+          respondentEmail: validated.respondentEmail,
+          respondentPhone: validated.respondentPhone,
+          marketingConsent: validated.marketingConsent,
+          status,
+          appointmentAt,
+          submitterIpHash: null,
+        }, client);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } else {
+      submission = await formRepository.createSubmission({
+        formId: form.id,
+        workspaceOwnerId: form.workspaceOwnerId,
+        accessToken,
+        answers: validated.answers,
+        respondentName: validated.respondentName,
+        respondentEmail: validated.respondentEmail,
+        respondentPhone: validated.respondentPhone,
+        marketingConsent: validated.marketingConsent,
+        status,
+        submitterIpHash: null,
+      });
+    }
 
     // Thư báo cho chủ form nếu settings.notifyOwner được bật (fire-and-forget, không để người điền chờ)
     if (form.settings?.notifyOwner && form.ownerEmail) {
@@ -309,6 +480,7 @@ class FormService {
         <p>Họ tên: ${escapeHtml(validated.respondentName || 'Chưa cung cấp')}</p>
         <p>Email: ${escapeHtml(validated.respondentEmail || 'Chưa cung cấp')}</p>
         <p>Số điện thoại: ${escapeHtml(validated.respondentPhone || 'Chưa cung cấp')}</p>
+        ${appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>` : ''}
         <p>Thời gian: ${escapeHtml(new Date().toLocaleString('vi-VN'))}</p>
       `;
 
@@ -319,6 +491,27 @@ class FormService {
       }).catch((emailErr) => {
         logError(`[FormService] Gửi thư báo chủ form thất bại cho form ${form.id}: ${emailErr.message}`);
       });
+    }
+
+    // Thư xác nhận lịch hẹn cho người đặt (PR-2a việc 4) — chỉ khi có đặt lịch, có email, và
+    // form bật settings.sendConfirmation (dùng CHUNG công tắc với thư xác nhận thường — tự chọn,
+    // ghi trong báo cáo). Gửi sau khi đã COMMIT; chỉ ghi confirmation_sent_at khi gửi THÀNH CÔNG.
+    if (bookingEnabled && validated.respondentEmail && form.settings?.sendConfirmation) {
+      const subject = `[${SENDER_NAME}] Xác nhận lịch hẹn - ${form.title}`;
+      const html = `
+        <h2>Đã xác nhận lịch hẹn của bạn</h2>
+        <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
+        <p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>
+      `;
+
+      void sendSystemEmail({
+        to: validated.respondentEmail,
+        subject,
+        html,
+      }).then(() => formRepository.markConfirmationSent(submission.id))
+        .catch((emailErr) => {
+          logError(`[FormService] Gửi thư xác nhận lịch hẹn thất bại cho submission ${submission.id}: ${emailErr.message}`);
+        });
     }
 
     return { accessToken: submission.accessToken, isBotTrap: false };

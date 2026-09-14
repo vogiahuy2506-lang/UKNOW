@@ -214,6 +214,14 @@ export const CRON_JOBS = [
     impact: 'Nếu không chạy, bounce bất đồng bộ không được ghi nhận và email_hard_bounced không được cập nhật.',
     tracked: true,
   },
+  {
+    code: 'form_booking_reminder',
+    label: 'Nhắc lịch hẹn form đặt lịch',
+    schedule: 'Mỗi 15 phút',
+    description: 'Gửi 1 thư nhắc cho các lượt đặt lịch qua Form còn đang chiếm chỗ, giờ hẹn còn trong 24 giờ tới và chưa được nhắc.',
+    impact: 'Người đặt lịch không nhận được thư nhắc trước giờ hẹn.',
+    tracked: true,
+  },
 ];
 
 export function getCronJobByCode(code) {
