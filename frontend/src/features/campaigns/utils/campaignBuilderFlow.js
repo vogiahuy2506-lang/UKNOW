@@ -2,11 +2,11 @@ const EMAIL_ACTION_TYPES = ['send_email'];
 const ZALO_PERSONAL_ACTION_TYPES = ['send_zalo_personal', 'send_zalo_friend_request'];
 const ZALO_GROUP_ACTION_TYPES = ['send_zalo_group'];
 
-const COMMON_DATA_NODE_TYPES = ['read_sheet', 'read_courses_db', 'read_products_db', 'read_interested_customers', 'read_landing_leads', 'save_customer'];
+const COMMON_DATA_NODE_TYPES = ['read_sheet', 'read_courses_db', 'read_products_db', 'read_interested_customers', 'read_landing_leads', 'read_form_submissions', 'save_customer'];
 const ZALO_ACCOUNT_NODE_TYPE = 'select_zalo_account';
 const ZALO_PERSONAL_DATA_NODE_TYPES = ['get_all_friends'];
 const ZALO_GROUP_DATA_NODE_TYPES = ['get_all_groups'];
-const ZALO_GROUP_COMMON_DATA_NODE_TYPES = ['read_sheet', 'read_courses_db', 'read_products_db', 'read_landing_leads', 'save_customer'];
+const ZALO_GROUP_COMMON_DATA_NODE_TYPES = ['read_sheet', 'read_courses_db', 'read_products_db', 'read_landing_leads', 'read_form_submissions', 'save_customer'];
 
 // Logic nodes (điều kiện, gắn tag, cập nhật thuộc tính) khả dụng cho mọi loại
 // chiến dịch — không bị giới hạn theo email/zalo/zalo_group.

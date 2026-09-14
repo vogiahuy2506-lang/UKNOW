@@ -71,6 +71,29 @@ const campaignBuilderApiService = {
     return api.get('/leads/preview', { params: q, ...options });
   },
 
+  /**
+   * Danh sách biểu mẫu của workspace (GET /api/forms) — dùng cho node read_form_submissions chọn form.
+   * Mỗi form có settings.consentEnabled, submissionCount (backend form.repository.js listFormsByOwner).
+   *
+   * @param {object} options axios options
+   */
+  listForms(options = {}) {
+    return api.get('/forms', options);
+  },
+
+  /**
+   * Preview bài nộp biểu mẫu (GET /api/forms/:formId/campaign-preview) — dùng cho node
+   * read_form_submissions trong Builder. Preview LUÔN dùng fieldMap rỗng phía server (PR-6a) —
+   * Builder tự áp fieldMap phía client sau khi nhận kết quả (xem formSubmissionFieldMap.js).
+   *
+   * @param {string|number} formId
+   * @param {{ limit?: number }} params
+   * @param {object} options axios options
+   */
+  previewFormSubmissions(formId, params = {}, options = {}) {
+    return api.get(`/forms/${formId}/campaign-preview`, { params, ...options });
+  },
+
   previewGoogleSheet(payload, options = {}) {
     return api.post('/google-sheets/preview', payload, options);
   },

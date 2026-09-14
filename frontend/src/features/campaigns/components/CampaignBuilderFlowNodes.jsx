@@ -1,7 +1,7 @@
 import { useState } from 'react';
 /* eslint-disable react-refresh/only-export-components -- nodeConfigs registry exported alongside node UI */
 import { BaseEdge, getBezierPath, Handle, Position, useReactFlow } from 'reactflow';
-import { HiOutlineAdjustments, HiOutlineChat, HiOutlineCube, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePencil, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineTag, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
+import { HiOutlineAdjustments, HiOutlineChat, HiOutlineClipboardList, HiOutlineCube, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePencil, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineTag, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 const NODE_CARD_CONTAINER_CLASS =
@@ -124,6 +124,14 @@ export function getNodeConfigs(t) {
         bgColor: '#E0F2F1',
         iconColor: '#0D6E6E',
         description: t('campaignNodes.readLeadsDesc'),
+      },
+      {
+        type: 'read_form_submissions',
+        name: t('campaignNodes.readFormSubmissions'),
+        icon: HiOutlineClipboardList,
+        bgColor: '#FCE4EC',
+        iconColor: '#AD1457',
+        description: t('campaignNodes.readFormSubmissionsDesc'),
       },
       {
         type: 'select_zalo_account',
@@ -299,6 +307,16 @@ export const nodeConfigs = {
       iconColor: '#0D6E6E',
       description: 'Leads from Founder AI landing form',
       descriptionVi: 'Lead từ form landing Founder AI (lọc ngày, nghề, lĩnh vực)',
+    },
+    {
+      type: 'read_form_submissions',
+      name: 'Form Submissions Data',
+      nameVi: 'Dữ liệu Biểu mẫu',
+      icon: HiOutlineClipboardList,
+      bgColor: '#FCE4EC',
+      iconColor: '#AD1457',
+      description: 'People who submitted and consented on a form',
+      descriptionVi: 'Người đã điền và đồng ý nhận tin từ một biểu mẫu',
     },
     {
       type: 'save_customer',

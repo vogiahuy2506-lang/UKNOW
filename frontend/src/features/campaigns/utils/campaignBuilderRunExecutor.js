@@ -421,6 +421,14 @@ const buildNodeSuccessValidation = (nodeType, result) => {
       message: `Lấy dữ liệu landing page thành công (${fetched} lead, tổng khớp ${total})`,
     };
   }
+  if (nodeType === 'read_form_submissions') {
+    const fetched = result?.output?.meta?.fetched || 0;
+    const total = result?.output?.meta?.totalItems ?? fetched;
+    return {
+      status: 'success',
+      message: `Lấy dữ liệu form thành công (${fetched} bản ghi, tổng khớp ${total})`,
+    };
+  }
   if (nodeType === 'send_email') {
     const attempted = result?.output?.meta?.attempted || 0;
     const totalAttempts = result?.output?.meta?.totalAttempts || attempted;
@@ -510,6 +518,8 @@ const getNodeFailureMessage = (nodeType, error) => (
           ? 'Không thể lấy dữ liệu sản phẩm'
           : nodeType === 'read_landing_leads'
           ? 'Không thể lấy dữ liệu landing page'
+          : nodeType === 'read_form_submissions'
+          ? 'Không thể lấy dữ liệu form'
           : nodeType === 'get_all_friends'
             ? 'Không thể lấy danh sách bạn bè Zalo'
             : nodeType === 'get_all_groups'

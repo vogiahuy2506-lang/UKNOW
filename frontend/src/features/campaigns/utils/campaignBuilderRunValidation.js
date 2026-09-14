@@ -1,4 +1,5 @@
 import { LANDING_LEADS_MAX_RECORDS } from '../constants/landingLeadsNodeLimits.js';
+import { FORM_SUBMISSIONS_MAX_RECORDS } from '../constants/formSubmissionsNodeLimits.js';
 
 /**
  * Build execution order from flow graph with trigger-rooted traversal.
@@ -248,6 +249,22 @@ export const validateNodeForRun = (node) => {
       if (from > to) {
         return { status: 'failed', message: '«Từ ngày» phải trước hoặc bằng «Đến ngày»' };
       }
+    }
+  }
+
+  if (nodeType === 'read_form_submissions') {
+    if (!String(config.formId || '').trim()) {
+      return { status: 'failed', message: 'Chưa chọn biểu mẫu' };
+    }
+    const limit = parseInt(config.formSubmissionsLimit, 10);
+    if (Number.isFinite(limit) && limit < 1) {
+      return { status: 'failed', message: 'Số bản ghi tối đa không hợp lệ' };
+    }
+    if (Number.isFinite(limit) && limit > FORM_SUBMISSIONS_MAX_RECORDS) {
+      return {
+        status: 'failed',
+        message: `Số bản ghi tối đa không được vượt quá ${FORM_SUBMISSIONS_MAX_RECORDS.toLocaleString('vi-VN')}`,
+      };
     }
   }
 

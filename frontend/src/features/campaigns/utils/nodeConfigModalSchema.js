@@ -97,6 +97,26 @@ export const getSchemaForNodeId = ({ nodeId, runLogMap = {}, nodes = [], buildSc
     ];
   }
 
+  if (nodeType === 'read_form_submissions') {
+    // Trường form có mã f_xxxxxxxx khó đọc -> khoá cố định trước, rồi ghép cột động lưu lúc
+    // chọn form (formColumnsSnapshot: [{key,label,type}], xem NodeConfigReadFormSubmissionsSection.jsx).
+    const dynamicCols = Array.isArray(node?.data?.config?.formColumnsSnapshot)
+      ? node.data.config.formColumnsSnapshot.map((c) => ({ key: c.key, type: c.type || 'string' }))
+      : [];
+    return [
+      { key: 'submissionId', type: 'number' },
+      { key: 'id', type: 'number' },
+      { key: 'formId', type: 'string' },
+      { key: 'fullName', type: 'string' },
+      { key: 'email', type: 'string' },
+      { key: 'phone', type: 'string' },
+      { key: 'appointmentAt', type: 'string' },
+      { key: 'createdAt', type: 'string' },
+      { key: 'marketingConsent', type: 'boolean' },
+      ...dynamicCols,
+    ];
+  }
+
   if (nodeType === 'read_interested_customers') {
     return [
       { key: 'customerId', type: 'number' },

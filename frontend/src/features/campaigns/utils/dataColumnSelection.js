@@ -9,6 +9,10 @@ const ALWAYS_KEEP_BY_KIND = {
   landing: ['leadId', 'id'],
   courses_db: [],
   products_db: [],
+  // PR-6b — khớp backend dataColumnSelection.util.js ALWAYS_KEEP_BY_KIND.form: landing chỉ
+  // giữ leadId/id là lỗ đã biết (không chọn cột email thì node gửi không tìm được người
+  // nhận) — form không lặp lại, giữ luôn cả 3 khoá liên hệ.
+  form: ['submissionId', 'id', 'email', 'phone', 'fullName'],
 };
 
 /**
@@ -31,7 +35,7 @@ export function normalizeDataSelectedColumns(raw) {
 /**
  * @param {unknown} items
  * @param {unknown} rawSelectedColumns
- * @param {'sheet'|'interested'|'landing'|'courses_db'} kind
+ * @param {'sheet'|'interested'|'landing'|'courses_db'|'form'} kind
  * @returns {{ items: object[], dataLoadMeta: object }}
  */
 export function applyDataColumnSelectionToItems(items, rawSelectedColumns, kind = 'sheet') {

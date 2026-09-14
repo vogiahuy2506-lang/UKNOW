@@ -349,6 +349,22 @@ export const createNodeConfigFormData = ({
   landingLeadsSlugs: Array.isArray(config.landingLeadsSlugs) ? config.landingLeadsSlugs : [],
   landingLeadsCustomFilters: Array.isArray(config.landingLeadsCustomFilters) ? config.landingLeadsCustomFilters : [],
   landingLeadsLimit: config.landingLeadsLimit || 1000,
+  formId: config.formId || '',
+  /**
+   * Ánh xạ trường form cho Họ tên/Email/SĐT — trống = lấy theo vai trò (role) trong form.
+   * Khoá PHẢI trùng tên với contract backend (form.service.js getCampaignDataForForm) vì
+   * formData được lưu THẲNG làm config khi bấm Lưu (xem CampaignBuilder.jsx handleNodeConfigSave:
+   * `config: formData`) — không có bước đổi tên khoá.
+   */
+  fieldMap: {
+    nameKey: config.fieldMap?.nameKey || '',
+    emailKey: config.fieldMap?.emailKey || '',
+    phoneKey: config.fieldMap?.phoneKey || '',
+  },
+  /** Snapshot cột của form lúc chọn ({key,label,type}[]) — nhãn dễ đọc thay vì khoá f_xxxxxxxx. */
+  formColumnsSnapshot: Array.isArray(config.formColumnsSnapshot) ? config.formColumnsSnapshot : [],
+  formConsentEnabled: Boolean(config.formConsentEnabled),
+  formSubmissionsLimit: config.formSubmissionsLimit || 1000,
 });
 
 /**
@@ -606,6 +622,27 @@ export const handleNodeConfigSaveClick = async ({
       onSave(formData);
     } catch (error) {
       console.error('Landing leads preview error:', error);
+      const msg = error.response?.data?.message || error.message || 'Không thể kiểm tra cấu hình';
+      toastNotifier.error(typeof msg === 'string' ? msg : 'Không thể kiểm tra cấu hình');
+    } finally {
+      setIsLoadingTestPreview(false);
+    }
+    return;
+  }
+
+  if (nodeType === 'read_form_submissions') {
+    if (!String(formData.formId || '').trim()) {
+      toastNotifier.error('Vui lòng chọn một biểu mẫu trước khi lưu');
+      return;
+    }
+    try {
+      setIsLoadingTestPreview(true);
+      const response = await campaignBuilderApiService.previewFormSubmissions(formData.formId, { limit: 50 });
+      const total = response?.data?.data?.pagination?.total ?? 0;
+      toastNotifier.success(`Kết nối OK. Có ${total} người đã đồng ý nhận tin (xem trước tối đa 50 dòng)`);
+      onSave(formData);
+    } catch (error) {
+      console.error('Form submissions preview error:', error);
       const msg = error.response?.data?.message || error.message || 'Không thể kiểm tra cấu hình';
       toastNotifier.error(typeof msg === 'string' ? msg : 'Không thể kiểm tra cấu hình');
     } finally {

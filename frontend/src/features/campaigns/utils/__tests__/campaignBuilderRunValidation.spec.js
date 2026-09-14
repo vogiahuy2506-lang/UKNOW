@@ -21,6 +21,33 @@ describe('campaignBuilderRunValidation Spec (PR-3)', () => {
     });
   });
 
+  describe('validateNodeForRun read_form_submissions (PR-6b)', () => {
+    it('thiếu formId -> failed kèm câu báo', () => {
+      const node = { type: 'read_form_submissions', data: { config: {} } };
+      const res = validateNodeForRun(node);
+      expect(res.status).toBe('failed');
+      expect(res.message).toContain('biểu mẫu');
+    });
+
+    it('có formId, limit hợp lệ -> success', () => {
+      const node = {
+        type: 'read_form_submissions',
+        data: { config: { formId: 9, formSubmissionsLimit: 500 } },
+      };
+      const res = validateNodeForRun(node);
+      expect(res.status).toBe('success');
+    });
+
+    it('limit vượt trần -> failed', () => {
+      const node = {
+        type: 'read_form_submissions',
+        data: { config: { formId: 9, formSubmissionsLimit: 999999 } },
+      };
+      const res = validateNodeForRun(node);
+      expect(res.status).toBe('failed');
+    });
+  });
+
   describe('validateNodeForRun warnings for unmapped template variables', () => {
     it('attaches warning to Zalo personal action node without failing validation', () => {
       const node = {

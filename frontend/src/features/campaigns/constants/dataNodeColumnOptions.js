@@ -43,3 +43,20 @@ export const LANDING_LEAD_COLUMN_OPTIONS = [
   { key: 'createdAt', label: 'createdAt' },
   { key: 'customFields', label: 'customFields (thông tin thêm)' },
 ];
+
+/**
+ * Danh sách cột bài nộp biểu mẫu (khớp `formCampaignItem.util.js` phía backend — khoá cố
+ * định). Cột động của từng trường form (f_xxxxxxxx) lấy từ `config.formColumnsSnapshot`, KHÔNG
+ * liệt kê tĩnh ở đây.
+ */
+export const FORM_SUBMISSION_COLUMN_OPTIONS = [
+  { key: 'submissionId', label: 'submissionId' },
+  { key: 'id', label: 'id' },
+  { key: 'formId', label: 'formId' },
+  { key: 'fullName', label: 'fullName' },
+  { key: 'email', label: 'email' },
+  { key: 'phone', label: 'phone' },
+  { key: 'appointmentAt', label: 'appointmentAt (giờ hẹn, nếu form có đặt lịch)' },
+  { key: 'createdAt', label: 'createdAt' },
+  { key: 'marketingConsent', label: 'marketingConsent' },
+];

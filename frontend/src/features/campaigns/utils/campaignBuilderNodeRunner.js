@@ -1,4 +1,6 @@
 import { clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
+import { clampFormSubmissionsLimitUi } from '../constants/formSubmissionsNodeLimits.js';
+import { applyFieldMapToPreviewItems } from './formSubmissionFieldMap.js';
 import { resolveItemField } from './campaignBuilderRuntime.js';
 import { applyDataColumnSelectionToItems, measureJsonUtf8Bytes } from './dataColumnSelection.js';
 import {
@@ -901,6 +903,43 @@ export const createCampaignNodeRunner = (deps) => {
             limit,
             accumulatedPayloadBytesUtf8: measureJsonUtf8Bytes(slimLandingRows),
             dataLoadMeta: landingDataLoadMeta,
+          },
+        },
+      };
+    }
+
+    if (nodeType === 'read_form_submissions') {
+      const limit = clampFormSubmissionsLimitUi(config.formSubmissionsLimit, 1000);
+      const response = await apiService.previewFormSubmissions(config.formId, { limit }, { signal });
+      const data = response.data?.data;
+      const rawRows = Array.isArray(data?.items) ? data.items : [];
+      // Preview API LUÔN dùng fieldMap rỗng phía server (PR-6a getCampaignPreviewForForm) — áp
+      // lại fieldMap ở client để chạy thử khớp với chạy thật (PR-6b phản biện điểm 2).
+      const mappedRows = applyFieldMapToPreviewItems(rawRows, config.fieldMap);
+      const { items: slimFormRows, dataLoadMeta: formDataLoadMeta } = applyDataColumnSelectionToItems(
+        mappedRows,
+        config.dataSelectedColumns,
+        'form'
+      );
+      ctx.sheetRows = slimFormRows;
+      return {
+        input: {
+          operation: 'Get Form Submissions',
+          formId: config.formId || '',
+          fieldMap: config.fieldMap || {},
+          formSubmissionsLimit: limit,
+          dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],
+        },
+        output: {
+          ok: true,
+          items: slimFormRows,
+          schema: buildSchemaFromRows(slimFormRows),
+          meta: {
+            totalItems: data?.pagination?.total ?? slimFormRows.length,
+            fetched: slimFormRows.length,
+            limit,
+            accumulatedPayloadBytesUtf8: measureJsonUtf8Bytes(slimFormRows),
+            dataLoadMeta: formDataLoadMeta,
           },
         },
       };

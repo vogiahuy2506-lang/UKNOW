@@ -43,6 +43,7 @@ import {
   NodeConfigReadSheetSection,
 } from './NodeConfigModalReadSections';
 import { NodeConfigReadLandingLeadsSection } from './NodeConfigReadLandingLeadsSection';
+import { NodeConfigReadFormSubmissionsSection } from './NodeConfigReadFormSubmissionsSection';
 import { NodeConfigSelectZaloAccountSection } from './NodeConfigModalSelectZaloAccountSection';
 import {
   NodeConfigConditionSection,
@@ -544,6 +545,8 @@ const NodeConfigModal = ({
         );
       case 'read_landing_leads':
         return <NodeConfigReadLandingLeadsSection formData={formData} setFormData={setFormData} />;
+      case 'read_form_submissions':
+        return <NodeConfigReadFormSubmissionsSection formData={formData} setFormData={setFormData} />;
       case 'save_customer':
         return (
           <NodeConfigSaveCustomerSection
