@@ -1,11 +1,15 @@
 import { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import {
   HiOutlineSparkles, HiOutlineExternalLink, HiOutlinePencilAlt,
   HiOutlineDeviceMobile, HiOutlineDesktopComputer, HiOutlineCode,
   HiOutlineEye, HiOutlineDownload, HiOutlineClipboard, HiOutlineX,
-  HiOutlineCheck
+  HiOutlineCheck, HiOutlineGlobeAlt, HiOutlineRefresh,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
+import { getPublicUrlFromSlug } from '../../landing-canvas/utils/buildCanvasSrcDoc.js';
+import { slugifyLandingTitle } from '../utils/landingPaste.js';
 
 /**
  * Enhanced Landing Page Card with preview, code view, and export options.
@@ -13,7 +17,8 @@ import { useI18n } from '../../../i18n';
 const LandingPageCard = ({
   page,
   messageId = null,
-  onSaveToLibrary,
+  canSave = true,
+  onSaveAndPublish,
   onGenerateNew,
   onEditWithAi,
   isEditing = false,
@@ -28,6 +33,19 @@ const LandingPageCard = ({
   const [editInstruction, setEditInstruction] = useState('');
   const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
   const iframeRef = useRef(null);
+
+  // "Lưu & xuất bản" (PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md, Việc 2.2) — thay cho nút
+  // "Lưu vào thư viện" cũ (chỉ navigate sang trang soạn kèm state, chưa lưu gì thật).
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [saveTitle, setSaveTitle] = useState(page.title || '');
+  const [saveSlug, setSaveSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [savePublishNow, setSavePublishNow] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [saveBusy, setSaveBusy] = useState(null); // null | 'create' | 'toggle' | 'update'
+
+  const isSaved = Boolean(page.landingPageId);
+  const publicUrl = isSaved && page.slug ? getPublicUrlFromSlug(page.slug) : '';
 
   const rawHtml = page.html || '';
   const isFullDocument = /<!doctype\s+html/i.test(rawHtml) || /<html[\s>]/i.test(rawHtml);
@@ -110,7 +128,94 @@ const LandingPageCard = ({
     }
   };
 
+  const handleOpenSaveForm = () => {
+    setSaveTitle(page.title || '');
+    setSaveSlug(slugifyLandingTitle(page.title || ''));
+    setSlugTouched(false);
+    setSavePublishNow(false);
+    setSaveError(null);
+    setShowSaveForm(true);
+  };
+
+  const handleTitleChange = (e) => {
+    const value = e.target.value;
+    setSaveTitle(value);
+    if (!slugTouched) setSaveSlug(slugifyLandingTitle(value));
+  };
+
+  const handleSlugChange = (e) => {
+    setSlugTouched(true);
+    setSaveSlug(e.target.value.toLowerCase());
+  };
+
+  const handleSubmitSave = async (e) => {
+    e?.preventDefault?.();
+    const title = saveTitle.trim();
+    if (!title || saveBusy) {
+      if (!title) setSaveError(t('save.titleRequired'));
+      return;
+    }
+    setSaveBusy('create');
+    setSaveError(null);
+    try {
+      await onSaveAndPublish?.({
+        page,
+        formValues: { title, slug: saveSlug.trim().toLowerCase(), isPublished: savePublishNow },
+        fullHtml,
+        messageIndex,
+        messageId,
+      });
+      setShowSaveForm(false);
+      toast.success(t('save.saved'));
+    } catch (error) {
+      const status = error?.response?.status;
+      if (status === 409) setSaveError(t('save.slugTaken'));
+      else if (status === 403) setSaveError(t('save.forbidden'));
+      else setSaveError(error?.response?.data?.message || t('save.saveFailed'));
+    } finally {
+      setSaveBusy(null);
+    }
+  };
+
+  const handleTogglePublish = async () => {
+    if (saveBusy) return;
+    setSaveBusy('toggle');
+    try {
+      await onSaveAndPublish?.({
+        page,
+        formValues: { title: page.title, slug: page.slug, isPublished: !page.isPublished },
+        fullHtml,
+        messageIndex,
+        messageId,
+      });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || t('save.toggleFailed'));
+    } finally {
+      setSaveBusy(null);
+    }
+  };
+
+  const handleUpdateSaved = async () => {
+    if (saveBusy) return;
+    setSaveBusy('update');
+    try {
+      await onSaveAndPublish?.({
+        page,
+        formValues: { title: page.title, slug: page.slug, isPublished: page.isPublished },
+        fullHtml,
+        messageIndex,
+        messageId,
+      });
+      toast.success(t('save.updateSaved'));
+    } catch (error) {
+      toast.error(error?.response?.data?.message || t('save.saveFailed'));
+    } finally {
+      setSaveBusy(null);
+    }
+  };
+
   const isBusy = isEditing || isSubmittingLocal;
+  const showSaveButton = !isSaved && canSave;
   const deviceWidth = device === 'mobile' ? 'w-[375px]' : 'w-full';
   const deviceHeight = device === 'mobile' ? 'h-[667px]' : 'h-full';
 
@@ -285,6 +390,120 @@ const LandingPageCard = ({
           </div>
         )}
 
+        {/* Lưu & xuất bản (Việc 2.2) */}
+        {!isSaved && showSaveForm && (
+          <form
+            onSubmit={handleSubmitSave}
+            className="mt-3 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200 space-y-2"
+          >
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                {t('save.title')}
+              </label>
+              <input
+                type="text"
+                value={saveTitle}
+                onChange={handleTitleChange}
+                disabled={saveBusy === 'create'}
+                className="w-full text-xs rounded-lg border border-slate-200 bg-white p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                {t('save.slug')}
+              </label>
+              <input
+                type="text"
+                value={saveSlug}
+                onChange={handleSlugChange}
+                placeholder={t('save.slugPlaceholder')}
+                disabled={saveBusy === 'create'}
+                className="w-full text-xs rounded-lg border border-slate-200 bg-white p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+              {saveSlug && (
+                <p className="mt-1 text-[10px] text-slate-400 truncate">{getPublicUrlFromSlug(saveSlug)}</p>
+              )}
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={savePublishNow}
+                onChange={(e) => setSavePublishNow(e.target.checked)}
+                disabled={saveBusy === 'create'}
+              />
+              {t('save.publishNow')}
+            </label>
+            {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveForm(false)}
+                disabled={saveBusy === 'create'}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg transition"
+              >
+                {t('save.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={saveBusy === 'create'}
+                className="px-4 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-lg transition"
+              >
+                {saveBusy === 'create' ? t('save.saving') : t('save.submit')}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {isSaved && (
+          <div className="mt-3 bg-emerald-50 rounded-xl p-3 border border-emerald-200 space-y-2">
+            <div className="flex items-center gap-1.5 text-emerald-800 font-bold text-xs">
+              <HiOutlineCheck className="w-3.5 h-3.5" />
+              <span>{t('save.saved')}</span>
+            </div>
+            {publicUrl && (
+              <a
+                href={publicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-900 underline truncate"
+              >
+                <HiOutlineGlobeAlt className="w-3.5 h-3.5 shrink-0" />
+                {publicUrl}
+              </a>
+            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link
+                to={`/app/settings/landing-pages/${page.landingPageId}/edit`}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-100 transition"
+              >
+                <HiOutlinePencilAlt className="w-3 h-3" />
+                {t('save.openEditor')}
+              </Link>
+              {canSave && (
+                <button
+                  type="button"
+                  onClick={handleTogglePublish}
+                  disabled={Boolean(saveBusy)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-100 transition disabled:opacity-50"
+                >
+                  {saveBusy === 'toggle' ? t('save.saving') : (page.isPublished ? t('save.unpublish') : t('save.publish'))}
+                </button>
+              )}
+              {canSave && (
+                <button
+                  type="button"
+                  onClick={handleUpdateSaved}
+                  disabled={Boolean(saveBusy)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-100 transition disabled:opacity-50"
+                >
+                  <HiOutlineRefresh className="w-3 h-3" />
+                  {saveBusy === 'update' ? t('save.updating') : t('save.updateButton')}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="mt-4 space-y-2">
           <button
@@ -294,7 +513,7 @@ const LandingPageCard = ({
             <HiOutlineExternalLink className="w-4 h-4 text-orange-400" />
             {t('viewFullscreen')}
           </button>
-          <div className="grid grid-cols-3 gap-2">
+          <div className={`grid gap-2 ${showSaveButton ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <button
               onClick={() => setShowEditBox((prev) => !prev)}
               className={`py-2.5 border font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-1 transition-all ${
@@ -306,13 +525,15 @@ const LandingPageCard = ({
               <HiOutlineSparkles className="w-3.5 h-3.5" />
               {t('editWithAi')}
             </button>
-            <button
-              onClick={() => onSaveToLibrary?.(page)}
-              className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1"
-            >
-              <HiOutlinePencilAlt className="w-3.5 h-3.5 text-slate-500" />
-              {t('editAndSave')}
-            </button>
+            {showSaveButton && (
+              <button
+                onClick={handleOpenSaveForm}
+                className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1"
+              >
+                <HiOutlinePencilAlt className="w-3.5 h-3.5 text-slate-500" />
+                {t('save.button')}
+              </button>
+            )}
             <button
               onClick={() => onGenerateNew?.()}
               className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1"

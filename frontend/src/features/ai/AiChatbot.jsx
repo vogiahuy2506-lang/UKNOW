@@ -62,6 +62,15 @@ import {
   findLatestInteractiveIndex,
 } from './utils/wizardContext.js';
 import { isValidGoogleSheetUrl } from './utils/googleSheetUrl.js';
+import {
+  looksLikeHtmlDocument,
+  splitHtmlPaste,
+  buildLandingPasteMarker,
+} from './utils/landingPaste.js';
+import {
+  createLandingPageAdmin,
+  updateLandingPageAdmin,
+} from '../landing-pages/services/landingPagesAdminApi.service.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
@@ -323,6 +332,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const { user, fetchAiCredits, aiCredits, billingStatus, addons, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
   const isEmployeeCtx = activeContext?.type === 'employee';
+  // Self context luôn được (mẫu PermissionRoute, App.jsx:172-180) — AiChatbot.jsx chưa có cổng
+  // quyền chi tiết nào để soi theo (chỉ có isEmployeeCtx thô), nên lấy đúng mẫu từ đó.
+  const canManageLandingPages = !isEmployeeCtx || activeContext?.permissions?.landing_pages === true;
 
   const aiBillingBlock = useMemo(
     () => getAiBillingBlockState({
@@ -1749,6 +1761,79 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     await sendChatMessage(text, [], { silentUser: true, historyBase, intent: 'content_plan_request' });
   };
 
+  /**
+   * Dán nguyên trang HTML có sẵn vào ô chat (Việc 2.1) — gọi aiApi.landingFromHtml, KHÔNG qua
+   * aiApi.chat. Tin user trong state cũng chỉ là marker (Bẫy 1 áp cho cả client, không riêng
+   * DB) — nên phải CHỜ backend trả `message.data.title` (đã áp fallback "Landing dán vào lúc
+   * HH:mm" nếu không có tiêu đề) rồi mới dựng marker, thay vì tự đoán tiêu đề ở đây và có thể
+   * lệch với bản backend lưu.
+   */
+  const handleLandingHtmlPaste = async (rawText) => {
+    const { html, instruction } = splitHtmlPaste(rawText);
+    if (!html) {
+      await sendChatMessage(rawText, []);
+      return;
+    }
+
+    let mySessionId = currentSessionId;
+    const baseMessages = messages;
+    const update = makeUpdater(mySessionId, [...baseMessages]);
+    if (mySessionId) markTabPending(mySessionId);
+    setIsTyping(true);
+
+    try {
+      const response = await aiApi.landingFromHtml({ sessionId: mySessionId, html });
+      if (!response?.success || !response?.data?.message) {
+        throw new Error(response?.message || 'Không nhận được phản hồi');
+      }
+      const { sessionId: returnedSessionId, sessionTitle, message } = response.data;
+      if (returnedSessionId && !currentSessionId) {
+        mySessionId = returnedSessionId;
+        markTabPending(mySessionId);
+        setCurrentSessionId(returnedSessionId);
+        setSessions((prev) => [{
+          id: returnedSessionId,
+          title: sessionTitle || message.data?.title || 'Landing',
+          updated_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        }, ...prev]);
+      } else if (returnedSessionId) {
+        setSessions((prev) => prev.map((s) => (s.id === returnedSessionId ? { ...s, updated_at: new Date().toISOString() } : s)));
+      }
+
+      // KHÔNG đánh dấu silent: true — isSilentWizardUserMessage() (:117-119) ẩn hẳn khỏi UI mọi
+      // tin user có cờ này, dùng cho tin giao thức nội bộ ([wizard]{...}). Marker ở đây phải HIỆN
+      // RA cho người dùng thấy (thay chỗ cho HTML thật), không phải bị giấu đi.
+      const markerText = buildLandingPasteMarker(message.data?.title, html.length);
+      const withPasteMessages = [
+        ...baseMessages,
+        { role: 'user', content: markerText },
+        { role: 'assistant', content: message.content, type: message.type, data: message.data },
+      ];
+      update(() => withPasteMessages);
+
+      // Phần chữ ngoài HTML (nếu có, ví dụ "dùng trang này, đổi màu nút sang xanh") → sửa ngay
+      // sau khi thẻ hiện, tốn 1 credit như sửa thường (Việc 2.1). Truyền sessionId/historyBase
+      // tay vì state currentSessionId/messages của render này chưa kịp cập nhật (setState bất
+      // đồng bộ) khi phiên vừa được tạo ở lượt gọi ngay trên.
+      if (instruction) {
+        const targetIndex = withPasteMessages.length - 1;
+        await handleEditLandingPageWithAi(message.data, instruction, targetIndex, {
+          historyBase: withPasteMessages,
+          sessionId: mySessionId,
+        });
+      }
+    } catch (error) {
+      update((prev) => [...prev, {
+        role: 'assistant',
+        content: `⚠️ Lỗi: ${getAiRequestErrorMessage(error)}`,
+      }]);
+    } finally {
+      setIsTyping(false);
+      clearTabPending(mySessionId);
+    }
+  };
+
   const handleSend = async () => {
     if (isSendingRef.current) return;
     const trimmedInput = inputText.trim();
@@ -1828,6 +1913,25 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
       try {
         await handlePlanConfirmationByText();
+      } finally {
+        isSendingRef.current = false;
+      }
+      return;
+    }
+
+    // Dán nguyên trang HTML có sẵn — không qua AI, không tốn credit (Việc 2.1). Chỉ bắt khi
+    // KHÔNG có file đính kèm: hợp đồng POST /ai/landing-from-html (PR-1, đã chốt) không nhận
+    // files, có file thì để rơi xuống luồng chat thường (aiApi.chat) như trước giờ.
+    if (
+      trimmedInput
+      && uploadedFiles.length === 0
+      && !hasActiveWizard
+      && looksLikeHtmlDocument(trimmedInput)
+    ) {
+      isSendingRef.current = true;
+      setInputText('');
+      try {
+        await handleLandingHtmlPaste(trimmedInput);
       } finally {
         isSendingRef.current = false;
       }
@@ -2307,9 +2411,53 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     onToggle?.();
   };
 
-  const handleSaveLandingPage = (page) => {
-    navigate('/app/settings/landing-pages', { state: { aiDraft: page } });
-    onToggle?.();
+  /**
+   * "Lưu & xuất bản" (Việc 2.2) — gọi createLandingPageAdmin/updateLandingPageAdmin đã có sẵn
+   * (LandingCanvasEditor.jsx:87-116 là mẫu), quyết định tạo mới hay cập nhật bằng page.landingPageId
+   * (Bẫy 5: thẻ đã lưu mà lưu lại thì phải là cập nhật, không tạo trang thứ hai). Dùng lại chính
+   * hàm này cho nút "Xuất bản/Ẩn" và "Cập nhật trang đã lưu" — cả 3 đều là 1 lượt PUT/POST đủ
+   * slug+title+htmlContent (backend ghi đè thẳng, KHÔNG COALESCE — landingPageAdmin.service.js:230,254 —
+   * thiếu 1 trong 3 là mất dữ liệu, không phải "giữ nguyên trường không gửi lên").
+   */
+  const handleSaveAndPublishLandingPage = async ({ page, formValues, fullHtml, messageIndex, messageId }) => {
+    const existingId = page?.landingPageId;
+    const body = {
+      slug: formValues.slug || null,
+      title: formValues.title,
+      htmlContent: fullHtml,
+      isPublished: Boolean(formValues.isPublished),
+      domainType: 'system',
+      ...(page?.leadFormConfig ? { leadFormConfig: page.leadFormConfig } : {}),
+    };
+
+    const saved = existingId
+      ? await updateLandingPageAdmin(existingId, body)
+      : await createLandingPageAdmin(body);
+
+    const patch = {
+      landingPageId: saved.id,
+      slug: saved.slug || '',
+      isPublished: Boolean(saved.isPublished),
+    };
+
+    const mySessionId = currentSessionId;
+    const update = makeUpdater(mySessionId, [...messages]);
+    update((prev) => prev.map((msg, i) => (
+      i === messageIndex ? { ...msg, data: { ...msg.data, ...patch } } : msg
+    )));
+
+    if (mySessionId) {
+      try {
+        await aiApi.patchLandingMessage(mySessionId, patch, messageId || undefined);
+      } catch (patchErr) {
+        // Trang đã lưu/cập nhật thành công ở /admin/landing-pages — lỗi ở đây chỉ nghĩa là
+        // bản ghi trong phiên chat chưa đồng bộ (F5 có thể tạm chưa thấy trạng thái mới nhất),
+        // không phải lưu thất bại — không throw để không hiện nhầm báo lỗi cho người dùng.
+        console.warn('patchLandingMessage thất bại (trang vẫn đã lưu):', patchErr);
+      }
+    }
+
+    return saved;
   };
 
   const handleQuickSendDraft = () => {
@@ -2854,7 +3002,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const handleEditLandingPageWithAi = async (pageData, instruction, messageIndex = null, options = {}) => {
-    const { historyBase = null, messageId = null, files = [] } = options;
+    const { historyBase = null, messageId = null, files = [], sessionId: sessionIdOverride = null } = options;
     const rawHtml = pageData?.html;
     const trimmedInstr = String(instruction || '').trim();
     if (!rawHtml || !trimmedInstr) {
@@ -2862,7 +3010,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       return false;
     }
 
-    const mySessionId = currentSessionId;
+    // sessionIdOverride: dùng khi phiên vừa được tạo trong CÙNG lượt gọi này (ví dụ ngay sau
+    // handleLandingHtmlPaste) — state `currentSessionId` chưa kịp cập nhật (setState bất đồng
+    // bộ, closure của hàm này vẫn thấy giá trị cũ) nên phải truyền tay để không tạo phiên thứ 2.
+    const mySessionId = sessionIdOverride ?? currentSessionId;
     const baseMessages = historyBase ?? messages;
     const update = makeUpdater(mySessionId, [...baseMessages]);
     if (mySessionId) markTabPending(mySessionId);
@@ -3355,6 +3506,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               </button>
             </div>
           )}
+          {!isSuperAdmin && (
+            <p className="mt-3 max-w-3xl text-center text-xs text-slate-400">
+              {t('aiChatbot.landingPasteHint')}
+            </p>
+          )}
         </div>
       ) : (
         <>
@@ -3712,7 +3868,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   page={msg.data}
                   messageId={msg.id}
                   messageIndex={idx}
-                  onSaveToLibrary={handleSaveLandingPage}
+                  canSave={canManageLandingPages}
+                  onSaveAndPublish={handleSaveAndPublishLandingPage}
                   onGenerateNew={handleGenerateNewLandingPage}
                   onEditWithAi={handleEditLandingPageWithAi}
                   isEditing={editingLandingPageIndex === idx}

@@ -124,6 +124,34 @@ const aiApi = {
     return response.data;
   },
 
+  /**
+   * Dán nguyên một trang HTML có sẵn vào phiên chat — không qua AI, không tốn credit
+   * (PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md, Việc 1.1/2.1).
+   * @param {{ sessionId?: number|null, html: string, title?: string|null }} params
+   */
+  landingFromHtml: async ({ sessionId = null, html, title = null } = {}) => {
+    const payload = { html };
+    if (sessionId) payload.sessionId = sessionId;
+    if (title) payload.title = title;
+    const response = await api.post('/ai/landing-from-html', payload);
+    return response.data;
+  },
+
+  /**
+   * Ghi landingPageId/slug/isPublished vào tin landing_page của phiên sau khi đã lưu/xuất bản
+   * qua POST|PUT /admin/landing-pages — không AI, không credit (Việc 1.2/2.2). Whitelist đúng
+   * 3 khoá đó ở backend, khoá lạ bị bỏ qua.
+   * @param {number} sessionId
+   * @param {{ landingPageId?: number, slug?: string, isPublished?: boolean }} data
+   * @param {number|null} [messageId]
+   */
+  patchLandingMessage: async (sessionId, data, messageId = null) => {
+    const payload = { data };
+    if (messageId) payload.messageId = messageId;
+    const response = await api.patch(`/ai/sessions/${sessionId}/landing-message`, payload);
+    return response.data;
+  },
+
   getSessions: async () => {
     const response = await api.get('/ai/sessions');
     return response.data;
