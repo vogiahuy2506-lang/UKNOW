@@ -402,6 +402,33 @@ const chatbotApiService = {
   summarizeAiActivity({ date } = {}) {
     return api.post('/ai/chatbot/inbox/ai-activity/summarize', { date });
   },
+
+  // Contact Alerts (PR-2)
+  getContactAlerts({ status, limit, offset } = {}) {
+    return api.get('/ai/chatbot/inbox/contact-alerts', {
+      params: {
+        ...(status ? { status } : {}),
+        ...(limit != null ? { limit } : {}),
+        ...(offset != null ? { offset } : {}),
+      },
+    });
+  },
+
+  markContactAlertHandled(id) {
+    return api.post(`/ai/chatbot/inbox/contact-alerts/${id}/handled`);
+  },
+
+  unmarkContactAlertHandled(id) {
+    return api.delete(`/ai/chatbot/inbox/contact-alerts/${id}/handled`);
+  },
+
+  getContactAlertSettings() {
+    return api.get('/ai/chatbot/inbox/contact-alerts/settings');
+  },
+
+  updateContactAlertSettings({ emailEnabled }) {
+    return api.put('/ai/chatbot/inbox/contact-alerts/settings', { emailEnabled });
+  },
 };
 
 export default chatbotApiService;

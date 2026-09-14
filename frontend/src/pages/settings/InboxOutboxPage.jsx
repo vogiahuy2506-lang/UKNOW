@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   HiArrowLeft, HiOutlineSearch, HiOutlineBell,
   HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineExclamation,
-  HiOutlineMail, HiOutlineInbox, HiOutlineSparkles, HiX
+  HiOutlineMail, HiOutlineInbox, HiOutlineSparkles, HiOutlinePhone, HiX
 } from 'react-icons/hi';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ConversationList from '../../features/inbox/ConversationList';
@@ -13,6 +14,7 @@ import ZaloAccountSelector from '../../features/inbox/ZaloAccountSelector';
 import TypingIndicator from '../../features/inbox/TypingIndicator';
 import ConversationDetails from '../../features/inbox/ConversationDetails';
 import AiActivityReport from '../../features/inbox/AiActivityReport';
+import ContactAlertsPanel from '../../features/inbox/ContactAlertsPanel';
 import { useI18n } from '../../i18n';
 import toast from 'react-hot-toast';
 import useInboxSSE from '../../hooks/useInboxSSE';
@@ -148,7 +150,9 @@ const InboxPage = () => {
   const [hasMore, setHasMore] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
-  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'ai_report'
+  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'ai_report' | 'contact_alerts'
+  const [contactAlertsOpenCount, setContactAlertsOpenCount] = useState(0);
+  const [searchParams] = useSearchParams();
   
   const [sessionStatus, setSessionStatus] = useState({
     connected: false,
@@ -668,20 +672,38 @@ const InboxPage = () => {
     }
   }, [fetchUnreadCount, pendingMessages]);
 
-  const handleOpenConversationFromReport = useCallback((convId) => {
+  const handleOpenConversationByRef = useCallback(({ id, type, visitorName = 'Khách hàng' }) => {
     setActiveView('chat');
-    const found = conversations.find((c) => Number(c.id) === Number(convId));
+    const convId = Number(id);
+    const found = conversations.find((c) => Number(c.id) === convId && (!type || c.type === type));
     if (found) {
       handleSelectConversation(found);
     } else {
       handleSelectConversation({
         id: convId,
-        type: 'zalo_personal',
-        visitorName: 'Khách hàng',
+        type: type || 'webchat',
+        visitorName,
         unreadCount: 0,
       });
     }
   }, [conversations, handleSelectConversation]);
+
+  const handleOpenConversationFromReport = useCallback((convId) => {
+    handleOpenConversationByRef({ id: convId, type: 'zalo_personal' });
+  }, [handleOpenConversationByRef]);
+
+  const lastHandledDeepLinkRef = useRef(null);
+  useEffect(() => {
+    const convParam = searchParams.get('conversation');
+    const typeParam = searchParams.get('type');
+    if (convParam) {
+      const key = `${convParam}:${typeParam || ''}`;
+      if (lastHandledDeepLinkRef.current !== key) {
+        lastHandledDeepLinkRef.current = key;
+        handleOpenConversationByRef({ id: convParam, type: typeParam });
+      }
+    }
+  }, [searchParams, handleOpenConversationByRef]);
 
   useEffect(() => {
     fetchConversations(true);
@@ -758,21 +780,21 @@ const InboxPage = () => {
             </button>
           </div>
 
-          {/* View Toggle Tabs: Chat vs AI Report */}
+          {/* View Toggle Tabs: Chat vs AI Report vs Contact Alerts */}
           <div className="flex items-center gap-1 p-1 bg-gray-100/90 rounded-xl mx-3 mb-2 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setActiveView('chat')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
                 activeView === 'chat'
                   ? 'bg-white text-primary-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              <HiOutlineInbox className="w-4 h-4" />
-              <span>{t('inbox.title') || 'Hộp thư'}</span>
+              <HiOutlineInbox className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('inbox.title') || 'Hộp thư'}</span>
               {unreadCount > 0 && (
-                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold">
+                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold shrink-0">
                   {unreadCount}
                 </span>
               )}
@@ -780,14 +802,31 @@ const InboxPage = () => {
             <button
               type="button"
               onClick={() => setActiveView('ai_report')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
                 activeView === 'ai_report'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              <HiOutlineSparkles className="w-4 h-4 text-indigo-500" />
-              <span>Báo cáo AI</span>
+              <HiOutlineSparkles className="w-4 h-4 text-indigo-500 shrink-0" />
+              <span className="truncate">Báo cáo AI</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('contact_alerts')}
+              className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                activeView === 'contact_alerts'
+                  ? 'bg-white text-rose-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <HiOutlinePhone className="w-4 h-4 text-rose-500 shrink-0" />
+              <span className="truncate">{t('inbox.contactAlertsTab') || 'Liên hệ để lại'}</span>
+              {contactAlertsOpenCount > 0 && (
+                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold shrink-0">
+                  {contactAlertsOpenCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -897,8 +936,8 @@ const InboxPage = () => {
       {/* Right panel */}
       <div
         className={`h-full min-h-0 flex-1 min-w-0 overflow-hidden bg-gray-50 ${
-          (selectedConversation || activeView === 'ai_report')
-            ? (activeView === 'ai_report' ? 'flex flex-col' : 'grid grid-rows-[auto,minmax(0,1fr),auto]')
+          (selectedConversation || activeView === 'ai_report' || activeView === 'contact_alerts')
+            ? (activeView === 'ai_report' || activeView === 'contact_alerts' ? 'flex flex-col' : 'grid grid-rows-[auto,minmax(0,1fr),auto]')
             : 'hidden lg:flex lg:flex-col'
         }`}
       >
@@ -908,6 +947,12 @@ const InboxPage = () => {
             onSelectConversation={handleOpenConversationFromReport}
             canManage={canManage}
             canSummarize={!isEmployeeContext}
+          />
+        ) : activeView === 'contact_alerts' ? (
+          <ContactAlertsPanel
+            onSelectConversation={handleOpenConversationByRef}
+            isEmployeeContext={isEmployeeContext}
+            onOpenCountChange={setContactAlertsOpenCount}
           />
         ) : selectedConversation ? (
           <>

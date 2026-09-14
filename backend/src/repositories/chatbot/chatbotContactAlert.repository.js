@@ -142,7 +142,7 @@ class ChatbotContactAlertRepository {
    */
   async getOwnerContact(idUser, queryable = db) {
     const { rows } = await queryable.query(
-      `SELECT id, email, phone FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT id, email, phone, chatbot_contact_alert_email FROM users WHERE id = $1 LIMIT 1`,
       [idUser]
     );
     return rows[0] || null;
@@ -302,6 +302,144 @@ class ChatbotContactAlertRepository {
       [ids, notifiedAt]
     );
   }
+
+  /**
+   * Lấy danh sách liên hệ khách để lại cho chủ shop
+   * @param {number} idUser
+   * @param {object} [options]
+   * @param {'open'|'handled'|'all'} [options.status='open']
+   * @param {number} [options.limit=50]
+   * @param {number} [options.offset=0]
+   * @param {object} [queryable=db]
+   * @returns {Promise<{ items: Array<object>, total: number, openCount: number }>}
+   */
+  async listForOwner(idUser, { status = 'open', limit = 50, offset = 0 } = {}, queryable = db) {
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
+    const safeOffset = Math.max(0, Number(offset) || 0);
+
+    let statusCondition = '';
+    if (status === 'open') {
+      statusCondition = 'AND a.handled_at IS NULL';
+    } else if (status === 'handled') {
+      statusCondition = 'AND a.handled_at IS NOT NULL';
+    }
+
+    const itemsQuery = `
+      SELECT a.*,
+             COALESCE(wc.visitor_name, cc.visitor_name, zc.visitor_name) AS visitor_name,
+             COALESCE(cc.channel, a.last_source) AS channel,
+             COALESCE(conn.display_name, zs.display_name) AS display_name,
+             COALESCE(u_handled.full_name, u_handled.email) AS handled_by_name
+      FROM chatbot_contact_alerts a
+      LEFT JOIN webchat_conversations wc ON a.last_source = 'web' AND wc.id = a.last_conversation_id
+      LEFT JOIN channel_conversations cc ON a.last_source = 'channel' AND cc.id = a.last_conversation_id
+      LEFT JOIN channel_connections conn ON cc.id_channel = conn.id
+      LEFT JOIN zalo_personal_conversations zc ON a.last_source = 'zalo_personal' AND zc.id = a.last_conversation_id
+      LEFT JOIN zalo_settings zs ON zs.id = zc.id_zalo_setting
+      LEFT JOIN users u_handled ON u_handled.id = a.handled_by
+      WHERE a.id_user = $1 ${statusCondition}
+      ORDER BY a.last_seen_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+
+    const totalFilterQuery = `
+      SELECT COUNT(*) AS total
+      FROM chatbot_contact_alerts a
+      WHERE a.id_user = $1 ${statusCondition}
+    `;
+
+    const openCountQuery = `
+      SELECT COUNT(*) AS open_count
+      FROM chatbot_contact_alerts a
+      WHERE a.id_user = $1 AND a.handled_at IS NULL
+    `;
+
+    const [itemsRes, totalRes, openRes] = await Promise.all([
+      queryable.query(itemsQuery, [idUser, safeLimit, safeOffset]),
+      queryable.query(totalFilterQuery, [idUser]),
+      queryable.query(openCountQuery, [idUser]),
+    ]);
+
+    return {
+      items: itemsRes.rows,
+      total: Number(totalRes.rows[0]?.total || 0),
+      openCount: Number(openRes.rows[0]?.open_count || 0),
+    };
+  }
+
+  /**
+   * Đánh dấu đã liên hệ / đã xử lý
+   * @param {number} id
+   * @param {number} idUser
+   * @param {number|null} [handledBy=null]
+   * @param {object} [queryable=db]
+   * @returns {Promise<object|null>}
+   */
+  async markHandled(id, idUser, handledBy = null, queryable = db) {
+    const { rows } = await queryable.query(
+      `UPDATE chatbot_contact_alerts
+       SET handled_at = NOW(),
+           handled_by = $3,
+           updated_at = NOW()
+       WHERE id = $1 AND id_user = $2
+       RETURNING *`,
+      [id, idUser, handledBy]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Bỏ đánh dấu đã liên hệ (quay lại trạng thái chưa xử lý)
+   * @param {number} id
+   * @param {number} idUser
+   * @param {object} [queryable=db]
+   * @returns {Promise<object|null>}
+   */
+  async unmarkHandled(id, idUser, queryable = db) {
+    const { rows } = await queryable.query(
+      `UPDATE chatbot_contact_alerts
+       SET handled_at = NULL,
+           handled_by = NULL,
+           updated_at = NOW()
+       WHERE id = $1 AND id_user = $2
+       RETURNING *`,
+      [id, idUser]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Cập nhật công tắc nhận email thông báo liên hệ
+   * @param {number} idUser
+   * @param {boolean} enabled
+   * @param {object} [queryable=db]
+   * @returns {Promise<object|null>}
+   */
+  async setOwnerAlertEmail(idUser, enabled, queryable = db) {
+    const { rows } = await queryable.query(
+      `UPDATE users
+       SET chatbot_contact_alert_email = $2,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, chatbot_contact_alert_email`,
+      [idUser, Boolean(enabled)]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Lấy trạng thái công tắc nhận email thông báo liên hệ
+   * @param {number} idUser
+   * @param {object} [queryable=db]
+   * @returns {Promise<boolean>}
+   */
+  async getOwnerAlertEmail(idUser, queryable = db) {
+    const { rows } = await queryable.query(
+      `SELECT chatbot_contact_alert_email FROM users WHERE id = $1 LIMIT 1`,
+      [idUser]
+    );
+    return rows[0]?.chatbot_contact_alert_email ?? true;
+  }
 }
 
 const chatbotContactAlertRepository = new ChatbotContactAlertRepository();
@@ -309,5 +447,10 @@ const chatbotContactAlertRepository = new ChatbotContactAlertRepository();
 export const getCursor = (...args) => chatbotContactAlertRepository.getCursor(...args);
 export const setCursor = (...args) => chatbotContactAlertRepository.setCursor(...args);
 export const getMaxMessageId = (...args) => chatbotContactAlertRepository.getMaxMessageId(...args);
+export const listForOwner = (...args) => chatbotContactAlertRepository.listForOwner(...args);
+export const markHandled = (...args) => chatbotContactAlertRepository.markHandled(...args);
+export const unmarkHandled = (...args) => chatbotContactAlertRepository.unmarkHandled(...args);
+export const setOwnerAlertEmail = (...args) => chatbotContactAlertRepository.setOwnerAlertEmail(...args);
+export const getOwnerAlertEmail = (...args) => chatbotContactAlertRepository.getOwnerAlertEmail(...args);
 export { ChatbotContactAlertRepository };
 export default chatbotContactAlertRepository;

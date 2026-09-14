@@ -27,7 +27,7 @@ jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   SENDER_NAME: 'UKNOW Campaign',
 }));
 
-const { default: chatbotContactAlertService } = await import(
+const { default: chatbotContactAlertService, getFrontendInboxUrl } = await import(
   '../chatbotContactAlert.service.js'
 );
 
@@ -431,4 +431,74 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
       })
     );
   });
+
+  it('chủ shop tắt nhận email alert thì suppressedReason = owner_opted_out và pendingNotify = false', async () => {
+    mockRepo.getOwnerContact.mockResolvedValue({
+      id: 1,
+      email: 'owner@uknow.vn',
+      phone: '0901234567',
+      chatbot_contact_alert_email: false,
+    });
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 301,
+            id_user: 1,
+            id_conversation: 50,
+            content: 'Liên hệ lại qua SĐT 0988776655 nha',
+            created_at: fixedNow,
+            visitor_name: 'Khách Tắt Thư',
+          },
+        ];
+      }
+      return [];
+    });
+
+    await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingNotify: false,
+        suppressedReason: 'owner_opted_out',
+      })
+    );
+  });
 });
+
+describe('chatbotContactAlert.service — getFrontendInboxUrl', () => {
+  const origEnv = process.env.FRONTEND_URL;
+
+  beforeEach(() => {
+    process.env.FRONTEND_URL = 'https://app.uknow.vn';
+  });
+
+  afterEach(() => {
+    if (origEnv) {
+      process.env.FRONTEND_URL = origEnv;
+    } else {
+      delete process.env.FRONTEND_URL;
+    }
+  });
+
+  it('trả về link chung nếu không có conversationId', () => {
+    expect(getFrontendInboxUrl()).toBe('https://app.uknow.vn/app/settings/inbox');
+    expect(getFrontendInboxUrl({})).toBe('https://app.uknow.vn/app/settings/inbox');
+  });
+
+  it('map web -> webchat', () => {
+    const url = getFrontendInboxUrl({ source: 'web', conversationId: '42' });
+    expect(url).toBe('https://app.uknow.vn/app/settings/inbox?conversation=42&type=webchat');
+  });
+
+  it('map channel -> channel', () => {
+    const url = getFrontendInboxUrl({ source: 'channel', conversationId: 'conv_123' });
+    expect(url).toBe('https://app.uknow.vn/app/settings/inbox?conversation=conv_123&type=channel');
+  });
+
+  it('map zalo_personal -> zalo_personal', () => {
+    const url = getFrontendInboxUrl({ source: 'zalo_personal', conversationId: 'thread_456' });
+    expect(url).toBe('https://app.uknow.vn/app/settings/inbox?conversation=thread_456&type=zalo_personal');
+  });
+});
+

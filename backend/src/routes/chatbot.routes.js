@@ -4,6 +4,7 @@ import chatbotController from '../controllers/chatbot.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
 import zaloPersonalSyncController from '../controllers/zaloPersonalSync.controller.js';
 import aiActivityController from '../controllers/chatbot/aiActivity.controller.js';
+import chatbotContactAlertController from '../controllers/chatbot/chatbotContactAlert.controller.js';
 import authMiddleware, {
   attachSseUserIdForRateLimit,
   resolveUserContext,
@@ -231,6 +232,13 @@ router.post(
   assertAiCreditAvailable('inbox_ai_summary'),
   aiActivityController.summarizeActivity.bind(aiActivityController)
 );
+
+// ── Chatbot Contact Alerts ─────────────────────────────────────────
+router.get('/inbox/contact-alerts', requirePermission('inbox_view'), chatbotContactAlertController.listAlerts.bind(chatbotContactAlertController));
+router.post('/inbox/contact-alerts/:id/handled', requirePermission('inbox_reply'), chatbotContactAlertController.markHandled.bind(chatbotContactAlertController));
+router.delete('/inbox/contact-alerts/:id/handled', requirePermission('inbox_reply'), chatbotContactAlertController.unmarkHandled.bind(chatbotContactAlertController));
+router.get('/inbox/contact-alerts/settings', requirePermission('inbox_view'), chatbotContactAlertController.getSettings.bind(chatbotContactAlertController));
+router.put('/inbox/contact-alerts/settings', requirePermission('inbox_manage'), chatbotContactAlertController.updateSettings.bind(chatbotContactAlertController));
 
 // ── Zalo Personal Account Chatbot Settings ─────────────────────────
 

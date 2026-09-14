@@ -30,6 +30,7 @@ export const ALLOWED_CLEANUP_TABLES = Object.freeze([
   'campaign_runs',
   'landing_page_events',
   'contact_submissions',
+  'chatbot_contact_alerts',
 ]);
 
 /**
@@ -86,6 +87,7 @@ export async function countRetentionEligibleRows() {
     campaignRunsRes,
     landingEventsRes,
     contactSubmissionsRes,
+    chatbotContactAlertsRes,
     legacyDeletedUsersRes,
   ] = await Promise.all([
     // 1. customers: 90 ngày sau khi tài khoản chủ sở hữu bị xoá (deleted_at < NOW() - 90 days)
@@ -117,7 +119,12 @@ export async function countRetentionEligibleRows() {
       SELECT COUNT(*) AS count FROM contact_submissions cs
       WHERE cs.created_at < NOW() - INTERVAL '24 months'
     `),
-    // 6. users: tài khoản xoá mềm cũ nhưng deleted_at IS NULL (không bị dọn dẹp)
+    // 6. chatbot_contact_alerts: 24 tháng từ last_seen_at
+    db.query(`
+      SELECT COUNT(*) AS count FROM chatbot_contact_alerts cca
+      WHERE cca.last_seen_at < NOW() - INTERVAL '24 months'
+    `),
+    // 7. users: tài khoản xoá mềm cũ nhưng deleted_at IS NULL (không bị dọn dẹp)
     db.query(`
       SELECT COUNT(*) AS count FROM users u
       WHERE u.status = 'deleted' AND u.deleted_at IS NULL
@@ -129,6 +136,7 @@ export async function countRetentionEligibleRows() {
   const campaign_runs = Number.parseInt(campaignRunsRes.rows[0]?.count || 0, 10);
   const landing_page_events = Number.parseInt(landingEventsRes.rows[0]?.count || 0, 10);
   const contact_submissions = Number.parseInt(contactSubmissionsRes.rows[0]?.count || 0, 10);
+  const chatbot_contact_alerts = Number.parseInt(chatbotContactAlertsRes.rows[0]?.count || 0, 10);
   const legacy_deleted_users = Number.parseInt(legacyDeletedUsersRes.rows[0]?.count || 0, 10);
 
   return {
@@ -137,13 +145,15 @@ export async function countRetentionEligibleRows() {
     campaign_runs,
     landing_page_events,
     contact_submissions,
+    chatbot_contact_alerts,
     legacy_deleted_users,
-    totalEligible: customers + leads + campaign_runs + landing_page_events + contact_submissions,
+    totalEligible: customers + leads + campaign_runs + landing_page_events + contact_submissions + chatbot_contact_alerts,
     customersEligible: customers,
     leadsEligible: leads,
     campaignRunsEligible: campaign_runs,
     landingPageEventsEligible: landing_page_events,
     contactSubmissionsEligible: contact_submissions,
+    chatbotContactAlertsEligible: chatbot_contact_alerts,
   };
 }
 
@@ -176,12 +186,14 @@ export async function runDataRetentionCleanup({ force = false, batchSize = 1000 
         campaign_runs: 0,
         landing_page_events: 0,
         contact_submissions: 0,
+        chatbot_contact_alerts: 0,
       },
       customersDeleted: 0,
       leadsDeleted: 0,
       campaignRunsDeleted: 0,
       landingPageEventsDeleted: 0,
       contactSubmissionsDeleted: 0,
+      chatbotContactAlertsDeleted: 0,
     };
   }
 
@@ -251,12 +263,25 @@ export async function runDataRetentionCleanup({ force = false, batchSize = 1000 
     batchSize
   );
 
+  // 6. Dọn chatbot_contact_alerts: 24 tháng kể từ last_seen_at
+  const chatbotContactAlertsDeleted = await deleteInBatches(
+    'chatbot_contact_alerts',
+    `DELETE FROM chatbot_contact_alerts
+      WHERE id IN (
+        SELECT cca.id FROM chatbot_contact_alerts cca
+        WHERE cca.last_seen_at < NOW() - INTERVAL '24 months'
+        LIMIT $1
+      )`,
+    batchSize
+  );
+
   const deletedCounts = {
     customers: customersDeleted,
     leads: leadsDeleted,
     campaign_runs: campaignRunsDeleted,
     landing_page_events: landingEventsDeleted,
     contact_submissions: contactSubmissionsDeleted,
+    chatbot_contact_alerts: chatbotContactAlertsDeleted,
   };
 
   const totalDeleted = Object.values(deletedCounts).reduce((sum, count) => sum + count, 0);
@@ -273,5 +298,6 @@ export async function runDataRetentionCleanup({ force = false, batchSize = 1000 
     campaignRunsDeleted,
     landingPageEventsDeleted: landingEventsDeleted,
     contactSubmissionsDeleted,
+    chatbotContactAlertsDeleted,
   };
 }

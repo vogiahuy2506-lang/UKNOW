@@ -13,9 +13,18 @@ const EXCERPT_CHARS = Number(process.env.CHATBOT_CONTACT_ALERT_EXCERPT_CHARS) ||
 
 const SOURCES = ['web', 'channel', 'zalo_personal'];
 
-function getFrontendInboxUrl() {
+export function getFrontendInboxUrl({ source, conversationId } = {}) {
   const base = (process.env.FRONTEND_URL || 'https://founderai.vn').replace(/\/+$/, '');
-  return `${base}/app/settings/inbox`;
+  if (!conversationId) {
+    return `${base}/app/settings/inbox`;
+  }
+  const typeMap = {
+    web: 'webchat',
+    channel: 'channel',
+    zalo_personal: 'zalo_personal',
+  };
+  const type = typeMap[source] || source || 'webchat';
+  return `${base}/app/settings/inbox?conversation=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(type)}`;
 }
 
 function formatChannelLabel(alert) {
@@ -48,6 +57,12 @@ function buildAlertEmailHtml({ userFullName, alerts, inboxUrl }) {
           })
         : '—';
 
+      const itemUrl = getFrontendInboxUrl({
+        source: alert.last_source,
+        conversationId: alert.last_conversation_id,
+      });
+      const safeItemUrl = escapeHtml(itemUrl);
+
       return `
       <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 14px; background-color: #f8fafc;">
         <div style="font-size: 14px; color: #475569; margin-bottom: 6px;">
@@ -66,6 +81,11 @@ function buildAlertEmailHtml({ userFullName, alerts, inboxUrl }) {
                </div>`
             : ''
         }
+        <div style="margin-top: 10px;">
+          <a href="${safeItemUrl}" style="display: inline-block; color: #0284c7; text-decoration: none; font-size: 13px; font-weight: 600;">
+            Mở hội thoại &rarr;
+          </a>
+        </div>
       </div>`;
     })
     .join('');
@@ -192,6 +212,10 @@ class ChatbotContactAlertService {
               pendingNotify = false;
               suppressedReason = 'owner_own_contact';
               suppressed++;
+            } else if (owner?.chatbot_contact_alert_email === false) {
+              pendingNotify = false;
+              suppressedReason = 'owner_opted_out';
+              suppressed++;
             } else if (hasAgent) {
               // Có nhân viên trả lời trong 120 phút gần nhất -> người thật đã thấy
               pendingNotify = false;
@@ -281,10 +305,16 @@ class ChatbotContactAlertService {
       }
 
       const subject = `[${SENDER_NAME}] ${sendableAlerts.length} khách để lại liên hệ trong chatbot`;
+      const primaryUrl = sendableAlerts.length === 1
+        ? getFrontendInboxUrl({
+            source: sendableAlerts[0].last_source,
+            conversationId: sendableAlerts[0].last_conversation_id,
+          })
+        : getFrontendInboxUrl();
       const html = buildAlertEmailHtml({
         userFullName: fullName,
         alerts: sendableAlerts,
-        inboxUrl,
+        inboxUrl: primaryUrl,
       });
 
       try {

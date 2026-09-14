@@ -80,6 +80,8 @@ CREATE TABLE users (
   -- migration 207: mốc nhắc hạn ĐÃ GỬI trong chu kỳ hiện tại ({cycle, days}) — xem
   -- subscriptionReminderSettings.repository.js
   subscription_reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
+  -- migration 220: công tắc nhận email khi khách để lại SĐT/email trong chatbot
+  chatbot_contact_alert_email BOOLEAN NOT NULL DEFAULT true,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -1631,6 +1633,8 @@ CREATE TABLE IF NOT EXISTS chatbot_contact_alerts (
   pending_notify         BOOLEAN NOT NULL DEFAULT true,
   suppressed_reason      VARCHAR(30),
   last_notified_at       TIMESTAMPTZ,
+  handled_at             TIMESTAMPTZ,
+  handled_by             BIGINT REFERENCES users(id) ON DELETE SET NULL,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_chatbot_contact_alert UNIQUE (id_user, contact_type, contact_value)
@@ -1639,6 +1643,8 @@ CREATE INDEX IF NOT EXISTS idx_chatbot_contact_alerts_pending
   ON chatbot_contact_alerts (id_user) WHERE pending_notify = true;
 CREATE INDEX IF NOT EXISTS idx_chatbot_contact_alerts_conv
   ON chatbot_contact_alerts (id_user, last_source, last_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_chatbot_contact_alerts_user_handled
+  ON chatbot_contact_alerts (id_user, handled_at);
 
 CREATE TABLE IF NOT EXISTS chatbot_contact_scan_cursors (
   source           VARCHAR(20) PRIMARY KEY,
