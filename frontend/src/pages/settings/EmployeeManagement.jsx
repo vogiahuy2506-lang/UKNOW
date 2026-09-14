@@ -27,6 +27,7 @@ const PERMISSION_FIELDS = (t) => [
   { keys: ['campaigns_run'],    label: t('employee.permissions.campaignRun') },
   { keys: ['customers'],        label: t('employee.permissions.customers') },
   { keys: ['leads'],            label: t('employee.permissions.leads') },
+  { keys: ['forms'],            label: t('employee.permissions.forms') },
   { keys: ['chatbots_manage'],  label: t('employee.permissions.chatbotsManage') },
   { keys: ['chatbot_channels_manage'], label: t('employee.permissions.chatbotChannelsManage') },
   { keys: ['inbox_view'],       label: t('employee.permissions.inboxView') },

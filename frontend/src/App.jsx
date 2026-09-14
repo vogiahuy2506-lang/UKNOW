@@ -68,6 +68,10 @@ import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
 // sau khi các trang cũ được lưu lại.
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import PublicChatbotPage from './pages/public/PublicChatbotPage';
+import PublicFormPage from './features/forms/pages/PublicFormPage';
+import FormsListPage from './features/forms/pages/FormsListPage';
+import FormEditorPage from './features/forms/pages/FormEditorPage';
+import FormSubmissionsPage from './features/forms/pages/FormSubmissionsPage';
 import LearningPage from './pages/learning/LearningPage';
 import CheckoutPage from './pages/checkout/CheckoutPage';
 import PaymentSuccessPage from './pages/checkout/PaymentSuccess';
@@ -390,6 +394,7 @@ function AppContent() {
           {/* @deprecated compat cho trang cũ còn iframe /embed/lead-form — gỡ sau khi trang cũ được lưu lại */}
           <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
           <Route path="/chat/:chatbotId" element={<PublicChatbotPage />} />
+          <Route path="/f/:publicKey" element={<PublicFormPage />} />
           <Route path="/learning" element={<LearningPage />} />
 
           {/* Protected Routes - prefix /app */}
@@ -450,6 +455,12 @@ function AppContent() {
             <Route path="courses" element={<FeatureFlagRoute flag="VITE_FEATURE_COURSES"><PermissionRoute permission="courses"><Courses /></PermissionRoute></FeatureFlagRoute>} />
             <Route path="products" element={<FeatureFlagRoute flag="VITE_FEATURE_PRODUCTS"><PermissionRoute permission="courses"><Products /></PermissionRoute></FeatureFlagRoute>} />
             <Route path="landing-leads" element={<PermissionRoute permission="leads"><LandingLeadsListPage /></PermissionRoute>} />
+
+            {/* Forms */}
+            <Route path="forms" element={<PermissionRoute permission="forms"><FormsListPage /></PermissionRoute>} />
+            <Route path="forms/new" element={<PermissionRoute permission="forms"><FormEditorPage /></PermissionRoute>} />
+            <Route path="forms/:id/edit" element={<PermissionRoute permission="forms"><FormEditorPage /></PermissionRoute>} />
+            <Route path="forms/:id/submissions" element={<PermissionRoute permission="forms"><FormSubmissionsPage /></PermissionRoute>} />
 
             {/* Marketplace - unified page with tabs */}
             <Route path="marketplace" element={<Marketplace />} />
