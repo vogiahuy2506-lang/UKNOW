@@ -34,3 +34,10 @@ export async function submitPublicForm(publicKey, payload) {
   const res = await publicClient.post(`/public/forms/${encodeURIComponent(publicKey)}/submissions`, payload);
   return res.data?.data;
 }
+
+export async function fetchPublicSlots(publicKey, { from, days } = {}) {
+  const res = await publicClient.get(`/public/forms/${encodeURIComponent(publicKey)}/slots`, {
+    params: { from, days },
+  });
+  return res.data?.data || { slots: [] };
+}

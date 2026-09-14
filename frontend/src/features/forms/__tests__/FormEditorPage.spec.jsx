@@ -212,4 +212,135 @@ describe('FormEditorPage component', () => {
     expect(formAdminApi.createForm).not.toHaveBeenCalled();
     expect(screen.getByText('Tiêu đề biểu mẫu là bắt buộc')).toBeInTheDocument();
   });
+
+  describe('Đặt lịch hẹn (PR-2b)', () => {
+    it('bật đặt lịch, Thứ 2 09:00 + Chủ nhật 10:00, để trống sức chứa: weeklySlots đủ 7 khoá đúng "0"/"1", slotCapacity: null (đột biến #5, #6)', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-booking-1' });
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form đặt lịch mới' },
+      });
+
+      const enableCheckbox = screen.getByRole('checkbox', { name: /Bật đặt lịch hẹn/i });
+      fireEvent.click(enableCheckbox);
+
+      // 7 nút "Thêm khung giờ" theo thứ tự Thứ 2 -> Chủ nhật (WEEKDAY_UI_ORDER)
+      const addButtons = screen.getAllByRole('button', { name: /Thêm khung giờ/i });
+      expect(addButtons).toHaveLength(7);
+      fireEvent.click(addButtons[0]); // Thứ 2
+      fireEvent.click(addButtons[6]); // Chủ nhật
+
+      const timeInputs = container.querySelectorAll('input[type="time"]');
+      expect(timeInputs).toHaveLength(2);
+      fireEvent.change(timeInputs[0], { target: { value: '09:00' } });
+      fireEvent.change(timeInputs[1], { target: { value: '10:00' } });
+
+      // Không đụng vào ô sức chứa -> để trống
+      const saveBtn = screen.getByRole('button', { name: /Lưu biểu mẫu/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+
+      expect(payload.bookingConfig.enabled).toBe(true);
+      expect(payload.bookingConfig.weeklySlots).toEqual({
+        '0': ['10:00'],
+        '1': ['09:00'],
+        '2': [],
+        '3': [],
+        '4': [],
+        '5': [],
+        '6': [],
+      });
+      expect(payload.bookingConfig.slotCapacity).toBeNull();
+      expect(payload.bookingConfig.daysAhead).toBe(30);
+      expect(payload.bookingConfig.minNoticeMinutes).toBe(60);
+      expect(payload.bookingConfig.closedDates).toEqual([]);
+    });
+
+    it('form mới không bật đặt lịch: payload bookingConfig: null', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-no-booking' });
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form không đặt lịch' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+      expect(payload.bookingConfig).toBeNull();
+    });
+
+    it('tắt đặt lịch trên form đã có cấu hình: cảnh báo trước khi lưu, chặn lưu tới khi tick xác nhận, payload bookingConfig: null', async () => {
+      const existingFormWithBooking = {
+        ...existingForm,
+        bookingConfig: {
+          enabled: true,
+          weeklySlots: { '0': [], '1': ['09:00'], '2': [], '3': [], '4': [], '5': [], '6': [] },
+          slotCapacity: 5,
+          daysAhead: 14,
+          minNoticeMinutes: 30,
+          closedDates: [],
+        },
+      };
+      formAdminApi.fetchFormById.mockResolvedValue(existingFormWithBooking);
+      formAdminApi.updateForm.mockResolvedValue(existingFormWithBooking);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument();
+      });
+
+      const enableCheckbox = screen.getByRole('checkbox', { name: /Bật đặt lịch hẹn/i });
+      expect(enableCheckbox).toBeChecked();
+      fireEvent.click(enableCheckbox); // tắt đặt lịch
+
+      // Cảnh báo mất dữ liệu hiện ra rõ ràng trước khi lưu
+      expect(screen.getByText(/sẽ xoá toàn bộ khung giờ/i)).toBeInTheDocument();
+
+      const saveBtn = screen.getByRole('button', { name: /Lưu biểu mẫu/i });
+      fireEvent.click(saveBtn);
+
+      // Chưa tick xác nhận -> chặn lưu
+      expect(formAdminApi.updateForm).not.toHaveBeenCalled();
+
+      const confirmCheckbox = screen.getByRole('checkbox', { name: /Tôi đã hiểu, vẫn lưu để tắt đặt lịch/i });
+      fireEvent.click(confirmCheckbox);
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const [, payload] = formAdminApi.updateForm.mock.calls[0];
+      expect(payload.bookingConfig).toBeNull();
+    });
+  });
 });

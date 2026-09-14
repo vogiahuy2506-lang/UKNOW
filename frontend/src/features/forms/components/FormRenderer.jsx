@@ -1,16 +1,23 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useI18n } from '../../../i18n';
+import BookingSlotPicker from './BookingSlotPicker';
+import { vnToday, addDaysToDateStr, formatSlotDateLabel } from '../utils/bookingFormat.util';
+
+const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT']);
 
 /**
  * FormRenderer: Component hiển thị biểu mẫu công khai và xử lý nộp bài.
  * Thiết kế decoupled để PR-4 dùng cho xem trước (previewMode) và PR-5 dùng cho bản nhúng.
  *
  * @param {object} props
- * @param {object} props.form - Định nghĩa biểu mẫu (title, description, fields, settings, theme)
+ * @param {object} props.form - Định nghĩa biểu mẫu (title, description, fields, settings, theme, booking)
  * @param {Function} props.onSubmit - Callback nộp bài: (payload) => Promise<void>
  * @param {boolean} [props.isSubmitting] - Trạng thái đang gửi từ bên ngoài
  * @param {string} [props.externalError] - Lỗi từ server (nếu có)
  * @param {boolean} [props.previewMode] - Chế độ xem trước trong trình soạn thảo
+ * @param {(from: string, days: number) => Promise<{slots: Array}>} [props.loadSlots] - Tải khung
+ *   giờ trống. Renderer KHÔNG tự gọi API (giữ decoupled) — không truyền prop này (vd. trong
+ *   previewMode) thì hiển thị lịch khoá/mẫu thay vì gọi mạng.
  */
 export default function FormRenderer({
   form,
@@ -18,13 +25,26 @@ export default function FormRenderer({
   isSubmitting = false,
   externalError = '',
   previewMode = false,
+  loadSlots,
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const [answers, setAnswers] = useState({});
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [clientErrors, setClientErrors] = useState({});
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
+
+  const booking = form?.booking || null;
+  const bookingEnabled = Boolean(booking?.enabled);
+  const daysAhead = Number.isFinite(booking?.daysAhead) ? booking.daysAhead : 30;
+  const bookingMock = bookingEnabled && (previewMode || typeof loadSlots !== 'function');
+
+  const [weekStart, setWeekStart] = useState(() => vnToday());
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsLoadError, setSlotsLoadError] = useState('');
+  const [selectedSlot, setSelectedSlot] = useState(null); // { date, time }
+  const [bookedInfo, setBookedInfo] = useState(null); // snapshot cho màn thành công
 
   // Chống bấm đúp bằng useRef để chặn ngay lập tức trong event loop
   const submittingRef = useRef(false);
@@ -35,6 +55,56 @@ export default function FormRenderer({
   const settings = form?.settings || {};
   const submitButtonText = settings.submitButtonText?.trim() || t('publicForm.defaultSubmit');
   const successMessage = settings.successMessage?.trim() || t('publicForm.defaultSuccess');
+
+  const todayVn = vnToday();
+  const maxDate = addDaysToDateStr(todayVn, daysAhead);
+  const canGoPrevWeek = weekStart > todayVn;
+  const canGoNextWeek = addDaysToDateStr(weekStart, 7) <= maxDate;
+
+  const loadWeek = useCallback(
+    async (from) => {
+      if (typeof loadSlots !== 'function') return;
+      setSlotsLoading(true);
+      setSlotsLoadError('');
+      try {
+        const result = await loadSlots(from, 7);
+        setSlots(Array.isArray(result?.slots) ? result.slots : []);
+      } catch {
+        setSlots([]);
+        setSlotsLoadError(t('publicForm.booking.loadSlotsError'));
+      } finally {
+        setSlotsLoading(false);
+      }
+    },
+    [loadSlots, t]
+  );
+
+  useEffect(() => {
+    if (bookingEnabled && !bookingMock) {
+      loadWeek(weekStart);
+    }
+  }, [bookingEnabled, bookingMock, weekStart, loadWeek]);
+
+  const handlePrevWeek = () => {
+    const prev = addDaysToDateStr(weekStart, -7);
+    setWeekStart(prev < todayVn ? todayVn : prev);
+  };
+
+  const handleNextWeek = () => {
+    if (!canGoNextWeek) return;
+    setWeekStart(addDaysToDateStr(weekStart, 7));
+  };
+
+  const handleSelectSlot = (date, time) => {
+    setSelectedSlot({ date, time });
+    if (clientErrors.__booking) {
+      setClientErrors((prev) => {
+        const next = { ...prev };
+        delete next.__booking;
+        return next;
+      });
+    }
+  };
 
   const normalizePhoneClient = (raw) => {
     const s = String(raw || '').trim();
@@ -100,6 +170,10 @@ export default function FormRenderer({
       }
     }
 
+    if (bookingEnabled && !previewMode && !selectedSlot) {
+      errors.__booking = t('publicForm.booking.selectRequired');
+    }
+
     return errors;
   };
 
@@ -143,8 +217,19 @@ export default function FormRenderer({
         payload.marketingConsent = Boolean(marketingConsent);
       }
 
+      // Chỉ gửi appointmentDate/appointmentTime khi form bật đặt lịch — form không bật
+      // KHÔNG được có 2 khoá này trong payload (hợp đồng PR-2a).
+      if (bookingEnabled && selectedSlot) {
+        payload.appointmentDate = selectedSlot.date;
+        payload.appointmentTime = selectedSlot.time;
+      }
+
       if (onSubmit) {
         await onSubmit(payload);
+      }
+
+      if (bookingEnabled && selectedSlot) {
+        setBookedInfo(selectedSlot);
       }
 
       // Xử lý chuyển hướng phòng thủ lớp 2
@@ -161,8 +246,19 @@ export default function FormRenderer({
       }
 
       setSubmittedSuccess(true);
-    } catch {
-      // Lỗi do bên ngoài/caller quản lý qua externalError
+    } catch (err) {
+      // Lỗi chung do bên ngoài/caller quản lý qua externalError. Riêng lỗi khung giờ (409 hết
+      // chỗ / 400 khung không hợp lệ) phải tải lại slots + bỏ chọn khung cũ, GIỮ NGUYÊN các câu
+      // trả lời khác đã điền (answers không đổi trong nhánh này).
+      const code = err?.response?.data?.code;
+      if (bookingEnabled && SLOT_ERROR_CODES.has(code)) {
+        setSelectedSlot(null);
+        setClientErrors((prev) => ({
+          ...prev,
+          __booking: t(`publicForm.booking.error.${code}`),
+        }));
+        loadWeek(weekStart);
+      }
     } finally {
       submittingRef.current = false;
     }
@@ -180,6 +276,14 @@ export default function FormRenderer({
         <p className="text-gray-600 whitespace-pre-line leading-relaxed">
           {successMessage}
         </p>
+        {bookedInfo && (
+          <p className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary-50 text-primary-700 text-sm font-medium">
+            {t('publicForm.booking.bookedAt', {
+              date: formatSlotDateLabel(bookedInfo.date, locale),
+              time: bookedInfo.time,
+            })}
+          </p>
+        )}
       </div>
     );
   }
@@ -432,6 +536,24 @@ export default function FormRenderer({
             </div>
           );
         })}
+
+        {/* Chọn khung giờ đặt lịch: chỉ hiện khi form.booking?.enabled */}
+        {bookingEnabled && (
+          <BookingSlotPicker
+            slots={slots}
+            isLoading={slotsLoading}
+            loadError={slotsLoadError}
+            selected={selectedSlot}
+            onSelect={handleSelectSlot}
+            onPrevWeek={handlePrevWeek}
+            onNextWeek={handleNextWeek}
+            canGoPrev={canGoPrevWeek}
+            canGoNext={canGoNextWeek}
+            disabled={isSubmitting || previewMode}
+            mock={bookingMock}
+            error={clientErrors.__booking}
+          />
+        )}
 
         {/* Ô đồng ý tiếp thị: chỉ hiện khi consentEnabled = true */}
         {settings.consentEnabled === true && (

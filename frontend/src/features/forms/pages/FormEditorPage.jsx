@@ -37,6 +37,38 @@ const DEFAULT_SETTINGS = {
   redirectUrl: '',
 };
 
+// Hợp đồng đặt lịch (bookingConfig) — chép từ backend/src/utils/formDefinition.util.js
+// normalizeBookingConfig, hằng số dòng 265-275 (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md,
+// PR-2a). Lệch thì code backend đúng, không phải file này.
+const WEEKDAY_KEYS = ['0', '1', '2', '3', '4', '5', '6'];
+const WEEKDAY_UI_ORDER = [
+  { key: '1', labelKey: 'forms.editorPage.booking.weekday.mon' },
+  { key: '2', labelKey: 'forms.editorPage.booking.weekday.tue' },
+  { key: '3', labelKey: 'forms.editorPage.booking.weekday.wed' },
+  { key: '4', labelKey: 'forms.editorPage.booking.weekday.thu' },
+  { key: '5', labelKey: 'forms.editorPage.booking.weekday.fri' },
+  { key: '6', labelKey: 'forms.editorPage.booking.weekday.sat' },
+  { key: '0', labelKey: 'forms.editorPage.booking.weekday.sun' },
+];
+const MAX_SLOTS_PER_DAY = 48;
+const MIN_SLOT_CAPACITY = 1;
+const MAX_SLOT_CAPACITY = 1000;
+const MIN_DAYS_AHEAD = 1;
+const MAX_DAYS_AHEAD = 180;
+const MIN_NOTICE_MINUTES_MIN = 0;
+const MIN_NOTICE_MINUTES_MAX = 10080;
+const MAX_CLOSED_DATES = 366;
+
+const DEFAULT_WEEKLY_SLOTS = WEEKDAY_KEYS.reduce((acc, k) => ({ ...acc, [k]: [] }), {});
+const DEFAULT_BOOKING = {
+  enabled: false,
+  weeklySlots: DEFAULT_WEEKLY_SLOTS,
+  slotCapacity: '', // '' = không giới hạn (gửi null)
+  daysAhead: 30,
+  minNoticeMinutes: 60,
+  closedDates: [],
+};
+
 export default function FormEditorPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -55,6 +87,9 @@ export default function FormEditorPage() {
     submitButtonText: t('publicForm.defaultSubmit'),
     successMessage: t('publicForm.defaultSuccess'),
   }));
+  const [booking, setBooking] = useState(DEFAULT_BOOKING);
+  const [initialBookingHadConfig, setInitialBookingHadConfig] = useState(false);
+  const [confirmDisableBooking, setConfirmDisableBooking] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -106,6 +141,25 @@ export default function FormEditorPage() {
           successMessage: data.settings?.successMessage || DEFAULT_SETTINGS.successMessage,
           redirectUrl: data.settings?.redirectUrl || '',
         });
+
+        if (data.bookingConfig) {
+          setBooking({
+            enabled: true,
+            weeklySlots: { ...DEFAULT_WEEKLY_SLOTS, ...data.bookingConfig.weeklySlots },
+            slotCapacity:
+              data.bookingConfig.slotCapacity === null || data.bookingConfig.slotCapacity === undefined
+                ? ''
+                : String(data.bookingConfig.slotCapacity),
+            daysAhead: data.bookingConfig.daysAhead ?? 30,
+            minNoticeMinutes: data.bookingConfig.minNoticeMinutes ?? 60,
+            closedDates: Array.isArray(data.bookingConfig.closedDates) ? data.bookingConfig.closedDates : [],
+          });
+          setInitialBookingHadConfig(true);
+        } else {
+          setBooking(DEFAULT_BOOKING);
+          setInitialBookingHadConfig(false);
+        }
+        setConfirmDisableBooking(false);
       })
       .catch((err) => {
         toast.error(err.response?.data?.message || t('forms.editorPage.loadError'));
@@ -214,6 +268,70 @@ export default function FormEditorPage() {
     });
   };
 
+  // Bật/tắt đặt lịch hẹn
+  const handleToggleBookingEnabled = (checked) => {
+    setBooking((prev) => ({ ...prev, enabled: checked }));
+    if (checked) setConfirmDisableBooking(false);
+  };
+
+  const handleAddTimeSlot = (dayKey) => {
+    setBooking((prev) => {
+      const current = prev.weeklySlots[dayKey] || [];
+      if (current.length >= MAX_SLOTS_PER_DAY) {
+        toast.error(t('forms.editorPage.booking.maxSlotsPerDay'));
+        return prev;
+      }
+      return { ...prev, weeklySlots: { ...prev.weeklySlots, [dayKey]: [...current, ''] } };
+    });
+  };
+
+  const handleUpdateTimeSlot = (dayKey, idx, value) => {
+    setBooking((prev) => {
+      const current = [...(prev.weeklySlots[dayKey] || [])];
+      current[idx] = value;
+      return { ...prev, weeklySlots: { ...prev.weeklySlots, [dayKey]: current } };
+    });
+  };
+
+  const handleRemoveTimeSlot = (dayKey, idx) => {
+    setBooking((prev) => ({
+      ...prev,
+      weeklySlots: { ...prev.weeklySlots, [dayKey]: (prev.weeklySlots[dayKey] || []).filter((_, i) => i !== idx) },
+    }));
+  };
+
+  // Áp khung giờ của Thứ 2 cho tất cả các ngày còn lại
+  const handleApplyMondayToAll = () => {
+    setBooking((prev) => {
+      const mondaySlots = prev.weeklySlots['1'] || [];
+      const next = {};
+      for (const key of WEEKDAY_KEYS) next[key] = [...mondaySlots];
+      return { ...prev, weeklySlots: next };
+    });
+  };
+
+  const handleAddClosedDate = () => {
+    setBooking((prev) => {
+      if (prev.closedDates.length >= MAX_CLOSED_DATES) {
+        toast.error(t('forms.editorPage.booking.maxClosedDates'));
+        return prev;
+      }
+      return { ...prev, closedDates: [...prev.closedDates, ''] };
+    });
+  };
+
+  const handleUpdateClosedDate = (idx, value) => {
+    setBooking((prev) => {
+      const next = [...prev.closedDates];
+      next[idx] = value;
+      return { ...prev, closedDates: next };
+    });
+  };
+
+  const handleRemoveClosedDate = (idx) => {
+    setBooking((prev) => ({ ...prev, closedDates: prev.closedDates.filter((_, i) => i !== idx) }));
+  };
+
   // Validate form trước khi lưu
   const validateForm = () => {
     const errs = {};
@@ -271,6 +389,52 @@ export default function FormEditorPage() {
       }
     }
 
+    // Validate đặt lịch hẹn (hợp đồng normalizeBookingConfig, xem hằng số ở đầu file)
+    if (booking.enabled) {
+      let totalSlots = 0;
+      let hasDuplicate = false;
+      for (const key of WEEKDAY_KEYS) {
+        const times = (booking.weeklySlots[key] || []).filter(Boolean);
+        totalSlots += times.length;
+        if (new Set(times).size !== times.length) hasDuplicate = true;
+      }
+      if (totalSlots === 0) {
+        errs.bookingSlots = t('forms.editorPage.booking.noSlotsError');
+      } else if (hasDuplicate) {
+        errs.bookingSlots = t('forms.editorPage.booking.duplicateSlotTime');
+      }
+
+      if (booking.slotCapacity !== '') {
+        const n = Number(booking.slotCapacity);
+        if (!Number.isInteger(n) || n < MIN_SLOT_CAPACITY || n > MAX_SLOT_CAPACITY) {
+          errs.bookingCapacity = t('forms.editorPage.booking.capacityInvalid');
+        }
+      }
+
+      const daysAheadNum = Number(booking.daysAhead);
+      if (!Number.isInteger(daysAheadNum) || daysAheadNum < MIN_DAYS_AHEAD || daysAheadNum > MAX_DAYS_AHEAD) {
+        errs.bookingDaysAhead = t('forms.editorPage.booking.daysAheadInvalid');
+      }
+
+      const minNoticeNum = Number(booking.minNoticeMinutes);
+      if (
+        !Number.isInteger(minNoticeNum) ||
+        minNoticeNum < MIN_NOTICE_MINUTES_MIN ||
+        minNoticeNum > MIN_NOTICE_MINUTES_MAX
+      ) {
+        errs.bookingMinNotice = t('forms.editorPage.booking.minNoticeInvalid');
+      }
+
+      const closedFilled = booking.closedDates.filter(Boolean);
+      if (closedFilled.length > MAX_CLOSED_DATES) {
+        errs.bookingClosedDates = t('forms.editorPage.booking.maxClosedDates');
+      } else if (new Set(closedFilled).size !== closedFilled.length) {
+        errs.bookingClosedDates = t('forms.editorPage.booking.duplicateClosedDate');
+      }
+    } else if (initialBookingHadConfig && !confirmDisableBooking) {
+      errs.bookingDisableConfirm = t('forms.editorPage.booking.disableConfirmRequired');
+    }
+
     return errs;
   };
 
@@ -316,16 +480,37 @@ export default function FormEditorPage() {
         redirectUrl: settings.redirectUrl?.trim() || null,
       };
 
+      // Luôn gửi bookingConfig: đủ 6 khoá khi bật, null khi tắt (server lưu null -> mất khung
+      // giờ đã khai, đã cảnh báo ở validateForm/UI trước khi tới đây).
+      let payloadBooking = null;
+      if (booking.enabled) {
+        const weeklySlots = {};
+        for (const key of WEEKDAY_KEYS) {
+          weeklySlots[key] = (booking.weeklySlots[key] || []).filter(Boolean);
+        }
+        payloadBooking = {
+          enabled: true,
+          weeklySlots,
+          slotCapacity: booking.slotCapacity === '' ? null : Number(booking.slotCapacity),
+          daysAhead: Number(booking.daysAhead),
+          minNoticeMinutes: Number(booking.minNoticeMinutes),
+          closedDates: booking.closedDates.filter(Boolean),
+        };
+      }
+
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
         fields: payloadFields,
         settings: payloadSettings,
+        bookingConfig: payloadBooking,
       };
 
       if (isEditMode) {
         await updateForm(id, payload);
         toast.success(t('forms.saveSuccess'));
+        setInitialBookingHadConfig(Boolean(payloadBooking));
+        setConfirmDisableBooking(false);
       } else {
         const created = await createForm(payload);
         toast.success(t('forms.saveSuccess'));
@@ -749,6 +934,216 @@ export default function FormEditorPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Khối 4: Đặt lịch hẹn */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">
+                {t('forms.editorPage.booking.title')}
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {t('forms.editorPage.booking.enableHelp')}
+              </p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
+              <span className="text-sm font-medium text-gray-800">
+                {t('forms.editorPage.booking.enableLabel')}
+              </span>
+              <input
+                type="checkbox"
+                checked={booking.enabled}
+                onChange={(e) => handleToggleBookingEnabled(e.target.checked)}
+                className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
+              />
+            </label>
+          </div>
+
+          {!booking.enabled && initialBookingHadConfig && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs space-y-2">
+              <p className="font-medium">{t('forms.editorPage.booking.disableWarning')}</p>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={confirmDisableBooking}
+                  onChange={(e) => setConfirmDisableBooking(e.target.checked)}
+                  className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300"
+                />
+                <span>{t('forms.editorPage.booking.disableConfirmCheckbox')}</span>
+              </label>
+              {errors.bookingDisableConfirm && (
+                <p className="text-red-700 font-medium">{errors.bookingDisableConfirm}</p>
+              )}
+            </div>
+          )}
+
+          {booking.enabled && (
+            <div className="space-y-5">
+              {(fields.every((f) => f.role !== 'email') || !settings.sendConfirmation) && (
+                <p className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs">
+                  {t('forms.editorPage.booking.emailHint')}
+                </p>
+              )}
+
+              {errors.bookingSlots && (
+                <p className="text-xs text-red-600 p-3 bg-red-50 rounded-xl">{errors.bookingSlots}</p>
+              )}
+
+              {/* Khung giờ theo tuần */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    {t('forms.editorPage.booking.weeklySlotsLabel')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleApplyMondayToAll}
+                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    {t('forms.editorPage.booking.applyMondayToAll')}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {WEEKDAY_UI_ORDER.map((day) => (
+                    <div key={day.key} className="p-3 rounded-xl border border-gray-200 bg-gray-50/50">
+                      <div className="text-xs font-semibold text-gray-700 mb-2">{t(day.labelKey)}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(booking.weeklySlots[day.key] || []).map((time, idx) => (
+                          <div key={idx} className="flex items-center gap-1">
+                            <input
+                              type="time"
+                              value={time}
+                              onChange={(e) => handleUpdateTimeSlot(day.key, idx, e.target.value)}
+                              className="px-2 py-1.5 bg-white rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTimeSlot(day.key, idx)}
+                              className="p-1 text-gray-400 hover:text-red-500 rounded"
+                              title={t('forms.editorPage.booking.removeSlot')}
+                            >
+                              <HiOutlineTrash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => handleAddTimeSlot(day.key)}
+                          className="px-2.5 py-1.5 rounded-lg border border-dashed border-gray-300 text-xs text-primary-600 hover:bg-primary-50"
+                        >
+                          + {t('forms.editorPage.booking.addSlot')}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sức chứa / số ngày cho phép / báo trước tối thiểu */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.booking.capacityLabel')}
+                  </label>
+                  <input
+                    type="number"
+                    min={MIN_SLOT_CAPACITY}
+                    max={MAX_SLOT_CAPACITY}
+                    value={booking.slotCapacity}
+                    onChange={(e) => setBooking((prev) => ({ ...prev, slotCapacity: e.target.value }))}
+                    placeholder={t('forms.editorPage.booking.capacityPlaceholder')}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                      errors.bookingCapacity
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  {errors.bookingCapacity && (
+                    <p className="text-xs text-red-600 mt-1">{errors.bookingCapacity}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.booking.daysAheadLabel')}
+                  </label>
+                  <input
+                    type="number"
+                    min={MIN_DAYS_AHEAD}
+                    max={MAX_DAYS_AHEAD}
+                    value={booking.daysAhead}
+                    onChange={(e) => setBooking((prev) => ({ ...prev, daysAhead: e.target.value }))}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                      errors.bookingDaysAhead
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  {errors.bookingDaysAhead && (
+                    <p className="text-xs text-red-600 mt-1">{errors.bookingDaysAhead}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.booking.minNoticeLabel')}
+                  </label>
+                  <input
+                    type="number"
+                    min={MIN_NOTICE_MINUTES_MIN}
+                    max={MIN_NOTICE_MINUTES_MAX}
+                    value={booking.minNoticeMinutes}
+                    onChange={(e) => setBooking((prev) => ({ ...prev, minNoticeMinutes: e.target.value }))}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                      errors.bookingMinNotice
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  {errors.bookingMinNotice && (
+                    <p className="text-xs text-red-600 mt-1">{errors.bookingMinNotice}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Ngày nghỉ */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    {t('forms.editorPage.booking.closedDatesLabel')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddClosedDate}
+                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    + {t('forms.editorPage.booking.addClosedDate')}
+                  </button>
+                </div>
+                {errors.bookingClosedDates && (
+                  <p className="text-xs text-red-600">{errors.bookingClosedDates}</p>
+                )}
+                <div className="space-y-2">
+                  {booking.closedDates.map((d, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={d}
+                        onChange={(e) => handleUpdateClosedDate(idx, e.target.value)}
+                        className="px-3 py-1.5 bg-white rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveClosedDate(idx)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                      >
+                        <HiOutlineTrash className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useI18n } from '../../../i18n';
 import {
   fetchPublicForm,
   submitPublicForm,
+  fetchPublicSlots,
 } from '../services/formPublicApi.service';
 import FormRenderer from '../components/FormRenderer';
 
@@ -35,6 +36,11 @@ export default function PublicFormPage() {
   useEffect(() => {
     loadForm();
   }, [loadForm]);
+
+  const loadSlots = useCallback(
+    (from, days) => fetchPublicSlots(publicKey, { from, days }),
+    [publicKey]
+  );
 
   const handleSubmit = async (payload) => {
     setSubmitError('');
@@ -139,6 +145,7 @@ export default function PublicFormPage() {
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
         externalError={submitError}
+        loadSlots={form?.booking?.enabled ? loadSlots : undefined}
       />
     </div>
   );

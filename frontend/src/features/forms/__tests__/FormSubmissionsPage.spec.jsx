@@ -8,6 +8,14 @@ import * as formAdminApi from '../services/formAdminApi.service';
 vi.mock('../services/formAdminApi.service', () => ({
   fetchFormById: vi.fn(),
   fetchFormSubmissions: vi.fn(),
+  cancelSubmission: vi.fn(),
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 describe('FormSubmissionsPage component', () => {
@@ -251,5 +259,173 @@ describe('FormSubmissionsPage component', () => {
     // Phải đúng thứ tự fields: f_c9a1 (Họ và tên) -> f_2b7e (Email) -> f_71d0 (Dịch vụ)
     // Và f_deleted (Trường đã xoá) nằm ở sau cùng
     expect(renderedLabels).toEqual(['Họ và tên', 'Email', 'Dịch vụ', 'Trường đã xoá']);
+  });
+
+  describe('Đặt lịch hẹn (PR-2b)', () => {
+    const bookingForm = {
+      id: 'form-booking-789',
+      title: 'Form đặt lịch tư vấn',
+      booking: { enabled: true, daysAhead: 30 },
+      fields: [{ key: 'f_name', label: 'Họ tên', type: 'short_text' }],
+    };
+
+    const bookingSubmissionsPage1 = {
+      submissions: [
+        {
+          id: 'sub-appt-1',
+          respondentName: 'Khách hẹn 1',
+          respondentEmail: 'hen1@example.com',
+          marketingConsent: true,
+          status: 'submitted',
+          // 2026-09-19T17:30:00Z = 00:30 20/09/2026 giờ VN (GMT+7)
+          appointmentAt: '2026-09-19T17:30:00.000Z',
+          createdAt: '2026-09-14T08:00:00.000Z',
+          answers: {},
+        },
+        {
+          id: 'sub-appt-2',
+          respondentName: 'Khách đã huỷ',
+          respondentEmail: 'huy@example.com',
+          marketingConsent: false,
+          status: 'cancelled',
+          appointmentAt: '2026-09-20T02:00:00.000Z',
+          createdAt: '2026-09-14T08:10:00.000Z',
+          answers: {},
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    };
+
+    it('hiển thị cột Giờ hẹn theo giờ VN (không theo múi giờ trình duyệt) và cột Trạng thái', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(bookingForm);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(bookingSubmissionsPage1);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-booking-789/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('hen1@example.com')).toBeInTheDocument();
+      });
+
+      // Giờ hẹn tuyệt đối luôn theo Asia/Ho_Chi_Minh — đột biến #4 (chạy dưới TZ=America/New_York)
+      expect(screen.getByText('00:30 20/09/2026')).toBeInTheDocument();
+
+      // Trạng thái
+      expect(screen.getByText('Đã đặt')).toBeInTheDocument();
+      expect(screen.getByText('Đã huỷ')).toBeInTheDocument();
+
+      // Bài đã huỷ không còn nút Huỷ lịch
+      expect(screen.queryAllByRole('button', { name: /Huỷ lịch/i })).toHaveLength(1);
+    });
+
+    it('bộ lọc theo ngày: bấm "Hôm nay" gửi date=hôm nay giờ VN; xoá bộ lọc gọi lại không có date', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(bookingForm);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(bookingSubmissionsPage1);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-booking-789/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('hen1@example.com')).toBeInTheDocument();
+      });
+
+      formAdminApi.fetchFormSubmissions.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: 'Hôm nay' }));
+
+      await waitFor(() => {
+        expect(formAdminApi.fetchFormSubmissions).toHaveBeenCalledTimes(1);
+      });
+      const [, callArgs] = formAdminApi.fetchFormSubmissions.mock.calls[0];
+      expect(callArgs.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      formAdminApi.fetchFormSubmissions.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: /Xoá bộ lọc/i }));
+
+      await waitFor(() => {
+        expect(formAdminApi.fetchFormSubmissions).toHaveBeenCalledTimes(1);
+      });
+      const [, clearedArgs] = formAdminApi.fetchFormSubmissions.mock.calls[0];
+      expect(clearedArgs.date).toBeUndefined();
+    });
+
+    it('Huỷ lịch: xác nhận rồi gọi cancelSubmission đúng id, cập nhật dòng thành Đã huỷ và ẩn nút', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(bookingForm);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(bookingSubmissionsPage1);
+      formAdminApi.cancelSubmission.mockResolvedValue({ id: 'sub-appt-1', status: 'cancelled' });
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-booking-789/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('hen1@example.com')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Huỷ lịch' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Có, huỷ' }));
+
+      await waitFor(() => {
+        expect(formAdminApi.cancelSubmission).toHaveBeenCalledWith('form-booking-789', 'sub-appt-1');
+      });
+
+      // Dòng cập nhật thành Đã huỷ, nút Huỷ lịch biến mất khỏi dòng đó
+      await waitFor(() => {
+        expect(screen.getAllByText('Đã huỷ')).toHaveLength(2);
+      });
+      expect(screen.queryAllByRole('button', { name: /Huỷ lịch/i })).toHaveLength(0);
+    });
+
+    it('Huỷ lịch thất bại 409: hiện thông báo lỗi và tải lại trang hiện tại', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(bookingForm);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(bookingSubmissionsPage1);
+      formAdminApi.cancelSubmission.mockRejectedValue({
+        response: { status: 409, data: { code: 'SUBMISSION_ALREADY_CANCELLED', message: 'Bài nộp này đã bị huỷ trước đó' } },
+      });
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-booking-789/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('hen1@example.com')).toBeInTheDocument();
+      });
+
+      formAdminApi.fetchFormSubmissions.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: 'Huỷ lịch' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Có, huỷ' }));
+
+      await waitFor(() => {
+        expect(formAdminApi.fetchFormSubmissions).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 });

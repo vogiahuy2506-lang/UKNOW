@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   HiOutlineArrowLeft,
   HiOutlineInbox,
@@ -8,15 +9,20 @@ import {
   HiOutlineUser,
   HiOutlineMail,
   HiOutlinePhone,
+  HiOutlineX,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import {
   fetchFormById,
   fetchFormSubmissions,
+  cancelSubmission,
 } from '../services/formAdminApi.service';
+import { formatAppointmentAtVn, vnToday } from '../utils/bookingFormat.util';
+
+const CANCELLABLE_STATUSES = new Set(['submitted', 'confirmed']);
 
 export default function FormSubmissionsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const { id } = useParams();
 
@@ -30,6 +36,9 @@ export default function FormSubmissionsPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [cancelTargetId, setCancelTargetId] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
 
   const formKeyOrderMap = useMemo(() => {
     const map = new Map();
@@ -48,7 +57,7 @@ export default function FormSubmissionsPage() {
       try {
         const [formData, subsData] = await Promise.all([
           fetchFormById(id),
-          fetchFormSubmissions(id, { page: targetPage, pageSize: 20 }),
+          fetchFormSubmissions(id, { page: targetPage, pageSize: 20, date: dateFilter || undefined }),
         ]);
         setForm(formData);
         setSubmissions(Array.isArray(subsData.submissions) ? subsData.submissions : []);
@@ -64,7 +73,7 @@ export default function FormSubmissionsPage() {
         setIsLoading(false);
       }
     },
-    [id, t]
+    [id, t, dateFilter]
   );
 
   useEffect(() => {
@@ -74,6 +83,30 @@ export default function FormSubmissionsPage() {
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.totalPages || newPage === pagination.page) return;
     loadData(newPage);
+  };
+
+  const handleSetTodayFilter = () => setDateFilter(vnToday());
+  const handleClearFilter = () => setDateFilter('');
+
+  const handleRequestCancel = (submissionId) => setCancelTargetId(submissionId);
+  const handleAbortCancel = () => setCancelTargetId(null);
+
+  const handleConfirmCancel = async (submissionId) => {
+    setCancellingId(submissionId);
+    try {
+      const updated = await cancelSubmission(id, submissionId);
+      setSubmissions((prev) =>
+        prev.map((s) => (s.id === submissionId ? { ...s, status: updated?.status || 'cancelled' } : s))
+      );
+      toast.success(t('forms.submissionsPage.cancelSuccess'));
+      setCancelTargetId(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || t('forms.submissionsPage.cancelError'));
+      setCancelTargetId(null);
+      loadData(pagination.page);
+    } finally {
+      setCancellingId(null);
+    }
   };
 
   return (
@@ -110,6 +143,38 @@ export default function FormSubmissionsPage() {
         )}
       </div>
 
+      {form?.booking?.enabled && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <label htmlFor="date-filter" className="text-xs font-medium text-gray-600">
+            {t('forms.submissionsPage.dateFilterLabel')}
+          </label>
+          <input
+            id="date-filter"
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+          <button
+            type="button"
+            onClick={handleSetTodayFilter}
+            className="px-2.5 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50"
+          >
+            {t('forms.submissionsPage.today')}
+          </button>
+          {dateFilter && (
+            <button
+              type="button"
+              onClick={handleClearFilter}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <HiOutlineX className="w-3.5 h-3.5" />
+              {t('forms.submissionsPage.clearFilter')}
+            </button>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
           {error}
@@ -145,12 +210,27 @@ export default function FormSubmissionsPage() {
                   <th className="py-3.5 px-4 sm:px-6 w-60">
                     {t('forms.submissionsPage.colRespondent')}
                   </th>
+                  {form?.booking?.enabled && (
+                    <>
+                      <th className="py-3.5 px-4 sm:px-6 w-44">
+                        {t('forms.submissionsPage.colAppointment')}
+                      </th>
+                      <th className="py-3.5 px-4 sm:px-6 w-32">
+                        {t('forms.submissionsPage.colStatus')}
+                      </th>
+                    </>
+                  )}
                   <th className="py-3.5 px-4 sm:px-6 w-36 text-center">
                     {t('forms.submissionsPage.colConsent')}
                   </th>
                   <th className="py-3.5 px-4 sm:px-6">
                     {t('forms.submissionsPage.colAnswers')}
                   </th>
+                  {form?.booking?.enabled && (
+                    <th className="py-3.5 px-4 sm:px-6 w-36">
+                      {t('forms.submissionsPage.colActions')}
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -193,6 +273,30 @@ export default function FormSubmissionsPage() {
                           )}
                         </div>
                       </td>
+
+                      {form?.booking?.enabled && (
+                        <>
+                          {/* Giờ hẹn — LUÔN theo giờ Việt Nam, không phụ thuộc múi giờ trình duyệt */}
+                          <td className="py-4 px-4 sm:px-6 text-xs text-gray-600 whitespace-nowrap">
+                            {sub.appointmentAt ? formatAppointmentAtVn(sub.appointmentAt, locale) : '—'}
+                          </td>
+
+                          {/* Trạng thái */}
+                          <td className="py-4 px-4 sm:px-6">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                sub.status === 'cancelled'
+                                  ? 'bg-gray-100 text-gray-600 border-gray-200'
+                                  : sub.status === 'confirmed'
+                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}
+                            >
+                              {t(`forms.submissionsPage.status.${sub.status || 'submitted'}`)}
+                            </span>
+                          </td>
+                        </>
+                      )}
 
                       {/* Đồng ý tiếp thị */}
                       <td className="py-4 px-4 sm:px-6 text-center">
@@ -242,6 +346,50 @@ export default function FormSubmissionsPage() {
                           )}
                         </div>
                       </td>
+
+                      {form?.booking?.enabled && (
+                        <td className="py-4 px-4 sm:px-6">
+                          {CANCELLABLE_STATUSES.has(sub.status) && sub.appointmentAt ? (
+                            cancelTargetId === sub.id ? (
+                              <div className="space-y-1.5">
+                                <p className="text-xs text-gray-600">
+                                  {t('forms.submissionsPage.cancelConfirmDesc')}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmCancel(sub.id)}
+                                    disabled={cancellingId === sub.id}
+                                    className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50"
+                                  >
+                                    {cancellingId === sub.id
+                                      ? t('forms.submissionsPage.cancelling')
+                                      : t('forms.submissionsPage.cancelConfirmYes')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleAbortCancel}
+                                    disabled={cancellingId === sub.id}
+                                    className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium"
+                                  >
+                                    {t('forms.submissionsPage.cancelConfirmNo')}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRequestCancel(sub.id)}
+                                className="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-medium"
+                              >
+                                {t('forms.submissionsPage.cancelButton')}
+                              </button>
+                            )
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

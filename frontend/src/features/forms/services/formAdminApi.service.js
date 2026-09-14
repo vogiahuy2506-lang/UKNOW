@@ -35,9 +35,14 @@ export async function publishForm(id, isPublished) {
   return res.data?.data;
 }
 
-export async function fetchFormSubmissions(id, { page = 1, pageSize = 20 } = {}) {
-  const res = await api.get(`/forms/${id}/submissions`, {
-    params: { page, pageSize },
-  });
+export async function fetchFormSubmissions(id, { page = 1, pageSize = 20, date } = {}) {
+  const params = { page, pageSize };
+  if (date) params.date = date;
+  const res = await api.get(`/forms/${id}/submissions`, { params });
   return res.data?.data || { submissions: [], total: 0, page: 1, pageSize: 20, totalPages: 1 };
+}
+
+export async function cancelSubmission(id, submissionId) {
+  const res = await api.post(`/forms/${id}/submissions/${submissionId}/cancel`);
+  return res.data?.data;
 }

@@ -313,4 +313,130 @@ describe('FormRenderer component', () => {
     const payload = mockOnSubmit.mock.calls[0][0];
     expect(payload.answers.user_phone).toBe('0901234567');
   });
+
+  describe('đặt lịch hẹn (PR-2b)', () => {
+    const bookingForm = {
+      ...baseForm,
+      booking: { enabled: true, daysAhead: 30 },
+    };
+
+    const mockSlotsResponse = {
+      slots: [
+        { date: '2026-09-20', time: '09:00', remaining: 3 },
+        { date: '2026-09-20', time: '10:00', remaining: 0 },
+        { date: '2026-09-21', time: '14:00', remaining: null },
+      ],
+    };
+
+    it('form không bật đặt lịch: không hiển thị bộ chọn khung giờ, payload không có appointmentDate/appointmentTime', async () => {
+      const mockOnSubmit = vi.fn().mockResolvedValue({});
+      render(
+        <I18nProvider>
+          <FormRenderer form={baseForm} onSubmit={mockOnSubmit} />
+        </I18nProvider>
+      );
+
+      expect(screen.queryByText('Chọn ngày và giờ hẹn')).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Không đặt lịch' } });
+      fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'no-booking@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+      const payload = mockOnSubmit.mock.calls[0][0];
+      expect(payload).not.toHaveProperty('appointmentDate');
+      expect(payload).not.toHaveProperty('appointmentTime');
+    });
+
+    it('form bật đặt lịch, chưa chọn khung giờ + bấm gửi: báo lỗi tại chỗ, KHÔNG gọi onSubmit (đột biến #1)', async () => {
+      const mockLoadSlots = vi.fn().mockResolvedValue(mockSlotsResponse);
+      const mockOnSubmit = vi.fn();
+
+      render(
+        <I18nProvider>
+          <FormRenderer form={bookingForm} onSubmit={mockOnSubmit} loadSlots={mockLoadSlots} />
+        </I18nProvider>
+      );
+
+      await waitFor(() => expect(mockLoadSlots).toHaveBeenCalledTimes(1));
+
+      fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Chưa chọn khung' } });
+      fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'chuachon@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+      expect(mockOnSubmit).not.toHaveBeenCalled();
+      expect(await screen.findByText('Vui lòng chọn một khung giờ hẹn')).toBeInTheDocument();
+    });
+
+    it('khung remaining:0 không click được; chọn khung còn chỗ gửi đúng appointmentDate/appointmentTime; màn thành công hiện giờ đã đặt', async () => {
+      const mockLoadSlots = vi.fn().mockResolvedValue(mockSlotsResponse);
+      const mockOnSubmit = vi.fn().mockResolvedValue({});
+
+      render(
+        <I18nProvider>
+          <FormRenderer form={bookingForm} onSubmit={mockOnSubmit} loadSlots={mockLoadSlots} />
+        </I18nProvider>
+      );
+
+      const fullSlotBtn = await screen.findByRole('button', { name: /10:00.*Hết chỗ/i });
+      expect(fullSlotBtn).toBeDisabled();
+
+      const openSlotBtn = screen.getByRole('button', { name: /^09:00/ });
+      fireEvent.click(openSlotBtn);
+
+      fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Đã chọn khung' } });
+      fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'dachon@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+      const payload = mockOnSubmit.mock.calls[0][0];
+      expect(payload.appointmentDate).toBe('2026-09-20');
+      expect(payload.appointmentTime).toBe('09:00');
+
+      // Màn thành công hiện giờ hẹn đã đặt
+      await waitFor(() => {
+        expect(screen.getByText(/Lịch hẹn của bạn/i)).toBeInTheDocument();
+      });
+      expect(screen.getByText(/09:00/)).toBeInTheDocument();
+    });
+
+    it('409 FORM_SLOT_FULL: hiện thông báo theo mã lỗi, tải lại slots, bỏ chọn khung cũ, giữ nguyên câu trả lời khác (đột biến #2)', async () => {
+      const mockLoadSlots = vi.fn().mockResolvedValue(mockSlotsResponse);
+      const slotFullError = {
+        response: { status: 409, data: { code: 'FORM_SLOT_FULL', message: 'Khung giờ này vừa hết chỗ' } },
+      };
+      const mockOnSubmit = vi.fn().mockRejectedValue(slotFullError);
+
+      render(
+        <I18nProvider>
+          <FormRenderer form={bookingForm} onSubmit={mockOnSubmit} loadSlots={mockLoadSlots} />
+        </I18nProvider>
+      );
+
+      await waitFor(() => expect(mockLoadSlots).toHaveBeenCalledTimes(1));
+
+      const openSlotBtn = await screen.findByRole('button', { name: /^09:00/ });
+      fireEvent.click(openSlotBtn);
+
+      fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Giữ tên này' } });
+      fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'keep@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+
+      // Tải lại slots sau lỗi khung giờ
+      await waitFor(() => expect(mockLoadSlots).toHaveBeenCalledTimes(2));
+
+      // Thông báo lỗi theo code (i18n phía client, không phải message thô từ server)
+      expect(await screen.findByText('Khung giờ này vừa hết chỗ, vui lòng chọn khung khác')).toBeInTheDocument();
+
+      // Khung cũ bị bỏ chọn: bấm gửi lại (không chọn khung mới) bị chặn tại chỗ, onSubmit không tăng thêm
+      fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+      expect(mockOnSubmit).toHaveBeenCalledTimes(1);
+
+      // Giữ nguyên các câu trả lời khác đã điền
+      expect(screen.getByLabelText(/Họ và tên/i)).toHaveValue('Giữ tên này');
+      expect(screen.getByLabelText(/Email/i)).toHaveValue('keep@example.com');
+    });
+  });
 });
