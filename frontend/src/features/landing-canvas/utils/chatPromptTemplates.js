@@ -1,5 +1,5 @@
 /**
- * Quick-pick AI templates — copy từ LandingPageFullEditor AI_TEMPLATES.
+ * Quick-pick AI templates — copy từ editor cũ, đã xoá (LandingPageFullEditor.jsx AI_TEMPLATES).
  * Hiển thị khi chat panel rỗng (messages.length === 0).
  */
 export const CHAT_QUICK_PICKS = [

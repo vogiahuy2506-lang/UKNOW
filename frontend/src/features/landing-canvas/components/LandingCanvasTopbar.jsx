@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlineChevronLeft, HiOutlineX, HiOutlineTemplate, HiOutlineViewGrid, HiOutlineClock, HiOutlineCog, HiOutlineDocumentText, HiOutlineBookmark } from 'react-icons/hi';
+import { HiOutlineChevronLeft, HiOutlineX, HiOutlineTemplate, HiOutlineViewGrid, HiOutlineClock, HiOutlineCog, HiOutlineDocumentText, HiOutlineBookmark, HiOutlineCode } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 /**
@@ -18,6 +18,7 @@ import { useI18n } from '../../../i18n';
  *  - onOpenVisualEditor
  *  - onOpenVersionHistory
  *  - onOpenSaveTemplate
+ *  - onOpenImportHtml   : mở modal "Nhập HTML" (PLAN_LANDING_DAN_HTML_CO_SAN_2026-09-13.md)
  */
 export default function LandingCanvasTopbar({
   form,
@@ -32,8 +33,10 @@ export default function LandingCanvasTopbar({
   onOpenVisualEditor,
   onOpenVersionHistory,
   onOpenSaveTemplate,
+  onOpenImportHtml,
 }) {
   const tc = useI18n('landingCanvas.topbar');
+  const ti = useI18n('landingCanvas.importHtml');
   const closeBtnRef = useRef(null);
 
   const titleMaxLength = useMemo(() => 200, []);
@@ -100,6 +103,11 @@ export default function LandingCanvasTopbar({
           <span>{tc('settings')}</span>
         </button>
         <div className="w-px h-5 bg-gray-200 mx-1" />
+        <IconButton
+          icon={HiOutlineCode}
+          onClick={onOpenImportHtml}
+          title={ti('button')}
+        />
         <IconButton
           icon={HiOutlineTemplate}
           onClick={onOpenTemplateGallery}

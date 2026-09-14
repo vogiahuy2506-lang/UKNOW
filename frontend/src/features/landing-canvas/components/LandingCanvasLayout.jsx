@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import LandingCanvasTopbar from './LandingCanvasTopbar.jsx';
 import CanvasPreviewArea from './CanvasPreviewArea.jsx';
 import CanvasChatPanel from './CanvasChatPanel.jsx';
@@ -27,12 +27,22 @@ export default function LandingCanvasLayout({
   onOpenVisualEditor,
   onOpenVersionHistory,
   onOpenSaveTemplate,
+  onOpenImportHtml,
+  previewResetKey,
   chatPanel,
   previewPanel,
 }) {
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const chatPanelRef = useRef(null);
   const handleToggleChat = useCallback(() => {
     setChatCollapsed((cur) => !cur);
+  }, []);
+
+  // "Nhờ AI tạo" ở thẻ empty-state (Việc 2): mở panel chat nếu đang thu gọn rồi focus ô nhập —
+  // panel thu gọn không render ChatComposer nên phải đợi 1 nhịp render trước khi ref có giá trị.
+  const handleFocusChat = useCallback(() => {
+    setChatCollapsed(false);
+    requestAnimationFrame(() => chatPanelRef.current?.focus());
   }, []);
 
   /**
@@ -65,6 +75,7 @@ export default function LandingCanvasLayout({
         onOpenVisualEditor={onOpenVisualEditor}
         onOpenVersionHistory={onOpenVersionHistory}
         onOpenSaveTemplate={onOpenSaveTemplate}
+        onOpenImportHtml={onOpenImportHtml}
       />
 
       <div className="flex-1 min-h-0 flex">
@@ -76,6 +87,7 @@ export default function LandingCanvasLayout({
         >
           {chatPanel ?? (
             <CanvasChatPanel
+              ref={chatPanelRef}
               form={form}
               setForm={setForm}
               openTab={openTab}
@@ -88,7 +100,16 @@ export default function LandingCanvasLayout({
 
         {/* Preview Area (right, flex) */}
         <section className="flex-1 min-w-0 bg-[#f8fafc] flex flex-col min-h-0">
-          {previewPanel ?? <CanvasPreviewArea form={form} setForm={setForm} />}
+          {previewPanel ?? (
+            <CanvasPreviewArea
+              key={previewResetKey}
+              form={form}
+              setForm={setForm}
+              onOpenImportHtml={onOpenImportHtml}
+              onOpenTemplateGallery={onOpenTemplateGallery}
+              onFocusChat={handleFocusChat}
+            />
+          )}
         </section>
       </div>
     </div>

@@ -1,8 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import LandingCanvasLayout from './LandingCanvasLayout.jsx';
 import SettingsModal from './SettingsModal.jsx';
+import ImportHtmlModal from './ImportHtmlModal.jsx';
 import { useI18n } from '../../../i18n';
 import {
   createLandingPageAdmin,
@@ -29,6 +30,7 @@ import LandingVersionModal from '../../landing-pages/components/LandingVersionMo
 export default function LandingCanvasEditor({ editingId, form, setForm, onClose }) {
   const { t } = useI18n();
   const tc = useI18n('landingCanvas.landingCanvasEditor');
+  const ti = useI18n('landingCanvas.importHtml');
   const [saving, setSaving] = useState(false);
   const [activeModalTab, setActiveModalTab] = useState(null);
 
@@ -37,6 +39,12 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [importHtmlOpen, setImportHtmlOpen] = useState(false);
+  // Đổi mỗi lần Nhập HTML áp dụng → remount CanvasPreviewArea để mode nội bộ của nó reset về
+  // 'view' (PLAN_LANDING_DAN_HTML_CO_SAN_2026-09-13.md, Việc 1 — "cần mode nâng lên editor hoặc
+  // reset qua key"; chọn key vì không cần đổi API/props hiện có của CanvasPreviewArea).
+  const [previewResetKey, setPreviewResetKey] = useState(0);
+  const previousHtmlRef = useRef('');
 
   const handleOpenSettingTab = useCallback((tab) => {
     setActiveModalTab((cur) => (cur === tab ? null : tab));
@@ -167,6 +175,41 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
     setSaveTemplateOpen(true);
   }, [form]);
 
+  const handleOpenImportHtml = useCallback(() => {
+    setImportHtmlOpen(true);
+  }, []);
+
+  /**
+   * Áp dụng HTML vừa nhập (dán/đọc từ tệp) — KHÔNG qua AI, KHÔNG gọi prepareLandingHtmlOnSave ở
+   * trình duyệt (backend tự làm lúc lưu, landingPageAdmin.service.js:128-132). ImportHtmlModal đã
+   * tự hỏi xác nhận nếu trang đang có nội dung; ở đây chỉ còn việc set state + cho hoàn tác.
+   */
+  const handleApplyImportedHtml = useCallback((html) => {
+    previousHtmlRef.current = form?.htmlContent || '';
+    setForm((prev) => ({ ...prev, htmlContent: html }));
+    setPreviewResetKey((k) => k + 1);
+
+    toast.custom((t) => (
+      <div
+        className="flex items-center gap-3 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-3"
+        style={{ opacity: t.visible ? 1 : 0, transition: 'opacity 0.2s' }}
+      >
+        <span className="text-[14px] text-gray-700">{ti('applied')}</span>
+        <button
+          type="button"
+          onClick={() => {
+            setForm((prev) => ({ ...prev, htmlContent: previousHtmlRef.current }));
+            setPreviewResetKey((k) => k + 1);
+            toast.dismiss(t.id);
+          }}
+          className="text-[13px] font-semibold text-orange-600 hover:text-orange-700"
+        >
+          {ti('undo')}
+        </button>
+      </div>
+    ));
+  }, [form, setForm, ti]);
+
   return (
     <>
       <LandingCanvasLayout
@@ -183,6 +226,15 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
         onOpenVisualEditor={handleOpenBlockEditor}
         onOpenVersionHistory={handleOpenVersionHistory}
         onOpenSaveTemplate={handleOpenSaveTemplate}
+        onOpenImportHtml={handleOpenImportHtml}
+        previewResetKey={previewResetKey}
+      />
+
+      <ImportHtmlModal
+        isOpen={importHtmlOpen}
+        onClose={() => setImportHtmlOpen(false)}
+        currentHtml={form?.htmlContent || ''}
+        onApply={handleApplyImportedHtml}
       />
 
       <SettingsModal

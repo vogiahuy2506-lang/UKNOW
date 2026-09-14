@@ -727,6 +727,20 @@ export default {
       copyError: 'Không copy được, vui lòng copy thủ công.',
       copied: 'Đã copy',
     },
+    importHtml: {
+      button: 'Nhập HTML',
+      title: 'Nhập HTML có sẵn',
+      placeholder: 'Dán mã HTML vào đây…',
+      chooseFile: 'Chọn tệp .html',
+      apply: 'Áp dụng',
+      replaceConfirm: 'Trang đang có nội dung. Thay toàn bộ HTML hiện tại bằng nội dung vừa dán?',
+      confirmYes: 'Đồng ý, thay thế',
+      confirmCancel: 'Hủy',
+      undo: 'Hoàn tác',
+      applied: 'Đã nhập HTML mới.',
+      tooLarge: 'HTML quá dài (tối đa 500.000 ký tự).',
+      noFormWarning: 'Trang chưa có form đăng ký — hệ thống sẽ bắt form đầu tiên có ô email/số điện thoại, hoặc thêm data-founderai-capture vào form.',
+    },
     chat: {
       title: 'AI Assistant',
       placeholder: 'Mô tả thay đổi bạn muốn… (Enter để gửi, Shift+Enter xuống dòng)',
@@ -875,6 +889,11 @@ export default {
       deviceMobile: 'Mobile',
       zoom: 'Zoom',
       monacoLoading: 'Đang tải Monaco editor…',
+    },
+    emptyState: {
+      pasteHtml: 'Dán HTML có sẵn',
+      askAi: 'Nhờ AI tạo',
+      pickTemplate: 'Chọn mẫu',
     },
     canvasConversation: {
       intentRenameTitle: 'Đã đổi tên landing page thành "{value}".',

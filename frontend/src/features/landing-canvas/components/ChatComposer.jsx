@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { HiOutlinePaperAirplane, HiOutlinePaperClip, HiOutlineX } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
@@ -15,7 +15,7 @@ import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
  * - Nếu chỉ có file mà không có prompt, tự điền filesOnlyPrompt
  * - Disabled khi isStreaming hoặc isUploading
  */
-export default function ChatComposer({ onSend, disabled = false }) {
+const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false }, ref) {
   const tc = useI18n('landingCanvas.chat');
   const { t, locale } = useI18n();
   const { usage: storageQuota } = useStorageQuota();
@@ -26,6 +26,12 @@ export default function ChatComposer({ onSend, disabled = false }) {
 
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // "Nhờ AI tạo" ở thẻ empty-state (PLAN_LANDING_DAN_HTML_CO_SAN_2026-09-13.md, Việc 2) cần focus
+  // thẳng vào ô nhập chat — expose qua ref thay vì query DOM từ ngoài.
+  useImperativeHandle(ref, () => ({
+    focus: () => textareaRef.current?.focus(),
+  }));
 
   const handleFileSelect = async (e) => {
     const rawFiles = Array.from(e.target.files || []);
@@ -164,4 +170,6 @@ export default function ChatComposer({ onSend, disabled = false }) {
       </div>
     </div>
   );
-}
+});
+
+export default ChatComposer;

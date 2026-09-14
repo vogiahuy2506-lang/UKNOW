@@ -727,6 +727,20 @@ export default {
       copyError: 'Could not copy, please copy manually.',
       copied: 'Copied',
     },
+    importHtml: {
+      button: 'Import HTML',
+      title: 'Import existing HTML',
+      placeholder: 'Paste your HTML here…',
+      chooseFile: 'Choose .html file',
+      apply: 'Apply',
+      replaceConfirm: 'This page already has content. Replace all current HTML with the pasted content?',
+      confirmYes: 'Yes, replace it',
+      confirmCancel: 'Cancel',
+      undo: 'Undo',
+      applied: 'New HTML imported.',
+      tooLarge: 'HTML is too long (500,000 characters max).',
+      noFormWarning: "This page doesn't have a signup form yet — the system will capture the first form with an email/phone field, or add data-founderai-capture to your form.",
+    },
     chat: {
       title: 'AI Assistant',
       placeholder: 'Describe what you want to change… (Enter to send, Shift+Enter for new line)',
@@ -875,6 +889,11 @@ export default {
       deviceMobile: 'Mobile',
       zoom: 'Zoom',
       monacoLoading: 'Loading Monaco editor…',
+    },
+    emptyState: {
+      pasteHtml: 'Paste existing HTML',
+      askAi: 'Ask AI to build it',
+      pickTemplate: 'Pick a template',
     },
     canvasConversation: {
       intentRenameTitle: 'Landing page renamed to "{value}".',

@@ -1,3 +1,4 @@
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { useI18n } from '../../../i18n';
 import {
   HiOutlineSparkles,
@@ -22,9 +23,13 @@ import { CHAT_QUICK_PICKS } from '../utils/chatPromptTemplates.js';
  *  - collapsed: bool
  *  - onToggleCollapsed: callback toggle mở/thu nhỏ
  */
-export default function CanvasChatPanel({ form, setForm, openTab, collapsed, onToggleCollapsed, editingId = null }) {
+const CanvasChatPanel = forwardRef(function CanvasChatPanel(
+  { form, setForm, openTab, collapsed, onToggleCollapsed, editingId = null },
+  ref
+) {
   const tc = useI18n('landingCanvas.chat');
   const hasExistingHtml = Boolean(String(form?.htmlContent || '').trim());
+  const composerRef = useRef(null);
 
   const {
     messages,
@@ -32,6 +37,12 @@ export default function CanvasChatPanel({ form, setForm, openTab, collapsed, onT
     handleSend,
     handleUndo,
   } = useCanvasConversation({ form, setForm, hasExistingHtml, openTab, editingId });
+
+  // Panel thu gọn (collapsed) không render ChatComposer nên composerRef.current là null lúc đó —
+  // handler ngoài (handleFocusChat, LandingCanvasLayout.jsx) tự mở panel trước khi focus.
+  useImperativeHandle(ref, () => ({
+    focus: () => composerRef.current?.focus(),
+  }));
 
   if (collapsed) {
     return (
@@ -69,10 +80,12 @@ export default function CanvasChatPanel({ form, setForm, openTab, collapsed, onT
         )}
       </div>
 
-      <ChatComposer onSend={handleSend} disabled={isStreaming} />
+      <ChatComposer ref={composerRef} onSend={handleSend} disabled={isStreaming} />
     </div>
   );
-}
+});
+
+export default CanvasChatPanel;
 
 /* ───────── Modern Header ───────── */
 
