@@ -252,3 +252,53 @@ describe('chatRouter._callAI thinking config', () => {
     expect(second.generationConfig.maxOutputTokens).toBe(3072);
   });
 });
+
+describe('ChatRouterService.buildSystemPrompt — natural pronouns + no internal note leak', () => {
+  it('passes sub_assistant_name through to the prompt so AI uses the configured name', () => {
+    // Bug trước: WhatsApp Baileys inbox chỉ pass {welcome_message, response_style,
+    // system_instruction} cho buildSystemPrompt — thiếu sub_assistant_name.
+    // Khi id_sub_assistant set trong DB nhưng subAssistant=null (vd row
+    // bị xoá) thì prompt rơi về chatbot.name generic → AI xưng "Anh/Chị"
+    // cứng nhắc thay vì tên đặt trong sub-assistant. Fix: pass
+    // settings.sub_assistant_name từ JOIN `sa.name`.
+    const prompt = chatRouterService.buildSystemPrompt({
+      subAssistant: null,
+      settings: {
+        sub_assistant_name: 'Trợ lý Hà',
+        response_style: 'friendly',
+      },
+      chatbot: { name: 'Tro ly AI' },
+    });
+    // "Trợ lý Hà" được chèn vào rule "LUON xung ten la ..."
+    expect(prompt).toContain('LUON xung ten la "Trợ lý Hà"');
+    // Anti xưng hô cứng: prompt phải có rule cho AI linh hoạt thay vì
+    // "Anh/Chị" mặc định.
+    expect(prompt).toMatch(/KHONG.*xưng hô.*Anh\/Chị|xưng hô.*linh hoạt/);
+  });
+
+  it('forbids printing internal note structures (payment note, INTERNAL tags) to customers', () => {
+    // Bug: khi system_instruction có rule "khi có bill → tạo ghi chú
+    // thanh toán", AI in cả cấu trúc "Ghi chú thanh toán: ..." ra reply
+    // cho khách. Fix: thêm rule anti-echo trong QUY TAC QUAN TRONG.
+    const prompt = chatRouterService.buildSystemPrompt({
+      subAssistant: { name: 'Bot' },
+      settings: { response_style: 'friendly' },
+      chatbot: { name: 'Bot' },
+    });
+    expect(prompt).toContain('TUYET DOI KHONG in lại các cấu trúc note');
+    expect(prompt).toContain('Ghi chú thanh toán');
+    expect(prompt).toContain('INTERNAL');
+  });
+
+  it('forbids auto-classifying an image as bill/đơn hàng (only ask user)', () => {
+    // Bug: khách gửi ảnh (có thể là bill hoặc ảnh thường), AI tự suy
+    // đoán là "bill thanh toán" rồi in "Ghi chú thanh toán: ..." ra
+    // reply. Fix: thêm rule "KHONG tu suy doan hinh anh la bill".
+    const prompt = chatRouterService.buildSystemPrompt({
+      subAssistant: null,
+      settings: { response_style: 'friendly' },
+      chatbot: { name: 'Bot' },
+    });
+    expect(prompt).toMatch(/KHÔNG tự suy đoán hình ảnh là "bill thanh toán"/);
+  });
+});

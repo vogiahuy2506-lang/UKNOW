@@ -137,9 +137,11 @@ async function findEnabledChatbots(sessionKey) {
   const { rows } = await db.query(
     `SELECT s.id_chatbot, s.welcome_message, s.ai_model, s.temperature,
             s.max_tokens, s.response_style, s.system_instruction,
-            s.id_sub_assistant, cb.id_user, cb.name AS chatbot_name
+            s.id_sub_assistant, sa.name AS sub_assistant_name,
+            cb.id_user, cb.name AS chatbot_name
      FROM chatbot_whatsapp_baileys_settings s
      JOIN custom_chatbots cb ON cb.id = s.id_chatbot
+     LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant
      WHERE s.session_key = $1 AND s.is_enabled = true AND cb.is_active = true`,
     [sessionKey]
   );
@@ -271,10 +273,20 @@ async function buildReplyForChatbot({ ownerUserId, cb, history, messageText }) {
 
   const systemPrompt = chatRouterService.buildSystemPrompt({
     subAssistant,
+    // Trước đây chỗ này chỉ pass welcome_message + response_style +
+    // system_instruction — thiếu `sub_assistant_name`. Khi user attach
+    // sub-assistant cho WhatsApp Baileys session thì buildSystemPrompt
+    // resolve `name = subAssistant?.name || settings?.sub_assistant_name
+    // || chatbot?.name`. Nếu subAssistant=null (vd ID set trong DB
+    // nhưng row không tồn tại / bị xoá) thì rơi về `cb.chatbot_name`
+    // (generic, vd "Tro ly AI") → AI xưng hô "Anh/Chị" thay vì tên
+    // đặt trong sub-assistant. JOIN `sa.name` ngay trong
+    // findEnabledChatbots → pass thẳng qua đây để prompt dùng đúng tên.
     settings: {
       welcome_message: cb.welcome_message,
       response_style: cb.response_style,
       system_instruction: cb.system_instruction,
+      sub_assistant_name: cb.sub_assistant_name,
     },
     chatbot: { name: cb.chatbot_name },
     ragContext,
