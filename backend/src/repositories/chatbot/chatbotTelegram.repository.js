@@ -212,6 +212,33 @@ class ChatbotTelegramRepository {
       return rows[0];
     }
 
+    // New path: ensure the profile row exists BEFORE inserting the
+    // state row. Bug trước: chỉ insert telegram_session_state thuần
+    // → FK violation
+    //   "violates foreign key constraint
+    //    telegram_session_state_telegram_user_id_fkey"
+    // vì telegram_session_state có FK refer telegram_accounts.
+    // Sửa: insert telegram_accounts (UPSERT) trước, sau đó insert
+    // telegram_session_state. Nếu telegram_accounts đã tồn tại (re-login
+    // cùng telegram_user_id) thì chỉ update phone/first_name/...
+    // via ON CONFLICT (legacy path đã làm đúng phần này — new path
+    // trước đây bỏ sót).
+    await db.query(
+      `INSERT INTO telegram_accounts
+         (id_user, telegram_user_id, phone, first_name, last_name, username)
+       VALUES (COALESCE($1, (SELECT id_user FROM telegram_accounts
+                              WHERE telegram_user_id = $2 LIMIT 1)),
+               $2, $3, $4, $5, $6)
+       ON CONFLICT (telegram_user_id) DO UPDATE SET
+         phone      = COALESCE(EXCLUDED.phone,      telegram_accounts.phone),
+         first_name = COALESCE(EXCLUDED.first_name, telegram_accounts.first_name),
+         last_name  = COALESCE(EXCLUDED.last_name,  telegram_accounts.last_name),
+         username   = COALESCE(EXCLUDED.username,   telegram_accounts.username),
+         is_active  = true,
+         updated_at = NOW()`,
+      [userId, telegramUserId, phone, firstName, lastName, username]
+    );
+
     const { rows } = await db.query(
       `INSERT INTO telegram_session_state (telegram_user_id, state)
        VALUES ($1, $2)
@@ -290,6 +317,12 @@ class ChatbotTelegramRepository {
       );
     }
     const encrypted = encryptBaileysBlob(state);
+    // Caller must have created the profile row via `upsertSession` /
+    // `createAccount` BEFORE calling this method — telegram_session_state
+    // has a FK to telegram_accounts(telegram_user_id) so the parent row
+    // must exist or the INSERT fails with:
+    //   "violates foreign key constraint
+    //    telegram_session_state_telegram_user_id_fkey"
     const { rows } = await db.query(
       `INSERT INTO telegram_session_state (telegram_user_id, state)
        VALUES ($1, $2)

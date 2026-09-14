@@ -409,15 +409,19 @@ export class TelegramAuth {
       phone: me.phone || null,
     };
 
-    // Flush the in-memory driver's auth keys / kv / peers / refMessages
-    // to Postgres BEFORE upserting the user-facing profile row. If
-    // saveSessionState fails, the rest of the flow is unusable (session
-    // would not survive backend restart) so we abort early with ERROR.
+    // Flush in-memory state → Postgres (atomic).
     //
     // QR login dùng `InMemoryTelegramStorage` vì ta chưa biết
     // telegram_user_id lúc start(). State chỉ tồn tại trong RAM của
     // tiến trình — bắt buộc phải flush ngay khi scan xong, không chờ
     // disconnect (backend có thể restart trước khi user logout).
+    //
+    // Bug trước: code saveSessionState riêng → FK violation vì
+    // telegram_session_state có FK refer telegram_accounts và
+    // telegram_accounts row chưa được insert. Fix: gọi upsertSession
+    // MỘT LẦN với cả profile payload + sessionState blob. Repo đã
+    // được sửa để thực hiện UPSERT profile trước, sau đó UPSERT state
+    // row trong cùng call (xem chatbotTelegram.repository.upsertSession).
     try {
       // Lazy import để không pull @mtcute/core ở top-level (xem comment
       // ở đầu file). Sau login thành công là path warm-cache nên import
@@ -427,31 +431,13 @@ export class TelegramAuth {
       const blob = memoryStorage
         ? extractSerializedState(memoryStorage)
         : null;
-      if (blob) {
-        await this._sessionRepo.saveSessionState(telegramUserId, blob);
-      } else {
-        // Postgres driver đã save khi mtcute gọi disconnect (legacy
-        // path), nên không cần flush lại — nhưng cũng không nên log
-        // warning nếu driver là PostgresBacked. Just defensive log.
-        logInfo(
-          `[TelegramAuth] no in-memory state extracted for telegram_user_id=${telegramUserId} (driver may be Postgres-backed)`
-        );
-      }
-    } catch (err) {
-      flow.status = QR_STATUS.ERROR;
-      flow.error = `Failed to persist session state: ${err.message}`;
-      flow.endedAt = Date.now();
-      logWarn(
-        `[TelegramAuth] pre-persist saveSessionState failed for telegram_user_id=${telegramUserId}: ${err.message}`
-      );
-      return;
-    }
 
-    // Save the profile row. The session state itself has already
-    // been persisted by the above saveSessionState call; this call
-    // only needs to update `telegram_accounts`'s user-facing columns
-    // (phone, first_name, last_name, username, owner binding).
-    try {
+      // Build payload. `session` — blob là data từ InMemoryTelegramStorage.
+      // Nếu blob null (vd caller dùng PostgresBacked driver đã auto-save),
+      // ta vẫn cần insert profile row với marker tối thiểu để FK không
+      // dangling. Dùng object rỗng {} để repo upsert state row với data
+      // rỗng — không lý tưởng nhưng tránh crash. Trong thực tế QR login
+      // path luôn có blob (vì storageProvider là InMemoryTelegramStorage).
       await this._sessionRepo.upsertSession({
         telegramUserId,
         // The requesting workspace owner (`userId` from
@@ -462,7 +448,7 @@ export class TelegramAuth {
         // column \"id_user\" of relation \"telegram_accounts\"
         // violates not-null constraint".
         userId: flow.userContext ?? null,
-        sessionString: '',
+        sessionState: blob ?? {},
         phone: flow.me.phone,
         firstName: flow.me.firstName,
         lastName: flow.me.lastName,
@@ -472,6 +458,9 @@ export class TelegramAuth {
       flow.status = QR_STATUS.ERROR;
       flow.error = `Failed to persist session: ${err.message}`;
       flow.endedAt = Date.now();
+      logWarn(
+        `[TelegramAuth] persist failed for telegram_user_id=${telegramUserId}: ${err.message}`
+      );
       return;
     }
 

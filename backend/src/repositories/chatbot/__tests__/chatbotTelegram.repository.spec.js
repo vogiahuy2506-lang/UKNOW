@@ -138,10 +138,22 @@ describe('ChatbotTelegramRepository session methods', () => {
   });
 
   describe('upsertSession (back-compat shim)', () => {
-    it('when sessionState is provided, only touches telegram_session_state', async () => {
-      dbMock.query.mockResolvedValueOnce({
-        rows: [{ telegram_user_id: 12345, schema_version: 1, updated_at: '2026-09-13' }],
-      });
+    it('when sessionState is provided, upserts BOTH profile and state (FK-safe order)', async () => {
+      // Bug trước: sessionState path chỉ insert telegram_session_state
+      // mà KHÔNG tạo telegram_accounts row → FK violation
+      //   "violates foreign key constraint
+      //    telegram_session_state_telegram_user_id_fkey"
+      // Fix: sessionState path cũng phải insert telegram_accounts
+      // (UPSERT) trước để FK target tồn tại.
+      dbMock.query
+        // First call: UPSERT telegram_accounts (profile row).
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, telegram_user_id: 12345, first_name: 'Alice' }],
+        })
+        // Second call: encrypted UPSERT telegram_session_state.
+        .mockResolvedValueOnce({
+          rows: [{ telegram_user_id: 12345, schema_version: 1, updated_at: '2026-09-13' }],
+        });
       await repo.upsertSession({
         telegramUserId: 12345,
         sessionState: { kv: { x: 1 } },
@@ -149,13 +161,18 @@ describe('ChatbotTelegramRepository session methods', () => {
         firstName: 'Alice',
         userId: 7,
       });
-      // Exactly one query — the encrypted UPSERT on
-      // telegram_session_state.
-      expect(dbMock.query).toHaveBeenCalledTimes(1);
-      const [sql, params] = dbMock.query.mock.calls[0];
-      expect(sql).toMatch(/INSERT INTO telegram_session_state/);
-      expect(params[0]).toBe(12345);
-      expect(params[1]).toMatchObject({ enc: expect.stringMatching(/^enc:v1:/) });
+      // Exactly two queries: profile upsert THEN state upsert (FK order).
+      expect(dbMock.query).toHaveBeenCalledTimes(2);
+      // First query: telegram_accounts UPSERT — must come BEFORE state.
+      const [profileSql, profileParams] = dbMock.query.mock.calls[0];
+      expect(profileSql).toMatch(/INSERT INTO telegram_accounts/);
+      expect(profileSql).toMatch(/ON CONFLICT \(telegram_user_id\) DO UPDATE/);
+      expect(profileParams).toEqual([7, 12345, '+84', 'Alice', null, null]);
+      // Second query: encrypted state row.
+      const [stateSql, stateParams] = dbMock.query.mock.calls[1];
+      expect(stateSql).toMatch(/INSERT INTO telegram_session_state/);
+      expect(stateParams[0]).toBe(12345);
+      expect(stateParams[1]).toMatchObject({ enc: expect.stringMatching(/^enc:v1:/) });
     });
 
     it('legacy `sessionString` marker still upserts the profile row', async () => {

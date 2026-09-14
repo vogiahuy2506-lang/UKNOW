@@ -154,12 +154,13 @@ describe('TelegramAuth.start', () => {
       expect.objectContaining({
         telegramUserId: 12345,
         firstName: 'Alice',
+        // State lives in telegram_session_state (DB) — blob goes through
+        // upsertSession(sessionState: blob) atomic UPSERT (profile +
+        // state row in the same call). No separate saveSessionState
+        // needed at the auth layer.
+        sessionState: expect.objectContaining({ kv: expect.anything() }),
       })
     );
-    // State lives in telegram_session_state (DB) — sessionString column
-    // intentionally blank in upsertSession; the actual blob goes through
-    // saveSessionState(telegramUserId, extractSerializedState(...)).
-    expect(fakeRepo.saveSessionState).toHaveBeenCalledWith(12345, expect.objectContaining({ kv: expect.anything() }));
     const status = auth.getStatus(sessionId);
     expect(status.status).toBe(QR_STATUS.SUCCESS);
     expect(status.user.telegram_user_id).toBe(12345);
@@ -239,12 +240,9 @@ describe('TelegramAuth.start', () => {
     expect(fakeRepo.upsertSession).toHaveBeenCalledWith(
       expect.objectContaining({
         telegramUserId: 777,
+        sessionState: expect.objectContaining({ kv: expect.anything() }),
       })
     );
-    // State lives in telegram_session_state (DB) — verify saveSessionState
-    // is called BEFORE upsertSession so the user-facing row only exists
-    // when the underlying state row is also persisted.
-    expect(fakeRepo.saveSessionState).toHaveBeenCalledWith(777, expect.objectContaining({ kv: expect.anything() }));
     expect(auth.getStatus(sessionId).status).toBe(QR_STATUS.SUCCESS);
   });
 
