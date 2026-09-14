@@ -94,6 +94,13 @@ function resolveAndEnsureSessionDir(requested) {
   //   3. Subfolder `<path>/<storageKey>/` chưa được tạo (mtcute không tự mkdir)
   //      → SQLite mở file <path>/<storageKey>/client.session fail.
   // Log đủ context để debug không cần SSH vào prod.
+  // Lưu ý: ở production path mới (commit này) code path này KHÔNG
+  // được gọi nữa vì telegramAuth.start() và telegramSessionManager
+  // đều truyền `storageProvider` (PostgresBackedTelegramStorage hoặc
+  // InMemoryTelegramStorage) → mtcute KHÔNG rơi về SqliteStorage trên
+  // file. Hàm này chỉ chạy khi caller không truyền storageProvider —
+  // path đó là legacy / dev seed scripts. Khi chạy, vẫn cần mkdir
+  // writable hoặc fallback để tránh crash trên môi trường production.
   console.log(
     `[MtProtoTelegramClient] resolveAndEnsureSessionDir requested="${requested}" cwd="${process.cwd()}" envTELEGRAM_SESSION_DIR="${process.env.TELEGRAM_SESSION_DIR || ''}" resolved="${resolved}"`
   );

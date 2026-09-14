@@ -447,3 +447,84 @@ function restoreBuffers(value) {
 }
 
 export default PostgresBackedTelegramStorage;
+
+// ── In-memory only variant ────────────────────────────────────────────
+// Used during QR login (createSession flow) where we don't yet know the
+// final `telegram_user_id` — so we cannot pre-create a Postgres row.
+// mtcute still needs a valid `ITelegramStorageProvider`; giving it the
+// on-disk SQLite fallback would resurrect the EACCES bug on production
+// containers (mkdir `/app/.telegram-sessions/...`). The in-memory variant
+// keeps the QR handshake alive without touching the filesystem. On
+// successful scan, `telegramAuth._onLoginSuccess` calls
+// `extractSerializedState(memoryStorage)` and writes the blob to Postgres
+// with the real `telegram_user_id`, then `telegramSessionManager`
+// re-creates a `PostgresBackedTelegramStorage` for runtime use.
+//
+// Bug trước đó: `telegramAuth.start()` không truyền `storageProvider` cho
+// `MtProtoTelegramClient` → mtcute rơi về `_storagePath` (file SQLite) →
+// `mkdir /app/.telegram-sessions/default` throw EACCES trên production.
+// Fix commit trước (233365f7) chỉ thêm fallback `os.tmpdir()` cho mkdir,
+// VẪN dùng file SQLite — sai triết lý (user đã yêu cầu nhiều lần:
+// "không lưu session vào file ở folder, lưu vào DB hết"). Fix này loại
+// bỏ hoàn toàn file path: in-memory cho QR, Postgres cho runtime.
+export class InMemoryTelegramStorage {
+  constructor() {
+    this.driver = new MemoryStorageDriver();
+    this.kv = new MemoryKeyValueRepository(this.driver);
+    this.authKeys = new MemoryAuthKeysRepository(this.driver);
+    this.peers = new MemoryPeersRepository(this.driver);
+    this.refMessages = new MemoryRefMessagesRepository(this.driver);
+  }
+  // `setup` / `load` / `save` / `destroy` are part of the
+  // `ITelegramStorageProvider` shape — delegate to the driver so
+  // mtcute's `StorageManager` doesn't choke on a no-op provider.
+  async setup(log, platform) {
+    if (typeof this.driver.setup === 'function') {
+      return this.driver.setup(log, platform);
+    }
+  }
+  async load() {
+    if (typeof this.driver.load === 'function') {
+      return this.driver.load();
+    }
+  }
+  async save() {
+    if (typeof this.driver.save === 'function') {
+      return this.driver.save();
+    }
+  }
+  async destroy() {
+    if (typeof this.driver.destroy === 'function') {
+      return this.driver.destroy();
+    }
+  }
+}
+
+/**
+ * Walk the 5 in-memory repos of an `InMemoryTelegramStorage` and emit
+ * the same JSON-serialisable blob that `PostgresBackedDriver.save()`
+ * would write — so the caller can hand it straight to
+ * `repo.saveSessionState(realTelegramUserId, blob)` after a successful
+ * QR scan. Mirrors the private serialisation logic of the Postgres
+ * driver so we don't double-import or break encapsulation.
+ *
+ * @param {InMemoryTelegramStorage} storage
+ * @returns {object|null}
+ */
+export function extractSerializedState(storage) {
+  if (!storage?.driver || typeof storage.driver.getState !== 'function') {
+    return null;
+  }
+  const kvState = storage.driver.getState('kv', () => new Map());
+  const authKeysState = storage.driver.getState('authKeys', () => ({}));
+  const peersState = storage.driver.getState('peers', () => ({}));
+  const refMessagesState = storage.driver.getState('refMessages', () => ({}));
+
+  const kv = kvState instanceof Map ? Object.fromEntries(kvState) : kvState || {};
+  return {
+    kv: serialiseValue(kv),
+    authKeys: serialiseValue(authKeysState),
+    peers: serialiseValue(peersState),
+    refMessages: serialiseValue(refMessagesState),
+  };
+}

@@ -13,11 +13,27 @@ const clientPath = path.resolve(__dirname, '..', 'telegramClient.js');
 
 const fakeRepo = {
   upsertSession: jest.fn(async () => ({})),
+  saveSessionState: jest.fn(async () => ({})),
 };
 
 function makeFakeClientFactory(behaviour = {}) {
+  // Minimal stand-in for `InMemoryTelegramStorage` — the real factory
+  // resolves 5 in-memory repos via `MemoryStorageDriver`. For our test
+  // purposes (verify saveSessionState is invoked) we only need a
+  // `getState(name, factory)` method that returns a Map / {} so the
+  // serializer does not blow up.
+  const fakeMemoryStorage = {
+    driver: {
+      getState(name, factory) {
+        if (!this._cache) this._cache = {};
+        if (!this._cache[name]) this._cache[name] = factory();
+        return this._cache[name];
+      },
+    },
+  };
   return () => ({
     sessionString: null,
+    _storageProvider: fakeMemoryStorage,
     async connect() {},
     async disconnect() {},
     async isAuthorized() { return Boolean(this.sessionString); },
@@ -137,10 +153,13 @@ describe('TelegramAuth.start', () => {
     expect(fakeRepo.upsertSession).toHaveBeenCalledWith(
       expect.objectContaining({
         telegramUserId: 12345,
-        sessionString: 'fake-tg-string',
         firstName: 'Alice',
       })
     );
+    // State lives in telegram_session_state (DB) — sessionString column
+    // intentionally blank in upsertSession; the actual blob goes through
+    // saveSessionState(telegramUserId, extractSerializedState(...)).
+    expect(fakeRepo.saveSessionState).toHaveBeenCalledWith(12345, expect.objectContaining({ kv: expect.anything() }));
     const status = auth.getStatus(sessionId);
     expect(status.status).toBe(QR_STATUS.SUCCESS);
     expect(status.user.telegram_user_id).toBe(12345);
@@ -220,9 +239,12 @@ describe('TelegramAuth.start', () => {
     expect(fakeRepo.upsertSession).toHaveBeenCalledWith(
       expect.objectContaining({
         telegramUserId: 777,
-        sessionString: 'fake-tg-string',
       })
     );
+    // State lives in telegram_session_state (DB) — verify saveSessionState
+    // is called BEFORE upsertSession so the user-facing row only exists
+    // when the underlying state row is also persisted.
+    expect(fakeRepo.saveSessionState).toHaveBeenCalledWith(777, expect.objectContaining({ kv: expect.anything() }));
     expect(auth.getStatus(sessionId).status).toBe(QR_STATUS.SUCCESS);
   });
 

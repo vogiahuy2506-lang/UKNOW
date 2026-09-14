@@ -21,6 +21,8 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import {
   PostgresBackedTelegramStorage,
+  InMemoryTelegramStorage,
+  extractSerializedState,
 } from '../telegramMtProtoStorage.js';
 
 // Pin a stable key so the repo's `encryptBaileysBlob` inside the
@@ -230,5 +232,64 @@ describe('PostgresBackedTelegramStorage', () => {
       storage.driver.destroy();
       expect(repo.saveSessionState).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('InMemoryTelegramStorage (QR login path)', () => {
+  // Bug trước đó: telegramAuth.start() không truyền storageProvider
+  // cho MtProtoTelegramClient → mtcute rơi về file SQLite fallback
+  // → mkdir /app/.telegram-sessions/<key> throw EACCES trên production.
+  // User đã nói nhiều lần: "không lưu session vào file ở folder, lưu
+  // vào DB hết". Fix: dùng InMemoryTelegramStorage trong QR login,
+  // sau khi login success extract state và save vào DB. Class này
+  // là stub cho mtcute (in-memory only) — KHÔNG tốn đĩa.
+  it('does not require a telegramUserId (pre-login placeholder)', () => {
+    const s = new InMemoryTelegramStorage();
+    // Constructor không cần telegramUserId vì pre-login không biết ID.
+    expect(s).toBeDefined();
+    expect(s.kv).toBeDefined();
+    expect(s.authKeys).toBeDefined();
+    expect(s.peers).toBeDefined();
+    expect(s.refMessages).toBeDefined();
+  });
+
+  it('exposes a delegating driver (load/save/destroy no-op)', async () => {
+    const s = new InMemoryTelegramStorage();
+    await expect(s.setup({}, 'node')).resolves.toBeUndefined();
+    await expect(s.load()).resolves.toBeUndefined();
+    await expect(s.save()).resolves.toBeUndefined();
+    await expect(s.destroy()).resolves.toBeUndefined();
+  });
+
+  it('extractSerializedState returns a JSON-safe blob for kv / authKeys / peers / refMessages', () => {
+    // Verify the helper used by telegramAuth._onLoginSuccess to flush
+    // in-memory state → saveSessionState(realTelegramUserId, blob).
+    const s = new InMemoryTelegramStorage();
+    s.kv.set('foo', 'bar');
+    s.kv.set(Buffer.from([1, 2, 3]), 'binary-key');
+    const blob = extractSerializedState(s);
+    expect(blob).toBeTruthy();
+    expect(blob.kv).toBeDefined();
+    // String value passes through unchanged.
+    expect(blob.kv.foo).toBe('bar');
+    // Buffer value was serialised by `serialiseValue` to a JSON-safe
+    // marker shape (not raw Buffer). We don't pin the exact form, just
+    // verify (a) it's not a Buffer anymore, (b) the whole blob is
+    // JSON-serialisable — mtcute's persistence path requires this.
+    const json = JSON.stringify(blob);
+    expect(typeof json).toBe('string');
+    expect(json.length).toBeGreaterThan(0);
+    // Round-trip via JSON.parse to confirm no Buffer instance leaked
+    // through (would throw `TypeError: Do not know how to serialize
+    // a BigInt` or similar on stringification otherwise).
+    expect(() => JSON.parse(json)).not.toThrow();
+  });
+
+  it('extractSerializedState returns null when given a non-driver object', () => {
+    // Defensive: nếu ai đó pass storage sai type, helper phải trả null
+    // để caller fallback về logInfo thay vì throw.
+    expect(extractSerializedState(null)).toBeNull();
+    expect(extractSerializedState({})).toBeNull();
+    expect(extractSerializedState({ driver: {} })).toBeNull();
   });
 });

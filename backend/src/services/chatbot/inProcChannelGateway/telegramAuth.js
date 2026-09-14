@@ -22,6 +22,19 @@ import { TelegramTransportError, buildDefaultClient, whenReady } from './telegra
 import { warnOnce } from './warnOnce.js';
 import { isStubOnly } from './stubCheck.js';
 
+// Lazy-import InMemoryTelegramStorage / extractSerializedState để tránh
+// pull `@mtcute/core` ở module top-level. Trong stub mode (test isStubOnly)
+// `MtProtoTelegramClient` không load được nên @mtcute/core throw về
+// native binding `long` — top-level import sẽ làm crash cả import chain.
+// `telegramSessionManager` đã làm pattern này (loadMtProtoStorageModule
+// cached) — áp dụng tương tự cho QR login path.
+let _mtProtoStorageModule = null;
+async function loadMtProtoStorageModule() {
+  if (_mtProtoStorageModule) return _mtProtoStorageModule;
+  _mtProtoStorageModule = await import('./telegramMtProtoStorage.js');
+  return _mtProtoStorageModule;
+}
+
 const logInfo = (msg, meta) =>
   meta !== undefined ? console.log(msg, meta) : console.log(msg);
 const logWarn = (msg) => console.warn(msg);
@@ -136,9 +149,22 @@ export class TelegramAuth {
       err.status = 503;
       throw err;
     }
+    // QR login flow không biết telegramUserId trước khi user scan → không
+    // thể tạo PostgresBackedTelegramStorage. Dùng InMemoryTelegramStorage
+    // để mtcute KHÔNG rơi về file SQLite (gây EACCES / mkdir / user đã
+    // yêu cầu nhiều lần "không lưu session vào file ở folder").
+    // Sau khi login success, _onLoginSuccess gọi extractSerializedState +
+    // sessionRepo.saveSessionState để flush state vào DB với telegramUserId
+    // thật. telegramSessionManager sẽ tạo PostgresBackedTelegramStorage
+    // mới cho runtime.
+    //
+    // Lazy import qua loadMtProtoStorageModule() để không pull @mtcute/core
+    // ở module top-level (xem comment import phía trên).
+    const { InMemoryTelegramStorage } = await loadMtProtoStorageModule();
     const client = buildDefaultClient({
       apiId: this._telegramCreds.apiId,
       apiHash: this._telegramCreds.apiHash,
+      storageProvider: new InMemoryTelegramStorage(),
     });
     console.log('[TelegramAuth] calling client.connect() — may take a while if outbound to Telegram DC is slow/blocked');
     const connectStart = Date.now();
@@ -383,28 +409,48 @@ export class TelegramAuth {
       phone: me.phone || null,
     };
 
-    // Flush the Postgres-backed driver (if any) before reading the
-    // session marker. mtcute calls `save()` automatically on
-    // disconnect, but we want to be defensive: a backend crash
-    // before the disconnect event would otherwise drop the freshly
-    // scanned auth keys. `flush()` is a no-op for the SQLite
-    // fallback path.
-    if (typeof flow.client.flush === 'function') {
-      try {
-        await flow.client.flush();
-      } catch (err) {
-        logWarn(`[TelegramAuth] pre-persist flush failed: ${err.message}`);
+    // Flush the in-memory driver's auth keys / kv / peers / refMessages
+    // to Postgres BEFORE upserting the user-facing profile row. If
+    // saveSessionState fails, the rest of the flow is unusable (session
+    // would not survive backend restart) so we abort early with ERROR.
+    //
+    // QR login dùng `InMemoryTelegramStorage` vì ta chưa biết
+    // telegram_user_id lúc start(). State chỉ tồn tại trong RAM của
+    // tiến trình — bắt buộc phải flush ngay khi scan xong, không chờ
+    // disconnect (backend có thể restart trước khi user logout).
+    try {
+      // Lazy import để không pull @mtcute/core ở top-level (xem comment
+      // ở đầu file). Sau login thành công là path warm-cache nên import
+      // lần thứ 2 sẽ gần như free.
+      const { extractSerializedState } = await loadMtProtoStorageModule();
+      const memoryStorage = flow.client?._storageProvider;
+      const blob = memoryStorage
+        ? extractSerializedState(memoryStorage)
+        : null;
+      if (blob) {
+        await this._sessionRepo.saveSessionState(telegramUserId, blob);
+      } else {
+        // Postgres driver đã save khi mtcute gọi disconnect (legacy
+        // path), nên không cần flush lại — nhưng cũng không nên log
+        // warning nếu driver là PostgresBacked. Just defensive log.
+        logInfo(
+          `[TelegramAuth] no in-memory state extracted for telegram_user_id=${telegramUserId} (driver may be Postgres-backed)`
+        );
       }
+    } catch (err) {
+      flow.status = QR_STATUS.ERROR;
+      flow.error = `Failed to persist session state: ${err.message}`;
+      flow.endedAt = Date.now();
+      logWarn(
+        `[TelegramAuth] pre-persist saveSessionState failed for telegram_user_id=${telegramUserId}: ${err.message}`
+      );
+      return;
     }
 
     // Save the profile row. The session state itself has already
-    // been persisted by the Postgres-backed driver's `save()`
-    // hook; this call only needs to update `telegram_accounts`'s
-    // user-facing columns (phone, first_name, last_name, username,
-    // owner binding). We pass the legacy `sessionString` marker
-    // for callers that still rely on its presence — the repo's
-    // `upsertSession` now also writes an encrypted state row when
-    // it sees a non-`sessionState` payload.
+    // been persisted by the above saveSessionState call; this call
+    // only needs to update `telegram_accounts`'s user-facing columns
+    // (phone, first_name, last_name, username, owner binding).
     try {
       await this._sessionRepo.upsertSession({
         telegramUserId,
@@ -416,7 +462,7 @@ export class TelegramAuth {
         // column \"id_user\" of relation \"telegram_accounts\"
         // violates not-null constraint".
         userId: flow.userContext ?? null,
-        sessionString: flow.client.saveSession() || '',
+        sessionString: '',
         phone: flow.me.phone,
         firstName: flow.me.firstName,
         lastName: flow.me.lastName,
