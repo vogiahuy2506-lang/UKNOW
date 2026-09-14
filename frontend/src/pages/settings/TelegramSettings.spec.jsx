@@ -98,8 +98,11 @@ describe('TelegramSettings — defensive rendering', () => {
 
     await renderTelegramSettings();
 
+    // Redesigned: pill text changed from "1/1 đang hoạt động" to
+    // "<count> đang hoạt động" (badge trên header, không còn inline
+    // total/total). Backend behaviour vẫn giữ nguyên.
     await waitFor(() => {
-      expect(screen.queryByText(/1\/1 đang hoạt động/i)).toBeTruthy();
+      expect(screen.queryByText(/1 đang hoạt động/i)).toBeTruthy();
     });
   });
 });
