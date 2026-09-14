@@ -66,6 +66,25 @@ describe('formDefinition.util', () => {
     expect(normalized[2].key).toMatch(/^f_[a-f0-9]{8}$/);
   });
 
+  it('key trùng khoá cố định của item chiến dịch (email/phone/id/...) -> không nhận, tự sinh khoá khác thay vì báo lỗi', () => {
+    // PR-6a review 14/09: field.key literal "email" (hoặc bất kỳ khoá nào trong
+    // RESERVED_CAMPAIGN_ITEM_FIELD_KEYS, không phân biệt hoa thường) sẽ ghi đè item.email đã
+    // chuẩn hoá trong formCampaignItem.util.js mapFormSubmissionToCampaignItem — chặn ngay từ lúc
+    // lưu form, không báo lỗi vì trình soạn không bao giờ tự gửi các khoá này.
+    const fields = [
+      { key: 'email', type: 'short_text', label: 'Email tự khai' },
+      { key: 'PHONE', type: 'short_text', label: 'SĐT hoa (không phân biệt hoa thường)' },
+      { key: 'custom_ok_key', type: 'short_text', label: 'Trường hợp lệ' },
+    ];
+    const normalized = normalizeFormFields(fields);
+    expect(normalized[0].key).not.toBe('email');
+    expect(normalized[0].key).toMatch(/^f_[a-f0-9]{8}$/);
+    expect(normalized[1].key).not.toBe('PHONE');
+    expect(normalized[1].key).toMatch(/^f_[a-f0-9]{8}$/);
+    // Trường hợp lệ không bị ảnh hưởng
+    expect(normalized[2].key).toBe('custom_ok_key');
+  });
+
   it('ném lỗi nếu nhãn rỗng hoặc vượt quá 200 ký tự', () => {
     expect(() =>
       normalizeFormFields([{ type: 'short_text', label: '   ' }])

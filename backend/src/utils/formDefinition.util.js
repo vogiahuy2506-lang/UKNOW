@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { isReservedCampaignItemFieldKey } from './formCampaignItem.util.js';
 
 export const ALLOWED_FIELD_TYPES = Object.freeze([
   'short_text',
@@ -135,7 +136,15 @@ export function normalizeFormFields(rawFields) {
 
     let key = '';
     const rawKey = typeof field.key === 'string' ? field.key.trim() : '';
-    if (rawKey && /^[a-zA-Z0-9_]{3,32}$/.test(rawKey) && !usedKeys.has(rawKey)) {
+    // Key trùng khoá cố định của item chiến dịch (email/phone/id/...) -> tự sinh khoá khác thay
+    // vì báo lỗi: trình soạn không bao giờ gửi khoá đó, chỉ chặn client cố tình/API gọi thẳng
+    // (PR-6a review 14/09 — formCampaignItem.util.js RESERVED_CAMPAIGN_ITEM_FIELD_KEYS).
+    if (
+      rawKey
+      && /^[a-zA-Z0-9_]{3,32}$/.test(rawKey)
+      && !usedKeys.has(rawKey)
+      && !isReservedCampaignItemFieldKey(rawKey)
+    ) {
       key = rawKey;
     } else {
       key = generateFieldKey(usedKeys);

@@ -6,6 +6,40 @@
  */
 
 /**
+ * Khoá cố định của item chiến dịch (xem object `item` trong mapFormSubmissionToCampaignItem bên
+ * dưới) — trường form KHÔNG được có field.key trùng các khoá này, nếu không giá trị đã chuẩn hoá
+ * (email chữ thường, phone đã normalize...) bị trường tự khai ghi đè âm thầm (PR-6a review 14/09).
+ * `formDefinition.util.js` `normalizeFormFields` import danh sách này để CHẶN từ lúc lưu form
+ * (client gửi key trùng → tự sinh khoá khác, không báo lỗi vì trình soạn không bao giờ gửi khoá
+ * đó); mapper dưới đây BỎ QUA trường nào lỡ trùng, phòng dữ liệu cũ tạo trước khi có chặn này.
+ */
+export const RESERVED_CAMPAIGN_ITEM_FIELD_KEYS = Object.freeze([
+  'submissionId',
+  'id',
+  'formId',
+  'fullName',
+  'email',
+  'phone',
+  'appointmentAt',
+  'createdAt',
+  'marketingConsent',
+]);
+
+const RESERVED_CAMPAIGN_ITEM_FIELD_KEYS_LOWER = new Set(
+  RESERVED_CAMPAIGN_ITEM_FIELD_KEYS.map((k) => k.toLowerCase())
+);
+
+/**
+ * So không phân biệt hoa thường — "Email"/"EMAIL" cũng bị chặn như "email".
+ *
+ * @param {unknown} key
+ * @returns {boolean}
+ */
+export function isReservedCampaignItemFieldKey(key) {
+  return RESERVED_CAMPAIGN_ITEM_FIELD_KEYS_LOWER.has(String(key || '').toLowerCase());
+}
+
+/**
  * Chuẩn hoá số điện thoại: bỏ khoảng trắng, giữ số và dấu + đầu chuỗi.
  * Bản tương đương của `lead.service.js` (const nội bộ, không export) và
  * `formSubmission.util.js` (cũng không export) — không import được nên viết lại tại đây,
@@ -105,7 +139,7 @@ export function mapFormSubmissionToCampaignItem(row, fields = [], fieldMap = {})
 
   for (const field of safeFields) {
     const key = field?.key;
-    if (!key) continue;
+    if (!key || isReservedCampaignItemFieldKey(key)) continue;
     const value = readAnswerValue(answers, key);
     if (value !== null) item[key] = value;
   }

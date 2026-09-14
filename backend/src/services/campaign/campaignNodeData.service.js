@@ -599,6 +599,12 @@ class CampaignNodeDataService {
     const pairKey = (email, phone) => `${String(email || '')}|${String(phone || '')}`;
 
     const dedupedMap = new Map();
+    // PR-6a review 14/09: khoá phát hiện nguồn (leadId/submissionId/formId...) PHẢI đọc từ
+    // `customerData` GỐC ngay trong vòng lặp này — vòng lặp thứ hai bên dưới tái dùng tên biến
+    // `customerData` cho phần tử của `chunk` (bắt nguồn từ `dedupedMap`/`normalizedCustomers`,
+    // vốn CHỈ giữ 6 khoá email/phone/fullName/gender/customerSource/notes) nên trước bản vá này
+    // mọi điều kiện `customerData.leadId`/`customerData.submissionId` ở vòng dưới luôn undefined —
+    // consent_source landing_lead CŨNG chưa từng hoạt động, không riêng gì nhánh form mới thêm.
     for (const customerData of customers || []) {
       const mapped = {
         email: normalizeEmail(campaignFlowService.getFieldValue(customerData, fieldMap.email)),
@@ -609,6 +615,19 @@ class CampaignNodeDataService {
         notes: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.notes)),
       };
       if (!mapped.email && !mapped.phone) continue;
+      const isLandingLead = Boolean(
+        customerData.leadId ||
+        customerData.lead_id ||
+        customerData.landingPageSlug ||
+        customerData.landing_page_slug ||
+        customerData.sourceLandingPage ||
+        customerData.source_landing_page
+      );
+      // Item từ node read_form_submissions mang cả submissionId lẫn formId (khoá cố định,
+      // sống sót qua applyDataColumnSelectionToItems nhờ ALWAYS_KEEP_BY_KIND.form).
+      const isFormSubmission = Boolean(customerData.submissionId) && Boolean(customerData.formId);
+      const resolvedConsentSource = customerData.consentSource || customerData.consent_source
+        || (isLandingLead ? 'landing_lead' : (isFormSubmission ? 'form_submission' : 'import'));
       const key = pairKey(mapped.email, mapped.phone);
       const prev = dedupedMap.get(key) || {};
       dedupedMap.set(key, {
@@ -618,6 +637,7 @@ class CampaignNodeDataService {
         gender: mapped.gender || prev.gender || null,
         customerSource: mapped.customerSource || prev.customerSource || 'campaign',
         notes: mapped.notes || prev.notes || null,
+        consentSource: resolvedConsentSource || prev.consentSource || null,
       });
     }
     const normalizedCustomers = Array.from(dedupedMap.values());
@@ -715,15 +735,9 @@ class CampaignNodeDataService {
             const gender = customerData.gender;
             const customerSource = customerData.customerSource || 'campaign';
             const notes = customerData.notes;
-            const isLandingLead = Boolean(
-              customerData.leadId ||
-              customerData.lead_id ||
-              customerData.landingPageSlug ||
-              customerData.landing_page_slug ||
-              customerData.sourceLandingPage ||
-              customerData.source_landing_page
-            );
-            const consentSource = customerData.consentSource || customerData.consent_source || (isLandingLead ? 'landing_lead' : 'import');
+            // consentSource đã được phát hiện từ dữ liệu gốc (leadId/submissionId/formId) và
+            // gắn sẵn vào từng phần tử của normalizedCustomers ở vòng lặp dedupe phía trên.
+            const consentSource = customerData.consentSource || 'import';
 
             if (!email && !phone) {
               skipped += 1;

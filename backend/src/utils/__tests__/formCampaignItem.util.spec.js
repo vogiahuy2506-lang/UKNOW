@@ -80,4 +80,22 @@ describe('formCampaignItem.util - mapFormSubmissionToCampaignItem', () => {
     expect(Object.prototype.hasOwnProperty.call(item, 'fullName')).toBe(true);
     expect(item.fullName).toBe('Nguyễn Văn A');
   });
+
+  it('dữ liệu cũ: trường form lỡ có field.key trùng khoá cố định (answers.email) -> bị bỏ qua, item.email vẫn là respondentEmail chuẩn hoá', () => {
+    // Phòng dữ liệu tạo TRƯỚC khi normalizeFormFields chặn key trùng (PR-6a review 14/09) —
+    // field.key literal "email" không được phép ghi đè khoá cố định của item.
+    const fieldsWithReservedKey = [
+      ...fields,
+      { key: 'email', type: 'short_text', label: 'Email tự khai (dữ liệu cũ)', role: null },
+    ];
+    const rowWithReservedAnswerKey = {
+      ...baseRow,
+      answers: {
+        ...baseRow.answers,
+        email: { label: 'Email tự khai (dữ liệu cũ)', type: 'short_text', value: 'khac-hoan-toan@example.com' },
+      },
+    };
+    const item = mapFormSubmissionToCampaignItem(rowWithReservedAnswerKey, fieldsWithReservedKey, {});
+    expect(item.email).toBe('a@example.com');
+  });
 });

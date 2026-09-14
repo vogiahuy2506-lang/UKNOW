@@ -286,4 +286,104 @@ describe('Node chiến dịch "Lấy dữ liệu từ biểu mẫu" (read_form_s
     expect(previewRes.body.data.columns[0]).toHaveProperty('label');
     expect(previewRes.body.data.columns[0]).toHaveProperty('type');
   });
+
+  describe('Lưu khách hàng sau node form (consent_source) — PR-6a review', () => {
+    // saveCustomersFromCampaignDirect cần saveCustomerFieldMap kiểu {mode:'node', field:<khoá
+    // phẳng trên item>} để thật sự đọc được email/phone/fullName — không nodeId thì
+    // getFieldValue dùng thẳng item, khớp cách campaignFlow.service.js hoạt động.
+    const NODE_FIELD_MAP = {
+      email: { mode: 'node', field: 'email' },
+      phone: { mode: 'node', field: 'phone' },
+      fullName: { mode: 'node', field: 'fullName' },
+    };
+
+    async function insertMinimalCampaign(ownerId) {
+      const { rows } = await db.query(
+        `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, $2, 'active') RETURNING id`,
+        [ownerId, 'Campaign consent_source test']
+      );
+      return rows[0].id;
+    }
+
+    it('item từ node form (submissionId + formId) -> khách mới có consent_source = form_submission', async () => {
+      const owner = await createUser({ username: 'owner_consent_1' });
+      const campaignId = await insertMinimalCampaign(owner.id);
+
+      const formItem = {
+        submissionId: 501,
+        formId: 9,
+        email: 'form-consent@example.com',
+        phone: '0901111111',
+        fullName: 'Khách Từ Form',
+      };
+
+      const summary = await campaignNodeDataService.saveCustomersFromCampaignDirect(
+        [formItem],
+        campaignId,
+        owner.id,
+        { config: { saveCustomerFieldMap: NODE_FIELD_MAP } },
+        null
+      );
+      expect(summary.saved).toBe(1);
+
+      const row = await db.query('SELECT consent_source FROM customers WHERE id_user = $1 AND email = $2', [
+        owner.id,
+        'form-consent@example.com',
+      ]);
+      expect(row.rows[0].consent_source).toBe('form_submission');
+    });
+
+    it('item từ node landing (leadId) vẫn ra consent_source = landing_lead', async () => {
+      const owner = await createUser({ username: 'owner_consent_2' });
+      const campaignId = await insertMinimalCampaign(owner.id);
+
+      const landingItem = {
+        leadId: 77,
+        email: 'landing-consent@example.com',
+        phone: '0902222222',
+        fullName: 'Khách Từ Landing',
+      };
+
+      const summary = await campaignNodeDataService.saveCustomersFromCampaignDirect(
+        [landingItem],
+        campaignId,
+        owner.id,
+        { config: { saveCustomerFieldMap: NODE_FIELD_MAP } },
+        null
+      );
+      expect(summary.saved).toBe(1);
+
+      const row = await db.query('SELECT consent_source FROM customers WHERE id_user = $1 AND email = $2', [
+        owner.id,
+        'landing-consent@example.com',
+      ]);
+      expect(row.rows[0].consent_source).toBe('landing_lead');
+    });
+
+    it('item từ node sheet (không leadId/submissionId) vẫn ra consent_source = import', async () => {
+      const owner = await createUser({ username: 'owner_consent_3' });
+      const campaignId = await insertMinimalCampaign(owner.id);
+
+      const sheetItem = {
+        email: 'sheet-consent@example.com',
+        phone: '0903333333',
+        fullName: 'Khách Từ Sheet',
+      };
+
+      const summary = await campaignNodeDataService.saveCustomersFromCampaignDirect(
+        [sheetItem],
+        campaignId,
+        owner.id,
+        { config: { saveCustomerFieldMap: NODE_FIELD_MAP } },
+        null
+      );
+      expect(summary.saved).toBe(1);
+
+      const row = await db.query('SELECT consent_source FROM customers WHERE id_user = $1 AND email = $2', [
+        owner.id,
+        'sheet-consent@example.com',
+      ]);
+      expect(row.rows[0].consent_source).toBe('import');
+    });
+  });
 });
