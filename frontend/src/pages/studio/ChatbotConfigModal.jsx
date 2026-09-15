@@ -158,39 +158,38 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
         active_hours: form.active_hours,
       };
 
+      // Lưu chatbot thất bại thì báo lỗi và GIỮ modal mở. Bản trước (76aa2be4, thời chatbot còn lưu
+      // localStorage) nuốt lỗi API, cập nhật UI bằng dữ liệu form rồi báo "Đã lưu cấu hình" — mọi lỗi
+      // 400 (active_hours / reply_limit_config / response_style sai...) đều bị che, chủ shop tưởng đã lưu.
       let updatedBot;
       try {
         const res = await chatbotApi.updateChatbot(chatbot.id, updateData);
-        if (res.success && res.data) {
-          updatedBot = { ...chatbot, ...res.data, suggested_questions: form.suggested_questions || [] };
-        } else {
-          throw new Error(res.message || 'Save failed');
+        if (!res?.success || !res?.data) {
+          throw new Error(res?.message || 'Lưu thất bại');
         }
-
-        const aiSettings = {
-          system_instruction: form.system_instruction,
-          ai_model: form.ai_model,
-          temperature: form.temperature,
-          max_tokens: form.max_tokens,
-          response_style: form.response_style,
-          welcome_message: form.welcome_message,
-          is_enabled: form.is_active,
-        };
-        const ALL_CHANNELS = ['zalo_personal', 'zalo_oa', 'facebook', 'web', 'script', 'iframe', 'public_link'];
-        try {
-          await Promise.all(ALL_CHANNELS.map((channel) =>
-            chatbotApi.updateChatbotSettings(channel, aiSettings)
-          ));
-        } catch (aiErr) {
-          console.warn('[ChatbotConfigModal] AI settings save failed:', aiErr.message);
-        }
+        updatedBot = { ...chatbot, ...res.data, suggested_questions: form.suggested_questions || [] };
       } catch (apiError) {
-        console.warn('[ChatbotConfigModal] API save failed:', apiError.message);
-        updatedBot = {
-          ...chatbot,
-          ...updateData,
-          suggested_questions: form.suggested_questions || [],
-        };
+        toast.error(apiError?.response?.data?.message || apiError?.message || 'Lưu thất bại');
+        return;
+      }
+
+      // Đồng bộ cài đặt AI sang các kênh: lỗi ở đây không chặn việc lưu chatbot (giữ như cũ).
+      const aiSettings = {
+        system_instruction: form.system_instruction,
+        ai_model: form.ai_model,
+        temperature: form.temperature,
+        max_tokens: form.max_tokens,
+        response_style: form.response_style,
+        welcome_message: form.welcome_message,
+        is_enabled: form.is_active,
+      };
+      const ALL_CHANNELS = ['zalo_personal', 'zalo_oa', 'facebook', 'web', 'script', 'iframe', 'public_link'];
+      try {
+        await Promise.all(ALL_CHANNELS.map((channel) =>
+          chatbotApi.updateChatbotSettings(channel, aiSettings)
+        ));
+      } catch (aiErr) {
+        console.warn('[ChatbotConfigModal] AI settings save failed:', aiErr.message);
       }
 
       onUpdate?.(updatedBot);
