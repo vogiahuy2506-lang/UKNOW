@@ -8744,6 +8744,7 @@ export default {
       consentYes: 'Có',
       consentNo: 'Không',
       consentNone: '—',
+      consentWithdrawn: 'Đã rút · {date}',
       colAnswers: 'Câu trả lời',
       notProvided: 'Chưa cung cấp',
       noAnswers: 'Không có câu trả lời',

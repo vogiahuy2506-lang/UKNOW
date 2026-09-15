@@ -422,9 +422,20 @@ export default function FormSubmissionsPage() {
                         </td>
                       )}
 
-                      {/* Đồng ý tiếp thị */}
+                      {/* Đồng ý tiếp thị — rút lại (PR-7b) xét TRƯỚC true/false: sau khi rút,
+                          marketingConsent tự về false nhưng phải hiện rõ "Đã rút", không lẫn với
+                          "Không" (chưa từng đồng ý) hay "Chưa tích" hồi trước khi rút. */}
                       <td className="py-4 px-4 sm:px-6 text-center">
-                        {sub.marketingConsent === true ? (
+                        {sub.consentWithdrawnAt ? (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                            title={new Date(sub.consentWithdrawnAt).toLocaleString('vi-VN')}
+                          >
+                            {t('forms.submissionsPage.consentWithdrawn', {
+                              date: new Date(sub.consentWithdrawnAt).toLocaleDateString('vi-VN'),
+                            })}
+                          </span>
+                        ) : sub.marketingConsent === true ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                             {t('forms.submissionsPage.consentYes')}
                           </span>

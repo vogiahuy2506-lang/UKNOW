@@ -249,6 +249,59 @@ describe('FormSubmissionsPage component', () => {
     expect(dashes.length).toBeGreaterThanOrEqual(1);
   });
 
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7b mục 5 — ô đồng ý hiện "Đã rút" (kèm ngày)
+   * khi có `consentWithdrawnAt`, xét TRƯỚC true/false (sau khi rút, marketingConsent tự về false
+   * nhưng KHÔNG được hiện lẫn với "Không" thường).
+   */
+  it('bài có consentWithdrawnAt -> hiện "Đã rút" kèm ngày, KHÔNG hiện "Không"', async () => {
+    formAdminApi.fetchFormById.mockResolvedValue(mockForm);
+    formAdminApi.fetchFormSubmissions.mockResolvedValue({
+      submissions: [
+        {
+          id: 'sub-withdrawn-1',
+          respondentName: 'Đã Rút Đồng Ý',
+          respondentEmail: 'withdrawn@example.com',
+          marketingConsent: false,
+          consentWithdrawnAt: '2026-09-15T10:00:00.000Z',
+          createdAt: '2026-09-14T08:00:00.000Z',
+          answers: {},
+        },
+        {
+          id: 'sub-notwithdrawn-1',
+          respondentName: 'Chưa Rút',
+          respondentEmail: 'notwithdrawn@example.com',
+          marketingConsent: false,
+          consentWithdrawnAt: null,
+          createdAt: '2026-09-14T08:05:00.000Z',
+          answers: {},
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/app/forms/form-sub-123/submissions']}>
+        <I18nProvider>
+          <Routes>
+            <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+          </Routes>
+        </I18nProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('withdrawn@example.com')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Đã rút/)).toBeInTheDocument();
+    // Bài kia (chưa rút, marketingConsent: false) vẫn hiện "Không" bình thường.
+    expect(screen.getByText('Không')).toBeInTheDocument();
+  });
+
   it('phân trang theo totalPages và chuyển trang thành công', async () => {
     formAdminApi.fetchFormById.mockResolvedValue(mockForm);
     formAdminApi.fetchFormSubmissions
