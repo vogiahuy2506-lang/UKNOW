@@ -4,8 +4,11 @@ import {
   normalizeFormSettings,
   normalizeBookingConfig,
   normalizePaymentConfig,
+  normalizeFormTheme,
+  buildFormAssetKeyRegex,
   ALLOWED_FIELD_TYPES,
   ALLOWED_ROLES,
+  ALLOWED_FORM_FONTS,
   MAX_FIELDS,
 } from '../formDefinition.util.js';
 
@@ -370,5 +373,148 @@ describe('normalizePaymentConfig', () => {
   it('holdMinutes ngoài khoảng 10-120 -> lỗi', () => {
     expect(() => normalizePaymentConfig({ ...validRaw, holdMinutes: 5 })).toThrow(/holdMinutes/);
     expect(() => normalizePaymentConfig({ ...validRaw, holdMinutes: 121 })).toThrow(/holdMinutes/);
+  });
+});
+
+describe('normalizeFormTheme (PR-4a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md)', () => {
+  const OWNER_ID = 42;
+  const ctx = { workspaceOwnerId: OWNER_ID };
+
+  it('null/undefined -> {} (giữ giao diện hiện tại)', () => {
+    expect(normalizeFormTheme(null, ctx)).toEqual({});
+    expect(normalizeFormTheme(undefined, ctx)).toEqual({});
+  });
+
+  it('{} -> {} (không tự điền mặc định cho khoá nào)', () => {
+    expect(normalizeFormTheme({}, ctx)).toEqual({});
+  });
+
+  it('không phải object (mảng/chuỗi) -> lỗi', () => {
+    expect(() => normalizeFormTheme('not-an-object', ctx)).toThrow(/theme/i);
+    expect(() => normalizeFormTheme(['a'], ctx)).toThrow(/theme/i);
+  });
+
+  it('khoá lạ bị bỏ (whitelist) — { hack: 1, primaryColor: "#112233" } -> chỉ giữ primaryColor', () => {
+    const theme = normalizeFormTheme({ hack: 1, primaryColor: '#112233' }, ctx);
+    expect(theme).toEqual({ primaryColor: '#112233' });
+  });
+
+  it('primaryColor "red;background:url(x)" -> 400 INVALID_FORM_THEME', () => {
+    expect(() => normalizeFormTheme({ primaryColor: 'red;background:url(x)' }, ctx)).toThrow(/primaryColor/);
+    try {
+      normalizeFormTheme({ primaryColor: 'red;background:url(x)' }, ctx);
+    } catch (err) {
+      expect(err.statusCode).toBe(400);
+      expect(err.code).toBe('INVALID_FORM_THEME');
+    }
+  });
+
+  it('backgroundColor không đúng dạng hex #RRGGBB -> lỗi', () => {
+    expect(() => normalizeFormTheme({ backgroundColor: '#fff' }, ctx)).toThrow(/backgroundColor/);
+    expect(() => normalizeFormTheme({ backgroundColor: 'white' }, ctx)).toThrow(/backgroundColor/);
+  });
+
+  it('primaryColor/backgroundColor hex hợp lệ (hoa lẫn thường) -> giữ nguyên chuỗi gốc', () => {
+    expect(normalizeFormTheme({ primaryColor: '#AbC123' }, ctx).primaryColor).toBe('#AbC123');
+  });
+
+  it('fontFamily "Comic Sans MS" (ngoài whitelist) -> 400', () => {
+    expect(() => normalizeFormTheme({ fontFamily: 'Comic Sans MS' }, ctx)).toThrow(/fontFamily/);
+  });
+
+  it('cả 8 font trong ALLOWED_FORM_FONTS đều hợp lệ', () => {
+    expect(ALLOWED_FORM_FONTS).toHaveLength(8);
+    for (const font of ALLOWED_FORM_FONTS) {
+      expect(normalizeFormTheme({ fontFamily: font }, ctx)).toEqual({ fontFamily: font });
+    }
+  });
+
+  it('layout phải là "card" hoặc "wide", khác thì lỗi', () => {
+    expect(normalizeFormTheme({ layout: 'card' }, ctx)).toEqual({ layout: 'card' });
+    expect(normalizeFormTheme({ layout: 'wide' }, ctx)).toEqual({ layout: 'wide' });
+    expect(() => normalizeFormTheme({ layout: 'full' }, ctx)).toThrow(/layout/);
+  });
+
+  it('bannerHeight phải là "sm"/"md"/"lg", khác thì lỗi, KHÔNG tự mặc định "md" khi vắng mặt', () => {
+    expect(normalizeFormTheme({ bannerHeight: 'sm' }, ctx)).toEqual({ bannerHeight: 'sm' });
+    expect(normalizeFormTheme({ bannerHeight: 'lg' }, ctx)).toEqual({ bannerHeight: 'lg' });
+    expect(() => normalizeFormTheme({ bannerHeight: 'xl' }, ctx)).toThrow(/bannerHeight/);
+    expect(normalizeFormTheme({ primaryColor: '#112233' }, ctx)).not.toHaveProperty('bannerHeight');
+  });
+
+  it('preset: chỉ a-z0-9_- tối đa 32 ký tự, khác thì lỗi', () => {
+    expect(normalizeFormTheme({ preset: 'sunset-01' }, ctx)).toEqual({ preset: 'sunset-01' });
+    expect(() => normalizeFormTheme({ preset: 'Sunset 01' }, ctx)).toThrow(/preset/);
+    expect(() => normalizeFormTheme({ preset: 'a'.repeat(33) }, ctx)).toThrow(/preset/);
+  });
+
+  describe('bannerKey/logoKey — định dạng (lớp kiểm thuần, không đụng DB)', () => {
+    it('bannerKey null -> giữ null trong kết quả (tín hiệu "gỡ ảnh")', () => {
+      expect(normalizeFormTheme({ bannerKey: null }, ctx)).toEqual({ bannerKey: null });
+    });
+
+    it('bannerKey đúng dạng uploads/<workspaceOwnerId>/forms/<tên>.<ext> -> giữ nguyên', () => {
+      const key = `uploads/${OWNER_ID}/forms/123_abcd1234_banner.png`;
+      expect(normalizeFormTheme({ bannerKey: key }, ctx)).toEqual({ bannerKey: key });
+    });
+
+    it('bannerKey đuôi .jpg/.jpeg/.webp (hoa hoặc thường) đều hợp lệ', () => {
+      for (const ext of ['jpg', 'JPG', 'jpeg', 'webp', 'PNG']) {
+        const key = `uploads/${OWNER_ID}/forms/x.${ext}`;
+        expect(normalizeFormTheme({ bannerKey: key }, ctx).bannerKey).toBe(key);
+      }
+    });
+
+    it('bannerKey là URL ngoài (https://evil.example/a.png) -> 400 INVALID_FORM_THEME', () => {
+      expect(() => normalizeFormTheme({ bannerKey: 'https://evil.example/a.png' }, ctx)).toThrow(/bannerKey/);
+      try {
+        normalizeFormTheme({ bannerKey: 'https://evil.example/a.png' }, ctx);
+      } catch (err) {
+        expect(err.statusCode).toBe(400);
+        expect(err.code).toBe('INVALID_FORM_THEME');
+      }
+    });
+
+    it('bannerKey mang id CHỦ KHÁC (không khớp workspaceOwnerId đang sửa) -> 400 ngay ở lớp định dạng', () => {
+      const otherOwnerKey = `uploads/${OWNER_ID + 1}/forms/x.png`;
+      expect(() => normalizeFormTheme({ bannerKey: otherOwnerKey }, ctx)).toThrow(/bannerKey/);
+    });
+
+    it('bannerKey đúng dạng nhưng thư mục "landing/" (không phải "forms/") -> 400', () => {
+      const landingKey = `uploads/${OWNER_ID}/landing/x.png`;
+      expect(() => normalizeFormTheme({ bannerKey: landingKey }, ctx)).toThrow(/bannerKey/);
+    });
+
+    it('không truyền workspaceOwnerId (ctx rỗng) -> mọi bannerKey đều 400 (an toàn theo mặc định)', () => {
+      expect(() => normalizeFormTheme({ bannerKey: `uploads/${OWNER_ID}/forms/x.png` }, {})).toThrow(/bannerKey/);
+    });
+
+    it('logoKey theo đúng quy tắc như bannerKey (null, đúng dạng, URL ngoài -> lỗi)', () => {
+      expect(normalizeFormTheme({ logoKey: null }, ctx)).toEqual({ logoKey: null });
+      const key = `uploads/${OWNER_ID}/forms/logo.webp`;
+      expect(normalizeFormTheme({ logoKey: key }, ctx)).toEqual({ logoKey: key });
+      expect(() => normalizeFormTheme({ logoKey: 'https://evil.example/logo.png' }, ctx)).toThrow(/logoKey/);
+    });
+
+    it('không gửi bannerKey/logoKey -> không có 2 khoá này trong kết quả (không tự set null)', () => {
+      const theme = normalizeFormTheme({ primaryColor: '#112233' }, ctx);
+      expect(theme).not.toHaveProperty('bannerKey');
+      expect(theme).not.toHaveProperty('logoKey');
+    });
+  });
+
+  describe('buildFormAssetKeyRegex', () => {
+    it('khớp đúng khoá của owner được truyền vào, không khớp owner khác', () => {
+      const re = buildFormAssetKeyRegex(OWNER_ID);
+      expect(re.test(`uploads/${OWNER_ID}/forms/a.png`)).toBe(true);
+      expect(re.test(`uploads/${OWNER_ID + 1}/forms/a.png`)).toBe(false);
+    });
+
+    it('không khớp thư mục khác "forms/" hoặc đuôi file khác', () => {
+      const re = buildFormAssetKeyRegex(OWNER_ID);
+      expect(re.test(`uploads/${OWNER_ID}/landing/a.png`)).toBe(false);
+      expect(re.test(`uploads/${OWNER_ID}/forms/a.gif`)).toBe(false);
+      expect(re.test(`uploads/${OWNER_ID}/forms/a.svg`)).toBe(false);
+    });
   });
 });

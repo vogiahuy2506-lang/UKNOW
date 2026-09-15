@@ -157,6 +157,7 @@ class FormRepository {
     description = null,
     fields = [],
     settings = {},
+    theme = {},
     bookingConfig = null,
     paymentConfig = null,
   }) {
@@ -169,10 +170,11 @@ class FormRepository {
          description,
          fields,
          settings,
+         theme,
          booking_config,
          payment_config,
          is_published
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
        RETURNING
          id,
          workspace_owner_id AS "workspaceOwnerId",
@@ -197,6 +199,7 @@ class FormRepository {
         description,
         JSON.stringify(fields),
         JSON.stringify(settings),
+        JSON.stringify(theme || {}),
         bookingConfig ? JSON.stringify(bookingConfig) : null,
         paymentConfig ? JSON.stringify(paymentConfig) : null,
       ]
@@ -206,15 +209,15 @@ class FormRepository {
 
   /**
    * Cập nhật biểu mẫu.
-   * Cập nhật: title, description, fields, settings, bookingConfig (PR-2a).
-   * Vẫn bỏ qua hoàn toàn payment_config, theme, admin_disabled_at (PR-3/PR-4).
+   * Cập nhật: title, description, fields, settings, bookingConfig (PR-2a), paymentConfig
+   * (PR-3a), theme (PR-4a). Vẫn bỏ qua hoàn toàn admin_disabled_at (chỉ super admin route).
    *
    * @param {number} id
    * @param {number} workspaceOwnerId
    * @param {object} params
    * @returns {Promise<object|null>}
    */
-  async updateForm(id, workspaceOwnerId, { title, description, fields, settings, bookingConfig, paymentConfig }) {
+  async updateForm(id, workspaceOwnerId, { title, description, fields, settings, theme, bookingConfig, paymentConfig }) {
     const fieldsToSet = [];
     const values = [id, workspaceOwnerId];
     let idx = 3;
@@ -237,6 +240,11 @@ class FormRepository {
     if (settings !== undefined) {
       fieldsToSet.push(`settings = $${idx}`);
       values.push(JSON.stringify(settings));
+      idx += 1;
+    }
+    if (theme !== undefined) {
+      fieldsToSet.push(`theme = $${idx}`);
+      values.push(JSON.stringify(theme || {}));
       idx += 1;
     }
     if (bookingConfig !== undefined) {

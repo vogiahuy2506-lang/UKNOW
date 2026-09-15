@@ -523,3 +523,133 @@ export function normalizePaymentConfig(raw) {
     holdMinutes,
   };
 }
+
+// ─── Theme (PR-4a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md "Bổ sung 15/09 khi soạn lệnh
+// PR-4") ─────────────────────────────────────────────────────────────────────────────────
+
+// 8 font đã kiểm có subset `vietnamese` trên Google Fonts CSS API (15/09) — form PR-4a chỉ
+// nhận đúng danh sách này, không nhận font tuỳ ý (chống chọn font không hiển thị được dấu).
+export const ALLOWED_FORM_FONTS = Object.freeze([
+  'Be Vietnam Pro',
+  'Inter',
+  'Roboto',
+  'Nunito',
+  'Montserrat',
+  'Lora',
+  'Playfair Display',
+  'Quicksand',
+]);
+export const ALLOWED_FORM_LAYOUTS = Object.freeze(['card', 'wide']);
+export const ALLOWED_FORM_BANNER_HEIGHTS = Object.freeze(['sm', 'md', 'lg']);
+export const MAX_FORM_THEME_PRESET_LENGTH = 32;
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const FORM_THEME_PRESET_RE = /^[a-z0-9_-]{1,32}$/;
+
+/**
+ * Regex khoá kho ảnh biểu mẫu cho MỘT workspaceOwnerId cụ thể — `bannerKey`/`logoKey` phải
+ * khớp đúng id của CHÍNH chủ form đang sửa, không phải bất kỳ số nào. Đây là lớp kiểm ĐẦU (định
+ * dạng, thuần — không đụng DB); lớp kiểm THỨ HAI (khoá có thật trong `storage_objects`,
+ * `owner_user_id`/`category`/`state` đúng) nằm ở `form.service.js` vì cần query DB.
+ *
+ * @param {number|string} workspaceOwnerId
+ * @returns {RegExp}
+ */
+export function buildFormAssetKeyRegex(workspaceOwnerId) {
+  const id = Number(workspaceOwnerId);
+  return new RegExp(`^uploads/${id}/forms/[A-Za-z0-9._-]+\\.(png|jpe?g|webp)$`, 'i');
+}
+
+function normalizeFormThemeAssetKey(raw, keyLabel, workspaceOwnerId) {
+  if (raw === null) return null; // gỡ ảnh
+  const key = String(raw || '').trim();
+  if (!workspaceOwnerId || !buildFormAssetKeyRegex(workspaceOwnerId).test(key)) {
+    throw createValidationError(`${keyLabel} không hợp lệ`, 'INVALID_FORM_THEME');
+  }
+  return key;
+}
+
+/**
+ * Chuẩn hoá và xác thực giao diện (theme) của biểu mẫu theo whitelist — mọi khoá tuỳ chọn,
+ * `{}`/thiếu = giữ giao diện hiện tại (KHÔNG force default như `normalizeFormSettings`; khooá
+ * nào không được gửi/không hợp lệ thì vắng mặt trong kết quả, không tự điền giá trị mặc định).
+ * Khoá lạ bị bỏ, giống `normalizeFormSettings`.
+ *
+ * Xác thực `bannerKey`/`logoKey` ở đây CHỈ là định dạng (regex, thuần) — lớp kiểm DB (khoá có
+ * thật, đúng chủ, đúng category) nằm ở service, KHÔNG đưa vào util này (Bổ sung 15/09 mục theme:
+ * "Kiểm dòng DB nằm ở service, util giữ thuần").
+ *
+ * `theme` là đối tượng THAY THẾ TOÀN BỘ mỗi khi được gửi (cùng quy ước với `settings`/
+ * `bookingConfig`/`paymentConfig`) — gửi `theme: { primaryColor: '#112233' }` mà không có
+ * `bannerKey` nghĩa là ảnh banner (nếu có từ trước) cũng bị bỏ, không phải "giữ nguyên ảnh cũ,
+ * chỉ đổi màu". Muốn giữ ảnh cũ, payload phải gửi lại đúng `bannerKey` cũ cùng lúc.
+ *
+ * @param {any} raw
+ * @param {{ workspaceOwnerId: number }} ctx
+ * @returns {object}
+ */
+export function normalizeFormTheme(raw, { workspaceOwnerId } = {}) {
+  if (raw === undefined || raw === null) return {};
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw createValidationError('Giao diện biểu mẫu (theme) phải là một đối tượng', 'INVALID_FORM_THEME');
+  }
+
+  const theme = {};
+
+  if (raw.preset !== undefined && raw.preset !== null) {
+    const preset = String(raw.preset).trim();
+    if (!FORM_THEME_PRESET_RE.test(preset)) {
+      throw createValidationError('preset không hợp lệ (chỉ a-z, 0-9, _, -, tối đa 32 ký tự)', 'INVALID_FORM_THEME');
+    }
+    theme.preset = preset;
+  }
+
+  if (raw.primaryColor !== undefined && raw.primaryColor !== null) {
+    const c = String(raw.primaryColor).trim();
+    if (!HEX_COLOR_RE.test(c)) {
+      throw createValidationError('primaryColor phải có dạng mã màu hex #RRGGBB', 'INVALID_FORM_THEME');
+    }
+    theme.primaryColor = c;
+  }
+
+  if (raw.backgroundColor !== undefined && raw.backgroundColor !== null) {
+    const c = String(raw.backgroundColor).trim();
+    if (!HEX_COLOR_RE.test(c)) {
+      throw createValidationError('backgroundColor phải có dạng mã màu hex #RRGGBB', 'INVALID_FORM_THEME');
+    }
+    theme.backgroundColor = c;
+  }
+
+  if (raw.fontFamily !== undefined && raw.fontFamily !== null) {
+    const f = String(raw.fontFamily).trim();
+    if (!ALLOWED_FORM_FONTS.includes(f)) {
+      throw createValidationError('fontFamily không nằm trong danh sách font hỗ trợ', 'INVALID_FORM_THEME');
+    }
+    theme.fontFamily = f;
+  }
+
+  if (raw.layout !== undefined && raw.layout !== null) {
+    const l = String(raw.layout).trim();
+    if (!ALLOWED_FORM_LAYOUTS.includes(l)) {
+      throw createValidationError('layout phải là "card" hoặc "wide"', 'INVALID_FORM_THEME');
+    }
+    theme.layout = l;
+  }
+
+  if (raw.bannerHeight !== undefined && raw.bannerHeight !== null) {
+    const h = String(raw.bannerHeight).trim();
+    if (!ALLOWED_FORM_BANNER_HEIGHTS.includes(h)) {
+      throw createValidationError('bannerHeight phải là "sm", "md" hoặc "lg"', 'INVALID_FORM_THEME');
+    }
+    theme.bannerHeight = h;
+  }
+
+  if (raw.bannerKey !== undefined) {
+    theme.bannerKey = normalizeFormThemeAssetKey(raw.bannerKey, 'bannerKey', workspaceOwnerId);
+  }
+
+  if (raw.logoKey !== undefined) {
+    theme.logoKey = normalizeFormThemeAssetKey(raw.logoKey, 'logoKey', workspaceOwnerId);
+  }
+
+  return theme;
+}

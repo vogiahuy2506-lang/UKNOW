@@ -598,5 +598,65 @@ describe('GET /lp-assets/* (Landing Assets)', () => {
     const res = await request(app).get('/lp-assets/uploads/1/landing/../../etc/passwd');
     expect(res.status).toBe(404);
   });
+
+  // PR-4a (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md): mở rộng /lp-assets cho cặp
+  // forms/ ↔ form_asset, bên cạnh landing/ ↔ landing_asset ở trên — đường landing PHẢI giữ
+  // nguyên hành vi (3 ca phía trên vẫn xanh không sửa gì là bằng chứng), form dùng chung cửa
+  // vì nginx production chỉ proxy đúng 4 tiền tố cố định (Bẫy production PR-4a).
+  it('GET /lp-assets/<khoá forms/ active, category=form_asset> → 200', async () => {
+    const owner = await createUser({ username: 'lp-asset-form-user' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${owner.id}/forms/sample-banner.png`,
+      content: 'FORMPNGDATA',
+    });
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+       VALUES ('workspace', $1, $1, $2, 'form_asset', 'active', 11)`,
+      [owner.id, storageKey]
+    );
+
+    const res = await request(app)
+      .get(`/lp-assets/${storageKey}`)
+      .buffer(true)
+      .parse((response, cb) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.toString('utf8')).toBe('FORMPNGDATA');
+  });
+
+  it('khoá forms/ nhưng dòng sổ category="landing_asset" (lẫn loại) → 404', async () => {
+    const owner = await createUser({ username: 'lp-asset-cross-1' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${owner.id}/forms/mismatched.png`,
+      content: 'X',
+    });
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+       VALUES ('workspace', $1, $1, $2, 'landing_asset', 'active', 1)`,
+      [owner.id, storageKey]
+    );
+
+    const res = await request(app).get(`/lp-assets/${storageKey}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('khoá landing/ nhưng dòng sổ category="form_asset" (lẫn loại ngược lại) → 404', async () => {
+    const owner = await createUser({ username: 'lp-asset-cross-2' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${owner.id}/landing/mismatched.png`,
+      content: 'X',
+    });
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+       VALUES ('workspace', $1, $1, $2, 'form_asset', 'active', 1)`,
+      [owner.id, storageKey]
+    );
+
+    const res = await request(app).get(`/lp-assets/${storageKey}`);
+    expect(res.status).toBe(404);
+  });
 });
 

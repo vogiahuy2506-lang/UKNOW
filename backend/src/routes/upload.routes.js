@@ -38,6 +38,7 @@ const TEMP_UPLOAD_PERMISSIONS = [
   'chatbots_manage',
   'inbox_reply',
   'campaigns_create',
+  'forms',
 ];
 
 // auth trước → uploadLimiter key theo user (không theo IP)

@@ -2,6 +2,8 @@ import formService from '../services/form.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { ingestFormAsset } from '../services/formAsset.service.js';
+import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 
 /**
  * PR-3a "Bổ sung 15/09": chỉ CHỦ workspace (không phải nhân viên) được đổi paymentConfig —
@@ -79,7 +81,7 @@ class FormController {
       const workspaceContext = getWorkspaceContext(req.user);
       if (rejectPaymentConfigFromEmployee(req, res, workspaceContext)) return;
 
-      const { title, description, fields, settings, bookingConfig, paymentConfig } = req.body || {};
+      const { title, description, fields, settings, theme, bookingConfig, paymentConfig } = req.body || {};
 
       const form = await formService.createForm({
         workspaceOwnerId: workspaceContext.workspaceOwnerId,
@@ -88,6 +90,7 @@ class FormController {
         description,
         fields,
         settings,
+        theme,
         bookingConfig,
         paymentConfig,
       });
@@ -161,6 +164,56 @@ class FormController {
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể cập nhật biểu mẫu',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
+   * POST /api/forms/assets — tải banner/logo cho biểu mẫu (PR-4a mục 2).
+   * Body: { tempId, originalName, contentType, size } — `tempId` lấy từ POST /api/uploads/temp
+   * trước đó. Trả `{ storageKey, url, sizeBytes }`; `storageKey` gán vào theme.bannerKey/logoKey
+   * ở lượt lưu form kế tiếp (POST/PUT /api/forms), lúc đó khoá mới chuyển 'active'.
+   */
+  async uploadAsset(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const { tempId, originalName, contentType } = req.body || {};
+
+      const asset = await ingestFormAsset({
+        tempId,
+        originalName,
+        contentType,
+        ownerUserId: workspaceContext.workspaceOwnerId,
+        actorUserId: workspaceContext.actorUserId,
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          storageKey: asset.storageKey,
+          url: asset.url,
+          sizeBytes: asset.sizeBytes,
+        },
+      });
+    } catch (error) {
+      if (error instanceof StorageQuotaExceededError) {
+        // PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md PR-4a: 413 theo đúng hợp đồng của nhiệm
+        // vụ này — landingPageAdmin.controller.js:448 dùng `error.status || 413` nhưng
+        // StorageQuotaExceededError luôn tự set .status=409 trong constructor nên fallback đó
+        // thực ra chết (không bao giờ tới 413); ở đây ép thẳng 413 thay vì chép lại chỗ chết đó.
+        return res.status(413).json({
+          success: false,
+          code: error.code || 'STORAGE_QUOTA_EXCEEDED',
+          message: error.message,
+          data: error.usage,
+        });
+      }
+      const status = error.status || error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.uploadAsset]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Lỗi khi tải ảnh lên',
         code: error.code || 'INTERNAL_ERROR',
       });
     }

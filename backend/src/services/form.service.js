@@ -9,6 +9,7 @@ import {
   normalizeFormSettings,
   normalizeBookingConfig,
   normalizePaymentConfig,
+  normalizeFormTheme,
   MAX_TITLE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
 } from '../utils/formDefinition.util.js';
@@ -28,6 +29,9 @@ import { logError } from '../utils/logger.util.js';
 import { escapeHtml } from '../utils/htmlEscape.util.js';
 import { mapFormSubmissionToCampaignItem } from '../utils/formCampaignItem.util.js';
 import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
+import { findStorageObjectByKey, activateFormAssetStorageObjects } from '../repositories/storage.repository.js';
+import { markDeletedAfterUnlink } from './storage/storageObject.service.js';
+import { buildFormAssetUrl } from './formAsset.service.js';
 
 const MAX_SLOTS_DAYS_PARAM = 31;
 const DEFAULT_SLOTS_DAYS_PARAM = 7;
@@ -93,6 +97,125 @@ async function insertSubmissionWithPaymentCodeRetry(baseParams, queryable, needs
   throw lastError;
 }
 
+// ─── Theme / ảnh biểu mẫu (PR-4a, "Bổ sung 15/09 khi soạn lệnh PR-4") ─────────────────────
+
+/**
+ * Lớp kiểm THỨ HAI cho `bannerKey`/`logoKey` — `normalizeFormTheme` (util, thuần) chỉ kiểm định
+ * dạng + owner id đúng khớp trong CHÍNH đường dẫn khoá; hàm này query DB để xác nhận khoá có
+ * THẬT trong `storage_objects`, đúng `owner_user_id` (nguồn sự thật, phòng khi dữ liệu lệch dù
+ * chuỗi khoá trùng khớp), đúng `category='form_asset'`, và còn ở trạng thái dùng được
+ * (`temp`/`active` — không phải `deleted`/`cleanup_pending`/`orphaned`).
+ *
+ * @param {string} key
+ * @param {number} workspaceOwnerId
+ */
+async function assertFormAssetKeyOwned(key, workspaceOwnerId) {
+  const record = await findStorageObjectByKey(key);
+  if (
+    !record
+    || Number(record.owner_user_id) !== Number(workspaceOwnerId)
+    || record.category !== 'form_asset'
+    || !['temp', 'active'].includes(record.state)
+  ) {
+    throw createHttpError('Ảnh không hợp lệ hoặc không thuộc kho lưu trữ của bạn', 400, 'INVALID_FORM_THEME');
+  }
+}
+
+/**
+ * @param {object} theme Kết quả `normalizeFormTheme` (đã qua lớp kiểm định dạng)
+ * @param {number} workspaceOwnerId
+ */
+async function assertFormThemeAssetKeysOwned(theme, workspaceOwnerId) {
+  if (theme.bannerKey) await assertFormAssetKeyOwned(theme.bannerKey, workspaceOwnerId);
+  if (theme.logoKey) await assertFormAssetKeyOwned(theme.logoKey, workspaceOwnerId);
+}
+
+/**
+ * Chiếu `theme` sang dạng AN TOÀN cho API công khai — whitelist thủ công (không spread nguyên
+ * object) để KHÔNG BAO GIỜ lộ `bannerKey`/`logoKey` thô (khách ẩn danh không có lý do biết khoá
+ * kho nội bộ), chỉ trả `bannerUrl`/`logoUrl` đã tính từ khoá. Dùng cho `getPublicForm` và
+ * `getSubmissionStatus` (trang trạng thái công khai — khớp giao diện form gốc).
+ *
+ * @param {object|null} theme
+ * @returns {object}
+ */
+function buildPublicFormTheme(theme) {
+  if (!theme || typeof theme !== 'object') return {};
+  const out = {};
+  if (theme.preset) out.preset = theme.preset;
+  if (theme.primaryColor) out.primaryColor = theme.primaryColor;
+  if (theme.backgroundColor) out.backgroundColor = theme.backgroundColor;
+  if (theme.fontFamily) out.fontFamily = theme.fontFamily;
+  if (theme.layout) out.layout = theme.layout;
+  if (theme.bannerHeight) out.bannerHeight = theme.bannerHeight;
+  if (theme.bannerKey) out.bannerUrl = buildFormAssetUrl(theme.bannerKey);
+  if (theme.logoKey) out.logoUrl = buildFormAssetUrl(theme.logoKey);
+  return out;
+}
+
+/**
+ * Bản CHỦ FORM (private) của phép chiếu theme — GIỮ nguyên `bannerKey`/`logoKey` (trình soạn
+ * cần biết khoá hiện tại để biết "đang chọn ảnh nào", không chỉ để hiển thị) và BỔ SUNG
+ * `bannerUrl`/`logoUrl` tính sẵn cho tiện xem trước — không sửa `form` gốc (trả object mới).
+ *
+ * @param {object} form Kết quả từ formRepository (có field `theme`)
+ * @returns {object}
+ */
+function augmentFormThemeWithUrls(form) {
+  if (!form) return form;
+  const theme = form.theme || {};
+  const augmented = { ...theme };
+  if (theme.bannerKey) augmented.bannerUrl = buildFormAssetUrl(theme.bannerKey);
+  if (theme.logoKey) augmented.logoUrl = buildFormAssetUrl(theme.logoKey);
+  return { ...form, theme: augmented };
+}
+
+/**
+ * Vòng đời khoá kho ảnh SAU KHI đã ghi `forms.theme` thành công (Bổ sung 15/09 mục 3):
+ * kích hoạt khoá MỚI (chuyển `active`, `reference_type 'form'`, `reference_id` = id form — mẫu
+ * `activateLandingAssetStorageObjects`), giải phóng khoá CŨ không còn dùng
+ * (`markDeletedAfterUnlink`). Lỗi giải phóng kho chỉ LOG, không ném lại — request lưu form đã
+ * thành công, đừng biến một sự cố dọn dẹp kho thành lỗi 500 cho người dùng.
+ *
+ * So sánh theo full-replace: `theme` là đối tượng thay thế toàn bộ mỗi lần được gửi (xem
+ * docstring `normalizeFormTheme`), nên "khoá cũ" luôn lấy từ `oldTheme` (trước khi lưu) và
+ * "khoá mới" từ `newTheme` (sau khi lưu) — không cần biết payload có đề cập khoá đó hay không.
+ *
+ * @param {object} params
+ * @param {object|null} params.oldTheme Theme TRƯỚC khi lưu (`null`/`{}` khi tạo form mới)
+ * @param {object} params.newTheme Theme SAU khi lưu (đã chuẩn hoá, khớp DB)
+ * @param {number} params.workspaceOwnerId
+ * @param {number} params.formId
+ */
+async function syncFormThemeAssetLifecycle({ oldTheme, newTheme, workspaceOwnerId, formId }) {
+  const oldBanner = oldTheme?.bannerKey || null;
+  const newBanner = newTheme?.bannerKey || null;
+  const oldLogo = oldTheme?.logoKey || null;
+  const newLogo = newTheme?.logoKey || null;
+
+  const keysToActivate = [];
+  if (newBanner && newBanner !== oldBanner) keysToActivate.push(newBanner);
+  if (newLogo && newLogo !== oldLogo) keysToActivate.push(newLogo);
+  if (keysToActivate.length > 0) {
+    await activateFormAssetStorageObjects({
+      storageKeys: keysToActivate,
+      ownerUserId: workspaceOwnerId,
+      formId,
+    });
+  }
+
+  const keysToRelease = [];
+  if (oldBanner && oldBanner !== newBanner) keysToRelease.push(oldBanner);
+  if (oldLogo && oldLogo !== newLogo) keysToRelease.push(oldLogo);
+  for (const key of keysToRelease) {
+    try {
+      await markDeletedAfterUnlink({ storageKey: key });
+    } catch (error) {
+      logError(`[FormService] Không giải phóng được ảnh biểu mẫu cũ (${key}):`, error?.message || error);
+    }
+  }
+}
+
 class FormService {
   /**
    * Kiểm tra điều kiện gói dịch vụ của chủ workspace đối với form public.
@@ -129,7 +252,8 @@ class FormService {
    * @returns {Promise<Array<object>>}
    */
   async listForms(workspaceOwnerId) {
-    return formRepository.listFormsByOwner(workspaceOwnerId);
+    const forms = await formRepository.listFormsByOwner(workspaceOwnerId);
+    return forms.map(augmentFormThemeWithUrls);
   }
 
   /**
@@ -145,7 +269,7 @@ class FormService {
     if (!form) {
       throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
     }
-    return form;
+    return augmentFormThemeWithUrls(form);
   }
 
   /**
@@ -154,7 +278,7 @@ class FormService {
    * @param {object} params
    * @returns {Promise<object>}
    */
-  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, bookingConfig, paymentConfig }) {
+  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, theme, bookingConfig, paymentConfig }) {
     const trimmedTitle = String(title || '').trim();
     if (!trimmedTitle) {
       throw createHttpError('Tiêu đề biểu mẫu không được để trống', 400, 'INVALID_FORM_TITLE');
@@ -173,13 +297,15 @@ class FormService {
 
     const normalizedFields = normalizeFormFields(fields || []);
     const safeSettings = normalizeFormSettings(settings);
+    const safeTheme = normalizeFormTheme(theme, { workspaceOwnerId });
+    await assertFormThemeAssetKeysOwned(safeTheme, workspaceOwnerId);
     const safeBookingConfig = normalizeBookingConfig(bookingConfig);
     const safePaymentConfig = normalizePaymentConfig(paymentConfig);
 
     // 12 bytes ngẫu nhiên -> 16 ký tự base64url
     const publicKey = crypto.randomBytes(12).toString('base64url');
 
-    return formRepository.createForm({
+    const created = await formRepository.createForm({
       workspaceOwnerId,
       createdByUserId,
       publicKey,
@@ -187,9 +313,21 @@ class FormService {
       description: trimmedDesc,
       fields: normalizedFields,
       settings: safeSettings,
+      theme: safeTheme,
       bookingConfig: safeBookingConfig,
       paymentConfig: safePaymentConfig,
     });
+
+    // PR-4a mục 3: kích hoạt khoá ảnh (nếu có) SAU khi đã ghi forms.theme thành công — form mới
+    // nên "khoá cũ" luôn rỗng, chỉ có nhánh kích hoạt, không có nhánh giải phóng.
+    await syncFormThemeAssetLifecycle({
+      oldTheme: null,
+      newTheme: safeTheme,
+      workspaceOwnerId,
+      formId: created.id,
+    });
+
+    return augmentFormThemeWithUrls(created);
   }
 
   /**
@@ -242,6 +380,13 @@ class FormService {
       updateData.settings = normalizeFormSettings(payload.settings);
     }
 
+    let safeTheme;
+    if (payload.theme !== undefined) {
+      safeTheme = normalizeFormTheme(payload.theme, { workspaceOwnerId });
+      await assertFormThemeAssetKeysOwned(safeTheme, workspaceOwnerId);
+      updateData.theme = safeTheme;
+    }
+
     if (payload.bookingConfig !== undefined) {
       updateData.bookingConfig = normalizeBookingConfig(payload.bookingConfig);
     }
@@ -250,7 +395,20 @@ class FormService {
       updateData.paymentConfig = normalizePaymentConfig(payload.paymentConfig);
     }
 
-    return formRepository.updateForm(id, workspaceOwnerId, updateData);
+    const updated = await formRepository.updateForm(id, workspaceOwnerId, updateData);
+
+    // PR-4a mục 3: chỉ đụng vòng đời ảnh khi theme THỰC SỰ được gửi trong payload này — không
+    // gửi theme (payload.theme === undefined) nghĩa là giữ nguyên, không có gì để đổi/giải phóng.
+    if (payload.theme !== undefined) {
+      await syncFormThemeAssetLifecycle({
+        oldTheme: existing.theme,
+        newTheme: safeTheme,
+        workspaceOwnerId,
+        formId: id,
+      });
+    }
+
+    return augmentFormThemeWithUrls(updated);
   }
 
   /**
@@ -267,7 +425,8 @@ class FormService {
       throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
     }
 
-    return formRepository.updateFormPublish(id, workspaceOwnerId, isPublished);
+    const updated = await formRepository.updateFormPublish(id, workspaceOwnerId, isPublished);
+    return augmentFormThemeWithUrls(updated);
   }
 
   /**
@@ -284,6 +443,17 @@ class FormService {
     }
 
     await formRepository.deleteForm(id, workspaceOwnerId);
+
+    // PR-4a mục 3: xoá form -> giải phóng CẢ HAI khoá ảnh (nếu có) SAU khi DB đã xoá xong; lỗi
+    // giải phóng kho chỉ log, không làm hỏng request (form đã xoá thành công ở DB rồi).
+    const keysToRelease = [existing.theme?.bannerKey, existing.theme?.logoKey].filter(Boolean);
+    for (const key of keysToRelease) {
+      try {
+        await markDeletedAfterUnlink({ storageKey: key });
+      } catch (error) {
+        logError(`[FormService] Không giải phóng được ảnh biểu mẫu sau khi xoá form (${key}):`, error?.message || error);
+      }
+    }
   }
 
   /**
@@ -493,7 +663,9 @@ class FormService {
       title: form.title,
       description: form.description,
       fields: form.fields,
-      theme: form.theme || {},
+      // PR-4a mục 5: whitelist thủ công + URL tính từ khoá — KHÔNG trả bannerKey/logoKey thô
+      // cho khách ẩn danh (buildPublicFormTheme).
+      theme: buildPublicFormTheme(form.theme),
       settings: {
         consentEnabled: form.settings?.consentEnabled ?? false,
         submitButtonText: form.settings?.submitButtonText || 'Gửi thông tin',
@@ -904,6 +1076,9 @@ class FormService {
     return {
       status: submission.status,
       formTitle: form.title,
+      // PR-4a mục 5: trang trạng thái công khai khớp giao diện form gốc — cùng phép chiếu
+      // whitelist+URL với getPublicForm, không lộ bannerKey/logoKey.
+      theme: buildPublicFormTheme(form.theme),
       appointmentAt: submission.appointmentAt,
       holdExpiresAt: submission.holdExpiresAt,
       holdExpired,

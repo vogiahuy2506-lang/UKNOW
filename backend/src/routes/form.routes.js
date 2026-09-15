@@ -18,6 +18,7 @@ router.use(requirePermission('forms'));
 
 router.get('/', formController.list.bind(formController));
 router.post('/', formController.create.bind(formController));
+router.post('/assets', formController.uploadAsset.bind(formController));
 router.get('/:id', formController.get.bind(formController));
 router.put('/:id', formController.update.bind(formController));
 router.delete('/:id', formController.delete.bind(formController));

@@ -189,3 +189,31 @@ export async function activateLandingAssetStorageObjects(
   return rows;
 }
 
+/**
+ * PR-4a (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md) — bản `form_asset`/`form` của
+ * `activateLandingAssetStorageObjects` phía trên. Hàm riêng thay vì tham số hoá category/
+ * referenceType chung: hai luồng (landing/form) không dùng chung transaction hay call site, và
+ * giữ riêng giúp đọc SQL trực tiếp thấy đúng loại tài nguyên đang chạm, không phải suy từ tham số.
+ */
+export async function activateFormAssetStorageObjects(
+  { storageKeys, ownerUserId, formId },
+  queryable = db
+) {
+  if (!Array.isArray(storageKeys) || storageKeys.length === 0) return [];
+  const { rows } = await queryable.query(
+    `UPDATE storage_objects
+        SET state = 'active',
+            expires_at = NULL,
+            reference_type = 'form',
+            reference_id = $3,
+            updated_at = NOW()
+      WHERE storage_key = ANY($1::text[])
+        AND owner_user_id = $2
+        AND category = 'form_asset'
+        AND state IN ('temp', 'active')
+    RETURNING *`,
+    [storageKeys, ownerUserId, String(formId)]
+  );
+  return rows;
+}
+
