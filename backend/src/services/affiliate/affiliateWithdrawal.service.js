@@ -867,6 +867,14 @@ export async function getAffiliateOverview(userId) {
     monthlyHistory,
     withdrawalHistory: withdrawals,
     ledgerHistory,
+    // Trang đối tác vẽ thang 5 bậc từ đây — KHÔNG chép mảng bậc sang frontend, một nguồn
+    // sự thật duy nhất là AFFILIATE_TIERS (affiliateTier.util.js). Chỉ trả 3 trường cần
+    // vẽ (level/minRevenue/ratePercent), không trả nguyên object có thể đổi hình dạng.
+    tiers: AFFILIATE_TIERS.map(({ level, minRevenue, ratePercent }) => ({
+      level,
+      minRevenue,
+      ratePercent,
+    })),
   };
 }
 

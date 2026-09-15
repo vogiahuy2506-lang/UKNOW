@@ -8346,9 +8346,10 @@ export default {
     previewEmpty: 'Chưa có nội dung để xem trước.',
   },
   affiliate: {
-    title: 'Chương trình Đối tác Affiliate',
+    title: 'Chương trình đối tác',
     subtitle: 'Giới thiệu thành viên mới và nhận hoa hồng lên tới 30% doanh thu mỗi tháng.',
     partnerOverview: 'Tổng quan đối tác',
+    activeStatus: 'Đang hoạt động',
     referralInfo: 'Thông tin giới thiệu',
     referralCode: 'Mã giới thiệu',
     referralLink: 'Link giới thiệu',
@@ -8366,12 +8367,22 @@ export default {
     requestWithdrawal: 'Yêu cầu rút tiền',
     minWithdrawalNotice: 'Số dư tối thiểu để rút là 1.000.000đ (hiện có: {balance})',
     hasPendingNotice: 'Bạn đang có yêu cầu rút đang chờ kế toán xử lý',
+    // Thang 5 bậc + thẻ hoa hồng tháng (thiết kế lại 15/09)
+    commissionMonthLabel: 'Hoa hồng tháng {month}',
+    tierFromLabel: 'từ {amount}',
+    closingNotice: 'Hoa hồng tháng này được chốt sổ đầu tháng sau.',
+    minWithdrawalChip: 'Tối thiểu {amount}',
+    withdrawalProcessingNotice: 'Kế toán xử lý trong 7 ngày làm việc.',
 
     // Mục ĐANG CHỜ ĐỦ ĐIỀU KIỆN
     pendingApprovalTitle: 'Đơn hàng đang chờ đủ điều kiện',
     pendingApprovalDesc: 'Các đơn hàng dưới đây người mua chưa cập nhật số điện thoại tài khoản nên chưa được ghi nhận vào doanh thu hợp lệ. Vui lòng nhắc bạn bè bổ sung SĐT để nhận hoa hồng.',
     pendingBuyersCount: 'Người mua chưa có SĐT',
     pendingRevenueAmount: 'Doanh thu tạm treo',
+    pendingCommissionEstimated: 'Hoa hồng đang chờ (ước tính)',
+    pendingNoticeTitle: '{count} đơn chưa được tính hoa hồng',
+    viewPendingOrders: 'Xem {count} đơn',
+    hidePendingOrders: 'Ẩn danh sách',
     buyerEmail: 'Email người mua',
     orderAmount: 'Giá trị đơn',
     orderDate: 'Ngày mua',
@@ -8383,6 +8394,7 @@ export default {
     grossRevenue: 'Doanh thu hợp lệ',
     closedAt: 'Ngày chốt sổ',
     noMonthlyHistory: 'Chưa có dữ liệu đóng sổ tháng nào.',
+    monthlyHistoryEmpty: 'Chưa có tháng nào được chốt sổ. Hoa hồng tháng này được chốt sổ đầu tháng sau.',
 
     // Lịch sử rút
     withdrawalHistoryTitle: 'Lịch sử rút hoa hồng',
@@ -8425,6 +8437,7 @@ export default {
     bankNameLabel: 'Tên ngân hàng',
     bankAccountLabel: 'Số tài khoản ngân hàng',
     bankAccountNameLabel: 'Tên chủ tài khoản (viết hoa không dấu)',
+    legalNoticeTitle: 'Lưu ý pháp lý',
     legalNotice: 'Theo Nghị định 330/2026/NĐ-CP và Điều khoản Sử dụng mục 15.3: Thông tin CCCD/CMND và tài khoản ngân hàng chỉ được sử dụng cho mục đích khấu trừ thuế TNCN, kê khai thuế theo quy định pháp luật và chi trả hoa hồng. Dữ liệu được mã hoá theo tiêu chuẩn an toàn khi lưu trữ.',
     submitWithdrawal: 'Gửi yêu cầu rút',
     submitting: 'Đang gửi yêu cầu...',
@@ -8448,6 +8461,7 @@ export default {
     actionApprove: 'Đã chuyển khoản',
     actionReject: 'Từ chối',
     actionAdjustment: 'Điều chỉnh số dư ví',
+    overdueNoticeTitle: '{count} yêu cầu quá hạn 7 ngày làm việc',
     modalKycTitle: 'Chi tiết thông tin KYC đối tác',
     kycIdNumber: 'Số CCCD (đã giải mã)',
     kycIssuedDate: 'Ngày cấp',

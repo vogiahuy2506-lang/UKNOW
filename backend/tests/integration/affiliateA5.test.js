@@ -402,6 +402,25 @@ describe('Affiliate PR-A5 — Admin Ledger Adjustment & Overview APIs', () => {
       expect(event.buyer_id).toBeUndefined();
       expect(event.buyerId).toBeUndefined();
     });
+
+    it('Trả về tiers từ AFFILIATE_TIERS — trang đối tác vẽ thang 5 bậc, không tự bịa dữ liệu', async () => {
+      const partner = await createUser({ email: 'partner_tiers@test.com', username: 'partner_tiers', role: 'user' });
+      const partnerToken = createAuthToken(partner);
+
+      const res = await request(app)
+        .get('/api/affiliate/overview')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(200);
+      const { tiers } = res.body.data;
+      expect(Array.isArray(tiers)).toBe(true);
+      expect(tiers).toHaveLength(5);
+
+      const tier2 = tiers.find((tr) => tr.level === 2);
+      expect(tier2).toBeDefined();
+      expect(tier2.minRevenue).toBe(10000000);
+      expect(tier2.ratePercent).toBe(15);
+    });
   });
 
   describe('GET /api/admin/affiliate/periods & available-months', () => {

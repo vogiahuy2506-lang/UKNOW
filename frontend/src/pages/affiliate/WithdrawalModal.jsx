@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import affiliateService from '../../services/affiliate.service';
+import Notice from '../../components/common/Notice';
 
 const MIN_AMOUNT = 1_000_000;
 
@@ -148,16 +149,16 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 dark:from-gray-800/60 dark:to-gray-800/40">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            <h3 className="text-lg font-bold text-gray-900">
               {t('affiliate.modalWithdrawalTitle')}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5">
               {t('affiliate.walletBalance')}:{' '}
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="font-semibold text-emerald-600">
                 {formatVnd(currentBalance)}
               </span>
             </p>
@@ -165,7 +166,7 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-lg transition-colors"
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition-colors"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -178,13 +179,13 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
           {/* Nhập số tiền rút */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="font-semibold text-gray-800 dark:text-gray-200">
+              <label className="font-semibold text-gray-800">
                 {t('affiliate.withdrawalAmountLabel')} <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
                 onClick={handleWithdrawAll}
-                className="text-xs text-orange-600 dark:text-orange-400 hover:underline font-medium"
+                className="text-xs text-orange-600 hover:underline font-medium"
               >
                 {t('affiliate.withdrawalAll')} ({formatVnd(currentBalance)})
               </button>
@@ -197,16 +198,12 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder={t('affiliate.withdrawalAmountPlaceholder')}
-                className={`w-full px-4 py-2.5 rounded-xl border font-semibold text-base transition-colors ${
-                  validationError
-                    ? 'border-red-400 dark:border-red-600 focus:ring-red-400 bg-red-50/30'
-                    : 'border-gray-200 dark:border-gray-700 focus:ring-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
-                }`}
+                className={`input font-semibold text-base pr-14 ${validationError ? 'input-error' : ''}`}
               />
-              <span className="absolute right-3.5 top-3 text-gray-400 font-medium">VNĐ</span>
+              <span className="absolute right-3.5 top-2.5 text-gray-400 font-medium">VNĐ</span>
             </div>
             {validationError && (
-              <p className="text-xs text-red-500 dark:text-red-400 font-medium flex items-center gap-1">
+              <p className="text-xs text-red-500 font-medium flex items-center gap-1">
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
@@ -215,27 +212,27 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
             )}
           </div>
 
-          {/* 🔴 BẢNG BA SỐ: Gộp / Thuế 10% / Thực nhận */}
-          <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 space-y-2.5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+          {/* Bảng ba số: Gộp / Thuế 10% / Thực nhận */}
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-2.5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-600">
               {t('affiliate.amountBreakdownTitle')}
             </h4>
-            <div className="flex justify-between text-gray-600 dark:text-gray-300">
+            <div className="flex justify-between text-gray-600">
               <span>{t('affiliate.grossAmount')}</span>
-              <span className="font-semibold text-gray-900 dark:text-white">
+              <span className="font-semibold text-gray-900">
                 {formatVnd(numericAmount)}
               </span>
             </div>
-            <div className="flex justify-between text-gray-600 dark:text-gray-300">
+            <div className="flex justify-between text-gray-600">
               <span className="flex items-center gap-1">
                 {t('affiliate.taxDeduction')}
                 <span className="text-xs text-gray-400">(TNCN)</span>
               </span>
-              <span className="font-semibold text-red-600 dark:text-red-400">
+              <span className="font-semibold text-red-600">
                 - {formatVnd(taxAmount)}
               </span>
             </div>
-            <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-emerald-700 dark:text-emerald-400">
+            <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-emerald-700">
               <span className="font-bold">{t('affiliate.netPayout')}</span>
               <span className="font-extrabold text-base">
                 {formatVnd(netAmount)}
@@ -245,11 +242,9 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
 
           {/* Loại đối tác */}
           <div className="space-y-2">
-            <label className="font-semibold text-gray-800 dark:text-gray-200">
-              {t('affiliate.partnerTypeLabel')}
-            </label>
+            <label className="font-semibold text-gray-800">{t('affiliate.partnerTypeLabel')}</label>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center gap-2 p-3 rounded-xl border border-orange-500 bg-orange-50/50 dark:bg-orange-950/20 cursor-pointer">
+              <label className="flex items-center gap-2 p-3 rounded-xl border border-orange-500 bg-orange-50/50 cursor-pointer">
                 <input
                   type="radio"
                   name="partnerType"
@@ -258,12 +253,12 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   onChange={() => setPartnerType('personal')}
                   className="text-orange-600 focus:ring-orange-500"
                 />
-                <span className="font-medium text-gray-900 dark:text-white">
+                <span className="font-medium text-gray-900">
                   {t('affiliate.partnerPersonal')}
                 </span>
               </label>
 
-              <label className="flex items-center gap-2 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-100/60 dark:bg-gray-800/40 opacity-60 cursor-not-allowed">
+              <label className="flex items-center gap-2 p-3 rounded-xl border border-gray-200 bg-gray-100/60 opacity-60 cursor-not-allowed">
                 <input
                   type="radio"
                   name="partnerType"
@@ -271,26 +266,24 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   disabled
                   className="text-gray-400"
                 />
-                <div>
-                  <span className="font-medium text-gray-700 dark:text-gray-400">
-                    {t('affiliate.partnerCompany')}
-                  </span>
-                  <span className="block text-[10px] text-amber-600 dark:text-amber-400">
-                    (Sắp ra mắt)
-                  </span>
-                </div>
+                <span className="font-medium text-gray-700">
+                  {t('affiliate.partnerCompany')}
+                </span>
               </label>
             </div>
+            <Notice variant="info" title={t('affiliate.partnerCompany')}>
+              {t('affiliate.partnerCompanyNotice')}
+            </Notice>
           </div>
 
           {/* Thông tin KYC Cá nhân */}
-          <div className="space-y-3.5 pt-2 border-t border-gray-100 dark:border-gray-800">
-            <h4 className="font-bold text-gray-900 dark:text-white">
+          <div className="space-y-3.5 pt-2 border-t border-gray-100">
+            <h4 className="font-bold text-gray-900">
               {t('affiliate.personalInfoTitle')}
             </h4>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              <label className="label">
                 {t('affiliate.fullNameLabel')} <span className="text-red-500">*</span>
               </label>
               <input
@@ -298,13 +291,13 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="input"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                <label className="label">
                   {t('affiliate.idCardLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -313,12 +306,12 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   placeholder="9 hoặc 12 số"
                   value={idCardNumber}
                   onChange={(e) => setIdCardNumber(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="input"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                <label className="label">
                   {t('affiliate.idCardIssuedDateLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -326,26 +319,24 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   required
                   value={idCardIssuedDate}
                   onChange={(e) => setIdCardIssuedDate(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="input"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  {t('affiliate.taxCodeLabel')}
-                </label>
+                <label className="label">{t('affiliate.taxCodeLabel')}</label>
                 <input
                   type="text"
                   placeholder="10 hoặc 13 số"
                   value={taxCode}
                   onChange={(e) => setTaxCode(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="input"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              <label className="label">
                 {t('affiliate.idCardIssuedPlaceLabel')} <span className="text-red-500">*</span>
               </label>
               <input
@@ -354,19 +345,19 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                 placeholder="Ví dụ: Cục Cảnh sát QLHC về TTXH"
                 value={idCardIssuedPlace}
                 onChange={(e) => setIdCardIssuedPlace(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="input"
               />
             </div>
           </div>
 
           {/* Thông tin Ngân hàng */}
-          <div className="space-y-3.5 pt-2 border-t border-gray-100 dark:border-gray-800">
-            <h4 className="font-bold text-gray-900 dark:text-white">
+          <div className="space-y-3.5 pt-2 border-t border-gray-100">
+            <h4 className="font-bold text-gray-900">
               {t('affiliate.bankTitle')}
             </h4>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              <label className="label">
                 {t('affiliate.bankNameLabel')} <span className="text-red-500">*</span>
               </label>
               <input
@@ -375,13 +366,13 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                 placeholder="Ví dụ: Vietcombank, Techcombank, MB Bank..."
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="input"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                <label className="label">
                   {t('affiliate.bankAccountLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -390,12 +381,12 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   placeholder="Số tài khoản"
                   value={bankAccountNumber}
                   onChange={(e) => setBankAccountNumber(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="input"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                <label className="label">
                   {t('affiliate.bankAccountNameLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -404,19 +395,16 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   placeholder="NGUYEN VAN A"
                   value={bankAccountName}
                   onChange={(e) => setBankAccountName(e.target.value.toUpperCase())}
-                  className="w-full px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white uppercase font-medium"
+                  className="input uppercase font-medium"
                 />
               </div>
             </div>
           </div>
 
-          {/* 🔴 Thông báo pháp lý theo Nghị định 330/2026/NĐ-CP */}
-          <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300 leading-relaxed flex items-start gap-2.5">
-            <svg className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p>{t('affiliate.legalNotice')}</p>
-          </div>
+          {/* Thông báo pháp lý theo Nghị định 330/2026/NĐ-CP */}
+          <Notice variant="warning" title={t('affiliate.legalNoticeTitle')}>
+            {t('affiliate.legalNotice')}
+          </Notice>
 
           {/* Buttons */}
           <div className="pt-2 flex justify-end gap-3">
@@ -424,14 +412,14 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="btn btn-secondary"
             >
               {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={submitting || !!validationError}
-              className="px-6 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold shadow-md shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+              className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed gap-2"
             >
               {submitting ? (
                 <>
