@@ -6,7 +6,7 @@
  * chính util (đúng bài học rút ra từ PR-1: "test xanh" không có nghĩa là chạy đúng
  * nếu không ai từng gọi thật đường mã đó).
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import http from 'http';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
@@ -160,6 +160,50 @@ describe('Đăng ký → đẩy sang Google Sheet', () => {
       expect(await assertNoPostArrives()).toBe(true);
     } finally {
       process.env.MEMBER_SHEET_WEBHOOK_URL = savedUrl;
+    }
+  });
+});
+
+describe('Đăng ký Google → đẩy sang Google Sheet (PR-A 15/09)', () => {
+  // Chỉ giả fetch tới Google userinfo; pushMemberToSheet đi bằng axios (adapter http của
+  // Node) nên vẫn tới server giả thật, không bị spy này chặn.
+  function mockGoogleUserinfo(email, name) {
+    return jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ email, email_verified: true, name }),
+    });
+  }
+
+  it('tài khoản Google mới (chưa có SĐT) → server giả nhận email, phone rỗng', async () => {
+    const fetchSpy = mockGoogleUserinfo('googlesheet@test.local', 'Google Sheet User');
+    try {
+      const res = await request(app)
+        .post('/api/auth/google-login')
+        .send({ access_token: 'token_google_sheet' });
+      expect(res.status).toBe(200);
+
+      const posted = await waitForPost();
+      expect(posted).not.toBeNull();
+      expect(posted.secret).toBe('test-secret');
+      expect(posted.email).toBe('googlesheet@test.local');
+      expect(posted.phone).toBe('');
+      expect(posted.fullName).toBe('Google Sheet User');
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('tài khoản Google đã có đăng nhập lại → KHÔNG đẩy sang Sheet', async () => {
+    const existing = await createUser({ username: 'googleexisting' });
+    const fetchSpy = mockGoogleUserinfo(existing.email, 'Existing User');
+    try {
+      const res = await request(app)
+        .post('/api/auth/google-login')
+        .send({ access_token: 'token_google_existing' });
+      expect(res.status).toBe(200);
+      expect(await assertNoPostArrives()).toBe(true);
+    } finally {
+      fetchSpy.mockRestore();
     }
   });
 });

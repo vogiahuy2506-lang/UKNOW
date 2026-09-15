@@ -19,7 +19,6 @@ import { truncateAll, createVerificationCode, createUser } from './helpers/db.js
 import { LEGAL_DOCUMENTS } from '../../src/config/legalDocuments.config.js';
 import { findPurgeBlockers } from '../../src/repositories/admin/adminMembers.repository.js';
 import userConsentRepository from '../../src/repositories/user/userConsent.repository.js';
-import memberSheetSync from '../../src/utils/memberSheetSync.util.js';
 
 let app;
 
@@ -291,46 +290,6 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
         });
       expect(resSecond.status).toBe(200);
       expect(resSecond.body.data.user.hasConsented).toBe(true);
-    });
-
-    it('đăng ký Google gọi pushMemberToSheet đúng một lần với email, user đã tồn tại đăng nhập thì không gọi', async () => {
-      const googleEmail = 'google_sheet_sync@test.local';
-      fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          email: googleEmail,
-          email_verified: true,
-          name: 'Sheet Sync User',
-        }),
-      });
-
-      const sheetSpy = jest.spyOn(memberSheetSync, 'pushMemberToSheet').mockResolvedValue();
-
-      try {
-        // 1. Đăng ký Google lần đầu (user mới) -> phải gọi pushMemberToSheet đúng 1 lần
-        const res1 = await request(app)
-          .post('/api/auth/google-login')
-          .send({ access_token: 'token_sheet_test' });
-
-        expect(res1.status).toBe(200);
-        expect(sheetSpy).toHaveBeenCalledTimes(1);
-        expect(sheetSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            email: googleEmail,
-            fullName: 'Sheet Sync User',
-          })
-        );
-
-        // 2. User đã tồn tại đăng nhập lại -> KHÔNG gọi pushMemberToSheet
-        const res2 = await request(app)
-          .post('/api/auth/google-login')
-          .send({ access_token: 'token_sheet_test_again' });
-
-        expect(res2.status).toBe(200);
-        expect(sheetSpy).toHaveBeenCalledTimes(1);
-      } finally {
-        sheetSpy.mockRestore();
-      }
     });
 
     it('Google, consents.dpa = false → 400, 0 dòng user_consents, KHÔNG tạo user', async () => {

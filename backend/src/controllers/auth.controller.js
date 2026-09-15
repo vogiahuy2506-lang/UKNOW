@@ -21,7 +21,7 @@ import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
-import memberSheetSync, { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
+import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
 import userConsentRepository, { recordConsents, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
@@ -604,7 +604,7 @@ class AuthController {
         // chỉ gắn được SAU khi đã có id), nên không cần kiểm isCurrentlyAnyonesEmployee ở đây.
         // An toàn khi chưa có SĐT: Apps Script ghi đè theo email (upsertByEmail_), lúc người dùng
         // nhập số qua modal user.controller.js:509 đẩy lại và ghi đè dòng cũ.
-        (memberSheetSync?.pushMemberToSheet || pushMemberToSheet)({
+        pushMemberToSheet({
           email: userEmail,
           phone: user.phone ?? null,
           fullName: full_name,
