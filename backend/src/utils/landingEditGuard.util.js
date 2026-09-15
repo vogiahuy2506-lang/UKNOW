@@ -48,6 +48,25 @@ function unescapeJsonStringHtml(html) {
   }
 }
 
+/**
+ * Gom mọi publicKey trong khối nhúng Biểu mẫu (`<div data-founderai-form="KEY">`, hợp đồng
+ * cố định PR-5) xuất hiện trong một đoạn HTML. Regex chấp nhận cả nháy đơn/kép; KEY là
+ * base64url ([A-Za-z0-9_-]) — không khớp `data-founderai-form-section`/`-mounted` (không có
+ * dấu `=` ngay sau tên thuộc tính).
+ *
+ * @param {string} html
+ * @returns {Set<string>}
+ */
+function extractFormEmbedKeys(html) {
+  const keys = new Set();
+  const re = /\bdata-founderai-form\s*=\s*(["'])([A-Za-z0-9_-]+)\1/g;
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    keys.add(m[2]);
+  }
+  return keys;
+}
+
 export function extractHtmlFromModelText(text) {
   const raw = String(text || '').trim();
   if (!raw) return '';
@@ -137,6 +156,21 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
   // nào bảo vệ ở đường AI-edit: nhờ AI "sửa màu nút" là có thể mất form trong im lặng.
   if (current.includes('data-founderai-capture') && !next.includes('data-founderai-capture')) {
     const err = new Error('AI đã làm mất form đăng ký. Vui lòng thử lại.');
+    err.status = 422;
+    throw err;
+  }
+
+  // PR-5b-1: khối nhúng Biểu mẫu (`<section data-founderai-form-section>`, hợp đồng cố định
+  // PR-5) chưa có chốt bảo vệ ở đường AI-edit — quy tắc prompt "Không dùng JavaScript logic
+  // ngoài Tailwind CDN" (aiLandingPage.service.js) tự nó đủ lý do để AI xoá thẻ
+  // <script src=".../form-embed.js">. So TỪNG publicKey (không phải chỉ so chuỗi
+  // 'data-founderai-form') — trang có 2 khối mà AI chỉ giữ 1 vẫn phải bắt được.
+  const oldFormEmbedKeys = extractFormEmbedKeys(current);
+  const newFormEmbedKeys = extractFormEmbedKeys(next);
+  const lostFormEmbedKey = [...oldFormEmbedKeys].some((key) => !newFormEmbedKeys.has(key));
+  const lostFormEmbedScript = current.includes('form-embed.js') && !next.includes('form-embed.js');
+  if (lostFormEmbedKey || lostFormEmbedScript) {
+    const err = new Error('AI đã làm mất biểu mẫu nhúng. Vui lòng thử lại.');
     err.status = 422;
     throw err;
   }

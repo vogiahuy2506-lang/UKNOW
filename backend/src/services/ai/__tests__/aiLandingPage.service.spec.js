@@ -397,6 +397,41 @@ describe('aiLandingPageService.editHtml — rule 2b: thêm trường vào form h
   });
 });
 
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-5b-1.
+ *
+ * Prompt editHtml (quy tắc 2 :520, quy tắc 4 :528) phải dặn AI giữ nguyên văn khối nhúng
+ * Biểu mẫu `<section data-founderai-form-section>` và không xoá thẻ <script src=".../form-embed.js">
+ * dù quy tắc 4 cấm JS logic ngoài Tailwind CDN — trước bản vá này không có câu ngoại lệ nào,
+ * AI có thể coi form-embed.js là "JavaScript logic" cần xoá.
+ */
+describe('aiLandingPageService.editHtml — prompt giữ nguyên khối nhúng Biểu mẫu (PR-5b-1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('prompt chứa data-founderai-form-section và ngoại lệ cho thẻ script form-embed.js', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Đổi màu nút thành xanh',
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toContain('data-founderai-form-section');
+    expect(sentPrompt).toContain('data-founderai-form');
+    expect(sentPrompt).toMatch(/GIỮ NGUYÊN VĂN toàn bộ khối đó/i);
+    expect(sentPrompt).toMatch(/DI CHUYỂN cả khối nguyên vẹn/i);
+    // Quy tắc 4 (cấm JS ngoài Tailwind CDN) phải có câu ngoại lệ tường minh cho form-embed.js.
+    expect(sentPrompt).toMatch(/form-embed\.js/);
+    expect(sentPrompt).toMatch(/trừ thẻ.*form-embed\.js/i);
+  });
+});
+
 describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6)', () => {
   beforeEach(() => {
     jest.clearAllMocks();

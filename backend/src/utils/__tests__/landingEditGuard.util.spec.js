@@ -6,8 +6,7 @@ import {
   MAX_EDIT_HTML_INPUT_CHARS,
 } from '../landingEditGuard.util.js';
 
-describe('landingEditGuard.util', () => {
-  const baseValidHtml = `<!DOCTYPE html>
+const baseValidHtml = `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="utf-8"/>
@@ -23,6 +22,7 @@ describe('landingEditGuard.util', () => {
 </body>
 </html>`;
 
+describe('landingEditGuard.util', () => {
   it('hợp lệ khi AI chỉnh sửa đúng quy cách và giữ nguyên form marker', () => {
     const editedHtml = baseValidHtml.replace(
       'class="text-2xl font-bold">Tiêu đề',
@@ -236,6 +236,92 @@ describe('landingEditGuard.util', () => {
 
   it('MAX_EDIT_HTML_INPUT_CHARS hằng số là 60000', () => {
     expect(MAX_EDIT_HTML_INPUT_CHARS).toBe(60000);
+  });
+});
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-5b-1.
+ *
+ * Khối nhúng Biểu mẫu (hợp đồng cố định PR-5): <section data-founderai-form-section> chứa
+ * <div data-founderai-form="KEY">, <noscript>, và <script src=".../form-embed.js" defer>.
+ * Trước bản vá này landingEditGuard.util.js chỉ canh form-lead cũ (data-founderai-capture,
+ * :138) — không có chốt nào bảo vệ khối Biểu mẫu ở đường AI-edit.
+ */
+describe('landingEditGuard.util — chốt khối nhúng Biểu mẫu (PR-5b-1)', () => {
+  const embedBlock = (key) =>
+    `<section data-founderai-form-section><div data-founderai-form="${key}"></div>` +
+    `<noscript><a href="https://founderai.biz/f/${key}">Mở biểu mẫu</a></noscript>` +
+    `<script src="https://founderai.biz/form-embed.js" defer></script></section>`;
+
+  const htmlWith = (...blocks) => baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, blocks.join(''));
+
+  it('HTML cũ có khối, HTML mới giữ nguyên khối + chỉ đổi màu nút khác → hợp lệ', () => {
+    const current = htmlWith(embedBlock('pub_ABC123'));
+    const next = current.replace(
+      'class="text-2xl font-bold">Tiêu đề',
+      'class="text-3xl font-extrabold text-blue-600">Tiêu đề mới cập nhật'
+    );
+
+    const isValid = validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    expect(isValid).toBe(true);
+  });
+
+  it('HTML mới xoá cả khối nhúng → ném lỗi 422 "mất biểu mẫu nhúng"', () => {
+    const current = htmlWith(embedBlock('pub_ABC123'));
+    const next = current.replace(embedBlock('pub_ABC123'), '<p>Khách đã mất form</p>');
+
+    expect(() => {
+      validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    }).toThrow(/mất biểu mẫu nhúng/i);
+  });
+
+  it('HTML mới giữ <div> nhưng đổi publicKey → ném lỗi 422', () => {
+    const current = htmlWith(embedBlock('pub_ABC123'));
+    const next = current.replace(/pub_ABC123/g, 'pub_XYZ999');
+
+    expect(() => {
+      validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    }).toThrow(/mất biểu mẫu nhúng/i);
+  });
+
+  it('HTML mới giữ <div> đúng key nhưng mất thẻ <script form-embed.js> → ném lỗi 422', () => {
+    const current = htmlWith(embedBlock('pub_ABC123'));
+    const next = current.replace(
+      '<script src="https://founderai.biz/form-embed.js" defer></script>',
+      ''
+    );
+
+    expect(() => {
+      validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    }).toThrow(/mất biểu mẫu nhúng/i);
+  });
+
+  it('HTML cũ có 2 khối (2 publicKey khác nhau), HTML mới chỉ mất 1 khối → ném lỗi 422 (so TỪNG key, không chỉ so chuỗi)', () => {
+    const current = htmlWith(embedBlock('pub_KEY_ONE'), embedBlock('pub_KEY_TWO'));
+    // Chuỗi 'data-founderai-form' VẪN còn trong next (khối 1 còn) — nếu chốt chỉ so
+    // .includes('data-founderai-form') thì sẽ lọt qua sai; phải so từng key mới bắt được.
+    const next = current.replace(embedBlock('pub_KEY_TWO'), '');
+
+    expect(() => {
+      validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    }).toThrow(/mất biểu mẫu nhúng/i);
+  });
+
+  it('HTML mới DI CHUYỂN cả khối nguyên vẹn xuống cuối trang → vẫn hợp lệ (không canh vị trí)', () => {
+    const current = htmlWith(embedBlock('pub_ABC123'));
+    const withoutBlockAtOldSpot = current.replace(embedBlock('pub_ABC123'), '');
+    const next = withoutBlockAtOldSpot.replace('</body>', `${embedBlock('pub_ABC123')}</body>`);
+
+    const isValid = validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    expect(isValid).toBe(true);
+  });
+
+  it('trang không có khối Biểu mẫu → hành vi y như cũ, không đòi hỏi gì thêm', () => {
+    const current = baseValidHtml.replace(LANDING_FORM_PLACEHOLDER, '');
+    const next = current.replace('Tiêu đề', 'Tiêu đề mới, không liên quan biểu mẫu');
+
+    const isValid = validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    expect(isValid).toBe(true);
   });
 });
 
