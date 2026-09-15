@@ -13,6 +13,7 @@ const mockCheckBeforeAi = jest.fn();
 const mockMarkRateLimitNotified = jest.fn();
 const mockGetSessionByAccountId = jest.fn();
 const mockResourceIsLocked = jest.fn();
+const mockFindChatbotById = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/chatbot/zaloPersonal.repository.js', () => ({
   default: {
@@ -32,6 +33,8 @@ jest.unstable_mockModule('../../../repositories/chatbot/zaloInbox.repository.js'
 jest.unstable_mockModule('../../../repositories/ai/chatbot.repository.js', () => ({
   default: {
     getSettings: mockGetChatbotSettings,
+    // Chốt khung giờ (0acc4ad9) đọc active_hours của chatbot gắn với hội thoại.
+    findChatbotById: mockFindChatbotById,
   },
 }));
 
@@ -96,6 +99,7 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
     mockSendReply.mockResolvedValue({ success: true });
     mockGetSessionByAccountId.mockResolvedValue({ api: {} });
     mockResourceIsLocked.mockResolvedValue(false);
+    mockFindChatbotById.mockResolvedValue({ id: 10, active_hours: null });
     jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 200 });
   });
 
@@ -271,6 +275,27 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
         expect.objectContaining({ idChatbot: 20 })
       );
       expect(mockRouteMessageWithSettings.mock.calls[0][0].chatbotId).toBe(20);
+    });
+
+    it('chatbot ngoài khung giờ (im lặng) → không gọi AI, không chạy rate limit, không trả lời', async () => {
+      jest.setSystemTime(new Date('2026-09-15T22:00:00+07:00'));
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 402, id_chatbot: 10 });
+      mockFindChatbotById.mockResolvedValue({
+        id: 10,
+        active_hours: { start: '08:00', end: '17:00', outsideAction: 'silent' },
+      });
+
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: 'ah_1', fromUid: 'visitor_night', content: 'Shop còn mở không', type: 0 },
+        { conversationId: 402, messageId: 903 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockFindChatbotById).toHaveBeenCalledWith(10);
+      expect(mockCheckBeforeAi).not.toHaveBeenCalled();
+      expect(mockRouteMessageWithSettings).not.toHaveBeenCalled();
+      expect(mockSendReply).not.toHaveBeenCalled();
     });
 
     it('skips AI when no chatbot is pinned and no enabled chatbot can be picked', async () => {
