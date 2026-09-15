@@ -10,22 +10,32 @@ import { useI18n } from '../../../i18n';
  * 🔴 QUYẾT ĐỊNH 12/09/2026: BẮT BUỘC, KHÔNG CÓ "ĐỂ SAU".
  * - Bắt buộc đồng ý mới được tiếp tục sử dụng app.
  * - Không đóng được: không có nút "Để sau", bấm overlay không tắt, không bắt phím Escape.
- * - Lối ra duy nhất nếu không đồng ý: xoá tài khoản tại trang Cài đặt tài khoản.
+ * - Không đồng ý → đăng xuất; muốn xoá tài khoản → liên hệ hỗ trợ (app chưa có tự xoá).
  * - Tự động hiển thị lại khi văn bản pháp lý đổi phiên bản (isOutdated = true).
  *
- * @param {{ isOpen: boolean, onConsented?: () => void, isOutdated?: boolean }} props
+ * @param {{ isOpen: boolean, onConsented?: () => void, onDecline?: () => Promise<void> | void, isOutdated?: boolean }} props
  */
-const ConsentRequiredModal = ({ isOpen, onConsented, isOutdated = false }) => {
+const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = false }) => {
   const { t } = useI18n();
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [dpa, setDpa] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const allChecked = terms && privacy && dpa;
+
+  const handleDecline = async () => {
+    setDeclining(true);
+    try {
+      await onDecline?.();
+    } finally {
+      setDeclining(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -155,9 +165,17 @@ const ConsentRequiredModal = ({ isOpen, onConsented, isOutdated = false }) => {
             <button
               type="submit"
               className="btn btn-primary w-full"
-              disabled={loading || !allChecked}
+              disabled={loading || declining || !allChecked}
             >
               {loading ? t('consentRequired.saving') : t('consentRequired.submit')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary w-full"
+              onClick={handleDecline}
+              disabled={loading || declining}
+            >
+              {declining ? t('consentRequired.loggingOut') : t('consentRequired.declineAndLogout')}
             </button>
             <p className="text-xs text-center text-gray-500">
               {t('consentRequired.disagreePrompt')}{' '}

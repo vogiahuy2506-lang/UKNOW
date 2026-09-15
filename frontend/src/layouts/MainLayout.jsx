@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/layout/admin/Sidebar';
 import Header from '../components/layout/admin/Header';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
@@ -25,8 +25,10 @@ const HEADER_HEIGHT = 44; // topbar height — matches h-[44px] in Header.jsx
 
 const MainLayout = () => {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
+  const logout = useAuthStore((s) => s.logout);
   const phoneOtpEnabled = useAuthStore((s) => s.phoneOtpEnabled);
   const mustChangePassword = user?.mustChangePassword === true;
   // Đổi mật khẩu trước, xong mới tới SĐT — hai cổng cùng đóng là chuyện có thật
@@ -65,6 +67,11 @@ const MainLayout = () => {
   const activeContext = useAuthStore((state) => state.activeContext);
   const fetchAiCredits = useAuthStore((state) => state.fetchAiCredits);
   const [trial, setTrial] = useState(null);
+
+  const handleDeclineConsent = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
 
   useEffect(() => {
     if (!user?.id) {
@@ -295,6 +302,7 @@ const MainLayout = () => {
               },
             })
           }
+          onDecline={handleDeclineConsent}
         />
 
         <TrialWelcomeModal
@@ -421,6 +429,7 @@ const MainLayout = () => {
             },
           })
         }
+        onDecline={handleDeclineConsent}
       />
 
       <TrialWelcomeModal

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import MainLayout from '../MainLayout';
 
 const stableT = (key) => key;
@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
   user: null,
   phoneOtpEnabled: false,
   updateUser: vi.fn(),
+  logout: vi.fn().mockResolvedValue(undefined),
   fetchAiCredits: vi.fn().mockResolvedValue(undefined),
   isAuthenticated: true,
   activeContext: { type: 'self' },
@@ -28,21 +29,28 @@ vi.mock('../../features/auth/components/ChangePasswordModal', () => ({ default: 
 vi.mock('../../features/auth/components/PhoneRequiredModal', () => ({ default: () => null }));
 vi.mock('../../features/auth/components/TrialWelcomeModal', () => ({ default: () => null }));
 
-// Stub ConsentRequiredModal để kiểm tra isOpen và isOutdated props
+// Stub ConsentRequiredModal để kiểm tra isOpen, isOutdated và onDecline props
 vi.mock('../../features/auth/components/ConsentRequiredModal', () => ({
-  default: ({ isOpen, isOutdated }) =>
+  default: ({ isOpen, isOutdated, onDecline }) =>
     isOpen ? (
       <div
         data-testid="consent-required-modal-open"
         data-is-outdated={isOutdated ? 'true' : 'false'}
-      />
+      >
+        <button data-testid="consent-decline-btn" onClick={onDecline}>
+          Decline
+        </button>
+      </div>
     ) : null,
 }));
 
-const renderLayout = () =>
+const renderLayout = (initialEntries = ['/app']) =>
   render(
-    <MemoryRouter>
-      <MainLayout />
+    <MemoryRouter initialEntries={initialEntries}>
+      <Routes>
+        <Route path="/login" element={<div data-testid="login-page">login-page</div>} />
+        <Route path="*" element={<MainLayout />} />
+      </Routes>
     </MemoryRouter>
   );
 
@@ -152,5 +160,61 @@ describe('MainLayout — consentRequired theo luật bắt buộc 12/09', () => 
     renderLayout();
 
     expect(screen.queryByTestId('consent-required-modal-open')).not.toBeInTheDocument();
+  });
+
+  it('bấm Không đồng ý và đăng xuất (desktop) → gọi logout và điều hướng tới /login', async () => {
+    m.phoneOtpEnabled = false;
+    m.user = {
+      id: 1,
+      role: 'user',
+      phone: '0912345678',
+      phoneVerifiedAt: '2026-09-11T10:00:00.000Z',
+      mustChangePassword: false,
+      hasConsented: false,
+      consentVersionOutdated: false,
+    };
+
+    renderLayout();
+
+    const declineBtns = screen.getAllByTestId('consent-decline-btn');
+    expect(declineBtns.length).toBeGreaterThan(0);
+
+    fireEvent.click(declineBtns[0]);
+
+    await waitFor(() => {
+      expect(m.logout).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('login-page')).toBeInTheDocument();
+    });
+  });
+
+  it('bấm Không đồng ý và đăng xuất (mobile) → gọi logout và điều hướng tới /login', async () => {
+    const originalWidth = window.innerWidth;
+    window.innerWidth = 500;
+    try {
+      m.phoneOtpEnabled = false;
+      m.user = {
+        id: 1,
+        role: 'user',
+        phone: '0912345678',
+        phoneVerifiedAt: '2026-09-11T10:00:00.000Z',
+        mustChangePassword: false,
+        hasConsented: false,
+        consentVersionOutdated: false,
+      };
+
+      renderLayout();
+
+      const declineBtns = screen.getAllByTestId('consent-decline-btn');
+      expect(declineBtns.length).toBeGreaterThan(0);
+
+      fireEvent.click(declineBtns[0]);
+
+      await waitFor(() => {
+        expect(m.logout).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('login-page')).toBeInTheDocument();
+      });
+    } finally {
+      window.innerWidth = originalWidth;
+    }
   });
 });

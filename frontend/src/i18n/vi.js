@@ -7234,9 +7234,11 @@ export default {
     later: 'Để sau',
     submit: 'Đồng ý và tiếp tục',
     saving: 'Đang xử lý...',
+    declineAndLogout: 'Không đồng ý và đăng xuất',
+    loggingOut: 'Đang đăng xuất...',
     failed: 'Ghi nhận đồng ý thất bại.',
     errorOccurred: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
-    disagreePrompt: 'Không đồng ý? Bạn có thể yêu cầu xoá tài khoản qua trang',
+    disagreePrompt: 'Muốn xoá hẳn tài khoản và dữ liệu?',
     accountSettingsLink: 'Liên hệ hỗ trợ',
   },
 
