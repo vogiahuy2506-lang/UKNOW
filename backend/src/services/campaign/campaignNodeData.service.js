@@ -348,7 +348,14 @@ class CampaignNodeDataService {
       if (sheetName) {
         const worksheetHtmlViewUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
         logApiCall('google_sheet', worksheetHtmlViewUrl);
-        const worksheetRes = await fetchWorksheetNames(spreadsheetId, { timeoutMs: fetchTimeoutMs });
+        // Lỗi mạng / timeout làm axios NÉM (validateStatus chỉ bắt HTTP >= 400). Không bắt ở đây thì
+        // ngoại lệ rơi ra catch ngoài cùng → return [] → tên tab tự nhận vẫn gửi 0 người đúng lúc Google chập chờn.
+        let worksheetRes;
+        try {
+          worksheetRes = await fetchWorksheetNames(spreadsheetId, { timeoutMs: fetchTimeoutMs });
+        } catch (worksheetErr) {
+          worksheetRes = { ok: false, reason: 'unreadable', error: worksheetErr?.message };
+        }
         const tabUnreadable = !worksheetRes.ok;
         const tabMissing = worksheetRes.ok && !(worksheetRes.names || []).includes(sheetName);
 

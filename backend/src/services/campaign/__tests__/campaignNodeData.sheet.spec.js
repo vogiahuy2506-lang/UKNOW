@@ -309,3 +309,55 @@ describe('campaignNodeDataService.fetchGoogleSheetCustomersFromConfig', () => {
   });
 });
 
+
+describe('fetchGoogleSheetCustomersFromConfig — lỗi mạng khi mở htmlview (axios ném, không phải HTTP >= 400)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('tên tab tự nhận (sheetNameSource auto) + htmlview timeout → vẫn đọc tab đầu tiên', async () => {
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes('/htmlview')) {
+        const err = new Error('timeout of 180000ms exceeded');
+        err.code = 'ECONNABORTED';
+        throw err;
+      }
+      expect(url).not.toContain('&sheet=');
+      return {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+        data: 'Phone,Name\n0901111111,Khach A',
+      };
+    });
+
+    const customers = await campaignNodeDataService.fetchGoogleSheetCustomersFromConfig({
+      sheetUrl: VALID_SHEET_URL,
+      sheetName: 'Khách tháng 9',
+      sheetNameSource: 'auto',
+      headerRow: 1,
+      dataStartRow: 2,
+    });
+
+    expect(customers).toHaveLength(1);
+    expect(customers[0]).toMatchObject({ Phone: '0901111111' });
+  });
+
+  it('tên tab tự gõ + htmlview timeout → giữ hành vi cũ: không đọc, trả rỗng', async () => {
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes('/htmlview')) {
+        throw new Error('socket hang up');
+      }
+      return { status: 200, headers: { 'content-type': 'text/csv' }, data: 'Phone\n0901111111' };
+    });
+
+    const customers = await campaignNodeDataService.fetchGoogleSheetCustomersFromConfig({
+      sheetUrl: VALID_SHEET_URL,
+      sheetName: 'Khách tháng 9',
+      headerRow: 1,
+      dataStartRow: 2,
+    });
+
+    expect(customers).toEqual([]);
+    expect(mockAxiosGet).toHaveBeenCalledTimes(1);
+  });
+});
