@@ -31,7 +31,7 @@ router.post('/register',
       .isLength({ max: 255 })
       .withMessage('Họ tên không được quá 255 ký tự'),
     // Không kiểm định dạng ở đây — khách gõ/copy "+84 912 345 678", "0912-345-678"
-    // đều hợp lệ. Chuẩn hoá + kiểm độ dài (10-11 số) nằm trong controller, dùng
+    // đều hợp lệ. Chuẩn hoá + kiểm dạng di động VN (isValidAccountPhone) nằm trong controller, dùng
     // normalizePhoneForZaloCampaign — MỘT nguồn sự thật duy nhất cho chuẩn hoá SĐT
     // (đừng thêm regex định dạng ở đây, sẽ lệch với controller — xem PLAN_SDT_BAT_BUOC_SYNC_SHEET
     // mục "Bẫy #1"). PUT /users/me/phone (user.routes.js) đã dùng đúng mẫu này.
