@@ -70,6 +70,7 @@ import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
 import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
 import PublicChatbotPage from './pages/public/PublicChatbotPage';
 import PublicFormPage from './features/forms/pages/PublicFormPage';
+import FormSubmissionStatusPage from './features/forms/pages/FormSubmissionStatusPage';
 import FormsListPage from './features/forms/pages/FormsListPage';
 import FormEditorPage from './features/forms/pages/FormEditorPage';
 import FormSubmissionsPage from './features/forms/pages/FormSubmissionsPage';
@@ -81,6 +82,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminMembersPage from './pages/admin/AdminMembersPage';
 import AdminPlansPage from './pages/admin/AdminPlansPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
+import AdminFormsPage from './pages/admin/AdminFormsPage';
 import AdminEinvoicesPage from './pages/admin/AdminEinvoicesPage';
 import AdminVouchersPage from './pages/admin/AdminVouchersPage';
 import AdminSystemPage from './pages/admin/AdminSystemPage';
@@ -397,6 +399,7 @@ function AppContent() {
           <Route path="/embed/lead-form" element={<EmbedLeadFormPage />} />
           <Route path="/chat/:chatbotId" element={<PublicChatbotPage />} />
           <Route path="/f/:publicKey" element={<PublicFormPage />} />
+          <Route path="/f/:publicKey/s/:accessToken" element={<FormSubmissionStatusPage />} />
           <Route path="/learning" element={<LearningPage />} />
 
           {/* Protected Routes - prefix /app */}
@@ -487,6 +490,7 @@ function AppContent() {
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="vouchers" element={<AdminVouchersPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="forms" element={<AdminFormsPage />} />
             <Route path="einvoices" element={<AdminEinvoicesPage />} />
             <Route path="alerts" element={<AdminAlertsPage />} />
             <Route path="funnel" element={<AdminFunnelPage />} />
