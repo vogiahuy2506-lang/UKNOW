@@ -36,7 +36,7 @@ function toPayload(formState) {
   };
 }
 
-export default function ChatbotActiveHoursCard({ value, onChange }) {
+export default function ChatbotActiveHoursCard({ value, onChange, onValidityChange }) {
   const { t } = useI18n();
   const [state, setState] = useState(() => toFormState(value));
   const [error, setError] = useState('');
@@ -51,26 +51,22 @@ export default function ChatbotActiveHoursCard({ value, onChange }) {
     setState(next);
 
     // Validation
+    let msg = '';
     if (next.mode === 'custom') {
       if (next.start === next.end) {
-        const msg = t('chatbot.studio.activeHoursSameTime') || 'Giờ bắt đầu và giờ kết thúc không được trùng nhau';
-        setError(msg);
-        return;
-      }
-      if (next.outsideAction === 'message' && !next.outsideMessage.trim()) {
-        const msg = t('chatbot.studio.activeHoursEmptyMessage') || 'Vui lòng nhập câu trả lời ngoài khung giờ';
-        setError(msg);
-        return;
-      }
-      if (next.outsideAction === 'message' && next.outsideMessage.trim().length > 500) {
-        const msg = t('chatbot.studio.activeHoursMessageTooLong') || 'Câu trả lời không được vượt quá 500 ký tự';
-        setError(msg);
-        return;
+        msg = t('chatbot.studio.activeHoursSameTime') || 'Giờ bắt đầu và giờ kết thúc không được trùng nhau';
+      } else if (next.outsideAction === 'message' && !next.outsideMessage.trim()) {
+        msg = t('chatbot.studio.activeHoursEmptyMessage') || 'Vui lòng nhập câu trả lời ngoài khung giờ';
+      } else if (next.outsideAction === 'message' && next.outsideMessage.trim().length > 500) {
+        msg = t('chatbot.studio.activeHoursMessageTooLong') || 'Câu trả lời không được vượt quá 500 ký tự';
       }
     }
 
-    setError('');
-    onChange?.(toPayload(next));
+    setError(msg);
+    // Báo lỗi lên modal để chặn nút Lưu: không báo thì modal giữ cấu hình hợp lệ cũ và lưu âm thầm
+    // bản cũ (ví dụ vẫn 24/7) trong khi chủ shop tưởng đã lưu khung giờ.
+    onValidityChange?.(msg);
+    if (!msg) onChange?.(toPayload(next));
   };
 
   return (

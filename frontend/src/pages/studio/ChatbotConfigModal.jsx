@@ -41,6 +41,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
   const { t } = useI18n();
   const [activeAnchor, setActiveAnchor] = useState('basic');
   const [saving, setSaving] = useState(false);
+  const [activeHoursError, setActiveHoursError] = useState('');
   const [hydrated, setHydrated] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState(null);
   const [newQuestion, setNewQuestion] = useState('');
@@ -131,6 +132,10 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
   const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error('Vui lòng nhập tên chatbot');
+      return;
+    }
+    if (activeHoursError) {
+      toast.error(activeHoursError);
       return;
     }
     setSaving(true);
@@ -496,6 +501,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
                   <ChatbotActiveHoursCard
                     value={form.active_hours}
                     onChange={(newActiveHours) => update({ active_hours: newActiveHours })}
+                    onValidityChange={setActiveHoursError}
                   />
                 )}
                 {hydrated && (

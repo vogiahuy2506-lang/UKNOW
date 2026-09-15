@@ -61,6 +61,27 @@ describe('ChatbotActiveHoursCard', () => {
     expect(screen.getByText('chatbot.studio.activeHoursSameTime')).toBeDefined();
   });
 
+  it('cấu hình sai → báo lỗi lên modal (chặn Lưu) và không gửi giá trị; sửa đúng → xoá lỗi', () => {
+    const onChange = vi.fn();
+    const onValidityChange = vi.fn();
+    render(
+      <ChatbotActiveHoursCard
+        value={{ start: '08:00', end: '17:30', outsideAction: 'silent' }}
+        onChange={onChange}
+        onValidityChange={onValidityChange}
+      />
+    );
+
+    const endInput = screen.getByLabelText('end-time');
+    fireEvent.change(endInput, { target: { value: '08:00' } });
+    expect(onValidityChange).toHaveBeenLastCalledWith('chatbot.studio.activeHoursSameTime');
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(endInput, { target: { value: '18:00' } });
+    expect(onValidityChange).toHaveBeenLastCalledWith('');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ start: '08:00', end: '18:00' }));
+  });
+
   it('switches back to 24/7 and emits null', () => {
     const onChange = vi.fn();
     render(
