@@ -18,6 +18,10 @@ const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT'])
  * @param {(from: string, days: number) => Promise<{slots: Array}>} [props.loadSlots] - Tải khung
  *   giờ trống. Renderer KHÔNG tự gọi API (giữ decoupled) — không truyền prop này (vd. trong
  *   previewMode) thì hiển thị lịch khoá/mẫu thay vì gọi mạng.
+ * @param {boolean} [props.embedMode] - PR-5: đang render trong iframe nhúng (`/f/:publicKey?embed=1`).
+ *   Khi có redirectUrl, chuyển hướng CẢ TRANG NGOÀI (`window.top`) thay vì chỉ mỗi iframe —
+ *   thất bại (top bị chặn/không truy cập được) thì hiện màn thành công kèm link `target="_top"`
+ *   thay vì im lặng chuyển hướng mỗi iframe (khách chỉ thấy iframe đổi trang, trang ngoài đứng yên).
  */
 export default function FormRenderer({
   form,
@@ -26,6 +30,7 @@ export default function FormRenderer({
   externalError = '',
   previewMode = false,
   loadSlots,
+  embedMode = false,
 }) {
   const { t, locale } = useI18n();
 
@@ -33,6 +38,7 @@ export default function FormRenderer({
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [clientErrors, setClientErrors] = useState({});
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
+  const [redirectFallbackUrl, setRedirectFallbackUrl] = useState('');
 
   const booking = form?.booking || null;
   const bookingEnabled = Boolean(booking?.enabled);
@@ -243,8 +249,21 @@ export default function FormRenderer({
         try {
           const parsed = new URL(settings.redirectUrl.trim());
           if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-            window.location.href = settings.redirectUrl.trim();
-            return;
+            const url = settings.redirectUrl.trim();
+            if (embedMode) {
+              // Trong iframe nhúng: đổi window.location.href chỉ chuyển hướng MỖI iframe,
+              // khách vẫn kẹt trên landing page ngoài. Thử chuyển cả trang ngoài qua window.top;
+              // thất bại (hiếm — vd trình duyệt chặn) thì rơi xuống màn thành công + link target="_top".
+              try {
+                window.top.location.href = url;
+                return;
+              } catch {
+                setRedirectFallbackUrl(url);
+              }
+            } else {
+              window.location.href = url;
+              return;
+            }
           }
         } catch {
           // URL không hợp lệ -> không redirect, hiện thông báo thành công
@@ -289,6 +308,16 @@ export default function FormRenderer({
               time: bookedInfo.time,
             })}
           </p>
+        )}
+        {redirectFallbackUrl && (
+          <a
+            href={redirectFallbackUrl}
+            target="_top"
+            rel="noopener"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
+          >
+            {t('publicForm.redirectFallbackLink')}
+          </a>
         )}
       </div>
     );

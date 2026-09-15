@@ -141,6 +141,92 @@ describe('FormRenderer component', () => {
     expect(window.location.href).toBe('https://example.com/thank-you');
   });
 
+  it('PR-5 embedMode: redirectUrl an toàn -> thử chuyển hướng CẢ TRANG NGOÀI qua window.top (không chỉ mỗi iframe)', async () => {
+    const originalTop = window.top;
+    let capturedTopHref = '';
+    Object.defineProperty(window, 'top', {
+      value: {
+        location: {
+          set href(v) {
+            capturedTopHref = v;
+          },
+          get href() {
+            return capturedTopHref;
+          },
+        },
+      },
+      configurable: true,
+    });
+
+    const safeRedirectForm = {
+      ...baseForm,
+      settings: { ...baseForm.settings, redirectUrl: 'https://example.com/thank-you' },
+    };
+    const mockOnSubmit = vi.fn().mockResolvedValue({});
+
+    render(
+      <I18nProvider>
+        <FormRenderer form={safeRedirectForm} onSubmit={mockOnSubmit} embedMode />
+      </I18nProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Lê Thị B' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'lethib@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(capturedTopHref).toBe('https://example.com/thank-you'));
+
+    // window.location (chỉ mỗi iframe) đứng yên — chuyển hướng phải đi qua window.top
+    expect(window.location.href).toBe('http://localhost:5174/f/pub_key_123');
+
+    Object.defineProperty(window, 'top', { value: originalTop, configurable: true });
+  });
+
+  it('PR-5 embedMode: window.top chặn (throw) -> hiện màn thành công kèm link target="_top" tới redirectUrl, KHÔNG chuyển window.location', async () => {
+    const originalTop = window.top;
+    Object.defineProperty(window, 'top', {
+      value: {
+        get location() {
+          throw new Error('Blocked cross-origin top navigation');
+        },
+      },
+      configurable: true,
+    });
+
+    const safeRedirectForm = {
+      ...baseForm,
+      settings: { ...baseForm.settings, redirectUrl: 'https://example.com/thank-you' },
+    };
+    const mockOnSubmit = vi.fn().mockResolvedValue({});
+
+    render(
+      <I18nProvider>
+        <FormRenderer form={safeRedirectForm} onSubmit={mockOnSubmit} embedMode />
+      </I18nProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Lê Thị B' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'lethib@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+
+    // Màn thành công hiện ra (không vỡ), kèm link dự phòng target="_top"
+    await waitFor(() => {
+      expect(screen.getByText('Cảm ơn bạn đã gửi phản hồi!')).toBeInTheDocument();
+    });
+    const fallbackLink = screen.getByRole('link');
+    expect(fallbackLink).toHaveAttribute('href', 'https://example.com/thank-you');
+    expect(fallbackLink).toHaveAttribute('target', '_top');
+    expect(fallbackLink).toHaveAttribute('rel', 'noopener');
+
+    // window.location của chính iframe không hề đổi
+    expect(window.location.href).toBe('http://localhost:5174/f/pub_key_123');
+
+    Object.defineProperty(window, 'top', { value: originalTop, configurable: true });
+  });
+
   it('khi consentEnabled = false thì không render checkbox và payload không có marketingConsent', async () => {
     const mockOnSubmit = vi.fn().mockResolvedValue({});
 
