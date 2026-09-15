@@ -80,7 +80,7 @@ export default function BookingSlotPicker({
         </div>
       ) : isLoading ? (
         <div className="p-6 text-center text-gray-400 text-sm">
-          <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-200 border-t-primary-600" />
+          <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-200 border-t-[color:var(--form-primary,#df5c0e)]" />
         </div>
       ) : loadError ? (
         <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
@@ -113,8 +113,8 @@ export default function BookingSlotPicker({
                           isFull
                             ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed line-through'
                             : isSelected
-                              ? 'border-primary-600 bg-primary-600 text-white'
-                              : 'border-gray-300 text-gray-700 hover:bg-primary-50 hover:border-primary-300'
+                              ? 'border-[color:var(--form-primary,#df5c0e)] bg-[color:var(--form-primary,#df5c0e)] text-[color:var(--form-primary-text,#ffffff)]'
+                              : 'border-gray-300 text-gray-700 hover:bg-[color:var(--form-primary-tint,#fef7ee)] hover:border-[color:var(--form-primary,#f6bb78)]'
                         }`}
                       >
                         {slot.time}

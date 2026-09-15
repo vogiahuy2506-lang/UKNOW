@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -16,7 +16,19 @@ import {
   fetchFormById,
   createForm,
   updateForm,
+  uploadFormTempFile,
+  uploadFormAsset,
 } from '../services/formAdminApi.service';
+import FormRenderer from '../components/FormRenderer';
+import useStorageQuota from '../../storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
+import {
+  ALLOWED_FORM_FONTS,
+  ALLOWED_FORM_LAYOUTS,
+  ALLOWED_FORM_BANNER_HEIGHTS,
+  FORM_THEME_PRESETS,
+} from '../constants/formTheme';
 
 const FIELD_TYPES = [
   { value: 'short_text', labelKey: 'forms.types.short_text' },
@@ -87,6 +99,25 @@ const DEFAULT_PAYMENT = {
   holdMinutes: DEFAULT_HOLD_MINUTES,
 };
 
+// Hợp đồng giao diện (theme) — chép từ backend/src/utils/formDefinition.util.js
+// normalizeFormTheme (PR-4a/4b). '' ở mọi trường nghĩa là "chưa đặt" -> khoá đó vắng mặt trong
+// payload khi lưu, FormRenderer/trang công khai tự rơi về giao diện mặc định hiện tại. Riêng
+// bannerUrl/logoUrl CHỈ để hiển thị xem trước — không bao giờ gửi lên server (server tự tính
+// lại từ bannerKey/logoKey).
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const DEFAULT_THEME = {
+  preset: '',
+  primaryColor: '',
+  backgroundColor: '',
+  fontFamily: '',
+  layout: '',
+  bannerHeight: '',
+  bannerKey: '',
+  bannerUrl: '',
+  logoKey: '',
+  logoUrl: '',
+};
+
 export default function FormEditorPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -116,7 +147,13 @@ export default function FormEditorPage() {
   const [initialBookingHadConfig, setInitialBookingHadConfig] = useState(false);
   const [confirmDisableBooking, setConfirmDisableBooking] = useState(false);
   const [payment, setPayment] = useState(DEFAULT_PAYMENT);
+  const [theme, setTheme] = useState(DEFAULT_THEME);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [errors, setErrors] = useState({});
+  const { usage: storageQuota } = useStorageQuota();
+  const bannerInputRef = useRef(null);
+  const logoInputRef = useRef(null);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -199,6 +236,22 @@ export default function FormEditorPage() {
         } else {
           setPayment(DEFAULT_PAYMENT);
         }
+
+        // GET chủ form trả CẢ bannerKey/logoKey (trình soạn cần biết khoá hiện tại) LẪN
+        // bannerUrl/logoUrl (tiện hiển thị ngay, không cần tự dựng URL từ khoá).
+        const loadedTheme = data.theme || {};
+        setTheme({
+          preset: loadedTheme.preset || '',
+          primaryColor: loadedTheme.primaryColor || '',
+          backgroundColor: loadedTheme.backgroundColor || '',
+          fontFamily: loadedTheme.fontFamily || '',
+          layout: loadedTheme.layout || '',
+          bannerHeight: loadedTheme.bannerHeight || '',
+          bannerKey: loadedTheme.bannerKey || '',
+          bannerUrl: loadedTheme.bannerUrl || '',
+          logoKey: loadedTheme.logoKey || '',
+          logoUrl: loadedTheme.logoUrl || '',
+        });
       })
       .catch((err) => {
         toast.error(err.response?.data?.message || t('forms.editorPage.loadError'));
@@ -369,6 +422,92 @@ export default function FormEditorPage() {
 
   const handleRemoveClosedDate = (idx) => {
     setBooking((prev) => ({ ...prev, closedDates: prev.closedDates.filter((_, i) => i !== idx) }));
+  };
+
+  // Chọn mẫu dựng sẵn: CHỈ ghi đè màu/font/layout — cố ý KHÔNG đụng bannerKey/logoKey/bannerUrl/
+  // logoUrl (mục 6 "chọn preset ... giữ nguyên ảnh"; nghiệm thu "chọn preset khi có logo -> giữ
+  // logoKey"). FORM_THEME_PRESETS không chứa trường ảnh nên không có gì để vô tình ghi đè.
+  const handleSelectThemePreset = (presetId) => {
+    const preset = FORM_THEME_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    setTheme((prev) => ({
+      ...prev,
+      preset: preset.id,
+      primaryColor: preset.primaryColor,
+      backgroundColor: preset.backgroundColor,
+      fontFamily: preset.fontFamily,
+      layout: preset.layout,
+    }));
+  };
+
+  const handleThemeColorChange = (field, value) => {
+    setTheme((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleThemeFontChange = (value) => {
+    setTheme((prev) => ({ ...prev, fontFamily: value }));
+  };
+
+  const handleThemeLayoutChange = (value) => {
+    setTheme((prev) => ({ ...prev, layout: value }));
+  };
+
+  const handleThemeBannerHeightChange = (value) => {
+    setTheme((prev) => ({ ...prev, bannerHeight: value }));
+  };
+
+  const handleRemoveThemeImage = (kind) => {
+    // kind: 'banner' | 'logo' — xoá khỏi state, KHÔNG gửi khoá này khi lưu -> backend tự gỡ +
+    // giải phóng tệp (hợp đồng "gửi thiếu bannerKey = gỡ banner VÀ xoá file ảnh").
+    if (kind === 'banner') {
+      setTheme((prev) => ({ ...prev, bannerKey: '', bannerUrl: '' }));
+    } else {
+      setTheme((prev) => ({ ...prev, logoKey: '', logoUrl: '' }));
+    }
+  };
+
+  const handleUploadThemeImage = async (kind, file) => {
+    if (!file) return;
+    const allowedExts = ['.png', '.jpg', '.jpeg', '.webp'];
+    const name = (file.name || '').toLowerCase();
+    if (!allowedExts.some((ext) => name.endsWith(ext))) {
+      toast.error(t('forms.editorPage.theme.onlyImages'));
+      return;
+    }
+
+    const validation = validateFilesBeforeUpload([file], storageQuota);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      return;
+    }
+
+    const setUploading = kind === 'banner' ? setIsUploadingBanner : setIsUploadingLogo;
+    setUploading(true);
+    try {
+      const temp = await uploadFormTempFile(file);
+      const asset = await uploadFormAsset({
+        tempId: temp.tempId,
+        originalName: temp.originalName,
+        contentType: temp.contentType,
+        size: temp.size,
+      });
+      if (kind === 'banner') {
+        setTheme((prev) => ({ ...prev, bannerKey: asset.storageKey, bannerUrl: asset.url }));
+      } else {
+        setTheme((prev) => ({ ...prev, logoKey: asset.storageKey, logoUrl: asset.url }));
+      }
+      notifyStorageQuotaRefresh();
+    } catch (err) {
+      // Bẫy 413/STORAGE_QUOTA_EXCEEDED — báo hết dung lượng, KHÔNG đổi ảnh đang hiển thị
+      // (nghiệm thu: "413 -> báo hết dung lượng không đổi ảnh").
+      if (err.response?.status === 413 || err.response?.data?.code === 'STORAGE_QUOTA_EXCEEDED') {
+        toast.error(t('storageQuota.quotaExceededServer'));
+      } else {
+        toast.error(err.response?.data?.message || t('forms.editorPage.theme.uploadError'));
+      }
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Validate form trước khi lưu
@@ -559,12 +698,32 @@ export default function FormEditorPage() {
         };
       }
 
+      // PR-4b mục 6: payload LUÔN gửi `theme` (kể cả rỗng `{}` — nghĩa là "không tuỳ chỉnh",
+      // FormRenderer/trang công khai tự rơi về giao diện mặc định) — KHÁC payment, không có gate
+      // theo isEmployee (nhân viên có quyền `forms` mới vào được trang này, được phép đổi theme).
+      // Khoá nào rỗng ('') thì VẮNG MẶT trong object — riêng bannerKey/logoKey: vắng mặt =
+      // "gỡ ảnh" (hợp đồng normalizeFormTheme), nên phải theo đúng state hiện tại của "Gỡ ảnh"/
+      // đã upload, KHÔNG được tự ý gửi giá trị cũ khi người dùng chỉ đổi màu (bannerKey đã nằm
+      // sẵn trong theme.bannerKey từ lúc nạp API — giữ ảnh cũ tự động vì state không đổi trừ khi
+      // người dùng bấm Gỡ ảnh/upload ảnh khác).
+      const payloadTheme = {
+        ...(theme.preset ? { preset: theme.preset } : {}),
+        ...(HEX_COLOR_RE.test(theme.primaryColor) ? { primaryColor: theme.primaryColor } : {}),
+        ...(HEX_COLOR_RE.test(theme.backgroundColor) ? { backgroundColor: theme.backgroundColor } : {}),
+        ...(theme.fontFamily ? { fontFamily: theme.fontFamily } : {}),
+        ...(theme.layout ? { layout: theme.layout } : {}),
+        ...(theme.bannerHeight ? { bannerHeight: theme.bannerHeight } : {}),
+        ...(theme.bannerKey ? { bannerKey: theme.bannerKey } : {}),
+        ...(theme.logoKey ? { logoKey: theme.logoKey } : {}),
+      };
+
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
         fields: payloadFields,
         settings: payloadSettings,
         bookingConfig: payloadBooking,
+        theme: payloadTheme,
       };
 
       // PR-3b mục 1: payload LUÔN gửi paymentConfig cho chủ tài khoản (đủ khoá khi bật, null khi
@@ -601,6 +760,38 @@ export default function FormEditorPage() {
       setIsSaving(false);
     }
   };
+
+  // Xem trước Khối 6 (Giao diện) — FormRenderer previewMode dựng từ state nháp hiện tại, KHÔNG
+  // phải bản đã lưu. Phản biện PR-4b điểm 3: đặt xem trước NGAY DƯỚI các control trong CÙNG khối
+  // (không tách layout 2 cột toàn trang) — trang này vốn là 1 cột các "Khối" xếp dọc, dựng lại
+  // thành 2 cột là thay đổi lớn hơn hẳn phạm vi tính năng theme.
+  const previewForm = useMemo(
+    () => ({
+      title: title || t('forms.formTitle'),
+      description,
+      fields: fields.map((f) => ({
+        key: f.key || f.label,
+        label: f.label,
+        type: f.type,
+        required: f.required,
+        options: f.options,
+      })),
+      settings: {
+        submitButtonText: settings.submitButtonText,
+        successMessage: settings.successMessage,
+        consentEnabled: false,
+      },
+      theme: {
+        primaryColor: HEX_COLOR_RE.test(theme.primaryColor) ? theme.primaryColor : undefined,
+        fontFamily: theme.fontFamily || undefined,
+        layout: theme.layout || undefined,
+        bannerHeight: theme.bannerHeight || undefined,
+        bannerUrl: theme.bannerUrl || undefined,
+        logoUrl: theme.logoUrl || undefined,
+      },
+    }),
+    [title, description, fields, settings.submitButtonText, settings.successMessage, theme, t]
+  );
 
   if (isLoading) {
     return (
@@ -1386,6 +1577,253 @@ export default function FormEditorPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Khối 6: Giao diện (PR-4b) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              {t('forms.editorPage.theme.title')}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {t('forms.editorPage.theme.subtitle')}
+            </p>
+          </div>
+
+          {/* Mẫu dựng sẵn */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-2">
+              {t('forms.editorPage.theme.presetLabel')}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {FORM_THEME_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleSelectThemePreset(preset.id)}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
+                    theme.preset === preset.id
+                      ? 'border-primary-500 ring-2 ring-primary-100 text-gray-900'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span
+                    className="w-4 h-4 rounded-full border border-black/10 shrink-0"
+                    style={{ backgroundColor: preset.primaryColor }}
+                  />
+                  {t(`forms.editorPage.theme.presets.${preset.id}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {t('forms.editorPage.theme.primaryColorLabel')}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={HEX_COLOR_RE.test(theme.primaryColor) ? theme.primaryColor : '#df5c0e'}
+                  onChange={(e) => handleThemeColorChange('primaryColor', e.target.value)}
+                  className="h-9 w-11 rounded-lg border border-gray-300 cursor-pointer shrink-0"
+                  aria-label={t('forms.editorPage.theme.primaryColorLabel')}
+                />
+                <input
+                  type="text"
+                  value={theme.primaryColor}
+                  onChange={(e) => handleThemeColorChange('primaryColor', e.target.value)}
+                  placeholder="#DF5C0E"
+                  maxLength={7}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm font-mono focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {t('forms.editorPage.theme.backgroundColorLabel')}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={HEX_COLOR_RE.test(theme.backgroundColor) ? theme.backgroundColor : '#f9fafb'}
+                  onChange={(e) => handleThemeColorChange('backgroundColor', e.target.value)}
+                  className="h-9 w-11 rounded-lg border border-gray-300 cursor-pointer shrink-0"
+                  aria-label={t('forms.editorPage.theme.backgroundColorLabel')}
+                />
+                <input
+                  type="text"
+                  value={theme.backgroundColor}
+                  onChange={(e) => handleThemeColorChange('backgroundColor', e.target.value)}
+                  placeholder="#F9FAFB"
+                  maxLength={7}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm font-mono focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {t('forms.editorPage.theme.fontLabel')}
+              </label>
+              <select
+                value={theme.fontFamily}
+                onChange={(e) => handleThemeFontChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+              >
+                <option value="">{t('forms.editorPage.theme.fontDefault')}</option>
+                {ALLOWED_FORM_FONTS.map((font) => (
+                  <option key={font} value={font}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {t('forms.editorPage.theme.layoutLabel')}
+              </label>
+              <select
+                value={theme.layout}
+                onChange={(e) => handleThemeLayoutChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+              >
+                <option value="">{t('forms.editorPage.theme.layoutDefault')}</option>
+                {ALLOWED_FORM_LAYOUTS.map((l) => (
+                  <option key={l} value={l}>
+                    {t(`forms.editorPage.theme.layout.${l}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {t('forms.editorPage.theme.bannerHeightLabel')}
+              </label>
+              <select
+                value={theme.bannerHeight}
+                onChange={(e) => handleThemeBannerHeightChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+              >
+                <option value="">{t('forms.editorPage.theme.bannerHeightDefault')}</option>
+                {ALLOWED_FORM_BANNER_HEIGHTS.map((h) => (
+                  <option key={h} value={h}>
+                    {t(`forms.editorPage.theme.bannerHeight.${h}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Banner + Logo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {t('forms.editorPage.theme.bannerLabel')}
+              </label>
+              {theme.bannerUrl ? (
+                <img
+                  src={theme.bannerUrl}
+                  alt=""
+                  className="w-full h-24 object-cover rounded-xl border border-gray-200 mb-2"
+                />
+              ) : (
+                <div className="w-full h-24 rounded-xl border border-dashed border-gray-300 bg-gray-50 mb-2" />
+              )}
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  handleUploadThemeImage('banner', file);
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isUploadingBanner}
+                  onClick={() => bannerInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {isUploadingBanner ? t('forms.editorPage.theme.uploading') : t('forms.editorPage.theme.uploadButton')}
+                </button>
+                {theme.bannerUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveThemeImage('banner')}
+                    className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    {t('forms.editorPage.theme.removeImage')}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {t('forms.editorPage.theme.logoLabel')}
+              </label>
+              {theme.logoUrl ? (
+                <img
+                  src={theme.logoUrl}
+                  alt=""
+                  className="h-24 max-w-full object-contain rounded-xl border border-gray-200 mb-2 bg-white"
+                />
+              ) : (
+                <div className="w-full h-24 rounded-xl border border-dashed border-gray-300 bg-gray-50 mb-2" />
+              )}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  handleUploadThemeImage('logo', file);
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isUploadingLogo}
+                  onClick={() => logoInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {isUploadingLogo ? t('forms.editorPage.theme.uploading') : t('forms.editorPage.theme.uploadButton')}
+                </button>
+                {theme.logoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveThemeImage('logo')}
+                    className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    {t('forms.editorPage.theme.removeImage')}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Xem trước */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-2">
+              {t('forms.editorPage.theme.previewLabel')}
+            </label>
+            <div
+              className="rounded-xl border border-gray-200 p-4 sm:p-6 flex justify-center overflow-x-hidden box-border"
+              style={HEX_COLOR_RE.test(theme.backgroundColor) ? { backgroundColor: theme.backgroundColor } : undefined}
+            >
+              <FormRenderer form={previewForm} onSubmit={() => {}} previewMode />
+            </div>
+          </div>
         </div>
       </div>
     </div>

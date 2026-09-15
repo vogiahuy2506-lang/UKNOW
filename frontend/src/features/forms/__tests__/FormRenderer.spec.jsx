@@ -625,4 +625,88 @@ describe('FormRenderer component', () => {
       expect(screen.queryByRole('button', { name: /^09:00/ })).not.toBeInTheDocument();
     });
   });
+
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-4b mục 4 — FormRenderer áp `theme`. Ràng
+   * buộc cứng: `theme` rỗng/thiếu -> giao diện GIỮ NGUYÊN như trước PR-4b (fallback trong
+   * var(--form-primary,#df5c0e) khớp đúng primary-600 hiện tại).
+   */
+  describe('FormRenderer — theme (PR-4b)', () => {
+    afterEach(() => {
+      document.querySelectorAll('link[id^="form-google-font-"]').forEach((el) => el.remove());
+    });
+
+    it('theme {} (không khai báo) -> nút gửi dùng class cũ với fallback ĐÚNG màu/chữ mặc định hiện tại', () => {
+      render(
+        <I18nProvider>
+          <FormRenderer form={baseForm} onSubmit={vi.fn()} />
+        </I18nProvider>
+      );
+      const submitBtn = screen.getByRole('button', { name: 'Gửi thông tin' });
+      expect(submitBtn.className).toContain('bg-[color:var(--form-primary,#df5c0e)]');
+      expect(submitBtn.className).toContain('text-[color:var(--form-primary-text,#ffffff)]');
+      // Không có theme -> không set custom property nào trên gốc (rơi hẳn về fallback trong CSS).
+      const root = submitBtn.closest('.rounded-2xl');
+      expect(root.style.getPropertyValue('--form-primary')).toBe('');
+      expect(root.style.getPropertyValue('--form-primary-text')).toBe('');
+    });
+
+    it('theme.primaryColor -> root set --form-primary đúng màu, --form-primary-text tính bằng getReadableTextColor', () => {
+      const themedForm = { ...baseForm, theme: { primaryColor: '#FFFF00' } };
+      render(
+        <I18nProvider>
+          <FormRenderer form={themedForm} onSubmit={vi.fn()} />
+        </I18nProvider>
+      );
+      const submitBtn = screen.getByRole('button', { name: 'Gửi thông tin' });
+      const root = submitBtn.closest('.rounded-2xl');
+      expect(root.style.getPropertyValue('--form-primary')).toBe('#FFFF00');
+      // #FFFF00 -> chữ tối #111827 (đo review 15/09: 16.52 so 1.07)
+      expect(root.style.getPropertyValue('--form-primary-text')).toBe('#111827');
+    });
+
+    it('theme.fontFamily hợp lệ (Lora) -> chèn đúng 1 <link> Google Fonts', () => {
+      const themedForm = { ...baseForm, theme: { fontFamily: 'Lora' } };
+      render(
+        <I18nProvider>
+          <FormRenderer form={themedForm} onSubmit={vi.fn()} />
+        </I18nProvider>
+      );
+      const links = document.querySelectorAll('link[id^="form-google-font-"]');
+      expect(links).toHaveLength(1);
+      expect(links[0].href).toContain('family=Lora');
+    });
+
+    it('theme.fontFamily lạ (không thuộc whitelist) -> KHÔNG chèn <link> nào', () => {
+      const themedForm = { ...baseForm, theme: { fontFamily: 'Comic Sans MS' } };
+      render(
+        <I18nProvider>
+          <FormRenderer form={themedForm} onSubmit={vi.fn()} />
+        </I18nProvider>
+      );
+      expect(document.querySelectorAll('link[id^="form-google-font-"]')).toHaveLength(0);
+    });
+
+    it('theme.bannerUrl -> hiện banner full-width; ảnh lỗi tải -> ẩn banner, không vỡ khung', () => {
+      const themedForm = { ...baseForm, theme: { bannerUrl: 'https://cdn.example.com/banner.jpg' } };
+      render(
+        <I18nProvider>
+          <FormRenderer form={themedForm} onSubmit={vi.fn()} />
+        </I18nProvider>
+      );
+      const banner = screen.getByAltText('');
+      expect(banner.src).toBe('https://cdn.example.com/banner.jpg');
+      fireEvent.error(banner);
+      expect(screen.queryByAltText('')).not.toBeInTheDocument();
+    });
+
+    it('theme rỗng -> KHÔNG hiện banner/logo nào', () => {
+      render(
+        <I18nProvider>
+          <FormRenderer form={baseForm} onSubmit={vi.fn()} />
+        </I18nProvider>
+      );
+      expect(screen.queryByAltText('')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -8,6 +8,9 @@ import { fetchPublicSubmissionStatus } from '../services/formPublicApi.service';
 import { formatAppointmentAtVn } from '../utils/bookingFormat.util';
 import { formatVnd, formatCountdown } from '../../../utils/vietqrParser';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
+import { useFormFont } from '../utils/useFormFont';
+import { buildFormFontFamily } from '../constants/formTheme';
+import { getReadableTextColor } from '../utils/formTheme.util';
 
 const POLL_INTERVAL_MS = 30000;
 
@@ -161,6 +164,21 @@ export default function FormSubmissionStatusPage() {
     : 'min-h-screen bg-gray-50/60 py-6 sm:py-12 px-3 sm:px-6 flex flex-col items-center overflow-x-hidden box-border';
   const cardClass = 'w-full max-w-md mx-auto p-5 sm:p-6 bg-white rounded-2xl shadow-sm border border-gray-100';
 
+  // Theme của form gốc, chiếu qua API trạng thái (buildPublicFormTheme — chỉ có
+  // bannerUrl/logoUrl, không có khoá). Không có banner ở trang này (PLAN PR-4b mục 5 chỉ liệt
+  // font + màu chủ đạo + nền + logo, không nhắc banner).
+  const theme = statusData?.theme || {};
+  const primaryColor = theme.primaryColor || null;
+  const primaryTextColor = primaryColor ? getReadableTextColor(primaryColor) : null;
+  const fontFamilyCss = buildFormFontFamily(theme.fontFamily);
+  useFormFont(theme.fontFamily);
+  const themeRootStyle = {
+    ...(primaryColor ? { '--form-primary': primaryColor } : {}),
+    ...(primaryTextColor ? { '--form-primary-text': primaryTextColor } : {}),
+    ...(fontFamilyCss ? { fontFamily: fontFamilyCss } : {}),
+    ...(!embedMode && theme.backgroundColor ? { backgroundColor: theme.backgroundColor } : {}),
+  };
+
   if (isLoading) {
     return (
       <div ref={embedRootRef} className={wrapperClass}>
@@ -193,8 +211,18 @@ export default function FormSubmissionStatusPage() {
   const { status, formTitle, appointmentAt, payment, holdExpired } = statusData;
 
   return (
-    <div ref={embedRootRef} className={wrapperClass}>
+    <div ref={embedRootRef} className={wrapperClass} style={themeRootStyle}>
       <div className={cardClass}>
+        {theme.logoUrl && (
+          <img
+            src={theme.logoUrl}
+            alt=""
+            className="h-12 max-w-[200px] object-contain mx-auto mb-3"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        )}
         <h1 className="text-lg font-bold text-gray-900 mb-1 text-center break-words">{formTitle}</h1>
 
         {appointmentAt && (
@@ -265,7 +293,7 @@ export default function FormSubmissionStatusPage() {
             <p className="text-sm text-gray-500 mb-4">{t('publicForm.payment.holdExpiredDesc')}</p>
             <Link
               to={`/f/${encodeURIComponent(publicKey)}${embedMode ? '?embed=1' : ''}`}
-              className="inline-flex items-center px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-colors"
+              className="inline-flex items-center px-4 py-2 rounded-xl bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 text-[color:var(--form-primary-text,#ffffff)] text-sm font-medium transition-colors"
             >
               {t('publicForm.payment.backToForm')}
             </Link>
@@ -310,7 +338,7 @@ export default function FormSubmissionStatusPage() {
               href="/contact"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[11px] text-primary-600 hover:text-primary-700 font-medium underline"
+              className="text-[11px] text-[color:var(--form-primary,#df5c0e)] hover:brightness-95 font-medium underline"
             >
               {t('publicForm.payment.reportLink')}
             </a>

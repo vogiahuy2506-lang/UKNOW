@@ -59,3 +59,31 @@ export async function confirmPayment(id, submissionId) {
   const res = await api.post(`/forms/${id}/submissions/${submissionId}/confirm-payment`);
   return res.data?.data;
 }
+
+/**
+ * PR-4b — bước 1/2 của luồng upload ảnh giao diện (banner/logo): gửi file lên kho tạm, trả
+ * `{tempId, originalName, contentType, size}`. Bước 2 là `uploadFormAsset` bên dưới.
+ *
+ * @param {File} file
+ * @returns {Promise<{tempId: string, originalName: string, contentType: string, size: number}>}
+ */
+export async function uploadFormTempFile(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await api.post('/uploads/temp', fd, {
+    headers: { 'Content-Type': undefined },
+  });
+  return res.data?.data;
+}
+
+/**
+ * PR-4b — bước 2/2: đăng ký tệp tạm thành ảnh giao diện chính thức của form (banner/logo).
+ * Hợp đồng PLAN mục "Upload": {tempId, originalName, contentType, size} -> {storageKey, url, sizeBytes}.
+ *
+ * @param {{tempId: string, originalName: string, contentType: string, size: number}} temp
+ * @returns {Promise<{storageKey: string, url: string, sizeBytes: number}>}
+ */
+export async function uploadFormAsset({ tempId, originalName, contentType, size }) {
+  const res = await api.post('/forms/assets', { tempId, originalName, contentType, size });
+  return res.data?.data;
+}

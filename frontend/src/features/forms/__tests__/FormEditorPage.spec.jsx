@@ -4,11 +4,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nProvider } from '../../../i18n';
 import FormEditorPage from '../pages/FormEditorPage';
 import * as formAdminApi from '../services/formAdminApi.service';
+import toast from 'react-hot-toast';
 
 vi.mock('../services/formAdminApi.service', () => ({
   fetchFormById: vi.fn(),
   createForm: vi.fn(),
   updateForm: vi.fn(),
+  uploadFormTempFile: vi.fn(),
+  uploadFormAsset: vi.fn(),
+}));
+
+vi.mock('../../storage/useStorageQuota', () => ({
+  default: () => ({ usage: null }),
+}));
+
+vi.mock('../../storage/storageEvents', () => ({
+  notifyStorageQuotaRefresh: vi.fn(),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -543,6 +554,211 @@ describe('FormEditorPage component', () => {
       expect(screen.getByText('Vui lòng chọn ngân hàng')).toBeInTheDocument();
       expect(screen.getByText('Số tài khoản phải gồm 6-19 chữ số')).toBeInTheDocument();
       expect(screen.getByText('Vui lòng nhập tên chủ tài khoản')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-4b mục 6 — Khối "Giao diện".
+   */
+  describe('Giao diện (PR-4b)', () => {
+    const existingFormWithTheme = {
+      ...existingForm,
+      theme: {
+        primaryColor: '#111111',
+        bannerKey: 'uploads/1/forms/banner_abc.png',
+        bannerUrl: 'https://cdn.example.com/banner_abc.png',
+      },
+    };
+
+    it('chỉ đổi màu chủ đạo (không đụng banner) -> payload.theme giữ NGUYÊN bannerKey cũ, KHÔNG có bannerUrl', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(existingFormWithTheme);
+      formAdminApi.updateForm.mockResolvedValue(existingFormWithTheme);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument());
+
+      const primaryHexInput = screen.getByPlaceholderText('#DF5C0E');
+      fireEvent.change(primaryHexInput, { target: { value: '#222222' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const [, payload] = formAdminApi.updateForm.mock.calls[0];
+
+      expect(payload.theme.primaryColor).toBe('#222222');
+      expect(payload.theme.bannerKey).toBe('uploads/1/forms/banner_abc.png');
+      expect(payload.theme).not.toHaveProperty('bannerUrl');
+    });
+
+    it('bấm "Gỡ ảnh" banner rồi lưu -> payload.theme KHÔNG có khoá bannerKey', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(existingFormWithTheme);
+      formAdminApi.updateForm.mockResolvedValue(existingFormWithTheme);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole('button', { name: 'Gỡ ảnh' }));
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const [, payload] = formAdminApi.updateForm.mock.calls[0];
+
+      expect(payload.theme).not.toHaveProperty('bannerKey');
+    });
+
+    it('chọn mẫu dựng sẵn khi form đang có logoKey -> payload.theme GIỮ NGUYÊN logoKey (preset không có trường ảnh)', async () => {
+      const formWithLogo = {
+        ...existingForm,
+        theme: {
+          logoKey: 'uploads/1/forms/logo_xyz.png',
+          logoUrl: 'https://cdn.example.com/logo_xyz.png',
+        },
+      };
+      formAdminApi.fetchFormById.mockResolvedValue(formWithLogo);
+      formAdminApi.updateForm.mockResolvedValue(formWithLogo);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole('button', { name: /Cổ điển/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const [, payload] = formAdminApi.updateForm.mock.calls[0];
+
+      expect(payload.theme.logoKey).toBe('uploads/1/forms/logo_xyz.png');
+      expect(payload.theme.preset).toBe('classic');
+      expect(payload.theme.primaryColor).toBe('#DF5C0E');
+    });
+
+    it('tải banner lên -> gọi đúng 2 API (uploads/temp rồi forms/assets), xem trước hiện ảnh trả về', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-theme-1' });
+      formAdminApi.uploadFormTempFile.mockResolvedValue({
+        tempId: 'temp-1',
+        originalName: 'banner.png',
+        contentType: 'image/png',
+        size: 12345,
+      });
+      formAdminApi.uploadFormAsset.mockResolvedValue({
+        storageKey: 'uploads/1/forms/new_banner.png',
+        url: 'https://cdn.example.com/new_banner.png',
+        sizeBytes: 12345,
+      });
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      const bannerFileInput = container.querySelectorAll('input[type="file"]')[0];
+      const file = new File(['fake'], 'banner.png', { type: 'image/png' });
+      fireEvent.change(bannerFileInput, { target: { files: [file] } });
+
+      await waitFor(() => expect(formAdminApi.uploadFormTempFile).toHaveBeenCalledTimes(1));
+      expect(formAdminApi.uploadFormTempFile).toHaveBeenCalledWith(file);
+
+      await waitFor(() => expect(formAdminApi.uploadFormAsset).toHaveBeenCalledTimes(1));
+      expect(formAdminApi.uploadFormAsset).toHaveBeenCalledWith({
+        tempId: 'temp-1',
+        originalName: 'banner.png',
+        contentType: 'image/png',
+        size: 12345,
+      });
+
+      await waitFor(() => {
+        const previewImg = container.querySelector('img[src="https://cdn.example.com/new_banner.png"]');
+        expect(previewImg).toBeTruthy();
+      });
+    });
+
+    it('upload lỗi 413/STORAGE_QUOTA_EXCEEDED -> báo hết dung lượng, KHÔNG đổi ảnh đang hiển thị', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(existingFormWithTheme);
+      const quotaErr = new Error('quota exceeded');
+      quotaErr.response = { status: 413, data: { code: 'STORAGE_QUOTA_EXCEEDED' } };
+      formAdminApi.uploadFormTempFile.mockRejectedValue(quotaErr);
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument());
+      // Ảnh banner cũ đang hiển thị từ trước (existingFormWithTheme.theme.bannerUrl)
+      expect(container.querySelector('img[src="https://cdn.example.com/banner_abc.png"]')).toBeTruthy();
+
+      const logoFileInput = container.querySelectorAll('input[type="file"]')[1];
+      const file = new File(['fake'], 'logo.png', { type: 'image/png' });
+      fireEvent.change(logoFileInput, { target: { files: [file] } });
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          'Workspace đã dùng hết dung lượng lưu trữ. Hãy xoá bớt tệp cũ hoặc nâng gói.'
+        )
+      );
+      // Banner cũ vẫn còn nguyên — lỗi upload logo không đụng tới banner
+      expect(container.querySelector('img[src="https://cdn.example.com/banner_abc.png"]')).toBeTruthy();
+      expect(formAdminApi.uploadFormAsset).not.toHaveBeenCalled();
+    });
+
+    it('theme {} (form mới, chưa tuỳ chỉnh gì) -> payload.theme là object rỗng', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-theme-empty' });
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form không tuỳ chỉnh giao diện' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+      expect(payload.theme).toEqual({});
     });
   });
 });

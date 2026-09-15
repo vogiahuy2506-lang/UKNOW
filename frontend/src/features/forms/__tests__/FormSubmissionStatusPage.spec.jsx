@@ -315,4 +315,84 @@ describe('FormSubmissionStatusPage component', () => {
       expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
     });
   });
+
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-4b mục 5 — trang trạng thái áp
+   * font + màu chủ đạo (nút "Quay lại biểu mẫu") + nền + logo từ `theme` trả về bởi API trạng
+   * thái (chỉ bannerUrl/logoUrl, không có khoá — form.service.js buildPublicFormTheme).
+   */
+  describe('FormSubmissionStatusPage — theme', () => {
+    it('theme.primaryColor -> wrapper set --form-primary, nút "Quay lại biểu mẫu" dùng class var(--form-primary,...)', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue({
+        status: 'pending_payment',
+        formTitle: 'Form hết hạn giữ chỗ',
+        appointmentAt: null,
+        holdExpired: true,
+        holdExpiresAt: null,
+        payment: null,
+        theme: { primaryColor: '#1D4ED8' },
+      });
+
+      const { container } = renderStatusPage();
+
+      const link = await screen.findByRole('link', { name: /Quay lại biểu mẫu/i });
+      expect(link.className).toMatch(/var\(--form-primary,#df5c0e\)/);
+
+      const wrapper = container.firstChild;
+      expect(wrapper.style.getPropertyValue('--form-primary')).toBe('#1D4ED8');
+    });
+
+    it('theme.backgroundColor + không nhúng -> wrapper có style backgroundColor', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue({
+        ...pendingPayment,
+        theme: { backgroundColor: '#fdf2e9' },
+      });
+
+      const { container } = renderStatusPage('/f/pub_1/s/tok_1');
+
+      await waitFor(() => expect(screen.getByText('Form thu tiền giữ chỗ')).toBeInTheDocument());
+
+      const wrapper = container.firstChild;
+      expect(wrapper.style.backgroundColor).toBe('rgb(253, 242, 233)');
+    });
+
+    it('theme.backgroundColor + ?embed=1 -> wrapper KHÔNG có style backgroundColor', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue({
+        ...pendingPayment,
+        theme: { backgroundColor: '#fdf2e9' },
+      });
+
+      const { container } = renderStatusPage('/f/pub_1/s/tok_1?embed=1');
+
+      await waitFor(() => expect(screen.getByText('Form thu tiền giữ chỗ')).toBeInTheDocument());
+
+      const wrapper = container.firstChild;
+      expect(wrapper.style.backgroundColor).toBe('');
+    });
+
+    it('theme.logoUrl -> hiện logo phía trên tiêu đề; không có logoUrl -> không hiện', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue({
+        ...pendingPayment,
+        theme: { logoUrl: 'https://cdn.example.com/logo.png' },
+      });
+
+      renderStatusPage();
+
+      await waitFor(() => expect(screen.getByText('Form thu tiền giữ chỗ')).toBeInTheDocument());
+      const logo = screen.getByAltText('');
+      expect(logo.src).toBe('https://cdn.example.com/logo.png');
+    });
+
+    it('không có theme -> giữ giao diện hiện tại (không style backgroundColor, không logo)', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue(pendingPayment);
+
+      const { container } = renderStatusPage();
+
+      await waitFor(() => expect(screen.getByText('Form thu tiền giữ chỗ')).toBeInTheDocument());
+
+      const wrapper = container.firstChild;
+      expect(wrapper.style.backgroundColor).toBe('');
+      expect(screen.queryByAltText('')).not.toBeInTheDocument();
+    });
+  });
 });

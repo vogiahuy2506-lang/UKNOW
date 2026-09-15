@@ -2,6 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useI18n } from '../../../i18n';
 import BookingSlotPicker from './BookingSlotPicker';
 import { vnToday, addDaysToDateStr, formatSlotDateLabel } from '../utils/bookingFormat.util';
+import { useFormFont } from '../utils/useFormFont';
+import { getReadableTextColor } from '../utils/formTheme.util';
+import { buildFormFontFamily, FORM_BANNER_HEIGHTS, DEFAULT_FORM_BANNER_HEIGHT } from '../constants/formTheme';
 
 const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT']);
 
@@ -67,6 +70,40 @@ export default function FormRenderer({
   const settings = form?.settings || {};
   const submitButtonText = settings.submitButtonText?.trim() || t('publicForm.defaultSubmit');
   const successMessage = settings.successMessage?.trim() || t('publicForm.defaultSuccess');
+
+  // PR-4b — giao diện biểu mẫu (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md). `theme` rỗng/thiếu
+  // phải ra ĐÚNG giao diện hiện tại (chữ trắng trên cam mặc định) — mọi biến dưới đây chỉ có giá
+  // trị khi theme THỰC SỰ khai báo khoá đó, không tự suy ra màu/text từ màu mặc định.
+  const theme = form?.theme || {};
+  const primaryColor = theme.primaryColor || null;
+  // Chỉ tính màu chữ tự động khi theme CÓ primaryColor riêng — gọi hàm này vô điều kiện (kể cả
+  // với màu mặc định #DF5C0E) sẽ đổi chữ nút từ trắng sang tối (review 15/09: 4.79 so 3.70).
+  const primaryTextColor = primaryColor ? getReadableTextColor(primaryColor) : null;
+  // Nền nhạt (~10% alpha, hex 8 ký tự) dùng cho trạng thái hover — CSS custom property (không
+  // phải class opacity-modifier của Tailwind trên giá trị var(), thứ Tailwind không tính trước
+  // được lúc build) để BookingSlotPicker (con) dùng qua cascade, cùng cơ chế với --form-primary.
+  const primaryTintColor = primaryColor ? `${primaryColor}1a` : null;
+  const fontFamilyCss = buildFormFontFamily(theme.fontFamily);
+  const isWideLayout = theme.layout === 'wide';
+  const bannerHeight = FORM_BANNER_HEIGHTS[theme.bannerHeight] || FORM_BANNER_HEIGHTS[DEFAULT_FORM_BANNER_HEIGHT];
+  const [bannerLoadFailed, setBannerLoadFailed] = useState(false);
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+
+  useFormFont(theme.fontFamily);
+
+  // Biến CSS trên gốc component thay vì sinh class Tailwind động (Bẫy PR-4b mục 2: JIT không
+  // thấy `bg-[${color}]` lúc build) — cascade tự nhiên xuống BookingSlotPicker (con), không cần
+  // truyền primaryColor qua props. Fallback trong var(...) giữ ĐÚNG màu/chữ mặc định hiện tại khi
+  // không set (phrase "biến CSS trên gốc" — phản biện PR-4b điểm 1, chọn vì tránh prop-drilling
+  // primaryColor xuống BookingSlotPicker và các nút lặp lại nhiều chỗ).
+  const themeRootStyle = {
+    ...(primaryColor ? { '--form-primary': primaryColor } : {}),
+    ...(primaryTextColor ? { '--form-primary-text': primaryTextColor } : {}),
+    ...(primaryTintColor ? { '--form-primary-tint': primaryTintColor } : {}),
+    ...(fontFamilyCss ? { fontFamily: fontFamilyCss } : {}),
+  };
+  const cardWidthClass = isWideLayout ? 'max-w-2xl' : 'max-w-xl';
+  const cardSurfaceClass = isWideLayout ? '' : 'shadow-sm border border-gray-100';
 
   const todayVn = vnToday();
   const maxDate = addDaysToDateStr(todayVn, daysAhead);
@@ -300,7 +337,10 @@ export default function FormRenderer({
 
   if (submittedSuccess) {
     return (
-      <div className="w-full max-w-xl mx-auto p-6 bg-white rounded-2xl shadow-sm border border-gray-100 text-center">
+      <div
+        className={`w-full ${cardWidthClass} mx-auto p-6 bg-white rounded-2xl ${cardSurfaceClass} text-center`}
+        style={themeRootStyle}
+      >
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-3xl font-bold">
           ✓
         </div>
@@ -311,7 +351,13 @@ export default function FormRenderer({
           {successMessage}
         </p>
         {bookedInfo && (
-          <p className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary-50 text-primary-700 text-sm font-medium">
+          <p
+            className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary-50 text-primary-700 text-sm font-medium"
+            // Nền nhạt + chữ đậm của MỘT màu — không quy về CSS var (fallback của var() không
+            // tái tạo được cặp "50/700" nhạt-đậm cùng tông của một hex bất kỳ), chỉ ghi đè bằng
+            // style khi CÓ theme màu riêng; theme {} giữ nguyên 2 class gốc, không đổi gì.
+            style={primaryColor ? { backgroundColor: `${primaryColor}1a`, color: primaryColor } : undefined}
+          >
             {t('publicForm.booking.bookedAt', {
               date: formatSlotDateLabel(bookedInfo.date, locale),
               time: bookedInfo.time,
@@ -323,7 +369,7 @@ export default function FormRenderer({
             href={redirectFallbackUrl}
             target="_top"
             rel="noopener"
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[color:var(--form-primary,#df5c0e)] text-[color:var(--form-primary-text,#ffffff)] text-sm font-medium hover:brightness-95 transition-colors"
           >
             {t('publicForm.redirectFallbackLink')}
           </a>
@@ -333,20 +379,44 @@ export default function FormRenderer({
   }
 
   return (
-    <div className="w-full max-w-xl mx-auto p-4 sm:p-6 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-hidden box-border">
-      {/* Tiêu đề & mô tả biểu mẫu */}
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 break-words">
-          {form?.title || t('forms.formTitle')}
-        </h1>
-        {form?.description && (
-          <p className="text-gray-600 text-sm sm:text-base whitespace-pre-line break-words leading-relaxed">
-            {form.description}
-          </p>
-        )}
-      </div>
+    <div
+      className={`w-full ${cardWidthClass} mx-auto bg-white rounded-2xl ${cardSurfaceClass} overflow-hidden overflow-x-hidden box-border`}
+      style={themeRootStyle}
+    >
+      {/* Banner: full-bleed (tràn hết chiều rộng thẻ, không theo padding nội dung bên dưới) —
+          object-cover + chiều cao cố định theo bannerHeight, ảnh 1600×400 không bị thu nhỏ vì
+          không giới hạn max-width. Lỗi tải -> ẩn hẳn, không vỡ khung (không hiện icon ảnh hỏng). */}
+      {theme.bannerUrl && !bannerLoadFailed && (
+        <img
+          src={theme.bannerUrl}
+          alt=""
+          style={{ height: bannerHeight }}
+          className="w-full object-cover"
+          onError={() => setBannerLoadFailed(true)}
+        />
+      )}
+      <div className="p-4 sm:p-6">
+        {/* Tiêu đề & mô tả biểu mẫu */}
+        <div className="mb-6">
+          {theme.logoUrl && !logoLoadFailed && (
+            <img
+              src={theme.logoUrl}
+              alt=""
+              className="h-12 max-w-[200px] object-contain mb-3"
+              onError={() => setLogoLoadFailed(true)}
+            />
+          )}
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 break-words">
+            {form?.title || t('forms.formTitle')}
+          </h1>
+          {form?.description && (
+            <p className="text-gray-600 text-sm sm:text-base whitespace-pre-line break-words leading-relaxed">
+              {form.description}
+            </p>
+          )}
+        </div>
 
-      {/* Lỗi tổng thể từ server */}
+        {/* Lỗi tổng thể từ server */}
       {externalError && (
         <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm break-words">
           {externalError}
@@ -535,7 +605,7 @@ export default function FormRenderer({
                           checked={val === optVal}
                           onChange={(e) => handleFieldChange(key, e.target.value)}
                           disabled={isSubmitting || previewMode}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                          className="h-4 w-4 text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
                         />
                         <span>{optLbl}</span>
                       </label>
@@ -565,7 +635,7 @@ export default function FormRenderer({
                           checked={isChecked}
                           onChange={() => handleCheckboxItemToggle(key, optVal)}
                           disabled={isSubmitting || previewMode}
-                          className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
+                          className="h-4 w-4 rounded text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
                         />
                         <span>{optLbl}</span>
                       </label>
@@ -608,7 +678,7 @@ export default function FormRenderer({
                 checked={marketingConsent}
                 onChange={(e) => setMarketingConsent(e.target.checked)}
                 disabled={isSubmitting || previewMode}
-                className="mt-0.5 h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
+                className="mt-0.5 h-4 w-4 rounded text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
               />
               <span className="leading-snug">
                 {settings.consentText || t('publicForm.consentLabel')}
@@ -622,12 +692,13 @@ export default function FormRenderer({
           <button
             type="submit"
             disabled={isSubmitting || previewMode}
-            className="w-full py-3 px-6 rounded-xl font-medium text-white bg-primary-600 hover:bg-primary-700 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            className="w-full py-3 px-6 rounded-xl font-medium text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             {isSubmitting ? t('publicForm.submitting') : submitButtonText}
           </button>
         </div>
       </form>
+      </div>
     </div>
   );
 }

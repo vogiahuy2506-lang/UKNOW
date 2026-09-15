@@ -129,6 +129,62 @@ describe('PublicFormPage — chế độ nhúng (?embed=1)', () => {
 });
 
 /**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-4b phản biện điểm 2 — nền ngoài theo
+ * `theme.backgroundColor` khi mở trực tiếp, KHÔNG tô khi nhúng (?embed=1).
+ */
+describe('PublicFormPage — nền ngoài theo theme.backgroundColor', () => {
+  let originalResizeObserver;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = StubResizeObserver;
+  });
+
+  afterEach(() => {
+    window.ResizeObserver = originalResizeObserver;
+  });
+
+  const themedForm = {
+    ...baseForm,
+    theme: { backgroundColor: '#fdf2e9' },
+  };
+
+  it('mở trực tiếp (không nhúng) + theme.backgroundColor -> wrapper có style backgroundColor', async () => {
+    fetchPublicForm.mockResolvedValue(themedForm);
+
+    const { container } = renderPage('/f/pub_theme');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    const wrapper = container.firstChild;
+    expect(wrapper.style.backgroundColor).toBe('rgb(253, 242, 233)');
+  });
+
+  it('?embed=1 + theme.backgroundColor -> wrapper KHÔNG có style backgroundColor (không tô đè nền landing)', async () => {
+    fetchPublicForm.mockResolvedValue(themedForm);
+
+    const { container } = renderPage('/f/pub_theme?embed=1');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    const wrapper = container.firstChild;
+    expect(wrapper.style.backgroundColor).toBe('');
+  });
+
+  it('không có theme.backgroundColor -> wrapper không có style backgroundColor', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+
+    const { container } = renderPage('/f/pub_notheme');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    const wrapper = container.firstChild;
+    expect(wrapper.style.backgroundColor).toBe('');
+  });
+});
+
+/**
  * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-3b.
  *
  * Route đích /f/:publicKey/s/:accessToken được thay bằng 1 component đánh dấu đơn giản

@@ -182,8 +182,15 @@ export default function PublicFormPage() {
   }
 
   // 5. Render biểu mẫu
+  // Nền ngoài theo backgroundColor CHỈ khi mở trực tiếp (không nhúng) — nhúng vào landing
+  // không được tô đè nền trang chủ landing (PLAN PR-4b phản biện điểm 2).
+  const pageBackgroundStyle =
+    !embedMode && form?.theme?.backgroundColor
+      ? { backgroundColor: form.theme.backgroundColor }
+      : undefined;
+
   return (
-    <div ref={embedRootRef} className={formWrapperClass}>
+    <div ref={embedRootRef} className={formWrapperClass} style={pageBackgroundStyle}>
       {form?.payment?.enabled && (
         <div className="w-full max-w-xl mx-auto mb-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm font-medium text-center">
           {t('publicForm.payment.requiredNotice', { amount: formatVnd(form.payment.amount) })}
