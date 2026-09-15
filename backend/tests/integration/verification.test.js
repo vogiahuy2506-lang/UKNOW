@@ -38,6 +38,7 @@ const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
 const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
+const { INVALID_ACCOUNT_PHONE_MESSAGE } = await import('../../src/utils/accountPhone.util.js');
 
 let app;
 let originalSendGridKey;
@@ -121,6 +122,48 @@ describe('POST /api/verification/send-code', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toContain('Tên đăng nhập');
     expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it('send-code kèm phone đang thuộc user khác → 409 PHONE_TAKEN và KHÔNG tạo mã xác minh (đếm bảng mã = 0)', async () => {
+    await createUser({ username: 'owner', email: 'owner@gmail.com', phone: '0912345678' });
+
+    const res = await request(app)
+      .post('/api/verification/send-code')
+      .send({ email: 'newperson@gmail.com', phone: '0912345678' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PHONE_TAKEN');
+    expect(res.body.message).toContain('Số điện thoại này đã được dùng');
+    expect(mockSendMail).not.toHaveBeenCalled();
+
+    const { rows } = await db.query('SELECT count(*)::int AS count FROM verification_codes');
+    expect(rows[0].count).toBe(0);
+  });
+
+  it('phone sai dạng ("1111111111") → 400 kèm INVALID_ACCOUNT_PHONE_MESSAGE, không tạo mã', async () => {
+    const res = await request(app)
+      .post('/api/verification/send-code')
+      .send({ email: 'newperson@gmail.com', phone: '1111111111' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
+    expect(mockSendMail).not.toHaveBeenCalled();
+
+    const { rows } = await db.query('SELECT count(*)::int AS count FROM verification_codes');
+    expect(rows[0].count).toBe(0);
+  });
+
+  it('send-code không kèm phone → 200 như cũ, tạo mã xác minh', async () => {
+    const res = await request(app)
+      .post('/api/verification/send-code')
+      .send({ email: 'nophone@gmail.com' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+    const { rows } = await db.query('SELECT count(*)::int AS count FROM verification_codes WHERE email = $1', ['nophone@gmail.com']);
+    expect(rows[0].count).toBe(1);
   });
 
   it('gọi send-code 2 lần trong cooldown → lần 2 trả 429', async () => {

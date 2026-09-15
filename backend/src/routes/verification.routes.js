@@ -15,6 +15,9 @@ router.post('/send-code',
       .trim()
       .isEmail()
       .withMessage('Email không hợp lệ'),
+    body('phone')
+      .optional()
+      .trim(),
   ],
   handleValidationErrors,
   verificationController.sendCode.bind(verificationController)

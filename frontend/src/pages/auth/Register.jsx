@@ -323,7 +323,11 @@ const Register = () => {
     }
     setIsSendingCode(true);
     try {
-      await sendVerificationCode({ email: data.email, username: data.username });
+      await sendVerificationCode({
+        email: data.email,
+        username: data.username,
+        ...(!phoneOtpEnabled && data.phone ? { phone: data.phone.trim() } : {}),
+      });
       const cleanRef = (data.referralCode || '').trim();
       setOtpData({
         email: data.email,

@@ -62,6 +62,29 @@ class VerificationController {
         }
       }
 
+      // Kiểm tra SĐT sớm (nếu có truyền lên, ví dụ từ form đăng ký khi OTP SMS tắt)
+      const rawPhone = req.body?.phone;
+      if (rawPhone !== undefined && rawPhone !== null && String(rawPhone).trim() !== '') {
+        const normalizedPhone = normalizeAccountPhone(rawPhone);
+        if (!isValidAccountPhone(normalizedPhone)) {
+          return res.status(400).json({
+            success: false,
+            message: INVALID_ACCOUNT_PHONE_MESSAGE,
+          });
+        }
+        const existingPhone = await db.query(
+          'SELECT id FROM users WHERE phone = $1 LIMIT 1',
+          [normalizedPhone]
+        );
+        if (existingPhone.rows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            code: 'PHONE_TAKEN',
+            message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+          });
+        }
+      }
+
       await verificationService.sendVerification(null, email);
 
       res.json({

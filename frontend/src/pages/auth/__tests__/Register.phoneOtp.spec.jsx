@@ -99,4 +99,72 @@ describe('Register.jsx — ô SĐT theo cờ phoneOtpEnabled & Đăng ký Google
     expect(screen.queryByText(/termsConsentTitle/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/termsConsentDesc/i)).not.toBeInTheDocument();
   });
+
+  it('cờ OTP tắt → submit form gọi sendVerificationCode kèm phone', async () => {
+    m.phoneOtpEnabled = false;
+    const { sendVerificationCode } = await import('../../../features/auth/services/authApi.service');
+    sendVerificationCode.mockResolvedValueOnce({ success: true });
+
+    renderRegister();
+
+    fireEvent.change(screen.getByPlaceholderText('register.usernamePlaceholder'), {
+      target: { value: 'userotpfalse' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('register.emailPlaceholder'), {
+      target: { value: 'test_otp_false@gmail.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('register.phonePlaceholder'), {
+      target: { value: '0912345678' },
+    });
+    const passwordInputs = screen.getAllByPlaceholderText('••••••••');
+    fireEvent.change(passwordInputs[0], { target: { value: 'Password123' } });
+    fireEvent.change(passwordInputs[1], { target: { value: 'Password123' } });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    checkboxes.forEach((cb) => fireEvent.click(cb));
+
+    fireEvent.click(screen.getByText('register.registerButton'));
+
+    await waitFor(() => {
+      expect(sendVerificationCode).toHaveBeenCalledTimes(1);
+    });
+
+    expect(sendVerificationCode).toHaveBeenCalledWith({
+      email: 'test_otp_false@gmail.com',
+      username: 'userotpfalse',
+      phone: '0912345678',
+    });
+  });
+
+  it('cờ OTP bật → submit form gọi sendVerificationCode KHÔNG kèm phone', async () => {
+    m.phoneOtpEnabled = true;
+    const { sendVerificationCode } = await import('../../../features/auth/services/authApi.service');
+    sendVerificationCode.mockResolvedValueOnce({ success: true });
+
+    renderRegister();
+
+    fireEvent.change(screen.getByPlaceholderText('register.usernamePlaceholder'), {
+      target: { value: 'userotptrue' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('register.emailPlaceholder'), {
+      target: { value: 'test_otp_true@gmail.com' },
+    });
+    const passwordInputs = screen.getAllByPlaceholderText('••••••••');
+    fireEvent.change(passwordInputs[0], { target: { value: 'Password123' } });
+    fireEvent.change(passwordInputs[1], { target: { value: 'Password123' } });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    checkboxes.forEach((cb) => fireEvent.click(cb));
+
+    fireEvent.click(screen.getByText('register.registerButton'));
+
+    await waitFor(() => {
+      expect(sendVerificationCode).toHaveBeenCalledTimes(1);
+    });
+
+    expect(sendVerificationCode).toHaveBeenCalledWith({
+      email: 'test_otp_true@gmail.com',
+      username: 'userotptrue',
+    });
+  });
 });
