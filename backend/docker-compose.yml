@@ -8,10 +8,16 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # dotenv sẽ đọc file /app/.env được mount bên dưới. Các biến môi
+      # trường ở đây (nếu có) sẽ override giá trị trong .env — tiện cho
+      # CI / staging muốn bật/tắt feature flag mà không sửa file .env.
     networks:
       - uknow_network
     volumes:
-      - ./.env:/app/.env
+      # File .env nằm ngoài image để có thể rotate secret mà không cần
+      # rebuild + push image. Node sẽ load nó qua `node -r dotenv/config`
+      # (xem script "start" trong package.json).
+      - ./.env:/app/.env:ro
       - ./uploads:/app/uploads
       - ./temp_uploads:/app/temp_uploads
     # Giới hạn log: mỗi file tối đa 10MB, giữ tối đa 5 file xoay vòng (~50MB tổng)
