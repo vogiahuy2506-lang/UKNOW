@@ -46,3 +46,16 @@ export async function cancelSubmission(id, submissionId) {
   const res = await api.post(`/forms/${id}/submissions/${submissionId}/cancel`);
   return res.data?.data;
 }
+
+/**
+ * PR-3b — chủ form (hoặc nhân viên có quyền forms) xác nhận đã nhận tiền chuyển khoản cho một
+ * bài nộp đang pending_payment.
+ *
+ * @param {number|string} id ID biểu mẫu
+ * @param {number|string} submissionId
+ * @returns {Promise<object>}
+ */
+export async function confirmPayment(id, submissionId) {
+  const res = await api.post(`/forms/${id}/submissions/${submissionId}/confirm-payment`);
+  return res.data?.data;
+}

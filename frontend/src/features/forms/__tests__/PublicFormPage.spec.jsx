@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useSearchParams } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { I18nProvider } from '../../../i18n';
 import PublicFormPage from '../pages/PublicFormPage';
-import { fetchPublicForm } from '../services/formPublicApi.service';
+import { fetchPublicForm, submitPublicForm } from '../services/formPublicApi.service';
 
 vi.mock('../services/formPublicApi.service', () => ({
   fetchPublicForm: vi.fn(),
@@ -125,5 +125,161 @@ describe('PublicFormPage — chế độ nhúng (?embed=1)', () => {
 
     const wrapper = container.firstChild;
     expect(wrapper.className).not.toMatch(/min-h-screen/);
+  });
+});
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-3b.
+ *
+ * Route đích /f/:publicKey/s/:accessToken được thay bằng 1 component đánh dấu đơn giản
+ * (thay vì FormSubmissionStatusPage thật) để test này chỉ đo hành vi điều hướng của
+ * PublicFormPage — không phụ thuộc/đo lẫn logic trang trạng thái (đã có spec riêng).
+ */
+function StatusPageMarker() {
+  const [params] = useSearchParams();
+  return <div data-testid="status-page-marker">status-page:{params.get('embed') || ''}</div>;
+}
+
+function renderPagePr3b(path) {
+  return render(
+    <I18nProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/f/:publicKey" element={<PublicFormPage />} />
+          <Route path="/f/:publicKey/s/:accessToken" element={<StatusPageMarker />} />
+        </Routes>
+      </MemoryRouter>
+    </I18nProvider>
+  );
+}
+
+describe('PublicFormPage — PR-3b thanh toán giữ chỗ', () => {
+  let originalResizeObserver;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = StubResizeObserver;
+  });
+
+  afterEach(() => {
+    window.ResizeObserver = originalResizeObserver;
+  });
+
+  const paymentForm = {
+    ...baseForm,
+    payment: { enabled: true, amount: 150000 },
+  };
+
+  it('form có payment.enabled -> hiện dòng thông báo "Cần chuyển khoản {amount} để giữ chỗ" trước khi gửi', async () => {
+    fetchPublicForm.mockResolvedValue(paymentForm);
+
+    renderPagePr3b('/f/pub_pay');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    expect(screen.getByText((text) => text.includes('150.000') && text.includes('đ'))).toBeInTheDocument();
+  });
+
+  it('form KHÔNG bật payment -> không hiện dòng thông báo giữ chỗ', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+
+    renderPagePr3b('/f/pub_nopay');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    expect(screen.queryByText(/Cần chuyển khoản/i)).not.toBeInTheDocument();
+  });
+
+  it('nộp xong trả về payment+accessToken -> chuyển tới /f/:publicKey/s/:accessToken (không ?embed=1 khi mở trực tiếp)', async () => {
+    fetchPublicForm.mockResolvedValue(paymentForm);
+    submitPublicForm.mockResolvedValue({
+      id: 'sub-1',
+      payment: { code: 'ABC123', amount: 150000 },
+      accessToken: 'tok-xyz',
+    });
+
+    renderPagePr3b('/f/pub_pay');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(screen.getByTestId('status-page-marker')).toBeInTheDocument());
+    expect(screen.getByTestId('status-page-marker').textContent).toBe('status-page:');
+  });
+
+  it('nộp xong trả về payment+accessToken trong chế độ nhúng (?embed=1) -> URL đích giữ ?embed=1', async () => {
+    fetchPublicForm.mockResolvedValue(paymentForm);
+    submitPublicForm.mockResolvedValue({
+      id: 'sub-1',
+      payment: { code: 'ABC123', amount: 150000 },
+      accessToken: 'tok-xyz',
+    });
+
+    renderPagePr3b('/f/pub_pay?embed=1');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(screen.getByTestId('status-page-marker')).toBeInTheDocument());
+    expect(screen.getByTestId('status-page-marker').textContent).toBe('status-page:1');
+  });
+
+  it('nộp xong KHÔNG có payment trong response -> giữ màn thành công cũ của FormRenderer, không điều hướng', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+    submitPublicForm.mockResolvedValue({ id: 'sub-2' });
+
+    renderPagePr3b('/f/pub_nopay');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(screen.getByText('Cảm ơn!')).toBeInTheDocument());
+    expect(screen.queryByTestId('status-page-marker')).not.toBeInTheDocument();
+  });
+
+  it('nộp bài lỗi 429 với code FORM_TOO_MANY_PENDING_HOLDS -> hiện thông báo riêng, không phải thông báo 429 chung', async () => {
+    fetchPublicForm.mockResolvedValue(paymentForm);
+    const err = new Error('too many');
+    err.response = { status: 429, data: { code: 'FORM_TOO_MANY_PENDING_HOLDS' } };
+    submitPublicForm.mockRejectedValue(err);
+
+    renderPagePr3b('/f/pub_pay');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/quá nhiều lượt giữ chỗ chưa thanh toán/i)
+      ).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/Quá nhiều lần gửi form/i)).not.toBeInTheDocument();
+  });
+
+  it('nộp bài lỗi 429 KHÔNG kèm code đặc biệt -> hiện thông báo 429 chung như cũ', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+    const err = new Error('rate limited');
+    err.response = { status: 429, data: {} };
+    submitPublicForm.mockRejectedValue(err);
+
+    renderPagePr3b('/f/pub_nopay');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Quá nhiều lần gửi form/i)).toBeInTheDocument()
+    );
   });
 });

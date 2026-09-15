@@ -41,3 +41,18 @@ export async function fetchPublicSlots(publicKey, { from, days } = {}) {
   });
   return res.data?.data || { slots: [] };
 }
+
+/**
+ * Trạng thái công khai của một bài nộp — trang dùng chung cho "vừa nộp xong" lẫn "mở lại từ
+ * thư" (PR-3b). Không gắn auth, không lưu accessToken vào localStorage (chỉ nằm trên URL).
+ *
+ * @param {string} publicKey
+ * @param {string} accessToken
+ * @returns {Promise<{ status: string, formTitle: string, appointmentAt: string|null, holdExpiresAt: string|null, holdExpired: boolean, payment: object|null }>}
+ */
+export async function fetchPublicSubmissionStatus(publicKey, accessToken) {
+  const res = await publicClient.get(
+    `/public/forms/${encodeURIComponent(publicKey)}/submissions/${encodeURIComponent(accessToken)}`
+  );
+  return res.data?.data;
+}

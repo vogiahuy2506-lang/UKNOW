@@ -10,6 +10,8 @@ import {
   HiOutlineCheck,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
+import { useAuthStore } from '../../../stores/authStore';
+import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
 import {
   fetchFormById,
   createForm,
@@ -69,11 +71,34 @@ const DEFAULT_BOOKING = {
   closedDates: [],
 };
 
+// Hợp đồng thanh toán giữ chỗ (paymentConfig) — chép từ backend/src/utils/formDefinition.util.js
+// normalizePaymentConfig, hằng số cùng file (PR-3a). Lệch thì code backend đúng, không phải file này.
+const MIN_PAYMENT_AMOUNT = 1000;
+const MAX_PAYMENT_AMOUNT = 100000000;
+const MIN_HOLD_MINUTES = 10;
+const MAX_HOLD_MINUTES = 120;
+const DEFAULT_HOLD_MINUTES = 30;
+const DEFAULT_PAYMENT = {
+  enabled: false,
+  amount: '', // chuỗi CHỈ CHỮ SỐ (không dấu chấm) — format hiển thị ở input riêng
+  bankBin: '',
+  accountNumber: '',
+  accountName: '',
+  holdMinutes: DEFAULT_HOLD_MINUTES,
+};
+
 export default function FormEditorPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
+
+  // Phản biện PR-3b điểm 3: activeContext (self/employee) sống trong authStore (Zustand) —
+  // cùng cách đọc `Campaigns.jsx:51`. Nhân viên (kể cả có quyền `forms`) chỉ ĐỌC được khối
+  // thanh toán — không phải một chốt permission riêng, mà là contextType.
+  const user = useAuthStore((state) => state.user);
+  const activeContext = useAuthStore((state) => state.activeContext) || user?.activeContext;
+  const isEmployee = activeContext?.type === 'employee';
 
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
@@ -90,6 +115,7 @@ export default function FormEditorPage() {
   const [booking, setBooking] = useState(DEFAULT_BOOKING);
   const [initialBookingHadConfig, setInitialBookingHadConfig] = useState(false);
   const [confirmDisableBooking, setConfirmDisableBooking] = useState(false);
+  const [payment, setPayment] = useState(DEFAULT_PAYMENT);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -160,6 +186,19 @@ export default function FormEditorPage() {
           setInitialBookingHadConfig(false);
         }
         setConfirmDisableBooking(false);
+
+        if (data.paymentConfig) {
+          setPayment({
+            enabled: true,
+            amount: data.paymentConfig.amount != null ? String(data.paymentConfig.amount) : '',
+            bankBin: data.paymentConfig.bankBin || '',
+            accountNumber: data.paymentConfig.accountNumber || '',
+            accountName: data.paymentConfig.accountName || '',
+            holdMinutes: data.paymentConfig.holdMinutes ?? DEFAULT_HOLD_MINUTES,
+          });
+        } else {
+          setPayment(DEFAULT_PAYMENT);
+        }
       })
       .catch((err) => {
         toast.error(err.response?.data?.message || t('forms.editorPage.loadError'));
@@ -435,6 +474,28 @@ export default function FormEditorPage() {
       errs.bookingDisableConfirm = t('forms.editorPage.booking.disableConfirmRequired');
     }
 
+    // Validate thanh toán giữ chỗ (hợp đồng normalizePaymentConfig, hằng số ở đầu file) — nhân
+    // viên không gửi paymentConfig nên không cần validate phía họ (khối chỉ đọc, disabled).
+    if (!isEmployee && payment.enabled) {
+      const amountNum = Number(payment.amount);
+      if (!Number.isInteger(amountNum) || amountNum < MIN_PAYMENT_AMOUNT || amountNum > MAX_PAYMENT_AMOUNT) {
+        errs.paymentAmount = t('forms.editorPage.payment.amountInvalid');
+      }
+      if (!payment.bankBin || !PAYOS_BANK_BIN_MAP[payment.bankBin]) {
+        errs.paymentBank = t('forms.editorPage.payment.bankRequired');
+      }
+      if (!/^\d{6,19}$/.test(payment.accountNumber || '')) {
+        errs.paymentAccountNumber = t('forms.editorPage.payment.accountNumberInvalid');
+      }
+      if (!payment.accountName || !payment.accountName.trim()) {
+        errs.paymentAccountName = t('forms.editorPage.payment.accountNameRequired');
+      }
+      const holdNum = Number(payment.holdMinutes);
+      if (!Number.isInteger(holdNum) || holdNum < MIN_HOLD_MINUTES || holdNum > MAX_HOLD_MINUTES) {
+        errs.paymentHoldMinutes = t('forms.editorPage.payment.holdMinutesInvalid');
+      }
+    }
+
     return errs;
   };
 
@@ -505,6 +566,24 @@ export default function FormEditorPage() {
         settings: payloadSettings,
         bookingConfig: payloadBooking,
       };
+
+      // PR-3b mục 1: payload LUÔN gửi paymentConfig cho chủ tài khoản (đủ khoá khi bật, null khi
+      // tắt) — nhân viên KHÔNG được gửi khoá này dù giá trị gì (backend chặn 403
+      // PAYMENT_CONFIG_OWNER_ONLY chỉ cần THẤY khoá `paymentConfig` trong body, không xét giá
+      // trị), nên bỏ hẳn khoá này khỏi payload thay vì gửi null.
+      if (!isEmployee) {
+        payload.paymentConfig = payment.enabled
+          ? {
+              enabled: true,
+              method: 'bank',
+              amount: Number(payment.amount),
+              bankBin: payment.bankBin,
+              accountNumber: payment.accountNumber.trim(),
+              accountName: payment.accountName.trim(),
+              holdMinutes: Number(payment.holdMinutes),
+            }
+          : null;
+      }
 
       if (isEditMode) {
         await updateForm(id, payload);
@@ -1140,6 +1219,169 @@ export default function FormEditorPage() {
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Khối 5: Thanh toán giữ chỗ */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">
+                {t('forms.editorPage.payment.title')}
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {t('forms.editorPage.payment.enableHelp')}
+              </p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
+              <span className="text-sm font-medium text-gray-800">
+                {t('forms.editorPage.payment.enableLabel')}
+              </span>
+              <input
+                type="checkbox"
+                checked={payment.enabled}
+                disabled={isEmployee}
+                onChange={(e) => setPayment((prev) => ({ ...prev, enabled: e.target.checked }))}
+                className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
+              />
+            </label>
+          </div>
+
+          {isEmployee && (
+            <p className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              {t('forms.editorPage.payment.employeeReadOnlyNotice')}
+            </p>
+          )}
+
+          {payment.enabled && (
+            <div className="space-y-5">
+              {!isEmployee && (
+                <p className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs">
+                  {t('forms.editorPage.payment.ownerWarning')}
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.payment.amountLabel')}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    disabled={isEmployee}
+                    value={payment.amount ? Number(payment.amount).toLocaleString('vi-VN') : ''}
+                    onChange={(e) =>
+                      setPayment((prev) => ({ ...prev, amount: e.target.value.replace(/\D/g, '') }))
+                    }
+                    placeholder={t('forms.editorPage.payment.amountPlaceholder')}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                      errors.paymentAmount
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  {errors.paymentAmount && (
+                    <p className="text-xs text-red-600 mt-1">{errors.paymentAmount}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.payment.bankLabel')}
+                  </label>
+                  <select
+                    disabled={isEmployee}
+                    value={payment.bankBin}
+                    onChange={(e) => setPayment((prev) => ({ ...prev, bankBin: e.target.value }))}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                      errors.paymentBank
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  >
+                    <option value="">{t('forms.editorPage.payment.bankPlaceholder')}</option>
+                    {Object.entries(PAYOS_BANK_BIN_MAP).map(([bin, info]) => (
+                      <option key={bin} value={bin}>
+                        {info.name} ({info.short})
+                      </option>
+                    ))}
+                  </select>
+                  {errors.paymentBank && (
+                    <p className="text-xs text-red-600 mt-1">{errors.paymentBank}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.payment.accountNumberLabel')}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    disabled={isEmployee}
+                    value={payment.accountNumber}
+                    onChange={(e) =>
+                      setPayment((prev) => ({ ...prev, accountNumber: e.target.value.replace(/\D/g, '') }))
+                    }
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                      errors.paymentAccountNumber
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  {errors.paymentAccountNumber && (
+                    <p className="text-xs text-red-600 mt-1">{errors.paymentAccountNumber}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.payment.accountNameLabel')}
+                  </label>
+                  <input
+                    type="text"
+                    disabled={isEmployee}
+                    value={payment.accountName}
+                    onChange={(e) => setPayment((prev) => ({ ...prev, accountName: e.target.value }))}
+                    placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                      errors.paymentAccountName
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {t('forms.editorPage.payment.accountNameHint')}
+                  </p>
+                  {errors.paymentAccountName && (
+                    <p className="text-xs text-red-600 mt-1">{errors.paymentAccountName}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.payment.holdMinutesLabel')}
+                  </label>
+                  <input
+                    type="number"
+                    min={MIN_HOLD_MINUTES}
+                    max={MAX_HOLD_MINUTES}
+                    disabled={isEmployee}
+                    value={payment.holdMinutes}
+                    onChange={(e) => setPayment((prev) => ({ ...prev, holdMinutes: e.target.value }))}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                      errors.paymentHoldMinutes
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  {errors.paymentHoldMinutes && (
+                    <p className="text-xs text-red-600 mt-1">{errors.paymentHoldMinutes}</p>
+                  )}
                 </div>
               </div>
             </div>

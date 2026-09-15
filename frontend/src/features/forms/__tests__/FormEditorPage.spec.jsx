@@ -18,6 +18,14 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
+// PR-3b phản biện điểm 3: activeContext sống trong authStore (Zustand, selector-style hook)
+// — mock phải áp `selector` lên state giả lập thay vì trả nguyên object, đúng cách
+// FormEditorPage.jsx đọc `useAuthStore((state) => state.activeContext)`.
+let mockAuthState = { user: null, activeContext: { type: 'self' } };
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: (selector) => selector(mockAuthState),
+}));
+
 describe('FormEditorPage component', () => {
   const existingForm = {
     id: 'form-existing-456',
@@ -60,6 +68,7 @@ describe('FormEditorPage component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuthState = { user: null, activeContext: { type: 'self' } };
   });
 
   it('khi sửa form (PUT): giữ nguyên key cũ của tất cả các trường hiện có', async () => {
@@ -341,6 +350,199 @@ describe('FormEditorPage component', () => {
       await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
       const [, payload] = formAdminApi.updateForm.mock.calls[0];
       expect(payload.bookingConfig).toBeNull();
+    });
+  });
+
+  describe('Thanh toán giữ chỗ (PR-3b)', () => {
+    function fillPaymentFields(container) {
+      fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), {
+        target: { value: '150000' },
+      });
+      const bankSelect = screen.getByText('Ngân hàng').closest('div').querySelector('select');
+      fireEvent.change(bankSelect, { target: { value: '970436' } });
+      const accountNumberInput = screen
+        .getByText('Số tài khoản')
+        .closest('div')
+        .querySelector('input');
+      fireEvent.change(accountNumberInput, { target: { value: '0123456789' } });
+      fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), {
+        target: { value: 'Nguyen Van A' },
+      });
+      void container;
+    }
+
+    it('chủ tài khoản bật thanh toán, điền đủ thông tin hợp lệ: payload.paymentConfig đủ khoá, amount là số nguyên', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-payment-1' });
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form thu tiền giữ chỗ' },
+      });
+
+      const enableCheckbox = screen.getByRole('checkbox', { name: /Bật thanh toán/i });
+      fireEvent.click(enableCheckbox);
+
+      fillPaymentFields(container);
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+
+      expect(payload.paymentConfig).toEqual({
+        enabled: true,
+        method: 'bank',
+        amount: 150000,
+        bankBin: '970436',
+        accountNumber: '0123456789',
+        accountName: 'Nguyen Van A',
+        holdMinutes: 30,
+      });
+      expect(typeof payload.paymentConfig.amount).toBe('number');
+      expect(typeof payload.paymentConfig.holdMinutes).toBe('number');
+    });
+
+    it('chủ tài khoản KHÔNG bật thanh toán: payload.paymentConfig: null (khoá vẫn có mặt)', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-no-payment' });
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form không thu tiền' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+      expect(payload).toHaveProperty('paymentConfig');
+      expect(payload.paymentConfig).toBeNull();
+    });
+
+    it('form đang bật thanh toán rồi tắt lại trước khi lưu: payload.paymentConfig: null', async () => {
+      const existingFormWithPayment = {
+        ...existingForm,
+        paymentConfig: {
+          amount: 200000,
+          bankBin: '970415',
+          accountNumber: '9999999999',
+          accountName: 'NGUYEN VAN B',
+          holdMinutes: 45,
+        },
+      };
+      formAdminApi.fetchFormById.mockResolvedValue(existingFormWithPayment);
+      formAdminApi.updateForm.mockResolvedValue(existingFormWithPayment);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument();
+      });
+
+      // Dữ liệu paymentConfig cũ được nạp đúng vào state khi mở form đã có cấu hình
+      const enableCheckbox = screen.getByRole('checkbox', { name: /Bật thanh toán/i });
+      expect(enableCheckbox).toBeChecked();
+      expect(screen.getByDisplayValue('200.000')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('NGUYEN VAN B')).toBeInTheDocument();
+
+      fireEvent.click(enableCheckbox); // tắt lại
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const [, payload] = formAdminApi.updateForm.mock.calls[0];
+      expect(payload.paymentConfig).toBeNull();
+    });
+
+    it('nhân viên: checkbox bật thanh toán bị disabled, thấy câu "Chỉ chủ tài khoản đổi được", và payload KHÔNG có khoá paymentConfig (kể cả null)', async () => {
+      mockAuthState = { user: { id: 1 }, activeContext: { type: 'employee' } };
+      const existingFormWithPayment = {
+        ...existingForm,
+        paymentConfig: {
+          amount: 200000,
+          bankBin: '970415',
+          accountNumber: '9999999999',
+          accountName: 'NGUYEN VAN B',
+          holdMinutes: 45,
+        },
+      };
+      formAdminApi.fetchFormById.mockResolvedValue(existingFormWithPayment);
+      formAdminApi.updateForm.mockResolvedValue(existingFormWithPayment);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument();
+      });
+
+      const enableCheckbox = screen.getByRole('checkbox', { name: /Bật thanh toán/i });
+      expect(enableCheckbox).toBeChecked();
+      expect(enableCheckbox).toBeDisabled();
+      expect(screen.getByText(/Chỉ chủ tài khoản đổi được thông tin nhận tiền/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const [, payload] = formAdminApi.updateForm.mock.calls[0];
+      expect(payload).not.toHaveProperty('paymentConfig');
+    });
+
+    it('validate: bật thanh toán nhưng bỏ trống các trường bắt buộc -> báo lỗi, chặn lưu', async () => {
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form thiếu thông tin thanh toán' },
+      });
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      expect(formAdminApi.createForm).not.toHaveBeenCalled();
+      expect(screen.getByText('Số tiền phải từ 1.000 đến 100.000.000 VND')).toBeInTheDocument();
+      expect(screen.getByText('Vui lòng chọn ngân hàng')).toBeInTheDocument();
+      expect(screen.getByText('Số tài khoản phải gồm 6-19 chữ số')).toBeInTheDocument();
+      expect(screen.getByText('Vui lòng nhập tên chủ tài khoản')).toBeInTheDocument();
     });
   });
 });

@@ -58,6 +58,7 @@ export const superAdminMenuItems = (t) => [
   { key: 'plan_management', name: t('nav.planManagement'), defaultCategory: 'business', path: '/admin/plans', icon: HiOutlineCurrencyDollar },
   { key: 'voucher_management', name: t('nav.voucherManagement'), defaultCategory: 'business', path: '/admin/vouchers', icon: HiOutlineTicket },
   { key: 'orders', name: t('nav.orders'), defaultCategory: 'business', path: '/admin/orders', icon: HiOutlineClipboardList },
+  { key: 'form_payment_management', name: t('nav.formPaymentManagement'), defaultCategory: 'business', path: '/admin/forms', icon: HiOutlineCurrencyDollar },
   { key: 'einvoices', name: t('nav.einvoices'), defaultCategory: 'business', path: '/admin/einvoices', icon: HiOutlineDocumentText },
   { key: 'affiliate_management', name: t('nav.affiliateManagement'), defaultCategory: 'business', path: '/admin/affiliate', icon: HiOutlineCurrencyDollar },
   { key: 'server_monitoring', name: t('nav.serverMonitoring'), defaultCategory: 'monitoring', path: '/admin/health/system', icon: HiOutlineServer },

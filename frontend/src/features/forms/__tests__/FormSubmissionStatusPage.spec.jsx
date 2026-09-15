@@ -1,0 +1,232 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { I18nProvider } from '../../../i18n';
+import FormSubmissionStatusPage from '../pages/FormSubmissionStatusPage';
+import { fetchPublicSubmissionStatus } from '../services/formPublicApi.service';
+
+vi.mock('../services/formPublicApi.service', () => ({
+  fetchPublicSubmissionStatus: vi.fn(),
+}));
+
+vi.mock('qrcode', () => ({
+  __esModule: true,
+  default: {
+    toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,fake'),
+  },
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-3b — trang trạng thái công khai
+ * /f/:publicKey/s/:accessToken (dùng chung cho "vừa nộp xong" lẫn "mở lại từ thư").
+ */
+function renderStatusPage(path = '/f/pub_1/s/tok_1') {
+  return render(
+    <I18nProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/f/:publicKey/s/:accessToken" element={<FormSubmissionStatusPage />} />
+        </Routes>
+      </MemoryRouter>
+    </I18nProvider>
+  );
+}
+
+const pendingPayment = {
+  status: 'pending_payment',
+  formTitle: 'Form thu tiền giữ chỗ',
+  appointmentAt: null,
+  holdExpired: false,
+  holdExpiresAt: new Date(Date.now() + 125000).toISOString(),
+  payment: {
+    code: 'ABC123',
+    amount: 150000,
+    bankName: 'Vietcombank',
+    accountNumber: '0123456789',
+    accountName: 'NGUYEN VAN A',
+    qrString: '00020101021238570010A00000072701270006970436011300123456789020208QRIBFTTA53037045802VN6304ABCD',
+  },
+};
+
+describe('FormSubmissionStatusPage component', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('đang tải -> hiện spinner + chữ "Đang tải trạng thái..."', async () => {
+    let resolvePromise;
+    fetchPublicSubmissionStatus.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePromise = resolve;
+      })
+    );
+
+    renderStatusPage();
+
+    expect(screen.getByText('Đang tải trạng thái...')).toBeInTheDocument();
+    resolvePromise(pendingPayment);
+    await waitFor(() => expect(screen.queryByText('Đang tải trạng thái...')).not.toBeInTheDocument());
+  });
+
+  it('không tìm thấy bài nộp (404/lỗi) -> hiện màn "Không tìm thấy bài nộp"', async () => {
+    const err = new Error('not found');
+    err.response = { status: 404 };
+    fetchPublicSubmissionStatus.mockRejectedValue(err);
+
+    renderStatusPage();
+
+    await waitFor(() => expect(screen.getByText('Không tìm thấy bài nộp')).toBeInTheDocument());
+    expect(
+      screen.getByText('Đường dẫn không hợp lệ hoặc bài nộp không tồn tại.')
+    ).toBeInTheDocument();
+  });
+
+  it('pending_payment còn hạn + có payment -> hiện QR + 5 dòng thông tin chuyển khoản + đếm ngược', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue(pendingPayment);
+
+    renderStatusPage();
+
+    await waitFor(() => expect(screen.getByAltText('Mã QR chuyển khoản')).toBeInTheDocument());
+    expect(screen.getByAltText('Mã QR chuyển khoản')).toHaveAttribute('src', 'data:image/png;base64,fake');
+
+    expect(screen.getByText('Vietcombank')).toBeInTheDocument();
+    expect(screen.getByText('0123456789')).toBeInTheDocument();
+    expect(screen.getByText('NGUYEN VAN A')).toBeInTheDocument();
+    expect(screen.getByText('150.000 đ')).toBeInTheDocument();
+    expect(screen.getByText('ABC123')).toBeInTheDocument();
+
+    expect(screen.getByTestId('hold-countdown')).toBeInTheDocument();
+  });
+
+  it('pending_payment đã hết hạn giữ chỗ (holdExpired: true) -> KHÔNG hiện QR, hiện màn hết hạn + link quay lại biểu mẫu', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpired: true });
+
+    renderStatusPage('/f/pub_expired/s/tok_expired');
+
+    await waitFor(() => expect(screen.getByText('Hết thời gian giữ chỗ')).toBeInTheDocument());
+    expect(screen.queryByAltText('Mã QR chuyển khoản')).not.toBeInTheDocument();
+
+    const backLink = screen.getByRole('link', { name: 'Quay lại biểu mẫu' });
+    expect(backLink).toHaveAttribute('href', '/f/pub_expired');
+  });
+
+  it('confirmed -> hiện "Đã xác nhận", KHÔNG hiện QR', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue({
+      status: 'confirmed',
+      formTitle: 'Form đã xác nhận',
+      appointmentAt: null,
+      holdExpired: false,
+      holdExpiresAt: null,
+      payment: null,
+    });
+
+    renderStatusPage();
+
+    await waitFor(() => expect(screen.getByText('Đã xác nhận')).toBeInTheDocument());
+    expect(screen.queryByAltText('Mã QR chuyển khoản')).not.toBeInTheDocument();
+  });
+
+  it('cancelled -> hiện "Đã huỷ", KHÔNG hiện QR', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue({
+      status: 'cancelled',
+      formTitle: 'Form đã huỷ',
+      appointmentAt: null,
+      holdExpired: false,
+      holdExpiresAt: null,
+      payment: null,
+    });
+
+    renderStatusPage();
+
+    await waitFor(() => expect(screen.getByText('Đã huỷ')).toBeInTheDocument());
+    expect(screen.queryByAltText('Mã QR chuyển khoản')).not.toBeInTheDocument();
+  });
+
+  describe('đếm ngược + tự làm mới (PR-3b)', () => {
+    function parseCountdownSeconds(text) {
+      const m = text.match(/(\d{2}):(\d{2})/);
+      if (!m) return null;
+      return Number(m[1]) * 60 + Number(m[2]);
+    }
+
+    // React 18 flush hiệu ứng thụ động (useEffect) qua MessageChannel thật, không phải qua
+    // timer bị fake hoá bởi vi.useFakeTimers() — một lần advance lớn không chắc đủ nhịp cho
+    // vòng lặp sự kiện thật xen kẽ; chia nhỏ nhiều bước advance liên tiếp đáng tin cậy hơn.
+    async function flushAsync(totalMs, stepMs = 50) {
+      for (let elapsed = 0; elapsed < totalMs; elapsed += stepMs) {
+        await vi.advanceTimersByTimeAsync(stepMs);
+      }
+    }
+
+    it('đếm ngược giảm dần theo từng giây thật (setInterval 1s)', async () => {
+      vi.useFakeTimers();
+      const holdExpiresAt = new Date(Date.now() + 300000).toISOString();
+      fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpiresAt });
+
+      renderStatusPage();
+      await flushAsync(3000);
+
+      const initial = parseCountdownSeconds(screen.getByTestId('hold-countdown').textContent);
+      expect(initial).not.toBeNull();
+
+      await flushAsync(3000);
+      const later = parseCountdownSeconds(screen.getByTestId('hold-countdown').textContent);
+      expect(initial - later).toBeGreaterThanOrEqual(2);
+      expect(initial - later).toBeLessThanOrEqual(4);
+    });
+
+    it('tự gọi lại API mỗi 30 giây khi còn đang chờ thanh toán (còn hạn)', async () => {
+      vi.useFakeTimers();
+      const holdExpiresAt = new Date(Date.now() + 600000).toISOString();
+      fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpiresAt });
+
+      renderStatusPage();
+      await flushAsync(1000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
+
+      await flushAsync(30000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(2);
+
+      await flushAsync(30000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(3);
+    });
+
+    it('hết đếm ngược -> gọi lại API NGAY, không đợi đủ vòng 30 giây', async () => {
+      vi.useFakeTimers();
+      const holdExpiresAt = new Date(Date.now() + 3000).toISOString();
+      fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpiresAt });
+
+      renderStatusPage();
+      await flushAsync(1000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
+
+      // Chỉ trôi thêm chưa tới 3 giây nữa (tổng kém xa mốc 30 giây) — nếu refetch xảy ra ở đây
+      // thì chắc chắn đến từ nhánh "đếm ngược chạm 0", không phải vòng poll 30 giây.
+      await flushAsync(2500);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it('poll 30 giây KHÔNG chạy khi đã hết hạn giữ chỗ (holdExpired: true ngay từ đầu)', async () => {
+      vi.useFakeTimers();
+      fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpired: true });
+
+      renderStatusPage();
+      await flushAsync(1000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
+
+      await flushAsync(60000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
+    });
+  });
+});

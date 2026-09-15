@@ -16,10 +16,29 @@ import {
   fetchFormById,
   fetchFormSubmissions,
   cancelSubmission,
+  confirmPayment,
 } from '../services/formAdminApi.service';
 import { formatAppointmentAtVn, vnToday } from '../utils/bookingFormat.util';
+import { formatVnd } from '../../../utils/vietqrParser';
 
-const CANCELLABLE_STATUSES = new Set(['submitted', 'confirmed']);
+// PR-3b: pending_payment nhận thêm — chủ có thể huỷ một lượt còn đang chờ chuyển khoản (nhả
+// chỗ ngay, không cần đợi hold_expires_at trôi qua) — khớp backend cancelSubmission fromStatuses.
+const CANCELLABLE_STATUSES = new Set(['submitted', 'confirmed', 'pending_payment']);
+
+/**
+ * Trạng thái HIỂN THỊ của một bài nộp — "hết hạn giữ chỗ" không phải trạng thái lưu trong DB
+ * (tính lúc đọc, giống backend §4.3) — pending_payment mà hold_expires_at đã qua thì hiện khác
+ * với pending_payment còn hạn, dù cột `status` trong DB vẫn là 'pending_payment'.
+ *
+ * @param {{ status: string, holdExpiresAt: string|null }} sub
+ * @returns {'submitted'|'confirmed'|'cancelled'|'pending_payment'|'hold_expired'}
+ */
+function getDisplayStatus(sub) {
+  if (sub.status === 'pending_payment' && sub.holdExpiresAt && new Date(sub.holdExpiresAt).getTime() <= Date.now()) {
+    return 'hold_expired';
+  }
+  return sub.status || 'submitted';
+}
 
 export default function FormSubmissionsPage() {
   const { t, locale } = useI18n();
@@ -39,6 +58,8 @@ export default function FormSubmissionsPage() {
   const [dateFilter, setDateFilter] = useState('');
   const [cancelTargetId, setCancelTargetId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [confirmPaymentTargetId, setConfirmPaymentTargetId] = useState(null);
+  const [confirmingPaymentId, setConfirmingPaymentId] = useState(null);
 
   // API chủ form (GET /api/forms/:id) trả khoá `bookingConfig` (form.repository.js
   // findFormByIdAndOwner), KHÔNG PHẢI `booking` — khoá đó chỉ có ở API công khai
@@ -48,6 +69,13 @@ export default function FormSubmissionsPage() {
     () => Boolean(form?.bookingConfig?.enabled) || submissions.some((s) => Boolean(s.appointmentAt)),
     [form?.bookingConfig?.enabled, submissions]
   );
+  // Cùng logic — form từng bật thu tiền rồi tắt vẫn còn bài nộp mang paymentCode, phải hiện cột.
+  const showPaymentColumns = useMemo(
+    () => Boolean(form?.paymentConfig?.enabled) || submissions.some((s) => Boolean(s.paymentCode)),
+    [form?.paymentConfig?.enabled, submissions]
+  );
+  const showStatusColumn = showBookingColumns || showPaymentColumns;
+  const showActionsColumn = showBookingColumns || showPaymentColumns;
 
   const formKeyOrderMap = useMemo(() => {
     const map = new Map();
@@ -115,6 +143,38 @@ export default function FormSubmissionsPage() {
       loadData(pagination.page);
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const handleRequestConfirmPayment = (submissionId) => setConfirmPaymentTargetId(submissionId);
+  const handleAbortConfirmPayment = () => setConfirmPaymentTargetId(null);
+
+  const handleConfirmPaymentReceived = async (submissionId) => {
+    setConfirmingPaymentId(submissionId);
+    try {
+      const updated = await confirmPayment(id, submissionId);
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === submissionId
+            ? { ...s, status: updated?.status || 'confirmed', paidConfirmedAt: updated?.paidConfirmedAt || new Date().toISOString() }
+            : s
+        )
+      );
+      toast.success(t('forms.submissionsPage.confirmPaymentSuccess'));
+      setConfirmPaymentTargetId(null);
+    } catch (err) {
+      const code = err.response?.data?.code;
+      const msg =
+        code === 'FORM_SLOT_TAKEN'
+          ? t('forms.submissionsPage.confirmPaymentSlotTaken')
+          : code === 'SUBMISSION_NOT_PENDING_PAYMENT'
+            ? t('forms.submissionsPage.confirmPaymentNotPending')
+            : err.response?.data?.message || t('forms.submissionsPage.confirmPaymentError');
+      toast.error(msg);
+      setConfirmPaymentTargetId(null);
+      loadData(pagination.page);
+    } finally {
+      setConfirmingPaymentId(null);
     }
   };
 
@@ -220,14 +280,19 @@ export default function FormSubmissionsPage() {
                     {t('forms.submissionsPage.colRespondent')}
                   </th>
                   {showBookingColumns && (
-                    <>
-                      <th className="py-3.5 px-4 sm:px-6 w-44">
-                        {t('forms.submissionsPage.colAppointment')}
-                      </th>
-                      <th className="py-3.5 px-4 sm:px-6 w-32">
-                        {t('forms.submissionsPage.colStatus')}
-                      </th>
-                    </>
+                    <th className="py-3.5 px-4 sm:px-6 w-44">
+                      {t('forms.submissionsPage.colAppointment')}
+                    </th>
+                  )}
+                  {showPaymentColumns && (
+                    <th className="py-3.5 px-4 sm:px-6 w-40">
+                      {t('forms.submissionsPage.colPayment')}
+                    </th>
+                  )}
+                  {showStatusColumn && (
+                    <th className="py-3.5 px-4 sm:px-6 w-32">
+                      {t('forms.submissionsPage.colStatus')}
+                    </th>
                   )}
                   <th className="py-3.5 px-4 sm:px-6 w-36 text-center">
                     {t('forms.submissionsPage.colConsent')}
@@ -235,8 +300,8 @@ export default function FormSubmissionsPage() {
                   <th className="py-3.5 px-4 sm:px-6">
                     {t('forms.submissionsPage.colAnswers')}
                   </th>
-                  {showBookingColumns && (
-                    <th className="py-3.5 px-4 sm:px-6 w-36">
+                  {showActionsColumn && (
+                    <th className="py-3.5 px-4 sm:px-6 w-40">
                       {t('forms.submissionsPage.colActions')}
                     </th>
                   )}
@@ -284,28 +349,46 @@ export default function FormSubmissionsPage() {
                       </td>
 
                       {showBookingColumns && (
-                        <>
-                          {/* Giờ hẹn — LUÔN theo giờ Việt Nam, không phụ thuộc múi giờ trình duyệt */}
-                          <td className="py-4 px-4 sm:px-6 text-xs text-gray-600 whitespace-nowrap">
-                            {sub.appointmentAt ? formatAppointmentAtVn(sub.appointmentAt, locale) : '—'}
-                          </td>
+                        /* Giờ hẹn — LUÔN theo giờ Việt Nam, không phụ thuộc múi giờ trình duyệt */
+                        <td className="py-4 px-4 sm:px-6 text-xs text-gray-600 whitespace-nowrap">
+                          {sub.appointmentAt ? formatAppointmentAtVn(sub.appointmentAt, locale) : '—'}
+                        </td>
+                      )}
 
-                          {/* Trạng thái */}
+                      {showPaymentColumns && (
+                        /* Mã nội dung chuyển khoản + số tiền — để chủ đối chiếu sao kê */
+                        <td className="py-4 px-4 sm:px-6 text-xs whitespace-nowrap">
+                          {sub.paymentCode ? (
+                            <div className="space-y-0.5">
+                              <div className="font-mono font-semibold text-gray-800">{sub.paymentCode}</div>
+                              <div className="text-gray-500">{formatVnd(sub.paymentAmount)}</div>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      )}
+
+                      {showStatusColumn && (() => {
+                        const displayStatus = getDisplayStatus(sub);
+                        const statusClass =
+                          displayStatus === 'cancelled'
+                            ? 'bg-gray-100 text-gray-600 border-gray-200'
+                            : displayStatus === 'confirmed'
+                              ? 'bg-green-50 text-green-700 border-green-200'
+                              : displayStatus === 'pending_payment'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : displayStatus === 'hold_expired'
+                                  ? 'bg-red-50 text-red-600 border-red-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200';
+                        return (
                           <td className="py-4 px-4 sm:px-6">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                                sub.status === 'cancelled'
-                                  ? 'bg-gray-100 text-gray-600 border-gray-200'
-                                  : sub.status === 'confirmed'
-                                    ? 'bg-green-50 text-green-700 border-green-200'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200'
-                              }`}
-                            >
-                              {t(`forms.submissionsPage.status.${sub.status || 'submitted'}`)}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusClass}`}>
+                              {t(`forms.submissionsPage.status.${displayStatus}`)}
                             </span>
                           </td>
-                        </>
-                      )}
+                        );
+                      })()}
 
                       {/* Đồng ý tiếp thị */}
                       <td className="py-4 px-4 sm:px-6 text-center">
@@ -356,46 +439,87 @@ export default function FormSubmissionsPage() {
                         </div>
                       </td>
 
-                      {showBookingColumns && (
+                      {showActionsColumn && (
                         <td className="py-4 px-4 sm:px-6">
-                          {CANCELLABLE_STATUSES.has(sub.status) && sub.appointmentAt ? (
-                            cancelTargetId === sub.id ? (
-                              <div className="space-y-1.5">
-                                <p className="text-xs text-gray-600">
-                                  {t('forms.submissionsPage.cancelConfirmDesc')}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleConfirmCancel(sub.id)}
-                                    disabled={cancellingId === sub.id}
-                                    className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50"
-                                  >
-                                    {cancellingId === sub.id
-                                      ? t('forms.submissionsPage.cancelling')
-                                      : t('forms.submissionsPage.cancelConfirmYes')}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleAbortCancel}
-                                    disabled={cancellingId === sub.id}
-                                    className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium"
-                                  >
-                                    {t('forms.submissionsPage.cancelConfirmNo')}
-                                  </button>
-                                </div>
+                          {confirmPaymentTargetId === sub.id ? (
+                            <div className="space-y-1.5">
+                              <p className="text-xs text-gray-600">
+                                {t('forms.submissionsPage.confirmPaymentConfirmDesc', {
+                                  code: sub.paymentCode,
+                                  amount: formatVnd(sub.paymentAmount),
+                                })}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfirmPaymentReceived(sub.id)}
+                                  disabled={confirmingPaymentId === sub.id}
+                                  className="px-2.5 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium disabled:opacity-50"
+                                >
+                                  {confirmingPaymentId === sub.id
+                                    ? t('forms.submissionsPage.confirmPaymentProcessing')
+                                    : t('forms.submissionsPage.confirmPaymentConfirmYes')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleAbortConfirmPayment}
+                                  disabled={confirmingPaymentId === sub.id}
+                                  className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium"
+                                >
+                                  {t('forms.submissionsPage.cancelConfirmNo')}
+                                </button>
                               </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleRequestCancel(sub.id)}
-                                className="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-medium"
-                              >
-                                {t('forms.submissionsPage.cancelButton')}
-                              </button>
-                            )
+                            </div>
+                          ) : cancelTargetId === sub.id ? (
+                            <div className="space-y-1.5">
+                              <p className="text-xs text-gray-600">
+                                {t('forms.submissionsPage.cancelConfirmDesc')}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfirmCancel(sub.id)}
+                                  disabled={cancellingId === sub.id}
+                                  className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50"
+                                >
+                                  {cancellingId === sub.id
+                                    ? t('forms.submissionsPage.cancelling')
+                                    : t('forms.submissionsPage.cancelConfirmYes')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleAbortCancel}
+                                  disabled={cancellingId === sub.id}
+                                  className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium"
+                                >
+                                  {t('forms.submissionsPage.cancelConfirmNo')}
+                                </button>
+                              </div>
+                            </div>
                           ) : (
-                            <span className="text-gray-300 text-xs">—</span>
+                            <div className="flex flex-col items-start gap-1.5">
+                              {sub.status === 'pending_payment' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRequestConfirmPayment(sub.id)}
+                                  className="px-2.5 py-1.5 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 text-xs font-medium"
+                                >
+                                  {t('forms.submissionsPage.confirmPaymentButton')}
+                                </button>
+                              )}
+                              {CANCELLABLE_STATUSES.has(sub.status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRequestCancel(sub.id)}
+                                  className="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-medium"
+                                >
+                                  {t('forms.submissionsPage.cancelButton')}
+                                </button>
+                              )}
+                              {sub.status !== 'pending_payment' && !CANCELLABLE_STATUSES.has(sub.status) && (
+                                <span className="text-gray-300 text-xs">—</span>
+                              )}
+                            </div>
                           )}
                         </td>
                       )}

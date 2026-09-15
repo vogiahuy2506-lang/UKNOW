@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import {
   fetchPublicForm,
@@ -8,9 +8,11 @@ import {
 } from '../services/formPublicApi.service';
 import FormRenderer from '../components/FormRenderer';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
+import { formatVnd } from '../../../utils/vietqrParser';
 
 export default function PublicFormPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { publicKey } = useParams();
   const [searchParams] = useSearchParams();
   const embedMode = searchParams.get('embed') === '1';
@@ -74,11 +76,21 @@ export default function PublicFormPage() {
     setSubmitError('');
     setIsSubmitting(true);
     try {
-      await submitPublicForm(publicKey, payload);
+      const result = await submitPublicForm(publicKey, payload);
+      // PR-3b (Bổ sung 15/09): nộp bài trả `payment` -> chuyển sang trang trạng thái công khai
+      // (dùng CHUNG cho "vừa nộp xong" lẫn "mở lại từ thư") thay vì hiện màn thành công của
+      // FormRenderer — form không thu tiền thì payment=null, giữ nguyên màn thành công cũ.
+      if (result?.payment && result?.accessToken) {
+        const statusPath = `/f/${encodeURIComponent(publicKey)}/s/${encodeURIComponent(result.accessToken)}`;
+        navigate(embedMode ? `${statusPath}?embed=1` : statusPath, { replace: true });
+      }
     } catch (err) {
       setIsSubmitting(false);
       const status = err.response?.status;
-      if (status === 429) {
+      const code = err.response?.data?.code;
+      if (code === 'FORM_TOO_MANY_PENDING_HOLDS') {
+        setSubmitError(t('publicForm.payment.tooManyPendingHolds'));
+      } else if (status === 429) {
         setSubmitError(t('publicForm.rateLimitError'));
       } else {
         const msg = err.response?.data?.message || t('publicForm.submitError');
@@ -168,6 +180,11 @@ export default function PublicFormPage() {
   // 5. Render biểu mẫu
   return (
     <div ref={embedRootRef} className={formWrapperClass}>
+      {form?.payment?.enabled && (
+        <div className="w-full max-w-xl mx-auto mb-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm font-medium text-center">
+          {t('publicForm.payment.requiredNotice', { amount: formatVnd(form.payment.amount) })}
+        </div>
+      )}
       <FormRenderer
         form={form}
         onSubmit={handleSubmit}
