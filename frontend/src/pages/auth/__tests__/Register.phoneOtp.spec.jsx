@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Register from '../Register';
@@ -51,6 +51,10 @@ describe('Register.jsx — ô SĐT theo cờ phoneOtpEnabled & Đăng ký Google
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('cờ tắt → hiện ô SĐT, bắt buộc (giữ nguyên hành vi hôm nay)', () => {
     m.phoneOtpEnabled = false;
 
@@ -74,6 +78,10 @@ describe('Register.jsx — ô SĐT theo cờ phoneOtpEnabled & Đăng ký Google
   });
 
   it('PR-B: đăng ký Google không mở hộp đồng ý, gọi googleLogin trực tiếp không có consents', async () => {
+    // Register.jsx chỉ render nút Google khi có VITE_GOOGLE_CLIENT_ID. Máy dev có sẵn trong
+    // frontend/.env nên ca này xanh cục bộ, nhưng job test-frontend trên CI không đặt biến
+    // này (chỉ bước build của deploy-frontend có) — thiếu stub là đỏ trên CI.
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-google-client-id');
     renderRegister();
 
     const googleBtn = screen.getByTestId('google-auth-btn');
