@@ -283,3 +283,65 @@ describe('PublicFormPage — PR-3b thanh toán giữ chỗ', () => {
     );
   });
 });
+
+/**
+ * Review PR-3b 15/09 — ca đầu-cuối trên PublicFormPage thật (không giả onSubmit): form thu tiền có
+ * redirectUrl, nộp xong phải ở lại trang trạng thái. Thiếu `return { navigated: true }` ở
+ * handleSubmit thì FormRenderer gán window.location.href sang trang cảm ơn, khách không thấy QR —
+ * ca ở FormRenderer.spec giả onSubmit nên không bắt được việc PublicFormPage quên trả tín hiệu.
+ */
+describe('PublicFormPage — PR-3b form thu tiền có redirectUrl', () => {
+  let originalResizeObserver;
+  let originalLocation;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = StubResizeObserver;
+    originalLocation = window.location;
+    delete window.location;
+    window.location = {
+      href: 'http://localhost:5174/f/pub_pay',
+      origin: 'http://localhost:5174',
+      pathname: '/f/pub_pay',
+      search: '',
+      hash: '',
+    };
+  });
+
+  afterEach(() => {
+    window.location = originalLocation;
+    window.ResizeObserver = originalResizeObserver;
+  });
+
+  const withRedirect = (extra) => ({
+    ...baseForm,
+    settings: { ...baseForm.settings, redirectUrl: 'https://example.com/cam-on' },
+    ...extra,
+  });
+
+  it('form thu tiền: sang trang trạng thái, KHÔNG chuyển tới redirectUrl', async () => {
+    fetchPublicForm.mockResolvedValue(withRedirect({ payment: { enabled: true, amount: 150000 } }));
+    submitPublicForm.mockResolvedValue({ id: 'sub-1', accessToken: 'tok-xyz', payment: { code: 'ABC123', amount: 150000 } });
+
+    renderPagePr3b('/f/pub_pay');
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(screen.getByTestId('status-page-marker')).toBeInTheDocument());
+    expect(window.location.href).toBe('http://localhost:5174/f/pub_pay');
+  });
+
+  it('đối chứng — form KHÔNG thu tiền: vẫn chuyển tới redirectUrl như cũ', async () => {
+    fetchPublicForm.mockResolvedValue(withRedirect());
+    submitPublicForm.mockResolvedValue({ id: 'sub-2', accessToken: 'tok-abc', payment: null });
+
+    renderPagePr3b('/f/pub_pay');
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(window.location.href).toBe('https://example.com/cam-on'));
+  });
+});
