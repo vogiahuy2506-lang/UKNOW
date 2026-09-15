@@ -23,7 +23,7 @@ import {
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
 import { PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../utils/passwordValidation';
-import { isPlausiblePhone } from '../../utils/phoneValidation';
+import { isValidAccountPhone } from '../../utils/phoneValidation';
 import { getStoredReferralCode, captureReferralFromUrl, clearStoredReferralCode } from '../../utils/referralStorage';
 
 /**
@@ -57,7 +57,7 @@ const registerSchema = (t, { phoneOtpEnabled = false } = {}) => z.object({
     ? z.string().optional()
     : z.string()
       .min(1, t('register.phoneRequired'))
-      .refine(isPlausiblePhone, { message: t('register.invalidPhone') }),
+      .refine(isValidAccountPhone, { message: t('register.invalidPhone') }),
   referralCode: z.string().optional(),
 }).refine((d) => d.password === d.confirmPassword, {
   message: t('auth.passwordMismatch'),

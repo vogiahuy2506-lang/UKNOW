@@ -3,7 +3,7 @@ import db from '../config/database.js';
 import verificationService from '../services/verification.service.js';
 import verificationRepository from '../repositories/verification.repository.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
-import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
+import { normalizePhoneForZaloCampaign, isValidAccountPhone, INVALID_ACCOUNT_PHONE_MESSAGE } from '../utils/zaloPhoneCampaign.util.js';
 import { isCurrentlyAnyonesEmployee } from '../repositories/user/user.repository.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -134,8 +134,8 @@ class VerificationController {
     try {
       const userId = req.user.id;
       const normalizedPhone = normalizePhoneForZaloCampaign(req.body?.phone);
-      if (!isValidNormalizedPhoneLength(normalizedPhone)) {
-        return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
+      if (!isValidAccountPhone(normalizedPhone)) {
+        return res.status(400).json({ success: false, message: INVALID_ACCOUNT_PHONE_MESSAGE });
       }
 
       await verificationService.sendPhoneOtp({ userId, phone: normalizedPhone });
@@ -184,8 +184,8 @@ class VerificationController {
 
     const userId = req.user.id;
     const normalizedPhone = normalizePhoneForZaloCampaign(req.body?.phone);
-    if (!isValidNormalizedPhoneLength(normalizedPhone)) {
-      return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
+    if (!isValidAccountPhone(normalizedPhone)) {
+      return res.status(400).json({ success: false, message: INVALID_ACCOUNT_PHONE_MESSAGE });
     }
 
     try {

@@ -13,6 +13,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createVerificationCode } from './helpers/db.js';
+import { INVALID_ACCOUNT_PHONE_MESSAGE } from '../../src/utils/zaloPhoneCampaign.util.js';
 
 let app;
 
@@ -180,6 +181,22 @@ describe('PUT /api/users/me/phone', () => {
       .send({ phone: '123' });
 
     expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
+  });
+
+  it('SĐT nhập bừa 1111111111 → 400 kèm INVALID_ACCOUNT_PHONE_MESSAGE, DB phone vẫn NULL', async () => {
+    const user = await createUser({ username: 'junkphone', phone: null });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/me/phone')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '1111111111' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
+    const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [user.id]);
+    expect(rows[0].phone).toBeNull();
   });
 
   it('route này KHÔNG bị requirePhone chặn — nếu bị thì user không có đường thoát', async () => {
@@ -262,7 +279,16 @@ describe('Đăng ký chấp nhận mọi định dạng SĐT hợp lý (route kh
   it('rác hoàn toàn ("abc") → 400, không tạo tài khoản', async () => {
     const res = await registerWithPhone('abc', '5');
     expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
     const { rows } = await db.query('SELECT id FROM users WHERE username = $1', ['fmt5']);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('đăng ký email với 1111111111 → 400 kèm INVALID_ACCOUNT_PHONE_MESSAGE, không tạo user', async () => {
+    const res = await registerWithPhone('1111111111', 'junk');
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
+    const { rows } = await db.query('SELECT id FROM users WHERE username = $1', ['fmtjunk']);
     expect(rows).toHaveLength(0);
   });
 });
@@ -333,6 +359,22 @@ describe('PUT /api/users/profile chấp nhận mọi định dạng SĐT hợp l
       .send({ phone: '123' });
 
     expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
+  });
+
+  it('SĐT nhập bừa 1111111111 → 400 kèm INVALID_ACCOUNT_PHONE_MESSAGE, số trong DB không đổi', async () => {
+    const user = await createUser({ username: 'prof_junk', phone: '0912000055' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '1111111111' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
+    const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [user.id]);
+    expect(rows[0].phone).toBe('0912000055');
   });
 
   it('không truyền phone (chỉ sửa fullName) → 200, giữ nguyên phone cũ', async () => {

@@ -19,7 +19,7 @@ import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.
 import { getSystemAuditContext } from '../utils/auditContext.util.js';
 import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
-import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
+import { normalizePhoneForZaloCampaign, isValidAccountPhone, INVALID_ACCOUNT_PHONE_MESSAGE } from '../utils/zaloPhoneCampaign.util.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
@@ -107,8 +107,8 @@ class AuthController {
       let normalizedPhone = null;
       if (!isPhoneOtpEnabled()) {
         normalizedPhone = normalizePhoneForZaloCampaign(phone);
-        if (!isValidNormalizedPhoneLength(normalizedPhone)) {
-          throw { status: 400, message: 'Số điện thoại không hợp lệ' };
+        if (!isValidAccountPhone(normalizedPhone)) {
+          throw { status: 400, message: INVALID_ACCOUNT_PHONE_MESSAGE };
         }
         const existingPhone = await client.query(
           'SELECT id FROM users WHERE phone = $1',

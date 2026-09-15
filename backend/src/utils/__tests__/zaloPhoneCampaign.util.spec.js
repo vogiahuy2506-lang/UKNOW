@@ -1,7 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
 import {
   normalizePhoneForZaloCampaign,
-  isValidNormalizedPhoneLength,
+  isValidAccountPhone,
+  INVALID_ACCOUNT_PHONE_MESSAGE,
 } from '../zaloPhoneCampaign.util.js';
 
 describe('normalizePhoneForZaloCampaign', () => {
@@ -40,41 +41,76 @@ describe('normalizePhoneForZaloCampaign', () => {
   });
 });
 
-describe('isValidNormalizedPhoneLength', () => {
-  it('10 số (di động VN chuẩn) → hợp lệ', () => {
-    expect(isValidNormalizedPhoneLength('0912345678')).toBe(true);
+describe('isValidAccountPhone', () => {
+  it('10 số di động Việt Nam các đầu số 03, 05, 07, 08, 09 → hợp lệ', () => {
+    expect(isValidAccountPhone('0312345678')).toBe(true);
+    expect(isValidAccountPhone('0512345678')).toBe(true);
+    expect(isValidAccountPhone('0712345678')).toBe(true);
+    expect(isValidAccountPhone('0812345678')).toBe(true);
+    expect(isValidAccountPhone('0912345678')).toBe(true);
   });
 
-  it('11 số (số bàn có mã vùng) → hợp lệ', () => {
-    expect(isValidNormalizedPhoneLength('02412345678')).toBe(true);
+  it('số không bắt đầu bằng đầu số di động VN hợp lệ → không hợp lệ', () => {
+    expect(isValidAccountPhone('1111111111')).toBe(false);
+    expect(isValidAccountPhone('0111111111')).toBe(false);
+    expect(isValidAccountPhone('02838123456')).toBe(false); // số bàn 11 số
+    expect(isValidAccountPhone('0412345678')).toBe(false);
+    expect(isValidAccountPhone('0612345678')).toBe(false);
   });
 
-  it('9 số → KHÔNG hợp lệ (đây chính là ca Bẫy 2b bị bắt qua ngưỡng độ dài)', () => {
-    expect(isValidNormalizedPhoneLength('812345678')).toBe(false);
+  it('độ dài khác 10 chữ số → không hợp lệ', () => {
+    expect(isValidAccountPhone('091234567')).toBe(false); // 9 số
+    expect(isValidAccountPhone('09123456789')).toBe(false); // 11 số
+    expect(isValidAccountPhone('091234567890')).toBe(false); // 12 số
   });
 
-  it('12 số → KHÔNG hợp lệ', () => {
-    expect(isValidNormalizedPhoneLength('091234567890')).toBe(false);
+  it('chuỗi rỗng / null / undefined / chữ cái → không hợp lệ', () => {
+    expect(isValidAccountPhone('')).toBe(false);
+    expect(isValidAccountPhone(null)).toBe(false);
+    expect(isValidAccountPhone(undefined)).toBe(false);
+    expect(isValidAccountPhone('abc1234567890')).toBe(false);
   });
 
-  it('rỗng → KHÔNG hợp lệ', () => {
-    expect(isValidNormalizedPhoneLength('')).toBe(false);
-  });
-
-  it('null/undefined → KHÔNG hợp lệ, không throw', () => {
-    expect(isValidNormalizedPhoneLength(null)).toBe(false);
-    expect(isValidNormalizedPhoneLength(undefined)).toBe(false);
+  it('INVALID_ACCOUNT_PHONE_MESSAGE đúng nội dung thông báo', () => {
+    expect(INVALID_ACCOUNT_PHONE_MESSAGE).toBe(
+      'Số điện thoại phải là số di động Việt Nam gồm 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09'
+    );
   });
 });
 
-describe('normalizePhoneForZaloCampaign + isValidNormalizedPhoneLength (kết hợp — mô phỏng dòng chảy thật trong controller)', () => {
-  it('"+84 912 345 678" đi qua cả hai bước → hợp lệ', () => {
-    const normalized = normalizePhoneForZaloCampaign('+84 912 345 678');
-    expect(isValidNormalizedPhoneLength(normalized)).toBe(true);
+describe('Bảng ca kiểm tra kết hợp normalizePhoneForZaloCampaign + isValidAccountPhone (mục 3 plan)', () => {
+  const validCases = [
+    '0987654321',
+    '0312345678',
+    '0912-345-678',
+    '+84 912 345 678',
+    '84912345678',
+    '912345678',
+  ];
+
+  validCases.forEach((input) => {
+    it(`"${input}" → đạt`, () => {
+      const normalized = normalizePhoneForZaloCampaign(input);
+      expect(isValidAccountPhone(normalized)).toBe(true);
+    });
   });
 
-  it('"abc" đi qua cả hai bước → không hợp lệ, không throw', () => {
-    const normalized = normalizePhoneForZaloCampaign('abc');
-    expect(isValidNormalizedPhoneLength(normalized)).toBe(false);
+  const invalidCases = [
+    '1111111111',
+    '0111111111',
+    'abc1234567890',
+    '02838123456',
+    '09123456789',
+    '091234567',
+    '312345678',
+    '',
+    null,
+  ];
+
+  invalidCases.forEach((input) => {
+    it(`"${input}" → trượt`, () => {
+      const normalized = normalizePhoneForZaloCampaign(input);
+      expect(isValidAccountPhone(normalized)).toBe(false);
+    });
   });
 });

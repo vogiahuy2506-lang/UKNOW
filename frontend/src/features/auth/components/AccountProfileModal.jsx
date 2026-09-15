@@ -17,7 +17,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile, getUserConsentHistory } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
-import { isPlausiblePhone } from '../../../utils/phoneValidation';
+import { isValidAccountPhone } from '../../../utils/phoneValidation';
 import PhoneRequiredModal from './PhoneRequiredModal';
 import PlanSection from '../../billing/PlanSection';
 import OrderHistoryTab from '../../billing/OrderHistoryTab';
@@ -304,7 +304,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
     const payload = buildSubmitPayload();
     if (!payload.email) { setError(t('accountProfileModal.emailRequired')); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) { setError(t('accountProfileModal.emailInvalid')); return; }
-    if (payload.phone && !isPlausiblePhone(payload.phone)) {
+    if (payload.phone && !isValidAccountPhone(payload.phone)) {
       setError(t('accountProfileModal.phoneInvalid'));
       return;
     }

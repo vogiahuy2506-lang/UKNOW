@@ -4,7 +4,7 @@ import { HiOutlinePhone, HiOutlineShieldCheck } from 'react-icons/hi';
 import { updateMyPhone, sendPhoneOtpCode, verifyPhoneOtpCode } from '../services/authApi.service';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
-import { isPlausiblePhone } from '../../../utils/phoneValidation';
+import { isValidAccountPhone } from '../../../utils/phoneValidation';
 
 const RESEND_COOLDOWN = 60;
 
@@ -109,7 +109,7 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
     e.preventDefault();
     setError('');
 
-    if (!isPlausiblePhone(phone)) {
+    if (!isValidAccountPhone(phone)) {
       setError(t('phoneRequired.validationInvalid'));
       return;
     }

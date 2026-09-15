@@ -41,7 +41,7 @@ import {
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
 import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
-import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
+import { normalizePhoneForZaloCampaign, isValidAccountPhone, INVALID_ACCOUNT_PHONE_MESSAGE } from '../utils/zaloPhoneCampaign.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
 import { recordConsents, getUserConsentHistory, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
@@ -366,8 +366,8 @@ class UserController {
       let normalizedPhone = phone;
       if (phone !== undefined && phone !== null) {
         normalizedPhone = normalizePhoneForZaloCampaign(phone);
-        if (!isValidNormalizedPhoneLength(normalizedPhone)) {
-          return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
+        if (!isValidAccountPhone(normalizedPhone)) {
+          return res.status(400).json({ success: false, message: INVALID_ACCOUNT_PHONE_MESSAGE });
         }
         const existingPhone = await findUserByPhoneExceptId(normalizedPhone, userId);
         if (existingPhone) {
@@ -472,8 +472,8 @@ class UserController {
     try {
       const userId = req.user.id;
       const normalizedPhone = normalizePhoneForZaloCampaign(req.body?.phone);
-      if (!isValidNormalizedPhoneLength(normalizedPhone)) {
-        return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ' });
+      if (!isValidAccountPhone(normalizedPhone)) {
+        return res.status(400).json({ success: false, message: INVALID_ACCOUNT_PHONE_MESSAGE });
       }
 
       const existingPhone = await findUserByPhoneExceptId(normalizedPhone, userId);

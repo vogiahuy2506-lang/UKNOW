@@ -1,3 +1,8 @@
+import { VIETNAMESE_MOBILE_REGEX } from './vietnamesePhone.util.js';
+
+export const INVALID_ACCOUNT_PHONE_MESSAGE =
+  'Số điện thoại phải là số di động Việt Nam gồm 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09';
+
 /**
  * Chuẩn hóa số điện thoại để lưu tra cứu blocklist / binding gửi Zalo trong campaign.
  * Chỉ giữ chữ số; 84xxxxxxxxxx → 0xxxxxxxxxx.
@@ -18,21 +23,16 @@ export function normalizePhoneForZaloCampaign(raw) {
 }
 
 /**
- * Kết quả `normalizePhoneForZaloCampaign` có đủ dài để là một SĐT thật không (10-11
- * chữ số — di động VN chuẩn 10 số dạng 0xxxxxxxxx, giữ thêm 11 cho số bàn cũ có mã
- * vùng). Dùng SAU khi chuẩn hoá, không phải trên input thô — input thô có thể có
- * `+`, khoảng trắng, gạch nối mà vẫn hợp lệ.
+ * Kiểm tra xem chuỗi SĐT đã chuẩn hoá (bằng `normalizePhoneForZaloCampaign`)
+ * có phải là số di động Việt Nam 10 số hợp lệ (bắt đầu bằng 03, 05, 07, 08 hoặc 09) hay không.
  *
- * Dùng chung ở mọi nơi kiểm SĐT (đăng ký, cập nhật hồ sơ, PUT /me/phone) — đừng lặp
- * lại ngưỡng độ dài rải rác ở từng controller, sẽ lệch nhau đúng kiểu hai hàm chuẩn
- * hoá bất đồng ý.
+ * Dùng chung ở mọi nơi kiểm SĐT tài khoản (đăng ký, cập nhật hồ sơ, PUT /me/phone, OTP).
  *
- * @param {string} normalized kết quả từ normalizePhoneForZaloCampaign
+ * @param {string|null|undefined} normalized kết quả từ normalizePhoneForZaloCampaign
  * @returns {boolean}
  */
-export function isValidNormalizedPhoneLength(normalized) {
-  const len = String(normalized ?? '').length;
-  return len >= 10 && len <= 11;
+export function isValidAccountPhone(normalized) {
+  return VIETNAMESE_MOBILE_REGEX.test(String(normalized ?? ''));
 }
 
 /**
