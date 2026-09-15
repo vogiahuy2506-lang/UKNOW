@@ -97,7 +97,16 @@ jobs:
             BUILD_SHA=${{ github.sha }}
             LP_APEX_FIXED_IP=${{ secrets.LP_APEX_FIXED_IP }}
             LP_CNAME_TARGET=${{ secrets.LP_CNAME_TARGET }}
-          cache-from: type=gha
+            TELEGRAM_GATEWAY_SECRET=${{ secrets.TELEGRAM_GATEWAY_SECRET }}
+            TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
+            TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+            TELEGRAM_GATEWAY_TRANSPORT=${{ secrets.TELEGRAM_GATEWAY_TRANSPORT }}
+            TELEGRAM_CONNECT_TIMEOUT_MS=${{ secrets.TELEGRAM_CONNECT_TIMEOUT_MS }}
+          # Không dùng cache-from: lần build trước đã "tái sử dụng" layer cũ không có
+          # ENV TELEGRAM_*, khiến image b8fc6342 deploy lên production thiếu 5 ENV
+          # Telegram → gateway không bao giờ start. Tắt cache-from cho tới khi xác
+          # nhận ENV được inject đúng (xem git log comment về cache poisoning).
+          # cache-to vẫn lưu để build sau dùng lại được khi Dockerfile không đổi.
           cache-to: type=gha,mode=max
 
       - name: Verify image on registry
