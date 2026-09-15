@@ -133,6 +133,7 @@ const WIZARD_CHANNEL_LABELS = {
 
 const WIZARD_DATA_SOURCE_LABELS = {
   landing: { vi: 'Đăng ký từ Landing Page', en: 'Landing page sign-ups' },
+  form: { vi: 'Người điền Biểu mẫu', en: 'Form respondents' },
   sheet: { vi: 'File Excel / Google Sheet', en: 'Excel / Google Sheet' },
   db: { vi: 'Danh sách khách hàng', en: 'Saved customer list' },
 };

@@ -156,3 +156,29 @@ describe('findLatestInteractiveIndex — thẻ trước ranh giới không còn 
     expect(findLatestInteractiveIndex(null, INTERACTIVE)).toBe(-1);
   });
 });
+
+describe('PR-6c: applyWizardSelectionsToScript — dataSource "form" đổi node interested_customers thành read_form_submissions', () => {
+  it('dataSource=form + context.formId → node đổi subtype và điền config.formId', () => {
+    const script = {
+      campaignType: 'email',
+      nodes: [
+        { nodeSubtype: 'interested_customers', config: {} },
+      ],
+    };
+    const next = applyWizardSelectionsToScript(script, { dataSource: 'form', formId: 12 });
+    expect(next.nodes[0].nodeSubtype).toBe('read_form_submissions');
+    expect(next.nodes[0].config.formId).toBe(12);
+  });
+
+  it('dataSource=form không có context.formId → config.formId rỗng, chờ chọn trong builder', () => {
+    const script = {
+      campaignType: 'email',
+      nodes: [
+        { nodeSubtype: 'interested_customers', config: {} },
+      ],
+    };
+    const next = applyWizardSelectionsToScript(script, { dataSource: 'form', senderAccountId: 7 });
+    expect(next.nodes[0].nodeSubtype).toBe('read_form_submissions');
+    expect(next.nodes[0].config.formId).toBe('');
+  });
+});

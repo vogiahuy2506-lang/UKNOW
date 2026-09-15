@@ -190,6 +190,15 @@ export const applyWizardSelectionsToScript = (script, context = {}) => {
             config: { landingLeadsSlugs: [] },
           };
         }
+        if (context.dataSource === 'form' && node.nodeSubtype === 'interested_customers') {
+          return {
+            ...node,
+            nodeSubtype: 'read_form_submissions',
+            nodeName: 'Dữ liệu Biểu mẫu',
+            nodeDescription: 'Người đã nộp Biểu mẫu và đồng ý nhận tin.',
+            config: { formId: context.formId || '' },
+          };
+        }
         return { ...node, config };
       })
       : script.nodes,
