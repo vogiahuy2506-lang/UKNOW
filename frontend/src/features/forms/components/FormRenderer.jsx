@@ -11,7 +11,10 @@ const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT'])
  *
  * @param {object} props
  * @param {object} props.form - Định nghĩa biểu mẫu (title, description, fields, settings, theme, booking)
- * @param {Function} props.onSubmit - Callback nộp bài: (payload) => Promise<void>
+ * @param {Function} props.onSubmit - Callback nộp bài: (payload) => Promise<{navigated?: boolean}|void>.
+ *   Trả `{ navigated: true }` khi caller đã tự điều hướng đi nơi khác (PR-3b: nộp bài thu tiền ->
+ *   trang trạng thái) — FormRenderer bỏ qua redirectUrl/màn thành công của chính nó trong trường
+ *   hợp đó, tránh chồng lên điều hướng caller vừa làm.
  * @param {boolean} [props.isSubmitting] - Trạng thái đang gửi từ bên ngoài
  * @param {string} [props.externalError] - Lỗi từ server (nếu có)
  * @param {boolean} [props.previewMode] - Chế độ xem trước trong trình soạn thảo
@@ -237,7 +240,13 @@ export default function FormRenderer({
       }
 
       if (onSubmit) {
-        await onSubmit(payload);
+        const submitResult = await onSubmit(payload);
+        // Caller đã tự điều hướng (PR-3b: nộp bài thu tiền -> trang trạng thái) — không chạy
+        // tiếp redirectUrl/màn thành công của FormRenderer, tránh window.location.href đè lên
+        // navigate() caller vừa gọi.
+        if (submitResult?.navigated) {
+          return;
+        }
       }
 
       if (bookingEnabled && selectedSlot) {

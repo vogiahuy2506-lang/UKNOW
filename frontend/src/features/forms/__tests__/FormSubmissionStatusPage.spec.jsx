@@ -107,6 +107,10 @@ describe('FormSubmissionStatusPage component', () => {
     expect(screen.getByText('ABC123')).toBeInTheDocument();
 
     expect(screen.getByTestId('hold-countdown')).toBeInTheDocument();
+
+    const reportLink = screen.getByRole('link', { name: 'Báo cáo vấn đề' });
+    expect(reportLink).toHaveAttribute('href', '/contact');
+    expect(reportLink).toHaveAttribute('target', '_blank');
   });
 
   it('pending_payment đã hết hạn giữ chỗ (holdExpired: true) -> KHÔNG hiện QR, hiện màn hết hạn + link quay lại biểu mẫu', async () => {
@@ -134,6 +138,23 @@ describe('FormSubmissionStatusPage component', () => {
     renderStatusPage();
 
     await waitFor(() => expect(screen.getByText('Đã xác nhận')).toBeInTheDocument());
+    expect(screen.queryByAltText('Mã QR chuyển khoản')).not.toBeInTheDocument();
+  });
+
+  it('review 15/09: submitted (form không thu tiền, chỉ dùng chung trang trạng thái) -> hiện "Đã ghi nhận", KHÔNG dùng chung chữ "Đã xác nhận" với trạng thái confirmed', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue({
+      status: 'submitted',
+      formTitle: 'Form không thu tiền',
+      appointmentAt: null,
+      holdExpired: false,
+      holdExpiresAt: null,
+      payment: null,
+    });
+
+    renderStatusPage();
+
+    await waitFor(() => expect(screen.getByText('Đã ghi nhận')).toBeInTheDocument());
+    expect(screen.queryByText('Đã xác nhận')).not.toBeInTheDocument();
     expect(screen.queryByAltText('Mã QR chuyển khoản')).not.toBeInTheDocument();
   });
 
@@ -186,6 +207,49 @@ describe('FormSubmissionStatusPage component', () => {
       expect(initial - later).toBeLessThanOrEqual(4);
     });
 
+    it('review 15/09: vòng làm mới 30s gặp lỗi mạng tạm thời (không phải 404) -> GIỮ NGUYÊN QR/dữ liệu cũ, không chuyển sang màn "Không tìm thấy bài nộp"', async () => {
+      vi.useFakeTimers();
+      const holdExpiresAt = new Date(Date.now() + 600000).toISOString();
+      fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpiresAt });
+
+      renderStatusPage();
+      await flushAsync(1000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
+      expect(screen.getByAltText('Mã QR chuyển khoản')).toBeInTheDocument();
+
+      const networkErr = new Error('Network Error');
+      networkErr.response = undefined; // lỗi mạng thật thường không có response (khác lỗi 404 có response)
+      fetchPublicSubmissionStatus.mockRejectedValueOnce(networkErr);
+
+      await flushAsync(30000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(2);
+
+      // Vẫn còn QR/dữ liệu của lần tải trước — KHÔNG bị lỗi lần này xoá mất.
+      expect(screen.getByAltText('Mã QR chuyển khoản')).toBeInTheDocument();
+      expect(screen.queryByText('Không tìm thấy bài nộp')).not.toBeInTheDocument();
+    });
+
+    it('review 15/09: vòng làm mới 30s trả 404 (form bị ẩn/tắt/access token hết hiệu lực sau khi khách đã mở trang) -> CHUYỂN sang màn "Không tìm thấy bài nộp" (ca đối chứng — không phải mọi lỗi đều được bỏ qua)', async () => {
+      vi.useFakeTimers();
+      const holdExpiresAt = new Date(Date.now() + 600000).toISOString();
+      fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpiresAt });
+
+      renderStatusPage();
+      await flushAsync(1000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
+      expect(screen.getByAltText('Mã QR chuyển khoản')).toBeInTheDocument();
+
+      const notFoundErr = new Error('not found');
+      notFoundErr.response = { status: 404 };
+      fetchPublicSubmissionStatus.mockRejectedValueOnce(notFoundErr);
+
+      await flushAsync(30000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(2);
+
+      expect(screen.getByText('Không tìm thấy bài nộp')).toBeInTheDocument();
+      expect(screen.queryByAltText('Mã QR chuyển khoản')).not.toBeInTheDocument();
+    });
+
     it('tự gọi lại API mỗi 30 giây khi còn đang chờ thanh toán (còn hạn)', async () => {
       vi.useFakeTimers();
       const holdExpiresAt = new Date(Date.now() + 600000).toISOString();
@@ -217,9 +281,31 @@ describe('FormSubmissionStatusPage component', () => {
       expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(2);
     });
 
-    it('poll 30 giây KHÔNG chạy khi đã hết hạn giữ chỗ (holdExpired: true ngay từ đầu)', async () => {
+    it('review 15/09: poll 30 giây VẪN chạy dù đã hết hạn giữ chỗ (holdExpired: true ngay từ đầu) — status vẫn pending_payment nên khách chuyển khoản muộn vẫn thấy "Đã xác nhận" khi chủ bấm nhận tiền', async () => {
       vi.useFakeTimers();
       fetchPublicSubmissionStatus.mockResolvedValue({ ...pendingPayment, holdExpired: true });
+
+      renderStatusPage();
+      await flushAsync(1000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(1);
+
+      await flushAsync(30000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(2);
+
+      await flushAsync(30000);
+      expect(fetchPublicSubmissionStatus).toHaveBeenCalledTimes(3);
+    });
+
+    it('poll 30 giây DỪNG hẳn khi trạng thái không còn pending_payment (đã confirmed) — không tự chạy mãi bất kể trạng thái', async () => {
+      vi.useFakeTimers();
+      fetchPublicSubmissionStatus.mockResolvedValue({
+        status: 'confirmed',
+        formTitle: 'Form đã xác nhận',
+        appointmentAt: null,
+        holdExpired: false,
+        holdExpiresAt: null,
+        payment: null,
+      });
 
       renderStatusPage();
       await flushAsync(1000);

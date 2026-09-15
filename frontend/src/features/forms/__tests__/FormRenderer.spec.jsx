@@ -141,6 +141,68 @@ describe('FormRenderer component', () => {
     expect(window.location.href).toBe('https://example.com/thank-you');
   });
 
+  it('review 15/09: onSubmit trả { navigated: true } (form thu tiền, PublicFormPage đã tự navigate sang trang trạng thái) -> BỎ QUA redirectUrl, không đổi window.location dù có redirectUrl hợp lệ', async () => {
+    const paymentFormWithRedirect = {
+      ...baseForm,
+      settings: {
+        ...baseForm.settings,
+        redirectUrl: 'https://example.com/cam-on',
+      },
+    };
+
+    const mockOnSubmit = vi.fn().mockResolvedValue({ navigated: true });
+    const initialHref = window.location.href;
+
+    render(
+      <I18nProvider>
+        <FormRenderer form={paymentFormWithRedirect} onSubmit={mockOnSubmit} />
+      </I18nProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Trần Văn C' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'tranvanc@example.com' } });
+
+    const submitBtn = screen.getByRole('button', { name: /Gửi thông tin/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    // Caller (PublicFormPage) đã tự điều hướng đi trang trạng thái — FormRenderer không được
+    // redirect chồng lên, và cũng không tự hiện màn thành công của chính nó (component thật sẽ
+    // unmount ngay khi route đổi; ở đây chỉ cần chắc nó không tự ý làm gì thêm sau tín hiệu này).
+    expect(window.location.href).toBe(initialHref);
+    expect(screen.queryByText('Cảm ơn bạn đã gửi phản hồi!')).not.toBeInTheDocument();
+  });
+
+  it('onSubmit trả undefined (hành vi cũ, form không thu tiền) -> vẫn redirect như trước (đối chứng)', async () => {
+    const safeRedirectForm = {
+      ...baseForm,
+      settings: {
+        ...baseForm.settings,
+        redirectUrl: 'https://example.com/thank-you-2',
+      },
+    };
+
+    const mockOnSubmit = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <I18nProvider>
+        <FormRenderer form={safeRedirectForm} onSubmit={mockOnSubmit} />
+      </I18nProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), { target: { value: 'Phạm Thị D' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'phamthid@example.com' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+
+    await waitFor(() => {
+      expect(window.location.href).toBe('https://example.com/thank-you-2');
+    });
+  });
+
   it('PR-5 embedMode: redirectUrl an toàn -> thử chuyển hướng CẢ TRANG NGOÀI qua window.top (không chỉ mỗi iframe)', async () => {
     const originalTop = window.top;
     let capturedTopHref = '';

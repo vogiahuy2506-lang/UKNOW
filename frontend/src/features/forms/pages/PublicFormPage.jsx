@@ -83,6 +83,10 @@ export default function PublicFormPage() {
       if (result?.payment && result?.accessToken) {
         const statusPath = `/f/${encodeURIComponent(publicKey)}/s/${encodeURIComponent(result.accessToken)}`;
         navigate(embedMode ? `${statusPath}?embed=1` : statusPath, { replace: true });
+        // Báo cho FormRenderer biết đã tự điều hướng — nó bỏ qua redirectUrl/màn thành công của
+        // chính nó (review 15/09: form vừa thu tiền vừa có redirectUrl từng bị FormRenderer đè
+        // window.location.href lên ngay sau navigate() này, khách không kịp thấy trang QR).
+        return { navigated: true };
       }
     } catch (err) {
       setIsSubmitting(false);

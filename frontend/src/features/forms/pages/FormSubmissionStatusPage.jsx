@@ -66,6 +66,12 @@ export default function FormSubmissionStatusPage() {
   const [countdownSeconds, setCountdownSeconds] = useState(null);
   // Chặn refetch-do-đếm-ngược-về-0 bắn liên tiếp nhiều lần trong cùng một giây làm tròn.
   const hasFiredZeroRefetch = useRef(false);
+  // Đọc statusData "mới nhất" trong catch của load() mà không phải thêm statusData vào deps
+  // của useCallback (sẽ tạo lại hàm mỗi lần re-render, phá interval đang chạy).
+  const statusDataRef = useRef(null);
+  useEffect(() => {
+    statusDataRef.current = statusData;
+  }, [statusData]);
 
   const load = useCallback(async () => {
     try {
@@ -73,7 +79,16 @@ export default function FormSubmissionStatusPage() {
       setStatusData(data);
       setHttpStatus(null);
     } catch (err) {
-      setHttpStatus(err.response?.status || 500);
+      const status = err.response?.status || 500;
+      // Review 15/09: lỗi mạng tạm thời ở vòng tự làm mới (poll 30s) từng xoá sạch QR/thông tin
+      // đã tải — chuyển thẳng khách sang màn "Không tìm thấy bài nộp" dù dữ liệu cũ vẫn đúng.
+      // Đã có dữ liệu VÀ lỗi không phải 404 (form/bài nộp thật sự không còn) -> giữ nguyên màn
+      // đang hiện, bỏ qua lỗi lần này. Lần tải ĐẦU TIÊN (chưa có statusData) hoặc 404 vẫn báo lỗi
+      // như cũ.
+      if (statusDataRef.current && status !== 404) {
+        return;
+      }
+      setHttpStatus(status);
     } finally {
       setIsLoading(false);
     }
@@ -83,15 +98,18 @@ export default function FormSubmissionStatusPage() {
     load();
   }, [load]);
 
-  const isPendingActive = statusData?.status === 'pending_payment' && !statusData?.holdExpired;
+  const isPendingPayment = statusData?.status === 'pending_payment';
+  const isPendingActive = isPendingPayment && !statusData?.holdExpired;
 
-  // Tự làm mới mỗi 30 giây khi còn chờ thanh toán chưa hết hạn (Bổ sung 15/09 PR-3b) — để khách
-  // thấy "đã xác nhận" mà không cần tự bấm tải lại.
+  // Tự làm mới mỗi 30 giây khi còn ở trạng thái chờ thanh toán — CẢ KHI đã hết hạn giữ chỗ
+  // (review 15/09: khách chuyển khoản sát giờ/muộn vẫn cần thấy "Đã xác nhận" ngay khi chủ bấm
+  // "Đã nhận tiền", chủ vẫn xác nhận được submission dù đã hết hạn — xem FormSubmissionsPage).
+  // Đếm ngược (effect dưới) thì NGƯỢC LẠI, chỉ chạy khi còn hạn — không đếm lùi quá 0.
   useEffect(() => {
-    if (!isPendingActive) return undefined;
+    if (!isPendingPayment) return undefined;
     const interval = setInterval(load, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isPendingActive, load]);
+  }, [isPendingPayment, load]);
 
   // Đồng hồ đếm ngược tới holdExpiresAt — hết giờ đếm ngược thì gọi lại API NGAY (không đợi
   // vòng 30 giây ở trên), để chuyển đúng sang màn "hết thời gian giữ chỗ" không trễ nhịp.
@@ -277,7 +295,7 @@ export default function FormSubmissionStatusPage() {
             <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-2xl font-bold">
               ✓
             </div>
-            <h2 className="text-base font-semibold text-gray-900">{t('publicForm.payment.confirmedTitle')}</h2>
+            <h2 className="text-base font-semibold text-gray-900">{t('publicForm.payment.submittedTitle')}</h2>
           </div>
         )}
 
