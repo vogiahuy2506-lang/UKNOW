@@ -172,17 +172,36 @@ describe('chatbot active hours integration', () => {
       );
 
       // Gọi widget chat qua endpoint public
+      const sessionId = `sess_${Date.now()}`;
       const res = await request(app)
         .post(`/api/chatbot-public/custom-chatbot/${chatbot.widget_key}/chat`)
         .send({
           message: 'Chào shop',
-          sessionId: `sess_${Date.now()}`,
+          sessionId,
         });
 
       expect(res.status).toBe(200);
       expect(res.body.data.content).toBe('Chúng tôi đang ngoài giờ làm việc');
       expect(res.body.data.rateLimited).toBe(true);
       expect(res.body.data.reason).toBe('outside_active_hours');
+
+      // Lần 2 cùng phiên, cùng đợt ngoài giờ → im lặng (chỉ gửi câu 1 lần)
+      const second = await request(app)
+        .post(`/api/chatbot-public/custom-chatbot/${chatbot.widget_key}/chat`)
+        .send({ message: 'Còn ai không', sessionId });
+      expect(second.status).toBe(200);
+      expect(second.body.data.content).toBeNull();
+      expect(second.body.data.reason).toBe('outside_active_hours');
+
+      // Tin khách ngoài giờ vẫn vào hộp thư; câu ngoài giờ lưu đúng 1 lần
+      const { rows: msgs } = await db.query(
+        `SELECT m.role, m.content FROM webchat_messages m
+           JOIN webchat_conversations c ON c.id = m.id_conversation
+          WHERE c.session_id = $1 ORDER BY m.id`,
+        [sessionId]
+      );
+      expect(msgs.filter((m) => m.role === 'visitor').map((m) => m.content)).toEqual(['Chào shop', 'Còn ai không']);
+      expect(msgs.filter((m) => m.role === 'assistant').map((m) => m.content)).toEqual(['Chúng tôi đang ngoài giờ làm việc']);
     });
 
     it('remains silent when outside hours with action silent', async () => {
@@ -205,17 +224,27 @@ describe('chatbot active hours integration', () => {
         [JSON.stringify(config), chatbot.id]
       );
 
+      const sessionId = `sess_silent_${Date.now()}`;
       const res = await request(app)
         .post(`/api/chatbot-public/custom-chatbot/${chatbot.widget_key}/chat`)
         .send({
           message: 'Alo shop ơi',
-          sessionId: `sess_silent_${Date.now()}`,
+          sessionId,
         });
 
       expect(res.status).toBe(200);
       expect(res.body.data.content).toBeNull();
       expect(res.body.data.rateLimited).toBe(true);
       expect(res.body.data.reason).toBe('outside_active_hours');
+
+      // Im lặng nhưng tin khách vẫn vào hộp thư, không có tin bot
+      const { rows: msgs } = await db.query(
+        `SELECT m.role, m.content FROM webchat_messages m
+           JOIN webchat_conversations c ON c.id = m.id_conversation
+          WHERE c.session_id = $1 ORDER BY m.id`,
+        [sessionId]
+      );
+      expect(msgs).toEqual([{ role: 'visitor', content: 'Alo shop ơi' }]);
     });
   });
 });
