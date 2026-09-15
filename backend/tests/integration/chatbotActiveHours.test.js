@@ -21,10 +21,6 @@ beforeAll(() => {
   app = createApp();
 });
 
-afterAll(async () => {
-  await db.end();
-});
-
 beforeEach(async () => {
   await truncateAll();
   await chatbotActiveHoursService.clearAllForTest();
