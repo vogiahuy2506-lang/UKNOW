@@ -59,8 +59,10 @@ const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false
       );
       setUploadedFiles((prev) => [...prev, ...results]);
       notifyStorageQuotaRefresh();
-    } catch {
-      toast.error(tc('uploadError') || 'Tải tệp lên thất bại');
+    } catch (err) {
+      // Hiện đúng lý do server trả (ổ đĩa đang bảo vệ, hết dung lượng, quá nhiều lượt tải…) —
+      // câu chung chung từng khiến sếp báo "không upload được" mà không ai biết vì sao (15/09).
+      toast.error(err?.response?.data?.message || tc('uploadError') || 'Tải tệp lên thất bại');
     } finally {
       setIsUploading(false);
     }

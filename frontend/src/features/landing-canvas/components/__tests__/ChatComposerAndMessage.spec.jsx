@@ -2,9 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatComposer from '../ChatComposer.jsx';
 import ChatMessage from '../ChatMessage.jsx';
+import toast from 'react-hot-toast';
 import api from '../../../../services/api.js';
 
 vi.mock('../../../../services/api.js');
+
+vi.mock('react-hot-toast', () => ({
+  default: { error: vi.fn(), success: vi.fn() },
+}));
 
 vi.mock('../../../../i18n', () => ({
   useI18n: (namespace = null) => {
@@ -115,6 +120,44 @@ describe('ChatComposer (PR-3)', () => {
     fireEvent.click(removeBtn);
 
     expect(screen.queryByText('tailieu.pdf')).not.toBeInTheDocument();
+  });
+
+  it('server từ chối tải lên → toast hiện đúng lý do server trả, không phải câu chung chung', async () => {
+    api.post.mockRejectedValueOnce({
+      response: {
+        status: 507,
+        data: {
+          success: false,
+          code: 'STORAGE_CAPACITY_PROTECTED',
+          message: 'Hệ thống đang tạm ngừng nhận tệp mới để bảo vệ dữ liệu. Vui lòng thử lại sau.',
+        },
+      },
+    });
+
+    render(<ChatComposer onSend={vi.fn()} />);
+
+    const file = new File(['img'], 'logo.png', { type: 'image/png' });
+    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Hệ thống đang tạm ngừng nhận tệp mới để bảo vệ dữ liệu. Vui lòng thử lại sau.'
+      );
+    });
+    expect(screen.queryByText('logo.png')).not.toBeInTheDocument();
+  });
+
+  it('lỗi mạng không có phản hồi server → vẫn hiện câu chung', async () => {
+    api.post.mockRejectedValueOnce(new Error('Network Error'));
+
+    render(<ChatComposer onSend={vi.fn()} />);
+
+    const file = new File(['pdf'], 'tailieu.pdf', { type: 'application/pdf' });
+    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('landingCanvas.chat.uploadError');
+    });
   });
 });
 
