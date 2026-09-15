@@ -1522,6 +1522,8 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
     CHECK (jsonb_typeof(reply_limit_config) = 'object'),
   -- Migration 155: chatbot origin tracking (self_created, marketplace_purchased, shared)
   origin VARCHAR(50) DEFAULT 'self_created',
+  -- Migration 222: nhãn kêu gọi mở chat trên widget web (script embed), mặc định TẮT
+  launcher_label      VARCHAR(40) DEFAULT NULL,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );

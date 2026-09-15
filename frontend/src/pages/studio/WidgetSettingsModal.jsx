@@ -84,7 +84,10 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     show_header: true,        // used by iframe & public_link
     welcome_message: '',
     auto_open: false,         // used by script
-    launcher_label: 'Chat với chúng tôi', // used by script
+    // Cố ý KHÔNG điền sẵn — rỗng = widget chỉ hiện nút tròn như hôm nay. Điền sẵn ở
+    // đây sẽ tự ghi nhãn vào DB ở lần lưu bất kỳ (kể cả chỉ đổi màu), tự bật viên
+    // nhãn trên site khách mà không ai yêu cầu. Xem quyết định 2.1 trong plan.
+    launcher_label: '', // used by script
     border_radius: 16,
     show_suggested: true,     // used by public_link
     require_name: false,      // used by public_link
@@ -110,7 +113,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         show_header: ws.show_header !== false,
         welcome_message: ws.welcome_message || chatbot.welcome_message || '',
         auto_open: ws.auto_open === true,
-        launcher_label: ws.launcher_label || 'Chat với chúng tôi',
+        launcher_label: chatbot.launcher_label ?? '',
         border_radius: ws.border_radius ?? chatbot.border_radius ?? 16,
         show_suggested: ws.show_suggested !== false,
         require_name: ws.require_name === true,
@@ -346,13 +349,9 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                   </section>
 
-                  {/* Launcher label - DEPRECATED FIELD.
-                      widget.js chi hien thi SVG icon (xem widget.js dong 122),
-                      khong render launcher_label. Field nay khong co cot DB
-                      tuong ung va khong noi render nao su dung -> an di de
-                      tranh nham lan cho admin. Neu sau nay muon text label
-                      thi can vua sua widget.js vua them cot DB. */}
-                  {false && (
+                  {/* Launcher label — viên nhãn kêu gọi cạnh bong bóng, chỉ áp dụng cho dạng
+                      nhúng script (không có ở iframe/public link). Mặc định rỗng — để trống
+                      thì widget chỉ hiện nút tròn như hôm nay. */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <h4 className="text-sm font-semibold text-slate-900 mb-3">Nhãn nút mở chat</h4>
                     <input
@@ -360,10 +359,14 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       value={cfg.launcher_label}
                       onChange={(e) => update({ launcher_label: e.target.value })}
                       placeholder="Chat với chúng tôi"
+                      maxLength={40}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
                     />
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-xs text-slate-400">Để trống thì chỉ hiện nút tròn</p>
+                      <p className="text-xs text-slate-400 shrink-0 ml-2">{cfg.launcher_label.length}/40</p>
+                    </div>
                   </section>
-                  )}
 
                   {/* Script toggles */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
@@ -498,12 +501,28 @@ function ScriptPreview({ cfg, chatbot }) {
   const isBottom = pos.includes('bottom');
   // Logo chi lay tu Setting Chatbot (avatar_url). Widget settings khong luu logo.
   const avatarSrc = chatbot?.avatar_url;
+  const hasLauncherLabel = Boolean(cfg.launcher_label && cfg.launcher_label.trim());
 
   return (
     <div className="relative h-44 bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
       <div className="absolute inset-0 p-2">
         <div className="w-full h-full bg-white rounded-md border border-slate-100" />
       </div>
+      {/* Nhãn nút mở chat — vị trí THẬT trên widget (cạnh bong bóng), chỉ vẽ khi có nội
+          dung. Trước đây preview này vẽ nhãn làm tiêu đề khung chat (sai — tiêu đề khung
+          chat thật ra luôn là tên chatbot, không đổi theo nhãn) nên "xem trước nói dối". */}
+      {hasLauncherLabel && (
+        <div
+          className="absolute max-w-[110px] truncate px-2 py-1 rounded-full bg-white shadow border border-slate-200 text-[9px]"
+          style={{
+            color: cfg.text_color,
+            [isBottom ? 'bottom' : 'top']: 22,
+            [isRight ? 'right' : 'left']: 56,
+          }}
+        >
+          {cfg.launcher_label}
+        </div>
+      )}
       <div
         className="absolute w-10 h-10 rounded-full shadow-lg overflow-hidden flex items-center justify-center text-white"
         style={{
@@ -532,7 +551,7 @@ function ScriptPreview({ cfg, chatbot }) {
           className="px-2 py-1.5 text-[10px] font-semibold text-white"
           style={{ background: cfg.primary_color }}
         >
-          {cfg.launcher_label || 'Chat với chúng tôi'}
+          {chatbot?.name || 'AI Assistant'}
         </div>
         <div className="p-2 text-[10px]">Xin chào!</div>
       </div>

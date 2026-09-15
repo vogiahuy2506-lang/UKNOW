@@ -20,7 +20,8 @@ class ChatbotCloneRepository {
       `SELECT id, id_user, name, description, system_instruction, greeting_msg, welcome_message,
               avatar_url, theme_color, position, primary_color, background_color, text_color,
               accent_color, logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, allow_attachments, temperature, max_tokens, ai_model
+              suggested_questions, allow_attachments, temperature, max_tokens, ai_model,
+              launcher_label
        FROM custom_chatbots
        WHERE id = $1 AND is_active = true`,
       [sourceChatbotId]
@@ -53,8 +54,8 @@ class ChatbotCloneRepository {
           avatar_url, theme_color, position, primary_color, background_color, text_color,
           accent_color, logo_url, show_avatar, border_radius, chat_height,
           suggested_questions, widget_key, allow_attachments,
-          temperature, max_tokens, ai_model, origin)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+          temperature, max_tokens, ai_model, origin, launcher_label)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
        RETURNING *`,
       [
         targetUserId,
@@ -81,6 +82,8 @@ class ChatbotCloneRepository {
         payload.max_tokens ?? 2048,
         payload.ai_model ?? 'gemini-2.5-flash',
         origin, // 'shared' for cloned chatbots, null for self-created
+        // Marketplace snapshot không mang nhãn -> mặc định NULL (widget không hiện viên nhãn).
+        payload.launcher_label ?? null,
       ]
     );
     return rows[0];

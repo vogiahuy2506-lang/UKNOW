@@ -1311,6 +1311,7 @@ class ChatbotController {
           showAvatar: chatbot.show_avatar !== false,
           suggestedQuestions: chatbot.suggested_questions || [],
           position: chatbot.position || 'bottom-right',
+          launcherLabel: chatbot.launcher_label || '',
           allowAttachments: chatbot.allow_attachments === true,
           // AI settings - widget.js co the dung de tuy bien prompt neu sau nay can
           responseStyle: chatbot.response_style || 'friendly',
@@ -1609,6 +1610,22 @@ class ChatbotController {
           message: `response_style khong hop le: ${req.body.response_style}`,
           code: 'CHATBOT_RESPONSE_STYLE_INVALID',
         });
+      }
+
+      // launcher_label: nhan keu goi mo chat tren widget script embed.
+      // null tu client nghia la "xoa nhan" -> chuan hoa thanh '' TRUOC khi vao repo,
+      // vi repo dung COALESCE($n, launcher_label) va COALESCE(NULL, x) = x (khong xoa duoc).
+      if (req.body.launcher_label !== undefined) {
+        const rawLabel = req.body.launcher_label === null ? '' : req.body.launcher_label;
+        const trimmedLabel = typeof rawLabel === 'string' ? rawLabel.trim() : String(rawLabel).trim();
+        if (trimmedLabel.length > 40) {
+          return res.status(400).json({
+            success: false,
+            message: 'Nhãn nút mở chat tối đa 40 ký tự',
+            code: 'CHATBOT_LAUNCHER_LABEL_TOO_LONG',
+          });
+        }
+        updatePayload.launcher_label = trimmedLabel;
       }
 
       const updated = await chatbotRepository.updateChatbot(id, userId, updatePayload);

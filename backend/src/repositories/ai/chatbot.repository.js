@@ -480,7 +480,7 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key,
+              suggested_questions, widget_key, launcher_label,
               COALESCE(origin, 'self_created') as origin, reply_limit_config,
               created_at, updated_at
        FROM custom_chatbots
@@ -518,7 +518,7 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key, allow_attachments,
+              suggested_questions, widget_key, allow_attachments, launcher_label,
               created_at, updated_at
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true
@@ -557,7 +557,7 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key, allow_attachments,
+              suggested_questions, widget_key, allow_attachments, launcher_label,
               temperature, max_tokens, ai_model, origin,
               created_at, updated_at
        FROM custom_chatbots
@@ -605,6 +605,7 @@ class ChatbotRepository {
          max_tokens = COALESCE($23, max_tokens),
          ai_model = COALESCE($24, ai_model),
          response_style = COALESCE($25, response_style),
+         launcher_label = COALESCE($26, launcher_label),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -616,7 +617,8 @@ class ChatbotRepository {
        data.chat_height, data.widget_key,
        data.allow_attachments === undefined ? null : Boolean(data.allow_attachments),
        data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config),
-       data.temperature, data.max_tokens, data.ai_model, data.response_style];
+       data.temperature, data.max_tokens, data.ai_model, data.response_style,
+       data.launcher_label];
     } else {
       // Update suggested_questions field
       query = `UPDATE custom_chatbots SET
@@ -644,6 +646,7 @@ class ChatbotRepository {
          max_tokens = COALESCE($24, max_tokens),
          ai_model = COALESCE($25, ai_model),
          response_style = COALESCE($26, response_style),
+         launcher_label = COALESCE($27, launcher_label),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -655,7 +658,8 @@ class ChatbotRepository {
        data.chat_height, suggestedQuestions, data.widget_key,
        data.allow_attachments === undefined ? null : Boolean(data.allow_attachments),
        data.reply_limit_config === undefined ? null : JSON.stringify(data.reply_limit_config),
-       data.temperature, data.max_tokens, data.ai_model, data.response_style];
+       data.temperature, data.max_tokens, data.ai_model, data.response_style,
+       data.launcher_label];
     }
 
     const { rows } = await db.query(query, params);
@@ -721,7 +725,7 @@ class ChatbotRepository {
               avatar_url, is_active, theme_color, position, welcome_message,
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
-              suggested_questions, widget_key, allow_attachments,
+              suggested_questions, widget_key, allow_attachments, launcher_label,
               temperature, max_tokens, ai_model, response_style,
               created_at, updated_at
        FROM custom_chatbots

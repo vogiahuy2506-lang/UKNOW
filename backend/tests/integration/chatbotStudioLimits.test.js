@@ -225,3 +225,109 @@ describe('chatbot studio message cursor', () => {
     expect(older.body.data.some((item) => item.id === latest.body.data[0].id)).toBe(false);
   });
 });
+
+describe('chatbot launcher_label (nhãn nút mở chat trên widget)', () => {
+  it('lưu nhãn đã trim và trả đúng qua endpoint public config', async () => {
+    const update = await request(app)
+      .put(`/api/ai/chatbot/custom-chatbots/${chatbot.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ launcher_label: '  Tư vấn ngay  ' });
+
+    expect(update.status).toBe(200);
+    expect(update.body.data.launcher_label).toBe('Tư vấn ngay');
+
+    const { rows } = await db.query(
+      `SELECT launcher_label FROM custom_chatbots WHERE id = $1`,
+      [chatbot.id]
+    );
+    expect(rows[0].launcher_label).toBe('Tư vấn ngay');
+
+    const config = await request(app)
+      .get(`/api/chatbot-public/custom-chatbot/${chatbot.widget_key}/config`);
+    expect(config.status).toBe(200);
+    expect(config.body.data.launcherLabel).toBe('Tư vấn ngay');
+  });
+
+  it('không gửi launcher_label trong PUT thì giữ nguyên giá trị đã lưu', async () => {
+    await request(app)
+      .put(`/api/ai/chatbot/custom-chatbots/${chatbot.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ launcher_label: 'Nhãn cũ' });
+
+    const update = await request(app)
+      .put(`/api/ai/chatbot/custom-chatbots/${chatbot.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ primary_color: '#123456' });
+
+    expect(update.status).toBe(200);
+    expect(update.body.data.primary_color).toBe('#123456');
+    expect(update.body.data.launcher_label).toBe('Nhãn cũ');
+
+    const { rows } = await db.query(
+      `SELECT launcher_label FROM custom_chatbots WHERE id = $1`,
+      [chatbot.id]
+    );
+    expect(rows[0].launcher_label).toBe('Nhãn cũ');
+  });
+
+  it('gửi launcher_label rỗng thì xoá nhãn (không phải giữ nguyên)', async () => {
+    await request(app)
+      .put(`/api/ai/chatbot/custom-chatbots/${chatbot.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ launcher_label: 'Sắp bị xoá' });
+
+    const update = await request(app)
+      .put(`/api/ai/chatbot/custom-chatbots/${chatbot.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ launcher_label: '' });
+
+    expect(update.status).toBe(200);
+    expect(update.body.data.launcher_label).toBe('');
+
+    const { rows } = await db.query(
+      `SELECT launcher_label FROM custom_chatbots WHERE id = $1`,
+      [chatbot.id]
+    );
+    expect(rows[0].launcher_label).toBe('');
+
+    const config = await request(app)
+      .get(`/api/chatbot-public/custom-chatbot/${chatbot.widget_key}/config`);
+    expect(config.body.data.launcherLabel).toBe('');
+  });
+
+  it('từ chối nhãn dài hơn 40 ký tự, không ghi DB', async () => {
+    const tooLong = 'x'.repeat(41);
+    const update = await request(app)
+      .put(`/api/ai/chatbot/custom-chatbots/${chatbot.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ launcher_label: tooLong });
+
+    expect(update.status).toBe(400);
+    expect(update.body.code).toBe('CHATBOT_LAUNCHER_LABEL_TOO_LONG');
+
+    const { rows } = await db.query(
+      `SELECT launcher_label FROM custom_chatbots WHERE id = $1`,
+      [chatbot.id]
+    );
+    expect(rows[0].launcher_label).toBeNull();
+  });
+
+  it('chatbot mới tạo trả launcherLabel rỗng trong config, không phải null', async () => {
+    const created = await request(app)
+      .post('/api/ai/chatbot/custom-chatbots')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Bot chưa cấu hình nhãn' });
+    expect(created.status).toBe(201);
+
+    const { rows } = await db.query(
+      `UPDATE custom_chatbots SET widget_key = $2 WHERE id = $1 RETURNING widget_key`,
+      [created.body.data.id, `new_bot_${Date.now()}`]
+    );
+    const widgetKey = rows[0].widget_key;
+
+    const config = await request(app)
+      .get(`/api/chatbot-public/custom-chatbot/${widgetKey}/config`);
+    expect(config.status).toBe(200);
+    expect(config.body.data.launcherLabel).toBe('');
+  });
+});

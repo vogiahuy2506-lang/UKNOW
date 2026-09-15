@@ -14,7 +14,8 @@
  *     showAvatar: true,
  *     suggestedQuestions: ['Câu hỏi 1', 'Câu hỏi 2'],
  *     position: 'bottom-right',
- *     welcomeMessage: 'Xin chào!'
+ *     welcomeMessage: 'Xin chào!',
+ *     launcherLabel: 'Chat với chúng tôi'
  *   };
  * </script>
  * <script src="https://your-domain.com/widget.js" defer></script>
@@ -40,6 +41,8 @@
   let CHATBOT_NAME = 'AI Assistant';
   let CHATBOT_AVATAR = '';
   let ALLOW_ATTACHMENTS = false;
+  // Nhãn kêu gọi mở chat cạnh bong bóng — rỗng = tắt (chỉ hiện nút tròn như hôm nay).
+  let LAUNCHER_LABEL = config.launcherLabel || '';
 
   let isOpen = false;
   let messages = JSON.parse(localStorage.getItem('uknow_msgs_' + WIDGET_KEY) || '[]');
@@ -83,6 +86,9 @@
         CHATBOT_NAME = c.name || CHATBOT_NAME;
         CHATBOT_AVATAR = c.avatarUrl || c.logoUrl || '';
         ALLOW_ATTACHMENTS = c.allowAttachments === true;
+        // '' hợp lệ (tắt nhãn) nên không dùng `||` — chỉ giữ giá trị cũ khi server
+        // không trả field này (ví dụ config cũ chưa có cột).
+        LAUNCHER_LABEL = typeof c.launcherLabel === 'string' ? c.launcherLabel : LAUNCHER_LABEL;
         configLoaded = true;
       }
     } catch (err) {
@@ -123,6 +129,37 @@
     bubble.onclick = toggleChat;
     bubble.onmouseenter = () => { bubble.style.transform = 'scale(1.08)'; };
     bubble.onmouseleave = () => { bubble.style.transform = 'scale(1)'; };
+
+    // Launcher label — viên nhãn cạnh bong bóng, chỉ dựng khi chủ chatbot có nhập nội
+    // dung. Nhãn do chủ shop nhập và hiển thị trên website bên thứ ba -> LUÔN dùng
+    // textContent, KHÔNG BAO GIỜ innerHTML (tránh XSS qua nhãn tuỳ ý).
+    let launcherLabelEl = null;
+    if (LAUNCHER_LABEL && LAUNCHER_LABEL.trim()) {
+      launcherLabelEl = document.createElement('div');
+      launcherLabelEl.id = 'uknow-launcher-label';
+      launcherLabelEl.style.cssText = `
+        position: absolute;
+        top: 0;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        ${POSITION.includes('right') ? 'right: 100%; margin-right: 12px;' : 'left: 100%; margin-left: 12px;'}
+        padding: 8px 14px;
+        background: #ffffff;
+        color: ${TEXT_COLOR};
+        border-radius: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        white-space: nowrap;
+        max-width: min(220px, 60vw);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+        font-size: 14px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      `;
+      launcherLabelEl.textContent = LAUNCHER_LABEL;
+      launcherLabelEl.onclick = toggleChat;
+    }
 
     // Chat window
     const chatWindow = document.createElement('div');
@@ -301,6 +338,7 @@
     chatWindow.appendChild(msgArea);
     chatWindow.appendChild(inputArea);
     container.appendChild(bubble);
+    if (launcherLabelEl) container.appendChild(launcherLabelEl);
     container.appendChild(chatWindow);
     document.body.appendChild(container);
 
@@ -316,15 +354,18 @@
     isOpen = !isOpen;
     const chatWindow = document.getElementById('uknow-window');
     const bubble = document.getElementById('uknow-bubble');
+    const launcherLabelEl = document.getElementById('uknow-launcher-label');
 
     if (isOpen) {
       chatWindow.style.display = 'flex';
       bubble.innerHTML = `<svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`;
       bubble.style.transform = 'rotate(90deg)';
+      if (launcherLabelEl) launcherLabelEl.style.display = 'none';
     } else {
       chatWindow.style.display = 'none';
       bubble.innerHTML = `<svg width="28" height="28" fill="white" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`;
       bubble.style.transform = 'rotate(0deg)';
+      if (launcherLabelEl) launcherLabelEl.style.display = 'flex';
     }
   }
 
