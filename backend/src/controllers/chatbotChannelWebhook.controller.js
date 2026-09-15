@@ -355,6 +355,13 @@ class ChatbotChannelWebhookController {
           continue;
         }
 
+        // Kiểm AI tạm dừng TRƯỚC khung giờ và rate limit, cùng thứ tự Zalo OA / WhatsApp: bản trước
+        // kiểm sau cùng → hội thoại chủ shop đang tự trả lời vẫn nhận câu ngoài giờ và vẫn ăn bộ đếm.
+        if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+          console.log(`[Facebook] AI paused for conversation ${conv.id} — skipping reply`);
+          continue;
+        }
+
         // Active hours check (trước checkBeforeAi)
         const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
         const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
@@ -416,11 +423,6 @@ class ChatbotChannelWebhookController {
               });
             }
           }
-          continue;
-        }
-
-        if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
-          console.log(`[Facebook] AI paused for conversation ${conv.id} — skipping reply`);
           continue;
         }
 

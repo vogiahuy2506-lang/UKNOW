@@ -13,6 +13,8 @@ const mockMarkRateLimitNotified = jest.fn();
 const mockRouteChatbotMessage = jest.fn();
 const mockParseWebhookEvent = jest.fn();
 const mockSendReply = jest.fn();
+const mockFbParseWebhookEvent = jest.fn();
+const mockFbSendReply = jest.fn();
 
 jest.unstable_mockModule('../../repositories/ai/chatbotChannel.repository.js', () => ({
   default: {
@@ -41,6 +43,16 @@ jest.unstable_mockModule('../../services/chatbot/chatbotRateLimit.service.js', (
   default: {
     checkBeforeAi: mockCheckBeforeAi,
     markRateLimitNotified: mockMarkRateLimitNotified,
+    // Kho khoá dùng chung với chatbotActiveHours.service (câu ngoài giờ gửi 1 lần).
+    hasKey: jest.fn().mockResolvedValue(false),
+    setKeyWithTtl: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.unstable_mockModule('../../services/chatbot/channelAdapters/facebook.adapter.js', () => ({
+  default: {
+    parseWebhookEvent: mockFbParseWebhookEvent,
+    sendReply: mockFbSendReply,
   },
 }));
 
@@ -250,5 +262,53 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
     await jest.advanceTimersByTimeAsync(6000);
 
     expect(mockAddMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ChatbotChannelWebhookController - Facebook: AI tạm dừng kiểm trước khung giờ', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-15T22:00:00+07:00'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  function arrange({ paused }) {
+    mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8 });
+    mockFindChatbotById.mockResolvedValue({
+      id: 8,
+      id_user: 1,
+      is_active: true,
+      active_hours: { start: '08:00', end: '17:00', outsideAction: 'message', outsideMessage: 'Ngoài giờ' },
+    });
+    mockGetOrCreateConversation.mockResolvedValue({ id: 300 });
+    mockAddMessage.mockResolvedValue({ id: 1 });
+    mockFbParseWebhookEvent.mockReturnValue([{ message: 'Alo', senderId: 'fb_user_1', messageId: 'fb_m1' }]);
+    mockFbSendReply.mockResolvedValue({ success: true });
+    mockIsAiPaused.mockResolvedValue(paused);
+    mockCheckBeforeAi.mockResolvedValue({ allowed: true });
+  }
+
+  it('chủ shop đang tự trả lời (AI tạm dừng) + ngoài giờ → lưu tin khách, không gửi câu ngoài giờ, không ăn rate limit', async () => {
+    arrange({ paused: true });
+    const res = { send: jest.fn() };
+    await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb_tok' }, body: {} }, res);
+
+    expect(mockAddMessage).toHaveBeenCalledWith(300, expect.objectContaining({ role: 'visitor', content: 'Alo' }));
+    expect(mockFbSendReply).not.toHaveBeenCalled();
+    expect(mockCheckBeforeAi).not.toHaveBeenCalled();
+    expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
+  });
+
+  it('không tạm dừng + ngoài giờ → gửi câu ngoài giờ, không gọi AI', async () => {
+    arrange({ paused: false });
+    const res = { send: jest.fn() };
+    await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb_tok' }, body: {} }, res);
+
+    expect(mockFbSendReply).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'fb_user_1', message: 'Ngoài giờ' }));
+    expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
   });
 });
