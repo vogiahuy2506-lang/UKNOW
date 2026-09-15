@@ -501,12 +501,13 @@ if (typeof window !== 'undefined') {
       .then(function (body) {
         log('success', body);
 
-        // Chỉ hiển thị success/error box của capture script nếu form KHÔNG có sẵn UI riêng.
-        // VD: form có id="successMessage" (custom success) → giữ nguyên, không đụng.
-        var hasCustomSuccess = form.parentElement && (
-          form.parentElement.querySelector('#successMessage') ||
-          form.parentElement.querySelector('.founderai-capture-success')
-        );
+        // Chỉ hiển thị success box của capture script nếu form KHÔNG có sẵn UI riêng.
+        // UI riêng = id="successMessage" (trang tự lo hiện) → giữ nguyên, không đụng.
+        // KHÔNG tính class .founderai-capture-success: đó là hộp của CHÍNH script này (prompt AI
+        // dặn đặt cạnh form). Tính nó là UI riêng thì gửi xong không hiện gì mà nút đã khoá —
+        // 15/09 sếp thử checkform.founderai.biz báo "không bấm được nút đăng ký".
+        var hasCustomSuccess = form.parentElement &&
+          form.parentElement.querySelector('#successMessage');
         if (!hasCustomSuccess) {
           showSuccess(form);
           try { form.reset(); } catch (e) { /* ignore */ }
