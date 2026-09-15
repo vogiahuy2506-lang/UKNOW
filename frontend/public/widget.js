@@ -151,13 +151,17 @@
         box-shadow: 0 2px 10px rgba(0,0,0,0.15);
         white-space: nowrap;
         max-width: min(220px, 60vw);
-        overflow: hidden;
-        text-overflow: ellipsis;
+        box-sizing: border-box;
         cursor: pointer;
         font-size: 14px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       `;
-      launcherLabelEl.textContent = LAUNCHER_LABEL;
+      // Chữ nằm trong span riêng: text-overflow: ellipsis không có tác dụng trên chính
+      // phần tử display:flex, nhãn 40 ký tự sẽ bị cắt ngang giữa chữ thay vì hiện "…".
+      const launcherLabelText = document.createElement('span');
+      launcherLabelText.style.cssText = 'min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+      launcherLabelText.textContent = LAUNCHER_LABEL;
+      launcherLabelEl.appendChild(launcherLabelText);
       launcherLabelEl.onclick = toggleChat;
     }
 
