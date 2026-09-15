@@ -244,6 +244,48 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     });
   }
 
+  // Active hours check (trước khi gọi AI, sau khi đã lưu tin visitor)
+  let chatbotRecord = null;
+  if (idChatbot) {
+    chatbotRecord = await chatbotRepository.findChatbotById(idChatbot);
+  }
+  const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
+  const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+    activeHours: chatbotRecord?.active_hours,
+    channel: 'telegram_personal',
+    chatbotId: idChatbot || account.id,
+    senderKey: parsed.senderId,
+  });
+  if (!activeCheck.allowed) {
+    if (activeCheck.shouldNotify) {
+      await logTelegramMessage(conversation, 'bot', activeCheck.staticReply, {
+        model: 'ai_outside_hours',
+        replySource: 'ai_outside_hours',
+      });
+      try {
+        await telegramAdapter.sendReply({
+          userId: account.id_user,
+          channelId: account.id,
+          externalId: peer,
+          message: activeCheck.staticReply,
+        });
+        await chatbotActiveHoursService.markNotified({
+          channel: 'telegram_personal',
+          chatbotId: idChatbot || account.id,
+          senderKey: parsed.senderId,
+          activeHours: chatbotRecord?.active_hours,
+        });
+      } catch (sendErr) {
+        console.warn('[Telegram] sendReply outside hours failed:', sendErr.message);
+      }
+    }
+    console.log('[Telegram] outside active hours — message saved, no AI reply', {
+      accountId: account.id,
+      idChatbot,
+    });
+    return;
+  }
+
   const result = await chatRouterService.routeMessageWithSettings({
     channel: 'telegram_personal',
     userId: account.id_user,
