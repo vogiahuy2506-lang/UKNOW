@@ -6,16 +6,23 @@ import cloudflareService from '../cloudflare.service.js';
 import { linkAssetsToLandingPage } from '../landing/landingAsset.service.js';
 
 import db from '../../config/database.js';
+import formRepository from '../../repositories/form.repository.js';
+import formService from '../form.service.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import {
   prepareLandingHtmlOnSave,
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
+  countFormSlots,
+  replaceFormSlotWithEmbed,
+  buildFormEmbedSectionHtml,
 } from '../../utils/landingHtmlInjection.util.js';
 import {
   mergeLeadFormIntoCustomConfig,
   toPublicLeadFormConfig,
+  validateAdminLeadFormConfig,
 } from '../../utils/landingLeadFormConfig.util.js';
+import { buildFormFieldsFromLeadFormConfig } from '../../utils/landingLeadFormToFormFields.util.js';
 import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 import {
   invalidateDomainResolverPayload,
@@ -125,17 +132,52 @@ class LandingPageAdminService {
         throw err;
       }
     }
-    /** Khi lưu: gỡ khối script cũ, đổi href http(s) sang link tracking, chèn lp-track.js + founderai-capture.js. */
-    const htmlContent = prepareLandingHtmlOnSave(body?.htmlContent ?? '', {
-      slug,
-      frontendOrigin: resolveFrontendOriginFromEnv(),
-      apiBase: resolvePublicApiBaseFromEnv(),
-    });
     /** Merge `body.leadFormConfig` vào customConfig JSONB (giữ key khác nếu có). */
     const customConfig = mergeLeadFormIntoCustomConfig(
       {},
       body?.leadFormConfig
     );
+
+    // PR-5b-2a — chỗ trống Biểu mẫu (không phụ thuộc AI_LANDING_FORM_MODE — người dùng có thể dán
+    // tay <div data-founderai-form-slot></div>). 2+ → 400, không lưu gì, không tạo gì. Đúng 1:
+    // landing CHƯA có id lúc này (insert bên dưới) nên tạo form TRƯỚC (landing_page_id để trống),
+    // gắn lại NGAY TRONG transaction insert landing (client.query bên dưới) — lỡ transaction đó
+    // rollback thì form (tạo qua pool, khác connection nên không tự rollback theo) mồ côi tạm
+    // thời, dọn ở nhánh catch. Landing trong DB, nếu có, LUÔN mang HTML đã resolve — không bao
+    // giờ lưu chỗ trống trơ (khách mở ra thấy khoảng trống im lặng).
+    const rawHtml = body?.htmlContent ?? '';
+    const slotCount = countFormSlots(rawHtml);
+    if (slotCount > 1) {
+      const err = new Error(`Trang có ${slotCount} chỗ trống biểu mẫu, chỉ được đúng 1.`);
+      err.statusCode = 400;
+      throw err;
+    }
+    let htmlWithFormResolved = rawHtml;
+    let newForm = null;
+    if (slotCount === 1) {
+      const fields = buildFormFieldsFromLeadFormConfig(customConfig.leadForm);
+      const formTitle = String(body?.title || '').trim().slice(0, 200) || slug || 'Biểu mẫu landing';
+      newForm = await formService.createForm({
+        workspaceOwnerId: context.workspaceOwnerId,
+        createdByUserId: context.actorUserId,
+        title: formTitle,
+        fields,
+        settings: { consentEnabled: true, notifyOwner: true },
+      });
+      await formService.publishForm(newForm.id, context.workspaceOwnerId, true);
+      const embedHtml = buildFormEmbedSectionHtml({
+        publicKey: newForm.publicKey,
+        origin: resolveFrontendOriginFromEnv(),
+      });
+      htmlWithFormResolved = replaceFormSlotWithEmbed(rawHtml, embedHtml);
+    }
+
+    /** Khi lưu: gỡ khối script cũ, đổi href http(s) sang link tracking, chèn lp-track.js + founderai-capture.js. */
+    const htmlContent = prepareLandingHtmlOnSave(htmlWithFormResolved, {
+      slug,
+      frontendOrigin: resolveFrontendOriginFromEnv(),
+      apiBase: resolvePublicApiBaseFromEnv(),
+    });
 
     const client = await db.getClient();
     let lp;
@@ -158,6 +200,9 @@ class LandingPageAdminService {
         domainSubtype,
         customConfig,
       }, client);
+      if (newForm) {
+        await formRepository.setLandingPageId(newForm.id, lp.id, client);
+      }
       await linkAssetsToLandingPage({
         html: htmlContent,
         ownerUserId: context.workspaceOwnerId,
@@ -167,6 +212,13 @@ class LandingPageAdminService {
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
+      if (newForm) {
+        // Form đã tạo (pool) nhưng landing chưa từng tồn tại (transaction rollback) → mồ côi,
+        // dọn ngay thay vì để lại một Biểu mẫu không gắn landing nào, không ai biết tới.
+        await formService.deleteForm(newForm.id, context.workspaceOwnerId).catch((cleanupErr) => {
+          console.warn('[LandingPageAdmin.create] Không xoá được form mồ côi sau lỗi lưu landing:', cleanupErr.message);
+        });
+      }
       throw error;
     } finally {
       client.release();
@@ -227,7 +279,51 @@ class LandingPageAdminService {
         throw err;
       }
     }
-    const htmlContent = prepareLandingHtmlOnSave(body?.htmlContent ?? '', {
+
+    /** Merge `body.leadFormConfig` vào customConfig hiện tại (giữ key khác nếu có). */
+    const nextCustomConfig = mergeLeadFormIntoCustomConfig(
+      current.customConfig,
+      body?.leadFormConfig
+    );
+
+    // PR-5b-2a — chỗ trống Biểu mẫu (không phụ thuộc AI_LANDING_FORM_MODE — người dùng có thể dán
+    // tay <div data-founderai-form-slot></div>). 2+ → 400, không lưu gì. Đúng 1: landing ĐÃ có id
+    // (khác create()) nên KHÔNG có cửa sổ mồ côi — form đã gắn landing này thì DÙNG LẠI nguyên
+    // trạng (không ghi đè trường — chủ có thể đã tự sửa form trong trình soạn Biểu mẫu riêng),
+    // chưa có thì tạo mới VỚI landing_page_id=id ngay trong một lần INSERT.
+    const rawHtml = body?.htmlContent ?? '';
+    const slotCount = countFormSlots(rawHtml);
+    if (slotCount > 1) {
+      const err = new Error(`Trang có ${slotCount} chỗ trống biểu mẫu, chỉ được đúng 1.`);
+      err.statusCode = 400;
+      throw err;
+    }
+    let htmlWithFormResolved = rawHtml;
+    if (slotCount === 1) {
+      let form = await formRepository.findByLandingPageId(id, resourceOwnerId);
+      if (!form) {
+        const fields = buildFormFieldsFromLeadFormConfig(nextCustomConfig.leadForm);
+        const formTitle = String(body?.title || current.title || '').trim().slice(0, 200)
+          || slug || current.slug || 'Biểu mẫu landing';
+        const createdForm = await formService.createForm({
+          workspaceOwnerId: resourceOwnerId,
+          createdByUserId: context.actorUserId,
+          title: formTitle,
+          fields,
+          settings: { consentEnabled: true, notifyOwner: true },
+          landingPageId: id,
+        });
+        await formService.publishForm(createdForm.id, resourceOwnerId, true);
+        form = createdForm;
+      }
+      const embedHtml = buildFormEmbedSectionHtml({
+        publicKey: form.publicKey,
+        origin: resolveFrontendOriginFromEnv(),
+      });
+      htmlWithFormResolved = replaceFormSlotWithEmbed(rawHtml, embedHtml);
+    }
+
+    const htmlContent = prepareLandingHtmlOnSave(htmlWithFormResolved, {
       slug,
       frontendOrigin: resolveFrontendOriginFromEnv(),
       apiBase: resolvePublicApiBaseFromEnv(),
@@ -242,12 +338,6 @@ class LandingPageAdminService {
       ? (body?.domainSubtype === 'apex' ? 'apex' : 'subdomain')
       : null;
     const typeChanged = nextDomainType !== (current.domainType || 'system');
-
-    /** Merge `body.leadFormConfig` vào customConfig hiện tại (giữ key khác nếu có). */
-    const nextCustomConfig = mergeLeadFormIntoCustomConfig(
-      current.customConfig,
-      body?.leadFormConfig
-    );
 
     const updated = await landingPageRepository.updateByIdInScope(id, {
       slug,

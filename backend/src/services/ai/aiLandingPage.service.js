@@ -8,6 +8,19 @@ import {
   MAX_EDIT_HTML_INPUT_CHARS,
 } from '../../utils/landingEditGuard.util.js';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
+import { countFormSlots } from '../../utils/landingHtmlInjection.util.js';
+
+/**
+ * PR-5b-2a — công tắc "AI dựng landing dùng Biểu mẫu thay form lead" (mặc định TẮT). Đọc
+ * `process.env` LÚC GỌI (không cache ở module scope) — test bật/tắt trong cùng file phải thấy
+ * hiệu lực ngay, và production đổi biến môi trường (không phải sửa code) là bật/tắt được ngay khi
+ * restart, không cần đợi thời điểm nạp module trùng khớp.
+ *
+ * @returns {boolean}
+ */
+export function isAiLandingFormMode() {
+  return process.env.AI_LANDING_FORM_MODE === 'form';
+}
 
 function stripJsonFences(raw) {
   let t = String(raw || '').trim();
@@ -256,6 +269,31 @@ class AiLandingPageService {
       ? '8) Ảnh: CHỈ dùng các URL trong ẢNH ĐÃ TẢI LÊN, mỗi URL ít nhất một lần, bằng <img src="..." alt="..." class="..."> (logo ở header, banner làm hero...). Không có ảnh nào được cấp thì không dùng <img>, không bịa URL, không dùng ảnh placeholder.'
       : '8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, chỉ được dùng Logo URL của hồ sơ doanh nghiệp nếu có, không dùng ảnh nào khác; nếu không có logo thì dùng gradient/icon Unicode hoặc bỏ ảnh.';
 
+    // PR-5b-2a — AI_LANDING_FORM_MODE=form: AI KHÔNG còn tự viết <form>, chỉ đặt một chỗ trống;
+    // backend tự tạo/tái dùng Biểu mẫu lúc LƯU landing rồi thay chỗ trống bằng khối nhúng thật
+    // (landingPageAdmin.service.js). leadFormConfig (occupation/interestArea/customFields) không
+    // còn ý nghĩa ở đường sinh HTML nữa — nó điều khiển FIELDS của Biểu mẫu được tạo lúc lưu
+    // (landingLeadFormToFormFields.util.js), không phải input trực tiếp trong HTML AI viết.
+    const formMode = isAiLandingFormMode();
+    const formRule = formMode
+      ? `6) Trang phải có ĐÚNG MỘT chỗ trống cho biểu mẫu đăng ký, đặt tại vị trí form (ví dụ sau khối CTA chính, trong <section>), theo ĐÚNG cấu trúc sau (giữ nguyên tên thuộc tính, được đổi class của <section> theo văn phong trang):
+   <section>
+     <div data-founderai-form-slot></div>
+   </section>
+   Bắt buộc: đúng MỘT thẻ <div data-founderai-form-slot></div> trong toàn trang, không thêm thuộc tính nào khác vào div này, không thêm nội dung con bên trong nó. TUYỆT ĐỐI KHÔNG viết bất kỳ thẻ <form> nào trong trang, KHÔNG thêm script hay input/label/button nào liên quan tới thu thập thông tin — hệ thống sẽ tự thay chỗ trống này bằng biểu mẫu thật sau khi trang được lưu.`
+      : `6) Trang phải có ĐÚNG MỘT form đăng ký lead thật (không phải placeholder), đặt tại vị trí form (ví dụ sau khối CTA chính, trong <section>), theo ĐÚNG cấu trúc sau (giữ nguyên tên thuộc tính, được đổi class/label/nội dung chữ theo văn phong trang):
+   <form data-founderai-capture>
+     <input type="text" name="name" placeholder="..." required />
+     <input type="email" name="email" placeholder="..." required />
+     <input type="tel" name="phone" placeholder="..." />
+     <label><input type="checkbox" name="marketingConsent" /> ...câu đồng ý nhận thông tin/khuyến mãi...</label>
+     <button type="submit">${formHeading}</button>
+   </form>
+   <div class="founderai-capture-success" style="display:none">...thông báo thành công...</div>
+   <div class="founderai-capture-error" style="display:none"></div>
+   Bắt buộc: đúng 3 trường name="name"/"email"/"phone" như trên (không đổi tên, không thêm form thứ 2 nào khác trong trang). Checkbox "marketingConsent" mặc định KHÔNG được tick sẵn (không thêm thuộc tính checked). KHÔNG dùng tên "cf_agree_checkbox" hay bất kỳ tên nào khác cho ô đồng ý này — phải đúng "marketingConsent". KHÔNG thêm thuộc tính action hoặc onsubmit trên thẻ <form> — script capture ngoài trang tự bắt sự kiện submit.`;
+    const leadFormExtraFieldsBlock = formMode ? '' : buildLeadFormExtraFieldsPromptBlock(leadFormConfig);
+
     const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên landing page marketing.
 
 Nhiệm vụ: tạo MỘT trang landing HTML5 hoàn chỉnh, đẹp, responsive, theo đúng yêu cầu người dùng.
@@ -279,20 +317,10 @@ QUY TẮC KỸ THUẬT (bắt buộc):
    - <script src="https://cdn.tailwindcss.com"></script>
 4) Styling — NGHIÊM CẤM TUYỆT ĐỐI dùng thuộc tính style="..." inline trên BẤT KỲ thẻ HTML nào. KHÔNG được viết style="color:...", style="background-color:...", style="font-size:...", style="padding:...", style="margin:..." hay bất kỳ thuộc tính style inline nào. CHỈ được dùng class Tailwind utility (ví dụ class="bg-orange-500 text-white px-6 py-3"). Không dùng <style> block lớn; chỉ được vài dòng cho keyframe animation nếu thật sự cần.
 5) Không dùng JavaScript ngoài script Tailwind CDN ở trên (không thư viện khác, không inline script logic).
-6) Trang phải có ĐÚNG MỘT form đăng ký lead thật (không phải placeholder), đặt tại vị trí form (ví dụ sau khối CTA chính, trong <section>), theo ĐÚNG cấu trúc sau (giữ nguyên tên thuộc tính, được đổi class/label/nội dung chữ theo văn phong trang):
-   <form data-founderai-capture>
-     <input type="text" name="name" placeholder="..." required />
-     <input type="email" name="email" placeholder="..." required />
-     <input type="tel" name="phone" placeholder="..." />
-     <label><input type="checkbox" name="marketingConsent" /> ...câu đồng ý nhận thông tin/khuyến mãi...</label>
-     <button type="submit">${formHeading}</button>
-   </form>
-   <div class="founderai-capture-success" style="display:none">...thông báo thành công...</div>
-   <div class="founderai-capture-error" style="display:none"></div>
-   Bắt buộc: đúng 3 trường name="name"/"email"/"phone" như trên (không đổi tên, không thêm form thứ 2 nào khác trong trang). Checkbox "marketingConsent" mặc định KHÔNG được tick sẵn (không thêm thuộc tính checked). KHÔNG dùng tên "cf_agree_checkbox" hay bất kỳ tên nào khác cho ô đồng ý này — phải đúng "marketingConsent". KHÔNG thêm thuộc tính action hoặc onsubmit trên thẻ <form> — script capture ngoài trang tự bắt sự kiện submit.
+${formRule}
 7) Toàn bộ chữ hiển thị phải theo CUSTOMER_CONTENT_LANGUAGE ở trên. Link ngoài dùng https, ngắn gọn.
 ${imageRule}
-${buildLeadFormExtraFieldsPromptBlock(leadFormConfig)}
+${leadFormExtraFieldsBlock}
 Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 {"title":"...","html":"<!DOCTYPE html>..."}`;
 
@@ -394,65 +422,86 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
-    // Chốt chặn form bắt lead: AI phải tự sinh <form data-founderai-capture> với
-    // trường email thật (quy tắc 6 ở trên) — không còn fallback tự chèn placeholder,
-    // vì placeholder không được founderai-capture.js bắt được submit.
-    if (!/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
-      const err = new Error('AI không tạo form đăng ký lead (thiếu data-founderai-capture). Vui lòng thử lại.');
-      err.status = 422;
-      throw err;
-    }
-    if (!/\bname\s*=\s*["']email["']/i.test(html)) {
-      const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
-      err.status = 422;
-      throw err;
-    }
-    // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: leadFormConfig yêu cầu occupation/
-    // interestArea visible thì HTML phải có field tương ứng — không fallback, vì thiếu field
-    // không gây lỗi cho khách (lead.service.js chỉ để trống) nhưng khiến trang mất dữ liệu mà
-    // cấu hình vốn đòi hỏi, âm thầm và mãi mãi (trang đã publish, không sinh lại).
-    if (leadFormConfig?.fixedFields?.occupation?.visible && !/\bname\s*=\s*["']occupation["']/i.test(html)) {
-      const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường occupation (name="occupation") dù cấu hình yêu cầu. Vui lòng thử lại.');
-      err.status = 422;
-      throw err;
-    }
-    if (leadFormConfig?.fixedFields?.interestArea?.visible && !/\bname\s*=\s*["']interestArea["']/i.test(html)) {
-      const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường interestArea (name="interestArea") dù cấu hình yêu cầu. Vui lòng thử lại.');
-      err.status = 422;
-      throw err;
-    }
-    // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 1: mỗi customFields[] đã áp dụng
-    // (khoá cf_sugg_NN_text tất định) đòi đúng 1 field name="<khoá>" trong HTML — thiếu thì
-    // publish trang không có ô đó, khách không bao giờ điền được, mãi mãi (trang đã publish).
-    const customFields = Array.isArray(leadFormConfig?.customFields) ? leadFormConfig.customFields : [];
-    const missingCustomFieldKey = customFields
-      .find((field) => !new RegExp(`\\bname\\s*=\\s*["']${field.key}["']`, 'i').test(html));
-    if (missingCustomFieldKey) {
-      const err = new Error(`AI tạo form đăng ký lead nhưng thiếu trường "${missingCustomFieldKey.labelVi || missingCustomFieldKey.key}" (name="${missingCustomFieldKey.key}") dù cấu hình yêu cầu. Vui lòng thử lại.`);
-      err.status = 422;
-      throw err;
-    }
-    // 09/09 (sự cố slug-test ở đường sửa AI): ô select/radio có mặt nhưng AI ghi value là NHÃN
-    // ("Lựa chọn 1") thay vì mã ("opt_a") → normalizeCustomSubmitValue từ chối MỌI lead với
-    // "<nhãn> không hợp lệ"; occupation/interestArea thì normalizeOptionalSelectValue đổi thành ''
-    // trong im lặng. Đường sinh đã đưa sẵn markup đúng mã (rule 9) nên hiếm gặp, nhưng lọt qua
-    // kiểm name ở trên là trang publish với form không bao giờ gửi được — chặn 422 cho cùng luật.
-    const wrongOptionField = customFields
-      .filter((field) => field.type === 'select' || field.type === 'radio')
-      .find((field) => (Array.isArray(field.options) ? field.options : []).some((o) => !htmlHasOptionValue(html, o?.value)));
-    if (wrongOptionField) {
-      const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường "${wrongOptionField.labelVi || wrongOptionField.key}" (name="${wrongOptionField.key}") không đúng mã đã cấu hình. Vui lòng thử lại.`);
-      err.status = 422;
-      throw err;
-    }
-    const wrongFixedField = [
-      leadFormConfig?.fixedFields?.occupation?.visible ? ['occupation', OCCUPATION_VALUES] : null,
-      leadFormConfig?.fixedFields?.interestArea?.visible ? ['interestArea', INTEREST_AREA_VALUES] : null,
-    ].find((entry) => entry && entry[1].some((v) => !htmlHasOptionValue(html, v)));
-    if (wrongFixedField) {
-      const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường ${wrongFixedField[0]} (name="${wrongFixedField[0]}") không đúng danh sách hệ thống. Vui lòng thử lại.`);
-      err.status = 422;
-      throw err;
+    if (formMode) {
+      // PR-5b-2a — AI KHÔNG còn tự sinh form: đòi đúng MỘT chỗ trống, và cấm tuyệt đối
+      // <form data-founderai-capture> (mẫu cũ) lọt qua — model đôi khi "quen tay" viết form thật
+      // dù quy tắc 6 đã đổi, phải bắt ở đây chứ không tin lời hứa của prompt.
+      if (/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
+        const err = new Error('AI vẫn tự viết <form> đăng ký lead thay vì chỗ trống biểu mẫu. Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
+      const slotCount = countFormSlots(html);
+      if (slotCount !== 1) {
+        const err = new Error(
+          slotCount === 0
+            ? 'AI không tạo chỗ trống cho biểu mẫu (thiếu data-founderai-form-slot). Vui lòng thử lại.'
+            : `AI tạo ${slotCount} chỗ trống biểu mẫu thay vì đúng 1. Vui lòng thử lại.`
+        );
+        err.status = 422;
+        throw err;
+      }
+    } else {
+      // Chốt chặn form bắt lead: AI phải tự sinh <form data-founderai-capture> với
+      // trường email thật (quy tắc 6 ở trên) — không còn fallback tự chèn placeholder,
+      // vì placeholder không được founderai-capture.js bắt được submit.
+      if (!/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
+        const err = new Error('AI không tạo form đăng ký lead (thiếu data-founderai-capture). Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
+      if (!/\bname\s*=\s*["']email["']/i.test(html)) {
+        const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
+      // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: leadFormConfig yêu cầu occupation/
+      // interestArea visible thì HTML phải có field tương ứng — không fallback, vì thiếu field
+      // không gây lỗi cho khách (lead.service.js chỉ để trống) nhưng khiến trang mất dữ liệu mà
+      // cấu hình vốn đòi hỏi, âm thầm và mãi mãi (trang đã publish, không sinh lại).
+      if (leadFormConfig?.fixedFields?.occupation?.visible && !/\bname\s*=\s*["']occupation["']/i.test(html)) {
+        const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường occupation (name="occupation") dù cấu hình yêu cầu. Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
+      if (leadFormConfig?.fixedFields?.interestArea?.visible && !/\bname\s*=\s*["']interestArea["']/i.test(html)) {
+        const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường interestArea (name="interestArea") dù cấu hình yêu cầu. Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
+      // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 1: mỗi customFields[] đã áp dụng
+      // (khoá cf_sugg_NN_text tất định) đòi đúng 1 field name="<khoá>" trong HTML — thiếu thì
+      // publish trang không có ô đó, khách không bao giờ điền được, mãi mãi (trang đã publish).
+      const customFields = Array.isArray(leadFormConfig?.customFields) ? leadFormConfig.customFields : [];
+      const missingCustomFieldKey = customFields
+        .find((field) => !new RegExp(`\\bname\\s*=\\s*["']${field.key}["']`, 'i').test(html));
+      if (missingCustomFieldKey) {
+        const err = new Error(`AI tạo form đăng ký lead nhưng thiếu trường "${missingCustomFieldKey.labelVi || missingCustomFieldKey.key}" (name="${missingCustomFieldKey.key}") dù cấu hình yêu cầu. Vui lòng thử lại.`);
+        err.status = 422;
+        throw err;
+      }
+      // 09/09 (sự cố slug-test ở đường sửa AI): ô select/radio có mặt nhưng AI ghi value là NHÃN
+      // ("Lựa chọn 1") thay vì mã ("opt_a") → normalizeCustomSubmitValue từ chối MỌI lead với
+      // "<nhãn> không hợp lệ"; occupation/interestArea thì normalizeOptionalSelectValue đổi thành ''
+      // trong im lặng. Đường sinh đã đưa sẵn markup đúng mã (rule 9) nên hiếm gặp, nhưng lọt qua
+      // kiểm name ở trên là trang publish với form không bao giờ gửi được — chặn 422 cho cùng luật.
+      const wrongOptionField = customFields
+        .filter((field) => field.type === 'select' || field.type === 'radio')
+        .find((field) => (Array.isArray(field.options) ? field.options : []).some((o) => !htmlHasOptionValue(html, o?.value)));
+      if (wrongOptionField) {
+        const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường "${wrongOptionField.labelVi || wrongOptionField.key}" (name="${wrongOptionField.key}") không đúng mã đã cấu hình. Vui lòng thử lại.`);
+        err.status = 422;
+        throw err;
+      }
+      const wrongFixedField = [
+        leadFormConfig?.fixedFields?.occupation?.visible ? ['occupation', OCCUPATION_VALUES] : null,
+        leadFormConfig?.fixedFields?.interestArea?.visible ? ['interestArea', INTEREST_AREA_VALUES] : null,
+      ].find((entry) => entry && entry[1].some((v) => !htmlHasOptionValue(html, v)));
+      if (wrongFixedField) {
+        const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường ${wrongFixedField[0]} (name="${wrongFixedField[0]}") không đúng danh sách hệ thống. Vui lòng thử lại.`);
+        err.status = 422;
+        throw err;
+      }
     }
 
     validateLandingImageUrls({ html, assets, allowedSourceText: businessCtx });

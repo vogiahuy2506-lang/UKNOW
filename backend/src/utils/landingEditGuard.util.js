@@ -57,7 +57,7 @@ function unescapeJsonStringHtml(html) {
  * @param {string} html
  * @returns {Set<string>}
  */
-function extractFormEmbedKeys(html) {
+export function extractFormEmbedKeys(html) {
   const keys = new Set();
   const re = /\bdata-founderai-form\s*=\s*(["'])([A-Za-z0-9_-]+)\1/g;
   let m;

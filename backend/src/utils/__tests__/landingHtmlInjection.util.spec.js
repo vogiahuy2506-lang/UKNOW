@@ -8,7 +8,11 @@ import {
   autoInjectLeadFormIfMissing,
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
+  countFormSlots,
+  replaceFormSlotWithEmbed,
+  buildFormEmbedSectionHtml,
 } from '../landingHtmlInjection.util.js';
+import { extractFormEmbedKeys } from '../landingEditGuard.util.js';
 
 describe('landingHtmlInjection.util', () => {
   describe('stripFounderLandingAutoBlocks', () => {
@@ -460,6 +464,70 @@ describe('landingHtmlInjection.util', () => {
     it('xử lý trailing slash của BACKEND_PUBLIC_URL', () => {
       process.env.BACKEND_PUBLIC_URL = 'https://api.example.com/';
       expect(resolvePublicApiBaseFromEnv()).toBe('https://api.example.com/api');
+    });
+  });
+
+  // PR-5b-2a — chỗ trống <div data-founderai-form-slot></div> AI đặt trong HTML, và khối nhúng
+  // Biểu mẫu thay chỗ trống đó lúc lưu landing.
+  describe('countFormSlots', () => {
+    it('đếm 0 khi không có chỗ trống', () => {
+      expect(countFormSlots('<section><p>x</p></section>')).toBe(0);
+    });
+
+    it('đếm đúng 1', () => {
+      expect(countFormSlots('<section><div data-founderai-form-slot></div></section>')).toBe(1);
+    });
+
+    it('đếm đúng 2', () => {
+      const html = '<div data-founderai-form-slot></div><div data-founderai-form-slot></div>';
+      expect(countFormSlots(html)).toBe(2);
+    });
+
+    it('chấp nhận khoảng trắng bên trong div nhưng không khớp div có thuộc tính/nội dung khác', () => {
+      expect(countFormSlots('<div data-founderai-form-slot>\n  </div>')).toBe(1);
+      expect(countFormSlots('<div data-founderai-form-slot class="x"></div>')).toBe(0);
+      expect(countFormSlots('<div data-founderai-form-slot>text</div>')).toBe(0);
+    });
+
+    it('html rỗng/null → 0', () => {
+      expect(countFormSlots('')).toBe(0);
+      expect(countFormSlots(null)).toBe(0);
+    });
+  });
+
+  describe('replaceFormSlotWithEmbed', () => {
+    it('thay đúng chỗ trống bằng HTML khác, giữ nguyên phần còn lại', () => {
+      const html = '<section><div data-founderai-form-slot></div></section>';
+      const out = replaceFormSlotWithEmbed(html, '<p>EMBED</p>');
+      expect(out).toBe('<section><p>EMBED</p></section>');
+    });
+  });
+
+  describe('buildFormEmbedSectionHtml', () => {
+    it('đúng hợp đồng cố định (khớp ShareModal.jsx): section/div/noscript/script, origin không có trailing slash', () => {
+      const html = buildFormEmbedSectionHtml({ publicKey: 'abc123', origin: 'https://example.com/', fallbackText: 'Mở biểu mẫu' });
+      expect(html).toBe(
+        `<section data-founderai-form-section>
+  <div data-founderai-form="abc123"></div>
+  <noscript><a href="https://example.com/f/abc123">Mở biểu mẫu</a></noscript>
+  <script src="https://example.com/form-embed.js" defer></script>
+</section>`
+      );
+    });
+
+    it('kết quả được extractFormEmbedKeys (landingEditGuard.util.js) nhận ra đúng key', () => {
+      const html = buildFormEmbedSectionHtml({ publicKey: 'xyz789', origin: 'https://founderai.biz' });
+      const keys = extractFormEmbedKeys(html);
+      expect(keys.has('xyz789')).toBe(true);
+      expect(keys.size).toBe(1);
+    });
+
+    it('thay chỗ trống bằng khối nhúng rồi countFormSlots → 0 (không còn chỗ trống)', () => {
+      const withSlot = '<section><div data-founderai-form-slot></div></section>';
+      const embed = buildFormEmbedSectionHtml({ publicKey: 'k1', origin: 'https://example.com' });
+      const out = replaceFormSlotWithEmbed(withSlot, embed);
+      expect(countFormSlots(out)).toBe(0);
+      expect(extractFormEmbedKeys(out).has('k1')).toBe(true);
     });
   });
 });

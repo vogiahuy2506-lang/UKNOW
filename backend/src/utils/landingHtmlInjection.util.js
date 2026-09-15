@@ -229,3 +229,57 @@ export function resolvePublicApiBaseFromEnv() {
   const withApi = /\/api$/i.test(base) ? base : `${base}/api`;
   return normalizeLandingLpTrackApiBase(withApi);
 }
+
+/**
+ * PR-5b-2a — chỗ trống AI đặt trong HTML khi `AI_LANDING_FORM_MODE=form` (khác hợp đồng khối
+ * nhúng CỐ ĐỊNH ở `buildFormEmbedSectionHtml` bên dưới — chỗ trống chỉ tồn tại TẠM THỜI, từ lúc
+ * AI trả HTML tới lúc lưu landing). Regex chấp nhận div rỗng có thêm khoảng trắng bên trong (AI
+ * thỉnh thoảng chèn xuống dòng) nhưng KHÔNG chấp nhận thêm thuộc tính lạ hay nội dung con — giữ
+ * hợp đồng hẹp để không khớp nhầm div khác.
+ */
+const FORM_SLOT_RE = /<div\s+data-founderai-form-slot\s*>\s*<\/div>/gi;
+
+/**
+ * Đếm số chỗ trống biểu mẫu (`<div data-founderai-form-slot></div>`) trong một đoạn HTML.
+ * Dùng cả ở chốt chặn sau khi AI sinh (đúng 1) lẫn lúc lưu landing (0/1 hợp lệ, ≥2 → 400) — logic
+ * đếm PHẢI giống nhau ở cả hai nơi, nên đặt một chỗ duy nhất.
+ *
+ * @param {string} html
+ * @returns {number}
+ */
+export function countFormSlots(html) {
+  const matches = String(html || '').match(FORM_SLOT_RE);
+  return matches ? matches.length : 0;
+}
+
+/**
+ * Thay ĐÚNG MỘT chỗ trống biểu mẫu bằng đoạn HTML khác (khối nhúng thật). Gọi ĐÚNG MỘT lần
+ * `.replace` (không global) — caller phải tự đảm bảo `countFormSlots(html) === 1` trước khi gọi
+ * (kiểm ở landingPageAdmin.service.js, không lặp lại điều kiện ở đây).
+ *
+ * @param {string} html
+ * @param {string} replacementHtml
+ * @returns {string}
+ */
+export function replaceFormSlotWithEmbed(html, replacementHtml) {
+  return String(html || '').replace(FORM_SLOT_RE, () => String(replacementHtml || ''));
+}
+
+/**
+ * Hợp đồng khối nhúng Biểu mẫu CỐ ĐỊNH (PR-5, `PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md`) —
+ * PHẢI khớp byte-for-byte với bản frontend ở `ShareModal.jsx` (`embedCode`) và được
+ * `form-embed.js` + `extractFormEmbedKeys` (`landingEditGuard.util.js`) nhận diện đúng. `origin`
+ * TUYỆT ĐỐI — landing chạy trên subdomain/tên miền riêng của khách, không cùng origin với app.
+ *
+ * @param {{ publicKey: string, origin: string, fallbackText?: string }} params
+ * @returns {string}
+ */
+export function buildFormEmbedSectionHtml({ publicKey, origin, fallbackText = 'Mở biểu mẫu' }) {
+  const org = String(origin || '').replace(/\/+$/, '');
+  const key = String(publicKey || '');
+  return `<section data-founderai-form-section>
+  <div data-founderai-form="${key}"></div>
+  <noscript><a href="${org}/f/${key}">${fallbackText}</a></noscript>
+  <script src="${org}/form-embed.js" defer></script>
+</section>`;
+}

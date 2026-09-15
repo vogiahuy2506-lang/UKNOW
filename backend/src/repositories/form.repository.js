@@ -56,6 +56,7 @@ class FormRepository {
          f.payment_config AS "paymentConfig",
          f.is_published AS "isPublished",
          f.admin_disabled_at AS "adminDisabledAt",
+         f.landing_page_id AS "landingPageId",
          f.created_at AS "createdAt",
          f.updated_at AS "updatedAt",
          COUNT(s.id)::int AS "submissionCount"
@@ -92,6 +93,7 @@ class FormRepository {
          f.payment_config AS "paymentConfig",
          f.is_published AS "isPublished",
          f.admin_disabled_at AS "adminDisabledAt",
+         f.landing_page_id AS "landingPageId",
          f.created_at AS "createdAt",
          f.updated_at AS "updatedAt",
          COUNT(s.id)::int AS "submissionCount"
@@ -160,6 +162,11 @@ class FormRepository {
     theme = {},
     bookingConfig = null,
     paymentConfig = null,
+    // PR-5b-2a — biết ngay lúc tạo landing nào đã sinh ra form này (đường UPDATE landing: id
+    // landing đã biết trước, gắn thẳng ở INSERT, không cần UPDATE riêng). Đường CREATE landing
+    // (id landing CHƯA có lúc form được tạo) để mặc định null, gắn sau bằng setLandingPageId
+    // trong CÙNG transaction với INSERT landing (landingPageAdmin.service.js).
+    landingPageId = null,
   }) {
     const result = await db.query(
       `INSERT INTO forms (
@@ -173,8 +180,9 @@ class FormRepository {
          theme,
          booking_config,
          payment_config,
+         landing_page_id,
          is_published
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false)
        RETURNING
          id,
          workspace_owner_id AS "workspaceOwnerId",
@@ -189,6 +197,7 @@ class FormRepository {
          payment_config AS "paymentConfig",
          is_published AS "isPublished",
          admin_disabled_at AS "adminDisabledAt",
+         landing_page_id AS "landingPageId",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -202,9 +211,48 @@ class FormRepository {
         JSON.stringify(theme || {}),
         bookingConfig ? JSON.stringify(bookingConfig) : null,
         paymentConfig ? JSON.stringify(paymentConfig) : null,
+        landingPageId,
       ]
     );
     return result.rows[0];
+  }
+
+  /**
+   * PR-5b-2a — form (nếu có) đã gắn với một landing page cụ thể, để lúc lưu landing lại (HTML lại
+   * có chỗ trống) TÁI DÙNG đúng form thay vì đẻ form mồ côi. `LIMIT 1`: quy ước 1 landing tối đa 1
+   * form do luồng này tạo (chỉ code này ghi `landing_page_id`, không có đường nào khác gắn 2 form
+   * vào cùng 1 landing).
+   *
+   * @param {number} landingPageId
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<{id: number, publicKey: string}|null>}
+   */
+  async findByLandingPageId(landingPageId, workspaceOwnerId) {
+    const result = await db.query(
+      `SELECT id, public_key AS "publicKey"
+       FROM forms
+       WHERE landing_page_id = $1 AND workspace_owner_id = $2
+       LIMIT 1`,
+      [landingPageId, workspaceOwnerId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * PR-5b-2a — gắn `landing_page_id` cho form ĐÃ TỒN TẠI (đường CREATE landing: form được tạo
+   * TRƯỚC khi biết `id` landing, gắn lại sau trong CÙNG transaction với INSERT landing — truyền
+   * `client` để 2 câu lệnh cùng transaction). `queryable` mặc định `db` (pool) cho lúc gọi ngoài
+   * transaction (không dùng ở đường CREATE landing, chỉ để đối xứng với các hàm khác trong file).
+   *
+   * @param {number} formId
+   * @param {number} landingPageId
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   */
+  async setLandingPageId(formId, landingPageId, queryable = db) {
+    await queryable.query(
+      `UPDATE forms SET landing_page_id = $2, updated_at = NOW() WHERE id = $1`,
+      [formId, landingPageId]
+    );
   }
 
   /**

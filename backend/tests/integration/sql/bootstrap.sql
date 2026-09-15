@@ -3368,10 +3368,13 @@ CREATE TABLE IF NOT EXISTS forms (
   theme               JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_published        BOOLEAN NOT NULL DEFAULT FALSE,
   admin_disabled_at   TIMESTAMPTZ,
+  landing_page_id     BIGINT REFERENCES landing_pages(id) ON DELETE SET NULL,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT forms_fields_array_check CHECK (jsonb_typeof(fields) = 'array')
 );
+CREATE INDEX IF NOT EXISTS idx_forms_landing_page_id ON forms (landing_page_id)
+  WHERE landing_page_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS form_submissions (
   id                   BIGSERIAL PRIMARY KEY,

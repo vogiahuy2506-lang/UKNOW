@@ -630,3 +630,98 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
   });
 });
 
+/**
+ * PR-5b-2a (`PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md`, "Bổ sung 15/09 khi soạn lệnh
+ * PR-5b-2") — AI_LANDING_FORM_MODE=form: AI chỉ đặt chỗ trống, không còn tự viết
+ * <form data-founderai-capture>. Đọc process.env LÚC GỌI generate(), không lúc nạp module — mọi
+ * test trong file này TRƯỚC đoạn này chạy với biến chưa set (mode 'lead', 28 ca đã xanh ở trên,
+ * không sửa assertion nào) để chứng minh mặc định KHÔNG đổi hành vi.
+ */
+describe('aiLandingPageService.generate — AI_LANDING_FORM_MODE=form (PR-5b-2a)', () => {
+  const validSlotHtml =
+    '<!DOCTYPE html><html lang="vi"><head><script src="https://cdn.tailwindcss.com"></script></head><body>' +
+    '<section><div data-founderai-form-slot></div></section>' +
+    '</body></html>';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getContextForLandingAi.mockResolvedValue('');
+  });
+
+  afterEach(() => {
+    delete process.env.AI_LANDING_FORM_MODE;
+  });
+
+  it('công tắc TẮT (mặc định/không set) → prompt vẫn đòi <form data-founderai-capture> như cũ, chỗ trống bị coi là thiếu form → 422', async () => {
+    delete process.env.AI_LANDING_FORM_MODE;
+    mockGenerateReturns(validSlotHtml);
+    await expect(
+      aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/data-founderai-capture/) });
+  });
+
+  it('công tắc BẬT: HTML có đúng 1 chỗ trống, không <form> → qua chốt chặn, không đổi html', async () => {
+    process.env.AI_LANDING_FORM_MODE = 'form';
+    mockGenerateReturns(validSlotHtml);
+    const result = await aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+    expect(result.html).toBe(validSlotHtml);
+  });
+
+  it('công tắc BẬT: prompt không còn cấu trúc <form data-founderai-capture>, có nhắc data-founderai-form-slot, KHÔNG kèm buildLeadFormExtraFieldsPromptBlock', async () => {
+    process.env.AI_LANDING_FORM_MODE = 'form';
+    mockGenerateReturns(validSlotHtml);
+    await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'landing khoá học',
+      leadFormConfig: { fixedFields: { occupation: { visible: true }, interestArea: { visible: true } } },
+    });
+    const promptText = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(promptText).toContain('data-founderai-form-slot');
+    expect(promptText).not.toContain('data-founderai-capture');
+    // OCCUPATION_VALUES[0] — rule 9 (buildLeadFormExtraFieldsPromptBlock) không còn chèn vào prompt ở mode form dù leadFormConfig yêu cầu occupation.
+    expect(promptText).not.toMatch(/Sinh viên \/ Học sinh/);
+  });
+
+  it('công tắc BẬT: HTML vẫn còn <form data-founderai-capture> (model "quen tay") → 422', async () => {
+    process.env.AI_LANDING_FORM_MODE = 'form';
+    mockGenerateReturns(validFormHtml);
+    await expect(
+      aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/vẫn tự viết <form>/) });
+  });
+
+  it('công tắc BẬT: HTML có 0 chỗ trống → 422', async () => {
+    process.env.AI_LANDING_FORM_MODE = 'form';
+    const htmlNoSlot = '<!DOCTYPE html><html lang="vi"><head><script src="https://cdn.tailwindcss.com"></script></head><body><section>x</section></body></html>';
+    mockGenerateReturns(htmlNoSlot);
+    await expect(
+      aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/không tạo chỗ trống/) });
+  });
+
+  it('công tắc BẬT: HTML có 2 chỗ trống → 422', async () => {
+    process.env.AI_LANDING_FORM_MODE = 'form';
+    const htmlTwoSlots = validSlotHtml.replace(
+      '</section>',
+      '</section><section><div data-founderai-form-slot></div></section>'
+    );
+    mockGenerateReturns(htmlTwoSlots);
+    await expect(
+      aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/2 chỗ trống/) });
+  });
+
+  it('đọc công tắc LÚC GỌI, không lúc nạp module — bật rồi tắt ngay trong cùng file test phải đổi hành vi ngay', async () => {
+    process.env.AI_LANDING_FORM_MODE = 'form';
+    mockGenerateReturns(validSlotHtml);
+    const onResult = await aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+    expect(onResult.html).toBe(validSlotHtml);
+
+    delete process.env.AI_LANDING_FORM_MODE;
+    mockGenerateReturns(validSlotHtml);
+    await expect(
+      aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
+    ).rejects.toMatchObject({ status: 422 });
+  });
+});
+

@@ -305,7 +305,7 @@ class FormService {
    * @param {object} params
    * @returns {Promise<object>}
    */
-  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, theme, bookingConfig, paymentConfig }) {
+  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, theme, bookingConfig, paymentConfig, landingPageId = null }) {
     const trimmedTitle = String(title || '').trim();
     if (!trimmedTitle) {
       throw createHttpError('Tiêu đề biểu mẫu không được để trống', 400, 'INVALID_FORM_TITLE');
@@ -343,6 +343,7 @@ class FormService {
       theme: safeTheme,
       bookingConfig: safeBookingConfig,
       paymentConfig: safePaymentConfig,
+      landingPageId,
     });
 
     // PR-4a mục 3: kích hoạt khoá ảnh (nếu có) SAU khi đã ghi forms.theme thành công — form mới
