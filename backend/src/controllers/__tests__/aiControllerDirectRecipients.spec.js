@@ -166,6 +166,29 @@ describe('aiController directRecipients with Zalo contacts UIDs (P0)', () => {
     );
   });
 
+  // PR-6c review 15/09 — Việc 2: cùng bug với createCampaignFromDraft, ở đường prepareCampaign.
+  it('prepareCampaign: truyền ownerUserId = id CHỦ workspace (không phải id nhân viên) vào context của prepareScript', async () => {
+    const rawScript = {
+      nodes: [{ id: 'n1', node_type: 'data', node_subtype: 'read_form_submissions', config: { formId: 12 } }],
+    };
+    mockPrepareScript.mockResolvedValue({ ...rawScript });
+
+    const req = {
+      body: { script: rawScript },
+      // Nhân viên id=9 thao tác thay chủ workspace id=3.
+      user: { id: 9, role: 'employee', activeContext: { type: 'employee', ownerId: 3 } },
+    };
+    const res = makeRes();
+
+    await aiController.prepareCampaign(req, res);
+
+    expect(mockPrepareScript).toHaveBeenCalledWith(
+      rawScript,
+      9,
+      expect.objectContaining({ ownerUserId: 3 })
+    );
+  });
+
   it('executeCampaign: rejects employee autoRun before campaign creation without campaigns_run', async () => {
     const req = {
       body: { autoRun: true },

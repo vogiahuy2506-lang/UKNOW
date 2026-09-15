@@ -168,6 +168,29 @@ class AiCampaignRepository {
     return result.rows;
   }
 
+  /**
+   * PR-6c review 15/09 — kiểm CHỈ quyền sở hữu formId, tách khỏi `getForms`. `getForms` cố ý hẹp
+   * (chỉ form đã xuất bản, không bị tắt, LIMIT 20) vì phục vụ gợi ý trong prompt — dùng nó để
+   * kiểm sở hữu ở `sanitizeFormOwnership` từng xoá nhầm formId hợp lệ của form nháp hoặc form thứ
+   * 21 trở đi của ĐÚNG chủ workspace. Hàm này không lọc is_published/admin_disabled_at/LIMIT —
+   * chỉ trả đúng những id trong `formIds` thực sự thuộc `ownerId`.
+   *
+   * @param {number} ownerId workspace_owner_id
+   * @param {Array<number|string>} formIds
+   * @returns {Promise<number[]>}
+   */
+  async getFormIdsOwnedBy(ownerId, formIds) {
+    const ids = Array.from(
+      new Set((Array.isArray(formIds) ? formIds : []).map((id) => Number(id)).filter(Number.isInteger))
+    );
+    if (ids.length === 0) return [];
+    const result = await db.query(
+      `SELECT id FROM forms WHERE workspace_owner_id = $1 AND id = ANY($2::bigint[])`,
+      [ownerId, ids]
+    );
+    return result.rows.map((row) => Number(row.id));
+  }
+
   async getCustomerStatTotal(userId) {
     const result = await db.query(
       `SELECT COUNT(*) as total FROM customers WHERE id_user = $1`,

@@ -589,6 +589,27 @@ describe('aiCampaignDraftService.prepareScript — compilerApplied skip-guard (P
     zaloSpy.mockRestore();
     emailSpy.mockRestore();
   });
+
+  // Review 15/09 — Việc 2: sanitizeFormOwnership phải nhận id CHỦ workspace
+  // (context.ownerUserId), không phải userId (id người đang thao tác — có thể là nhân viên).
+  it('truyền context.ownerUserId vào sanitizeFormOwnership khi có; rơi về userId khi không có', async () => {
+    const mockRepo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    const zaloSpy = jest.spyOn(mockRepo, 'findDefaultZaloSettingId').mockResolvedValue(null);
+    const emailSpy = jest.spyOn(mockRepo, 'findDefaultEmailSettingId').mockResolvedValue(null);
+    const sanitizeSpy = jest.spyOn(aiCampaignDraftService, 'sanitizeFormOwnership');
+
+    // Nhân viên id=9 thao tác thay chủ workspace id=3 → phải kiểm quyền sở hữu theo id=3.
+    await aiCampaignDraftService.prepareScript(minimalScript(), 9, { ownerUserId: 3 });
+    expect(sanitizeSpy).toHaveBeenLastCalledWith(expect.anything(), 3);
+
+    // Không truyền ownerUserId (vd gọi nội bộ không qua controller) → không đổi hành vi cũ.
+    await aiCampaignDraftService.prepareScript(minimalScript(), 9);
+    expect(sanitizeSpy).toHaveBeenLastCalledWith(expect.anything(), 9);
+
+    sanitizeSpy.mockRestore();
+    zaloSpy.mockRestore();
+    emailSpy.mockRestore();
+  });
 });
 
 describe('aiCampaignDraftService.sanitizeFormOwnership (PR-6c)', () => {
@@ -600,31 +621,50 @@ describe('aiCampaignDraftService.sanitizeFormOwnership (PR-6c)', () => {
     ],
   });
 
+  // Review 15/09 — sanitizeFormOwnership chuyển sang dùng aiCampaignRepository.getFormIdsOwnedBy
+  // (kiểm CHỈ quyền sở hữu, không lọc is_published/LIMIT 20 như getForms — getForms cố ý hẹp
+  // để phục vụ gợi ý trong prompt, dùng nó ở đây từng xoá nhầm formId hợp lệ của form nháp/hơn
+  // 20 form). Mock đúng hàm mới.
   it('formId thuộc chủ workspace → giữ nguyên trong config', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getForms').mockResolvedValue([{ id: 12, title: 'Tư vấn 1-1' }]);
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([12]);
 
     const result = await aiCampaignDraftService.sanitizeFormOwnership(scriptWithFormNode(12), 7);
     const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
     expect(node.config.formId).toBe(12);
+    expect(spy).toHaveBeenCalledWith(7, [12]);
 
     spy.mockRestore();
   });
 
   it('formId KHÔNG thuộc chủ workspace (AI bịa id, hoặc của workspace khác) → bị bỏ trống', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getForms').mockResolvedValue([{ id: 12, title: 'Tư vấn 1-1' }]);
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([]);
 
     const result = await aiCampaignDraftService.sanitizeFormOwnership(scriptWithFormNode(999), 7);
     const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
     expect(node.config.formId).toBeUndefined();
+    expect(spy).toHaveBeenCalledWith(7, [999]);
 
     spy.mockRestore();
   });
 
-  it('lỗi khi truy vấn danh sách form → bỏ trống toàn bộ để an toàn (fail-safe)', async () => {
+  it('form NHÁP (chưa xuất bản) của ĐÚNG chủ workspace → vẫn giữ formId (getFormIdsOwnedBy không lọc is_published)', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getForms').mockRejectedValue(new Error('DB down'));
+    // getForms (hẹp, chỉ form đã xuất bản) sẽ KHÔNG trả form nháp này — nếu sanitizeFormOwnership
+    // lỡ dùng lại getForms thì test này đỏ, đúng như review 15/09 đã bắt.
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([55]);
+
+    const result = await aiCampaignDraftService.sanitizeFormOwnership(scriptWithFormNode(55), 7);
+    const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
+    expect(node.config.formId).toBe(55);
+
+    spy.mockRestore();
+  });
+
+  it('lỗi khi truy vấn quyền sở hữu form → bỏ trống toàn bộ để an toàn (fail-safe)', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockRejectedValue(new Error('DB down'));
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await aiCampaignDraftService.sanitizeFormOwnership(scriptWithFormNode(12), 7);
@@ -635,9 +675,9 @@ describe('aiCampaignDraftService.sanitizeFormOwnership (PR-6c)', () => {
     warnSpy.mockRestore();
   });
 
-  it('không có node read_form_submissions nào → không gọi getForms (không tốn DB)', async () => {
+  it('không có node read_form_submissions nào → không gọi getFormIdsOwnedBy (không tốn DB)', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getForms').mockResolvedValue([]);
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([]);
 
     const script = {
       nodes: [

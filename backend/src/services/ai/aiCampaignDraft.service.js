@@ -758,25 +758,37 @@ class AiCampaignDraftService {
   }
 
   /**
-   * PR-6c — chặn `formId` KHÔNG thuộc workspace của userId lọt vào node `read_form_submissions`
+   * PR-6c — chặn `formId` KHÔNG thuộc workspace của chủ lọt vào node `read_form_submissions`
    * (AI bịa id, hoặc ngữ cảnh mang formId của workspace khác). Bỏ trống chứ không throw — người
    * dùng tự chọn lại form đúng trong khung cấu hình node ở builder, không làm hỏng cả bản nháp
    * (mẫu "form không tồn tại/không thuộc workspace → báo lỗi rõ" của PR-6a áp dụng ở RUN TIME,
    * đây là lớp UX sớm hơn ở DRAFT TIME).
    *
+   * Review 15/09 sửa 2 điểm:
+   * 1. Tham số PHẢI là id CHỦ workspace (`resolveOwnerUserId`), không phải id người đang thao
+   *    tác — nhân viên gọi API này với `req.user.id` là id nhân viên, khác chủ workspace, nên
+   *    trước đây MỌI formId hợp lệ của chủ đều bị xoá khi một nhân viên soạn campaign.
+   * 2. Dùng `getFormIdsOwnedBy` (chỉ kiểm sở hữu, không lọc is_published/LIMIT 20) thay vì
+   *    `getForms` (cố ý hẹp, phục vụ gợi ý trong prompt) — trước đây form NHÁP hoặc form thứ 21
+   *    trở đi của ĐÚNG chủ cũng bị coi là "không thuộc workspace" và bị xoá oan.
+   *
    * @param {object} script
-   * @param {number} userId
+   * @param {number} ownerUserId id chủ workspace (không phải id người đang thao tác)
    * @returns {Promise<object>}
    */
-  async sanitizeFormOwnership(script, userId) {
+  async sanitizeFormOwnership(script, ownerUserId) {
     if (!script || !Array.isArray(script.nodes)) return script;
     const formNodes = script.nodes.filter((n) => getNodeSubtype(n) === 'read_form_submissions');
     if (formNodes.length === 0) return script;
 
+    const formIdsInScript = formNodes
+      .map((n) => (n.config || n.settings || {}).formId)
+      .filter((id) => id != null);
+
     let ownedFormIds;
     try {
-      const forms = await aiCampaignRepository.getForms(userId);
-      ownedFormIds = new Set(forms.map((f) => Number(f.id)));
+      const ids = await aiCampaignRepository.getFormIdsOwnedBy(ownerUserId, formIdsInScript);
+      ownedFormIds = new Set(ids);
     } catch (e) {
       console.warn('[AI Patch] Không kiểm được quyền sở hữu formId, bỏ trống toàn bộ để an toàn:', e.message);
       ownedFormIds = new Set();
@@ -786,7 +798,7 @@ class AiCampaignDraftService {
       const cfg = node.config || node.settings || {};
       const rawFormId = cfg.formId;
       if (rawFormId != null && !ownedFormIds.has(Number(rawFormId))) {
-        console.log(`[AI Patch] Bỏ formId=${rawFormId} khỏi node read_form_submissions — không thuộc workspace ${userId}`);
+        console.log(`[AI Patch] Bỏ formId=${rawFormId} khỏi node read_form_submissions — không thuộc workspace ${ownerUserId}`);
         delete cfg.formId;
         node.config = cfg;
       }
@@ -812,7 +824,12 @@ class AiCampaignDraftService {
         ...context,
       });
     }
-    patched = await this.sanitizeFormOwnership(patched, userId);
+    // PR-6c review 15/09 — sanitizeFormOwnership phải kiểm theo id CHỦ workspace, không phải
+    // userId (id người đang thao tác — có thể là nhân viên). context.ownerUserId đến từ
+    // resolveOwnerUserId(req.user) ở ai.controller.js; rơi về userId khi không truyền (gọi nội
+    // bộ không qua controller/không có khái niệm nhân viên) để không đổi hành vi cũ ở đó.
+    const ownerUserId = context.ownerUserId != null ? context.ownerUserId : userId;
+    patched = await this.sanitizeFormOwnership(patched, ownerUserId);
     const canonical = this.canonicalizeScript(patched);
     const nodes = this.normalizeNodes(canonical.nodes);
     await this.autoFillEmailChannels(nodes, userId);

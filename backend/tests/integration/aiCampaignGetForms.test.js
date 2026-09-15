@@ -103,3 +103,51 @@ describe('AiCampaignRepository.getForms — PR-6c', () => {
     expect(forms).toEqual([]);
   });
 });
+
+/**
+ * Review 15/09 — getFormIdsOwnedBy CHỈ kiểm quyền sở hữu (workspace_owner_id), KHÔNG lọc
+ * is_published/admin_disabled_at/LIMIT 20 như getForms — getForms cố ý hẹp để gợi ý trong
+ * prompt; dùng nó để kiểm sở hữu ở sanitizeFormOwnership từng xoá nhầm formId hợp lệ của form
+ * nháp hoặc form ngoài 20 form gần nhất của ĐÚNG chủ.
+ */
+describe('AiCampaignRepository.getFormIdsOwnedBy — PR-6c review 15/09', () => {
+  it('form NHÁP (chưa xuất bản) của đúng chủ → vẫn trả về (không lọc is_published như getForms)', async () => {
+    const owner = await createUser({ username: 'owner_ids_draft' });
+    const draftForm = await insertForm(owner, { title: 'Nháp', isPublished: false });
+
+    const ids = await aiCampaignRepository.getFormIdsOwnedBy(owner.id, [draftForm]);
+    expect(ids).toEqual([draftForm]);
+  });
+
+  it('form đã bị super admin tắt của đúng chủ → vẫn trả về (không lọc admin_disabled_at như getForms)', async () => {
+    const owner = await createUser({ username: 'owner_ids_disabled' });
+    const disabledForm = await insertForm(owner, { title: 'Đã tắt', isPublished: true, adminDisabled: true });
+
+    const ids = await aiCampaignRepository.getFormIdsOwnedBy(owner.id, [disabledForm]);
+    expect(ids).toEqual([disabledForm]);
+  });
+
+  it('form của chủ workspace khác → bị loại dù id có trong danh sách hỏi', async () => {
+    const ownerA = await createUser({ username: 'owner_ids_a' });
+    const ownerB = await createUser({ username: 'owner_ids_b' });
+    const formA = await insertForm(ownerA, { title: 'Của A' });
+    const formB = await insertForm(ownerB, { title: 'Của B' });
+
+    const ids = await aiCampaignRepository.getFormIdsOwnedBy(ownerA.id, [formA, formB]);
+    expect(ids).toEqual([formA]);
+  });
+
+  it('id không tồn tại lẫn trong danh sách hỏi → chỉ trả những id thật sự thuộc chủ', async () => {
+    const owner = await createUser({ username: 'owner_ids_mixed' });
+    const realForm = await insertForm(owner, { title: 'Thật' });
+
+    const ids = await aiCampaignRepository.getFormIdsOwnedBy(owner.id, [realForm, 999999999]);
+    expect(ids).toEqual([realForm]);
+  });
+
+  it('mảng formIds rỗng → trả mảng rỗng', async () => {
+    const owner = await createUser({ username: 'owner_ids_empty' });
+    const ids = await aiCampaignRepository.getFormIdsOwnedBy(owner.id, []);
+    expect(ids).toEqual([]);
+  });
+});

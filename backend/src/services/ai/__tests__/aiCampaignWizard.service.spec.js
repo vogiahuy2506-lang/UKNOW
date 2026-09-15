@@ -6,6 +6,7 @@ import {
   createEmptyWizardState,
   evaluateNextGate,
   extractWizardState,
+  inferDataSourceFromText,
   isContentPlanRevisionText,
   mergeWizardState,
   normalizeWizardState,
@@ -483,6 +484,24 @@ describe('aiCampaignWizard.service', () => {
     );
     const optionsEmail = gateEmail.response.data.questions[0].options.map((o) => o.value);
     expect(optionsEmail).toContain('form');
+  });
+
+  // Review 15/09 (PR-6c vòng sửa) — Việc 1: bản gốc bắt "đặt lịch"/"người đặt" trần nên đoán nhầm
+  // câu MỜI đặt lịch ("mời khách đặt lịch tư vấn", "kêu gọi đặt lịch demo") thành nguồn form, cướp
+  // mất câu hỏi nguồn của wizard (chỉ hỏi khi dataSource còn trống). Bảng 8 câu review đưa ra,
+  // kiểm thẳng regex qua inferDataSourceFromText — không qua extractWizardState/isCampaignRequestText
+  // để tránh phụ thuộc câu có "kích hoạt" luồng chiến dịch hay không.
+  it.each([
+    ['Tạo chiến dịch email mời khách đặt lịch tư vấn miễn phí tuần này', null],
+    ['Gửi Zalo nhắc người đặt hàng chưa thanh toán', null],
+    ['Tạo chiến dịch cho danh sách khách hàng, mời đặt lịch học thử', 'db'],
+    ['Gửi email cho khách từ landing page, kêu gọi đặt lịch demo', 'landing'],
+    ['gửi cho người đặt lịch ở biểu mẫu Tư vấn 1-1', 'form'],
+    ['gửi cho những người đã đặt lịch', 'form'],
+    ['email cảm ơn khách đã đặt lịch tuần trước', 'form'],
+    ['người điền form trên landing page', 'landing'],
+  ])('PR-6c review: inferDataSourceFromText(%j) → %s', (text, expected) => {
+    expect(inferDataSourceFromText(text)).toBe(expected);
   });
 
   it('PR-6c: inferDataSourceFromText nhận diện "người đặt lịch ở biểu mẫu" là nguồn form (qua extractWizardState)', () => {

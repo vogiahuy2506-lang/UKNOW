@@ -136,7 +136,9 @@ class AiController {
         return res.status(400).json({ success: false, message: 'Kịch bản chiến dịch không hợp lệ' });
       }
 
-      const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id);
+      const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id, {
+        ownerUserId: resolveOwnerUserId(req.user),
+      });
       if (directRecipients) this.applyDirectRecipients(preparedScript, directRecipients);
       else if (preparedScript.wizardDataSource === 'manual' || preparedScript.wizardDataSource === 'zalo_contacts') this.markManualRecipientsRequired(preparedScript);
       const confirmationView = await campaignConfirmationService.buildConfirmationView({
@@ -830,7 +832,9 @@ class AiController {
         });
       }
 
-      const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id);
+      const preparedScript = await aiCampaignDraftService.prepareScript(script, req.user.id, {
+        ownerUserId: resolveOwnerUserId(req.user),
+      });
       if (directRecipients) this.applyDirectRecipients(preparedScript, directRecipients);
       else if (preparedScript.wizardDataSource === 'manual') {
         const error = new Error('Danh sách người nhận trực tiếp đã hết phiên. Vui lòng nhập lại.');

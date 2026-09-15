@@ -357,6 +357,38 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
       expect(mockAutoCreateZaloTemplates).not.toHaveBeenCalled();
       expect(mockCreateCampaign).not.toHaveBeenCalled();
     });
+
+    // PR-6c review 15/09 — Việc 2: prepareScript(script, req.user.id) dùng id NHÂN VIÊN thay vì
+    // id chủ workspace, nên sanitizeFormOwnership (bên trong prepareScript) coi mọi formId hợp
+    // lệ của chủ là "không thuộc workspace" khi một nhân viên soạn campaign. Kiểm ownerUserId
+    // đúng nghĩa (id chủ, không phải id nhân viên) được truyền vào context.
+    it('truyền ownerUserId = id CHỦ workspace (không phải id nhân viên) vào context của prepareScript', async () => {
+      const preparedScript = {
+        campaignName: 'Employee draft with form node',
+        connections: [],
+        nodes: [{
+          node_type: 'data',
+          node_subtype: 'read_form_submissions',
+          config: { formId: 12 },
+        }],
+      };
+      mockPrepareScript.mockResolvedValueOnce(preparedScript);
+      mockBuildConfirmationView.mockResolvedValueOnce({ readyToCreate: false });
+      const req = {
+        body: { script: preparedScript, resourceVersions: [] },
+        // Nhân viên id=9 thao tác thay chủ workspace id=3.
+        user: { id: 9, role: 'employee', activeContext: { type: 'employee', ownerId: 3 } },
+      };
+      const res = makeRes();
+
+      await aiController.createCampaignFromDraft(req, res);
+
+      expect(mockPrepareScript).toHaveBeenCalledWith(
+        preparedScript,
+        9,
+        expect.objectContaining({ ownerUserId: 3 })
+      );
+    });
   });
 
   describe('pushToCampaign', () => {

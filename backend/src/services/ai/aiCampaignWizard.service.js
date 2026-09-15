@@ -95,17 +95,30 @@ const inferChannelFromText = (text = '') => {
   return pickChannelByExplicitSignal(normalized, /\bemail\b|gửi mail|gui mail|thư điện tử|thu dien tu/);
 };
 
-const inferDataSourceFromText = (text = '') => {
+export const inferDataSourceFromText = (text = '') => {
   const normalized = String(text || '').toLowerCase();
   if (/google\s*sheet|spreadsheet|docs\.google\.com\/spreadsheets|excel|xlsx|xls|csv|file|t[eệ]p|tập tin/.test(normalized)) {
     return 'sheet';
   }
   // PR-6c — Bẫy chữ: "form" xuất hiện cả trong câu nói về landing ("người điền form trên landing
-  // page") nên KHÔNG dùng chữ "form" trần để đoán nguồn — chỉ dựa các cụm tiếng Việt đặc trưng
-  // của Biểu mẫu (biểu mẫu / đặt lịch / người đặt). Xét TRƯỚC regex landing ngay dưới: câu "gửi
-  // cho người đặt lịch ở biểu mẫu" phải ra 'form', không rơi vào 'landing' dù không chứa các cụm
-  // này thì vẫn khớp landing bình thường.
-  if (/biểu mẫu|bieu mau|đặt lịch|dat lich|người đặt|nguoi dat/.test(normalized)) return 'form';
+  // page") nên KHÔNG dùng chữ "form" trần để đoán nguồn. Review 15/09 bắt tiếp: "đặt lịch"/"người
+  // đặt" trần (bản gốc PR-6c) khớp cả câu MỜI đặt lịch ("mời khách đặt lịch tư vấn", "kêu gọi đặt
+  // lịch demo") — đó là lời mời sắp tới, không phải danh sách người ĐÃ nộp biểu mẫu, nên đoán
+  // "form" là sai và cướp mất câu hỏi nguồn của wizard (chỉ hỏi khi dataSource còn trống, :1076-
+  // 1077). Chỉ khớp 'form' với cụm CHẮC CHẮN nói về người đã nộp: có chữ "biểu mẫu" hẳn hoi, hoặc
+  // "(người|khách) đã đặt lịch" / "người đặt lịch" / "danh sách đặt lịch" (thì quá khứ hoặc danh
+  // từ hoá — không phải câu mời). "khách đặt lịch" (không có "đã") vẫn KHÔNG khớp — cố ý, đó là
+  // câu mời như ca 1. Xét TRƯỚC regex landing ngay dưới: câu vừa có "biểu mẫu" vừa có "landing"
+  // phải ra 'form'.
+  if (
+    /biểu mẫu|bieu mau/.test(normalized) ||
+    /(?:người|khách|nguoi|khach)\s+đã\s+đặt lịch/.test(normalized) ||
+    /(?:người|khách|nguoi|khach)\s+da\s+dat lich/.test(normalized) ||
+    /người đặt lịch|nguoi dat lich/.test(normalized) ||
+    /danh sách đặt lịch|danh sach dat lich/.test(normalized)
+  ) {
+    return 'form';
+  }
   if (/landing page|landing|lead/.test(normalized)) return 'landing';
   if (/danh sách khách hàng|danh sach khach hang|khách hàng trong hệ thống|khach hang trong he thong|khách hàng có sẵn|khach hang co san|database|db|crm/.test(normalized)) {
     return 'db';
