@@ -27,12 +27,22 @@ const cleanupRequest = (key) => {
   pendingRequests.delete(key);
 };
 
+const DEFAULT_TIMEOUT_MS = 10000;
+// Backend nhận tới 100 MB/tệp; tệp vài MB qua Cloudflare đã dễ vượt 10 giây mặc định.
+const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Upload (FormData) KHÔNG khử trùng: khoá chỉ gồm method+url+params, không có body, nên chọn nhiều
+// tệp cùng lúc (Promise.all nhiều POST /uploads/temp) thì lượt sau huỷ lượt trước — chỉ tệp cuối
+// lên server, giao diện báo "Tải tệp lên thất bại" (sếp đính kèm ảnh + PDF + DOCX 14/09).
+const isUploadRequest = (config) =>
+  typeof FormData !== 'undefined' && config?.data instanceof FormData;
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: DEFAULT_TIMEOUT_MS,
   withCredentials: true,
 });
 // Add delete method
@@ -118,18 +128,22 @@ const forceLogoutAndRedirect = async () => {
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    // Request deduplication - cancel duplicate in-flight requests
-    const key = getRequestKey(config);
-    if (pendingRequests.has(key)) {
-      const controller = pendingRequests.get(key);
-      controller.abort();
-      pendingRequests.delete(key);
+    if (isUploadRequest(config)) {
+      if (config.timeout === DEFAULT_TIMEOUT_MS) config.timeout = UPLOAD_TIMEOUT_MS;
+    } else {
+      // Request deduplication - cancel duplicate in-flight requests
+      const key = getRequestKey(config);
+      if (pendingRequests.has(key)) {
+        const controller = pendingRequests.get(key);
+        controller.abort();
+        pendingRequests.delete(key);
+      }
+
+      const controller = new AbortController();
+      config.signal = controller.signal;
+      pendingRequests.set(key, controller);
     }
-    
-    const controller = new AbortController();
-    config.signal = controller.signal;
-    pendingRequests.set(key, controller);
-    
+
     const token = getStoredToken('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -157,16 +171,16 @@ const getLimitReachedLabel = () => {
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
-    // Clean up pending request on success
-    const key = getRequestKey(response.config);
-    cleanupRequest(key);
+    // Clean up pending request on success (upload không đăng ký nên không xoá nhầm lượt khác cùng khoá)
+    if (!isUploadRequest(response.config)) {
+      cleanupRequest(getRequestKey(response.config));
+    }
     return response;
   },
   async (error) => {
     // Clean up pending request on error
-    if (error.config) {
-      const key = getRequestKey(error.config);
-      cleanupRequest(key);
+    if (error.config && !isUploadRequest(error.config)) {
+      cleanupRequest(getRequestKey(error.config));
     }
 
     // Map server message và storage error codes vào Error.message để toast/UI hiện câu tiếng Việt rõ nghĩa
