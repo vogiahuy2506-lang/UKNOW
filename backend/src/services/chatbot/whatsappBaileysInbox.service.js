@@ -139,7 +139,8 @@ async function findEnabledChatbots(sessionKey) {
     `SELECT s.id_chatbot, s.welcome_message, s.ai_model, s.temperature,
             s.max_tokens, s.response_style, s.system_instruction,
             s.id_sub_assistant, sa.name AS sub_assistant_name,
-            cb.id_user, cb.name AS chatbot_name
+            cb.id_user, cb.name AS chatbot_name,
+             cb.active_hours
      FROM chatbot_whatsapp_baileys_settings s
      JOIN custom_chatbots cb ON cb.id = s.id_chatbot
      LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant
@@ -383,6 +384,41 @@ async function processIncomingMessage({ sessionKey, msg }) {
         externalId,
         externalMessageId: messageId,
       });
+
+      // Active hours check (trước khi gọi AI, tin khách đã được lưu)
+      const { default: chatbotActiveHoursService } = await import('./chatbotActiveHours.service.js');
+      const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: cb.active_hours,
+        channel: 'whatsapp_baileys',
+        chatbotId: cb.id_chatbot,
+        senderKey: externalId,
+      });
+      if (!activeCheck.allowed) {
+        if (activeCheck.shouldNotify) {
+          const sent = await whatsappAdapter.sendReply({
+            channelId: sessionKey,
+            externalId,
+            message: activeCheck.staticReply,
+          });
+          if (sent?.success !== false) {
+            await persistMessage({
+              conversationId: conversation.id,
+              channelId: idChannelConnection,
+              userId: ownerUserId,
+              role: 'bot',
+              content: activeCheck.staticReply,
+            });
+            await chatbotActiveHoursService.markNotified({
+              channel: 'whatsapp_baileys',
+              chatbotId: cb.id_chatbot,
+              senderKey: externalId,
+              activeHours: cb.active_hours,
+            });
+          }
+        }
+        log(`session=${sessionKey} chatbot=${cb.id_chatbot} outside active hours — message saved, no AI reply`);
+        continue;
+      }
 
       // Lấy lịch sử + gọi AI (qua chatRouterService chung).
       try {

@@ -14,6 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChatbotReplyLimitsCard from '../../features/chatbot/components/ChatbotReplyLimitsCard';
+import ChatbotActiveHoursCard from '../../features/chatbot/components/ChatbotActiveHoursCard';
 import AiHandoffAutoResumeCard from '../../features/billing/AiHandoffAutoResumeCard';
 import ImageUrlInput from '../../features/chatbot/components/AvatarUploader';
 import KnowledgeTab from './KnowledgeTab';
@@ -61,6 +62,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
     allow_attachments: false,
     suggested_questions: [],
     reply_limit_config: null,
+    active_hours: null,
   });
 
   useEffect(() => {
@@ -95,6 +97,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
       allow_attachments: chatbot.allow_attachments === true,
       suggested_questions: chatbot.suggested_questions || [],
       reply_limit_config: chatbot.reply_limit_config || null,
+      active_hours: chatbot.active_hours || null,
     };
     setForm(loadedForm);
     setInitialSnapshot(loadedForm);
@@ -147,6 +150,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
         widget_key: chatbot.widget_key || form.widget_key,
         suggested_questions: form.suggested_questions || [],
         reply_limit_config: form.reply_limit_config,
+        active_hours: form.active_hours,
       };
 
       let updatedBot;
@@ -486,8 +490,14 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
                 </SectionCard>
               </section>
 
-              {/* Giới hạn */}
-              <section id="config-anchor-limits">
+              {/* Giới hạn & Khung giờ */}
+              <section id="config-anchor-limits" className="space-y-4">
+                {hydrated && (
+                  <ChatbotActiveHoursCard
+                    value={form.active_hours}
+                    onChange={(newActiveHours) => update({ active_hours: newActiveHours })}
+                  />
+                )}
                 {hydrated && (
                   <ChatbotReplyLimitsCard
                     value={form.reply_limit_config}

@@ -32,6 +32,8 @@ import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import { normalizeChatbotReplyLimitConfig } from '../utils/chatbotReplyLimit.util.js';
+import { normalizeChatbotActiveHours } from '../utils/chatbotActiveHours.util.js';
+import chatbotActiveHoursService from '../services/chatbot/chatbotActiveHours.service.js';
 import { consumeWidgetUploadBytes } from '../services/storage/widgetUploadCap.service.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 import {
@@ -1584,6 +1586,22 @@ class ChatbotController {
         }
       }
 
+      if (req.body.active_hours !== undefined) {
+        try {
+          updatePayload.active_hours = normalizeChatbotActiveHours(
+            req.body.active_hours,
+            { strict: true }
+          );
+          updatePayload.active_hours_set = true;
+        } catch (validationError) {
+          return res.status(400).json({
+            success: false,
+            message: validationError.message,
+            code: 'CHATBOT_ACTIVE_HOURS_INVALID',
+          });
+        }
+      }
+
       // Clamp ai_model theo plan cua user (resolveAllowedModel tra fallback neu
       // model bi plan chan). Ap dung cho ca repo updateCustomChatbots lan
       // chatbot_settings sync -> custom_chatbots va chatbot_settings luon
@@ -1783,33 +1801,44 @@ class ChatbotController {
       const clientSessionId = String(sessionId || '').trim();
       const visitorKey = clientSessionId
         || `widget_${widgetKey}_${String(req.ip || 'anon').slice(0, 64)}`;
-      const rate = await chatbotRateLimitService.checkBeforeAi({
+
+      // Kiểm tra khung giờ hoạt động trước checkBeforeAi (ngoài giờ không ăn bộ đếm rate limit)
+      const activeHoursCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: chatbot.active_hours,
         channel: 'web',
-        ownerUserId: chatbot.id_user,
         chatbotId: chatbot.id,
         senderKey: visitorKey,
       });
-      if (!rate.allowed) {
-        const content = rate.shouldNotify ? rate.staticReply : null;
-        if (rate.shouldNotify) {
-          await chatbotRateLimitService.markRateLimitNotified({
-            channel: 'web',
-            ownerUserId: chatbot.id_user,
-            chatbotId: chatbot.id,
-            senderKey: visitorKey,
-            reason: rate.reason,
+
+      if (activeHoursCheck.allowed) {
+        const rate = await chatbotRateLimitService.checkBeforeAi({
+          channel: 'web',
+          ownerUserId: chatbot.id_user,
+          chatbotId: chatbot.id,
+          senderKey: visitorKey,
+        });
+        if (!rate.allowed) {
+          const content = rate.shouldNotify ? rate.staticReply : null;
+          if (rate.shouldNotify) {
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'web',
+              ownerUserId: chatbot.id_user,
+              chatbotId: chatbot.id,
+              senderKey: visitorKey,
+              reason: rate.reason,
+            });
+          }
+          return res.json({
+            success: true,
+            data: {
+              role: 'assistant',
+              content,
+              created_at: new Date().toISOString(),
+              rateLimited: true,
+              reason: rate.reason,
+            },
           });
         }
-        return res.json({
-          success: true,
-          data: {
-            role: 'assistant',
-            content,
-            created_at: new Date().toISOString(),
-            rateLimited: true,
-            reason: rate.reason,
-          },
-        });
       }
 
       let conversation = null;
@@ -1893,6 +1922,36 @@ class ChatbotController {
           conversationId: conversation.id,
           conversationType: 'webchat',
           change: 1,
+        });
+      }
+
+      // Xử lý phản hồi ngoài giờ: chỉ trả sau khi tin khách đã được lưu vào hộp thư
+      if (!activeHoursCheck.allowed) {
+        const content = activeHoursCheck.shouldNotify ? activeHoursCheck.staticReply : null;
+        if (activeHoursCheck.shouldNotify) {
+          await chatbotActiveHoursService.markNotified({
+            channel: 'web',
+            chatbotId: chatbot.id,
+            senderKey: visitorKey,
+            activeHours: chatbot.active_hours,
+          });
+          if (conversation && content) {
+            await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
+              role: 'assistant',
+              content,
+              replySource: 'ai_outside_hours',
+            });
+          }
+        }
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content,
+            created_at: new Date().toISOString(),
+            rateLimited: true,
+            reason: activeHoursCheck.reason,
+          },
         });
       }
 
@@ -2006,34 +2065,44 @@ class ChatbotController {
         );
       }
 
-      const rate = await chatbotRateLimitService.checkBeforeAi({
+      // Kiểm tra khung giờ hoạt động trước checkBeforeAi
+      const activeHoursCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: chatbot.active_hours,
         channel: 'web',
-        ownerUserId: chatbotUserId,
         chatbotId: chatbot.id,
         senderKey: visitorSessionId,
       });
-      if (!rate.allowed) {
-        const content = rate.shouldNotify ? rate.staticReply : null;
-        if (rate.shouldNotify) {
-          await chatbotRateLimitService.markRateLimitNotified({
-            channel: 'web',
-            ownerUserId: chatbotUserId,
-            chatbotId: chatbot.id,
-            senderKey: visitorSessionId,
-            reason: rate.reason,
+
+      if (activeHoursCheck.allowed) {
+        const rate = await chatbotRateLimitService.checkBeforeAi({
+          channel: 'web',
+          ownerUserId: chatbotUserId,
+          chatbotId: chatbot.id,
+          senderKey: visitorSessionId,
+        });
+        if (!rate.allowed) {
+          const content = rate.shouldNotify ? rate.staticReply : null;
+          if (rate.shouldNotify) {
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'web',
+              ownerUserId: chatbotUserId,
+              chatbotId: chatbot.id,
+              senderKey: visitorSessionId,
+              reason: rate.reason,
+            });
+          }
+          return res.json({
+            success: true,
+            data: {
+              role: 'assistant',
+              content,
+              created_at: new Date().toISOString(),
+              sessionId: visitorSessionId,
+              rateLimited: true,
+              reason: rate.reason,
+            },
           });
         }
-        return res.json({
-          success: true,
-          data: {
-            role: 'assistant',
-            content,
-            created_at: new Date().toISOString(),
-            sessionId: visitorSessionId,
-            rateLimited: true,
-            reason: rate.reason,
-          },
-        });
       }
 
       const creditPrep = await preparePublicChatCredit(chatbotUserId);
@@ -2086,6 +2155,37 @@ class ChatbotController {
       conversationType: 'webchat',
       change: 1,
     });
+      }
+
+      // Xử lý phản hồi ngoài giờ (Chỗ 8): chỉ trả sau khi tin khách đã được lưu vào hộp thư
+      if (!activeHoursCheck.allowed) {
+        const content = activeHoursCheck.shouldNotify ? activeHoursCheck.staticReply : null;
+        if (activeHoursCheck.shouldNotify) {
+          await chatbotActiveHoursService.markNotified({
+            channel: 'web',
+            chatbotId: chatbot.id,
+            senderKey: visitorSessionId,
+            activeHours: chatbot.active_hours,
+          });
+          if (conversation && content) {
+            await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
+              role: 'assistant',
+              content,
+              replySource: 'ai_outside_hours',
+            });
+          }
+        }
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content,
+            created_at: new Date().toISOString(),
+            sessionId: visitorSessionId,
+            rateLimited: true,
+            reason: activeHoursCheck.reason,
+          },
+        });
       }
 
       // Handoff: owner took over — skip AI (no credit charge)

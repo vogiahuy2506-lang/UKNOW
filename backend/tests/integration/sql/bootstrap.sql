@@ -1524,6 +1524,9 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   origin VARCHAR(50) DEFAULT 'self_created',
   -- Migration 222: nhãn kêu gọi mở chat trên widget web (script embed), mặc định TẮT
   launcher_label      VARCHAR(40) DEFAULT NULL,
+  -- Migration 224: khung giờ chatbot được phép trả lời, mặc định NULL (24/7)
+  active_hours        JSONB DEFAULT NULL
+    CHECK (active_hours IS NULL OR jsonb_typeof(active_hours) = 'object'),
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );

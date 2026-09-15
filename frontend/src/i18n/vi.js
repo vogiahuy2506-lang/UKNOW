@@ -3656,6 +3656,20 @@ export default {
       replyLimitSave: 'Lưu giới hạn',
       replyLimitSaveFailed: 'Không lưu được giới hạn trả lời.',
 
+      activeHoursTitle: 'Khung giờ hoạt động',
+      activeHoursHelp: 'Chatbot chỉ tự động trả lời trong khung giờ đã định. Ngoài khung giờ sẽ không gọi AI và không trừ credit.',
+      activeHoursAlways: 'Luôn trả lời (24/7)',
+      activeHoursCustom: 'Chỉ trả lời trong khung giờ',
+      activeHoursTimeRange: 'Khung giờ được phép trả lời:',
+      activeHoursTzNote: 'Giờ Việt Nam (UTC+7). Được phép qua nửa đêm, ví dụ 18:00 – 05:00.',
+      activeHoursOutsideAction: 'Khi có tin nhắn ngoài khung giờ:',
+      activeHoursSilent: 'Im lặng',
+      activeHoursSendMessage: 'Gửi một câu',
+      activeHoursOnceNotice: 'Chỉ gửi tối đa 1 lần cho mỗi khách trong đợt ngoài giờ.',
+      activeHoursSameTime: 'Giờ bắt đầu và giờ kết thúc không được trùng nhau',
+      activeHoursEmptyMessage: 'Vui lòng nhập câu trả lời ngoài khung giờ',
+      activeHoursMessageTooLong: 'Câu trả lời không được vượt quá 500 ký tự',
+
       // Sessions
       session: 'Phiên',
       newSession: 'Phiên mới',

@@ -3622,6 +3622,20 @@ export default {
       replyLimitSave: 'Save limits',
       replyLimitSaveFailed: 'Could not save reply limits.',
 
+      activeHoursTitle: 'Active hours',
+      activeHoursHelp: 'Chatbot only replies during designated hours. Outside these hours, AI is not called and credits are not charged.',
+      activeHoursAlways: 'Always reply (24/7)',
+      activeHoursCustom: 'Only reply within active hours',
+      activeHoursTimeRange: 'Allowed reply hours:',
+      activeHoursTzNote: 'Vietnam time (UTC+7). Overnight windows allowed, e.g. 18:00 – 05:00.',
+      activeHoursOutsideAction: 'When a message arrives outside hours:',
+      activeHoursSilent: 'Stay silent',
+      activeHoursSendMessage: 'Send a message',
+      activeHoursOnceNotice: 'Sent at most once per visitor per outside period.',
+      activeHoursSameTime: 'Start time and end time cannot be the same',
+      activeHoursEmptyMessage: 'Please enter an outside-hours response message',
+      activeHoursMessageTooLong: 'Response message must not exceed 500 characters',
+
       // Sessions
       session: 'Session',
       newSession: 'New Session',

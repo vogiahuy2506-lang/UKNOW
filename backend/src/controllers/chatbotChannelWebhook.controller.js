@@ -160,6 +160,40 @@ class ChatbotChannelWebhookController {
         return;
       }
 
+      // 3.5. Active hours check
+      const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
+      const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: chatbot.active_hours,
+        channel: 'zalo_oa',
+        chatbotId,
+        senderKey: senderId,
+      });
+      if (!activeCheck.allowed) {
+        if (activeCheck.shouldNotify) {
+          const sent = await zaloOAAdapter.sendReply({
+            conversationId: conv.id,
+            message: activeCheck.staticReply,
+            channelId: channel.id,
+            externalId: senderId,
+          });
+          if (sent?.success !== false) {
+            await chatbotChannelRepository.addMessage(conv.id, {
+              role: 'bot',
+              content: activeCheck.staticReply,
+              message_type: 'text',
+            });
+            await chatbotActiveHoursService.markNotified({
+              channel: 'zalo_oa',
+              chatbotId,
+              senderKey: senderId,
+              activeHours: chatbot.active_hours,
+            });
+          }
+        }
+        console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=outside_hours`);
+        return;
+      }
+
       // 4. Rate limit check (single check per batch)
       const rate = await chatbotRateLimitService.checkBeforeAi({
         channel: 'zalo_oa',
@@ -318,6 +352,39 @@ class ChatbotChannelWebhookController {
         const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
         if (await resourceIsLocked('chatbots', chatbotId)) {
           console.log(`[Facebook] Chatbot ${chatbotId} locked — message saved, no reply`);
+          continue;
+        }
+
+        // Active hours check (trước checkBeforeAi)
+        const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
+        const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+          activeHours: chatbot.active_hours,
+          channel: 'facebook',
+          chatbotId,
+          senderKey: msg.senderId,
+        });
+        if (!activeCheck.allowed) {
+          if (activeCheck.shouldNotify) {
+            const sent = await facebookAdapter.sendReply({
+              externalId: msg.senderId,
+              message: activeCheck.staticReply,
+              channelId: channel.id,
+            });
+            if (sent?.success !== false) {
+              await chatbotChannelRepository.addMessage(conv.id, {
+                role: 'bot',
+                content: activeCheck.staticReply,
+                message_type: 'text',
+              });
+              await chatbotActiveHoursService.markNotified({
+                channel: 'facebook',
+                chatbotId,
+                senderKey: msg.senderId,
+                activeHours: chatbot.active_hours,
+              });
+            }
+          }
+          console.log(`[Facebook] Chatbot ${chatbotId} outside active hours — message saved, no AI reply`);
           continue;
         }
 
@@ -572,6 +639,39 @@ class ChatbotChannelWebhookController {
       // 4. Handoff pause.
       if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
         console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused`);
+        return;
+      }
+
+      // 4.5. Active hours check
+      const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
+      const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: chatbot.active_hours,
+        channel: 'whatsapp',
+        chatbotId,
+        senderKey: senderId,
+      });
+      if (!activeCheck.allowed) {
+        if (activeCheck.shouldNotify) {
+          const sent = await whatsappAdapter.sendReply({
+            channelId: channel.id,
+            externalId: senderId,
+            message: activeCheck.staticReply,
+          });
+          if (sent?.success !== false) {
+            await chatbotChannelRepository.addMessage(conv.id, {
+              role: 'bot',
+              content: activeCheck.staticReply,
+              message_type: 'text',
+            });
+            await chatbotActiveHoursService.markNotified({
+              channel: 'whatsapp',
+              chatbotId,
+              senderKey: senderId,
+              activeHours: chatbot.active_hours,
+            });
+          }
+        }
+        console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=outside_hours`);
         return;
       }
 

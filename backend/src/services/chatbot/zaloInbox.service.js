@@ -729,6 +729,41 @@ class ZaloPersonalInboxService {
         return;
       }
 
+      // 3.5. Dynamic check: active hours (chốt gác trước checkBeforeAi)
+      let chatbotRecord = null;
+      if (idChatbot) {
+        chatbotRecord = await chatbotRepository.findChatbotById(idChatbot);
+      }
+      const { default: chatbotActiveHoursService } = await import('./chatbotActiveHours.service.js');
+      const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: chatbotRecord?.active_hours,
+        channel: 'zalo_personal',
+        chatbotId: idChatbot || zaloSettingId,
+        senderKey: senderId,
+      });
+      if (!activeCheck.allowed) {
+        if (activeCheck.shouldNotify) {
+          const sent = await zaloPersonalAdapter.sendReply({
+            externalId: String(senderId),
+            message: activeCheck.staticReply,
+            userId,
+            accountId: zaloSettingId,
+            persist: true,
+            replySource: 'ai_outside_hours',
+          });
+          if (sent?.success !== false) {
+            await chatbotActiveHoursService.markNotified({
+              channel: 'zalo_personal',
+              chatbotId: idChatbot || zaloSettingId,
+              senderKey: senderId,
+              activeHours: chatbotRecord?.active_hours,
+            });
+          }
+        }
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=outside_hours`);
+        return;
+      }
+
       // 4. Dynamic check: rate limit (single check per batch).
       //    Rate-limit is keyed on the owning chatbot so concurrent visitors
       //    going to chatbot B aren't blocked by chatbot A being busy.
