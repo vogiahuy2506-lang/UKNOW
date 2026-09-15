@@ -156,6 +156,28 @@ describe('PostAuthGateModals (PR-B: Cổng sau đăng nhập toàn cục)', () =
     expect(screen.getByTestId('phone-required-modal')).toBeInTheDocument();
   });
 
+  it('phoneOtp: cờ bật + số nước ngoài + phoneVerifiedAt null → KHÔNG hiện modal SĐT', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: true,
+      user: { id: 1, role: 'user', phone: '+14155552671', phoneVerifiedAt: null, mustChangePassword: false, hasConsented: true },
+    });
+
+    renderWithRouter(['/']);
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
+  it('phoneOtp: cờ bật + số bàn VN + phoneVerifiedAt null → KHÔNG hiện modal SĐT', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: true,
+      user: { id: 1, role: 'user', phone: '02838123456', phoneVerifiedAt: null, mustChangePassword: false, hasConsented: true },
+    });
+
+    renderWithRouter(['/']);
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
   it('phoneOtp: cờ bật + phoneVerifiedAt có giá trị → KHÔNG hiện modal SĐT', () => {
     useAuthStore.setState({
       isAuthenticated: true,

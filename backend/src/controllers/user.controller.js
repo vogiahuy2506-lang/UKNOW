@@ -41,7 +41,7 @@ import {
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import { invalidateAiHandoffAutoResumeCache } from '../utils/aiHandoffResume.util.js';
 import { normalizeBuyerInvoiceProfile } from '../utils/invoiceVat.util.js';
-import { normalizePhoneForZaloCampaign, isValidAccountPhone, INVALID_ACCOUNT_PHONE_MESSAGE } from '../utils/zaloPhoneCampaign.util.js';
+import { normalizeAccountPhone, isValidAccountPhone, INVALID_ACCOUNT_PHONE_MESSAGE } from '../utils/accountPhone.util.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
 import { recordConsents, getUserConsentHistory, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
@@ -361,11 +361,11 @@ class UserController {
       // Route đa năng này ghi thẳng `phone` từ trước khi có idx_users_phone_unique
       // (migration 179) — không chuẩn hoá, không kiểm trùng. Từ khi có ràng buộc UNIQUE,
       // để nguyên sẽ vỡ 500 thô khi trùng, hoặc lưu giá trị lệch với
-      // normalizePhoneForZaloCampaign mà PUT /users/me/phone dùng. Vá tại đây thay vì
+      // normalizeAccountPhone mà PUT /users/me/phone dùng. Vá tại đây thay vì
       // chỉ vá đường mới, để chỉ có một chỗ ghi `phone` không qua chuẩn hoá.
       let normalizedPhone = phone;
       if (phone !== undefined && phone !== null) {
-        normalizedPhone = normalizePhoneForZaloCampaign(phone);
+        normalizedPhone = normalizeAccountPhone(phone);
         if (!isValidAccountPhone(normalizedPhone)) {
           return res.status(400).json({ success: false, message: INVALID_ACCOUNT_PHONE_MESSAGE });
         }
@@ -471,7 +471,7 @@ class UserController {
   async updatePhone(req, res) {
     try {
       const userId = req.user.id;
-      const normalizedPhone = normalizePhoneForZaloCampaign(req.body?.phone);
+      const normalizedPhone = normalizeAccountPhone(req.body?.phone);
       if (!isValidAccountPhone(normalizedPhone)) {
         return res.status(400).json({ success: false, message: INVALID_ACCOUNT_PHONE_MESSAGE });
       }

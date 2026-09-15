@@ -1,26 +1,62 @@
 /**
  * Chuẩn hóa và kiểm tra số điện thoại tài khoản ở frontend — khớp chính xác từng bước với backend
- * (`normalizePhoneForZaloCampaign` và `isValidAccountPhone` trong backend/src/utils/zaloPhoneCampaign.util.js).
+ * (`accountPhone.util.js`).
  *
- * Quy tắc:
- * - Chỉ giữ chữ số, 84xxxxxxxxxx → 0xxxxxxxxxx.
- * - 9 số bắt đầu bằng 9 → 09xxxxxxxx.
- * - Chuẩn di động Việt Nam 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09 (/^0[35789]\d{8}$/).
+ * Quy tắc mới (15/09/2026):
+ * - Bỏ khoảng trắng, (), -, .
+ * - +84 / 0084: chuyển thành 0... (nếu sau đó có số 0 thừa thì bỏ một số 0)
+ * - + hoặc 00 (mã khác 84): số quốc tế, lưu dạng +[digits]
+ * - Còn lại: số nội địa VN: 84... -> 0..., 9 số đầu 9 -> thêm 0.
+ *
+ * Hợp lệ khi:
+ * - Số quốc tế: + mã quốc gia không bắt đầu bằng 0, tổng 8-15 chữ số E.164.
+ * - Số Việt Nam: di động 10 số (03/05/07/08/09) hoặc số bàn 11 số (02xxxxxxxxx).
  */
+
+const VIETNAMESE_MOBILE_REGEX = /^0[35789]\d{8}$/;
+const VIETNAM_LANDLINE_REGEX = /^02\d{9}$/;
+const INTERNATIONAL_PHONE_REGEX = /^\+[1-9]\d{7,14}$/;
 
 /**
  * Chuẩn hoá số điện thoại tài khoản tương tự backend:
- * - Bỏ mọi ký tự không phải số.
- * - Nếu bắt đầu bằng 84 và có độ dài >= 10 số: thay 84 bằng 0.
- * - Nếu có 9 chữ số và bắt đầu bằng 9: thêm số 0 đầu.
+ * - Bỏ khoảng trắng, (), -, .
+ * - +84 / 0084: chuyển thành 0... (bỏ số 0 thừa nếu có)
+ * - + hoặc 00: chuyển thành +...
+ * - Số nội địa VN: 84... -> 0..., 9 số đầu 9 -> thêm 0.
  * - Cắt tối đa 20 ký tự.
  *
  * @param {string|number|null|undefined} raw
  * @returns {string}
  */
 export function normalizeAccountPhone(raw) {
-  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (raw === undefined || raw === null) return '';
+  const compact = String(raw).trim().replace(/[\s().-]/g, '');
+  if (!compact) return '';
+
+  // 1. Bắt đầu bằng +84 hoặc 0084 (Việt Nam có mã quốc gia)
+  if (compact.startsWith('+84') || compact.startsWith('0084')) {
+    const prefixLen = compact.startsWith('+84') ? 3 : 4;
+    let digits = compact.slice(prefixLen).replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    return `0${digits}`.slice(0, 20);
+  }
+
+  // 2. Bắt đầu bằng + hoặc 00 (quốc tế mã khác 84)
+  if (compact.startsWith('+')) {
+    const digits = compact.slice(1).replace(/\D/g, '');
+    return `+${digits}`.slice(0, 20);
+  }
+  if (compact.startsWith('00')) {
+    const digits = compact.slice(2).replace(/\D/g, '');
+    return `+${digits}`.slice(0, 20);
+  }
+
+  // 3. Còn lại: VN trong nước
+  const digits = compact.replace(/\D/g, '');
   if (!digits) return '';
+
   if (digits.startsWith('84') && digits.length >= 10) {
     return `0${digits.slice(2)}`.slice(0, 20);
   }
@@ -31,12 +67,28 @@ export function normalizeAccountPhone(raw) {
 }
 
 /**
- * Kiểm tra xem giá trị nhập vào có phải là số di động Việt Nam 10 số hợp lệ hay không.
+ * Kiểm tra xem chuỗi SĐT (đã chuẩn hoá hoặc thô) có phải là số di động Việt Nam hay không.
+ * @param {string|number|null|undefined} value
+ * @returns {boolean}
+ */
+export function isVietnamMobilePhone(value) {
+  const normalized = normalizeAccountPhone(value);
+  return VIETNAMESE_MOBILE_REGEX.test(normalized);
+}
+
+/**
+ * Kiểm tra xem giá trị nhập vào có phải là SĐT tài khoản hợp lệ hay không:
+ * - Số di động Việt Nam 10 số (03/05/07/08/09)
+ * - Số bàn Việt Nam 11 số (02xxxxxxxxx)
+ * - Số quốc tế (bắt đầu bằng + hoặc 00, 8-15 chữ số E.164)
  *
  * @param {string|number|null|undefined} value
  * @returns {boolean}
  */
 export function isValidAccountPhone(value) {
   const normalized = normalizeAccountPhone(value);
-  return /^0[35789]\d{8}$/.test(normalized);
+  if (normalized.startsWith('+')) {
+    return INTERNATIONAL_PHONE_REGEX.test(normalized);
+  }
+  return VIETNAMESE_MOBILE_REGEX.test(normalized) || VIETNAM_LANDLINE_REGEX.test(normalized);
 }

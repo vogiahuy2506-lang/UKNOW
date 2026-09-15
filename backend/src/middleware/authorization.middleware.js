@@ -1,5 +1,6 @@
 import { isSuperAdmin, isUserAdmin, isEmployeeContext } from '../utils/roleScope.util.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
+import { normalizeAccountPhone, isVietnamMobilePhone } from '../utils/accountPhone.util.js';
 
 /**
  * Middleware yêu cầu user đổi mật khẩu trước khi truy cập.
@@ -64,7 +65,10 @@ export function requirePhone(req, res, next) {
   // thay vì PHONE_REQUIRED) để tầng gọi phân biệt được "chưa có số" và "có số, chưa xác
   // thực" — hai màn hình khác nhau ở PhoneRequiredModal (PR-2 frontend). Khi tắt, giữ
   // nguyên chỉ đòi có SĐT như hôm nay — Bẫy #6.
-  if (isPhoneOtpEnabled() && !req.user?.phone_verified_at) {
+  // 15/09/2026: Số bàn và số nước ngoài không nhận được mã SMS. Do đó khi OTP bật, chỉ
+  // đòi xác thực nếu số là di động VN. Đây là lỗ để lách OTP (nhập +1…) — chấp nhận, vì
+  // OTP chỉ chứng minh được số di động VN.
+  if (isPhoneOtpEnabled() && isVietnamMobilePhone(normalizeAccountPhone(phone)) && !req.user?.phone_verified_at) {
     return res.status(403).json({
       success: false,
       message: 'Bạn cần xác thực số điện thoại bằng mã OTP trước khi sử dụng hệ thống',

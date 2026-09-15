@@ -102,6 +102,20 @@ describe('POST /api/verification/phone/send-code + /verify (provider=mock)', () 
     expect(rows[0].phone_verified_at).toBeNull();
   });
 
+  it('send-code với số bàn Việt Nam 02838123456 → 400 PHONE_OTP_MOBILE_ONLY', async () => {
+    const user = await createUser({ username: 'otp_landline', phone: null });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .post('/api/verification/phone/send-code')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '02838123456' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PHONE_OTP_MOBILE_ONLY');
+    expect(res.body.message).toBe('Xác thực bằng mã SMS chỉ hỗ trợ số di động Việt Nam');
+  });
+
   it('sai mã 5 lần rồi mới nhập ĐÚNG mã → vẫn bị từ chối, mã đã chết', async () => {
     const user = await createUser({ username: 'otp_locked', phone: null });
     const token = await loginToken(user);
@@ -257,6 +271,17 @@ describe('POST /api/verification/phone/send-code + /verify (provider=mock)', () 
 
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('PHONE_NOT_VERIFIED');
+    });
+
+    it('user có số nước ngoài +14155552671 chưa xác thực → KHÔNG bị requirePhone chặn (200)', async () => {
+      const user = await createUser({ username: 'otp_gate_intl', phone: '+14155552671' });
+      const token = await loginToken(user);
+
+      const res = await request(app)
+        .get('/api/customers')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
     });
 
     it('xác thực xong → qua cổng requirePhone bình thường', async () => {

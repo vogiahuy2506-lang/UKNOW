@@ -13,7 +13,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createVerificationCode } from './helpers/db.js';
-import { INVALID_ACCOUNT_PHONE_MESSAGE } from '../../src/utils/zaloPhoneCampaign.util.js';
+import { INVALID_ACCOUNT_PHONE_MESSAGE } from '../../src/utils/accountPhone.util.js';
 
 let app;
 
@@ -199,6 +199,34 @@ describe('PUT /api/users/me/phone', () => {
     expect(rows[0].phone).toBeNull();
   });
 
+  it('nhận số nước ngoài +1 415 555 2671 → 200, lưu DB kèm + (+14155552671)', async () => {
+    const user = await createUser({ username: 'phone_intl', phone: null });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/me/phone')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '+1 415 555 2671' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.phone).toBe('+14155552671');
+    const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [user.id]);
+    expect(rows[0].phone).toBe('+14155552671');
+  });
+
+  it('số nước ngoài thiếu dấu + (14155552671) → 400 kèm INVALID_ACCOUNT_PHONE_MESSAGE', async () => {
+    const user = await createUser({ username: 'phone_intl_noplus', phone: null });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/me/phone')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '14155552671' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
+  });
+
   it('route này KHÔNG bị requirePhone chặn — nếu bị thì user không có đường thoát', async () => {
     const user = await createUser({ username: 'escapehatch', phone: null });
     const token = await loginToken(user);
@@ -291,6 +319,21 @@ describe('Đăng ký chấp nhận mọi định dạng SĐT hợp lý (route kh
     const { rows } = await db.query('SELECT id FROM users WHERE username = $1', ['fmtjunk']);
     expect(rows).toHaveLength(0);
   });
+
+  it('đăng ký email (OTP tắt) với số nước ngoài "+65 6123 4567" → 201, lưu DB dạng +6561234567', async () => {
+    const res = await registerWithPhone('+65 6123 4567', 'intl');
+    expect(res.status).toBe(201);
+    const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [res.body.data.user.id]);
+    expect(rows[0].phone).toBe('+6561234567');
+  });
+
+  it('trùng số giữa hai cách viết: user A lưu "+84 912 345 678", user B gửi "0912345678" → 409 PHONE_TAKEN', async () => {
+    await createUser({ username: 'useraintlvn', phone: '0912345678' });
+
+    const res = await registerWithPhone('+84 912 345 678', 'bvn');
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PHONE_TAKEN');
+  });
 });
 
 describe('PUT /api/users/profile chấp nhận mọi định dạng SĐT hợp lý và chuẩn hoá', () => {
@@ -375,6 +418,21 @@ describe('PUT /api/users/profile chấp nhận mọi định dạng SĐT hợp l
     expect(res.body.message).toBe(INVALID_ACCOUNT_PHONE_MESSAGE);
     const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [user.id]);
     expect(rows[0].phone).toBe('0912000055');
+  });
+
+  it('nhận số bàn Việt Nam 028 3812 3456 → 200, lưu DB dạng 02838123456', async () => {
+    const user = await createUser({ username: 'prof_landline', phone: '0912000088' });
+    const token = await loginToken(user);
+
+    const res = await request(app)
+      .put('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '028 3812 3456' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.phone).toBe('02838123456');
+    const { rows } = await db.query('SELECT phone FROM users WHERE id = $1', [user.id]);
+    expect(rows[0].phone).toBe('02838123456');
   });
 
   it('không truyền phone (chỉ sửa fullName) → 200, giữ nguyên phone cũ', async () => {

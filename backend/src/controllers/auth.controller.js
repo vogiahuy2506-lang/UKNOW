@@ -19,7 +19,7 @@ import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.
 import { getSystemAuditContext } from '../utils/auditContext.util.js';
 import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
-import { normalizePhoneForZaloCampaign, isValidAccountPhone, INVALID_ACCOUNT_PHONE_MESSAGE } from '../utils/zaloPhoneCampaign.util.js';
+import { normalizeAccountPhone, isValidAccountPhone, INVALID_ACCOUNT_PHONE_MESSAGE } from '../utils/accountPhone.util.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
@@ -106,7 +106,7 @@ class AuthController {
       // không đụng ràng buộc UNIQUE.
       let normalizedPhone = null;
       if (!isPhoneOtpEnabled()) {
-        normalizedPhone = normalizePhoneForZaloCampaign(phone);
+        normalizedPhone = normalizeAccountPhone(phone);
         if (!isValidAccountPhone(normalizedPhone)) {
           throw { status: 400, message: INVALID_ACCOUNT_PHONE_MESSAGE };
         }

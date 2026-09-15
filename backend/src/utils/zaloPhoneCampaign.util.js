@@ -1,8 +1,3 @@
-import { VIETNAMESE_MOBILE_REGEX } from './vietnamesePhone.util.js';
-
-export const INVALID_ACCOUNT_PHONE_MESSAGE =
-  'Số điện thoại phải là số di động Việt Nam gồm 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09';
-
 /**
  * Chuẩn hóa số điện thoại để lưu tra cứu blocklist / binding gửi Zalo trong campaign.
  * Chỉ giữ chữ số; 84xxxxxxxxxx → 0xxxxxxxxxx.
@@ -20,19 +15,6 @@ export function normalizePhoneForZaloCampaign(raw) {
     return `0${digits}`.slice(0, 20);
   }
   return digits.slice(0, 20);
-}
-
-/**
- * Kiểm tra xem chuỗi SĐT đã chuẩn hoá (bằng `normalizePhoneForZaloCampaign`)
- * có phải là số di động Việt Nam 10 số hợp lệ (bắt đầu bằng 03, 05, 07, 08 hoặc 09) hay không.
- *
- * Dùng chung ở mọi nơi kiểm SĐT tài khoản (đăng ký, cập nhật hồ sơ, PUT /me/phone, OTP).
- *
- * @param {string|null|undefined} normalized kết quả từ normalizePhoneForZaloCampaign
- * @returns {boolean}
- */
-export function isValidAccountPhone(normalized) {
-  return VIETNAMESE_MOBILE_REGEX.test(String(normalized ?? ''));
 }
 
 /**

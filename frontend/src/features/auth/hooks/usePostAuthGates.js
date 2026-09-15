@@ -1,4 +1,5 @@
 import { useAuthStore } from '../../../stores/authStore';
+import { isVietnamMobilePhone } from '../../../utils/phoneValidation';
 
 /**
  * Hook quản lý trạng thái các cổng sau đăng nhập (PR-B).
@@ -12,7 +13,8 @@ import { useAuthStore } from '../../../stores/authStore';
  *   - `role !== 'admin'`: khớp isSuperAdmin() backend (bypass admin khỏi cổng đồng ý & SĐT).
  *   - `phoneReminderDismissed`: lưu trong RAM authStore — KHÔNG lưu storage để "Để sau"
  *     chỉ tắt trong phiên xem hiện tại; đăng nhập lại hoặc user khác vào vẫn được nhắc.
- *   - `(phoneOtpEnabled && !user?.phoneVerifiedAt)`: có số rồi vẫn nhắc nếu OTP bật mà số chưa verify.
+ *   - `(phoneOtpEnabled && isVietnamMobilePhone(user?.phone) && !user?.phoneVerifiedAt)`:
+ *     số bàn và số nước ngoài không nhận được SMS OTP nên chỉ đòi xác thực đối với số di động VN.
  */
 export const usePostAuthGates = () => {
   const user = useAuthStore((s) => s.user);
@@ -33,7 +35,7 @@ export const usePostAuthGates = () => {
     isAuthenticated
     && !mustChangePassword
     && !consentRequired
-    && (!user?.phone || (phoneOtpEnabled && !user?.phoneVerifiedAt))
+    && (!user?.phone || (phoneOtpEnabled && isVietnamMobilePhone(user?.phone) && !user?.phoneVerifiedAt))
     && user?.role !== 'admin'
     && !phoneReminderDismissed
   );

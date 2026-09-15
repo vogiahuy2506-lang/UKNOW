@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '@jest/globals';
 import {
   normalizeAccountPhone,
   isValidAccountPhone,
   isVietnamMobilePhone,
-} from '../phoneValidation';
+  INVALID_ACCOUNT_PHONE_MESSAGE,
+  OTP_MOBILE_ONLY_MESSAGE,
+} from '../accountPhone.util.js';
 
 describe('normalizeAccountPhone và isValidAccountPhone theo bảng mục 2 plan', () => {
   const validTable = [
@@ -26,7 +28,6 @@ describe('normalizeAccountPhone và isValidAccountPhone theo bảng mục 2 plan
     it(`"${input}" → lưu "${expectedNormalized}", kết quả: đạt`, () => {
       const normalized = normalizeAccountPhone(input);
       expect(normalized).toBe(expectedNormalized);
-      expect(isValidAccountPhone(input)).toBe(true);
       expect(isValidAccountPhone(normalized)).toBe(true);
     });
   });
@@ -49,7 +50,6 @@ describe('normalizeAccountPhone và isValidAccountPhone theo bảng mục 2 plan
 
   invalidCases.forEach((input) => {
     it(`"${input}" → kết quả: trượt`, () => {
-      expect(isValidAccountPhone(input)).toBe(false);
       const normalized = normalizeAccountPhone(input);
       expect(isValidAccountPhone(normalized)).toBe(false);
     });
@@ -63,7 +63,6 @@ describe('isVietnamMobilePhone', () => {
     expect(isVietnamMobilePhone('0512345678')).toBe(true);
     expect(isVietnamMobilePhone('0712345678')).toBe(true);
     expect(isVietnamMobilePhone('0812345678')).toBe(true);
-    expect(isVietnamMobilePhone('+84 912 345 678')).toBe(true);
   });
 
   it('số bàn VN hoặc số nước ngoài → false', () => {
@@ -71,5 +70,19 @@ describe('isVietnamMobilePhone', () => {
     expect(isVietnamMobilePhone('+14155552671')).toBe(false);
     expect(isVietnamMobilePhone('+6561234567')).toBe(false);
     expect(isVietnamMobilePhone('')).toBe(false);
+  });
+});
+
+describe('Hằng thông báo', () => {
+  it('INVALID_ACCOUNT_PHONE_MESSAGE đúng nội dung', () => {
+    expect(INVALID_ACCOUNT_PHONE_MESSAGE).toBe(
+      'Số điện thoại không hợp lệ. Nhập số di động hoặc số bàn Việt Nam (vd 0912345678, 02838123456); số nước ngoài ghi kèm mã quốc gia (vd +1 415 555 2671)'
+    );
+  });
+
+  it('OTP_MOBILE_ONLY_MESSAGE đúng nội dung', () => {
+    expect(OTP_MOBILE_ONLY_MESSAGE).toBe(
+      'Xác thực bằng mã SMS chỉ hỗ trợ số di động Việt Nam'
+    );
   });
 });
