@@ -1,7 +1,7 @@
 import {
   isWithinActiveHours,
   normalizeChatbotActiveHours,
-  computeActiveHoursPeriodKey,
+  currentOutsideWindowStart,
   ActiveHoursValidationError,
 } from '../chatbotActiveHours.util.js';
 
@@ -185,14 +185,17 @@ describe('chatbotActiveHours.util', () => {
     });
   });
 
-  describe('computeActiveHoursPeriodKey', () => {
-    it('computes distinct keys across different outside periods', () => {
-      const config = { start: '08:00', end: '17:30' };
-      const d1 = new Date('2026-09-15T12:00:00.000Z'); // 19:00 VN -> outside
-      const d2 = new Date('2026-09-16T12:00:00.000Z'); // 19:00 VN next day -> outside
-      const key1 = computeActiveHoursPeriodKey(config, d1);
-      const key2 = computeActiveHoursPeriodKey(config, d2);
-      expect(key1).not.toBe(key2);
+  describe('currentOutsideWindowStart — mốc bắt đầu đợt ngoài giờ (giờ VN)', () => {
+    // Bảng mục 4 của _internal/PLAN_KHUNG_GIO_CHATBOT_TRA_LOI_2026-09-15.md
+    it.each([
+      [{ start: '18:00', end: '05:00' }, '2026-09-15T10:00:00+07:00', '2026-09-15T05:00:00+07:00'],
+      [{ start: '18:00', end: '05:00' }, '2026-09-15T17:59:00+07:00', '2026-09-15T05:00:00+07:00'],
+      [{ start: '18:00', end: '05:00' }, '2026-09-16T05:00:00+07:00', '2026-09-16T05:00:00+07:00'],
+      [{ start: '08:00', end: '17:30' }, '2026-09-15T20:00:00+07:00', '2026-09-15T17:30:00+07:00'],
+      [{ start: '08:00', end: '17:30' }, '2026-09-16T07:00:00+07:00', '2026-09-15T17:30:00+07:00'],
+    ])('%o lúc %s → %s', (config, nowIso, expectedIso) => {
+      expect(currentOutsideWindowStart(config, new Date(nowIso)).toISOString())
+        .toBe(new Date(expectedIso).toISOString());
     });
   });
 });

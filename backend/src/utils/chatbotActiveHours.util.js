@@ -148,43 +148,6 @@ export function isWithinActiveHours(config, now = new Date()) {
 }
 
 /**
- * Tính khoá nhận diện "đợt ngoài giờ" hiện tại theo ngày và cấu hình giờ VN.
- * Giúp đợt ngoài giờ tối nay khác đợt ngoài giờ tối mai.
- * @param {object} activeHours
- * @param {Date} [now=new Date()]
- * @returns {string}
- */
-export function computeActiveHoursPeriodKey(activeHours, now = new Date()) {
-  const parts = getVietnamDateTimeParts(now);
-  const nowMinutes = parts.totalMinutes;
-  const [sh, sm] = activeHours.start.split(':').map(Number);
-  const [eh, em] = activeHours.end.split(':').map(Number);
-  const startMinutes = sh * 60 + sm;
-  const endMinutes = eh * 60 + em;
-
-  const y = parts.year;
-  const m = String(parts.month + 1).padStart(2, '0');
-  const d = String(parts.day).padStart(2, '0');
-  const todayStr = `${y}-${m}-${d}`;
-
-  if (startMinutes < endMinutes) {
-    // Khung giờ trong cùng một ngày (ví dụ 08:00 - 17:30)
-    if (nowMinutes < startMinutes) {
-      return `${todayStr}:before_${activeHours.start}`;
-    }
-    return `${todayStr}:after_${activeHours.end}`;
-  }
-
-  // Khung giờ qua đêm (ví dụ 18:00 - 05:00)
-  // Ngoài giờ là khoảng từ end (05:00) đến start (18:00)
-  if (nowMinutes >= endMinutes && nowMinutes < startMinutes) {
-    return `${todayStr}:between_${activeHours.end}_${activeHours.start}`;
-  }
-
-  return `${todayStr}:outside`;
-}
-
-/**
  * Tính mốc bắt đầu của đợt ngoài giờ gần nhất tính tới thời điểm `now` (theo giờ VN).
  * Mốc này chính là thời điểm `end` của khung giờ hoạt động gần nhất trong quá khứ.
  * Dùng để tạo khoá đệm 1 lần / đợt ngoài giờ.

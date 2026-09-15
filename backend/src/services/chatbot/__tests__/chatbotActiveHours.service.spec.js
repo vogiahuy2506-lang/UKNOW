@@ -116,5 +116,30 @@ describe('chatbotActiveHours.service', () => {
       expect(nextPeriod.shouldNotify).toBe(true);
       expect(nextPeriod.staticReply).toBe('Ngoài giờ');
     });
+
+    it('cùng một đợt ngoài giờ vắt qua nửa đêm (08:00–17:30: nhắn 20:00 rồi 06:00 hôm sau) → chỉ gửi 1 lần', async () => {
+      // Bản đầu khoá theo ngày lịch nên 20:00 và 06:00 hôm sau ra hai khoá khác nhau → gửi 2 lần.
+      const activeHours = {
+        start: '08:00',
+        end: '17:30',
+        outsideAction: 'message',
+        outsideMessage: 'Ngoài giờ',
+      };
+      const evening = new Date('2026-09-15T20:00:00+07:00');
+      const nextMorning = new Date('2026-09-16T06:00:00+07:00');
+      const nextEvening = new Date('2026-09-16T20:00:00+07:00');
+      const base = { activeHours, channel: 'web', chatbotId: 'bot-2', senderKey: 'visitor-1' };
+
+      const first = await chatbotActiveHoursService.checkBeforeAi({ ...base, now: evening });
+      expect(first.shouldNotify).toBe(true);
+      await chatbotActiveHoursService.markNotified({ ...base, now: evening });
+
+      const sameWindow = await chatbotActiveHoursService.checkBeforeAi({ ...base, now: nextMorning });
+      expect(sameWindow.allowed).toBe(false);
+      expect(sameWindow.shouldNotify).toBe(false);
+
+      const newWindow = await chatbotActiveHoursService.checkBeforeAi({ ...base, now: nextEvening });
+      expect(newWindow.shouldNotify).toBe(true);
+    });
   });
 });
