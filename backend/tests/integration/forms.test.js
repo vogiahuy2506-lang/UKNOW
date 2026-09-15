@@ -1002,3 +1002,164 @@ describe('Forms and Submissions Backend Integration (PR-1a)', () => {
     expect(subCheck.rows).toHaveLength(0);
   });
 });
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7a — nguồn landing + UTM cho bài nộp Biểu mẫu.
+ */
+describe('Forms — nguồn landing + UTM (PR-7a)', () => {
+  async function createAndPublishForm(token) {
+    const createRes = await request(app)
+      .post('/api/forms')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Form PR-7a',
+        fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+      });
+    const form = createRes.body.data;
+    await request(app)
+      .put(`/api/forms/${form.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ isPublished: true });
+    return form;
+  }
+
+  it('nộp kèm slug landing đã xuất bản của CHÍNH chủ form + utmSource có khoảng trắng thừa -> 201, landing_page_slug đúng, utm_source đã trim', async () => {
+    const owner = await createUser({ username: 'owner_pr7a_1' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+
+    await db.query(
+      `INSERT INTO landing_pages (id_user, slug, title, is_published) VALUES ($1, 'khoa-hoc-ai', 'Khoá học AI', TRUE)`,
+      [owner.id]
+    );
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({
+        answers: {},
+        landingPageSlug: 'khoa-hoc-ai',
+        utmSource: ' zalo ',
+      });
+
+    expect(submitRes.status).toBe(201);
+
+    const dbRow = await db.query(
+      'SELECT landing_page_slug, utm_source FROM form_submissions WHERE form_id = $1',
+      [form.id]
+    );
+    expect(dbRow.rows[0].landing_page_slug).toBe('khoa-hoc-ai');
+    expect(dbRow.rows[0].utm_source).toBe('zalo');
+  });
+
+  it('slug landing thuộc về CHỦ KHÁC -> 201, landing_page_slug NULL (không lộ/gán nhầm nguồn)', async () => {
+    const owner = await createUser({ username: 'owner_pr7a_2' });
+    const otherOwner = await createUser({ username: 'owner_pr7a_2_other' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+
+    await db.query(
+      `INSERT INTO landing_pages (id_user, slug, title, is_published) VALUES ($1, 'landing-cua-nguoi-khac', 'Của người khác', TRUE)`,
+      [otherOwner.id]
+    );
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {}, landingPageSlug: 'landing-cua-nguoi-khac' });
+
+    expect(submitRes.status).toBe(201);
+
+    const dbRow = await db.query('SELECT landing_page_slug FROM form_submissions WHERE form_id = $1', [form.id]);
+    expect(dbRow.rows[0].landing_page_slug).toBeNull();
+  });
+
+  it('slug không tồn tại -> 201, landing_page_slug NULL', async () => {
+    const owner = await createUser({ username: 'owner_pr7a_3' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {}, landingPageSlug: 'slug-khong-ton-tai' });
+
+    expect(submitRes.status).toBe(201);
+    const dbRow = await db.query('SELECT landing_page_slug FROM form_submissions WHERE form_id = $1', [form.id]);
+    expect(dbRow.rows[0].landing_page_slug).toBeNull();
+  });
+
+  it('slug landing CHƯA XUẤT BẢN (is_published=FALSE) của chính chủ -> 201, landing_page_slug NULL', async () => {
+    const owner = await createUser({ username: 'owner_pr7a_4' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+
+    await db.query(
+      `INSERT INTO landing_pages (id_user, slug, title, is_published) VALUES ($1, 'landing-chua-xuat-ban', 'Chưa xuất bản', FALSE)`,
+      [owner.id]
+    );
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {}, landingPageSlug: 'landing-chua-xuat-ban' });
+
+    expect(submitRes.status).toBe(201);
+    const dbRow = await db.query('SELECT landing_page_slug FROM form_submissions WHERE form_id = $1', [form.id]);
+    expect(dbRow.rows[0].landing_page_slug).toBeNull();
+  });
+
+  it('utmCampaign dài 400 ký tự -> lưu đúng 255 ký tự (cắt bớt, không lỗi VARCHAR(255))', async () => {
+    const owner = await createUser({ username: 'owner_pr7a_5' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+    const longCampaign = 'x'.repeat(400);
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {}, utmCampaign: longCampaign });
+
+    expect(submitRes.status).toBe(201);
+    const dbRow = await db.query('SELECT utm_campaign FROM form_submissions WHERE form_id = $1', [form.id]);
+    expect(dbRow.rows[0].utm_campaign).toHaveLength(255);
+    expect(dbRow.rows[0].utm_campaign).toBe('x'.repeat(255));
+  });
+
+  it('mọi bài nộp đều có unsubscribe_token khác nhau, không NULL (cột mới thêm, DEFAULT gen_random_uuid() áp cho từng dòng)', async () => {
+    const owner = await createUser({ username: 'owner_pr7a_6' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+
+    await request(app).post(`/api/public/forms/${form.publicKey}/submissions`).send({ answers: {} });
+    await request(app).post(`/api/public/forms/${form.publicKey}/submissions`).send({ answers: {} });
+
+    const dbRows = await db.query(
+      'SELECT unsubscribe_token FROM form_submissions WHERE form_id = $1 ORDER BY id',
+      [form.id]
+    );
+    expect(dbRows.rows).toHaveLength(2);
+    expect(dbRows.rows[0].unsubscribe_token).toBeTruthy();
+    expect(dbRows.rows[1].unsubscribe_token).toBeTruthy();
+    expect(dbRows.rows[0].unsubscribe_token).not.toBe(dbRows.rows[1].unsubscribe_token);
+  });
+
+  it('danh sách bài nộp của chủ (GET /api/forms/:id/submissions) có landingPageSlug + utmSource, KHÔNG có unsubscribeToken', async () => {
+    const owner = await createUser({ username: 'owner_pr7a_7' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+
+    await db.query(
+      `INSERT INTO landing_pages (id_user, slug, title, is_published) VALUES ($1, 'landing-list-test', 'Landing', TRUE)`,
+      [owner.id]
+    );
+    await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {}, landingPageSlug: 'landing-list-test', utmSource: 'fb' });
+
+    const listRes = await request(app)
+      .get(`/api/forms/${form.id}/submissions`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(listRes.status).toBe(200);
+    const submission = listRes.body.data.submissions[0];
+    expect(submission.landingPageSlug).toBe('landing-list-test');
+    expect(submission.utmSource).toBe('fb');
+    expect(submission).not.toHaveProperty('unsubscribeToken');
+  });
+});

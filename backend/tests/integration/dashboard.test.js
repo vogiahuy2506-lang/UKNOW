@@ -394,6 +394,75 @@ describe('GET /api/dashboard/landing-pages-stats', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.rows.map((row) => row.slug)).toEqual(['mine-stats']);
   });
+
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7a "Bổ sung 15/09 khi soạn lệnh PR-7" mục 2 —
+   * bài nộp Biểu mẫu là nguồn THỨ HAI của submitCount, phải CỘNG vào lượt gửi cùng slug với leads
+   * (không GÁN đè), và loại bài `cancelled` khỏi phép đếm.
+   */
+  it('bài nộp Biểu mẫu được CỘNG vào submitCount cùng slug với leads — 2 lead + 3 bài nộp form (1 cancelled) => submitCount = 4', async () => {
+    const user = await createUser();
+    await db.query(
+      `INSERT INTO landing_pages (id_user, slug, title, is_published) VALUES ($1, 'promo-form', 'Promo Form', TRUE)`,
+      [user.id]
+    );
+    await db.query(
+      `INSERT INTO leads (landing_page_slug, email, id_user) VALUES ('promo-form', 'l1@u.local', $1), ('promo-form', 'l2@u.local', $1)`,
+      [user.id]
+    );
+    const formRes = await db.query(
+      `INSERT INTO forms (workspace_owner_id, public_key, title) VALUES ($1, 'pk_dash_1', 'Form dashboard') RETURNING id`,
+      [user.id]
+    );
+    const formId = formRes.rows[0].id;
+    await db.query(
+      `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, status, landing_page_slug) VALUES
+         ($1, $2, 'tok_dash_1', 'submitted', 'promo-form'),
+         ($1, $2, 'tok_dash_2', 'confirmed', 'promo-form'),
+         ($1, $2, 'tok_dash_3', 'cancelled', 'promo-form')`,
+      [formId, user.id]
+    );
+
+    const token = await loginAs(user);
+    const res = await request(app)
+      .get('/api/dashboard/landing-pages-stats?allTime=1')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const row = res.body.data.rows.find((r) => r.slug === 'promo-form');
+    expect(row).toBeTruthy();
+    expect(row.submitCount).toBe(4);
+  });
+
+  it('bài nộp Biểu mẫu của CHỦ KHÁC cùng slug KHÔNG cộng vào dashboard của mình', async () => {
+    const me = await createUser({ username: 'dash-form-me' });
+    const other = await createUser({ username: 'dash-form-other' });
+    await db.query(
+      `INSERT INTO landing_pages (id_user, slug, title, is_published) VALUES ($1, 'shared-slug', 'Mine', TRUE)`,
+      [me.id]
+    );
+    const formRes = await db.query(
+      `INSERT INTO forms (workspace_owner_id, public_key, title) VALUES ($1, 'pk_dash_2', 'Form khác chủ') RETURNING id`,
+      [other.id]
+    );
+    const formId = formRes.rows[0].id;
+    await db.query(
+      `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, status, landing_page_slug) VALUES
+         ($1, $2, 'tok_dash_4', 'submitted', 'shared-slug')`,
+      [formId, other.id]
+    );
+
+    const token = await loginAs(me);
+    const res = await request(app)
+      .get('/api/dashboard/landing-pages-stats?allTime=1')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const row = res.body.data.rows.find((r) => r.slug === 'shared-slug');
+    // Slug vẫn hiện (landing "mine" đã publish) nhưng submitCount không tính bài của other.
+    expect(row).toBeTruthy();
+    expect(row.submitCount).toBe(0);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────

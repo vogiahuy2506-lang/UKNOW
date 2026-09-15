@@ -3394,6 +3394,14 @@ CREATE TABLE IF NOT EXISTS form_submissions (
   paid_confirmed_at    TIMESTAMPTZ,
   paid_confirmed_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
   submitter_ip_hash    VARCHAR(64),
+  landing_page_slug    VARCHAR(255),
+  utm_source           VARCHAR(255),
+  utm_medium           VARCHAR(255),
+  utm_campaign         VARCHAR(255),
+  utm_content          VARCHAR(255),
+  utm_term             VARCHAR(255),
+  unsubscribe_token    UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+  consent_withdrawn_at TIMESTAMPTZ,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT form_submissions_status_check
@@ -3406,4 +3414,6 @@ CREATE INDEX IF NOT EXISTS idx_form_submissions_form_created ON form_submissions
 CREATE INDEX IF NOT EXISTS idx_form_submissions_owner ON form_submissions (workspace_owner_id);
 CREATE INDEX IF NOT EXISTS idx_form_submissions_slot ON form_submissions (form_id, appointment_at) WHERE appointment_at IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_form_submissions_payment_code ON form_submissions (workspace_owner_id, payment_code) WHERE payment_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_form_submissions_owner_landing ON form_submissions (workspace_owner_id, landing_page_slug)
+  WHERE landing_page_slug IS NOT NULL;
 

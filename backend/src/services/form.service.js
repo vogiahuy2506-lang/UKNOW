@@ -32,6 +32,8 @@ import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 import { findStorageObjectByKey, activateFormAssetStorageObjects } from '../repositories/storage.repository.js';
 import { markDeletedAfterUnlink } from './storage/storageObject.service.js';
 import { buildFormAssetUrl } from './formAsset.service.js';
+import landingPageRepository from '../repositories/landingPage.repository.js';
+import { canonicalLandingPageSlug } from '../utils/landingPageSlugCanonical.util.js';
 
 const MAX_SLOTS_DAYS_PARAM = 31;
 const DEFAULT_SLOTS_DAYS_PARAM = 7;
@@ -802,6 +804,31 @@ class FormService {
     // Kiểm tra gói dịch vụ của chủ form
     this.checkOwnerActivePlan(form);
 
+    // PR-7a — nguồn landing + UTM (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md mục PR-7, "Bổ sung
+    // 15/09" mục 2). Khác `lead.service.js` (từ chối khi landing không hợp lệ): bài nộp Biểu mẫu
+    // LUÔN được nhận — slug thuộc landing của chủ khác, không tồn tại, chưa xuất bản, hay lỗi tra
+    // cứu đều chỉ rơi về `landingPageSlug = null`, không bao giờ làm hỏng bài nộp.
+    const rawLandingSlug = canonicalLandingPageSlug(
+      body?.landingPageSlug ?? body?.landing_page_slug ?? ''
+    );
+    let landingPageSlug = null;
+    if (rawLandingSlug) {
+      try {
+        const lp = await landingPageRepository.findPublishedBySlug(rawLandingSlug);
+        if (lp && Number(lp.workspaceOwnerId) === Number(form.workspaceOwnerId)) {
+          landingPageSlug = rawLandingSlug;
+        }
+      } catch (lookupErr) {
+        logError(`[FormService] Lỗi tra cứu landing page slug "${rawLandingSlug}": ${lookupErr.message}`);
+      }
+    }
+    const trimUtmField = (v) => (v != null ? String(v).trim().slice(0, 255) || null : null);
+    const utmSource = trimUtmField(body?.utmSource);
+    const utmMedium = trimUtmField(body?.utmMedium);
+    const utmCampaign = trimUtmField(body?.utmCampaign);
+    const utmContent = trimUtmField(body?.utmContent);
+    const utmTerm = trimUtmField(body?.utmTerm);
+
     // Xác thực câu trả lời
     const validated = validateFormSubmission(form.fields, body.answers, body);
 
@@ -873,6 +900,12 @@ class FormService {
       paymentAmount: paymentEnabled ? paymentConfig.amount : null,
       paymentSnapshot,
       holdExpiresAt,
+      landingPageSlug,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      utmContent,
+      utmTerm,
     };
 
     let submission;

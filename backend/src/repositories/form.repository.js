@@ -361,6 +361,12 @@ class FormRepository {
     paymentAmount = null,
     paymentSnapshot = null,
     holdExpiresAt = null,
+    landingPageSlug = null,
+    utmSource = null,
+    utmMedium = null,
+    utmCampaign = null,
+    utmContent = null,
+    utmTerm = null,
   }, queryable = db) {
     const result = await queryable.query(
       `INSERT INTO form_submissions (
@@ -378,8 +384,14 @@ class FormRepository {
          payment_code,
          payment_amount,
          payment_snapshot,
-         hold_expires_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         hold_expires_at,
+         landing_page_slug,
+         utm_source,
+         utm_medium,
+         utm_campaign,
+         utm_content,
+         utm_term
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING
          id,
          form_id AS "formId",
@@ -397,6 +409,12 @@ class FormRepository {
          payment_amount AS "paymentAmount",
          payment_snapshot AS "paymentSnapshot",
          hold_expires_at AS "holdExpiresAt",
+         landing_page_slug AS "landingPageSlug",
+         utm_source AS "utmSource",
+         utm_medium AS "utmMedium",
+         utm_campaign AS "utmCampaign",
+         utm_content AS "utmContent",
+         utm_term AS "utmTerm",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -415,6 +433,12 @@ class FormRepository {
         paymentAmount,
         paymentSnapshot ? JSON.stringify(paymentSnapshot) : null,
         holdExpiresAt,
+        landingPageSlug,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm,
       ]
     );
     return result.rows[0];
@@ -839,6 +863,12 @@ class FormRepository {
          s.hold_expires_at AS "holdExpiresAt",
          s.paid_confirmed_at AS "paidConfirmedAt",
          s.paid_confirmed_by AS "paidConfirmedBy",
+         s.landing_page_slug AS "landingPageSlug",
+         s.utm_source AS "utmSource",
+         s.utm_medium AS "utmMedium",
+         s.utm_campaign AS "utmCampaign",
+         s.utm_content AS "utmContent",
+         s.utm_term AS "utmTerm",
          s.created_at AS "createdAt",
          s.updated_at AS "updatedAt"
        FROM form_submissions s
@@ -855,6 +885,58 @@ class FormRepository {
       pageSize: parsedPageSize,
       totalPages: Math.ceil(total / parsedPageSize) || 1,
     };
+  }
+
+  /**
+   * Đếm bài nộp Biểu mẫu theo slug landing nguồn, trong khoảng ngày, cùng phạm vi chủ workspace/
+   * super admin — mẫu `lead.repository.js` `aggregateSubmitsBySlug` (PR-7a "Bổ sung 15/09 khi
+   * soạn lệnh PR-7" mục 2: dashboard landing đang GÁN `cur.submitCount` từ MỘT nguồn (leads),
+   * hàm này cấp thêm nguồn thứ hai để `dashboardAnalytics.service.js` CỘNG dồn).
+   * Loại bài `cancelled` — huỷ thì không tính là một lượt "gửi" (khớp cách trang bài nộp coi
+   * `cancelled` là đã rút, không phải một chuyển đổi thật).
+   *
+   * @param {string|null} dateFrom Ngày `YYYY-MM-DD`, null = không chặn dưới
+   * @param {string|null} dateTo Ngày `YYYY-MM-DD`, null = không chặn trên
+   * @param {{ isSuperAdmin?: boolean, workspaceOwnerId?: number }} [scope]
+   * @returns {Promise<Array<{ slug: string, submitCount: number }>>}
+   */
+  async aggregateSubmitsBySlug(dateFrom, dateTo, scope = {}) {
+    const conditions = [
+      `landing_page_slug IS NOT NULL`,
+      `TRIM(landing_page_slug) <> ''`,
+      `status <> 'cancelled'`,
+    ];
+    const params = [];
+    let idx = 1;
+    if (dateFrom) {
+      conditions.push(`created_at >= $${idx}::timestamptz`);
+      params.push(`${dateFrom}T00:00:00.000Z`);
+      idx += 1;
+    }
+    if (dateTo) {
+      conditions.push(`created_at <= $${idx}::timestamptz`);
+      params.push(`${dateTo}T23:59:59.999Z`);
+      idx += 1;
+    }
+    if (scope?.isSuperAdmin !== true) {
+      const workspaceOwnerId = Number.parseInt(scope?.workspaceOwnerId, 10);
+      if (!Number.isFinite(workspaceOwnerId)) return [];
+      conditions.push(`workspace_owner_id = $${idx}`);
+      params.push(workspaceOwnerId);
+      idx += 1;
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const result = await db.query(
+      `SELECT landing_page_slug AS slug, COUNT(*)::bigint AS "submitCount"
+       FROM form_submissions
+       ${where}
+       GROUP BY landing_page_slug`,
+      params
+    );
+    return result.rows.map((r) => ({
+      slug: r.slug,
+      submitCount: Number(r.submitCount || 0),
+    }));
   }
 
   /**

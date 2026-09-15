@@ -2,6 +2,7 @@ import dashboardRepository from '../../repositories/dashboard/dashboard.reposito
 import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import leadRepository from '../../repositories/lead.repository.js';
+import formRepository from '../../repositories/form.repository.js';
 import customerHelperService from '../customer/customerHelper.service.js';
 import { getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 
@@ -493,9 +494,10 @@ class DashboardAnalyticsService {
       filters = { startDate, endDate };
     }
 
-    const [eventAgg, submitAgg] = await Promise.all([
+    const [eventAgg, submitAgg, formSubmitAgg] = await Promise.all([
       landingPageEventRepository.aggregateEventsBySlug(startDate, endDate, workspaceScope),
       leadRepository.aggregateSubmitsBySlug(startDate, endDate, workspaceScope),
+      formRepository.aggregateSubmitsBySlug(startDate, endDate, workspaceScope),
     ]);
 
     const bySlug = new Map();
@@ -516,7 +518,20 @@ class DashboardAnalyticsService {
         clickCount: 0,
         submitCount: 0,
       };
-      cur.submitCount = Number(r.submitCount || 0);
+      cur.submitCount += Number(r.submitCount || 0);
+      bySlug.set(r.slug, cur);
+    }
+    // PR-7a (Bo sung 15/09 khi soan lenh PR-7 muc 2): bai nop Bieu mau la nguon THU HAI cua
+    // luot gui, phai CONG vao cur.submitCount da co tu leads (khong GAN de mat lien ket cu).
+    for (const r of formSubmitAgg) {
+      if (!r.slug) continue;
+      const cur = bySlug.get(r.slug) || {
+        slug: r.slug,
+        viewCount: 0,
+        clickCount: 0,
+        submitCount: 0,
+      };
+      cur.submitCount += Number(r.submitCount || 0);
       bySlug.set(r.slug, cur);
     }
 
