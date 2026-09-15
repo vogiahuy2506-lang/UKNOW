@@ -114,9 +114,11 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
   return `${out}\n${injectBlock}`;
 }
 
-/** Cùng dạng hợp lệ với backend (`landingHtmlInjection.util.js` FORM_SLOT_RE, PR-5b-2a nợ 1) —
- * thêm thuộc tính khác/`=""`/khoảng trắng đều khớp, không khớp khi có nội dung con thật. */
-const FORM_SLOT_RE = /<div\b[^>]*\bdata-founderai-form-slot\b(?:=(?:"[^"]*"|'[^']*'))?[^>]*>\s*<\/div>/gi;
+/** Cùng dạng hợp lệ với backend (`landingHtmlInjection.util.js` FORM_SLOT_RE, PR-5b-2a nợ 1 +
+ * PR-5b-2c) — thêm thuộc tính khác/`=""`/khoảng trắng đều khớp, chú thích `<!--…-->` bên trong
+ * coi như khoảng trắng, không khớp khi có nội dung con thật. PHẢI giữ giống hệt bản backend —
+ * lệch nhau nghĩa là xem trước báo được nhưng lưu lại hỏng (hoặc ngược lại). */
+const FORM_SLOT_RE = /<div\b[^>]*\bdata-founderai-form-slot\b(?:=(?:"[^"]*"|'[^']*'))?[^>]*>(?:\s|<!--[\s\S]*?-->)*<\/div>/gi;
 
 function escapeHtmlText(value) {
   return String(value ?? '')

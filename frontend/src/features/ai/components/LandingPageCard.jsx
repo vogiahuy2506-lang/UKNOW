@@ -10,6 +10,7 @@ import {
 import { useI18n } from '../../../i18n';
 import { getPublicUrlFromSlug } from '../../landing-canvas/utils/buildCanvasSrcDoc.js';
 import { slugifyLandingTitle } from '../utils/landingPaste.js';
+import { injectFormSlotPreviewHint } from '../../landing-pages/utils/injectLandingEnhancements.js';
 
 /**
  * Enhanced Landing Page Card with preview, code view, and export options.
@@ -25,6 +26,7 @@ const LandingPageCard = ({
   messageIndex,
 }) => {
   const t = useI18n('landingPageCard');
+  const tcp = useI18n('landingCanvas.canvasPreview');
   const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'code'
   const [device, setDevice] = useState('desktop');
   const [showFullscreen, setShowFullscreen] = useState(false);
@@ -72,6 +74,13 @@ const LandingPageCard = ({
   ${rawHtml}
 </body>
 </html>`;
+
+  // PR-5b-2c mục 5 — thẻ landing của trợ lý nổi xem trước srcDoc THẲNG (không qua
+  // buildCanvasSrcDoc.js như trình soạn landing), nên chỗ trống `data-founderai-form-slot` (AI
+  // dựng bằng Biểu mẫu, chưa lưu) hiện ra một khoảng trống câm. Chỉ đổi biến PREVIEW riêng cho
+  // iframe — `fullHtml` (copy/tải về/hiện code) giữ nguyên chỗ trống thật để không lưu nhầm bản
+  // đã chèn khung gợi ý.
+  const previewHtml = injectFormSlotPreviewHint(fullHtml, tcp('formSlotHint'));
 
   const handlePreview = () => {
     setShowFullscreen(true);
@@ -312,7 +321,7 @@ const LandingPageCard = ({
                 </div>
                 <iframe
                   ref={iframeRef}
-                  srcDoc={fullHtml}
+                  srcDoc={previewHtml}
                   className={`w-full ${deviceHeight} border-0`}
                   title="Landing Page Preview"
                   sandbox="allow-scripts"
@@ -583,7 +592,7 @@ const LandingPageCard = ({
               <div className="flex items-center justify-center p-4 min-h-full">
                 <div className="w-[375px] h-[667px] flex-shrink-0 bg-white rounded-xl overflow-hidden shadow-2xl">
                   <iframe
-                    srcDoc={fullHtml}
+                    srcDoc={previewHtml}
                     className="w-full h-full border-0"
                     title="Landing Page Fullscreen Preview"
                     sandbox="allow-scripts"
@@ -594,7 +603,7 @@ const LandingPageCard = ({
               <div className="h-full p-4 flex flex-col">
                 <div className="flex-1 min-h-0 w-full max-w-6xl mx-auto bg-white rounded-xl overflow-hidden shadow-2xl">
                   <iframe
-                    srcDoc={fullHtml}
+                    srcDoc={previewHtml}
                     className="w-full h-full border-0"
                     title="Landing Page Fullscreen Preview"
                     sandbox="allow-scripts"
