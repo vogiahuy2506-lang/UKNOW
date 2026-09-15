@@ -738,3 +738,56 @@ describe('aiLandingPageService.generate — AI_LANDING_FORM_MODE=form (PR-5b-2a)
   });
 });
 
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, đính chính 16/09 → PR-5b-2c.
+ *
+ * editHtml() được trình soạn gọi cả khi HTML CHƯA lưu còn chỗ trống `data-founderai-form-slot`
+ * (`useCanvasConversation.js:244-252`, `AI_LANDING_FORM_MODE=form`) — trước bản vá này prompt
+ * không hề nhắc gì tới chỗ trống, model "quen tay" viết form/nhét chữ vào lọt qua im lặng cho
+ * tới lúc lưu. Chỉ thêm luật khi bản HIỆN TẠI thật sự có chỗ trống — trang không dùng form-mode
+ * giữ prompt y hệt trước PR này (luật 2b vẫn thêm trường vào form capture bình thường).
+ */
+describe('aiLandingPageService.editHtml — prompt giữ chỗ trống chờ Biểu mẫu (PR-5b-2c, đính chính)', () => {
+  const htmlWithSlot =
+    '<!DOCTYPE html><html lang="vi"><head><script src="https://cdn.tailwindcss.com"></script></head><body>' +
+    '<section><div data-founderai-form-slot></div></section>' +
+    '</body></html>';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('HTML hiện tại có chỗ trống → prompt thêm luật giữ nguyên văn thẻ, không viết form thay thế', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: htmlWithSlot }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: htmlWithSlot,
+      instruction: 'Đổi màu nút thành xanh',
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toMatch(/CHỖ TRỐNG CHỜ BIỂU MẪU/);
+    expect(sentPrompt).toMatch(/GIỮ NGUYÊN VĂN thẻ đó/);
+    expect(sentPrompt).toMatch(/NGOẠI LỆ 2b ở trên.*KHÔNG áp dụng/);
+  });
+
+  it('HTML hiện tại KHÔNG có chỗ trống nào → prompt giữ NGUYÊN VĂN như trước PR (rule 2b liền ngay rule 3, không chen luật mới)', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Đổi màu nút thành xanh',
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).not.toMatch(/CHỖ TRỐNG CHỜ BIỂU MẪU/);
+    expect(sentPrompt).toMatch(/không đổi tên trường nào khác ngoài trường mới được yêu cầu\.\n3\) Trả về JSON/);
+  });
+});
+

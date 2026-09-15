@@ -566,6 +566,15 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 
     const dataPromptBlock = buildAttachmentPromptBlock(assets, documents);
 
+    // PR-5b-2c (đính chính 16/09) — trang ĐANG có chỗ trống chờ Biểu mẫu (`AI_LANDING_FORM_MODE=
+    // form`, PR-5b-2a) thì prompt phải dặn AI giữ nguyên chỗ trống đó, KHÔNG tự viết form thay
+    // thế. Chỉ thêm khi bản hiện tại thật sự có chỗ trống — trang không dùng form-mode thì prompt
+    // giữ NGUYÊN VĂN như trước PR này (nghiệm thu "prompt y hệt trước PR").
+    const currentHasFormSlot = countFormSlots(rawCurrent) >= 1;
+    const formSlotEditRule = currentHasFormSlot
+      ? '2c) TRANG ĐANG CÓ CHỖ TRỐNG CHỜ BIỂU MẪU (thẻ <div data-founderai-form-slot></div>, chưa lưu thành khối nhúng thật): GIỮ NGUYÊN VĂN thẻ đó — không xoá, không thêm bất kỳ nội dung con nào bên trong (kể cả text/element), không tự viết <form>/<input>/nút "Gửi"/"Đăng ký" để thay thế; chỗ trống này sẽ được hệ thống thay bằng Biểu mẫu thật khi người dùng lưu trang. NGOẠI LỆ 2b ở trên (thêm trường vào form đăng ký) KHÔNG áp dụng cho trang này.\n'
+      : '';
+
     const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên chỉnh sửa landing page marketing.
 
 Nhiệm vụ: Chỉnh sửa trang landing HTML5 hiện tại theo ĐÚNG yêu cầu của người dùng.
@@ -576,7 +585,7 @@ QUY TẮC CHỈNH SỬA TỐI QUAN TRỌNG:
 1) Dưới đây là HTML hiện tại của trang. Nhiệm vụ của bạn là CHỈ thay đổi đúng phần người dùng yêu cầu.
 2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và form đăng ký lead hiện có của trang — comment "${LANDING_FORM_PLACEHOLDER}" (trang cũ), hoặc thẻ iframe form nhúng "/embed/lead-form/..." (trang cũ), hoặc form có thuộc tính "data-founderai-capture" cùng đủ 3 trường name="name"/"email"/"phone" và checkbox name="marketingConsent" (trang mới) — GIỮ NGUYÊN VĂN toàn bộ form đó, không đổi tên thuộc tính, không xóa trường nào. Nếu trang có khối nhúng Biểu mẫu (thẻ section mang thuộc tính data-founderai-form-section, bên trong có div mang thuộc tính data-founderai-form, thẻ noscript, và thẻ script nạp form-embed.js) thì GIỮ NGUYÊN VĂN toàn bộ khối đó — không đổi giá trị thuộc tính data-founderai-form, không xóa hay sửa thẻ script form-embed.js bên trong; được phép DI CHUYỂN cả khối nguyên vẹn sang vị trí khác trong trang nếu người dùng yêu cầu. Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
 2b) NGOẠI LỆ CỦA QUY TẮC 2 — khi yêu cầu là THÊM một trường mới vào form đăng ký (ví dụ: "thêm ô Tên công ty vào form", "thêm trường Quy mô kiểu chọn với 3 lựa chọn..."): đây là thay đổi ĐƯỢC PHÉP trên chính form đó. Thêm ĐÚNG các thẻ input/textarea/select/radio/checkbox được yêu cầu vào BÊN TRONG form "data-founderai-capture" hiện có (đặt sau các trường đang có, trước nút submit) — KHÔNG tạo form thứ 2, KHÔNG đổi thuộc tính "data-founderai-capture", và bắt buộc GIỮ NGUYÊN mọi trường đang có (name/email/phone/marketingConsent và mọi trường cf_* khác) — chỉ THÊM, không xoá, không đổi tên trường nào khác ngoài trường mới được yêu cầu.
-3) Trả về JSON { "title": "...", "html": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích.
+${formSlotEditRule}3) Trả về JSON { "title": "...", "html": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích.
 
 QUY TẮC KỸ THUẬT:
 1) Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Hai khóa: "title" (string) và "html" (string).

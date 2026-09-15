@@ -1,3 +1,5 @@
+import { countFormSlots, hasMalformedFormSlot } from './landingHtmlInjection.util.js';
+
 /**
  * Marker comment dùng cho vị trí nhúng form đăng ký.
  */
@@ -173,6 +175,27 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
     const err = new Error('AI đã làm mất biểu mẫu nhúng. Vui lòng thử lại.');
     err.status = 422;
     throw err;
+  }
+
+  // PR-5b-2c (đính chính 16/09, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md) — chỗ trống chờ
+  // Biểu mẫu `<div data-founderai-form-slot></div>` (PR-5b-2a, `AI_LANDING_FORM_MODE=form`) TẠM
+  // THỜI: từ lúc AI trả HTML tới lúc lưu landing chưa có gì khác đánh dấu nó, nên 5 chốt marker/
+  // iframe/snippet/khối-nhúng ở trên (chỉ canh những gì ĐÃ LƯU) không bắt được. Trình soạn gọi
+  // editHtml() cả khi HTML CHƯA lưu còn chỗ trống (`useCanvasConversation.js:244-252`) — probe với
+  // hàm thật cho thấy AI bỏ chỗ trống / thay bằng <form> tự viết / nhét nội dung vào bên trong đều
+  // lọt qua im lặng, landing publish ra KHÔNG có Biểu mẫu. Chỉ xét khi bản CŨ đang có ít nhất 1 chỗ
+  // trống hợp lệ — trang không dùng form-mode giữ nguyên hành vi cũ (luật 2b của prompt vẫn thêm
+  // trường vào form capture bình thường, không bị chốt này chặn nhầm).
+  const oldSlotCount = countFormSlots(current);
+  if (oldSlotCount >= 1) {
+    const newSlotCount = countFormSlots(next);
+    const oldFormTagCount = (current.match(/<form\b/gi) || []).length;
+    const newFormTagCount = (next.match(/<form\b/gi) || []).length;
+    if (newSlotCount !== oldSlotCount || hasMalformedFormSlot(next) || newFormTagCount > oldFormTagCount) {
+      const err = new Error('AI đã làm mất hoặc sửa sai chỗ trống chờ Biểu mẫu. Vui lòng thử lại.');
+      err.status = 422;
+      throw err;
+    }
   }
 
   // Chốt chặn 3: Kiểm tra inline-style tương đối so với bản cũ

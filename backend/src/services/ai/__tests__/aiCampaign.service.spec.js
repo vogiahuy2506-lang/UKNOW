@@ -625,6 +625,43 @@ describe('aiCampaign.service', () => {
     expect(landingThuongLine).not.toContain('formId=');
   });
 
+  // PR-5b-2c mục 4 — review PR-5b-2b (16/09) tìm thấy code ĐÃ đúng (formId có mặt ở prompt V2
+  // từ trước) nhưng KHÔNG có test nào canh riêng đường V2 (chỉ V1 có test ở trên) — đột biến xoá
+  // formId khỏi khối "📄 Landing Pages" của processSmartChatV2 không có ca nào bắt được ("xanh"
+  // không phải vì đúng có kiểm chứng, mà vì chưa ai viết test). Bịt lỗ coverage này.
+  it('PR-5b-2c: prompt chat (V2, đường sống ai.controller.js:504) cũng ghi rõ formId cạnh slug landing đã gắn Biểu mẫu', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    getLandingPages.mockResolvedValueOnce([
+      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', isPublished: true, formId: 7 },
+      { slug: 'landing-thuong', title: 'Landing thường', isPublished: true, formId: null },
+    ]);
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            content: { parts: [{ text: '{"type":"text","content":"ok v2","missing_fields":[],"data":null}' }] },
+          },
+        ],
+      },
+    });
+
+    await aiCampaignService.processSmartChatV2({
+      userId: 9,
+      resourceOwnerUserId: 3,
+      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+      locale: 'vi',
+    });
+
+    expect(getLandingPages).toHaveBeenCalledWith(3);
+    const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+    const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+    expect(systemPrompt).toContain('slug: "khoa-hoc-ielts"');
+    expect(systemPrompt).toContain('formId=7');
+    const landingThuongLine = systemPrompt.split('\n').find((line) => line.includes('landing-thuong'));
+    expect(landingThuongLine).not.toContain('formId=');
+  });
+
   it('employee chat V2: loads tenant resources by owner, meters Gemini by actor', async () => {
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });

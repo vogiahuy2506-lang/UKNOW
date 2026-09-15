@@ -325,6 +325,91 @@ describe('landingEditGuard.util — chốt khối nhúng Biểu mẫu (PR-5b-1)'
   });
 });
 
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, đính chính 16/09 → PR-5b-2c.
+ *
+ * Trình soạn landing gọi editHtml() ngay cả khi HTML CHƯA lưu còn chỗ trống chờ Biểu mẫu
+ * (`<div data-founderai-form-slot></div>`, `AI_LANDING_FORM_MODE=form`, PR-5b-2a). Trước bản vá
+ * này KHÔNG có chốt nào canh riêng cái này — AI bỏ chỗ trống / thay bằng <form> tự viết / nhét
+ * nội dung vào bên trong đều lọt qua im lặng, landing publish ra KHÔNG có Biểu mẫu.
+ */
+describe('landingEditGuard.util — PR-5b-2c chỗ trống chờ Biểu mẫu (đính chính, đường AI-edit)', () => {
+  const withSlot = (html = baseValidHtml) =>
+    html.replace(LANDING_FORM_PLACEHOLDER, '<div data-founderai-form-slot></div>');
+
+  it('HTML cũ có chỗ trống, HTML mới chỉ đổi màu nút khác → hợp lệ', () => {
+    const current = withSlot();
+    const next = current.replace(
+      'class="text-2xl font-bold">Tiêu đề',
+      'class="text-3xl font-extrabold text-blue-600">Tiêu đề mới cập nhật'
+    );
+
+    const isValid = validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    expect(isValid).toBe(true);
+  });
+
+  it('HTML mới bỏ hẳn chỗ trống → ném lỗi 422', () => {
+    const current = withSlot();
+    const next = current.replace('<div data-founderai-form-slot></div>', '<p>Đăng ký nhận tin ngay hôm nay</p>');
+
+    expect(() => {
+      validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    }).toThrow(/chỗ trống chờ Biểu mẫu/i);
+  });
+
+  it('HTML mới thay chỗ trống bằng <form> tự viết → ném lỗi 422', () => {
+    const current = withSlot();
+    const next = current.replace(
+      '<div data-founderai-form-slot></div>',
+      '<form data-founderai-capture><input name="email"/><button type="submit">Đăng ký</button></form>'
+    );
+
+    expect(() => {
+      validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    }).toThrow(/chỗ trống chờ Biểu mẫu/i);
+  });
+
+  it('HTML mới nhét nội dung con vào bên trong chỗ trống (sai dạng) → ném lỗi 422', () => {
+    const current = withSlot();
+    const next = current.replace(
+      '<div data-founderai-form-slot></div>',
+      '<div data-founderai-form-slot><p>Đăng ký ngay</p></div>'
+    );
+
+    expect(() => {
+      validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    }).toThrow(/chỗ trống chờ Biểu mẫu/i);
+  });
+
+  // Phản biện 16/09 điểm 2: chốt <form CHỈ áp khi bản cũ đang có chỗ trống — trang dùng form
+  // capture bình thường (không phải form-mode) thêm hẳn một <form> khác (yêu cầu hợp lệ, không
+  // liên quan chỗ trống) không được bị chặn nhầm.
+  it('bản cũ KHÔNG có chỗ trống nào — thêm hẳn 1 <form> mới không bị chặn (chốt chỉ áp khi bản cũ CÓ chỗ trống)', () => {
+    const current = baseValidHtml; // không có data-founderai-form-slot
+    const next = current.replace(
+      '</main>',
+      '<form data-newsletter><input name="email"/><button type="submit">Nhận bản tin</button></form></main>'
+    );
+
+    const isValid = validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    expect(isValid).toBe(true);
+  });
+
+  it('bản cũ có chỗ trống + thêm trường vào form capture khác trong cùng trang (không đụng chỗ trống) → vẫn hợp lệ', () => {
+    // Trang hiếm gặp: vừa có chỗ trống chờ Biểu mẫu, vừa có form capture cũ còn sót lại y nguyên
+    // — chỉnh sửa không đụng tới cái nào trong hai khối này thì vẫn qua bình thường.
+    const capForm = '<form data-founderai-capture><input name="name"/><input name="email"/><input name="phone"/></form>';
+    const current = withSlot(baseValidHtml).replace('</header>', `</header>${capForm}`);
+    const next = current.replace(
+      'class="text-2xl font-bold">Tiêu đề',
+      'class="text-3xl font-extrabold text-blue-600">Tiêu đề mới cập nhật'
+    );
+
+    const isValid = validateEditHtmlOutput({ currentHtml: current, newHtml: next });
+    expect(isValid).toBe(true);
+  });
+});
+
 describe('extractHtmlFromModelText — HTML nằm trong chuỗi JSON hỏng (09/09: trang đầy \\n và \\")', () => {
   const doc = '<!DOCTYPE html>\n<html>\n<head><title>A</title></head>\n<body><img alt="FounderAI" src="/x.png" />\n<p class="py-2">Xin chào</p></body>\n</html>';
   const escaped = JSON.stringify(doc).slice(1, -1); // đúng thứ nằm bên trong "html": "..."

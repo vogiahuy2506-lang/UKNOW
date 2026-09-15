@@ -53,6 +53,15 @@ const NO_SLOT_HTML = '<section><p>không có chỗ trống</p></section>';
 // Review PR-5b-2a nợ 1 — cùng nguyên văn ca review nêu (class + data-founderai-form-slot="").
 const SLOT_WITH_EXTRA_ATTR_HTML = '<div class="my-8" data-founderai-form-slot=""></div>';
 const MALFORMED_SLOT_HTML = '<div data-founderai-form-slot><p>x</p></div>';
+// PR-5b-2c (đính chính 16/09) — chú thích HTML bên trong chỗ trống coi như khoảng trắng (hợp lệ).
+const SLOT_WITH_COMMENT_HTML = '<div data-founderai-form-slot><!-- x --></div>';
+// PR-5b-2c — bộ chọn CSS [data-founderai-form-slot] trong <style> không được tính là "nhắc tên"
+// thừa (trước đây làm trang có ĐÚNG 1 chỗ trống hợp lệ bị báo sai dạng oan, 400).
+const SLOT_WITH_CSS_STYLE_HTML =
+  '<style>[data-founderai-form-slot]{min-height:1px}</style><div data-founderai-form-slot></div>';
+// PR-5b-2c — thuộc tính viết HOA + nội dung con thật: trước đây lọt qua (thiếu cờ i) → lưu nguyên
+// văn thuộc tính lẫn nội dung con, không báo lỗi, không tạo form.
+const UPPERCASE_MALFORMED_SLOT_HTML = '<div DATA-FOUNDERAI-FORM-SLOT><p>x</p></div>';
 
 describe('POST /api/admin/landing-pages — PR-5b-2a chỗ trống Biểu mẫu', () => {
   it('HTML có 1 chỗ trống + leadFormConfig occupation + 1 custom select → tạo 1 form đã xuất bản, gắn landing_page_id, đủ trường, HTML lưu có khối nhúng, không còn chỗ trống', async () => {
@@ -231,6 +240,58 @@ describe('POST /api/admin/landing-pages — PR-5b-2a chỗ trống Biểu mẫu'
     const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
     expect(formRows.rows).toHaveLength(0);
     const lpRows = await db.query('SELECT * FROM landing_pages WHERE slug = $1', ['nodebt1b']);
+    expect(lpRows.rows).toHaveLength(0);
+  });
+
+  // PR-5b-2c (đính chính 16/09) — chú thích HTML bên trong chỗ trống giờ coi như khoảng trắng,
+  // không còn bị coi là "sai dạng" oan.
+  it('PR-5b-2c — chỗ trống có chú thích HTML <!--…--> bên trong vẫn được nhận ra → tạo form + thay chỗ trống', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-2c-comment' } });
+    const token = await loginAs(me);
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'slot-2c-comment', title: 'Landing chỗ trống có chú thích', htmlContent: SLOT_WITH_COMMENT_HTML });
+    expect(res.status).toBe(201);
+
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formRows.rows).toHaveLength(1);
+    const lpRow = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [res.body.data.id]);
+    expect(lpRow.rows[0].html_content).not.toContain('data-founderai-form-slot');
+    expect(lpRow.rows[0].html_content).toContain(formRows.rows[0].public_key);
+  });
+
+  // PR-5b-2c — bộ chọn CSS trong <style> không được tính là "nhắc tên" thừa.
+  it('PR-5b-2c — bộ chọn CSS [data-founderai-form-slot] trong <style> + đúng 1 div hợp lệ → tạo form, KHÔNG 400', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-2c-css' } });
+    const token = await loginAs(me);
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'slot-2c-css', title: 'Landing chỗ trống có CSS', htmlContent: SLOT_WITH_CSS_STYLE_HTML });
+    expect(res.status).toBe(201);
+
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formRows.rows).toHaveLength(1);
+  });
+
+  // PR-5b-2c — thiếu cờ `i` ở regex cũ khiến thuộc tính viết HOA lọt hẳn khỏi mọi kiểm tra, lưu
+  // nguyên văn cả thuộc tính lẫn nội dung con vào DB, không báo lỗi, không tạo form.
+  it('PR-5b-2c — chỗ trống thuộc tính viết HOA + nội dung con → 400, không tạo form, không lưu landing', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-2c-upper' } });
+    const token = await loginAs(me);
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'slot-2c-upper', title: 'Landing chỗ trống HOA', htmlContent: UPPERCASE_MALFORMED_SLOT_HTML });
+    expect(res.status).toBe(400);
+
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formRows.rows).toHaveLength(0);
+    const lpRows = await db.query('SELECT * FROM landing_pages WHERE slug = $1', ['slot-2c-upper']);
     expect(lpRows.rows).toHaveLength(0);
   });
 
@@ -422,6 +483,32 @@ describe('PUT /api/admin/landing-pages/:id — PR-5b-2a chỗ trống Biểu m�
       .put(`/api/admin/landing-pages/${landingId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ slug: 'slot-update-3', title: 'Landing', htmlContent: TWO_SLOTS_HTML });
+    expect(updateRes.status).toBe(400);
+
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formRows.rows).toHaveLength(0);
+    const lpRow = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [landingId]);
+    expect(lpRow.rows[0].html_content).toBe(htmlBeforeUpdate);
+  });
+
+  // PR-5b-2c mục 4 — nghiệm thu "PUT chỗ trống sai dạng → 400, không có form mới" chưa có test
+  // nào canh riêng đường update() (chỉ create() có test nợ 1 malformed ở trên).
+  it('PR-5b-2c — HTML chỗ trống sai dạng (có nội dung con) lúc update → 400, không tạo form, không đổi landing hiện có', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-2c-put-malformed' } });
+    const token = await loginAs(me);
+
+    const createRes = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'slot-2c-put-malformed', title: 'Landing', htmlContent: NO_SLOT_HTML });
+    const landingId = createRes.body.data.id;
+    const beforeUpdate = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [landingId]);
+    const htmlBeforeUpdate = beforeUpdate.rows[0].html_content;
+
+    const updateRes = await request(app)
+      .put(`/api/admin/landing-pages/${landingId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'slot-2c-put-malformed', title: 'Landing', htmlContent: MALFORMED_SLOT_HTML });
     expect(updateRes.status).toBe(400);
 
     const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);

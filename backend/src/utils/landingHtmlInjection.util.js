@@ -244,12 +244,28 @@ export function resolvePublicApiBaseFromEnv() {
  * `='…'`), khoảng trắng/xuống dòng bên trong div. VẪN không chấp nhận nội dung con thật (element/
  * text khác khoảng trắng) — `hasMalformedFormSlot` bên dưới bắt riêng ca này để báo lỗi rõ thay vì
  * lặng lẽ bỏ qua.
+ *
+ * PR-5b-2c (review 16/09, probe với hàm thật) — chú thích HTML `<!--…-->` bên trong chỗ trống giờ
+ * coi như khoảng trắng (khớp hợp lệ): admin/AI đôi khi để lại `<!-- TODO -->` bên trong lúc soạn
+ * tay, trước đây bị đếm là "sai dạng" (có nội dung con) dù không có gì thật sự hiển thị.
  */
-const FORM_SLOT_RE = /<div\b[^>]*\bdata-founderai-form-slot\b(?:=(?:"[^"]*"|'[^']*'))?[^>]*>\s*<\/div>/gi;
+const FORM_SLOT_RE = /<div\b[^>]*\bdata-founderai-form-slot\b(?:=(?:"[^"]*"|'[^']*'))?[^>]*>(?:\s|<!--[\s\S]*?-->)*<\/div>/gi;
 
-/** Mọi chỗ chuỗi HTML có nhắc tên thuộc tính — dùng để so với số chỗ trống HỢP LỆ đếm được, lệch
- * nghĩa là có div mang thuộc tính này nhưng không khớp dạng hợp lệ (`hasMalformedFormSlot`). */
-const FORM_SLOT_ATTR_MENTION_RE = /\bdata-founderai-form-slot\b/g;
+/**
+ * Mọi thẻ mở HTML có nhắc tên thuộc tính (`<div data-founderai-form-slot ...>`, bất kỳ tên thẻ,
+ * không phân biệt hoa/thường) — dùng để so với số chỗ trống HỢP LỆ đếm được, lệch nghĩa là có thẻ
+ * mang thuộc tính này nhưng không khớp dạng hợp lệ (`hasMalformedFormSlot`).
+ *
+ * PR-5b-2c (review 16/09, probe 16/09) sửa 2 lỗ:
+ *   1. Thiếu cờ `i` — `<div DATA-FOUNDERAI-FORM-SLOT><p>x</p></div>` (HTML không phân biệt hoa
+ *      thường ở tên thuộc tính) không được đếm là "nhắc tên" nên không bị phát hiện sai dạng,
+ *      lưu nguyên cả thuộc tính lẫn nội dung con vào DB.
+ *   2. Đếm cả bên NGOÀI thẻ — chuỗi `[data-founderai-form-slot]` làm bộ chọn CSS trong `<style>`
+ *      (một cách hợp lệ để admin tự style chỗ trống trước khi lưu) bị tính là một "nhắc tên" thừa,
+ *      khiến trang có ĐÚNG 1 chỗ trống hợp lệ vẫn bị báo sai dạng. Giới hạn khớp bên TRONG một thẻ
+ *      mở thật (`<chữ cái...`) loại cả CSS lẫn chú thích (`<!--` không khớp `<[a-z]`).
+ */
+const FORM_SLOT_ATTR_MENTION_RE = /<[a-z][^>]*\bdata-founderai-form-slot\b/gi;
 
 /**
  * Đếm số chỗ trống biểu mẫu HỢP LỆ (`<div …data-founderai-form-slot…></div>`, không nội dung con)

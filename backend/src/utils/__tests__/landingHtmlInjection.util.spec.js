@@ -512,6 +512,22 @@ describe('landingHtmlInjection.util', () => {
         expect(countFormSlots('<div class="my-8" data-founderai-form-slot=""></div>')).toBe(1);
       });
     });
+
+    // PR-5b-2c (đính chính 16/09) — chú thích HTML bên trong chỗ trống giờ coi như khoảng
+    // trắng: admin/AI để lại `<!-- TODO -->` không phải là "nội dung con thật".
+    describe('PR-5b-2c — chú thích <!--…--> bên trong coi như khoảng trắng', () => {
+      it('chỉ có chú thích bên trong → vẫn đếm là chỗ trống hợp lệ', () => {
+        expect(countFormSlots('<div data-founderai-form-slot><!-- TODO --></div>')).toBe(1);
+      });
+
+      it('chú thích xen khoảng trắng/nhiều chú thích → vẫn hợp lệ', () => {
+        expect(countFormSlots('<div data-founderai-form-slot>  <!-- a -->\n<!-- b -->  </div>')).toBe(1);
+      });
+
+      it('chú thích RỒI có nội dung con thật khác → vẫn KHÔNG hợp lệ (không lách được bằng chú thích)', () => {
+        expect(countFormSlots('<div data-founderai-form-slot><!-- x --><p>thật</p></div>')).toBe(0);
+      });
+    });
   });
 
   describe('hasMalformedFormSlot (nợ 1, review PR-5b-2a)', () => {
@@ -532,6 +548,64 @@ describe('landingHtmlInjection.util', () => {
     it('1 chỗ trống hợp lệ + 1 chỗ trống hỏng dạng trong cùng trang → vẫn phát hiện hỏng dạng', () => {
       const html = '<div data-founderai-form-slot></div><div data-founderai-form-slot><span>x</span></div>';
       expect(hasMalformedFormSlot(html)).toBe(true);
+    });
+
+    /**
+     * PR-5b-2c (review 16/09, probe với hàm thật) — 2 lỗ của FORM_SLOT_ATTR_MENTION_RE bản cũ:
+     *   1. Thiếu cờ `i`: thuộc tính viết HOA lọt hẳn khỏi việc đếm "nhắc tên", nên div sai dạng
+     *      (có nội dung con) mang thuộc tính HOA bị coi là "không liên quan gì" → lưu nguyên văn.
+     *   2. Đếm cả ngoài thẻ: `[data-founderai-form-slot]` làm bộ chọn CSS trong `<style>` bị tính
+     *      là một "nhắc tên" thừa, khiến trang có ĐÚNG 1 chỗ trống hợp lệ bị báo sai dạng oan.
+     */
+    describe('PR-5b-2c — sửa cờ hoa/thường + giới hạn đếm trong thẻ', () => {
+      it('thuộc tính viết HOA + có nội dung con → PHẢI phát hiện hỏng dạng (trước đây lọt qua)', () => {
+        expect(hasMalformedFormSlot('<div DATA-FOUNDERAI-FORM-SLOT><p>x</p></div>')).toBe(true);
+      });
+
+      it('thuộc tính viết HOA nhưng rỗng (hợp lệ) → không hỏng dạng', () => {
+        expect(hasMalformedFormSlot('<div DATA-FOUNDERAI-FORM-SLOT></div>')).toBe(false);
+        expect(countFormSlots('<div DATA-FOUNDERAI-FORM-SLOT></div>')).toBe(1);
+      });
+
+      it('bộ chọn CSS [data-founderai-form-slot] trong <style> + đúng 1 div hợp lệ → KHÔNG hỏng dạng oan', () => {
+        const html = '<style>[data-founderai-form-slot]{min-height:1px}</style><div data-founderai-form-slot></div>';
+        expect(hasMalformedFormSlot(html)).toBe(false);
+        expect(countFormSlots(html)).toBe(1);
+      });
+
+      it('chú thích <!--…--> nhắc tên thuộc tính (không phải thẻ thật) → không tính là "nhắc tên"', () => {
+        const html = '<!-- data-founderai-form-slot --><div data-founderai-form-slot></div>';
+        expect(hasMalformedFormSlot(html)).toBe(false);
+        expect(countFormSlots(html)).toBe(1);
+      });
+    });
+  });
+
+  /**
+   * PR-5b-2c — bảng ca DÙNG CHUNG với bản frontend (`injectLandingEnhancements.spec.js`
+   * `FORM_SLOT_RE`, hàm `injectFormSlotPreviewHint`). Hai regex phải khớp CÙNG nhau — lệch nghĩa
+   * là xem trước báo được nhưng lưu lại hỏng, hoặc ngược lại. `validCount` ở đây tương ứng với số
+   * chỗ trống mà `injectFormSlotPreviewHint` phải thay ở phía frontend cho cùng input.
+   */
+  describe('PR-5b-2c — bảng ca dùng chung với frontend (parity)', () => {
+    const SHARED_SLOT_CASES = [
+      { name: 'div rỗng chuẩn', html: '<div data-founderai-form-slot></div>', validCount: 1, malformed: false },
+      { name: 'thêm class + =""', html: '<div class="my-8" data-founderai-form-slot=""></div>', validCount: 1, malformed: false },
+      { name: 'chú thích HTML bên trong', html: '<div data-founderai-form-slot><!-- x --></div>', validCount: 1, malformed: false },
+      {
+        name: 'CSS chọn trong <style> + div hợp lệ',
+        html: '<style>[data-founderai-form-slot]{min-height:1px}</style><div data-founderai-form-slot></div>',
+        validCount: 1,
+        malformed: false,
+      },
+      { name: 'thuộc tính viết HOA, rỗng', html: '<div DATA-FOUNDERAI-FORM-SLOT></div>', validCount: 1, malformed: false },
+      { name: 'thuộc tính viết HOA + nội dung con', html: '<div DATA-FOUNDERAI-FORM-SLOT><p>x</p></div>', validCount: 0, malformed: true },
+      { name: 'nội dung con thường', html: '<div data-founderai-form-slot><p>x</p></div>', validCount: 0, malformed: true },
+    ];
+
+    it.each(SHARED_SLOT_CASES)('$name → validCount=$validCount, malformed=$malformed', ({ html, validCount, malformed }) => {
+      expect(countFormSlots(html)).toBe(validCount);
+      expect(hasMalformedFormSlot(html)).toBe(malformed);
     });
   });
 
