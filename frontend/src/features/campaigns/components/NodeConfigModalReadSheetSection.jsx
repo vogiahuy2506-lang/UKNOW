@@ -114,10 +114,15 @@ export const NodeConfigReadSheetSection = ({
                 <input
                   type="text"
                   value={formData.sheetName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, sheetName: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, sheetName: e.target.value, sheetNameSource: undefined }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder={t('sheetNamePlaceholder')}
                 />
+                {formData.sheetNameSource === 'auto' && (
+                  <p className="text-xs text-primary-600 mt-1">{t('sheetNameAutoFilled')}</p>
+                )}
                 <p className="text-xs text-gray-500 mt-1">{t('sheetNameHint')}</p>
               </div>
               <div>

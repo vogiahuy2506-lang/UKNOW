@@ -395,7 +395,17 @@ export const handleNodeSheetConnectionCheck = async ({
     setIsCheckingSheet(true);
     const data = await onCheckSheetConnection(formData);
     const columns = Array.isArray(data?.columns) ? data.columns : [];
-    setFormData((prev) => ({ ...prev, columns }));
+    const worksheetNames = Array.isArray(data?.worksheetNames) ? data.worksheetNames : [];
+    // Ô Tên Sheet đang trống + file đọc được tab đầu tiên → tự điền, đánh dấu 'auto' để lúc
+    // chạy biết lùi về tab đầu nếu tab đổi tên (xem fetchGoogleSheetCustomersFromConfig).
+    const shouldAutoFillSheetName = !String(formData?.sheetName || '').trim() && Boolean(worksheetNames[0]);
+    setFormData((prev) => ({
+      ...prev,
+      columns,
+      ...(shouldAutoFillSheetName
+        ? { sheetName: worksheetNames[0], sheetNameSource: 'auto' }
+        : {}),
+    }));
     toastNotifier.success(
       columns.length
         ? `Kết nối sheet. Đã lấy ${columns.length} cột`

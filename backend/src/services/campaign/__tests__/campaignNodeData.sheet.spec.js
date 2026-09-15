@@ -162,6 +162,102 @@ describe('campaignNodeDataService.fetchGoogleSheetCustomersFromConfig', () => {
     expect(customers).toEqual([]);
   });
 
+  describe('sheetNameSource "auto" — tên tự nhận không còn thì lùi về tab đầu tiên (PLAN_TU_NHAN_TEN_SHEET_DAU_TIEN_2026-09-15)', () => {
+    it('auto + tab không còn tồn tại -> đọc CSV KHÔNG có &sheet= (tab đầu tiên), không trả rỗng', async () => {
+      mockAxiosGet.mockImplementation(async (url) => {
+        if (url.includes('/htmlview')) {
+          return { status: 200, data: htmlviewWithSheetNames('Khách tháng 10', 'Cũ') };
+        }
+        expect(url).not.toContain('&sheet=');
+        return {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+          data: 'Email,Name\nfirsttab@test.com,First Tab',
+        };
+      });
+
+      const config = {
+        sheetUrl: VALID_SHEET_URL,
+        sheetName: 'Khách tháng 9', // tab đã bị đổi tên/xoá — không còn trong danh sách trả về
+        sheetNameSource: 'auto',
+      };
+
+      const customers = await campaignNodeDataService.fetchGoogleSheetCustomersFromConfig(config);
+
+      expect(customers).toHaveLength(1);
+      expect(customers[0]).toMatchObject({ Email: 'firsttab@test.com' });
+    });
+
+    it('auto + htmlview lỗi 403 -> vẫn đọc CSV tab đầu tiên (không trả rỗng)', async () => {
+      mockAxiosGet.mockImplementation(async (url) => {
+        if (url.includes('/htmlview')) {
+          return { status: 403, data: 'Forbidden' };
+        }
+        expect(url).not.toContain('&sheet=');
+        return {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+          data: 'Email,Name\nok@test.com,OK',
+        };
+      });
+
+      const config = {
+        sheetUrl: VALID_SHEET_URL,
+        sheetName: 'Khách tháng 9',
+        sheetNameSource: 'auto',
+      };
+
+      const customers = await campaignNodeDataService.fetchGoogleSheetCustomersFromConfig(config);
+
+      expect(customers).toHaveLength(1);
+      expect(customers[0]).toMatchObject({ Email: 'ok@test.com' });
+    });
+
+    it('tên tự GÕ TAY (không có sheetNameSource auto) + tab không còn -> [] như hành vi cũ', async () => {
+      mockAxiosGet.mockImplementation(async (url) => {
+        if (url.includes('/htmlview')) {
+          return { status: 200, data: htmlviewWithSheetNames('Khác', 'Cũ') };
+        }
+        return { status: 200, data: '' };
+      });
+
+      const config = {
+        sheetUrl: VALID_SHEET_URL,
+        sheetName: 'Khách tháng 9',
+        // không có sheetNameSource -> coi như người dùng tự gõ
+      };
+
+      const customers = await campaignNodeDataService.fetchGoogleSheetCustomersFromConfig(config);
+
+      expect(customers).toEqual([]);
+    });
+
+    it('auto + tab VẪN CÒN -> đọc đúng tab đó, có &sheet=<tên>', async () => {
+      mockAxiosGet.mockImplementation(async (url) => {
+        if (url.includes('/htmlview')) {
+          return { status: 200, data: htmlviewWithSheetNames('Khách tháng 9', 'Cũ') };
+        }
+        expect(url).toContain('&sheet=Kh%C3%A1ch%20th%C3%A1ng%209');
+        return {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+          data: 'Email,Name\ncorrecttab@test.com,Correct',
+        };
+      });
+
+      const config = {
+        sheetUrl: VALID_SHEET_URL,
+        sheetName: 'Khách tháng 9',
+        sheetNameSource: 'auto',
+      };
+
+      const customers = await campaignNodeDataService.fetchGoogleSheetCustomersFromConfig(config);
+
+      expect(customers).toHaveLength(1);
+      expect(customers[0]).toMatchObject({ Email: 'correcttab@test.com' });
+    });
+  });
+
   describe('getCustomersFromDataNode read_sheet contactRowCount metadata', () => {
     it('returns contactRowCount === 0 when sheet has 7 job management columns without email or phone', async () => {
       mockAxiosGet.mockImplementation(async () => ({

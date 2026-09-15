@@ -17,20 +17,13 @@ import {
 import { applyDataColumnSelectionToItems } from '../../utils/dataColumnSelection.util.js';
 import { isEmailHeader, isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
 import formService from '../form.service.js';
+import { extractSpreadsheetId, fetchWorksheetNames } from '../../utils/googleSheetWorksheets.util.js';
 
 /**
  * Số khách tối đa mỗi transaction khi lưu batch (BEGIN…COMMIT).
  * Giảm thời gian giữ lock và áp lực WAL trên VPS nhỏ; không dùng biến môi trường.
  */
 const SAVE_CUSTOMERS_DB_CHUNK_SIZE = 500;
-
-const decodeJsQuotedString = (value = '') => {
-  try {
-    return JSON.parse(`"${String(value || '').replace(/"/g, '\\"')}"`);
-  } catch {
-    return String(value || '');
-  }
-};
 
 /**
  * Resolve selection mode with backward compatibility from legacy selected IDs.
@@ -333,53 +326,60 @@ class CampaignNodeDataService {
     const yieldEvery = getReadSheetParseYieldEveryRows();
 
     try {
-      const spreadsheetIdMatch = sheetUrl.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-      if (!spreadsheetIdMatch) {
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) {
         console.warn('[GoogleSheetData] sheetUrl không hợp lệ (không tìm thấy spreadsheetId):', sheetUrl);
         return [];
       }
 
-      const spreadsheetId = spreadsheetIdMatch[1];
-      const sheetParam = sheetName ? `&sheet=${encodeURIComponent(sheetName)}` : '';
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv${sheetParam}`;
-
       const axios = (await import('axios')).default;
       const Papa = (await import('papaparse')).default;
+
+      // sheetNameSource 'auto' = hệ thống tự điền lúc tạo chiến dịch (fillReadSheetFirstTabNames).
+      // Tên đó có thể lỗi thời nếu chủ shop đổi tên tab sau đó — khi vậy LÙI VỀ đọc tab đầu tiên
+      // thay vì trả rỗng, đúng tinh thần "link cập nhật thì vẫn gửi". Tên do người dùng tự gõ thì
+      // giữ nguyên hành vi cũ (không còn tab đúng tên → không gửi, tránh gửi nhầm tab).
+      const sheetNameSource = String(config?.sheetNameSource || '').trim();
+      const isAutoSheetName = Boolean(sheetName) && sheetNameSource === 'auto';
+
+      // effectiveSheetName rỗng => gviz đọc tab đầu tiên mặc định (không có &sheet=).
+      let effectiveSheetName = sheetName;
 
       if (sheetName) {
         const worksheetHtmlViewUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
         logApiCall('google_sheet', worksheetHtmlViewUrl);
-        const validationResponse = await axios.get(worksheetHtmlViewUrl, {
-          responseType: 'text',
-          timeout: fetchTimeoutMs,
-          validateStatus: () => true,
-        });
-        if (validationResponse.status >= 400) {
-          console.warn('[GoogleSheetData] Không đọc được htmlview để kiểm tra tên tab:', {
-            sheetUrl,
-            sheetName,
-            status: validationResponse.status,
-          });
-          return [];
-        }
-        const html = String(validationResponse.data || '');
-        const worksheetNames = [];
-        const regex = /items\.push\(\{name:\s*"((?:\\.|[^"\\])*)"/g;
-        let match;
-        while ((match = regex.exec(html))) {
-          const decoded = decodeJsQuotedString(match[1]).trim();
-          if (decoded) worksheetNames.push(decoded);
-        }
-        const dedupedWorksheetNames = Array.from(new Set(worksheetNames));
-        if (!dedupedWorksheetNames.includes(sheetName)) {
-          console.warn('[GoogleSheetData] Không tìm thấy tab trong file Google Sheet:', {
-            sheetUrl,
-            sheetName,
-            availableWorksheets: dedupedWorksheetNames,
-          });
-          return [];
+        const worksheetRes = await fetchWorksheetNames(spreadsheetId, { timeoutMs: fetchTimeoutMs });
+        const tabUnreadable = !worksheetRes.ok;
+        const tabMissing = worksheetRes.ok && !(worksheetRes.names || []).includes(sheetName);
+
+        if (tabUnreadable || tabMissing) {
+          if (isAutoSheetName) {
+            console.warn(`[GoogleSheetData] Tên tab tự nhận "${sheetName}" không còn — đọc tab đầu tiên`, {
+              sheetUrl,
+              reason: tabUnreadable ? 'unreadable' : 'not_found',
+              availableWorksheets: worksheetRes.ok ? worksheetRes.names : undefined,
+            });
+            effectiveSheetName = '';
+          } else if (tabUnreadable) {
+            console.warn('[GoogleSheetData] Không đọc được htmlview để kiểm tra tên tab:', {
+              sheetUrl,
+              sheetName,
+              status: worksheetRes.status,
+            });
+            return [];
+          } else {
+            console.warn('[GoogleSheetData] Không tìm thấy tab trong file Google Sheet:', {
+              sheetUrl,
+              sheetName,
+              availableWorksheets: worksheetRes.names,
+            });
+            return [];
+          }
         }
       }
+
+      const sheetParam = effectiveSheetName ? `&sheet=${encodeURIComponent(effectiveSheetName)}` : '';
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv${sheetParam}`;
 
       logApiCall('google_sheet', csvUrl);
       const response = await axios.get(csvUrl, {
@@ -390,7 +390,7 @@ class CampaignNodeDataService {
       if (response.status >= 400) {
         console.error('[GoogleSheetData] Tải CSV thất bại từ Google gviz:', {
           sheetUrl,
-          sheetName: sheetName || '(first tab)',
+          sheetName: effectiveSheetName || '(first tab)',
           csvUrl,
           status: response.status,
         });
@@ -402,7 +402,7 @@ class CampaignNodeDataService {
       if (isHtml) {
         console.error('[GoogleSheetData] Phản hồi gviz trả về HTML thay vì CSV (chưa chia sẻ quyền xem công khai hoặc sai tab):', {
           sheetUrl,
-          sheetName: sheetName || '(first tab)',
+          sheetName: effectiveSheetName || '(first tab)',
         });
         return [];
       }

@@ -33,6 +33,7 @@ import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits
 import { resolveWorkspaceOwnerId, StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { getNodeSubtype } from '../utils/nodeSubtype.util.js';
+import { fillReadSheetFirstTabNames } from '../services/campaign/readSheetAutoName.service.js';
 import { resolveCampaignVia } from '../utils/campaignVia.util.js';
 import { ingestLandingAttachments } from '../services/landing/landingAsset.service.js';
 import { listUserFilesSinceLastLanding } from '../repositories/aiSession.repository.js';
@@ -851,6 +852,9 @@ class AiController {
           message: 'Kịch bản có tài khoản gửi, mẫu tin hoặc nội dung chưa hợp lệ.',
         });
       }
+      // Tự nhận tên tab đầu tiên cho node read_sheet chưa có sheetName (timeout ngắn 8s,
+      // lỗi → để trống như cũ, không chặn tạo chiến dịch). Xem readSheetAutoName.service.js.
+      await fillReadSheetFirstTabNames(normalizedNodes);
       for (const node of normalizedNodes) {
         const subtype = getNodeSubtype(node);
         const validation = campaignNodeRegistryService.validateNodeConfig(subtype, node.config || {});

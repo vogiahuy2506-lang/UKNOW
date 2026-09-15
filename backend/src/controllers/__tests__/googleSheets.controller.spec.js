@@ -39,8 +39,11 @@ describe('GoogleSheetsController Unit Tests', () => {
   });
 
   describe('check()', () => {
-    it('empty sheetName -> fetches first tab without &sheet= param and skips htmlview validation', async () => {
+    it('empty sheetName -> fetches first tab without &sheet= param, but still reads worksheetNames for Builder auto-fill (tự nhận tên sheet)', async () => {
       mockAxiosGet.mockImplementation(async (url) => {
+        if (url.includes('/htmlview')) {
+          return { status: 200, data: htmlviewWithSheetNames('Khách tháng 9', 'Cũ') };
+        }
         expect(url).not.toContain('&sheet=');
         expect(url).toContain('/gviz/tq?tqx=out:csv');
         return {
@@ -60,8 +63,33 @@ describe('GoogleSheetsController Unit Tests', () => {
       expect(res.body.data.columns).toEqual(['Họ tên', 'Email', 'Số điện thoại']);
       expect(res.body.data.meta.sheetName).toBe('');
       expect(res.body.data.meta.csvUrl).not.toContain('&sheet=');
-      // Verify htmlview was NOT called because sheetName is empty
-      expect(mockAxiosGet).toHaveBeenCalledTimes(1);
+      // Việc 3 (tự nhận tên sheet): sheetName trống vẫn phải đọc htmlview để trả worksheetNames
+      // cho Builder tự điền — đây là đúng lúc auto-fill cần kích hoạt, không thể bỏ qua.
+      expect(res.body.data.worksheetNames).toEqual(['Khách tháng 9', 'Cũ']);
+      expect(mockAxiosGet).toHaveBeenCalledTimes(2);
+    });
+
+    it('empty sheetName, htmlview không đọc được (403) -> vẫn thành công qua CSV, worksheetNames rỗng (không chặn tạo)', async () => {
+      mockAxiosGet.mockImplementation(async (url) => {
+        if (url.includes('/htmlview')) {
+          return { status: 403, data: 'Forbidden' };
+        }
+        expect(url).not.toContain('&sheet=');
+        return {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+          data: 'Email,Name\na@test.com,Alice',
+        };
+      });
+
+      const req = { body: { sheetUrl: VALID_SHEET_URL, sheetName: '' } };
+      const res = makeRes();
+
+      await googleSheetsController.check(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.worksheetNames).toEqual([]);
     });
 
     it('Vietnamese sheetName -> validates via htmlview and encodes in csvUrl', async () => {

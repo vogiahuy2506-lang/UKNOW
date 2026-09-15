@@ -2,12 +2,7 @@ import axios from 'axios';
 import Papa from 'papaparse';
 import { getReadSheetFetchTimeoutMs } from '../utils/readSheetConfig.util.js';
 import { applyDataColumnSelectionToItems } from '../utils/dataColumnSelection.util.js';
-
-function extractSpreadsheetId(sheetUrl) {
-  if (!sheetUrl || typeof sheetUrl !== 'string') return null;
-  const match = sheetUrl.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : null;
-}
+import { extractSpreadsheetId, fetchWorksheetNames } from '../utils/googleSheetWorksheets.util.js';
 
 function buildCsvUrl(spreadsheetId, sheetName) {
   const safeName = sheetName && typeof sheetName === 'string' ? sheetName.trim() : '';
@@ -19,47 +14,6 @@ function buildCsvUrl(spreadsheetId, sheetName) {
 function toInt(value, fallback) {
   const n = parseInt(value, 10);
   return Number.isFinite(n) ? n : fallback;
-}
-
-/**
- * Decode JS double-quoted string literal content.
- *
- * @param {string} value
- * @returns {string}
- */
-function decodeJsQuotedString(value = '') {
-  try {
-    return JSON.parse(`"${String(value || '').replace(/"/g, '\\"')}"`);
-  } catch {
-    return String(value || '');
-  }
-}
-
-/**
- * Fetch worksheet names for a public Google Spreadsheet via htmlview.
- *
- * @param {string} spreadsheetId
- * @returns {Promise<{ ok: boolean, names?: string[], reason?: string }>}
- */
-async function fetchWorksheetNames(spreadsheetId) {
-  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
-  const response = await axios.get(url, {
-    responseType: 'text',
-    timeout: getReadSheetFetchTimeoutMs(),
-    validateStatus: () => true,
-  });
-  if (response.status >= 400) {
-    return { ok: false, reason: 'unreadable', status: response.status };
-  }
-  const html = String(response.data || '');
-  const names = [];
-  const regex = /items\.push\(\{name:\s*"((?:\\.|[^"\\])*)"/g;
-  let match;
-  while ((match = regex.exec(html))) {
-    const decoded = decodeJsQuotedString(match[1]).trim();
-    if (decoded) names.push(decoded);
-  }
-  return { ok: true, names: Array.from(new Set(names)) };
 }
 
 /**
@@ -117,21 +71,26 @@ class GoogleSheetsController {
       }
 
       const headerRowNum = Math.max(1, toInt(headerRow, 1));
-      const validation = await validateSheetNameExists(spreadsheetId, normalizedSheetName);
-      if (!validation.ok) {
-        if (validation.reason === 'not_found') {
-          const availableMsg = validation.names && validation.names.length
-            ? ` File này có: ${validation.names.join(', ')}`
-            : '';
+
+      // Luôn lấy danh sách tab: vừa để kiểm tra sheetName người dùng gõ (nếu có), vừa để trả
+      // `worksheetNames` cho Builder tự điền ô Tên Sheet khi đang trống. Không đọc được tab
+      // KHÔNG chặn khi sheetName đang trống — gviz vẫn đọc được tab đầu qua CSV bình thường.
+      const worksheetRes = await fetchWorksheetNames(spreadsheetId);
+      const worksheetNames = worksheetRes.ok ? (worksheetRes.names || []) : [];
+
+      if (normalizedSheetName) {
+        if (!worksheetRes.ok || !worksheetNames.length) {
           return res.status(400).json({
             success: false,
-            message: `Không tìm thấy tab "${normalizedSheetName}" trong file. ${availableMsg}`.trim(),
+            message: 'Không đọc được file. Kiểm tra lại link, và đảm bảo đã chia sẻ quyền xem cho "Bất kỳ ai có đường liên kết".',
           });
         }
-        return res.status(400).json({
-          success: false,
-          message: 'Không đọc được file. Kiểm tra lại link, và đảm bảo đã chia sẻ quyền xem cho "Bất kỳ ai có đường liên kết".',
-        });
+        if (!worksheetNames.includes(normalizedSheetName)) {
+          return res.status(400).json({
+            success: false,
+            message: `Không tìm thấy tab "${normalizedSheetName}" trong file. File này có: ${worksheetNames.join(', ')}`,
+          });
+        }
       }
       const csvUrl = buildCsvUrl(spreadsheetId, normalizedSheetName);
       const response = await axios.get(csvUrl, {
@@ -174,6 +133,7 @@ class GoogleSheetsController {
           success: true,
           data: {
             columns: [],
+            worksheetNames,
             meta: {
               spreadsheetId,
               sheetName: normalizedSheetName,
@@ -194,6 +154,7 @@ class GoogleSheetsController {
         success: true,
         data: {
           columns,
+          worksheetNames,
           meta: {
             spreadsheetId,
             sheetName: normalizedSheetName,

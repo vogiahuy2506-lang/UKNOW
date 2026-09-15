@@ -9,6 +9,17 @@ const getSessionWizardState = jest.fn();
 const updateWizardStateSections = jest.fn();
 const tryHandleHelpChat = jest.fn(async () => null);
 
+// createCampaignFromDraft: mock các service dùng bởi luồng tạo chiến dịch để test không đụng DB.
+const prepareScript = jest.fn();
+const autoCreateEmailTemplates = jest.fn(async () => {});
+const autoCreateZaloTemplates = jest.fn(async () => {});
+const cleanupAutoCreatedTemplates = jest.fn(async () => {});
+const assertResourceVersionsCurrent = jest.fn(async () => {});
+const buildConfirmationView = jest.fn(async () => ({ readyToCreate: true }));
+const validateNodeConfig = jest.fn(() => ({ valid: true, errors: [] }));
+const campaignControllerCreate = jest.fn();
+const fillReadSheetFirstTabNames = jest.fn(async () => {});
+
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
   default: {
     processSmartChat,
@@ -17,7 +28,28 @@ jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
 }));
 
 jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({ default: {} }));
-jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => ({
+  default: {
+    prepareScript,
+    autoCreateEmailTemplates,
+    autoCreateZaloTemplates,
+    cleanupAutoCreatedTemplates,
+  },
+}));
+jest.unstable_mockModule('../../services/ai/campaignConfirmation.service.js', () => ({
+  default: {
+    assertResourceVersionsCurrent,
+    buildConfirmationView,
+  },
+}));
+jest.unstable_mockModule('../../services/campaign/campaignNodeRegistry.service.js', () => ({
+  default: {
+    validateNodeConfig,
+  },
+}));
+jest.unstable_mockModule('../../services/campaign/readSheetAutoName.service.js', () => ({
+  fillReadSheetFirstTabNames,
+}));
 jest.unstable_mockModule('../../services/ai/businessProfile.service.js', () => ({
   default: {},
   serializeProductList: jest.fn(() => ''),
@@ -46,7 +78,11 @@ jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => (
 jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({
   chargeAiCredit,
 }));
-jest.unstable_mockModule('../campaign.controller.js', () => ({ default: {} }));
+jest.unstable_mockModule('../campaign.controller.js', () => ({
+  default: {
+    create: campaignControllerCreate,
+  },
+}));
 jest.unstable_mockModule('../../services/campaign/campaignCrud.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   createSession,
@@ -80,6 +116,23 @@ describe('ai.controller', () => {
     getSessionWizardState.mockResolvedValue(null);
     updateWizardStateSections.mockReset();
     updateWizardStateSections.mockResolvedValue(undefined);
+
+    prepareScript.mockReset();
+    autoCreateEmailTemplates.mockReset();
+    autoCreateEmailTemplates.mockResolvedValue(undefined);
+    autoCreateZaloTemplates.mockReset();
+    autoCreateZaloTemplates.mockResolvedValue(undefined);
+    cleanupAutoCreatedTemplates.mockReset();
+    cleanupAutoCreatedTemplates.mockResolvedValue(undefined);
+    assertResourceVersionsCurrent.mockReset();
+    assertResourceVersionsCurrent.mockResolvedValue(undefined);
+    buildConfirmationView.mockReset();
+    buildConfirmationView.mockResolvedValue({ readyToCreate: true });
+    validateNodeConfig.mockReset();
+    validateNodeConfig.mockReturnValue({ valid: true, errors: [] });
+    campaignControllerCreate.mockReset();
+    fillReadSheetFirstTabNames.mockReset();
+    fillReadSheetFirstTabNames.mockResolvedValue(undefined);
   });
 
   it('does not charge AI credit for wizard short-circuit chat responses', async () => {
@@ -395,5 +448,63 @@ describe('ai.controller', () => {
         expect.objectContaining({ planSlotKey: null })
       );
     }
+  });
+
+  /**
+   * PLAN_TU_NHAN_TEN_SHEET_DAU_TIEN_2026-09-15, Việc 2: mọi chiến dịch AI tạo đi qua
+   * createCampaignFromDraft. Node read_sheet có sheetName trống phải được điền tên tab đầu
+   * tiên (fillReadSheetFirstTabNames) SAU prepareScript, TRƯỚC vòng validateNodeConfig — để
+   * node đã điền tên đi vào bước tạo, không phải node còn trống.
+   */
+  it('createCampaignFromDraft: node read_sheet sheetName trống -> tự điền tên tab trước khi validate và trước khi gửi vào bước tạo', async () => {
+    const readSheetNode = {
+      id: 'n1',
+      nodeSubtype: 'read_sheet',
+      config: { sheetUrl: 'https://docs.google.com/spreadsheets/d/abc123/edit', sheetName: '' },
+    };
+
+    prepareScript.mockResolvedValue({
+      campaignName: 'Chiến dịch test',
+      description: '',
+      campaignType: 'zalo_personal',
+      nodes: [readSheetNode],
+      connections: [],
+    });
+
+    // fillReadSheetFirstTabNames sửa TRỰC TIẾP trên object node (đúng hành vi thật của service —
+    // xem readSheetAutoName.service.spec.js); mock giả lập lại đúng effect đó.
+    fillReadSheetFirstTabNames.mockImplementation(async (nodes) => {
+      for (const node of nodes) {
+        if (node.nodeSubtype === 'read_sheet' && !node.config.sheetName) {
+          node.config.sheetName = 'Khách tháng 9';
+          node.config.sheetNameSource = 'auto';
+        }
+      }
+    });
+
+    campaignControllerCreate.mockImplementation(async (req, res) => {
+      res.json({ success: true, data: { id: 999 } });
+    });
+
+    const req = {
+      body: { script: { nodes: [readSheetNode], connections: [] } },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.createCampaignFromDraft(req, res);
+
+    expect(fillReadSheetFirstTabNames).toHaveBeenCalledTimes(1);
+    // Vòng validate chạy SAU khi đã điền — thấy node với sheetName đã có, không phải rỗng.
+    expect(validateNodeConfig).toHaveBeenCalledWith(
+      'read_sheet',
+      expect.objectContaining({ sheetName: 'Khách tháng 9', sheetNameSource: 'auto' })
+    );
+    // Node gửi vào bước tạo campaign thật (campaignController.create) cũng đã có tên điền sẵn.
+    expect(campaignControllerCreate).toHaveBeenCalledTimes(1);
+    const [createReqArg] = campaignControllerCreate.mock.calls[0];
+    expect(createReqArg.body.nodes[0].config.sheetName).toBe('Khách tháng 9');
+    expect(createReqArg.body.nodes[0].config.sheetNameSource).toBe('auto');
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, campaignId: 999 }));
   });
 });
