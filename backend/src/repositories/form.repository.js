@@ -158,6 +158,7 @@ class FormRepository {
     fields = [],
     settings = {},
     bookingConfig = null,
+    paymentConfig = null,
   }) {
     const result = await db.query(
       `INSERT INTO forms (
@@ -169,8 +170,9 @@ class FormRepository {
          fields,
          settings,
          booking_config,
+         payment_config,
          is_published
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
        RETURNING
          id,
          workspace_owner_id AS "workspaceOwnerId",
@@ -196,6 +198,7 @@ class FormRepository {
         JSON.stringify(fields),
         JSON.stringify(settings),
         bookingConfig ? JSON.stringify(bookingConfig) : null,
+        paymentConfig ? JSON.stringify(paymentConfig) : null,
       ]
     );
     return result.rows[0];
@@ -211,7 +214,7 @@ class FormRepository {
    * @param {object} params
    * @returns {Promise<object|null>}
    */
-  async updateForm(id, workspaceOwnerId, { title, description, fields, settings, bookingConfig }) {
+  async updateForm(id, workspaceOwnerId, { title, description, fields, settings, bookingConfig, paymentConfig }) {
     const fieldsToSet = [];
     const values = [id, workspaceOwnerId];
     let idx = 3;
@@ -239,6 +242,11 @@ class FormRepository {
     if (bookingConfig !== undefined) {
       fieldsToSet.push(`booking_config = $${idx}`);
       values.push(bookingConfig ? JSON.stringify(bookingConfig) : null);
+      idx += 1;
+    }
+    if (paymentConfig !== undefined) {
+      fieldsToSet.push(`payment_config = $${idx}`);
+      values.push(paymentConfig ? JSON.stringify(paymentConfig) : null);
       idx += 1;
     }
 
@@ -341,6 +349,10 @@ class FormRepository {
     status = 'submitted',
     appointmentAt = null,
     submitterIpHash = null,
+    paymentCode = null,
+    paymentAmount = null,
+    paymentSnapshot = null,
+    holdExpiresAt = null,
   }, queryable = db) {
     const result = await queryable.query(
       `INSERT INTO form_submissions (
@@ -354,8 +366,12 @@ class FormRepository {
          marketing_consent,
          status,
          appointment_at,
-         submitter_ip_hash
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         submitter_ip_hash,
+         payment_code,
+         payment_amount,
+         payment_snapshot,
+         hold_expires_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING
          id,
          form_id AS "formId",
@@ -369,6 +385,10 @@ class FormRepository {
          status,
          appointment_at AS "appointmentAt",
          submitter_ip_hash AS "submitterIpHash",
+         payment_code AS "paymentCode",
+         payment_amount AS "paymentAmount",
+         payment_snapshot AS "paymentSnapshot",
+         hold_expires_at AS "holdExpiresAt",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -383,6 +403,10 @@ class FormRepository {
         status,
         appointmentAt,
         submitterIpHash,
+        paymentCode,
+        paymentAmount,
+        paymentSnapshot ? JSON.stringify(paymentSnapshot) : null,
+        holdExpiresAt,
       ]
     );
     return result.rows[0];
@@ -421,6 +445,53 @@ class FormRepository {
       [formId, appointmentAtIso]
     );
     return result.rows[0]?.occupied || 0;
+  }
+
+  /**
+   * Đếm số chỗ đang bị chiếm cho MỘT khung giờ, LOẠI TRỪ chính một bài nộp (§4.3, dùng khi chủ
+   * form xác nhận "Đã nhận tiền" cho một lượt — phải đếm lại KHÔNG tính chính bài đang xác nhận,
+   * vì nếu hold của nó CHƯA hết hạn thì nó tự đếm là đang chiếm chỗ, sẽ luôn thấy "đủ chỗ" một
+   * cách vô nghĩa). Dùng trong giao dịch — gọi SAU acquireFormSlotLock, bằng chính `client` đó.
+   *
+   * @param {number} formId
+   * @param {string} appointmentAtIso
+   * @param {number} excludeSubmissionId
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   * @returns {Promise<number>}
+   */
+  async countOccupiedForAppointmentExcluding(formId, appointmentAtIso, excludeSubmissionId, queryable = db) {
+    const result = await queryable.query(
+      `SELECT COUNT(*)::int AS occupied
+       FROM form_submissions
+       WHERE form_id = $1 AND appointment_at = $2 AND id <> $3 AND ${occupiedSlotConditionSql()}`,
+      [formId, appointmentAtIso, excludeSubmissionId]
+    );
+    return result.rows[0]?.occupied || 0;
+  }
+
+  /**
+   * Đếm số lượt ĐANG chờ thanh toán còn hạn (§4.3 nhánh pending_payment) của CÙNG một
+   * `submitter_ip_hash` trên MỘT form — chốt chống giữ chỗ hàng loạt (PR-3a mục 4, tối đa 3).
+   * `submitterIpHash` rỗng/null thì KHÔNG đếm được gì (0) — không chặn nhầm khi không tính được
+   * IP (`req.ip` rỗng) thay vì chặn oan mọi người.
+   *
+   * @param {number} formId
+   * @param {string} submitterIpHash
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   * @returns {Promise<number>}
+   */
+  async countPendingHoldsForIpAndForm(formId, submitterIpHash, queryable = db) {
+    if (!submitterIpHash) return 0;
+    const result = await queryable.query(
+      `SELECT COUNT(*)::int AS n
+       FROM form_submissions
+       WHERE form_id = $1
+         AND submitter_ip_hash = $2
+         AND status = 'pending_payment'
+         AND hold_expires_at > NOW()`,
+      [formId, submitterIpHash]
+    );
+    return result.rows[0]?.n || 0;
   }
 
   /**
@@ -500,6 +571,73 @@ class FormRepository {
          appointment_at AS "appointmentAt",
          updated_at AS "updatedAt"`,
       params
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Xác nhận đã nhận tiền cho một bài nộp (PR-3a mục 5) — UPDATE NGUYÊN TỬ, điều kiện
+   * `status = 'pending_payment'` nằm NGAY TRONG câu lệnh: hai request xác nhận đồng thời cùng
+   * một bài, Postgres tự khoá theo dòng — request thứ hai chỉ thấy status đã đổi SAU khi request
+   * đầu commit nên 0 dòng khớp, trả `null` (cùng mẫu `updateSubmissionStatus`/PR-2a review 14/09).
+   * Với bài CÓ lịch hẹn, gọi hàm này SAU khi đã acquireFormSlotLock + đếm lại chỗ trong cùng
+   * giao dịch — khoá đó tự tuần tự hoá hai request xác nhận cùng khung giờ, nên không cần thêm gì
+   * ở đây cho ca đó.
+   *
+   * @param {number} submissionId
+   * @param {number} formId
+   * @param {number} workspaceOwnerId
+   * @param {number} confirmedByUserId
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   * @returns {Promise<object|null>}
+   */
+  async confirmSubmissionPayment(submissionId, formId, workspaceOwnerId, confirmedByUserId, queryable = db) {
+    const result = await queryable.query(
+      `UPDATE form_submissions
+       SET status = 'confirmed', paid_confirmed_at = NOW(), paid_confirmed_by = $4, updated_at = NOW()
+       WHERE id = $1 AND form_id = $2 AND workspace_owner_id = $3 AND status = 'pending_payment'
+       RETURNING
+         id,
+         form_id AS "formId",
+         workspace_owner_id AS "workspaceOwnerId",
+         status,
+         appointment_at AS "appointmentAt",
+         respondent_email AS "respondentEmail",
+         payment_code AS "paymentCode",
+         payment_amount AS "paymentAmount",
+         paid_confirmed_at AS "paidConfirmedAt",
+         paid_confirmed_by AS "paidConfirmedBy",
+         updated_at AS "updatedAt"`,
+      [submissionId, formId, workspaceOwnerId, confirmedByUserId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Tìm bài nộp theo `access_token`, ràng buộc đúng `form_id` (link trạng thái công khai chứa cả
+   * publicKey lẫn token trên URL — PR-3a mục 4: "token sai hoặc không thuộc form đó → 404", nên
+   * PHẢI kiểm form_id khớp chứ không chỉ token đúng, đề phòng token đoán/chép nhầm giữa hai form).
+   * KHÔNG trả respondent_name/email/phone — trang trạng thái là public, không hiện thông tin cá
+   * nhân người đặt.
+   *
+   * @param {string} accessToken
+   * @param {number} formId
+   * @returns {Promise<object|null>}
+   */
+  async findSubmissionByAccessTokenAndForm(accessToken, formId) {
+    const result = await db.query(
+      `SELECT
+         id,
+         form_id AS "formId",
+         status,
+         appointment_at AS "appointmentAt",
+         payment_amount AS "paymentAmount",
+         payment_snapshot AS "paymentSnapshot",
+         payment_code AS "paymentCode",
+         hold_expires_at AS "holdExpiresAt"
+       FROM form_submissions
+       WHERE access_token = $1 AND form_id = $2`,
+      [accessToken, formId]
     );
     return result.rows[0] || null;
   }
@@ -590,6 +728,10 @@ class FormRepository {
        FROM form_submissions s
        JOIN forms f ON f.id = s.form_id
        WHERE ${occupiedSlotConditionSql('s')}
+         -- PR-3a (Bổ sung 15/09): occupiedSlotConditionSql tính CẢ pending_payment còn hạn giữ
+         -- chỗ là "đang chiếm" (đúng cho §4.3 sức chứa) — nhưng thư NHẮC LỊCH không được gửi cho
+         -- lượt còn đang chờ chuyển khoản, chưa chắc sẽ diễn ra. Lọc thêm status.
+         AND s.status IN ('submitted', 'confirmed')
          AND s.appointment_at > NOW()
          AND s.appointment_at <= NOW() + INTERVAL '24 hours'
          AND s.reminder_sent_at IS NULL
@@ -761,6 +903,98 @@ class FormRepository {
       [formId, workspaceOwnerId]
     );
     return result.rows[0]?.total || 0;
+  }
+
+  // ─── Super admin (PR-3a mục 9) ────────────────────────────────────────────────────────
+
+  /**
+   * Danh sách form cho bảng super admin — tìm theo `public_key` hoặc email chủ, phân trang.
+   * `q` rỗng → trả tất cả (mới nhất trước).
+   *
+   * @param {{ q?: string, page?: number, pageSize?: number }} params
+   * @returns {Promise<{ forms: Array<object>, total: number, page: number, pageSize: number }>}
+   */
+  async adminListForms({ q = '', page = 1, pageSize = 20 } = {}) {
+    const parsedPage = Math.max(1, Number.parseInt(page, 10) || 1);
+    const parsedPageSize = Math.max(1, Math.min(100, Number.parseInt(pageSize, 10) || 20));
+    const offset = (parsedPage - 1) * parsedPageSize;
+    const term = String(q || '').trim();
+
+    const whereClause = term ? `WHERE f.public_key ILIKE $1 OR u.email ILIKE $1` : '';
+    const params = term ? [`%${term}%`] : [];
+
+    const countResult = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM forms f
+       JOIN users u ON u.id = f.workspace_owner_id
+       ${whereClause}`,
+      params
+    );
+    const total = countResult.rows[0]?.total || 0;
+
+    const rowsResult = await db.query(
+      `SELECT
+         f.id,
+         f.public_key AS "publicKey",
+         f.title,
+         f.is_published AS "isPublished",
+         f.admin_disabled_at AS "adminDisabledAt",
+         (f.payment_config IS NOT NULL) AS "hasPayment",
+         f.created_at AS "createdAt",
+         u.email AS "ownerEmail",
+         COUNT(s.id)::int AS "submissionCount"
+       FROM forms f
+       JOIN users u ON u.id = f.workspace_owner_id
+       LEFT JOIN form_submissions s ON s.form_id = f.id
+       ${whereClause}
+       GROUP BY f.id, u.email
+       ORDER BY f.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, parsedPageSize, offset]
+    );
+
+    return {
+      forms: rowsResult.rows,
+      total,
+      page: parsedPage,
+      pageSize: parsedPageSize,
+      totalPages: Math.ceil(total / parsedPageSize) || 1,
+    };
+  }
+
+  /**
+   * Tìm form theo id CHO SUPER ADMIN — không ràng buộc theo workspace_owner_id (khác
+   * `findFormByIdAndOwner`, dùng cho chủ form tự thao tác trên form của chính mình).
+   *
+   * @param {number} id
+   * @returns {Promise<object|null>}
+   */
+  async adminFindFormById(id) {
+    const result = await db.query(
+      `SELECT id, public_key AS "publicKey", title, admin_disabled_at AS "adminDisabledAt"
+       FROM forms
+       WHERE id = $1`,
+      [id]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Bật/tắt form (super admin) — set/clear `admin_disabled_at`.
+   *
+   * @param {number} id
+   * @param {boolean} disabled
+   * @returns {Promise<object|null>}
+   */
+  async adminSetFormDisabled(id, disabled) {
+    const result = await db.query(
+      `UPDATE forms
+       SET admin_disabled_at = ${disabled ? 'NOW()' : 'NULL'}, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, public_key AS "publicKey", title, admin_disabled_at AS "adminDisabledAt"`,
+      [id]
+    );
+    return result.rows[0] || null;
   }
 }
 

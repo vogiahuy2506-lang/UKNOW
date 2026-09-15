@@ -1,4 +1,5 @@
 import formService from '../services/form.service.js';
+import { clientIpKey } from '../middleware/rateLimiter.middleware.js';
 
 class FormPublicController {
   async getPublic(req, res) {
@@ -43,14 +44,17 @@ class FormPublicController {
   async submitPublic(req, res) {
     try {
       const { publicKey } = req.params;
-      const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
-      const result = await formService.submitPublicForm(publicKey, req.body || {}, clientIp);
+      // clientIpKey — CÙNG cách lấy IP với publicFormSubmissionLimiter (rateLimiter.middleware.js)
+      // để "cùng IP" ở chốt chống giữ chỗ hàng loạt (PR-3a) khớp đúng cách limiter nhóm IP.
+      const ipKey = clientIpKey(req);
+      const result = await formService.submitPublicForm(publicKey, req.body || {}, ipKey);
 
       return res.status(201).json({
         success: true,
         message: 'Nộp biểu mẫu thành công',
         data: {
           accessToken: result.accessToken,
+          payment: result.payment || null,
         },
       });
     } catch (error) {
@@ -59,6 +63,29 @@ class FormPublicController {
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể nộp biểu mẫu',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
+   * GET /api/public/forms/:publicKey/submissions/:accessToken — trang trạng thái công khai
+   * cho người đặt (PR-3a mục 4). Không gắn limiter riêng — cùng mức với getPublic/getSlots.
+   */
+  async getSubmissionStatus(req, res) {
+    try {
+      const { publicKey, accessToken } = req.params;
+      const result = await formService.getSubmissionStatus(publicKey, accessToken);
+      return res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.getSubmissionStatus]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải trạng thái bài nộp',
         code: error.code || 'INTERNAL_ERROR',
       });
     }

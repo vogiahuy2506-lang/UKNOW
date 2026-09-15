@@ -12,8 +12,14 @@ function isInboxStreamPath(req) {
   return /\/ai\/chatbot\/inbox\/stream(?:\?|$)/.test(url);
 }
 
-/** express-rate-limit v8: ipKeyGenerator(ip: string), NOT the request object. */
-function clientIpKey(req) {
+/**
+ * express-rate-limit v8: ipKeyGenerator(ip: string), NOT the request object.
+ * Export — PR-3a (form.service.js/formIpHash.util.js) băm CHÍNH giá trị này cho
+ * `submitter_ip_hash`, để "cùng IP" ở chốt chống giữ chỗ hàng loạt khớp đúng cách limiter
+ * `publicFormSubmissionLimiter` nhóm IP (đặc biệt IPv6 theo khối) — hai nơi tính IP khác nhau
+ * sẽ lệch bucket, một bên chặn được còn bên kia thì không.
+ */
+export function clientIpKey(req) {
   const ip = req.ip || req.socket?.remoteAddress || '0.0.0.0';
   return ipKeyGenerator(ip);
 }

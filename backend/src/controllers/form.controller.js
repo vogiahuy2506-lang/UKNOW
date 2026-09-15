@@ -1,5 +1,30 @@
 import formService from '../services/form.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+
+/**
+ * PR-3a "Bổ sung 15/09": chỉ CHỦ workspace (không phải nhân viên) được đổi paymentConfig —
+ * nhân viên đi qua requirePhone bằng SĐT của CHÍNH họ (route /api/forms đã gắn requirePhone
+ * cho cả router), không phải một chốt đủ để tin tưởng khi tiền chuyển vào tài khoản do nhân
+ * viên tự khai. Kiểm NGAY TRONG controller — trước khi payload.paymentConfig chạm tới service.
+ *
+ * @param {object} req
+ * @param {object} res
+ * @param {{workspaceOwnerId: number, contextType: string}} workspaceContext
+ * @returns {boolean} true nếu đã trả response 403 (caller phải return ngay)
+ */
+function rejectPaymentConfigFromEmployee(req, res, workspaceContext) {
+  if (workspaceContext.contextType !== 'self' && Object.prototype.hasOwnProperty.call(req.body || {}, 'paymentConfig')) {
+    res.status(403).json({
+      success: false,
+      message: 'Chỉ chủ tài khoản mới được thay đổi cấu hình thanh toán của biểu mẫu',
+      code: 'PAYMENT_CONFIG_OWNER_ONLY',
+    });
+    return true;
+  }
+  return false;
+}
 
 class FormController {
   async list(req, res) {
@@ -52,7 +77,9 @@ class FormController {
   async create(req, res) {
     try {
       const workspaceContext = getWorkspaceContext(req.user);
-      const { title, description, fields, settings, bookingConfig } = req.body || {};
+      if (rejectPaymentConfigFromEmployee(req, res, workspaceContext)) return;
+
+      const { title, description, fields, settings, bookingConfig, paymentConfig } = req.body || {};
 
       const form = await formService.createForm({
         workspaceOwnerId: workspaceContext.workspaceOwnerId,
@@ -62,7 +89,22 @@ class FormController {
         fields,
         settings,
         bookingConfig,
+        paymentConfig,
       });
+
+      if (paymentConfig !== undefined) {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.FORM_PAYMENT_CONFIG_UPDATED,
+          AUDIT_ENTITY_TYPES.FORM,
+          form.id,
+          {
+            bankBin: form.paymentConfig?.bankBin || null,
+            accountNumberLast4: form.paymentConfig?.accountNumber ? form.paymentConfig.accountNumber.slice(-4) : null,
+            enabled: Boolean(form.paymentConfig),
+          }
+        );
+      }
 
       return res.status(201).json({
         success: true,
@@ -91,7 +133,24 @@ class FormController {
         });
       }
 
+      if (rejectPaymentConfigFromEmployee(req, res, workspaceContext)) return;
+
       const form = await formService.updateForm(id, workspaceContext.workspaceOwnerId, req.body || {});
+
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, 'paymentConfig')) {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.FORM_PAYMENT_CONFIG_UPDATED,
+          AUDIT_ENTITY_TYPES.FORM,
+          form.id,
+          {
+            bankBin: form.paymentConfig?.bankBin || null,
+            accountNumberLast4: form.paymentConfig?.accountNumber ? form.paymentConfig.accountNumber.slice(-4) : null,
+            enabled: Boolean(form.paymentConfig),
+          }
+        );
+      }
+
       return res.json({
         success: true,
         data: form,
@@ -230,6 +289,44 @@ class FormController {
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể huỷ bài nộp',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
+   * POST /api/forms/:id/submissions/:submissionId/confirm-payment — chủ form (hoặc nhân viên có
+   * quyền `forms`) xác nhận đã nhận tiền chuyển khoản (PR-3a mục 5).
+   */
+  async confirmPayment(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const id = Number.parseInt(req.params.id, 10);
+      const submissionId = Number.parseInt(req.params.submissionId, 10);
+      if (!Number.isFinite(id) || !Number.isFinite(submissionId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID không hợp lệ',
+          code: 'INVALID_ID',
+        });
+      }
+
+      const submission = await formService.confirmPayment(
+        id,
+        submissionId,
+        workspaceContext.workspaceOwnerId,
+        workspaceContext.actorUserId
+      );
+      return res.json({
+        success: true,
+        data: submission,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.confirmPayment]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể xác nhận thanh toán',
         code: error.code || 'INTERNAL_ERROR',
       });
     }

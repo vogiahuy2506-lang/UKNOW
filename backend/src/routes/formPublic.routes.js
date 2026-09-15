@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.get('/:publicKey', formPublicController.getPublic.bind(formPublicController));
 router.get('/:publicKey/slots', formPublicController.getSlots.bind(formPublicController));
+router.get('/:publicKey/submissions/:accessToken', formPublicController.getSubmissionStatus.bind(formPublicController));
 router.post(
   '/:publicKey/submissions',
   publicFormSubmissionLimiter,

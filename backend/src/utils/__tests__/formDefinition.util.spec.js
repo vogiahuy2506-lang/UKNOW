@@ -3,6 +3,7 @@ import {
   normalizeFormFields,
   normalizeFormSettings,
   normalizeBookingConfig,
+  normalizePaymentConfig,
   ALLOWED_FIELD_TYPES,
   ALLOWED_ROLES,
   MAX_FIELDS,
@@ -293,5 +294,81 @@ describe('normalizeBookingConfig', () => {
       minNoticeMinutes: 30,
       closedDates: ['2026-12-25'],
     });
+  });
+});
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-3a mục 1.
+ */
+describe('normalizePaymentConfig', () => {
+  const validRaw = {
+    enabled: true,
+    method: 'bank',
+    amount: 150000,
+    bankBin: '970422',
+    accountNumber: '0123456789',
+    accountName: 'nguyễn văn a',
+    holdMinutes: 45,
+  };
+
+  it('null/undefined/{enabled:false} -> null (tắt thu tiền)', () => {
+    expect(normalizePaymentConfig(null)).toBeNull();
+    expect(normalizePaymentConfig(undefined)).toBeNull();
+    expect(normalizePaymentConfig({ enabled: false })).toBeNull();
+  });
+
+  it('cấu hình hợp lệ -> chuẩn hoá đúng, accountName bỏ dấu + IN HOA + gộp khoảng trắng', () => {
+    const config = normalizePaymentConfig(validRaw);
+    expect(config).toEqual({
+      enabled: true,
+      method: 'bank',
+      amount: 150000,
+      bankBin: '970422',
+      accountNumber: '0123456789',
+      accountName: 'NGUYEN VAN A',
+      holdMinutes: 45,
+    });
+  });
+
+  it('accountName "  Trịnh   Đức   Phúc  " -> "TRINH DUC PHUC" (Đ/đ không tự decompose qua NFD)', () => {
+    const config = normalizePaymentConfig({ ...validRaw, accountName: '  Trịnh   Đức   Phúc  ' });
+    expect(config.accountName).toBe('TRINH DUC PHUC');
+  });
+
+  it('không truyền holdMinutes -> mặc định 30', () => {
+    const { holdMinutes, ...rest } = validRaw;
+    const config = normalizePaymentConfig(rest);
+    expect(config.holdMinutes).toBe(30);
+  });
+
+  it('method khác "bank" (vd momo_image) -> 400 "chưa được hỗ trợ"', () => {
+    expect(() => normalizePaymentConfig({ ...validRaw, method: 'momo_image' }))
+      .toThrow(/chưa được hỗ trợ/i);
+  });
+
+  it('amount ngoài khoảng 1.000-100.000.000 -> lỗi', () => {
+    expect(() => normalizePaymentConfig({ ...validRaw, amount: 999 })).toThrow(/Số tiền/);
+    expect(() => normalizePaymentConfig({ ...validRaw, amount: 100000001 })).toThrow(/Số tiền/);
+    expect(() => normalizePaymentConfig({ ...validRaw, amount: 1500.5 })).toThrow(/Số tiền/);
+  });
+
+  it('bankBin không thuộc danh sách BIN backend -> lỗi', () => {
+    expect(() => normalizePaymentConfig({ ...validRaw, bankBin: '999999' })).toThrow(/Ngân hàng/);
+  });
+
+  it('accountNumber không đúng 6-19 chữ số -> lỗi', () => {
+    expect(() => normalizePaymentConfig({ ...validRaw, accountNumber: '12345' })).toThrow(/Số tài khoản/);
+    expect(() => normalizePaymentConfig({ ...validRaw, accountNumber: '12345678901234567890' })).toThrow(/Số tài khoản/);
+    expect(() => normalizePaymentConfig({ ...validRaw, accountNumber: '123abc789' })).toThrow(/Số tài khoản/);
+  });
+
+  it('accountName rỗng sau khi chuẩn hoá -> lỗi', () => {
+    expect(() => normalizePaymentConfig({ ...validRaw, accountName: '' })).toThrow(/Tên chủ tài khoản/);
+    expect(() => normalizePaymentConfig({ ...validRaw, accountName: '!!!' })).toThrow(/Tên chủ tài khoản/);
+  });
+
+  it('holdMinutes ngoài khoảng 10-120 -> lỗi', () => {
+    expect(() => normalizePaymentConfig({ ...validRaw, holdMinutes: 5 })).toThrow(/holdMinutes/);
+    expect(() => normalizePaymentConfig({ ...validRaw, holdMinutes: 121 })).toThrow(/holdMinutes/);
   });
 });

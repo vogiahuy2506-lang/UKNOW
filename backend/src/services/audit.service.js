@@ -158,6 +158,13 @@ export const AUDIT_ACTIONS = {
   // System — einvoices
   EINVOICE_RETRIED: 'EINVOICE_RETRIED',
   EINVOICE_EMAIL_RESENT: 'EINVOICE_EMAIL_RESENT',
+
+  // Workspace — forms (PR-3a)
+  FORM_PAYMENT_CONFIG_UPDATED: 'FORM_PAYMENT_CONFIG_UPDATED',
+
+  // System — forms (PR-3a, super admin)
+  FORM_DISABLED: 'FORM_DISABLED',
+  FORM_ENABLED: 'FORM_ENABLED',
 };
 
 export const AUDIT_ENTITY_TYPES = {
@@ -183,6 +190,7 @@ export const AUDIT_ENTITY_TYPES = {
   MEDIA_OBJECT: 'media_object',
   AI_SESSION: 'ai_session',
   EINVOICE: 'einvoice',
+  FORM: 'form',
 };
 
 /**

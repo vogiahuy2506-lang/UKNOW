@@ -8,6 +8,7 @@ import {
   normalizeFormFields,
   normalizeFormSettings,
   normalizeBookingConfig,
+  normalizePaymentConfig,
   MAX_TITLE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
 } from '../utils/formDefinition.util.js';
@@ -19,6 +20,9 @@ import {
   listSlotCandidates,
   formatAppointmentVn,
 } from '../utils/formBooking.util.js';
+import { buildVietQrString, generatePaymentCode } from '../utils/vietQr.util.js';
+import { hashSubmitterIp } from '../utils/formIpHash.util.js';
+import { VIETQR_BANKS } from '../constants/vietQrBanks.js';
 import { sendSystemEmail, SENDER_NAME } from '../utils/systemEmail.util.js';
 import { logError } from '../utils/logger.util.js';
 import { escapeHtml } from '../utils/htmlEscape.util.js';
@@ -27,6 +31,11 @@ import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 
 const MAX_SLOTS_DAYS_PARAM = 31;
 const DEFAULT_SLOTS_DAYS_PARAM = 7;
+// PR-3a mục 4: "quá 3 lượt giữ chỗ đang chờ cho cùng IP + form thì trả 429".
+const MAX_PENDING_HOLDS_PER_IP_PER_FORM = 3;
+// payment_code trùng unique index uq_form_submissions_payment_code -> sinh lại, tối đa 5 lần.
+const MAX_PAYMENT_CODE_RETRIES = 5;
+const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5174').replace(/\/+$/, '');
 
 function createHttpError(message, statusCode = 400, code = 'BAD_REQUEST') {
   const err = new Error(message);
@@ -39,6 +48,49 @@ function isValidDateParam(dateStr) {
   if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const d = new Date(`${dateStr}T00:00:00.000Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === dateStr;
+}
+
+function isPaymentCodeUniqueViolation(error) {
+  return error?.code === '23505' && String(error?.constraint || '').includes('payment_code');
+}
+
+/**
+ * INSERT bài nộp, sinh lại `payment_code` khi đụng unique index
+ * `uq_form_submissions_payment_code` (PR-3a mục 4, tối đa `MAX_PAYMENT_CODE_RETRIES` lần).
+ *
+ * `inTransaction=true` (đường có đặt lịch, `queryable` là PoolClient đang BEGIN dở) dùng
+ * SAVEPOINT cho mỗi lần thử: một INSERT lỗi ràng buộc UNIQUE sẽ làm cả transaction "aborted"
+ * (mọi câu lệnh sau đó bị Postgres từ chối tới khi ROLLBACK) trừ khi có savepoint để lùi về —
+ * không có bước này thì lần thử thứ 2 trở đi sẽ luôn lỗi "current transaction is aborted".
+ * `inTransaction=false` (không đặt lịch, `queryable` là pool `db`) mỗi lần gọi tự auto-commit
+ * độc lập nên không cần savepoint.
+ *
+ * @param {object} baseParams Tham số cho `formRepository.createSubmission`, CHƯA có paymentCode
+ * @param {import('pg').PoolClient|typeof db} queryable
+ * @param {boolean} needsPaymentCode
+ * @param {boolean} inTransaction
+ * @returns {Promise<object>}
+ */
+async function insertSubmissionWithPaymentCodeRetry(baseParams, queryable, needsPaymentCode, inTransaction) {
+  if (!needsPaymentCode) {
+    return formRepository.createSubmission(baseParams, queryable);
+  }
+
+  let lastError;
+  for (let attempt = 0; attempt < MAX_PAYMENT_CODE_RETRIES; attempt += 1) {
+    const paymentCode = generatePaymentCode();
+    if (inTransaction) await queryable.query('SAVEPOINT payment_code_attempt');
+    try {
+      const submission = await formRepository.createSubmission({ ...baseParams, paymentCode }, queryable);
+      if (inTransaction) await queryable.query('RELEASE SAVEPOINT payment_code_attempt');
+      return submission;
+    } catch (error) {
+      if (inTransaction) await queryable.query('ROLLBACK TO SAVEPOINT payment_code_attempt');
+      if (!isPaymentCodeUniqueViolation(error)) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 class FormService {
@@ -102,7 +154,7 @@ class FormService {
    * @param {object} params
    * @returns {Promise<object>}
    */
-  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, bookingConfig }) {
+  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, bookingConfig, paymentConfig }) {
     const trimmedTitle = String(title || '').trim();
     if (!trimmedTitle) {
       throw createHttpError('Tiêu đề biểu mẫu không được để trống', 400, 'INVALID_FORM_TITLE');
@@ -122,6 +174,7 @@ class FormService {
     const normalizedFields = normalizeFormFields(fields || []);
     const safeSettings = normalizeFormSettings(settings);
     const safeBookingConfig = normalizeBookingConfig(bookingConfig);
+    const safePaymentConfig = normalizePaymentConfig(paymentConfig);
 
     // 12 bytes ngẫu nhiên -> 16 ký tự base64url
     const publicKey = crypto.randomBytes(12).toString('base64url');
@@ -135,13 +188,15 @@ class FormService {
       fields: normalizedFields,
       settings: safeSettings,
       bookingConfig: safeBookingConfig,
+      paymentConfig: safePaymentConfig,
     });
   }
 
   /**
    * Cập nhật biểu mẫu.
-   * Nhận title, description, fields, settings, bookingConfig (PR-2a).
-   * Vẫn bỏ qua hoàn toàn payment_config, theme, admin_disabled_at (PR-3/PR-4).
+   * Nhận title, description, fields, settings, bookingConfig (PR-2a), paymentConfig (PR-3a —
+   * chốt "chỉ chủ workspace" nằm ở form.controller.js, TRƯỚC khi payload.paymentConfig tới đây).
+   * Vẫn bỏ qua hoàn toàn theme, admin_disabled_at (PR-4/PR-3a super admin).
    *
    * @param {number} id
    * @param {number} workspaceOwnerId
@@ -189,6 +244,10 @@ class FormService {
 
     if (payload.bookingConfig !== undefined) {
       updateData.bookingConfig = normalizeBookingConfig(payload.bookingConfig);
+    }
+
+    if (payload.paymentConfig !== undefined) {
+      updateData.paymentConfig = normalizePaymentConfig(payload.paymentConfig);
     }
 
     return formRepository.updateForm(id, workspaceOwnerId, updateData);
@@ -279,7 +338,9 @@ class FormService {
       formId,
       workspaceOwnerId,
       'cancelled',
-      ['submitted', 'confirmed']
+      // PR-3a "Bổ sung 15/09": cho huỷ thêm từ pending_payment (chủ muốn nhả chỗ ngay, không đợi
+      // hold_expires_at trôi qua).
+      ['submitted', 'confirmed', 'pending_payment']
     );
     if (updated) {
       return updated;
@@ -295,6 +356,113 @@ class FormService {
       throw createHttpError('Bài nộp này đã bị huỷ trước đó', 409, 'SUBMISSION_ALREADY_CANCELLED');
     }
     throw createHttpError('Không thể huỷ bài nộp ở trạng thái này', 409, 'SUBMISSION_CANCEL_NOT_ALLOWED');
+  }
+
+  /**
+   * Chủ form xác nhận đã nhận tiền cho một bài nộp `pending_payment` (PR-3a mục 5).
+   *
+   * Bài có `appointment_at` (đặt lịch + thu tiền): BEGIN → khoá tư vấn theo khung giờ (§4.3,
+   * CHÍNH khoá đã dùng khi tạo bài nộp) → đếm lại chỗ đang chiếm KHÔNG TÍNH chính bài này → hết
+   * chỗ (ai đó khác đã lấy trong lúc chờ) → 409 FORM_SLOT_TAKEN, bài GIỮ NGUYÊN pending_payment;
+   * còn chỗ → UPDATE nguyên tử `WHERE status='pending_payment'`.
+   * Bài KHÔNG có lịch hẹn: không cần khoá — một UPDATE nguyên tử `WHERE status='pending_payment'`
+   * đã đủ atomic ở mức Postgres row-lock cho ca "xác nhận 2 lần đồng thời" (request thứ hai chỉ
+   * thấy status mới SAU khi request đầu commit).
+   *
+   * @param {number} formId
+   * @param {number} submissionId
+   * @param {number} workspaceOwnerId
+   * @param {number} confirmedByUserId
+   * @returns {Promise<object>}
+   */
+  async confirmPayment(formId, submissionId, workspaceOwnerId, confirmedByUserId) {
+    const form = await formRepository.findFormByIdAndOwner(formId, workspaceOwnerId);
+    if (!form) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+
+    const existing = await formRepository.findSubmissionByIdAndForm(submissionId, formId, workspaceOwnerId);
+    if (!existing) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+    if (existing.status !== 'pending_payment') {
+      throw createHttpError('Bài nộp này không ở trạng thái chờ thanh toán', 409, 'SUBMISSION_NOT_PENDING_PAYMENT');
+    }
+
+    if (existing.appointmentAt) {
+      const appointmentAtIso = new Date(existing.appointmentAt).toISOString();
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        await formRepository.acquireFormSlotLock(client, formId, appointmentAtIso);
+        const bookingConfig = form.bookingConfig;
+        const capacity = bookingConfig?.slotCapacity ?? null;
+        if (capacity !== null) {
+          const occupied = await formRepository.countOccupiedForAppointmentExcluding(
+            formId,
+            appointmentAtIso,
+            submissionId,
+            client
+          );
+          if (occupied >= capacity) {
+            throw createHttpError('Khung giờ này đã hết chỗ, không thể xác nhận', 409, 'FORM_SLOT_TAKEN');
+          }
+        }
+        const confirmed = await formRepository.confirmSubmissionPayment(
+          submissionId,
+          formId,
+          workspaceOwnerId,
+          confirmedByUserId,
+          client
+        );
+        if (!confirmed) {
+          // Đã đổi trạng thái bởi request khác giữa lúc pre-check và UPDATE (đồng thời).
+          throw createHttpError('Bài nộp này không còn ở trạng thái chờ thanh toán', 409, 'SUBMISSION_NOT_PENDING_PAYMENT');
+        }
+        await client.query('COMMIT');
+        this.notifyPaymentConfirmed(form, confirmed);
+        return confirmed;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    const confirmed = await formRepository.confirmSubmissionPayment(submissionId, formId, workspaceOwnerId, confirmedByUserId);
+    if (!confirmed) {
+      throw createHttpError('Bài nộp này không còn ở trạng thái chờ thanh toán', 409, 'SUBMISSION_NOT_PENDING_PAYMENT');
+    }
+    this.notifyPaymentConfirmed(form, confirmed);
+    return confirmed;
+  }
+
+  /**
+   * Thư "đã xác nhận thanh toán" cho người đặt (PR-3a mục 5) — fire-and-forget SAU KHI COMMIT,
+   * cùng trần thư/công tắc sendConfirmation với các thư khác của form.
+   *
+   * @param {object} form
+   * @param {object} confirmedSubmission
+   */
+  notifyPaymentConfirmed(form, confirmedSubmission) {
+    if (!confirmedSubmission.respondentEmail || !form.settings?.sendConfirmation) return;
+    const html = `
+      <h2>Đã xác nhận thanh toán</h2>
+      <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
+      ${confirmedSubmission.appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(new Date(confirmedSubmission.appointmentAt)))}</strong></p>` : ''}
+      <p>Mã giao dịch: <strong>${escapeHtml(confirmedSubmission.paymentCode || '')}</strong></p>
+    `;
+    void this.sendFormRespondentEmail({
+      formId: form.id,
+      submissionId: confirmedSubmission.id,
+      toEmail: confirmedSubmission.respondentEmail,
+      subject: `[${SENDER_NAME}] Đã xác nhận thanh toán - ${form.title}`,
+      html,
+      logLabel: 'thư xác nhận thanh toán',
+    }).catch((err) => {
+      logError(`[FormService] Gửi thư xác nhận thanh toán thất bại cho submission ${confirmedSubmission.id}: ${err.message}`);
+    });
   }
 
   /**
@@ -334,6 +502,11 @@ class FormService {
       },
       booking: form.bookingConfig?.enabled
         ? { enabled: true, daysAhead: form.bookingConfig.daysAhead }
+        : null,
+      // PR-3a mục "Public GET form thêm payment" — KHÔNG trả bankBin/accountNumber/accountName
+      // trước khi nộp bài (chỉ biết số tiền + có thu tiền hay không, để hiện UI form đúng).
+      payment: form.paymentConfig?.enabled
+        ? { enabled: true, amount: form.paymentConfig.amount, method: form.paymentConfig.method }
         : null,
     };
   }
@@ -404,12 +577,20 @@ class FormService {
    * thì 409 → COMMIT/ROLLBACK. Không đặt lịch thì giữ nguyên đường cũ (không giao dịch, không cần
    * khoá vì không có gì để tranh chấp).
    *
+   * Thu tiền (PR-3a) → status='pending_payment' bất kể có đặt lịch hay không (đặt lịch mà CHƯA
+   * trả tiền thì lịch chưa thật sự "chốt" — khác PR-2a lúc payment_config chưa tồn tại). Đếm lượt
+   * đang chờ thanh toán của CÙNG submitter_ip_hash+form: có đặt lịch thì đếm TRONG CÙNG giao dịch
+   * + khoá của luồng đặt lịch (Bổ sung 15/09, không mở khoá riêng); không đặt lịch thì đếm trước
+   * khi INSERT (không có gì để khoá).
+   *
    * @param {string} publicKey
    * @param {object} body
-   * @param {string} clientIp
-   * @returns {Promise<{ accessToken: string|null, isBotTrap?: boolean }>}
+   * @param {string} ipKey Giá trị IP đã chuẩn hoá theo `clientIpKey` (rateLimiter.middleware.js)
+   *   — KHÔNG phải `req.ip` thô, để "cùng IP" ở chốt chống giữ chỗ hàng loạt khớp đúng cách
+   *   limiter nhóm IP (đặc biệt IPv6 theo khối).
+   * @returns {Promise<{ accessToken: string|null, isBotTrap?: boolean, payment?: object|null }>}
    */
-  async submitPublicForm(publicKey, body = {}, clientIp = '') {
+  async submitPublicForm(publicKey, body = {}, ipKey = '') {
     // Honeypot: trường bẫy bot có giá trị thì trả thành công giả, không lưu
     const honeypot = body?._hp_website;
     if (honeypot && String(honeypot).trim().length > 0) {
@@ -434,6 +615,8 @@ class FormService {
 
     const bookingConfig = form.bookingConfig;
     const bookingEnabled = Boolean(bookingConfig?.enabled);
+    const paymentConfig = form.paymentConfig;
+    const paymentEnabled = Boolean(paymentConfig?.enabled);
     let appointmentAt = null;
     let status = 'submitted';
 
@@ -445,12 +628,60 @@ class FormService {
       // validateSlot ném lỗi .statusCode=400 sẵn (formBooking.util.js) — để nguyên bay lên.
       const slotResult = validateSlot(bookingConfig, String(appointmentDate), String(appointmentTime), new Date());
       appointmentAt = slotResult.appointmentAt;
-      // PR-2a: đặt lịch mà form CHƯA thu tiền (payment_config chưa làm ở PR-3) → confirmed ngay.
       status = 'confirmed';
     }
 
-    // Sinh access_token và lưu bài nộp vào database (PR-1a để submitter_ip_hash NULL)
+    // Chỉ băm/lưu IP khi form thu tiền — đây là chốt CHỐNG GIỮ CHỖ HÀNG LOẠT của PR-3a
+    // (§4 mục 4), không phải hành vi chung cho mọi form. Form không thu tiền GIỮ NGUYÊN
+    // submitter_ip_hash = NULL như PR-1a (forms.test.js đã khoá hành vi này).
+    let submitterIpHash = null;
+    let paymentSnapshot = null;
+    let holdExpiresAt = null;
+
+    if (paymentEnabled) {
+      submitterIpHash = hashSubmitterIp(ipKey);
+      status = 'pending_payment';
+      const bankInfo = VIETQR_BANKS[paymentConfig.bankBin] || null;
+      holdExpiresAt = new Date(Date.now() + paymentConfig.holdMinutes * 60 * 1000);
+      paymentSnapshot = {
+        bankBin: paymentConfig.bankBin,
+        bankName: bankInfo?.name || paymentConfig.bankBin,
+        accountNumber: paymentConfig.accountNumber,
+        accountName: paymentConfig.accountName,
+        amount: paymentConfig.amount,
+      };
+
+      if (!bookingEnabled) {
+        // Không đặt lịch -> không có giao dịch/khoá nào đang mở, đếm trước khi INSERT.
+        const pendingCount = await formRepository.countPendingHoldsForIpAndForm(form.id, submitterIpHash);
+        if (pendingCount >= MAX_PENDING_HOLDS_PER_IP_PER_FORM) {
+          throw createHttpError(
+            'Bạn đang có quá nhiều lượt giữ chỗ chưa thanh toán cho biểu mẫu này. Vui lòng hoàn tất hoặc chờ hết hạn giữ chỗ trước khi thử lại.',
+            429,
+            'FORM_TOO_MANY_PENDING_HOLDS'
+          );
+        }
+      }
+    }
+
+    // Sinh access_token và lưu bài nộp vào database
     const accessToken = crypto.randomBytes(32).toString('hex');
+    const baseSubmissionParams = {
+      formId: form.id,
+      workspaceOwnerId: form.workspaceOwnerId,
+      accessToken,
+      answers: validated.answers,
+      respondentName: validated.respondentName,
+      respondentEmail: validated.respondentEmail,
+      respondentPhone: validated.respondentPhone,
+      marketingConsent: validated.marketingConsent,
+      status,
+      appointmentAt,
+      submitterIpHash,
+      paymentAmount: paymentEnabled ? paymentConfig.amount : null,
+      paymentSnapshot,
+      holdExpiresAt,
+    };
 
     let submission;
     if (bookingEnabled) {
@@ -464,19 +695,19 @@ class FormService {
         if (capacity !== null && occupied >= capacity) {
           throw createHttpError('Khung giờ này vừa hết chỗ, vui lòng chọn khung khác', 409, 'FORM_SLOT_FULL');
         }
-        submission = await formRepository.createSubmission({
-          formId: form.id,
-          workspaceOwnerId: form.workspaceOwnerId,
-          accessToken,
-          answers: validated.answers,
-          respondentName: validated.respondentName,
-          respondentEmail: validated.respondentEmail,
-          respondentPhone: validated.respondentPhone,
-          marketingConsent: validated.marketingConsent,
-          status,
-          appointmentAt,
-          submitterIpHash: null,
-        }, client);
+        if (paymentEnabled) {
+          // Đếm TRONG CÙNG giao dịch + khoá của luồng đặt lịch (Bổ sung 15/09) — không mở khoá
+          // riêng cho chốt IP.
+          const pendingCount = await formRepository.countPendingHoldsForIpAndForm(form.id, submitterIpHash, client);
+          if (pendingCount >= MAX_PENDING_HOLDS_PER_IP_PER_FORM) {
+            throw createHttpError(
+              'Bạn đang có quá nhiều lượt giữ chỗ chưa thanh toán cho biểu mẫu này. Vui lòng hoàn tất hoặc chờ hết hạn giữ chỗ trước khi thử lại.',
+              429,
+              'FORM_TOO_MANY_PENDING_HOLDS'
+            );
+          }
+        }
+        submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, client, paymentEnabled, true);
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
@@ -485,19 +716,17 @@ class FormService {
         client.release();
       }
     } else {
-      submission = await formRepository.createSubmission({
-        formId: form.id,
-        workspaceOwnerId: form.workspaceOwnerId,
-        accessToken,
-        answers: validated.answers,
-        respondentName: validated.respondentName,
-        respondentEmail: validated.respondentEmail,
-        respondentPhone: validated.respondentPhone,
-        marketingConsent: validated.marketingConsent,
-        status,
-        submitterIpHash: null,
-      });
+      submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, db, paymentEnabled, false);
     }
+
+    const qrString = paymentEnabled
+      ? buildVietQrString({
+          bin: paymentSnapshot.bankBin,
+          accountNumber: paymentSnapshot.accountNumber,
+          amount: paymentSnapshot.amount,
+          memo: submission.paymentCode,
+        })
+      : null;
 
     // Thư báo cho chủ form nếu settings.notifyOwner được bật (fire-and-forget, không để người điền chờ)
     if (form.settings?.notifyOwner && form.ownerEmail) {
@@ -509,6 +738,7 @@ class FormService {
         <p>Email: ${escapeHtml(validated.respondentEmail || 'Chưa cung cấp')}</p>
         <p>Số điện thoại: ${escapeHtml(validated.respondentPhone || 'Chưa cung cấp')}</p>
         ${appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>` : ''}
+        ${paymentEnabled ? `<p>Trạng thái: <strong>Chờ thanh toán</strong> — mã <strong>${escapeHtml(submission.paymentCode)}</strong>, số tiền <strong>${escapeHtml(paymentConfig.amount.toLocaleString('vi-VN'))}đ</strong></p>` : ''}
         <p>Thời gian: ${escapeHtml(new Date().toLocaleString('vi-VN'))}</p>
       `;
 
@@ -521,43 +751,161 @@ class FormService {
       });
     }
 
-    // Thư xác nhận lịch hẹn cho người đặt (PR-2a việc 4) — chỉ khi có đặt lịch, có email, và
-    // form bật settings.sendConfirmation (dùng CHUNG công tắc với thư xác nhận thường — tự chọn,
-    // ghi trong báo cáo). Gửi sau khi đã COMMIT; chỉ ghi confirmation_sent_at khi gửi THÀNH CÔNG.
-    //
-    // Trần thư gửi người đặt (PLAN...#Trần thư gửi người đặt, bổ sung sau review PR-2a 14/09):
-    // lịch vẫn đặt được (201) dù vượt trần — chỉ bỏ gửi thư. Vượt trần thì logError CHỈ kèm form
-    // id, không ghi địa chỉ email ra log.
-    if (bookingEnabled && validated.respondentEmail && form.settings?.sendConfirmation) {
-      const formEmailCount = await formRepository.countFormRespondentEmailsLast24h(form.id);
-      const recipientEmailCount = formEmailCount < MAX_FORM_RESPONDENT_EMAILS_PER_24H
-        ? await formRepository.countConfirmationEmailsForRecipientLast24h(validated.respondentEmail)
-        : 0;
-
-      if (formEmailCount >= MAX_FORM_RESPONDENT_EMAILS_PER_24H) {
-        logError(`[FormService] Bỏ gửi thư xác nhận cho form ${form.id} — đã vượt trần ${MAX_FORM_RESPONDENT_EMAILS_PER_24H} thư/24h`);
-      } else if (recipientEmailCount >= MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H) {
-        logError(`[FormService] Bỏ gửi thư xác nhận cho form ${form.id} — người nhận đã vượt trần ${MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H} thư xác nhận/24h`);
-      } else {
-        const subject = `[${SENDER_NAME}] Xác nhận lịch hẹn - ${form.title}`;
-        const html = `
+    // Thư xác nhận lịch hẹn cho người đặt (PR-2a việc 4) — CHỈ khi lịch đã thật sự 'confirmed'
+    // (form không thu tiền; nếu có thu tiền thì status là 'pending_payment', đi nhánh thư
+    // hướng dẫn chuyển khoản bên dưới, không gửi thư "đã xác nhận" trong khi còn chờ tiền).
+    if (bookingEnabled && status === 'confirmed' && validated.respondentEmail && form.settings?.sendConfirmation) {
+      await this.sendFormRespondentEmail({
+        formId: form.id,
+        formTitle: form.title,
+        submissionId: submission.id,
+        toEmail: validated.respondentEmail,
+        subject: `[${SENDER_NAME}] Xác nhận lịch hẹn - ${form.title}`,
+        html: `
           <h2>Đã xác nhận lịch hẹn của bạn</h2>
           <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
           <p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>
-        `;
-
-        void sendSystemEmail({
-          to: validated.respondentEmail,
-          subject,
-          html,
-        }).then(() => formRepository.markConfirmationSent(submission.id))
-          .catch((emailErr) => {
-            logError(`[FormService] Gửi thư xác nhận lịch hẹn thất bại cho submission ${submission.id}: ${emailErr.message}`);
-          });
-      }
+        `,
+        logLabel: 'thư xác nhận lịch hẹn',
+      });
     }
 
-    return { accessToken: submission.accessToken, isBotTrap: false };
+    // Thư hướng dẫn chuyển khoản cho người đặt (PR-3a mục 5) — cùng công tắc/trần thư với thư
+    // xác nhận lịch hẹn ở trên (dùng CHUNG bộ đếm — hai nhánh loại trừ nhau vì status chỉ có thể
+    // là MỘT trong hai giá trị 'confirmed' xor 'pending_payment' khi bookingEnabled||paymentEnabled).
+    if (paymentEnabled && validated.respondentEmail && form.settings?.sendConfirmation) {
+      const statusUrl = `${FRONTEND_URL}/f/${encodeURIComponent(key)}/s/${encodeURIComponent(accessToken)}`;
+      const holdMinutesText = escapeHtml(String(paymentConfig.holdMinutes));
+      await this.sendFormRespondentEmail({
+        formId: form.id,
+        formTitle: form.title,
+        submissionId: submission.id,
+        toEmail: validated.respondentEmail,
+        subject: `[${SENDER_NAME}] Hướng dẫn chuyển khoản - ${form.title}`,
+        html: `
+          <h2>Vui lòng chuyển khoản để giữ chỗ</h2>
+          <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
+          ${appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>` : ''}
+          <p>Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
+          <p>Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
+          <p>Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
+          <p>Số tiền: <strong>${escapeHtml(paymentConfig.amount.toLocaleString('vi-VN'))}đ</strong></p>
+          <p>Nội dung chuyển khoản (bắt buộc ghi đúng): <strong>${escapeHtml(submission.paymentCode)}</strong></p>
+          <p>Hạn giữ chỗ: <strong>${holdMinutesText} phút</strong> kể từ lúc đặt.</p>
+          <p>Theo dõi trạng thái tại: <a href="${escapeHtml(statusUrl)}">${escapeHtml(statusUrl)}</a></p>
+        `,
+        logLabel: 'thư hướng dẫn chuyển khoản',
+      });
+    }
+
+    return {
+      accessToken: submission.accessToken,
+      isBotTrap: false,
+      payment: paymentEnabled
+        ? {
+            amount: paymentConfig.amount,
+            code: submission.paymentCode,
+            bankBin: paymentSnapshot.bankBin,
+            bankName: paymentSnapshot.bankName,
+            accountNumber: paymentSnapshot.accountNumber,
+            accountName: paymentSnapshot.accountName,
+            qrString,
+            holdExpiresAt: submission.holdExpiresAt,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Gửi MỘT thư cho người điền form (xác nhận lịch hẹn HOẶC hướng dẫn chuyển khoản) — gom logic
+   * trần thư dùng CHUNG (PLAN...#Trần thư gửi người đặt) để hai nhánh gọi không viết trùng.
+   * Vượt trần thì logError CHỈ kèm form id, không ghi địa chỉ email ra log. Fire-and-forget —
+   * không throw, không chặn response 201 cho người điền.
+   *
+   * @param {{ formId: number, formTitle: string, submissionId: number, toEmail: string, subject: string, html: string, logLabel: string }} params
+   */
+  async sendFormRespondentEmail({ formId, submissionId, toEmail, subject, html, logLabel }) {
+    const formEmailCount = await formRepository.countFormRespondentEmailsLast24h(formId);
+    const recipientEmailCount = formEmailCount < MAX_FORM_RESPONDENT_EMAILS_PER_24H
+      ? await formRepository.countConfirmationEmailsForRecipientLast24h(toEmail)
+      : 0;
+
+    if (formEmailCount >= MAX_FORM_RESPONDENT_EMAILS_PER_24H) {
+      logError(`[FormService] Bỏ gửi ${logLabel} cho form ${formId} — đã vượt trần ${MAX_FORM_RESPONDENT_EMAILS_PER_24H} thư/24h`);
+      return;
+    }
+    if (recipientEmailCount >= MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H) {
+      logError(`[FormService] Bỏ gửi ${logLabel} cho form ${formId} — người nhận đã vượt trần ${MAX_CONFIRMATION_EMAILS_PER_RECIPIENT_PER_24H} thư xác nhận/24h`);
+      return;
+    }
+
+    void sendSystemEmail({ to: toEmail, subject, html })
+      .then(() => formRepository.markConfirmationSent(submissionId))
+      .catch((emailErr) => {
+        logError(`[FormService] Gửi ${logLabel} thất bại cho submission ${submissionId}: ${emailErr.message}`);
+      });
+  }
+
+  /**
+   * Trang trạng thái công khai cho người đặt (PR-3a mục 4): `GET /api/public/forms/:publicKey/
+   * submissions/:accessToken`. Token sai hoặc không thuộc form đó → 404 (giống mọi 404 public
+   * khác). KHÔNG trả tên/email/SĐT người đặt. `payment` (kèm `qrString` dựng lại từ
+   * payment_snapshot LƯU LÚC ĐẶT, không đọc payment_config hiện tại của form — chủ đổi STK sau
+   * đó không được ảnh hưởng QR đã gửi cho khách) chỉ có khi còn `pending_payment` VÀ chưa hết hạn.
+   *
+   * @param {string} publicKey
+   * @param {string} accessToken
+   * @returns {Promise<object>}
+   */
+  async getSubmissionStatus(publicKey, accessToken) {
+    const key = String(publicKey || '').trim();
+    const token = String(accessToken || '').trim();
+    if (!key || !token) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    const form = await formRepository.findFormByPublicKey(key);
+    if (!form || !form.isPublished || form.adminDisabledAt) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+    this.checkOwnerActivePlan(form);
+
+    const submission = await formRepository.findSubmissionByAccessTokenAndForm(token, form.id);
+    if (!submission) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    const holdExpiresAt = submission.holdExpiresAt ? new Date(submission.holdExpiresAt) : null;
+    const holdExpired = submission.status === 'pending_payment' && (!holdExpiresAt || holdExpiresAt.getTime() <= Date.now());
+
+    let payment = null;
+    if (submission.status === 'pending_payment' && !holdExpired && submission.paymentSnapshot) {
+      const snap = submission.paymentSnapshot;
+      payment = {
+        amount: submission.paymentAmount,
+        code: submission.paymentCode,
+        bankBin: snap.bankBin,
+        bankName: snap.bankName,
+        accountNumber: snap.accountNumber,
+        accountName: snap.accountName,
+        qrString: buildVietQrString({
+          bin: snap.bankBin,
+          accountNumber: snap.accountNumber,
+          amount: submission.paymentAmount,
+          memo: submission.paymentCode,
+        }),
+        holdExpiresAt: submission.holdExpiresAt,
+      };
+    }
+
+    return {
+      status: submission.status,
+      formTitle: form.title,
+      appointmentAt: submission.appointmentAt,
+      holdExpiresAt: submission.holdExpiresAt,
+      holdExpired,
+      payment,
+    };
   }
 
   /**
@@ -637,6 +985,29 @@ class FormService {
         fetched: items.length,
       },
     };
+  }
+
+  // ─── Super admin (PR-3a mục 9) ────────────────────────────────────────────────────────
+
+  /**
+   * @param {{ q?: string, page?: number, pageSize?: number }} params
+   * @returns {Promise<object>}
+   */
+  async adminListForms(params) {
+    return formRepository.adminListForms(params);
+  }
+
+  /**
+   * @param {number} id
+   * @param {boolean} disabled
+   * @returns {Promise<object>}
+   */
+  async adminSetFormDisabled(id, disabled) {
+    const form = await formRepository.adminFindFormById(id);
+    if (!form) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+    return formRepository.adminSetFormDisabled(id, disabled);
   }
 }
 

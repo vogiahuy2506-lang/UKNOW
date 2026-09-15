@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { isReservedCampaignItemFieldKey } from './formCampaignItem.util.js';
+import { VIETQR_BANKS } from '../constants/vietQrBanks.js';
 
 export const ALLOWED_FIELD_TYPES = Object.freeze([
   'short_text',
@@ -402,5 +403,123 @@ export function normalizeBookingConfig(raw) {
     daysAhead,
     minNoticeMinutes,
     closedDates,
+  };
+}
+
+// ─── Payment config (PR-3a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md) ──────────────────
+
+export const MIN_PAYMENT_AMOUNT = 1000;
+export const MAX_PAYMENT_AMOUNT = 100000000;
+export const MIN_ACCOUNT_NUMBER_LENGTH = 6;
+export const MAX_ACCOUNT_NUMBER_LENGTH = 19;
+export const MAX_ACCOUNT_NAME_LENGTH = 50;
+export const MIN_HOLD_MINUTES = 10;
+export const MAX_HOLD_MINUTES = 120;
+export const DEFAULT_HOLD_MINUTES = 30;
+const ACCOUNT_NAME_RE = /^[A-Z0-9 ]{2,50}$/;
+const ACCOUNT_NUMBER_RE = /^\d{6,19}$/;
+
+/**
+ * Chuẩn hoá tên chủ tài khoản: bỏ dấu tiếng Việt (kể cả Đ/đ — không decompose qua NFD), viết
+ * HOA, gộp khoảng trắng liên tiếp. Ngân hàng chỉ hiển thị/đối chiếu được chữ không dấu trên nội
+ * dung chuyển khoản/tên chủ TK, nên chuẩn hoá NGAY LÚC LƯU thay vì để nguyên rồi lỗi khi in QR.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+function normalizeAccountName(raw) {
+  const s = String(raw || '').trim();
+  const noDiacritics = s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toUpperCase();
+  return noDiacritics.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Chuẩn hoá và xác thực cấu hình thanh toán giữ chỗ (payment_config) của biểu mẫu.
+ * `null`/`undefined`/`{enabled:false}` đều chuẩn hoá về `null` (tắt thu tiền).
+ *
+ * PR-3a chỉ nhận `method: 'bank'` — `momo_image` dời sang sau PR-4 (chưa có endpoint upload
+ * ảnh cho form) nên bị từ chối 400 ở đây thay vì âm thầm lưu cấu hình không dùng được.
+ *
+ * Không tự kiểm `phone_verified_at`/`requirePhone` ở đây — route `/api/forms` đã gắn
+ * `requirePhone` cho TOÀN BỘ router (`form.routes.js`), nên request tới được hàm này tức là
+ * đã qua đúng luật đó (Bổ sung 15/09 mục 2, thay cho giả định ban đầu "đòi phone_verified_at
+ * cứng" — sai vì OTP chỉ bật khi production đặt PHONE_OTP_PROVIDER).
+ *
+ * @param {any} raw
+ * @returns {{
+ *   enabled: true,
+ *   method: 'bank',
+ *   amount: number,
+ *   bankBin: string,
+ *   accountNumber: string,
+ *   accountName: string,
+ *   holdMinutes: number
+ * } | null}
+ */
+export function normalizePaymentConfig(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw createValidationError('Cấu hình thanh toán (paymentConfig) phải là một đối tượng', 'INVALID_PAYMENT_CONFIG');
+  }
+  if (!raw.enabled) return null;
+
+  const method = String(raw.method || 'bank').trim().toLowerCase();
+  if (method !== 'bank') {
+    throw createValidationError('Phương thức thanh toán này chưa được hỗ trợ (chỉ nhận chuyển khoản ngân hàng)', 'PAYMENT_METHOD_UNSUPPORTED');
+  }
+
+  const amount = Number(raw.amount);
+  if (!Number.isInteger(amount) || amount < MIN_PAYMENT_AMOUNT || amount > MAX_PAYMENT_AMOUNT) {
+    throw createValidationError(
+      `Số tiền phải là số nguyên từ ${MIN_PAYMENT_AMOUNT.toLocaleString('vi-VN')} đến ${MAX_PAYMENT_AMOUNT.toLocaleString('vi-VN')} VND`,
+      'INVALID_PAYMENT_CONFIG'
+    );
+  }
+
+  const bankBin = String(raw.bankBin || '').trim();
+  if (!VIETQR_BANKS[bankBin]) {
+    throw createValidationError('Ngân hàng (bankBin) không hợp lệ', 'INVALID_PAYMENT_CONFIG');
+  }
+
+  const accountNumber = String(raw.accountNumber || '').trim();
+  if (!ACCOUNT_NUMBER_RE.test(accountNumber)) {
+    throw createValidationError(
+      `Số tài khoản phải gồm ${MIN_ACCOUNT_NUMBER_LENGTH}-${MAX_ACCOUNT_NUMBER_LENGTH} chữ số`,
+      'INVALID_PAYMENT_CONFIG'
+    );
+  }
+
+  const accountName = normalizeAccountName(raw.accountName);
+  if (!ACCOUNT_NAME_RE.test(accountName)) {
+    throw createValidationError(
+      'Tên chủ tài khoản không hợp lệ (chỉ chữ in hoa không dấu, số, khoảng trắng, 2-50 ký tự)',
+      'INVALID_PAYMENT_CONFIG'
+    );
+  }
+
+  let holdMinutes = DEFAULT_HOLD_MINUTES;
+  if (raw.holdMinutes !== undefined && raw.holdMinutes !== null) {
+    const n = Number(raw.holdMinutes);
+    if (!Number.isInteger(n) || n < MIN_HOLD_MINUTES || n > MAX_HOLD_MINUTES) {
+      throw createValidationError(
+        `holdMinutes phải là số nguyên ${MIN_HOLD_MINUTES}-${MAX_HOLD_MINUTES}`,
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
+    holdMinutes = n;
+  }
+
+  return {
+    enabled: true,
+    method: 'bank',
+    amount,
+    bankBin,
+    accountNumber,
+    accountName,
+    holdMinutes,
   };
 }
