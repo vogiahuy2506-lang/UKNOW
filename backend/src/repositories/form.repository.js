@@ -1004,6 +1004,29 @@ class FormRepository {
     );
     return result.rows[0] || null;
   }
+
+  /**
+   * PR-4a review 15/09 (Việc 1) — kiểm một khoá kho ảnh (bannerKey/logoKey) còn được form NÀO
+   * của workspace này tham chiếu hay không. Dùng TRƯỚC khi giải phóng khoá cũ trong vòng đời
+   * theme (`form.service.js` `syncFormThemeAssetLifecycle`/`deleteForm`): hai form khác nhau có
+   * thể trỏ cùng một khoá (nhân bản form, hoặc chủ động dùng lại ảnh) — đổi/xoá ở MỘT form không
+   * được kéo theo giải phóng khoá form KIA còn đang dùng. Gọi SAU khi form đang xử lý đã ghi/xoá
+   * xong ở DB, nên chính nó sẽ không tự "false positive" khớp với khoá cũ của mình.
+   *
+   * @param {number} workspaceOwnerId
+   * @param {string} storageKey
+   * @returns {Promise<boolean>}
+   */
+  async isFormAssetKeyReferenced(workspaceOwnerId, storageKey) {
+    const result = await db.query(
+      `SELECT 1 FROM forms
+        WHERE workspace_owner_id = $1
+          AND (theme->>'bannerKey' = $2 OR theme->>'logoKey' = $2)
+        LIMIT 1`,
+      [workspaceOwnerId, storageKey]
+    );
+    return result.rowCount > 0;
+  }
 }
 
 export default new FormRepository();

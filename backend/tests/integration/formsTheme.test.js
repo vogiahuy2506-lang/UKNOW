@@ -406,6 +406,93 @@ describe('Vòng đời khoá ảnh biểu mẫu', () => {
     const row = await findStorageRow(bannerKey);
     expect(row.state).toBe('deleted');
   });
+
+  // ─── Review 15/09, Việc 1: khoá ảnh còn được form KHÁC dùng thì KHÔNG được giải phóng ───
+
+  it('P1 — form B dùng CHUNG bannerKey với form A; xoá B -> khoá vẫn active (A còn dùng); xoá tiếp A -> khoá mới deleted', async () => {
+    const owner = await createUser({ username: 'lifecycle-shared-p1' });
+    const token = await loginAs(owner);
+    const temp = await uploadTempFile(token, FAKE_PNG, 'banner.png', 'image/png');
+    const bannerKey = (await uploadFormAsset(token, temp)).body.data.storageKey;
+
+    const formA = (await createForm(token, { title: 'Form A', theme: { bannerKey } })).body.data;
+    const formB = (await createForm(token, { title: 'Form B', theme: { bannerKey } })).body.data;
+    expect(formB.theme.bannerKey).toBe(bannerKey);
+
+    const delB = await request(app).delete(`/api/forms/${formB.id}`).set('Authorization', `Bearer ${token}`);
+    expect(delB.status).toBe(200);
+
+    // A còn tham chiếu -> khoá KHÔNG bị giải phóng.
+    const rowAfterB = await findStorageRow(bannerKey);
+    expect(rowAfterB.state).toBe('active');
+    const lpResAfterB = await request(app).get(`/lp-assets/${bannerKey}`);
+    expect(lpResAfterB.status).toBe(200);
+
+    const delA = await request(app).delete(`/api/forms/${formA.id}`).set('Authorization', `Bearer ${token}`);
+    expect(delA.status).toBe(200);
+
+    // Không còn form nào tham chiếu -> giờ mới giải phóng.
+    const rowAfterA = await findStorageRow(bannerKey);
+    expect(rowAfterA.state).toBe('deleted');
+  });
+
+  it('P2 — bannerKey và logoKey CỦA CÙNG MỘT FORM trỏ chung 1 khoá; gỡ banner -> khoá vẫn active (logo còn dùng); gỡ nốt logo -> khoá mới deleted', async () => {
+    const owner = await createUser({ username: 'lifecycle-shared-p2' });
+    const token = await loginAs(owner);
+    const temp = await uploadTempFile(token, FAKE_PNG, 'shared.png', 'image/png');
+    const key = (await uploadFormAsset(token, temp)).body.data.storageKey;
+
+    const createRes = await createForm(token, { theme: { bannerKey: key, logoKey: key } });
+    const formId = createRes.body.data.id;
+
+    // Gỡ banner (payload chỉ còn logoKey) — theme full-replace nên bannerKey vắng mặt trong lần gửi này.
+    const putRemoveBanner = await request(app)
+      .put(`/api/forms/${formId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ theme: { logoKey: key } });
+    expect(putRemoveBanner.status).toBe(200);
+    expect(putRemoveBanner.body.data.theme).not.toHaveProperty('bannerKey');
+    expect(putRemoveBanner.body.data.theme.logoKey).toBe(key);
+
+    // logo vẫn dùng khoá này -> chưa giải phóng.
+    const rowAfterBannerGone = await findStorageRow(key);
+    expect(rowAfterBannerGone.state).toBe('active');
+
+    // Gỡ nốt logo -> giờ mới giải phóng.
+    const putRemoveLogo = await request(app)
+      .put(`/api/forms/${formId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ theme: {} });
+    expect(putRemoveLogo.status).toBe(200);
+
+    const rowAfterAll = await findStorageRow(key);
+    expect(rowAfterAll.state).toBe('deleted');
+  });
+
+  it('Việc 2 — khoá đã bị giải phóng (state=deleted) rồi bị form KHÁC cố dùng lại -> 400 INVALID_FORM_THEME (kiểm state vẫn còn tác dụng)', async () => {
+    const owner = await createUser({ username: 'lifecycle-reuse-deleted' });
+    const token = await loginAs(owner);
+    const temp = await uploadTempFile(token, FAKE_PNG, 'banner.png', 'image/png');
+    const bannerKey = (await uploadFormAsset(token, temp)).body.data.storageKey;
+
+    const createRes = await createForm(token, { theme: { bannerKey } });
+    const formId = createRes.body.data.id;
+
+    // Đổi sang banner khác -> khoá cũ không còn form nào dùng -> giải phóng (state=deleted).
+    const temp2 = await uploadTempFile(token, FAKE_PNG, 'other.png', 'image/png');
+    const otherKey = (await uploadFormAsset(token, temp2)).body.data.storageKey;
+    const putRes = await request(app)
+      .put(`/api/forms/${formId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ theme: { bannerKey: otherKey } });
+    expect(putRes.status).toBe(200);
+    expect((await findStorageRow(bannerKey)).state).toBe('deleted');
+
+    // Form KHÁC cố dùng lại chính khoá đã deleted đó -> phải bị chặn.
+    const reuseRes = await createForm(token, { theme: { bannerKey } });
+    expect(reuseRes.status).toBe(400);
+    expect(reuseRes.body.code).toBe('INVALID_FORM_THEME');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

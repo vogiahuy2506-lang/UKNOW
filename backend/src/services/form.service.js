@@ -171,15 +171,42 @@ function augmentFormThemeWithUrls(form) {
 }
 
 /**
+ * PR-4a review 15/09 (Việc 1) — giải phóng MỘT khoá, nhưng CHỈ khi không còn form nào của cùng
+ * workspace còn tham chiếu nó (`form.repository.js` `isFormAssetKeyReferenced`). Hai form khác
+ * nhau (nhân bản form, hoặc chủ động chọn lại cùng ảnh) có thể trỏ cùng một khoá — đổi/xoá ở MỘT
+ * form không được kéo theo giải phóng khoá form KIA còn đang dùng. Gọi SAU KHI form đang xử lý
+ * đã ghi/xoá xong ở DB (nên bản thân nó không tự khớp nhầm với khoá cũ của chính mình).
+ *
+ * Lỗi (cả bước kiểm tham chiếu lẫn bước giải phóng) chỉ LOG, không ném lại — request chính (lưu
+ * hoặc xoá form) đã thành công, đừng biến một sự cố dọn dẹp kho thành lỗi 500 cho người dùng.
+ *
+ * @param {string} key
+ * @param {number} workspaceOwnerId
+ */
+async function releaseFormAssetKeyIfUnreferenced(key, workspaceOwnerId) {
+  try {
+    const stillReferenced = await formRepository.isFormAssetKeyReferenced(workspaceOwnerId, key);
+    if (stillReferenced) return;
+    await markDeletedAfterUnlink({ storageKey: key });
+  } catch (error) {
+    logError(`[FormService] Không giải phóng được ảnh biểu mẫu cũ (${key}):`, error?.message || error);
+  }
+}
+
+/**
  * Vòng đời khoá kho ảnh SAU KHI đã ghi `forms.theme` thành công (Bổ sung 15/09 mục 3):
  * kích hoạt khoá MỚI (chuyển `active`, `reference_type 'form'`, `reference_id` = id form — mẫu
  * `activateLandingAssetStorageObjects`), giải phóng khoá CŨ không còn dùng
- * (`markDeletedAfterUnlink`). Lỗi giải phóng kho chỉ LOG, không ném lại — request lưu form đã
- * thành công, đừng biến một sự cố dọn dẹp kho thành lỗi 500 cho người dùng.
+ * (`releaseFormAssetKeyIfUnreferenced`).
  *
  * So sánh theo full-replace: `theme` là đối tượng thay thế toàn bộ mỗi lần được gửi (xem
  * docstring `normalizeFormTheme`), nên "khoá cũ" luôn lấy từ `oldTheme` (trước khi lưu) và
  * "khoá mới" từ `newTheme` (sau khi lưu) — không cần biết payload có đề cập khoá đó hay không.
+ *
+ * Việc 1 review 15/09 — so khoá theo TẬP HỢP {bannerKey, logoKey}, KHÔNG so từng cặp
+ * banner↔banner/logo↔logo: gỡ banner (bannerKey cũ = K) trong khi logoKey CỦA CHÍNH FORM NÀY vẫn
+ * đang là K thì K vẫn còn dùng (chỉ đổi vai trò trong theme, không phải bỏ hẳn) — so cặp
+ * banner↔banner cũ sẽ giải phóng nhầm K dù logo vẫn cần nó.
  *
  * @param {object} params
  * @param {object|null} params.oldTheme Theme TRƯỚC khi lưu (`null`/`{}` khi tạo form mới)
@@ -204,15 +231,11 @@ async function syncFormThemeAssetLifecycle({ oldTheme, newTheme, workspaceOwnerI
     });
   }
 
-  const keysToRelease = [];
-  if (oldBanner && oldBanner !== newBanner) keysToRelease.push(oldBanner);
-  if (oldLogo && oldLogo !== newLogo) keysToRelease.push(oldLogo);
-  for (const key of keysToRelease) {
-    try {
-      await markDeletedAfterUnlink({ storageKey: key });
-    } catch (error) {
-      logError(`[FormService] Không giải phóng được ảnh biểu mẫu cũ (${key}):`, error?.message || error);
-    }
+  const newKeySet = new Set([newBanner, newLogo].filter(Boolean));
+  const oldKeySet = new Set([oldBanner, oldLogo].filter(Boolean));
+  for (const key of oldKeySet) {
+    if (newKeySet.has(key)) continue; // vẫn dùng ở slot khác của CHÍNH form này
+    await releaseFormAssetKeyIfUnreferenced(key, workspaceOwnerId);
   }
 }
 
@@ -444,15 +467,12 @@ class FormService {
 
     await formRepository.deleteForm(id, workspaceOwnerId);
 
-    // PR-4a mục 3: xoá form -> giải phóng CẢ HAI khoá ảnh (nếu có) SAU khi DB đã xoá xong; lỗi
-    // giải phóng kho chỉ log, không làm hỏng request (form đã xoá thành công ở DB rồi).
-    const keysToRelease = [existing.theme?.bannerKey, existing.theme?.logoKey].filter(Boolean);
+    // PR-4a mục 3 (Việc 1 review 15/09): xoá form -> giải phóng khoá ảnh (nếu có) SAU khi DB đã
+    // xoá xong — nhưng CHỈ khoá nào không còn form nào KHÁC của workspace này còn tham chiếu
+    // (releaseFormAssetKeyIfUnreferenced). Set khử trùng lặp trường hợp bannerKey === logoKey.
+    const keysToRelease = new Set([existing.theme?.bannerKey, existing.theme?.logoKey].filter(Boolean));
     for (const key of keysToRelease) {
-      try {
-        await markDeletedAfterUnlink({ storageKey: key });
-      } catch (error) {
-        logError(`[FormService] Không giải phóng được ảnh biểu mẫu sau khi xoá form (${key}):`, error?.message || error);
-      }
+      await releaseFormAssetKeyIfUnreferenced(key, workspaceOwnerId);
     }
   }
 
