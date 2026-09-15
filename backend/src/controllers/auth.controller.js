@@ -21,7 +21,7 @@ import { grantSignupTrial } from '../services/user/signupTrial.service.js';
 import { grantSignupTrialInTx } from '../services/user/signupTrialTx.service.js';
 import { normalizePhoneForZaloCampaign, isValidNormalizedPhoneLength } from '../utils/zaloPhoneCampaign.util.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
-import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
+import memberSheetSync, { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
 import userConsentRepository, { recordConsents, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
@@ -477,8 +477,16 @@ class AuthController {
 
       // 3. Nếu chưa tồn tại, tạo mới
       if (result.rows.length === 0) {
-        // Nghị định 330/2026/NĐ-CP (PR-N2): Bắt buộc đồng ý đủ 3 văn bản pháp lý cho user mới
-        validateRegistrationConsents(req.body.consents);
+        // Quyết định 15/09 (PR-A): Bỏ hộp đồng ý ở luồng đăng ký Google.
+        // Tài khoản Google mới không bắt buộc gửi consents tại đây; đồng ý được thu thập
+        // toàn cục qua ConsentRequiredModal sau khi người dùng đăng nhập.
+        // Rủi ro pháp lý: tài khoản Google (email, tên, avatar) được lưu trước khi có đồng ý.
+        // Nhánh có consents được giữ lại để tương thích ngược nếu client cũ còn gửi.
+        const googleConsents = req.body.consents;
+        const hasProvidedConsents = googleConsents !== undefined && googleConsents !== null;
+        if (hasProvidedConsents) {
+          validateRegistrationConsents(googleConsents);
+        }
 
         await client.query('BEGIN');
         inNewUserTx = true;
@@ -547,25 +555,26 @@ class AuthController {
         user = insertResult.rows[0];
 
         // Lưu bằng chứng đồng ý vào user_consents cho user mới đăng ký Google (PR-N2)
-        const googleConsents = req.body.consents;
-
-        await userConsentRepository.recordConsents({
-          userId: user.id,
-          consents: {
-            terms: googleConsents.terms,
-            privacy: googleConsents.privacy,
-            dpa: googleConsents.dpa,
-          },
-          source: 'google_register',
-          ipAddress,
-          userAgent,
-          client,
-        });
-        user.consents = {
-          terms: { granted: Boolean(googleConsents.terms), document_version: LEGAL_DOCUMENTS.terms.version },
-          privacy: { granted: Boolean(googleConsents.privacy), document_version: LEGAL_DOCUMENTS.privacy.version },
-          dpa: { granted: Boolean(googleConsents.dpa), document_version: LEGAL_DOCUMENTS.dpa.version },
-        };
+        // Chỉ lưu khi request có gửi consents (PR-A: không bắt buộc gửi lúc đăng ký Google).
+        if (hasProvidedConsents) {
+          await userConsentRepository.recordConsents({
+            userId: user.id,
+            consents: {
+              terms: googleConsents.terms,
+              privacy: googleConsents.privacy,
+              dpa: googleConsents.dpa,
+            },
+            source: 'google_register',
+            ipAddress,
+            userAgent,
+            client,
+          });
+          user.consents = {
+            terms: { granted: Boolean(googleConsents.terms), document_version: LEGAL_DOCUMENTS.terms.version },
+            privacy: { granted: Boolean(googleConsents.privacy), document_version: LEGAL_DOCUMENTS.privacy.version },
+            dpa: { granted: Boolean(googleConsents.dpa), document_version: LEGAL_DOCUMENTS.dpa.version },
+          };
+        }
 
         trial = await grantSignupTrialInTx(client, { userId: user.id, userEmail: user.email });
         if (trial) {
@@ -589,6 +598,18 @@ class AuthController {
           planName: trial?.planName || null,
           loginUrl: `${FRONTEND_URL}/login`,
         }).catch((err) => console.error('[WelcomeEmail] Failed to send:', err.message));
+
+        // Đẩy sang Google Sheet thành viên (async, không block response — xem memberSheetSync.util.js).
+        // User vừa tạo trong transaction này chắc chắn chưa thể là nhân viên của ai (user_members
+        // chỉ gắn được SAU khi đã có id), nên không cần kiểm isCurrentlyAnyonesEmployee ở đây.
+        // An toàn khi chưa có SĐT: Apps Script ghi đè theo email (upsertByEmail_), lúc người dùng
+        // nhập số qua modal user.controller.js:509 đẩy lại và ghi đè dòng cũ.
+        (memberSheetSync?.pushMemberToSheet || pushMemberToSheet)({
+          email: userEmail,
+          phone: user.phone ?? null,
+          fullName: full_name,
+          createdAt: new Date(),
+        }).catch((err) => console.warn('[MemberSheet] Failed to push (Google):', err.message));
       } else {
         user = result.rows[0];
 
@@ -660,6 +681,13 @@ class AuthController {
           await client.query('ROLLBACK');
         } catch (rollbackErr) {
           console.error('Google register rollback failed:', rollbackErr?.message || rollbackErr);
+        }
+      }
+      // Xử lý lỗi unique constraint từ DB (nếu manual check bị lọt do race condition — 2 request Google cùng email đua nhau)
+      if (error.code === '23505') {
+        const detail = error.detail || '';
+        if (detail.includes('email')) {
+          return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
         }
       }
       if (error.status && typeof error.message === 'string') {

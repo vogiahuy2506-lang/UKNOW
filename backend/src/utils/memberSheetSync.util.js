@@ -68,3 +68,7 @@ export async function pushMemberToSheet({ email, phone, fullName, createdAt, pho
     `[MemberSheet] push thất bại sau ${MAX_RETRIES + 1} lần cho ${maskPhone(phone)}: ${lastErr?.message || lastErr}`
   );
 }
+
+export default {
+  pushMemberToSheet,
+};

@@ -19,6 +19,7 @@ import { truncateAll, createVerificationCode, createUser } from './helpers/db.js
 import { LEGAL_DOCUMENTS } from '../../src/config/legalDocuments.config.js';
 import { findPurgeBlockers } from '../../src/repositories/admin/adminMembers.repository.js';
 import userConsentRepository from '../../src/repositories/user/userConsent.repository.js';
+import memberSheetSync from '../../src/utils/memberSheetSync.util.js';
 
 let app;
 
@@ -218,7 +219,7 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       expect(consentCountAfter.rows[0].count).toBe(3);
     });
 
-    it('Google, body KHÔNG có consents → 400, 0 dòng user_consents, KHÔNG tạo user', async () => {
+    it('Google, body KHÔNG có consents → 200, tạo 1 user, 0 dòng user_consents, hasConsented === false', async () => {
       const googleEmail = 'google_no_consent@test.local';
       fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
@@ -235,14 +236,101 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
           access_token: 'token_no_consent',
         });
 
-      expect(res.status).toBe(400);
-      expect(res.body.success).toBe(false);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.user.email).toBe(googleEmail);
+      expect(res.body.data.user.hasConsented).toBe(false);
 
       const userCount = await db.query('SELECT COUNT(*)::int AS count FROM users WHERE email = $1', [googleEmail]);
-      expect(userCount.rows[0].count).toBe(0);
+      expect(userCount.rows[0].count).toBe(1);
 
       const consentCount = await db.query('SELECT COUNT(*)::int AS count FROM user_consents');
       expect(consentCount.rows[0].count).toBe(0);
+    });
+
+    it('user Google mới không gửi consents, sau đó POST /api/users/consents đủ 3 ô → lần google-login sau hasConsented === true', async () => {
+      const googleEmail = 'google_reconsent_flow@test.local';
+      fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          email: googleEmail,
+          email_verified: true,
+          name: 'Reconsent Flow User',
+        }),
+      });
+
+      // 1. Đăng ký Google lần đầu không gửi consents -> 200, hasConsented: false
+      const resFirst = await request(app)
+        .post('/api/auth/google-login')
+        .send({
+          access_token: 'token_first_step',
+        });
+      expect(resFirst.status).toBe(200);
+      expect(resFirst.body.data.user.hasConsented).toBe(false);
+
+      const token = resFirst.body.data.accessToken;
+
+      // 2. Gọi POST /api/users/consents đồng ý đủ 3 ô (như khi đồng ý qua modal toàn cục)
+      const resConsent = await request(app)
+        .post('/api/users/consents')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          consents: {
+            terms: true,
+            privacy: true,
+            dpa: true,
+          },
+        });
+      expect(resConsent.status).toBe(200);
+
+      // 3. Đăng nhập lại qua Google -> hasConsented === true
+      const resSecond = await request(app)
+        .post('/api/auth/google-login')
+        .send({
+          access_token: 'token_second_step',
+        });
+      expect(resSecond.status).toBe(200);
+      expect(resSecond.body.data.user.hasConsented).toBe(true);
+    });
+
+    it('đăng ký Google gọi pushMemberToSheet đúng một lần với email, user đã tồn tại đăng nhập thì không gọi', async () => {
+      const googleEmail = 'google_sheet_sync@test.local';
+      fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          email: googleEmail,
+          email_verified: true,
+          name: 'Sheet Sync User',
+        }),
+      });
+
+      const sheetSpy = jest.spyOn(memberSheetSync, 'pushMemberToSheet').mockResolvedValue();
+
+      try {
+        // 1. Đăng ký Google lần đầu (user mới) -> phải gọi pushMemberToSheet đúng 1 lần
+        const res1 = await request(app)
+          .post('/api/auth/google-login')
+          .send({ access_token: 'token_sheet_test' });
+
+        expect(res1.status).toBe(200);
+        expect(sheetSpy).toHaveBeenCalledTimes(1);
+        expect(sheetSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            email: googleEmail,
+            fullName: 'Sheet Sync User',
+          })
+        );
+
+        // 2. User đã tồn tại đăng nhập lại -> KHÔNG gọi pushMemberToSheet
+        const res2 = await request(app)
+          .post('/api/auth/google-login')
+          .send({ access_token: 'token_sheet_test_again' });
+
+        expect(res2.status).toBe(200);
+        expect(sheetSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        sheetSpy.mockRestore();
+      }
     });
 
     it('Google, consents.dpa = false → 400, 0 dòng user_consents, KHÔNG tạo user', async () => {
