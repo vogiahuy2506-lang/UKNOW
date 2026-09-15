@@ -415,6 +415,7 @@ class FormRepository {
          utm_campaign AS "utmCampaign",
          utm_content AS "utmContent",
          utm_term AS "utmTerm",
+         unsubscribe_token AS "unsubscribeToken",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -646,6 +647,79 @@ class FormRepository {
   }
 
   /**
+   * PR-7b — CHỈ 3 cột cần để dựng chân thư "Rút lại đồng ý" (`formUnsubscribeFooter.util.js`),
+   * tách RIÊNG khỏi `confirmSubmissionPayment` một cách CỐ Ý: RETURNING của hàm đó đi thẳng ra
+   * API `confirmPayment` cho chủ form (`form.controller.js` → `res.json({ data: submission })`)
+   * — gộp `unsubscribe_token` vào đó sẽ lộ token rút đồng ý cho chủ form đọc được (vi phạm "Không
+   * trả unsubscribeToken ở bất kỳ API nào").
+   *
+   * @param {number} submissionId
+   * @returns {Promise<{ marketingConsent: boolean|null, unsubscribeToken: string, consentWithdrawnAt: string|null }|null>}
+   */
+  async getSubmissionConsentInfo(submissionId) {
+    const result = await db.query(
+      `SELECT
+         marketing_consent AS "marketingConsent",
+         unsubscribe_token AS "unsubscribeToken",
+         consent_withdrawn_at AS "consentWithdrawnAt"
+       FROM form_submissions
+       WHERE id = $1`,
+      [submissionId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Tìm bài nộp theo `unsubscribe_token` — dùng cho trang rút lại đồng ý công khai (PR-7b), mẫu
+   * `lead.repository.js` `findByUnsubscribeToken`. Mỗi token chỉ khớp ĐÚNG MỘT bài nộp (cột
+   * unique, migration 223) — rút không ảnh hưởng các bài khác của cùng người nộp/cùng form.
+   *
+   * @param {string} token
+   * @returns {Promise<object|null>}
+   */
+  async findSubmissionByUnsubscribeToken(token) {
+    const result = await db.query(
+      `SELECT
+         id,
+         form_id AS "formId",
+         marketing_consent AS "marketingConsent",
+         unsubscribe_token AS "unsubscribeToken",
+         consent_withdrawn_at AS "consentWithdrawnAt",
+         created_at AS "createdAt"
+       FROM form_submissions
+       WHERE unsubscribe_token = $1
+       LIMIT 1`,
+      [token]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Rút lại đồng ý nhận tiếp thị cho MỘT bài nộp — mẫu `lead.repository.js` `withdrawConsentById`.
+   * `COALESCE(consent_withdrawn_at, NOW())` giữ nguyên thời điểm rút LẦN ĐẦU khi bấm link nhiều
+   * lần (không ghi đè mốc thời gian cũ).
+   *
+   * @param {number} id
+   * @returns {Promise<object|null>}
+   */
+  async withdrawSubmissionConsentById(id) {
+    const result = await db.query(
+      `UPDATE form_submissions
+       SET marketing_consent = FALSE,
+           consent_withdrawn_at = COALESCE(consent_withdrawn_at, NOW()),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING
+         id,
+         marketing_consent AS "marketingConsent",
+         consent_withdrawn_at AS "consentWithdrawnAt",
+         unsubscribe_token AS "unsubscribeToken"`,
+      [id]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
    * Tìm bài nộp theo `access_token`, ràng buộc đúng `form_id` (link trạng thái công khai chứa cả
    * publicKey lẫn token trên URL — PR-3a mục 4: "token sai hoặc không thuộc form đó → 404", nên
    * PHẢI kiểm form_id khớp chứ không chỉ token đúng, đề phòng token đoán/chép nhầm giữa hai form).
@@ -756,6 +830,9 @@ class FormRepository {
          s.form_id AS "formId",
          s.respondent_email AS "respondentEmail",
          s.appointment_at AS "appointmentAt",
+         s.marketing_consent AS "marketingConsent",
+         s.unsubscribe_token AS "unsubscribeToken",
+         s.consent_withdrawn_at AS "consentWithdrawnAt",
          f.title AS "formTitle"
        FROM form_submissions s
        JOIN forms f ON f.id = s.form_id
@@ -869,6 +946,7 @@ class FormRepository {
          s.utm_campaign AS "utmCampaign",
          s.utm_content AS "utmContent",
          s.utm_term AS "utmTerm",
+         s.consent_withdrawn_at AS "consentWithdrawnAt",
          s.created_at AS "createdAt",
          s.updated_at AS "updatedAt"
        FROM form_submissions s

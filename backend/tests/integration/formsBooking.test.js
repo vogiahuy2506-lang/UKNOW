@@ -460,6 +460,71 @@ describe('Form booking — đặt lịch hẹn (PR-2a)', () => {
   });
 });
 
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7b — link "Rút lại đồng ý" trong thư xác nhận
+ * lịch hẹn.
+ */
+describe('Form booking — link rút lại đồng ý trong thư xác nhận lịch hẹn (PR-7b)', () => {
+  it('nộp bài có email + tích đồng ý + sendConfirmation → thư xác nhận có link /api/public/forms/unsubscribe/<token đúng của bài>', async () => {
+    const owner = await createUser({ username: 'owner_booking_unsub_1' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token, {
+      fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+      settings: { sendConfirmation: true },
+    });
+    const emailField = form.fields[0];
+
+    mockSendMail.mockClear();
+    const bookRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({
+        answers: { [emailField.key]: 'booking_unsub1@example.com' },
+        appointmentDate: futureDate(9),
+        appointmentTime: ALL_WEEK_TIME,
+        marketingConsent: true,
+      });
+    expect(bookRes.status).toBe(201);
+
+    const row = await db.query(
+      `SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`,
+      [bookRes.body.data.accessToken]
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'booking_unsub1@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].subject).toContain('Xác nhận lịch hẹn');
+    expect(call[0].html).toContain(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+  });
+
+  it('nộp bài có email nhưng KHÔNG tích đồng ý → thư xác nhận lịch hẹn KHÔNG có link rút', async () => {
+    const owner = await createUser({ username: 'owner_booking_unsub_2' });
+    const token = await loginAs(owner);
+    const form = await createBookingForm(token, {
+      fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+      settings: { sendConfirmation: true },
+    });
+    const emailField = form.fields[0];
+
+    mockSendMail.mockClear();
+    const bookRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({
+        answers: { [emailField.key]: 'booking_unsub2@example.com' },
+        appointmentDate: futureDate(9),
+        appointmentTime: ALL_WEEK_TIME,
+      });
+    expect(bookRes.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'booking_unsub2@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].html).not.toContain('/api/public/forms/unsubscribe/');
+  });
+});
+
 describe('Form booking — review PR-2a 14/09: trần thư, ?date= sai, huỷ nguyên tử', () => {
   it('form đã có 200 thư người đặt trong 24h → đặt lịch mới có email vẫn 201, KHÔNG gửi thư', async () => {
     const owner = await createUser({ username: 'owner_cap_form' });

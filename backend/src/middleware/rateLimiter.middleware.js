@@ -285,6 +285,31 @@ export const leadUnsubscribeLimiter = rateLimit({
   },
 });
 
+// Public form unsubscribe — chống flood/lạm dụng link rút lại đồng ý (không auth), PR-7b
+// (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md), khoá riêng "form-unsubscribe" — KHÔNG dùng
+// chung bucket với leadUnsubscribeLimiter dù cùng IP, để rút đồng ý ở form không bị chặn bởi
+// hoạt động rút đồng ý ở lead (hai tính năng độc lập) và ngược lại.
+export const formUnsubscribeLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `form-unsubscribe:${clientIpKey(req)}`,
+  // Người bấm link là người thật đang mở trình duyệt — phải trả HTML, không trả JSON.
+  handler: (req, res) => {
+    res.status(429).send(
+      renderLeadUnsubscribeHtml({
+        title: 'Quá nhiều yêu cầu / Too Many Requests',
+        headingVi: 'Vui lòng thử lại sau',
+        textVi: 'Bạn đã thực hiện quá nhiều yêu cầu rút lại đồng ý. Vui lòng thử lại sau ít phút.',
+        headingEn: 'Too many requests',
+        textEn: 'Too many consent withdrawal requests. Please try again after a few minutes.',
+      })
+    );
+  },
+});
+
 // Public landing analytics view — giới hạn nhẹ hơn lead nhưng vẫn chống flood
 export const publicLandingAnalyticsLimiter = rateLimit({
   skip: skipInTest,

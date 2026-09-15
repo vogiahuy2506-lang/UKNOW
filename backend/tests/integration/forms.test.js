@@ -14,6 +14,7 @@ const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
 const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
+const formRepository = (await import('../../src/repositories/form.repository.js')).default;
 
 let app;
 
@@ -1160,6 +1161,264 @@ describe('Forms — nguồn landing + UTM (PR-7a)', () => {
     const submission = listRes.body.data.submissions[0];
     expect(submission.landingPageSlug).toBe('landing-list-test');
     expect(submission.utmSource).toBe('fb');
+    expect(submission).not.toHaveProperty('unsubscribeToken');
+  });
+});
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7b — người nộp Biểu mẫu tự rút lại đồng ý nhận
+ * tiếp thị qua `GET /api/public/forms/unsubscribe/:token`.
+ */
+describe('Forms — rút lại đồng ý nhận tiếp thị (PR-7b)', () => {
+  async function createSimplePublishedForm(token, overrides = {}) {
+    const createRes = await request(app)
+      .post('/api/forms')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Form PR-7b',
+        fields: [{ label: 'Email', type: 'email', required: false, role: 'email' }],
+        ...overrides,
+      });
+    expect(createRes.status).toBe(201);
+    const form = createRes.body.data;
+    const publishRes = await request(app)
+      .put(`/api/forms/${form.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ isPublished: true });
+    expect(publishRes.status).toBe(200);
+    return publishRes.body.data;
+  }
+
+  it('token sai định dạng (không phải UUID) → 404 HTML', async () => {
+    const res = await request(app).get('/api/public/forms/unsubscribe/khong-phai-uuid');
+    expect(res.status).toBe(404);
+    expect(res.type).toContain('html');
+    expect(res.text).toContain('Liên kết không hợp lệ');
+  });
+
+  it('token đúng định dạng UUID nhưng không tồn tại → 404 HTML', async () => {
+    const res = await request(app).get('/api/public/forms/unsubscribe/00000000-0000-0000-0000-000000000000');
+    expect(res.status).toBe(404);
+    expect(res.type).toContain('html');
+    expect(res.text).toContain('Liên kết không tồn tại');
+  });
+
+  it('bấm link đúng → 200 HTML; dòng marketing_consent=false, consent_withdrawn_at có giá trị', async () => {
+    const owner = await createUser({ username: 'owner_unsub_1' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' }, marketingConsent: true });
+    expect(submitRes.status).toBe(201);
+
+    const before = await db.query(
+      `SELECT unsubscribe_token, marketing_consent, consent_withdrawn_at FROM form_submissions WHERE access_token = $1`,
+      [submitRes.body.data.accessToken]
+    );
+    expect(before.rows[0].marketing_consent).toBe(true);
+    expect(before.rows[0].consent_withdrawn_at).toBeNull();
+    const unsubscribeToken = before.rows[0].unsubscribe_token;
+
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${unsubscribeToken}`);
+    expect(unsubRes.status).toBe(200);
+    expect(unsubRes.type).toContain('html');
+    expect(unsubRes.text).toContain('Rút lại đồng ý thành công');
+
+    const after = await db.query(
+      `SELECT marketing_consent, consent_withdrawn_at FROM form_submissions WHERE unsubscribe_token = $1`,
+      [unsubscribeToken]
+    );
+    expect(after.rows[0].marketing_consent).toBe(false);
+    expect(after.rows[0].consent_withdrawn_at).not.toBeNull();
+  });
+
+  it('bấm link LẦN 2 → 200 "đã ghi nhận trước đó", consent_withdrawn_at KHÔNG đổi', async () => {
+    const owner = await createUser({ username: 'owner_unsub_2' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' }, marketingConsent: true });
+    const before = await db.query(
+      `SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`,
+      [submitRes.body.data.accessToken]
+    );
+    const unsubscribeToken = before.rows[0].unsubscribe_token;
+
+    const firstRes = await request(app).get(`/api/public/forms/unsubscribe/${unsubscribeToken}`);
+    expect(firstRes.status).toBe(200);
+    const firstWithdrawnAt = (
+      await db.query(`SELECT consent_withdrawn_at FROM form_submissions WHERE unsubscribe_token = $1`, [unsubscribeToken])
+    ).rows[0].consent_withdrawn_at;
+
+    // Chờ 1 giây để nếu code lỡ ghi đè bằng NOW() mới thì mốc thời gian chắc chắn khác đi (không
+    // phải trùng ngẫu nhiên trong cùng mili-giây).
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const secondRes = await request(app).get(`/api/public/forms/unsubscribe/${unsubscribeToken}`);
+    expect(secondRes.status).toBe(200);
+    expect(secondRes.text).toContain('đã được ghi nhận trước đó');
+
+    const secondWithdrawnAt = (
+      await db.query(`SELECT consent_withdrawn_at FROM form_submissions WHERE unsubscribe_token = $1`, [unsubscribeToken])
+    ).rows[0].consent_withdrawn_at;
+    expect(new Date(secondWithdrawnAt).getTime()).toBe(new Date(firstWithdrawnAt).getTime());
+  });
+
+  /**
+   * Test HTTP tuần tự ở trên đi qua service `withdrawSubmissionConsent`, có chốt "đã rút thì trả
+   * về sớm, không UPDATE lại" ở TẦNG SERVICE — mốc thời gian không đổi ở ca đó có thể chỉ vì
+   * UPDATE thứ hai KHÔNG BAO GIỜ chạy, không thật sự chứng minh COALESCE trong SQL. Gọi thẳng
+   * `formRepository.withdrawSubmissionConsentById` HAI LẦN (bỏ qua chốt tầng service) mới phơi
+   * đúng lớp phòng thủ COALESCE — kịch bản thật của nó là HAI request đua nhau cùng đọc thấy
+   * "chưa rút" trước khi request nào kịp UPDATE (race), không phải double-click tuần tự.
+   */
+  it('gọi thẳng formRepository.withdrawSubmissionConsentById HAI LẦN (mô phỏng race, bỏ qua chốt service) → consent_withdrawn_at giữ mốc LẦN ĐẦU', async () => {
+    const owner = await createUser({ username: 'owner_unsub_2b' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'race@b.com' }, marketingConsent: true });
+    const before = await db.query(
+      `SELECT id FROM form_submissions WHERE access_token = $1`,
+      [submitRes.body.data.accessToken]
+    );
+    const submissionId = before.rows[0].id;
+
+    const first = await formRepository.withdrawSubmissionConsentById(submissionId);
+    expect(first.consentWithdrawnAt).not.toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const second = await formRepository.withdrawSubmissionConsentById(submissionId);
+    expect(new Date(second.consentWithdrawnAt).getTime()).toBe(new Date(first.consentWithdrawnAt).getTime());
+  });
+
+  it('rút ở bài A không ảnh hưởng bài B của cùng form', async () => {
+    const owner = await createUser({ username: 'owner_unsub_3' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const subA = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' }, marketingConsent: true });
+    const subB = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'b@b.com' }, marketingConsent: true });
+
+    const rowA = await db.query(`SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`, [subA.body.data.accessToken]);
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${rowA.rows[0].unsubscribe_token}`);
+    expect(unsubRes.status).toBe(200);
+
+    const rowB = await db.query(`SELECT marketing_consent FROM form_submissions WHERE access_token = $1`, [subB.body.data.accessToken]);
+    expect(rowB.rows[0].marketing_consent).toBe(true);
+  });
+
+  it('form đã bị ẨN (super admin adminDisabledAt) → link vẫn rút được (200)', async () => {
+    const owner = await createUser({ username: 'owner_unsub_4' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' }, marketingConsent: true });
+    const row = await db.query(`SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`, [submitRes.body.data.accessToken]);
+
+    await db.query(`UPDATE forms SET admin_disabled_at = NOW() WHERE id = $1`, [form.id]);
+
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+    expect(unsubRes.status).toBe(200);
+  });
+
+  it('form CHƯA XUẤT BẢN (chủ tắt sau khi nộp) → link vẫn rút được (200)', async () => {
+    const owner = await createUser({ username: 'owner_unsub_5' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' }, marketingConsent: true });
+    const row = await db.query(`SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`, [submitRes.body.data.accessToken]);
+
+    await request(app)
+      .put(`/api/forms/${form.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ isPublished: false });
+
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+    expect(unsubRes.status).toBe(200);
+  });
+
+  it('chủ form ĐÃ HẾT GÓI → link vẫn rút được (200) — quyền người nộp không phụ thuộc gói của chủ', async () => {
+    const owner = await createUser({ username: 'owner_unsub_6' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' }, marketingConsent: true });
+    const row = await db.query(`SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`, [submitRes.body.data.accessToken]);
+
+    await db.query(`UPDATE users SET subscription_expires_at = NOW() - INTERVAL '30 days' WHERE id = $1`, [owner.id]);
+    await db.query(
+      `UPDATE plans SET grace_period_days = 0 WHERE id = (SELECT active_plan_id FROM users WHERE id = $1)`,
+      [owner.id]
+    );
+
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+    expect(unsubRes.status).toBe(200);
+  });
+
+  it('bài chưa từng tích đồng ý (marketing_consent NULL) → vẫn trả 200, ghi consent_withdrawn_at', async () => {
+    const owner = await createUser({ username: 'owner_unsub_7' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' } });
+    const row = await db.query(`SELECT unsubscribe_token, marketing_consent FROM form_submissions WHERE access_token = $1`, [submitRes.body.data.accessToken]);
+    expect(row.rows[0].marketing_consent).toBeNull();
+
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+    expect(unsubRes.status).toBe(200);
+
+    const after = await db.query(`SELECT marketing_consent, consent_withdrawn_at FROM form_submissions WHERE unsubscribe_token = $1`, [row.rows[0].unsubscribe_token]);
+    expect(after.rows[0].marketing_consent).toBe(false);
+    expect(after.rows[0].consent_withdrawn_at).not.toBeNull();
+  });
+
+  it('danh sách bài nộp của chủ (GET /api/forms/:id/submissions) có consentWithdrawnAt', async () => {
+    const owner = await createUser({ username: 'owner_unsub_8' });
+    const token = await loginAs(owner);
+    const form = await createSimplePublishedForm(token);
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'a@b.com' }, marketingConsent: true });
+    const row = await db.query(`SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`, [submitRes.body.data.accessToken]);
+    await request(app).get(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+
+    const listRes = await request(app)
+      .get(`/api/forms/${form.id}/submissions`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(listRes.status).toBe(200);
+    const submission = listRes.body.data.submissions[0];
+    expect(submission.consentWithdrawnAt).toBeTruthy();
     expect(submission).not.toHaveProperty('unsubscribeToken');
   });
 });

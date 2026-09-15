@@ -9,6 +9,7 @@ import { sendSystemEmail, SENDER_NAME } from '../utils/systemEmail.util.js';
 import { escapeHtml } from '../utils/htmlEscape.util.js';
 import { formatAppointmentVn } from '../utils/formBooking.util.js';
 import { logError } from '../utils/logger.util.js';
+import { buildFormUnsubscribeFooterHtml } from '../utils/formUnsubscribeFooter.util.js';
 
 /**
  * @returns {Promise<{ candidates: number, sent: number, failed: number, skippedByCap: number, synced: number }>}
@@ -39,10 +40,16 @@ export async function runFormBookingReminder() {
 
     try {
       const subject = `[${SENDER_NAME}] Nhắc lịch hẹn sắp tới - ${row.formTitle}`;
+      const footerHtml = buildFormUnsubscribeFooterHtml({
+        marketingConsent: row.marketingConsent,
+        consentWithdrawnAt: row.consentWithdrawnAt,
+        unsubscribeToken: row.unsubscribeToken,
+      });
       const html = `
         <h2>Nhắc lịch hẹn sắp tới</h2>
         <p>Biểu mẫu: <strong>${escapeHtml(row.formTitle)}</strong></p>
         <p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(new Date(row.appointmentAt)))}</strong></p>
+        ${footerHtml}
       `;
       await sendSystemEmail({
         to: row.respondentEmail,

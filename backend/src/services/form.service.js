@@ -34,6 +34,8 @@ import { markDeletedAfterUnlink } from './storage/storageObject.service.js';
 import { buildFormAssetUrl } from './formAsset.service.js';
 import landingPageRepository from '../repositories/landingPage.repository.js';
 import { canonicalLandingPageSlug } from '../utils/landingPageSlugCanonical.util.js';
+import { buildFormUnsubscribeFooterHtml } from '../utils/formUnsubscribeFooter.util.js';
+import { renderLeadUnsubscribeHtml } from '../utils/leadUnsubscribeHtml.util.js';
 
 const MAX_SLOTS_DAYS_PARAM = 31;
 const DEFAULT_SLOTS_DAYS_PARAM = 7;
@@ -637,13 +639,26 @@ class FormService {
    * @param {object} form
    * @param {object} confirmedSubmission
    */
-  notifyPaymentConfirmed(form, confirmedSubmission) {
+  async notifyPaymentConfirmed(form, confirmedSubmission) {
     if (!confirmedSubmission.respondentEmail || !form.settings?.sendConfirmation) return;
+
+    // PR-7b — chân thư "Rút lại đồng ý": lấy RIÊNG qua getSubmissionConsentInfo (không nằm trong
+    // RETURNING của confirmSubmissionPayment, vốn đi thẳng ra API confirmPayment cho chủ form —
+    // xem docstring getSubmissionConsentInfo).
+    let footerHtml = '';
+    try {
+      const consentInfo = await formRepository.getSubmissionConsentInfo(confirmedSubmission.id);
+      if (consentInfo) footerHtml = buildFormUnsubscribeFooterHtml(consentInfo);
+    } catch (err) {
+      logError(`[FormService] Lỗi lấy thông tin đồng ý cho submission ${confirmedSubmission.id}: ${err.message}`);
+    }
+
     const html = `
       <h2>Đã xác nhận thanh toán</h2>
       <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
       ${confirmedSubmission.appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(new Date(confirmedSubmission.appointmentAt)))}</strong></p>` : ''}
       <p>Mã giao dịch: <strong>${escapeHtml(confirmedSubmission.paymentCode || '')}</strong></p>
+      ${footerHtml}
     `;
     void this.sendFormRespondentEmail({
       formId: form.id,
@@ -990,6 +1005,7 @@ class FormService {
           <h2>Đã xác nhận lịch hẹn của bạn</h2>
           <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
           <p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>
+          ${buildFormUnsubscribeFooterHtml({ marketingConsent: validated.marketingConsent, unsubscribeToken: submission.unsubscribeToken })}
         `,
         logLabel: 'thư xác nhận lịch hẹn',
       });
@@ -1018,6 +1034,7 @@ class FormService {
           <p>Nội dung chuyển khoản (bắt buộc ghi đúng): <strong>${escapeHtml(submission.paymentCode)}</strong></p>
           <p>Hạn giữ chỗ: <strong>${holdMinutesText} phút</strong> kể từ lúc đặt.</p>
           <p>Theo dõi trạng thái tại: <a href="${escapeHtml(statusUrl)}">${escapeHtml(statusUrl)}</a></p>
+          ${buildFormUnsubscribeFooterHtml({ marketingConsent: validated.marketingConsent, unsubscribeToken: submission.unsubscribeToken })}
         `,
         logLabel: 'thư hướng dẫn chuyển khoản',
       });
@@ -1069,6 +1086,77 @@ class FormService {
       .catch((emailErr) => {
         logError(`[FormService] Gửi ${logLabel} thất bại cho submission ${submissionId}: ${emailErr.message}`);
       });
+  }
+
+  /**
+   * Xử lý rút lại đồng ý tiếp thị cho MỘT bài nộp Biểu mẫu thông qua public unsubscribe link
+   * (PR-7b, mô phỏng `lead.service.js` `withdrawLeadConsent`). Không chặn theo trạng thái form
+   * (ẩn/tắt bởi super admin, chủ hết gói) — quyền rút đồng ý của người nộp không phụ thuộc trạng
+   * thái vận hành của form.
+   *
+   * @param {object} params
+   * @param {string} params.token
+   * @param {string} [params.privacyPolicyUrl]
+   * @returns {Promise<{ statusCode: number, html: string }>}
+   */
+  async withdrawSubmissionConsent({ token, privacyPolicyUrl }) {
+    const cleanToken = String(token || '').trim();
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const renderHtml = (opts) => renderLeadUnsubscribeHtml({ ...opts, privacyPolicyUrl });
+
+    if (!cleanToken || !UUID_RE.test(cleanToken)) {
+      return {
+        statusCode: 404,
+        html: renderHtml({
+          title: 'Liên kết không hợp lệ / Invalid Link',
+          headingVi: 'Liên kết không hợp lệ',
+          textVi: 'Liên kết rút lại đồng ý không hợp lệ hoặc đã hết hạn.',
+          headingEn: 'Invalid link',
+          textEn: 'The consent withdrawal link is invalid or has expired.',
+        }),
+      };
+    }
+
+    const submission = await formRepository.findSubmissionByUnsubscribeToken(cleanToken);
+    if (!submission) {
+      return {
+        statusCode: 404,
+        html: renderHtml({
+          title: 'Liên kết không tồn tại / Link Not Found',
+          headingVi: 'Liên kết không tồn tại',
+          textVi: 'Không tìm thấy bài nộp tương ứng với liên kết này.',
+          headingEn: 'Link not found',
+          textEn: 'We could not find any submission matching this link.',
+        }),
+      };
+    }
+
+    const alreadyWithdrawn = submission.marketingConsent === false && submission.consentWithdrawnAt != null;
+    if (alreadyWithdrawn) {
+      return {
+        statusCode: 200,
+        html: renderHtml({
+          title: 'Đã rút lại đồng ý / Consent Already Withdrawn',
+          headingVi: 'Yêu cầu đã được ghi nhận trước đó',
+          textVi: 'Bạn đã rút lại đồng ý nhận thông tin tiếp thị trước đó. Chúng tôi sẽ không gửi thông tin tiếp thị đến bạn.',
+          headingEn: 'Request already recorded',
+          textEn: 'You had already withdrawn your marketing consent previously. We will not send marketing communications to you.',
+        }),
+      };
+    }
+
+    await formRepository.withdrawSubmissionConsentById(submission.id);
+
+    return {
+      statusCode: 200,
+      html: renderHtml({
+        title: 'Rút lại đồng ý thành công / Consent Withdrawn',
+        headingVi: 'Rút lại đồng ý thành công',
+        textVi: 'Bạn đã rút lại đồng ý nhận thông tin tiếp thị thành công. Chúng tôi đã ghi nhận và sẽ không gửi thông tin tiếp thị đến bạn.',
+        headingEn: 'Consent withdrawn successfully',
+        textEn: 'You have successfully withdrawn your marketing consent. We will no longer send marketing communications to you.',
+      }),
+    };
   }
 
   /**

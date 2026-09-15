@@ -287,6 +287,47 @@ describe('Node chiến dịch "Lấy dữ liệu từ biểu mẫu" (read_form_s
     expect(previewRes.body.data.columns[0]).toHaveProperty('type');
   });
 
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7b — người nộp tự rút đồng ý qua link công
+   * khai, node chiến dịch đọc lại NGAY ở lượt sau phải không còn thấy bài đó (marketing_consent
+   * tự rơi về false, `listConsentedSubmissionsForCampaign` lọc `IS TRUE` — không cần đổi code
+   * node, chỉ cần đường rút đồng ý ghi đúng cột).
+   */
+  it('bấm link rút đồng ý → node chiến dịch (loader lẫn API preview) đọc lại KHÔNG còn thấy bài đó', async () => {
+    const owner = await createUser({ username: 'owner_node_unsub_1' });
+    const token = await loginAs(owner);
+    const form = await createAndPublishForm(token);
+
+    await submitPublic(form, { name: 'Sẽ Rút Đồng Ý', email: 'withdraw@example.com', marketingConsent: 'true' });
+    await submitPublic(form, { name: 'Vẫn Đồng Ý', email: 'stays@example.com', marketingConsent: 'true' });
+
+    const node = {
+      id: 'node_unsub',
+      node_subtype: 'read_form_submissions',
+      config: { formId: form.id },
+    };
+    const before = await campaignNodeDataService.getCustomersFromDataNode(node, owner.id, []);
+    expect(before.items.map((i) => i.email).sort()).toEqual(['stays@example.com', 'withdraw@example.com']);
+
+    const row = await db.query(
+      'SELECT unsubscribe_token FROM form_submissions WHERE respondent_email = $1',
+      ['withdraw@example.com']
+    );
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+    expect(unsubRes.status).toBe(200);
+
+    const after = await campaignNodeDataService.getCustomersFromDataNode(node, owner.id, []);
+    expect(after.items).toHaveLength(1);
+    expect(after.items[0].email).toBe('stays@example.com');
+
+    const previewRes = await request(app)
+      .get(`/api/forms/${form.id}/campaign-preview`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(previewRes.status).toBe(200);
+    expect(previewRes.body.data.items).toHaveLength(1);
+    expect(previewRes.body.data.items[0].email).toBe('stays@example.com');
+  });
+
   describe('Lưu khách hàng sau node form (consent_source) — PR-6a review', () => {
     // saveCustomersFromCampaignDirect cần saveCustomerFieldMap kiểu {mode:'node', field:<khoá
     // phẳng trên item>} để thật sự đọc được email/phone/fullName — không nodeId thì

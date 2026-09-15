@@ -816,3 +816,81 @@ describe('PR-3b — thư hướng dẫn chuyển khoản + thư đã xác nhận
     expect(statusRes.status).toBe(404);
   });
 });
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7b — link "Rút lại đồng ý" trong thư hướng dẫn
+ * chuyển khoản + thư "đã xác nhận thanh toán".
+ */
+describe('PR-7b — link rút lại đồng ý trong thư thanh toán', () => {
+  it('nộp bài thu tiền có email + tích đồng ý → thư hướng dẫn chuyển khoản có link /api/public/forms/unsubscribe/<token đúng>', async () => {
+    const owner = await createUser({ username: 'owner_pay_unsub_1' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+    const emailField = form.fields[0];
+
+    mockSendMail.mockClear();
+    const res = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'unsub_pay1@example.com' }, marketingConsent: true });
+    expect(res.status).toBe(201);
+
+    const row = await db.query(`SELECT unsubscribe_token FROM form_submissions WHERE access_token = $1`, [res.body.data.accessToken]);
+    const unsubscribeToken = row.rows[0].unsubscribe_token;
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'unsub_pay1@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].html).toContain(`/api/public/forms/unsubscribe/${unsubscribeToken}`);
+  });
+
+  it('nộp bài thu tiền có email + KHÔNG tích đồng ý → thư hướng dẫn chuyển khoản KHÔNG có link rút', async () => {
+    const owner = await createUser({ username: 'owner_pay_unsub_2' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+    const emailField = form.fields[0];
+
+    mockSendMail.mockClear();
+    const res = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'unsub_pay2@example.com' } });
+    expect(res.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'unsub_pay2@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].html).not.toContain('/api/public/forms/unsubscribe/');
+  });
+
+  it('chủ bấm "Đã nhận tiền", bài đã tích đồng ý → thư "đã xác nhận thanh toán" có link rút đúng token', async () => {
+    const owner = await createUser({ username: 'owner_pay_unsub_3' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'unsub_pay3@example.com' }, marketingConsent: true });
+    expect(submitRes.status).toBe(201);
+    const row = await db.query(
+      `SELECT id, unsubscribe_token FROM form_submissions WHERE access_token = $1`,
+      [submitRes.body.data.accessToken]
+    );
+
+    mockSendMail.mockClear();
+    const confirmRes = await request(app)
+      .post(`/api/forms/${form.id}/submissions/${row.rows[0].id}/confirm-payment`)
+      .set('Authorization', `Bearer ${token}`)
+      .send();
+    expect(confirmRes.status).toBe(200);
+    // Chốt "Không trả unsubscribeToken ở bất kỳ API nào" — API confirm-payment cho chủ form.
+    expect(confirmRes.body.data).not.toHaveProperty('unsubscribeToken');
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'unsub_pay3@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].html).toContain(`/api/public/forms/unsubscribe/${row.rows[0].unsubscribe_token}`);
+  });
+});

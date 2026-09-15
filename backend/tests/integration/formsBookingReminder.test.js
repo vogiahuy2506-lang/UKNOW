@@ -54,7 +54,7 @@ function futureDate(daysFromNow) {
   return addDaysToDateStr(todayVn(new Date()), daysFromNow);
 }
 
-async function bookAppointment(token, { title = 'Form Nhắc Lịch', email = 'respondent@example.com', sendConfirmation = true } = {}) {
+async function bookAppointment(token, { title = 'Form Nhắc Lịch', email = 'respondent@example.com', sendConfirmation = true, marketingConsent = null } = {}) {
   const createRes = await request(app)
     .post('/api/forms')
     .set('Authorization', `Bearer ${token}`)
@@ -79,13 +79,15 @@ async function bookAppointment(token, { title = 'Form Nhắc Lịch', email = 'r
 
   const emailField = form.fields[0];
   const answers = email ? { [emailField.key]: email } : {};
+  const body = { answers, appointmentDate: futureDate(10), appointmentTime: ALL_WEEK_TIME };
+  if (marketingConsent !== null) body.marketingConsent = marketingConsent;
   const bookRes = await request(app)
     .post(`/api/public/forms/${form.publicKey}/submissions`)
-    .send({ answers, appointmentDate: futureDate(10), appointmentTime: ALL_WEEK_TIME });
+    .send(body);
   expect(bookRes.status).toBe(201);
 
-  const row = await db.query(`SELECT id FROM form_submissions WHERE form_id = $1`, [form.id]);
-  return { formId: form.id, submissionId: row.rows[0].id };
+  const row = await db.query(`SELECT id, unsubscribe_token FROM form_submissions WHERE form_id = $1`, [form.id]);
+  return { formId: form.id, submissionId: row.rows[0].id, unsubscribeToken: row.rows[0].unsubscribe_token };
 }
 
 /** Đặt appointment_at cách "giờ hẹn cách NOW `hoursFromNow` giờ", created_at cách appointment_at `createdDaysBeforeAppointment` ngày. */
@@ -237,5 +239,68 @@ describe('Cron form_booking_reminder (PR-2a việc 5)', () => {
 
     const row = await db.query(`SELECT reminder_sent_at FROM form_submissions WHERE id = $1`, [submissionId]);
     expect(row.rows[0].reminder_sent_at).toBeNull();
+  });
+});
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7b — link "Rút lại đồng ý" trong thư nhắc lịch.
+ */
+describe('Cron form_booking_reminder — link rút lại đồng ý (PR-7b)', () => {
+  it('bài đã tích đồng ý → thư nhắc lịch có link /api/public/forms/unsubscribe/<token đúng của bài>', async () => {
+    const owner = await createUser({ username: 'owner_reminder_consent' });
+    const token = await loginAs(owner);
+    const { submissionId, unsubscribeToken } = await bookAppointment(token, {
+      email: 'reminder_consent@example.com',
+      marketingConsent: true,
+    });
+    await backdateSubmission(submissionId, { hoursFromNow: 23.83, createdDaysBeforeAppointment: 3 });
+    mockSendMail.mockClear();
+
+    const result = await runFormBookingReminder();
+    expect(result.sent).toBe(1);
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'reminder_consent@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].html).toContain(`/api/public/forms/unsubscribe/${unsubscribeToken}`);
+  });
+
+  it('bài KHÔNG tích đồng ý → thư nhắc lịch KHÔNG có link rút', async () => {
+    const owner = await createUser({ username: 'owner_reminder_noconsent' });
+    const token = await loginAs(owner);
+    const { submissionId } = await bookAppointment(token, {
+      email: 'reminder_noconsent@example.com',
+      marketingConsent: false,
+    });
+    await backdateSubmission(submissionId, { hoursFromNow: 23.83, createdDaysBeforeAppointment: 3 });
+    mockSendMail.mockClear();
+
+    const result = await runFormBookingReminder();
+    expect(result.sent).toBe(1);
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'reminder_noconsent@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].html).not.toContain('/api/public/forms/unsubscribe/');
+  });
+
+  it('bài đã đồng ý NHƯNG đã rút trước đó (bấm link) → thư nhắc lịch gửi sau đó KHÔNG có link rút', async () => {
+    const owner = await createUser({ username: 'owner_reminder_withdrawn' });
+    const token = await loginAs(owner);
+    const { submissionId, unsubscribeToken } = await bookAppointment(token, {
+      email: 'reminder_withdrawn@example.com',
+      marketingConsent: true,
+    });
+
+    const unsubRes = await request(app).get(`/api/public/forms/unsubscribe/${unsubscribeToken}`);
+    expect(unsubRes.status).toBe(200);
+
+    await backdateSubmission(submissionId, { hoursFromNow: 23.83, createdDaysBeforeAppointment: 3 });
+    mockSendMail.mockClear();
+
+    const result = await runFormBookingReminder();
+    expect(result.sent).toBe(1);
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'reminder_withdrawn@example.com');
+    expect(call).toBeTruthy();
+    expect(call[0].html).not.toContain('/api/public/forms/unsubscribe/');
   });
 });
