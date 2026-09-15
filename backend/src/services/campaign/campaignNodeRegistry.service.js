@@ -639,6 +639,9 @@ class CampaignNodeRegistryService {
     lines.push('• nodeType: "data", nodeSubtype: "read_landing_leads"');
     lines.push('  config: {}');
     lines.push('');
+    lines.push('• nodeType: "data", nodeSubtype: "read_form_submissions"    ← người đã nộp Biểu mẫu và ĐỒNG Ý nhận tin');
+    lines.push('  config: { "formId": <ID_form> } (formId lấy từ danh sách Biểu mẫu trong TÀI NGUYÊN CÓ SẴN — BẮT BUỘC)');
+    lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "select_zalo_account"');
     lines.push('  config: { "zaloAccountId": <ID> } (BẮT BUỘC trước get_all_friends/get_all_groups)');
     lines.push('');

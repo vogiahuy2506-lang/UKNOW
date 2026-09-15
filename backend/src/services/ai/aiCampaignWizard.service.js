@@ -100,6 +100,12 @@ const inferDataSourceFromText = (text = '') => {
   if (/google\s*sheet|spreadsheet|docs\.google\.com\/spreadsheets|excel|xlsx|xls|csv|file|t[eệ]p|tập tin/.test(normalized)) {
     return 'sheet';
   }
+  // PR-6c — Bẫy chữ: "form" xuất hiện cả trong câu nói về landing ("người điền form trên landing
+  // page") nên KHÔNG dùng chữ "form" trần để đoán nguồn — chỉ dựa các cụm tiếng Việt đặc trưng
+  // của Biểu mẫu (biểu mẫu / đặt lịch / người đặt). Xét TRƯỚC regex landing ngay dưới: câu "gửi
+  // cho người đặt lịch ở biểu mẫu" phải ra 'form', không rơi vào 'landing' dù không chứa các cụm
+  // này thì vẫn khớp landing bình thường.
+  if (/biểu mẫu|bieu mau|đặt lịch|dat lich|người đặt|nguoi dat/.test(normalized)) return 'form';
   if (/landing page|landing|lead/.test(normalized)) return 'landing';
   if (/danh sách khách hàng|danh sach khach hang|khách hàng trong hệ thống|khach hang trong he thong|khách hàng có sẵn|khach hang co san|database|db|crm/.test(normalized)) {
     return 'db';
@@ -605,6 +611,13 @@ export function buildDataSourceQuestion(locale = 'vi', gateState = null) {
               description: isEnglish
                 ? 'People who submitted the form on your landing page (name, phone, email)'
                 : 'Người điền form trên trang landing (tên, SĐT, email)',
+            },
+            {
+              value: 'form',
+              label: isEnglish ? 'Form respondents' : 'Người điền Biểu mẫu',
+              description: isEnglish
+                ? 'People who submitted your Biểu mẫu (form) and agreed to receive marketing messages'
+                : 'Người đã nộp Biểu mẫu và đồng ý nhận tin (vd: đặt lịch tư vấn)',
             },
             ...(isZalo ? [{
               value: 'zalo_contacts',

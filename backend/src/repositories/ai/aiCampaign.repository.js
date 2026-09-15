@@ -132,6 +132,42 @@ class AiCampaignRepository {
     return result.rows;
   }
 
+  /**
+   * PR-6c — danh sách Biểu mẫu của chủ workspace để trợ lý AI gợi ý `formId` cho node
+   * `read_form_submissions` (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, "Bổ sung 15/09 khi
+   * soạn lệnh PR-6c" mục 1). Chỉ form ĐÃ XUẤT BẢN và KHÔNG bị super admin tắt — form nháp/đã tắt
+   * không nhận bài nộp nên đưa cho AI chỉ gây nhầm lẫn ("form-6c: chọn form chưa xuất bản → node
+   * ra 0 người trong im lặng" — cùng lớp lỗi mà PR-6 gốc đã tránh cho landing).
+   *
+   * `consentedCount` đếm ĐÚNG điều kiện node thật sự dùng khi đọc (`marketing_consent IS TRUE AND
+   * status <> 'cancelled'`, xem `form.repository.js` `listConsentedSubmissionsForCampaign`) — để
+   * AI biết trước form có `consentEnabled=false` hay 0 bài đồng ý thì cảnh báo "node sẽ không có
+   * ai" thay vì im lặng tạo node rỗng.
+   *
+   * @param {number} ownerId workspace_owner_id
+   * @returns {Promise<Array<{ id: number, title: string, isPublished: boolean, consentEnabled: boolean, consentedCount: number }>>}
+   */
+  async getForms(ownerId) {
+    const result = await db.query(
+      `SELECT
+         f.id,
+         f.title,
+         f.is_published,
+         COALESCE((f.settings->>'consentEnabled')::boolean, false) AS consent_enabled,
+         COUNT(s.id) FILTER (WHERE s.marketing_consent IS TRUE AND s.status <> 'cancelled')::int AS consented_count
+       FROM forms f
+       LEFT JOIN form_submissions s ON s.form_id = f.id
+       WHERE f.workspace_owner_id = $1
+         AND f.admin_disabled_at IS NULL
+         AND f.is_published = TRUE
+       GROUP BY f.id
+       ORDER BY f.created_at DESC
+       LIMIT 20`,
+      [ownerId]
+    );
+    return result.rows;
+  }
+
   async getCustomerStatTotal(userId) {
     const result = await db.query(
       `SELECT COUNT(*) as total FROM customers WHERE id_user = $1`,

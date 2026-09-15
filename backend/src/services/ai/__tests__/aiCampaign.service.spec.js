@@ -15,6 +15,7 @@ const getRecommendedCampaignType = jest.fn(async () => 'mixed');
 const getCustomerStats = jest.fn(async () => ({ total: 0, hasEmail: 0, hasZalo: 0 }));
 const getCourses = jest.fn(async () => []);
 const getLandingPages = jest.fn(async () => []);
+const getForms = jest.fn(async () => []);
 const getFormattedProfileForPrompt = jest.fn(async () => '');
 const getContextForPrompt = jest.fn(async () => '');
 
@@ -86,6 +87,7 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
     getCustomerStats,
     getCourses,
     getLandingPages,
+    getForms,
   },
 }));
 
@@ -120,6 +122,7 @@ describe('aiCampaign.service', () => {
     getCustomerStats.mockReset();
     getCourses.mockReset();
     getLandingPages.mockReset();
+    getForms.mockReset();
     getFormattedProfileForPrompt.mockReset();
     getContextForPrompt.mockReset();
     getZaloAccountsFull.mockResolvedValue([]);
@@ -132,6 +135,7 @@ describe('aiCampaign.service', () => {
     getCustomerStats.mockResolvedValue({ total: 0, hasEmail: 0, hasZalo: 0 });
     getCourses.mockResolvedValue([]);
     getLandingPages.mockResolvedValue([]);
+    getForms.mockResolvedValue([]);
     getFormattedProfileForPrompt.mockResolvedValue('');
     getContextForPrompt.mockResolvedValue('');
   });
@@ -552,6 +556,39 @@ describe('aiCampaign.service', () => {
     expect(getCourses).not.toHaveBeenCalledWith(9);
     expect(reserve).toHaveBeenCalledWith(9, expect.any(Object));
     expect(record).toHaveBeenCalledWith(9, expect.any(Object), expect.objectContaining({ feature: 'smart_chat' }));
+  });
+
+  it('PR-6c: prompt chat (V1) liệt kê danh sách Biểu mẫu (formId + title) và node read_form_submissions khi có 2 form', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    getForms.mockResolvedValueOnce([
+      { id: 12, title: 'Tư vấn 1-1', isPublished: true, consentEnabled: true, consentedCount: 5 },
+      { id: 20, title: 'Đặt lịch demo', isPublished: true, consentEnabled: false, consentedCount: 0 },
+    ]);
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            finishReason: 'STOP',
+            content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] },
+          },
+        ],
+      },
+    });
+
+    await aiCampaignService.processSmartChat({
+      userId: 1,
+      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+      locale: 'vi',
+    });
+
+    const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+    const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+    expect(systemPrompt).toContain('id: 12');
+    expect(systemPrompt).toContain('Tư vấn 1-1');
+    expect(systemPrompt).toContain('id: 20');
+    expect(systemPrompt).toContain('Đặt lịch demo');
+    expect(systemPrompt).toContain('data/read_form_submissions');
   });
 
   it('employee chat V2: loads tenant resources by owner, meters Gemini by actor', async () => {

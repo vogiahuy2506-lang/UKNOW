@@ -955,10 +955,11 @@ QUY TẮC:
     // Thu thập existing resources cho non-admin users (theo workspace owner)
     let existingResources = '';
     let landingPages = [];
+    let forms = [];
     let firstZaloAccountId = null;
     if (ownerId) {
       try {
-        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, _landingPages] =
+        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, _landingPages, _forms] =
           await Promise.all([
             aiPromptResources.getEmailTemplates(ownerId),
             aiPromptResources.getZaloAccounts(ownerId),
@@ -968,9 +969,11 @@ QUY TẮC:
             aiPromptResources.getCustomerStats(ownerId),
             aiPromptResources.getCourses(ownerId),
             aiPromptResources.getLandingPages(ownerId),
+            aiPromptResources.getForms(ownerId),
           ]);
 
         landingPages = _landingPages;
+        forms = _forms;
         const connectedZaloAccount = zaloAccounts.find(
           (a) => (a.status === 'connected' || !a.status) && a.isActive !== false && a.is_active !== false
         );
@@ -1001,6 +1004,9 @@ ${zaloGroups.length > 0 ? `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.gro
 🌐 Landing Pages (landingLeadsSlugs — dùng để lọc leads trong read_landing_leads):
 ${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}`).join('\n') : '  (chưa có landing page nào)'}
 
+📝 Biểu mẫu (formId — dùng trong read_form_submissions, lấy người đã nộp và ĐỒNG Ý nhận tin):
+${forms.length > 0 ? forms.map(f => `  - id: ${f.id} | "${f.title}"${f.consentEnabled ? ` (${f.consentedCount} người đã đồng ý)` : ' (form CHƯA hỏi đồng ý nhận tin — node sẽ không có ai)'}`).join('\n') : '  (chưa có biểu mẫu nào xuất bản)'}
+
 NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại này):
 • trigger/manual — điểm khởi đầu
 • data/interested_customers — lấy khách từ DB (config: interestedCustomerType, interestedLimit, interestedCourseIds, notPurchasedCourseIds)
@@ -1009,6 +1015,7 @@ NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại n
   - notPurchasedCourseIds: [id1, id2] → loại trừ khách ĐÃ mua các khóa này
 • data/read_sheet — đọc Google Sheet (config: sheetUrl BẮT BUỘC)
 • data/read_landing_leads — lấy leads từ landing page (config: landingLeadsSlugs: ["slug"] — lấy từ danh sách Landing Pages trong TÀI NGUYÊN)
+• data/read_form_submissions — lấy người đã nộp biểu mẫu và ĐỒNG Ý nhận tin (config: formId — lấy từ danh sách Biểu mẫu trong TÀI NGUYÊN)
 • data/select_zalo_account — chọn TK Zalo (BẮT BUỘC trong MỌI chiến dịch Zalo, đặt trước node gửi)
 • data/get_all_friends — lấy danh sách bạn bè
 • data/get_all_groups — lấy danh sách nhóm
@@ -1514,11 +1521,13 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - sheetUrl có giá trị → dùng ĐÚNG URL đó làm config.sheetUrl cho node read_sheet (KHÔNG để trống).
 - zaloGroupIds có giá trị → dùng ĐÚNG danh sách này cho config.zaloGroupIds và config.zaloSelectedGroupIds trong send_zalo_group và get_all_groups.
 - landingLeadsSlugs có giá trị → dùng ĐÚNG mảng slug này cho config.landingLeadsSlugs trong read_landing_leads.
+- formId có giá trị → dùng ĐÚNG id đó làm config.formId trong read_form_submissions.
 - sendMode / zaloPersonalSendMode / zaloGroupSendMode:
   • Khi lịch gửi là chuỗi nhiều ngày (schedule.mode === 'drip' hoặc có delayValue > 0 giữa các tin/bước): BẮT BUỘC đặt config.sendMode = "schedule" (cho send_email), config.zaloPersonalSendMode = "schedule" (cho send_zalo_personal), config.zaloGroupSendMode = "schedule" (cho send_zalo_group).
   • Khi gửi một lần (schedule.mode === 'once' và không có delay): đặt "all".
 - zaloAccount="<id>" → dùng ID đó làm zaloAccountId trong tất cả action/data node Zalo; nếu không có câu hỏi này → dùng tài khoản mặc định (firstZaloAccountId)
 - landingPage="<slug>" → dùng slug đó trong landingLeadsSlugs của read_landing_leads
+- formId="<id>" → dùng id đó làm config.formId trong read_form_submissions
 - Dùng CAMPAIGN_BRIEF DATA (nếu có) để viết nội dung: không bịa sản phẩm ngoài brief; không tự map productIds sang interestedCourseIds / notPurchasedCourseIds trừ khi user NÓI RÕ muốn lọc audience theo đã mua/chưa mua/quan tâm khóa đó
 - dataSource="zalo_contacts" → xử lý GIỐNG "manual": KHÔNG tạo interested_customers/read_sheet/get_all_friends. Người nhận là các UID người dùng đã chọn, hệ thống truyền riêng ở bước chuẩn bị gửi. Vẫn PHẢI có select_zalo_account.
 - dataSource="sheet"          → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", headerRow: 1, dataStartRow: 2 }
@@ -1534,6 +1543,9 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - dataSource="landing" + user CHƯA chọn landing page cụ thể + có nhiều landing page trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Landing page cần lấy leads"], content: "Bạn muốn lấy leads từ landing page nào? (liệt kê tên trang)\n${landingPages.map(lp => `- ${lp.title} (${lp.slug})`).join('\n')}"
 - dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] }
 - dataSource="landing" + không có landing page nào → type: "text", content: "Tài khoản chưa có landing page nào. Bạn cần tạo landing page trước để thu thập leads."
+- dataSource="form" + user CHƯA chọn biểu mẫu cụ thể + có nhiều biểu mẫu trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Biểu mẫu cần lấy người đã nộp"], content: "Bạn muốn lấy người đã nộp từ biểu mẫu nào? (liệt kê tên biểu mẫu)\n${forms.map(f => `- ${f.title} (id: ${f.id})`).join('\n')}"
+- dataSource="form" + user đã chọn hoặc chỉ có 1 biểu mẫu → nodeSubtype: "read_form_submissions", config: { formId: <id> }. Biểu mẫu đó có consentEnabled=false (xem TÀI NGUYÊN) → vẫn tạo node bình thường, nhưng PHẢI nói rõ trong content: "Lưu ý: biểu mẫu này chưa bật hỏi đồng ý nhận tin nên node sẽ không có ai."
+- dataSource="form" + không có biểu mẫu nào đã xuất bản → type: "text", content: "Tài khoản chưa có biểu mẫu nào xuất bản. Bạn cần xuất bản một biểu mẫu trước để thu thập người đăng ký."
 
 Ví dụ campaign drip 2 đợt (dataSource=db):
 nodes: trigger → select_zalo_account (nếu là Zalo) → interested_customers → action_wave1(delay=0) → action_wave2(delay=3 days) → end
@@ -1547,6 +1559,9 @@ nodes: trigger → read_sheet(sheetUrl="https://docs.google.com/spreadsheets/d/1
 Ví dụ lấy từ landing page (dataSource=landing):
 nodes: trigger → read_landing_leads → action_wave1(delay=0) → end
 
+Ví dụ lấy từ biểu mẫu (dataSource=form):
+nodes: trigger → read_form_submissions(formId=12) → action_wave1(delay=0) → end
+
 Ví dụ nhiều sản phẩm gửi 1 lần (CAMPAIGN_BRIEF multiple_products):
 nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days) → end
 
@@ -1558,7 +1573,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 ### Audience và nguồn khách:
 - KHÔNG có field audience trong ask_campaign_details; nguồn khách được chọn bằng dataSource.
 - KHÔNG bao giờ giả định khách hàng lấy từ file/sheet khi user chưa nói rõ.
-- Nếu user chưa nói rõ nguồn khách, hãy hỏi "Lấy danh sách khách từ đâu?" với các lựa chọn db/sheet/landing/manual/zalo_contacts.
+- Nếu user chưa nói rõ nguồn khách, hãy hỏi "Lấy danh sách khách từ đâu?" với các lựa chọn db/sheet/landing/form/manual/zalo_contacts.
 
 ## HEURISTICS CHO type="create_and_run":
 - CHỈ khi người dùng nói RÕ ràng muốn bỏ xác nhận: "tạo và chạy", "create and run", "chạy ngay chiến dịch"
@@ -1915,7 +1930,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
     if (ownerId) {
       try {
-        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, landingPages] =
+        const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, landingPages, forms] =
           await Promise.all([
             aiPromptResources.getEmailTemplates(ownerId),
             aiPromptResources.getZaloAccounts(ownerId),
@@ -1924,6 +1939,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             aiPromptResources.getRecommendedCampaignType(ownerId),
             aiPromptResources.getCustomerStats(ownerId),
             aiPromptResources.getLandingPages(ownerId),
+            aiPromptResources.getForms(ownerId),
           ]);
 
         // Get node context từ registry
@@ -1965,6 +1981,9 @@ ${templateSelectionPrompt}
 
 📄 Landing Pages:
 ${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}`).join('\n') : '  (chưa có landing page nào)'}
+
+📝 Biểu mẫu (formId — dùng trong read_form_submissions, lấy người đã nộp và ĐỒNG Ý nhận tin):
+${forms.length > 0 ? forms.map(f => `  - id: ${f.id} | "${f.title}"${f.consentEnabled ? ` (${f.consentedCount} người đã đồng ý)` : ' (form CHƯA hỏi đồng ý nhận tin — node sẽ không có ai)'}`).join('\n') : '  (chưa có biểu mẫu nào xuất bản)'}
 `;
       } catch (e) {
         console.warn('[AI V2] Không lấy được resources:', e.message);

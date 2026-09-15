@@ -23,9 +23,10 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
     audience: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['sheet', 'db', 'landing', 'manual', 'zalo_contacts'] },
+        type: { type: 'string', enum: ['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts'] },
         url: { type: 'string' },
         slugs: { type: 'array', items: { type: 'string' } },
+        formId: { type: 'integer' },
         groupIds: { type: 'array', items: { type: 'string' } },
         friendIds: { type: 'array', items: { type: 'string' } },
         recipientKind: { type: 'string', enum: ['email', 'phone'] },
@@ -71,7 +72,7 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
 
 const VALID_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 const VALID_SENDER_TYPES = new Set(['email_account', 'zalo_account']);
-const VALID_AUDIENCE_TYPES = new Set(['sheet', 'db', 'landing', 'manual', 'zalo_contacts']);
+const VALID_AUDIENCE_TYPES = new Set(['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts']);
 const VALID_RECIPIENT_KINDS = new Set(['email', 'phone']);
 const VALID_SCHEDULE_TYPES = new Set(['once', 'drip']);
 const VALID_LOCALES = new Set(['vi', 'en']);
@@ -308,6 +309,9 @@ export function isCompilableIntent(intent) {
       }
       if (intent.audience.type === 'landing' && (!Array.isArray(intent.audience.slugs) || intent.audience.slugs.length === 0)) {
         missing.push('audience.slugs');
+      }
+      if (intent.audience.type === 'form' && (intent.audience.formId == null || !Number.isInteger(Number(intent.audience.formId)))) {
+        missing.push('audience.formId');
       }
     }
   }

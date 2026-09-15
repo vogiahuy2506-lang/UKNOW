@@ -12,6 +12,7 @@ const KNOWN_AUDIENCE_SUBTYPES = new Set([
   'read_sheet',
   'interested_customers',
   'read_landing_leads',
+  'read_form_submissions',
   'get_all_friends',
   'get_all_groups',
 ]);
@@ -172,7 +173,16 @@ export function deriveIntentFromGraph(nodes = [], connections = []) {
     } else if (audSubtype === 'read_landing_leads') {
       audience = {
         type: 'landing',
-        slugs: Array.isArray(audCfg.landingPageSlugs) ? audCfg.landingPageSlugs : [],
+        // PR-6c — lỗi cũ: đọc audCfg.landingPageSlugs nhưng compiler ghi landingLeadsSlugs
+        // (campaignCompiler.service.js, comment giải thích tên đúng ngay tại đó) → mở lại
+        // chiến dịch landing để AI sửa thì slug luôn đọc ra rỗng, mất bộ lọc landing đã chọn.
+        slugs: Array.isArray(audCfg.landingLeadsSlugs) ? audCfg.landingLeadsSlugs : [],
+        recipientKind,
+      };
+    } else if (audSubtype === 'read_form_submissions') {
+      audience = {
+        type: 'form',
+        formId: audCfg.formId != null ? Number(audCfg.formId) : null,
         recipientKind,
       };
     } else if (audSubtype === 'get_all_friends') {

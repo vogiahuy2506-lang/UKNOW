@@ -1,4 +1,5 @@
 import aiCampaignDraftRepository from '../../repositories/ai/aiCampaignDraft.repository.js';
+import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 
@@ -233,7 +234,7 @@ class AiCampaignDraftService {
                  ['condition', 'filter', 'branch', 'split'].includes(nodeSubtype)) {
         nodeType = 'condition';
       } else if (['interested_customers', 'read_interested_customers', 'read_sheet', 'google_sheet',
-                  'read_landing_leads', 'read_courses_db', 'read_products_db'].includes(nodeSubtype)) {
+                  'read_landing_leads', 'read_form_submissions', 'read_courses_db', 'read_products_db'].includes(nodeSubtype)) {
         nodeType = nodeSubtype;
       } else if (nodeType === 'data') {
         if (['interested_customers', 'read_interested_customers'].includes(nodeSubtype)) {
@@ -363,6 +364,7 @@ class AiCampaignDraftService {
       zaloFriendIds = null,
       landingPageSlug = null,
       landingLeadsSlugs = null,
+      formId = null,
       defaultZaloAccountId = null,
       channel = null,
     } = options;
@@ -370,6 +372,9 @@ class AiCampaignDraftService {
     const targetZaloAccountId = senderAccountId || defaultZaloAccountId || null;
     const effectiveDataSource = dataSource || script.wizardDataSource || null;
     const effectiveSheetUrl = sheetUrl || script.sheetUrl || null;
+    // PR-6c — mẫu effectiveLandingSlug ngay dưới: ngữ cảnh (options.formId) thắng, rồi tới
+    // script.formId (đường AI ghi thẳng formId vào gốc script như landingPageSlug).
+    const effectiveFormId = formId || script.formId || null;
     const effectiveLandingSlug = landingPageSlug || landingLeadsSlugs || script.landingPageSlug || null;
 
     const getNodeType = (node) => String(node?.node_type || node?.nodeType || node?.type || '').toLowerCase();
@@ -396,8 +401,8 @@ class AiCampaignDraftService {
       const isUnwantedAudienceNode = (node) => {
         const st = getNodeSubtype(node);
         const t = getNodeType(node);
-        return ['interested_customers', 'read_interested_customers', 'read_sheet', 'google_sheet', 'read_landing_leads', 'get_all_friends'].includes(st) ||
-               ['interested_customers', 'read_sheet', 'read_landing_leads', 'get_all_friends'].includes(t);
+        return ['interested_customers', 'read_interested_customers', 'read_sheet', 'google_sheet', 'read_landing_leads', 'read_form_submissions', 'get_all_friends'].includes(st) ||
+               ['interested_customers', 'read_sheet', 'read_landing_leads', 'read_form_submissions', 'get_all_friends'].includes(t);
       };
 
       const unwantedNodes = script.nodes.filter(isUnwantedAudienceNode);
@@ -581,6 +586,21 @@ class AiCampaignDraftService {
       }
     }
 
+    // 4b. PR-6c — nếu có formId, điền vào node read_form_submissions (mẫu 4. ở trên). Việc chặn
+    // formId KHÔNG thuộc chủ workspace (AI bịa id) nằm ở prepareScript() — hàm này thuần/không
+    // có DB nên không tự kiểm quyền sở hữu được.
+    if (effectiveFormId) {
+      for (const node of script.nodes) {
+        const st = getNodeSubtype(node);
+        if (st === 'read_form_submissions') {
+          const cfg = node.config || node.settings || {};
+          cfg.formId = effectiveFormId;
+          node.config = cfg;
+          console.log(`[AI Patch] Gán formId=${effectiveFormId} cho node read_form_submissions`);
+        }
+      }
+    }
+
     // 5. Nếu có node gửi Zalo, đảm bảo có select_zalo_account và đúng zaloAccountId
     if (hasZaloSend) {
       const isSelectZaloAccountNode = (node) => {
@@ -737,6 +757,43 @@ class AiCampaignDraftService {
     return script;
   }
 
+  /**
+   * PR-6c — chặn `formId` KHÔNG thuộc workspace của userId lọt vào node `read_form_submissions`
+   * (AI bịa id, hoặc ngữ cảnh mang formId của workspace khác). Bỏ trống chứ không throw — người
+   * dùng tự chọn lại form đúng trong khung cấu hình node ở builder, không làm hỏng cả bản nháp
+   * (mẫu "form không tồn tại/không thuộc workspace → báo lỗi rõ" của PR-6a áp dụng ở RUN TIME,
+   * đây là lớp UX sớm hơn ở DRAFT TIME).
+   *
+   * @param {object} script
+   * @param {number} userId
+   * @returns {Promise<object>}
+   */
+  async sanitizeFormOwnership(script, userId) {
+    if (!script || !Array.isArray(script.nodes)) return script;
+    const formNodes = script.nodes.filter((n) => getNodeSubtype(n) === 'read_form_submissions');
+    if (formNodes.length === 0) return script;
+
+    let ownedFormIds;
+    try {
+      const forms = await aiCampaignRepository.getForms(userId);
+      ownedFormIds = new Set(forms.map((f) => Number(f.id)));
+    } catch (e) {
+      console.warn('[AI Patch] Không kiểm được quyền sở hữu formId, bỏ trống toàn bộ để an toàn:', e.message);
+      ownedFormIds = new Set();
+    }
+
+    for (const node of formNodes) {
+      const cfg = node.config || node.settings || {};
+      const rawFormId = cfg.formId;
+      if (rawFormId != null && !ownedFormIds.has(Number(rawFormId))) {
+        console.log(`[AI Patch] Bỏ formId=${rawFormId} khỏi node read_form_submissions — không thuộc workspace ${userId}`);
+        delete cfg.formId;
+        node.config = cfg;
+      }
+    }
+    return script;
+  }
+
   async prepareScript(script, userId, context = {}) {
     let patched;
     // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: script.compilerApplied === true
@@ -755,6 +812,7 @@ class AiCampaignDraftService {
         ...context,
       });
     }
+    patched = await this.sanitizeFormOwnership(patched, userId);
     const canonical = this.canonicalizeScript(patched);
     const nodes = this.normalizeNodes(canonical.nodes);
     await this.autoFillEmailChannels(nodes, userId);

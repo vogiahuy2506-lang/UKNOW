@@ -408,6 +408,29 @@ describe('aiCampaignDraftService.patchDeterministicCampaignScript (Zalo)', () =>
     expect(landingNode.config.landingLeadsSlugs).toEqual(['khoa-hoc-ielts-2026']);
   });
 
+  it('PR-6c scenario 4b: patches formId into read_form_submissions from options.formId', () => {
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'read_form_submissions', config: {} },
+        { id: 'n3', tempId: 'n3', nodeType: 'action', nodeSubtype: 'send_email', config: {} },
+        { id: 'n4', tempId: 'n4', nodeType: 'end', nodeSubtype: 'end', config: {} },
+      ],
+      connections: [
+        { sourceNodeId: 'n1', targetNodeId: 'n2' },
+        { sourceNodeId: 'n2', targetNodeId: 'n3' },
+        { sourceNodeId: 'n3', targetNodeId: 'n4' },
+      ],
+    };
+
+    const patched = aiCampaignDraftService.patchDeterministicCampaignScript(script, {
+      formId: 12,
+    });
+
+    const formNode = patched.nodes.find((n) => (n.nodeSubtype || n.node_subtype) === 'read_form_submissions');
+    expect(formNode.config.formId).toBe(12);
+  });
+
   it('handles scenario 8: enforces zaloGroupSendMode="schedule" for Zalo group drip campaigns', () => {
     const script = {
       nodes: [
@@ -565,5 +588,66 @@ describe('aiCampaignDraftService.prepareScript — compilerApplied skip-guard (P
     patchSpy.mockRestore();
     zaloSpy.mockRestore();
     emailSpy.mockRestore();
+  });
+});
+
+describe('aiCampaignDraftService.sanitizeFormOwnership (PR-6c)', () => {
+  const scriptWithFormNode = (formId) => ({
+    nodes: [
+      { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+      { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'read_form_submissions', config: { formId } },
+      { id: 'n3', tempId: 'n3', nodeType: 'action', nodeSubtype: 'send_email', config: {} },
+    ],
+  });
+
+  it('formId thuộc chủ workspace → giữ nguyên trong config', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getForms').mockResolvedValue([{ id: 12, title: 'Tư vấn 1-1' }]);
+
+    const result = await aiCampaignDraftService.sanitizeFormOwnership(scriptWithFormNode(12), 7);
+    const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
+    expect(node.config.formId).toBe(12);
+
+    spy.mockRestore();
+  });
+
+  it('formId KHÔNG thuộc chủ workspace (AI bịa id, hoặc của workspace khác) → bị bỏ trống', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getForms').mockResolvedValue([{ id: 12, title: 'Tư vấn 1-1' }]);
+
+    const result = await aiCampaignDraftService.sanitizeFormOwnership(scriptWithFormNode(999), 7);
+    const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
+    expect(node.config.formId).toBeUndefined();
+
+    spy.mockRestore();
+  });
+
+  it('lỗi khi truy vấn danh sách form → bỏ trống toàn bộ để an toàn (fail-safe)', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getForms').mockRejectedValue(new Error('DB down'));
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await aiCampaignDraftService.sanitizeFormOwnership(scriptWithFormNode(12), 7);
+    const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
+    expect(node.config.formId).toBeUndefined();
+
+    spy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('không có node read_form_submissions nào → không gọi getForms (không tốn DB)', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getForms').mockResolvedValue([]);
+
+    const script = {
+      nodes: [
+        { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+        { id: 'n2', tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_email', config: {} },
+      ],
+    };
+    await aiCampaignDraftService.sanitizeFormOwnership(script, 7);
+    expect(spy).not.toHaveBeenCalled();
+
+    spy.mockRestore();
   });
 });

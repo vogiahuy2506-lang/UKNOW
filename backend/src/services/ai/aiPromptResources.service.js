@@ -168,6 +168,28 @@ class AiPromptResourcesService {
   }
 
   /**
+   * PR-6c — danh sách Biểu mẫu (đã xuất bản, chưa bị tắt) để trợ lý AI gợi ý `formId` cho node
+   * `read_form_submissions` trong prompt đường tự do.
+   * @param {number} userId
+   * @returns {Promise<Array<{ id: number, title: string, isPublished: boolean, consentEnabled: boolean, consentedCount: number }>>}
+   */
+  async getForms(userId) {
+    try {
+      const rows = await aiCampaignRepository.getForms(userId);
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        isPublished: r.is_published,
+        consentEnabled: r.consent_enabled,
+        consentedCount: r.consented_count,
+      }));
+    } catch (e) {
+      console.warn('[AI] Không lấy được danh sách biểu mẫu:', e.message);
+      return [];
+    }
+  }
+
+  /**
    * Lấy thông tin khuyến nghị campaign type dựa trên profile doanh nghiệp.
    * @param {number} userId
    * @returns {Promise<string>}

@@ -83,6 +83,48 @@ describe('Backtest - Việc 1: campaignIntentFromGraph.service', () => {
     });
   });
 
+  it('PR-6c: rút intent thành công từ graph có read_form_submissions → audience.type = "form"', () => {
+    const nodes = [
+      { id: 1, node_subtype: 'manual', config: {} },
+      { id: 2, node_subtype: 'read_form_submissions', config: { formId: 12 } },
+      {
+        id: 3,
+        node_subtype: 'send_email',
+        config: { fromEmailId: 5, recipientSource: 'node' },
+      },
+      { id: 4, node_subtype: 'end', config: {} },
+    ];
+
+    const res = deriveIntentFromGraph(nodes, []);
+    expect(res.unsupported).toEqual([]);
+    expect(res.intent.audience).toEqual({
+      type: 'form',
+      formId: 12,
+      recipientKind: 'email',
+    });
+  });
+
+  it('PR-6c: rút intent từ graph read_landing_leads đọc đúng landingLeadsSlugs (không phải landingPageSlugs)', () => {
+    const nodes = [
+      { id: 1, node_subtype: 'manual', config: {} },
+      { id: 2, node_subtype: 'read_landing_leads', config: { landingLeadsSlugs: ['a'] } },
+      {
+        id: 3,
+        node_subtype: 'send_email',
+        config: { fromEmailId: 5, recipientSource: 'node' },
+      },
+      { id: 4, node_subtype: 'end', config: {} },
+    ];
+
+    const res = deriveIntentFromGraph(nodes, []);
+    expect(res.unsupported).toEqual([]);
+    expect(res.intent.audience).toEqual({
+      type: 'landing',
+      slugs: ['a'],
+      recipientKind: 'email',
+    });
+  });
+
   it('phát hiện đúng các node chưa hỗ trợ (condition, save_customer...) và trả về unsupported', () => {
     const nodes = [
       { id: 1, node_subtype: 'manual', config: {} },

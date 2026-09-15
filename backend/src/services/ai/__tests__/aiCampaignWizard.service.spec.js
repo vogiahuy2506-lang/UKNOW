@@ -469,6 +469,43 @@ describe('aiCampaignWizard.service', () => {
     expect(optionsEmail).not.toContain('zalo_contacts');
   });
 
+  it('PR-6c: buildDataSourceQuestion có lựa chọn "form" cho cả email lẫn zalo', () => {
+    const gateZalo = evaluateNextGate(
+      { isCampaignFlow: true, channel: 'zalo', senderAccountId: 1, dataSource: null },
+      {}
+    );
+    const optionsZalo = gateZalo.response.data.questions[0].options.map((o) => o.value);
+    expect(optionsZalo).toContain('form');
+
+    const gateEmail = evaluateNextGate(
+      { isCampaignFlow: true, channel: 'email', senderAccountId: 1, dataSource: null },
+      {}
+    );
+    const optionsEmail = gateEmail.response.data.questions[0].options.map((o) => o.value);
+    expect(optionsEmail).toContain('form');
+  });
+
+  it('PR-6c: inferDataSourceFromText nhận diện "người đặt lịch ở biểu mẫu" là nguồn form (qua extractWizardState)', () => {
+    const state = extractWizardState([
+      { role: 'user', content: 'chiến dịch gửi email cảm ơn cho người đã đặt lịch ở biểu mẫu' },
+    ]);
+    expect(state.dataSource).toBe('form');
+  });
+
+  it('PR-6c: câu vừa khớp cụm form-trap vừa khớp "landing" phải ra form (form-trap xét TRƯỚC landing)', () => {
+    const state = extractWizardState([
+      { role: 'user', content: 'chiến dịch gửi cho người đặt lịch ở biểu mẫu trên landing page của khoá học' },
+    ]);
+    expect(state.dataSource).toBe('form');
+  });
+
+  it('PR-6c: bẫy chữ — "người điền form trên landing page" vẫn ra nguồn landing, không rơi vào form', () => {
+    const state = extractWizardState([
+      { role: 'user', content: 'chiến dịch gửi cho người điền form trên landing page' },
+    ]);
+    expect(state.dataSource).toBe('landing');
+  });
+
   it('asks friend picker for zalo channel when dataSource is zalo_contacts and no friends selected (PR-B)', () => {
     const state = extractWizardState([
       { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo"}\nZalo' },

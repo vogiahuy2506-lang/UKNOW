@@ -180,6 +180,21 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, a
         landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
       },
     });
+  } else if (audience.type === 'form') {
+    audienceNodeId = `${prefix}_read_form_submissions_1`;
+    nodes.push({
+      id: audienceNodeId,
+      tempId: audienceNodeId,
+      nodeType: 'data',
+      nodeSubtype: 'read_form_submissions',
+      nodeName: 'Dữ liệu Biểu mẫu',
+      nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
+      positionX: 350,
+      positionY: 200,
+      config: {
+        formId: audience.formId != null ? Number(audience.formId) : null,
+      },
+    });
   }
 
   // 3. Send Email Node
@@ -352,6 +367,21 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
         // đặt sai tên thì node chạy nhưng đọc TOÀN BỘ lead mọi landing page, không phải chỉ
         // slug đã chọn (bắt được nhờ test no-op mục 1.1, không phải review đọc mắt).
         landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
+      },
+    });
+  } else if (audience.type === 'form') {
+    audienceNodeId = `${prefix}_read_form_submissions_1`;
+    nodes.push({
+      id: audienceNodeId,
+      tempId: audienceNodeId,
+      nodeType: 'data',
+      nodeSubtype: 'read_form_submissions',
+      nodeName: 'Dữ liệu Biểu mẫu',
+      nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
+      positionX: 350,
+      positionY: 200,
+      config: {
+        formId: audience.formId != null ? Number(audience.formId) : null,
       },
     });
   }
@@ -574,6 +604,21 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
         landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
       },
     });
+  } else if (audience.type === 'form') {
+    audienceNodeId = `${prefix}_read_form_submissions_1`;
+    nodes.push({
+      id: audienceNodeId,
+      tempId: audienceNodeId,
+      nodeType: 'data',
+      nodeSubtype: 'read_form_submissions',
+      nodeName: 'Dữ liệu Biểu mẫu',
+      nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
+      positionX: 500,
+      positionY: 200,
+      config: {
+        formId: audience.formId != null ? Number(audience.formId) : null,
+      },
+    });
   }
 
   // 4. Send Zalo Personal Node
@@ -775,6 +820,21 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
         // đặt sai tên thì node chạy nhưng đọc TOÀN BỘ lead mọi landing page, không phải chỉ
         // slug đã chọn (bắt được nhờ test no-op mục 1.1, không phải review đọc mắt).
         landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [],
+      },
+    });
+  } else if (audience.type === 'form') {
+    audienceNodeId = `${prefix}_read_form_submissions_1`;
+    nodes.push({
+      id: audienceNodeId,
+      tempId: audienceNodeId,
+      nodeType: 'data',
+      nodeSubtype: 'read_form_submissions',
+      nodeName: 'Dữ liệu Biểu mẫu',
+      nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
+      positionX: 500,
+      positionY: 200,
+      config: {
+        formId: audience.formId != null ? Number(audience.formId) : null,
       },
     });
   }

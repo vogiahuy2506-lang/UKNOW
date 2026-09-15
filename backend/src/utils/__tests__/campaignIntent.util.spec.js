@@ -49,7 +49,7 @@ describe('campaignIntent.util', () => {
     expect(vi.type).toBe('ask_campaign_details');
     expect(vi.data.questions[0].id).toBe('dataSource');
     expect(vi.data.questions[0].wizardGate).toBe('dataSource');
-    expect(vi.data.questions[0].options.map((o) => o.value)).toEqual(['db', 'sheet', 'landing', 'manual']);
+    expect(vi.data.questions[0].options.map((o) => o.value)).toEqual(['db', 'sheet', 'landing', 'form', 'manual']);
     const en = buildCampaignDataSourceQuestion('en');
     expect(en.content).toMatch(/recipient list/i);
   });

@@ -136,6 +136,116 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
     expect(sendGroupNode.config.zaloGroupTemplateSteps.length).toBe(1);
   });
 
+  describe('PR-6c: audience.type = "form" (node read_form_submissions)', () => {
+    const assertFormAudienceNode = (graph) => {
+      const audienceNode = graph.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
+      expect(audienceNode).not.toBeUndefined();
+      expect(audienceNode.nodeType).toBe('data');
+      expect(audienceNode.config.formId).toBe(12);
+      return audienceNode;
+    };
+
+    it('email-once: audience form sinh node read_form_submissions với formId đúng, nối vào send_email', () => {
+      const graph = compileCampaign({
+        version: 1,
+        channel: 'email',
+        sender: { type: 'email_account', id: 7 },
+        audience: { type: 'form', formId: 12, recipientKind: 'email' },
+        schedule: { type: 'once' },
+        contentBrief: { topic: 'Cảm ơn đã đặt lịch', locale: 'vi' },
+      });
+      const audienceNode = assertFormAudienceNode(graph);
+      const sendEmailNode = graph.nodes.find((n) => n.nodeSubtype === 'send_email');
+      expect(sendEmailNode.config.recipientSource).toBe('node');
+      expect(sendEmailNode.config.recipientNodeId).toBe(audienceNode.id);
+      expect(
+        graph.connections.some(
+          (c) => c.sourceNodeId === audienceNode.id && c.targetNodeId === sendEmailNode.id
+        )
+      ).toBe(true);
+    });
+
+    it('email-drip: audience form sinh node read_form_submissions với formId đúng, nối vào send_email', () => {
+      const graph = compileCampaign({
+        version: 1,
+        channel: 'email',
+        sender: { type: 'email_account', id: 7 },
+        audience: { type: 'form', formId: 12, recipientKind: 'email' },
+        schedule: { type: 'drip', days: 3, slotsPerDay: 1 },
+        contentBrief: { topic: 'Chuỗi chăm sóc sau đặt lịch', locale: 'vi' },
+      });
+      const audienceNode = assertFormAudienceNode(graph);
+      const sendEmailNode = graph.nodes.find((n) => n.nodeSubtype === 'send_email');
+      expect(sendEmailNode.config.recipientSource).toBe('node');
+      expect(sendEmailNode.config.recipientNodeId).toBe(audienceNode.id);
+      expect(sendEmailNode.config.emailSteps.length).toBe(3);
+      expect(
+        graph.connections.some(
+          (c) => c.sourceNodeId === audienceNode.id && c.targetNodeId === sendEmailNode.id
+        )
+      ).toBe(true);
+    });
+
+    it('zalo cá nhân gửi một lần: audience form sinh node read_form_submissions với formId đúng, nối vào send_zalo_personal', () => {
+      const graph = compileCampaign({
+        version: 1,
+        channel: 'zalo',
+        sender: { type: 'zalo_account', id: 12 },
+        audience: { type: 'form', formId: 12, recipientKind: 'phone' },
+        schedule: { type: 'once' },
+        contentBrief: { topic: 'Nhắc lịch hẹn', locale: 'vi' },
+      });
+      const audienceNode = assertFormAudienceNode(graph);
+      const sendZaloNode = graph.nodes.find((n) => n.nodeSubtype === 'send_zalo_personal');
+      expect(sendZaloNode.config.zaloRecipientSource).toBe('node');
+      expect(sendZaloNode.config.zaloRecipientNodeId).toBe(audienceNode.id);
+      expect(
+        graph.connections.some(
+          (c) => c.sourceNodeId === audienceNode.id && c.targetNodeId === sendZaloNode.id
+        )
+      ).toBe(true);
+    });
+
+    it('zalo cá nhân Drip: audience form sinh node read_form_submissions với formId đúng, nối vào send_zalo_personal', () => {
+      const graph = compileCampaign({
+        version: 1,
+        channel: 'zalo',
+        sender: { type: 'zalo_account', id: 12 },
+        audience: { type: 'form', formId: 12, recipientKind: 'phone' },
+        schedule: { type: 'drip', days: 2, slotsPerDay: 1 },
+        contentBrief: { topic: 'Chuỗi nhắc lịch Zalo', locale: 'vi' },
+      });
+      const audienceNode = assertFormAudienceNode(graph);
+      const sendZaloNode = graph.nodes.find((n) => n.nodeSubtype === 'send_zalo_personal');
+      expect(sendZaloNode.config.zaloRecipientSource).toBe('node');
+      expect(sendZaloNode.config.zaloRecipientNodeId).toBe(audienceNode.id);
+      expect(sendZaloNode.config.zaloPersonalTemplateSteps.length).toBe(2);
+      expect(
+        graph.connections.some(
+          (c) => c.sourceNodeId === audienceNode.id && c.targetNodeId === sendZaloNode.id
+        )
+      ).toBe(true);
+    });
+
+    it('node read_form_submissions do compiler sinh ra pass validateNodeConfig của registry', () => {
+      const graph = compileCampaign({
+        version: 1,
+        channel: 'email',
+        sender: { type: 'email_account', id: 7 },
+        audience: { type: 'form', formId: 12, recipientKind: 'email' },
+        schedule: { type: 'once' },
+        contentBrief: { topic: 'Cảm ơn đã đặt lịch', locale: 'vi' },
+      });
+      const audienceNode = graph.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
+      const validation = campaignNodeRegistryService.validateNodeConfig(
+        audienceNode.nodeSubtype,
+        audienceNode.config
+      );
+      expect(validation.valid).toBe(true);
+      expect(validation.errors).toEqual([]);
+    });
+  });
+
   it('tên khoá của node do compiler sinh trùng đúng tham số của insertNodeTx và updateCampaign', () => {
     const testIntents = [
       sampleEmailSheetOnce,

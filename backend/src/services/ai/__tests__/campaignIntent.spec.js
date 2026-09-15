@@ -227,6 +227,18 @@ describe('PR-1: CampaignIntentV1 schema & deriveIntent', () => {
       const res3 = isCompilableIntent(incomplete3);
       expect(res3.ok).toBe(false);
       expect(res3.missing).toContain('schedule.days');
+
+      // PR-6c — audience.type: 'form' thiếu formId
+      const incomplete4 = {
+        version: 1,
+        channel: 'email',
+        sender: { type: 'email_account', id: 1 },
+        audience: { type: 'form' },
+        schedule: { type: 'once' },
+      };
+      const res4 = isCompilableIntent(incomplete4);
+      expect(res4.ok).toBe(false);
+      expect(res4.missing).toContain('audience.formId');
     });
 
     it('nghiệm thu 17 golden fixtures: số lượng fixture compilable <= 12 và nêu đúng trường thiếu', () => {
