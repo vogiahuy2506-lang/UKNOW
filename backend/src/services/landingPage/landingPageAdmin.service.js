@@ -14,6 +14,7 @@ import {
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
   countFormSlots,
+  hasMalformedFormSlot,
   replaceFormSlotWithEmbed,
   buildFormEmbedSectionHtml,
 } from '../../utils/landingHtmlInjection.util.js';
@@ -89,7 +90,15 @@ class LandingPageAdminService {
       err.statusCode = 404;
       throw err;
     }
-    return toAdminLandingDto(row);
+    // PR-5b-2b mục 7 — link "Mở Biểu mẫu của trang này" từ trình soạn landing. Chủ thật của
+    // landing (không phải authUser — super admin xem landing của khách khác vẫn phải tra đúng
+    // chủ đó, mẫu resourceOwnerId ở update()).
+    const context = getWorkspaceContext(authUser);
+    const landingOwnerId = context.isSuperAdmin
+      ? Number(row.workspaceOwnerId || row.idUser)
+      : context.workspaceOwnerId;
+    const linkedForm = await formRepository.findByLandingPageId(id, landingOwnerId);
+    return { ...toAdminLandingDto(row), linkedFormId: linkedForm?.id ?? null };
   }
 
   /**
@@ -146,6 +155,13 @@ class LandingPageAdminService {
     // thời, dọn ở nhánh catch. Landing trong DB, nếu có, LUÔN mang HTML đã resolve — không bao
     // giờ lưu chỗ trống trơ (khách mở ra thấy khoảng trống im lặng).
     const rawHtml = body?.htmlContent ?? '';
+    // Review PR-5b-2a nợ 1 — chỗ trống dạng sai (có nội dung con, vd AI/admin lỡ thêm chữ vào
+    // trong div) không được lưu ÂM THẦM thành một div rỗng vô dụng — báo 400 rõ ràng, không lưu.
+    if (hasMalformedFormSlot(rawHtml)) {
+      const err = new Error('Trang có chỗ trống biểu mẫu sai dạng (có nội dung bên trong div data-founderai-form-slot).');
+      err.statusCode = 400;
+      throw err;
+    }
     const slotCount = countFormSlots(rawHtml);
     if (slotCount > 1) {
       const err = new Error(`Trang có ${slotCount} chỗ trống biểu mẫu, chỉ được đúng 1.`);
@@ -292,6 +308,13 @@ class LandingPageAdminService {
     // trạng (không ghi đè trường — chủ có thể đã tự sửa form trong trình soạn Biểu mẫu riêng),
     // chưa có thì tạo mới VỚI landing_page_id=id ngay trong một lần INSERT.
     const rawHtml = body?.htmlContent ?? '';
+    // Review PR-5b-2a nợ 1 — chỗ trống dạng sai (có nội dung con, vd AI/admin lỡ thêm chữ vào
+    // trong div) không được lưu ÂM THẦM thành một div rỗng vô dụng — báo 400 rõ ràng, không lưu.
+    if (hasMalformedFormSlot(rawHtml)) {
+      const err = new Error('Trang có chỗ trống biểu mẫu sai dạng (có nội dung bên trong div data-founderai-form-slot).');
+      err.statusCode = 400;
+      throw err;
+    }
     const slotCount = countFormSlots(rawHtml);
     if (slotCount > 1) {
       const err = new Error(`Trang có ${slotCount} chỗ trống biểu mẫu, chỉ được đúng 1.`);
@@ -315,6 +338,13 @@ class LandingPageAdminService {
         });
         await formService.publishForm(createdForm.id, resourceOwnerId, true);
         form = createdForm;
+      } else if (!form.isPublished) {
+        // Review PR-5b-2a nợ 3 — chủ đã tự tắt xuất bản form gắn landing này (qua Forms admin)
+        // rồi lưu lại landing (vẫn có chỗ trống) → khối nhúng sẽ trỏ vào form KHÔNG xuất bản,
+        // khách bấm vào thấy "không tìm thấy biểu mẫu". Xuất bản lại thay vì tạo form mới (tránh
+        // đẻ form song song, mất lịch sử bài nộp cũ của form đang dùng) hoặc báo lỗi chặn lưu
+        // (người dùng đang ở màn hình landing, không tự sửa trạng thái form từ đây được).
+        await formService.publishForm(form.id, resourceOwnerId, true);
       }
       const embedHtml = buildFormEmbedSectionHtml({
         publicKey: form.publicKey,

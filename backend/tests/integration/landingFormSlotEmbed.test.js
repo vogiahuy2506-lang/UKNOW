@@ -5,11 +5,12 @@
  * `AI_LANDING_FORM_MODE` (test riêng ở `aiLandingPage.service.spec.js`) — người dùng có thể dán
  * tay chỗ trống, đây là test cho `landingPageAdmin.service.js` `create`/`update`.
  */
-import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, beforeEach, jest } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createPlan, assignPlanToUser } from './helpers/db.js';
+import landingPageRepository from '../../src/repositories/landingPage.repository.js';
 
 let app;
 
@@ -49,6 +50,9 @@ async function addLandingMembership(ownerId, employeeId, permissions = { landing
 const SLOT_HTML = '<section><div data-founderai-form-slot></div></section>';
 const TWO_SLOTS_HTML = `${SLOT_HTML}<section><div data-founderai-form-slot></div></section>`;
 const NO_SLOT_HTML = '<section><p>không có chỗ trống</p></section>';
+// Review PR-5b-2a nợ 1 — cùng nguyên văn ca review nêu (class + data-founderai-form-slot="").
+const SLOT_WITH_EXTRA_ATTR_HTML = '<div class="my-8" data-founderai-form-slot=""></div>';
+const MALFORMED_SLOT_HTML = '<div data-founderai-form-slot><p>x</p></div>';
 
 describe('POST /api/admin/landing-pages — PR-5b-2a chỗ trống Biểu mẫu', () => {
   it('HTML có 1 chỗ trống + leadFormConfig occupation + 1 custom select → tạo 1 form đã xuất bản, gắn landing_page_id, đủ trường, HTML lưu có khối nhúng, không còn chỗ trống', async () => {
@@ -190,6 +194,99 @@ describe('POST /api/admin/landing-pages — PR-5b-2a chỗ trống Biểu mẫu'
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.landingPageId).toBe(landingId);
   });
+
+  // Review PR-5b-2a nợ 1 — ca ĐÚNG NGUYÊN VĂN review nêu: thêm class + data-founderai-form-slot=""
+  // (cách viết HTML hợp lệ bình thường) trước đây bị đếm là 0, lưu ÂM THẦM cả div rỗng, không
+  // tạo form. Giờ phải nhận ra và tạo form như chỗ trống "chuẩn".
+  it('nợ 1 — chỗ trống có thêm thuộc tính (class + ="") vẫn được nhận ra → tạo form + thay chỗ trống', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-nodebt1a' } });
+    const token = await loginAs(me);
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'nodebt1a', title: 'Landing chỗ trống có class', htmlContent: SLOT_WITH_EXTRA_ATTR_HTML });
+    expect(res.status).toBe(201);
+
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formRows.rows).toHaveLength(1);
+
+    const lpRow = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [res.body.data.id]);
+    expect(lpRow.rows[0].html_content).not.toContain('data-founderai-form-slot');
+    expect(lpRow.rows[0].html_content).toContain(formRows.rows[0].public_key);
+  });
+
+  // Review PR-5b-2a nợ 1 — chỗ trống có nội dung con thật (hỏng dạng) → 400 rõ ràng, KHÔNG lưu
+  // âm thầm div rỗng vô dụng.
+  it('nợ 1 — chỗ trống sai dạng (có nội dung con) → 400, không tạo form, không lưu landing', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-nodebt1b' } });
+    const token = await loginAs(me);
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'nodebt1b', title: 'Landing chỗ trống hỏng', htmlContent: MALFORMED_SLOT_HTML });
+    expect(res.status).toBe(400);
+
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formRows.rows).toHaveLength(0);
+    const lpRows = await db.query('SELECT * FROM landing_pages WHERE slug = $1', ['nodebt1b']);
+    expect(lpRows.rows).toHaveLength(0);
+  });
+
+  // Review PR-5b-2a nợ 2 — giao dịch lưu landing hỏng SAU KHI form đã tạo (form tạo qua pool,
+  // TRƯỚC transaction insert landing) không được để lại form mồ côi. Ép insert landing lỗi
+  // (deterministic, không cần đua race thật) để buộc nhánh catch chạy.
+  it('nợ 2 — giao dịch lưu landing hỏng sau khi form đã tạo → không còn form mồ côi trong DB', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-nodebt2' } });
+    const token = await loginAs(me);
+
+    const insertSpy = jest
+      .spyOn(landingPageRepository, 'insert')
+      .mockRejectedValueOnce(new Error('nợ 2 test — ép insert landing lỗi sau khi form đã tạo'));
+
+    const res = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'nodebt2', title: 'Landing giao dịch hỏng', htmlContent: SLOT_HTML });
+    expect(res.status).toBe(500);
+
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formRows.rows).toHaveLength(0);
+    const lpRows = await db.query('SELECT * FROM landing_pages WHERE slug = $1', ['nodebt2']);
+    expect(lpRows.rows).toHaveLength(0);
+
+    insertSpy.mockRestore();
+  });
+
+  it('GET /api/admin/landing-pages/:id trả linkedFormId khi landing có form gắn, null khi chưa có', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-linkedid' } });
+    const token = await loginAs(me);
+
+    const withFormRes = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'linked-yes', title: 'Landing có form', htmlContent: SLOT_HTML });
+    const noFormRes = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'linked-no', title: 'Landing không form', htmlContent: NO_SLOT_HTML });
+
+    const formRow = await db.query('SELECT id FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    const formId = formRow.rows[0].id;
+
+    const getWithForm = await request(app)
+      .get(`/api/admin/landing-pages/${withFormRes.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(getWithForm.status).toBe(200);
+    expect(getWithForm.body.data.linkedFormId).toBe(formId);
+
+    const getNoForm = await request(app)
+      .get(`/api/admin/landing-pages/${noFormRes.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(getNoForm.status).toBe(200);
+    expect(getNoForm.body.data.linkedFormId).toBeNull();
+  });
 });
 
 describe('PUT /api/admin/landing-pages/:id — PR-5b-2a chỗ trống Biểu mẫu', () => {
@@ -269,6 +366,41 @@ describe('PUT /api/admin/landing-pages/:id — PR-5b-2a chỗ trống Biểu m�
 
     const lpRow = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [landingId]);
     expect(lpRow.rows[0].html_content).toContain(firstForm.public_key);
+  });
+
+  // Review PR-5b-2a nợ 3 — chủ tự tắt xuất bản form gắn landing (qua Forms admin), rồi lưu lại
+  // landing (vẫn có chỗ trống) → khối nhúng trước đây vẫn trỏ vào form KHÔNG xuất bản, khách bấm
+  // vào thấy "không tìm thấy". Chọn xuất bản lại (không tạo form mới, không báo lỗi chặn lưu).
+  it('nợ 3 — form gắn landing đã bị tắt xuất bản, lưu landing lại có chỗ trống → tự xuất bản lại (không tạo form mới)', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-nodebt3' } });
+    const token = await loginAs(me);
+
+    const createRes = await request(app)
+      .post('/api/admin/landing-pages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'nodebt3', title: 'Landing form sẽ bị tắt', htmlContent: SLOT_HTML });
+    const landingId = createRes.body.data.id;
+    const formRow = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    const form = formRow.rows[0];
+    expect(form.is_published).toBe(true);
+
+    // Chủ tự tắt xuất bản form (mô phỏng PUT /api/forms/:id/publish isPublished=false).
+    await db.query('UPDATE forms SET is_published = FALSE WHERE id = $1', [form.id]);
+
+    const updateRes = await request(app)
+      .put(`/api/admin/landing-pages/${landingId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ slug: 'nodebt3', title: 'Landing form sẽ bị tắt', htmlContent: SLOT_HTML });
+    expect(updateRes.status).toBe(200);
+
+    const formAfter = await db.query('SELECT id, is_published FROM forms WHERE workspace_owner_id = $1', [me.id]);
+    expect(formAfter.rows).toHaveLength(1); // không tạo form mới
+    expect(formAfter.rows[0].id).toBe(form.id);
+    expect(formAfter.rows[0].is_published).toBe(true); // được xuất bản lại
+
+    // Khối nhúng vẫn trỏ đúng form đó, và public GET giờ phải 200 (đã xuất bản lại).
+    const publicRes = await request(app).get(`/api/public/forms/${form.public_key}`);
+    expect(publicRes.status).toBe(200);
   });
 
   it('HTML có 2 chỗ trống lúc update → 400, không đổi form/landing hiện có', async () => {

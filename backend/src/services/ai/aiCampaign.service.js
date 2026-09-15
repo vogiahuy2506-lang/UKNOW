@@ -62,6 +62,7 @@ import {
   pickChannelByExplicitSignal,
 } from '../../utils/campaignQuickSend.util.js';
 import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
+import { applyLandingAudienceResolution } from './landingAudienceResolver.service.js';
 import { isCompilableIntent, deriveIntent } from './campaignIntent.schema.js';
 import { compileCampaign } from './campaignCompiler.service.js';
 import { mergeCompiledWithContent, assertNoEmptyContent } from './campaignScriptMerge.service.js';
@@ -1002,7 +1003,7 @@ Tài khoản Zalo mặc định: ${firstZaloAccountId ?? 'null'}
 ${zaloGroups.length > 0 ? `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.groupName}"`).join('\n')}` : ''}
 
 🌐 Landing Pages (landingLeadsSlugs — dùng để lọc leads trong read_landing_leads):
-${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}`).join('\n') : '  (chưa có landing page nào)'}
+${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}${lp.formId ? ` — trang này thu người đăng ký bằng Biểu mẫu formId=${lp.formId}, dùng data/read_form_submissions thay vì read_landing_leads` : ''}`).join('\n') : '  (chưa có landing page nào)'}
 
 📝 Biểu mẫu (formId — dùng trong read_form_submissions, lấy người đã nộp và ĐỒNG Ý nhận tin):
 ${forms.length > 0 ? forms.map(f => `  - id: ${f.id} | "${f.title}"${f.consentEnabled ? ` (${f.consentedCount} người đã đồng ý)` : ' (form CHƯA hỏi đồng ý nhận tin — node sẽ không có ai)'}`).join('\n') : '  (chưa có biểu mẫu nào xuất bản)'}
@@ -1541,7 +1542,7 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - dataSource="sheet" + URL ĐÃ có trong message (https://docs.google.com/spreadsheets/...) → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", headerRow: 1, dataStartRow: 2 }, thêm ghi chú format trong nodeDescription
 - dataSource="sheet" + CHƯA có URL → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? (URL bắt đầu bằng https://docs.google.com/...)"
 - dataSource="landing" + user CHƯA chọn landing page cụ thể + có nhiều landing page trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Landing page cần lấy leads"], content: "Bạn muốn lấy leads từ landing page nào? (liệt kê tên trang)\n${landingPages.map(lp => `- ${lp.title} (${lp.slug})`).join('\n')}"
-- dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] }
+- dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → xem landing đó trong TÀI NGUYÊN "🌐 Landing Pages": CÓ ghi "formId=<id>" (trang thu người đăng ký bằng Biểu mẫu) → nodeSubtype: "read_form_submissions", config: { formId: <id> } (KHÔNG dùng read_landing_leads cho landing này — landing dựng bằng Biểu mẫu thì bảng leads không có ai, node đọc landing sẽ ra 0 người trong im lặng); KHÔNG ghi formId → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] } như cũ.
 - dataSource="landing" + không có landing page nào → type: "text", content: "Tài khoản chưa có landing page nào. Bạn cần tạo landing page trước để thu thập leads."
 - dataSource="form" + user CHƯA chọn biểu mẫu cụ thể + có nhiều biểu mẫu trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Biểu mẫu cần lấy người đã nộp"], content: "Bạn muốn lấy người đã nộp từ biểu mẫu nào? (liệt kê tên biểu mẫu)\n${forms.map(f => `- ${f.title} (id: ${f.id})`).join('\n')}"
 - dataSource="form" + user đã chọn hoặc chỉ có 1 biểu mẫu → nodeSubtype: "read_form_submissions", config: { formId: <id> }. Biểu mẫu đó có consentEnabled=false (xem TÀI NGUYÊN) → vẫn tạo node bình thường, nhưng PHẢI nói rõ trong content: "Lưu ý: biểu mẫu này chưa bật hỏi đồng ý nhận tin nên node sẽ không có ai."
@@ -1745,7 +1746,16 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             // bên dưới nuốt thành log "Giữ script LLM cũ", nên compiler KHÔNG BAO GIỜ chạy.
             // Đo trên production 06/09: cờ zalo_group bật từ 31/08 nhưng audit_logs không có
             // một dòng via='ai_compiler' nào trong 7 ngày — đây chính là nguyên nhân.
-            const compiledGraph = compileCampaign(campaignIntent);
+            //
+            // PR-5b-2b — audience landing có ĐÚNG 1 slug và slug đó có Biểu mẫu gắn (PR-5b-2a) →
+            // biên dịch bằng read_form_submissions thay vì read_landing_leads (quyết định đầy đủ ở
+            // landingAudienceResolver.service.js, test trực tiếp ở đó — không cần dựng cả pipeline
+            // chat để kiểm). GHI CHÚ: deriveIntent (campaignIntent.schema.js) hiện KHÔNG populate
+            // audience.slugs cho landing từ gateState (lỗ có trước PR-6c, ngoài phạm vi PR này) nên
+            // nhánh này hiện chưa có đường thực tế nào tới được — vẫn nối đúng chỗ theo yêu cầu
+            // plan, sẽ tự chạy khi lỗ đó được vá riêng.
+            const compilableIntent = await applyLandingAudienceResolution(campaignIntent, ownerId);
+            const compiledGraph = compileCampaign(compilableIntent);
 
             let slotFillingSucceeded = false;
             // Giai đoạn 4: LLM Content Slot Filling
@@ -1980,7 +1990,7 @@ ${zaloGroupsList}
 ${templateSelectionPrompt}
 
 📄 Landing Pages:
-${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}`).join('\n') : '  (chưa có landing page nào)'}
+${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}${lp.formId ? ` — trang này thu người đăng ký bằng Biểu mẫu formId=${lp.formId}, dùng data/read_form_submissions thay vì read_landing_leads` : ''}`).join('\n') : '  (chưa có landing page nào)'}
 
 📝 Biểu mẫu (formId — dùng trong read_form_submissions, lấy người đã nộp và ĐỒNG Ý nhận tin):
 ${forms.length > 0 ? forms.map(f => `  - id: ${f.id} | "${f.title}"${f.consentEnabled ? ` (${f.consentedCount} người đã đồng ý)` : ' (form CHƯA hỏi đồng ý nhận tin — node sẽ không có ai)'}`).join('\n') : '  (chưa có biểu mẫu nào xuất bản)'}

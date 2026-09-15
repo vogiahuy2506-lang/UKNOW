@@ -591,6 +591,40 @@ describe('aiCampaign.service', () => {
     expect(systemPrompt).toContain('data/read_form_submissions');
   });
 
+  it('PR-5b-2b: prompt chat (V1) ghi rõ landing đã gắn Biểu mẫu (formId cạnh slug), landing khác vẫn ghi bình thường', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    getLandingPages.mockResolvedValueOnce([
+      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', isPublished: true, formId: 7 },
+      { slug: 'landing-thuong', title: 'Landing thường', isPublished: true, formId: null },
+    ]);
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            finishReason: 'STOP',
+            content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] },
+          },
+        ],
+      },
+    });
+
+    await aiCampaignService.processSmartChat({
+      userId: 1,
+      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+      locale: 'vi',
+    });
+
+    const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+    const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+    expect(systemPrompt).toContain('slug: "khoa-hoc-ielts"');
+    expect(systemPrompt).toContain('formId=7');
+    expect(systemPrompt).toContain('slug: "landing-thuong"');
+    // Landing không có form gắn: dòng của nó KHÔNG chứa "formId=" (đứng riêng, không lẫn số của landing kia).
+    const landingThuongLine = systemPrompt.split('\n').find((line) => line.includes('landing-thuong'));
+    expect(landingThuongLine).not.toContain('formId=');
+  });
+
   it('employee chat V2: loads tenant resources by owner, meters Gemini by actor', async () => {
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });

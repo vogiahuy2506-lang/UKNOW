@@ -120,16 +120,60 @@ class AiCampaignRepository {
     }
   }
 
+  /**
+   * PR-5b-2b — kèm `form_id` (Biểu mẫu đã gắn landing qua PR-5b-2a `forms.landing_page_id`, chưa
+   * bị super admin tắt) để AI biết landing nào nên sinh `read_form_submissions` thay vì
+   * `read_landing_leads` khi soạn chiến dịch "gửi cho người đăng ký landing X".
+   *
+   * Review "Neo PR-5b-2b" — lọc trước đây `WHERE id_user = $1`, KHÔNG phải chủ workspace: landing
+   * do nhân viên tạo ghi `id_user = workspaceOwnerId` (landingPageAdmin.service.js `create()`) nên
+   * lọc theo `id_user` với `ownerId` (đã là workspace owner id ở call site) vẫn đúng cho landing
+   * MỚI, nhưng landing cũ trước khi có cột `workspace_owner_id` (hoặc bị đổi chủ tay qua DB) có
+   * thể lệch — `COALESCE(workspace_owner_id, id_user)` khớp đúng "chủ hiệu lực" mà chính bảng này
+   * đã dùng cho index riêng (`idx_landing_pages_effective_workspace_owner`), không đoán tên cột.
+   *
+   * @param {number} userId workspace owner id
+   * @returns {Promise<Array<{ slug: string, title: string, is_published: boolean, form_id: number|null }>>}
+   */
   async getLandingPages(userId) {
     const result = await db.query(
-      `SELECT slug, COALESCE(title, slug) AS title, is_published
-       FROM landing_pages
-       WHERE id_user = $1
-       ORDER BY updated_at DESC
+      `SELECT
+         lp.slug,
+         COALESCE(lp.title, lp.slug) AS title,
+         lp.is_published,
+         f.id AS form_id
+       FROM landing_pages lp
+       LEFT JOIN forms f ON f.landing_page_id = lp.id AND f.admin_disabled_at IS NULL
+       WHERE COALESCE(lp.workspace_owner_id, lp.id_user) = $1
+       ORDER BY lp.updated_at DESC
        LIMIT 20`,
       [userId]
     );
     return result.rows;
+  }
+
+  /**
+   * PR-5b-2b — formId của Biểu mẫu gắn landing có slug này (chưa bị super admin tắt), thuộc ĐÚNG
+   * `ownerId`. `null` nếu landing không tồn tại/không thuộc `ownerId`/chưa có form gắn/form đã bị
+   * tắt. Tách khỏi `getLandingPages` (LIMIT 20 — landing cũ hơn 20 trang gần nhất sẽ tra hụt).
+   *
+   * @param {number} ownerId workspace owner id
+   * @param {string} slug
+   * @returns {Promise<number|null>}
+   */
+  async getFormIdForLandingSlug(ownerId, slug) {
+    const result = await db.query(
+      `SELECT f.id
+       FROM landing_pages lp
+       JOIN forms f ON f.landing_page_id = lp.id
+       WHERE lp.slug = $1
+         AND COALESCE(lp.workspace_owner_id, lp.id_user) = $2
+         AND f.admin_disabled_at IS NULL
+       LIMIT 1`,
+      [slug, ownerId]
+    );
+    const id = result.rows[0]?.id;
+    return id != null ? Number(id) : null;
   }
 
   /**

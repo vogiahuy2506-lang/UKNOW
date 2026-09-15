@@ -8,7 +8,7 @@ import {
   MAX_EDIT_HTML_INPUT_CHARS,
 } from '../../utils/landingEditGuard.util.js';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
-import { countFormSlots } from '../../utils/landingHtmlInjection.util.js';
+import { countFormSlots, hasMalformedFormSlot } from '../../utils/landingHtmlInjection.util.js';
 
 /**
  * PR-5b-2a — công tắc "AI dựng landing dùng Biểu mẫu thay form lead" (mặc định TẮT). Đọc
@@ -428,6 +428,14 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       // dù quy tắc 6 đã đổi, phải bắt ở đây chứ không tin lời hứa của prompt.
       if (/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
         const err = new Error('AI vẫn tự viết <form> đăng ký lead thay vì chỗ trống biểu mẫu. Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
+      // Review PR-5b-2a nợ 1 — chỗ trống có thuộc tính data-founderai-form-slot nhưng dạng sai
+      // (ví dụ có nội dung con) không được ÂM THẦM đếm là 0 rồi báo "thiếu chỗ trống" (gây hiểu
+      // lầm — AI CÓ viết, chỉ sai dạng); báo đúng nguyên nhân.
+      if (hasMalformedFormSlot(html)) {
+        const err = new Error('AI tạo chỗ trống biểu mẫu sai dạng (có nội dung bên trong div data-founderai-form-slot). Vui lòng thử lại.');
         err.status = 422;
         throw err;
       }

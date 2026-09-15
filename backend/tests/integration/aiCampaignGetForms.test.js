@@ -151,3 +151,125 @@ describe('AiCampaignRepository.getFormIdsOwnedBy — PR-6c review 15/09', () => 
     expect(ids).toEqual([]);
   });
 });
+
+async function insertLanding(owner, { slug, title = 'Landing', idUserOverride = undefined, workspaceOwnerIdOverride = undefined } = {}) {
+  const idUser = idUserOverride !== undefined ? idUserOverride : owner.id;
+  const workspaceOwnerId = workspaceOwnerIdOverride !== undefined ? workspaceOwnerIdOverride : owner.id;
+  const result = await db.query(
+    `INSERT INTO landing_pages (id_user, workspace_owner_id, slug, title, html_content, is_published)
+     VALUES ($1, $2, $3, $4, '<p>x</p>', true)
+     RETURNING id`,
+    [idUser, workspaceOwnerId, slug, title]
+  );
+  return Number(result.rows[0].id);
+}
+
+async function attachFormToLanding(formId, landingId) {
+  await db.query('UPDATE forms SET landing_page_id = $1 WHERE id = $2', [landingId, formId]);
+}
+
+/**
+ * PR-5b-2b — kèm formId (landing đã gắn Biểu mẫu) + sửa lọc theo chủ workspace hiệu lực
+ * (COALESCE(workspace_owner_id, id_user)), không còn lọc thẳng id_user.
+ */
+describe('AiCampaignRepository.getLandingPages — PR-5b-2b', () => {
+  it('landing có form gắn (chưa bị tắt) → formId đúng; landing không có form gắn → formId null', async () => {
+    const owner = await createUser({ username: 'lp_owner_forms' });
+    const landingWithForm = await insertLanding(owner, { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS' });
+    const landingNoForm = await insertLanding(owner, { slug: 'landing-thuong', title: 'Landing thường' });
+    const form = await insertForm(owner, { title: 'Form đăng ký' });
+    await attachFormToLanding(form, landingWithForm);
+
+    const rows = await aiCampaignRepository.getLandingPages(owner.id);
+    const withFormRow = rows.find((r) => r.slug === 'khoa-hoc-ielts');
+    const noFormRow = rows.find((r) => r.slug === 'landing-thuong');
+    expect(Number(withFormRow.form_id)).toBe(form);
+    expect(noFormRow.form_id).toBeNull();
+  });
+
+  it('form gắn landing nhưng đã bị super admin tắt → formId null (không gợi ý form đã tắt)', async () => {
+    const owner = await createUser({ username: 'lp_owner_disabled' });
+    const landing = await insertLanding(owner, { slug: 'landing-form-tat' });
+    const form = await insertForm(owner, { title: 'Form đã tắt', adminDisabled: true });
+    await attachFormToLanding(form, landing);
+
+    const rows = await aiCampaignRepository.getLandingPages(owner.id);
+    const row = rows.find((r) => r.slug === 'landing-form-tat');
+    expect(row.form_id).toBeNull();
+  });
+
+  // Review "Neo PR-5b-2b" — trước đây lọc thẳng WHERE id_user = $1; landing có workspace_owner_id
+  // KHÁC id_user (đổi chủ tay qua DB, hoặc dữ liệu cũ trước cột workspace_owner_id) phải lấy theo
+  // workspace_owner_id (chủ hiệu lực), không phải id_user.
+  it('landing có workspace_owner_id khác id_user (dữ liệu lệch) → lọc theo workspace_owner_id (chủ hiệu lực)', async () => {
+    const realOwner = await createUser({ username: 'lp_owner_effective' });
+    const staleIdUser = await createUser({ username: 'lp_owner_stale' });
+    await insertLanding(realOwner, {
+      slug: 'landing-lech-chu',
+      idUserOverride: staleIdUser.id,
+      workspaceOwnerIdOverride: realOwner.id,
+    });
+
+    const rowsForRealOwner = await aiCampaignRepository.getLandingPages(realOwner.id);
+    expect(rowsForRealOwner.some((r) => r.slug === 'landing-lech-chu')).toBe(true);
+
+    const rowsForStaleIdUser = await aiCampaignRepository.getLandingPages(staleIdUser.id);
+    expect(rowsForStaleIdUser.some((r) => r.slug === 'landing-lech-chu')).toBe(false);
+  });
+
+  it('landing của chủ khác → không lộ trong danh sách', async () => {
+    const ownerA = await createUser({ username: 'lp_owner_a2' });
+    const ownerB = await createUser({ username: 'lp_owner_b2' });
+    await insertLanding(ownerB, { slug: 'landing-cua-b' });
+
+    const rows = await aiCampaignRepository.getLandingPages(ownerA.id);
+    expect(rows.some((r) => r.slug === 'landing-cua-b')).toBe(false);
+  });
+});
+
+describe('AiCampaignRepository.getFormIdForLandingSlug — PR-5b-2b', () => {
+  it('landing có form gắn, đúng chủ → trả formId', async () => {
+    const owner = await createUser({ username: 'slug_owner_1' });
+    const landing = await insertLanding(owner, { slug: 'khoa-hoc-ielts' });
+    const form = await insertForm(owner, { title: 'Form' });
+    await attachFormToLanding(form, landing);
+
+    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'khoa-hoc-ielts');
+    expect(formId).toBe(form);
+  });
+
+  it('landing không có form gắn → trả null', async () => {
+    const owner = await createUser({ username: 'slug_owner_2' });
+    await insertLanding(owner, { slug: 'khong-co-form' });
+
+    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'khong-co-form');
+    expect(formId).toBeNull();
+  });
+
+  it('slug thuộc landing của chủ KHÁC → trả null (không lộ formId của người khác)', async () => {
+    const ownerA = await createUser({ username: 'slug_owner_a' });
+    const ownerB = await createUser({ username: 'slug_owner_b' });
+    const landingB = await insertLanding(ownerB, { slug: 'landing-cua-b-2' });
+    const formB = await insertForm(ownerB, { title: 'Form của B' });
+    await attachFormToLanding(formB, landingB);
+
+    const formId = await aiCampaignRepository.getFormIdForLandingSlug(ownerA.id, 'landing-cua-b-2');
+    expect(formId).toBeNull();
+  });
+
+  it('form gắn landing đã bị super admin tắt → trả null', async () => {
+    const owner = await createUser({ username: 'slug_owner_3' });
+    const landing = await insertLanding(owner, { slug: 'landing-form-tat-2' });
+    const form = await insertForm(owner, { title: 'Form đã tắt', adminDisabled: true });
+    await attachFormToLanding(form, landing);
+
+    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'landing-form-tat-2');
+    expect(formId).toBeNull();
+  });
+
+  it('slug không tồn tại → trả null', async () => {
+    const owner = await createUser({ username: 'slug_owner_4' });
+    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'khong-ton-tai');
+    expect(formId).toBeNull();
+  });
+});

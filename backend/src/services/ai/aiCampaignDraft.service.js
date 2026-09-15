@@ -2,6 +2,7 @@ import aiCampaignDraftRepository from '../../repositories/ai/aiCampaignDraft.rep
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
+import { resolveLandingAudienceToForm } from './landingAudienceResolver.service.js';
 
 const NODE_REFERENCE_KEYS = [
   'saveCustomerNodeId', 'recipientNodeId', 'ccNodeId', 'bccNodeId',
@@ -758,6 +759,36 @@ class AiCampaignDraftService {
   }
 
   /**
+   * PR-5b-2b — vá bản nháp tự do (mục 4 ở trên chỉ điền `landingLeadsSlugs` từ ngữ cảnh gate,
+   * KHÔNG đổi loại node): sau khi LLM tự viết `read_landing_leads` với slug, nếu landing đó có
+   * Biểu mẫu gắn (PR-5b-2a) thì đổi thành `read_form_submissions` — cùng quyết định "đúng 1 slug"
+   * với đường ý định (`landingAudienceResolver.service.js`, một chỗ quyết định duy nhất). Không
+   * throw khi tra cứu lỗi — giữ nguyên `read_landing_leads`, fail-safe về hành vi cũ.
+   *
+   * Gọi TRƯỚC `sanitizeFormOwnership` trong `prepareScript`: formId mới thêm ở đây vẫn đi qua lớp
+   * kiểm sở hữu đó như bất kỳ formId nào khác (phòng khi tra cứu ở đây có lỗi logic tương lai).
+   *
+   * @param {object} script
+   * @param {number} ownerUserId id chủ workspace (không phải id người đang thao tác)
+   * @returns {Promise<object>}
+   */
+  async resolveLandingAudienceForDraft(script, ownerUserId) {
+    if (!script || !Array.isArray(script.nodes)) return script;
+    for (const node of script.nodes) {
+      if (getNodeSubtype(node) !== 'read_landing_leads') continue;
+      const cfg = node.config || node.settings || {};
+      const slugs = Array.isArray(cfg.landingLeadsSlugs) ? cfg.landingLeadsSlugs : [];
+      const formId = await resolveLandingAudienceToForm(ownerUserId, slugs);
+      if (formId == null) continue;
+      node.nodeSubtype = 'read_form_submissions';
+      if (node.node_subtype !== undefined) node.node_subtype = 'read_form_submissions';
+      node.config = { formId };
+      console.log(`[AI Patch] Đổi read_landing_leads (slug=${slugs[0]}) sang read_form_submissions formId=${formId} — landing có Biểu mẫu gắn`);
+    }
+    return script;
+  }
+
+  /**
    * PR-6c — chặn `formId` KHÔNG thuộc workspace của chủ lọt vào node `read_form_submissions`
    * (AI bịa id, hoặc ngữ cảnh mang formId của workspace khác). Bỏ trống chứ không throw — người
    * dùng tự chọn lại form đúng trong khung cấu hình node ở builder, không làm hỏng cả bản nháp
@@ -829,6 +860,9 @@ class AiCampaignDraftService {
     // resolveOwnerUserId(req.user) ở ai.controller.js; rơi về userId khi không truyền (gọi nội
     // bộ không qua controller/không có khái niệm nhân viên) để không đổi hành vi cũ ở đó.
     const ownerUserId = context.ownerUserId != null ? context.ownerUserId : userId;
+    // PR-5b-2b — trước sanitizeFormOwnership (mẫu chú thích ngay dưới): landing có Biểu mẫu gắn
+    // thì đổi node read_landing_leads LLM tự viết sang read_form_submissions.
+    patched = await this.resolveLandingAudienceForDraft(patched, ownerUserId);
     patched = await this.sanitizeFormOwnership(patched, ownerUserId);
     const canonical = this.canonicalizeScript(patched);
     const nodes = this.normalizeNodes(canonical.nodes);

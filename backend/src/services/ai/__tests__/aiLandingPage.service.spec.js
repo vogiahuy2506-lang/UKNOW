@@ -699,6 +699,19 @@ describe('aiLandingPageService.generate — AI_LANDING_FORM_MODE=form (PR-5b-2a)
     ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/không tạo chỗ trống/) });
   });
 
+  // Review PR-5b-2a nợ 1 (15/09) — chỗ trống có nội dung con (dạng hỏng) trước đây bị đếm là 0
+  // rồi báo nhầm "AI không tạo chỗ trống" — giờ phải báo đúng nguyên nhân.
+  it('công tắc BẬT: HTML có chỗ trống sai dạng (có nội dung con) → 422 báo đúng nguyên nhân, không nhầm "thiếu chỗ trống"', async () => {
+    process.env.AI_LANDING_FORM_MODE = 'form';
+    const htmlMalformed =
+      '<!DOCTYPE html><html lang="vi"><head><script src="https://cdn.tailwindcss.com"></script></head><body>' +
+      '<section><div data-founderai-form-slot><p>x</p></div></section></body></html>';
+    mockGenerateReturns(htmlMalformed);
+    await expect(
+      aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/sai dạng/) });
+  });
+
   it('công tắc BẬT: HTML có 2 chỗ trống → 422', async () => {
     process.env.AI_LANDING_FORM_MODE = 'form';
     const htmlTwoSlots = validSlotHtml.replace(

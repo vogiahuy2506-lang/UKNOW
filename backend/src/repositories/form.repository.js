@@ -229,7 +229,7 @@ class FormRepository {
    */
   async findByLandingPageId(landingPageId, workspaceOwnerId) {
     const result = await db.query(
-      `SELECT id, public_key AS "publicKey"
+      `SELECT id, public_key AS "publicKey", is_published AS "isPublished"
        FROM forms
        WHERE landing_page_id = $1 AND workspace_owner_id = $2
        LIMIT 1`,

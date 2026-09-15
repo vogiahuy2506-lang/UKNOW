@@ -9,6 +9,7 @@ import {
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
   countFormSlots,
+  hasMalformedFormSlot,
   replaceFormSlotWithEmbed,
   buildFormEmbedSectionHtml,
 } from '../landingHtmlInjection.util.js';
@@ -483,15 +484,54 @@ describe('landingHtmlInjection.util', () => {
       expect(countFormSlots(html)).toBe(2);
     });
 
-    it('chấp nhận khoảng trắng bên trong div nhưng không khớp div có thuộc tính/nội dung khác', () => {
+    it('chấp nhận khoảng trắng bên trong div nhưng không khớp div có nội dung con thật', () => {
       expect(countFormSlots('<div data-founderai-form-slot>\n  </div>')).toBe(1);
-      expect(countFormSlots('<div data-founderai-form-slot class="x"></div>')).toBe(0);
       expect(countFormSlots('<div data-founderai-form-slot>text</div>')).toBe(0);
     });
 
     it('html rỗng/null → 0', () => {
       expect(countFormSlots('')).toBe(0);
       expect(countFormSlots(null)).toBe(0);
+    });
+
+    // Review PR-5b-2a nợ 1 (15/09) — bản đầu KHÔNG khớp khi có thêm thuộc tính khác hoặc
+    // data-founderai-form-slot="" (cách viết HTML hợp lệ bình thường), hậu quả là lưu ÂM THẦM cả
+    // div rỗng vào landing, không tạo form. Giờ phải khớp.
+    describe('nợ 1 (review PR-5b-2a) — chấp nhận thêm thuộc tính/giá trị thuộc tính', () => {
+      it('có thêm thuộc tính class trước/sau → đếm 1 (trước đây đếm 0)', () => {
+        expect(countFormSlots('<div data-founderai-form-slot class="x"></div>')).toBe(1);
+        expect(countFormSlots('<div class="my-8" data-founderai-form-slot></div>')).toBe(1);
+      });
+
+      it('data-founderai-form-slot="" (giá trị rỗng, nháy kép/nháy đơn) → đếm 1', () => {
+        expect(countFormSlots('<div data-founderai-form-slot=""></div>')).toBe(1);
+        expect(countFormSlots("<div data-founderai-form-slot=''></div>")).toBe(1);
+      });
+
+      it('kết hợp cả class lẫn ="" (ca đúng nguyên văn review nêu)', () => {
+        expect(countFormSlots('<div class="my-8" data-founderai-form-slot=""></div>')).toBe(1);
+      });
+    });
+  });
+
+  describe('hasMalformedFormSlot (nợ 1, review PR-5b-2a)', () => {
+    it('div hợp lệ (có/không thêm thuộc tính) → không hỏng dạng', () => {
+      expect(hasMalformedFormSlot('<div data-founderai-form-slot></div>')).toBe(false);
+      expect(hasMalformedFormSlot('<div class="my-8" data-founderai-form-slot=""></div>')).toBe(false);
+    });
+
+    it('có thuộc tính nhưng chứa nội dung con thật → hỏng dạng', () => {
+      expect(hasMalformedFormSlot('<div data-founderai-form-slot><p>x</p></div>')).toBe(true);
+    });
+
+    it('không có chỗ trống nào → không hỏng dạng (khác 0 chỗ trống hợp lệ nhưng có mặt)', () => {
+      expect(hasMalformedFormSlot('<section><p>không liên quan</p></section>')).toBe(false);
+      expect(hasMalformedFormSlot('')).toBe(false);
+    });
+
+    it('1 chỗ trống hợp lệ + 1 chỗ trống hỏng dạng trong cùng trang → vẫn phát hiện hỏng dạng', () => {
+      const html = '<div data-founderai-form-slot></div><div data-founderai-form-slot><span>x</span></div>';
+      expect(hasMalformedFormSlot(html)).toBe(true);
     });
   });
 

@@ -233,16 +233,28 @@ export function resolvePublicApiBaseFromEnv() {
 /**
  * PR-5b-2a — chỗ trống AI đặt trong HTML khi `AI_LANDING_FORM_MODE=form` (khác hợp đồng khối
  * nhúng CỐ ĐỊNH ở `buildFormEmbedSectionHtml` bên dưới — chỗ trống chỉ tồn tại TẠM THỜI, từ lúc
- * AI trả HTML tới lúc lưu landing). Regex chấp nhận div rỗng có thêm khoảng trắng bên trong (AI
- * thỉnh thoảng chèn xuống dòng) nhưng KHÔNG chấp nhận thêm thuộc tính lạ hay nội dung con — giữ
- * hợp đồng hẹp để không khớp nhầm div khác.
+ * AI trả HTML tới lúc lưu landing).
+ *
+ * Review PR-5b-2a nợ 1 (15/09): bản đầu chỉ khớp ĐÚNG `<div data-founderai-form-slot></div>`
+ * không thuộc tính khác — AI thêm `class` cho đẹp, hoặc admin dán tay
+ * `data-founderai-form-slot=""` (một cách viết HTML hợp lệ hoàn toàn bình thường) đều KHÔNG khớp,
+ * và hậu quả không phải báo lỗi mà là ÂM THẦM lưu nguyên cái div rỗng vào landing, không tạo form
+ * nào — trang publish với một khoảng trống câm. Regex giờ chấp nhận: thêm thuộc tính khác trước/
+ * sau (`[^>]*`), giá trị thuộc tính viết dưới mọi dạng (`data-founderai-form-slot`, `="…"`,
+ * `='…'`), khoảng trắng/xuống dòng bên trong div. VẪN không chấp nhận nội dung con thật (element/
+ * text khác khoảng trắng) — `hasMalformedFormSlot` bên dưới bắt riêng ca này để báo lỗi rõ thay vì
+ * lặng lẽ bỏ qua.
  */
-const FORM_SLOT_RE = /<div\s+data-founderai-form-slot\s*>\s*<\/div>/gi;
+const FORM_SLOT_RE = /<div\b[^>]*\bdata-founderai-form-slot\b(?:=(?:"[^"]*"|'[^']*'))?[^>]*>\s*<\/div>/gi;
+
+/** Mọi chỗ chuỗi HTML có nhắc tên thuộc tính — dùng để so với số chỗ trống HỢP LỆ đếm được, lệch
+ * nghĩa là có div mang thuộc tính này nhưng không khớp dạng hợp lệ (`hasMalformedFormSlot`). */
+const FORM_SLOT_ATTR_MENTION_RE = /\bdata-founderai-form-slot\b/g;
 
 /**
- * Đếm số chỗ trống biểu mẫu (`<div data-founderai-form-slot></div>`) trong một đoạn HTML.
- * Dùng cả ở chốt chặn sau khi AI sinh (đúng 1) lẫn lúc lưu landing (0/1 hợp lệ, ≥2 → 400) — logic
- * đếm PHẢI giống nhau ở cả hai nơi, nên đặt một chỗ duy nhất.
+ * Đếm số chỗ trống biểu mẫu HỢP LỆ (`<div …data-founderai-form-slot…></div>`, không nội dung con)
+ * trong một đoạn HTML. Dùng cả ở chốt chặn sau khi AI sinh (đúng 1) lẫn lúc lưu landing (0/1 hợp
+ * lệ, ≥2 → 400) — logic đếm PHẢI giống nhau ở cả hai nơi, nên đặt một chỗ duy nhất.
  *
  * @param {string} html
  * @returns {number}
@@ -250,6 +262,22 @@ const FORM_SLOT_RE = /<div\s+data-founderai-form-slot\s*>\s*<\/div>/gi;
 export function countFormSlots(html) {
   const matches = String(html || '').match(FORM_SLOT_RE);
   return matches ? matches.length : 0;
+}
+
+/**
+ * PR-5b-2a nợ 1 — có div mang thuộc tính `data-founderai-form-slot` nhưng KHÔNG khớp dạng hợp lệ
+ * (ví dụ có nội dung con thật: `<div data-founderai-form-slot><p>x</p></div>`) hay không. So số
+ * lần chuỗi nhắc tên thuộc tính với số chỗ trống hợp lệ đếm được — lệch (nhắc nhiều hơn hợp lệ)
+ * nghĩa là có ít nhất một div hỏng dạng. Không phải HTML parser thật (không cần cho phạm vi này —
+ * chỉ AI sinh hoặc admin dán tay một khối đơn giản), chỉ đủ để KHÔNG lặng lẽ bỏ qua như nợ 1.
+ *
+ * @param {string} html
+ * @returns {boolean}
+ */
+export function hasMalformedFormSlot(html) {
+  const source = String(html || '');
+  const mentionCount = (source.match(FORM_SLOT_ATTR_MENTION_RE) || []).length;
+  return mentionCount > countFormSlots(source);
 }
 
 /**
