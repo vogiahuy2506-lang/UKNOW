@@ -54,6 +54,44 @@
 
   var APP_ORIGIN = getAppOrigin();
 
+  // PR-7a — biểu mẫu biết mình đến từ landing nào + UTM (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md
+  // mục PR-7). Slug landing lấy từ data-slug của script lp-track.js/founderai-capture.js mà
+  // landingHtmlInjection.util.js đã chèn sẵn khi lưu trang — không tự đoán/nối chuỗi slug từ nơi
+  // khác. UTM lấy từ window.location.search của CHÍNH trang landing (form-embed.js chạy trực
+  // tiếp trên trang đó, không phải trong iframe).
+  var UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+
+  function findLandingSlug() {
+    var selectors = ['script[src$="/lp-track.js"][data-slug]', 'script[src$="/founderai-capture.js"][data-slug]'];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      if (el) {
+        var slug = (el.getAttribute('data-slug') || '').trim();
+        if (slug) return slug.slice(0, 255);
+      }
+    }
+    return '';
+  }
+
+  function buildSourceParams() {
+    var out = [];
+    var slug = findLandingSlug();
+    if (slug) out.push('lp=' + encodeURIComponent(slug));
+    try {
+      var params = new URLSearchParams(window.location.search);
+      for (var i = 0; i < UTM_KEYS.length; i++) {
+        var key = UTM_KEYS[i];
+        var val = params.get(key);
+        if (val) out.push(key + '=' + encodeURIComponent(String(val).slice(0, 255)));
+      }
+    } catch (e) {
+      // URLSearchParams không có trên trình duyệt quá cũ -> bỏ qua UTM, không chặn mount() form.
+    }
+    return out;
+  }
+
+  var SOURCE_PARAMS = buildSourceParams();
+
   function isOpaqueOrigin() {
     try {
       if (typeof window.origin === 'string') return window.origin === 'null';
@@ -77,7 +115,7 @@
   function renderFallbackLink(container, key) {
     container.innerHTML = '';
     var a = document.createElement('a');
-    a.href = APP_ORIGIN + '/f/' + encodeURIComponent(key);
+    a.href = APP_ORIGIN + '/f/' + encodeURIComponent(key) + (SOURCE_PARAMS.length ? '?' + SOURCE_PARAMS.join('&') : '');
     a.target = '_blank';
     a.rel = 'noopener';
     a.textContent = 'Mở biểu mẫu';
@@ -95,7 +133,8 @@
   function renderIframe(container, key) {
     container.innerHTML = '';
     var iframe = document.createElement('iframe');
-    iframe.src = APP_ORIGIN + '/f/' + encodeURIComponent(key) + '?embed=1';
+    iframe.src = APP_ORIGIN + '/f/' + encodeURIComponent(key) + '?embed=1' +
+      (SOURCE_PARAMS.length ? '&' + SOURCE_PARAMS.join('&') : '');
     iframe.style.width = '100%';
     iframe.style.display = 'block';
     iframe.style.border = '0';

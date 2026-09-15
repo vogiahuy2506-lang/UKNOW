@@ -185,6 +185,98 @@ describe('PublicFormPage — nền ngoài theo theme.backgroundColor', () => {
 });
 
 /**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7a mục 6 — PublicFormPage đọc `lp`/`utm_*` từ
+ * searchParams của CHÍNH trang (đúng cho cả nhúng lẫn link trực tiếp), thêm vào payload trước
+ * `submitPublicForm`.
+ */
+describe('PublicFormPage — nguồn landing + UTM vào payload (PR-7a)', () => {
+  let originalResizeObserver;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = StubResizeObserver;
+  });
+
+  afterEach(() => {
+    window.ResizeObserver = originalResizeObserver;
+  });
+
+  it('?embed=1&lp=khoa-hoc&utm_source=fb -> payload gửi đi có landingPageSlug + utmSource', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+    submitPublicForm.mockResolvedValue({ id: 'sub-1' });
+
+    renderPage('/f/pub_abc?embed=1&lp=khoa-hoc&utm_source=fb');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(submitPublicForm).toHaveBeenCalledTimes(1));
+    const [, payload] = submitPublicForm.mock.calls[0];
+    expect(payload.landingPageSlug).toBe('khoa-hoc');
+    expect(payload.utmSource).toBe('fb');
+    expect(payload).not.toHaveProperty('utmMedium');
+  });
+
+  it('mở link trực tiếp không nhúng /f/KEY?utm_source=zalo -> payload vẫn có utmSource (không chỉ khi nhúng)', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+    submitPublicForm.mockResolvedValue({ id: 'sub-2' });
+
+    renderPage('/f/pub_abc?utm_source=zalo');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(submitPublicForm).toHaveBeenCalledTimes(1));
+    const [, payload] = submitPublicForm.mock.calls[0];
+    expect(payload.utmSource).toBe('zalo');
+  });
+
+  it('không có lp/utm_* trên URL -> payload KHÔNG có các khoá đó', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+    submitPublicForm.mockResolvedValue({ id: 'sub-3' });
+
+    renderPage('/f/pub_abc');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(submitPublicForm).toHaveBeenCalledTimes(1));
+    const [, payload] = submitPublicForm.mock.calls[0];
+    expect(payload).not.toHaveProperty('landingPageSlug');
+    expect(payload).not.toHaveProperty('utmSource');
+    expect(payload).not.toHaveProperty('utmMedium');
+    expect(payload).not.toHaveProperty('utmCampaign');
+    expect(payload).not.toHaveProperty('utmContent');
+    expect(payload).not.toHaveProperty('utmTerm');
+  });
+
+  it('đủ cả 5 UTM trên URL -> payload có đủ 5 khoá camelCase tương ứng', async () => {
+    fetchPublicForm.mockResolvedValue(baseForm);
+    submitPublicForm.mockResolvedValue({ id: 'sub-4' });
+
+    renderPage(
+      '/f/pub_abc?utm_source=fb&utm_medium=cpc&utm_campaign=t9&utm_content=banner1&utm_term=khoa-hoc-ai'
+    );
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'a@b.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+
+    await waitFor(() => expect(submitPublicForm).toHaveBeenCalledTimes(1));
+    const [, payload] = submitPublicForm.mock.calls[0];
+    expect(payload.utmSource).toBe('fb');
+    expect(payload.utmMedium).toBe('cpc');
+    expect(payload.utmCampaign).toBe('t9');
+    expect(payload.utmContent).toBe('banner1');
+    expect(payload.utmTerm).toBe('khoa-hoc-ai');
+  });
+});
+
+/**
  * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-3b.
  *
  * Route đích /f/:publicKey/s/:accessToken được thay bằng 1 component đánh dấu đơn giản

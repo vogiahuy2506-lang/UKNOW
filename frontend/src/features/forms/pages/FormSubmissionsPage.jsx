@@ -76,6 +76,12 @@ export default function FormSubmissionsPage() {
   );
   const showStatusColumn = showBookingColumns || showPaymentColumns;
   const showActionsColumn = showBookingColumns || showPaymentColumns;
+  // PR-7a mục 7 — chỉ hiện cột "Nguồn" khi có ÍT NHẤT MỘT bài nộp mang slug landing hoặc utm_source
+  // (form không nhúng vào landing nào / khách vào thẳng link thì mọi bài đều rỗng, ẩn hẳn cột).
+  const showSourceColumn = useMemo(
+    () => submissions.some((s) => Boolean(s.landingPageSlug) || Boolean(s.utmSource)),
+    [submissions]
+  );
 
   const formKeyOrderMap = useMemo(() => {
     const map = new Map();
@@ -294,6 +300,11 @@ export default function FormSubmissionsPage() {
                       {t('forms.submissionsPage.colStatus')}
                     </th>
                   )}
+                  {showSourceColumn && (
+                    <th className="py-3.5 px-4 sm:px-6 w-40">
+                      {t('forms.submissionsPage.colSource')}
+                    </th>
+                  )}
                   <th className="py-3.5 px-4 sm:px-6 w-36 text-center">
                     {t('forms.submissionsPage.colConsent')}
                   </th>
@@ -389,6 +400,27 @@ export default function FormSubmissionsPage() {
                           </td>
                         );
                       })()}
+
+                      {showSourceColumn && (
+                        /* Nguồn: slug landing + utm_source/utm_campaign — chỉ để thống kê, không
+                           phải điều kiện nghiệp vụ (PR-7a mục 7). */
+                        <td className="py-4 px-4 sm:px-6 text-xs whitespace-nowrap">
+                          {sub.landingPageSlug || sub.utmSource || sub.utmCampaign ? (
+                            <div className="space-y-0.5">
+                              {sub.landingPageSlug && (
+                                <div className="font-mono text-gray-700">{sub.landingPageSlug}</div>
+                              )}
+                              {(sub.utmSource || sub.utmCampaign) && (
+                                <div className="text-gray-500">
+                                  {[sub.utmSource, sub.utmCampaign].filter(Boolean).join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      )}
 
                       {/* Đồng ý tiếp thị */}
                       <td className="py-4 px-4 sm:px-6 text-center">

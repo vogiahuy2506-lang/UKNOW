@@ -10,6 +10,17 @@ import FormRenderer from '../components/FormRenderer';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
 import { formatVnd } from '../../../utils/vietqrParser';
 
+// PR-7a — biểu mẫu biết mình đến từ landing nào + UTM (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md
+// mục PR-7): ánh xạ tên tham số URL (snake_case, chuẩn UTM) sang khoá payload (camelCase, khớp
+// hợp đồng backend `form.service.js` `submitPublicForm`).
+const UTM_PARAM_TO_PAYLOAD_KEY = [
+  ['utm_source', 'utmSource'],
+  ['utm_medium', 'utmMedium'],
+  ['utm_campaign', 'utmCampaign'],
+  ['utm_content', 'utmContent'],
+  ['utm_term', 'utmTerm'],
+];
+
 export default function PublicFormPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -72,11 +83,21 @@ export default function PublicFormPage() {
     [publicKey]
   );
 
+  // PR-7a — searchParams của CHÍNH trang này (đúng cho cả nhúng: form-embed.js chuyền ?lp=&utm_*=
+  // vào src iframe; lẫn mở link trực tiếp /f/KEY?utm_source=zalo).
   const handleSubmit = async (payload) => {
     setSubmitError('');
     setIsSubmitting(true);
     try {
-      const result = await submitPublicForm(publicKey, payload);
+      const enrichedPayload = { ...payload };
+      const lp = searchParams.get('lp');
+      if (lp) enrichedPayload.landingPageSlug = lp;
+      for (const [paramKey, payloadKey] of UTM_PARAM_TO_PAYLOAD_KEY) {
+        const val = searchParams.get(paramKey);
+        if (val) enrichedPayload[payloadKey] = val;
+      }
+
+      const result = await submitPublicForm(publicKey, enrichedPayload);
       // PR-3b (Bổ sung 15/09): nộp bài trả `payment` -> chuyển sang trang trạng thái công khai
       // (dùng CHUNG cho "vừa nộp xong" lẫn "mở lại từ thư") thay vì hiện màn thành công của
       // FormRenderer — form không thu tiền thì payment=null, giữ nguyên màn thành công cũ.

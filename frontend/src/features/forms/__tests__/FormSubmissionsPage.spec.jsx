@@ -110,6 +110,87 @@ describe('FormSubmissionsPage component', () => {
     vi.clearAllMocks();
   });
 
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7a mục 7 — cột "Nguồn" (slug landing +
+   * utm_source/utm_campaign), chỉ hiện khi có ít nhất một bài mang dữ liệu nguồn.
+   */
+  describe('Cột "Nguồn" (PR-7a)', () => {
+    it('không bài nộp nào có landingPageSlug/utmSource -> KHÔNG có cột Nguồn', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(mockForm);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(mockSubmissionsPage1);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-sub-123/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('snapshot@example.com')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Nguồn')).not.toBeInTheDocument();
+    });
+
+    it('ít nhất một bài có landingPageSlug -> hiện cột Nguồn, đúng slug + utm_source/utm_campaign theo từng dòng', async () => {
+      const submissionsWithSource = {
+        submissions: [
+          {
+            id: 'sub-src-1',
+            respondentName: 'Có nguồn',
+            respondentEmail: 'src1@example.com',
+            marketingConsent: true,
+            createdAt: '2026-09-14T08:00:00.000Z',
+            landingPageSlug: 'khoa-hoc-ai',
+            utmSource: 'facebook',
+            utmCampaign: 'thang9',
+            answers: {},
+          },
+          {
+            id: 'sub-src-2',
+            respondentName: 'Không nguồn',
+            respondentEmail: 'src2@example.com',
+            marketingConsent: true,
+            createdAt: '2026-09-14T08:05:00.000Z',
+            landingPageSlug: null,
+            utmSource: null,
+            utmCampaign: null,
+            answers: {},
+          },
+        ],
+        total: 2,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      };
+
+      formAdminApi.fetchFormById.mockResolvedValue(mockForm);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(submissionsWithSource);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-sub-123/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('src1@example.com')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Nguồn')).toBeInTheDocument();
+      expect(screen.getByText('khoa-hoc-ai')).toBeInTheDocument();
+      expect(screen.getByText('facebook · thang9')).toBeInTheDocument();
+    });
+  });
+
   it('hiển thị nhãn câu trả lời theo snapshot label trong bài nộp thay vì form definition hiện tại', async () => {
     formAdminApi.fetchFormById.mockResolvedValue(mockForm);
     formAdminApi.fetchFormSubmissions.mockResolvedValue(mockSubmissionsPage1);

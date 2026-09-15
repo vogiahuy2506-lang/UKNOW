@@ -8739,6 +8739,7 @@ export default {
       colPayment: 'Mã & số tiền',
       colStatus: 'Trạng thái',
       colActions: 'Thao tác',
+      colSource: 'Nguồn',
       colConsent: 'Đồng ý tiếp thị',
       consentYes: 'Có',
       consentNo: 'Không',

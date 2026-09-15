@@ -38,17 +38,28 @@ function dispatchResizeMessage({ origin, source, type = 'founderai-form-resize',
   window.dispatchEvent(event);
 }
 
+function setupLpTrackScript(slug, { capture = false } = {}) {
+  const script = document.createElement('script');
+  script.src = capture ? 'https://landing.example/founderai-capture.js' : 'https://landing.example/lp-track.js';
+  script.setAttribute('data-slug', slug);
+  document.head.appendChild(script);
+  return script;
+}
+
 describe('form-embed.js', () => {
   let originalWindowOrigin;
 
   beforeEach(() => {
     document.body.innerHTML = '';
     document.head.querySelectorAll('script[src$="form-embed.js"]').forEach((s) => s.remove());
+    document.head.querySelectorAll('script[src$="lp-track.js"], script[src$="founderai-capture.js"]').forEach((s) => s.remove());
     originalWindowOrigin = window.origin;
+    window.history.pushState({}, '', '/');
   });
 
   afterEach(() => {
     Object.defineProperty(window, 'origin', { value: originalWindowOrigin, configurable: true });
+    window.history.pushState({}, '', '/');
   });
 
   it('2 container + 1 script → mount() tự chạy, tạo đúng 2 iframe với src ORIGIN/f/KEY?embed=1', async () => {
@@ -199,5 +210,69 @@ describe('form-embed.js', () => {
     expect(link.href).toBe(`${APP_ORIGIN}/f/key-opaque`);
     expect(link.target).toBe('_blank');
     expect(link.rel).toBe('noopener');
+  });
+
+  /**
+   * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-7a mục 5 — form-embed.js đọc slug landing
+   * (data-slug của lp-track.js, dự phòng founderai-capture.js) + UTM từ window.location.search
+   * của trang landing, chuyền vào URL iframe/link dự phòng.
+   */
+  describe('nguồn landing + UTM (PR-7a)', () => {
+    it('có <script lp-track.js data-slug> + URL ?utm_source=fb&utm_campaign=t9 → iframe src có embed=1&lp=khoa-hoc&utm_source=fb&utm_campaign=t9', async () => {
+      setupLpTrackScript('khoa-hoc');
+      window.history.pushState({}, '', '/landing?utm_source=fb&utm_campaign=t9');
+      setupScriptTag();
+      makeContainer('key-a');
+
+      await loadFormEmbed();
+
+      const iframe = document.querySelector('iframe');
+      expect(iframe.src).toBe(`${APP_ORIGIN}/f/key-a?embed=1&lp=khoa-hoc&utm_source=fb&utm_campaign=t9`);
+    });
+
+    it('không có script data-slug, không UTM → iframe src giữ nguyên ?embed=1 (không thêm &)', async () => {
+      setupScriptTag();
+      makeContainer('key-b');
+
+      await loadFormEmbed();
+
+      const iframe = document.querySelector('iframe');
+      expect(iframe.src).toBe(`${APP_ORIGIN}/f/key-b?embed=1`);
+    });
+
+    it('không có lp-track.js nhưng có founderai-capture.js data-slug → vẫn lấy được slug (dự phòng)', async () => {
+      setupLpTrackScript('khoa-hoc-2', { capture: true });
+      setupScriptTag();
+      makeContainer('key-c');
+
+      await loadFormEmbed();
+
+      const iframe = document.querySelector('iframe');
+      expect(iframe.src).toBe(`${APP_ORIGIN}/f/key-c?embed=1&lp=khoa-hoc-2`);
+    });
+
+    it('chỉ có utm_source trong URL (các khoá UTM khác trống) → chỉ thêm đúng utm_source', async () => {
+      window.history.pushState({}, '', '/landing?utm_source=zalo&other_param=x');
+      setupScriptTag();
+      makeContainer('key-d');
+
+      await loadFormEmbed();
+
+      const iframe = document.querySelector('iframe');
+      expect(iframe.src).toBe(`${APP_ORIGIN}/f/key-d?embed=1&utm_source=zalo`);
+    });
+
+    it('window.origin === "null" (link dự phòng) + có slug/UTM → link href cũng mang lp=/utm_*', async () => {
+      setupLpTrackScript('khoa-hoc');
+      window.history.pushState({}, '', '/landing?utm_source=fb');
+      Object.defineProperty(window, 'origin', { value: 'null', configurable: true });
+      setupScriptTag();
+      const container = makeContainer('key-e');
+
+      await loadFormEmbed();
+
+      const link = container.querySelector('a[data-founderai-form-fallback-link]');
+      expect(link.href).toBe(`${APP_ORIGIN}/f/key-e?lp=khoa-hoc&utm_source=fb`);
+    });
   });
 });
