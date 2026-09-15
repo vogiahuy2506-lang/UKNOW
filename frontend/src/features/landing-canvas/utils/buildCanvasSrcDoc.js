@@ -1,5 +1,8 @@
 import { useMemo } from 'react';
-import { prepareLandingHtmlForPreview } from '../../landing-pages/utils/injectLandingEnhancements.js';
+import {
+  prepareLandingHtmlForPreview,
+  injectFormSlotPreviewHint,
+} from '../../landing-pages/utils/injectLandingEnhancements.js';
 import { normalizeLandingLpTrackApiBase } from '../../landing-pages/utils/normalizeLandingLpTrackApiBase.js';
 
 /**
@@ -49,9 +52,11 @@ function buildEmptyHint(text) {
  * @param {string} params.slug
  * @param {string} params.publicUrl
  * @param {string} [params.emptyHint] Nội dung placeholder khi chưa có HTML (nên truyền từ i18n)
+ * @param {string} [params.formSlotHint] PR-5b-2b — chữ hiện trong khung chấm thay chỗ trống
+ *   `data-founderai-form-slot` LÚC XEM TRƯỚC (nên truyền từ i18n); không đổi HTML thật sẽ lưu.
  * @returns {string} srcDoc HTML hoàn chỉnh
  */
-export function buildCanvasSrcDoc({ html, title, slug, emptyHint }) {
+export function buildCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint }) {
   const rawTrim = String(html || '').trim();
   const trimmedSlug = String(slug || '').trim().toLowerCase();
 
@@ -101,21 +106,25 @@ export function buildCanvasSrcDoc({ html, title, slug, emptyHint }) {
       : '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preview</title></head><body></body></html>';
   }
 
-  const preview = prepareLandingHtmlForPreview(baseHtml, {
+  let preview = prepareLandingHtmlForPreview(baseHtml, {
     slug: trimmedSlug,
     frontendOrigin: origin,
     apiBase,
   });
+  // PR-5b-2b mục 2 — CHỈ ảnh hưởng srcDoc của iframe preview, không đổi `html`/`baseHtml` gốc nên
+  // không lọt vào bất kỳ đường lưu thật nào (setForm chỉ nhận input từ CanvasPreviewCode, không
+  // đọc lại biến `preview` này).
+  preview = injectFormSlotPreviewHint(preview, formSlotHint);
   return ensureTailwindCdn(preview);
 }
 
 /**
  * React hook: build srcDoc memoized theo form state.
  */
-export function useCanvasSrcDoc({ html, title, slug, emptyHint }) {
+export function useCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint }) {
   return useMemo(
-    () => buildCanvasSrcDoc({ html, title, slug, emptyHint }),
-    [html, title, slug, emptyHint]
+    () => buildCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint }),
+    [html, title, slug, emptyHint, formSlotHint]
   );
 }
 

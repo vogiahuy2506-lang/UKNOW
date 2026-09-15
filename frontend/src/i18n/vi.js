@@ -645,6 +645,7 @@ export default {
     topbar: {
       settings: 'Cài đặt',
       form: 'Lead Form',
+      openLinkedForm: 'Mở Biểu mẫu của trang này',
       domain: 'Tên miền',
       pageSettings: 'Thông tin trang',
       history: 'Lịch sử',
@@ -881,6 +882,7 @@ export default {
       deviceMobile: 'Mobile',
       zoom: 'Zoom',
       monacoLoading: 'Đang tải Monaco editor…',
+      formSlotHint: 'Biểu mẫu đăng ký sẽ hiện ở đây sau khi lưu',
     },
     emptyState: {
       pasteHtml: 'Dán HTML có sẵn',

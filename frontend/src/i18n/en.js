@@ -645,6 +645,7 @@ export default {
     topbar: {
       settings: 'Settings',
       form: 'Lead Form',
+      openLinkedForm: 'Open this page’s Form',
       domain: 'Domain',
       pageSettings: 'Page info',
       history: 'History',
@@ -881,6 +882,7 @@ export default {
       deviceMobile: 'Mobile',
       zoom: 'Zoom',
       monacoLoading: 'Loading Monaco editor…',
+      formSlotHint: 'Your registration form will appear here after saving',
     },
     emptyState: {
       pasteHtml: 'Paste existing HTML',

@@ -113,3 +113,37 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
   }
   return `${out}\n${injectBlock}`;
 }
+
+/** Cùng dạng hợp lệ với backend (`landingHtmlInjection.util.js` FORM_SLOT_RE, PR-5b-2a nợ 1) —
+ * thêm thuộc tính khác/`=""`/khoảng trắng đều khớp, không khớp khi có nội dung con thật. */
+const FORM_SLOT_RE = /<div\b[^>]*\bdata-founderai-form-slot\b(?:=(?:"[^"]*"|'[^']*'))?[^>]*>\s*<\/div>/gi;
+
+function escapeHtmlText(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * PR-5b-2b mục 2 — CHỈ ở chế độ xem trước (srcDoc của iframe trình soạn landing): thay chỗ trống
+ * `<div data-founderai-form-slot></div>` bằng khung chấm gợi ý "Biểu mẫu đăng ký sẽ hiện ở đây
+ * sau khi lưu". KHÔNG đổi HTML thật sẽ gửi lưu — hàm này chỉ chạm vào chuỗi srcDoc dựng riêng cho
+ * iframe preview (`buildCanvasSrcDoc.js`), gọi SAU `prepareLandingHtmlForPreview`, không gọi ở
+ * đường lưu thật.
+ *
+ * @param {string} html
+ * @param {string} hintText Chữ hiển thị trong khung — nên truyền từ i18n (vi/en)
+ * @returns {string}
+ */
+export function injectFormSlotPreviewHint(html, hintText) {
+  const source = String(html ?? '');
+  if (!source) return source;
+  const text = escapeHtmlText(hintText || 'Biểu mẫu đăng ký sẽ hiện ở đây sau khi lưu');
+  const placeholder =
+    `<div style="border:2px dashed #f97316;border-radius:12px;padding:32px 16px;` +
+    `text-align:center;color:#f97316;background:#fff7ed;font-family:system-ui,sans-serif;` +
+    `font-size:14px;">${text}</div>`;
+  return source.replace(FORM_SLOT_RE, () => placeholder);
+}

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlineChevronLeft, HiOutlineX, HiOutlineTemplate, HiOutlineViewGrid, HiOutlineClock, HiOutlineCog, HiOutlineDocumentText, HiOutlineBookmark, HiOutlineCode } from 'react-icons/hi';
+import { HiOutlineChevronLeft, HiOutlineX, HiOutlineTemplate, HiOutlineViewGrid, HiOutlineClock, HiOutlineCog, HiOutlineDocumentText, HiOutlineBookmark, HiOutlineCode, HiOutlineClipboardList } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 /**
@@ -129,6 +129,18 @@ export default function LandingCanvasTopbar({
             onClick={onOpenVersionHistory}
             title={tc('history')}
           />
+        ) : null}
+        {/* PR-5b-2b mục 7 — chỉ hiện khi landing này có Biểu mẫu gắn (PR-5b-2a forms.landing_page_id). */}
+        {form.linkedFormId ? (
+          <a
+            href={`/app/forms/${form.linkedFormId}/edit`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={tc('openLinkedForm')}
+            className="p-3 rounded-lg transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+          >
+            <HiOutlineClipboardList className="w-6 h-6" />
+          </a>
         ) : null}
       </div>
 

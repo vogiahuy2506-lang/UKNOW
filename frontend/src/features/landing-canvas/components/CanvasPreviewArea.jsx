@@ -29,7 +29,7 @@ export default function CanvasPreviewArea({ form, setForm, onOpenImportHtml, onO
   const title = form?.title || '';
   const slug = form?.slug || '';
 
-  const srcDoc = useCanvasSrcDoc({ html, title, slug, emptyHint: tc('empty') });
+  const srcDoc = useCanvasSrcDoc({ html, title, slug, emptyHint: tc('empty'), formSlotHint: tc('formSlotHint') });
   const publicUrl = useMemo(() => getPublicUrlFromSlug(slug), [slug]);
 
   const handleCodeChange = useCallback(

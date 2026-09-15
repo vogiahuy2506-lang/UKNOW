@@ -70,6 +70,7 @@ export default function LandingCanvasPage() {
         : defaultLeadFormConfig(),
       leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
       leadFormFieldErrors: {},
+      linkedFormId: null,
     };
   }, []);
 
@@ -106,6 +107,9 @@ export default function LandingCanvasPage() {
           leadFormConfig: normalizeLeadFormConfig(full.leadFormConfig),
           leadFormPersistedMeta: snapshotLeadFormPersistedMeta(full.leadFormConfig),
           leadFormFieldErrors: {},
+          // PR-5b-2b mục 7 — Biểu mẫu gắn landing này (PR-5b-2a forms.landing_page_id), null nếu
+          // chưa có. Dùng để hiện link "Mở Biểu mẫu của trang này" trong trình soạn.
+          linkedFormId: full.linkedFormId ?? null,
         });
       } catch (e) {
         if (cancelled) return;
