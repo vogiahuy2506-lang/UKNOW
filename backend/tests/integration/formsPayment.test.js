@@ -705,3 +705,114 @@ describe('PR-3a — huỷ lượt pending_payment', () => {
     expect(resB.status).toBe(201);
   });
 });
+
+/**
+ * PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, "Bổ sung 15/09 khi soạn lệnh PR-3b" mục 5 —
+ * hai nợ PR-3a gộp vào PR-3b: (1) trạng thái công khai không chặn khi chủ hết gói; (2) test
+ * integration cho thư hướng dẫn chuyển khoản + thư "đã xác nhận" (kèm escape HTML).
+ */
+describe('PR-3b — thư hướng dẫn chuyển khoản + thư đã xác nhận + chủ hết gói vẫn xem được trạng thái', () => {
+  it('nộp bài thu tiền có email + sendConfirmation → thư hướng dẫn chứa ngân hàng/STK/số tiền/mã/link trạng thái, HTML đã escape', async () => {
+    const owner = await createUser({ username: 'owner_pay_mail1' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+    const emailField = form.fields[0];
+
+    // Chèn thẳng payment_config có accountName chứa HTML — bỏ qua validate của normalizePaymentConfig
+    // (chặn ký tự ngoài [A-Z0-9 ] ở tầng API, ĐÚNG như thiết kế) để phơi đúng lớp phòng thủ thứ
+    // hai: escapeHtml() ở template thư, phòng khi dữ liệu tới bằng đường khác trong tương lai.
+    await db.query(
+      `UPDATE forms SET payment_config = jsonb_set(payment_config, '{accountName}', '"NGUYEN VAN A <b>HACK</b>"') WHERE id = $1`,
+      [form.id]
+    );
+
+    mockSendMail.mockClear();
+    const res = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'payer_mail1@example.com' } });
+    expect(res.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'payer_mail1@example.com');
+    expect(call).toBeTruthy();
+    const { subject, html } = call[0];
+    expect(subject).toContain('Hướng dẫn chuyển khoản');
+    expect(html).toContain('MB Bank');
+    expect(html).toContain('0123456789');
+    expect(html).toContain('150.000');
+    expect(html).toContain(res.body.data.payment.code);
+    expect(html).toContain(`/f/${form.publicKey}/s/${res.body.data.accessToken}`);
+    // Escape đúng — không lọt thẻ <b> sống vào email HTML.
+    expect(html).toContain('&lt;b&gt;HACK&lt;/b&gt;');
+    expect(html).not.toContain('<b>HACK</b>');
+  });
+
+  it('chủ bấm "Đã nhận tiền" → thư "đã xác nhận" gửi ĐÚNG người đặt (không gửi cho chủ)', async () => {
+    const owner = await createUser({ username: 'owner_pay_mail2', email: 'owner_pay_mail2@example.com' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+    const emailField = form.fields[0];
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'payer_mail2@example.com' } });
+    expect(submitRes.status).toBe(201);
+    const row = await db.query(`SELECT id FROM form_submissions WHERE access_token = $1`, [submitRes.body.data.accessToken]);
+
+    mockSendMail.mockClear();
+    const confirmRes = await request(app)
+      .post(`/api/forms/${form.id}/submissions/${row.rows[0].id}/confirm-payment`)
+      .set('Authorization', `Bearer ${token}`)
+      .send();
+    expect(confirmRes.status).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const toRespondent = mockSendMail.mock.calls.find((c) => c[0].to === 'payer_mail2@example.com');
+    const toOwner = mockSendMail.mock.calls.find((c) => c[0].to === 'owner_pay_mail2@example.com');
+    expect(toRespondent).toBeTruthy();
+    expect(toRespondent[0].subject).toContain('Đã xác nhận thanh toán');
+    expect(toOwner).toBeFalsy();
+  });
+
+  it('chủ ĐÃ HẾT GÓI (subscription_expires_at + grace_period_days quá khứ) → trang trạng thái vẫn 200', async () => {
+    const owner = await createUser({ username: 'owner_pay_expired' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+
+    const submitRes = await request(app).post(`/api/public/forms/${form.publicKey}/submissions`).send({ answers: {} });
+    expect(submitRes.status).toBe(201);
+
+    await db.query(`UPDATE users SET subscription_expires_at = NOW() - INTERVAL '5 days' WHERE id = $1`, [owner.id]);
+    await db.query(
+      `UPDATE plans SET grace_period_days = 2 WHERE id = (SELECT active_plan_id FROM users WHERE id = $1)`,
+      [owner.id]
+    );
+
+    // Xác nhận GET form public thường (vẫn dùng checkOwnerActivePlan) đúng là 503 — làm chứng
+    // đối chứng rằng "chủ hết gói" ở test này THẬT SỰ có hiệu lực, không phải false negative.
+    const publicFormRes = await request(app).get(`/api/public/forms/${form.publicKey}`);
+    expect(publicFormRes.status).toBe(503);
+
+    const statusRes = await request(app).get(`/api/public/forms/${form.publicKey}/submissions/${submitRes.body.data.accessToken}`);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.data.status).toBe('pending_payment');
+    expect(statusRes.body.data.payment).toBeTruthy();
+  });
+
+  it('form bị ẨN (chưa xuất bản) → trang trạng thái VẪN 404 (chỉ bỏ chốt gói, không bỏ chốt ẩn/tắt)', async () => {
+    const owner = await createUser({ username: 'owner_pay_unpublish' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+    const submitRes = await request(app).post(`/api/public/forms/${form.publicKey}/submissions`).send({ answers: {} });
+
+    await request(app)
+      .put(`/api/forms/${form.id}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ isPublished: false });
+
+    const statusRes = await request(app).get(`/api/public/forms/${form.publicKey}/submissions/${submitRes.body.data.accessToken}`);
+    expect(statusRes.status).toBe(404);
+  });
+});

@@ -868,7 +868,10 @@ class FormService {
     if (!form || !form.isPublished || form.adminDisabledAt) {
       throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
     }
-    this.checkOwnerActivePlan(form);
+    // PR-3b (Bổ sung 15/09): KHÔNG chặn theo checkOwnerActivePlan ở đây — khách đã đặt/chuyển
+    // khoản phải xem được trạng thái bài nộp của MÌNH dù chủ hết gói sau đó (tiền đã đi, khách
+    // cần biết đã xác nhận hay chưa). Vẫn giữ chặn khi form bị ẩn (!isPublished) hoặc bị super
+    // admin tắt (adminDisabledAt) — hai điều kiện phía trên.
 
     const submission = await formRepository.findSubmissionByAccessTokenAndForm(token, form.id);
     if (!submission) {
