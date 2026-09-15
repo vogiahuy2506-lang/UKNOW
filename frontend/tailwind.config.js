@@ -4,6 +4,12 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // App chỉ có giao diện sáng. Không khai báo thì Tailwind 3 mặc định 'media' → mọi class `dark:`
+  // tự bật theo chế độ tối của hệ điều hành: 15/09/2026 trang Chương trình đối tác, trang quản lý
+  // đối tác và modal rút tiền (~340 class dark:) hiện nền xanh đen giữa app nền trắng, khung cảnh
+  // báo chữ vàng nhạt trên nền be không đọc được. 'class' = chỉ bật khi <html class="dark">, app
+  // không bao giờ gắn class đó.
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
