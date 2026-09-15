@@ -8,6 +8,7 @@ import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
 import { useI18n, I18nProvider } from './i18n';
 import RouteAnalytics from './components/RouteAnalytics';
 import ReferralCapture from './components/ReferralCapture';
+import PostAuthGateModals from './features/auth/components/PostAuthGateModals';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -283,6 +284,7 @@ function AppContent() {
         <Router>
           <RouteAnalytics />
           <ReferralCapture />
+          <PostAuthGateModals />
           {toaster}
           <Routes>
           {/* Auth Routes */}

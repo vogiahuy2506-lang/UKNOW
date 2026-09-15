@@ -1,0 +1,326 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import PostAuthGateModals from '../PostAuthGateModals';
+import { useAuthStore } from '../../../../stores/authStore';
+
+const stableT = (key) => key;
+vi.mock('../../../../i18n', () => ({ useI18n: () => ({ t: stableT }) }));
+
+// Stub các modal để cô lập logic cổng
+vi.mock('../ChangePasswordModal', () => ({
+  default: ({ isOpen }) => (isOpen ? <div data-testid="change-password-modal" /> : null),
+}));
+
+vi.mock('../PhoneRequiredModal', () => ({
+  default: ({ isOpen, onClose }) =>
+    isOpen ? (
+      <div data-testid="phone-required-modal">
+        <button data-testid="phone-later-btn" onClick={onClose}>
+          Để sau
+        </button>
+      </div>
+    ) : null,
+}));
+
+vi.mock('../ConsentRequiredModal', () => ({
+  default: ({ isOpen, isOutdated, onDecline }) =>
+    isOpen ? (
+      <div
+        data-testid="consent-required-modal"
+        data-is-outdated={isOutdated ? 'true' : 'false'}
+      >
+        <button data-testid="consent-decline-btn" onClick={onDecline}>
+          Không đồng ý và đăng xuất
+        </button>
+      </div>
+    ) : null,
+}));
+
+const renderWithRouter = (initialEntries = ['/']) =>
+  render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <PostAuthGateModals />
+      <Routes>
+        <Route path="/login" element={<div data-testid="login-page">Login Page</div>} />
+        <Route path="/" element={<div data-testid="home-page">Home Page</div>} />
+        <Route path="/terms" element={<div data-testid="terms-page">Terms Page</div>} />
+        <Route path="/lp/:slug" element={<div data-testid="lp-page">LP Page</div>} />
+        <Route path="/termsx" element={<div data-testid="termsx-page">TermsX Page</div>} />
+        <Route path="/app" element={<div data-testid="app-page">App Page</div>} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+const originalLogout = useAuthStore.getState().logout;
+
+describe('PostAuthGateModals (PR-B: Cổng sau đăng nhập toàn cục)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuthStore.setState({
+      user: null,
+      isAuthenticated: false,
+      phoneOtpEnabled: false,
+      phoneReminderDismissed: false,
+      logout: originalLogout,
+    });
+  });
+
+  it('(a) user chưa đồng ý ở / → modal đồng ý hiện, modal SĐT CHƯA hiện dù thiếu số', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: false,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: null, // thiếu số
+        mustChangePassword: false,
+        hasConsented: false, // chưa đồng ý
+      },
+    });
+
+    renderWithRouter(['/']);
+
+    // Modal đồng ý phải hiện
+    expect(screen.getByTestId('consent-required-modal')).toBeInTheDocument();
+    // Modal SĐT KHÔNG được hiện trước đồng ý (thứ tự: mật khẩu -> đồng ý -> SĐT)
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('change-password-modal')).not.toBeInTheDocument();
+  });
+
+  it('user có consentVersionOutdated = true → HIỆN modal đồng ý với isOutdated = true', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: '0912345678',
+        phoneVerifiedAt: '2026-09-11T10:00:00.000Z',
+        mustChangePassword: false,
+        hasConsented: false,
+        consentVersionOutdated: true,
+      },
+    });
+
+    renderWithRouter(['/']);
+
+    const modal = screen.getByTestId('consent-required-modal');
+    expect(modal).toHaveAttribute('data-is-outdated', 'true');
+  });
+
+  it('(b) đã đồng ý, thiếu số ở / → modal SĐT hiện; bấm "Để sau" → tắt', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: false,
+      phoneReminderDismissed: false,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: null,
+        mustChangePassword: false,
+        hasConsented: true,
+      },
+    });
+
+    renderWithRouter(['/']);
+
+    expect(screen.getByTestId('phone-required-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('consent-required-modal')).not.toBeInTheDocument();
+
+    // Bấm "Để sau"
+    fireEvent.click(screen.getByTestId('phone-later-btn'));
+
+    expect(useAuthStore.getState().phoneReminderDismissed).toBe(true);
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
+  it('phoneOtp: cờ tắt + user có phone → KHÔNG hiện modal SĐT', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: false,
+      user: { id: 1, role: 'user', phone: '0912345678', phoneVerifiedAt: null, mustChangePassword: false, hasConsented: true },
+    });
+
+    renderWithRouter(['/']);
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
+  it('phoneOtp: cờ bật + có phone nhưng phoneVerifiedAt null → HIỆN modal SĐT', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: true,
+      user: { id: 1, role: 'user', phone: '0912345678', phoneVerifiedAt: null, mustChangePassword: false, hasConsented: true },
+    });
+
+    renderWithRouter(['/']);
+    expect(screen.getByTestId('phone-required-modal')).toBeInTheDocument();
+  });
+
+  it('phoneOtp: cờ bật + phoneVerifiedAt có giá trị → KHÔNG hiện modal SĐT', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: true,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: '0912345678',
+        phoneVerifiedAt: '2026-09-11T10:00:00.000Z',
+        mustChangePassword: false,
+        hasConsented: true,
+      },
+    });
+
+    renderWithRouter(['/']);
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
+  it('(c) ở /terms và /lp/abc → không modal nào', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: null,
+        mustChangePassword: false,
+        hasConsented: false,
+      },
+    });
+
+    // 1. Kiểm tra /terms
+    const { unmount } = renderWithRouter(['/terms']);
+    expect(screen.queryByTestId('consent-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('change-password-modal')).not.toBeInTheDocument();
+    unmount();
+
+    // 2. Kiểm tra /lp/abc
+    renderWithRouter(['/lp/abc']);
+    expect(screen.queryByTestId('consent-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('change-password-modal')).not.toBeInTheDocument();
+  });
+
+  it('ranh giới tiền tố: /termsx KHÔNG bị loại trừ → modal đồng ý vẫn hiện', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: '0912345678',
+        mustChangePassword: false,
+        hasConsented: false,
+      },
+    });
+
+    renderWithRouter(['/termsx']);
+    expect(screen.getByTestId('consent-required-modal')).toBeInTheDocument();
+  });
+
+  it('(d) mustChangePassword → chỉ modal đổi mật khẩu', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: null,
+        mustChangePassword: true,
+        hasConsented: false,
+      },
+    });
+
+    renderWithRouter(['/']);
+
+    expect(screen.getByTestId('change-password-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('consent-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
+  it('(e) role admin → không modal nào', () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 1,
+        role: 'admin',
+        phone: null,
+        mustChangePassword: false,
+        hasConsented: false,
+      },
+    });
+
+    renderWithRouter(['/']);
+
+    expect(screen.queryByTestId('change-password-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('consent-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
+  it('(f) chưa đăng nhập (isAuthenticated = false) → không modal nào', () => {
+    useAuthStore.setState({
+      isAuthenticated: false,
+      user: null,
+    });
+
+    renderWithRouter(['/']);
+
+    expect(screen.queryByTestId('change-password-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('consent-required-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+  });
+
+  it('(g) "Không đồng ý và đăng xuất" → logout gọi, về /login', async () => {
+    const logoutSpy = vi.fn().mockResolvedValue(undefined);
+    useAuthStore.setState({
+      isAuthenticated: true,
+      logout: logoutSpy,
+      user: {
+        id: 1,
+        role: 'user',
+        phone: '0912345678',
+        mustChangePassword: false,
+        hasConsented: false,
+      },
+    });
+
+    renderWithRouter(['/']);
+
+    const declineBtn = screen.getByTestId('consent-decline-btn');
+    fireEvent.click(declineBtn);
+
+    await waitFor(() => {
+      expect(logoutSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('login-page')).toBeInTheDocument();
+    });
+  });
+
+  it('đăng xuất rồi đăng nhập user khác vẫn được nhắc (phoneReminderDismissed reset khi logout)', async () => {
+    // 1. User 1 đăng nhập, thiếu số -> hiện modal -> bấm "Để sau" -> tắt modal
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: false,
+      phoneReminderDismissed: false,
+      user: { id: 1, role: 'user', phone: null, mustChangePassword: false, hasConsented: true },
+    });
+
+    const { unmount } = renderWithRouter(['/']);
+    expect(screen.getByTestId('phone-required-modal')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('phone-later-btn'));
+    expect(useAuthStore.getState().phoneReminderDismissed).toBe(true);
+    expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+    unmount();
+
+    // 2. Logout
+    await useAuthStore.getState().logout({ skipServer: true });
+    expect(useAuthStore.getState().phoneReminderDismissed).toBe(false);
+
+    // 3. User 2 đăng nhập cũng thiếu số -> PHẢI hiện lại modal
+    useAuthStore.setState({
+      isAuthenticated: true,
+      phoneOtpEnabled: false,
+      user: { id: 2, role: 'user', phone: null, mustChangePassword: false, hasConsented: true },
+    });
+
+    renderWithRouter(['/']);
+    expect(screen.getByTestId('phone-required-modal')).toBeInTheDocument();
+  });
+});

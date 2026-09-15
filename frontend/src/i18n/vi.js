@@ -350,17 +350,7 @@ export default {
     usernameMinLen: 'Tên đăng nhập phải có ít nhất 3 ký tự',
     usernameMaxLen: 'Tên đăng nhập không được quá 50 ký tự',
     usernamePattern: 'Tên đăng nhập chỉ được chứa chữ cái không dấu và số',
-    // Terms consent popup
-    termsConsentTitle: 'Đồng ý với Điều khoản sử dụng',
-    termsConsentDesc: 'Trước khi tiếp tục đăng ký bằng Google, bạn cần đồng ý với các điều khoản sau của Công ty TNHH Giải pháp số DIGISO:',
-    companyInfo: 'Thông tin công ty',
-    termsConsentTerms: 'Tôi đã đọc và đồng ý với Điều khoản sử dụng của DIGISO',
-    termsConsentPrivacy: 'Tôi đã đọc và đồng ý với Chính sách bảo mật của DIGISO',
-    termsConsentDpa: 'Tôi đã đọc và đồng ý với Thoả thuận Xử lý Dữ liệu Công khai (Public DPA) của DIGISO',
     acceptAllTerms: 'Bạn cần đồng ý với tất cả các điều khoản để tiếp tục',
-    cancel: 'Hủy',
-    acceptAndContinue: 'Đồng ý và Tiếp tục',
-    processing: 'Đang xử lý...',
   },
 
   nav: {

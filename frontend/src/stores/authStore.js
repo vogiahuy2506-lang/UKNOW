@@ -186,6 +186,8 @@ export const useAuthStore = create((set, get) => ({
   // năng đều cùng một giá trị an toàn. Không có "đang tải" riêng — false là trạng thái đúng
   // để hiển thị (ô SĐT hiện, modal một bước) cho tới khi biết chắc là true.
   phoneOtpEnabled: false,
+  /** PR-B: Cờ tắt nhắc SĐT trong phiên hiện tại (không lưu storage, reset khi logout/login). */
+  phoneReminderDismissed: false,
 
   /**
    * Khởi tạo trạng thái auth từ storage khi load app.
@@ -290,7 +292,7 @@ export const useAuthStore = create((set, get) => ({
     const activeContext = pickDefaultContext(normalizedUser);
     saveContext(activeContext);
 
-    set({ user: normalizedUser, isAuthenticated: true, activeContext });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false });
 
     return response.data;
   },
@@ -315,7 +317,7 @@ export const useAuthStore = create((set, get) => ({
       }
     }
 
-    set({ user: normalizedUser, isAuthenticated: true, activeContext });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false });
 
     return response.data;
   },
@@ -337,7 +339,7 @@ export const useAuthStore = create((set, get) => ({
       }
     }
 
-    set({ user: normalizedUser, isAuthenticated: true, activeContext });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false });
 
     return response.data;
   },
@@ -359,9 +361,9 @@ export const useAuthStore = create((set, get) => ({
       notifyStorageQuotaClear();
       await clearQueryCache();
       set({
-
         user: null,
         isAuthenticated: false,
+        phoneReminderDismissed: false,
         aiCredits: { used: 0, limit: null },
         sendUsage: { ...EMPTY_SEND_USAGE },
         addons: null,
@@ -445,6 +447,11 @@ export const useAuthStore = create((set, get) => ({
   /** Cập nhật thông tin user trong store. */
   updateUser: (user) => {
     set({ user: normalizeUser(user) });
+  },
+
+  /** Tắt nhắc SĐT trong phiên xem hiện tại. */
+  dismissPhoneReminder: () => {
+    set({ phoneReminderDismissed: true });
   },
 
   /**

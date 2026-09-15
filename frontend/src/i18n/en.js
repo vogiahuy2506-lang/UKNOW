@@ -350,17 +350,7 @@ export default {
     usernameMinLen: 'Username must be at least 3 characters',
     usernameMaxLen: 'Username must not exceed 50 characters',
     usernamePattern: 'Username can only contain letters and numbers',
-    // Terms consent popup
-    termsConsentTitle: 'Agree to Terms of Service',
-    termsConsentDesc: 'Before continuing to register with Google, you need to agree to the following terms from DIGISO Digital Solutions Co., Ltd.:',
-    companyInfo: 'Company Information',
-    termsConsentTerms: 'I have read and agree to DIGISO\'s Terms of Service',
-    termsConsentPrivacy: 'I have read and agree to DIGISO\'s Privacy Policy',
-    termsConsentDpa: 'I have read and agree to DIGISO\'s Public Data Processing Agreement (Public DPA)',
     acceptAllTerms: 'You must agree to all terms to continue',
-    cancel: 'Cancel',
-    acceptAndContinue: 'Agree and Continue',
-    processing: 'Processing...',
   },
 
   nav: {

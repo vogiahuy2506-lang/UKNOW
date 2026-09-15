@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '../components/layout/admin/Sidebar';
 import Header from '../components/layout/admin/Header';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
@@ -9,9 +9,7 @@ import AiChatbot from '../features/ai/AiChatbot';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
-import ChangePasswordModal from '../features/auth/components/ChangePasswordModal';
-import PhoneRequiredModal from '../features/auth/components/PhoneRequiredModal';
-import ConsentRequiredModal from '../features/auth/components/ConsentRequiredModal';
+import { usePostAuthGates } from '../features/auth/hooks/usePostAuthGates';
 import TrialWelcomeModal from '../features/auth/components/TrialWelcomeModal';
 import PlanExpiryModal from '../features/auth/components/PlanExpiryModal';
 import { trialWelcomeKey } from '../stores/authStore';
@@ -25,35 +23,8 @@ const HEADER_HEIGHT = 44; // topbar height — matches h-[44px] in Header.jsx
 
 const MainLayout = () => {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const updateUser = useAuthStore((s) => s.updateUser);
-  const logout = useAuthStore((s) => s.logout);
-  const phoneOtpEnabled = useAuthStore((s) => s.phoneOtpEnabled);
-  const mustChangePassword = user?.mustChangePassword === true;
-  // Đổi mật khẩu trước, xong mới tới SĐT — hai cổng cùng đóng là chuyện có thật
-  // (nhân viên được mời, hoặc admin reset mật khẩu, đều có thể chưa có SĐT).
-  // role !== 'admin': khớp isSuperAdmin() bên backend (requirePhone bypass superadmin) —
-  // thiếu điều kiện này thì superadmin cũng dính modal không đóng được dù server không chặn họ.
-  // Xem PLAN_SDT_BAT_BUOC_SYNC_SHEET_2026-09-02.md mục 1.4 và 1.6.
-  // Nhắc, KHÔNG chặn (đổi 04/09/2026, commit ad809325). `phoneDismissed` cố ý là state trong
-  // bộ nhớ — KHÔNG lưu localStorage — để bấm "Để sau" chỉ tắt trong phiên xem hiện tại, còn
-  // lần vào /app sau vẫn được nhắc lại. Đây là yêu cầu của sếp, không phải thiếu sót.
-  // Bị mất ở 1a992e76 (07/09, "fix lint" xoá khoá i18n trùng kéo theo cả onClose) — khôi
-  // phục 09/09 vì modal không có cách đóng, chặn cả app.
-  //
-  // PR-2 (11/09/2026, xác thực SĐT): thêm vế `(phoneOtpEnabled && !user?.phoneVerifiedAt)` —
-  // có SĐT rồi vẫn phải nhắc nếu tính năng OTP đang bật mà số CHƯA được xác thực (tài khoản
-  // cũ, hoặc vừa đổi số qua PUT /profile). Cờ tắt → vế này luôn false, y hệt biểu thức cũ.
-  const [phoneDismissed, setPhoneDismissed] = useState(false);
-  const phoneRequired = !mustChangePassword
-    && (!user?.phone || (phoneOtpEnabled && !user?.phoneVerifiedAt))
-    && user?.role !== 'admin'
-    && !phoneDismissed;
-  // Đồng ý điều khoản & xử lý dữ liệu (Nghị định 330/2026/NĐ-CP).
-  // Quyết định 12/09/2026: BẮT BUỘC, không có "Để sau".
-  // Thứ tự ưu tiên modal: mật khẩu -> SĐT -> đồng ý pháp lý.
-  const consentRequired = !mustChangePassword && !phoneRequired && !user?.hasConsented && user?.role !== 'admin';
+  const { anyGateOpen } = usePostAuthGates();
   const [sidebarOpen, setSidebarOpen] = useLocalStorageState('founder_ai_sidebar_open', false); // default icon-only
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useLocalStorageState('founder_ai_ai_panel_open', false);
@@ -67,11 +38,6 @@ const MainLayout = () => {
   const activeContext = useAuthStore((state) => state.activeContext);
   const fetchAiCredits = useAuthStore((state) => state.fetchAiCredits);
   const [trial, setTrial] = useState(null);
-
-  const handleDeclineConsent = async () => {
-    await logout();
-    navigate('/login', { replace: true });
-  };
 
   useEffect(() => {
     if (!user?.id) {
@@ -132,7 +98,7 @@ const MainLayout = () => {
   };
 
   const planExpiryWarning =
-    !mustChangePassword && !phoneRequired && !consentRequired && !trial
+    !anyGateOpen && !trial
     && activeContext?.type === 'self'
     && user?.role !== 'admin'
     && shouldWarnPlanExpiry(billingStatus)
@@ -273,38 +239,6 @@ const MainLayout = () => {
           </main>
         </div>
 
-        <ChangePasswordModal
-          isOpen={mustChangePassword}
-          forced
-          onClose={() => {}}
-          onChanged={() => updateUser({ ...user, mustChangePassword: false })}
-        />
-
-        <PhoneRequiredModal
-          isOpen={phoneRequired}
-          onClose={() => setPhoneDismissed(true)}
-          onChanged={(phone, phoneVerifiedAt) =>
-            updateUser({ ...user, phone, ...(phoneVerifiedAt ? { phoneVerifiedAt } : {}) })}
-        />
-
-        <ConsentRequiredModal
-          isOpen={consentRequired}
-          isOutdated={Boolean(user?.consentVersionOutdated)}
-          onConsented={() =>
-            updateUser({
-              ...user,
-              hasConsented: true,
-              consentVersionOutdated: false,
-              consents: {
-                terms: { granted: true, document_version: '2026-09-10' },
-                privacy: { granted: true, document_version: '2026-09-10' },
-                dpa: { granted: true, document_version: '2026-09-10' },
-              },
-            })
-          }
-          onDecline={handleDeclineConsent}
-        />
-
         <TrialWelcomeModal
           isOpen={Boolean(trial)}
           trial={trial}
@@ -399,38 +333,6 @@ const MainLayout = () => {
           </div>
         </div>
       )}
-
-      <ChangePasswordModal
-        isOpen={mustChangePassword}
-        forced
-        onClose={() => {}}
-        onChanged={() => updateUser({ ...user, mustChangePassword: false })}
-      />
-
-      <PhoneRequiredModal
-        isOpen={phoneRequired}
-        onClose={() => setPhoneDismissed(true)}
-        onChanged={(phone, phoneVerifiedAt) =>
-          updateUser({ ...user, phone, ...(phoneVerifiedAt ? { phoneVerifiedAt } : {}) })}
-      />
-
-      <ConsentRequiredModal
-        isOpen={consentRequired}
-        isOutdated={Boolean(user?.consentVersionOutdated)}
-        onConsented={() =>
-          updateUser({
-            ...user,
-            hasConsented: true,
-            consentVersionOutdated: false,
-            consents: {
-              terms: { granted: true, document_version: '2026-09-10' },
-              privacy: { granted: true, document_version: '2026-09-10' },
-              dpa: { granted: true, document_version: '2026-09-10' },
-            },
-          })
-        }
-        onDecline={handleDeclineConsent}
-      />
 
       <TrialWelcomeModal
         isOpen={Boolean(trial)}
