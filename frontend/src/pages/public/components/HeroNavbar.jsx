@@ -97,7 +97,7 @@ export default function HeroNavbar() {
         <div className="flex items-center gap-3">
           {/* Logo */}
           <Link to="/" className="shrink-0 flex items-center gap-2">
-            <img src={founderaiLogo} alt="Founder AI" className="w-8 h-8 object-contain" />
+            <img src={founderaiLogo} alt="Founder AI" className="w-10 h-10 object-contain drop-shadow-sm" />
           </Link>
 
           {/* Desktop links — expands to fill center */}

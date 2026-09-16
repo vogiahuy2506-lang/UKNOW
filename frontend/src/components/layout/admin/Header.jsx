@@ -83,11 +83,11 @@ const Header = ({ onToggleSidebar }) => {
         )}
 
         {/* Left: Logo + Brand — icon's left edge aligned with sidebar icons */}
-        <Link to="/" className="flex items-center gap-2 shrink-0 group">
-          <span className="w-7 h-7 flex items-center justify-center shrink-0">
-            <img src={logoIcon} alt="Founder AI" className="w-7 h-7 object-contain" />
+        <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+          <span className="w-9 h-9 flex items-center justify-center shrink-0">
+            <img src={logoIcon} alt="Founder AI" className="w-9 h-9 object-contain drop-shadow-sm" />
           </span>
-          <span className="text-[16px] font-bold text-gray-900 tracking-tight hidden sm:inline leading-none">
+          <span className="text-[18px] font-extrabold text-gray-900 tracking-tight hidden sm:inline leading-none">
             Founder AI
           </span>
         </Link>

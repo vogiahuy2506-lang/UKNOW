@@ -164,7 +164,6 @@ const AuthLayout = ({ children }) => {
               msOverflowStyle: 'none'
             }}
           >
-            {/* Mobile top bar: logo + language toggle */}
             <div className="lg:hidden flex items-center justify-between mb-8">
               <Link 
                 to="/" 
@@ -173,9 +172,9 @@ const AuthLayout = ({ children }) => {
                 <img 
                   src={founderaiLogo} 
                   alt="Founder AI" 
-                  className="w-8 h-8 object-contain" 
+                  className="w-10 h-10 object-contain drop-shadow-sm" 
                 />
-                <span className="text-slate-800 font-bold text-[17px] tracking-tight">Founder AI</span>
+                <span className="text-slate-800 font-extrabold text-[18px] tracking-tight">Founder AI</span>
               </Link>
               <LanguageSwitcher />
             </div>
