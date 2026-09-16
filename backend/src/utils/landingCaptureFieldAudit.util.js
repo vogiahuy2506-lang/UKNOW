@@ -30,6 +30,23 @@ const CAPTURE_FORM_RE = /<form\b[^>]*\bdata-founderai-capture\b[^>]*>([\s\S]*?)<
 const NAMED_CONTROL_RE = /<(?:input|select|textarea)\b[^>]*\bname\s*=\s*(["'])([^"']*)\1/gi;
 
 /**
+ * Tìm form `data-founderai-capture` ĐẦU TIÊN trong HTML — cùng một quy tắc "form nào" cho mọi
+ * nơi cần soi/sửa bên trong nó (`auditLandingCaptureFields` ở đây, và
+ * `landingCaptureFieldAutoDeclare.util.js`), tránh hai nơi tự viết lại regex rồi lệch nhau
+ * (bẫy "quét cả trang" — landing khách hay có form tìm kiếm/đăng ký bản tin khác).
+ *
+ * @param {string} html
+ * @returns {{ full: string, inner: string }|null} `full` = toàn bộ `<form>...</form>` khớp được
+ *   (dùng để thay thế lại đúng vị trí trong HTML gốc); `inner` = nội dung bên trong, không gồm
+ *   hai thẻ `<form>`/`</form>`.
+ */
+export function extractCaptureFormMatch(html) {
+  const source = String(html || '');
+  const match = source.match(CAPTURE_FORM_RE);
+  return match ? { full: match[0], inner: match[1] } : null;
+}
+
+/**
  * @param {string} html HTML landing (thường là bản đã chuẩn bị để lưu — `prepareLandingHtmlOnSave`
  *   không đụng vào nội dung form nên soi trước/sau bước đó đều ra kết quả giống nhau).
  * @param {unknown} leadFormConfigOrCustomConfig `leadFormConfig` đã normalize HOẶC `custom_config`
@@ -42,11 +59,10 @@ const NAMED_CONTROL_RE = /<(?:input|select|textarea)\b[^>]*\bname\s*=\s*(["'])([
  *   nhiều lựa chọn cùng `name` chỉ đếm một lần) và sắp xếp alphabet để kết quả ổn định.
  */
 export function auditLandingCaptureFields(html, leadFormConfigOrCustomConfig) {
-  const source = String(html || '');
-  const formMatch = source.match(CAPTURE_FORM_RE);
+  const formMatch = extractCaptureFormMatch(html);
   if (!formMatch) return { unknownNames: [], declaredMissing: [] };
 
-  const inner = formMatch[1];
+  const inner = formMatch.inner;
   const foundNames = new Set();
   NAMED_CONTROL_RE.lastIndex = 0;
   let m;

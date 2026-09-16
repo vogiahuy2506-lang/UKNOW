@@ -11,14 +11,18 @@ export const CUSTOM_FIELD_KEY_RE = /^cf_[a-z0-9_]{4,40}$/;
 export const CUSTOM_FIELD_TYPES = Object.freeze(['text', 'textarea', 'select', 'radio', 'checkbox']);
 export const FORBIDDEN_FIELD_KEYS = Object.freeze(new Set(['__proto__', 'prototype', 'constructor']));
 
-const LABEL_VI_MIN = 2;
-const LABEL_VI_MAX = 100;
+// Xuất 4 hằng số này (16/09, PLAN_TU_KHAI_BAO_TRUONG_FORM_LANDING) để
+// landingCaptureFieldAutoDeclare.util.js tự kẹp nhãn/mã lựa chọn trong đúng biên
+// validateCustomFieldInput đòi hỏi — tránh đoán số ma, tránh gọi mergeLeadFormIntoCustomConfig
+// với field bị chính nó reject.
+export const LABEL_VI_MIN = 2;
+export const LABEL_VI_MAX = 100;
 const LABEL_EN_MAX = 100;
 const PLACEHOLDER_MAX = 160;
 const TEXT_VALUE_MAX = 500;
 const TEXTAREA_VALUE_MAX = 2000;
-const OPTION_VALUE_MAX = 80;
-const OPTION_LABEL_MAX = 100;
+export const OPTION_VALUE_MAX = 80;
+export const OPTION_LABEL_MAX = 100;
 const MAX_AI_CUSTOM_LABELS = 10;
 
 /** Đồng bộ shape với frontend `landingLeadFormConfig.js` LEAD_FORM_THEME_DEFAULTS. */

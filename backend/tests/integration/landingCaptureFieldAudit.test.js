@@ -59,7 +59,7 @@ const declaredField = (key, overrides = {}) => ({
 });
 
 describe('POST /api/admin/landing-pages — cảnh báo ô form chưa khai báo (câu 3 sếp hỏi 14/09)', () => {
-  it('ô name="chuc_vu" chưa khai báo → 201 + warning nêu đúng "chuc_vu", landing vẫn lưu', async () => {
+  it('ô name="chuc_vu" chưa khai báo → TỰ KHAI BÁO lúc lưu (PLAN_TU_KHAI_BAO 16/09): không còn cảnh báo, HTML đổi tên sang cf_*', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'cap-audit-c1' } });
     const token = await loginAs(me);
 
@@ -73,7 +73,13 @@ describe('POST /api/admin/landing-pages — cảnh báo ô form chưa khai báo 
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.warning).toContain('chuc_vu');
+    expect(res.body.data.warning).toBeUndefined();
+    expect(res.body.data.leadFormConfig.customFields).toHaveLength(1);
+    const declared = res.body.data.leadFormConfig.customFields[0];
+    expect(declared.type).toBe('text');
+    expect(declared.key).toMatch(/^cf_[a-z0-9_]+$/);
+    expect(res.body.data.htmlContent).not.toContain('name="chuc_vu"');
+    expect(res.body.data.htmlContent).toContain(`name="${declared.key}"`);
 
     const lpRows = await db.query('SELECT id FROM landing_pages WHERE slug = $1', ['capture-audit-1']);
     expect(lpRows.rows).toHaveLength(1);
@@ -101,7 +107,7 @@ describe('POST /api/admin/landing-pages — cảnh báo ô form chưa khai báo 
     expect(res.body.data.warning).toBeUndefined();
   });
 
-  it('ô cf_lung_tung CHƯA khai báo (đã khai báo field khác) → cảnh báo nêu đúng tên đó', async () => {
+  it('ô cf_lung_tung CHƯA khai báo (đã khai báo field khác) → cũng TỰ KHAI BÁO thêm (không mất, không đè field cũ)', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'cap-audit-c3' } });
     const token = await loginAs(me);
 
@@ -120,7 +126,16 @@ describe('POST /api/admin/landing-pages — cảnh báo ô form chưa khai báo 
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.warning).toContain('cf_lung_tung');
+    // cf_lung_tung được TỰ KHAI BÁO nên không còn trong cảnh báo — cảnh báo còn lại (nếu có) chỉ
+    // là declaredMissing cho cf_khac_biet (khai báo sẵn nhưng HTML không có ô này, không liên quan
+    // tự khai báo).
+    expect(res.body.data.warning).not.toContain('cf_lung_tung');
+    if (res.body.data.warning) {
+      expect(res.body.data.warning).toContain('cf_khac_biet');
+    }
+    expect(res.body.data.leadFormConfig.customFields).toHaveLength(2);
+    expect(res.body.data.leadFormConfig.customFields.map((f) => f.key)).toContain('cf_khac_biet');
+    expect(res.body.data.htmlContent).not.toContain('name="cf_lung_tung"');
   });
 
   it('trang không có form data-founderai-capture → không cảnh báo', async () => {
@@ -186,7 +201,7 @@ describe('POST /api/admin/landing-pages — cảnh báo ô form chưa khai báo 
 });
 
 describe('PUT /api/admin/landing-pages/:id — cảnh báo ô form chưa khai báo (create + update đều có kênh)', () => {
-  it('update() cũng có kênh cảnh báo (không chỉ create)', async () => {
+  it('update() cũng chạy tự khai báo (không chỉ create) — ô mới thêm vào lúc sửa cũng được khai báo, không còn cảnh báo', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'cap-audit-u1' } });
     const token = await loginAs(me);
 
@@ -207,10 +222,12 @@ describe('PUT /api/admin/landing-pages/:id — cảnh báo ô form chưa khai b�
       });
 
     expect(updateRes.status).toBe(200);
-    expect(updateRes.body.data.warning).toContain('cau_hoi');
+    expect(updateRes.body.data.warning).toBeUndefined();
+    expect(updateRes.body.data.leadFormConfig.customFields).toHaveLength(1);
+    expect(updateRes.body.data.htmlContent).not.toContain('name="cau_hoi"');
   });
 
-  it('gộp cảnh báo bản nháp (snapshot hết dung lượng) với cảnh báo ô lạ — cả hai câu cùng hiện, không mất câu nào', async () => {
+  it('gộp cảnh báo bản nháp (snapshot hết dung lượng) với cảnh báo ô lạ mà tự khai báo BỎ QUA (select rỗng) — cả hai câu cùng hiện, không mất câu nào', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'cap-audit-u2' } });
     const token = await loginAs(me);
 
@@ -233,8 +250,11 @@ describe('PUT /api/admin/landing-pages/:id — cảnh báo ô form chưa khai b�
         .send({
           slug: 'capture-audit-u2',
           title: 'Landing',
-          // HTML khác bản cũ (kích hoạt snapshot) VÀ có ô lạ (kích hoạt captureFieldWarning).
-          htmlContent: captureFormHtml('<input type="text" name="khung_gio_hen" />'),
+          // HTML khác bản cũ (kích hoạt snapshot) VÀ có select chỉ có option rỗng — tự khai báo
+          // KHÔNG dám khai báo (mục 6.2, tránh làm mất lead), nên vẫn còn cảnh báo cho ô này.
+          htmlContent: captureFormHtml(
+            '<select name="khung_gio_hen"><option value="">— Chọn —</option></select>'
+          ),
         });
     } finally {
       delete process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED;
@@ -243,5 +263,6 @@ describe('PUT /api/admin/landing-pages/:id — cảnh báo ô form chưa khai b�
     expect(updateRes.status).toBe(200);
     expect(updateRes.body.data.warning).toContain('khung_gio_hen');
     expect(updateRes.body.data.warning).toMatch(/dung lượng/);
+    expect(updateRes.body.data.htmlContent).toContain('name="khung_gio_hen"');
   });
 });

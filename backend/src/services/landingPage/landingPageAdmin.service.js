@@ -25,6 +25,7 @@ import {
 } from '../../utils/landingLeadFormConfig.util.js';
 import { buildFormFieldsFromLeadFormConfig } from '../../utils/landingLeadFormToFormFields.util.js';
 import { auditLandingCaptureFields, buildCaptureFieldAuditWarning } from '../../utils/landingCaptureFieldAudit.util.js';
+import { autoDeclareLandingCaptureFields } from '../../utils/landingCaptureFieldAutoDeclare.util.js';
 import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 import {
   invalidateDomainResolverPayload,
@@ -40,6 +41,46 @@ const RESERVED_SLUG_FIXED_LANDING = 'l';
  * @param {object|null} row
  * @returns {object|null}
  */
+/**
+ * Câu 3 sếp hỏi 14/09 → PLAN_TU_KHAI_BAO_TRUONG_FORM_LANDING_2026-09-16.md — dùng chung cho
+ * `create()`/`update()`: tự khai báo ô form chưa khai báo NGAY TRƯỚC khi lưu (đổi `name=` trong
+ * HTML sang khoá `cf_*` hợp lệ + gộp khai báo mới vào `customConfig.leadForm`), để người dùng
+ * không còn phải tự vào Cài đặt trang khai báo trước rồi mới nhờ AI sửa form.
+ *
+ * KHÔNG throw ra ngoài — auto-declare hỏng vì bất kỳ lý do gì (regex lệch, validator từ chối nhãn/
+ * khoá bất ngờ...) chỉ được làm MẤT TÁC DỤNG của tính năng này, tuyệt đối không được làm hỏng cả
+ * lượt lưu landing; `auditLandingCaptureFields` (gọi sau, không đổi) vẫn là lưới an toàn cuối cùng.
+ *
+ * @param {string} html
+ * @param {{ leadForm: object }} customConfig SẼ bị sửa TẠI CHỖ (`leadForm` được gán đè) khi có
+ *   trường mới khai báo thành công.
+ * @returns {string} HTML đã đổi tên `name=` (hoặc HTML gốc nếu không có gì để tự khai báo)
+ */
+function applyLeadFormAutoDeclare(html, customConfig) {
+  let autoDeclare;
+  try {
+    autoDeclare = autoDeclareLandingCaptureFields(html, customConfig.leadForm);
+  } catch (e) {
+    console.warn('[LandingPageAdmin] Tự khai báo trường form thất bại, giữ nguyên:', e.message);
+    return html;
+  }
+  if (autoDeclare.newFields.length === 0) return html;
+  try {
+    customConfig.leadForm = validateAdminLeadFormConfig(
+      {
+        version: customConfig.leadForm.version,
+        fixedFields: customConfig.leadForm.fixedFields,
+        customFields: [...customConfig.leadForm.customFields, ...autoDeclare.newFields],
+      },
+      { existing: customConfig.leadForm }
+    );
+  } catch (e) {
+    console.warn('[LandingPageAdmin] Gộp khai báo tự động thất bại, giữ nguyên:', e.message);
+    return html;
+  }
+  return autoDeclare.html;
+}
+
 function toAdminLandingDto(row) {
   if (!row) return null;
   const { customConfig, ...rest } = row;
@@ -188,6 +229,11 @@ class LandingPageAdminService {
       });
       htmlWithFormResolved = replaceFormSlotWithEmbed(rawHtml, embedHtml);
     }
+
+    // PLAN_TU_KHAI_BAO_TRUONG_FORM_LANDING_2026-09-16.md — tự khai báo ô form chưa khai báo
+    // TRƯỚC khi ghi HTML cuối cùng, để "thêm ô Chức vụ" ra đủ trường VÀ dữ liệu được lưu ngay,
+    // không bắt người dùng tự khai báo tay trước.
+    htmlWithFormResolved = applyLeadFormAutoDeclare(htmlWithFormResolved, customConfig);
 
     /** Khi lưu: gỡ khối script cũ, đổi href http(s) sang link tracking, chèn lp-track.js + founderai-capture.js. */
     const htmlContent = prepareLandingHtmlOnSave(htmlWithFormResolved, {
@@ -366,6 +412,9 @@ class LandingPageAdminService {
       });
       htmlWithFormResolved = replaceFormSlotWithEmbed(rawHtml, embedHtml);
     }
+
+    // Câu 3 sếp hỏi 14/09 — xem chú thích cùng đoạn ở create() phía trên.
+    htmlWithFormResolved = applyLeadFormAutoDeclare(htmlWithFormResolved, nextCustomConfig);
 
     const htmlContent = prepareLandingHtmlOnSave(htmlWithFormResolved, {
       slug,
