@@ -123,6 +123,8 @@ const ForgotPasswordPage = () => {
                   onFocus={() => setFocusedField('email')}
                   onBlur={() => setFocusedField(null)}
                   autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                 />
               </div>
               {error && (

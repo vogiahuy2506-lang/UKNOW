@@ -218,7 +218,7 @@ const MainLayout = ({ children = null }) => {
       : 'overflow-auto';
 
     return (
-      <div className="h-screen overflow-hidden bg-gray-50 flex flex-col">
+      <div className="h-screen overflow-hidden bg-gray-50 flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <Header onToggleSidebar={() => setMobileDrawerOpen(true)} />
 
         {mobileDrawerOpen && (

@@ -156,6 +156,8 @@ const Login = () => {
               }`}
               placeholder={t('auth.usernameLabel')}
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
             />
           </div>
           {errors.username && (

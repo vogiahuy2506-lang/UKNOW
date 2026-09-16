@@ -398,6 +398,8 @@ const Register = () => {
                     : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
                 }`}
                 placeholder={t('register.usernamePlaceholder')}
+                autoCapitalize="none"
+                autoCorrect="off"
               />
             </div>
             {errors.username && (
@@ -423,6 +425,8 @@ const Register = () => {
                     : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
                 }`}
                 placeholder={t('register.emailPlaceholder')}
+                autoCapitalize="none"
+                autoCorrect="off"
               />
             </div>
             {errors.email && (

@@ -14,6 +14,7 @@ import {
   HiOutlineAcademicCap,
   HiOutlineDocumentText,
   HiOutlineExternalLink,
+  HiOutlineMenu,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
@@ -28,7 +29,7 @@ const AVATAR_STYLES = {
   user: 'from-orange-500 to-red-500',
 };
 
-const Header = () => {
+const Header = ({ onToggleSidebar }) => {
   const { t, locale, changeLocale } = useI18n();
   const { user, logout, activeContext, switchContext } = useAuthStore();
   const navigate = useNavigate();
@@ -69,6 +70,18 @@ const Header = () => {
   return (
     <>
       <header className="w-full h-[44px] bg-white flex items-center pl-3 pr-3 border-b border-gray-200">
+        {/* Mobile Menu Button */}
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="lg:hidden mr-2 p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+            aria-label="Open sidebar"
+          >
+            <HiOutlineMenu className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Left: Logo + Brand — icon's left edge aligned with sidebar icons */}
         <Link to="/" className="flex items-center gap-2 shrink-0 group">
           <span className="w-7 h-7 flex items-center justify-center shrink-0">
