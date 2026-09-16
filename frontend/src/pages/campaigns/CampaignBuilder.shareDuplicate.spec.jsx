@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
+import campaignBuilderApiService from '../../features/campaigns/services/campaignBuilderApi.service';
 import CampaignBuilder from './CampaignBuilder';
 
 /**
@@ -219,5 +220,55 @@ describe('CampaignBuilder — Nhân bản trong sơ đồ (PR-2)', () => {
     expect(screen.queryByText('Nhân bản thành công')).not.toBeInTheDocument();
     // Vẫn ở đúng trang builder cũ.
     expect(screen.getByTestId('campaign-name')).toHaveTextContent('Chiến dịch thư cảm ơn');
+  });
+});
+
+/**
+ * Bổ sung khi review (16/09): đột biến đổi `canShare` thành "mặc định cho hiện khi thiếu dữ liệu"
+ * (`campaignOrigin !== 'marketplace_purchased'`) chạy qua TOÀN BỘ 108 test mà không ca nào đỏ —
+ * spec toolbar chỉ nhận thẳng prop `canShare`, không ai canh trình dựng SUY RA nó từ `origin`.
+ * Đây đúng là lỗ quyền lệnh giao dặn: chiến dịch mua ở Marketplace hoặc được người khác chia sẻ
+ * mà vẫn chia sẻ tiếp được.
+ */
+describe('CampaignBuilder — quyền hiện nút Chia sẻ suy từ origin (PR-2)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    mockGetCampaignRuns.mockResolvedValue({ data: { data: [] } });
+  });
+
+  const renderWithOrigin = async (origin) => {
+    campaignBuilderApiService.getCampaignById.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: 391,
+          campaignName: 'Chiến dịch thư cảm ơn',
+          campaignType: 'email',
+          status: 'draft',
+          ...(origin === undefined ? {} : { origin }),
+          nodes: [],
+          connections: [],
+        },
+      },
+    });
+    renderBuilder();
+    await waitFor(() => expect(screen.getByTestId('campaign-name')).toHaveTextContent('Chiến dịch thư cảm ơn'));
+  };
+
+  it('chiến dịch mua ở Marketplace → KHÔNG có nút Chia sẻ', async () => {
+    await renderWithOrigin('marketplace_purchased');
+    expect(screen.queryByRole('button', { name: 'Mở modal chia sẻ' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mở modal nhân bản' })).toBeInTheDocument();
+  });
+
+  it('API không trả origin (bản cũ/đang tải) → KHÔNG mặc định cho chia sẻ', async () => {
+    await renderWithOrigin(undefined);
+    expect(screen.queryByRole('button', { name: 'Mở modal chia sẻ' })).not.toBeInTheDocument();
+  });
+
+  it('chiến dịch tự tạo → có nút Chia sẻ', async () => {
+    await renderWithOrigin('self_created');
+    expect(screen.getByRole('button', { name: 'Mở modal chia sẻ' })).toBeInTheDocument();
   });
 });
