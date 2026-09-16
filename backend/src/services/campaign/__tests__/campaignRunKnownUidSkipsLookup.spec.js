@@ -1,16 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
+/**
+ * PR-2: Tiết kiệm lượt tra số Zalo khi đã biết UID.
+ * Ba ca cần kiểm tra:
+ * 1. Dòng dữ liệu có zalo_id -> resolveUidFromRecipient không được gọi, sendPersonalMessageQueued nhận đúng uid đó, recipientType: 'uid'
+ * 2. Dòng không có uid, findKnownZaloUidByPhone trả '123' -> resolveUidFromRecipient không được gọi, sendPersonalMessageQueued nhận '123', recipientType: 'uid'
+ * 3. Cả hai rỗng -> resolveUidFromRecipient được gọi đúng 1 lần
+ */
+
 const mockPatchRunMetadata = jest.fn().mockResolvedValue(null);
-const mockMergeRunMetadata = jest.fn().mockResolvedValue(null);
 const mockFailRun = jest.fn().mockResolvedValue(null);
 const mockFinalizeRun = jest.fn().mockResolvedValue(null);
 const mockSendPersonalMessageQueued = jest.fn();
+const mockResolveUidFromRecipient = jest.fn();
 const mockCheckSendQuota = jest.fn().mockResolvedValue({ allowed: true });
 const mockGetCustomersFromDataNode = jest.fn();
-const mockUpsertRecipientProgress = jest.fn().mockResolvedValue(null);
-const mockGetRecipientProgress = jest.fn().mockResolvedValue(null);
-const mockCountFailedByRecipientAndError = jest.fn().mockResolvedValue(0);
-const mockMarkPhoneUnreachableFromError = jest.fn().mockResolvedValue(null);
+const mockFindKnownZaloUidByPhone = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.js', () => ({
   default: {
@@ -21,11 +26,10 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.
       total_recipients: 0,
       successful_sends: 0,
       failed_sends: 0,
-      run_metadata: { source: 'campaign_run' }, // một lần, không có continuousMode
+      run_metadata: { source: 'campaign_run' },
     }),
     getRunStatus: jest.fn().mockResolvedValue('running'),
     patchRunMetadata: mockPatchRunMetadata,
-    mergeRunMetadata: mockMergeRunMetadata,
     clearDeferMetadataKeys: jest.fn().mockResolvedValue(null),
     updateRunProgress: jest.fn().mockResolvedValue(null),
     finalizeRun: mockFinalizeRun,
@@ -100,18 +104,11 @@ jest.unstable_mockModule('../campaignZaloSender.service.js', () => ({
     }),
     getConnectedApiOrSyncStatus: jest.fn().mockResolvedValue({}),
     createTrackingToken: jest.fn().mockReturnValue('tracking-token-test'),
-    resolveUidFromRecipient: jest.fn(async ({ recipient }) => ({
-      uid: `uid-${recipient}`,
-      zaloName: `User ${recipient}`,
-    })),
+    resolveUidFromRecipient: mockResolveUidFromRecipient,
     prepareZaloAttachmentSources: jest.fn().mockResolvedValue([]),
     buildTrackedMessageText: jest.fn(async ({ message }) => ({ message })),
     sendPersonalMessageQueued: mockSendPersonalMessageQueued,
-    annotateZaloSendError: jest.fn((err) => err),
-    extractZaloSendObservability: jest.fn((error) => ({
-      stage: 'send',
-      message: String(error?.message || error || '').trim(),
-    })),
+    extractZaloSendObservability: jest.fn().mockReturnValue({}),
   },
 }));
 
@@ -131,7 +128,7 @@ jest.unstable_mockModule('../zaloCampaignRecipient.service.js', () => ({
     isPhoneUnreachable: jest.fn().mockResolvedValue(false),
     getBoundSenderAccountId: jest.fn().mockResolvedValue(null),
     bindSenderAccount: jest.fn().mockResolvedValue(null),
-    markPhoneUnreachableFromError: mockMarkPhoneUnreachableFromError,
+    markPhoneUnreachableFromError: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -145,8 +142,7 @@ jest.unstable_mockModule('../../../repositories/customer/customerMutation.reposi
     updateZaloPersonalCustomerWithIdentifiers: jest.fn().mockResolvedValue(null),
     upsertZaloCustomerUidByPhone: jest.fn().mockResolvedValue(null),
     updateCustomerZaloUidIfEmpty: jest.fn().mockResolvedValue(null),
-    // PR-2 tiết kiệm lượt tra số: chưa biết uid → vẫn tra như cũ (spec này đo đường tra số).
-    findKnownZaloUidByPhone: jest.fn().mockResolvedValue(''),
+    findKnownZaloUidByPhone: mockFindKnownZaloUidByPhone,
   },
 }));
 
@@ -168,6 +164,7 @@ jest.unstable_mockModule('../campaignEmailSender.service.js', () => ({
   default: {},
 }));
 
+jest.uncrawlable = true;
 jest.unstable_mockModule('../campaignExecutionLog.service.js', () => ({
   default: {
     logExecutionNode: jest.fn().mockResolvedValue(null),
@@ -176,8 +173,8 @@ jest.unstable_mockModule('../campaignExecutionLog.service.js', () => ({
 
 jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.repository.js', () => ({
   default: {
-    getRecipientProgress: mockGetRecipientProgress,
-    upsertRecipientProgress: mockUpsertRecipientProgress,
+    getRecipientProgress: jest.fn().mockResolvedValue(null),
+    upsertRecipientProgress: jest.fn().mockResolvedValue(null),
     countPendingDue: jest.fn().mockResolvedValue({
       pending_count: 0,
       pending_without_future_due: 0,
@@ -196,7 +193,6 @@ jest.unstable_mockModule('../../../repositories/campaign/zaloMessage.repository.
     linkQuotaReservation: jest.fn().mockResolvedValue(undefined),
     updateStatusByTrackingToken: jest.fn().mockResolvedValue(undefined),
     findExistingSentCampaignZaloMessage: jest.fn().mockResolvedValue(null),
-    countFailedByRecipientAndError: mockCountFailedByRecipientAndError,
   },
 }));
 
@@ -218,21 +214,25 @@ async function runCampaignPumpingTimers(...args) {
   return runPromise;
 }
 
-describe('CampaignRun — Ghi lý do hỏng Zalo cá nhân & Sổ recipientAudit', () => {
+describe('CampaignRun — Tiết kiệm lượt tra số Zalo khi đã biết UID (PR-2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    // 09:00 ngày 12/09/2026 giờ Việt Nam — ngoài quiet hours (23:00-06:00).
     jest.setSystemTime(new Date('2026-09-12T02:00:00.000Z'));
     campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
     campaignRunService.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.clear();
-    mockGetRecipientProgress.mockResolvedValue({ lastCompletedStep: 0 });
-    mockCountFailedByRecipientAndError.mockResolvedValue(0);
     mockSendPersonalMessageQueued.mockResolvedValue({
       messageId: 'msg-1',
       response: { msgId: 'msg-1' },
       quotaReservationId: 88,
     });
+    mockResolveUidFromRecipient.mockImplementation(async ({ recipient }) => ({
+      uid: `resolved-${recipient}`,
+      zaloName: `User ${recipient}`,
+    }));
     mockCheckSendQuota.mockResolvedValue({ allowed: true });
+    mockFindKnownZaloUidByPhone.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -241,78 +241,70 @@ describe('CampaignRun — Ghi lý do hỏng Zalo cá nhân & Sổ recipientAudit
     campaignRunService.continuousRunIds.clear();
   });
 
-  it('Việc 1.1: Chế độ một lần, gửi hỏng → ledger có lastFailureReason', async () => {
+  it('ca 1: dòng dữ liệu có zalo_id → resolveUidFromRecipient không được gọi, sendPersonalMessageQueued nhận đúng uid đó, recipientType: "uid"', async () => {
     mockGetCustomersFromDataNode.mockResolvedValue({
       items: [
-        { phone: '0388180856', name: 'Khách Hỏng' },
+        { phone: '0901234567', zalo_id: 'uid-from-row-999', name: 'Khách có sẵn UID' },
       ],
       dataLoadMeta: {},
     });
 
-    mockSendPersonalMessageQueued.mockRejectedValue(new Error('Gửi thất bại: Tham số không hợp lệ'));
-
     await runCampaignPumpingTimers(383, 200, 10);
 
-    expect(mockUpsertRecipientProgress).toHaveBeenCalledWith(
+    expect(mockResolveUidFromRecipient).not.toHaveBeenCalled();
+    expect(mockSendPersonalMessageQueued).toHaveBeenCalledTimes(1);
+    expect(mockSendPersonalMessageQueued).toHaveBeenCalledWith(
       expect.objectContaining({
-        nodeId: 300,
-        channel: 'zalo_personal',
-        recipientKey: '0388180856',
-        metaPayload: expect.objectContaining({
-          lastFailureReason: 'invalid_parameter',
-        }),
+        recipient: 'uid-from-row-999',
+        recipientType: 'uid',
+        quotaRecipientKey: '0901234567',
       })
     );
   }, 15000);
 
-  it('Việc 1.3: Sổ recipientAudit đếm đúng 6 hàng nguồn trong đó 3 không có số', async () => {
+  it('ca 2: dòng không có uid, mock findKnownZaloUidByPhone trả "123" → resolveUidFromRecipient không được gọi, sendPersonalMessageQueued nhận "123", recipientType: "uid"', async () => {
     mockGetCustomersFromDataNode.mockResolvedValue({
       items: [
-        { phone: '0388180856', name: 'Khách 1' },
-        { phone: '0844790999', name: 'Khách 2' },
-        { phone: '0901234567', name: 'Khách 3' },
-        { phone: '', name: 'Khách không số 1' },
-        { phone: null, name: 'Khách không số 2' },
-        { name: 'Khách không số 3' },
+        { phone: '0901234567', name: 'Khách từng tra UID trước đó' },
       ],
       dataLoadMeta: {},
     });
+    mockFindKnownZaloUidByPhone.mockResolvedValue('123');
 
     await runCampaignPumpingTimers(383, 200, 10);
 
-    expect(mockMergeRunMetadata).toHaveBeenCalledWith(
-      200,
+    expect(mockFindKnownZaloUidByPhone).toHaveBeenCalledWith(10, '0901234567');
+    expect(mockResolveUidFromRecipient).not.toHaveBeenCalled();
+    expect(mockSendPersonalMessageQueued).toHaveBeenCalledTimes(1);
+    expect(mockSendPersonalMessageQueued).toHaveBeenCalledWith(
       expect.objectContaining({
-        recipientAudit: expect.objectContaining({
-          sourceRows: 6,
-          withRecipient: 3,
-          deduped: 3,
-          skippedNoRecipient: 3,
-          attempted: 3,
-        }),
+        recipient: '123',
+        recipientType: 'uid',
+        quotaRecipientKey: '0901234567',
       })
     );
   }, 15000);
 
-  it('Việc 1.2: invalid_parameter lần thứ hai cùng số → markPhoneUnreachableFromError và skippedSends', async () => {
+  it('ca 3: cả hai rỗng → resolveUidFromRecipient gọi đúng 1 lần (hành vi cũ)', async () => {
     mockGetCustomersFromDataNode.mockResolvedValue({
       items: [
-        { phone: '0388180856', name: 'Khách Lặp Lại' },
+        { phone: '0901234567', name: 'Khách mới hoàn toàn' },
       ],
       dataLoadMeta: {},
     });
-
-    mockSendPersonalMessageQueued.mockRejectedValue(new Error('Tham số không hợp lệ'));
-    // Lần thứ 2: đã có 1 lần hỏng trước đó
-    mockCountFailedByRecipientAndError.mockResolvedValue(1);
+    mockFindKnownZaloUidByPhone.mockResolvedValue(null);
 
     await runCampaignPumpingTimers(383, 200, 10);
 
-    expect(mockMarkPhoneUnreachableFromError).toHaveBeenCalledWith(
-      10,
-      '0388180856',
-      expect.any(Error),
-      200
+    expect(mockFindKnownZaloUidByPhone).toHaveBeenCalledWith(10, '0901234567');
+    expect(mockResolveUidFromRecipient).toHaveBeenCalledTimes(1);
+    expect(mockSendPersonalMessageQueued).toHaveBeenCalledTimes(1);
+    expect(mockSendPersonalMessageQueued).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipient: 'resolved-0901234567',
+        recipientType: 'uid',
+        quotaRecipientKey: '0901234567',
+      })
     );
   }, 15000);
 });

@@ -143,6 +143,8 @@ jest.unstable_mockModule('../../../repositories/customer/customerMutation.reposi
     updateZaloPersonalCustomerWithIdentifiers: jest.fn().mockResolvedValue(null),
     upsertZaloCustomerUidByPhone: jest.fn().mockResolvedValue(null),
     updateCustomerZaloUidIfEmpty: jest.fn().mockResolvedValue(null),
+    // PR-2 tiết kiệm lượt tra số: chưa biết uid → vẫn tra như cũ (spec này đo đường tra số).
+    findKnownZaloUidByPhone: jest.fn().mockResolvedValue(''),
   },
 }));
 

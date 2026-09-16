@@ -93,6 +93,58 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
       expect(yieldOrSleep).toHaveBeenCalledWith(expect.any(Number), 'phone_lookup_cooldown');
     });
 
+    it('channel=zalo_personal, requiresPhoneLookup=false và tài khoản đang cooldown → đi thẳng, không chờ (cooldown còn nguyên)', async () => {
+      const limiter = new ZaloRateLimiter();
+      limiter.scheduleZaloPersonalPhoneLookupCooldown('acc1');
+      expect(limiter.getPhoneLookupCooldownUntil('acc1')).toBeGreaterThan(Date.now());
+
+      const yieldOrSleep = jest.fn().mockImplementation(() => {
+        const err = new Error('yielded');
+        err.code = 'TEST_YIELD_SLOT';
+        throw err;
+      });
+      const sleepWithRunCheck = jest.fn().mockResolvedValue(undefined);
+
+      await limiter.enforceOutboundPolicyBeforeSend({
+        accountId: 'acc1',
+        channel: 'zalo_personal',
+        requiresPhoneLookup: false,
+        yieldOrSleep,
+        sleepWithRunCheck,
+        ensureRunStillRunning: jest.fn().mockResolvedValue(undefined),
+        runId: 1,
+      });
+
+      expect(yieldOrSleep).not.toHaveBeenCalled();
+      // Cooldown của tài khoản vẫn còn nguyên — không bị xoá nhân tiện.
+      expect(limiter.getPhoneLookupCooldownUntil('acc1')).toBeGreaterThan(Date.now());
+    });
+
+    it('channel=zalo_personal, requiresPhoneLookup=true và tài khoản đang cooldown → phải chờ', async () => {
+      const limiter = new ZaloRateLimiter();
+      limiter.scheduleZaloPersonalPhoneLookupCooldown('acc1');
+
+      const yieldOrSleep = jest.fn().mockImplementation(() => {
+        const err = new Error('yielded');
+        err.code = 'TEST_YIELD_SLOT';
+        throw err;
+      });
+
+      await expect(
+        limiter.enforceOutboundPolicyBeforeSend({
+          accountId: 'acc1',
+          channel: 'zalo_personal',
+          requiresPhoneLookup: true,
+          yieldOrSleep,
+          sleepWithRunCheck: jest.fn(),
+          ensureRunStillRunning: jest.fn().mockResolvedValue(undefined),
+          runId: 1,
+        })
+      ).rejects.toMatchObject({ code: 'TEST_YIELD_SLOT' });
+
+      expect(yieldOrSleep).toHaveBeenCalledWith(expect.any(Number), 'phone_lookup_cooldown');
+    });
+
     it('channel=zalo_group và tài khoản đang cooldown → đi thẳng, không chờ (gửi nhóm không tra số)', async () => {
       const limiter = new ZaloRateLimiter();
       limiter.scheduleZaloPersonalPhoneLookupCooldown('acc1');

@@ -333,6 +333,7 @@ class ZaloRateLimiter {
    * @param {string|number} input.accountId
    * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
    * @param {object|null} [input.zaloAccountPolicyHint]
+   * @param {boolean} [input.requiresPhoneLookup=true]
    * @param {(waitMs: number, reason: string) => Promise<void>} input.yieldOrSleep
    * @param {(waitMs: number) => Promise<void>} input.sleepWithRunCheck
    * @param {() => Promise<void>} input.ensureRunStillRunning
@@ -346,6 +347,7 @@ class ZaloRateLimiter {
     sleepWithRunCheck,
     ensureRunStillRunning,
     runId = 0,
+    requiresPhoneLookup = true,
   }) {
     const safeAccountId = String(accountId || '').trim();
     const safeChannel = String(channel || '').trim();
@@ -360,7 +362,7 @@ class ZaloRateLimiter {
       // Cooldown tra số điện thoại quá nhiều — cooldown ghi theo TÀI KHOẢN Zalo, nhưng chỉ kênh
       // có tra số (personal/friend_request) mới tiêu hạn mức đó; kênh nhóm gửi theo groupId nên
       // đi thẳng (xem PHONE_LOOKUP_CHANNELS).
-      const phoneLookupUntilMs = PHONE_LOOKUP_CHANNELS.has(safeChannel)
+      const phoneLookupUntilMs = PHONE_LOOKUP_CHANNELS.has(safeChannel) && requiresPhoneLookup
         ? Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0
         : 0;
       if (phoneLookupUntilMs > nowMs) {

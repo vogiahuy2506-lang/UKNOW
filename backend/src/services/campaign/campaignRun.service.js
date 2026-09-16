@@ -1415,11 +1415,17 @@ class CampaignRunService {
        */
       const computeNextAllowedZaloSendAtByQuietHours = (nowMs) =>
         this.zaloRateLimiter.computeNextAllowedSendAtByQuietHours(nowMs);
-      const enforceZaloOutboundPolicyBeforeSend = ({ accountId, channel, zaloAccountPolicyHint = null }) =>
+      const enforceZaloOutboundPolicyBeforeSend = ({
+        accountId,
+        channel,
+        zaloAccountPolicyHint = null,
+        requiresPhoneLookup = true,
+      }) =>
         this.zaloRateLimiter.enforceOutboundPolicyBeforeSend({
           accountId,
           channel,
           zaloAccountPolicyHint,
+          requiresPhoneLookup,
           yieldOrSleep: yieldOrSleepZaloOutboundWait,
           sleepWithRunCheck,
           ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
@@ -4687,9 +4693,15 @@ class CampaignRunService {
            *
            * @param {string} recipient
            * @param {'phone'|'uid'} rt
+           * @param {object} [options]
+           * @param {boolean} [options.requiresPhoneLookup=true]
            * @returns {Promise<object>}
            */
-          const pickMultiZaloPersonalAccount = async (recipient, rt) => {
+          const pickMultiZaloPersonalAccount = async (
+            recipient,
+            rt,
+            { requiresPhoneLookup = true } = {}
+          ) => {
             const poolSet = new Set(multiAccountIds.map((x) => String(x)));
             await recoverUnavailableMultiAccounts();
             const availablePoolIds = multiAccountIds.filter(
@@ -4767,11 +4779,13 @@ class CampaignRunService {
               }
               const nowMs = Date.now();
               const order = shuffleMultiAccountIds([...availablePoolIds]);
-              const notInPhoneCooldown = order.filter((id) => {
-                const until = this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id));
-                return until <= nowMs;
-              });
-              if (notInPhoneCooldown.length === 0 && order.length > 0) {
+              const notInPhoneCooldown = requiresPhoneLookup
+                ? order.filter((id) => {
+                    const until = this.zaloRateLimiter.getPhoneLookupCooldownUntil(String(id));
+                    return until <= nowMs;
+                  })
+                : order;
+              if (requiresPhoneLookup && notInPhoneCooldown.length === 0 && order.length > 0) {
                 // Mọi tài khoản trong pool đều đang cooldown tra số — KHÔNG được lấy đại một
                 // tài khoản đang bị phạt để gửi tiếp (mỗi lượt như vậy lại cộng thêm vào hạn mức
                 // đang cạn). Phải chờ tới mốc cooldown gần nhất rồi nhả slot cho scheduler resume.
@@ -4861,6 +4875,11 @@ class CampaignRunService {
             let customerId = extractCustomerIdFromRow(entryRow);
             // Extract Zalo UID from entry row (available when source is a Zalo friends node)
             const entryZaloUid = extractZaloUidFromRow(entryRow);
+            const knownUid = entryZaloUid
+              || (recipientType === 'phone'
+                ? await customerMutationRepository.findKnownZaloUidByPhone(userId, recipient)
+                : '');
+            const requiresPhoneLookup = recipientType === 'phone' && !knownUid;
             let trackingToken = '';
             let resolvedRecipientZaloName = null;
 
@@ -4928,7 +4947,9 @@ class CampaignRunService {
                 let switched = false;
                 for (let switchAttempt = 0; switchAttempt < maxSwitchAttempt; switchAttempt += 1) {
                 // eslint-disable-next-line no-await-in-loop
-                workingAccount = await pickMultiZaloPersonalAccount(recipient, recipientType);
+                workingAccount = await pickMultiZaloPersonalAccount(recipient, recipientType, {
+                  requiresPhoneLookup,
+                });
                 // eslint-disable-next-line no-await-in-loop
                 try {
                   // eslint-disable-next-line no-await-in-loop
@@ -4983,6 +5004,7 @@ class CampaignRunService {
                 accountId: workingAccount.id,
                 channel: 'zalo_personal',
                 zaloAccountPolicyHint: workingAccount,
+                requiresPhoneLookup,
               });
               customerId = await ensureCustomerForZaloPersonalRecipient({
                 userId,
@@ -5000,22 +5022,32 @@ class CampaignRunService {
               let lookupMs = null;
               let resolvedRecipientUid = null;
               let lookupZaloName = null;
-              try {
-                const lookupResult = await campaignZaloSenderService.resolveUidFromRecipient({
-                  api: workingApi,
-                  recipient,
-                  recipientType,
-                });
-                lookupMs = Date.now() - lookupStartedAt;
-                resolvedRecipientUid = lookupResult.uid;
-                lookupZaloName = lookupResult.zaloName;
-              } catch (error) {
-                campaignZaloSenderService.annotateZaloSendError(error, {
-                  stage: 'lookup',
-                  lookupMs: Date.now() - lookupStartedAt,
-                  attempts: Number.parseInt(error?.zaloRetry?.attempt, 10) || null,
-                });
-                throw error;
+              if (!requiresPhoneLookup) {
+                resolvedRecipientUid = recipientType === 'uid' ? recipient : knownUid;
+                lookupMs = 0;
+                lookupZaloName = null;
+                const source = entryZaloUid ? 'row' : 'customer';
+                console.log(
+                  `[CampaignRun][ZaloPersonal] run=${runId} recipient=${recipient} lookup_skipped=true source=${source} known_uid=${resolvedRecipientUid}`
+                );
+              } else {
+                try {
+                  const lookupResult = await campaignZaloSenderService.resolveUidFromRecipient({
+                    api: workingApi,
+                    recipient,
+                    recipientType,
+                  });
+                  lookupMs = Date.now() - lookupStartedAt;
+                  resolvedRecipientUid = lookupResult.uid;
+                  lookupZaloName = lookupResult.zaloName;
+                } catch (error) {
+                  campaignZaloSenderService.annotateZaloSendError(error, {
+                    stage: 'lookup',
+                    lookupMs: Date.now() - lookupStartedAt,
+                    attempts: Number.parseInt(error?.zaloRetry?.attempt, 10) || null,
+                  });
+                  throw error;
+                }
               }
               resolvedRecipientZaloName = String(lookupZaloName || '').trim() || null;
               trackingToken = campaignZaloSenderService.createTrackingToken();

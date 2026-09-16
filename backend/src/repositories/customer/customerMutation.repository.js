@@ -332,6 +332,24 @@ class CustomerMutationRepository {
     );
   }
 
+  async findKnownZaloUidByPhone(userId, phone) {
+    const safePhone = String(phone || '').trim();
+    if (!safePhone) return '';
+    const result = await db.query(
+      `SELECT zalo_id
+       FROM customers
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
+         AND $2 <> ''
+         AND (phone = $2 OR zalo_phone = $2)
+         AND zalo_id IS NOT NULL
+         AND zalo_id <> ''
+       ORDER BY id ASC
+       LIMIT 1`,
+      [userId, safePhone]
+    );
+    return String(result.rows[0]?.zalo_id ?? '').trim();
+  }
+
   async findZaloPersonalCustomerByIdentifiers(userId, uid, phone, email) {
     const result = await db.query(
       `SELECT id
