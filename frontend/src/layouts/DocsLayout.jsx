@@ -15,8 +15,16 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
  * Layout công khai cho trung tâm hướng dẫn (/huong-dan).
  * Sidebar trái liệt kê bài viết theo nhóm (feature_key), có ô tìm kiếm.
  * Trên mobile, sidebar thu vào dạng drawer.
+ *
+ * @param {object} props
+ * @param {boolean} [props.embedded=false] Đang chạy BÊN TRONG khung app (`MainLayout`, xem
+ *   `HelpDocsRoute.jsx` — phản hồi sếp 14/09: mở /huong-dan là mất menu chính của app). Khi bật:
+ *   bỏ header riêng của trang hướng dẫn (logo + "Trang chủ" + đổi ngôn ngữ đã có ở thanh trên của
+ *   app, hai header xếp nhau vừa chật vừa rối) và không chiếm cả chiều cao màn hình nữa, vì
+ *   `<main>` của app đã cuộn. Nút mở danh sách bài trên mobile vẫn phải còn — nó nằm trong header
+ *   đó, nên chế độ nhúng dựng lại một thanh mỏng chỉ có nút ấy.
  */
-export default function DocsLayout() {
+export default function DocsLayout({ embedded = false }) {
   const { t, locale } = useI18n();
   const location = useLocation();
   const [articles, setArticles] = useState([]);
@@ -126,7 +134,22 @@ export default function DocsLayout() {
   );
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className={`bg-white flex flex-col ${embedded ? 'h-full min-h-0' : 'min-h-screen'}`}>
+      {embedded ? (
+        <div className="lg:hidden flex h-11 shrink-0 items-center gap-2 border-b border-slate-100 px-3">
+          <button
+            type="button"
+            className="p-2 -ml-2 text-slate-500 hover:text-slate-800"
+            onClick={() => setMobileSidebarOpen(true)}
+            aria-label={t('helpDocs.openMenu')}
+          >
+            <HiOutlineMenu className="h-5 w-5" />
+          </button>
+          <Link to="/huong-dan" className="text-sm font-semibold text-slate-900">
+            {t('helpDocs.title')}
+          </Link>
+        </div>
+      ) : (
       <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/95 backdrop-blur">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
           <button
@@ -148,10 +171,11 @@ export default function DocsLayout() {
           <LanguageSwitcher className="ml-auto" showLabel />
         </div>
       </header>
+      )}
 
       <div className="flex flex-1 min-h-0">
         {/* Desktop sidebar */}
-        <aside className="hidden lg:block w-72 shrink-0 border-r border-slate-100">
+        <aside className={`hidden lg:block w-72 shrink-0 border-r border-slate-100 ${embedded ? 'overflow-auto' : ''}`}>
           {sidebarContent}
         </aside>
 
@@ -180,8 +204,8 @@ export default function DocsLayout() {
           </div>
         )}
 
-        <main className="flex-1 min-w-0">
-          <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        <main className={`flex-1 min-w-0 ${embedded ? 'overflow-auto' : ''}`}>
+          <div className={`w-full px-4 sm:px-6 lg:px-8 ${embedded ? 'py-5' : 'py-8'}`}>
             <Outlet context={{ articles, groups, isLoading }} />
           </div>
         </main>

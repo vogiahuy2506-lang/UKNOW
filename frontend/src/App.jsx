@@ -16,7 +16,7 @@ import AuthLayout from './layouts/AuthLayout';
 import CheckoutLayout from './layouts/CheckoutLayout';
 import { PublicLayoutLite } from './layouts/PublicLayout';
 import PolicyLayout from './layouts/PolicyLayout';
-import DocsLayout from './layouts/DocsLayout';
+import HelpDocsRoute from './layouts/HelpDocsRoute';
 
 // Pages
 import Login from './pages/auth/Login';
@@ -340,8 +340,9 @@ function AppContent() {
             />
           </Route>
 
-          {/* Trung tâm hướng dẫn — layout riêng, sidebar tài liệu */}
-          <Route path="/huong-dan" element={<DocsLayout />}>
+          {/* Trung tâm hướng dẫn — đã đăng nhập thì chạy trong khung app (giữ menu chính),
+              chưa đăng nhập thì layout công khai như cũ. Xem HelpDocsRoute.jsx. */}
+          <Route path="/huong-dan" element={<HelpDocsRoute />}>
             <Route index element={<HelpIndexPage />} />
             <Route path=":slug" element={<HelpArticlePage />} />
           </Route>

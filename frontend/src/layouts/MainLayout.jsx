@@ -21,7 +21,13 @@ const SIDEBAR_WIDTH_EXPANDED = 220; // expanded desktop width
 const SIDEBAR_GAP = 6; // gap between sidebar and main content
 const HEADER_HEIGHT = 44; // topbar height — matches h-[44px] in Header.jsx
 
-const MainLayout = () => {
+/**
+ * @param {object} props
+ * @param {React.ReactNode} [props.children] Nội dung lồng trực tiếp thay cho `<Outlet />` — dùng khi
+ *   một layout KHÁC cần chạy bên trong khung app (vd trung tâm hướng dẫn `/huong-dan`, xem
+ *   `HelpDocsRoute.jsx`). Bỏ trống thì hoạt động như cũ: render route con qua `<Outlet />`.
+ */
+const MainLayout = ({ children = null }) => {
   const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const { anyGateOpen } = usePostAuthGates();
@@ -234,7 +240,7 @@ const MainLayout = () => {
           {!isSpecialPage && <CreditWarningBanner />}
           <main ref={mainContentRef} className={`flex-1 min-h-0 min-w-0 relative ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
             <div className="relative h-full flex flex-col min-h-0">
-              <Outlet />
+              {children ?? <Outlet />}
             </div>
           </main>
         </div>
@@ -304,7 +310,7 @@ const MainLayout = () => {
           className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className="relative h-full flex flex-col min-h-0">
-            <Outlet />
+            {children ?? <Outlet />}
           </div>
         </main>
       </div>
