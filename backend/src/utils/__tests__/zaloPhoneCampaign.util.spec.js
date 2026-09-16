@@ -1,5 +1,9 @@
 import { describe, it, expect } from '@jest/globals';
-import { normalizePhoneForZaloCampaign } from '../zaloPhoneCampaign.util.js';
+import {
+  normalizePhoneForZaloCampaign,
+  isZaloUnreachableRecipientError,
+  inferZaloUnreachableReason,
+} from '../zaloPhoneCampaign.util.js';
 
 describe('normalizePhoneForZaloCampaign', () => {
   it('84xxxxxxxxx (mã quốc gia) → 0xxxxxxxxx', () => {
@@ -36,3 +40,28 @@ describe('normalizePhoneForZaloCampaign', () => {
     expect(normalizePhoneForZaloCampaign('abc123def')).toBe('123');
   });
 });
+
+describe('isZaloUnreachableRecipientError', () => {
+  it('người nhận từ chối nhận tin (chuỗi nguyên văn Zalo) → true', () => {
+    const error = new Error('Xin lỗi! Hiện tại tôi không muốn nhận tin nhắn.');
+    expect(isZaloUnreachableRecipientError(error)).toBe(true);
+  });
+
+  it('lỗi nhóm không tìm thấy (excludeDomain) → false', () => {
+    const error = new Error('Không tìm thấy nhóm Zalo trong tài khoản');
+    expect(isZaloUnreachableRecipientError(error)).toBe(false);
+  });
+});
+
+describe('inferZaloUnreachableReason', () => {
+  it('người nhận từ chối nhận tin (chuỗi nguyên văn Zalo) → stranger_blocked', () => {
+    const error = new Error('Xin lỗi! Hiện tại tôi không muốn nhận tin nhắn.');
+    expect(inferZaloUnreachableReason(error)).toBe('stranger_blocked');
+  });
+
+  it('lỗi nhóm không tìm thấy (đối chứng) → không thành stranger_blocked', () => {
+    const error = new Error('Không tìm thấy nhóm Zalo trong tài khoản');
+    expect(inferZaloUnreachableReason(error)).not.toBe('stranger_blocked');
+  });
+});
+

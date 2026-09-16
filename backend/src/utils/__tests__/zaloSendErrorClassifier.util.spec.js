@@ -60,6 +60,11 @@ describe('zaloSendErrorClassifier.util', () => {
       expect(result.category).toBe('NOT_FRIEND_OR_BLOCKED');
     });
 
+    it('map người từ chối nhận tin (chuỗi nguyên văn Zalo) → NOT_FRIEND_OR_BLOCKED', () => {
+      const result = classifyZaloSendError(new Error('Xin lỗi! Hiện tại tôi không muốn nhận tin nhắn.'));
+      expect(result.category).toBe('NOT_FRIEND_OR_BLOCKED');
+    });
+
     it('map nhóm Zalo không reachable → ZALO_GROUP_UNREACHABLE', () => {
       const result = classifyZaloSendError(new Error('Không tìm thấy nhóm với tài khoản hiện tại'));
       expect(result.category).toBe('ZALO_GROUP_UNREACHABLE');

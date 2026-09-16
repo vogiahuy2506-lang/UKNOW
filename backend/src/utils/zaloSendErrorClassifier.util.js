@@ -91,7 +91,8 @@ function isNotFriendOrBlockedError(error) {
     || msg.includes('hạn chế')
     || msg.includes('người lạ')
     || msg.includes('vi phạm chính sách')
-    || msg.includes('không thể nhận tin nhắn');
+    || msg.includes('không thể nhận tin nhắn')
+    || msg.includes('không muốn nhận tin nhắn');
 }
 
 function isRecipientNotFoundError(error) {

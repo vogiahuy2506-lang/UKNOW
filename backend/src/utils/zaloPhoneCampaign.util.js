@@ -78,6 +78,7 @@ export function isZaloUnreachableRecipientError(error) {
     probe.includes('chặn không nhận tin nhắn từ người lạ')
     || probe.includes('không nhận tin nhắn từ người lạ')
     || (probe.includes('bạn chưa thể gửi tin nhắn') && probe.includes('người lạ'))
+    || probe.includes('không muốn nhận tin nhắn')
   ) {
     return true;
   }
@@ -157,6 +158,7 @@ export function inferZaloUnreachableReason(error) {
     msg.includes('chặn không nhận tin nhắn từ người lạ')
     || msg.includes('không nhận tin nhắn từ người lạ')
     || (msg.includes('bạn chưa thể gửi tin nhắn') && msg.includes('người lạ'))
+    || msg.includes('không muốn nhận tin nhắn')
   ) {
     return 'stranger_blocked';
   }
