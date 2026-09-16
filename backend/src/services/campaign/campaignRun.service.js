@@ -126,6 +126,14 @@ class CampaignRunService {
       const rawMax = Number.parseInt(process.env.CONTINUOUS_ZALO_MAX_SEND_FAILURES, 10);
       this.CONTINUOUS_ZALO_MAX_SEND_FAILURES = Number.isFinite(rawMax) && rawMax >= 0 ? rawMax : 5;
     }
+    // One-shot: trần thử lại khi gửi Zalo thất bại + khoảng giãn cách giữa 2 lần thử (ms)
+    {
+      const rawMax = Number.parseInt(process.env.ZALO_ONESHOT_MAX_SEND_FAILURES, 10);
+      this.ZALO_ONESHOT_MAX_SEND_FAILURES = Number.isFinite(rawMax) && rawMax >= 0 ? rawMax : 3;
+
+      const rawDelay = Number.parseInt(process.env.ZALO_ONESHOT_RETRY_DELAY_MS, 10);
+      this.ZALO_ONESHOT_RETRY_DELAY_MS = Number.isFinite(rawDelay) && rawDelay >= 0 ? rawDelay : 6 * 60 * 60 * 1000;
+    }
 
     // --- Zalo rate-limit state & policy (shared env builder with diagnostic runner) ---
     this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
@@ -5504,6 +5512,7 @@ class CampaignRunService {
                 totalSteps,
                 failureAt,
                 zaloSendFailureCount = null,
+                nextDueAt = undefined,
               }) => {
                 // Sổ cái là ghi chép, không được làm hỏng lượt gửi: upsertRecipientProgress ném lại
                 // mọi lỗi DB không phải 42P01/42703 (:1843-1848). Trước PR-1 nhánh hỏng một lần không
@@ -5524,7 +5533,7 @@ class CampaignRunService {
                     totalSteps,
                     firstSentAt: zp.firstSentAt,
                     lastCompletedAt: zp.lastCompletedAt,
-                    nextDueAt: zp.nextDueAt,
+                    nextDueAt: nextDueAt !== undefined ? nextDueAt : zp.nextDueAt,
                     zaloSendFailureCount,
                     lastFailureReason: mapZaloErrorCategoryToLedgerReason(errorCategory),
                     lastFailureAt: failureAt,
@@ -5536,7 +5545,11 @@ class CampaignRunService {
                   );
                 }
               };
-              if (isContinuousMode && this.CONTINUOUS_ZALO_MAX_SEND_FAILURES > 0) {
+              const maxFailures = isContinuousMode
+                ? this.CONTINUOUS_ZALO_MAX_SEND_FAILURES
+                : this.ZALO_ONESHOT_MAX_SEND_FAILURES;
+              let hasRecordedFailureToLedger = false;
+              if (maxFailures > 0) {
                 // eslint-disable-next-line no-await-in-loop
                 const zp = await getRecipientProgress({
                   nodeId: node.id,
@@ -5546,14 +5559,15 @@ class CampaignRunService {
                 const prevFail = Math.max(0, Number.parseInt(zp.zaloSendFailureCount, 10) || 0);
                 const { nextFailureCount: nextFail, abandon } = resolveZaloContinuousSendFailureProgress({
                   prevFailureCount: prevFail,
-                  maxFailures: this.CONTINUOUS_ZALO_MAX_SEND_FAILURES,
+                  maxFailures,
                 });
                 if (abandon) {
                   failedSends += 1;
                   const observation = buildZaloPersonalErrorObservation(error);
                   const lastFailureReason = mapZaloErrorCategoryToLedgerReason(observation.errorCategory);
+                  const modeLabel = isContinuousMode ? 'continuous' : 'one-shot';
                   const abandonNote = (
-                    ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
+                    ` — đã dừng thử sau ${nextFail} lần gửi thất bại (${modeLabel}, max=${maxFailures}).`
                   );
                   const progressMessage = buildZaloPersonalProgressMessage();
                   const sentAt = toHoChiMinhIso();
@@ -5622,7 +5636,7 @@ class CampaignRunService {
                   }
                   console.warn(
                     `[CampaignRun][ZaloPersonal] run=${runId} recipient=${String(recipient || '').trim()} `
-                    + `chốt ledger sau ${nextFail} lần lỗi gửi (continuous).`
+                    + `chốt ledger sau ${nextFail} lần lỗi gửi (${modeLabel}).`
                   );
                   return { success: false };
                 }
@@ -5631,6 +5645,9 @@ class CampaignRunService {
                 // chỉ ghi ở lần chốt cuối cùng.
                 const retryObservation = buildZaloPersonalErrorObservation(error);
                 const retryFailureAt = toHoChiMinhIso();
+                const retryNextDueAt = !isContinuousMode && this.ZALO_ONESHOT_RETRY_DELAY_MS > 0
+                  ? toHoChiMinhIso(Date.now() + this.ZALO_ONESHOT_RETRY_DELAY_MS)
+                  : undefined;
                 await recordZaloFailureToLedger({
                   nodeId: node.id,
                   recipientKey: recipient,
@@ -5638,7 +5655,9 @@ class CampaignRunService {
                   totalSteps: totalStepsForRecipient,
                   failureAt: retryFailureAt,
                   zaloSendFailureCount: nextFail,
+                  nextDueAt: retryNextDueAt,
                 });
+                hasRecordedFailureToLedger = true;
               }
 
               const observation = buildZaloPersonalErrorObservation(error);
@@ -5714,15 +5733,17 @@ class CampaignRunService {
               failedSends += 1;
               const sentAt = toHoChiMinhIso();
 
-              // Việc 1.1: Ghi lastFailureReason cho mọi lượt hỏng Zalo cá nhân
-              await recordZaloFailureToLedger({
-                nodeId: node.id,
-                recipientKey: recipient,
-                errorCategory: observation.errorCategory,
-                totalSteps: totalStepsForRecipient,
-                failureAt: sentAt,
-                zaloSendFailureCount: null,
-              });
+              if (!hasRecordedFailureToLedger) {
+                // Việc 1.1: Ghi lastFailureReason cho mọi lượt hỏng Zalo cá nhân (khi tắt trần đếm lỗi)
+                await recordZaloFailureToLedger({
+                  nodeId: node.id,
+                  recipientKey: recipient,
+                  errorCategory: observation.errorCategory,
+                  totalSteps: totalStepsForRecipient,
+                  failureAt: sentAt,
+                  zaloSendFailureCount: null,
+                });
+              }
 
               const progressMessage = buildZaloPersonalProgressMessage();
               const senderName = resolveZaloSenderName(workingAccount);
@@ -6958,7 +6979,10 @@ class CampaignRunService {
                   });
                 }
               } else {
-                if (isContinuousMode && this.CONTINUOUS_ZALO_MAX_SEND_FAILURES > 0) {
+                const maxFailures = isContinuousMode
+                  ? this.CONTINUOUS_ZALO_MAX_SEND_FAILURES
+                  : this.ZALO_ONESHOT_MAX_SEND_FAILURES;
+                if (maxFailures > 0) {
                   // eslint-disable-next-line no-await-in-loop
                   const zp = await getRecipientProgress({
                     nodeId: node.id,
@@ -6966,11 +6990,15 @@ class CampaignRunService {
                     recipientKey: phone,
                   });
                   const prevFail = Math.max(0, Number.parseInt(zp.zaloSendFailureCount, 10) || 0);
-                  const nextFail = prevFail + 1;
-                  if (nextFail >= this.CONTINUOUS_ZALO_MAX_SEND_FAILURES) {
+                  const { nextFailureCount: nextFail, abandon } = resolveZaloContinuousSendFailureProgress({
+                    prevFailureCount: prevFail,
+                    maxFailures,
+                  });
+                  if (abandon) {
                     failedSends += 1;
+                    const modeLabel = isContinuousMode ? 'continuous' : 'one-shot';
                     const abandonNote = (
-                      ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
+                      ` — đã dừng thử sau ${nextFail} lần gửi thất bại (${modeLabel}, max=${maxFailures}).`
                     );
                     const errText = `${String(error?.message || '').trim()}${abandonNote}`;
                     const abandonFailureReason = mapZaloErrorCategoryToLedgerReason(
@@ -7026,7 +7054,7 @@ class CampaignRunService {
                     });
                     console.warn(
                       `[CampaignRun][ZaloFriend] run=${runId} phone=${String(phone || '').trim()} `
-                      + `chốt ledger sau ${nextFail} lần lỗi gửi (continuous).`
+                      + `chốt ledger sau ${nextFail} lần lỗi gửi (${modeLabel}).`
                     );
                   } else {
                     // Chưa chốt (chưa đạt ngưỡng abandon) nhưng vẫn phải ghi lý do lần này —
@@ -7034,6 +7062,9 @@ class CampaignRunService {
                     const retryFailureReason = mapZaloErrorCategoryToLedgerReason(
                       classifyZaloSendError(error, { stage: error?.stage || 'send' }).category
                     );
+                    const retryNextDueAt = !isContinuousMode && this.ZALO_ONESHOT_RETRY_DELAY_MS > 0
+                      ? toHoChiMinhIso(Date.now() + this.ZALO_ONESHOT_RETRY_DELAY_MS)
+                      : zp.nextDueAt;
                     // eslint-disable-next-line no-await-in-loop
                     await upsertRecipientProgress({
                       nodeId: node.id,
@@ -7043,7 +7074,7 @@ class CampaignRunService {
                       totalSteps: 1,
                       firstSentAt: zp.firstSentAt,
                       lastCompletedAt: zp.lastCompletedAt,
-                      nextDueAt: zp.nextDueAt,
+                      nextDueAt: retryNextDueAt,
                       zaloSendFailureCount: nextFail,
                       lastFailureReason: retryFailureReason,
                       lastFailureAt: toHoChiMinhIso(),
