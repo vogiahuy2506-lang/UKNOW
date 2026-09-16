@@ -563,6 +563,10 @@ class CampaignController {
         ? parseInt(req.body.scheduleId, 10)
         : null;
       const runName = String(req.body?.runName || '').trim();
+      // "Chạy ngay" tự kích hoạt chiến dịch nháp/tạm dừng trong cùng giao dịch chạy — chỉ có tác
+      // dụng khi source khác 'schedule' (chốt chặn thật nằm ở campaignRun.service.js, cờ này chỉ
+      // là tín hiệu ý định từ người bấm nút, không tự đủ để bỏ qua ràng buộc lịch).
+      const autoActivate = req.body?.autoActivate === true || String(req.body?.autoActivate || '').trim().toLowerCase() === 'true';
       const adjacentZaloNodeDelayMsRaw = Number.parseInt(req.body?.adjacentZaloNodeDelayMs, 10);
       const adjacentZaloNodeDelayMs = Number.isFinite(adjacentZaloNodeDelayMsRaw) && adjacentZaloNodeDelayMsRaw >= 0
         ? adjacentZaloNodeDelayMsRaw
@@ -706,6 +710,7 @@ class CampaignController {
             pollIntervalMs,
             resumeFromRunId,
           },
+          autoActivate,
         });
       }
 
@@ -773,6 +778,7 @@ class CampaignController {
     runName = '',
     runOptions = {},
     activatePendingApproval = false,
+    autoActivate = false,
   }) {
     return campaignRunService.createCampaignRunRecord({
       campaignId,
@@ -785,6 +791,7 @@ class CampaignController {
       runName,
       runOptions,
       activatePendingApproval,
+      autoActivate,
     });
   }
 

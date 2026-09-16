@@ -278,4 +278,78 @@ describe('CampaignSchedulesTable — Bảng lịch chạy đã thiết lập (b�
     // Nút Xem chi tiết vẫn có
     expect(screen.getByTitle('Xem chi tiết')).toBeInTheDocument();
   });
+
+  // PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md — PR-3, Việc 4: lỗi im lặng đã đo —
+  // lịch tới giờ mà chiến dịch đang paused/draft thì server 400, scheduler chỉ console.error,
+  // giao diện không hiện gì. Bịt bằng nhãn cảnh báo ngay trên dòng lịch.
+  it('chiến dịch của lịch đang paused → hiện nhãn cảnh báo "sẽ không gửi"', () => {
+    const schedules = [
+      {
+        id: 6,
+        scheduleName: 'Lịch sáng',
+        campaignName: 'Chiến dịch Tạm dừng',
+        campaignId: 106,
+        campaignStatus: 'paused',
+        scheduleType: 'daily',
+        enabled: true,
+      },
+    ];
+
+    renderComponent(schedules);
+
+    expect(screen.getByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).toBeInTheDocument();
+  });
+
+  it('chiến dịch của lịch đang draft → cũng hiện nhãn cảnh báo (không chỉ riêng paused)', () => {
+    const schedules = [
+      {
+        id: 7,
+        scheduleName: 'Lịch sáng',
+        campaignName: 'Chiến dịch Nháp',
+        campaignId: 107,
+        campaignStatus: 'draft',
+        scheduleType: 'daily',
+        enabled: true,
+      },
+    ];
+
+    renderComponent(schedules);
+
+    expect(screen.getByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).toBeInTheDocument();
+  });
+
+  it('chiến dịch của lịch đang active → KHÔNG hiện nhãn cảnh báo', () => {
+    const schedules = [
+      {
+        id: 8,
+        scheduleName: 'Lịch sáng',
+        campaignName: 'Chiến dịch Đang hoạt động',
+        campaignId: 108,
+        campaignStatus: 'active',
+        scheduleType: 'daily',
+        enabled: true,
+      },
+    ];
+
+    renderComponent(schedules);
+
+    expect(screen.queryByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).not.toBeInTheDocument();
+  });
+
+  it('thiếu campaignStatus (dữ liệu cũ chưa có trường này) → KHÔNG hiện cảnh báo sai', () => {
+    const schedules = [
+      {
+        id: 9,
+        scheduleName: 'Lịch sáng',
+        campaignName: 'Chiến dịch Không rõ trạng thái',
+        campaignId: 109,
+        scheduleType: 'daily',
+        enabled: true,
+      },
+    ];
+
+    renderComponent(schedules);
+
+    expect(screen.queryByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).not.toBeInTheDocument();
+  });
 });

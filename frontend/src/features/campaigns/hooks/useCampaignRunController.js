@@ -391,6 +391,9 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
       }
       await campaignRunApiService.runCampaign(runConfirmCampaign.id, {
         source: 'campaign_run',
+        // Chiến dịch nháp/tạm dừng thì backend tự kích hoạt trong cùng giao dịch chạy (chỉ áp
+        // dụng cho lượt chạy do người dùng bấm — server tự chặn khi source là 'schedule').
+        autoActivate: true,
         runName: runNameInput?.trim() || runConfirmCampaign.campaignName,
         adjacentZaloNodeDelayMs: ADJACENT_ZALO_NODE_DELAY_MS,
         continuousMode: effectiveContinuousMode,

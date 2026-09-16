@@ -853,15 +853,6 @@ const Campaigns = () => {
                                         <HiOutlinePencil className="w-4 h-4 mr-3" />
                                         {t('common.edit')}
                                       </button>
-                                      {campaign.status === 'draft' && (
-                                        <button
-                                          onClick={() => handlePublish(campaign.id)}
-                                          className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
-                                        >
-                                          <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                          {t('campaigns.activate')}
-                                        </button>
-                                      )}
                                       {campaign.status === 'active' && (
                                         <button
                                           onClick={() => handlePause(campaign.id)}
@@ -877,7 +868,7 @@ const Campaigns = () => {
                                           className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
                                         >
                                           <HiOutlinePlay className="w-4 h-4 mr-3" />
-                                          {t('campaigns.activate')}
+                                          {t('campaigns.resumeSchedule')}
                                         </button>
                                       )}
                                       {/* Share - only for self-created campaigns */}

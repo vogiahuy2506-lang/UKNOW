@@ -569,6 +569,40 @@ class CampaignRunRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * Tự kích hoạt chiến dịch 'draft'/'paused' NGAY TRONG giao dịch chạy — chỉ dùng khi người dùng
+   * chủ động bấm "Chạy ngay" (KHÔNG bao giờ gọi cho lượt chạy từ lịch — xem createCampaignRunRecord).
+   * Chép khuôn activatePendingApprovalCampaignTx ở trên, đổi trạng thái nguồn.
+   *
+   * @param {object} client
+   * @param {object} params
+   * @param {number|string} params.campaignId
+   * @param {boolean} params.isAdmin
+   * @param {number|string} params.workspaceOwnerId
+   * @returns {Promise<object|null>}
+   */
+  async activateDraftOrPausedCampaignTx(client, {
+    campaignId,
+    isAdmin,
+    workspaceOwnerId,
+  }) {
+    const params = [campaignId];
+    let query = `UPDATE campaigns
+      SET status = 'active',
+          published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND status IN ('draft', 'paused')`;
+    if (!isAdmin) {
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(workspace_owner_id, id_user) = $${params.length}`;
+    }
+    query += ' RETURNING id, status';
+
+    const result = await client.query(query, params);
+    return result.rows[0] || null;
+  }
+
   async hasActiveRunForCampaignTx(client, campaignId) {
     const result = await client.query(
       `SELECT id

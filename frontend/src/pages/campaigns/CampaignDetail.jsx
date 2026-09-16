@@ -114,15 +114,15 @@ const CampaignDetail = () => {
               <HiOutlinePause className="w-5 h-5 mr-2" />
               {t('campaigns.pause')}
             </button>
-          ) : (
+          ) : campaign.status === 'paused' ? (
             <button
               onClick={handleToggleStatus}
               className="btn btn-primary"
             >
               <HiOutlinePlay className="w-5 h-5 mr-2" />
-              {t('campaigns.activate')}
+              {t('campaigns.resumeSchedule')}
             </button>
-          )}
+          ) : null}
           <button
             onClick={() => setMarketplaceModal(true)}
             className="btn btn-secondary"

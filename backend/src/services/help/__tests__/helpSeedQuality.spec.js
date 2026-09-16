@@ -26,7 +26,6 @@ const REAL_MENU = {
     'Quản lý kênh gửi',
     'Thư viện nội dung',
     'Quản lý chiến dịch',
-    'Chạy chiến dịch',
     'Hiệu quả chiến dịch',
     'Khách hàng từ chiến dịch',
   ],
@@ -95,6 +94,11 @@ describe('chất lượng bài trợ giúp seed', () => {
       'Menu **Nhân viên**',
       '**Chiến dịch → Quản lý kênh**',
       '**Gói dịch vụ →',
+      // PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md, PR-3 Việc 5: nút "Kích hoạt
+      // chiến dịch" đã bỏ (chiến dịch nháp tự kích hoạt khi bấm "Chạy ngay"); "Chạy chiến dịch"
+      // không còn là trang riêng — đã gộp vào "Quản lý chiến dịch".
+      'Kích hoạt chiến dịch',
+      'trang Chạy chiến dịch',
     ];
     const offenders = [];
     for (const article of HELP_SEED_ARTICLES) {

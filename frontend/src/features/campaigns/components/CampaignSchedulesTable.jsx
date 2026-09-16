@@ -105,6 +105,11 @@ const CampaignSchedulesTable = ({
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{schedule.campaignName}</div>
+                      {schedule.campaignStatus && schedule.campaignStatus !== 'active' && (
+                        <div className="text-xs text-amber-600 font-medium mt-0.5">
+                          {t('campaignRun.scheduleCampaignNotActiveWarning')}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 tabular-nums">
                       {schedule.campaignId != null ? String(schedule.campaignId) : '—'}

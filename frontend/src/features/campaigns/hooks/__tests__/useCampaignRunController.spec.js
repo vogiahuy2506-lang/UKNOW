@@ -127,6 +127,40 @@ describe('useCampaignRunController', () => {
     expect(result.current.showRunConfirmModal).toBe(false);
   });
 
+  // PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md — PR-3, Việc 2: "Chạy ngay" (trình
+  // dựng lẫn trang danh sách đều dùng chung handleRunNow này) phải gửi autoActivate: true để
+  // backend tự kích hoạt chiến dịch nháp/tạm dừng trong cùng giao dịch chạy.
+  it('handleRunNow gửi autoActivate: true', async () => {
+    campaignRunApiService.runCampaign.mockResolvedValueOnce({
+      data: { success: true },
+    });
+
+    const { result } = renderHook(() => useCampaignRunController());
+
+    await waitFor(() => {
+      expect(campaignRunApiService.getCampaignRuns).toHaveBeenCalled();
+    });
+
+    const draftCampaign = {
+      id: 303,
+      campaignName: 'Chiến dịch nháp',
+      campaignType: 'email',
+    };
+
+    await act(async () => {
+      await result.current.openRunConfirmModal(draftCampaign);
+    });
+
+    await act(async () => {
+      await result.current.handleRunNow();
+    });
+
+    expect(campaignRunApiService.runCampaign).toHaveBeenCalledWith(
+      303,
+      expect.objectContaining({ autoActivate: true })
+    );
+  });
+
   it('handleToggleSchedule với lịch một lần đã chạy → không gọi API', async () => {
     const completedOnceSchedule = {
       id: 303,

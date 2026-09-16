@@ -18,6 +18,7 @@ class CampaignScheduleRepository {
          cs.created_at::timestamptz AS created_at,
          cs.updated_at::timestamptz AS updated_at,
          c.campaign_name AS campaign_name,
+         c.status AS campaign_status,
          lr.status AS last_run_status
        FROM campaign_schedules cs
        JOIN campaigns c ON cs.id_campaign = c.id
@@ -55,6 +56,7 @@ class CampaignScheduleRepository {
          cs.created_at::timestamptz AS created_at,
          cs.updated_at::timestamptz AS updated_at,
          c.campaign_name AS campaign_name,
+         c.status AS campaign_status,
          lr.status AS last_run_status
        FROM campaign_schedules cs
        JOIN campaigns c ON cs.id_campaign = c.id

@@ -661,6 +661,7 @@ class CampaignRunService {
     runName = '',
     runOptions = {},
     activatePendingApproval = false,
+    autoActivate = false,
   }) {
     const client = await db.getClient();
     let runRecord;
@@ -683,7 +684,17 @@ class CampaignRunService {
 
       const shouldActivatePendingApproval = activatePendingApproval
         && campaignData.status === 'pending_owner_approval';
-      if (campaignData.status !== 'active' && !shouldActivatePendingApproval) {
+      // Tự kích hoạt khi NGƯỜI DÙNG chủ động bấm "Chạy ngay" cho chiến dịch nháp/tạm dừng —
+      // TUYỆT ĐỐI không áp dụng cho lượt chạy từ lịch (source === 'schedule'): chiến dịch vừa
+      // "Tạm dừng" mà lịch tự bật lại thì nút Tạm dừng mất nghĩa (PLAN_NUT_HANH_DONG..., PR-3).
+      const shouldAutoActivateDraftOrPaused = autoActivate
+        && source !== 'schedule'
+        && (campaignData.status === 'draft' || campaignData.status === 'paused');
+      if (
+        campaignData.status !== 'active'
+        && !shouldActivatePendingApproval
+        && !shouldAutoActivateDraftOrPaused
+      ) {
         const error = new Error('Chỉ có thể chạy chiến dịch đang hoạt động');
         error.statusCode = 400;
         throw error;
@@ -709,6 +720,19 @@ class CampaignRunService {
         });
         if (!activatedCampaign) {
           const error = new Error('Chiến dịch không còn ở trạng thái chờ phê duyệt.');
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      if (shouldAutoActivateDraftOrPaused) {
+        const activatedCampaign = await campaignRunRepository.activateDraftOrPausedCampaignTx(client, {
+          campaignId,
+          isAdmin,
+          workspaceOwnerId,
+        });
+        if (!activatedCampaign) {
+          const error = new Error('Chiến dịch không còn ở trạng thái nháp hoặc tạm dừng.');
           error.statusCode = 409;
           throw error;
         }
