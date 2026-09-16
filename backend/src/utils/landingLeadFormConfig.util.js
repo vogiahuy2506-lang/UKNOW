@@ -484,13 +484,15 @@ export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFie
   for (const key of clientKeys) {
     assertSafeKey(key);
     if (!schemaByKey.has(key)) {
-      // Whitelist cf_* hiện KHÔNG ai khai báo được nữa — LandingCanvasEditor.jsx (v2) dùng
-      // schema tối giản {fields, theme, nameMode, submitEndpoint}, không còn customFields/
-      // fixedFields, nên customFields luôn bị ghi [] ở MỌI lần lưu (validateAdminLeadFormConfig
-      // ở trên). 400 ở đây trước làm MẤT CẢ LEAD (tên/email/phone) chỉ vì 1 khoá cf_* lạ đi
-      // kèm — README từng khuyên admin tự đặt name="cf_..." nhưng không có cách nào khai báo
-      // khoá đó để tránh lỗi này. Bỏ qua khoá lạ, giữ "không lưu dữ liệu ngoài schema" nhưng bỏ
-      // hình phạt mất lead (Review 08/09 tối, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b).
+      // ĐÍNH CHÍNH 16/09 — chú thích cũ ở đây viết "cf_* hiện KHÔNG ai khai báo được nữa" là
+      // LẠC HẬU: panel khai báo có thật (`LeadFormConfigPanel.jsx`, Cài đặt trang → Form đăng
+      // ký), khoá sinh tự động `cf_<slug>_<rand>` (`landingLeadFormConfig.js:93`). Khoá lạ ở đây
+      // là ô AI/admin thêm vào HTML nhưng CHƯA khai báo (hoặc gõ sai tên) — vẫn đúng phải bỏ
+      // qua, không 400 (400 từng làm MẤT CẢ LEAD tên/email/phone chỉ vì 1 khoá lạ đi kèm, Review
+      // 08/09 tối, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b) — nhưng giờ có
+      // `landingCaptureFieldAudit.util.js` soi + cảnh báo lúc LƯU landing (không phải lúc nhận
+      // bài nộp này) để chủ trang biết trước có ô sẽ rơi dữ liệu, thay vì chỉ log ở đây không ai
+      // thấy.
       console.warn(`[landingLeadFormConfig] Bỏ qua customField lạ không thuộc form (key="${key}")`);
       continue;
     }

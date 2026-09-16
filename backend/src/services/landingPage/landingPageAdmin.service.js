@@ -24,6 +24,7 @@ import {
   validateAdminLeadFormConfig,
 } from '../../utils/landingLeadFormConfig.util.js';
 import { buildFormFieldsFromLeadFormConfig } from '../../utils/landingLeadFormToFormFields.util.js';
+import { auditLandingCaptureFields, buildCaptureFieldAuditWarning } from '../../utils/landingCaptureFieldAudit.util.js';
 import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 import {
   invalidateDomainResolverPayload,
@@ -195,6 +196,14 @@ class LandingPageAdminService {
       apiBase: resolvePublicApiBaseFromEnv(),
     });
 
+    // Câu 3 sếp hỏi 14/09 ("dữ liệu điền vào form sẽ lưu về chỗ nào?") — soi form
+    // data-founderai-capture đối chiếu customFields đã khai báo, CHỈ cảnh báo không chặn lưu
+    // (chuyên mục/form có ô lạ vẫn là trạng thái tạm hợp lệ, và đường AI dựng landing gọi save
+    // liên tục — chặn ở đây là vỡ luồng đó). create() trước đây KHÔNG có kênh cảnh báo nào.
+    const captureFieldWarning = buildCaptureFieldAuditWarning(
+      auditLandingCaptureFields(htmlContent, customConfig.leadForm)
+    );
+
     const client = await db.getClient();
     let lp;
     try {
@@ -240,20 +249,25 @@ class LandingPageAdminService {
       client.release();
     }
 
+    const dto = toAdminLandingDto(lp);
+    if (captureFieldWarning) {
+      dto.warning = captureFieldWarning;
+    }
+
     // Tự động cấp subdomain slug.founderai.biz qua Cloudflare (chỉ khi user chọn system domain
     // VÀ đã nhập slug). Nếu slug rỗng, không cấp subdomain miễn phí — landing phải gắn custom domain.
     // Lỗi CF không làm fail toàn bộ request.
     if (domainType === 'system' && slug) {
       const domainResult = await landingPageDomainService.autoProvisionSubdomain(lp.id, slug);
       return {
-        ...toAdminLandingDto(lp),
+        ...dto,
         customDomain: domainResult.hostname,
         cfManaged: domainResult.cfManaged,
         customDomainProvisioned: domainResult.ok === true,
         customDomainMessage: domainResult.message || null,
       };
     }
-    return toAdminLandingDto(lp);
+    return dto;
   }
 
   /**
@@ -358,6 +372,11 @@ class LandingPageAdminService {
       frontendOrigin: resolveFrontendOriginFromEnv(),
       apiBase: resolvePublicApiBaseFromEnv(),
     });
+
+    // Câu 3 sếp hỏi 14/09 — xem chú thích cùng đoạn ở create() phía trên.
+    const captureFieldWarning = buildCaptureFieldAuditWarning(
+      auditLandingCaptureFields(htmlContent, nextCustomConfig.leadForm)
+    );
 
     // domainType / domainSubtype chỉ thay đổi khi user gửi lên rõ ràng.
     const incomingType = body?.domainType;
@@ -466,8 +485,11 @@ class LandingPageAdminService {
     );
 
     const dto = toAdminLandingDto(updated);
-    if (snapshotWarning && dto) {
-      dto.warning = snapshotWarning;
+    // Gộp — không ghi đè: cảnh báo snapshot (bản GCS trước khi ghi đè) và cảnh báo ô form lạ là
+    // hai chuyện độc lập, cả hai có thể cùng xảy ra trong một lần lưu.
+    const combinedWarning = [snapshotWarning, captureFieldWarning].filter(Boolean).join(' ');
+    if (combinedWarning && dto) {
+      dto.warning = combinedWarning;
     }
     return dto;
   }

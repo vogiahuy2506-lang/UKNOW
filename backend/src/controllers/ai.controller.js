@@ -24,7 +24,7 @@ import {
   buildLandingBriefContext,
   resolveOwnerUserId,
 } from '../services/ai/landingBrief.service.js';
-import { buildLeadFormDraftFromBrief, applyLeadFormDraftToConfig } from '../utils/landingLeadFormConfig.util.js';
+import { buildLeadFormDraftFromBrief, applyLeadFormDraftToConfig, normalizePersistedLeadForm } from '../utils/landingLeadFormConfig.util.js';
 import {
   normalizeAssistantLocale,
   resolveAssistantLocaleContext,
@@ -1598,11 +1598,17 @@ class AiController {
 
       // Xác thực landingPageId nếu có truyền lên
       let resolvedLandingPageId = null;
+      // Câu 3 sếp hỏi 14/09 — đường sửa trang trước đây không biết trang đang có customFields nào
+      // đã khai báo (chỉ đường sinh trang mới biết), nên AI thêm ô mới tự đặt tên tuỳ ý, không
+      // khớp khai báo → mất dữ liệu âm thầm lúc nhận bài nộp. `lp` (nếu resolve được) đã có sẵn
+      // `customConfig`, tận dụng luôn — không query thêm lần nữa.
+      let leadFormConfig = null;
       if (landingPageId) {
         const scope = getWorkspaceScope(req.user);
         const lp = await landingPageRepository.findByIdInScope(landingPageId, scope).catch(() => null);
         if (lp) {
           resolvedLandingPageId = lp.id;
+          leadFormConfig = normalizePersistedLeadForm(lp.customConfig);
         }
       }
 
@@ -1634,6 +1640,7 @@ class AiController {
         contentLocale,
         assets,
         documents,
+        leadFormConfig,
       });
 
       await chargeAiCredit(req);

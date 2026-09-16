@@ -791,3 +791,80 @@ describe('aiLandingPageService.editHtml — prompt giữ chỗ trống chờ Bi�
   });
 });
 
+/**
+ * Câu 3 sếp hỏi 14/09 ("dữ liệu điền vào form sẽ lưu về chỗ nào?") — đường editHtml trước đây
+ * không nạp leadFormConfig, AI tự đặt tên ô mới tuỳ ý khi NGOẠI LỆ 2b áp dụng → không khớp
+ * customFields đã khai báo → lead.service.js âm thầm bỏ qua lúc nhận bài nộp (gốc ca trang test
+ * checkform.founderai.biz).
+ */
+describe('aiLandingPageService.editHtml — prompt nạp danh sách khoá cf_* đã khai báo (câu 3 sếp hỏi 14/09)', () => {
+  const leadFormConfigWith3Keys = {
+    fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+    customFields: [
+      { key: 'cf_chuc_vu_ab12', type: 'text', labelVi: 'Chức vụ', required: false, options: [] },
+      { key: 'cf_don_vi_cd34', type: 'text', labelVi: 'Đơn vị công tác', required: false, options: [] },
+      {
+        key: 'cf_khung_gio_ef56',
+        type: 'select',
+        labelVi: 'Khung giờ hẹn',
+        required: true,
+        options: [{ value: 'sang', labelVi: 'Sáng' }, { value: 'chieu', labelVi: 'Chiều' }],
+      },
+    ],
+  };
+
+  it('landing có 3 khoá khai báo → chuỗi prompt chứa đủ 3 khoá + luật dùng đúng khoá (áp dụng khi 2b được dùng)', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Thêm ô Chức vụ vào form',
+      leadFormConfig: leadFormConfigWith3Keys,
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toContain('name="cf_chuc_vu_ab12"');
+    expect(sentPrompt).toContain('name="cf_don_vi_cd34"');
+    expect(sentPrompt).toContain('name="cf_khung_gio_ef56"');
+    expect(sentPrompt).toMatch(/DANH SÁCH KHOÁ TRƯỜNG ĐÃ KHAI BÁO/);
+    expect(sentPrompt).toMatch(/KHÔNG tự đặt tên trường khác/);
+    // Vẫn nằm giữa rule 2b và rule 3 — không phá cấu trúc numbering đã có.
+    expect(sentPrompt).toMatch(/không đổi tên trường nào khác ngoài trường mới được yêu cầu\.\n2d\) DANH SÁCH/);
+  });
+
+  it('landing KHÔNG khai báo khoá nào (leadFormConfig rỗng) → prompt giữ NGUYÊN VĂN như trước PR', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Đổi màu nút thành xanh',
+      leadFormConfig: { fixedFields: { occupation: { visible: false }, interestArea: { visible: false } }, customFields: [] },
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).not.toMatch(/DANH SÁCH KHOÁ TRƯỜNG ĐÃ KHAI BÁO/);
+    expect(sentPrompt).toMatch(/không đổi tên trường nào khác ngoài trường mới được yêu cầu\.\n3\) Trả về JSON/);
+  });
+
+  it('không truyền leadFormConfig (mặc định null, landing chưa từng resolve được) → prompt giữ NGUYÊN VĂN', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Đổi màu nút thành xanh',
+    });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).not.toMatch(/DANH SÁCH KHOÁ TRƯỜNG ĐÃ KHAI BÁO/);
+  });
+});
+
