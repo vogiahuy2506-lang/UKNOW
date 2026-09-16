@@ -119,6 +119,12 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
           leadFormConfig,
         });
         toast.success(t('landingPagesAdmin.created'));
+        // Câu 3 sếp hỏi 14/09 — create() giờ cũng trả `warning` (ô form chưa khai báo), y hệt
+        // update() bên trên; trước đây nhánh này bỏ qua field đó nên cảnh báo backend không tới
+        // được người dùng khi TẠO MỚI landing có form dán sẵn ô lạ.
+        if (created?.warning) {
+          toast(created.warning, { icon: '⚠️', duration: 6000 });
+        }
         const newId = created?.id ?? created?.data?.id;
         onClose?.(newId);
       }
