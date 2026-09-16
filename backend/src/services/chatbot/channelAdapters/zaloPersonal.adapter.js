@@ -701,8 +701,11 @@ class ZaloPersonalAdapter {
       }
 
       // Reuse campaign dispatch: album ảnh 1 lượt, mỗi file tài liệu 1 lượt (không dồn chung).
+      // `userId` ở đây LUÔN là chủ workspace (resolveWorkspaceOwnerId / account.id_user / channel.user_id
+      // ở mọi nơi gọi sendReply), không phải nhân viên thao tác — an toàn để lọc trực tiếp theo owner.
       const attachmentSources = await campaignZaloSender.prepareZaloAttachmentSources(
-        Array.isArray(attachments) ? attachments : []
+        Array.isArray(attachments) ? attachments : [],
+        { ownerUserId: userId }
       );
 
       // Gửi vào nhóm BẮT BUỘC có ThreadType.Group — thiếu thì zca-js mặc định

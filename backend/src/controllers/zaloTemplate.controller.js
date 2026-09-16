@@ -327,12 +327,25 @@ class ZaloTemplateController {
       const templateOwnerUserId = existing.id_user || userId;
 
       const currentAttachments = Array.isArray(existing.attachments) ? existing.attachments : [];
-      const incomingAttachments = Array.isArray(attachments) ? attachments : null;
-      let finalAttachments = incomingAttachments ? [...incomingAttachments] : [...currentAttachments];
 
       const resolveAttachmentKey = (att) => {
         return uploadController.normalizeStorageKey(att);
       };
+
+      // Chặn từ gốc: key thuộc workspace khác lọt vào đây (client tự gửi) sẽ bị campaign
+      // run/Quick Send đọc trộm sau này nếu không lọc ngay lúc lưu — xem prepareZaloAttachmentSources
+      // và buildMailAttachments (bộ lọc phía đọc chỉ chặn được nơi đã truyền ownerUserId).
+      const rawIncomingAttachments = Array.isArray(attachments) ? attachments : null;
+      const incomingAttachments = rawIncomingAttachments
+        ? rawIncomingAttachments.filter((att) => {
+          const key = resolveAttachmentKey(att);
+          if (!key) return true;
+          if (key.startsWith(`uploads/${templateOwnerUserId}/`)) return true;
+          console.warn(`[zaloTemplate.controller] Bỏ tệp đính kèm không thuộc workspace ${templateOwnerUserId} khi lưu mẫu ${id}: ${key}`);
+          return false;
+        })
+        : null;
+      let finalAttachments = incomingAttachments ? [...incomingAttachments] : [...currentAttachments];
 
       const deletedKeys = new Set();
       if (Array.isArray(deletedAttachments)) {

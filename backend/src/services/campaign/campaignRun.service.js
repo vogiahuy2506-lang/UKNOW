@@ -2916,7 +2916,10 @@ class CampaignRunService {
         try {
           return await campaignZaloSenderService.prepareZaloAttachmentSources(
             templateAttachments,
-            { cache: zaloTemplateAttachmentSourceCache }
+            {
+              cache: zaloTemplateAttachmentSourceCache,
+              ownerUserId: campaign.workspace_owner_id || campaign.id_user,
+            }
           );
         } catch (error) {
           if (!isMissingStorageKeyError(error)) {
