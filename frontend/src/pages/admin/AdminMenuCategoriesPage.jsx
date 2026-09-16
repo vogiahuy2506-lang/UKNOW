@@ -4,6 +4,8 @@ import {
   HiOutlineArrowDown,
   HiOutlineArrowUp,
   HiOutlineCollection,
+  HiOutlineExclamation,
+  HiOutlineInformationCircle,
   HiOutlinePlus,
   HiOutlineRefresh,
   HiOutlineSave,
@@ -166,6 +168,14 @@ export default function AdminMenuCategoriesPage() {
       toast.error(t('adminMenu.nameRequired'));
       return;
     }
+    // Chặn mềm — chuyên mục rỗng vẫn là trạng thái tạm hợp lệ (adminMenuLayout.js tự ẩn nó khỏi
+    // menu thật, không phải lỗi dữ liệu), nhưng người tạo chuyên mục mới hay quên gán tab ngay nên
+    // dễ tưởng "đã lưu là xong" rồi không hiểu sao không thấy đâu. Hỏi lại, không chặn cứng.
+    const emptyCategories = categories.filter((category) => category.itemKeys.length === 0);
+    if (emptyCategories.length > 0) {
+      const names = emptyCategories.map((category) => category.nameVi.trim() || category.nameEn.trim()).join(', ');
+      if (!window.confirm(t('adminMenu.emptyCategoriesConfirm', { names }))) return;
+    }
     setIsSaving(true);
     try {
       const response = isAppScope
@@ -245,6 +255,13 @@ export default function AdminMenuCategoriesPage() {
         </button>
       </div>
 
+      {isAppScope && (
+        <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          <HiOutlineInformationCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{t('adminMenu.appScopeHint')}</span>
+        </div>
+      )}
+
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="font-semibold text-gray-900">{t('adminMenu.addCategory')}</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
@@ -292,6 +309,12 @@ export default function AdminMenuCategoriesPage() {
               <span className="text-xs text-gray-400">
                 {t('adminMenu.itemCount', { count: category.itemKeys.length })}
               </span>
+              {category.itemKeys.length === 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
+                  <HiOutlineExclamation className="h-3.5 w-3.5" />
+                  {t('adminMenu.emptyCategoryBadge')}
+                </span>
+              )}
               <div className="flex items-center gap-1">
                 <button
                   type="button"
