@@ -6,7 +6,7 @@
  * nhắc phạm vi dưới tab "Menu Ứng dụng (/app)".
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import AdminMenuCategoriesPage from '../AdminMenuCategoriesPage';
 import viTranslations from '../../../i18n/vi';
 
@@ -85,13 +85,22 @@ describe('AdminMenuCategoriesPage — cảnh báo chuyên mục rỗng + nhắc 
     confirmSpy.mockRestore();
   });
 
-  it('chuyên mục chưa gán tab: hiện badge cảnh báo "sẽ không hiện trong menu"', async () => {
+  it('chuyên mục chưa gán tab: badge cảnh báo nằm ĐÚNG trên thẻ rỗng, KHÔNG gắn sang thẻ đã có tab', async () => {
     mocks.getLayout.mockResolvedValue(respond(withOneEmptyCategory()));
     render(<AdminMenuCategoriesPage />);
 
-    expect(await screen.findByText('Sẽ không hiện trong menu')).toBeInTheDocument();
+    await screen.findByText('Sẽ không hiện trong menu');
+    // Review Claude 16/09: bản đầu chỉ kiểm badge "có tồn tại đâu đó" → đảo điều kiện render
+    // (gắn badge vào chuyên mục CÓ tab, mất ở chuyên mục rỗng) vẫn xanh. Phải soi trong đúng thẻ:
+    // tên chuyên mục nằm trong <input aria-label="Tên tiếng Việt">, thẻ là <section> bọc ngoài.
+    const nameInputs = screen.getAllByLabelText('Tên tiếng Việt');
+    const emptyCard = nameInputs.find((input) => input.value === 'Tin tức').closest('section');
+    const filledCard = nameInputs.find((input) => input.value === 'Cài đặt').closest('section');
+
+    expect(within(emptyCard).getByText('Sẽ không hiện trong menu')).toBeInTheDocument();
+    expect(within(filledCard).queryByText('Sẽ không hiện trong menu')).toBeNull();
     // Dòng chữ trong thẻ cũng phải nói rõ hậu quả, không chỉ "chưa có tab nào".
-    expect(screen.getByText(/sẽ KHÔNG hiện trong menu/)).toBeInTheDocument();
+    expect(within(emptyCard).getByText(/sẽ KHÔNG hiện trong menu/)).toBeInTheDocument();
   });
 
   it('bấm Lưu khi có chuyên mục rỗng: hộp xác nhận nêu đúng tên chuyên mục; Huỷ → không gọi API', async () => {
