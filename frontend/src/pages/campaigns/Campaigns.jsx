@@ -694,6 +694,7 @@ const Campaigns = () => {
                                     <span className="badge badge-danger text-xs font-normal">
                                       {t(getRunPauseI18nKey(activePause), {
                                         until: formatCampaignDateTime(activePause.untilIso),
+                                        account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
                                       })}
                                     </span>
                                     {activePause.kind === 'plan_quota' && (
