@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import toast from 'react-hot-toast';
 import useCanvasConversation, { makeIntents, detectIntent } from '../useCanvasConversation.js';
 import {
   generateLandingHtmlWithAi,
@@ -11,12 +12,14 @@ vi.mock('../../../landing-pages/services/landingPagesAdminApi.service.js', () =>
   editLandingHtmlWithAi: vi.fn(),
 }));
 
-vi.mock('react-hot-toast', () => ({
-  default: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+// react-hot-toast thật: `toast` là HÀM có thêm .success/.error — hook gọi `toast(...)` trực tiếp
+// cho cảnh báo tệp bị bỏ qua, mock dạng object sẽ ném "toast is not a function".
+vi.mock('react-hot-toast', () => {
+  const toast = vi.fn();
+  toast.success = vi.fn();
+  toast.error = vi.fn();
+  return { default: toast };
+});
 
 vi.mock('../../../../i18n', () => ({
   useI18n: (namespace = null) => {
@@ -200,5 +203,43 @@ describe('useCanvasConversation — có files bỏ qua intent, gọi API với f
         landingPageId: null,
       })
     );
+  });
+
+  it('backend bỏ qua vài tệp (skippedAttachments) → HTML vẫn được áp + toast cảnh báo nêu tên tệp, không báo lỗi', async () => {
+    // PLAN_TEP_DINH_KEM_LANDING_MOI_DINH_DANG_2026-09-15.md Việc 6 — hình dạng thật của
+    // generateLandingHtmlWithAi là body axios: { success, data: { html, skippedAttachments } }.
+    generateLandingHtmlWithAi.mockResolvedValueOnce({
+      success: true,
+      data: {
+        html: '<div>Trang có ảnh</div>',
+        skippedAttachments: [
+          { originalName: 'a.heic', reason: 'Không thể chuyển đổi ảnh HEIC: hỏng' },
+          { originalName: 'b.pdf', reason: 'Không đọc được chữ trong tệp (có thể là bản scan)' },
+          { originalName: 'c.gif', reason: 'Mỗi lượt chỉ dùng tối đa 3 ảnh và 3 tài liệu' },
+          { originalName: 'd.doc', reason: 'Trích xuất tài liệu thất bại' },
+        ],
+      },
+    });
+
+    let formState = { title: '', htmlContent: '' };
+    const setForm = vi.fn((updater) => {
+      formState = typeof updater === 'function' ? updater(formState) : updater;
+    });
+    const { result } = renderHook(() =>
+      useCanvasConversation({ form: formState, setForm, hasExistingHtml: false, openTab: vi.fn(), editingId: null })
+    );
+
+    await act(async () => {
+      await result.current.handleSend({ prompt: 'Tạo trang từ tệp', files: [{ tempId: 't1', originalName: 'a.heic' }] });
+    });
+
+    expect(formState.htmlContent).toBe('<div>Trang có ảnh</div>');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledTimes(1);
+    const [text] = toast.mock.calls[0];
+    expect(text).toContain('a.heic — Không thể chuyển đổi ảnh HEIC: hỏng');
+    expect(text).toContain('c.gif');
+    expect(text).not.toContain('d.doc');
+    expect(text).toContain('và 1 tệp khác');
   });
 });

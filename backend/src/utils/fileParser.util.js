@@ -8,6 +8,7 @@ const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
 const Papa = require('papaparse');
 const JSZip = require('jszip');
+const WordExtractor = require('word-extractor');
 
 const KNOWN_BINARY_EXTENSIONS = new Set([
   '.xls', '.xlsx', '.doc', '.docx', '.ppt', '.pptx', '.pdf',
@@ -17,15 +18,14 @@ const KNOWN_BINARY_EXTENSIONS = new Set([
 ]);
 
 /**
- * Extract text from different file types based on originalName and contentType.
- *
- * @param {Buffer} buffer
- * @param {string} originalName
- * @param {string} contentType
- * @param {{ max?: number }} [options] - PDF: `max` pages (0 = all pages, default). Chat attachments pass max: 30.
- * @returns {Promise<string>} Extracted text content
+ * Trích xuất text thuần từ file buffer theo định dạng
+ * @param {Buffer} buffer - File buffer
+ * @param {string} originalName - Tên file gốc (để lấy extension)
+ * @param {string} contentType - Mime type của file
+ * @param {object} [options] - Tuỳ chọn thêm: { max: số trang PDF tối đa, 0 = không giới hạn }
+ * @returns {Promise<string>} Text trích xuất được
  */
-export async function extractTextFromBuffer(buffer, originalName, contentType = '', options = {}) {
+export async function extractTextFromBuffer(buffer, originalName, contentType, options = {}) {
   const ext = path.extname(originalName || '').toLowerCase();
   const mime = String(contentType || '').toLowerCase();
   const pdfMax = typeof options.max === 'number' ? options.max : 0;
@@ -41,21 +41,30 @@ export async function extractTextFromBuffer(buffer, originalName, contentType = 
     }
   }
 
-  // 2. Word Documents (.docx, .doc)
+  // 2. Word Documents (.doc legacy format via WordExtractor)
+  // Đuôi thắng MIME: máy không cài Office hay khai .docx là 'application/msword' — đẩy tệp OpenXML
+  // sang bộ đọc Word 97 sẽ hỏng, trong khi mammoth đọc được.
+  if (ext === '.doc' || (ext !== '.docx' && mime === 'application/msword')) {
+    try {
+      const extractor = new WordExtractor();
+      const doc = await extractor.extract(buffer);
+      return (doc.getBody() || '').trim();
+    } catch (err) {
+      console.error('[FileParser] Word .doc parse error:', err);
+      throw new Error(`Không thể giải nén file Word (.doc): ${err.message}`);
+    }
+  }
+
+  // 3. Word Documents (.docx openxml format via Mammoth)
   if (
-    ext === '.docx' || ext === '.doc' ||
-    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    mime === 'application/msword'
+    ext === '.docx' ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ) {
     try {
       const result = await mammoth.extractRawText({ buffer });
       return (result.value || '').trim();
     } catch (err) {
       console.error('[FileParser] Word parse error:', err);
-      if (ext === '.doc' || mime === 'application/msword') {
-        // Mammoth có thể không giải nén được file .doc nhị phân cũ; trả chuỗi rỗng thay vì ném rác
-        return '';
-      }
       throw new Error(`Không thể giải nén file Word (.docx): ${err.message}`);
     }
   }

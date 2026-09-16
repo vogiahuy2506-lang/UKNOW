@@ -11,7 +11,7 @@ import { getStorageBackend } from '../services/storage/storageBackend.js';
 // ngoài việc CÙNG được stream qua route này, tách hàm sẽ chỉ thêm một lớp gọi cho hai dòng so
 // sánh — và giữ nguyên 100% hành vi của nhánh `landing/` cũ (route/`state`/cache-control không
 // đổi gì).
-const VALID_KEY_REGEX = /^uploads\/\d+\/(landing|forms)\/[A-Za-z0-9._-]+\.(png|jpe?g|webp)$/i;
+const VALID_KEY_REGEX = /^uploads\/\d+\/(landing|forms)\/[A-Za-z0-9._-]+\.(png|jpe?g|webp|gif)$/i;
 const CATEGORY_BY_KEY_PREFIX = {
   landing: 'landing_asset',
   forms: 'form_asset',
@@ -22,6 +22,7 @@ const MIME_MAP = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.gif': 'image/gif',
 };
 
 export class LandingAssetController {

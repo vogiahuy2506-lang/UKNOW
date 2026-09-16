@@ -431,7 +431,7 @@ class LandingPageAdminController {
       });
 
       if (documents.length > 0 || assets.length === 0) {
-        return res.status(400).json({ success: false, message: 'Chỉ nhận ảnh PNG/JPG/WebP' });
+        return res.status(400).json({ success: false, message: 'Chỉ nhận ảnh PNG/JPG/WebP/GIF/HEIC' });
       }
 
       const asset = assets[0];

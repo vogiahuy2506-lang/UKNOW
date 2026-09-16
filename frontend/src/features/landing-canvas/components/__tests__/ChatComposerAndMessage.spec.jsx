@@ -59,6 +59,13 @@ describe('ChatComposer (PR-3)', () => {
     const file = new File(['fake-png'], 'banner.png', { type: 'image/png' });
     const fileInput = document.querySelector('input[type="file"]');
     expect(fileInput).not.toBeNull();
+    expect(fileInput.getAttribute('accept')).toContain('.gif');
+    expect(fileInput.getAttribute('accept')).toContain('.heic');
+    expect(fileInput.getAttribute('accept')).toContain('.txt');
+    expect(fileInput.getAttribute('accept')).toContain('.csv');
+    expect(fileInput.getAttribute('accept')).toContain('.xlsx');
+    expect(fileInput.getAttribute('accept')).toContain('.xls');
+    expect(fileInput.getAttribute('accept')).toContain('.pptx');
 
     fireEvent.change(fileInput, { target: { files: [file] } });
 

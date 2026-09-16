@@ -10,7 +10,7 @@ import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
 /**
  * Composer input cho chat panel:
  * - Enter để gửi, Shift+Enter để xuống dòng
- * - Đính kèm ảnh (.png,.jpg,.jpeg,.webp) hoặc tài liệu (.pdf,.docx,.pptx,.xlsx,.txt,.csv)
+ * - Đính kèm ảnh (.png,.jpg,.jpeg,.webp,.gif,.heic,.heif) hoặc tài liệu (.pdf,.docx,.doc,.pptx,.xlsx,.xls,.txt,.csv)
  * - Tải lên /uploads/temp với hạn mức lưu trữ
  * - Nếu chỉ có file mà không có prompt, tự điền filesOnlyPrompt
  * - Disabled khi isStreaming hoặc isUploading
@@ -141,7 +141,7 @@ const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.pptx,.xlsx,.txt,.csv"
+          accept=".png,.jpg,.jpeg,.webp,.gif,.heic,.heif,.pdf,.docx,.doc,.pptx,.xlsx,.xls,.txt,.csv"
           onChange={handleFileSelect}
           className="hidden"
         />

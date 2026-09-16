@@ -183,10 +183,16 @@ describe('fileParser.util', () => {
       .rejects.toThrow('Không thể giải nén file Excel (.xls)');
   });
 
-  it('should handle legacy Word (.doc) gracefully when error occurs', async () => {
+  it('should handle legacy Word (.doc) parsing errors by throwing', async () => {
     const buffer = Buffer.from('error');
-    const result = await extractTextFromBuffer(buffer, 'old.doc', 'application/msword');
-    expect(result).toBe('');
+    await expect(extractTextFromBuffer(buffer, 'old.doc', 'application/msword'))
+      .rejects.toThrow('Không thể giải nén file Word (.doc)');
+  });
+
+  it('.docx khai nhầm MIME application/msword → vẫn đọc bằng mammoth, không đẩy sang bộ đọc Word 97', async () => {
+    const buffer = Buffer.from('DOCX_BYTES');
+    const result = await extractTextFromBuffer(buffer, 'hoso.docx', 'application/msword');
+    expect(result).toBe('Extracted Word Content');
   });
 
   it('should parse PowerPoint files (.pptx) using jszip', async () => {

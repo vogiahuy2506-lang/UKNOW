@@ -67,6 +67,18 @@ const IMAGE_ALLOW = [
 
 const ALL_ALLOW = [...DOC_ALLOW, ...IMAGE_ALLOW];
 
+// Bổ sung chỉ cho profile 'landing':
+const OLE_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+
+const LANDING_EXTRA_ALLOW = [
+  { mime: 'image/gif', exts: ['.gif'], magic: 'gif', kind: 'image' },
+  { mime: 'image/heic', exts: ['.heic', '.heif'], magic: 'heic', kind: 'image' },
+  { mime: 'application/msword', exts: ['.doc'], magic: OLE_MAGIC, kind: 'doc' },
+  { mime: 'application/vnd.ms-excel', exts: ['.xls'], magic: OLE_MAGIC, kind: 'doc' },
+];
+
+const ALL_ALLOW_LANDING = [...ALL_ALLOW, ...LANDING_EXTRA_ALLOW];
+
 function httpError(message, status = 400) {
   const err = new Error(message);
   err.status = status;
@@ -81,15 +93,31 @@ function matchesMagic(buffer, magic) {
     const webp = buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
     return riff && webp;
   }
+  if (magic === 'gif') {
+    if (buffer.length < 6) return false;
+    const is87 = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38 && buffer[4] === 0x37 && buffer[5] === 0x61;
+    const is89 = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38 && buffer[4] === 0x39 && buffer[5] === 0x61;
+    return is87 || is89;
+  }
+  if (magic === 'heic') {
+    if (buffer.length < 12) return false;
+    // byte 4–7 = ftyp (0x66, 0x74, 0x79, 0x70)
+    const isFtyp = buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70;
+    if (!isFtyp) return false;
+    // byte 8–11 thuộc heic, heix, hevc, hevx, mif1, msf1, heim, heis
+    const brand = buffer.toString('ascii', 8, 12).toLowerCase();
+    const validBrands = ['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1', 'heim', 'heis'];
+    return validBrands.includes(brand);
+  }
   if (buffer.length < magic.length) return false;
   return magic.every((byte, i) => buffer[i] === byte);
 }
 
 /**
- * Validate file against allowlist (mime + extension pair) and magic bytes.
+ * Validate file against allowlist (extension-first + magic bytes) with profile support.
  * @returns {{ kind: 'image'|'doc', mime: string, ext: string }}
  */
-export function validateFile({ buffer, originalName, mimetype }) {
+export function validateFile({ buffer, originalName, mimetype, profile = 'default' }) {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw httpError('File trống hoặc không hợp lệ');
   }
@@ -98,23 +126,55 @@ export function validateFile({ buffer, originalName, mimetype }) {
   const rawExt = path.extname(name).toLowerCase();
   const mime = String(mimetype || '').toLowerCase().split(';')[0].trim();
 
-  if (rawExt === '.doc' || mime === 'application/msword') {
-    throw httpError('Chỉ nhận .docx, hãy Lưu thành .docx rồi gửi lại');
+  // Chặn tường minh
+  if (rawExt === '.svg' || mime === 'image/svg+xml') {
+    throw httpError('Không nhận file SVG');
   }
   if (rawExt === '.ppt' || mime === 'application/vnd.ms-powerpoint') {
     throw httpError('Chỉ nhận .pptx, hãy Lưu thành .pptx rồi gửi lại');
   }
-  if (rawExt === '.svg' || mime === 'image/svg+xml') {
-    throw httpError('Không nhận file SVG');
+  if (profile !== 'landing' && (rawExt === '.doc' || mime === 'application/msword')) {
+    throw httpError('Chỉ nhận .docx, hãy Lưu thành .docx rồi gửi lại');
   }
 
-  const rule = ALL_ALLOW.find((r) => r.mime === mime && r.exts.includes(rawExt));
+  const rules = profile === 'landing' ? ALL_ALLOW_LANDING : ALL_ALLOW;
+
+  // 1. Tìm quy tắc theo đuôi trước (rawExt)
+  const rule = rules.find((r) => r.exts.includes(rawExt));
   if (!rule) {
+    if (profile === 'landing') {
+      throw httpError('Định dạng file không được hỗ trợ. Nhận PDF, DOCX, DOC, PPTX, XLSX, XLS, TXT, CSV, PNG, JPEG, WEBP, GIF, HEIC');
+    }
     throw httpError('Định dạng file không được hỗ trợ. Nhận PDF, DOCX, PPTX, XLSX, TXT, CSV, PNG, JPEG, WEBP');
   }
 
-  if (!matchesMagic(buffer, rule.magic)) {
-    throw httpError('Nội dung file không khớp định dạng khai báo');
+  // 2. Kiểm tra nội dung:
+  if (rule.magic !== null) {
+    // Quy tắc có magic bytes -> chỉ cần magic khớp, MIME khai bỏ qua
+    if (!matchesMagic(buffer, rule.magic)) {
+      throw httpError('Nội dung file không khớp định dạng khai báo');
+    }
+  } else {
+    // Quy tắc không có magic (.txt, .csv)
+    const allowedTextMimes = [
+      '',
+      'application/octet-stream',
+      'text/plain',
+      'text/csv',
+      'application/csv',
+      'text/comma-separated-values',
+      'application/vnd.ms-excel',
+    ];
+    if (!allowedTextMimes.includes(mime)) {
+      throw httpError('Nội dung file không khớp định dạng khai báo');
+    }
+    // 8 KB đầu không có byte 0x00
+    const checkLen = Math.min(buffer.length, 8192);
+    for (let i = 0; i < checkLen; i++) {
+      if (buffer[i] === 0x00) {
+        throw httpError('Nội dung file không khớp định dạng khai báo');
+      }
+    }
   }
 
   const maxBytes = rule.kind === 'image' ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;

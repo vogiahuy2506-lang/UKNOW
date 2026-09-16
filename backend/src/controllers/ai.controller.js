@@ -72,11 +72,12 @@ function denyCampaignRun(res) {
   });
 }
 
-function mergeAndFilterLandingFiles(incomingFiles = [], sessionFiles = []) {
+export function mergeAndFilterLandingFiles(incomingFiles = [], sessionFiles = []) {
   const combined = [...incomingFiles, ...sessionFiles];
   const seen = new Set();
   const images = [];
   const docs = [];
+  const skipped = [];
 
   for (const f of combined) {
     const key = f?.storageKey || f?.tempId;
@@ -85,16 +86,30 @@ function mergeAndFilterLandingFiles(incomingFiles = [], sessionFiles = []) {
 
     const name = String(f?.originalName || '').toLowerCase();
     const type = String(f?.contentType || '').toLowerCase();
-    const isImg = type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(name);
+    const isImg = type.startsWith('image/') || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(name);
 
     if (isImg) {
-      if (images.length < 3) images.push(f);
+      if (images.length < 3) {
+        images.push(f);
+      } else {
+        skipped.push({
+          originalName: f?.originalName || f?.name || 'Ảnh',
+          reason: 'Mỗi lượt chỉ dùng tối đa 3 ảnh và 3 tài liệu',
+        });
+      }
     } else {
-      if (docs.length < 3) docs.push(f);
+      if (docs.length < 3) {
+        docs.push(f);
+      } else {
+        skipped.push({
+          originalName: f?.originalName || f?.name || 'Tài liệu',
+          reason: 'Mỗi lượt chỉ dùng tối đa 3 ảnh và 3 tài liệu',
+        });
+      }
     }
   }
 
-  return [...images, ...docs];
+  return { files: [...images, ...docs], skipped };
 }
 
 
@@ -1438,13 +1453,14 @@ class AiController {
           })).filter((f) => f.tempId || f.storageKey)
         : [];
 
-      const mergedFiles = mergeAndFilterLandingFiles(rawIncoming, sessionFiles);
-      const { assets, documents } = await ingestLandingAttachments({
+      const { files: mergedFiles, skipped: mergeSkipped } = mergeAndFilterLandingFiles(rawIncoming, sessionFiles);
+      const { assets, documents, skipped: ingestSkipped } = await ingestLandingAttachments({
         files: mergedFiles,
         ownerUserId,
         actorUserId: req.user.id,
         landingPageId: resolvedLandingPageId,
       });
+      const allSkipped = [...(mergeSkipped || []), ...(ingestSkipped || [])];
 
       // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b + PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md
       // PR-2d-3 việc 1: dựng leadFormDraft RỒI áp dụng applyLeadFormDraftToConfig (khoá
@@ -1491,6 +1507,10 @@ class AiController {
       }
 
       await chargeAiCredit(req);
+
+      if (allSkipped.length > 0) {
+        data.skippedAttachments = allSkipped;
+      }
 
       return res.json({ success: true, data });
     } catch (error) {
@@ -1597,13 +1617,14 @@ class AiController {
           })).filter((f) => f.tempId || f.storageKey)
         : [];
 
-      const mergedFiles = mergeAndFilterLandingFiles(rawIncoming);
-      const { assets, documents } = await ingestLandingAttachments({
+      const { files: mergedFiles, skipped: mergeSkipped } = mergeAndFilterLandingFiles(rawIncoming);
+      const { assets, documents, skipped: ingestSkipped } = await ingestLandingAttachments({
         files: mergedFiles,
         ownerUserId,
         actorUserId: req.user.id,
         landingPageId: resolvedLandingPageId,
       });
+      const allSkipped = [...(mergeSkipped || []), ...(ingestSkipped || [])];
 
       const data = await aiLandingPageService.editHtml({
         userId: ownerUserId,
@@ -1634,6 +1655,10 @@ class AiController {
             type: 'landing_edit_ack',
           }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save edit chat messages:', err.message));
         }
+      }
+
+      if (allSkipped.length > 0) {
+        data.skippedAttachments = allSkipped;
       }
 
       return res.json({ success: true, data });

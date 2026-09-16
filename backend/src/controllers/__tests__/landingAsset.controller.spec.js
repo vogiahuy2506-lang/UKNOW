@@ -100,4 +100,31 @@ describe('landingAsset.controller', () => {
       })
     );
   });
+
+  // PLAN_TEP_DINH_KEM_LANDING_MOI_DINH_DANG_2026-09-15.md ca 15: mở GIF ở chốt nhận tệp mà quên
+  // route này thì ảnh lưu được nhưng trang hiện ảnh vỡ (404), test backend vẫn xanh.
+  it('ảnh .gif → stream với Content-Type image/gif', async () => {
+    const req = { params: { key: 'uploads/39/landing/banner.gif' } };
+    const res = createMockRes();
+    mockFindStorageObjectByKey.mockResolvedValue({ category: 'landing_asset', state: 'active' });
+    mockStream.mockResolvedValue(true);
+
+    await landingAssetController.serveAsset(req, res);
+
+    expect(mockStream).toHaveBeenCalledWith(
+      'uploads/39/landing/banner.gif',
+      res,
+      expect.objectContaining({ mimeType: 'image/gif' })
+    );
+  });
+
+  it('ảnh .heic → 404 (HEIC đã được chuyển sang .jpg lúc nhận, không phục vụ trực tiếp)', async () => {
+    const req = { params: { key: 'uploads/39/landing/anh.heic' } };
+    const res = createMockRes();
+
+    await landingAssetController.serveAsset(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(mockStream).not.toHaveBeenCalled();
+  });
 });

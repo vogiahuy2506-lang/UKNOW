@@ -363,7 +363,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                 <input
                   ref={imageInputRef}
                   type="file"
-                  accept=".png,.jpg,.jpeg,.webp"
+                  accept=".png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
                   multiple
                   className="hidden"
                   onChange={handleImageUpload}

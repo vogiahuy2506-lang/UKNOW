@@ -14,6 +14,10 @@ jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
   extractTextFromBuffer: mockExtractTextFromBuffer,
 }));
 
+jest.unstable_mockModule('heic-convert', () => ({
+  default: jest.fn(async () => Buffer.from([0xff, 0xd8, 0xff, 0xe0])),
+}));
+
 jest.unstable_mockModule('../../storage/storageBackend.js', () => ({
   getStorageBackend: () => ({
     put: mockPut,
@@ -31,6 +35,15 @@ jest.unstable_mockModule('../../../repositories/storage.repository.js', () => ({
   activateLandingAssetStorageObjects: mockActivateLandingAssetStorageObjects,
   findStorageObjectByKey: jest.fn(),
   markStorageObjectCleanupPending: jest.fn(),
+  getEffectiveQuota: jest.fn().mockResolvedValue({
+    quotaLimitBytes: 100 * 1024 * 1024,
+    quotaUsedBytes: 0,
+    plan: 'pro',
+  }),
+  getWorkspaceUsage: jest.fn().mockResolvedValue({
+    usedBytes: 0,
+    fileCount: 0,
+  }),
 }));
 
 jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
@@ -88,15 +101,14 @@ describe('landingAsset.service (Việc 1.6)', () => {
     expect(mockPut).not.toHaveBeenCalled();
   });
 
-  it('(ii) GIF → từ chối (400)', async () => {
-    // Magic bytes của GIF89a: 0x47, 0x49, 0x46, 0x38, 0x39, 0x61
-    const gifBuffer = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00]);
-    mockReadTempFileBuffer.mockResolvedValue(gifBuffer);
+  it('(ii) file định dạng không hỗ trợ (exe) → từ chối (400)', async () => {
+    const exeBuffer = Buffer.from('MZ\x90\x00\x03\x00\x00\x00');
+    mockReadTempFileBuffer.mockResolvedValue(exeBuffer);
 
     const file = {
       tempId: 'temp_1',
-      originalName: 'anim.gif',
-      contentType: 'image/gif',
+      originalName: 'malware.exe',
+      contentType: 'application/x-msdownload',
     };
 
     await expect(
@@ -109,6 +121,28 @@ describe('landingAsset.service (Việc 1.6)', () => {
     });
 
     expect(mockPut).not.toHaveBeenCalled();
+  });
+
+  it('(ii-b) GIF hợp lệ → chấp nhận và lưu', async () => {
+    const gifBuffer = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00]);
+    mockReadTempFileBuffer.mockResolvedValue(gifBuffer);
+    mockPut.mockResolvedValue(true);
+    mockRegisterWrittenStorageObject.mockResolvedValue({ id: 11 });
+
+    const file = {
+      tempId: 'temp_gif',
+      originalName: 'animation.gif',
+      contentType: 'image/gif',
+    };
+
+    const res = await ingestLandingAttachments({
+      files: [file],
+      ownerUserId: 123,
+    });
+
+    expect(res.assets).toHaveLength(1);
+    expect(res.assets[0].originalName).toBe('animation.gif');
+    expect(mockPut).toHaveBeenCalledTimes(1);
   });
 
   it('(iii) ảnh 5 MB → lưu nhưng inlineForModel = false', async () => {
@@ -224,8 +258,130 @@ describe('landingAsset.service (Việc 1.6)', () => {
       })
     ).rejects.toMatchObject({
       status: 400,
-      message: 'Tệp "expired.png" đã hết hạn hoặc không còn, hãy đính kèm lại.',
+      message: expect.stringContaining('Tệp "expired.png" đã hết hạn hoặc không còn, hãy đính kèm lại.'),
     });
+  });
+
+  it('chấp nhận file TXT và trích xuất nội dung', async () => {
+    const txtBuffer = Buffer.from('Nội dung file văn bản thuần txt');
+    mockReadTempFileBuffer.mockResolvedValue(txtBuffer);
+
+    const file = {
+      tempId: 'temp_txt',
+      originalName: 'notes.txt',
+      contentType: 'text/plain',
+    };
+
+    const res = await ingestLandingAttachments({
+      files: [file],
+      ownerUserId: 123,
+    });
+
+    expect(mockExtractTextFromBuffer).toHaveBeenCalledWith(
+      txtBuffer,
+      'notes.txt',
+      'text/plain',
+      { max: 30 }
+    );
+    expect(res.documents).toHaveLength(1);
+    expect(res.documents[0].originalName).toBe('notes.txt');
+  });
+
+  it('chấp nhận file CSV và trích xuất nội dung', async () => {
+    const csvBuffer = Buffer.from('name,email\nUser A,a@test.com');
+    mockReadTempFileBuffer.mockResolvedValue(csvBuffer);
+
+    const file = {
+      tempId: 'temp_csv',
+      originalName: 'contacts.csv',
+      contentType: 'text/csv',
+    };
+
+    const res = await ingestLandingAttachments({
+      files: [file],
+      ownerUserId: 123,
+    });
+
+    expect(mockExtractTextFromBuffer).toHaveBeenCalledWith(
+      csvBuffer,
+      'contacts.csv',
+      'text/csv',
+      { max: 30 }
+    );
+    expect(res.documents).toHaveLength(1);
+  });
+
+  it('chấp nhận file XLSX (zip magic) và trích xuất nội dung', async () => {
+    const xlsxBuffer = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00]);
+    mockReadTempFileBuffer.mockResolvedValue(xlsxBuffer);
+
+    const file = {
+      tempId: 'temp_xlsx',
+      originalName: 'data.xlsx',
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+
+    const res = await ingestLandingAttachments({
+      files: [file],
+      ownerUserId: 123,
+    });
+
+    expect(mockExtractTextFromBuffer).toHaveBeenCalledWith(
+      xlsxBuffer,
+      'data.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      { max: 30 }
+    );
+    expect(res.documents).toHaveLength(1);
+  });
+
+  it('chấp nhận file PPTX (zip magic) và trích xuất nội dung', async () => {
+    const pptxBuffer = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00]);
+    mockReadTempFileBuffer.mockResolvedValue(pptxBuffer);
+
+    const file = {
+      tempId: 'temp_pptx',
+      originalName: 'slides.pptx',
+      contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    };
+
+    const res = await ingestLandingAttachments({
+      files: [file],
+      ownerUserId: 123,
+    });
+
+    expect(mockExtractTextFromBuffer).toHaveBeenCalledWith(
+      pptxBuffer,
+      'slides.pptx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      { max: 30 }
+    );
+    expect(res.documents).toHaveLength(1);
+  });
+
+  it('chấp nhận ảnh HEIC và lưu vào assets', async () => {
+    // 12 byte: 4 byte size + 'ftyp' + 'heic'
+    const heicBuffer = Buffer.from([
+      0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63,
+    ]);
+    mockReadTempFileBuffer.mockResolvedValue(heicBuffer);
+    mockPut.mockResolvedValue(true);
+    mockRegisterWrittenStorageObject.mockResolvedValue({ id: 12 });
+
+    const file = {
+      tempId: 'temp_heic',
+      originalName: 'photo.heic',
+      contentType: 'image/heic',
+    };
+
+    const res = await ingestLandingAttachments({
+      files: [file],
+      ownerUserId: 123,
+    });
+
+    expect(res.assets).toHaveLength(1);
+    expect(res.assets[0].originalName).toBe('photo.heic');
+    expect(mockPut).toHaveBeenCalledTimes(1);
   });
 });
 

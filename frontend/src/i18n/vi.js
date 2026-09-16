@@ -756,7 +756,7 @@ export default {
       undoTooltip: 'Khôi phục lại HTML trước khi AI sửa',
       clear: 'Xóa cuộc trò chuyện',
       attach: 'Đính kèm tệp',
-      attachHint: 'Đính kèm logo/banner (PNG/JPG/WebP) hoặc brochure PDF/DOCX',
+      attachHint: 'Đính kèm ảnh (PNG/JPG/WebP/GIF/HEIC) hoặc tài liệu PDF/DOCX/DOC/XLSX/XLS/PPTX/TXT/CSV',
       uploading: 'Đang tải lên...',
       removeFile: 'Bỏ tệp',
       filesOnlyPrompt: 'Dùng các tệp đính kèm cho trang này',

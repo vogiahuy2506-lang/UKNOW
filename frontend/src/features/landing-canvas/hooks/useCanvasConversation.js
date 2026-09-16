@@ -294,6 +294,15 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
             )
           );
         }
+
+        const skipped = result?.data?.skippedAttachments || result?.skippedAttachments;
+        if (Array.isArray(skipped) && skipped.length > 0) {
+          const displayLines = skipped.slice(0, 3).map((s) => `${s.originalName} — ${s.reason}`);
+          if (skipped.length > 3) {
+            displayLines.push(`và ${skipped.length - 3} tệp khác`);
+          }
+          toast(displayLines.join('\n'), { icon: '⚠️' });
+        }
       } catch (e) {
         const message =
           e?.response?.data?.message ||

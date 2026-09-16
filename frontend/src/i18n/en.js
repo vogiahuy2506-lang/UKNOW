@@ -756,7 +756,7 @@ export default {
       undoTooltip: 'Restore the HTML before the AI edited it',
       clear: 'Clear conversation',
       attach: 'Attach file',
-      attachHint: 'Attach logo/banner (PNG/JPG/WebP) or brochure PDF/DOCX',
+      attachHint: 'Attach images (PNG/JPG/WebP/GIF/HEIC) or documents PDF/DOCX/DOC/XLSX/XLS/PPTX/TXT/CSV',
       uploading: 'Uploading…',
       removeFile: 'Remove file',
       filesOnlyPrompt: 'Use the attached files for this page',
