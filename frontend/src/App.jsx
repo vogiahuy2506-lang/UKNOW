@@ -24,7 +24,6 @@ import Register from './pages/auth/Register';
 import AiHomePage from './pages/AiHomePage';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/campaigns/Campaigns';
-import CampaignDetail from './pages/campaigns/CampaignDetail';
 import CampaignBuilder from './pages/campaigns/CampaignBuilder';
 import QuickSend from './pages/campaigns/QuickSend';
 import Customers from './pages/customers/Customers';
@@ -416,7 +415,7 @@ function AppContent() {
 
             {/* Campaigns */}
             <Route path="campaigns" element={<PermissionRoute permission="campaigns_view"><Campaigns /></PermissionRoute>} />
-            <Route path="campaigns/:id" element={<PermissionRoute permission="campaigns_view"><CampaignDetail /></PermissionRoute>} />
+            <Route path="campaigns/:id" element={<Navigate to="builder" replace />} />
             <Route path="campaigns/:id/builder" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaigns/new" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaign-run" element={<Navigate to="/app/campaigns?tab=schedules" replace />} />

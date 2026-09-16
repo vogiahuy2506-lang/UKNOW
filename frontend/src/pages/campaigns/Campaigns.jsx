@@ -583,7 +583,7 @@ const Campaigns = () => {
                         <tr key={campaign.id}>
                           <td>
                             <Link
-                              to={`/app/campaigns/${campaign.id}`}
+                              to={`/app/campaigns/${campaign.id}/builder`}
                               className="text-primary-600 hover:text-primary-700 font-medium"
                             >
                               {campaign.campaignName}
