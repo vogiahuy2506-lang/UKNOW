@@ -5,10 +5,7 @@ import {
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlineChevronDown,
-  HiOutlinePlay,
-  HiOutlineSave,
   HiOutlineSearch,
-  HiOutlineStop,
   HiOutlineX,
 } from 'react-icons/hi';
 import CampaignExecutionLogWorkspace from '../../../components/campaigns/CampaignExecutionLogWorkspace';
@@ -18,6 +15,7 @@ import {
   ConfirmModal,
   FlowCanvas,
 } from './CampaignBuilderLayout';
+import CampaignBuilderToolbar from './CampaignBuilderToolbar';
 import NodeConfigModal from './NodeConfigModal';
 import { nodeConfigs } from './CampaignBuilderFlowNodes';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
@@ -122,6 +120,14 @@ const CampaignBuilderPageLayout = ({
   isRunning,
   onStopRun,
   onOpenNameModal,
+  /**
+   * Gửi thật trên máy chủ (khác `onRunCampaign` — nút đó chạy THỬ ngay trong trình duyệt).
+   * Không truyền (hoặc `canUseServerRunActions=false`) thì 2 nút này không hiện.
+   */
+  onRunNow,
+  onOpenSchedule,
+  canUseServerRunActions = false,
+  serverRunActionsDisabledHint = '',
   builderSidebarWidth,
   searchTerm,
   setSearchTerm,
@@ -253,35 +259,16 @@ const CampaignBuilderPageLayout = ({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
-          <button
-            onClick={onRunCampaign}
-            disabled={isRunning}
-            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 ${
-              isRunning ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'
-            }`}
-          >
-            <HiOutlinePlay className="w-4 h-4" />
-            {t('campaignBuilder.run')}
-          </button>
-          <button
-            onClick={onStopRun}
-            disabled={!isRunning}
-            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 ${
-              !isRunning ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'
-            }`}
-          >
-            <HiOutlineStop className="w-4 h-4" />
-            {t('campaignBuilder.stop')}
-          </button>
-          <button
-            onClick={onOpenNameModal}
-            className="px-2.5 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-1.5 sm:gap-2"
-          >
-            <HiOutlineSave className="w-4 h-4" />
-            {t('campaignBuilder.save')}
-          </button>
-        </div>
+        <CampaignBuilderToolbar
+          onRunNow={onRunNow}
+          onOpenSchedule={onOpenSchedule}
+          canUseServerRunActions={canUseServerRunActions}
+          serverRunActionsDisabledHint={serverRunActionsDisabledHint}
+          onRunCampaign={onRunCampaign}
+          isRunning={isRunning}
+          onStopRun={onStopRun}
+          onOpenNameModal={onOpenNameModal}
+        />
       </div>
     </div>
 

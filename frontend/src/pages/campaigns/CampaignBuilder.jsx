@@ -36,6 +36,9 @@ import {
   isEditableClipboardTarget,
 } from '../../features/campaigns/utils/campaignNodeClipboard';
 import CampaignBuilderPageLayout from '../../features/campaigns/components/CampaignBuilderPageLayout';
+import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
+import { ConfirmModal } from '../../features/campaigns/components/CampaignBuilderLayout';
+import useCampaignRunController from '../../features/campaigns/hooks/useCampaignRunController';
 import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCampaignBuilderLayoutState';
 import toast from 'react-hot-toast';
 import { readCampaignDraft, writeCampaignDraft, clearCampaignDraft } from '../../utils/campaignDraftStorage';
@@ -647,23 +650,29 @@ const CampaignBuilder = () => {
     }
   };
 
+  /**
+   * Lưu chiến dịch.
+   *
+   * @returns {Promise<boolean>} true khi đã lưu xong. Luồng "Lưu rồi chạy" của nút "Chạy ngay" đọc
+   *   giá trị này: lưu hỏng mà vẫn chạy tiếp nghĩa là gửi theo bản cũ trong DB.
+   */
   const handleSave = async () => {
     if (!campaignName.trim()) {
       toast.error(t('campaignBuilderExtra.enterCampaignName'));
-      return;
+      return false;
     }
 
     const triggerCount = nodes.filter((n) => isTriggerNodeType(n.data?.nodeType || n.type)).length;
     if (triggerCount > 1) {
       toast.error(t('campaignBuilderExtra.onlyOneTrigger'));
-      return;
+      return false;
     }
 
     try {
       const hasRunningCampaignRun = await hasRunningCampaignRunBeforeSave();
       if (hasRunningCampaignRun) {
         toast.error(RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE(t));
-        return;
+        return false;
       }
 
       // Transform nodes to match backend format
@@ -726,15 +735,17 @@ const CampaignBuilder = () => {
         navigate(`/app/campaigns/${savedCampaignId}/builder`, { replace: true });
       }
       toast.success(t('campaignBuilderExtra.saved'));
+      return true;
     } catch (error) {
       console.error('Save campaign error:', error);
       const statusCode = Number(error?.response?.status);
       if (statusCode === 409) {
         toast.error(error.response?.data?.message || RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE(t));
-        return;
+        return false;
       }
       const msg = error.response?.data?.message || error.message || t('campaignBuilderExtra.saveFailed');
       toast.error(typeof msg === 'string' ? msg : t('campaignBuilderExtra.saveFailed'));
+      return false;
     }
   };
 
@@ -932,6 +943,57 @@ const CampaignBuilder = () => {
     cancelCurrentRun();
   };
 
+  // ------------------------------------------------------------------
+  // Gửi THẬT từ trong trình dựng: "Chạy ngay" + "Lên lịch"
+  // (PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md, PR-1)
+  //
+  // Khác `handleRunCampaign` phía trên — nút đó chạy THỬ ngay trong trình duyệt. Hai nút này gọi
+  // máy chủ, và máy chủ đọc `flow_json` TRONG DB: sơ đồ sửa mà chưa lưu thì lượt gửi thật sẽ chạy
+  // BẢN CŨ trong im lặng, tin đã đi rồi mới biết. Nên `isDirty` là chặn cứng, hỏi "Lưu rồi chạy".
+  // ------------------------------------------------------------------
+  const [pendingServerAction, setPendingServerAction] = useState(null); // 'run' | 'schedule' | null
+  const runController = useCampaignRunController();
+
+  const campaignForServerActions = useMemo(() => ({
+    id,
+    campaignName,
+    campaignType,
+    status: campaignStatus,
+  }), [campaignName, campaignStatus, campaignType, id]);
+
+  const canUseServerRunActions = !isNewCampaign && Boolean(id);
+
+  // Không bọc useCallback: cả ba chỉ gắn vào nút/hộp thoại trong chính trang này (không có component
+  // ghi nhớ nào nhận), mà `runController` và `handleSave` đều tạo mới mỗi render nên memo hoá chỉ
+  // tạo cảm giác tối ưu giả.
+  const startServerAction = async (action) => {
+    if (action === 'run') {
+      await runController.openRunConfirmModal(campaignForServerActions);
+      return;
+    }
+    runController.openScheduleModal(campaignForServerActions);
+  };
+
+  const requestServerAction = (action) => {
+    if (!canUseServerRunActions) return;
+    if (isDirty) {
+      setPendingServerAction(action);
+      return;
+    }
+    startServerAction(action);
+  };
+
+  const handleSaveThenServerAction = async () => {
+    const action = pendingServerAction;
+    setPendingServerAction(null);
+    if (!action) return;
+    // handleSave trả false khi lưu hỏng (tên rỗng, đang có lượt chạy, lỗi mạng) — hỏng thì DỪNG,
+    // không được chạy tiếp bằng bản cũ trong DB.
+    const saved = await handleSave();
+    if (!saved) return;
+    await startServerAction(action);
+  };
+
   /**
    * Leave builder safely while preview run may still be in progress.
    *
@@ -963,6 +1025,7 @@ const CampaignBuilder = () => {
     : t('campaignBuilderExtra.unsavedChangesWarning');
 
   return (
+    <>
     <CampaignBuilderPageLayout
       campaignName={campaignName}
       campaignStatus={campaignStatus}
@@ -973,6 +1036,10 @@ const CampaignBuilder = () => {
       isRunning={isRunning}
       onStopRun={handleStopRun}
       onOpenNameModal={() => setShowNameModal(true)}
+      onRunNow={() => requestServerAction('run')}
+      onOpenSchedule={() => requestServerAction('schedule')}
+      canUseServerRunActions={canUseServerRunActions}
+      serverRunActionsDisabledHint={t('campaignBuilder.saveCampaignFirst')}
       builderSidebarWidth={builderSidebarWidth}
       searchTerm={searchTerm}
       setSearchTerm={setSearchTerm}
@@ -1054,6 +1121,66 @@ const CampaignBuilder = () => {
       leaveModalTitle={leaveModalTitle}
       leaveModalMessage={leaveModalMessage}
     />
+      <CampaignRunModals
+        weeklyDayOptions={runController.weeklyDayOptions}
+        showRunConfirmModal={runController.showRunConfirmModal}
+        closeRunConfirmModal={runController.closeRunConfirmModal}
+        runConfirmCampaign={runController.runConfirmCampaign}
+        runNameInput={runController.runNameInput}
+        setRunNameInput={runController.setRunNameInput}
+        runContinuousMode={runController.runContinuousMode}
+        setRunContinuousMode={runController.setRunContinuousMode}
+        runPollIntervalMinutes={runController.runPollIntervalMinutes}
+        setRunPollIntervalMinutes={runController.setRunPollIntervalMinutes}
+        isRunResumeLocked={runController.isRunResumeLocked}
+        runResumeMode={runController.runResumeMode}
+        setRunResumeMode={runController.setRunResumeMode}
+        runResumeFromId={runController.runResumeFromId}
+        setRunResumeFromId={runController.setRunResumeFromId}
+        continuousResumeRunOptions={runController.continuousResumeRunOptions}
+        isLoadingContinuousResumeOptions={runController.isLoadingContinuousResumeOptions}
+        shouldShowRunContinuousOptions={!runController.isZaloGroupCampaign(runController.runConfirmCampaign)}
+        isSubmittingRun={runController.isSubmittingRun}
+        handleRunNow={runController.handleRunNow}
+        stopRunConfirmTarget={runController.stopRunConfirmTarget}
+        closeStopRunConfirmModal={runController.closeStopRunConfirmModal}
+        handleConfirmStopRun={runController.handleConfirmStopRun}
+        stoppingRunIds={runController.stoppingRunIds}
+        showScheduleModal={runController.showScheduleModal}
+        selectedCampaign={runController.selectedCampaign}
+        closeScheduleModal={runController.closeScheduleModal}
+        scheduleForm={runController.scheduleForm}
+        setScheduleForm={runController.setScheduleForm}
+        handleSaveSchedule={runController.handleSaveSchedule}
+        showScheduleDetailModal={runController.showScheduleDetailModal}
+        selectedSchedule={runController.selectedSchedule}
+        closeScheduleDetailModal={runController.closeScheduleDetailModal}
+        getWeeklyDayLabel={runController.getWeeklyDayLabel}
+        getWeeklyDayFromCron={runController.getWeeklyDayFromCron}
+        getScheduleTypeLabel={runController.getScheduleTypeLabel}
+        getScheduleStatusClassName={runController.getScheduleStatusClassName}
+        getScheduleStatusLabel={runController.getScheduleStatusLabel}
+        scheduleRuns={runController.scheduleRuns}
+        handleToggleSchedule={runController.handleToggleSchedule}
+        isReadonlyOnceSchedule={runController.isReadonlyOnceSchedule}
+        closeCampaignSchedulesSummaryModal={runController.closeCampaignSchedulesSummaryModal}
+        allSchedules={runController.schedules}
+      />
+      <ConfirmModal
+        isOpen={Boolean(pendingServerAction)}
+        onClose={() => setPendingServerAction(null)}
+        onConfirm={handleSaveThenServerAction}
+        title={t('campaignBuilder.saveBeforeRunTitle')}
+        message={pendingServerAction === 'schedule'
+          ? t('campaignBuilder.saveBeforeScheduleMessage')
+          : t('campaignBuilder.saveBeforeRunMessage')}
+        confirmLabel={t('campaignBuilder.saveBeforeRunConfirm')}
+        cancelLabel={t('campaignBuilder.stay')}
+        confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
+        iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
+        iconColorClassName="w-6 h-6 text-amber-600"
+      />
+    </>
   );
 };
 
