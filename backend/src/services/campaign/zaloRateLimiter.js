@@ -2,6 +2,16 @@ import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { isZaloPhoneLookupRateLimitError } from '../../utils/zaloSendErrorClassifier.util.js';
 
 /**
+ * Kênh phải tra số điện thoại (findUser) trước khi gửi. Chỉ các kênh này tiêu hạn mức tra số
+ * theo ngày của Zalo, nên chỉ chúng phải tuân cooldown tra số. Gửi nhóm đi thẳng theo groupId,
+ * không tra số — production 06/09–16/09 (tài khoản 34, user 39): 155 tin nhóm gửi trong lúc
+ * hai run cá nhân/kết bạn cùng tài khoản đốt hạn mức mỗi sáng, Zalo không từ chối tin nhóm nào;
+ * 1.542 lỗi "quá nhiều" trong lịch sử đều là cá nhân/kết bạn. PR-2 (95a3a6f5) từng áp cooldown
+ * cho mọi kênh, làm lịch nhóm 09:00 15/09 trượt sang 06:00 hôm sau.
+ */
+const PHONE_LOOKUP_CHANNELS = new Set(['zalo_personal', 'zalo_friend_request']);
+
+/**
  * ZaloRateLimiter — Manages per-account Zalo outbound rate limiting state and policy.
  *
  * Extracted from CampaignRunService to keep rate-limit concerns in one place.
@@ -14,7 +24,7 @@ class ZaloRateLimiter {
   constructor(config = {}) {
     // Per-account+channel rate-limit state (shared across all runs in this process).
     this.zaloOutboundRateLimitState = new Map();
-    // Phone-lookup cooldown per accountId (zalo_personal only).
+    // Phone-lookup cooldown per accountId — chỉ chặn các kênh trong PHONE_LOOKUP_CHANNELS.
     this.zaloPersonalPhoneLookupCooldownUntil = new Map();
     // Per-account mutex to serialise concurrent sends on the same account.
     this.zaloOutboundAccountMutex = new Map();
@@ -347,10 +357,12 @@ class ZaloRateLimiter {
       await ensureRunStillRunning();
       const nowMs = Date.now();
 
-      // Cooldown tra số điện thoại quá nhiều — cooldown là của TÀI KHOẢN Zalo, không phải của
-      // kênh, nên áp cho mọi kênh (personal/group/friend_request) cùng tài khoản, không chỉ
-      // riêng zalo_personal.
-      const phoneLookupUntilMs = Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0;
+      // Cooldown tra số điện thoại quá nhiều — cooldown ghi theo TÀI KHOẢN Zalo, nhưng chỉ kênh
+      // có tra số (personal/friend_request) mới tiêu hạn mức đó; kênh nhóm gửi theo groupId nên
+      // đi thẳng (xem PHONE_LOOKUP_CHANNELS).
+      const phoneLookupUntilMs = PHONE_LOOKUP_CHANNELS.has(safeChannel)
+        ? Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0
+        : 0;
       if (phoneLookupUntilMs > nowMs) {
         const waitMs = phoneLookupUntilMs - nowMs;
         console.log(

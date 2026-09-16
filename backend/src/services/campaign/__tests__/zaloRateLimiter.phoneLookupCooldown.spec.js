@@ -7,7 +7,9 @@ import ZaloRateLimiter from '../zaloRateLimiter.js';
  *
  * Ba việc cần chốt bằng test:
  * 1. scheduleZaloPersonalPhoneLookupCooldown phải trả mốc 00:00 giờ VN kế tiếp, đúng ở mọi giờ.
- * 2. enforceOutboundPolicyBeforeSend phải áp cooldown này cho MỌI kênh (không chỉ zalo_personal).
+ * 2. enforceOutboundPolicyBeforeSend áp cooldown này cho MỌI kênh có tra số (zalo_personal +
+ *    zalo_friend_request), nhưng KHÔNG chặn zalo_group — gửi nhóm theo groupId không tra số,
+ *    không tiêu hạn mức (16/09: lịch nhóm 09:00 của user 39 trượt 21 giờ vì bản PR-2 chặn cả nhóm).
  * 3. Gọi lại schedule không được rút ngắn một cooldown đang có.
  */
 
@@ -32,7 +34,7 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
     });
   });
 
-  describe('enforceOutboundPolicyBeforeSend — cooldown áp cho mọi kênh, không chỉ zalo_personal', () => {
+  describe('enforceOutboundPolicyBeforeSend — cooldown áp cho kênh có tra số, không chặn kênh nhóm', () => {
     beforeEach(() => {
       jest.useFakeTimers().setSystemTime(new Date(vnTimeMs(2026, 9, 11, 9, 0)));
     });
@@ -67,7 +69,7 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
       expect(sleepWithRunCheck).not.toHaveBeenCalled();
     });
 
-    it('channel=zalo_group và tài khoản đang cooldown → cũng phải chờ', async () => {
+    it('channel=zalo_personal và tài khoản đang cooldown → phải chờ', async () => {
       const limiter = new ZaloRateLimiter();
       limiter.scheduleZaloPersonalPhoneLookupCooldown('acc1');
 
@@ -80,7 +82,7 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
       await expect(
         limiter.enforceOutboundPolicyBeforeSend({
           accountId: 'acc1',
-          channel: 'zalo_group',
+          channel: 'zalo_personal',
           yieldOrSleep,
           sleepWithRunCheck: jest.fn(),
           ensureRunStillRunning: jest.fn().mockResolvedValue(undefined),
@@ -89,6 +91,33 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
       ).rejects.toMatchObject({ code: 'TEST_YIELD_SLOT' });
 
       expect(yieldOrSleep).toHaveBeenCalledWith(expect.any(Number), 'phone_lookup_cooldown');
+    });
+
+    it('channel=zalo_group và tài khoản đang cooldown → đi thẳng, không chờ (gửi nhóm không tra số)', async () => {
+      const limiter = new ZaloRateLimiter();
+      limiter.scheduleZaloPersonalPhoneLookupCooldown('acc1');
+      // Cooldown thật sự đang treo trên tài khoản — chỉ kênh nhóm được đi qua.
+      expect(limiter.getPhoneLookupCooldownUntil('acc1')).toBeGreaterThan(Date.now());
+
+      const yieldOrSleep = jest.fn().mockImplementation(() => {
+        const err = new Error('yielded');
+        err.code = 'TEST_YIELD_SLOT';
+        throw err;
+      });
+      const sleepWithRunCheck = jest.fn().mockResolvedValue(undefined);
+
+      await limiter.enforceOutboundPolicyBeforeSend({
+        accountId: 'acc1',
+        channel: 'zalo_group',
+        yieldOrSleep,
+        sleepWithRunCheck,
+        ensureRunStillRunning: jest.fn().mockResolvedValue(undefined),
+        runId: 1,
+      });
+
+      expect(yieldOrSleep).not.toHaveBeenCalled();
+      // Cooldown của tài khoản vẫn còn nguyên cho kênh cá nhân/kết bạn — không bị xoá nhân tiện.
+      expect(limiter.getPhoneLookupCooldownUntil('acc1')).toBeGreaterThan(Date.now());
     });
 
     it('không có cooldown nào đang treo → đi thẳng qua, không chờ', async () => {
