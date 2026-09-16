@@ -65,7 +65,11 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
       ).rejects.toMatchObject({ code: 'TEST_YIELD_SLOT' });
 
       expect(yieldOrSleep).toHaveBeenCalledTimes(1);
-      expect(yieldOrSleep).toHaveBeenCalledWith(expect.any(Number), 'phone_lookup_cooldown');
+      expect(yieldOrSleep).toHaveBeenCalledWith(
+        expect.any(Number),
+        'phone_lookup_cooldown',
+        expect.objectContaining({ accountId: 'acc1' })
+      );
       expect(sleepWithRunCheck).not.toHaveBeenCalled();
     });
 
@@ -83,6 +87,7 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
         limiter.enforceOutboundPolicyBeforeSend({
           accountId: 'acc1',
           channel: 'zalo_personal',
+          zaloAccountPolicyHint: { displayName: 'SIM 1' },
           yieldOrSleep,
           sleepWithRunCheck: jest.fn(),
           ensureRunStillRunning: jest.fn().mockResolvedValue(undefined),
@@ -90,7 +95,11 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
         })
       ).rejects.toMatchObject({ code: 'TEST_YIELD_SLOT' });
 
-      expect(yieldOrSleep).toHaveBeenCalledWith(expect.any(Number), 'phone_lookup_cooldown');
+      expect(yieldOrSleep).toHaveBeenCalledWith(
+        expect.any(Number),
+        'phone_lookup_cooldown',
+        { accountId: 'acc1', accountName: 'SIM 1' }
+      );
     });
 
     it('channel=zalo_personal, requiresPhoneLookup=false và tài khoản đang cooldown → đi thẳng, không chờ (cooldown còn nguyên)', async () => {
@@ -142,7 +151,11 @@ describe('ZaloRateLimiter — cooldown tra số điện thoại reset theo 00:00
         })
       ).rejects.toMatchObject({ code: 'TEST_YIELD_SLOT' });
 
-      expect(yieldOrSleep).toHaveBeenCalledWith(expect.any(Number), 'phone_lookup_cooldown');
+      expect(yieldOrSleep).toHaveBeenCalledWith(
+        expect.any(Number),
+        'phone_lookup_cooldown',
+        expect.objectContaining({ accountId: 'acc1' })
+      );
     });
 
     it('channel=zalo_group và tài khoản đang cooldown → đi thẳng, không chờ (gửi nhóm không tra số)', async () => {

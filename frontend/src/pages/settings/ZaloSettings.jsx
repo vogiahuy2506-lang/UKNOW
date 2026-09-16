@@ -443,6 +443,13 @@ const ZaloSettings = () => {
                               ? t('zaloSettings.needsReauth')
                               : t('zaloSettings.disconnected')}
                         </span>
+                        {account.phoneLookupCooldownUntil && new Date(account.phoneLookupCooldownUntil).getTime() > Date.now() && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            {t('zaloSettings.phoneLookupCooldownBadge', {
+                              until: formatCampaignDateTime(account.phoneLookupCooldownUntil),
+                            })}
+                          </span>
+                        )}
                       </div>
                       {account.status === 'needs_reauth' && (
                         <p className="text-sm text-amber-800 mt-2">

@@ -334,7 +334,7 @@ class ZaloRateLimiter {
    * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
    * @param {object|null} [input.zaloAccountPolicyHint]
    * @param {boolean} [input.requiresPhoneLookup=true]
-   * @param {(waitMs: number, reason: string) => Promise<void>} input.yieldOrSleep
+   * @param {(waitMs: number, reason: string, context?: object) => Promise<void>} input.yieldOrSleep
    * @param {(waitMs: number) => Promise<void>} input.sleepWithRunCheck
    * @param {() => Promise<void>} input.ensureRunStillRunning
    * @param {number} [input.runId]
@@ -365,13 +365,18 @@ class ZaloRateLimiter {
       const phoneLookupUntilMs = PHONE_LOOKUP_CHANNELS.has(safeChannel) && requiresPhoneLookup
         ? Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0
         : 0;
+      const accountContext = {
+        accountId: safeAccountId,
+        accountName: zaloAccountPolicyHint?.displayName || zaloAccountPolicyHint?.name || null,
+      };
+
       if (phoneLookupUntilMs > nowMs) {
         const waitMs = phoneLookupUntilMs - nowMs;
         console.log(
           `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
           + `phone_lookup_cooldown=true wait_ms=${waitMs}`
         );
-        await yieldOrSleep(waitMs, 'phone_lookup_cooldown');
+        await yieldOrSleep(waitMs, 'phone_lookup_cooldown', accountContext);
         continue;
       }
 
@@ -383,7 +388,7 @@ class ZaloRateLimiter {
           + `quiet_hours=true (${this.explainQuietHoursPolicyForLog()}) `
           + `resume_at=${formatUtcAndVietnamForLog(quietUntilMs)} wait_ms=${waitMs}`
         );
-        await yieldOrSleep(waitMs, 'quiet_hours');
+        await yieldOrSleep(waitMs, 'quiet_hours', accountContext);
         continue;
       }
 
@@ -421,7 +426,7 @@ class ZaloRateLimiter {
           + `rate_limited=true attempts=${current.attemptCount}/${limitPerWindow} `
           + `window_start=${current.windowStartMs} now_local=${shifted.toISOString()} wait_ms=${waitMs}`
         );
-        await yieldOrSleep(waitMs, 'rate_limited');
+        await yieldOrSleep(waitMs, 'rate_limited', accountContext);
         continue;
       }
 

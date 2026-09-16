@@ -49,6 +49,7 @@ const CampaignRunLogsPanel = ({
                 <span className="text-sm font-medium text-amber-900">
                   {t(getRunPauseI18nKey(activePause), {
                     until: formatCampaignDateTime(activePause.untilIso),
+                    account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
                   })}
                 </span>
                 {activePause.kind === 'plan_quota' && (

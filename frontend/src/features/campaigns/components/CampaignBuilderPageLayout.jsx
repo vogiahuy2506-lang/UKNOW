@@ -18,7 +18,9 @@ import {
 import CampaignBuilderToolbar from './CampaignBuilderToolbar';
 import NodeConfigModal from './NodeConfigModal';
 import { nodeConfigs } from './CampaignBuilderFlowNodes';
+import { Link } from 'react-router-dom';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
+import { getRunPauseI18nKey } from '../utils/campaignQuotaPause.helpers';
 
 /**
  * Số thứ tự cho mỗi node trên palette, đánh theo thứ tự thực thi gợi ý:
@@ -169,6 +171,7 @@ const CampaignBuilderPageLayout = ({
   onDeleteNode,
   setNodeToConfig,
   setShowConfigModal,
+  activePause = null,
   showRunLogs,
   isResizingLog,
   onLogResizeStart,
@@ -555,6 +558,27 @@ const CampaignBuilderPageLayout = ({
           </div>
         )}
       </div>
+
+      {activePause && (
+        <div className="flex-none px-4 py-2 bg-amber-50 border-t border-b border-amber-200 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+            <span>
+              {t(getRunPauseI18nKey(activePause), {
+                until: formatCampaignDateTime(activePause.untilIso),
+                account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
+              })}
+            </span>
+          </div>
+          {activePause.kind === 'plan_quota' && (
+            <Link
+              to="/app/topup"
+              className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
+            >
+              {t('campaignRun.buyTopup')}
+            </Link>
+          )}
+        </div>
+      )}
 
       {showRunLogs && (
         <div

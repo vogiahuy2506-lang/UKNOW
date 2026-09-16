@@ -21,12 +21,18 @@ const {
   mockExecuteCampaignRun,
   mockUpdateCampaign,
   mockGetCampaignRuns,
+  mockFetchZaloAccountOptions,
 } = vi.hoisted(() => ({
   mockOpenRunConfirmModal: vi.fn(),
   mockOpenScheduleModal: vi.fn(),
   mockExecuteCampaignRun: vi.fn().mockResolvedValue(undefined),
   mockUpdateCampaign: vi.fn().mockResolvedValue({ data: { data: { id: 391 } } }),
   mockGetCampaignRuns: vi.fn().mockResolvedValue({ data: { data: [] } }),
+  mockFetchZaloAccountOptions: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../features/campaigns/utils/nodeConfigModal.helpers', () => ({
+  fetchZaloAccountOptions: mockFetchZaloAccountOptions,
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -258,5 +264,102 @@ describe('CampaignBuilder — nút gửi thật trong sơ đồ (PR-1)', () => {
     expect(screen.getByRole('button', { name: 'Chạy ngay' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Lên lịch' })).toBeDisabled();
     expect(screen.getByTestId('disabled-hint')).toHaveTextContent('Lưu chiến dịch trước đã');
+  });
+
+  it('chiến dịch Zalo cá nhân có tài khoản bị giới hạn tra số → hiện hộp xác nhận trước khi chạy', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    mockFetchZaloAccountOptions.mockResolvedValue([
+      {
+        id: 'acc1',
+        displayName: 'SIM1-DIGISO',
+        phoneLookupCooldownUntil: new Date(Date.now() + 3600000).toISOString(),
+      },
+    ]);
+
+    const { default: api } = await import('../../features/campaigns/services/campaignBuilderApi.service');
+    api.getCampaignById.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: 391,
+          campaignName: 'Zalo cá nhân chăm sóc',
+          campaignType: 'zalo',
+          status: 'draft',
+          nodes: [
+            {
+              id: 'n-zalo',
+              nodeType: 'action',
+              nodeSubtype: 'select_zalo_account',
+              config: { zaloAccountId: 'acc1' },
+            },
+          ],
+          connections: [],
+        },
+      },
+    });
+
+    renderBuilder();
+    await waitFor(() => expect(screen.getByTestId('campaign-name')).toHaveTextContent('Zalo cá nhân chăm sóc'));
+
+    // TH1: Người dùng bấm Huỷ (false) -> không mở hộp chạy
+    confirmSpy.mockReturnValueOnce(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy ngay' }));
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(confirmSpy.mock.calls[0][0]).toContain('SIM1-DIGISO đang bị giới hạn tới');
+    expect(mockOpenRunConfirmModal).not.toHaveBeenCalled();
+
+    // TH2: Người dùng bấm Đồng ý (true) -> mở hộp chạy
+    confirmSpy.mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy ngay' }));
+
+    await waitFor(() => {
+      expect(mockOpenRunConfirmModal).toHaveBeenCalledTimes(1);
+    });
+    confirmSpy.mockRestore();
+  });
+
+  it('chiến dịch Zalo nhóm cùng tài khoản đó → không hỏi xác nhận, mở thẳng hộp chạy', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    mockFetchZaloAccountOptions.mockResolvedValue([
+      {
+        id: 'acc1',
+        displayName: 'SIM1-DIGISO',
+        phoneLookupCooldownUntil: new Date(Date.now() + 3600000).toISOString(),
+      },
+    ]);
+
+    const { default: api } = await import('../../features/campaigns/services/campaignBuilderApi.service');
+    api.getCampaignById.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: 391,
+          campaignName: 'Zalo nhóm thông báo',
+          campaignType: 'zalo_group',
+          status: 'draft',
+          nodes: [
+            {
+              id: 'n-zalo',
+              nodeType: 'action',
+              nodeSubtype: 'select_zalo_account',
+              config: { zaloAccountId: 'acc1' },
+            },
+          ],
+          connections: [],
+        },
+      },
+    });
+
+    renderBuilder();
+    await waitFor(() => expect(screen.getByTestId('campaign-name')).toHaveTextContent('Zalo nhóm thông báo'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy ngay' }));
+
+    await waitFor(() => {
+      expect(mockOpenRunConfirmModal).toHaveBeenCalledTimes(1);
+    });
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });

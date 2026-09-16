@@ -144,6 +144,7 @@ export const fetchZaloAccountOptions = async () => {
         status: String(account.status || 'disconnected'),
         isActive: account.isActive !== false,
         isDefault: account.isDefault === true,
+        phoneLookupCooldownUntil: account.phoneLookupCooldownUntil || null,
       };
     });
 };

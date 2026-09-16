@@ -109,6 +109,7 @@ describe('getActiveRunPause', () => {
       untilMs: Date.parse('2026-09-02T11:00:00.000Z'),
       reason: 'quiet_hours',
       kind: 'zalo',
+      accountName: null,
     });
   });
 
@@ -128,6 +129,33 @@ describe('getActiveRunPause', () => {
     expect(getActiveRunPause(null)).toBeNull();
     expect(getActiveRunPause({})).toBeNull();
   });
+
+  it('trả về accountName khi kind=zalo có zaloDeferredAccountName', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-02T10:00:00.000Z'));
+    const result = getActiveRunPause({
+      zaloOutboundDeferredUntil: '2026-09-02T11:00:00.000Z',
+      zaloDeferredReason: 'phone_lookup_cooldown',
+      zaloDeferredAccountName: 'SIM1-DIGISO',
+    });
+    expect(result).toEqual({
+      untilIso: '2026-09-02T11:00:00.000Z',
+      untilMs: Date.parse('2026-09-02T11:00:00.000Z'),
+      reason: 'phone_lookup_cooldown',
+      kind: 'zalo',
+      accountName: 'SIM1-DIGISO',
+    });
+  });
+
+  it('trả về accountName: null khi kind=zalo không có zaloDeferredAccountName', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-02T10:00:00.000Z'));
+    const result = getActiveRunPause({
+      zaloOutboundDeferredUntil: '2026-09-02T11:00:00.000Z',
+      zaloDeferredReason: 'quiet_hours',
+    });
+    expect(result?.accountName).toBeNull();
+  });
 });
 
 describe('getRunPauseI18nKey', () => {
@@ -135,6 +163,26 @@ describe('getRunPauseI18nKey', () => {
     expect(getRunPauseI18nKey('zalo')).toBe('campaignRun.zaloPausedUntil');
     expect(getRunPauseI18nKey('plan_quota')).toBe('campaignRun.quotaPausedUntil');
     expect(getRunPauseI18nKey('other')).toBe('campaignRun.quotaPausedUntil');
+  });
+
+  it('với zalo: map đúng 3 nhóm lý do hoãn mới (PR-A)', () => {
+    // 1. Cooldown tra số (cá nhân, api error, all pool)
+    expect(getRunPauseI18nKey('zalo', 'phone_lookup_cooldown')).toBe('campaignRun.zaloPhoneLookupPausedUntil');
+    expect(getRunPauseI18nKey('zalo', 'phone_lookup_cooldown_api_error')).toBe('campaignRun.zaloPhoneLookupPausedUntil');
+    expect(getRunPauseI18nKey('zalo', 'all_accounts_phone_lookup_cooldown')).toBe('campaignRun.zaloPhoneLookupPausedUntil');
+    expect(getRunPauseI18nKey({ kind: 'zalo', reason: 'phone_lookup_cooldown' })).toBe('campaignRun.zaloPhoneLookupPausedUntil');
+
+    // 2. Khung giờ yên lặng
+    expect(getRunPauseI18nKey('zalo', 'quiet_hours')).toBe('campaignRun.zaloQuietHoursUntil');
+    expect(getRunPauseI18nKey({ kind: 'zalo', reason: 'quiet_hours' })).toBe('campaignRun.zaloQuietHoursUntil');
+
+    // 3. Chạm trần tin/giờ
+    expect(getRunPauseI18nKey('zalo', 'rate_limited')).toBe('campaignRun.zaloRateLimitedUntil');
+    expect(getRunPauseI18nKey({ kind: 'zalo', reason: 'rate_limited' })).toBe('campaignRun.zaloRateLimitedUntil');
+
+    // 4. Khác: giữ zaloPausedUntil
+    expect(getRunPauseI18nKey('zalo', 'other_reason')).toBe('campaignRun.zaloPausedUntil');
+    expect(getRunPauseI18nKey({ kind: 'zalo', reason: '' })).toBe('campaignRun.zaloPausedUntil');
   });
 
   it('với non_continuous: all_recipients_waiting_next_due trả về waitingNextDueUntil, không ra SMTP', () => {
@@ -159,4 +207,5 @@ describe('getRunPauseI18nKey', () => {
     expect(getRunPauseI18nKey({ kind: 'non_continuous', reason: '' })).toBe('campaignRun.genericPausedUntil');
   });
 });
+
 

@@ -422,6 +422,7 @@ class CampaignRunService {
    * @param {string} input.reasonKey khóa metadata lưu reason
    * @param {string} input.atKey khóa metadata lưu thời điểm defer
    * @param {string} input.label nhãn phục vụ log
+   * @param {object} [input.extra] metadata bổ sung (ví dụ account id, account name)
    * @returns {Promise<never>}
    */
   async persistRunDeferYieldSlot({
@@ -433,6 +434,7 @@ class CampaignRunService {
     reasonKey,
     atKey,
     label,
+    extra = {},
   }) {
     const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
     const resumeAt = new Date(Date.now() + w);
@@ -441,6 +443,7 @@ class CampaignRunService {
       [untilKey]: resumeAt.toISOString(),
       [reasonKey]: String(reason || 'wait'),
       [atKey]: new Date().toISOString(),
+      ...extra,
     };
     await campaignRunRepository.patchRunMetadata(runId, patch);
     const quietNote = String(reason) === 'quiet_hours' ? ` — ${this._explainZaloQuietHoursPolicyForLog()}` : '';
@@ -457,7 +460,7 @@ class CampaignRunService {
    * Lưu mốc resume Zalo vào DB và ném lỗi điều khiển để `finally` nhả slot one-shot / worker continuous.
    *
    * Luồng hoạt động:
-   * 1. Merge JSON vào `campaign_runs.run_metadata` (mốc ISO, lý do, thời điểm ghi).
+   * 1. Merge JSON vào `campaign_runs.run_metadata` (mốc ISO, lý do, thời điểm ghi, thông tin tài khoản nếu có).
    * 2. Ném `RUN_YIELD_SLOT` — catch ở `_doExecuteCampaign` không đánh fail run.
    *
    * @param {object} input
@@ -465,9 +468,22 @@ class CampaignRunService {
    * @param {number} input.campaignId
    * @param {number} input.waitMs thời gian chờ còn lại (ms)
    * @param {string} input.reason mã ngữ cảnh (log / debug)
+   * @param {number|string|null} [input.accountId] id tài khoản Zalo bị chặn
+   * @param {string|null} [input.accountName] tên hiển thị của tài khoản
    * @returns {Promise<never>}
    */
-  async persistZaloDeferYieldSlot({ runId, campaignId, waitMs, reason }) {
+  async persistZaloDeferYieldSlot({
+    runId,
+    campaignId,
+    waitMs,
+    reason,
+    accountId = null,
+    accountName = null,
+  }) {
+    const extra = {};
+    if (accountId != null) extra.zaloDeferredAccountId = accountId;
+    if (accountName != null) extra.zaloDeferredAccountName = accountName;
+
     await this.persistRunDeferYieldSlot({
       runId,
       campaignId,
@@ -477,6 +493,7 @@ class CampaignRunService {
       reasonKey: 'zaloDeferredReason',
       atKey: 'zaloDeferredAt',
       label: 'Zalo outbound',
+      extra,
     });
   }
 
@@ -1319,13 +1336,21 @@ class CampaignRunService {
        *
        * @param {number} waitMs thời gian chờ còn lại (ms)
        * @param {string} reason mã ngữ cảnh (phone_lookup_cooldown / quiet_hours / rate_limited)
+       * @param {object} [context={}] ngữ cảnh phụ (accountId, accountName)
        * @returns {Promise<void>}
        */
-      const yieldOrSleepZaloOutboundWait = async (waitMs, reason) => {
+      const yieldOrSleepZaloOutboundWait = async (waitMs, reason, context = {}) => {
         const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
         if (w <= 0) return;
         if (w >= this.zaloRateLimiter.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS) {
-          await this.persistZaloDeferYieldSlot({ runId, campaignId, waitMs: w, reason });
+          await this.persistZaloDeferYieldSlot({
+            runId,
+            campaignId,
+            waitMs: w,
+            reason,
+            accountId: context.accountId ?? null,
+            accountName: context.accountName ?? null,
+          });
         }
         await sleepWithRunCheck(w);
       };
@@ -4806,6 +4831,7 @@ class CampaignRunService {
                     campaignId,
                     waitMs,
                     reason: 'all_accounts_phone_lookup_cooldown',
+                    accountName: `pool ${order.length} tài khoản`,
                   });
                 }
               }
@@ -5348,6 +5374,8 @@ class CampaignRunService {
                     campaignId,
                     waitMs,
                     reason: 'phone_lookup_cooldown_api_error',
+                    accountId: workingAccount.id,
+                    accountName: workingAccount.displayName || null,
                   });
                 }
                 // Không có wait hợp lệ thì vẫn thoát yên lặng, không tính failed/log execution.
@@ -6456,6 +6484,7 @@ class CampaignRunService {
                   campaignId,
                   waitMs,
                   reason: 'all_accounts_phone_lookup_cooldown',
+                  accountName: `pool ${order.length} tài khoản`,
                 });
               }
             }
@@ -6731,6 +6760,8 @@ class CampaignRunService {
                     campaignId,
                     waitMs,
                     reason: 'phone_lookup_cooldown_api_error',
+                    accountId: workingAccount.id,
+                    accountName: workingAccount.displayName || null,
                   });
                 }
                 // Không có wait hợp lệ thì vẫn thoát yên lặng, không tính failed/log execution —

@@ -250,6 +250,7 @@ class ZaloSettingRepository {
               zs.updated_at::timestamptz AS updated_at, zs.last_connected_at::timestamptz AS last_connected_at,
               zs.last_restore_attempt_at::timestamptz AS last_restore_attempt_at,
               zs.restore_fail_count,
+              zs.phone_lookup_cooldown_until::timestamptz AS phone_lookup_cooldown_until,
               COALESCE(u.full_name, u.username) AS creator_name,
               EXISTS (
                 SELECT 1 FROM topup_locked_resources tlr

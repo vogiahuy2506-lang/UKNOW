@@ -195,6 +195,9 @@ class ZaloSettingsController {
       lastConnectedAt: item.last_connected_at,
       lastRestoreAttemptAt: item.last_restore_attempt_at || null,
       restoreFailCount: Number(item.restore_fail_count || 0),
+      phoneLookupCooldownUntil: item.phone_lookup_cooldown_until
+        ? new Date(item.phone_lookup_cooldown_until).toISOString()
+        : null,
     };
   }
 

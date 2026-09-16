@@ -40,6 +40,9 @@ import CampaignRunModals from '../../features/campaigns/components/CampaignRunMo
 import { ConfirmModal } from '../../features/campaigns/components/CampaignBuilderLayout';
 import useCampaignRunController from '../../features/campaigns/hooks/useCampaignRunController';
 import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCampaignBuilderLayoutState';
+import useLatestRunPause from '../../features/campaigns/hooks/useLatestRunPause';
+import { fetchZaloAccountOptions } from '../../features/campaigns/utils/nodeConfigModal.helpers';
+import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import toast from 'react-hot-toast';
 import { readCampaignDraft, writeCampaignDraft, clearCampaignDraft } from '../../utils/campaignDraftStorage';
 const LOG_LIST_MIN_WIDTH = 200;
@@ -123,6 +126,7 @@ const CampaignBuilder = () => {
   const hasHydratedDraftRef = useRef(false);
   const hasHydratedAiDraftRef = useRef(false);
   const isNewCampaign = !id || id === 'new';
+  const { activePause } = useLatestRunPause(isNewCampaign ? null : id);
   const shouldBlockNavigation = isRunning || isDirty;
   const navigationBlocker = useBrowserRouterBlocker(shouldBlockNavigation);
   const {
@@ -963,15 +967,74 @@ const CampaignBuilder = () => {
 
   const canUseServerRunActions = !isNewCampaign && Boolean(id);
 
+  const checkZaloPhoneLookupCooldown = async () => {
+    if (runController.isZaloGroupCampaign(campaignForServerActions)) return true;
+    const normalizedType = String(campaignType || '').trim().toLowerCase();
+    const isPersonalOrFriendType = normalizedType === 'zalo' || normalizedType === 'zalo_personal'
+      || normalizedType === 'zalo-individual' || normalizedType === 'zalo_individual';
+    const getNodeType = (n) => String(n?.data?.nodeType || n?.data?.nodeSubtype || n?.nodeSubtype || n?.type || '').toLowerCase();
+    const hasZaloPersonalNode = (nodes || []).some((n) => {
+      const t = getNodeType(n);
+      return t === 'send_zalo_personal' || t === 'send_zalo_friend_request';
+    });
+    if (!isPersonalOrFriendType && !hasZaloPersonalNode) return true;
+
+    const selectZaloNode = (nodes || []).find((n) => {
+      const t = getNodeType(n);
+      return t === 'select_zalo_account';
+    });
+    if (!selectZaloNode) return true;
+
+    const config = selectZaloNode.data?.config || selectZaloNode.config || {};
+    const poolOn = Boolean(config.zaloPoolMultiAccountEnabled);
+    const selectedAccountIds = poolOn && Array.isArray(config.zaloPoolAccountIds) && config.zaloPoolAccountIds.length > 0
+      ? config.zaloPoolAccountIds.map(String)
+      : (config.zaloAccountId ? [String(config.zaloAccountId)] : []);
+    if (selectedAccountIds.length === 0) return true;
+
+    try {
+      const zaloAccounts = await fetchZaloAccountOptions();
+      const nowMs = Date.now();
+      const cooldownAccount = zaloAccounts.find((acc) => {
+        if (!selectedAccountIds.includes(String(acc.id))) return false;
+        const untilMs = acc.phoneLookupCooldownUntil ? new Date(acc.phoneLookupCooldownUntil).getTime() : 0;
+        return untilMs > nowMs;
+      });
+
+      if (cooldownAccount) {
+        const untilStr = formatCampaignDateTime(cooldownAccount.phoneLookupCooldownUntil);
+        const accountName = cooldownAccount.displayName || t('campaignRun.zaloAccountFallback');
+        const confirmed = window.confirm(
+          t('campaignBuilder.phoneLookupCooldownConfirm', {
+            account: accountName,
+            until: untilStr,
+          })
+        );
+        if (!confirmed) return false;
+      }
+    } catch {
+      // Bỏ qua lỗi fetch danh sách tài khoản để không chặn hành vi gửi nếu API gặp sự cố
+    }
+    return true;
+  };
+
   // Không bọc useCallback: cả ba chỉ gắn vào nút/hộp thoại trong chính trang này (không có component
   // ghi nhớ nào nhận), mà `runController` và `handleSave` đều tạo mới mỗi render nên memo hoá chỉ
   // tạo cảm giác tối ưu giả.
   const startServerAction = async (action) => {
+    const canProceed = await checkZaloPhoneLookupCooldown();
+    if (!canProceed) return;
     if (action === 'run') {
       await runController.openRunConfirmModal(campaignForServerActions);
       return;
     }
     runController.openScheduleModal(campaignForServerActions);
+  };
+
+  const handleSaveScheduleWithCooldownCheck = async () => {
+    const canProceed = await checkZaloPhoneLookupCooldown();
+    if (!canProceed) return;
+    await runController.handleSaveSchedule();
   };
 
   const requestServerAction = (action) => {
@@ -1080,6 +1143,7 @@ const CampaignBuilder = () => {
       onDeleteNode={handleDeleteNode}
       setNodeToConfig={setNodeToConfig}
       setShowConfigModal={setShowConfigModal}
+      activePause={activePause}
       showRunLogs={showRunLogs}
       isResizingLog={isResizingLog}
       onLogResizeStart={handleLogResizeStart}
@@ -1151,7 +1215,7 @@ const CampaignBuilder = () => {
         closeScheduleModal={runController.closeScheduleModal}
         scheduleForm={runController.scheduleForm}
         setScheduleForm={runController.setScheduleForm}
-        handleSaveSchedule={runController.handleSaveSchedule}
+        handleSaveSchedule={handleSaveScheduleWithCooldownCheck}
         showScheduleDetailModal={runController.showScheduleDetailModal}
         selectedSchedule={runController.selectedSchedule}
         closeScheduleDetailModal={runController.closeScheduleDetailModal}

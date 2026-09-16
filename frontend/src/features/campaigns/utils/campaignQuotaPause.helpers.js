@@ -42,6 +42,9 @@ export function getActiveRunPause(runMetadata) {
       untilMs,
       reason,
       kind: fam.kind,
+      ...(fam.kind === 'zalo'
+        ? { accountName: runMetadata.zaloDeferredAccountName || null }
+        : {}),
     };
   }
 
@@ -61,7 +64,22 @@ export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
     (typeof pauseOrKind === 'object' ? pauseOrKind?.reason : maybeReason) || ''
   ).trim();
 
-  if (kind === 'zalo') return 'campaignRun.zaloPausedUntil';
+  if (kind === 'zalo') {
+    if (
+      reason === 'phone_lookup_cooldown'
+      || reason === 'phone_lookup_cooldown_api_error'
+      || reason === 'all_accounts_phone_lookup_cooldown'
+    ) {
+      return 'campaignRun.zaloPhoneLookupPausedUntil';
+    }
+    if (reason === 'quiet_hours') {
+      return 'campaignRun.zaloQuietHoursUntil';
+    }
+    if (reason === 'rate_limited') {
+      return 'campaignRun.zaloRateLimitedUntil';
+    }
+    return 'campaignRun.zaloPausedUntil';
+  }
   if (kind === 'non_continuous') {
     if (reason === 'all_recipients_waiting_next_due') {
       return 'campaignRun.waitingNextDueUntil';

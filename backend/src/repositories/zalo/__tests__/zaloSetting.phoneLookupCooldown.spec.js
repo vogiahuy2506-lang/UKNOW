@@ -47,4 +47,14 @@ describe('zaloSetting.repository — phone lookup cooldown (PR-2b)', () => {
     expect(sql).toMatch(/FROM\s+zalo_settings/i);
     expect(sql).toMatch(/phone_lookup_cooldown_until\s*>\s*NOW\(\)/i);
   });
+
+  it('findAccountsList SELECT phone_lookup_cooldown_until::timestamptz (PR-A)', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await repository.findAccountsList(false, 10);
+
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql] = query.mock.calls[0];
+    expect(sql).toMatch(/phone_lookup_cooldown_until::timestamptz\s+AS\s+phone_lookup_cooldown_until/i);
+  });
 });
