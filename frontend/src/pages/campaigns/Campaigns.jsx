@@ -27,6 +27,8 @@ import { getActiveRunPause, getRunPauseI18nKey } from '../../features/campaigns/
 import { useAuthStore } from '../../stores/authStore';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import CampaignMarketplaceModal from '../../components/campaigns/CampaignMarketplaceModal';
+import CampaignShareModal from '../../features/campaigns/components/CampaignShareModal';
+import CampaignDuplicateModal from '../../features/campaigns/components/CampaignDuplicateModal';
 import useCampaignRunController from '../../features/campaigns/hooks/useCampaignRunController';
 import useCampaignRunDerivedData from '../../features/campaigns/hooks/useCampaignRunDerivedData';
 import CampaignRunLogsPanel from '../../features/campaigns/components/CampaignRunLogsPanel';
@@ -74,13 +76,9 @@ const Campaigns = () => {
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuButtonRefs = useRef({});
   const [duplicateModal, setDuplicateModal] = useState({ show: false, campaign: null });
-  const [duplicateName, setDuplicateName] = useState('');
-  const [isDuplicating, setIsDuplicating] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [showShareModal, setShowShareModal] = useState({ show: false, campaign: null });
-  const [isSharing, setIsSharing] = useState(false);
-  const [shareForm, setShareForm] = useState({ email: '', shareType: 'view', canRun: false });
   const [approveModal, setApproveModal] = useState({ show: false, campaign: null });
   const [isApproving, setIsApproving] = useState(false);
   const [rejectModal, setRejectModal] = useState({ show: false, campaign: null, reason: '' });
@@ -235,72 +233,21 @@ const Campaigns = () => {
 
   const openDuplicateModal = (campaign) => {
     setDuplicateModal({ show: true, campaign });
-    setDuplicateName(`${campaign.campaignName} (${t('campaigns.copy')})`);
     setActiveMenu(null);
   };
 
   const closeDuplicateModal = () => {
     setDuplicateModal({ show: false, campaign: null });
-    setDuplicateName('');
   };
 
   // Share modal handlers
   const openShareModal = (campaign) => {
-    setShareForm({ email: '', shareType: 'view', canRun: false });
     setShowShareModal({ show: true, campaign });
     setActiveMenu(null);
   };
 
   const closeShareModal = () => {
     setShowShareModal({ show: false, campaign: null });
-    setShareForm({ email: '', shareType: 'view', canRun: false });
-  };
-
-  const handleShare = async () => {
-    if (!shareForm.email.trim()) {
-      toast.error(t('campaigns.enterEmail'));
-      return;
-    }
-    if (!shareForm.email.includes('@')) {
-      toast.error(t('campaigns.invalidEmail'));
-      return;
-    }
-
-    setIsSharing(true);
-    try {
-      await campaignApiService.shareCampaign(showShareModal.campaign.id, {
-        recipientEmail: shareForm.email.trim(),
-        shareType: shareForm.shareType,
-        canRun: shareForm.canRun,
-      });
-      toast.success(t('campaigns.shareSuccess'));
-      closeShareModal();
-    } catch (error) {
-      toast.error(error.response?.data?.message || t('campaigns.shareFailed'));
-    } finally {
-      setIsSharing(false);
-    }
-  };
-
-  const handleDuplicate = async () => {
-    if (!duplicateName.trim()) {
-      toast.error(t('campaigns.enterCampaignName'));
-      return;
-    }
-
-    setIsDuplicating(true);
-    try {
-      await campaignApiService.duplicateCampaign(duplicateModal.campaign.id, {
-        campaignName: duplicateName.trim()
-      });
-      toast.success(t('campaigns.duplicateSuccess'));
-      closeDuplicateModal();
-      fetchCampaigns();
-    } catch (error) {
-      toast.error(error.response?.data?.message || t('campaigns.duplicateFailed'));
-    } finally {
-      setIsDuplicating(false);
-    }
   };
 
   const handleApprove = async () => {
@@ -1031,61 +978,12 @@ const Campaigns = () => {
         </>
       )}
 
-      {/* Modal nhân bản chiến dịch */}
-      {duplicateModal.show && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50"
-            onClick={closeDuplicateModal}
-          />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">{t('campaigns.duplicateModalTitle')}</h3>
-            </div>
-            <div className="px-6 py-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('campaigns.newCampaignName')}
-              </label>
-              <input
-                type="text"
-                value={duplicateName}
-                onChange={(e) => setDuplicateName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleDuplicate();
-                  if (e.key === 'Escape') closeDuplicateModal();
-                }}
-                placeholder={t('campaigns.newCampaignNamePlaceholder')}
-                className="input w-full"
-                autoFocus
-              />
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
-              <button
-                onClick={closeDuplicateModal}
-                disabled={isDuplicating}
-                className="btn btn-secondary"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={handleDuplicate}
-                disabled={isDuplicating}
-                className="btn btn-primary"
-              >
-                {isDuplicating ? (
-                  <>
-                    <div className="spinner w-4 h-4 mr-2"></div>
-                    {t('common.processing')}
-                  </>
-                ) : (
-                  t('campaigns.duplicate')
-                )}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <CampaignDuplicateModal
+        campaign={duplicateModal.campaign}
+        open={duplicateModal.show}
+        onClose={closeDuplicateModal}
+        onDone={fetchCampaigns}
+      />
 
       {showCreateModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1166,93 +1064,11 @@ const Campaigns = () => {
         document.body
       )}
 
-      {/* Modal chia sẻ chiến dịch */}
-      {showShareModal.show && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={closeShareModal}
-          />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {t('campaigns.shareModalTitle') || 'Chia sẻ chiến dịch'}
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {showShareModal.campaign?.campaignName}
-              </p>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('campaigns.recipientEmail') || 'Email người nhận'}
-                </label>
-                <input
-                  type="email"
-                  value={shareForm.email}
-                  onChange={(e) => setShareForm({ ...shareForm, email: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleShare();
-                    if (e.key === 'Escape') closeShareModal();
-                  }}
-                  placeholder="email@example.com"
-                  className="input w-full"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('campaigns.sharePermission') || 'Quyền chia sẻ'}
-                </label>
-                <select
-                  value={shareForm.shareType}
-                  onChange={(e) => setShareForm({ ...shareForm, shareType: e.target.value })}
-                  className="input w-full"
-                >
-                  <option value="view">{t('campaigns.viewOnly') || 'Chỉ xem'}</option>
-                  <option value="edit">{t('campaigns.viewAndEdit') || 'Xem và chỉnh sửa'}</option>
-                </select>
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="canRun"
-                  checked={shareForm.canRun}
-                  onChange={(e) => setShareForm({ ...shareForm, canRun: e.target.checked })}
-                  className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
-                />
-                <label htmlFor="canRun" className="ml-2 text-sm text-gray-700">
-                  {t('campaigns.canRunCampaign') || 'Cho phép chạy chiến dịch'}
-                </label>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
-              <button
-                onClick={closeShareModal}
-                disabled={isSharing}
-                className="btn btn-secondary"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={handleShare}
-                disabled={isSharing}
-                className="btn btn-primary"
-              >
-                {isSharing ? (
-                  <>
-                    <div className="spinner w-4 h-4 mr-2"></div>
-                    {t('common.processing')}
-                  </>
-                ) : (
-                  t('campaigns.share')
-                )}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <CampaignShareModal
+        campaign={showShareModal.campaign}
+        open={showShareModal.show}
+        onClose={closeShareModal}
+      />
 
       {/* Modal Duyệt chiến dịch */}
       {approveModal.show && approveModal.campaign && createPortal(

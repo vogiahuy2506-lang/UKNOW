@@ -37,6 +37,8 @@ import {
 } from '../../features/campaigns/utils/campaignNodeClipboard';
 import CampaignBuilderPageLayout from '../../features/campaigns/components/CampaignBuilderPageLayout';
 import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
+import CampaignShareModal from '../../features/campaigns/components/CampaignShareModal';
+import CampaignDuplicateModal from '../../features/campaigns/components/CampaignDuplicateModal';
 import { ConfirmModal } from '../../features/campaigns/components/CampaignBuilderLayout';
 import useCampaignRunController from '../../features/campaigns/hooks/useCampaignRunController';
 import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCampaignBuilderLayoutState';
@@ -85,6 +87,14 @@ const CampaignBuilder = () => {
   const [campaignDescription, setCampaignDescription] = useState('');
   const [campaignType, setCampaignType] = useState('email');
   const [campaignStatus, setCampaignStatus] = useState('draft');
+  /**
+   * Nguồn gốc chiến dịch (`self_created` / `marketplace_purchased` / bản được chia sẻ) — API chi
+   * tiết trước đây không trả trường này (getCampaignById), đã bổ sung 1 dòng ở backend
+   * (PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16, PR-2). Dùng để ẩn nút "Chia sẻ": chiến
+   * dịch mua ở Marketplace hay được người khác chia sẻ mà vẫn cho chia sẻ tiếp là lỗi quyền —
+   * KHÔNG mặc định cho hiện khi `null` (đang tải/chưa có id).
+   */
+  const [campaignOrigin, setCampaignOrigin] = useState(null);
   const [lastSavedTime, setLastSavedTime] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const [runLogs, setRunLogs] = useState([]);
@@ -387,6 +397,7 @@ const CampaignBuilder = () => {
         setCampaignDescription(campaignData.description || '');
         setCampaignType(campaignData.campaignType || 'email');
         setCampaignStatus(campaignData.status || 'draft');
+        setCampaignOrigin(campaignData.origin || null);
         setLastSavedTime(campaignData.updatedAt || campaignData.createdAt || new Date().toISOString());
         const { nodes: loadedNodes, edges: loadedEdges } = buildFlowFromCampaign(campaignData);
         const arr = Array.isArray(loadedNodes) ? loadedNodes : [];
@@ -1057,6 +1068,30 @@ const CampaignBuilder = () => {
     await startServerAction(action);
   };
 
+  // ------------------------------------------------------------------
+  // "Chia sẻ" + "Nhân bản" trong thanh công cụ trình dựng
+  // (PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md, PR-2) — tái dùng 2 modal đã tách
+  // khỏi Campaigns.jsx. Nhân bản xong hỏi "Mở bản sao?" rồi mới điều hướng, không tự động ngầm.
+  // ------------------------------------------------------------------
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicatedCampaignId, setDuplicatedCampaignId] = useState(null);
+  const canShare = campaignOrigin === 'self_created';
+
+  const handleDuplicateDone = (duplicated) => {
+    setShowDuplicateModal(false);
+    const newId = duplicated?.id;
+    if (!newId) return;
+    setDuplicatedCampaignId(newId);
+  };
+
+  const handleOpenDuplicatedCampaign = () => {
+    const targetId = duplicatedCampaignId;
+    setDuplicatedCampaignId(null);
+    if (!targetId) return;
+    navigate(`/app/campaigns/${targetId}/builder`);
+  };
+
   /**
    * Leave builder safely while preview run may still be in progress.
    *
@@ -1103,6 +1138,9 @@ const CampaignBuilder = () => {
       onOpenSchedule={() => requestServerAction('schedule')}
       canUseServerRunActions={canUseServerRunActions}
       serverRunActionsDisabledHint={t('campaignBuilder.saveCampaignFirst')}
+      onOpenShare={() => setShowShareModal(true)}
+      canShare={canShare}
+      onOpenDuplicate={() => setShowDuplicateModal(true)}
       builderSidebarWidth={builderSidebarWidth}
       searchTerm={searchTerm}
       setSearchTerm={setSearchTerm}
@@ -1243,6 +1281,29 @@ const CampaignBuilder = () => {
         confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
         iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
         iconColorClassName="w-6 h-6 text-amber-600"
+      />
+      <CampaignShareModal
+        campaign={campaignForServerActions}
+        open={showShareModal}
+        onClose={() => setShowShareModal(false)}
+      />
+      <CampaignDuplicateModal
+        campaign={campaignForServerActions}
+        open={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        onDone={handleDuplicateDone}
+      />
+      <ConfirmModal
+        isOpen={Boolean(duplicatedCampaignId)}
+        onClose={() => setDuplicatedCampaignId(null)}
+        onConfirm={handleOpenDuplicatedCampaign}
+        title={t('campaignBuilder.duplicateSuccessTitle')}
+        message={t('campaignBuilder.duplicateSuccessMessage')}
+        confirmLabel={t('campaignBuilder.openDuplicate')}
+        cancelLabel={t('campaignBuilder.stay')}
+        confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
+        iconClassName="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0"
+        iconColorClassName="w-6 h-6 text-emerald-600"
       />
     </>
   );

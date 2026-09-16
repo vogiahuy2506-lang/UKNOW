@@ -113,6 +113,7 @@ class CampaignCrudService {
       description: campaign.description,
       campaignType: campaign.campaign_type,
       status: campaign.status,
+      origin: campaign.origin,
       flowJson: campaign.flow_json,
       landingPageUrl: campaign.landing_page_url,
       startDate: campaign.start_date,

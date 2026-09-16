@@ -1,6 +1,8 @@
 import {
   HiOutlineClock,
+  HiOutlineDuplicate,
   HiOutlineLightningBolt,
+  HiOutlineMail,
   HiOutlinePlay,
   HiOutlineSave,
   HiOutlineStop,
@@ -26,6 +28,10 @@ const BASE_BUTTON_CLASS = 'px-2.5 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base ro
  * @param {boolean} props.isRunning đang chạy thử
  * @param {() => void} props.onStopRun dừng chạy thử
  * @param {() => void} props.onOpenNameModal mở hộp lưu
+ * @param {() => void} props.onOpenShare mở hộp chia sẻ — chỉ hiện khi `canShare`
+ * @param {boolean} [props.canShare=false] chiến dịch tự tạo (`origin === 'self_created'`) — không
+ *   mặc định hiện khi thiếu dữ liệu, cho hiện oan là lỗi quyền (chiến dịch mua/được chia sẻ)
+ * @param {() => void} props.onOpenDuplicate mở hộp nhân bản
  */
 const CampaignBuilderToolbar = ({
   onRunNow,
@@ -36,6 +42,9 @@ const CampaignBuilderToolbar = ({
   isRunning,
   onStopRun,
   onOpenNameModal,
+  onOpenShare,
+  canShare = false,
+  onOpenDuplicate,
 }) => {
   const { t } = useI18n();
 
@@ -90,6 +99,30 @@ const CampaignBuilderToolbar = ({
       >
         <HiOutlineSave className="w-4 h-4" />
         {t('campaignBuilder.save')}
+      </button>
+      {canShare && (
+        <button
+          onClick={onOpenShare}
+          disabled={!canUseServerRunActions}
+          title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
+          className={`${BASE_BUTTON_CLASS} ${
+            !canUseServerRunActions ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          <HiOutlineMail className="w-4 h-4" />
+          {t('campaignBuilder.share')}
+        </button>
+      )}
+      <button
+        onClick={onOpenDuplicate}
+        disabled={!canUseServerRunActions}
+        title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
+        className={`${BASE_BUTTON_CLASS} ${
+          !canUseServerRunActions ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+        }`}
+      >
+        <HiOutlineDuplicate className="w-4 h-4" />
+        {t('campaignBuilder.duplicate')}
       </button>
     </div>
   );

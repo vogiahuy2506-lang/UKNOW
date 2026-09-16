@@ -130,6 +130,9 @@ const CampaignBuilderPageLayout = ({
   onOpenSchedule,
   canUseServerRunActions = false,
   serverRunActionsDisabledHint = '',
+  onOpenShare,
+  canShare = false,
+  onOpenDuplicate,
   builderSidebarWidth,
   searchTerm,
   setSearchTerm,
@@ -271,6 +274,9 @@ const CampaignBuilderPageLayout = ({
           isRunning={isRunning}
           onStopRun={onStopRun}
           onOpenNameModal={onOpenNameModal}
+          onOpenShare={onOpenShare}
+          canShare={canShare}
+          onOpenDuplicate={onOpenDuplicate}
         />
       </div>
     </div>

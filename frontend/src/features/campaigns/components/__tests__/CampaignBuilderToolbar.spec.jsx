@@ -20,6 +20,9 @@ function renderToolbar(overrides = {}) {
     isRunning: false,
     onStopRun: vi.fn(),
     onOpenNameModal: vi.fn(),
+    onOpenShare: vi.fn(),
+    canShare: true,
+    onOpenDuplicate: vi.fn(),
     ...overrides,
   };
   render(
@@ -31,13 +34,15 @@ function renderToolbar(overrides = {}) {
 }
 
 describe('CampaignBuilderToolbar', () => {
-  it('có đủ 5 nút, hai nhãn chạy KHÁC hẳn nhau', () => {
+  it('có đủ 7 nút, hai nhãn chạy KHÁC hẳn nhau', () => {
     renderToolbar();
     expect(screen.getByRole('button', { name: 'Chạy ngay' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lên lịch' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Chạy thử' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dừng' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lưu' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chia sẻ' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nhân bản' })).toBeInTheDocument();
     // Không còn nhãn trống nghĩa "Chạy" đứng cạnh "Chạy ngay".
     expect(screen.queryByRole('button', { name: 'Chạy' })).not.toBeInTheDocument();
   });
@@ -58,6 +63,40 @@ describe('CampaignBuilderToolbar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
     expect(props.onOpenNameModal).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chia sẻ' }));
+    expect(props.onOpenShare).toHaveBeenCalledTimes(1);
+    expect(props.onOpenDuplicate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nhân bản' }));
+    expect(props.onOpenDuplicate).toHaveBeenCalledTimes(1);
+    expect(props.onOpenShare).toHaveBeenCalledTimes(1);
+  });
+
+  // PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md — PR-2, mục "GIẢ ĐỊNH đã đo xong":
+  // API chi tiết chiến dịch không trả origin trước đây; nay đã bổ sung. Nút "Chia sẻ" KHÔNG được
+  // mặc định hiện khi thiếu dữ liệu — chiến dịch mua Marketplace/được chia sẻ mà vẫn chia sẻ tiếp
+  // là lỗi quyền, giống hệt luật ở Campaigns.jsx:936.
+  it('canShare=false (chiến dịch không tự tạo) → nút Chia sẻ KHÔNG render; Nhân bản vẫn còn', () => {
+    renderToolbar({ canShare: false });
+    expect(screen.queryByRole('button', { name: 'Chia sẻ' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nhân bản' })).toBeInTheDocument();
+  });
+
+  it('chiến dịch chưa lưu lần nào → Chia sẻ/Nhân bản cũng vô hiệu kèm tooltip như 2 nút gửi thật', () => {
+    const props = renderToolbar({ canUseServerRunActions: false });
+
+    const share = screen.getByRole('button', { name: 'Chia sẻ' });
+    const duplicate = screen.getByRole('button', { name: 'Nhân bản' });
+    expect(share).toBeDisabled();
+    expect(duplicate).toBeDisabled();
+    expect(share).toHaveAttribute('title', 'Lưu chiến dịch trước đã');
+    expect(duplicate).toHaveAttribute('title', 'Lưu chiến dịch trước đã');
+
+    fireEvent.click(share);
+    fireEvent.click(duplicate);
+    expect(props.onOpenShare).not.toHaveBeenCalled();
+    expect(props.onOpenDuplicate).not.toHaveBeenCalled();
   });
 
   it('chiến dịch chưa lưu lần nào → 2 nút gửi thật vô hiệu kèm tooltip, chạy thử vẫn bấm được', () => {
