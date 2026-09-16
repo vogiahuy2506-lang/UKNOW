@@ -108,6 +108,7 @@ export default {
       emptyNoResultsDesc: 'Try adjusting your filters',
       emptyNoListingsTitle: 'No templates yet',
       emptyNoListingsDesc: 'Be the first to post a listing',
+      postListingButton: 'Post template',
       createListing: 'Create listing',
       tabBrowse: 'Browse',
       tabMine: 'Mine',
@@ -1797,6 +1798,9 @@ export default {
     cancelSuccess: 'Order cancelled and QR disabled',
     cancelFailed: 'Failed to cancel order',
     status: 'Status',
+    ordersTable: {
+      order: 'Order',
+    },
   },
 
   adminOrders: {
@@ -2428,6 +2432,28 @@ export default {
     loadMore: 'Load more messages',
     selectConversation: 'Select a conversation',
     startConversation: 'Start a conversation',
+    anonymousUser: 'User',
+    group: 'Group',
+    sent: 'Sent',
+    read: 'Read',
+    imageLoadFailed: 'Failed to load image',
+    download: 'Download',
+    attachments: 'Attachments',
+    sticker: 'Sticker',
+    image: 'Image',
+    video: 'Video',
+    audio: 'Audio',
+    file: 'File',
+    location: 'Location',
+    notificationsOn: 'Turn on notifications',
+    notificationsOff: 'Turn off notifications',
+    replyingToThis: 'Replying to this message',
+    mediaMessage: '📎 Attachment',
+    emoji: 'Emoji',
+    uploadImage: 'Upload image',
+    uploadFile: 'Upload file',
+    searchMessages: 'Search messages...',
+    results: 'results',
     typeMessage: 'Type a message...',
     enterTip: 'Press Enter to send, Shift+Enter for new line',
     send: 'Send',
@@ -3198,6 +3224,7 @@ export default {
   },
 
   errors: {
+    copyFailed: 'Copy failed',
     networkError: 'Network error',
     serverError: 'Server error',
     notFound: 'Not found',
@@ -3293,6 +3320,8 @@ export default {
   },
 
   emailSettings: {
+    modeCustomDomain: 'Custom Domain',
+    modeCustomDomainDesc: 'Send emails from your own domain after DNS verification.',
     title: 'Email Settings',
     subtitle: 'Manage sending emails for campaigns',
     listTitle: 'Email list',
@@ -4277,6 +4306,7 @@ export default {
   },
 
   contact: {
+    viewPricing: 'View pricing',
     getInTouch: 'Get in touch with us',
     fillForm: 'Fill the form below to contact us.',
     name: 'Full Name',
@@ -5483,6 +5513,7 @@ export default {
 
   // Node Config - Interested Customers
   nodeConfig: {
+    takingAllMode: 'In taking all mode (default). Continuous will automatically fetch new customers periodically.',
     basicInfo: 'Basic Info',
     noCourses: 'No courses found',
     takingAll: 'Taking all courses',
@@ -5706,7 +5737,7 @@ export default {
     featuresLabel: 'Display features',
     featuresSublabel: '(pricing page)',
     featuresPlaceholder: 'Add feature... (Press Enter to add)',
-    featuresPlaceholderVi: 'Vietnamese (bắt buộc)',
+    featuresPlaceholderVi: 'Vietnamese (required)',
     featuresPlaceholderEn: 'English (optional)',
     emailPerDay: 'Email / day',
     emailPerMonth: 'Email / month',
@@ -5912,6 +5943,12 @@ export default {
 
   // Template Gallery
   templateGallery: {
+    makePublic: 'Make Public',
+    makePrivate: 'Make Private',
+    confirmMakePublic: 'Are you sure you want to make this template public?',
+    confirmMakePrivate: 'Are you sure you want to make this template private?',
+    publicSuccess: 'Template made public',
+    privateSuccess: 'Template made private',
     searchTemplate: 'Search template...',
     templatePreview: 'Template Preview',
     preview: 'Preview',
@@ -7619,6 +7656,7 @@ Feel free to ask me anything!`,
     noFailures: 'No failures recorded.',
     noRecentErrors: 'No recent errors.',
     kpi: {
+      reachRate: 'Reach: {rate} / {total} people',
       sent: 'Messages sent',
       failed: 'Failed messages',
       clicked: 'Link clicks',
@@ -7849,6 +7887,7 @@ Feel free to ask me anything!`,
       zalo_silent_drop_high: 'Zalo did not confirm delivery; this may relate to sending limits or anti-spam. Slow down sending and check the account.',
     },
     kpi: {
+      reachRate: 'Reach: {rate} / {total} people',
       sent: 'Messages sent',
       failed: 'Failed',
       clicked: 'Link clicks',
@@ -8360,7 +8399,7 @@ Feel free to ask me anything!`,
     saveFailed: 'Save failed',
     featureKeyPlaceholder: '— Select a topic —',
     featureKeyHint: 'Decides which group the article appears under in Help, and which article the "?" icon opens on the matching screen.',
-    seedConfirmPrompt: 'WARNING: Seeding OVERWRITES every sample article with the version from source code. Any images you inserted by hand are replaced by [ẢNH: ...] placeholders and CANNOT be recovered.\n\nOnly use this to reset articles to their original text.\n\nType SEED to confirm:',
+    seedConfirmPrompt: 'WARNING: Seeding OVERWRITES every sample article with the version from source code. Any images you inserted by hand are replaced by [IMAGE: ...] placeholders and CANNOT be recovered.\n\nOnly use this to reset articles to their original text.\n\nType SEED to confirm:',
     seedConfirmMismatch: 'You did not type SEED — cancelled, nothing changed.',
     seedGroup1: 'Reset sample articles (overwrites)',
     seeding: 'Seeding...',
