@@ -85,6 +85,7 @@ const CampaignRunModals = ({
   campaignSchedulesModalCampaign = null,
   closeCampaignSchedulesSummaryModal,
   allSchedules = [],
+  canEditSchedules = true,
 }) => {
   const { t } = useI18n();
   return (
@@ -651,6 +652,40 @@ const CampaignRunModals = ({
                           <span className="font-medium">{getScheduleRunTimingFieldLabelVi(sch)}:</span>{' '}
                           {getScheduleNextRunUiLabel(sch, t)}
                         </p>
+                        {canEditSchedules && (
+                          <div
+                            className="flex items-center gap-2 pt-1"
+                            title={isReadonlyOnceSchedule(sch) ? t('campaignRun.scheduleLockedOneTimeTooltip') : undefined}
+                          >
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={Boolean(sch.enabled)}
+                              aria-label={sch.enabled ? t('campaignRun.disableSchedule') : t('campaignRun.enableSchedule2')}
+                              disabled={isReadonlyOnceSchedule(sch)}
+                              onClick={() => {
+                                if (isReadonlyOnceSchedule(sch)) return;
+                                handleToggleSchedule(sch.id, sch.enabled);
+                              }}
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                                isReadonlyOnceSchedule(sch) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                              } ${sch.enabled ? 'bg-primary-600' : 'bg-gray-200'}`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                  sch.enabled ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                            <span
+                              className={`text-xs font-medium select-none ${
+                                isReadonlyOnceSchedule(sch) ? 'text-gray-400' : 'text-gray-700'
+                              }`}
+                            >
+                              {sch.enabled ? t('campaignRun.switchOn') : t('campaignRun.switchOff')}
+                            </span>
+                          </div>
+                        )}
                       </li>
                     );
                   })}

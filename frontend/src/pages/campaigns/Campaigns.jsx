@@ -1413,6 +1413,7 @@ const Campaigns = () => {
         campaignSchedulesModalCampaign={runController.campaignSchedulesModalCampaign}
         closeCampaignSchedulesSummaryModal={runController.closeCampaignSchedulesSummaryModal}
         allSchedules={runController.schedules}
+        canEditSchedules={canEditSchedules}
       />
 
     </div>
