@@ -198,6 +198,34 @@ describe('ingestLandingAttachments — tệp lỗi không làm hỏng cả lư�
     });
   });
 
+  it('imagesOnly (nút Tải ảnh ở Cài đặt trang): tài liệu bị từ chối với câu "Chỉ nhận ảnh", không phí công đọc chữ', async () => {
+    serveTempFiles({ t_doc: DOC });
+
+    await expect(
+      ingestLandingAttachments({
+        files: [{ tempId: 't_doc', originalName: 'brochure.doc', contentType: 'application/msword' }],
+        ownerUserId: 39,
+        imagesOnly: true,
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('Chỉ nhận ảnh'),
+    });
+  });
+
+  it('imagesOnly vẫn nhận ảnh bình thường', async () => {
+    serveTempFiles({ t_png: PNG_1x1 });
+
+    const res = await ingestLandingAttachments({
+      files: [{ tempId: 't_png', originalName: 'logo.png', contentType: 'image/png' }],
+      ownerUserId: 39,
+      imagesOnly: true,
+    });
+
+    expect(res.assets).toHaveLength(1);
+    expect(res.skipped).toHaveLength(0);
+  });
+
   it('lỗi kho lưu trữ là lỗi HỆ THỐNG → ném ra ngoài, không âm thầm bỏ qua tệp', async () => {
     serveTempFiles({ t_png: PNG_1x1 });
     mockPut.mockRejectedValueOnce(new Error('GCS 503'));

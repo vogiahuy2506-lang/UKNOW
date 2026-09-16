@@ -428,6 +428,7 @@ class LandingPageAdminController {
         ownerUserId: context.workspaceOwnerId,
         actorUserId: req.user.id,
         landingPageId: resolvedLandingPageId,
+        imagesOnly: true,
       });
 
       if (documents.length > 0 || assets.length === 0) {

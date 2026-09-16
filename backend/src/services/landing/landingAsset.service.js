@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import convertHeic from 'heic-convert';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { validateFile } from '../chatbot/chatAttachment.service.js';
@@ -28,7 +27,12 @@ export function buildLandingAssetUrl(storageKey) {
 }
 
 /**
- * Chuyển đổi ảnh HEIC sang JPEG có timeout 20s
+ * Chuyển đổi ảnh HEIC sang JPEG có timeout 20s.
+ *
+ * `heic-convert` kéo theo `libheif-js` (wasm) — nạp LƯỜI, chỉ khi thật sự có ảnh HEIC:
+ * import ở đầu file làm mọi tiến trình nạp module này phải dựng wasm (đo 16/09: +32 MB RSS mỗi
+ * lần nạp), và trong một lượt `jest --runInBand` thì 75 suite integration cùng trả giá đó → heap
+ * phình tới 3,8 GB rồi chết. Backend production cũng không phải gánh wasm lúc khởi động.
  */
 async function convertHeicWithTimeout(buffer, timeoutMs = HEIC_CONVERT_TIMEOUT_MS) {
   let timer;
@@ -36,6 +40,7 @@ async function convertHeicWithTimeout(buffer, timeoutMs = HEIC_CONVERT_TIMEOUT_M
     timer = setTimeout(() => reject(new Error('Quá thời gian chuyển đổi ảnh HEIC (20s)')), timeoutMs);
   });
   try {
+    const { default: convertHeic } = await import('heic-convert');
     const res = await Promise.race([
       convertHeic({
         buffer,
@@ -77,6 +82,8 @@ async function extractDocWithTimeout(buffer, originalName, mime) {
  * @param {number|string} [params.actorUserId]
  * @param {number|string|null} [params.landingPageId]
  * @param {string} [params.profile='landing']
+ * @param {boolean} [params.imagesOnly=false] - Nút "Tải ảnh" ở Cài đặt trang: tài liệu bị từ chối
+ *   ngay với lý do đọc được, không phí công trích xuất chữ rồi mới báo lỗi ở controller.
  * @returns {Promise<{ assets: Array<object>, documents: Array<object>, skipped: Array<object> }>}
  */
 export async function ingestLandingAttachments({
@@ -85,6 +92,7 @@ export async function ingestLandingAttachments({
   actorUserId = null,
   landingPageId = null,
   profile = 'landing',
+  imagesOnly = false,
 }) {
   const ownerId = Number(ownerUserId);
   if (!ownerId) {
@@ -200,6 +208,13 @@ export async function ingestLandingAttachments({
           base64: inlineForModel ? buffer.toString('base64') : null,
         });
       } else if (validation.kind === 'doc') {
+        if (imagesOnly) {
+          skipped.push({
+            originalName: file.originalName || fileName,
+            reason: 'Chỉ nhận ảnh PNG/JPG/WebP/GIF/HEIC',
+          });
+          continue;
+        }
         if (totalDocChars >= TEXT_BUDGET_CHARS) {
           skipped.push({
             originalName: file.originalName || fileName,
