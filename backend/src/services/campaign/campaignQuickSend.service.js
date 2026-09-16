@@ -93,7 +93,7 @@ class CampaignQuickSendService {
         sourceType: 'quick_send',
         normalizeEmailList: (v) => emailSettingsController.normalizeEmailList(v),
         buildTrackedHtml: (...args) => emailSettingsController.buildTrackedHtml(...args),
-        buildMailAttachments: (items) => emailSettingsController.buildMailAttachments(items),
+        buildMailAttachments: (items) => emailSettingsController.buildMailAttachments(items, workspaceOwnerId),
         createSmtpTransporter: (input) => emailSettingsController.createSmtpTransporter(input),
         formatUtc7: () => emailSettingsController.formatUtc7(),
       });
@@ -121,7 +121,10 @@ class CampaignQuickSendService {
       accountId,
     });
 
-    const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(attachments);
+    const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(
+      attachments,
+      { ownerUserId: workspaceOwnerId }
+    );
 
     // 3. Reserve quota atomically
     const requestKey = resolvedIdempotencyKey;

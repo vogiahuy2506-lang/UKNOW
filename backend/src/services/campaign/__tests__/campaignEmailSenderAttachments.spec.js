@@ -79,7 +79,7 @@ describe('Finding 1: campaignEmailSenderService đọc attachments khi không d�
       { emailStep: 1 }
     );
 
-    expect(buildAttachmentsSpy).toHaveBeenCalledWith([dummyAttachment]);
+    expect(buildAttachmentsSpy).toHaveBeenCalledWith([dummyAttachment], 1);
     expect(rawEmailParams).not.toBeNull();
     expect(rawEmailParams.subject).toBe('Tiêu đề từ compiler');
     expect(rawEmailParams.attachments).toHaveLength(1);
@@ -127,7 +127,7 @@ describe('Finding 1: campaignEmailSenderService đọc attachments khi không d�
       runId
     );
 
-    expect(buildAttachmentsSpy).toHaveBeenCalledWith([dummyAttachment]);
+    expect(buildAttachmentsSpy).toHaveBeenCalledWith([dummyAttachment], 1);
     expect(rawEmailParams.attachments).toHaveLength(1);
     expect(result.status).toBe('success');
   });

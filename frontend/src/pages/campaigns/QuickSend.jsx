@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import api from '../../services/api';
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
@@ -13,6 +14,9 @@ import { ZaloGroupPickerCard } from '../../features/ai/components/AiChatbotWizar
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
 import { resolveActionIdempotencyKey } from '../../utils/idempotency.util.js';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import { pickTemplateContent } from './quickSend.util';
 import {
   HiOutlinePlus,
@@ -28,7 +32,13 @@ import {
   HiOutlinePaperAirplane,
   HiOutlineRefresh,
   HiOutlinePaperClip,
+  HiOutlineX,
 } from 'react-icons/hi';
+
+// Trần đính kèm Gửi nhanh khi soạn nội dung mới (khớp backend MAX_QUICK_SEND_ATTACHMENT_BYTES).
+const MAX_QUICK_SEND_ATTACHMENT_COUNT = 5;
+const MAX_QUICK_SEND_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024; // 20 MB
+const QUICK_SEND_ATTACHMENT_ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 
 function formatFileSize(bytes) {
   if (!bytes) return '';
@@ -214,6 +224,9 @@ const QuickSend = () => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [templateContent, setTemplateContent] = useState({ subject: '', body: '' });
   const [extraAttachments, setExtraAttachments] = useState([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const quickSendAttachmentInputRef = useRef(null);
+  const { usage: storageQuotaUsage } = useStorageQuota();
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
   const [templateDetailError, setTemplateDetailError] = useState(false);
@@ -1151,6 +1164,65 @@ const QuickSend = () => {
     setSelectedChannel(nextChannel);
   };
 
+  // Tệp đính kèm tự tải lên ở bước Nội dung (Việc 3, PLAN_GUI_NHANH_DINH_KEM_TU_TAI_LEN_2026-09-16).
+  // Đăng ký TỪNG tệp TUẦN TỰ (không Promise.all) — POST /campaigns/quick-send/attachments là JSON,
+  // request dedup của api.js huỷ lượt trước nếu 2 request cùng method+url bay song song (chỉ FormData
+  // được miễn trừ) → chọn nhiều tệp cùng lúc sẽ mất hết trừ tệp cuối nếu làm song song.
+  const handleQuickSendAttachmentSelect = async (e) => {
+    const rawFiles = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!rawFiles.length) return;
+
+    if (extraAttachments.length + rawFiles.length > MAX_QUICK_SEND_ATTACHMENT_COUNT) {
+      toast.error(t('quickSend.attachmentTooMany'));
+      return;
+    }
+    const existingTotal = extraAttachments.reduce((sum, a) => sum + (a.size || 0), 0);
+    const newTotal = rawFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+    if (existingTotal + newTotal > MAX_QUICK_SEND_ATTACHMENT_TOTAL_BYTES) {
+      toast.error(t('quickSend.attachmentTotalTooLarge'));
+      return;
+    }
+
+    const validation = validateFilesBeforeUpload(rawFiles, storageQuotaUsage);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      return;
+    }
+
+    setIsUploadingAttachment(true);
+    try {
+      const uploaded = [];
+      for (const file of rawFiles) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const tempRes = await api.post('/uploads/temp', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const temp = tempRes.data.data;
+        const registeredRes = await campaignApiService.uploadQuickSendAttachment({
+          tempId: temp.tempId,
+          originalName: temp.originalName,
+          contentType: temp.contentType,
+          size: temp.size,
+        });
+        uploaded.push(registeredRes.data.data);
+      }
+      setExtraAttachments((prev) => [...prev, ...uploaded]);
+      notifyStorageQuotaRefresh();
+    } catch (err) {
+      // Hiện đúng câu server trả — nuốt lỗi bằng câu chung từng khiến sếp báo "không upload
+      // được" mà không ai biết vì sao (15/09).
+      toast.error(err?.response?.data?.message || t('quickSend.attachmentUploadError'));
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleRemoveQuickSendAttachment = (idx) => {
+    setExtraAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   // Step indicators
   const steps = [
     { key: QUICK_SEND_STEPS.RECIPIENTS, label: t('quickSend.stepRecipients'), icon: HiOutlineUsers },
@@ -1701,6 +1773,59 @@ const QuickSend = () => {
                   </div>
                 </div>
               )}
+
+              {/* Tệp đính kèm — hiện ở cả 2 chế độ (mẫu + tự soạn), cộng vào extraAttachments */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('quickSend.attachmentsLabel')}
+                </label>
+                <p className="text-xs text-gray-500 mb-3">{t('quickSend.attachmentsHint')}</p>
+
+                {extraAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {extraAttachments.map((att, idx) => (
+                      <span
+                        key={att.key || idx}
+                        className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-xs text-gray-700"
+                      >
+                        <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span className="truncate max-w-[180px] font-medium">{att.originalName || att.name}</span>
+                        {att.size ? <span className="text-gray-400 shrink-0">({formatFileSize(att.size)})</span> : null}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveQuickSendAttachment(idx)}
+                          className="p-0.5 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                          title={t('quickSend.attachmentRemove')}
+                        >
+                          <HiOutlineX className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  ref={quickSendAttachmentInputRef}
+                  type="file"
+                  multiple
+                  accept={QUICK_SEND_ATTACHMENT_ACCEPT}
+                  onChange={handleQuickSendAttachmentSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => quickSendAttachmentInputRef.current?.click()}
+                  disabled={isUploadingAttachment}
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {isUploadingAttachment ? (
+                    <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <HiOutlinePaperClip className="w-4 h-4" />
+                  )}
+                  {t('quickSend.attachmentAdd')}
+                </button>
+              </div>
             </div>
 
             {/* Navigation */}

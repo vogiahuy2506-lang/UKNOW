@@ -12,10 +12,13 @@ import {
   requirePhone,
   requireSelfContext,
 } from '../middleware/authorization.middleware.js';
-import { campaignRunLimiter, quickSendTestLimiter } from '../middleware/rateLimiter.middleware.js';
+import { campaignRunLimiter, quickSendTestLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
+import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
+import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
 const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed'];
+const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePaths().uploads] });
 
 router.use(authMiddleware);
 router.use(requirePasswordChange);
@@ -30,6 +33,13 @@ router.get('/delay-config', requirePermission('campaigns_view'), campaignControl
 // Quick send estimate & test send (rate limited 5 tests/hour per user)
 router.get('/quick-send/estimate', requirePermission('campaigns_view'), campaignController.getQuickSendEstimate.bind(campaignController));
 router.post('/quick-send/test-send', quickSendTestLimiter, requirePermission('campaigns_create'), campaignController.testSendQuickCampaign.bind(campaignController));
+router.post(
+  '/quick-send/attachments',
+  uploadLimiter,
+  requirePermission('campaigns_create'),
+  workspaceUploadCapacityGuard,
+  campaignController.uploadQuickSendAttachment.bind(campaignController)
+);
 
 // Get by id — chỉ cần quyền xem
 router.get('/:id', requirePermission('campaigns_view'), campaignController.getById.bind(campaignController));

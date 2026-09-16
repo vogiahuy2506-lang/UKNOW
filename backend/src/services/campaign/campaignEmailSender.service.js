@@ -693,7 +693,7 @@ class CampaignEmailSenderService {
     );
 
     const realMailAttachments = Array.isArray(attachments) && attachments.length > 0
-      ? await emailSettingsController.buildMailAttachments(attachments)
+      ? await emailSettingsController.buildMailAttachments(attachments, campaign.workspace_owner_id || campaign.id_user)
       : [];
 
     // Resolve actual from address + brand domain before sending (for logging)

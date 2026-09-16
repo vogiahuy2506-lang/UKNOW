@@ -2286,7 +2286,8 @@ class ZaloSettingsController {
         accountId,
       });
       const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(
-        templateAttachments
+        templateAttachments,
+        { ownerUserId: userId }
       );
 
       const items = [];
@@ -2830,7 +2831,8 @@ class ZaloSettingsController {
        * tránh đọc lại cùng một file cho từng group gửi thử.
        */
       const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(
-        templateAttachments
+        templateAttachments,
+        { ownerUserId: userId }
       );
 
       const items = [];

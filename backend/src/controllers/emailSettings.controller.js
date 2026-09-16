@@ -325,12 +325,22 @@ ${linkItems}
     return '';
   }
 
-  async buildMailAttachments(items) {
+  /**
+   * @param {Array<object>} items
+   * @param {number|string|null} [ownerUserId] khi truyền: bỏ qua key không bắt đầu bằng
+   *   `uploads/<ownerUserId>/` (client tự gửi key thuộc workspace khác). Không truyền = giữ
+   *   hành vi cũ (không lọc) — dùng cho các nơi gọi chưa có sẵn owner id trong scope.
+   */
+  async buildMailAttachments(items, ownerUserId = null) {
     if (!Array.isArray(items) || items.length === 0) return [];
     const results = [];
     for (const item of items) {
       const key = this.resolveAttachmentKey(item);
       if (!key) continue;
+      if (ownerUserId && !key.startsWith(`uploads/${ownerUserId}/`)) {
+        console.warn(`[EmailSettings] Bỏ qua attachment không thuộc workspace ${ownerUserId}: ${key}`);
+        continue;
+      }
       // Lấy nội dung tệp trực tiếp từ local uploads thay vì object storage.
       const bodyBuffer = await uploadController.readFileBufferByKey(key);
       results.push({
@@ -620,7 +630,7 @@ ${linkItems}
         sourceType: 'direct_email',
         normalizeEmailList: (value) => this.normalizeEmailList(value),
         buildTrackedHtml: (...args) => this.buildTrackedHtml(...args),
-        buildMailAttachments: (items) => this.buildMailAttachments(items),
+        buildMailAttachments: (items) => this.buildMailAttachments(items, workspaceOwnerId),
         createSmtpTransporter: (input) => this.createSmtpTransporter(input),
         formatUtc7: () => this.formatUtc7(),
       });

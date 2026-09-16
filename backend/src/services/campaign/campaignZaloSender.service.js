@@ -412,17 +412,25 @@ class CampaignZaloSenderService {
    * Uses in-memory cache per run to avoid reading the same file repeatedly.
    *
    * @param {Array<any>} attachments
-   * @param {{ cache?: Map<string, any> }} [options]
+   * @param {{ cache?: Map<string, any>, ownerUserId?: number|string|null }} [options]
+   *   `ownerUserId`: khi truyền, bỏ qua (kèm cảnh báo) key không bắt đầu bằng
+   *   `uploads/<ownerUserId>/` — chặn client tự gửi key thuộc workspace khác. Không truyền =
+   *   giữ hành vi cũ (không lọc), dùng cho nơi gọi chưa có sẵn owner id trong scope.
    * @returns {Promise<Array<{data: Buffer, filename: string, metadata: {totalSize: number}}>>}
    */
   async prepareZaloAttachmentSources(attachments = [], options = {}) {
     const source = Array.isArray(attachments) ? attachments : [];
     if (!source.length) return [];
     const cache = options?.cache instanceof Map ? options.cache : null;
+    const ownerUserId = options?.ownerUserId || null;
 
     const outputs = [];
     for (const attachment of source) {
       const key = uploadController.normalizeStorageKey(attachment);
+      if (ownerUserId && key && !key.startsWith(`uploads/${ownerUserId}/`)) {
+        console.warn(`[CampaignZaloSender] Bỏ qua attachment không thuộc workspace ${ownerUserId}: ${key}`);
+        continue;
+      }
       const cacheKey = key ? `local:${key}` : `inline:${JSON.stringify(attachment || {})}`;
       if (cache?.has(cacheKey)) {
         outputs.push(cache.get(cacheKey));

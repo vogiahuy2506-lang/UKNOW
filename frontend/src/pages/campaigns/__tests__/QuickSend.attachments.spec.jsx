@@ -6,6 +6,7 @@ import zaloTemplateApiService from '../../../features/templates/services/zaloTem
 import emailSettingsApiService from '../../../features/settings/services/emailSettingsApi.service';
 import zaloSettingsApiService from '../../../features/settings/services/zaloSettingsApi.service';
 import campaignApiService from '../../../features/campaigns/services/campaignApi.service';
+import api from '../../../services/api';
 import toast from 'react-hot-toast';
 
 const mockNavigate = vi.fn();
@@ -59,7 +60,18 @@ vi.mock('../../../features/campaigns/services/campaignApi.service', () => ({
   default: {
     getQuickSendEstimate: vi.fn(),
     testSendQuickCampaign: vi.fn(),
+    uploadQuickSendAttachment: vi.fn(),
   },
+}));
+
+vi.mock('../../../services/api');
+
+vi.mock('../../../features/storage/useStorageQuota', () => ({
+  default: () => ({ usage: null }),
+}));
+
+vi.mock('../../../features/storage/storageEvents', () => ({
+  notifyStorageQuotaRefresh: vi.fn(),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -437,6 +449,159 @@ describe('QuickSend Attachments Flow', () => {
         attachments: [sampleAttachment],
       }),
       expect.objectContaining({ idempotencyKey: expect.any(String) })
+    );
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // PLAN_GUI_NHANH_DINH_KEM_TU_TAI_LEN_2026-09-16 — Việc 3: tự tải tệp đính kèm khi soạn
+  // nội dung mới (không đi qua mẫu). Luồng: chọn tệp -> POST /uploads/temp -> POST
+  // /campaigns/quick-send/attachments -> đẩy vào extraAttachments -> gửi kèm activeAttachments.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Đi tới bước Nội dung, chuyển "Soạn nội dung mới", nhập nội dung, rồi chọn 1 tệp. */
+  async function walkToCustomContentAndSelectFile({
+    channel = 'email',
+    recipient = 'client@example.com',
+    body = 'Nội dung tự soạn',
+    file = new File(['noi dung'], 'bao-cao.pdf', { type: 'application/pdf' }),
+  } = {}) {
+    render(<QuickSend />);
+
+    if (channel === 'zalo') {
+      fireEvent.click(screen.getByText('Zalo'));
+    }
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: recipient } });
+    fireEvent.click(screen.getByRole('button', { name: /quickSend\.next/i }));
+
+    fireEvent.click(await screen.findByText('quickSend.contentModeCustom'));
+
+    const bodyTextarea = screen.getByPlaceholderText('quickSend.customBodyPlaceholder');
+    fireEvent.change(bodyTextarea, { target: { value: body } });
+
+    const fileInput = document.querySelector('input[type="file"]');
+    fireEvent.change(fileInput, { target: { files: [file] } });
+  }
+
+  it('tải 1 tệp: hiện chip + gửi kèm attachments đúng key (soạn nội dung mới)', async () => {
+    api.post.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { tempId: 'tmp_1', originalName: 'bao-cao.pdf', contentType: 'application/pdf', size: 1024 },
+      },
+    });
+    campaignApiService.uploadQuickSendAttachment.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          key: 'uploads/5/quick-send/1700000000_ab12cd34_bao-cao.pdf',
+          originalName: 'bao-cao.pdf',
+          size: 1024,
+          contentType: 'application/pdf',
+        },
+      },
+    });
+
+    await walkToCustomContentAndSelectFile();
+
+    await waitFor(() => {
+      expect(screen.getByText('bao-cao.pdf')).toBeInTheDocument();
+    });
+    expect(api.post).toHaveBeenCalledWith('/uploads/temp', expect.anything(), expect.anything());
+    expect(campaignApiService.uploadQuickSendAttachment).toHaveBeenCalledWith({
+      tempId: 'tmp_1',
+      originalName: 'bao-cao.pdf',
+      contentType: 'application/pdf',
+      size: 1024,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /quickSend\.next/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /quickSend\.sendNow/i }));
+
+    await waitFor(() => {
+      expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(1);
+    });
+    expect(emailSettingsApiService.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({ key: 'uploads/5/quick-send/1700000000_ab12cd34_bao-cao.pdf' }),
+        ],
+      }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
+    );
+  });
+
+  it('tệp thứ 6 -> chặn ngay ở frontend, không gọi API tải lên', async () => {
+    render(<QuickSend />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'client@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /quickSend\.next/i }));
+    fireEvent.click(await screen.findByText('quickSend.contentModeCustom'));
+
+    const sixFiles = Array.from({ length: 6 }, (_, i) =>
+      new File(['x'], `f${i}.pdf`, { type: 'application/pdf' })
+    );
+    const fileInput = document.querySelector('input[type="file"]');
+    fireEvent.change(fileInput, { target: { files: sixFiles } });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('quickSend.attachmentTooMany');
+    });
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('server trả 409 hết dung lượng -> toast hiện đúng câu server trả, không dùng câu chung', async () => {
+    api.post.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { tempId: 'tmp_2', originalName: 'anh.png', contentType: 'image/png', size: 2048 },
+      },
+    });
+    campaignApiService.uploadQuickSendAttachment.mockRejectedValueOnce({
+      response: { status: 409, data: { message: 'Workspace đã dùng hết dung lượng lưu trữ' } },
+    });
+
+    await walkToCustomContentAndSelectFile({
+      file: new File(['anh'], 'anh.png', { type: 'image/png' }),
+    });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Workspace đã dùng hết dung lượng lưu trữ');
+    });
+    // Không phải câu chung attachmentUploadError — đúng lỗi 15/09 phải tránh lặp lại.
+    expect(toast.error).not.toHaveBeenCalledWith('quickSend.attachmentUploadError');
+  });
+
+  it('xoá chip đính kèm -> payload gửi không còn tệp đó', async () => {
+    api.post.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { tempId: 'tmp_3', originalName: 'x.pdf', contentType: 'application/pdf', size: 500 },
+      },
+    });
+    campaignApiService.uploadQuickSendAttachment.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { key: 'uploads/5/quick-send/999_x.pdf', originalName: 'x.pdf', size: 500, contentType: 'application/pdf' },
+      },
+    });
+
+    await walkToCustomContentAndSelectFile({
+      file: new File(['x'], 'x.pdf', { type: 'application/pdf' }),
+    });
+    await waitFor(() => expect(screen.getByText('x.pdf')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTitle('quickSend.attachmentRemove'));
+    expect(screen.queryByText('x.pdf')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /quickSend\.next/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /quickSend\.sendNow/i }));
+
+    await waitFor(() => {
+      expect(emailSettingsApiService.sendEmail).toHaveBeenCalledTimes(1);
+    });
+    expect(emailSettingsApiService.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ attachments: [] }),
+      expect.anything()
     );
   });
 });

@@ -693,4 +693,20 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       expect(rejectRes.status).toBe(200);
     });
   });
+
+  describe('14. Quick Send attachments (/api/campaigns/quick-send/attachments)', () => {
+    it('blocks employee without campaigns_create permission (403)', async () => {
+      currentTestUser = createEmployee({ campaigns_create: false });
+      const res = await request(app).post('/api/campaigns/quick-send/attachments').send({});
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('PERMISSION_DENIED');
+    });
+
+    it('allows employee with campaigns_create permission (200)', async () => {
+      currentTestUser = createEmployee({ campaigns_create: true });
+      const res = await request(app).post('/api/campaigns/quick-send/attachments').send({});
+      expect(res.status).toBe(200);
+      expect(res.body.method).toBe('uploadQuickSendAttachment');
+    });
+  });
 });

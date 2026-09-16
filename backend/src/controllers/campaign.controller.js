@@ -25,6 +25,8 @@ import {
   describeZaloOutboundFailure,
 } from '../utils/zaloDispatchDelivery.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { ingestQuickSendAttachment } from '../services/campaign/quickSendAttachment.service.js';
+import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 
 class CampaignController {
   /**
@@ -1147,6 +1149,51 @@ class CampaignController {
       return res.status(error.statusCode || error.status || 500).json({
         success: false,
         message: error.message || 'Lỗi server khi gửi thử nghiệm',
+      });
+    }
+  }
+
+  /**
+   * Nhận tệp đính kèm cho Gửi nhanh khi soạn nội dung mới (không đi qua mẫu).
+   * Tệp tạm (đã tải qua /uploads/temp) được chuyển sang storage lâu dài ở trạng thái 'temp',
+   * tự hết hạn sau 7 ngày nếu không được dùng trong lượt gửi thật.
+   * POST /api/campaigns/quick-send/attachments
+   * Body: { tempId, originalName, contentType, size }
+   */
+  async uploadQuickSendAttachment(req, res) {
+    try {
+      const context = getWorkspaceContext(req.user);
+      const { tempId, originalName, contentType, size } = req.body || {};
+      if (!tempId) {
+        return res.status(400).json({ success: false, message: 'Thiếu tempId tệp tạm' });
+      }
+
+      const data = await ingestQuickSendAttachment({
+        tempId,
+        originalName,
+        contentType,
+        size,
+        ownerUserId: context.workspaceOwnerId,
+        actorUserId: context.actorUserId,
+      });
+
+      return res.json({ success: true, data });
+    } catch (error) {
+      if (error instanceof StorageQuotaExceededError) {
+        return res.status(error.status || 413).json({
+          success: false,
+          code: error.code || 'STORAGE_QUOTA_EXCEEDED',
+          message: error.message,
+          data: error.usage,
+        });
+      }
+      const status = error.status || error.statusCode || 500;
+      if (status >= 500) {
+        console.error('[CampaignController.uploadQuickSendAttachment]', error);
+      }
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Lỗi khi tải tệp đính kèm lên',
       });
     }
   }

@@ -90,6 +90,11 @@ export const campaignApiService = {
       },
     });
   },
+
+  // Chuyển tệp tạm (đã tải qua /uploads/temp) sang storage lâu dài cho Gửi nhanh.
+  uploadQuickSendAttachment(payload) {
+    return api.post('/campaigns/quick-send/attachments', payload);
+  },
 };
 
 export default campaignApiService;
