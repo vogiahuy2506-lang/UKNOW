@@ -40,8 +40,12 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
     await row.getByRole('link', { name }).click();
     await page.waitForURL(/\/app\/campaigns\/\d+\/builder/, { timeout: 25_000 });
 
-    // Bấm "Chạy ngay" trong trình dựng.
+    // Bấm "Chạy ngay" trong trình dựng -> mở modal xác nhận.
     await page.getByRole('button', { name: 'Chạy ngay' }).click();
+    await expect(page.getByText('Xác nhận chạy chiến dịch')).toBeVisible({ timeout: 10_000 });
+
+    // Bấm "Xác nhận chạy" trong modal -> lúc này mới gọi API runCampaign, server trả lỗi.
+    await page.getByRole('button', { name: 'Xác nhận chạy' }).click();
 
     // Hai tầng chặn khác nhau, thông điệp khác nhau — nhận cả hai:
     //  - publish (409): 'Không thể kích hoạt chiến dịch khi chưa có node nào'
