@@ -7656,7 +7656,6 @@ Feel free to ask me anything!`,
     noFailures: 'No failures recorded.',
     noRecentErrors: 'No recent errors.',
     kpi: {
-      reachRate: 'Reach: {rate} / {total} people',
       sent: 'Messages sent',
       failed: 'Failed messages',
       clicked: 'Link clicks',
