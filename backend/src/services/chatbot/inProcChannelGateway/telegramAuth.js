@@ -99,8 +99,17 @@ export class TelegramAuth {
    * @param {Object} [deps.telegramCreds]
    * @param {number} [deps.telegramCreds.apiId]
    * @param {string} [deps.telegramCreds.apiHash]
+   * @param {Object} [deps.sessionManager] - Optional
+   *   `TelegramSessionManager`. When provided, after a successful
+   *   QR scan we hand the live mtcute client straight to the
+   *   session manager via `adoptClient(...)` BEFORE disconnecting
+   *   the auth-time client. Without this hook, the auth client
+   *   would be torn down and the backend would have no live
+   *   socket to Telegram until the next process restart (when
+   *   `restoreSessionsFromDb()` re-creates it from Postgres).
+   *   Optional — unit tests construct `TelegramAuth` without it.
    */
-  constructor({ sessionRepo, telegramCreds = {} } = {}) {
+  constructor({ sessionRepo, telegramCreds = {}, sessionManager = null } = {}) {
     if (!sessionRepo) {
       throw new Error(
         '[TelegramAuth] sessionRepo is required — pass chatbotTelegramRepository (or compatible).'
@@ -109,6 +118,18 @@ export class TelegramAuth {
     this._flows = new Map();
     this._sessionRepo = sessionRepo;
     this._telegramCreds = telegramCreds;
+    this._sessionManager = sessionManager;
+  }
+
+  /**
+   * Late-bind the session manager so the QR-success path can adopt
+   * the live client into the registry before `_cleanup()` tears it
+   * down. Optional — tests / stub callers can leave it null.
+   *
+   * @param {Object|null} sessionManager
+   */
+  setSessionManager(sessionManager) {
+    this._sessionManager = sessionManager;
   }
 
   /**
@@ -467,6 +488,42 @@ export class TelegramAuth {
     flow.status = QR_STATUS.SUCCESS;
     flow.endedAt = Date.now();
     logInfo(`[TelegramAuth] login success for telegram_user_id=${telegramUserId}`);
+
+    // ── Hand the live mtcute client to TelegramSessionManager ───────
+    // Without this hook, `_cleanup()` would `disconnect()` the auth
+    // client, leaving the backend with no live Telegram socket until
+    // the next restart. `adoptClient()` registers the inbound handler
+    // (so webhook → AI routing fires immediately) and stashes the
+    // client in the session manager's registry so `_cleanup()` knows
+    // to skip the disconnect.
+    //
+    // We only adopt when the session manager is wired AND the flow's
+    // client is still live. A swallowed/missing client means the
+    // transport reused the singleton client and the session manager
+    // already owns it via `getClient()`; re-registering would
+    // double-subscribe and cause duplicate webhook deliveries.
+    if (this._sessionManager && flow.client) {
+      try {
+        const adopted = this._sessionManager.adoptClient(
+          telegramUserId,
+          flow.client
+        );
+        if (adopted) {
+          flow.clientAdopted = true;
+          logInfo(
+            `[TelegramAuth] adopted client for telegram_user_id=${telegramUserId} into session manager`
+          );
+        } else {
+          logWarn(
+            `[TelegramAuth] session manager declined adopt for ${telegramUserId}; cleaning up auth client as before`
+          );
+        }
+      } catch (err) {
+        logWarn(
+          `[TelegramAuth] adoptClient threw for ${telegramUserId}: ${err.message}`
+        );
+      }
+    }
   }
 
   _cleanup(flow) {
@@ -474,7 +531,10 @@ export class TelegramAuth {
       clearInterval(flow.pollHandle);
       flow.pollHandle = null;
     }
-    if (flow.client) {
+    // Skip the disconnect if the session manager adopted this flow's
+    // client — tearing it down would kill the runtime socket and we'd
+    // regress to "AI im lặng cho tới khi restart".
+    if (flow.client && !flow.clientAdopted) {
       safeDisconnect(flow.client).catch(() => {});
     }
   }

@@ -85,6 +85,15 @@ function makeChannelState({ channel, authCtor, sessionManagerCtor, repo, forward
     { apiId, apiHash },
     state.inboxForwarder
   );
+  // Hand the session manager back to the auth singleton so the
+  // QR-success path can call `adoptClient(flow.client)` BEFORE
+  // `telegramAuth._cleanup()` calls `disconnect()`. Without this
+  // hook, the auth client is torn down and the backend has no live
+  // socket until the next restart, so inbound messages don't reach
+  // the AI webhook route until then.
+  if (typeof state.auth.setSessionManager === 'function') {
+    state.auth.setSessionManager(state.sessionManager);
+  }
   state.facade = facadeMaker(state);
 
   return state;

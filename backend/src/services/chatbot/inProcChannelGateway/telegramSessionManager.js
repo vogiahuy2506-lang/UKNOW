@@ -331,6 +331,103 @@ export class TelegramSessionManager {
   }
 
   /**
+   * Adopt an already-connected mtcute `TelegramClient` (typically
+   * the one `TelegramAuth.start()` used during QR login) into the
+   * session registry WITHOUT disconnecting it.
+   *
+   * ── Why ──────────────────────────────────────────────────────────
+   * Without this, `TelegramAuth._onLoginSuccess()` would flush the
+   * session to Postgres, then `_cleanup()` would call `disconnect()`
+   * on the auth client. Telegram then has no live socket to push
+   * updates through, so subsequent inbound messages are lost until
+   * the next backend restart (when `restoreSessionsFromDb()` finally
+   * re-creates a client from the persisted blob). The result: the
+   * AI stays silent for the rest of the process lifetime — exactly
+   * what users hit when they scanned a QR, then complained "AI
+   * không rep".
+   *
+   * The fix: hand the live client straight to the session manager
+   * BEFORE `_cleanup()` reaches `disconnect()`. The session manager
+   * claims ownership of the client, registers the inbound handler,
+   * and `_cleanup()` sees `_clients.has(...)` and skips the
+   * disconnect for that flow.
+   *
+   * ── Idempotency ──────────────────────────────────────────────────
+   * If the session manager already has a live client for this
+   * `telegramUserId` (e.g. from a previous adopt, or a startup-time
+   * `restoreSessionsFromDb`), we dispose of the NEW client and keep
+   * the existing one. This protects against double-registration
+   * of the inbound handler and against two clients fighting for
+   * the same `authKeys` on Telegram's DC side (which surfaces as
+   * "AUTH_KEY_DUPLICATED" kicks).
+   *
+   * ── Storage caveat ───────────────────────────────────────────────
+   * The adopted client uses `InMemoryTelegramStorage` (set up by
+   * `TelegramAuth.start()`), not `PostgresBackedTelegramStorage`.
+   * That's fine: the next `disconnect()` will lose RAM state, but
+   * the canonical state is already on Postgres (saved by
+   * `upsertSession` in `_onLoginSuccess`). On the NEXT restart,
+   * `restoreSessionsFromDb()` reads that Postgres row and constructs
+   * a `PostgresBackedTelegramStorage`-backed client from scratch.
+   *
+   * @param {number|string} telegramUserId
+   * @param {Object} client - A connected, authorised mtcute client
+   *   (exposes `registerMessageHandler`, `disconnect`, `isAuthorized`,
+   *   `getSessionString`).
+   * @returns {boolean} true if the client was adopted; false if the
+   *   session manager already owned one (in which case the caller
+   *   should disconnect the new client to avoid leaks).
+   */
+  adoptClient(telegramUserId, client) {
+    const key = String(telegramUserId);
+    if (this._clients.has(key)) {
+      logWarn(
+        `[TelegramSessionManager] adoptClient: already managing a client for ${telegramUserId}, dropping the new one`
+      );
+      return false;
+    }
+    if (!client) return false;
+
+    const record = new ClientRecord({ accountKey: key, client });
+    this._clients.set(key, record);
+
+    // Subscribe the inbound handler synchronously so we don't miss
+    // any messages that arrive between `adoptClient()` returning
+    // and `TelegramAuth._cleanup()` running.
+    if (this._inboxForwarder && typeof client.registerMessageHandler === 'function') {
+      try {
+        // registerMessageHandler is async in mtcute, but we don't
+        // need to await here — the handler call itself queues the
+        // subscription. Awaiting would couple `adoptClient()` to
+        // network timing the auth caller doesn't care about.
+        const subPromise = client.registerMessageHandler(
+          (event) => this._forwardInbound(event, telegramUserId),
+          { accountTelegramUserId: telegramUserId }
+        );
+        if (subPromise && typeof subPromise.catch === 'function') {
+          subPromise.catch((err) =>
+            logWarn(
+              `[TelegramSessionManager] registerMessageHandler (adopted) failed for ${telegramUserId}: ${err.message}`
+            )
+          );
+        }
+        logInfo(
+          `[TelegramSessionManager] adopted client for ${telegramUserId} with inbound handler`
+        );
+      } catch (err) {
+        logWarn(
+          `[TelegramSessionManager] registerMessageHandler (adopted, sync) threw for ${telegramUserId}: ${err.message}`
+        );
+      }
+    } else {
+      logInfo(
+        `[TelegramSessionManager] adopted client for ${telegramUserId} (no inboxForwarder wired)`
+      );
+    }
+    return true;
+  }
+
+  /**
    * Hand a normalised inbound event from the transport off to the
    * forwarder. Translates `TelegramMessageEvent` (camelCase) into
    * the snake_case wire shape `telegramAdapter.parseWebhookEvent`

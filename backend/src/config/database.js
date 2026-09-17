@@ -63,6 +63,14 @@ const poolConfig = {
   // Hiển thị trong pg_stat_activity.application_name (DBeaver/DataGrip) để phân biệt backend vs IDE.
   application_name: String(process.env.DB_APPLICATION_NAME || 'founderai-campaign-backend').trim() || 'founderai-campaign-backend',
   options: '-c timezone=Asia/Ho_Chi_Minh',
+  // Force IPv4 only. Neon DNS resolves to BOTH A and AAAA records;
+  // Node 22's default `dns.lookup` (verbatim:false) tries IPv6 first
+  // and surfaces `ENOTFOUND` when the dev machine has no working
+  // IPv6 egress (common on Windows LANs behind WARP). Pinning
+  // `family: 4` makes pg fall straight through to the A record,
+  // which matches the resolution used by `psql`/`pg_dump` already.
+  // Disable by setting DB_IP_FAMILY=6 if your host only has IPv6.
+  family: Number.parseInt(process.env.DB_IP_FAMILY, 10) === 6 ? 6 : 4,
   // Kích thước pool cấu hình qua env; mặc định 20 kết nối tối đa mỗi process.
   max: Number.parseInt(process.env.DB_POOL_MAX, 10) || (isNeon ? 3 : 20),
   // Neon serverless: giảm idle timeout để tránh connection bị server đóng
