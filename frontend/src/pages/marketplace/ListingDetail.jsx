@@ -19,6 +19,7 @@ import {
   HiOutlineMail,
   HiOutlineChat,
   HiOutlineChevronLeft,
+  HiOutlineGlobe,
   HiThumbUp,
   HiStar,
 } from 'react-icons/hi';
@@ -40,6 +41,12 @@ const RESOURCE_VISUAL = {
     bg: 'bg-purple-100',
     text: 'text-purple-600',
     label: 'Chatbot',
+  },
+  landing_page: {
+    Icon: HiOutlineGlobe,
+    bg: 'bg-blue-100',
+    text: 'text-blue-600',
+    label: 'Landing Page',
   },
 };
 
@@ -724,7 +731,20 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
       const response = await marketplaceService.getListing(id, {
         signal: abortControllerRef.current.signal
       });
-      setListing(response.data.data);
+      const fetchedListing = response.data.data;
+      // Defensive check: warn nếu snapshot không khớp với resource_type.
+      // Có thể xảy ra khi admin sửa trực tiếp DB hoặc do bug cũ khi tạo listing.
+      if (fetchedListing?.resource_type === 'campaign' && fetchedListing?.snapshot_data) {
+        const snap = fetchedListing.snapshot_data;
+        const looksLikeLandingPage = snap.htmlContent || (snap.title && !snap.nodes);
+        if (looksLikeLandingPage) {
+          console.warn(
+            `[ListingDetail] Listing #${id} có resource_type='campaign' nhưng snapshot_data như landing page.`,
+            { snapshotKeys: Object.keys(snap) }
+          );
+        }
+      }
+      setListing(fetchedListing);
 
       if (authedFavorites) {
         marketplaceService.checkFavorite(id)

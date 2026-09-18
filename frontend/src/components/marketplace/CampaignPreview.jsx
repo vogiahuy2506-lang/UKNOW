@@ -51,6 +51,28 @@ const CampaignPreview = ({ snapshot }) => {
 
   const { nodes = [], connections = [], campaignType } = snapshot;
 
+  // Defensive check: nếu snapshot không có nodes thì có thể snapshot bị sai kiểu
+  // (vd: tạo listing từ campaign nhưng snapshot lại chứa landing page data).
+  // Hiển thị thông báo rõ ràng thay vì render rỗng.
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    return (
+      <section className="card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <HiOutlineMail className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Preview Campaign</h2>
+            <p className="text-xs text-amber-600">Snapshot không hợp lệ — campaign chưa có nodes</p>
+          </div>
+        </div>
+        <div className="text-center py-6 text-gray-500 text-sm">
+          Chiến dịch này chưa có nodes nào trong flow. Hãy quay lại chỉnh sửa campaign trước khi đăng bán.
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="card p-5">
       <div className="flex items-center gap-2 mb-4">
