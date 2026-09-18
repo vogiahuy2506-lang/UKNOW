@@ -37,8 +37,8 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
         <ul className="space-y-1">
           {plan.features.map((f, i) => {
             const text = (typeof f === 'object' && f !== null)
-              ? (f[locale] || f.vi || f.en || '')
-              : getTranslatedFeature(f, t);
+              ? (f[locale] || getTranslatedFeature(f.vi || f.en || '', t, locale))
+              : getTranslatedFeature(f, t, locale);
             return (
               <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
                 <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
@@ -50,7 +50,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
       )}
 
       {plan.description && (
-        <p className="text-xs text-gray-400 italic">{getTranslatedPlanDescription(plan, t)}</p>
+        <p className="text-xs text-gray-400 italic">{getTranslatedPlanDescription(plan, t, locale)}</p>
       )}
 
       <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
@@ -78,7 +78,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
 //   - Đang dùng (isActivated && isActive)       — tag xanh
 //   - Chờ kích hoạt (assigned chưa active plan) — tag vàng
 export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const isHidden = plan.isActive === false;
   return (
     <div className={`card p-5 flex flex-col gap-4 transition-opacity ${isHidden ? 'opacity-60 bg-gray-50' : ''}`}>
@@ -118,7 +118,7 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
       </div>
 
       {plan.description && (
-        <p className="text-xs text-gray-400 italic -mt-2">{getTranslatedPlanDescription(plan, t)}</p>
+        <p className="text-xs text-gray-400 italic -mt-2">{getTranslatedPlanDescription(plan, t, locale)}</p>
       )}
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">

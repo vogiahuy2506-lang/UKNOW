@@ -1,96 +1,11 @@
 import { createPortal } from 'react-dom';
 
-// ── Plan translation helpers (shared with admin cards) ──────────────────────
-
-const normalizeText = (s) => String(s || '').toLowerCase().normalize('NFC').trim();
-
-const PLAN_ALIASES = { professional: 'pro' };
-
-export const getPlanTranslationKey = (plan) => {
-  const code = normalizeText(plan?.code);
-  if (code) return PLAN_ALIASES[code] || code;
-  const name = normalizeText(plan?.name).replace(/^gói\s+/, '').replace(/\s+plan$/, '');
-  const resolved = PLAN_ALIASES[name] || name;
-  if (['starter', 'trial', 'basic', 'pro', 'team', 'business', 'enterprise', 'custom'].includes(resolved)) return resolved;
-  if (name.includes('tùy chọn') || name.includes('tuỳ chọn')) return 'custom';
-  return '';
-};
-
-export const getTranslatedPlanDescription = (plan, t) => {
-  // Mô tả admin nhập trong DB luôn thắng — bản dịch cứng chỉ là fallback cho gói
-  // chưa có mô tả riêng. Đảo ngược thứ tự này (ưu tiên bản dịch) khiến ô "Mô tả"
-  // trong trang quản trị vô tác dụng với mọi gói có mã quen thuộc.
-  if (String(plan?.description || '').trim()) return plan.description;
-  const key = getPlanTranslationKey(plan);
-  const translated = key ? t(`pricing.planDescriptions.${key}`) : '';
-  return translated && translated !== `pricing.planDescriptions.${key}` ? translated : plan.description;
-};
-
-export const getTranslatedFeature = (feature, t) => {
-  const text = String(feature || '').trim();
-  const normalized = normalizeText(text);
-
-  const emailMonthVi = text.match(/^([\d.,]+)\s*emails?\s*\/\s*tháng$/i);
-  if (emailMonthVi) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonthVi[1] });
-  const emailMonthEn = text.match(/^([\d.,]+)\s*emails?\s*\/\s*month$/i);
-  if (emailMonthEn) return t('pricing.featureTemplates.emailPerMonth', { n: emailMonthEn[1] });
-
-  const zaloMonth = text.match(/^([\d.,]+)\s*(?:tin(?:\s*nhắn)?\s*)?zalo\s*\/\s*tháng$/i);
-  if (zaloMonth) return t('pricing.featureTemplates.zaloPerMonth', { n: zaloMonth[1] });
-
-  const members = text.match(/^([\d.,]+)\s*thành viên(?:\s*tham gia)?$/i);
-  if (members) return t('pricing.featureTemplates.members', { n: members[1] });
-
-  const campaigns = text.match(/^([\d.,]+)\s*chiến dịch$/i);
-  if (campaigns) return t('pricing.featureTemplates.campaigns', { n: campaigns[1] });
-
-  const landingPages = text.match(/^([\d.,]+)\s*landing pages?$/i);
-  if (landingPages) return t('pricing.featureTemplates.landingPages', { n: landingPages[1] });
-
-  const zaloAccounts = text.match(/^([\d.,]+)\s*tài khoản\s*zalo(?:\s*oa)?$/i);
-  if (zaloAccounts) return t('pricing.featureTemplates.zaloAccounts', { n: zaloAccounts[1] });
-
-  const emailAccounts = text.match(/^([\d.,]+)\s*tài khoản\s*email$/i);
-  if (emailAccounts) return t('pricing.featureTemplates.emailAccounts', { n: emailAccounts[1] });
-
-  const knownFeatureKeys = {
-    'ai viết content nâng cao': 'advancedAiWriting',
-    'hỗ trợ ưu tiên 24/7': 'prioritySupport247',
-    'hỗ trợ 24/7': 'support247',
-    'hỗ trợ qua email': 'emailSupport',
-    'multi_language': 'multiLanguage',
-    'không giới hạn': 'unlimited',
-    'không hỗ trợ': 'notSupported',
-    'nhắn tin zalo oa không giới hạn': 'unlimitedZaloMessages',
-    'nhắn tin zalo không giới hạn': 'unlimitedZaloMessages',
-    'không giới hạn tin zalo': 'unlimitedZalo',
-    'gửi email không giới hạn': 'unlimitedEmailSending',
-    'không giới hạn email': 'unlimitedEmail',
-    'không giới hạn chiến dịch': 'unlimitedCampaigns',
-    'không giới hạn landing pages': 'unlimitedLandingPages',
-    'không giới hạn landing page': 'unlimitedLandingPages',
-    'không giới hạn tài khoản': 'unlimitedAccounts',
-    'tạo chiến dịch zalo & email': 'zaloEmailCampaigns',
-    'hỗ trợ qua chat': 'chatSupport',
-    'báo cáo chi tiết': 'detailedReports',
-    'tự động hoá zalo': 'zaloAutomation',
-    'tự động hóa zalo': 'zaloAutomation',
-    'api truy cập': 'apiAccess',
-    'ưu tiên hỗ trợ': 'prioritySupport',
-    'hỗ trợ ưu tiên': 'prioritySupport',
-    'nhãn trắng (white-label)': 'whiteLabel',
-    'nhãn trắng': 'whiteLabel',
-    'white-label': 'whiteLabel',
-    'hỗ trợ chuyên biệt': 'dedicatedSupport',
-    'cam kết uptime 99.9%': 'slaUptime',
-    'sla 99.9%': 'slaUptime',
-    'tích hợp tùy chỉnh': 'customIntegrations',
-    'tích hợp tuỳ chỉnh': 'customIntegrations',
-  };
-
-  const key = knownFeatureKeys[normalized];
-  return key ? t(`pricing.features.${key}`) : text;
-};
+// ── Plan translation helpers (shared with PricingSection) ───────────────────
+export {
+  getPlanTranslationKey,
+  getTranslatedPlanDescription,
+  getTranslatedFeature,
+} from '../../../utils/planTranslation.util.js';
 
 // ── Format helpers ──────────────────────────────────────────────────────────
 

@@ -594,7 +594,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
               ? plan.features
               : JSON.parse(plan.features || '[]');
             const planName = getTranslatedPlanName(plan, t);
-            const planDescription = getTranslatedPlanDescription(plan, t);
+            const planDescription = getTranslatedPlanDescription(plan, t, locale);
             const rawPlanPrice = billingPeriod === 'yearly' && plan.price_yearly
               ? Number(plan.price_yearly)
               : Number(plan.price || 0);
@@ -730,8 +730,8 @@ export default function PricingSection({ embedded = false, compact = false, glas
                   <ul className="space-y-2 flex-1 mb-5">
                     {features.map((feature, i) => {
                       const featureText = (typeof feature === 'object' && feature !== null)
-                        ? (feature[locale] || feature.vi || feature.en || '')
-                        : getTranslatedFeature(feature, t);
+                        ? (feature[locale] || getTranslatedFeature(feature.vi || feature.en || '', t, locale))
+                        : getTranslatedFeature(feature, t, locale);
                       return (
                         <li key={i} className="flex items-start gap-2">
                           <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${style.featureIcon}`}>
