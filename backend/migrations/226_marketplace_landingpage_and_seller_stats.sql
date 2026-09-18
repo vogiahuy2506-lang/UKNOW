@@ -1,3 +1,4 @@
+-- allow-destructive-ddl: Cần thay đổi CHECK constraint để thêm landing_page resource_type - migration có chủ đích nghiệp vụ
 -- 226: Marketplace Enhancement - landing_page resource_type và seller_stats
 -- Thêm landing_page làm resource_type mới
 -- Thêm bảng theo dõi stats của seller
