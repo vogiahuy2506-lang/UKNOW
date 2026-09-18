@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { I18nProvider } from '../../i18n';
 
 // Mock chatbotApi BEFORE importing the component so the dynamic
 // shape change can be exercised without booting axios + the gateway.
@@ -34,9 +35,11 @@ const importComponent = () =>
 const renderTelegramSettings = async () => {
   const TelegramSettings = await importComponent();
   return render(
-    <MemoryRouter>
-      <TelegramSettings />
-    </MemoryRouter>
+    <I18nProvider>
+      <MemoryRouter>
+        <TelegramSettings />
+      </MemoryRouter>
+    </I18nProvider>
   );
 };
 
