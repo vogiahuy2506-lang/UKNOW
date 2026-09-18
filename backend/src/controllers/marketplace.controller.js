@@ -10,6 +10,7 @@ import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
 const VALID_RESOURCE_TYPES = ['campaign', 'chatbot', 'landing_page'];
 const VALID_VISIBILITIES = ['public', 'team'];
+const VALID_CATEGORIES = ['marketing', 'chatbot', 'landing'];
 
 class MarketplaceController {
   /**
