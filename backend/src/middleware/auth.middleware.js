@@ -18,6 +18,9 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
               u.active_plan_id, u.subscription_expires_at, u.must_change_password, u.phone,
               u.phone_verified_at,
               u.referral_code,
+              u.referred_by_user_id,
+              u.referred_at,
+              u.created_at,
               u.updated_at,
               COALESCE(p.grace_period_days, 0)::int AS grace_period_days,
               (
@@ -46,6 +49,9 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
               NULL AS subscription_expires_at, FALSE AS must_change_password, phone,
               phone_verified_at,
               referral_code,
+              referred_by_user_id,
+              referred_at,
+              created_at,
               updated_at,
               0 AS grace_period_days,
               (

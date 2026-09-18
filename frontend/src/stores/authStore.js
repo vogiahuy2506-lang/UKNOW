@@ -188,6 +188,8 @@ export const useAuthStore = create((set, get) => ({
   phoneOtpEnabled: false,
   /** PR-B: Cờ tắt nhắc SĐT trong phiên hiện tại (không lưu storage, reset khi logout/login). */
   phoneReminderDismissed: false,
+  /** Cờ tắt popup mã giới thiệu trong phiên hiện tại. */
+  referralPromptDismissed: false,
 
   /**
    * Khởi tạo trạng thái auth từ storage khi load app.
@@ -292,7 +294,7 @@ export const useAuthStore = create((set, get) => ({
     const activeContext = pickDefaultContext(normalizedUser);
     saveContext(activeContext);
 
-    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false, referralPromptDismissed: false });
 
     return response.data;
   },
@@ -317,7 +319,7 @@ export const useAuthStore = create((set, get) => ({
       }
     }
 
-    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false, referralPromptDismissed: false });
 
     return response.data;
   },
@@ -339,7 +341,7 @@ export const useAuthStore = create((set, get) => ({
       }
     }
 
-    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false });
+    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false, referralPromptDismissed: false });
 
     return response.data;
   },
@@ -364,6 +366,7 @@ export const useAuthStore = create((set, get) => ({
         user: null,
         isAuthenticated: false,
         phoneReminderDismissed: false,
+        referralPromptDismissed: false,
         aiCredits: { used: 0, limit: null },
         sendUsage: { ...EMPTY_SEND_USAGE },
         addons: null,
@@ -452,6 +455,11 @@ export const useAuthStore = create((set, get) => ({
   /** Tắt nhắc SĐT trong phiên xem hiện tại. */
   dismissPhoneReminder: () => {
     set({ phoneReminderDismissed: true });
+  },
+
+  /** Tắt popup nhắc mã giới thiệu trong phiên xem hiện tại. */
+  dismissReferralPrompt: () => {
+    set({ referralPromptDismissed: true });
   },
 
   /**

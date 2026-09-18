@@ -1,10 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../stores/authStore';
-import { usePostAuthGates } from '../hooks/usePostAuthGates';
+import { usePostAuthGates, markReferralPromptDismissed } from '../hooks/usePostAuthGates';
 import ChangePasswordModal from './ChangePasswordModal';
 import PhoneRequiredModal from './PhoneRequiredModal';
 import ConsentRequiredModal from './ConsentRequiredModal';
+import ReferralPromptModal from './ReferralPromptModal';
 
 /**
  * Danh sách tiền tố đường dẫn được loại trừ khỏi cổng sau đăng nhập.
@@ -65,8 +66,9 @@ const PostAuthGateModals = () => {
   const updateUser = useAuthStore((s) => s.updateUser);
   const logout = useAuthStore((s) => s.logout);
   const dismissPhoneReminder = useAuthStore((s) => s.dismissPhoneReminder);
+  const dismissReferralPrompt = useAuthStore((s) => s.dismissReferralPrompt);
 
-  const { mustChangePassword, consentRequired, phoneRequired } = usePostAuthGates();
+  const { mustChangePassword, consentRequired, phoneRequired, referralPromptRequired } = usePostAuthGates();
 
   // Không hiển thị nếu chưa đăng nhập hoặc đang ở đường dẫn bị loại trừ
   if (!isAuthenticated || isPathExcludedFromPostAuthGates(location.pathname)) {
@@ -76,6 +78,31 @@ const PostAuthGateModals = () => {
   const handleDeclineConsent = async () => {
     await logout();
     navigate('/login', { replace: true });
+  };
+
+  const handleDismissReferralPrompt = () => {
+    if (user?.id) {
+      markReferralPromptDismissed(user.id);
+    }
+    dismissReferralPrompt();
+  };
+
+  const handleSuccessReferralPrompt = (data) => {
+    if (user?.id) {
+      markReferralPromptDismissed(user.id);
+    }
+    dismissReferralPrompt();
+    if (data?.user) {
+      updateUser(data.user);
+    } else {
+      updateUser({
+        ...user,
+        referredByUserId: data?.referredByUserId ?? data?.referred_by_user_id,
+        referredAt: data?.referredAt ?? data?.referred_at ?? new Date().toISOString(),
+        referrerCode: data?.referrerCode,
+        referrerName: data?.referrerName,
+      });
+    }
   };
 
   return (
@@ -110,6 +137,12 @@ const PostAuthGateModals = () => {
           })
         }
         onDecline={handleDeclineConsent}
+      />
+
+      <ReferralPromptModal
+        isOpen={referralPromptRequired}
+        onClose={handleDismissReferralPrompt}
+        onSuccess={handleSuccessReferralPrompt}
       />
     </>
   );

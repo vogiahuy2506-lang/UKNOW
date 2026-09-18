@@ -6479,6 +6479,7 @@ export default {
     copyCode: 'Copy Code',
     copyLink: 'Copy Link',
     copied: 'Copied!',
+    referredBy: 'Referred by',
     // Profile tab - account stats
     createdAt: 'Created on {date}',
     lastLogin: 'Last login {date}',
@@ -7630,6 +7631,23 @@ Feel free to ask me anything!`,
     success: 'Password changed successfully!',
     failed: 'Password change failed.',
     errorOccurred: 'An error occurred. Please try again.',
+  },
+
+  referralPromptModal: {
+    title: 'Enter referral code',
+    description: 'If you were referred to UKNOW Campaign by a friend or partner, please enter their referral code.',
+    warningNote: 'Note: You can only enter a referral code during this onboarding step. Once skipped, you will not be able to enter it later.',
+    label: 'Referral code',
+    placeholder: 'e.g. UKN123456',
+    skip: 'Skip / I don’t have a code',
+    submit: 'Confirm code',
+    submitting: 'Verifying...',
+    success: 'Referral code linked successfully!',
+    invalidCode: 'Invalid or non-existent referral code.',
+    selfReferral: 'You cannot refer yourself.',
+    alreadyReferred: 'Your account is already linked to a referrer.',
+    timeExpired: 'The referral window has expired (first 24h only).',
+    failed: 'Failed to link referral code. Please try again.',
   },
 
   phoneRequired: {

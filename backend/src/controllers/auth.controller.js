@@ -1043,6 +1043,9 @@ class AuthController {
       phoneVerifiedAt: user.phone_verified_at ?? null,
       // Mã giới thiệu cá nhân (Affiliate PR-A1)
       referralCode: user.referral_code ?? user.referralCode ?? null,
+      referredByUserId: user.referred_by_user_id ?? user.referredByUserId ?? null,
+      referredAt: user.referred_at ?? user.referredAt ?? null,
+      createdAt: user.created_at ?? user.createdAt ?? null,
       // Bằng chứng đồng ý văn bản pháp lý (Nghị định 330/2026/NĐ-CP PR-N2)
       consents: consents || null,
       hasConsented: hasConsentedCurrent(consents),

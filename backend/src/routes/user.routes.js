@@ -31,6 +31,17 @@ router.put(
   userController.updatePhone.bind(userController)
 );
 
+/**
+ * POST /api/users/me/referrer
+ * Liên kết người giới thiệu khi vừa đăng ký tài khoản mới.
+ */
+router.post(
+  '/me/referrer',
+  [body('referralCode').trim().notEmpty().withMessage('Vui lòng nhập mã giới thiệu')],
+  handleValidationErrors,
+  userController.bindReferrer.bind(userController)
+);
+
 // Hồ sơ xuất hoá đơn người dùng tự lưu
 router.get('/invoice-profile', userController.getInvoiceProfile.bind(userController));
 router.put('/invoice-profile', userController.updateInvoiceProfile.bind(userController));

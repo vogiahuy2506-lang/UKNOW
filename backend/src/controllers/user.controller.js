@@ -1,4 +1,6 @@
 import bcrypt from 'bcryptjs';
+import db from '../config/database.js';
+import { normalizeReferralCode } from '../utils/affiliateReferral.util.js';
 import {
   findLegacyEmployees,
   findPasswordHashByUserId,
@@ -143,6 +145,10 @@ const mapProfileResponse = (userRow) => ({
   avatarUrl: userRow.avatar_url,
   phone: userRow.phone,
   referralCode: userRow.referral_code ?? null,
+  referredByUserId: userRow.referred_by_user_id ?? null,
+  referredAt: userRow.referred_at ?? null,
+  referrerCode: userRow.referrer_code ?? null,
+  referrerName: userRow.referrer_name ?? null,
   consents: userRow.consents || null,
   hasConsented: hasConsentedCurrent(userRow.consents),
   consentVersionOutdated: isConsentVersionOutdated(userRow.consents),
@@ -534,6 +540,104 @@ class UserController {
       }
       console.error('Update phone error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * POST /api/users/me/referrer
+   * Liên kết người giới thiệu khi vừa đăng ký tài khoản mới.
+   */
+  async bindReferrer(req, res) {
+    try {
+      const userId = req.user.id;
+      const rawCode = req.body?.referralCode;
+      const cleanRefCode = normalizeReferralCode(rawCode);
+
+      if (!cleanRefCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vui lòng nhập mã giới thiệu',
+        });
+      }
+
+      const { rows: userRows } = await db.query(
+        'SELECT id, email, phone, referred_by_user_id, created_at FROM users WHERE id = $1',
+        [userId]
+      );
+      if (userRows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      }
+
+      const currentUser = userRows[0];
+
+      if (currentUser.referred_by_user_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tài khoản của bạn đã được liên kết người giới thiệu trước đó',
+        });
+      }
+
+      const createdAtMs = new Date(currentUser.created_at).getTime();
+      const nowMs = Date.now();
+      const hoursSinceCreation = (nowMs - createdAtMs) / (1000 * 60 * 60);
+      if (hoursSinceCreation > 24) {
+        return res.status(400).json({
+          success: false,
+          message: 'Đã quá thời hạn liên kết mã giới thiệu (chỉ áp dụng khi mới đăng ký tài khoản)',
+        });
+      }
+
+      const { rows: referrerRows } = await db.query(
+        'SELECT id, email, phone, referral_code, full_name, username FROM users WHERE referral_code = $1',
+        [cleanRefCode]
+      );
+      if (referrerRows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Mã giới thiệu không tồn tại hoặc không hợp lệ',
+        });
+      }
+
+      const referrer = referrerRows[0];
+
+      const isSelf = String(referrer.id) === String(currentUser.id)
+        || (referrer.email && currentUser.email && referrer.email.toLowerCase() === currentUser.email.toLowerCase())
+        || (referrer.phone && currentUser.phone && referrer.phone === currentUser.phone);
+
+      if (isSelf) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bạn không thể tự nhập mã giới thiệu của chính mình',
+        });
+      }
+
+      const { rows: updatedRows } = await db.query(
+        `UPDATE users
+         SET referred_by_user_id = $1, referred_at = CURRENT_TIMESTAMP
+         WHERE id = $2 AND referred_by_user_id IS NULL
+         RETURNING id, referred_by_user_id, referred_at`,
+        [referrer.id, userId]
+      );
+
+      if (updatedRows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tài khoản đã có người giới thiệu',
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Liên kết người giới thiệu thành công',
+        data: {
+          referredByUserId: referrer.id,
+          referrerCode: referrer.referral_code,
+          referrerName: referrer.full_name || referrer.username,
+        },
+      });
+    } catch (error) {
+      console.error('bindReferrer error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server khi liên kết mã giới thiệu' });
     }
   }
 

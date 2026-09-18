@@ -127,3 +127,14 @@ export async function getUserConsentHistory() {
   const response = await api.get('/users/consents');
   return response.data;
 }
+
+/**
+ * Liên kết người giới thiệu (Affiliate) ngay sau khi đăng ký tài khoản.
+ *
+ * @param {{ referralCode: string }} payload
+ * @returns {Promise<{ success: boolean, message?: string, data?: Record<string, any> }>}
+ */
+export async function bindReferrer({ referralCode }) {
+  const response = await api.post('/users/me/referrer', { referralCode });
+  return response.data;
+}

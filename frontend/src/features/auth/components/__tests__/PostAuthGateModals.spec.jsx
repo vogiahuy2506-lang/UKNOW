@@ -37,6 +37,30 @@ vi.mock('../ConsentRequiredModal', () => ({
     ) : null,
 }));
 
+vi.mock('../ReferralPromptModal', () => ({
+  default: ({ isOpen, onClose, onSuccess }) =>
+    isOpen ? (
+      <div data-testid="referral-prompt-modal">
+        <button data-testid="referral-skip-btn" onClick={onClose}>
+          Bỏ qua
+        </button>
+        <button
+          data-testid="referral-submit-btn"
+          onClick={() =>
+            onSuccess({
+              referredByUserId: 99,
+              referrerCode: 'PROMO99',
+              referrerName: 'User 99',
+            })
+          }
+        >
+          Xác nhận
+        </button>
+      </div>
+    ) : null,
+}));
+
+
 const renderWithRouter = (initialEntries = ['/']) =>
   render(
     <MemoryRouter initialEntries={initialEntries}>
@@ -345,4 +369,125 @@ describe('PostAuthGateModals (PR-B: Cổng sau đăng nhập toàn cục)', () =
     renderWithRouter(['/']);
     expect(screen.getByTestId('phone-required-modal')).toBeInTheDocument();
   });
+
+  describe('Cổng nhập mã giới thiệu (ReferralPromptModal - chỉ 1 lần lúc mới đăng ký)', () => {
+    beforeEach(() => {
+      window.localStorage.clear();
+      useAuthStore.setState({ referralPromptDismissed: false });
+    });
+
+    it('tài khoản mới tạo (<24h), đã đồng ý và đủ SĐT, chưa có người giới thiệu → HIỆN modal referral', () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: 10,
+          role: 'user',
+          phone: '0912345678',
+          phoneVerifiedAt: '2026-09-18T10:00:00.000Z',
+          mustChangePassword: false,
+          hasConsented: true,
+          referredByUserId: null,
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      renderWithRouter(['/']);
+      expect(screen.getByTestId('referral-prompt-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('consent-required-modal')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('phone-required-modal')).not.toBeInTheDocument();
+    });
+
+    it('tài khoản đã có người giới thiệu (referredByUserId) → KHÔNG hiện modal referral', () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: 11,
+          role: 'user',
+          phone: '0912345678',
+          phoneVerifiedAt: '2026-09-18T10:00:00.000Z',
+          mustChangePassword: false,
+          hasConsented: true,
+          referredByUserId: 5,
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      renderWithRouter(['/']);
+      expect(screen.queryByTestId('referral-prompt-modal')).not.toBeInTheDocument();
+    });
+
+    it('tài khoản tạo quá 24 giờ → KHÔNG hiện modal referral', () => {
+      const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: 12,
+          role: 'user',
+          phone: '0912345678',
+          phoneVerifiedAt: '2026-09-18T10:00:00.000Z',
+          mustChangePassword: false,
+          hasConsented: true,
+          referredByUserId: null,
+          createdAt: twoDaysAgo,
+        },
+      });
+
+      renderWithRouter(['/']);
+      expect(screen.queryByTestId('referral-prompt-modal')).not.toBeInTheDocument();
+    });
+
+    it('bấm Bỏ qua → modal đóng và lưu localStorage vĩnh viễn không hỏi lại', () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: 13,
+          role: 'user',
+          phone: '0912345678',
+          phoneVerifiedAt: '2026-09-18T10:00:00.000Z',
+          mustChangePassword: false,
+          hasConsented: true,
+          referredByUserId: null,
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      const { unmount } = renderWithRouter(['/']);
+      expect(screen.getByTestId('referral-prompt-modal')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('referral-skip-btn'));
+      expect(window.localStorage.getItem('referral_prompt_dismissed_13')).toBe('1');
+      expect(screen.queryByTestId('referral-prompt-modal')).not.toBeInTheDocument();
+      unmount();
+
+      // Mở lại trang → vẫn không hiện vì đã dismiss trong localStorage
+      renderWithRouter(['/']);
+      expect(screen.queryByTestId('referral-prompt-modal')).not.toBeInTheDocument();
+    });
+
+    it('xác nhận mã thành công → cập nhật user trong authStore và đóng modal', () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: 14,
+          role: 'user',
+          phone: '0912345678',
+          phoneVerifiedAt: '2026-09-18T10:00:00.000Z',
+          mustChangePassword: false,
+          hasConsented: true,
+          referredByUserId: null,
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      renderWithRouter(['/']);
+      expect(screen.getByTestId('referral-prompt-modal')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('referral-submit-btn'));
+
+      expect(window.localStorage.getItem('referral_prompt_dismissed_14')).toBe('1');
+      expect(useAuthStore.getState().user.referredByUserId).toBe(99);
+      expect(screen.queryByTestId('referral-prompt-modal')).not.toBeInTheDocument();
+    });
+  });
 });
+

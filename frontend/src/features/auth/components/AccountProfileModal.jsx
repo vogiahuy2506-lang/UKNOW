@@ -537,8 +537,18 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                     </button>
                   </div>
                 </div>
+
+                {profileData?.referrerCode && (
+                  <div className="pt-2 border-t border-orange-200/60 flex items-center justify-between text-xs text-slate-600">
+                    <span>{t('accountProfileModal.referredBy')}:</span>
+                    <span className="font-medium text-slate-900">
+                      {profileData.referrerName ? `${profileData.referrerName} (${profileData.referrerCode})` : profileData.referrerCode}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
+
 
             {/* Lịch sử đồng ý điều khoản & xử lý dữ liệu (PR-N3a / Nghị định 330/2026/NĐ-CP) */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">

@@ -6483,6 +6483,7 @@ export default {
     copyCode: 'Sao chép mã',
     copyLink: 'Sao chép link',
     copied: 'Đã sao chép!',
+    referredBy: 'Được giới thiệu bởi',
     // Profile tab - account stats
     createdAt: 'Tạo ngày {date}',
     lastLogin: 'Đăng nhập gần nhất {date}',
@@ -7553,6 +7554,23 @@ export default {
     success: 'Password changed successfully!',
     failed: 'Password change failed.',
     errorOccurred: 'An error occurred. Please try again.',
+  },
+
+  referralPromptModal: {
+    title: 'Nhập mã giới thiệu',
+    description: 'Nếu bạn được bạn bè hoặc đối tác giới thiệu đến UKNOW Campaign, vui lòng nhập mã giới thiệu của họ.',
+    warningNote: 'Lưu ý: Bạn chỉ có thể nhập mã giới thiệu tại bước khởi tạo này. Sau khi bỏ qua, hệ thống sẽ không cho phép nhập lại.',
+    label: 'Mã giới thiệu',
+    placeholder: 'Ví dụ: UKN123456',
+    skip: 'Bỏ qua / Tôi không có mã',
+    submit: 'Xác nhận mã',
+    submitting: 'Đang kiểm tra...',
+    success: 'Liên kết người giới thiệu thành công!',
+    invalidCode: 'Mã giới thiệu không hợp lệ hoặc không tồn tại.',
+    selfReferral: 'Bạn không thể tự giới thiệu chính mình.',
+    alreadyReferred: 'Tài khoản của bạn đã có người giới thiệu.',
+    timeExpired: 'Đã hết thời hạn liên kết mã giới thiệu (chỉ áp dụng trong 24h đầu).',
+    failed: 'Liên kết người giới thiệu thất bại. Vui lòng thử lại.',
   },
 
   phoneRequired: {
