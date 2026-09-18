@@ -50,21 +50,56 @@ describe('chatbot active hours integration', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ active_hours: config });
 
-      expect(res.status).toBe(200);
-      expect(res.body.data.active_hours).toEqual({
+      const expected = {
+        days: [1, 2, 3, 4, 5, 6, 0],
+        slots: [{ start: '18:00', end: '05:00' }],
         start: '18:00',
         end: '05:00',
         outsideAction: 'message',
         outsideMessage: 'Hiện ngoài giờ hỗ trợ',
-      });
+      };
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.active_hours).toEqual(expected);
 
       // Kiểm tra trong DB
       const { rows } = await db.query(
         'SELECT active_hours FROM custom_chatbots WHERE id = $1',
         [chatbot.id]
       );
-      expect(rows[0].active_hours).toEqual(config);
+      expect(rows[0].active_hours).toEqual(expected);
     });
+
+    it('saves multi-slot and multi-day active_hours configuration', async () => {
+      const config = {
+        days: [1, 2, 3, 4, 5],
+        slots: [
+          { start: '11:30', end: '13:30' },
+          { start: '18:00', end: '05:00' },
+        ],
+        outsideAction: 'message',
+        outsideMessage: 'Ngoài giờ hỗ trợ Thứ 2 - Thứ 6',
+      };
+
+      const res = await request(app)
+        .put(`/api/ai/chatbot/custom-chatbots/${chatbot.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ active_hours: config });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.active_hours).toEqual({
+        days: [1, 2, 3, 4, 5],
+        slots: [
+          { start: '11:30', end: '13:30' },
+          { start: '18:00', end: '05:00' },
+        ],
+        start: '11:30',
+        end: '13:30',
+        outsideAction: 'message',
+        outsideMessage: 'Ngoài giờ hỗ trợ Thứ 2 - Thứ 6',
+      });
+    });
+
 
     it('rejects invalid active_hours where start equals end', async () => {
       const res = await request(app)

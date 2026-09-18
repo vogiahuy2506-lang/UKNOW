@@ -96,4 +96,137 @@ describe('ChatbotActiveHoursCard', () => {
 
     expect(onChange).toHaveBeenCalledWith(null);
   });
+
+  it('renders multi-slot and custom days when provided', () => {
+    const initial = {
+      days: [1, 2, 3, 4, 5],
+      slots: [
+        { start: '08:00', end: '12:00' },
+        { start: '13:30', end: '17:30' },
+      ],
+      outsideAction: 'silent',
+    };
+    render(<ChatbotActiveHoursCard value={initial} onChange={vi.fn()} />);
+
+    expect(screen.getByText('chatbot.studio.activeHoursPresetWorkdays')).toBeDefined();
+    expect(screen.getByLabelText('start-time')).toHaveValue('08:00');
+    expect(screen.getByLabelText('end-time')).toHaveValue('12:00');
+    expect(screen.getByLabelText('start-time-1')).toHaveValue('13:30');
+    expect(screen.getByLabelText('end-time-1')).toHaveValue('17:30');
+  });
+
+  it('renders overnight badge for slot where start > end', () => {
+    const initial = {
+      days: [1, 2, 3, 4, 5],
+      slots: [{ start: '18:00', end: '05:00' }],
+      outsideAction: 'silent',
+    };
+    render(<ChatbotActiveHoursCard value={initial} onChange={vi.fn()} />);
+
+    expect(screen.getByText('chatbot.studio.activeHoursOvernightBadge')).toBeDefined();
+  });
+
+  it('updates days when preset buttons are clicked', () => {
+    const onChange = vi.fn();
+    render(
+      <ChatbotActiveHoursCard
+        value={{ start: '08:00', end: '17:30', outsideAction: 'silent' }}
+        onChange={onChange}
+      />
+    );
+
+    const workdaysBtn = screen.getByText('chatbot.studio.activeHoursPresetWorkdays');
+    fireEvent.click(workdaysBtn);
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        days: [1, 2, 3, 4, 5],
+        slots: [{ start: '08:00', end: '17:30' }],
+      })
+    );
+  });
+
+  it('validates error when all days are unselected', () => {
+    const onChange = vi.fn();
+    const onValidityChange = vi.fn();
+    render(
+      <ChatbotActiveHoursCard
+        value={{ days: [1], slots: [{ start: '08:00', end: '17:30' }], outsideAction: 'silent' }}
+        onChange={onChange}
+        onValidityChange={onValidityChange}
+      />
+    );
+
+    // Unselect Monday (T2)
+    const monBtn = screen.getByText('chatbot.studio.dayMon');
+    fireEvent.click(monBtn);
+
+    expect(onValidityChange).toHaveBeenLastCalledWith('chatbot.studio.activeHoursNoDaysSelected');
+    expect(screen.getByText('chatbot.studio.activeHoursNoDaysSelected')).toBeDefined();
+  });
+
+  it('adds and removes time slots up to limit', () => {
+    const onChange = vi.fn();
+    render(
+      <ChatbotActiveHoursCard
+        value={{
+          days: [1, 2, 3, 4, 5],
+          slots: [{ start: '08:00', end: '12:00' }],
+          outsideAction: 'silent',
+        }}
+        onChange={onChange}
+      />
+    );
+
+    // Click Add Slot
+    const addBtn = screen.getByText('chatbot.studio.activeHoursAddSlot');
+    fireEvent.click(addBtn);
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slots: [
+          { start: '08:00', end: '12:00' },
+          { start: '18:00', end: '22:00' },
+        ],
+      })
+    );
+
+    // Now remove slot 2
+    const removeBtns = screen.getAllByTitle('chatbot.studio.activeHoursRemoveSlot');
+    expect(removeBtns.length).toBe(2);
+    fireEvent.click(removeBtns[1]);
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slots: [{ start: '08:00', end: '12:00' }],
+      })
+    );
+  });
+
+  it('validates overlapping time slots and blocks submission', () => {
+    const onChange = vi.fn();
+    const onValidityChange = vi.fn();
+    render(
+      <ChatbotActiveHoursCard
+        value={{
+          days: [1, 2, 3, 4, 5],
+          slots: [
+            { start: '08:00', end: '12:00' },
+            { start: '14:00', end: '18:00' },
+          ],
+          outsideAction: 'silent',
+        }}
+        onChange={onChange}
+        onValidityChange={onValidityChange}
+      />
+    );
+
+    // Change slot 2 start time to 11:00 (overlaps with 08:00-12:00)
+    const start2 = screen.getByLabelText('start-time-1');
+    fireEvent.change(start2, { target: { value: '11:00' } });
+
+    expect(onValidityChange).toHaveBeenLastCalledWith('chatbot.studio.activeHoursSlotsOverlap');
+    expect(screen.getByText('chatbot.studio.activeHoursSlotsOverlap')).toBeDefined();
+  });
 });
+
