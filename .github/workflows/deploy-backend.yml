@@ -185,7 +185,24 @@ jobs:
           script: |
             set -e
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Deploying backend image: $BACKEND_IMAGE"
-            docker pull "$BACKEND_IMAGE"
+            # Docker Hub thỉnh thoảng trả TLS handshake timeout / 5xx khi registry CDN
+            # nghẽn (18/09/2026: workflow fail ở đây, image build vẫn trên registry,
+            # chỉ là phiên TCP bị ngắt giữa chừng). Retry tối đa 5 lần với backoff
+            # để tránh fail cả workflow vì một blip ngắn — image đã được push lên
+            # registry thành công ở step "Build and push image", pull thuần tuý là
+            # network I/O nên retry an toàn (idempotent, không đổi state).
+            PULL_ATTEMPT=0
+            PULL_MAX_ATTEMPTS=5
+            until docker pull "$BACKEND_IMAGE"; do
+              PULL_ATTEMPT=$((PULL_ATTEMPT + 1))
+              if [ "$PULL_ATTEMPT" -ge "$PULL_MAX_ATTEMPTS" ]; then
+                echo "::error::docker pull failed sau $PULL_MAX_ATTEMPTS lần — registry có thể đang down hoặc bị rate-limit."
+                exit 1
+              fi
+              BACKOFF=$((PULL_ATTEMPT * 15))
+              echo "::warning::docker pull lần $PULL_ATTEMPT/$PULL_MAX_ATTEMPTS thất bại, chờ ${BACKOFF}s rồi thử lại..."
+              sleep "$BACKOFF"
+            done
             docker image inspect "$BACKEND_IMAGE" --format 'Pulled image id: {{.Id}}'
             mkdir -p /root/uknow/scripts /root/uknow/certbot/.well-known/acme-challenge /root/uknow/nginx-domains
             cp /tmp/uknow-ssl-scripts/ssl-auto-provision.sh /root/uknow/scripts/ssl-auto-provision.sh
