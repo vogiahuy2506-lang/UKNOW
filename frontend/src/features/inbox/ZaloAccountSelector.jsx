@@ -43,7 +43,7 @@ const ZaloAccountSelector = ({
       if (payload?.success && payload?.data?.accounts?.length > 0) {
         const mapped = payload.data.accounts.map((account) => ({
           id: account.id,
-          displayName: account.displayName || account.display_name || 'Zalo Cá nhân',
+          displayName: account.displayName || account.display_name || t('inbox.zaloPersonal') || 'Zalo Cá nhân',
           isActive: account.hasActiveSession,
           hasSession: account.hasActiveSession,
           conversationCount: account.conversationCount,

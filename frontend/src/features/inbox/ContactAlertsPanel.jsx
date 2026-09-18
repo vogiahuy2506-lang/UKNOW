@@ -15,10 +15,10 @@ import {
 import chatbotApi from '../chatbot/services/chatbotApi.service';
 import toast from 'react-hot-toast';
 
-function formatDateTime(isoStr) {
+function formatDateTime(isoStr, locale = 'vi') {
   if (!isoStr) return '—';
   const d = new Date(isoStr);
-  return d.toLocaleString('vi-VN', {
+  return d.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh',
     hour: '2-digit',
     minute: '2-digit',
@@ -41,7 +41,7 @@ export default function ContactAlertsPanel({
   onOpenCountChange,
   className = '',
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [alerts, setAlerts] = useState([]);
   const [total, setTotal] = useState(0);
   const [openCount, setOpenCount] = useState(0);
@@ -205,7 +205,7 @@ export default function ContactAlertsPanel({
     if (alert.last_source === 'zalo_personal') {
       return (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 border border-cyan-100">
-          Zalo cá nhân{alert.display_name ? ` (${alert.display_name})` : ''}
+          {t('inbox.zaloPersonal') || 'Zalo cá nhân'}{alert.display_name ? ` (${alert.display_name})` : ''}
         </span>
       );
     }
@@ -237,7 +237,7 @@ export default function ContactAlertsPanel({
     }
     if (alert.suppressed_reason === 'owner_opted_out') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100" title="Chủ shop đã tắt nhận email">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100" title={t('inbox.contactAlerts.titleOwnerOptedOut') || 'Chủ shop đã tắt nhận email'}>
           <HiOutlineExclamationCircle className="w-3.5 h-3.5" />
           {t('inbox.contactAlerts.statusOptedOut') || 'Tắt thông báo'}
         </span>
@@ -245,7 +245,7 @@ export default function ContactAlertsPanel({
     }
     if (alert.suppressed_reason === 'human_active') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200" title="Người thật đã trả lời trong 120 phút">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200" title={t('inbox.contactAlerts.titleHumanActive') || 'Người thật đã trả lời trong 120 phút'}>
           <HiOutlineCheckCircle className="w-3.5 h-3.5" />
           {t('inbox.contactAlerts.statusHumanActive') || 'Đã có người rep'}
         </span>
@@ -471,7 +471,7 @@ export default function ContactAlertsPanel({
 
                   {/* Lần cuối */}
                   <td className="py-3.5 px-4 whitespace-nowrap text-gray-500">
-                    {formatDateTime(alert.last_seen_at)}
+                    {formatDateTime(alert.last_seen_at, locale)}
                   </td>
 
                   {/* Số lần */}
@@ -486,7 +486,7 @@ export default function ContactAlertsPanel({
                     {formatStatusBadge(alert)}
                     {alert.handled_at && alert.handled_by_name && (
                       <div className="text-[10px] text-gray-400 mt-0.5">
-                        bởi {alert.handled_by_name}
+                        {t('inbox.contactAlerts.byUser', { name: alert.handled_by_name }) || `bởi ${alert.handled_by_name}`}
                       </div>
                     )}
                   </td>

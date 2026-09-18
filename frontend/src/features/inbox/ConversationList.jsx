@@ -30,7 +30,10 @@ const parseVisitorInfo = (visitorInfo) => {
   return visitorInfo || {};
 };
 
-const getDisplayName = (conv) => {
+const getDisplayName = (conv, t) => {
+  const defaultCustomer = t ? (t('inbox.customer') || 'Khách hàng') : 'Khách hàng';
+  const defaultGroup = t ? (t('inbox.group') || 'Nhóm') : 'Nhóm';
+  if (!conv) return defaultCustomer;
   const visitorInfo = parseVisitorInfo(conv.visitor_info || conv.visitorInfo);
   
   if (visitorInfo.is_group) {
@@ -43,7 +46,7 @@ const getDisplayName = (conv) => {
     }
     const groupId = visitorInfo.group_id || visitorInfo.groupId || '';
     const shortId = groupId.replace('group_', '').slice(-6);
-    return `Nhóm ${shortId}`;
+    return `${defaultGroup} ${shortId}`;
   }
   
   const senderName = visitorInfo.sender_name || visitorInfo.senderName;
@@ -51,7 +54,7 @@ const getDisplayName = (conv) => {
     return senderName;
   }
   
-  return conv.visitorName || 'Khách hàng';
+  return conv.visitorName || defaultCustomer;
 };
 
 const isGroupConversation = (conv) => {
@@ -62,7 +65,7 @@ const isGroupConversation = (conv) => {
 const getLastMessageAt = (conv) =>
   conv.lastMessageAt || conv.last_message_at || conv.updatedAt || conv.createdAt || '';
 
-const formatTime = (dateString) => {
+const formatTime = (dateString, t, locale) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
@@ -71,11 +74,11 @@ const formatTime = (dateString) => {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'Vừa xong';
-  if (diffMins < 60) return `${diffMins}p`;
-  if (diffHours < 24) return `${diffHours}giờ`;
-  if (diffDays < 7) return `${diffDays}ngày`;
-  return date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'short' });
+  if (diffMins < 1) return t ? (t('inbox.justNow') || 'Vừa xong') : 'Vừa xong';
+  if (diffMins < 60) return `${diffMins}${t ? (t('inbox.minsShort') || 'p') : 'p'}`;
+  if (diffHours < 24) return `${diffHours}${t ? (t('inbox.hoursShort') || 'giờ') : 'giờ'}`;
+  if (diffDays < 7) return `${diffDays}${t ? (t('inbox.daysShort') || 'ngày') : 'ngày'}`;
+  return date.toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', { day: 'numeric', month: 'short' });
 };
 
 const truncateMessage = (message, maxLength = 45, labels) => {
@@ -90,10 +93,11 @@ const ConversationItem = ({
   isSelected, 
   onSelect, 
   onDelete,
-  t 
+  t,
+  locale
 }) => {
   const channel = CHANNEL_LABELS(t)[conv.channel] || CHANNEL_LABELS(t).web;
-  const displayName = getDisplayName(conv);
+  const displayName = getDisplayName(conv, t);
   const isGroup = isGroupConversation(conv);
   const messageLabels = {
     sticker: t('inbox.messageSticker'),
@@ -105,7 +109,7 @@ const ConversationItem = ({
   
   const hasUnread = conv.unreadCount > 0;
   const isActive = conv.status === 'active';
-  const lastMessageTime = formatTime(getLastMessageAt(conv));
+  const lastMessageTime = formatTime(getLastMessageAt(conv), t, locale);
   const selectedConversation = isGroup
     ? {
         ...conv,
@@ -168,11 +172,11 @@ const ConversationItem = ({
               <span className={`font-semibold text-sm truncate ${
                 isSelected ? 'text-primary-700' : 'text-gray-900'
               }`}>
-                {displayName || 'Khách hàng'}
+                {displayName || (t ? (t('inbox.customer') || 'Khách hàng') : 'Khách hàng')}
               </span>
               {!isActive && (
                 <span className="shrink-0 text-[9px] px-1 py-px rounded bg-gray-100 text-gray-500">
-                  Đóng
+                  {t('common.close') || 'Đóng'}
                 </span>
               )}
               {conv.aiPaused && !conv.aiPausedAt && (
@@ -193,14 +197,14 @@ const ConversationItem = ({
               {onDelete && (
                 <button
                   type="button"
-                  aria-label="Xóa cuộc trò chuyện"
+                  aria-label={t('inbox.confirmDeleteTitle') || 'Xóa cuộc trò chuyện'}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     onDelete(conv, e);
                   }}
                   className="absolute right-2 top-2 hidden p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all group-hover:flex focus:outline-none focus:ring-2 focus:ring-red-300"
-                  title="Xóa cuộc trò chuyện"
+                  title={t('inbox.confirmDeleteTitle') || 'Xóa cuộc trò chuyện'}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -223,14 +227,14 @@ const ConversationItem = ({
   );
 };
 
-const EmptyState = ({ message }) => (
+const EmptyState = ({ message, t }) => (
   <div className="flex-1 flex items-center justify-center text-gray-500">
     <div className="text-center p-8">
       <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 flex items-center justify-center">
         <span className="text-4xl">💬</span>
       </div>
       <p className="text-base font-semibold text-gray-600">{message}</p>
-      <p className="text-sm text-gray-400 mt-2">Chọn một cuộc trò chuyện để bắt đầu</p>
+      <p className="text-sm text-gray-400 mt-2">{t ? (t('inbox.selectConversation') || 'Chọn một cuộc trò chuyện để bắt đầu') : 'Chọn một cuộc trò chuyện để bắt đầu'}</p>
     </div>
   </div>
 );
@@ -262,7 +266,7 @@ const ConversationList = ({
   onDelete,
   sortBy = 'latest',
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const filteredConversations = useMemo(() => {
@@ -276,10 +280,10 @@ const ConversationList = ({
         result.sort((a, b) => (b.unreadCount || 0) - (a.unreadCount || 0));
         break;
       case 'name_asc':
-        result.sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b), 'vi'));
+        result.sort((a, b) => getDisplayName(a, t).localeCompare(getDisplayName(b, t), locale === 'en' ? 'en' : 'vi'));
         break;
       case 'name_desc':
-        result.sort((a, b) => getDisplayName(b).localeCompare(getDisplayName(a), 'vi'));
+        result.sort((a, b) => getDisplayName(b, t).localeCompare(getDisplayName(a, t), locale === 'en' ? 'en' : 'vi'));
         break;
       default:
         break;
@@ -292,7 +296,7 @@ const ConversationList = ({
     const unread = result.filter((c) => c.unreadCount > 0);
     const read = result.filter((c) => !c.unreadCount || c.unreadCount === 0);
     return [...unread, ...read];
-  }, [conversations, sortBy]);
+  }, [conversations, sortBy, t, locale]);
 
   const handleDeleteClick = (conv) => {
     setDeleteTarget(conv);
@@ -310,7 +314,7 @@ const ConversationList = ({
       {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
       {!isLoading && filteredConversations.length === 0 && (
-        <EmptyState message={t('inbox.noMessages')} />
+        <EmptyState message={t('inbox.noMessages')} t={t} />
       )}
 
       {filteredConversations.length > 0 && (
@@ -323,6 +327,7 @@ const ConversationList = ({
               onSelect={onSelect}
               onDelete={handleDeleteClick}
               t={t}
+              locale={locale}
             />
           ))}
 
@@ -335,10 +340,10 @@ const ConversationList = ({
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="animate-spin w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full"></span>
-                  Đang tải...
+                  {t('common.loading') || 'Đang tải...'}
                 </span>
               ) : (
-                'Tải thêm cuộc trò chuyện'
+                t('inbox.loadMoreConversations') || 'Tải thêm cuộc trò chuyện'
               )}
             </button>
           )}

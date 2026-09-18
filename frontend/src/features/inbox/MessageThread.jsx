@@ -45,7 +45,7 @@ function getSendState(metadata, now = Date.now()) {
   return { kind: 'ok' };
 }
 
-const formatMessageDate = (dateString) => {
+const formatMessageDate = (dateString, t, locale = 'vi') => {
   if (!dateString) return '';
   const date = new Date(dateString);
   const today = new Date();
@@ -53,11 +53,11 @@ const formatMessageDate = (dateString) => {
   yesterday.setDate(yesterday.getDate() - 1);
 
   if (date.toDateString() === today.toDateString()) {
-    return 'Hôm nay';
+    return t ? (t('inbox.today') || 'Hôm nay') : 'Hôm nay';
   } else if (date.toDateString() === yesterday.toDateString()) {
-    return 'Hôm qua';
+    return t ? (t('inbox.yesterday') || 'Hôm qua') : 'Hôm qua';
   }
-  return date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'long', year: 'numeric' });
+  return date.toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 const isSameDay = (date1, date2) => {
@@ -77,7 +77,7 @@ const MessageBubble = ({
   replyingTo,
   messageLabels,
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   // Web chat (trang công khai + widget nhúng) ghi tin bot với role 'assistant'
   // (chatbot.controller addWebChatMessage), các kênh khác ghi 'bot'. Không gộp thì tin bot
   // web hiện bên phía khách như thể khách tự nói (phát hiện 14/09/2026 khi widget bắt đầu lưu tin).
@@ -137,7 +137,7 @@ const MessageBubble = ({
       {showDate && (
         <div className="flex items-center justify-center my-6">
           <span className="text-xs font-medium text-gray-400 bg-gray-100/80 px-4 py-1.5 rounded-full backdrop-blur-sm">
-            {formatMessageDate(message.createdAt)}
+            {formatMessageDate(message.createdAt, t, locale)}
           </span>
         </div>
       )}
@@ -161,7 +161,7 @@ const MessageBubble = ({
             )}
             {isAgent && (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full">
-                ✨ Bạn
+                ✨ {t('inbox.you') || 'Bạn'}
               </span>
             )}
           </div>
@@ -370,7 +370,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, re
       <div className="h-full min-h-0 flex items-center justify-center">
         <div className="text-center">
           <div className="w-14 h-14 border-3 border-primary-500 border-t-transparent rounded-full mx-auto mb-4 animate-spin"></div>
-          <p className="text-gray-500 font-medium">Đang tải tin nhắn...</p>
+          <p className="text-gray-500 font-medium">{t('inbox.loadingMessages') || t('common.loading') || 'Đang tải tin nhắn...'}</p>
         </div>
       </div>
     );
@@ -383,8 +383,8 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, re
           <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 flex items-center justify-center">
             <span className="text-4xl">💬</span>
           </div>
-          <p className="text-lg font-semibold text-gray-700">Chưa có tin nhắn</p>
-          <p className="text-sm text-gray-400 mt-2">Bắt đầu cuộc trò chuyện ngay</p>
+          <p className="text-lg font-semibold text-gray-700">{t('inbox.noMessages') || 'Chưa có tin nhắn'}</p>
+          <p className="text-sm text-gray-400 mt-2">{t('inbox.startConversation') || 'Bắt đầu cuộc trò chuyện ngay'}</p>
         </div>
       </div>
     );
@@ -402,7 +402,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, re
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm trong cuộc trò chuyện..."
+              placeholder={t('inbox.searchMessages') || 'Tìm kiếm trong cuộc trò chuyện...'}
               className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
             />
             {searchQuery && (
@@ -416,7 +416,7 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, re
           </div>
           {searchResults.length > 0 && (
             <span className="text-xs font-semibold text-primary-600 bg-primary-50 px-3.5 py-2 rounded-xl">
-              {searchResults.length} kết quả
+              {searchResults.length} {t('inbox.results') || 'kết quả'}
             </span>
           )}
           <button

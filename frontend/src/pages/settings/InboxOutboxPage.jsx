@@ -752,7 +752,7 @@ const InboxPage = () => {
       web: 'Web Chat',
       zalo_oa: 'Zalo OA',
       facebook: 'Facebook',
-      zalo_personal: 'Zalo Cá nhân',
+      zalo_personal: t('inbox.zaloPersonal') || 'Zalo Cá nhân',
       whatsapp_baileys: 'WhatsApp',
     };
     return channelMap[channel] || channel || '';
@@ -791,7 +791,7 @@ const InboxPage = () => {
                   ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
               }`}
-              title={notificationsEnabled ? 'Tắt thông báo' : 'Bật thông báo'}
+              title={notificationsEnabled ? (t('inbox.notificationsOff') || 'Tắt thông báo') : (t('inbox.notificationsOn') || 'Bật thông báo')}
             >
               <HiOutlineBell className="w-4 h-4" />
             </button>
@@ -826,7 +826,7 @@ const InboxPage = () => {
               }`}
             >
               <HiOutlineSparkles className="w-4 h-4 text-indigo-500 shrink-0" />
-              <span className="truncate">Báo cáo AI</span>
+              <span className="truncate">{t('inbox.aiReportTab') || 'Báo cáo AI'}</span>
             </button>
             <button
               type="button"
@@ -852,10 +852,10 @@ const InboxPage = () => {
               <HiOutlineExclamation className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-rose-800 leading-tight">
-                  Tài khoản Zalo mất kết nối — Bot tạm dừng nhận tin!
+                  {t('inbox.zaloDisconnectedBanner') || 'Tài khoản Zalo mất kết nối — Bot tạm dừng nhận tin!'}
                 </p>
                 <p className="text-[10px] text-rose-600 mt-0.5 leading-tight">
-                  {t('inbox.sessionExpired')} — Vui lòng quét lại mã QR tại Cài đặt kênh.
+                  {t('inbox.sessionExpired')} — {t('inbox.rescanQRAtChannels') || 'Vui lòng quét lại mã QR tại Cài đặt kênh.'}
                 </p>
               </div>
             </div>
@@ -1125,6 +1125,7 @@ const InboxPage = () => {
                         toast(
                           payload?.data?.message
                             || t('inbox.syncPersonalNoHistory')
+                            || t('inbox.syncPersonal1on1Notice')
                             || 'Chat 1-1 không kéo lịch sử được. Đã làm mới kết nối — nhờ đối phương nhắn tin mới.',
                           { icon: 'ℹ️', duration: 6000 }
                         );
@@ -1159,7 +1160,7 @@ const InboxPage = () => {
                     ? 'text-primary-600 bg-primary-50 shadow-sm' 
                     : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                 }`}
-                title="Chi tiết"
+                title={t('common.details') || 'Chi tiết'}
               >
                 <HiOutlineInformationCircle className="w-5 h-5" />
               </button>

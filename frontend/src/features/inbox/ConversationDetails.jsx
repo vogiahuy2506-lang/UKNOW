@@ -3,7 +3,7 @@ import { HiX, HiPhone, HiMail, HiLocationMarker, HiClock, HiTag, HiDocumentText,
 import { useI18n } from '../../i18n';
 
 const ConversationDetails = ({ conversation, onClose, onAddTag, onAddNote }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [activeTab, setActiveTab] = useState('info');
   const [newTag, setNewTag] = useState('');
   const [newNote, setNewNote] = useState('');
@@ -20,7 +20,7 @@ const ConversationDetails = ({ conversation, onClose, onAddTag, onAddNote }) => 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    return date.toLocaleString('vi-VN', {
+    return date.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -32,11 +32,11 @@ const ConversationDetails = ({ conversation, onClose, onAddTag, onAddNote }) => 
   // Get channel icon and label
   const getChannelInfo = () => {
     const channels = {
-      web: { icon: '💬', label: 'Web Chat' },
-      zalo_oa: { icon: '📱', label: 'Zalo OA' },
-      facebook: { icon: '📘', label: 'Facebook' },
-      zalo_personal: { icon: '👤', label: 'Zalo Cá nhân' },
-      zalo_group: { icon: '👥', label: 'Zalo Nhóm' },
+      web: { icon: '💬', label: t('inbox.webChat') || 'Web Chat' },
+      zalo_oa: { icon: '📱', label: t('inbox.zaloOA') || 'Zalo OA' },
+      facebook: { icon: '📘', label: t('inbox.facebook') || 'Facebook' },
+      zalo_personal: { icon: '👤', label: t('inbox.zaloPersonal') || 'Zalo Cá nhân' },
+      zalo_group: { icon: '👥', label: t('inbox.zaloGroup') || 'Zalo Nhóm' },
     };
     return channels[conversation.channel] || { icon: '💬', label: conversation.channel };
   };

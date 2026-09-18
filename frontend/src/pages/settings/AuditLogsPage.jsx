@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HiOutlineRefresh, HiOutlineSearch } from 'react-icons/hi';
 import auditLogsApiService from '../../features/settings/services/auditLogsApi.service';
+import { useI18n } from '../../i18n';
 
-const ACTION_LABELS = {
+const ACTION_FALLBACKS = {
   EMPLOYEE_ADDED: 'Thêm nhân viên',
   EMPLOYEE_REMOVED: 'Xóa nhân viên',
   EMPLOYEE_LIMITS_UPDATED: 'Cập nhật giới hạn gửi',
@@ -22,19 +23,19 @@ const ACTION_LABELS = {
   ZALO_TEMPLATE_DELETED: 'Xóa mẫu Zalo',
 };
 
-const ENTITY_LABELS = {
+const ENTITY_FALLBACKS = {
   employee: 'Nhân viên',
   campaign: 'Chiến dịch',
   email_template: 'Mẫu email',
   zalo_template: 'Mẫu Zalo',
 };
 
-function fmtDate(d) {
+function fmtDate(d, locale) {
   if (!d) return '—';
-  return new Date(d).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+  return new Date(d).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-function ActionBadge({ action }) {
+function ActionBadge({ action, t }) {
   const isDelete = action?.includes('DELETED') || action?.includes('REMOVED');
   const isCreate = action?.includes('CREATED') || action?.includes('ADDED');
   const color = isDelete
@@ -42,14 +43,16 @@ function ActionBadge({ action }) {
     : isCreate
     ? 'bg-green-100 text-green-700'
     : 'bg-blue-100 text-blue-700';
+  const label = (t && t(`auditLogs.actions.${action}`)) || ACTION_FALLBACKS[action] || action;
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
-      {ACTION_LABELS[action] || action}
+      {label}
     </span>
   );
 }
 
 export default function AuditLogsPage() {
+  const { t, locale } = useI18n();
   const [logs, setLogs] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
   const [loading, setLoading] = useState(false);
@@ -86,12 +89,12 @@ export default function AuditLogsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nhật ký hoạt động</h1>
-          <p className="mt-1 text-sm text-gray-500">Theo dõi mọi thay đổi trong tổ chức của bạn</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('auditLogs.title') || 'Nhật ký hoạt động'}</h1>
+          <p className="mt-1 text-sm text-gray-500">{t('auditLogs.subtitle') || 'Theo dõi mọi thay đổi trong tổ chức của bạn'}</p>
         </div>
         <button type="button" onClick={() => fetchLogs(page)} disabled={loading} className="btn btn-secondary">
           <HiOutlineRefresh className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Làm mới
+          {t('common.refresh') || 'Làm mới'}
         </button>
       </div>
 
@@ -99,43 +102,47 @@ export default function AuditLogsPage() {
       <form onSubmit={handleFilter} className="card p-5">
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[180px]">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Hành động</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t('auditLogs.action') || 'Hành động'}</label>
             <select
               value={filters.action}
               onChange={(e) => setFilters((f) => ({ ...f, action: e.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
-              <option value="">Tất cả</option>
-              {Object.entries(ACTION_LABELS).map(([val, label]) => (
-                <option key={val} value={val}>{label}</option>
+              <option value="">{t('common.all') || 'Tất cả'}</option>
+              {Object.keys(ACTION_FALLBACKS).map((val) => (
+                <option key={val} value={val}>
+                  {(t && t(`auditLogs.actions.${val}`)) || ACTION_FALLBACKS[val]}
+                </option>
               ))}
             </select>
           </div>
           <div className="flex-1 min-w-[160px]">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Loại đối tượng</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t('auditLogs.entity') || 'Loại đối tượng'}</label>
             <select
               value={filters.entityType}
               onChange={(e) => setFilters((f) => ({ ...f, entityType: e.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
-              <option value="">Tất cả</option>
-              {Object.entries(ENTITY_LABELS).map(([val, label]) => (
-                <option key={val} value={val}>{label}</option>
+              <option value="">{t('common.all') || 'Tất cả'}</option>
+              {Object.keys(ENTITY_FALLBACKS).map((val) => (
+                <option key={val} value={val}>
+                  {(t && t(`auditLogs.entities.${val}`)) || ENTITY_FALLBACKS[val]}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Từ ngày</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t('auditLogs.startDate') || 'Từ ngày'}</label>
             <input type="date" value={filters.startDate} onChange={(e) => setFilters((f) => ({ ...f, startDate: e.target.value }))}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Đến ngày</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t('auditLogs.endDate') || 'Đến ngày'}</label>
             <input type="date" value={filters.endDate} onChange={(e) => setFilters((f) => ({ ...f, endDate: e.target.value }))}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
           </div>
           <button type="submit" className="btn btn-primary">
-            <HiOutlineSearch className="mr-2 h-4 w-4" /> Lọc
+            <HiOutlineSearch className="mr-2 h-4 w-4" /> {t('common.filter') || 'Lọc'}
           </button>
         </div>
       </form>
@@ -146,32 +153,32 @@ export default function AuditLogsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Thời gian</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Người thực hiện</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Hành động</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Đối tượng</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Chi tiết</th>
+                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('auditLogs.colTime') || 'Thời gian'}</th>
+                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('auditLogs.colUser') || 'Người thực hiện'}</th>
+                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('auditLogs.colAction') || 'Hành động'}</th>
+                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('auditLogs.colEntity') || 'Đối tượng'}</th>
+                <th className="pb-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('auditLogs.colDetails') || 'Chi tiết'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading && (
-                <tr><td colSpan={5} className="py-10 text-center text-gray-400">Đang tải...</td></tr>
+                <tr><td colSpan={5} className="py-10 text-center text-gray-400">{t('common.loading') || 'Đang tải...'}</td></tr>
               )}
               {!loading && logs.length === 0 && (
-                <tr><td colSpan={5} className="py-10 text-center text-gray-400">Chưa có nhật ký nào</td></tr>
+                <tr><td colSpan={5} className="py-10 text-center text-gray-400">{t('auditLogs.emptyTitle') || 'Chưa có nhật ký nào'}</td></tr>
               )}
               {!loading && logs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50/60 transition-colors">
-                  <td className="py-3 pr-4 text-gray-500 whitespace-nowrap">{fmtDate(log.created_at)}</td>
+                  <td className="py-3 pr-4 text-gray-500 whitespace-nowrap">{fmtDate(log.created_at, locale)}</td>
                   <td className="py-3 pr-4">
                     <div className="font-medium text-gray-900">{log.actor_name || log.actor_username || '—'}</div>
                     {log.actor_username && log.actor_name && (
                       <div className="text-xs text-gray-400">@{log.actor_username}</div>
                     )}
                   </td>
-                  <td className="py-3 pr-4"><ActionBadge action={log.action} /></td>
+                  <td className="py-3 pr-4"><ActionBadge action={log.action} t={t} /></td>
                   <td className="py-3 pr-4 text-gray-600">
-                    {ENTITY_LABELS[log.entity_type] || log.entity_type || '—'}
+                    {(t && t(`auditLogs.entities.${log.entity_type}`)) || ENTITY_FALLBACKS[log.entity_type] || log.entity_type || '—'}
                     {log.entity_id ? <span className="text-gray-400 ml-1">#{log.entity_id}</span> : null}
                   </td>
                   <td className="py-3 text-gray-500 text-xs max-w-xs truncate">
@@ -188,15 +195,15 @@ export default function AuditLogsPage() {
         {pagination.pages > 1 && (
           <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
             <span className="text-sm text-gray-500">
-              Tổng {pagination.total?.toLocaleString('vi-VN')} bản ghi
+              {(t && t('auditLogs.totalRecords', { total: pagination.total?.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN') })) || `Tổng ${pagination.total?.toLocaleString('vi-VN')} bản ghi`}
             </span>
             <div className="flex gap-1">
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="btn btn-secondary py-1 px-3 text-sm disabled:opacity-40">
-                ← Trước
+                {`← ${t('common.previous') || 'Trước'}`}
               </button>
               <span className="px-3 py-1 text-sm text-gray-600">{page} / {pagination.pages}</span>
               <button onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))} disabled={page >= pagination.pages} className="btn btn-secondary py-1 px-3 text-sm disabled:opacity-40">
-                Sau →
+                {`${t('common.next') || 'Sau'} →`}
               </button>
             </div>
           </div>

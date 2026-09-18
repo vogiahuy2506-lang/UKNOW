@@ -143,7 +143,7 @@ function MobileMenu({ isOpen, onClose }) {
           {isAuthenticated ? (
             <div className="space-y-1">
               <div className="px-4 py-2 text-sm text-slate-500">
-                Xin chào, <span className="font-semibold text-slate-700">{user?.fullName || user?.username}</span>
+                {t('common.hello') || 'Xin chào'}, <span className="font-semibold text-slate-700">{user?.fullName || user?.username}</span>
               </div>
               <Link
                 to={user?.role === 'admin' ? '/admin' : '/app'}
@@ -158,7 +158,7 @@ function MobileMenu({ isOpen, onClose }) {
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               >
                 <HiOutlineLogout className="w-5 h-5" />
-                Đăng xuất
+                {t('common.logout') || 'Đăng xuất'}
               </button>
             </div>
           ) : (
@@ -168,14 +168,14 @@ function MobileMenu({ isOpen, onClose }) {
                 onClick={onClose}
                 className="block w-full text-center px-5 py-3 border-2 border-orange-500 text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition-all"
               >
-                Đăng nhập
+                {t('common.login') || 'Đăng nhập'}
               </Link>
               <Link
                 to="/register"
                 onClick={onClose}
                 className="block w-full text-center px-5 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all"
               >
-                Đăng ký
+                {t('common.register') || 'Đăng ký'}
               </Link>
             </div>
           )}
@@ -244,13 +244,13 @@ export default function Navbar() {
                     to="/login"
                     className="px-5 py-2.5 border-2 border-orange-500 text-orange-600 rounded-full font-bold hover:bg-orange-50 transition-all duration-200"
                   >
-                    Đăng nhập
+                    {t('common.login') || 'Đăng nhập'}
                   </Link>
                   <Link
                     to="/register"
                     className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all duration-200 active:scale-[0.98]"
                   >
-                    Đăng ký
+                    {t('common.register') || 'Đăng ký'}
                   </Link>
                 </>
               )}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useI18n } from '../../i18n';
 import {
   HiOutlineRefresh,
   HiOutlineSparkles,
@@ -11,10 +12,10 @@ import {
 import chatbotApi from '../chatbot/services/chatbotApi.service';
 import toast from 'react-hot-toast';
 
-function formatTime(isoStr) {
+function formatTime(isoStr, locale = 'vi') {
   if (!isoStr) return '--:--';
   const d = new Date(isoStr);
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(locale === 'en' ? 'en-US' : 'vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
 function getTodayString() {
@@ -32,6 +33,7 @@ export default function AiActivityReport({
   canManage = true,
   canSummarize = true,
 }) {
+  const { t, locale } = useI18n();
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [reportData, setReportData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,11 +54,11 @@ export default function AiActivityReport({
       }
     } catch (err) {
       console.error('Failed to fetch AI activity report:', err);
-      toast.error('Không thể tải báo cáo hoạt động AI');
+      toast.error(t('inbox.aiReport.fetchError'));
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, selectedAccountId]);
+  }, [selectedDate, selectedAccountId, t]);
 
   useEffect(() => {
     fetchReport(selectedDate);
@@ -67,11 +69,11 @@ export default function AiActivityReport({
     try {
       const res = await chatbotApi.resumeAllAi();
       if (res?.data?.success) {
-        toast.success(`Đã bật lại AI cho ${res.data.data?.resumedCount || 0} hội thoại!`);
+        toast.success(t('inbox.aiReport.resumeAllSuccess', { count: res.data.data?.resumedCount || 0 }));
         fetchReport();
       }
     } catch (err) {
-      toast.error('Lỗi khi bật lại AI');
+      toast.error(t('inbox.aiReport.resumeAllError'));
     } finally {
       setIsResumingAll(false);
     }
@@ -82,11 +84,11 @@ export default function AiActivityReport({
     try {
       const res = await chatbotApi.summarizeAiActivity({ date: selectedDate });
       if (res?.data?.success) {
-        toast.success(res.data.data?.cached ? 'Đã tải tóm tắt từ bản lưu' : 'Đã tóm tắt các hội thoại bằng AI thành công!');
+        toast.success(res.data.data?.cached ? t('inbox.aiReport.summarizeSuccessCached') : t('inbox.aiReport.summarizeSuccess'));
         fetchReport();
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Lỗi khi tóm tắt bằng AI');
+      toast.error(err?.response?.data?.message || t('inbox.aiReport.summarizeError'));
     } finally {
       setIsSummarizing(false);
     }
@@ -131,11 +133,11 @@ export default function AiActivityReport({
                 <HiOutlineSparkles className="w-5 h-5" />
               </div>
               <h1 className="text-base sm:text-lg font-bold text-gray-900">
-                Báo cáo AI phản hồi khách hàng
+                {t('inbox.aiReport.title')}
               </h1>
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
-              Theo dõi trong ngày AI đã tư vấn cho ai, ai đang cần người thật hỗ trợ
+              {t('inbox.aiReport.subtitle')}
             </p>
           </div>
 
@@ -151,7 +153,7 @@ export default function AiActivityReport({
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                Hôm nay
+                {t('inbox.aiReport.today')}
               </button>
               <input
                 type="date"
@@ -166,7 +168,7 @@ export default function AiActivityReport({
               onClick={() => fetchReport()}
               disabled={isLoading}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all border border-gray-200 bg-white"
-              title="Làm mới dữ liệu"
+              title={t('inbox.aiReport.refreshTitle')}
             >
               <HiOutlineRefresh className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -178,7 +180,7 @@ export default function AiActivityReport({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-sm transition-all disabled:opacity-50"
             >
               <HiOutlineSparkles className={`w-4 h-4 ${isSummarizing ? 'animate-spin' : ''}`} />
-              <span>{isSummarizing ? 'Đang tóm tắt...' : 'Tóm tắt ý chính (AI)'}</span>
+              <span>{isSummarizing ? t('inbox.aiReport.summarizing') : t('inbox.aiReport.summarizeAi')}</span>
             </button>}
           </div>
         </div>
@@ -189,7 +191,7 @@ export default function AiActivityReport({
             <div className="flex items-center gap-2 text-xs text-amber-800">
               <HiOutlineExclamationCircle className="w-5 h-5 text-amber-500 shrink-0" />
               <span>
-                Có <strong>{stats.stalePausedCount}</strong> hội thoại AI đang bị tạm dừng quá 24h (do bạn đã nhắn tay trước đó).
+                {t('inbox.aiReport.staleWarning', { count: stats.stalePausedCount })}
               </span>
             </div>
             <button
@@ -199,7 +201,7 @@ export default function AiActivityReport({
               className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-all shadow-sm disabled:opacity-50"
             >
               <HiOutlinePlay className="w-3.5 h-3.5" />
-              <span>{isResumingAll ? 'Đang bật...' : 'Bật lại tất cả AI'}</span>
+              <span>{isResumingAll ? t('inbox.aiReport.resumingBtn') : t('inbox.aiReport.resumeAllBtn')}</span>
             </button>
           </div>
         )}
@@ -208,31 +210,31 @@ export default function AiActivityReport({
       {/* KPI Cards */}
       <div className="shrink-0 px-4 py-3 sm:px-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
-          <p className="text-[11px] font-medium text-gray-500">Hội thoại phát sinh</p>
+          <p className="text-[11px] font-medium text-gray-500">{t('inbox.aiReport.kpiConversations')}</p>
           <p className="text-lg font-bold text-gray-900 mt-0.5">{stats.totalConversations}</p>
         </div>
         <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
-          <p className="text-[11px] font-medium text-gray-500">Khách gửi đến</p>
-          <p className="text-lg font-bold text-blue-600 mt-0.5">{stats.totalKhachNhan} <span className="text-xs font-normal text-gray-400">tin</span></p>
+          <p className="text-[11px] font-medium text-gray-500">{t('inbox.aiReport.kpiIncoming')}</p>
+          <p className="text-lg font-bold text-blue-600 mt-0.5">{stats.totalKhachNhan} <span className="text-xs font-normal text-gray-400">{t('inbox.aiReport.messagesUnit')}</span></p>
         </div>
         <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
-          <p className="text-[11px] font-medium text-gray-500">AI đã phản hồi</p>
-          <p className="text-lg font-bold text-indigo-600 mt-0.5">{stats.totalAiTraLoi} <span className="text-xs font-normal text-gray-400">tin</span></p>
+          <p className="text-[11px] font-medium text-gray-500">{t('inbox.aiReport.kpiAiReplied')}</p>
+          <p className="text-lg font-bold text-indigo-600 mt-0.5">{stats.totalAiTraLoi} <span className="text-xs font-normal text-gray-400">{t('inbox.aiReport.messagesUnit')}</span></p>
         </div>
         <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
-          <p className="text-[11px] font-medium text-gray-500">Người trực trả lời</p>
-          <p className="text-lg font-bold text-emerald-600 mt-0.5">{stats.totalNguoiTraLoi} <span className="text-xs font-normal text-gray-400">tin</span></p>
+          <p className="text-[11px] font-medium text-gray-500">{t('inbox.aiReport.kpiHumanReplied')}</p>
+          <p className="text-lg font-bold text-emerald-600 mt-0.5">{stats.totalNguoiTraLoi} <span className="text-xs font-normal text-gray-400">{t('inbox.aiReport.messagesUnit')}</span></p>
         </div>
         <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
-          <p className="text-[11px] font-medium text-gray-500">Chưa đọc trên web</p>
+          <p className="text-[11px] font-medium text-gray-500">{t('inbox.aiReport.kpiUnread')}</p>
           <p className={`text-lg font-bold mt-0.5 ${stats.totalChuaDoc > 0 ? 'text-rose-600' : 'text-gray-800'}`}>
-            {stats.totalChuaDoc} <span className="text-xs font-normal text-gray-400">tin</span>
+            {stats.totalChuaDoc} <span className="text-xs font-normal text-gray-400">{t('inbox.aiReport.messagesUnit')}</span>
           </p>
         </div>
         <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
-          <p className="text-[11px] font-medium text-gray-500">Đang tạm dừng AI</p>
+          <p className="text-[11px] font-medium text-gray-500">{t('inbox.aiReport.kpiAiPaused')}</p>
           <p className={`text-lg font-bold mt-0.5 ${stats.totalAiPaused > 0 ? 'text-amber-600' : 'text-gray-800'}`}>
-            {stats.totalAiPaused} <span className="text-xs font-normal text-gray-400">người</span>
+            {stats.totalAiPaused} <span className="text-xs font-normal text-gray-400">{t('inbox.aiReport.peopleUnit')}</span>
           </p>
         </div>
       </div>
@@ -249,7 +251,7 @@ export default function AiActivityReport({
                 : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            Tất cả ({conversations.length})
+            {t('inbox.aiReport.filterAll', { count: conversations.length })}
           </button>
           <button
             type="button"
@@ -260,7 +262,7 @@ export default function AiActivityReport({
                 : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            AI đã trả lời ({conversations.filter(c => c.aiTraLoi > 0).length})
+            {t('inbox.aiReport.filterAiReplied', { count: conversations.filter(c => c.aiTraLoi > 0).length })}
           </button>
           <button
             type="button"
@@ -271,7 +273,7 @@ export default function AiActivityReport({
                 : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            Còn tin chưa đọc ({conversations.filter(c => c.chuaDoc > 0).length})
+            {t('inbox.aiReport.filterUnread', { count: conversations.filter(c => c.chuaDoc > 0).length })}
           </button>
           <button
             type="button"
@@ -282,7 +284,7 @@ export default function AiActivityReport({
                 : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            AI đang dừng ({conversations.filter(c => c.aiPaused).length})
+            {t('inbox.aiReport.filterPaused', { count: conversations.filter(c => c.aiPaused).length })}
           </button>
           {reportData?.hasSummaryCache && (
             <button
@@ -294,7 +296,7 @@ export default function AiActivityReport({
                   : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
               }`}
             >
-              Cần người gọi lại ⚠️ ({conversations.filter(c => c.summary?.can_nguoi_that_khong).length})
+              {t('inbox.aiReport.filterNeedHuman', { count: conversations.filter(c => c.summary?.can_nguoi_that_khong).length })}
             </button>
           )}
         </div>
@@ -303,7 +305,7 @@ export default function AiActivityReport({
           <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Tìm theo tên hoặc ý chính..."
+            placeholder={t('inbox.aiReport.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -316,15 +318,15 @@ export default function AiActivityReport({
         {isLoading ? (
           <div className="h-64 flex flex-col items-center justify-center text-gray-400 gap-2">
             <HiOutlineRefresh className="w-8 h-8 animate-spin text-indigo-500" />
-            <p className="text-xs">Đang tải báo cáo hoạt động AI...</p>
+            <p className="text-xs">{t('inbox.aiReport.loadingReport')}</p>
           </div>
         ) : filteredConversations.length === 0 ? (
           <div className="h-64 bg-white rounded-2xl border border-gray-200 flex flex-col items-center justify-center text-center p-6">
             <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-2">
               <HiOutlineChatAlt2 className="w-6 h-6" />
             </div>
-            <p className="text-sm font-semibold text-gray-700">Không có hội thoại nào khớp bộ lọc</p>
-            <p className="text-xs text-gray-500 mt-1">Hãy thử chọn ngày khác hoặc đổi bộ lọc ở trên.</p>
+            <p className="text-sm font-semibold text-gray-700">{t('inbox.aiReport.emptyTitle')}</p>
+            <p className="text-xs text-gray-500 mt-1">{t('inbox.aiReport.emptySubtitle')}</p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -346,12 +348,12 @@ export default function AiActivityReport({
                         </span>
                         {conv.aiPaused && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                            AI đang tạm dừng
+                            {t('inbox.aiReport.badgeAiPaused')}
                           </span>
                         )}
                         {conv.chuaDoc > 0 && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-200 animate-pulse">
-                            {conv.chuaDoc} chưa đọc
+                            {t('inbox.aiReport.badgeUnread', { count: conv.chuaDoc })}
                           </span>
                         )}
                       </div>
@@ -360,22 +362,22 @@ export default function AiActivityReport({
                       {hasSummary ? (
                         <div className="mt-2 space-y-1 bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100">
                           <p className="text-xs text-gray-800">
-                            <span className="font-semibold text-indigo-900">Ý chính:</span> {conv.summary.y_chinh}
+                            <span className="font-semibold text-indigo-900">{t('inbox.aiReport.labelMainPoint')}</span> {conv.summary.y_chinh}
                           </p>
                           {conv.summary.khach_muon_gi && (
                             <p className="text-xs text-gray-600">
-                              <span className="font-semibold text-gray-700">Nhu cầu khách:</span> {conv.summary.khach_muon_gi}
+                              <span className="font-semibold text-gray-700">{t('inbox.aiReport.labelCustomerNeed')}</span> {conv.summary.khach_muon_gi}
                             </p>
                           )}
                           {needHuman && (
                             <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-100 text-rose-800">
-                              <span>⚠️ Cần người hỗ trợ: {conv.summary.ly_do_can_nguoi || 'Khách đang chờ chốt đơn/hỗ trợ chuyên sâu'}</span>
+                              <span>{t('inbox.aiReport.labelNeedHuman', { reason: conv.summary.ly_do_can_nguoi || t('inbox.aiReport.defaultNeedHumanReason') })}</span>
                             </div>
                           )}
                         </div>
                       ) : (
                         <p className="text-xs text-gray-500 mt-1">
-                          Tin đầu: {formatTime(conv.tinDau)} · Tin cuối: {formatTime(conv.tinCuoi)}
+                          {t('inbox.aiReport.firstMsg', { time: formatTime(conv.tinDau, locale) })} · {t('inbox.aiReport.lastMsg', { time: formatTime(conv.tinCuoi, locale) })}
                         </p>
                       )}
 
@@ -383,17 +385,17 @@ export default function AiActivityReport({
                       <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500">
                         <span className="inline-flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-blue-500" />
-                          Khách: <strong>{conv.khachNhan}</strong> tin
+                          {t('inbox.aiReport.statCustomer', { count: conv.khachNhan })}
                         </span>
                         <span className="inline-flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                          AI trả lời: <strong>{conv.aiTraLoi}</strong> tin
+                          {t('inbox.aiReport.statAi', { count: conv.aiTraLoi })}
                         </span>
                         <span className="inline-flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          Người trả lời: <strong>{conv.nguoiTraLoi}</strong> tin
+                          {t('inbox.aiReport.statHuman', { count: conv.nguoiTraLoi })}
                         </span>
-                        <span>Giờ cuối: {formatTime(conv.tinCuoi)}</span>
+                        <span>{t('inbox.aiReport.lastTime', { time: formatTime(conv.tinCuoi, locale) })}</span>
                       </div>
                     </div>
 
@@ -405,7 +407,7 @@ export default function AiActivityReport({
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all shadow-sm"
                       >
                         <HiOutlineExternalLink className="w-4 h-4" />
-                        <span>Mở hội thoại</span>
+                        <span>{t('inbox.aiReport.openConversation')}</span>
                       </button>
                     </div>
                   </div>

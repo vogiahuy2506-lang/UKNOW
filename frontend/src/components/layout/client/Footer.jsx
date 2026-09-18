@@ -125,11 +125,17 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="mt-16 pt-8 border-t border-slate-800">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
-            <p>© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người</p>
+            <p>{t('footer.publicBottomCopyright') || '© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người'}</p>
             <div className="flex items-center gap-6">
-              <a href="/privacy-policy" className="hover:text-white transition-colors">Chính sách bảo mật</a>
-              <a href="/public-dpa" className="hover:text-white transition-colors">Thoả thuận xử lý dữ liệu</a>
-              <a href="/terms" className="hover:text-white transition-colors">Điều khoản sử dụng</a>
+              <a href="/privacy-policy" className="hover:text-white transition-colors">
+                {t('footer.publicPrivacyLink') || 'Chính sách bảo mật'}
+              </a>
+              <a href="/public-dpa" className="hover:text-white transition-colors">
+                {t('footer.publicDpaLink') || 'Thoả thuận xử lý dữ liệu'}
+              </a>
+              <a href="/terms" className="hover:text-white transition-colors">
+                {t('footer.publicTermsLink') || 'Điều khoản sử dụng'}
+              </a>
             </div>
           </div>
         </div>

@@ -26,7 +26,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
   const imageInputRef = useRef(null);
   const pickerRef = useRef(null);
 
-  const placeholderText = placeholder || 'Nhập tin nhắn...';
+  const placeholderText = placeholder || t('inbox.typeMessage') || 'Nhập tin nhắn...';
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -153,7 +153,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
             <div className="w-1 h-10 bg-primary-500 rounded-full" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-primary-600">
-                {replyingTo.role === 'agent' ? 'Bạn' : 'Khách hàng'}
+                {replyingTo.role === 'agent' ? (t('inbox.you') || 'Bạn') : (t('inbox.customer') || 'Khách hàng')}
               </p>
               <p className="text-sm text-gray-600 truncate">
                 {getReplyPreview()}
@@ -164,7 +164,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
             type="button"
             onClick={onCancelReply}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-primary-100 rounded-xl transition-all"
-            title="Hủy"
+            title={t('common.cancel') || 'Hủy'}
           >
             <HiX className="w-4 h-4" />
           </button>
@@ -218,7 +218,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
             type="button"
             onClick={() => setShowFileMenu(!showFileMenu)}
             className="p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
-            title="Đính kèm"
+            title={t('inbox.attachments') || 'Đính kèm'}
           >
             <HiPaperClip className="w-5 h-5" />
           </button>
@@ -235,7 +235,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
                   <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
                     <HiOutlinePhotograph className="w-5 h-5 text-purple-600" />
                   </div>
-                  <span className="text-sm font-medium text-gray-700">Gửi hình ảnh</span>
+                  <span className="text-sm font-medium text-gray-700">{t('inbox.uploadImage') || 'Gửi hình ảnh'}</span>
                 </button>
                 <button
                   type="button"
@@ -245,7 +245,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
                   <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
                     <HiDocument className="w-5 h-5 text-blue-600" />
                   </div>
-                  <span className="text-sm font-medium text-gray-700">Gửi tệp đính kèm</span>
+                  <span className="text-sm font-medium text-gray-700">{t('inbox.uploadFile') || 'Gửi tệp đính kèm'}</span>
                 </button>
               </div>
             </>
@@ -342,7 +342,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
               ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white hover:shadow-lg hover:shadow-primary-500/30 hover:scale-105'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
           }`}
-          title="Gửi tin nhắn"
+          title={t('inbox.send') || 'Gửi tin nhắn'}
         >
           {isSending ? (
             <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
