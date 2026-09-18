@@ -109,8 +109,17 @@ export const DEFAULT_APP_MENU_CATEGORIES = Object.freeze([
  */
 export function normalizeAppMenuCategories(categories, items) {
   const itemByKey = new Map(items.map((item) => [item.key, item]));
+  // Map icon mặc định theo id để fallback khi DB không trả về icon (vd: data cũ hoặc
+  // category do super admin tạo chưa gán icon). Không có bước này, tất cả chuyên mục
+  // rơi về cùng 1 icon mặc định ở sidebar thu gọn — đúng triệu chứng ngày 18/09/2026.
+  const defaultIconById = new Map(
+    DEFAULT_APP_MENU_CATEGORIES.map((c) => [c.id, c.icon])
+  );
   const source = Array.isArray(categories) && categories.length > 0
-    ? categories
+    ? categories.map((category) => ({
+      ...category,
+      icon: category.icon || defaultIconById.get(category.id) || null,
+    }))
     : DEFAULT_APP_MENU_CATEGORIES.map((category) => ({
       ...category,
       itemKeys: items
