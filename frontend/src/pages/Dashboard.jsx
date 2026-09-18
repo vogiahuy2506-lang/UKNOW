@@ -36,10 +36,10 @@ const Skeleton = ({ className = '' }) => (
  * @param {string} iso - Chuỗi ISO (từ DB)
  * @returns {string}
  */
-function formatInsightSavedAt(iso) {
+function formatInsightSavedAt(iso, locale = 'vi') {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+    return new Date(iso).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
   } catch {
     return '';
   }
@@ -129,7 +129,7 @@ const DashboardSkeleton = () => (
  * @returns {JSX.Element}
  */
 const Dashboard = () => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const printRef = useRef(null);
   /** Giữ tiêu đề tab gốc để khôi phục sau in — giảm chữ trên chân trang PDF khi trình duyệt bật đầu/cuối trang */
   const documentTitleForPrintRef = useRef(
@@ -266,6 +266,7 @@ const Dashboard = () => {
         topListsData,
         landingPageStats,
         filters,
+        locale,
       });
       const data = extractInsightFromDashboardInsightsResponse(response);
       const normalized = normalizeDashboardInsightForUi(data);
@@ -414,7 +415,7 @@ const Dashboard = () => {
           </svg>
           <span>
             {t('dashboard.storedInsight')}
-            {storedInsightSavedAt ? ` (lúc ${formatInsightSavedAt(storedInsightSavedAt)})` : ''}. {t('dashboard.storedInsightSuffix')}
+            {storedInsightSavedAt ? ` (${locale === 'en' ? 'at' : 'lúc'} ${formatInsightSavedAt(storedInsightSavedAt, locale)})` : ''}. {t('dashboard.storedInsightSuffix')}
           </span>
         </div>
       )}

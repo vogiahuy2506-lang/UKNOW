@@ -25,10 +25,11 @@ const COLOR_CLICK = '#6366f1';
 /** Màu thanh “Đã gửi” trong biểu đồ Top click (tách khỏi click) */
 const COLOR_SENT = '#0d9488';
 
-const formatNumber = (v) => Number(v || 0).toLocaleString('vi-VN');
+const formatNumber = (v, locale = 'vi') =>
+  Number(v || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN');
 
 /** Hide label when value is zero */
-const formatLabelNonZero = (v) => (v > 0 ? formatNumber(v) : '');
+const formatLabelNonZero = (v, locale = 'vi') => (v > 0 ? formatNumber(v, locale) : '');
 
 /** Truncate label to fit inside Y-axis width */
 const truncateLabel = (label, max = 42) =>
@@ -71,7 +72,7 @@ const OrderTooltip = ({ active, payload }) => {
  * Mở (open) chỉ có trên hành trình email; Zalo không có mở — vẫn hiển thị mở = 0 khi cần.
  */
 const CampaignClickSentTooltip = ({ active, payload }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload || {};
   const realName = row._realName || '';
@@ -90,12 +91,12 @@ const CampaignClickSentTooltip = ({ active, payload }) => {
         {t('dashboard.channel')}: <span className="font-semibold text-gray-800">{channelLabel}</span>
       </p>
       <p className="text-[11px] text-indigo-600 font-medium mb-1.5">
-        {t('dashboard.clickRateLabel')}: {ratePct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%
+        {t('dashboard.clickRateLabel')}: {ratePct.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', { maximumFractionDigits: 1 })}%
         {sent === 0 ? ` (${t('dashboard.noSentYet')})` : ''}
       </p>
       <p className="text-[11px] text-gray-400 mb-2">
         {isEmail ? (
-          <>{t('dashboard.emailOpensJourney')}: {formatNumber(opens)}</>
+          <>{t('dashboard.emailOpensJourney')}: {formatNumber(opens, locale)}</>
         ) : (
           <>{t('dashboard.emailOpensNotApplicable')}</>
         )}
@@ -107,7 +108,7 @@ const CampaignClickSentTooltip = ({ active, payload }) => {
             <span className="text-gray-500">{entry.name}</span>
           </span>
           <span className="font-semibold text-gray-800 tabular-nums">
-            {formatNumber(entry.value)}
+            {formatNumber(entry.value, locale)}
           </span>
         </div>
       ))}
@@ -240,7 +241,7 @@ const TopHorizontalChart = ({
   insightError = '',
   hideInsight = false,
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [sortKey, setSortKey] = useState(defaultSortKey || bars[0]?.key || 'total');
   const isMobile = useIsMobile();
 
@@ -410,7 +411,7 @@ const TopHorizontalChart = ({
                           fontSize={11}
                           textAnchor="start"
                         >
-                          {`${formatNumber(v)} · ${pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`}
+                          {`${formatNumber(v, locale)} · ${pct.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', { maximumFractionDigits: 1 })}%`}
                         </text>
                       );
                     }
@@ -426,7 +427,7 @@ const TopHorizontalChart = ({
                           fontSize={11}
                           textAnchor="start"
                         >
-                          {formatNumber(v)}
+                          {formatNumber(v, locale)}
                         </text>
                       );
                     }
@@ -439,8 +440,8 @@ const TopHorizontalChart = ({
                   position="right"
                   style={{ fontSize: 11, fill: '#6b7280' }}
                   formatter={(value) => {
-                    if (isMultiBar) return formatLabelNonZero(value);
-                    return formatNumber(value);
+                    if (isMultiBar) return formatLabelNonZero(value, locale);
+                    return formatNumber(value, locale);
                   }}
                 />
               )}

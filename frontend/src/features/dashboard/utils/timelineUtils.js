@@ -47,7 +47,8 @@ export const formatMonthAxis = (value) => {
  * @param {string} value - "YYYY-MM"
  * @returns {string}
  */
-export const formatMonthTooltip = (value) => {
+export const formatMonthTooltip = (value, locale = 'vi') => {
   const [year, month] = value.split('-');
-  return `Tháng ${parseInt(month, 10)}/${year}`;
+  const m = parseInt(month, 10);
+  return locale === 'en' ? `Month ${m}/${year}` : `Tháng ${m}/${year}`;
 };

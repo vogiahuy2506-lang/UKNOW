@@ -17,6 +17,7 @@ import {
 } from 'react-icons/hi';
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import { useI18n } from '../../i18n';
 
 /**
  * TelegramSettings — Trang quản lý tài khoản Telegram cá nhân trong
@@ -29,24 +30,25 @@ import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 
 // ── QR Login Modal ─────────────────────────────────────────────────────────────
 
-const GUIDE_STEPS = [
-  {
-    title: 'Mở Telegram trên điện thoại',
-    desc: 'Đảm bảo đã đăng nhập vào tài khoản Telegram muốn liên kết.',
-  },
-  {
-    title: 'Quét mã QR',
-    desc: 'Vào Cài đặt → Thiết bị → Liên kết thiết bị bằng QR, hướng camera vào mã QR.',
-  },
-  {
-    title: 'Xác nhận trên điện thoại',
-    desc: 'Nhấn "Xác nhận đăng nhập" trên Telegram. Tài khoản sẽ tự động xuất hiện trong danh sách.',
-  },
-];
-
 function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQr }) {
+  const { t } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [countdown, setCountdown] = useState('');
+
+  const guideSteps = [
+    {
+      title: t('telegramSettings.step1Title'),
+      desc: t('telegramSettings.step1Desc'),
+    },
+    {
+      title: t('telegramSettings.step2Title'),
+      desc: t('telegramSettings.step2Desc'),
+    },
+    {
+      title: t('telegramSettings.step3Title'),
+      desc: t('telegramSettings.step3Desc'),
+    },
+  ];
 
   useEffect(() => setMounted(true), []);
 
@@ -86,18 +88,18 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-semibold text-slate-900">
-              {isSuccess ? 'Liên kết thành công!' : 'Quét mã QR để kết nối'}
+              {isSuccess ? t('telegramSettings.modalTitleSuccess') : t('telegramSettings.modalTitleScan')}
             </h3>
             <p className="text-xs text-slate-500">
               {isSuccess
-                ? 'Tài khoản Telegram đã được kết nối.'
-                : 'Mở Telegram → Cài đặt → Thiết bị đã liên kết → Liên kết thiết bị'}
+                ? t('telegramSettings.modalSubtitleSuccess')
+                : t('telegramSettings.modalSubtitleScan')}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Đóng"
+            aria-label={t('telegramSettings.close')}
             className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
           >
             <HiOutlineX className="w-4 h-4" />
@@ -112,9 +114,9 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                 <HiOutlineCheckCircle className="w-9 h-9 text-green-500" />
               </div>
               <div>
-                <p className="text-base font-semibold text-slate-900">Liên kết thành công!</p>
+                <p className="text-base font-semibold text-slate-900">{t('telegramSettings.modalTitleSuccess')}</p>
                 <p className="text-sm text-slate-500 mt-1">
-                  Tài khoản Telegram đã được kết nối.
+                  {t('telegramSettings.modalSubtitleSuccess')}
                 </p>
               </div>
               <button
@@ -122,7 +124,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                 onClick={onClose}
                 className="mt-2 px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
               >
-                Đóng
+                {t('telegramSettings.close')}
               </button>
             </div>
           ) : (
@@ -160,17 +162,17 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                 {isError ? (
                   <span className="flex items-center justify-center gap-1.5">
                     <HiOutlineExclamation className="w-4 h-4 shrink-0" />
-                    {qrError || 'Mã QR đã hết hạn.'}
+                    {qrError || t('telegramSettings.qrExpired')}
                   </span>
                 ) : isWaiting ? (
                   <span className="flex items-center justify-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse shrink-0" />
-                    Đang chờ bạn quét QR…
+                    {t('telegramSettings.waitingScan')}
                   </span>
                 ) : (
                   <span className="flex items-center justify-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-slate-400 animate-pulse shrink-0" />
-                    Đang kết nối…
+                    {t('telegramSettings.connectingGateway')}
                   </span>
                 )}
               </div>
@@ -178,15 +180,15 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
               {/* Countdown */}
               {countdown && !isSuccess && (
                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <span>Mã hết hạn sau</span>
+                  <span>{t('telegramSettings.expiresIn')}</span>
                   <span className="font-mono font-semibold text-orange-600">{countdown}</span>
                 </div>
               )}
 
               {/* Guide steps */}
               <div className="w-full space-y-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Hướng dẫn</p>
-                {GUIDE_STEPS.map((step, i) => (
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{t('telegramSettings.guideHeading')}</p>
+                {guideSteps.map((step, i) => (
                   <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
                     <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold shrink-0 mt-0.5">
                       {i + 1}
@@ -207,14 +209,14 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   <HiOutlineRefresh className="w-4 h-4" />
-                  Tạo QR mới
+                  {t('telegramSettings.newQr')}
                 </button>
                 <button
                   type="button"
                   onClick={onCancel}
                   className="px-5 py-2.5 rounded-xl border border-rose-200 bg-white text-sm font-medium text-rose-600 hover:bg-rose-50 transition-colors"
                 >
-                  Hủy
+                  {t('telegramSettings.cancel')}
                 </button>
               </div>
             </>
@@ -229,32 +231,31 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
 
 // ── Account Card ───────────────────────────────────────────────────────────────
 
-const STATUS_META = {
-  loaded: {
-    label: 'Đã kết nối',
-    cls: 'bg-green-50 text-green-700 border-green-200',
-    dot: 'bg-green-500',
-  },
-  active: {
-    label: 'Đang hoạt động',
-    cls: 'bg-green-50 text-green-700 border-green-200',
-    dot: 'bg-green-500',
-  },
-  connecting: {
-    label: 'Đang kết nối',
-    cls: 'bg-primary-50 text-primary-700 border-primary-200',
-    dot: 'bg-primary-500 animate-pulse',
-  },
-  inactive: {
-    label: 'Ngắt kết nối',
-    cls: 'bg-slate-50 text-slate-500 border-slate-200',
-    dot: 'bg-slate-400',
-  },
-};
-
-function StatusPill({ loaded, active }) {
+function StatusPill({ loaded, active, t }) {
   const key = loaded && active ? 'loaded' : active ? 'active' : 'inactive';
-  const meta = STATUS_META[key];
+  const metaMap = {
+    loaded: {
+      label: t('telegramSettings.statusConnected'),
+      cls: 'bg-green-50 text-green-700 border-green-200',
+      dot: 'bg-green-500',
+    },
+    active: {
+      label: t('telegramSettings.statusActive'),
+      cls: 'bg-green-50 text-green-700 border-green-200',
+      dot: 'bg-green-500',
+    },
+    connecting: {
+      label: t('telegramSettings.statusConnecting'),
+      cls: 'bg-primary-50 text-primary-700 border-primary-200',
+      dot: 'bg-primary-500 animate-pulse',
+    },
+    inactive: {
+      label: t('telegramSettings.statusInactive'),
+      cls: 'bg-slate-50 text-slate-500 border-slate-200',
+      dot: 'bg-slate-400',
+    },
+  };
+  const meta = metaMap[key];
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${meta.cls}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
@@ -263,7 +264,7 @@ function StatusPill({ loaded, active }) {
   );
 }
 
-function AccountCard({ account, onLogout, onDelete, loggingOut, deleting }) {
+function AccountCard({ account, onLogout, onDelete, loggingOut, deleting, t }) {
   const fullName = [account.first_name, account.last_name].filter(Boolean).join(' ');
   const displayName = fullName || account.username || account.phone || 'Telegram User';
   const avatarChar = (displayName || 'T').trim().charAt(0).toUpperCase();
@@ -280,7 +281,7 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-slate-900 truncate">{displayName}</p>
-            <StatusPill loaded={account.is_loaded} active={account.is_active} />
+            <StatusPill loaded={account.is_loaded} active={account.is_active} t={t} />
           </div>
 
           <div className="mt-2.5 space-y-1.5">
@@ -313,7 +314,7 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting }) {
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
             >
               <HiOutlineLogout className="w-3.5 h-3.5" />
-              {loggingOut === account.id ? 'Đang đăng xuất…' : 'Đăng xuất'}
+              {loggingOut === account.id ? t('telegramSettings.loggingOut') : t('telegramSettings.logout')}
             </button>
           )}
           <button
@@ -323,7 +324,7 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting }) {
             className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
           >
             <HiOutlineTrash className="w-3.5 h-3.5" />
-            {deleting === account.id ? 'Đang xóa…' : 'Xóa'}
+            {deleting === account.id ? t('telegramSettings.deleting') : t('telegramSettings.delete')}
           </button>
         </div>
       </div>
@@ -334,6 +335,7 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function TelegramSettings() {
+  const { t } = useI18n();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -361,10 +363,10 @@ export default function TelegramSettings() {
     } catch (err) {
       if (axios.isCancel(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') return;
       console.error('[TelegramSettings] fetchAccounts:', err);
-      toast.error(err?.message || 'Không thể tải danh sách tài khoản Telegram');
+      toast.error(err?.message || t('telegramSettings.loadFailed'));
       setAccounts([]);
     }
-  }, []);
+  }, [t]);
 
   const fetchGatewayStatus = useCallback(async (signal) => {
     try {
@@ -436,7 +438,7 @@ export default function TelegramSettings() {
         if (status === 'success') {
           stopPolling();
           setQrStatus('success');
-          toast.success('Đã liên kết tài khoản Telegram thành công');
+          toast.success(t('telegramSettings.successLinked'));
           setQrPayload(null);
           await fetchAccounts();
           return;
@@ -444,22 +446,22 @@ export default function TelegramSettings() {
         if (status === 'expired' || status === 'error') {
           stopPolling();
           setQrStatus(status);
-          setQrError(data?.error || 'Mã QR đã hết hạn. Vui lòng thử lại.');
+          setQrError(data?.error || t('telegramSettings.qrExpired'));
           return;
         }
         if (status === 'not_found') {
           stopPolling();
           setQrStatus('expired');
-          setQrError('Phiên đăng nhập đã hết hạn trên máy chủ.');
+          setQrError(t('telegramSettings.sessionExpiredServer'));
         }
       } catch (err) {
         console.error('[TelegramSettings] poll error:', err);
         stopPolling();
         setQrStatus('error');
-        setQrError(err?.message || 'Mất kết nối với máy chủ');
+        setQrError(err?.message || t('telegramSettings.connectionLost'));
       }
     }, 3000);
-  }, [stopPolling, fetchAccounts]);
+  }, [stopPolling, fetchAccounts, t]);
 
   const handleStartQrLogin = useCallback(async () => {
     setQrError(null);
@@ -472,7 +474,7 @@ export default function TelegramSettings() {
       const resp = await chatbotApi.initTelegramLogin({ signal: controller.signal });
       const data = resp?.data?.data ?? resp?.data;
       if (!data?.sessionId || !data?.qrImageBase64) {
-        throw new Error('Máy chủ không trả về mã QR hợp lệ');
+        throw new Error(t('telegramSettings.invalidQrServer'));
       }
       setQrPayload({ sessionId: data.sessionId, qrImageBase64: data.qrImageBase64, expiresAt: data.expiresAt });
       setQrStatus('awaiting_scan');
@@ -485,13 +487,13 @@ export default function TelegramSettings() {
       }
       const code = err?.response?.data?.code;
       if (code === 'TELEGRAM_STUB_TRANSPORT') {
-        msg = 'Telegram transport chưa được cài đặt. Vui lòng liên hệ quản trị viên để cấu hình TELEGRAM_GATEWAY_TRANSPORT.';
+        msg = t('telegramSettings.errStubTransport');
       } else if (code === 'TELEGRAM_NOT_CONFIGURED') {
-        msg = 'Telegram gateway chưa được cấu hình. Vui lòng liên hệ quản trị viên.';
+        msg = t('telegramSettings.errNotConfigured');
       } else if (code === 'TELEGRAM_CONNECT_TIMEOUT') {
-        msg = 'Không thể kết nối Telegram (timeout 15s). Kiểm tra firewall hoặc liên hệ quản trị viên.';
+        msg = t('telegramSettings.errConnectTimeout');
       } else if (!isCanceled) {
-        msg = err?.message || 'Không thể bắt đầu QR login';
+        msg = err?.message || t('telegramSettings.cannotStartLogin');
       }
       lastStartErrorRef.current = msg;
       setQrError(msg);
@@ -501,7 +503,7 @@ export default function TelegramSettings() {
       if (connectAbortRef.current) { connectAbortRef.current.abort(); connectAbortRef.current = null; }
       setConnecting(false);
     }
-  }, [startPolling, fetchGatewayStatus]);
+  }, [startPolling, fetchGatewayStatus, t]);
 
   const handleCancelQr = useCallback(async () => {
     stopPolling();
@@ -516,31 +518,31 @@ export default function TelegramSettings() {
   }, [qrPayload, stopPolling]);
 
   const handleDelete = useCallback(async (id) => {
-    if (!window.confirm('Xóa tài khoản Telegram này? Tất cả cuộc trò chuyện liên quan sẽ bị mất.')) return;
+    if (!window.confirm(t('telegramSettings.deleteConfirm'))) return;
     setDeleting(id);
     try {
       await chatbotApi.deleteTelegramAccount(id);
-      toast.success('Đã xóa tài khoản Telegram');
+      toast.success(t('telegramSettings.deleteSuccess'));
       await fetchAccounts();
     } catch (err) {
-      toast.error(err?.message || 'Không thể xóa tài khoản Telegram');
+      toast.error(err?.message || t('telegramSettings.deleteError'));
     } finally {
       setDeleting(null);
     }
-  }, [fetchAccounts]);
+  }, [fetchAccounts, t]);
 
   const handleLogout = useCallback(async (id) => {
     setLoggingOut(id);
     try {
       await chatbotApi.logoutTelegramAccount(id);
-      toast.success('Đã ngắt kết nối Telegram');
+      toast.success(t('telegramSettings.logoutSuccess'));
       await fetchAccounts();
     } catch (err) {
-      toast.error(err?.message || 'Không thể ngắt kết nối');
+      toast.error(err?.message || t('telegramSettings.logoutError'));
     } finally {
       setLoggingOut(null);
     }
-  }, [fetchAccounts]);
+  }, [fetchAccounts, t]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -562,11 +564,10 @@ export default function TelegramSettings() {
             <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
               <FaTelegramPlane className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-bold text-slate-900">Telegram cá nhân</h2>
+            <h2 className="text-lg font-bold text-slate-900">{t('telegramSettings.title')}</h2>
           </div>
           <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
-            Kết nối tài khoản Telegram qua mã QR để chatbot tự động trả lời tin nhắn —
-            không cần Telegram Bot.
+            {t('telegramSettings.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -577,7 +578,7 @@ export default function TelegramSettings() {
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
           >
             <HiOutlineRefresh className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Đang tải…' : 'Làm mới'}
+            {refreshing ? t('telegramSettings.loading') : t('telegramSettings.refresh')}
           </button>
           <button
             type="button"
@@ -585,15 +586,15 @@ export default function TelegramSettings() {
             disabled={!canOpenQr}
             title={
               gatewayStatus?.stubOnly
-                ? 'Telegram gateway chưa được cài đặt — liên hệ quản trị viên.'
+                ? t('telegramSettings.gatewayStubWarning')
                 : gatewayStatus && !gatewayStatus.hasSecret
-                ? 'Telegram gateway chưa có shared secret — liên hệ quản trị viên.'
+                ? t('telegramSettings.gatewayNotConfigured')
                 : undefined
             }
             className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             <HiOutlineQrcode className="w-3.5 h-3.5" />
-            Quét QR
+            {t('telegramSettings.scanQr')}
           </button>
         </div>
       </div>
@@ -605,16 +606,16 @@ export default function TelegramSettings() {
           <div className="flex-1">
             <p className="font-semibold text-amber-800">
               {gatewayStatus.stubOnly
-                ? 'Telegram transport chưa được cài đặt trên máy chủ này.'
-                : 'Telegram gateway chưa được cấu hình trên máy chủ.'}
+                ? t('telegramSettings.gatewayStubWarning')
+                : t('telegramSettings.gatewayNotConfigured')}
             </p>
             <p className="mt-0.5 text-xs text-amber-700 flex items-center gap-1">
               {gatewayStatus.stubOnly
-                ? 'Quản trị viên cần đặt TELEGRAM_GATEWAY_TRANSPORT và khởi động lại backend.'
-                : 'Quản trị viên cần đặt TELEGRAM_GATEWAY_SECRET và khởi động lại backend.'}
+                ? t('telegramSettings.gatewayStubAdminAction')
+                : t('telegramSettings.gatewaySecretAdminAction')}
               {' '}
               <HiOutlineRefresh className="w-3 h-3 animate-spin inline" />
-              Kiểm tra lại mỗi 30 giây…
+              {t('telegramSettings.rechecking30s')}
             </p>
           </div>
         </div>
@@ -625,7 +626,7 @@ export default function TelegramSettings() {
         {/* List header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-800">Tài khoản đã liên kết</span>
+            <span className="text-sm font-semibold text-slate-800">{t('telegramSettings.linkedAccounts')}</span>
             {safeAccounts.length > 0 && (
               <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
                 {safeAccounts.length}
@@ -635,7 +636,7 @@ export default function TelegramSettings() {
           {totalActive > 0 && (
             <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-              {totalActive} đang hoạt động
+              {t('telegramSettings.activeCount', { count: totalActive })}
             </span>
           )}
         </div>
@@ -644,7 +645,7 @@ export default function TelegramSettings() {
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-2 py-14">
             <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-slate-500">Đang tải danh sách…</p>
+            <p className="text-sm text-slate-500">{t('telegramSettings.loadingList')}</p>
           </div>
         ) : safeAccounts.length === 0 ? (
           /* Empty state */
@@ -653,9 +654,9 @@ export default function TelegramSettings() {
               <FaTelegramPlane className="w-8 h-8 text-slate-300" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-700">Chưa có tài khoản Telegram nào</p>
+              <p className="text-sm font-semibold text-slate-700">{t('telegramSettings.emptyTitle')}</p>
               <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
-                Bấm <strong className="text-primary-600">Quét QR</strong> ở trên để quét mã bằng app Telegram trên điện thoại.
+                {t('telegramSettings.emptySubtitle', { action: t('telegramSettings.scanQr') })}
               </p>
             </div>
             <button
@@ -665,7 +666,7 @@ export default function TelegramSettings() {
               className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
             >
               <HiOutlineQrcode className="w-4 h-4" />
-              Quét QR
+              {t('telegramSettings.scanQr')}
             </button>
           </div>
         ) : (
@@ -679,6 +680,7 @@ export default function TelegramSettings() {
                 onDelete={handleDelete}
                 loggingOut={loggingOut}
                 deleting={deleting}
+                t={t}
               />
             ))}
           </div>
@@ -689,9 +691,7 @@ export default function TelegramSettings() {
       <div className="flex items-start gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
         <HiOutlineInformationCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
         <p className="text-xs text-slate-600 leading-relaxed">
-          Sau khi kết nối, vào <strong>Chatbot Studio → Deploy</strong> để chọn chatbot cho từng tài khoản.
-          Nếu gateway ngưng hoạt động, tài khoản sẽ tự động chuyển sang trạng thái "Ngắt kết nối" —
-          bấm <strong>Đăng xuất</strong> rồi <strong>Quét QR</strong> lại để khôi phục.
+          {t('telegramSettings.footerTip')}
         </p>
       </div>
 

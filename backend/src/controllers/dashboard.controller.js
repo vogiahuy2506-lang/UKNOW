@@ -326,6 +326,10 @@ class DashboardController {
   async generateInsights(req, res) {
     try {
       const { overview, analytics, topListsData, landingPageStats, filters } = req.body || {};
+      const locale =
+        req.body?.locale ||
+        req.query?.locale ||
+        (req.headers['accept-language']?.startsWith('en') ? 'en' : 'vi');
 
       if (!overview || !analytics || !topListsData) {
         return res.status(400).json({
@@ -342,6 +346,7 @@ class DashboardController {
         topListsData,
         landingPageStats,
         filters,
+        locale,
       });
 
       try {

@@ -40,13 +40,15 @@ function CategoryBadge({ category, t }) {
     email_template: { label: t('mediaLibrary.categoryEmailTemplate'), color: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
     chat: { label: t('mediaLibrary.categoryChat'), color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
     landing: { label: t('mediaLibrary.categoryLanding'), color: 'bg-purple-50 text-purple-700 border-purple-100' },
+    landing_version: { label: t('mediaLibrary.categoryLandingVersion'), color: 'bg-purple-50 text-purple-700 border-purple-100' },
     logo: { label: t('mediaLibrary.categoryLogo'), color: 'bg-pink-50 text-pink-700 border-pink-100' },
     campaign: { label: t('mediaLibrary.categoryCampaign'), color: 'bg-amber-50 text-amber-700 border-amber-100' },
+    quick_send: { label: t('mediaLibrary.categoryQuickSend'), color: 'bg-amber-50 text-amber-700 border-amber-100' },
     help: { label: t('mediaLibrary.categoryHelp'), color: 'bg-teal-50 text-teal-700 border-teal-100' },
     temp: { label: t('mediaLibrary.categoryTemp'), color: 'bg-slate-100 text-slate-700 border-slate-200' },
   };
 
-  const item = categoryMap[category] || { label: category || 'Khác', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+  const item = categoryMap[category] || { label: category || t('mediaLibrary.categoryOther'), color: 'bg-slate-100 text-slate-700 border-slate-200' };
   return (
     <span className={`text-[11px] font-medium border px-2 py-0.5 rounded-md ${item.color}`}>
       {item.label}
@@ -54,7 +56,7 @@ function CategoryBadge({ category, t }) {
   );
 }
 
-function StorageObjectCard({ item, onDeleteClick, t }) {
+function StorageObjectCard({ item, onDeleteClick, t, locale = 'vi' }) {
   const isImage = item.type === 'image' || String(item.mimeType || '').startsWith('image/');
   const [imageError, setImageError] = useState(false);
 
@@ -82,7 +84,7 @@ function StorageObjectCard({ item, onDeleteClick, t }) {
               onError={() => setImageError(true)}
             />
             <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs gap-1 font-medium">
-              <HiOutlineExternalLink className="w-4 h-4" /> Mở xem
+              <HiOutlineExternalLink className="w-4 h-4" /> {t('mediaLibrary.openView')}
             </div>
           </a>
         ) : (
@@ -100,7 +102,7 @@ function StorageObjectCard({ item, onDeleteClick, t }) {
           </div>
           {item.createdAt && (
             <div className="text-[11px] text-slate-400 mt-0.5">
-              {new Date(item.createdAt).toLocaleDateString('vi-VN', {
+              {new Date(item.createdAt).toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', {
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric',
@@ -119,7 +121,7 @@ function StorageObjectCard({ item, onDeleteClick, t }) {
             className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium"
           >
             <HiOutlineExternalLink className="w-3.5 h-3.5" />
-            Xem tệp
+            {t('mediaLibrary.viewFile')}
           </a>
         ) : (
           <span />
@@ -202,7 +204,7 @@ function ChannelCard({ item, t }) {
 }
 
 export default function MediaLibraryPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const activeContext = useAuthStore((state) => state.activeContext);
   const canManage = activeContext?.type !== 'employee'
     || activeContext?.permissions?.media_library_manage === true;
@@ -289,8 +291,10 @@ export default function MediaLibraryPage() {
     { value: 'email_template', label: t('mediaLibrary.categoryEmailTemplate') },
     { value: 'chat', label: t('mediaLibrary.categoryChat') },
     { value: 'landing', label: t('mediaLibrary.categoryLanding') },
+    { value: 'landing_version', label: t('mediaLibrary.categoryLandingVersion') },
     { value: 'logo', label: t('mediaLibrary.categoryLogo') },
     { value: 'campaign', label: t('mediaLibrary.categoryCampaign') },
+    { value: 'quick_send', label: t('mediaLibrary.categoryQuickSend') },
     { value: 'help', label: t('mediaLibrary.categoryHelp') },
     { value: 'temp', label: t('mediaLibrary.categoryTemp') },
   ]), [t]);
@@ -448,7 +452,7 @@ export default function MediaLibraryPage() {
                   href={conflictBanner.url}
                   className="text-xs text-amber-800 underline hover:text-amber-950 mt-1 inline-block font-semibold"
                 >
-                  Đi đến màn hình quản lý &rarr;
+                  {t('mediaLibrary.goToManageScreen')} &rarr;
                 </a>
               )}
             </div>
@@ -458,7 +462,7 @@ export default function MediaLibraryPage() {
             onClick={() => setConflictBanner(null)}
             className="text-xs text-amber-600 hover:text-amber-800 px-2 py-1"
           >
-            Đóng
+            {t('common.close')}
           </button>
         </div>
       )}
@@ -482,6 +486,7 @@ export default function MediaLibraryPage() {
                 item={item}
                 onDeleteClick={canManage ? (target) => setDeletingItem(target) : undefined}
                 t={t}
+                locale={locale}
               />
             ))
             : tab === 'owned'

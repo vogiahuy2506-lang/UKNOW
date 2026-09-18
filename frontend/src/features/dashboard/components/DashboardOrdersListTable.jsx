@@ -12,12 +12,13 @@ import { normalizeJourneyDescription } from '../../customers/utils/customerJourn
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
-const formatNumber = (value) => Number(value || 0).toLocaleString('vi-VN');
+const formatNumber = (value, locale = 'vi') =>
+  Number(value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN');
 
-const formatCurrency = (amount, currency = 'VND') => {
+const formatCurrency = (amount, currency = 'VND', locale = 'vi') => {
   const num = Number(amount || 0);
-  if (currency === 'VND') return `${num.toLocaleString('vi-VN')}đ`;
-  return `${num.toLocaleString('vi-VN')} ${currency}`;
+  if (currency === 'VND') return locale === 'en' ? `${num.toLocaleString('en-US')} VND` : `${num.toLocaleString('vi-VN')}đ`;
+  return `${num.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} ${currency}`;
 };
 
 // ─── Config maps ──────────────────────────────────────────────────────────────
@@ -295,7 +296,7 @@ const buildJourneySourceLabel = ({
  * @param {function} props.onNavigateCustomer - (campaignId, customerId) => void
  */
 const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [customer, setCustomer] = useState(null);
   const [journey, setJourney] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -517,7 +518,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
               {order.orderRef && <DetailRow label={t('ordersTable.orderRef')} value={order.orderRef} />}
               <DetailRow label={t('ordersTable.amount')}>
                 <span className="text-base font-semibold text-gray-900">
-                  {formatCurrency(order.amount, order.currency)}
+                  {formatCurrency(order.amount, order.currency, locale)}
                 </span>
               </DetailRow>
               {order.paymentMethod && <DetailRow label={t('ordersTable.paymentMethod')} value={order.paymentMethod} />}
@@ -708,7 +709,7 @@ const DashboardOrdersListTable = ({
   ordersStatusFilter,
   onChangePage,
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const items = useMemo(() => ordersData?.items || [], [ordersData?.items]);
   const pagination = ordersData?.pagination || { page: 1, totalPages: 1, total: 0 };
@@ -1130,7 +1131,7 @@ const DashboardOrdersListTable = ({
 
                       {/* Số tiền */}
                       <td className="px-4 py-3 border-b border-gray-100 text-sm text-right tabular-nums font-medium text-gray-700 whitespace-nowrap">
-                        {formatCurrency(item.amount, item.currency)}
+                        {formatCurrency(item.amount, item.currency, locale)}
                       </td>
 
                       {/* Ngày */}

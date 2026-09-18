@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 
-const formatNumber = (value) => Number(value || 0).toLocaleString('vi-VN');
-const formatDate = (value) => {
+const formatNumber = (value, locale = 'vi') =>
+  Number(value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN');
+const formatDate = (value, locale = 'vi') => {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return date.toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 const getStatusConfig = (status, t) => {
@@ -376,7 +377,7 @@ const ExpandableCellText = ({ value, maxPreviewChars = 72, className = '', t: tF
  * @returns {JSX.Element}
  */
 const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const items = useMemo(() => runsData?.items || [], [runsData?.items]);
   const pagination = runsData?.pagination || { page: 1, totalPages: 1, total: 0 };
 
@@ -613,32 +614,32 @@ const DashboardRunsTable = ({ runsData, isLoadingRuns, onChangePage }) => {
 
                       {/* Date */}
                       <td className="px-4 py-3 border-b border-gray-100 text-sm text-gray-600 whitespace-nowrap">
-                        {formatDate(item.startedAt)}
+                        {formatDate(item.startedAt, locale)}
                       </td>
 
                       {/* Số tin đã gửi theo hành trình */}
                       <td className="px-4 py-3 border-b border-gray-100 text-sm text-gray-700 text-right tabular-nums">
-                        <span className="font-medium">{formatNumber(item.journeySentCount ?? 0)}</span>
+                        <span className="font-medium">{formatNumber(item.journeySentCount ?? 0, locale)}</span>
                       </td>
 
                       {/* Email open */}
                       <td className="px-4 py-3 border-b border-gray-100 text-sm text-gray-700 text-right tabular-nums">
-                        {formatNumber(item.emailOpenedCount)}
+                        {formatNumber(item.emailOpenedCount, locale)}
                       </td>
 
                       {/* Click */}
                       <td className="px-4 py-3 border-b border-gray-100 text-sm text-gray-700 text-right tabular-nums">
-                        {formatNumber((item.emailClickedCount || 0) + (item.zaloClickCount || 0))}
+                        {formatNumber((item.emailClickedCount || 0) + (item.zaloClickCount || 0), locale)}
                       </td>
 
                       {/* Orders */}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="flex flex-col gap-0.5 text-xs tabular-nums">
                           <span className={`font-semibold ${orderSortKey === 'completedOrderCount' ? 'text-green-600' : 'text-green-500'}`}>
-                            {formatNumber(item.completedOrderCount)} {t('runsTable.ordered')}
+                            {formatNumber(item.completedOrderCount, locale)} {t('runsTable.ordered')}
                           </span>
                           <span className={`${orderSortKey === 'pendingOrderCount' ? 'text-orange-500 font-semibold' : 'text-orange-400'}`}>
-                            {formatNumber(item.pendingOrderCount)} {t('runsTable.pendingOrders')}
+                            {formatNumber(item.pendingOrderCount, locale)} {t('runsTable.pendingOrders')}
                           </span>
                         </div>
                       </td>

@@ -17,6 +17,7 @@ import {
 } from 'react-icons/hi';
 import { FaWhatsapp } from 'react-icons/fa';
 import whatsappSettingsApiService from '../../features/settings/services/whatsappSettingsApi.service';
+import { useI18n } from '../../i18n';
 
 /**
  * WhatsAppSettings — Đồng bộ cam + trắng chủ đạo của hệ thống.
@@ -26,15 +27,14 @@ import whatsappSettingsApiService from '../../features/settings/services/whatsap
  * Vẫn chỉ 1 cách kết nối: quét QR bằng WhatsApp cá nhân.
  */
 
-const STATUS_META = {
-  open: { label: 'Đã kết nối', cls: 'bg-green-50 text-green-700 border-green-200' },
-  connecting: { label: 'Đang kết nối', cls: 'bg-primary-50 text-primary-700 border-primary-200' },
-  closed: { label: 'Chưa kết nối', cls: 'bg-slate-50 text-slate-600 border-slate-200' },
-  offline: { label: 'Ngoại tuyến', cls: 'bg-slate-50 text-slate-600 border-slate-200' },
-};
-
-function StatusPill({ status }) {
-  const meta = STATUS_META[status] || STATUS_META.offline;
+function StatusPill({ status, t }) {
+  const metaMap = {
+    open: { label: t('whatsAppSettings.statusConnected'), cls: 'bg-green-50 text-green-700 border-green-200' },
+    connecting: { label: t('whatsAppSettings.statusConnecting'), cls: 'bg-primary-50 text-primary-700 border-primary-200' },
+    closed: { label: t('whatsAppSettings.statusNotConnected'), cls: 'bg-slate-50 text-slate-600 border-slate-200' },
+    offline: { label: t('whatsAppSettings.statusOffline'), cls: 'bg-slate-50 text-slate-600 border-slate-200' },
+  };
+  const meta = metaMap[status] || metaMap.offline;
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${
@@ -68,6 +68,7 @@ function InfoRow({ icon: Icon, label, value, mono = false }) {
 }
 
 export default function WhatsAppSettings() {
+  const { t } = useI18n();
   const [sessions, setSessions] = useState([]); // { sessionKey, phone, name, status }
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,14 +127,14 @@ export default function WhatsAppSettings() {
       const res = await whatsappSettingsApiService.openBaileysSession(sessionKey);
       const d = res?.data?.data;
       if (d?.status === 'open') {
-        toast.success('Số WhatsApp của bạn đã kết nối.');
+        toast.success(t('whatsAppSettings.connectedSuccess'));
         setQrSessionKey(null);
         fetchSessions();
         return;
       }
       setQrSessionKey(sessionKey);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể mở phiên WhatsApp.');
+      toast.error(err?.response?.data?.message || t('whatsAppSettings.cannotOpenSession'));
     } finally {
       setConnecting(false);
     }
@@ -143,15 +144,15 @@ export default function WhatsAppSettings() {
   // Lưu ý: s.sessionKey đã được backend prefix sẵn (vd "1-default"); ta chỉ
   // truyền shortKey (vd "default") để backend wrap đúng 1 lần.
   const handleDelete = async (sessionKey) => {
-    if (!window.confirm('Ngắt kết nối số WhatsApp này?')) return;
+    if (!window.confirm(t('whatsAppSettings.disconnectConfirm'))) return;
     setDeleting(sessionKey);
     try {
       const shortKey = sessionKey.split('-').slice(1).join('-') || 'default';
       await whatsappSettingsApiService.deleteBaileysSession(shortKey);
-      toast.success('Đã ngắt kết nối.');
+      toast.success(t('whatsAppSettings.disconnected'));
       fetchSessions();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể ngắt kết nối.');
+      toast.error(err?.response?.data?.message || t('whatsAppSettings.cannotDisconnect'));
     } finally {
       setDeleting(null);
     }
@@ -162,11 +163,11 @@ export default function WhatsAppSettings() {
     setSavingNickname(true);
     try {
       await whatsappSettingsApiService.updateBaileysSession(shortKey, nicknameInput.trim());
-      toast.success('Đã lưu tên hiển thị.');
+      toast.success(t('whatsAppSettings.savedDisplayName'));
       setEditingNickname(null);
       fetchSessions();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể lưu tên.');
+      toast.error(err?.response?.data?.message || t('whatsAppSettings.cannotSaveDisplayName'));
     } finally {
       setSavingNickname(false);
     }
@@ -190,7 +191,7 @@ export default function WhatsAppSettings() {
     try {
       await whatsappSettingsApiService.openBaileysSession(shortKey);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể mở lại phiên.');
+      toast.error(err?.response?.data?.message || t('whatsAppSettings.cannotReopenSession'));
       setQrSessionKey(null);
     } finally {
       setConnecting(false);
@@ -204,7 +205,7 @@ export default function WhatsAppSettings() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">WhatsApp</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Kết nối số WhatsApp cá nhân bằng mã QR.
+            {t('whatsAppSettings.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -215,7 +216,7 @@ export default function WhatsAppSettings() {
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-primary-200 hover:text-primary-700 disabled:opacity-70"
           >
             <HiOutlineRefresh className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Làm mới
+            {t('whatsAppSettings.refresh')}
           </button>
           <button
             type="button"
@@ -224,7 +225,7 @@ export default function WhatsAppSettings() {
             className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <HiOutlineQrcode className="h-4 w-4" />
-            {connecting ? 'Đang mở…' : 'Quét QR'}
+            {connecting ? t('whatsAppSettings.opening') : t('whatsAppSettings.scanQr')}
           </button>
         </div>
       </div>
@@ -240,9 +241,11 @@ export default function WhatsAppSettings() {
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-100 text-primary-600">
               <FaWhatsapp className="h-7 w-7" />
             </div>
-            <p className="text-sm font-semibold text-slate-900">Chưa có số WhatsApp nào được kết nối</p>
+            <p className="text-sm font-semibold text-slate-900">{t('whatsAppSettings.emptyTitle')}</p>
             <p className="mt-1 max-w-xs text-sm text-slate-500">
-              Bấm <strong className="text-primary-700">Quét QR</strong> ở trên để liên kết số WhatsApp cá nhân của bạn.
+              {t('whatsAppSettings.emptySubtitle', {
+                action: t('whatsAppSettings.scanQr'),
+              })}
             </p>
           </div>
         </div>
@@ -262,21 +265,21 @@ export default function WhatsAppSettings() {
                       <h3 className="font-semibold text-slate-900 truncate">
                         {s.name || s.phone || `WhatsApp #${s.shortKey || '?'}`}
                       </h3>
-                      <StatusPill status={s.status} />
+                      <StatusPill status={s.status} t={t} />
                     </div>
 
                     {/* Detail grid */}
                     <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
                       <InfoRow
                         icon={HiOutlineDeviceMobile}
-                        label="Số điện thoại"
+                        label={t('whatsAppSettings.phoneNumber')}
                         value={s.phone || '—'}
                       />
                       {/* Tên hiển thị — có nút edit */}
                       <div className="flex items-start gap-1.5">
                         <HiOutlineUserCircle className="mt-px h-4 w-4 shrink-0 text-slate-400" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] text-slate-400 leading-tight">Tên hiển thị</p>
+                          <p className="text-[11px] text-slate-400 leading-tight">{t('whatsAppSettings.displayName')}</p>
                           {editingNickname === s.sessionKey ? (
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <input
@@ -286,7 +289,7 @@ export default function WhatsAppSettings() {
                                 onChange={(e) => setNicknameInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNickname(s.sessionKey); if (e.key === 'Escape') handleCancelEditNickname(); }}
                                 className="flex-1 rounded-md border border-slate-300 px-2 py-0.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                                placeholder="VD: WhatsApp cá nhân"
+                                placeholder={t('whatsAppSettings.displayNamePlaceholder')}
                                 autoFocus
                               />
                               <button
@@ -295,14 +298,14 @@ export default function WhatsAppSettings() {
                                 disabled={savingNickname}
                                 className="rounded-md bg-primary-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-60"
                               >
-                                Lưu
+                                {t('whatsAppSettings.save')}
                               </button>
                               <button
                                 type="button"
                                 onClick={handleCancelEditNickname}
                                 className="rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
                               >
-                                Hủy
+                                {t('whatsAppSettings.cancel')}
                               </button>
                             </div>
                           ) : (
@@ -314,7 +317,7 @@ export default function WhatsAppSettings() {
                                 type="button"
                                 onClick={() => handleStartEditNickname(s)}
                                 className="shrink-0 rounded p-0.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                                title="Đổi tên hiển thị"
+                                title={t('whatsAppSettings.changeDisplayName')}
                               >
                                 <HiOutlinePencilAlt className="h-3.5 w-3.5" />
                               </button>
@@ -324,13 +327,13 @@ export default function WhatsAppSettings() {
                       </div>
                       <InfoRow
                         icon={HiOutlineIdentification}
-                        label="WhatsApp JID"
+                        label={t('whatsAppSettings.jid')}
                         value={s.phone ? `${s.phone}@s.whatsapp.net` : '—'}
                         mono
                       />
                       <InfoRow
                         icon={HiOutlineKey}
-                        label="Session key"
+                        label={t('whatsAppSettings.sessionKey')}
                         value={s.shortKey || s.sessionKey?.split('-').pop() || '—'}
                         mono
                       />
@@ -348,7 +351,7 @@ export default function WhatsAppSettings() {
                       className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 transition hover:bg-primary-100 disabled:opacity-50"
                     >
                       <HiOutlineQrcode className="h-3.5 w-3.5" />
-                      Quét lại
+                      {t('whatsAppSettings.rescan')}
                     </button>
                   )}
                   <button
@@ -356,7 +359,7 @@ export default function WhatsAppSettings() {
                     onClick={() => handleDelete(s.sessionKey)}
                     disabled={deleting === s.sessionKey}
                     className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                    title="Ngắt kết nối & xóa phiên"
+                    title={t('whatsAppSettings.deleteTitle')}
                   >
                     {deleting === s.sessionKey ? (
                       <span className="inline-block h-4 w-4 rounded-full border-2 border-red-300 border-t-transparent animate-spin" />
@@ -375,7 +378,7 @@ export default function WhatsAppSettings() {
       <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
         <HiOutlineClock className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
         <p>
-          Dùng được với <strong>WhatsApp cá nhân</strong>. Phiên được lưu trên máy chủ — không cần quét lại sau khi khởi động lại.
+          {t('whatsAppSettings.footerTip')}
         </p>
       </div>
 
@@ -396,6 +399,7 @@ export default function WhatsAppSettings() {
 
 /* ── QR Modal (compact, primary theme, có hướng dẫn 4 bước bên trong) ── */
 function QrModal({ sessionKey, onClose, onConnected }) {
+  const { t } = useI18n();
   const [qr, setQr] = useState(null);
   const [status, setStatus] = useState('connecting');
   const [error, setError] = useState(null);
@@ -414,7 +418,7 @@ function QrModal({ sessionKey, onClose, onConnected }) {
         setQr(d.qr || null);
         if (d.status === 'open') {
           setConnected(true);
-          toast.success('Đã kết nối WhatsApp!');
+          toast.success(t('whatsAppSettings.connectedSuccess'));
           onConnected && onConnected();
           return;
         }
@@ -434,7 +438,7 @@ function QrModal({ sessionKey, onClose, onConnected }) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [sessionKey, onConnected]);
+  }, [sessionKey, onConnected, t]);
 
   // Cleanup khi user đóng modal mà CHƯA quét QR — huỷ phiên để khỏi lưu rác.
   // Nếu đã connected thì giữ lại.
@@ -456,16 +460,16 @@ function QrModal({ sessionKey, onClose, onConnected }) {
             <FaWhatsapp className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-slate-900">Quét mã QR để kết nối</h3>
+            <h3 className="text-base font-semibold text-slate-900">{t('whatsAppSettings.modalTitle')}</h3>
             <p className="text-xs text-slate-500">
-              Mở WhatsApp trên điện thoại → Cài đặt → Thiết bị đã liên kết → Liên kết thiết bị
+              {t('whatsAppSettings.modalSubtitle')}
             </p>
           </div>
           <button
             type="button"
             onClick={handleClose}
             className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            title="Đóng"
+            title={t('whatsAppSettings.close')}
           >
             <HiOutlineX className="h-4 w-4" />
           </button>
@@ -480,28 +484,28 @@ function QrModal({ sessionKey, onClose, onConnected }) {
             ) : status === 'open' ? (
               <div className="text-center text-green-600">
                 <HiOutlineCheckCircle className="w-12 h-12 mx-auto" />
-                <p className="mt-2 text-sm font-medium">Đã kết nối!</p>
+                <p className="mt-2 text-sm font-medium">{t('whatsAppSettings.connected')}</p>
               </div>
             ) : (
               <div className="text-slate-400 text-sm text-center">
                 <HiOutlineRefresh className="w-8 h-8 mx-auto mb-2 animate-spin text-primary-500" />
-                Đang tạo mã…
+                {t('whatsAppSettings.generatingQr')}
               </div>
             )}
           </div>
 
           {/* Steps */}
           <div className="space-y-3 text-sm text-slate-700 flex-1">
-            <Step n={1} text="Mở app WhatsApp trên điện thoại" />
-            <Step n={2} text='Nhấn ⋮ → "Thiết bị đã liên kết"' />
-            <Step n={3} text='Chọn "Liên kết thiết bị"' />
-            <Step n={4} text="Hướng camera vào mã QR bên trái" />
+            <Step n={1} text={t('whatsAppSettings.step1')} />
+            <Step n={2} text={t('whatsAppSettings.step2')} />
+            <Step n={3} text={t('whatsAppSettings.step3')} />
+            <Step n={4} text={t('whatsAppSettings.step4')} />
 
             {/* Quick tip */}
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 mt-3">
               <HiOutlineInformationCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
-                Nếu đóng cửa sổ mà chưa quét, phiên sẽ được huỷ tự động.
+                {t('whatsAppSettings.modalTip')}
               </span>
             </div>
 
@@ -521,7 +525,7 @@ function QrModal({ sessionKey, onClose, onConnected }) {
             onClick={handleClose}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            {connected ? 'Đóng' : 'Huỷ'}
+            {connected ? t('whatsAppSettings.close') : t('whatsAppSettings.cancel')}
           </button>
           <button
             type="button"
@@ -530,7 +534,7 @@ function QrModal({ sessionKey, onClose, onConnected }) {
             className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <HiOutlineRefresh className="h-4 w-4" />
-            Tạo lại QR
+            {t('whatsAppSettings.regenerateQr')}
           </button>
         </div>
       </div>

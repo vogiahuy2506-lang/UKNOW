@@ -39,7 +39,7 @@ const CampaignSchedulesTable = ({
   onToggleSchedule = () => {},
   canEdit = true,
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   return (
     <div className="card">
@@ -118,13 +118,13 @@ const CampaignSchedulesTable = ({
                       <span className="badge badge-info">
                         {schedule.scheduleType === 'weekly'
                           ? `${t('campaigns.scheduleWeekly')} (${getWeeklyDayLabel(getWeeklyDayFromCron(schedule.cronExpression))})`
-                          : getScheduleTypeLabel(schedule.scheduleType)}
+                          : getScheduleTypeLabel(schedule.scheduleType, t)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {schedule.lastRunAt ? (
                         <div>
-                          <div className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.lastRunAt)}</div>
+                          <div className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.lastRunAt, '-', locale)}</div>
                           <div className="text-xs text-gray-500">
                             {schedule.runCount || 0} {t('campaignRun.times')}
                           </div>
@@ -135,14 +135,14 @@ const CampaignSchedulesTable = ({
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {schedule.enabled && schedule.nextRunAt ? (
-                        <span className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.nextRunAt)}</span>
+                        <span className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.nextRunAt, '-', locale)}</span>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`badge ${getScheduleStatusClassName(schedule)}`}>
-                        {getScheduleStatusLabel(schedule)}
+                        {getScheduleStatusLabel(schedule, t)}
                       </span>
                     </td>
                     <td className="px-6 py-4">

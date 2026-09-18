@@ -64,10 +64,11 @@ const toCampaignDate = (value) => {
  * @param {string} fallback fallback text when value is invalid
  * @returns {string}
  */
-export const formatCampaignDateTime = (value, fallback = '-') => {
+export const formatCampaignDateTime = (value, fallback = '-', locale = 'vi') => {
   const date = toCampaignDate(value);
   if (!date) return fallback;
-  return date.toLocaleString('vi-VN', {
+  const targetLocale = locale === 'en' || locale === 'en-US' ? 'en-US' : 'vi-VN';
+  return date.toLocaleString(targetLocale, {
     hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
     timeZone: HANOI_TIME_ZONE,
   });
@@ -78,12 +79,14 @@ export const formatCampaignDateTime = (value, fallback = '-') => {
  *
  * @param {string|number|Date|null|undefined} value giá trị thời gian đầu vào
  * @param {string} fallback text fallback khi value không hợp lệ
+ * @param {string} [locale='vi'] mã locale hiển thị
  * @returns {string}
  */
-export const formatCampaignTime = (value, fallback = '-') => {
+export const formatCampaignTime = (value, fallback = '-', locale = 'vi') => {
   const date = toCampaignDate(value);
   if (!date) return fallback;
-  return date.toLocaleTimeString('vi-VN', {
+  const targetLocale = locale === 'en' || locale === 'en-US' ? 'en-US' : 'vi-VN';
+  return date.toLocaleTimeString(targetLocale, {
     hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
     timeZone: HANOI_TIME_ZONE,
   });

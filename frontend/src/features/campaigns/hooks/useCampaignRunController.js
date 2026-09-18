@@ -842,6 +842,8 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
   const getWeeklyDayLabelByOptions = (dayValue) => getWeeklyDayLabel(dayValue, weeklyDayOptions);
   const getWeeklyDayFromCronByOptions = (cronExpression = '') =>
     getWeeklyDayFromCron(cronExpression, weeklyDayOptions);
+  const getScheduleTypeLabelBound = (type) => getScheduleTypeLabel(type, t);
+  const getScheduleStatusLabelBound = (schedule) => getScheduleStatusLabel(schedule, t);
 
   return {
     weeklyDayOptions,
@@ -892,9 +894,9 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
     fetchSchedules,
     getWeeklyDayLabel: getWeeklyDayLabelByOptions,
     getWeeklyDayFromCron: getWeeklyDayFromCronByOptions,
-    getScheduleTypeLabel,
+    getScheduleTypeLabel: getScheduleTypeLabelBound,
     getScheduleStatusClassName,
-    getScheduleStatusLabel,
+    getScheduleStatusLabel: getScheduleStatusLabelBound,
     isReadonlyOnceSchedule,
 
     // Handlers

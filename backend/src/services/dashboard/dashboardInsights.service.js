@@ -684,9 +684,100 @@ function buildDataMarkdownSection(safePayload) {
  * 3. Tách insight tab «Tất cả» vs từng kênh thành góc nhìn marketing khác nhau.
  *
  * @param {string} dataMarkdown - Khối markdown dữ liệu dashboard đã chuẩn hóa
+ * @param {string} [locale='vi'] - Ngôn ngữ ('vi' hoặc 'en')
  * @returns {string} Prompt đầy đủ gửi Gemini
  */
-function buildAnalysisPrompt(dataMarkdown) {
+function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
+  if (locale === 'en') {
+    return [
+      'You are a senior marketing analytics expert with 10+ years of experience in email marketing, Zalo marketing, and sales campaign optimization.',
+      '',
+      'Task: Read the DASHBOARD DATA below (strictly following the filters), analyze the metrics closely, and do not invent new numbers.',
+      '',
+      '=== DATA ===',
+      dataMarkdown,
+      '',
+      '=== OUTPUT REQUIREMENTS ===',
+      'Return ONLY a single valid JSON object (UTF-8), without markdown code fences, without any commentary outside JSON.',
+      'Language: English. All text in the response (overview, key metrics, insights, channel analysis, recommendations, chart analyses, notes) MUST be written in professional English.',
+      'CRITICAL — JSON syntax: in all string fields (overview, charts.*, …) do NOT insert raw double quotes ("); use **bold** or single quotes within text. If the JSON schema deviates, the client will fail to render insights.',
+      '',
+      'DASHBOARD CHARTS MAPPING → JSON (every `charts.*` field MUST contain actual markdown content, do not leave empty if relevant data exists):',
+      '- "Orders Over Time" / trend chart (pending & completed orders): `charts.ordersTrend.summary` (Summary tab) and `charts.ordersTrend.compare` (Channel comparison on timeline).',
+      '- "Channel Engagement" chart (daily Sent/Opened/Clicked lines for Email, Zalo, Zalo Group): `charts.channelEngagement.all` + separate `email`, `zalo`, `zalo_group` — explain peaks/anomalies (e.g. high email volume vs high Zalo Group engagement if data shows).',
+      '- Donut / channel breakdown charts (Clicks, Pending Orders, Completed Orders): `charts.channelBreakdown.click`, `.pending`, `.completed`.',
+      '- Top Courses, Top Campaigns by Orders / Clicks: `charts.topLists.topCourses`, `.topCampaignsByOrders`, `.topCampaignsByClicks`.',
+      '- Top Landing Pages block (views / clicks / forms): `charts.landingTopPages`.',
+      '',
+      'JSON Schema (all keys required; use empty string "" if no information):',
+      '{',
+      '  "overview": "Overall summary of campaign performance in 1-3 sentences",',
+      '  "key_metrics_analysis": {',
+      '    "open_rate": { "value": "29.5% or —", "benchmark": "Compare with industry benchmark (~20-25%)", "assessment": "good|average|poor", "comment": "brief comment" },',
+      '    "click_rate": { "value": "click/sent rate or —", "benchmark": "Brief benchmark comparison", "assessment": "good|average|poor", "comment": "brief comment" },',
+      '    "conversion_rate": { "value": "click to completed orders rate (or —)", "comment": "comment on bottom of the funnel" }',
+      '  },',
+      '  "insights": [',
+      '    { "title": "...", "type": "opportunity|problem|warning|trend", "priority": "high|medium|low", "detail": "...", "impact": "..." }',
+      '  ],',
+      '  "channel_analysis": {',
+      '    "best_channel": "Most effective channel (Email | Zalo | Zalo Group) + brief data-backed rationale",',
+      '    "underperforming_channel": "Weakest channel / needs improvement + signs from clicks/orders/sends",',
+      '    "recommendation": "Coordinated 3-channel strategy: prioritization, timing, distinct roles (broadcast vs 1-on-1 vs community)"',
+      '  },',
+      '  "funnel_analysis": {',
+      '    "bottleneck": "...",',
+      '    "drop_off_stage": "...",',
+      '    "suggestion": "..."',
+      '  },',
+      '  "top_product_insight": { "observation": "...", "action": "..." },',
+      '  "action_plan": [',
+      '    { "priority": 1, "action": "...", "expected_result": "...", "timeline": "..." }',
+      '  ],',
+      '  "risk_warning": "Risk warning if metrics are not improved (1-2 sentences)",',
+      '  "charts": {',
+      '    "ordersTrend": {',
+      '      "summary": "markdown: «Summary» tab (total pendingOrders + completedOrders); 4-8 bullets; **Trend**, **Data Discrepancies** or **Data Synchronization**, **Multi-channel Sending Activity**, **Conclusion**.",',
+      '      "compare": "markdown: «Compare Channels» tab (email/zalo/zalo_group × pending/completed on TIMELINE); compare channels, temporal hotspots, **Conclusion**."',
+      '    },',
+      '    "channelEngagement": {',
+      '      "all": "markdown: compare 3-channel strategy on same timeline — role of Email vs Zalo 1-on-1 vs Zalo Group (funnel, cadence, reliability); recommendation for coordination / marketing effort distribution.",',
+      '      "email": "markdown: Email-specific strategy (subject lines, segmentation, open/click, follow-up) linked to emailSent / interaction timeline if present.",',
+      '      "zalo": "markdown: Zalo OA strategy (messaging, timing, personalization, conversion) tied to zaloSent and related clicks/orders.",',
+      '      "zalo_group": "markdown: Zalo Group strategy (community, social proof, group content) tied to zaloGroupSent and interactions/orders."',
+      '    },',
+      '    "channelBreakdown": {',
+      '      "click": "markdown 2-4 points (bulleted + **bold**) for Click breakdown donut",',
+      '      "completed": "markdown for Completed Orders donut",',
+      '      "pending": "markdown for Pending Orders donut"',
+      '    },',
+      '    "topLists": {',
+      '      "topCourses": "markdown 2-5 points for Top Courses",',
+      '      "topCampaignsByOrders": "markdown for Top Campaigns by Orders",',
+      '      "topCampaignsByClicks": "markdown for Top Clicks (mention clicks/sends if available)"',
+      '    },',
+      '    "landingTopPages": "markdown: 5-10 bullet lines; MUST cover (1) views (2) tracking clicks (3) form submissions; **bold** key figures/pages; CTR and form/view ratios if available"',
+      '  },',
+      '  "notes": [ "data limitation warnings if any (e.g., abbreviated timeline)" ]',
+      '}',
+      '',
+      'Formatting rules for insights (charts.* — string or per field in channelEngagement):',
+      '- Write in light markdown: each key point on a new line starting with \"- \".',
+      '- Use **labels or key numbers** in bold; avoid long unbroken paragraphs.',
+      'Analysis rules:',
+      '- For charts.ordersTrend.summary: only use combined pendingOrders + completedOrders.',
+      '- For charts.ordersTrend.compare: inspect emailPendingOrders, emailCompletedOrders, zalo*, zaloGroup* on TIMELINE; compare channels and seasonal patterns; note discrepancies if timeline diverges from overview.',
+      '- Legacy: if model returns ordersTrend as a single string, system attaches to summary; compare may be empty.',
+      '- For charts.channelEngagement: all/email/zalo/zalo_group must present distinct perspectives; «All» tab is overarching strategy; individual tabs focus specifically on that channel (Email / Zalo / Zalo Group) and its correlation with orders.',
+      '- For channel_analysis.recommendation: always address all three channels: Email, Zalo, Zalo Group (even if a channel has 0 sends — explain strategic implications).',
+      '- For charts.landingTopPages: be specific; analyze across views / clicks / forms and conversion rates.',
+      '- Prioritize actionable insights that can be executed within 7-30 days.',
+      '- Keep benchmark comparisons qualitative and balanced when data is sparse.',
+      '- If completed orders are disproportionately low compared to clicks/sends, diagnose funnel bottleneck with testable hypothesis.',
+      '- action_plan and insights[] should have at least one multi-channel coordination item when data permits.',
+    ].join('\n');
+  }
+
   return [
     'Bạn là chuyên gia phân tích marketing với 10+ năm kinh nghiệm về email marketing, Zalo marketing và tối ưu hóa chiến dịch bán hàng.',
     '',
@@ -760,7 +851,7 @@ function buildAnalysisPrompt(dataMarkdown) {
     '}',
     '',
     'Quy tắc định dạng insight (charts.* — chuỗi hoặc từng field trong channelEngagement):',
-    '- Viết bằng markdown nhẹ: mỗi ý chính là một dòng bắt đầu bằng \"- \" (gạch đầu dòng).',
+    '- Viết bằng markdown nhẹ: mỗi ý chính là một dòng bắt đầu bằng \"- \".',
     '- Dùng **nhãn hoặc số then chốt** để in đậm; tránh một đoạn văn dài không xuống dòng.',
     'Quy tắc phân tích:',
     '- Với charts.ordersTrend.summary: như trên nhưng chỉ dùng pendingOrders + completedOrders (tổng).',
@@ -792,9 +883,10 @@ class DashboardInsightsService {
    * @param {object} input.topListsData
    * @param {object} [input.landingPageStats] - { rows?: object[] } từ API landing-pages-stats (tùy chọn)
    * @param {object} input.filters
+   * @param {string} [input.locale='vi']
    * @returns {Promise<{ success: boolean, data: object }>}
    */
-  async generateInsights({ userId, overview, analytics, topListsData, landingPageStats, filters }) {
+  async generateInsights({ userId, overview, analytics, topListsData, landingPageStats, filters, locale = 'vi' }) {
     let lastText = '';
     let lastFinish = '';
     let lastBlock = '';
@@ -805,7 +897,7 @@ class DashboardInsightsService {
 
     const runOnce = async (safePayload) => {
       const dataMarkdown = buildDataMarkdownSection(safePayload);
-      const prompt = buildAnalysisPrompt(dataMarkdown);
+      const prompt = buildAnalysisPrompt(dataMarkdown, locale);
       const result = await generateGeminiText({
         prompt,
         model: insightModel,
@@ -856,11 +948,17 @@ class DashboardInsightsService {
       const notes = Array.isArray(parsed.notes) ? [...parsed.notes] : [];
       if (usedCompactRetry) {
         notes.push(
-          'Hệ thống đã tự động thu gọn timeline/landing trong prompt và gọi Gemini lần 2 (lần 1 không parse được hoặc có nguy cơ cắt đầu ra).'
+          locale === 'en'
+            ? 'The system automatically compacted timeline/landing data in prompt and retried Gemini (first attempt could not be parsed or was truncated).'
+            : 'Hệ thống đã tự động thu gọn timeline/landing trong prompt và gọi Gemini lần 2 (lần 1 không parse được hoặc có nguy cơ cắt đầu ra).'
         );
       }
       if (lastFinish === 'MAX_TOKENS') {
-        notes.push('Gemini kết thúc do đạt giới hạn độ dài đầu ra; một số mục có thể bị rút gọn.');
+        notes.push(
+          locale === 'en'
+            ? 'Gemini finished due to reaching the maximum output token limit; some sections may be truncated.'
+            : 'Gemini kết thúc do đạt giới hạn độ dài đầu ra; một số mục có thể bị rút gọn.'
+        );
       }
       return {
         success: true,
@@ -873,14 +971,22 @@ class DashboardInsightsService {
       data: normalizeInsightPayload({
         overview:
           typeof lastText === 'string' && lastText.length > 0
-            ? `Không parse được JSON từ Gemini. Bản thô (có thể cắt):\n${lastText.slice(0, 2000)}`
-            : 'Không nhận được nội dung từ Gemini.',
+            ? (locale === 'en'
+                ? `Failed to parse JSON from Gemini. Raw output (may be truncated):\n${lastText.slice(0, 2000)}`
+                : `Không parse được JSON từ Gemini. Bản thô (có thể cắt):\n${lastText.slice(0, 2000)}`)
+            : (locale === 'en'
+                ? 'No content received from Gemini.'
+                : 'Không nhận được nội dung từ Gemini.'),
         charts: defaultCharts(),
         notes: [
-          'Không parse được JSON đầy đủ. Kiểm tra GEMINI_MODEL (khuyến nghị: gemini-2.5-flash) và GEMINI_API_KEY.',
+          locale === 'en'
+            ? 'Could not parse complete JSON. Check GEMINI_MODEL (recommended: gemini-2.5-flash) and GEMINI_API_KEY.'
+            : 'Không parse được JSON đầy đủ. Kiểm tra GEMINI_MODEL (khuyến nghị: gemini-2.5-flash) và GEMINI_API_KEY.',
           lastFinish ? `Gemini finishReason: ${lastFinish}` : '',
-          lastBlock ? `Chặn prompt: ${lastBlock}` : '',
-          usedCompactRetry ? 'Đã thử prompt thu gọn nhưng vẫn không parse được JSON.' : '',
+          lastBlock ? (locale === 'en' ? `Prompt blocked: ${lastBlock}` : `Chặn prompt: ${lastBlock}`) : '',
+          usedCompactRetry
+            ? (locale === 'en' ? 'Retried with compacted prompt but still could not parse JSON.' : 'Đã thử prompt thu gọn nhưng vẫn không parse được JSON.')
+            : '',
         ].filter(Boolean),
       }),
     };

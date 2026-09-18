@@ -231,7 +231,25 @@ export const assertOnceScheduleNotInPast = (scheduleForm = {}, now = new Date())
  * @param {string} type schedule type
  * @returns {string}
  */
-export const getScheduleTypeLabel = (type) => {
+export const getScheduleTypeLabel = (type, t) => {
+  if (t) {
+    switch (type) {
+      case 'once':
+        return t('campaignRun.typeOnce');
+      case 'daily':
+        return t('campaignRun.typeDaily');
+      case 'weekly':
+        return t('campaignRun.typeWeekly');
+      case 'monthly':
+        return t('campaignRun.typeMonthly');
+      case 'hourly':
+        return t('campaignRun.typeHourly');
+      case 'custom':
+        return t('campaignRun.typeCustom');
+      default:
+        return type;
+    }
+  }
   switch (type) {
     case 'once':
       return 'Chạy 1 lần';
@@ -314,10 +332,17 @@ export const getWeeklyDayFromCron = (cronExpression = '', weeklyDayOptions = [])
  * @param {object} schedule schedule item
  * @returns {string}
  */
-export const getScheduleStatusLabel = (schedule) => {
-  if (isStoppedOnceSchedule(schedule)) return 'Đã dừng';
-  if (isCompletedOnceSchedule(schedule)) return 'Đã hoàn thành';
-  return schedule?.enabled ? 'Đang bật' : 'Đã tắt';
+export const getScheduleStatusLabel = (schedule, t) => {
+  if (isStoppedOnceSchedule(schedule)) {
+    return t ? t('campaignRun.statusStopped') : 'Đã dừng';
+  }
+  if (isCompletedOnceSchedule(schedule)) {
+    return t ? t('campaignRun.statusCompleted') : 'Đã hoàn thành';
+  }
+  if (schedule?.enabled) {
+    return t ? t('campaignRun.statusEnabled') : 'Đang bật';
+  }
+  return t ? t('campaignRun.statusDisabled') : 'Đã tắt';
 };
 
 /**
@@ -667,8 +692,12 @@ export const resolveScheduleUiTimingDate = (schedule, now = new Date()) => {
  * @param {object} schedule bản ghi lịch
  * @returns {string}
  */
-export const getScheduleRunTimingFieldLabelVi = (schedule) =>
-  (isScheduleOneTimeRun(schedule) ? 'Lịch chạy' : 'Lần chạy tiếp theo');
+export const getScheduleRunTimingFieldLabelVi = (schedule, t) => {
+  if (isScheduleOneTimeRun(schedule)) {
+    return t ? t('campaignRun.scheduleTime') : 'Lịch chạy';
+  }
+  return t ? t('campaignRun.nextRun') : 'Lần chạy tiếp theo';
+};
 
 /**
  * Mô tả mẫu lịch ngắn gọn cho người dùng (ưu tiên weekly kèm thứ trong tuần), có kèm giờ chạy nếu đọc được từ cron.
@@ -676,24 +705,27 @@ export const getScheduleRunTimingFieldLabelVi = (schedule) =>
  * @param {object} schedule bản ghi lịch
  * @param {(cron: string) => string} getWeeklyDayFromCron hàm parse thứ từ cron
  * @param {(day: string) => string} getWeeklyDayLabel hàm map thứ → nhãn tiếng Việt
+ * @param {Function} [t] hàm dịch i18n
  * @returns {string}
  */
-export const getSchedulePatternSummaryVi = (schedule, getWeeklyDayFromCron, getWeeklyDayLabel) => {
+export const getSchedulePatternSummaryVi = (schedule, getWeeklyDayFromCron, getWeeklyDayLabel, t) => {
   const type = String(schedule?.scheduleType || '').trim();
   const cron = String(schedule?.cronExpression || '');
   let base;
   if (type === 'weekly') {
     const dayValue = getWeeklyDayFromCron(cron);
-    base = `Hàng tuần vào ${getWeeklyDayLabel(dayValue)}`;
+    base = t ? `${t('campaigns.scheduleWeekly')} (${getWeeklyDayLabel(dayValue)})` : `Hàng tuần vào ${getWeeklyDayLabel(dayValue)}`;
   } else if (type === 'custom') {
     const intervalDays = parseCustomIntervalDaysFromCron(cron);
-    base = intervalDays ? `Mỗi ${intervalDays} ngày (theo mốc bắt đầu)` : getScheduleTypeLabel(type);
+    base = intervalDays
+      ? (t ? t('campaignRun.everyNDays', { days: intervalDays }) : `Mỗi ${intervalDays} ngày (theo mốc bắt đầu)`)
+      : getScheduleTypeLabel(type, t);
   } else {
-    base = getScheduleTypeLabel(type);
+    base = getScheduleTypeLabel(type, t);
   }
   const clock = formatScheduleRunClockFromCron(cron);
   if (clock) {
-    return `${base} — lúc ${clock}`;
+    return t ? `${base} — ${t('campaignRun.atTime', { time: clock })}` : `${base} — lúc ${clock}`;
   }
   return base;
 };

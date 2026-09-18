@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 
-const formatNumber = (value) => Number(value || 0).toLocaleString('vi-VN');
+const formatNumber = (value, locale = 'vi') =>
+  Number(value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN');
 const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
 
 const CARDS_CONFIG = (t) => [
@@ -131,8 +132,9 @@ const KpiCard = ({ label, value, sub, icon, gradient, text, isEmpty, emptyHint, 
 };
 
 const DashboardKpiCards = ({ overview }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const cardsConfig = CARDS_CONFIG(t);
+  const fn = (val) => formatNumber(val, locale);
 
   const headline = overview?.headline || {};
   const email = overview?.channels?.email || {};
@@ -166,53 +168,53 @@ const DashboardKpiCards = ({ overview }) => {
   const cards = [
     {
       key: 'campaign',
-      value: formatNumber(headline.totalCampaigns),
-      sub: `${formatNumber(headline.totalRuns)} ${t('dashboard.runs')} • ${formatNumber(headline.runningRuns || 0)} ${t('dashboard.running')}`,
+      value: fn(headline.totalCampaigns),
+      sub: `${fn(headline.totalRuns)} ${t('dashboard.runs')} • ${fn(headline.runningRuns || 0)} ${t('dashboard.running')}`,
       isEmpty: !headline.totalCampaigns,
     },
     {
       key: 'sent',
-      value: formatNumber(totalSent),
+      value: fn(totalSent),
       sub: t('dashboardKpiCards.channelBreakdown', {
-        email: formatNumber(emailSent),
-        zalo: formatNumber(zaloSent),
-        group: formatNumber(zaloGroupSent),
+        email: fn(emailSent),
+        zalo: fn(zaloSent),
+        group: fn(zaloGroupSent),
       }),
       isEmpty: !totalSent,
     },
     {
       key: 'openRate',
-      value: emailSent > 0 ? formatPercent(emailOpenRate) : formatNumber(emailOpened),
-      sub: `${formatNumber(emailOpened)} ${t('dashboard.opened')}`,
+      value: emailSent > 0 ? formatPercent(emailOpenRate) : fn(emailOpened),
+      sub: `${fn(emailOpened)} ${t('dashboard.opened')}`,
       isEmpty: !emailOpened,
     },
     {
       key: 'clickRate',
-      value: emailSent > 0 ? formatPercent(emailClickRate) : formatNumber(emailClicked),
+      value: emailSent > 0 ? formatPercent(emailClickRate) : fn(emailClicked),
       sub: t('dashboardKpiCards.channelBreakdown', {
-        email: formatNumber(emailClicked),
-        zalo: formatNumber(zaloClicked),
-        group: formatNumber(zaloGroupClicked),
+        email: fn(emailClicked),
+        zalo: fn(zaloClicked),
+        group: fn(zaloGroupClicked),
       }),
       isEmpty: !emailClicked && !zaloClicked,
     },
     {
       key: 'pending',
-      value: formatNumber(orderPending),
+      value: fn(orderPending),
       sub: t('dashboardKpiCards.channelBreakdown', {
-        email: formatNumber(emailPending),
-        zalo: formatNumber(zaloPending),
-        group: formatNumber(zaloGroupPending),
+        email: fn(emailPending),
+        zalo: fn(zaloPending),
+        group: fn(zaloGroupPending),
       }),
       isEmpty: !orderPending,
     },
     {
       key: 'completed',
-      value: formatNumber(totalCompleted),
+      value: fn(totalCompleted),
       sub: t('dashboardKpiCards.channelBreakdown', {
-        email: formatNumber(emailCompleted),
-        zalo: formatNumber(zaloCompleted),
-        group: formatNumber(zaloGroupCompleted),
+        email: fn(emailCompleted),
+        zalo: fn(zaloCompleted),
+        group: fn(zaloGroupCompleted),
       }),
       isEmpty: !totalCompleted,
     },

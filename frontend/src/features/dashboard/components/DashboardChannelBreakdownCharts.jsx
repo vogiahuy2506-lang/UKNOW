@@ -8,7 +8,8 @@ const CHANNEL_COLORS = {
   zalo_group: '#8b5cf6',
 };
 
-const formatNumber = (v) => Number(v || 0).toLocaleString('vi-VN');
+const formatNumber = (v, locale = 'vi') =>
+  Number(v || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN');
 
 /**
  * Get channel label from translation function
@@ -25,7 +26,7 @@ const getChannelLabel = (key, t) => {
 /**
  * Custom tooltip for donut charts.
  */
-const DonutTooltip = ({ active, payload, t: _t }) => {
+const DonutTooltip = ({ active, payload, t: _t, locale = 'vi' }) => {
   if (!active || !payload?.length) return null;
   const { name, value } = payload[0];
   const channelKey = payload[0]?.payload?.key;
@@ -38,7 +39,7 @@ const DonutTooltip = ({ active, payload, t: _t }) => {
         />
         <span className="font-medium text-gray-700">{name}</span>
       </div>
-      <div className="text-gray-500 pl-3.5">{formatNumber(value)}</div>
+      <div className="text-gray-500 pl-3.5">{formatNumber(value, locale)}</div>
     </div>
   );
 };
@@ -81,7 +82,7 @@ const DonutCard = ({
   isInsightLoading = false,
   insightError = '',
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const data = buildChartData(values, t);
   const total = Object.values(values).reduce((sum, v) => sum + v, 0);
 
@@ -135,7 +136,7 @@ const DonutCard = ({
                           fontWeight="700"
                           fill={accentColor}
                         >
-                          {formatNumber(total)}
+                          {formatNumber(total, locale)}
                         </text>
                       </g>
                     );
@@ -143,7 +144,7 @@ const DonutCard = ({
                   position="center"
                 />
               </Pie>
-              <Tooltip content={<DonutTooltip t={t} />} />
+              <Tooltip content={<DonutTooltip t={t} locale={locale} />} />
             </PieChart>
           </ResponsiveContainer>
 
@@ -160,7 +161,7 @@ const DonutCard = ({
                   <span className="flex items-center gap-2">
                     <span className="text-gray-400">{pct}%</span>
                     <span className="font-medium text-gray-700 tabular-nums w-14 text-right">
-                      {formatNumber(entry.value)}
+                      {formatNumber(entry.value, locale)}
                     </span>
                   </span>
                 </div>

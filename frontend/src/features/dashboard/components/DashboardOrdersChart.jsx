@@ -19,9 +19,11 @@ const formatAxisDate = (value) => {
   return `${date.getDate()}/${date.getMonth() + 1}`;
 };
 
-const formatTooltipDate = (value) => {
+const formatTooltipDate = (value, locale = 'vi') => {
   const date = new Date(`${value}T00:00:00`);
-  return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+  return locale === 'en'
+    ? `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`
+    : `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 };
 
 /** Lines config for "Tổng hợp" tab (combined all channels) */
@@ -59,10 +61,10 @@ const VIEW_TABS = (t) => [
  * @param {string}  viewMode      - 'summary' | 'compare'
  * @param {function} t            - Translation function
  */
-const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t }) => {
+const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t, locale = 'vi' }) => {
   if (!active || !payload?.length) return null;
 
-  const dateLabel = isMonthlyView ? formatMonthTooltip(label) : formatTooltipDate(label);
+  const dateLabel = isMonthlyView ? formatMonthTooltip(label, locale) : formatTooltipDate(label, locale);
   const dataMap = Object.fromEntries(payload.map((e) => [e.dataKey, e]));
 
   /* ── Compare mode: 3-column layout ── */
@@ -113,7 +115,7 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t }) =
                       <span className="text-xs text-gray-600 whitespace-nowrap">{rowLabel}</span>
                     </div>
                     <span className="text-xs font-semibold text-gray-900 tabular-nums text-right">
-                      {Number(entry?.value || 0).toLocaleString('vi-VN')}
+                      {Number(entry?.value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}
                     </span>
                   </div>
                 ))}
@@ -136,7 +138,7 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t }) =
             <span className="text-xs text-gray-600">{entry.name}</span>
           </div>
           <span className="text-xs font-semibold text-gray-900">
-            {Number(entry.value || 0).toLocaleString('vi-VN')}
+            {Number(entry.value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}
           </span>
         </div>
       ))}
@@ -173,7 +175,7 @@ const DashboardOrdersChart = ({
   onViewModeChange,
   lockedViewMode = null,
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [internalViewMode, setInternalViewMode] = useState('summary');
   const isControlled =
     lockedViewMode == null && viewModeProp != null && typeof onViewModeChange === 'function';
@@ -236,13 +238,13 @@ const DashboardOrdersChart = ({
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100">
               <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
               <span className="text-xs font-medium text-orange-700">
-                {Number(totalPending).toLocaleString('vi-VN')} {t('dashboard.pendingOrdersBadge')}
+                {Number(totalPending).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} {t('dashboard.pendingOrdersBadge')}
               </span>
             </div>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 border border-green-100">
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
               <span className="text-xs font-medium text-green-700">
-                {Number(totalCompleted).toLocaleString('vi-VN')} {t('dashboard.completedOrdersBadge')}
+                {Number(totalCompleted).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} {t('dashboard.completedOrdersBadge')}
               </span>
             </div>
           </div>
@@ -279,7 +281,7 @@ const DashboardOrdersChart = ({
               />
               <Tooltip
                 content={
-                  <OrdersTooltip isMonthlyView={isMonthlyView} viewMode={viewMode} t={t} />
+                  <OrdersTooltip isMonthlyView={isMonthlyView} viewMode={viewMode} t={t} locale={locale} />
                 }
               />
               <Legend content={DashboardRechartsLegend} wrapperStyle={{ width: '100%' }} />

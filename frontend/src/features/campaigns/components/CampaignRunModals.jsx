@@ -464,7 +464,7 @@ const CampaignRunModals = ({
                   <p className="font-medium text-gray-900">
                     {selectedSchedule.scheduleType === 'weekly'
                       ? `${t('campaignRunModals.weekly')} (${getWeeklyDayLabel(getWeeklyDayFromCron(selectedSchedule.cronExpression))})`
-                      : getScheduleTypeLabel(selectedSchedule.scheduleType)}
+                      : getScheduleTypeLabel(selectedSchedule.scheduleType, t)}
                   </p>
                 </div>
                 <div>
@@ -480,7 +480,7 @@ const CampaignRunModals = ({
                 <div>
                   <p className="text-sm text-gray-500">{t('campaignRunModals.status')}</p>
                   <span className={`badge ${getScheduleStatusClassName(selectedSchedule)}`}>
-                    {getScheduleStatusLabel(selectedSchedule)}
+                    {getScheduleStatusLabel(selectedSchedule, t)}
                   </span>
                 </div>
                 <div>
@@ -581,7 +581,7 @@ const CampaignRunModals = ({
               disabled={isReadonlyOnceSchedule(selectedSchedule)}
             >
               {isReadonlyOnceSchedule(selectedSchedule)
-                ? getScheduleStatusLabel(selectedSchedule)
+                ? getScheduleStatusLabel(selectedSchedule, t)
                 : selectedSchedule.enabled
                   ? t('campaignRunModals.disableSchedule')
                   : t('campaignRunModals.enableSchedule2')}
@@ -630,7 +630,7 @@ const CampaignRunModals = ({
               return (
                 <ul className="space-y-3">
                   {list.map((sch) => {
-                    const pattern = getSchedulePatternSummaryVi(sch, getWeeklyDayFromCron, getWeeklyDayLabel);
+                    const pattern = getSchedulePatternSummaryVi(sch, getWeeklyDayFromCron, getWeeklyDayLabel, t);
                     const runTimesRaw = Number(sch?.runCount);
                     const runTimes = Number.isFinite(runTimesRaw) && runTimesRaw >= 0 ? runTimesRaw : 0;
                     return (
@@ -641,7 +641,7 @@ const CampaignRunModals = ({
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-medium text-gray-900 text-sm">{sch.scheduleName}</p>
                           <span className={`badge shrink-0 ${getScheduleStatusClassName(sch)}`}>
-                            {getScheduleStatusLabel(sch)}
+                            {getScheduleStatusLabel(sch, t)}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600">{pattern}</p>
@@ -649,7 +649,7 @@ const CampaignRunModals = ({
                           <span className="font-medium">{t('campaignRunModals.runs')}</span> {runTimes} {t('campaignRunModals.times')}
                         </p>
                         <p className="text-sm text-gray-800">
-                          <span className="font-medium">{getScheduleRunTimingFieldLabelVi(sch)}:</span>{' '}
+                          <span className="font-medium">{getScheduleRunTimingFieldLabelVi(sch, t)}:</span>{' '}
                           {getScheduleNextRunUiLabel(sch, t)}
                         </p>
                         {canEditSchedules && (

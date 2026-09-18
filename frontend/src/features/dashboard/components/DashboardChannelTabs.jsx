@@ -91,7 +91,7 @@ const calcRatio = (value, sent) =>
  * @param {boolean} props.isMonthlyView
  * @param {object}  props.labels - Translation labels for tooltip columns
  */
-const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, labels = {} }) => {
+const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, labels = {}, locale = 'vi' }) => {
   if (!active || !payload?.length) return null;
 
   const dateLabel = getTooltipLabel(label, isMonthlyView);
@@ -124,7 +124,7 @@ const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, 
             <span className="text-xs text-gray-600 whitespace-nowrap">{name}</span>
           </div>
           <span className="text-xs font-semibold text-gray-900 text-right tabular-nums">
-            {Number(value || 0).toLocaleString('vi-VN')}
+            {Number(value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}
           </span>
           <span className="text-xs font-medium text-indigo-400 w-10 text-right tabular-nums">
             {ratio ?? ''}
@@ -140,7 +140,7 @@ const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, 
           <span className="text-xs text-gray-600 whitespace-nowrap">{name}</span>
         </div>
         <span className="text-xs font-semibold text-gray-900 text-right tabular-nums">
-          {Number(value || 0).toLocaleString('vi-VN')}
+          {Number(value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}
         </span>
         <span className="text-xs font-medium text-indigo-400 w-10 text-right tabular-nums">
           {ratio ?? ''}
@@ -213,43 +213,50 @@ const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, 
  * @param {'all'|'email'|'zalo'|'zalo_group'} activeChannel
  * @returns {Array<{key: string, name: string, color: string}>}
  */
-const buildChartConfig = (activeChannel) => {
+const buildChartConfig = (activeChannel, t) => {
+  const sent = t ? t('sent') : 'Gửi';
+  const opened = t ? t('opened') : 'Mở';
+  const clicked = t ? t('clicked') : 'Click';
+  const downloaded = t ? t('downloaded') : 'Tải tệp';
+  const pendingOrders = t ? t('pendingOrders') : 'Đơn chờ';
+  const completedOrders = t ? t('completedOrders') : 'Đơn đặt';
+
   if (activeChannel === 'email') {
     return [
-      { key: 'emailSent', name: 'Gửi (Email)', color: '#06b6d4' },
-      { key: 'emailOpened', name: 'Mở (Email)', color: '#0ea5e9' },
-      { key: 'emailClicked', name: 'Click (Email)', color: '#6366f1' },
-      { key: 'emailDownloads', name: 'Tải tệp (Email)', color: '#f59e0b' },
-      { key: 'emailPendingOrders', name: 'Đơn chờ (Email)', color: '#fb923c' },
-      { key: 'emailCompletedOrders', name: 'Đơn đặt (Email)', color: '#22c55e' },
+      { key: 'emailSent', name: `${sent} (Email)`, color: '#06b6d4' },
+      { key: 'emailOpened', name: `${opened} (Email)`, color: '#0ea5e9' },
+      { key: 'emailClicked', name: `${clicked} (Email)`, color: '#6366f1' },
+      { key: 'emailDownloads', name: `${downloaded} (Email)`, color: '#f59e0b' },
+      { key: 'emailPendingOrders', name: `${pendingOrders} (Email)`, color: '#fb923c' },
+      { key: 'emailCompletedOrders', name: `${completedOrders} (Email)`, color: '#22c55e' },
     ];
   }
   if (activeChannel === 'zalo') {
     return [
-      { key: 'zaloSent', name: 'Gửi (Zalo)', color: '#2563eb' },
-      { key: 'zaloClicks', name: 'Click (Zalo)', color: '#3b82f6' },
-      { key: 'zaloPendingOrders', name: 'Đơn chờ (Zalo)', color: '#fb923c' },
-      { key: 'zaloCompletedOrders', name: 'Đơn đặt (Zalo)', color: '#22c55e' },
+      { key: 'zaloSent', name: `${sent} (Zalo)`, color: '#2563eb' },
+      { key: 'zaloClicks', name: `${clicked} (Zalo)`, color: '#3b82f6' },
+      { key: 'zaloPendingOrders', name: `${pendingOrders} (Zalo)`, color: '#fb923c' },
+      { key: 'zaloCompletedOrders', name: `${completedOrders} (Zalo)`, color: '#22c55e' },
     ];
   }
   if (activeChannel === 'zalo_group') {
     return [
-      { key: 'zaloGroupSent', name: 'Gửi (Zalo Group)', color: '#7c3aed' },
-      { key: 'zaloGroupClicks', name: 'Click (Zalo Group)', color: '#8b5cf6' },
-      { key: 'zaloGroupPendingOrders', name: 'Đơn chờ (Zalo Group)', color: '#fb923c' },
-      { key: 'zaloGroupCompletedOrders', name: 'Đơn đặt (Zalo Group)', color: '#22c55e' },
+      { key: 'zaloGroupSent', name: `${sent} (Zalo Group)`, color: '#7c3aed' },
+      { key: 'zaloGroupClicks', name: `${clicked} (Zalo Group)`, color: '#8b5cf6' },
+      { key: 'zaloGroupPendingOrders', name: `${pendingOrders} (Zalo Group)`, color: '#fb923c' },
+      { key: 'zaloGroupCompletedOrders', name: `${completedOrders} (Zalo Group)`, color: '#22c55e' },
     ];
   }
   // All channels — show sent + engagement metrics (orders are in the dedicated chart)
   return [
-    { key: 'emailSent', name: 'Gửi (Email)', color: '#06b6d4' },
-    { key: 'emailOpened', name: 'Mở (Email)', color: '#0ea5e9' },
-    { key: 'emailClicked', name: 'Click (Email)', color: '#6366f1' },
-    { key: 'emailDownloads', name: 'Tải tệp (Email)', color: '#f59e0b' },
-    { key: 'zaloSent', name: 'Gửi (Zalo)', color: '#2563eb' },
-    { key: 'zaloClicks', name: 'Click (Zalo)', color: '#3b82f6' },
-    { key: 'zaloGroupSent', name: 'Gửi (Zalo Group)', color: '#7c3aed' },
-    { key: 'zaloGroupClicks', name: 'Click (Zalo Group)', color: '#8b5cf6' },
+    { key: 'emailSent', name: `${sent} (Email)`, color: '#06b6d4' },
+    { key: 'emailOpened', name: `${opened} (Email)`, color: '#0ea5e9' },
+    { key: 'emailClicked', name: `${clicked} (Email)`, color: '#6366f1' },
+    { key: 'emailDownloads', name: `${downloaded} (Email)`, color: '#f59e0b' },
+    { key: 'zaloSent', name: `${sent} (Zalo)`, color: '#2563eb' },
+    { key: 'zaloClicks', name: `${clicked} (Zalo)`, color: '#3b82f6' },
+    { key: 'zaloGroupSent', name: `${sent} (Zalo Group)`, color: '#7c3aed' },
+    { key: 'zaloGroupClicks', name: `${clicked} (Zalo Group)`, color: '#8b5cf6' },
   ];
 };
 
@@ -279,12 +286,13 @@ const DashboardChannelTabs = ({
   isInsightLoading = false,
   insightError = '',
 }) => {
+  const { locale } = useI18n();
   const t = useI18n('dashboardChannelTabs');
 
   const rawTimeline = analytics?.timeline || [];
   const timeline = isMonthlyView ? aggregateToMonthly(rawTimeline) : rawTimeline;
 
-  const chartConfig = useMemo(() => buildChartConfig(activeChannel), [activeChannel]);
+  const chartConfig = useMemo(() => buildChartConfig(activeChannel, t), [activeChannel, t]);
 
   const hasData = timeline.some((item) =>
     chartConfig.some((cfg) => (item[cfg.key] || 0) > 0)
@@ -368,7 +376,7 @@ const DashboardChannelTabs = ({
                 axisLine={false}
                 tickFormatter={(v) => v > 999 ? `${(v / 1000).toFixed(1)}k` : v}
               />
-              <Tooltip content={<ChannelTooltip activeChannel={activeChannel} isMonthlyView={isMonthlyView} labels={tooltipLabels} />} />
+              <Tooltip content={<ChannelTooltip activeChannel={activeChannel} isMonthlyView={isMonthlyView} labels={tooltipLabels} locale={locale} />} />
               <Legend content={DashboardRechartsLegend} wrapperStyle={{ width: '100%' }} />
               {chartConfig.map((line) => (
                 <Line
