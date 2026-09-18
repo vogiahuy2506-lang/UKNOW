@@ -38,6 +38,17 @@ router.post('/chatbots',
   marketplaceController.createFromChatbot.bind(marketplaceController)
 );
 
+// Landing page listing management
+router.get('/landing-pages', requirePermission('marketplace_manage'), marketplaceController.getMyLandingPages.bind(marketplaceController));
+router.post('/landing-pages',
+  requirePermission('marketplace_manage'),
+  [
+    body('landingPageId').notEmpty().withMessage('landingPageId là bắt buộc'),
+  ],
+  handleValidationErrors,
+  marketplaceController.createFromLandingPage.bind(marketplaceController)
+);
+
 router.get('/listings/:id', marketplaceController.getById.bind(marketplaceController));
 
 router.put('/listings/:id',

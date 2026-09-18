@@ -1,29 +1,18 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineX,
   HiOutlineShare,
-  HiOutlineMail,
   HiOutlineSparkles,
 } from 'react-icons/hi';
 import chatbotApi from '../../services/chatbotApi';
 import { useI18n } from '../../i18n';
-
-const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
-
-const emailToAvatar = (email) => {
-  const handle = String(email || '').split('@')[0] || '?';
-  const initials = handle.slice(0, 2).toUpperCase();
-  let hash = 0;
-  for (let i = 0; i < handle.length; i += 1) hash = (hash * 31 + handle.charCodeAt(i)) >>> 0;
-  const hue = hash % 360;
-  return { initials, bg: `hsl(${hue} 70% 55%)` };
-};
+import EmailTagsInput from '../common/EmailTagsInput';
 
 const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
   const { t } = useI18n();
-  const [email, setEmail] = useState('');
+  const [emails, setEmails] = useState([]);
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -36,7 +25,7 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
 
   useEffect(() => {
     if (!open) {
-      setEmail('');
+      setEmails([]);
       setNote('');
       setError('');
       setSuccess(false);
@@ -57,51 +46,58 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
     };
   }, [open, submitting, onClose]);
 
-  const emailValid = useMemo(() => isValidEmail(email), [email]);
-  const avatar = useMemo(() => emailToAvatar(email), [email]);
-
   if (!open || !chatbot || !mounted) return null;
 
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
-    if (!email.trim()) {
-      setError(t('common.required') || 'Vui lòng nhập email');
-      return;
-    }
-    if (!emailValid) {
-      setError(t('auth.invalidEmail') || 'Email không hợp lệ');
+    if (emails.length === 0) {
+      setError(t('common.required') || 'Vui lòng nhập ít nhất 1 email');
       return;
     }
 
     setSubmitting(true);
     setError('');
 
-    try {
-      const result = await chatbotApi.shareChatbot(chatbot.id, {
-        recipientEmail: email.trim(),
-        note: note.trim() || undefined,
-      });
-      const recipient = result?.data?.recipient?.name || email.trim();
+    const results = await Promise.allSettled(
+      emails.map((recipientEmail) =>
+        chatbotApi.shareChatbot(chatbot.id, {
+          recipientEmail,
+          note: note.trim() || undefined,
+        }),
+      ),
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+
+    if (succeeded > 0) {
+      const firstOk = results.find((r) => r.status === 'fulfilled');
+      const recipient =
+        firstOk?.value?.data?.recipient?.name || `${succeeded} người`;
+      const msg =
+        failed > 0
+          ? `Đã chia sẻ cho ${succeeded}/${results.length} người`
+          : t('chatbot.cloneSuccess', { name: recipient }) ||
+            `Đã chia sẻ chatbot cho ${recipient}`;
+      toast.success(msg);
       setSuccess(true);
-      toast.success(
-        t('chatbot.cloneSuccess', { name: recipient })
-          || `Đã chia sẻ chatbot cho ${recipient}`
-      );
       setTimeout(() => {
         onSuccess?.();
         onClose();
       }, 900);
-    } catch (err) {
-      const code = err.response?.data?.code;
-      const message = (code === 'CHATBOT_LIMIT_EXCEEDED' ? t('chatbot.cloneLimitReached') : null)
-        || err.response?.data?.message
-        || err.message
-        || 'Không thể chia sẻ chatbot';
+    }
+    if (failed > 0) {
+      const firstFail = results.find((r) => r.status === 'rejected');
+      const err = firstFail?.reason;
+      const code = err?.response?.data?.code;
+      const message =
+        (code === 'CHATBOT_LIMIT_EXCEEDED' ? t('chatbot.cloneLimitReached') : null) ||
+        err?.response?.data?.message ||
+        err?.message ||
+        `${failed} lượt chia sẻ thất bại`;
       setError(message);
       toast.error(message);
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
   const modal = (
@@ -168,42 +164,19 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Email người nhận <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                {emailValid ? (
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-semibold"
-                    style={{ background: avatar.bg }}
-                  >
-                    {avatar.initials}
-                  </div>
-                ) : (
-                  <HiOutlineMail className="h-5 w-5 text-gray-400" />
-                )}
-              </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError('');
-                }}
-                placeholder="nguyen@example.com"
-                className={`w-full pl-12 pr-4 py-3 text-sm rounded-xl border bg-white transition-all focus:outline-none focus:ring-2 focus:ring-orange-200 ${
-                  error
-                    ? 'border-red-300 focus:border-red-400 focus:ring-red-200 bg-red-50/40'
-                    : emailValid
-                      ? 'border-green-300 focus:border-green-400 focus:ring-green-200'
-                      : 'border-gray-200 focus:border-orange-400'
-                }`}
-                disabled={submitting || success}
-              />
-            </div>
-            {error ? (
-              <p className="mt-1.5 text-xs text-red-600">{error}</p>
-            ) : (
+            <EmailTagsInput
+              value={emails}
+              onChange={(next) => {
+                setEmails(next);
+                if (error) setError('');
+              }}
+              disabled={submitting || success}
+              error={error}
+              placeholder="Nhập email và nhấn Enter để thêm..."
+            />
+            {!error && (
               <p className="mt-1.5 text-xs text-gray-500">
-                Người nhận phải có tài khoản trong hệ thống.
+                Người nhận phải có tài khoản trong hệ thống. Có thể thêm nhiều người.
               </p>
             )}
           </div>
@@ -248,7 +221,7 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
           <button
             type="submit"
             onClick={handleSubmit}
-            disabled={submitting || success || !email.trim()}
+            disabled={submitting || success || emails.length === 0}
             className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
@@ -262,6 +235,11 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 Đã chia sẻ
+              </>
+            ) : emails.length > 1 ? (
+              <>
+                <HiOutlineShare className="w-4 h-4" />
+                Chia sẻ ({emails.length})
               </>
             ) : (
               <>

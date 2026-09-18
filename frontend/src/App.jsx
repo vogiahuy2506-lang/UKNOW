@@ -117,6 +117,7 @@ import MarketplaceCreateRedirect from './pages/marketplace/MarketplaceCreateRedi
 import AdminMarketplace from './pages/marketplace/AdminMarketplace';
 import MarketplaceAnalytics from './pages/marketplace/MarketplaceAnalytics';
 import ListingSettings from './pages/marketplace/ListingSettings';
+import SellerDashboard from './pages/marketplace/SellerDashboard';
 import AffiliatePage from './pages/affiliate/AffiliatePage';
 import AdminAffiliatePage from './pages/admin/AdminAffiliatePage';
 import { getPostAuthPath } from './utils/authRedirect';
@@ -478,6 +479,7 @@ function AppContent() {
             <Route path="marketplace/create" element={<MarketplaceCreateRedirect />} />
             <Route path="marketplace/:id" element={<MarketplaceListingRedirect />} />
             <Route path="marketplace/listing/:id/settings" element={<ListingSettings />} />
+            <Route path="marketplace/seller-dashboard" element={<SellerDashboard />} />
             <Route path="admin/marketplace" element={<AdminMarketplace />} />
             <Route path="admin/marketplace/analytics" element={<MarketplaceAnalytics />} />
           </Route>

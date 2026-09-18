@@ -63,33 +63,43 @@ class MarketplacePurchaseRepository {
    * @param {object} options
    * @returns {Promise<object[]>}
    */
-  async findByUserId(userId, { limit = 20, offset = 0 } = {}) {
-    const { rows } = await db.query(
-      `SELECT mp.*,
+  async findByUserId(userId, { limit = 20, offset = 0, resourceType } = {}) {
+    const params = [userId];
+    let query = `
+      SELECT mp.*,
               ml.title, ml.description, ml.resource_type, ml.snapshot_data,
               COALESCE(u.full_name, u.username) as seller_name
        FROM marketplace_purchases mp
        JOIN marketplace_listings ml ON mp.listing_id = ml.id
        LEFT JOIN users u ON mp.seller_id = u.id
        WHERE mp.id_user = $1 AND mp.transaction_type = 'purchase'
-       ORDER BY mp.purchased_at DESC
-       LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
-    );
+    `;
+    if (resourceType) {
+      params.push(resourceType);
+      query += ` AND ml.resource_type = $${params.length}`;
+    }
+    params.push(limit, offset);
+    query += ` ORDER BY mp.purchased_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const { rows } = await db.query(query, params);
     return rows;
   }
 
   /**
    * Count user's purchases
    * @param {number} userId
+   * @param {object} options
    * @returns {Promise<number>}
    */
-  async countByUserId(userId) {
-    const { rows } = await db.query(
-      `SELECT COUNT(*) FROM marketplace_purchases
-       WHERE id_user = $1 AND transaction_type = 'purchase'`,
-      [userId]
-    );
+  async countByUserId(userId, { resourceType } = {}) {
+    const params = [userId];
+    let query = `SELECT COUNT(*) FROM marketplace_purchases mp
+                 JOIN marketplace_listings ml ON mp.listing_id = ml.id
+                 WHERE mp.id_user = $1 AND mp.transaction_type = 'purchase'`;
+    if (resourceType) {
+      params.push(resourceType);
+      query += ` AND ml.resource_type = $${params.length}`;
+    }
+    const { rows } = await db.query(query, params);
     return parseInt(rows[0].count, 10);
   }
 

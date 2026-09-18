@@ -346,6 +346,20 @@ class MarketplaceListingRepository {
     );
     return rows[0] || null;
   }
+
+  /**
+   * Find listing by landing page ID
+   * @param {number} landingPageId
+   * @returns {Promise<object|null>}
+   */
+  async findByLandingPageId(landingPageId) {
+    const { rows } = await db.query(
+      `SELECT * FROM marketplace_listings
+       WHERE resource_type = 'landing_page' AND resource_id = $1`,
+      [landingPageId]
+    );
+    return rows[0] || null;
+  }
 }
 
 export default new MarketplaceListingRepository();

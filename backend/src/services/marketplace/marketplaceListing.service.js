@@ -2,7 +2,15 @@ import marketplaceListingRepository from '../../repositories/marketplace/marketp
 import marketplacePurchaseRepository from '../../repositories/marketplace/marketplacePurchase.repository.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
+import landingPageRepository from '../../repositories/landingPage.repository.js';
 import db from '../../config/database.js';
+
+// Mapping resource_type -> auto category (không cho user chọn category thủ công)
+const AUTO_CATEGORY_MAP = {
+  campaign: 'marketing',
+  chatbot: 'chatbot',
+  landing_page: 'landing',
+};
 
 class MarketplaceListingService {
   /**
@@ -12,7 +20,7 @@ class MarketplaceListingService {
    * @returns {Promise<object>}
    */
   async createFromCampaign(userId, data) {
-    const { campaignId, title, description, category, tags, priceCredits, visibility } = data;
+    const { campaignId, title, description, category: userCategory, tags, priceCredits, visibility, status } = data;
 
     // Validate campaignId
     if (!campaignId || !Number.isFinite(Number(campaignId)) || Number(campaignId) <= 0) {
@@ -21,15 +29,8 @@ class MarketplaceListingService {
       throw error;
     }
 
-    // Validate category nếu được truyền
-    if (category !== undefined && category !== null && category !== '') {
-      const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
-      if (!VALID_CATEGORIES.includes(category)) {
-        const error = new Error('Category không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    // Auto category - không cho user chọn category thủ công
+    const category = AUTO_CATEGORY_MAP.campaign;
 
     // Validate visibility
     if (visibility !== undefined) {
@@ -98,7 +99,13 @@ class MarketplaceListingService {
 
     // Ensure title is not empty
     const finalTitle = (title?.trim() || campaign?.campaign_name?.trim() || '').substring(0, 255) || `Template ${campaignId}`;
-    
+
+    // Validate status nếu client gửi lên
+    const VALID_STATUSES = ['draft', 'published', 'paused'];
+    const finalStatus = status && VALID_STATUSES.includes(status)
+      ? status
+      : (visibility === 'public' ? 'published' : 'draft');
+
     return marketplaceListingRepository.create({
       idUser: userId,
       resourceType: 'campaign',
@@ -109,7 +116,7 @@ class MarketplaceListingService {
       tags,
       priceCredits: sanitizedPrice,
       visibility,
-      status: visibility === 'public' ? 'published' : 'draft',
+      status: finalStatus,
       snapshotData,
     });
   }
@@ -121,7 +128,7 @@ class MarketplaceListingService {
    * @returns {Promise<object>}
    */
   async createFromChatbot(userId, data) {
-    const { chatbotId, title, description, category, tags, priceCredits, visibility, includeKnowledgeBase } = data;
+    const { chatbotId, title, description, category: userCategory, tags, priceCredits, visibility, includeKnowledgeBase, status } = data;
 
     // Validate chatbotId
     if (!chatbotId || !Number.isFinite(Number(chatbotId)) || Number(chatbotId) <= 0) {
@@ -130,15 +137,8 @@ class MarketplaceListingService {
       throw error;
     }
 
-    // Validate category
-    if (category !== undefined && category !== null && category !== '') {
-      const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
-      if (!VALID_CATEGORIES.includes(category)) {
-        const error = new Error('Category không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    // Auto category - không cho user chọn category thủ công
+    const category = AUTO_CATEGORY_MAP.chatbot;
 
     // Validate visibility
     if (visibility !== undefined) {
@@ -248,7 +248,9 @@ class MarketplaceListingService {
       tags,
       priceCredits: sanitizedPrice,
       visibility,
-      status: visibility === 'public' ? 'published' : 'draft',
+      status: status && ['draft', 'published', 'paused'].includes(status)
+        ? status
+        : (visibility === 'public' ? 'published' : 'draft'),
       snapshotData,
     });
   }
@@ -316,9 +318,10 @@ class MarketplaceListingService {
       }
     }
 
-    // Validate category nếu được cập nhật
+    // Validate category nếu được cập nhật (cho phép tất cả categories vì auto-assigned)
+    // Categories: 'marketing', 'automation', 'support', 'landing'
     if (data.category !== undefined) {
-      const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
+      const VALID_CATEGORIES = ['marketing', 'chatbot', 'landing'];
       if (data.category !== null && data.category !== '' && !VALID_CATEGORIES.includes(data.category)) {
         const error = new Error('Category không hợp lệ');
         error.status = 400;
@@ -440,6 +443,105 @@ class MarketplaceListingService {
   async hasPurchased(userId, listingId) {
     const purchase = await marketplacePurchaseRepository.findByUserAndListing(userId, listingId);
     return !!purchase;
+  }
+
+  /**
+   * Create a listing from a landing page
+   * @param {number} userId
+   * @param {object} data
+   * @returns {Promise<object>}
+   */
+  async createFromLandingPage(userId, data) {
+    const { landingPageId, title, description, tags, priceCredits, visibility, status } = data;
+
+    // Validate landingPageId
+    if (!landingPageId || !Number.isFinite(Number(landingPageId)) || Number(landingPageId) <= 0) {
+      const error = new Error('landingPageId không hợp lệ');
+      error.status = 400;
+      throw error;
+    }
+
+    // Auto category - không cho user chọn category thủ công
+    const category = AUTO_CATEGORY_MAP.landing_page;
+
+    // Validate visibility
+    if (visibility !== undefined) {
+      const VALID_VISIBILITIES = ['public', 'team'];
+      if (!VALID_VISIBILITIES.includes(visibility)) {
+        const error = new Error('Visibility không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+    }
+
+    // Validate priceCredits
+    let sanitizedPrice = 0;
+    if (priceCredits !== undefined && priceCredits !== null && priceCredits !== '') {
+      const price = Number(priceCredits);
+      if (!Number.isFinite(price) || price < 0) {
+        const error = new Error('Price credits không hợp lệ');
+        error.status = 400;
+        throw error;
+      }
+      sanitizedPrice = Math.floor(price);
+    }
+
+    // Get landing page data
+    const landingPage = await landingPageRepository.findById(landingPageId);
+    if (!landingPage) {
+      const error = new Error('Landing page không tồn tại');
+      error.status = 404;
+      throw error;
+    }
+
+    // Verify ownership
+    const ownerId = Number(landingPage.workspaceOwnerId || landingPage.idUser);
+    if (ownerId !== userId) {
+      const error = new Error('Bạn không có quyền tạo listing từ landing page này');
+      error.status = 403;
+      throw error;
+    }
+
+    // Check if landing page already has a listing
+    const existingListing = await marketplaceListingRepository.findByLandingPageId(landingPageId);
+    if (existingListing) {
+      const error = new Error('Landing page này đã có listing trên marketplace');
+      error.status = 400;
+      throw error;
+    }
+
+    // Create snapshot
+    const snapshotData = {
+      title: landingPage.title || landingPage.slug,
+      slug: landingPage.slug,
+      htmlContent: landingPage.htmlContent || landingPage.html_content,
+      customConfig: landingPage.customConfig || landingPage.custom_config,
+    };
+
+    // Ensure title is not empty
+    const finalTitle = (title?.trim() || landingPage.title?.trim() || landingPage.slug?.trim() || '').substring(0, 255) || `Landing Page ${landingPageId}`;
+
+    // Auto-assign tags based on landing page category if available
+    const autoTags = tags || [];
+    if (landingPage.customConfig?.category && !autoTags.includes(landingPage.customConfig.category)) {
+      autoTags.push(landingPage.customConfig.category);
+    }
+
+    return marketplaceListingRepository.create({
+      idUser: userId,
+      resourceType: 'landing_page',
+      resourceId: landingPageId,
+      title: finalTitle,
+      description,
+      category,
+      tags: autoTags.length > 0 ? autoTags : null,
+      priceCredits: sanitizedPrice,
+      visibility,
+      status: status && ['draft', 'published', 'paused'].includes(status)
+        ? status
+        : (visibility === 'public' ? 'published' : 'draft'),
+      snapshotData,
+    });
   }
 }
 

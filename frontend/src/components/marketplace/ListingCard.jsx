@@ -14,6 +14,7 @@ export const CATEGORY_STYLES = {
 export const TYPE_STYLES = {
   campaign: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Chiến dịch', Icon: HiOutlineMail },
   chatbot: { bg: 'bg-purple-50', text: 'text-purple-600', label: 'Chatbot', Icon: HiOutlineChat },
+  landing_page: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Landing Page', Icon: HiOutlineTemplate },
 };
 
 const formatNumber = (n) => {

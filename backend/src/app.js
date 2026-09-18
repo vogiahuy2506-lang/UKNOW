@@ -87,6 +87,7 @@ import diagnosticRoutes from './routes/diagnostic.routes.js';
 import templateLabelRoutes from './routes/templateLabel.routes.js';
 import marketplaceRoutes from './routes/marketplace.routes.js';
 import marketplaceAdminRoutes from './routes/marketplaceAdmin.routes.js';
+import marketplaceSellerRoutes from './routes/marketplaceSeller.routes.js';
 import {
   affiliateWithdrawalRouter,
   adminAffiliateWithdrawalRouter,
@@ -236,6 +237,7 @@ export function createApp() {
   app.use('/api/admin/diagnostic', diagnosticRoutes);
   app.use('/api/template-labels', templateLabelRoutes);
   app.use('/api/marketplace', marketplaceRoutes);
+  app.use('/api/marketplace/seller', marketplaceSellerRoutes);
   app.use('/api/admin/marketplace', marketplaceAdminRoutes);
   app.use('/api/affiliate', affiliateRouter);
   app.use('/api/admin/affiliate', adminAffiliateRouter);

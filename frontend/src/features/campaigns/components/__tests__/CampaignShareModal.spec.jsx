@@ -6,7 +6,9 @@ import CampaignShareModal from '../CampaignShareModal';
 /**
  * PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md — PR-2, Việc 1: tách khỏi
  * Campaigns.jsx (khối :1169 + handleShare :259) thành component dùng chung. Giữ nguyên 3 trường
- * (email, shareType, canRun) và luật hiện có — refactor thuần, test này canh hành vi KHÔNG đổi.
+ * (email, shareType, canRun) và luật hiện có — refactor thuần.
+ * Cập nhật: input đổi sang EmailTagsInput (gõ Enter/Comma để thêm), cho phép chia sẻ nhiều người
+ * cùng lúc qua Promise.allSettled, nếu tất cả fail thì KHÔNG đóng modal.
  */
 const { mockShareCampaign } = vi.hoisted(() => ({ mockShareCampaign: vi.fn() }));
 
@@ -50,9 +52,9 @@ describe('CampaignShareModal', () => {
     mockShareCampaign.mockResolvedValue({ data: { success: true } });
     const props = renderModal();
 
-    fireEvent.change(screen.getByPlaceholderText('email@example.com'), {
-      target: { value: 'ban@vidu.com' },
-    });
+    const input = screen.getByPlaceholderText(/nhập email và nhấn enter/i);
+    fireEvent.change(input, { target: { value: 'ban@vidu.com' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'edit' } });
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Chia sẻ' }));
@@ -67,19 +69,21 @@ describe('CampaignShareModal', () => {
     expect(props.onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('email rỗng → báo lỗi, KHÔNG gọi API', () => {
+  it('email rỗng → không gọi API (button Chia sẻ bị disable)', () => {
     const props = renderModal();
-    fireEvent.click(screen.getByRole('button', { name: 'Chia sẻ' }));
+    const btn = screen.getByRole('button', { name: 'Chia sẻ' });
+    expect(btn).toBeDisabled();
     expect(mockShareCampaign).not.toHaveBeenCalled();
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  it('email sai định dạng (thiếu @) → báo lỗi, KHÔNG gọi API', () => {
+  it('email sai định dạng (thiếu @) → KHÔNG gọi API', () => {
     renderModal();
-    fireEvent.change(screen.getByPlaceholderText('email@example.com'), {
-      target: { value: 'khong-phai-email' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Chia sẻ' }));
+    const input = screen.getByPlaceholderText(/nhập email và nhấn enter/i);
+    fireEvent.change(input, { target: { value: 'khong-phai-email' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    // Email không hợp lệ → không thêm vào tag, button vẫn disable
+    expect(screen.getByRole('button', { name: 'Chia sẻ' })).toBeDisabled();
     expect(mockShareCampaign).not.toHaveBeenCalled();
   });
 
@@ -89,9 +93,9 @@ describe('CampaignShareModal', () => {
     });
     const props = renderModal();
 
-    fireEvent.change(screen.getByPlaceholderText('email@example.com'), {
-      target: { value: 'ban@vidu.com' },
-    });
+    const input = screen.getByPlaceholderText(/nhập email và nhấn enter/i);
+    fireEvent.change(input, { target: { value: 'ban@vidu.com' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     fireEvent.click(screen.getByRole('button', { name: 'Chia sẻ' }));
 
     await waitFor(() => expect(mockShareCampaign).toHaveBeenCalledTimes(1));
@@ -101,15 +105,16 @@ describe('CampaignShareModal', () => {
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  it('mở lại modal (đổi campaign) → form reset về mặc định, không giữ dữ liệu lần trước', () => {
+  it('mở lại modal (đổi campaign) → form reset, danh sách email rỗng', () => {
     const { rerender } = render(
       <I18nProvider>
         <CampaignShareModal campaign={{ id: 55, campaignName: 'A' }} open onClose={vi.fn()} />
       </I18nProvider>
     );
-    fireEvent.change(screen.getByPlaceholderText('email@example.com'), {
-      target: { value: 'con-lai@vidu.com' },
-    });
+    const input = screen.getByPlaceholderText(/nhập email và nhấn enter/i);
+    fireEvent.change(input, { target: { value: 'con-lai@vidu.com' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(screen.getByText('con-lai@vidu.com')).toBeInTheDocument();
 
     rerender(
       <I18nProvider>
@@ -122,6 +127,7 @@ describe('CampaignShareModal', () => {
       </I18nProvider>
     );
 
-    expect(screen.getByPlaceholderText('email@example.com')).toHaveValue('');
+    // Sau khi đóng và mở lại, danh sách email đã reset
+    expect(screen.queryByText('con-lai@vidu.com')).not.toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@ import marketplaceListingRepository from '../../repositories/marketplace/marketp
 import marketplacePurchaseRepository from '../../repositories/marketplace/marketplacePurchase.repository.js';
 import usageTrackingService from '../payment/usageTracking.service.js';
 import aiCreditMeter, { AI_CREDIT_RESOURCE } from '../ai/aiCreditMeter.service.js';
-import campaignCrudService from '../campaign/campaignCrud.service.js';
+import marketplaceWalletService from './marketplaceWallet.service.js';
 import db from '../../config/database.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import { getWalletBalance } from '../../repositories/payment/topup.repository.js';
@@ -134,14 +134,19 @@ class MarketplacePurchaseService {
           listing_id: listingId,
           buyer_id: buyerId,
         }, client);
+
+        // Update seller wallet balance
+        await marketplaceWalletService.creditSeller(client, listing.id_user, sellerAmount);
       }
 
       // 6. Clone resource
       let clonedResource;
       if (listing.resource_type === 'campaign') {
         clonedResource = await this._cloneCampaign(client, buyerId, listing);
-      } else {
+      } else if (listing.resource_type === 'chatbot') {
         clonedResource = await this._cloneChatbot(client, buyerId, listing);
+      } else {
+        clonedResource = await this._cloneLandingPage(client, buyerId, listing);
       }
 
       // 6. Create purchase record FIRST to get ID
@@ -271,6 +276,30 @@ class MarketplacePurchaseService {
   }
 
   /**
+   * Clone landing page từ listing snapshot.
+   * @private
+   */
+  async _cloneLandingPage(client, userId, listing) {
+    const snapshot = listing.snapshot_data || {};
+
+    // Tạo landing page mới
+    const { rows } = await client.query(
+      `INSERT INTO landing_pages (id_user, title, slug, html_content, custom_config, is_published)
+       VALUES ($1, $2, $3, $4, $5, FALSE)
+       RETURNING id`,
+      [
+        userId,
+        snapshot.title || 'Imported Landing Page',
+        `${snapshot.slug || 'landing'}-${Date.now()}`,
+        snapshot.htmlContent || snapshot.html_content || '',
+        snapshot.customConfig || snapshot.custom_config ? JSON.stringify(snapshot.customConfig || snapshot.custom_config) : '{}',
+      ]
+    );
+
+    return { id: rows[0].id, type: 'landing_page' };
+  }
+
+  /**
    * Get user's purchases
    * @param {number} userId
    * @param {object} options
@@ -279,7 +308,7 @@ class MarketplacePurchaseService {
   async getUserPurchases(userId, options = {}) {
     const [purchases, total] = await Promise.all([
       marketplacePurchaseRepository.findByUserId(userId, options),
-      marketplacePurchaseRepository.countByUserId(userId),
+      marketplacePurchaseRepository.countByUserId(userId, { resourceType: options.resourceType }),
     ]);
     return { purchases, total };
   }

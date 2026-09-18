@@ -24,6 +24,9 @@ import {
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
 import { useI18n } from '../../i18n';
+import CampaignPreview from '../../components/marketplace/CampaignPreview';
+import ChatbotPreview from '../../components/marketplace/ChatbotPreview';
+import LandingPagePreview from '../../components/marketplace/LandingPagePreview';
 
 const RESOURCE_VISUAL = {
   campaign: {
@@ -969,6 +972,21 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
                 </div>
               )}
             </section>
+
+            {/* Campaign Preview */}
+            {listing.resource_type === 'campaign' && listing.snapshot_data && (
+              <CampaignPreview snapshot={listing.snapshot_data} />
+            )}
+
+            {/* Chatbot Preview */}
+            {listing.resource_type === 'chatbot' && listing.snapshot_data && (
+              <ChatbotPreview snapshot={listing.snapshot_data} />
+            )}
+
+            {/* Landing Page Preview */}
+            {listing.resource_type === 'landing_page' && listing.snapshot_data && (
+              <LandingPagePreview snapshot={listing.snapshot_data} />
+            )}
 
             {/* Tips */}
             <section className="rounded-xl p-4 border border-blue-100 bg-blue-50">

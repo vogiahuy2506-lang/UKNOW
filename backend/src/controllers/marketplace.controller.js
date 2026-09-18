@@ -4,10 +4,11 @@ import marketplacePurchaseService from '../services/marketplace/marketplacePurch
 import marketplaceReviewService from '../services/marketplace/marketplaceReview.service.js';
 import marketplaceFavoriteService from '../services/marketplace/marketplaceFavorite.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import landingPageRepository from '../repositories/landingPage.repository.js';
 import { paginate } from '../helpers.js';
 import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
-const VALID_CATEGORIES = ['marketing', 'automation', 'support'];
+const VALID_RESOURCE_TYPES = ['campaign', 'chatbot', 'landing_page'];
 const VALID_VISIBILITIES = ['public', 'team'];
 
 class MarketplaceController {
@@ -251,8 +252,8 @@ class MarketplaceController {
       // Sanitize params
       const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
       const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);
-      const sanitizedType = ['campaign', 'chatbot'].includes(type) ? type : undefined;
-      const sanitizedCategory = VALID_CATEGORIES.includes(category) ? category : undefined;
+      const sanitizedType = VALID_RESOURCE_TYPES.includes(type) ? type : undefined;
+      const sanitizedCategory = category && !type ? category : undefined; // category filter only if no type filter
       const sanitizedSort = ['rating', 'newest', 'popular', 'price_asc', 'price_desc'].includes(sort) ? sort : 'rating';
       const sanitizedSearch = search?.trim().substring(0, 100) || undefined;
 
@@ -346,7 +347,7 @@ class MarketplaceController {
   async getMyPurchases(req, res, next) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
-      const { page = 1, limit = 20 } = req.query;
+      const { page = 1, limit = 20, resourceType } = req.query;
 
       const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);
       const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
@@ -354,6 +355,7 @@ class MarketplaceController {
       const { purchases, total } = await marketplacePurchaseService.getUserPurchases(userId, {
         limit: sanitizedLimit,
         offset: paginate({ page: sanitizedPage, limit: sanitizedLimit }).offset,
+        resourceType: resourceType || undefined,
       });
 
       res.json({
@@ -475,7 +477,7 @@ class MarketplaceController {
   async createFromChatbot(req, res, next) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
-      const { chatbotId, title, description, category, tags, priceCredits, visibility, includeKnowledgeBase } = req.body;
+      const { chatbotId, title, description, tags, priceCredits, visibility, includeKnowledgeBase } = req.body;
 
       if (!chatbotId) {
         return res.status(400).json({
@@ -494,7 +496,6 @@ class MarketplaceController {
 
       const sanitizedTitle = title?.trim().substring(0, 255) || undefined;
       const sanitizedDescription = description?.trim().substring(0, 2000) || undefined;
-      const sanitizedCategory = VALID_CATEGORIES.includes(category) ? category : undefined;
       const sanitizedTags = Array.isArray(tags) ? tags.slice(0, 10).map(t => String(t).substring(0, 50)) : undefined;
       const sanitizedPriceCredits = Math.max(parseInt(priceCredits, 10) || 0, 0);
       const sanitizedVisibility = VALID_VISIBILITIES.includes(visibility) ? visibility : 'public';
@@ -503,11 +504,113 @@ class MarketplaceController {
         chatbotId: sanitizedChatbotId,
         title: sanitizedTitle,
         description: sanitizedDescription,
-        category: sanitizedCategory,
         tags: sanitizedTags,
         priceCredits: sanitizedPriceCredits,
         visibility: sanitizedVisibility,
         includeKnowledgeBase: !!includeKnowledgeBase,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: listing,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get user's landing pages for creating listing
+   * GET /api/marketplace/landing-pages
+   */
+  async getMyLandingPages(req, res, next) {
+    try {
+      const userId = resolveWorkspaceOwnerId(req.user);
+
+      let landingPages;
+      try {
+        landingPages = await landingPageRepository.listByScope({ userId });
+      } catch (lpError) {
+        console.error('[Marketplace] listByScope error:', lpError);
+        landingPages = [];
+      }
+
+      if (!landingPages || landingPages.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // Get existing listings for these landing pages to mark which ones are already listed
+      let listedLandingPageIds = new Set();
+      try {
+        const { rows: existingListings } = await db.query(
+          `SELECT resource_id FROM marketplace_listings
+           WHERE resource_type = 'landing_page' AND id_user = $1`,
+          [userId]
+        );
+        listedLandingPageIds = new Set(existingListings.map(l => l.resource_id));
+      } catch (listingError) {
+        console.error('[Marketplace] listing query error:', listingError);
+      }
+
+      const landingPagesWithStatus = landingPages.map(lp => ({
+        id: lp.id,
+        title: lp.title || lp.slug,
+        slug: lp.slug,
+        isPublished: lp.isPublished,
+        isListed: listedLandingPageIds.has(lp.id),
+        createdAt: lp.createdAt,
+      }));
+
+      res.json({
+        success: true,
+        data: landingPagesWithStatus,
+      });
+    } catch (error) {
+      console.error('[Marketplace] getMyLandingPages error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi tải danh sách landing page',
+      });
+    }
+  }
+
+  /**
+   * Create listing from landing page
+   * POST /api/marketplace/landing-pages
+   */
+  async createFromLandingPage(req, res, next) {
+    try {
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const { landingPageId, title, description, tags, priceCredits, visibility } = req.body;
+
+      if (!landingPageId) {
+        return res.status(400).json({
+          success: false,
+          message: 'landingPageId là bắt buộc',
+        });
+      }
+
+      const sanitizedLandingPageId = parseInt(landingPageId, 10);
+      if (isNaN(sanitizedLandingPageId) || sanitizedLandingPageId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'landingPageId không hợp lệ',
+        });
+      }
+
+      const sanitizedTitle = title?.trim().substring(0, 255) || undefined;
+      const sanitizedDescription = description?.trim().substring(0, 2000) || undefined;
+      const sanitizedTags = Array.isArray(tags) ? tags.slice(0, 10).map(t => String(t).substring(0, 50)) : undefined;
+      const sanitizedPriceCredits = Math.max(parseInt(priceCredits, 10) || 0, 0);
+      const sanitizedVisibility = VALID_VISIBILITIES.includes(visibility) ? visibility : 'public';
+
+      const listing = await marketplaceListingService.createFromLandingPage(userId, {
+        landingPageId: sanitizedLandingPageId,
+        title: sanitizedTitle,
+        description: sanitizedDescription,
+        tags: sanitizedTags,
+        priceCredits: sanitizedPriceCredits,
+        visibility: sanitizedVisibility,
       });
 
       res.status(201).json({

@@ -137,10 +137,10 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
         className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-violet-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-orange-50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
-              <HiOutlineChat className="w-5 h-5 text-violet-600" />
+            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+              <HiOutlineChat className="w-5 h-5 text-orange-600" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Đăng lên Marketplace</h3>
@@ -149,7 +149,7 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-violet-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
             aria-label="Đóng"
           >
             <HiOutlineX className="w-5 h-5 text-gray-500" />
@@ -167,7 +167,7 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
                 className="w-10 h-10 rounded-xl object-cover ring-1 ring-gray-200"
               />
             ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white">
                 <HiOutlineChat className="w-5 h-5" />
               </div>
             )}
@@ -190,7 +190,7 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               onChange={(e) => setForm(prev => ({ ...prev, title: e.target.value }))}
               placeholder="Tên chatbot của bạn"
               maxLength={255}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 transition-all"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
             />
             <p className="text-xs text-gray-400 mt-1">{form.title.length}/255</p>
           </div>
@@ -205,7 +205,7 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Mô tả ngắn về chatbot..."
               rows={3}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 transition-all resize-none"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all resize-none"
             />
           </div>
 
@@ -218,13 +218,13 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               {form.tags.map(tag => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-violet-100 text-violet-700 text-xs rounded-full"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full"
                 >
                   {tag}
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}
-                    className="hover:text-violet-900"
+                    className="hover:text-orange-900"
                   >
                     <HiOutlineX className="w-3 h-3" />
                   </button>
@@ -238,7 +238,7 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Nhấn Enter để thêm tag"
-                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 transition-all"
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
               />
             )}
           </div>
@@ -252,7 +252,7 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               <button
                 type="button"
                 onClick={() => setForm(prev => ({ ...prev, priceCredits: Math.max(0, prev.priceCredits - 10) }))}
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-violet-300 hover:bg-violet-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
               >
                 -
               </button>
@@ -261,12 +261,12 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
                 value={form.priceCredits}
                 onChange={(e) => setForm(prev => ({ ...prev, priceCredits: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
                 min="0"
-                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 transition-all text-center font-semibold"
+                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-center font-semibold"
               />
               <button
                 type="button"
                 onClick={() => setForm(prev => ({ ...prev, priceCredits: prev.priceCredits + 10 }))}
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-violet-300 hover:bg-violet-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
               >
                 +
               </button>
@@ -278,13 +278,13 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
 
           {/* Knowledge Base option */}
           {chatbot?.hasKnowledgeBase && (
-            <div className="flex items-start gap-3 p-3 bg-violet-50 rounded-xl border border-violet-100">
+            <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
               <input
                 type="checkbox"
                 id="includeKb"
                 checked={includeKnowledgeBase}
                 onChange={(e) => setIncludeKnowledgeBase(e.target.checked)}
-                className="mt-0.5 w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
+                className="mt-0.5 w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
               />
               <div>
                 <label htmlFor="includeKb" className="text-sm font-medium text-gray-900 cursor-pointer">
@@ -312,7 +312,7 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting || !form.title.trim()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? (
               <>

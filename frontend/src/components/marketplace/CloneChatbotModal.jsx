@@ -1,11 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineX,
   HiOutlineCheckCircle,
   HiOutlineShare,
-  HiOutlineMail,
   HiOutlineEye,
   HiOutlinePencilAlt,
   HiOutlineDuplicate,
@@ -14,6 +13,7 @@ import {
 } from 'react-icons/hi';
 import chatbotApi from '../../services/chatbotApi';
 import { useI18n } from '../../i18n';
+import EmailTagsInput from '../common/EmailTagsInput';
 
 const PERMISSIONS = [
   {
@@ -39,20 +39,9 @@ const PERMISSIONS = [
   },
 ];
 
-const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
-
-const emailToAvatar = (email) => {
-  const handle = String(email || '').split('@')[0] || '?';
-  const initials = handle.slice(0, 2).toUpperCase();
-  let hash = 0;
-  for (let i = 0; i < handle.length; i += 1) hash = (hash * 31 + handle.charCodeAt(i)) >>> 0;
-  const hue = hash % 360;
-  return { initials, bg: `hsl(${hue} 70% 55%)` };
-};
-
 const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
   const { t } = useI18n();
-  const [email, setEmail] = useState('');
+  const [emails, setEmails] = useState([]);
   const [permission, setPermission] = useState('clone');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -66,7 +55,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
 
   useEffect(() => {
     if (!open) {
-      setEmail('');
+      setEmails([]);
       setNote('');
       setPermission('clone');
       setError('');
@@ -88,52 +77,58 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
     };
   }, [open, submitting, onClose]);
 
-  const emailValid = useMemo(() => isValidEmail(email), [email]);
-  const avatar = useMemo(() => emailToAvatar(email), [email]);
-
   if (!open || !chatbot || !mounted) return null;
 
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
-    if (!email.trim()) {
-      setError(t('common.required') || 'Vui lòng nhập email');
-      return;
-    }
-    if (!emailValid) {
-      setError(t('auth.invalidEmail') || 'Email không hợp lệ');
+    if (emails.length === 0) {
+      setError(t('common.required') || 'Vui lòng nhập ít nhất 1 email');
       return;
     }
 
     setSubmitting(true);
     setError('');
 
-    try {
-      const result = await chatbotApi.shareChatbot(chatbot.id, {
-        recipientEmail: email.trim(),
-        permission,
-        note: note.trim() || undefined,
-      });
-      const recipient = result?.data?.recipient?.name || email.trim();
+    const results = await Promise.allSettled(
+      emails.map((recipientEmail) =>
+        chatbotApi.shareChatbot(chatbot.id, {
+          recipientEmail,
+          permission,
+          note: note.trim() || undefined,
+        }),
+      ),
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+
+    if (succeeded > 0) {
+      const firstOk = results.find((r) => r.status === 'fulfilled');
+      const recipient = firstOk?.value?.data?.recipient?.name || `${succeeded} người`;
+      const msg =
+        failed > 0
+          ? `Đã chia sẻ cho ${succeeded}/${results.length} người`
+          : t('chatbot.cloneSuccess', { name: recipient }) ||
+            `Đã chia sẻ chatbot cho ${recipient}. Họ có thể tìm thấy trong danh sách chatbot của mình.`;
+      toast.success(msg);
       setSuccess(true);
-      toast.success(
-        t('chatbot.cloneSuccess', { name: recipient })
-          || `Đã chia sẻ chatbot cho ${recipient}. Họ có thể tìm thấy trong danh sách chatbot của mình.`
-      );
       setTimeout(() => {
         onSuccess?.();
         onClose();
       }, 900);
-    } catch (err) {
-      const code = err.response?.data?.code;
-      const message = (code === 'CHATBOT_LIMIT_EXCEEDED' ? t('chatbot.cloneLimitReached') : null)
-        || err.response?.data?.message
-        || err.message
-        || 'Không thể chia sẻ chatbot';
+    }
+    if (failed > 0) {
+      const firstFail = results.find((r) => r.status === 'rejected');
+      const err = firstFail?.reason;
+      const code = err?.response?.data?.code;
+      const message =
+        (code === 'CHATBOT_LIMIT_EXCEEDED' ? t('chatbot.cloneLimitReached') : null) ||
+        err?.response?.data?.message ||
+        err?.message ||
+        `${failed} lượt chia sẻ thất bại`;
       setError(message);
       toast.error(message);
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
   const modal = (
@@ -146,17 +141,17 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
         aria-modal="true"
         aria-labelledby="share-chatbot-title"
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl shadow-indigo-500/20 animate-[modalIn_0.28s_cubic-bezier(0.16,1,0.3,1)]"
+        className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl shadow-orange-500/20 animate-[modalIn_0.28s_cubic-bezier(0.16,1,0.3,1)]"
       >
         {/* Animated gradient header */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 pt-6 pb-8">
+        <div className="relative overflow-hidden bg-gradient-to-br from-orange-500 via-orange-500 to-amber-500 px-6 pt-6 pb-8">
           <div
             aria-hidden
             className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/15 blur-2xl animate-[pulse_6s_ease-in-out_infinite]"
           />
           <div
             aria-hidden
-            className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-fuchsia-300/30 blur-3xl animate-[pulse_7s_ease-in-out_infinite_1s]"
+            className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-amber-300/30 blur-3xl animate-[pulse_7s_ease-in-out_infinite_1s]"
           />
 
           <div className="relative flex items-start justify-between">
@@ -168,7 +163,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                 <h2 id="share-chatbot-title" className="text-xl font-semibold text-white tracking-tight">
                   {t('chatbot.cloneTitle') || 'Chia sẻ Chatbot'}
                 </h2>
-                <p className="text-indigo-100 text-sm mt-0.5">
+                <p className="text-orange-50 text-sm mt-0.5">
                   {t('chatbot.cloneSubtitle') || 'Mời đồng đội cùng sử dụng chatbot này'}
                 </p>
               </div>
@@ -194,7 +189,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                 className="w-11 h-11 rounded-xl object-cover ring-1 ring-slate-200"
               />
             ) : (
-              <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+              <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white">
                 <HiOutlineSparkles className="w-5 h-5" />
               </div>
             )}
@@ -204,53 +199,30 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                 {chatbot?.description || t('common.noDescription') || 'Không có mô tả'}
               </p>
             </div>
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-orange-700 bg-orange-50 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
               Sẵn sàng chia sẻ
             </span>
           </div>
 
-          {/* Email input with avatar preview */}
+          {/* Email input */}
           <div>
             <label className="block text-sm font-semibold text-slate-900 mb-1.5">
               {t('chatbot.recipientEmail') || 'Email người nhận'}
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                {emailValid ? (
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-semibold animate-[pop_0.2s_ease-out]"
-                    style={{ background: avatar.bg }}
-                  >
-                    {avatar.initials}
-                  </div>
-                ) : (
-                  <HiOutlineMail className="h-5 w-5 text-slate-400" />
-                )}
-              </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError('');
-                }}
-                placeholder={t('chatbot.emailPlaceholder') || 'nguyen@example.com'}
-                className={`w-full pl-12 pr-4 py-3 text-sm rounded-xl border bg-white transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                  error
-                    ? 'border-rose-300 focus:ring-rose-200 bg-rose-50/40'
-                    : emailValid
-                      ? 'border-emerald-300 focus:ring-emerald-200'
-                      : 'border-slate-200 focus:border-indigo-400 focus:ring-indigo-200'
-                }`}
-                disabled={submitting || success}
-              />
-            </div>
-            {error ? (
-              <p className="mt-1.5 text-xs text-rose-600">{error}</p>
-            ) : (
+            <EmailTagsInput
+              value={emails}
+              onChange={(next) => {
+                setEmails(next);
+                if (error) setError('');
+              }}
+              disabled={submitting || success}
+              error={error}
+              placeholder={t('chatbot.emailPlaceholder') || 'nguyen@example.com'}
+            />
+            {!error && (
               <p className="mt-1.5 text-xs text-slate-500">
-                {t('chatbot.cloneNote') || 'Người nhận phải có tài khoản trong hệ thống.'}
+                {t('chatbot.cloneNote') || 'Người nhận phải có tài khoản trong hệ thống. Có thể thêm nhiều người.'}
               </p>
             )}
           </div>
@@ -272,7 +244,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                     disabled={submitting || success}
                     className={`group relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center ${
                       active
-                        ? 'border-indigo-500 bg-indigo-50/60 shadow-sm'
+                        ? 'border-orange-500 bg-orange-50/60 shadow-sm'
                         : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                   >
@@ -286,7 +258,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                       {p.desc}
                     </span>
                     {active && (
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-600" />
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-orange-600" />
                     )}
                   </button>
                 );
@@ -305,15 +277,15 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
               rows={2}
               placeholder="Gửi kèm lời nhắn cho người nhận..."
               disabled={submitting || success}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all resize-none"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all resize-none"
             />
           </div>
 
           {/* Info box */}
-          <div className="flex gap-3 p-3 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100/80">
-            <HiOutlineClock className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+          <div className="flex gap-3 p-3 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100/80">
+            <HiOutlineClock className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-slate-700 leading-relaxed">
-              <span className="font-semibold text-indigo-900">
+              <span className="font-semibold text-orange-900">
                 {t('chatbot.cloneIncludes') || 'Bản sao bao gồm'}:
               </span>{' '}
               {t('chatbot.cloneIncludesList') ||
@@ -335,8 +307,8 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
           <button
             type="submit"
             onClick={handleSubmit}
-            disabled={submitting || success || !email.trim()}
-            className="relative px-5 py-2.5 text-sm font-semibold text-white rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 disabled:opacity-50 disabled:shadow-none inline-flex items-center gap-2"
+            disabled={submitting || success || emails.length === 0}
+            className="relative px-5 py-2.5 text-sm font-semibold text-white rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 transition-all shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 disabled:opacity-50 disabled:shadow-none inline-flex items-center gap-2"
           >
             {success ? (
               <span className="inline-flex items-center gap-2">
@@ -351,7 +323,9 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
             ) : (
               <span className="inline-flex items-center gap-2">
                 <HiOutlineShare className="w-4 h-4" />
-                {t('chatbot.clone') || 'Chia sẻ ngay'}
+                {emails.length > 1
+                  ? `Chia sẻ (${emails.length})`
+                  : t('chatbot.clone') || 'Chia sẻ ngay'}
               </span>
             )}
           </button>

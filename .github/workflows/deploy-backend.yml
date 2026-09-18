@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'e2e/**'
       - 'server/scripts/**'
       - '.github/workflows/test-backend.yml'
       - '.github/workflows/deploy-backend.yml'

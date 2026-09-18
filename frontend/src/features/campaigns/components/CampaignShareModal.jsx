@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
 import campaignApiService from '../services/campaignApi.service';
+import EmailTagsInput from '../../../components/common/EmailTagsInput';
 
 /**
  * Modal chia sẻ chiến dịch — tách khỏi Campaigns.jsx (PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16,
@@ -21,41 +22,55 @@ import campaignApiService from '../services/campaignApi.service';
  */
 const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
   const { t } = useI18n();
-  const [shareForm, setShareForm] = useState({ email: '', shareType: 'view', canRun: false });
+  const [shareForm, setShareForm] = useState({
+    emails: [],
+    shareType: 'view',
+    canRun: false,
+  });
   const [isSharing, setIsSharing] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setShareForm({ email: '', shareType: 'view', canRun: false });
+      setShareForm({ emails: [], shareType: 'view', canRun: false });
     }
   }, [open, campaign]);
 
   if (!open) return null;
 
   const handleShare = async () => {
-    if (!shareForm.email.trim()) {
-      toast.error(t('campaigns.enterEmail'));
-      return;
-    }
-    if (!shareForm.email.includes('@')) {
-      toast.error(t('campaigns.invalidEmail'));
+    if (shareForm.emails.length === 0) {
+      toast.error(t('campaigns.enterEmail') || 'Vui lòng nhập ít nhất 1 email');
       return;
     }
 
     setIsSharing(true);
-    try {
-      await campaignApiService.shareCampaign(campaign.id, {
-        recipientEmail: shareForm.email.trim(),
-        shareType: shareForm.shareType,
-        canRun: shareForm.canRun,
-      });
-      toast.success(t('campaigns.shareSuccess'));
+    const results = await Promise.allSettled(
+      shareForm.emails.map((email) =>
+        campaignApiService.shareCampaign(campaign.id, {
+          recipientEmail: email,
+          shareType: shareForm.shareType,
+          canRun: shareForm.canRun,
+        }),
+      ),
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+    if (succeeded > 0) {
+      toast.success(
+        failed > 0
+          ? `Đã chia sẻ cho ${succeeded}/${results.length} người`
+          : t('campaigns.shareSuccess') || 'Chia sẻ thành công',
+      );
+    }
+    if (failed > 0) {
+      const firstFail = results.find((r) => r.status === 'rejected');
+      const msg = firstFail?.reason?.response?.data?.message || t('campaigns.shareFailed');
+      toast.error(msg);
+    }
+    setIsSharing(false);
+    if (succeeded > 0) {
       onDone?.();
       onClose();
-    } catch (error) {
-      toast.error(error.response?.data?.message || t('campaigns.shareFailed'));
-    } finally {
-      setIsSharing(false);
     }
   };
 
@@ -79,17 +94,11 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {t('campaigns.recipientEmail') || 'Email người nhận'}
             </label>
-            <input
-              type="email"
-              value={shareForm.email}
-              onChange={(e) => setShareForm({ ...shareForm, email: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleShare();
-                if (e.key === 'Escape') onClose();
-              }}
-              placeholder="email@example.com"
-              className="input w-full"
-              autoFocus
+            <EmailTagsInput
+              value={shareForm.emails}
+              onChange={(emails) => setShareForm({ ...shareForm, emails })}
+              disabled={isSharing}
+              placeholder="Nhập email và nhấn Enter để thêm..."
             />
           </div>
           <div>
@@ -128,7 +137,7 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
           </button>
           <button
             onClick={handleShare}
-            disabled={isSharing}
+            disabled={isSharing || shareForm.emails.length === 0}
             className="btn btn-primary"
           >
             {isSharing ? (
@@ -136,6 +145,8 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
                 <div className="spinner w-4 h-4 mr-2"></div>
                 {t('common.processing')}
               </>
+            ) : shareForm.emails.length > 1 ? (
+              `Chia sẻ (${shareForm.emails.length})`
             ) : (
               t('campaigns.share')
             )}

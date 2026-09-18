@@ -2347,7 +2347,7 @@ CREATE INDEX idx_cron_job_runs_job_started ON cron_job_runs (job_code, started_a
 CREATE TABLE marketplace_listings (
     id BIGSERIAL PRIMARY KEY,
     id_user BIGINT NOT NULL REFERENCES users(id),
-    resource_type VARCHAR(20) NOT NULL CHECK (resource_type IN ('campaign', 'chatbot')),
+    resource_type VARCHAR(20) NOT NULL CHECK (resource_type IN ('campaign', 'chatbot', 'landing_page')),
     resource_id BIGINT NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -2412,6 +2412,46 @@ CREATE TABLE marketplace_favorites (
 
 CREATE INDEX idx_favorites_user ON marketplace_favorites(id_user);
 CREATE INDEX idx_favorites_listing ON marketplace_favorites(listing_id);
+
+-- ─── Marketplace Seller Stats (migration 226) ──────────────────────────────
+CREATE TABLE marketplace_seller_stats (
+    id_user BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    total_earnings INTEGER DEFAULT 0,
+    total_sales INTEGER DEFAULT 0,
+    total_views INTEGER DEFAULT 0,
+    available_balance INTEGER DEFAULT 0,
+    pending_payout INTEGER DEFAULT 0,
+    lifetime_paid_out INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_seller_stats_user ON marketplace_seller_stats(id_user);
+
+-- ─── Marketplace Payout Requests (migration 226) ───────────────────────────
+CREATE TABLE marketplace_payout_requests (
+    id BIGSERIAL PRIMARY KEY,
+    id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'paid')),
+    payment_method VARCHAR(50),
+    payment_details JSONB,
+    admin_notes TEXT,
+    requested_at TIMESTAMPTZ DEFAULT NOW(),
+    processed_at TIMESTAMPTZ,
+    processed_by BIGINT REFERENCES users(id)
+);
+
+CREATE INDEX idx_payout_requests_user ON marketplace_payout_requests(id_user);
+CREATE INDEX idx_payout_requests_status ON marketplace_payout_requests(status);
+
+CREATE OR REPLACE FUNCTION update_marketplace_seller_stats_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
