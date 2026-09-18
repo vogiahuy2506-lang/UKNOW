@@ -127,8 +127,27 @@ export function createDynamicCorsMiddleware() {
     const origin = req.headers.origin;
 
     if (!origin) {
+      // Trình duyệt gửi OPTIONS preflight luôn có `Origin`. Request không có Origin
+      // (curl, server-to-server) không qua preflight, bỏ qua.
       return next();
     }
+
+    /**
+     * Quan trọng: trả lời preflight (OPTIONS) ngay tại đây để KHÔNG rơi xuống
+     * authMiddleware (sẽ fail 401 vì OPTIONS không mang Bearer token). Nếu để
+     * authMiddleware xử lý OPTIONS, browser nhận 401 thay vì 204 → axios báo
+     * "Route not found" / "Network Error" → nhầm thành 404. Đây là bug đã làm
+     * frontend mất các cổng admin/landing-pages/shared/* trên production ngày
+     * 18/09/2026.
+     */
+    const setAllowHeaders = () => {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+      res.setHeader('Access-Control-Max-Age', '86400');
+    };
 
     /**
      * Landing page công bố chạy trong iframe sandbox không có `allow-same-origin`
@@ -143,16 +162,15 @@ export function createDynamicCorsMiddleware() {
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+        if (req.method === 'OPTIONS') return res.status(204).end();
       }
       return next();
     }
 
     // Check predefined origins first (fast path)
     if (defaultAllowedOrigins.has(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+      setAllowHeaders();
+      if (req.method === 'OPTIONS') return res.status(204).end();
       return next();
     }
 
@@ -168,10 +186,8 @@ export function createDynamicCorsMiddleware() {
 
     // Exact match only — substring "localhost" would allow localhost.attacker.com
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+      setAllowHeaders();
+      if (req.method === 'OPTIONS') return res.status(204).end();
       return next();
     }
 
@@ -180,10 +196,8 @@ export function createDynamicCorsMiddleware() {
       const verified = await isDomainVerified(hostname);
 
       if (verified) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+        setAllowHeaders();
+        if (req.method === 'OPTIONS') return res.status(204).end();
         return next();
       }
 
@@ -196,11 +210,9 @@ export function createDynamicCorsMiddleware() {
           hostname.endsWith('.hanhchinh.ai.vn') ||
           hostname === 'hanhchinh.ai.vn') {
         // Allow founderai.biz/uknow.vn subdomains (they use domainResolver middleware)
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+        setAllowHeaders();
         console.log(`[DynamicCors] Allowed platform subdomain: ${hostname}`);
+        if (req.method === 'OPTIONS') return res.status(204).end();
         return next();
       }
 
