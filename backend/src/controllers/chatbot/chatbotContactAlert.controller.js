@@ -9,9 +9,12 @@ class ChatbotContactAlertController {
   async listAlerts(req, res) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
-      const { status = 'open', limit = 50, offset = 0 } = req.query;
+      const { status = 'open', limit = 50, offset = 0, channel, accountId, contactType } = req.query;
       const data = await chatbotContactAlertRepository.listForOwner(userId, {
         status: String(status).trim(),
+        channel: channel ? String(channel).trim() : null,
+        accountId: accountId ? String(accountId).trim() : null,
+        contactType: contactType ? String(contactType).trim() : null,
         limit: Number(limit) || 50,
         offset: Number(offset) || 0,
       });

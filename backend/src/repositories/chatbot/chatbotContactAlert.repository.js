@@ -308,28 +308,66 @@ class ChatbotContactAlertRepository {
    * @param {number} idUser
    * @param {object} [options]
    * @param {'open'|'handled'|'all'} [options.status='open']
+   * @param {string|null} [options.channel=null]
+   * @param {number|string|null} [options.accountId=null]
+   * @param {'phone'|'email'|null} [options.contactType=null]
    * @param {number} [options.limit=50]
    * @param {number} [options.offset=0]
    * @param {object} [queryable=db]
    * @returns {Promise<{ items: Array<object>, total: number, openCount: number }>}
    */
-  async listForOwner(idUser, { status = 'open', limit = 50, offset = 0 } = {}, queryable = db) {
+  async listForOwner(idUser, { status = 'open', channel = null, accountId = null, contactType = null, limit = 50, offset = 0 } = {}, queryable = db) {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
     const safeOffset = Math.max(0, Number(offset) || 0);
 
-    let statusCondition = '';
+    const conditions = ['a.id_user = $1'];
+    const params = [idUser];
+    let pIndex = 2;
+
     if (status === 'open') {
-      statusCondition = 'AND a.handled_at IS NULL';
+      conditions.push('a.handled_at IS NULL');
     } else if (status === 'handled') {
-      statusCondition = 'AND a.handled_at IS NOT NULL';
+      conditions.push('a.handled_at IS NOT NULL');
     }
+
+    if (contactType === 'phone' || contactType === 'email') {
+      conditions.push(`a.contact_type = $${pIndex}`);
+      params.push(contactType);
+      pIndex += 1;
+    }
+
+    if (channel) {
+      if (channel === 'web') {
+        conditions.push(`a.last_source = 'web'`);
+      } else if (channel === 'zalo_personal') {
+        conditions.push(`a.last_source = 'zalo_personal'`);
+      } else if (channel === 'channel') {
+        conditions.push(`a.last_source = 'channel'`);
+      } else if (channel === 'email') {
+        conditions.push(`a.contact_type = 'email'`);
+      } else {
+        conditions.push(`(cc.channel = $${pIndex} OR a.last_source = $${pIndex})`);
+        params.push(channel);
+        pIndex += 1;
+      }
+    }
+
+    if (accountId) {
+      conditions.push(`(zc.id_zalo_setting::text = $${pIndex} OR zs.display_name = $${pIndex} OR zs.zalo_phone = $${pIndex} OR conn.id::text = $${pIndex} OR conn.display_name = $${pIndex})`);
+      params.push(accountId);
+      pIndex += 1;
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     const itemsQuery = `
       SELECT a.*,
              COALESCE(wc.visitor_name, cc.visitor_name, zc.visitor_name) AS visitor_name,
              COALESCE(cc.channel, a.last_source) AS channel,
              COALESCE(conn.display_name, zs.display_name) AS display_name,
-             COALESCE(u_handled.full_name, u_handled.email) AS handled_by_name
+             COALESCE(u_handled.full_name, u_handled.email) AS handled_by_name,
+             zc.id_zalo_setting AS zalo_setting_id,
+             zs.zalo_phone AS zalo_phone
       FROM chatbot_contact_alerts a
       LEFT JOIN webchat_conversations wc ON a.last_source = 'web' AND wc.id = a.last_conversation_id
       LEFT JOIN channel_conversations cc ON a.last_source = 'channel' AND cc.id = a.last_conversation_id
@@ -337,27 +375,42 @@ class ChatbotContactAlertRepository {
       LEFT JOIN zalo_personal_conversations zc ON a.last_source = 'zalo_personal' AND zc.id = a.last_conversation_id
       LEFT JOIN zalo_settings zs ON zs.id = zc.id_zalo_setting
       LEFT JOIN users u_handled ON u_handled.id = a.handled_by
-      WHERE a.id_user = $1 ${statusCondition}
+      ${whereClause}
       ORDER BY a.last_seen_at DESC
-      LIMIT $2 OFFSET $3
+      LIMIT $${pIndex} OFFSET $${pIndex + 1}
     `;
 
     const totalFilterQuery = `
       SELECT COUNT(*) AS total
       FROM chatbot_contact_alerts a
-      WHERE a.id_user = $1 ${statusCondition}
+      LEFT JOIN channel_conversations cc ON a.last_source = 'channel' AND cc.id = a.last_conversation_id
+      LEFT JOIN channel_connections conn ON cc.id_channel = conn.id
+      LEFT JOIN zalo_personal_conversations zc ON a.last_source = 'zalo_personal' AND zc.id = a.last_conversation_id
+      LEFT JOIN zalo_settings zs ON zs.id = zc.id_zalo_setting
+      ${whereClause}
     `;
+
+    // For openCount, same filters except force handled_at IS NULL
+    const openConditions = conditions.filter(
+      (c) => c !== 'a.handled_at IS NULL' && c !== 'a.handled_at IS NOT NULL'
+    );
+    openConditions.push('a.handled_at IS NULL');
+    const openWhereClause = `WHERE ${openConditions.join(' AND ')}`;
 
     const openCountQuery = `
       SELECT COUNT(*) AS open_count
       FROM chatbot_contact_alerts a
-      WHERE a.id_user = $1 AND a.handled_at IS NULL
+      LEFT JOIN channel_conversations cc ON a.last_source = 'channel' AND cc.id = a.last_conversation_id
+      LEFT JOIN channel_connections conn ON cc.id_channel = conn.id
+      LEFT JOIN zalo_personal_conversations zc ON a.last_source = 'zalo_personal' AND zc.id = a.last_conversation_id
+      LEFT JOIN zalo_settings zs ON zs.id = zc.id_zalo_setting
+      ${openWhereClause}
     `;
 
     const [itemsRes, totalRes, openRes] = await Promise.all([
-      queryable.query(itemsQuery, [idUser, safeLimit, safeOffset]),
-      queryable.query(totalFilterQuery, [idUser]),
-      queryable.query(openCountQuery, [idUser]),
+      queryable.query(itemsQuery, [...params, safeLimit, safeOffset]),
+      queryable.query(totalFilterQuery, params),
+      queryable.query(openCountQuery, params),
     ]);
 
     return {

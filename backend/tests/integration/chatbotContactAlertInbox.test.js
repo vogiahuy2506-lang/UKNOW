@@ -315,4 +315,106 @@ describe('Chatbot Contact Alert Inbox & Settings Integration (PR-2)', () => {
     expect(Number(remainingRows[0].id)).toBe(Number(freshId));
     expect(remainingRows.map((r) => Number(r.id))).not.toContain(Number(oldId));
   });
+
+  it('lọc liên hệ theo kênh, từng tài khoản Zalo và contactType (email/phone)', async () => {
+    const owner = await createUser({ username: 'owner_filter_test', email: 'owner_filter@example.com' });
+    const token = await loginAs(owner);
+
+    // 1. Webchat conversation
+    const { rows: widgetRows } = await db.query(
+      `INSERT INTO web_widget_configs (id_user, widget_key)
+       VALUES ($1, $2) RETURNING id`,
+      [owner.id, `key_${Date.now()}_filter`]
+    );
+    const { rows: webConvs } = await db.query(
+      `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id, visitor_name)
+       VALUES ($1, $2, 'sess_filter_web', 'Khách Web') RETURNING id`,
+      [owner.id, widgetRows[0].id]
+    );
+
+    // 2. Zalo accounts: Account 1 (0901111111), Account 2 (0902222222)
+    const { rows: zaloAcc1 } = await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, zalo_phone, status, is_active)
+       VALUES ($1, 'Zalo Thống', '0901111111', 'connected', TRUE) RETURNING id`,
+      [owner.id]
+    );
+    const { rows: zaloAcc2 } = await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, zalo_phone, status, is_active)
+       VALUES ($1, 'Zalo Hà Nội', '0902222222', 'connected', TRUE) RETURNING id`,
+      [owner.id]
+    );
+
+    const { rows: zaloConvs1 } = await db.query(
+      `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name)
+       VALUES ($1, $2, 'uid_z1', 'Khách Zalo 1') RETURNING id`,
+      [owner.id, zaloAcc1[0].id]
+    );
+    const { rows: zaloConvs2 } = await db.query(
+      `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name)
+       VALUES ($1, $2, 'uid_z2', 'Khách Zalo 2') RETURNING id`,
+      [owner.id, zaloAcc2[0].id]
+    );
+
+    // Insert alerts:
+    // Alert 1: Web, phone
+    // Alert 2: Zalo 1, email
+    // Alert 3: Zalo 2, phone
+    await db.query(
+      `INSERT INTO chatbot_contact_alerts
+         (id_user, contact_type, contact_value, first_seen_at, last_seen_at, seen_count,
+          last_source, last_conversation_id, last_message_id, last_excerpt)
+       VALUES
+         ($1, 'phone', '0988111111', NOW(), NOW(), 1, 'web', $2, 1, 'web phone'),
+         ($1, 'email', 'zalo1@test.vn', NOW(), NOW(), 1, 'zalo_personal', $3, 2, 'zalo1 email'),
+         ($1, 'phone', '0988222222', NOW(), NOW(), 1, 'zalo_personal', $4, 3, 'zalo2 phone')`,
+      [owner.id, webConvs[0].id, zaloConvs1[0].id, zaloConvs2[0].id]
+    );
+
+    // Filter by channel=web -> 1 item
+    const resWeb = await request(app)
+      .get('/api/ai/chatbot/inbox/contact-alerts?channel=web')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resWeb.body.data.items.length).toBe(1);
+    expect(resWeb.body.data.items[0].contact_value).toBe('0988111111');
+
+    // Filter by channel=zalo_personal -> 2 items
+    const resZalo = await request(app)
+      .get('/api/ai/chatbot/inbox/contact-alerts?channel=zalo_personal')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resZalo.body.data.items.length).toBe(2);
+
+    // Filter by individual zalo account (accountId = zaloAcc1 id) -> 1 item
+    const resZaloAcc1 = await request(app)
+      .get(`/api/ai/chatbot/inbox/contact-alerts?channel=zalo_personal&accountId=${zaloAcc1[0].id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(resZaloAcc1.body.data.items.length).toBe(1);
+    expect(resZaloAcc1.body.data.items[0].contact_value).toBe('zalo1@test.vn');
+
+    // Filter by Zalo phone (accountId = '0902222222') -> 1 item
+    const resZaloPhone = await request(app)
+      .get(`/api/ai/chatbot/inbox/contact-alerts?accountId=0902222222`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(resZaloPhone.body.data.items.length).toBe(1);
+    expect(resZaloPhone.body.data.items[0].contact_value).toBe('0988222222');
+
+    // Filter by contactType=email -> 1 item
+    const resEmail = await request(app)
+      .get('/api/ai/chatbot/inbox/contact-alerts?contactType=email')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resEmail.body.data.items.length).toBe(1);
+    expect(resEmail.body.data.items[0].contact_value).toBe('zalo1@test.vn');
+
+    // Filter by channel=email (shorthand) -> 1 item
+    const resChannelEmail = await request(app)
+      .get('/api/ai/chatbot/inbox/contact-alerts?channel=email')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resChannelEmail.body.data.items.length).toBe(1);
+    expect(resChannelEmail.body.data.items[0].contact_value).toBe('zalo1@test.vn');
+
+    // Filter by contactType=phone -> 2 items
+    const resPhone = await request(app)
+      .get('/api/ai/chatbot/inbox/contact-alerts?contactType=phone')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resPhone.body.data.items.length).toBe(2);
+  });
 });

@@ -36,6 +36,7 @@ describe('ContactAlertsPanel Component', () => {
       last_conversation_id: 41,
       last_source: 'web',
       visitor_name: 'Nguyễn Văn A',
+      contact_type: 'phone',
       contact_value: '0844790999',
       last_seen_at: '2026-09-14T10:00:00.000Z',
       seen_count: 2,
@@ -51,6 +52,7 @@ describe('ContactAlertsPanel Component', () => {
       last_source: 'zalo_personal',
       display_name: 'Zalo Sale 1',
       visitor_name: 'Trần Thị B',
+      contact_type: 'email',
       contact_value: 'khach@gmail.com',
       last_seen_at: '2026-09-14T11:00:00.000Z',
       seen_count: 1,
@@ -270,5 +272,74 @@ describe('ContactAlertsPanel Component', () => {
         digestFrequency: 'monthly',
       });
     });
+  });
+
+  it('cho phép lọc theo kênh (tất cả kênh, Zalo cá nhân, từng tài khoản Zalo, website)', async () => {
+    render(<ContactAlertsPanel />);
+
+    await waitFor(() => {
+      expect(chatbotApi.getContactAlerts).toHaveBeenCalledWith({
+        status: 'open',
+        limit: 100,
+        offset: 0,
+      });
+    });
+
+    const channelSelect = screen.getByLabelText('inbox.contactAlerts.filterChannel');
+    expect(channelSelect).toBeInTheDocument();
+    expect(channelSelect.value).toBe('all');
+
+    // Filter to zalo_personal
+    fireEvent.change(channelSelect, { target: { value: 'zalo_personal' } });
+
+    await waitFor(() => {
+      expect(chatbotApi.getContactAlerts).toHaveBeenCalledWith({
+        status: 'open',
+        channel: 'zalo_personal',
+        limit: 100,
+        offset: 0,
+      });
+    });
+
+    // Filter to specific Zalo account (Zalo Sale 1)
+    fireEvent.change(channelSelect, { target: { value: 'zalo_account:Zalo Sale 1' } });
+
+    await waitFor(() => {
+      expect(chatbotApi.getContactAlerts).toHaveBeenCalledWith({
+        status: 'open',
+        channel: 'zalo_personal',
+        accountId: 'Zalo Sale 1',
+        limit: 100,
+        offset: 0,
+      });
+    });
+  });
+
+  it('cho phép lọc theo loại liên hệ (Email, Số điện thoại)', async () => {
+    render(<ContactAlertsPanel />);
+
+    await waitFor(() => {
+      expect(chatbotApi.getContactAlerts).toHaveBeenCalled();
+    });
+
+    const contactTypeSelect = screen.getByLabelText('inbox.contactAlerts.filterContactType');
+    expect(contactTypeSelect).toBeInTheDocument();
+    expect(contactTypeSelect.value).toBe('all');
+
+    // Filter to email
+    fireEvent.change(contactTypeSelect, { target: { value: 'email' } });
+
+    await waitFor(() => {
+      expect(chatbotApi.getContactAlerts).toHaveBeenCalledWith({
+        status: 'open',
+        contactType: 'email',
+        limit: 100,
+        offset: 0,
+      });
+    });
+
+    // Client-side filtering check: only email row is visible
+    expect(screen.getByText('khach@gmail.com')).toBeInTheDocument();
+    expect(screen.queryByText('0844790999')).not.toBeInTheDocument();
   });
 });

@@ -47,6 +47,9 @@ export default function ContactAlertsPanel({
   const [openCount, setOpenCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('open'); // 'open' | 'handled' | 'all'
+  const [channelFilter, setChannelFilter] = useState('all');
+  const [contactTypeFilter, setContactTypeFilter] = useState('all'); // 'all' | 'phone' | 'email'
+  const [syncAccounts, setSyncAccounts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
@@ -57,11 +60,84 @@ export default function ContactAlertsPanel({
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
+  useEffect(() => {
+    let isMounted = true;
+    if (typeof chatbotApi.getZaloSyncStatus === 'function') {
+      chatbotApi
+        .getZaloSyncStatus()
+        .then((res) => {
+          if (!isMounted) return;
+          const payload = res?.data || res;
+          if (payload?.success && Array.isArray(payload?.data?.accounts)) {
+            setSyncAccounts(payload.data.accounts);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const zaloAccounts = useMemo(() => {
+    const accMap = new Map();
+    syncAccounts.forEach((acc) => {
+      const key = String(acc.id || acc.displayName || acc.phoneNumber || acc.zalo_phone);
+      accMap.set(key, {
+        id: acc.id,
+        displayName: acc.displayName || acc.name,
+        phone: acc.phoneNumber || acc.zalo_phone || acc.phone,
+      });
+    });
+
+    alerts.forEach((alert) => {
+      if (alert.last_source === 'zalo_personal' || alert.zalo_setting_id) {
+        const id = alert.zalo_setting_id;
+        const name = alert.display_name;
+        const phone = alert.zalo_phone;
+        const key = String(id || name || phone || '');
+        if (key && !accMap.has(key)) {
+          accMap.set(key, {
+            id,
+            displayName: name,
+            phone,
+          });
+        }
+      }
+    });
+
+    return Array.from(accMap.values());
+  }, [syncAccounts, alerts]);
+
+  const otherChannels = useMemo(() => {
+    const set = new Set();
+    alerts.forEach((a) => {
+      if (a.last_source === 'channel' && a.channel) {
+        set.add(a.channel);
+      }
+    });
+    return Array.from(set);
+  }, [alerts]);
+
   const fetchAlerts = useCallback(async () => {
     setIsLoading(true);
     try {
+      const isZaloAcc = channelFilter.startsWith('zalo_account:');
+      const channelParam = isZaloAcc
+        ? 'zalo_personal'
+        : channelFilter === 'all'
+        ? undefined
+        : channelFilter;
+      const accountIdParam = isZaloAcc
+        ? channelFilter.replace('zalo_account:', '')
+        : undefined;
+      const contactTypeParam = contactTypeFilter === 'all' ? undefined : contactTypeFilter;
+
       const res = await chatbotApi.getContactAlerts({
         status: statusFilter,
+        ...(channelParam ? { channel: channelParam } : {}),
+        ...(accountIdParam ? { accountId: accountIdParam } : {}),
+        ...(contactTypeParam ? { contactType: contactTypeParam } : {}),
         limit: 100,
         offset: 0,
       });
@@ -80,7 +156,7 @@ export default function ContactAlertsPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter, onOpenCountChange, t]);
+  }, [statusFilter, channelFilter, contactTypeFilter, onOpenCountChange, t]);
 
   const fetchSettings = useCallback(async () => {
     if (isEmployeeContext) return;
@@ -184,15 +260,45 @@ export default function ContactAlertsPanel({
   };
 
   const filteredAlerts = useMemo(() => {
-    if (!searchQuery.trim()) return alerts;
-    const q = searchQuery.toLowerCase().trim();
-    return alerts.filter((a) => {
-      const val = (a.contact_value || '').toLowerCase();
-      const name = (a.visitor_name || '').toLowerCase();
-      const exc = (a.last_excerpt || '').toLowerCase();
-      return val.includes(q) || name.includes(q) || exc.includes(q);
-    });
-  }, [alerts, searchQuery]);
+    let result = alerts;
+
+    if (channelFilter && channelFilter !== 'all') {
+      if (channelFilter === 'web') {
+        result = result.filter((a) => a.last_source === 'web');
+      } else if (channelFilter === 'zalo_personal') {
+        result = result.filter((a) => a.last_source === 'zalo_personal');
+      } else if (channelFilter.startsWith('zalo_account:')) {
+        const target = channelFilter.replace('zalo_account:', '');
+        result = result.filter(
+          (a) =>
+            a.last_source === 'zalo_personal' &&
+            (String(a.zalo_setting_id) === target ||
+              String(a.display_name) === target ||
+              String(a.zalo_phone) === target)
+        );
+      } else if (channelFilter === 'email') {
+        result = result.filter((a) => a.contact_type === 'email');
+      } else {
+        result = result.filter((a) => a.channel === channelFilter || a.last_source === channelFilter);
+      }
+    }
+
+    if (contactTypeFilter && contactTypeFilter !== 'all') {
+      result = result.filter((a) => a.contact_type === contactTypeFilter);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((a) => {
+        const val = (a.contact_value || '').toLowerCase();
+        const name = (a.visitor_name || '').toLowerCase();
+        const exc = (a.last_excerpt || '').toLowerCase();
+        return val.includes(q) || name.includes(q) || exc.includes(q);
+      });
+    }
+
+    return result;
+  }, [alerts, channelFilter, contactTypeFilter, searchQuery]);
 
   const formatChannelBadge = (alert) => {
     if (alert.last_source === 'web') {
@@ -338,40 +444,97 @@ export default function ContactAlertsPanel({
 
       {/* Filter and Search Bar */}
       <div className="shrink-0 px-4 py-2.5 bg-gray-50/80 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 bg-gray-200/80 p-1 rounded-lg text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setStatusFilter('open')}
-            className={`px-3 py-1 rounded-md transition-all ${
-              statusFilter === 'open'
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            {t('inbox.contactAlerts.filterOpen') || 'Chưa xử lý'} ({openCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter('handled')}
-            className={`px-3 py-1 rounded-md transition-all ${
-              statusFilter === 'handled'
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            {t('inbox.contactAlerts.filterHandled') || 'Đã xử lý'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1 rounded-md transition-all ${
-              statusFilter === 'all'
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            {t('inbox.contactAlerts.filterAll') || 'Tất cả'} ({total})
-          </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1 bg-gray-200/80 p-1 rounded-lg text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('open')}
+              className={`px-3 py-1 rounded-md transition-all ${
+                statusFilter === 'open'
+                  ? 'bg-white text-primary-700 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {t('inbox.contactAlerts.filterOpen') || 'Chưa xử lý'} ({openCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('handled')}
+              className={`px-3 py-1 rounded-md transition-all ${
+                statusFilter === 'handled'
+                  ? 'bg-white text-primary-700 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {t('inbox.contactAlerts.filterHandled') || 'Đã xử lý'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1 rounded-md transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-white text-primary-700 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {t('inbox.contactAlerts.filterAll') || 'Tất cả'} ({total})
+            </button>
+          </div>
+
+          {/* Channel filter dropdown */}
+          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 shadow-sm">
+            <label htmlFor="channel-filter-select" className="text-gray-400 font-medium whitespace-nowrap">
+              {t('inbox.contactAlerts.filterChannel') || 'Kênh'}:
+            </label>
+            <select
+              id="channel-filter-select"
+              aria-label={t('inbox.contactAlerts.filterChannel') || 'Kênh'}
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="all">{t('inbox.contactAlerts.filterChannelAll') || 'Tất cả kênh'}</option>
+              <option value="zalo_personal">{t('inbox.contactAlerts.filterChannelZaloAll') || 'Zalo cá nhân (Tất cả)'}</option>
+              {zaloAccounts.map((acc) => {
+                const val = `zalo_account:${acc.id || acc.displayName || acc.phone}`;
+                const label = acc.phone && acc.displayName
+                  ? `Zalo: ${acc.displayName} (${acc.phone})`
+                  : `Zalo: ${acc.displayName || acc.phone || acc.id}`;
+                return (
+                  <option key={val} value={val}>
+                    &nbsp;&nbsp;{label}
+                  </option>
+                );
+              })}
+              <option value="web">Website</option>
+              {otherChannels.map((ch) => {
+                const label = ch === 'zalo_oa' ? 'Zalo OA' : ch === 'facebook' ? 'Facebook' : ch;
+                return (
+                  <option key={ch} value={ch}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Contact type filter dropdown */}
+          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 shadow-sm">
+            <label htmlFor="contact-type-filter-select" className="text-gray-400 font-medium whitespace-nowrap">
+              {t('inbox.contactAlerts.filterContactType') || 'Loại'}:
+            </label>
+            <select
+              id="contact-type-filter-select"
+              aria-label={t('inbox.contactAlerts.filterContactType') || 'Loại liên hệ'}
+              value={contactTypeFilter}
+              onChange={(e) => setContactTypeFilter(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="all">{t('inbox.contactAlerts.filterContactTypeAll') || 'Tất cả thông tin'}</option>
+              <option value="phone">📞 {t('inbox.contactAlerts.filterContactTypePhone') || 'Số điện thoại'}</option>
+              <option value="email">✉️ {t('inbox.contactAlerts.filterContactTypeEmail') || 'Email'}</option>
+            </select>
+          </div>
         </div>
 
         <div className="relative w-64 max-w-full">

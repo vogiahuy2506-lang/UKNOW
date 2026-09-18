@@ -404,10 +404,13 @@ const chatbotApiService = {
   },
 
   // Contact Alerts (PR-2)
-  getContactAlerts({ status, limit, offset } = {}) {
+  getContactAlerts({ status, channel, accountId, contactType, limit, offset } = {}) {
     return api.get('/ai/chatbot/inbox/contact-alerts', {
       params: {
         ...(status ? { status } : {}),
+        ...(channel && channel !== 'all' ? { channel } : {}),
+        ...(accountId && accountId !== 'all' ? { accountId } : {}),
+        ...(contactType && contactType !== 'all' ? { contactType } : {}),
         ...(limit != null ? { limit } : {}),
         ...(offset != null ? { offset } : {}),
       },
