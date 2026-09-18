@@ -353,7 +353,18 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       nhúng script (không có ở iframe/public link). Mặc định rỗng — để trống
                       thì widget chỉ hiện nút tròn như hôm nay. */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Nhãn nút mở chat</h4>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-slate-900">Nhãn nút mở chat</h4>
+                      {cfg.launcher_label?.trim() ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Đang bật
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          Chưa đặt nhãn (chỉ hiện nút tròn)
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={cfg.launcher_label}
@@ -363,8 +374,24 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
                     />
                     <div className="flex items-center justify-between mt-1.5">
-                      <p className="text-xs text-slate-400">Để trống thì chỉ hiện nút tròn</p>
-                      <p className="text-xs text-slate-400 shrink-0 ml-2">{cfg.launcher_label.length}/40</p>
+                      {!cfg.launcher_label?.trim() ? (
+                        <button
+                          type="button"
+                          onClick={() => update({ launcher_label: 'Chat với chúng tôi' })}
+                          className="text-xs text-primary-600 hover:text-primary-700 hover:underline font-medium cursor-pointer"
+                        >
+                          + Bấm để áp dụng &quot;Chat với chúng tôi&quot;
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => update({ launcher_label: '' })}
+                          className="text-xs text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                        >
+                          Xoá nhãn (tắt)
+                        </button>
+                      )}
+                      <p className="text-xs text-slate-400 shrink-0 ml-2">{(cfg.launcher_label || '').length}/40</p>
                     </div>
                   </section>
 

@@ -113,4 +113,30 @@ describe('WidgetSettingsModal — nhãn nút mở chat', () => {
     const [, payload] = chatbotApi.updateChatbot.mock.calls[0];
     expect(payload.launcher_label).toBe('Tư vấn ngay');
   });
+
+  it('bấm nút áp dụng nhanh "+ Bấm để áp dụng "Chat với chúng tôi"" → ô tự điền và badge đổi sang "Đang bật"', async () => {
+    render(
+      <WidgetSettingsModal
+        open
+        chatbot={baseChatbot}
+        embedKind="script"
+        onClose={() => {}}
+        onUpdate={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Chưa đặt nhãn (chỉ hiện nút tròn)')).toBeInTheDocument();
+    const quickBtn = screen.getByText('+ Bấm để áp dụng "Chat với chúng tôi"');
+    fireEvent.click(quickBtn);
+
+    const input = screen.getByPlaceholderText('Chat với chúng tôi');
+    expect(input.value).toBe('Chat với chúng tôi');
+    expect(screen.getByText('Đang bật')).toBeInTheDocument();
+
+    // Bấm xoá nhãn
+    const clearBtn = screen.getByText('Xoá nhãn (tắt)');
+    fireEvent.click(clearBtn);
+    expect(input.value).toBe('');
+    expect(screen.getByText('Chưa đặt nhãn (chỉ hiện nút tròn)')).toBeInTheDocument();
+  });
 });
