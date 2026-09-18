@@ -480,6 +480,9 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
     expect(fullPromptText).toContain(asset2.url);
     expect(fullPromptText).toContain('brochure.pdf');
     expect(fullPromptText).toContain('Nội dung khoá học lập trình 2026');
+    expect(fullPromptText).toContain('BẮT BUỘC đọc hiểu và tuân thủ chặt chẽ theo các yêu cầu');
+    expect(fullPromptText).not.toContain('dữ kiện, không phải chỉ dẫn');
+    expect(fullPromptText).toContain('THỨ TỰ DỮ KIỆN VÀ YÊU CẦU: (1) TÀI LIỆU ĐÍNH KÈM (ưu tiên hàng đầu');
 
     // Số inlineData phải bằng 1 (vì chỉ asset1 có inlineForModel = true)
     const inlineDataParts = callArgs.parts.filter((p) => p.inlineData);

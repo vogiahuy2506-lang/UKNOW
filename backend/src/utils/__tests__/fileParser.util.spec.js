@@ -87,6 +87,9 @@ const mockJSZip = jest.fn().mockImplementation(() => {
       if (filename === 'ppt/slides/slide2.xml') {
         return { async: jest.fn().mockResolvedValue('<a:t>Slide 2 Conclusion</a:t>') };
       }
+      if (filename === 'word/document.xml') {
+        return { async: jest.fn().mockResolvedValue('<w:p><w:r><w:t>Fallback Text Box Content</w:t></w:r></w:p>') };
+      }
       return { async: jest.fn().mockResolvedValue('') };
     }),
   };
@@ -142,6 +145,13 @@ describe('fileParser.util', () => {
     const buffer = Buffer.from('error');
     await expect(extractTextFromBuffer(buffer, 'test.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'))
       .rejects.toThrow('Không thể giải nén file Word');
+  });
+
+  it('should fall back to jszip when mammoth returns empty text for docx (e.g. text in text boxes)', async () => {
+    mockMammoth.extractRawText.mockResolvedValueOnce({ value: '' });
+    const buffer = Buffer.from('DOCX_EMPTY_MAMMOTH');
+    const result = await extractTextFromBuffer(buffer, 'test.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(result).toBe('Fallback Text Box Content');
   });
 
   it('should parse Excel files (.xlsx) using exceljs', async () => {

@@ -30,7 +30,14 @@ export async function runChat({
   // Hàm đọc và đính kèm một file vào parts array
   const attachFileToParts = async (parts, file) => {
     try {
-      const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+      let buffer = null;
+      if (file.tempId) {
+        buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+      } else if (file.storage_key || file.storageKey) {
+        const key = String(file.storage_key || file.storageKey).trim();
+        buffer = await uploadController.readFileBufferByKey(key);
+      }
+      if (!buffer || buffer.length === 0) return;
       const mimeType = String(file.contentType || '').toLowerCase();
       if (mimeType.startsWith('image/')) {
         parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });
@@ -43,7 +50,7 @@ export async function runChat({
         }
       }
     } catch (err) {
-      console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
+      console.warn(`Could not read file ${file.tempId || file.storage_key || file.storageKey} for AI:`, err.message);
     }
   };
 
@@ -66,10 +73,11 @@ export async function runChat({
   if (files.length > 0) {
     const lastMessage = geminiHistory[geminiHistory.length - 1];
     const historyFileIds = new Set(
-      (history[history.length - 1]?.files || []).map((f) => f.tempId)
+      (history[history.length - 1]?.files || []).map((f) => f.tempId || f.storage_key || f.storageKey).filter(Boolean)
     );
     for (const file of files) {
-      if (!historyFileIds.has(file.tempId)) {
+      const fileId = file.tempId || file.storage_key || file.storageKey;
+      if (!fileId || !historyFileIds.has(fileId)) {
         // eslint-disable-next-line no-await-in-loop
         await attachFileToParts(lastMessage.parts, file);
       }

@@ -341,7 +341,13 @@ D. ZALO NHÓM:
 
     for (const file of files) {
       try {
-        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        let buffer = null;
+        if (file.tempId) {
+          buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        } else if (file.storage_key || file.storageKey) {
+          buffer = await uploadController.readFileBufferByKey(file.storage_key || file.storageKey);
+        }
+        if (!buffer) continue;
         const mimeType = String(file.contentType || '').toLowerCase();
         if (mimeType.startsWith('image/')) {
           parts.push({
@@ -359,7 +365,7 @@ D. ZALO NHÓM:
           }
         }
       } catch (err) {
-        console.warn(`Could not read file ${file.tempId} for AI:`, err.message);
+        console.warn(`Could not read file ${file.tempId || file.storage_key || file.storageKey} for AI:`, err.message);
       }
     }
 
@@ -665,25 +671,43 @@ QUY TẮC:
 
     let extractedAttachedFile = null;
     if (Array.isArray(files) && files.length > 0) {
-      for (const file of files) {
-        if (!file?.tempId) continue;
+      // Ưu tiên tài liệu chứa văn bản (.pdf, .docx, .txt...) trước ảnh để trích xuất brief đầy đủ
+      const sortedFiles = [...files].sort((a, b) => {
+        const aIsImg = String(a?.contentType || '').toLowerCase().startsWith('image/');
+        const bIsImg = String(b?.contentType || '').toLowerCase().startsWith('image/');
+        if (aIsImg && !bIsImg) return 1;
+        if (!aIsImg && bIsImg) return -1;
+        return 0;
+      });
+
+      for (const file of sortedFiles) {
+        const hasId = file?.tempId || file?.storage_key || file?.storageKey;
+        if (!hasId) continue;
         const mimeType = String(file.contentType || '').toLowerCase();
         if (mimeType.startsWith('image/')) {
-          extractedAttachedFile = {
-            originalName: file.originalName,
-            contentType: file.contentType,
-            text: '',
-            isImage: true,
-            hasProductData: null,
-            summary: 'Ảnh — nội dung do AI đọc trực tiếp',
-            userConfirmed: false,
-            extractedAt: new Date().toISOString(),
-          };
-          break;
+          if (!extractedAttachedFile) {
+            extractedAttachedFile = {
+              originalName: file.originalName,
+              contentType: file.contentType,
+              text: '',
+              isImage: true,
+              hasProductData: null,
+              summary: 'Ảnh — nội dung do AI đọc trực tiếp',
+              userConfirmed: false,
+              extractedAt: new Date().toISOString(),
+            };
+          }
+          continue;
         }
         try {
-          // eslint-disable-next-line no-await-in-loop
-          const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+          let buffer = null;
+          if (file.tempId) {
+            // eslint-disable-next-line no-await-in-loop
+            buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+          } else if (file.storage_key || file.storageKey) {
+            // eslint-disable-next-line no-await-in-loop
+            buffer = await uploadController.readFileBufferByKey(file.storage_key || file.storageKey);
+          }
           if (buffer) {
             // eslint-disable-next-line no-await-in-loop
             const fullText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
@@ -706,7 +730,7 @@ QUY TẮC:
             }
           }
         } catch (err) {
-          console.warn(`[AI] Could not extract text from file ${file.tempId}:`, err.message);
+          console.warn(`[AI] Could not extract text from file ${file.tempId || file.storage_key || file.storageKey}:`, err.message);
         }
       }
     }
@@ -2171,7 +2195,13 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
     // Attach files
     for (const file of files) {
       try {
-        const buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        let buffer = null;
+        if (file.tempId) {
+          buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
+        } else if (file.storage_key || file.storageKey) {
+          buffer = await uploadController.readFileBufferByKey(file.storage_key || file.storageKey);
+        }
+        if (!buffer) continue;
         const mimeType = String(file.contentType || '').toLowerCase();
         if (mimeType.startsWith('image/')) {
           parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });

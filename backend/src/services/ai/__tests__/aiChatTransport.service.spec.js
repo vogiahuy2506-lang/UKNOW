@@ -20,14 +20,19 @@ jest.unstable_mockModule('../../../utils/aiJsonParse.util.js', () => ({
   parseAiJson,
 }));
 
+const readTempFileBuffer = jest.fn();
+const readFileBufferByKey = jest.fn();
+const extractTextFromBuffer = jest.fn();
+
 jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
   default: {
-    readTempFileBuffer: jest.fn(),
+    readTempFileBuffer,
+    readFileBufferByKey,
   },
 }));
 
 jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
-  extractTextFromBuffer: jest.fn(),
+  extractTextFromBuffer,
 }));
 
 jest.unstable_mockModule('../../../utils/googleUrlFetch.util.js', () => ({
@@ -109,5 +114,53 @@ describe('aiChatTransport.service', () => {
       expect.objectContaining({ totalTokens: 8202 }),
       expect.objectContaining({ feature: 'smart_chat' })
     );
+  });
+
+  it('đính kèm tệp từ storage_key trong lịch sử hội thoại khi không còn tempId', async () => {
+    readFileBufferByKey.mockResolvedValueOnce(Buffer.from('doc-content'));
+    extractTextFromBuffer.mockResolvedValueOnce('Nội dung file Word từ storage');
+
+    axiosPost.mockResolvedValueOnce({
+      data: {
+        candidates: [
+          {
+            finishReason: 'STOP',
+            content: {
+              parts: [{ text: '{"type":"text","content":"Đã đọc file"}' }],
+            },
+          },
+        ],
+      },
+    });
+
+    const res = await runChat({
+      systemPrompt: 'sys prompt',
+      history: [
+        {
+          role: 'user',
+          content: 'Xem file này nhé',
+          files: [
+            {
+              originalName: 'yeu_cau.docx',
+              contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              storage_key: 'uploads/101/chat/yeu_cau.docx',
+            },
+          ],
+        },
+      ],
+      userId: 101,
+    });
+
+    expect(res).toEqual({ type: 'text', content: 'Đã đọc file' });
+    expect(readFileBufferByKey).toHaveBeenCalledWith('uploads/101/chat/yeu_cau.docx');
+    expect(extractTextFromBuffer).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'yeu_cau.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    const postBody = axiosPost.mock.calls[0][1];
+    const userParts = postBody.contents[0].parts;
+    const docPart = userParts.find((p) => p.text && p.text.includes('Nội dung file Word từ storage'));
+    expect(docPart).toBeDefined();
   });
 });

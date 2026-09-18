@@ -55,14 +55,32 @@ export async function extractTextFromBuffer(buffer, originalName, contentType, o
     }
   }
 
-  // 3. Word Documents (.docx openxml format via Mammoth)
+  // 3. Word Documents (.docx openxml format via Mammoth + fallback JSZip cho text box/shapes)
   if (
     ext === '.docx' ||
     mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ) {
     try {
       const result = await mammoth.extractRawText({ buffer });
-      return (result.value || '').trim();
+      let text = (result.value || '').trim();
+      if (!text) {
+        // Fallback: nếu Mammoth không trích được chữ (chữ nằm trong Text Box <w:txbxContent> hoặc Shape)
+        try {
+          const zip = new JSZip();
+          await zip.loadAsync(buffer);
+          const docXmlFile = zip.file('word/document.xml');
+          if (docXmlFile) {
+            const docXml = await docXmlFile.async('string');
+            const matches = docXml.match(/<w:t[^>]*>(.*?)<\/w:t>/g);
+            if (matches && matches.length > 0) {
+              text = matches.map((m) => m.replace(/<\/?w:t[^>]*>/g, '')).join(' ').trim();
+            }
+          }
+        } catch {
+          // Bỏ qua lỗi fallback, trả text hiện tại
+        }
+      }
+      return text;
     } catch (err) {
       console.error('[FileParser] Word parse error:', err);
       throw new Error(`Không thể giải nén file Word (.docx): ${err.message}`);
