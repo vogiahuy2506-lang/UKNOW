@@ -113,12 +113,29 @@ function stripDocumentWrapper(raw) {
   const htmlBlock = s.match(/<html\b[^>]*>([\s\S]*?)<\/html>/i);
   if (htmlBlock) s = htmlBlock[1];
 
-  // Bỏ <head>...</head>
+  // Bỏ <head>...</head> NHƯNG giữ <style> block bên trong admin paste.
+  // Admin dán document HTML đầy đủ (MIXML-style) → trong <head> thường có
+  // <style> chứa CSS của email template. Strip <style> thì admin mất CSS
+  // ngay cả khi admin muốn giữ. Phương án: bóc <head>...</head> ra khỏi
+  // s, trích <style>...</style> ra, dán TRƯỚC body content ở cuối cùng.
+  const headBlocks = [...s.matchAll(/<head\b[^>]*>([\s\S]*?)<\/head>/gi)];
+  let headStyles = '';
+  for (const m of headBlocks) {
+    const styleBlocks = [...m[1].matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)];
+    for (const sm of styleBlocks) headStyles += sm[0];
+  }
   s = s.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
 
   // Bóc trong <body>...</body>
   const bodyBlock = s.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
-  if (bodyBlock) s = bodyBlock[1];
+  if (bodyBlock) {
+    s = bodyBlock[1];
+  }
+
+  // Ghép <style> đã trích từ <head> trước body content
+  if (headStyles) {
+    s = headStyles + s;
+  }
 
   return s.trim();
 }
@@ -130,17 +147,28 @@ function stripDocumentWrapper(raw) {
 /**
  * Sanitize HTML admin soạn trong `html_content`.
  *
+ * TRIẾT LÝ (sau feedback 19/09):
+ *  - Admin paste nguyên template từ editor HTML (MIXML/CKEditor/HTML email builder).
+ *  - Email client (Gmail/Outlook) render GIỚI HẠN:
+ *      + Được: inline `style=""`, <style> block (không ổn định), <table>, <img>,
+ *        <a href="">, mọi <div>/<span>/<p>/<h*>/<strong>/...
+ *      + KHÔNG được: <script>, <iframe>, <object>, <embed>, <form>, event handler
+ *        on*=, javascript: scheme.
+ *  - Phải GIỮ <style> + style="" để layout admin paste còn hoạt động. Strip
+ *    style="..." sẽ phá layout của mọi template email designer tạo ra.
+ *
  * QUY TẮC (regex-based, best-effort cho email):
  *  1. Strip document wrapper (xem stripDocumentWrapper).
- *  2. Strip thẻ nguy hiểm: script, style, link, iframe, object, embed, form,
- *     meta, base, noscript, template, slot.
+ *  2. Strip thẻ nguy hiểm THỰC SỰ: script, iframe, object, embed, form, slot.
+ *     GIỮ: <style>, <link> (CSS import), <meta> (charset).
  *  3. Strip attribute on*= (event handler).
- *  4. Strip attribute style= (CSS injection; Gmail/Outlook bỏ inline CSS).
- *  5. Tag whitelist: p, br, strong, b, em, i, u, ul, ol, li, h1, h2, h3, h4,
- *     h5, h6, blockquote, code, pre, a, span, div, img, table, thead, tbody,
- *     tfoot, tr, th, td, hr, small.
+ *  4. GIỮ style="" — email client cần inline CSS.
+ *  5. Tag whitelist mở rộng: p, br, strong, b, em, i, u, s, ul, ol, li, h1-h6,
+ *     blockquote, code, pre, kbd, samp, a, span, div, img, figure, figcaption,
+ *     table, thead, tbody, tfoot, tr, th, td, hr, small, sup, sub, abbr, cite,
+ *     style, link, meta.
  *  6. Thẻ <a>: chỉ giữ href (http(s)/mailto/tel) + target=_blank + rel.
- *  7. Thẻ <img>: chỉ giữ src + alt + width + height (nếu có).
+ *  7. Thẻ <img>: chỉ giữ src + alt + width/height (validated scheme).
  *  8. Strip HTML comment.
  *
  * @param {string} raw
@@ -152,26 +180,26 @@ function sanitizeEmailHtml(raw) {
   let out = stripDocumentWrapper(raw);
   if (!out) return '';
 
-  // 1. Strip block tags
-  const BLOCK_TAGS = [
-    'script', 'style', 'link', 'iframe', 'object', 'embed', 'form',
-    'meta', 'base', 'noscript', 'template', 'slot'
-  ];
-  for (const tag of BLOCK_TAGS) {
+  // 1. Strip THẺ NGUY HIỂM thực sự (email client không render):
+  //    - script: code execution
+  //    - iframe/object/embed/form: phishing, embedded content
+  //    - slot: web components (không có ý nghĩa trong email)
+  // GIỮ: <style>, <link>, <meta> — admin paste template CSS cần giữ.
+  const DANGEROUS_TAGS = ['script', 'iframe', 'object', 'embed', 'form', 'slot'];
+  for (const tag of DANGEROUS_TAGS) {
     out = out.replace(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi'), '');
     out = out.replace(new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi'), '');
   }
 
-  // 2. Strip on* event attributes
+  // 2. Strip on* event handler attributes (bất kể ở thẻ nào)
   out = out.replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '');
   out = out.replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '');
   out = out.replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, '');
 
-  // 3. Strip style= attributes
-  out = out.replace(/\s+style\s*=\s*"[^"]*"/gi, '');
-  out = out.replace(/\s+style\s*=\s*'[^']*'/gi, '');
+  // 3. GIỮ style="" — email client render inline CSS.
+  //    KHÔNG strip.
 
-  // 4. Whitelist tags + attribute cleanup
+  // 4. Whitelist tags + attribute cleanup. Mọi thẻ ngoài whitelist → strip.
   const ALLOWED = new Set([
     'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'del', 'ins',
     'ul', 'ol', 'li',
@@ -180,14 +208,15 @@ function sanitizeEmailHtml(raw) {
     'a', 'span', 'div',
     'img', 'figure', 'figcaption',
     'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
-    'hr', 'small', 'sup', 'sub', 'abbr', 'cite'
+    'hr', 'small', 'sup', 'sub', 'abbr', 'cite',
+    'style', 'link', 'meta', 'title', 'head', 'html' // email client có thể có
   ]);
 
   out = out.replace(/<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi, (_whole, tagName, rest) => {
     const tag = String(tagName || '').toLowerCase();
     const isClose = _whole.startsWith('</');
 
-    if (BLOCK_TAGS.includes(tag)) return '';
+    if (DANGEROUS_TAGS.includes(tag)) return '';
     if (!ALLOWED.has(tag)) return '';
 
     if (isClose) return `</${tag}>`;
@@ -213,7 +242,8 @@ function sanitizeEmailHtml(raw) {
     }
 
     if (tag === 'img') {
-      // Chỉ giữ src + alt + width/height nếu hợp lệ
+      // Giữ src (validated) + alt + width/height + style + class (vì email client
+      // cần inline CSS — admin paste template có thể có class).
       const srcMatch =
         rest.match(/\bsrc\s*=\s*"([^"]*)"/i) ||
         rest.match(/\bsrc\s*=\s*'([^']*)'/i) ||
@@ -224,6 +254,7 @@ function sanitizeEmailHtml(raw) {
         rest.match(/\balt\s*=\s*([^\s>]+)/i);
       const wMatch  = rest.match(/\bwidth\s*=\s*"([^"]*)"/i) || rest.match(/\bwidth\s*=\s*([^\s>]+)/i);
       const hMatch  = rest.match(/\bheight\s*=\s*"([^"]*)"/i) || rest.match(/\bheight\s*=\s*([^\s>]+)/i);
+      const styleMatch = rest.match(/\bstyle\s*=\s*"([^"]*)"/i) || rest.match(/\bstyle\s*=\s*'([^']*)'/i);
       let attrs = '';
       if (srcMatch) {
         const src = String(srcMatch[1]).trim().replace(/"/g, '&quot;');
@@ -231,17 +262,34 @@ function sanitizeEmailHtml(raw) {
           attrs += ` src="${src}"`;
         }
       }
-      if (altMatch) attrs += ` alt="${String(altMatch[1]).replace(/"/g, '&quot;')}"`;
-      if (wMatch)   attrs += ` width="${String(wMatch[1]).replace(/[^0-9]/g, '')}"`;
-      if (hMatch)   attrs += ` height="${String(hMatch[1]).replace(/[^0-9]/g, '')}"`;
+      if (altMatch)   attrs += ` alt="${String(altMatch[1]).replace(/"/g, '&quot;')}"`;
+      if (wMatch)     attrs += ` width="${String(wMatch[1]).replace(/[^0-9%]/g, '')}"`;
+      if (hMatch)     attrs += ` height="${String(hMatch[1]).replace(/[^0-9%]/g, '')}"`;
+      if (styleMatch) attrs += ` style="${String(styleMatch[1]).replace(/"/g, '&quot;')}"`;
       return attrs ? `<img${attrs}>` : '';
     }
 
-    // Các thẻ whitelisted khác: bỏ toàn bộ attributes, giữ thẻ sạch
-    return `<${tag}>`;
+    // Thẻ whitelisted khác (div, p, table, tr, td, span, h1-h6, ...): GIỮ style
+    // + class + id (admin cần cho layout email + span hooks).
+    // Lấy lại style + class + id, bỏ các attribute khác.
+    const styleAttr = (rest.match(/\bstyle\s*=\s*"([^"]*)"/i) || rest.match(/\bstyle\s*=\s*'([^']*)'/i));
+    const classAttr = (rest.match(/\bclass\s*=\s*"([^"]*)"/i) || rest.match(/\bclass\s*=\s*'([^']*)'/i));
+    const idAttr    = (rest.match(/\bid\s*=\s*"([^"]*)"/i)    || rest.match(/\bid\s*=\s*'([^']*)'/i));
+    const colspan   = (rest.match(/\bcolspan\s*=\s*"([^"]*)"/i) || rest.match(/\bcolspan\s*=\s*'([^']*)'/i) || rest.match(/\bcolspan\s*=\s*([^\s>]+)/i));
+    let attrs = '';
+    if (styleAttr) attrs += ` style="${String(styleAttr[1]).replace(/"/g, '&quot;')}"`;
+    if (classAttr) attrs += ` class="${String(classAttr[1]).replace(/"/g, '&quot;')}"`;
+    if (idAttr)    attrs += ` id="${String(idAttr[1]).replace(/"/g, '&quot;')}"`;
+    if (colspan && (tag === 'th' || tag === 'td')) {
+      const v = String(colspan[1]).replace(/[^0-9]/g, '');
+      if (v) attrs += ` colspan="${v}"`;
+    }
+    return `<${tag}${attrs}>`;
   });
 
-  // 5. Strip HTML comments
+  // 5. Strip HTML comments (admin có thể có để ghi chú, nhưng comment có thể chứa
+  //    conditional comments Outlook — tuy nhiên an toàn hơn nếu strip vì có thể
+  //    leak tracker).
   out = out.replace(/<!--[\s\S]*?-->/g, '');
 
   return out.trim();
@@ -254,15 +302,30 @@ function sanitizeEmailHtml(raw) {
 /**
  * Render email HTML từ notification.
  *
- * TRIẾT LÝ: `html_content` là BODY EMAIL TUYỆT ĐỐI.
- * - Có `html_content` → sanitize → gói tối thiểu trong <html><body>.
- * - Không có `html_content` → escape(message) → gói tối thiểu.
+ * TRIẾT LÝ (rewrite 19/09 push 40e3a671):
+ *  - `html_content` là BODY EMAIL TUYỆT ĐỐI — không bọc layout, không footer.
+ *  - Chỉ giữ <!DOCTYPE> + <html> + <head> + <body> với CSS reset tối thiểu
+ *    (margin:0, font-family). Admin soạn gì → user nhận đúng y.
  *
- * KHÔNG bọc thêm: header gradient, greeting, title box, message box,
- * user chip, footer cố định. Admin soạn gì → user nhận đúng y.
+ * THAY ĐỔI LẦN NÀY (sau feedback mail lộ raw + footer cố định):
+ *  - KHÔNG còn <table> wrapper, padding, background, border-radius, footer.
+ *  - Sanitizer GIỮ inline CSS (style="...") vì email client CHỈ render inline
+ *    CSS. Nếu strip thì layout admin paste vỡ.
+ *  - KHÔNG strip <style> block: admin có thể paste CSS từ template designer
+ *    (MIXML/Mailchimp-style). Chỉ strip thẻ nguy hiểm thực sự (script, iframe,
+ *    object, embed, form) + on*= event handler.
+ *
+ * PIPELINE:
+ *  1. Nếu html_content:
+ *       (a) replaceVariables(html_content, user)
+ *       (b) sanitize: strip thẻ nguy hiểm + on*= handler (GIỮ style=, <style>)
+ *       (c) gói trong <!DOCTYPE html><body> tối thiểu + font-family system
+ *  2. Nếu không có html_content:
+ *       (a) escapeHtml(message)
+ *       (b) wrap trong <p> tối thiểu
  *
  * @param {Object} input
- * @param {Object}        input.notification  - { type, priority, title, message, html_content, html_content_en }
+ * @param {Object}        input.notification  - { type, priority, title, message, html_content }
  * @param {Object|null}  input.user          - user nhận (null cho preview)
  * @param {'vi'|'en'}    [input.locale='vi']
  * @returns {string} HTML đầy đủ <!DOCTYPE html>...
@@ -285,64 +348,41 @@ export function renderNotificationEmailHtml({ notification, user = null, locale 
 
   if (n.html_content && typeof n.html_content === 'string' && n.html_content.trim() !== '') {
     // Đường HTML: admin soạn trong "Soạn mẫu HTML".
-    // Pipeline: (1) replace {{var}} bằng user values → (2) sanitize.
-    // Sau sanitize admin vẫn dùng được <p>/<strong>/<a>/<img>/<table> nhưng
-    // KHÔNG có <style>, <script>, event handler, inline CSS.
+    // Pipeline: (1) replace {{var}} bằng user values → (2) sanitize CHỈ thẻ
+    // nguy hiểm (script, iframe, form, embed, object) + on*= handler.
+    // GIỮ: <style>, style="", <table>, <img>, <a href="...">, <strong>, ...
+    // Lý do: email client (Gmail/Outlook) KHÔNG render CSS trong <style> đáng
+    // tin cậy — nhưng admin paste nguyên template (MIXML/CKEditor) cần GIỮ
+    // <style> để fallback. GIỮ style="" vì Gmail CHỈ chấp nhận inline CSS.
     const raw = replaceVariablesForUser(n.html_content, u);
     bodyHtml = sanitizeEmailHtml(raw);
   } else {
-    // Đường plain text: không có html_content → dùng message + escape.
+    // Đường plain text: không có html_content → escape message + wrap <p>.
     const raw = replaceVariablesForUser(n.message || '', u);
-    bodyHtml = escapeHtml(raw);
+    bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(raw)}</p>`;
   }
 
   // Nếu sau sanitize bodyHtml rỗng → fallback message
   if (!bodyHtml) {
-    bodyHtml = `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#374151;font-size:15px;line-height:1.7;margin:0;">${escapeHtml(n.message || '')}</p>`;
+    const fallback = escapeHtml(n.message || '');
+    bodyHtml = `<p style="margin:0 0 12px;">${fallback}</p>`;
   }
 
   // ----------------------------------------------------------------
-  // Build full document
+  // Build full document — MINIMAL wrapper, không layout, không footer.
   // ----------------------------------------------------------------
   const lang = locale === 'en' ? 'en' : 'vi';
 
+  // System font stack + reset margin/body để admin soạn HTML hoàn toàn tự do.
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="format-detection" content="telephone=no" />
   <title>${escapeHtml(MAIL_FROM_NAME)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f3f4f6;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f3f4f6;">
-    <tr>
-      <td align="center" style="padding:24px 12px;">
-        <table width="680" cellpadding="0" cellspacing="0" border="0"
-               style="max-width:680px;width:100%;background:#ffffff;
-                      border-radius:12px;overflow:hidden;
-                      box-shadow:0 4px 16px rgba(0,0,0,.08);">
-          <tr>
-            <td style="padding:32px 36px;">
-              ${bodyHtml}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 36px;border-top:1px solid #e5e7eb;text-align:center;">
-              <p style="margin:0 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#9ca3af;">
-                ${escapeHtml(SUPPORT_EMAIL)}
-              </p>
-              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#d1d5db;">
-                <a href="${FRONTEND_URL}" style="color:#9ca3af;text-decoration:none;">${escapeHtml(MAIL_FROM_NAME)}</a>
-                &nbsp;·&nbsp;
-                <a href="${FRONTEND_URL}" style="color:#9ca3af;text-decoration:none;">${escapeHtml(FRONTEND_URL)}</a>
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+${bodyHtml}
 </body>
 </html>`;
 }

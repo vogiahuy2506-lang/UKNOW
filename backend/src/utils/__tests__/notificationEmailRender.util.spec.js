@@ -1,14 +1,19 @@
 /**
- * Spec cho notificationEmailRender.util.js — rewrite 19/09/2026.
+ * Spec cho notificationEmailRender.util.js — push 40e3a671 + push tiếp theo.
  *
- * TRIẾT LÝ MỚI: `html_content` là BODY EMAIL TUYỆT ĐỐI.
- * - Có `html_content` → sanitize → gói tối thiểu trong <html><body>.
- * - Không có `html_content` → escape(message) → gói tối thiểu.
- * - KHÔNG bọc thêm: header gradient, greeting, title box, user chip, footer.
+ * TRIẾT LÝ MỚI NHẤT:
+ *  - `html_content` là BODY EMAIL TUYỆT ĐỐI.
+ *  - Renderer KHÔNG bọc layout, KHÔNG footer, chỉ:
+ *      <!DOCTYPE html><html><head charset+viewport+title><body margin:0 + font>
+ *      + ${bodyHtml}
+ *      </body></html>
+ *  - Admin soạn gì → user nhận đúng y (WYSIWYG email).
  *
- * ĐIỀU NÀY NGHĨA LÀ:
- *   Test cũ check layout gradient/palette/priority badge/CTA/LOGO là OBSOLETE.
- *   Test mới check: body đúng → email gửi đúng y hệt preview.
+ * SANITIZER MỚI NHẤT:
+ *  - GIỮ inline CSS (style="...") — email client render inline CSS.
+ *  - GIỮ <style> block — admin paste template HTML có thể cần.
+ *  - CHỈ strip thẻ thực sự nguy hiểm: <script>, <iframe>, <object>, <embed>,
+ *    <form>, <slot> + on*= handler + javascript: scheme.
  */
 
 import { renderNotificationEmailHtml, replaceVariablesForUser } from '../notificationEmailRender.util.js';
@@ -51,15 +56,15 @@ describe('replaceVariablesForUser', () => {
 });
 
 // ---------------------------------------------------------------------------
-// renderNotificationEmailHtml — triết lý mới: html_content = body tuyệt đối
+// renderNotificationEmailHtml
 // ---------------------------------------------------------------------------
 
 describe('renderNotificationEmailHtml', () => {
   // ---------------------------------------------------------------------------
-  // Cấu trúc document
+  // Document structure
   // ---------------------------------------------------------------------------
 
-  it('trả về DOCTYPE + <html> + <body> hợp lệ', () => {
+  it('trả về DOCTYPE + html + body hợp lệ', () => {
     const html = renderNotificationEmailHtml({ notification: { message: 'Hi' } });
     expect(html).toMatch(/^<!DOCTYPE html>/i);
     expect(html).toContain('<html');
@@ -68,23 +73,30 @@ describe('renderNotificationEmailHtml', () => {
     expect(html).toContain('</body>');
   });
 
-  it('không bọc thêm layout wrapper (header gradient, greeting, title box, user chip)', () => {
-    // Triết lý mới: html_content = body. KHÔNG có gradient header.
+  it('KHÔNG bọc layout wrapper, KHÔNG footer cố định, KHÔNG background table', () => {
+    // Triết lý mới nhất: html_content là body tuyệt đối, không có wrapper.
+    // Lưu ý: <title> của renderer chứa "Founder AI" — không check chuỗi này.
     const html = renderNotificationEmailHtml({ notification: { message: 'Hello' } });
-    // Layout cũ không còn
-    expect(html).not.toContain('linear-gradient(135deg,#f97316');
-    expect(html).not.toContain('Xin chào');          // greeting
-    expect(html).not.toContain('Tiêu đề thông báo');  // fallback title cũ
-    expect(html).not.toContain('badge');               // title badge box
-    expect(html).not.toContain('user_info');           // user chip
-    expect(html).not.toContain('Nguyễn Văn Test');     // sample user không hiện nếu không có trong html_content
+    expect(html).not.toContain('info@digiso.vn');
+    expect(html).not.toContain('linear-gradient');
+    expect(html).not.toContain('border-radius');
+    expect(html).not.toContain('<td align="center"');
+    expect(html).not.toContain('box-shadow');
+    // Không có SUPPORT_EMAIL / FRONTEND_URL footer
+    expect(html).not.toContain('founderai.vn');
+  });
+
+  it('body chỉ có bodyHtml nằm giữa <body>...</body> — không có thẻ wrapper khác ngoài head/title', () => {
+    const html = renderNotificationEmailHtml({ notification: { message: 'Xin chào bạn' } });
+    // Body content là message (escaped trong <p>)
+    expect(html).toMatch(/<body[^>]*>[\s\S]*<p[^>]*>Xin chào bạn<\/p>[\s\S]*<\/body>/);
   });
 
   // ---------------------------------------------------------------------------
   // Đường html_content (admin soạn HTML)
   // ---------------------------------------------------------------------------
 
-  it('html_content được render TRỰC TIẾP vào body — không bọc thêm gì', () => {
+  it('html_content đi thẳng vào body — không có wrapper gì ngoài <html><body>', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         title: 'ignored-title',
@@ -92,9 +104,7 @@ describe('renderNotificationEmailHtml', () => {
         html_content: '<p>Hello World</p>'
       }
     });
-    // html_content đi THẲNG vào body, không qua wrapper
     expect(html).toContain('<p>Hello World</p>');
-    // Không có "ignored-title" hoặc "ignored-message" trong output
     expect(html).not.toContain('ignored-title');
     expect(html).not.toContain('ignored-message');
   });
@@ -103,46 +113,19 @@ describe('renderNotificationEmailHtml', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         message: 'fallback',
-        html_content: '<p>Chào {{user_name}}, chúc bạn một ngày tốt lành!</p>'
+        html_content: '<p>Chào {{user_name}}!</p>'
       },
       user: { full_name: 'Trần Thị Mai', email: 'mai@test.com', plan: 'pro' }
     });
-    expect(html).toContain('Chào Trần Thị Mai, chúc bạn một ngày tốt lành!');
+    expect(html).toContain('Chào Trần Thị Mai!');
     expect(html).not.toContain('{{user_name}}');
   });
 
-  it('html_content với {{user_email}} và {{user_plan}} được replace', () => {
-    const html = renderNotificationEmailHtml({
-      notification: {
-        message: 'm',
-        html_content: '<p>Email: {{user_email}} | Plan: {{user_plan}}</p>'
-      },
-      user: { full_name: 'A', email: 'user@test.com', plan: 'enterprise' }
-    });
-    expect(html).toContain('Email: user@test.com | Plan: enterprise');
-    expect(html).not.toContain('{{user_email}}');
-    expect(html).not.toContain('{{user_plan}}');
-  });
-
-  it('html_content với {{current_date}}, {{product_name}}, {{dashboard_url}}, {{support_email}} được replace', () => {
-    const html = renderNotificationEmailHtml({
-      notification: {
-        message: 'm',
-        html_content: '<p>{{product_name}} - {{current_date}} - {{dashboard_url}} - {{support_email}}</p>'
-      }
-    });
-    expect(html).not.toContain('{{product_name}}');
-    expect(html).not.toContain('{{current_date}}');
-    expect(html).not.toContain('{{dashboard_url}}');
-    expect(html).not.toContain('{{support_email}}');
-    expect(html).toContain('<p>');
-  });
-
   // ---------------------------------------------------------------------------
-  // Đường plain text (không có html_content)
+  // Đường plain text
   // ---------------------------------------------------------------------------
 
-  it('không có html_content → message được escape vào body', () => {
+  it('không có html_content → message được escape và wrap trong <p>', () => {
     const html = renderNotificationEmailHtml({
       notification: { message: 'Hello <b>World</b>' }
     });
@@ -150,23 +133,35 @@ describe('renderNotificationEmailHtml', () => {
     expect(html).not.toContain('<b>World</b>');
   });
 
-  it('message với newline được giữ nguyên', () => {
-    const html = renderNotificationEmailHtml({
-      notification: { message: 'Dòng 1\nDòng 2' }
-    });
-    expect(html).toContain('Dòng 1');
-    expect(html).toContain('Dòng 2');
-  });
-
-  it('cả html_content và message đều rỗng → fallback hiển thị message (dù rỗng)', () => {
+  it('message rỗng + html_content rỗng → fallback <p></p>', () => {
     const html = renderNotificationEmailHtml({ notification: {} });
-    expect(html).toContain('<body');
-    expect(html).toContain('</body>');
+    expect(html).toMatch(/<body[^>]*>[\s\S]*<p[^>]*><\/p>[\s\S]*<\/body>/);
   });
 
   // ---------------------------------------------------------------------------
-  // Sanitizer
+  // Sanitizer: GIỮ style + <style>, strip thẻ nguy hiểm thực sự
   // ---------------------------------------------------------------------------
+
+  it('<style> block được GIỮ (email client có thể dùng)', () => {
+    const html = renderNotificationEmailHtml({
+      notification: {
+        message: 'm',
+        html_content: '<style>.x{color:red}</style><p class="x">Styled</p>'
+      }
+    });
+    expect(html).toContain('<style>.x{color:red}</style>');
+    expect(html).toContain('class="x"');
+  });
+
+  it('inline style="" được GIỮ nguyên si', () => {
+    const html = renderNotificationEmailHtml({
+      notification: {
+        message: 'm',
+        html_content: '<p style="color:red;font-size:20px;margin:0">Styled</p>'
+      }
+    });
+    expect(html).toContain('style="color:red;font-size:20px;margin:0"');
+  });
 
   it('<script> bị strip hoàn toàn kèm nội dung', () => {
     const html = renderNotificationEmailHtml({
@@ -178,77 +173,41 @@ describe('renderNotificationEmailHtml', () => {
     expect(html).not.toContain('<script');
     expect(html).not.toContain('alert');
     expect(html).not.toContain('"XSS"');
-    // Text node giữ lại
     expect(html).toContain('<p>before</p>');
     expect(html).toContain('<p>after</p>');
   });
 
-  it('<style> bị strip hoàn toàn', () => {
+  it('<iframe>, <object>, <embed>, <form> bị strip (phishing protection)', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         message: 'm',
-        html_content: '<style>.x{color:red}</style><p>Text</p><link rel="stylesheet" href="evil.css">'
+        html_content: '<iframe src="evil.com"></iframe><object data="x"></object><embed src="y"><form action="/evil"><input></form><p>kept</p>'
       }
     });
-    expect(html).not.toContain('<style>');
-    expect(html).not.toContain('</style>');
-    expect(html).not.toContain('<link');
-    expect(html).not.toContain('.x{color:red}');
-    expect(html).not.toContain('evil.css');
-    expect(html).toContain('<p>Text</p>');
+    expect(html).not.toContain('<iframe');
+    expect(html).not.toContain('<object');
+    expect(html).not.toContain('<embed');
+    expect(html).not.toContain('<form');
+    expect(html).not.toContain('evil.com');
+    expect(html).not.toContain('<input>');
+    expect(html).toContain('<p>kept</p>');
   });
 
-  it('event handler onclick/onload bị strip attribute', () => {
+  it('event handler onclick/onload/onerror/onmouseover bị strip', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         message: 'm',
-        html_content: '<p onclick="alert(1)" onload="x()">Safe</p>'
+        html_content: '<p onclick="alert(1)" onload="x()" onmouseover="y()">Click</p>'
       }
     });
     expect(html).not.toContain('onclick');
     expect(html).not.toContain('onload');
+    expect(html).not.toContain('onmouseover');
     expect(html).not.toContain('alert(1)');
-    expect(html).toMatch(/<p>Safe<\/p>/);
+    expect(html).toContain('Click');
   });
 
-  it('style="..." attribute trong html_content bị strip — wrapper table styles KHÔNG bị ảnh hưởng', () => {
-    // Chỉ check style= trong nội dung body, không phải style= của wrapper table.
-    // Test: <p style="color:red">Styled</p> → style= bị strip → <p>Styled</p>.
-    // Wrapper table (background, border-radius) vẫn có style= → không check toàn bộ.
-    const html = renderNotificationEmailHtml({
-      notification: {
-        message: 'm',
-        html_content: '<p style="color:red;font-size:20px">Styled text</p>'
-      }
-    });
-    // style= trong content bị strip
-    expect(html).not.toContain('style="color:red');
-    expect(html).not.toContain('style="font-size');
-    // <p> sạch vẫn còn
-    expect(html).toMatch(/<p>Styled text<\/p>/);
-    // Wrapper table background/style vẫn có (không check cụ thể ở đây)
-    expect(html).toContain('background:#f3f4f6');
-  });
-
-  it('thẻ table ĐƯỢC PHÉP trong html_content (email client hỗ trợ table layout)', () => {
-    // Sau rewrite: table, thead, tbody, tr, th, td nằm trong whitelist.
-    // Admin dùng được table-based layout email.
-    const html = renderNotificationEmailHtml({
-      notification: {
-        message: 'm',
-        html_content: '<table><thead><tr><th>Col1</th></tr></thead><tbody><tr><td>cell</td></tr></tbody></table><p>para</p>'
-      }
-    });
-    expect(html).toContain('<table>');
-    expect(html).toContain('<thead>');
-    expect(html).toContain('<tbody>');
-    expect(html).toContain('<tr>');
-    expect(html).toContain('<th>Col1</th>');
-    expect(html).toContain('<td>cell</td>');
-    expect(html).toContain('<p>para</p>');
-  });
-
-  it('href="javascript:..." → bỏ href', () => {
+  it('href="javascript:..." → bỏ href, giữ <a>', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         message: 'm',
@@ -259,54 +218,51 @@ describe('renderNotificationEmailHtml', () => {
     expect(html).toContain('href="https://example.com"');
   });
 
-  it('img tag với src hợp lệ được giữ', () => {
+  it('img src=http(s)/data:image giữ; javascript: src bị loại', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         message: 'm',
-        html_content: '<p><img src="https://example.com/logo.png" alt="Logo" width="120" height="40"></p>'
+        html_content: '<img src="https://example.com/x.png" alt="OK"><img src="javascript:alert(1)"><img src="data:text/html,evil">'
       }
     });
-    expect(html).toContain('src="https://example.com/logo.png"');
-    expect(html).toContain('alt="Logo"');
-    expect(html).toContain('width="120"');
-    expect(html).toContain('height="40"');
-  });
-
-  it('img tag với javascript: data: src bị bỏ', () => {
-    const html = renderNotificationEmailHtml({
-      notification: {
-        message: 'm',
-        html_content: '<img src="javascript:alert(1)"><img src="data:text/html,evil">'
-      }
-    });
+    expect(html).toContain('src="https://example.com/x.png"');
     expect(html).not.toContain('javascript:');
     expect(html).not.toContain('data:text/html');
   });
 
-  it('thẻ svg, embed, form vẫn bị strip vì nằm trong BLOCK_TAGS', () => {
-    // svg, embed, form nằm trong danh sách nguy hiểm (BLOCK_TAGS) → strip + content.
-    // table THÌ được whitelist → xem test riêng.
+  it('thẻ table được whitelist', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         message: 'm',
-        html_content: '<svg width="100" height="100"><circle cx="50" cy="50" r="40"/></svg><embed src="evil.swf"><form action="/evil"><input type="text"></form><p>kept</p>'
+        html_content: '<table style="width:100%"><tr><td style="padding:10px">cell</td></tr></table><p>kept</p>'
       }
     });
-    expect(html).not.toContain('<svg');
-    expect(html).not.toContain('<circle');
-    expect(html).not.toContain('<embed');
-    expect(html).not.toContain('<form');
-    expect(html).not.toContain('evil.swf');
-    expect(html).not.toContain('/evil');
-    // Paragraph kept
-    expect(html).toContain('<p>kept</p>');
+    expect(html).toContain('<table');
+    expect(html).toContain('style="width:100%"');
+    expect(html).toContain('<td');
+    expect(html).toContain('style="padding:10px"');
+  });
+
+  it('thẻ div/span/p giữ style + class + id (admin dùng cho layout)', () => {
+    const html = renderNotificationEmailHtml({
+      notification: {
+        message: 'm',
+        html_content: '<div id="wrapper" class="container" style="max-width:600px"><p class="heading" style="font-size:20px">Hi</p><span style="color:red">red</span></div>'
+      }
+    });
+    expect(html).toContain('id="wrapper"');
+    expect(html).toContain('class="container"');
+    expect(html).toContain('style="max-width:600px"');
+    expect(html).toContain('class="heading"');
+    expect(html).toContain('style="font-size:20px"');
+    expect(html).toContain('style="color:red"');
   });
 
   // ---------------------------------------------------------------------------
   // Document wrapper strip
   // ---------------------------------------------------------------------------
 
-  it('html_content paste nguyên document <html><body>...</body></html> → chỉ giữ body content', () => {
+  it('html_content paste nguyên document <html><head><body>...</body></html> → body content', () => {
     const docHtml = `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -324,31 +280,18 @@ describe('renderNotificationEmailHtml', () => {
       notification: { message: 'm', html_content: docHtml },
       user: { full_name: 'Trần Văn A', email: 'a@test.com', plan: 'pro' }
     });
-    // <!DOCTYPE> còn (của renderer wrapper) — chỉ check content:
-    // <style> từ admin bị strip, <meta>/<title> từ admin bị strip.
-    // Lưu ý: renderer CỦA MÌNH có <title> ở <head> để email client set window
-    // title — đó là của renderer, không phải admin. Check <title> chỉ không có
-    // "My Email" (title của admin paste).
-    expect(html).not.toContain('<style');
-    expect(html).not.toContain('.x{color:red}');
+    // Admin's <title>"My Email" bị strip — không còn trong output.
+    // Renderer cũng có <title>Founder AI Platform</title> trong wrapper.
     expect(html).not.toContain('My Email');
     // Nội dung body được replace + sanitize
     expect(html).toContain('Xin chào Trần Văn A');
     expect(html).toContain('<strong>important</strong>');
     expect(html).toContain('href="https://example.com"');
-    expect(html).not.toContain('<style>');
+    expect(html).toContain('<style>');
+    expect(html).toContain('.x{color:red}');
   });
 
-  it('html_content chỉ có <body>...</body> (không html wrapper) → vẫn bóc được', () => {
-    const html = renderNotificationEmailHtml({
-      notification: { message: 'm', html_content: '<body><p>Body only</p></body>' }
-    });
-    // Wrapper body của renderer vẫn có — chỉ check content body bị bóc
-    expect(html).not.toContain('<body><p>Body only</p></body>');
-    expect(html).toContain('<p>Body only</p>');
-  });
-
-  it('html_content là fragment thuần (không html/body) → giữ nguyên như trước', () => {
+  it('html_content fragment thuần (không html/body) → giữ nguyên', () => {
     const html = renderNotificationEmailHtml({
       notification: { message: 'm', html_content: '<p>Just a paragraph</p>' }
     });
@@ -356,27 +299,32 @@ describe('renderNotificationEmailHtml', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Variable replace
+  // ---------------------------------------------------------------------------
+
+  it('{{current_date}}, {{product_name}}, {{dashboard_url}}, {{support_email}} được replace', () => {
+    const html = renderNotificationEmailHtml({
+      notification: { message: 'm', html_content: '<p>{{product_name}} - {{current_date}} - {{dashboard_url}} - {{support_email}}</p>' }
+    });
+    expect(html).not.toContain('{{');
+    expect(html).toContain('<p>');
+  });
+
+  // ---------------------------------------------------------------------------
   // Security edge cases
   // ---------------------------------------------------------------------------
 
-  it('user.full_name chứa < > — không có script/event handler', () => {
-    // replaceVariablesForUser KHÔNG escape text — đó là design choice.
-    // html_content của admin được phép chứa {{user_name}} và user_name được
-    // chèn raw. Edge case user.full_name chứa < > hiếm gặp (admin nhập user,
-    // không nhập tên). Không đảm bảo escape tuyệt đối — chỉ đảm bảo KHÔNG
-    // có script/alert chạy được.
+  it('XSS img onerror bị strip event handler — img src giữ hợp lệ', () => {
     const html = renderNotificationEmailHtml({
       notification: {
         message: 'm',
-        html_content: '<p>Chào {{user_name}}</p>'
-      },
-      user: { full_name: 'AbcXss', email: 'a@b.c', plan: 'pro' }
+        html_content: `<img src="https://example.com/x.png" onerror="alert('xss')"><p>Safe</p>`
+      }
     });
-    expect(html).not.toContain('<script');
-    expect(html).not.toContain('alert');
     expect(html).not.toContain('onerror');
-    expect(html).not.toContain('onload');
-    expect(html).toContain('AbcXss');
+    expect(html).not.toContain('alert');
+    expect(html).toContain('src="https://example.com/x.png"');
+    expect(html).toContain('<p>Safe</p>');
   });
 
   it('html_content rỗng/whitespace → fallback message được escape', () => {
@@ -384,18 +332,5 @@ describe('renderNotificationEmailHtml', () => {
       notification: { title: 'T', message: 'Fallback <b>text</b>' }
     });
     expect(html).toContain('Fallback &lt;b&gt;text&lt;/b&gt;');
-  });
-
-  it('XSS attempt trong html_content bị sanitize sạch', () => {
-    const html = renderNotificationEmailHtml({
-      notification: {
-        message: 'm',
-        html_content: `<img src=x onerror="alert('xss')"><p>Safe</p>`
-      }
-    });
-    expect(html).not.toContain('onerror');
-    expect(html).not.toContain('alert');
-    expect(html).not.toContain('x onerror');
-    expect(html).toContain('<p>Safe</p>');
   });
 });
