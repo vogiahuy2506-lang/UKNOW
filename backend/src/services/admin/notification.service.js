@@ -204,6 +204,7 @@ export default {
     const safeMessage = this.escapeHtml(message);
     const safeFullName = this.escapeHtml(user.full_name || user.username || 'bạn');
     const safeEmail = this.escapeHtml(user.email || '');
+    const safePlanName = this.escapeHtml(this.formatPlanName(user.plan));
 
     const priorityBadge = notification.priority === 'urgent'
       ? `<span style="display:inline-block;background:#dc2626;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">Ưu tiên cao</span>`
@@ -213,16 +214,31 @@ export default {
 
     const subject = `[${PRODUCT_NAME}] ${title}`;
 
-    const html = this.generateNotificationEmail({
-      type: notification.type,
-      config,
-      title: safeTitle,
-      message: safeMessage,
-      priorityBadge,
-      fullName: safeFullName,
-      email: safeEmail,
-      planName: this.escapeHtml(this.formatPlanName(user.plan))
-    });
+    let html;
+    if (notification.html_content && typeof notification.html_content === 'string' && notification.html_content.trim() !== '') {
+      // Đường từ notification_templates (Save As Template): admin đã soạn body_html
+      // riêng → dùng nguyên xi sau khi escape, bỏ qua layout hardcoded.
+      // Lưu ý: html_content đã là HTML hợp lệ do admin soạn; ta KHÔNG escape thẻ,
+      // chỉ thay {{...}} đã replaceVariables ở dạng raw (admin tự chịu trách nhiệm
+      // về HTML). Nếu admin muốn text-only thì đã dùng message thay vì html_content.
+      const rendered = this.replaceVariables(notification.html_content, user);
+      html = buildBaseTemplate({
+        subtitle: config.label,
+        content: rendered,
+        footerNote: config.footerNote
+      });
+    } else {
+      html = this.generateNotificationEmail({
+        type: notification.type,
+        config,
+        title: safeTitle,
+        message: safeMessage,
+        priorityBadge,
+        fullName: safeFullName,
+        email: safeEmail,
+        planName: safePlanName
+      });
+    }
 
     return {
       subject,
