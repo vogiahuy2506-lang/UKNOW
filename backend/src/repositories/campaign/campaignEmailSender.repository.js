@@ -17,7 +17,8 @@ class CampaignEmailSenderRepository {
   }
 
   /**
-   * Check if a lead with this email has marketing_consent = FALSE for this user / workspace.
+   * Check if a lead with this email has not consented (marketing_consent IS NOT TRUE)
+   * or has withdrawn consent for this user / workspace, based on the newest lead record.
    *
    * @param {number} userId
    * @param {string} emailLower lowercase email address
@@ -25,14 +26,16 @@ class CampaignEmailSenderRepository {
    */
   async isLeadConsentRefusedOrWithdrawn(userId, emailLower) {
     const result = await db.query(
-      `SELECT 1 FROM leads
+      `SELECT marketing_consent
+       FROM leads
        WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
-         AND LOWER(email) = $2
-         AND marketing_consent = FALSE
+         AND email = $2
+       ORDER BY created_at DESC, id DESC
        LIMIT 1`,
       [userId, emailLower]
     );
-    return result.rowCount > 0;
+    if (result.rowCount === 0) return false;
+    return result.rows[0].marketing_consent !== true;
   }
 
   /**

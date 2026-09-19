@@ -50,8 +50,8 @@ function buildLeadWhere(filters) {
     idx += 1;
   }
 
-  if (filters.excludeConsentFalse) {
-    conditions.push('marketing_consent IS NOT FALSE');
+  if (filters.consentedOnly) {
+    conditions.push('marketing_consent IS TRUE');
   }
 
   const next = appendCustomFieldFilterSql(

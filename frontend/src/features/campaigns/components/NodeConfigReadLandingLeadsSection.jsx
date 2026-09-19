@@ -119,7 +119,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
 
   const [slugOptions, setSlugOptions] = useState([{ value: 'l', label: t('nodeConfigLanding.landingReactSlug', { defaultValue: 'Landing React (/l)' }) }]);
   const [customDefs, setCustomDefs] = useState([]);
-  const [excludedRefusedConsent, setExcludedRefusedConsent] = useState(0);
+  const [excludedNoConsent, setExcludedNoConsent] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,11 +136,11 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
           landingLeadsLimit: 1,
         });
         if (!cancelled) {
-          const excluded = response?.data?.data?.pagination?.excludedRefusedConsent ?? 0;
-          setExcludedRefusedConsent(excluded);
+          const excluded = response?.data?.data?.pagination?.excludedNoConsent ?? 0;
+          setExcludedNoConsent(excluded);
         }
       } catch {
-        if (!cancelled) setExcludedRefusedConsent(0);
+        if (!cancelled) setExcludedNoConsent(0);
       }
     }, 250);
     return () => {
@@ -231,20 +231,20 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
         <p className="text-xs text-gray-500">{t('nodeConfigLanding.takingAllLeads')}</p>
       )}
 
-      {excludedRefusedConsent > 0 ? (
+      {excludedNoConsent > 0 ? (
         <p className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
           <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <span>
             {t('nodeConfigLanding.consentWarning', {
-              count: excludedRefusedConsent,
-              defaultValue: 'Có {count} lead bị bỏ qua do đã từ chối hoặc đã huỷ nhận tin.',
+              count: excludedNoConsent,
+              defaultValue: 'Có {count} lead bị bỏ qua vì chưa đồng ý nhận tin.',
             })}
           </span>
         </p>
       ) : null}
       <p className="text-xs text-gray-500">
         {t('nodeConfigLanding.consentInfo', {
-          defaultValue: 'Tự động bỏ qua người đã từ chối hoặc đã huỷ nhận tin tiếp thị.',
+          defaultValue: 'Tự động bỏ qua người chưa đồng ý nhận tin tiếp thị.',
         })}
       </p>
 

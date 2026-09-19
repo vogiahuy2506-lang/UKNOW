@@ -52,18 +52,18 @@ function renderHarness(initial = {}) {
   );
 }
 
-describe('NodeConfigReadLandingLeadsSection (PR-1)', () => {
+describe('NodeConfigReadLandingLeadsSection (PR-2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('khi có excludedRefusedConsent > 0 → hiện cảnh báo số lead bị bỏ qua', async () => {
+  it('khi có excludedNoConsent > 0 → hiện cảnh báo số lead bị bỏ qua', async () => {
     campaignBuilderApiService.previewLandingLeads.mockResolvedValue({
       data: {
         success: true,
         data: {
           items: [],
-          pagination: { total: 10, limit: 1, fetched: 0, excludedRefusedConsent: 3 },
+          pagination: { total: 10, limit: 1, fetched: 0, excludedNoConsent: 3 },
         },
       },
     });
@@ -72,17 +72,17 @@ describe('NodeConfigReadLandingLeadsSection (PR-1)', () => {
 
     await waitFor(() => {
       expect(campaignBuilderApiService.previewLandingLeads).toHaveBeenCalled();
-      expect(screen.getByText(/3 lead bị bỏ qua/)).toBeInTheDocument();
+      expect(screen.getByText(/3 lead bị bỏ qua vì chưa đồng ý/)).toBeInTheDocument();
     });
   });
 
-  it('khi excludedRefusedConsent = 0 → không hiện cảnh báo', async () => {
+  it('khi excludedNoConsent = 0 → không hiện cảnh báo', async () => {
     campaignBuilderApiService.previewLandingLeads.mockResolvedValue({
       data: {
         success: true,
         data: {
           items: [],
-          pagination: { total: 10, limit: 1, fetched: 0, excludedRefusedConsent: 0 },
+          pagination: { total: 10, limit: 1, fetched: 0, excludedNoConsent: 0 },
         },
       },
     });
