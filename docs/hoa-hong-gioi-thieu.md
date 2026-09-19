@@ -387,11 +387,11 @@ xảy ra.
 
 ## 13. Còn chờ người, không chờ code
 
-1. **Kế toán**: chứng từ khấu trừ có cần MST cá nhân không? Quy trình đối tác doanh
-   nghiệp (chờ hoá đơn rồi mới chuyển tiền, hay ngược lại)? Và câu ít ai nhớ hỏi nhất —
-   để khoản chi hoa hồng được tính là **chi phí được trừ** khi quyết toán, có cần **hợp
-   đồng cộng tác viên ký trước** không? Nếu có thì phải thêm bước ký **ngay trong hệ
-   thống**, chứ không thể tới lúc chi tiền mới phát hiện thiếu giấy.
+1. ~~**Kế toán**: MST cá nhân? hợp đồng cộng tác viên?~~ **Đã chốt 19/09/2026: không cần
+   hợp đồng cộng tác viên, không cần MST cá nhân.** Hồ sơ rút chỉ gồm đúng những gì sếp
+   liệt kê: CCCD, ngày cấp, nơi cấp, họ tên, số tài khoản. Ô "Mã số thuế cá nhân (nếu có)"
+   trong form rút là tuỳ chọn và giữ nguyên như vậy; `tax_code` nullable. Nhánh `company`
+   vẫn đóng ở tầng ứng dụng cho tới khi có người yêu cầu mở.
 2. **Sếp**: công bố chương trình khi nào. Trang `hanhchinh.ai.vn` vẫn thiếu điều khoản
    chống gian lận và quyền thay đổi/dừng chương trình — mục 15 Điều khoản Sử dụng trong
    sản phẩm thì đã có.
