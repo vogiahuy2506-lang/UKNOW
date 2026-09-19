@@ -47,7 +47,18 @@ CREATE INDEX IF NOT EXISTS idx_payout_requests_user ON marketplace_payout_reques
 CREATE INDEX IF NOT EXISTS idx_payout_requests_status ON marketplace_payout_requests(status);
 
 -- 4. Trigger để update updated_at cho seller_stats
--- Function đã được định nghĩa trong bootstrap.sql; chỉ cần tạo trigger
+-- Đảm bảo function tồn tại (idempotent — dùng CREATE OR REPLACE).
+-- Trước đây function này chỉ có trong tests/integration/sql/bootstrap.sql,
+-- gây lỗi 'function does not exist' khi chạy migration trên production.
+CREATE OR REPLACE FUNCTION update_marketplace_seller_stats_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function đã được định nghĩa ở trên; chỉ cần tạo trigger
 DROP TRIGGER IF EXISTS trg_seller_stats_updated_at ON marketplace_seller_stats;
 CREATE TRIGGER trg_seller_stats_updated_at
     BEFORE UPDATE ON marketplace_seller_stats
