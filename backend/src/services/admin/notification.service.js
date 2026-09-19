@@ -195,38 +195,37 @@ export default {
 
   /**
    * Build email HTML cho 1 notification + user nhận.
-   * 1 PATH DUY NHẤT: dùng shared renderer `renderNotificationEmailHtml` cho CẢ:
-   *   - preview iframe FE (notification.controller#previewEmailHtml)
-   *   - email gửi qua SMTP (sendNow/sendDirect)
-   * Khi notification có `html_content` (do admin "Save As Template"), renderer
-   * dùng nó làm BODY (sau khi replace {{...}}); nếu không có thì dùng message.
-   * Layout (header gradient, badge tone màu, user info chip, footer Digiso) LUÔN
-   * lấy từ renderer → preview iframe và email thực y chang nhau 100%.
    *
-   * @param {Object} notification - row từ notifications table
-   * @param {Object} user - user nhận (null = preview dùng sample user)
+   * 1 PATH DUY NHẤT cho CẢ:
+   *   - Preview iframe FE (notification.controller#previewEmailHtml)
+   *   - Email gửi qua SMTP (notification.service#sendNow/sendDirect)
+   * Dùng shared renderer `renderNotificationEmailHtml` để đảm bảo preview iframe
+   * y chang email thực 100%. Khi `html_content` có (do admin "Save As Template"),
+   * pipeline là: (1) replace `{{...}}` bằng user data → (2) sanitize (strip
+   * `<script>`, `<style>`, event handler, CSS injection) → nhúng vào layout gradient.
+   * Khi không có `html_content` thì dùng `message` plain text.
+   *
+   * @param {Object} notification
+   * @param {Object|null} user - user nhận (null cho preview, dùng sample user mặc định)
    * @returns {{subject: string, html: string, titleEn: string|null, messageEn: string|null}}
    */
   async buildEmailHtml(notification, user) {
-    const title = this.replaceVariables(notification.title, user);
-    const message = this.replaceVariables(notification.message, user);
-    const titleEn = notification.title_en ? this.replaceVariables(notification.title_en, user) : null;
-    const messageEn = notification.message_en ? this.replaceVariables(notification.message_en, user) : null;
-
+    const { html: title } = { html: this.replaceVariables(notification.title || '', user) };
     const subject = `[${PRODUCT_NAME}] ${title}`;
 
-    const html = renderNotificationEmailHtml({
+    // 1 PATH DUY NHẤT qua shared renderer → đảm bảo preview == email thực.
+    const builtHtml = renderNotificationEmailHtml({
       notification,
       user,
       locale: 'vi',
-      device: 'desktop'
+      device: 'desktop' // email thật luôn desktop, bất kể FE preview mobile/desktop
     });
 
     return {
       subject,
-      html,
-      titleEn,
-      messageEn
+      html: builtHtml,
+      titleEn: notification.title_en ? this.replaceVariables(notification.title_en, user) : null,
+      messageEn: notification.message_en ? this.replaceVariables(notification.message_en, user) : null
     };
   },
 
@@ -298,7 +297,14 @@ export default {
         const user = recipients[i];
         const logId = createdLogs[i]?.id;
         try {
+          // 1 PATH DUY NHẤT qua buildEmailHtml → renderNotificationEmailHtml.
+          // Email thực và preview iframe chung code path, đảm bảo layout khớp 100%.
           const emailContent = await this.buildEmailHtml(notification, user);
+
+          if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_NOTIFICATION_EMAIL === '1') {
+            console.log(`[NotificationService] → sending to ${user.email} | subject="${emailContent.subject}" | html.length=${emailContent.html.length}`);
+          }
+
           await sendSystemEmail({
             to: user.email,
             subject: emailContent.subject,

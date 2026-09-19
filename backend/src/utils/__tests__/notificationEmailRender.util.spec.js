@@ -162,23 +162,143 @@ describe('notificationEmailRender.util', () => {
       expect(html).toContain('Nội dung thông báo sẽ hiển thị ở đây...');
     });
 
-    it('html_content (Save As Template) dùng làm BODY, không escape thẻ admin soạn', () => {
-      // Admin soạn HTML riêng trong Save As Template — phải render y nguyên sau
-      // replace {{...}}. KHÔNG escape (admin tự chịu trách nhiệm về HTML).
+    it('html_content có <style> bị strip (CSS injection vào email client)', () => {
+      // Admin paste template có <style> → email nhận trước đây hiển thị raw. Sau
+      // sanitize phải MẤT toàn bộ khối <style>...content...</style> + thẻ tự đóng.
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'plain',
+          html_content: '<style>.x{color:red}</style><p>Safely kept paragraph</p><link rel="stylesheet" href="evil.css">'
+        }
+      });
+      expect(html).not.toContain('<style>');
+      expect(html).not.toContain('</style>');
+      expect(html).not.toContain('<link');
+      expect(html).not.toContain('.x{color:red}');
+      expect(html).not.toContain('evil.css');
+      // Paragraph được phép ở lại (whitelist) không chứa class.
+      expect(html).toContain('<p>Safely kept paragraph</p>');
+    });
+
+    it('html_content có <script> bị strip hoàn toàn cả nội dung', () => {
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'plain',
+          html_content: '<p>before</p><script>alert("XSS")</script><p>after</p>'
+        }
+      });
+      expect(html).not.toContain('<script');
+      expect(html).not.toContain('alert');
+      expect(html).not.toContain('"XSS"');
+      // Paragraph được giữ.
+      expect(html).toContain('<p>before</p>');
+      expect(html).toContain('<p>after</p>');
+    });
+
+    it('html_content có event handler onclick/onload bị strip attribute', () => {
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'plain',
+          html_content: '<p onclick="alert(1)" onload="x()" data-foo="1">Safe text</p>'
+        }
+      });
+      expect(html).not.toContain('onclick');
+      expect(html).not.toContain('onload');
+      expect(html).not.toContain('alert(1)');
+      expect(html).not.toContain('data-foo');
+      // Text + `<p>` tag sạch vẫn còn
+      expect(html).toContain('Safe text');
+      expect(html).toMatch(/<p>Safe text<\/p>/);
+    });
+
+    it('html_content có style= attribute bị strip (CSS injection)', () => {
+      // style="..." trong html_content bị SANITIZER strip. NHƯNG style="..." do
+      // renderer chèn vào layout email (header gradient/box) là cố ý — phải
+      // còn. Kiểm tra: javascript: scheme trong style phải MẤT.
       const html = renderNotificationEmailHtml({
         notification: {
           type: 'promotion',
-          title: 'Template Title',
-          message: 'plain message (sẽ KHÔNG dùng vì có html_content)',
-          html_content: '<div class="custom"><h2 style="color:red">My Body {{user_name}}</h2><p>Line 2</p></div>'
-        },
-        user: { full_name: 'Trần Văn X' }
+          title: 'T',
+          message: 'm',
+          html_content: '<h2 style="background:url(javascript:alert(1))">Hi</h2>'
+        }
       });
-      // html_content render y nguyên (có thẻ h2 đỏ), replace {{user_name}}
-      expect(html).toContain('<h2 style="color:red">My Body Trần Văn X</h2>');
-      expect(html).toContain('<div class="custom">');
-      // message plain KHÔNG hiển thị (vì html_content có)
-      expect(html).not.toContain('plain message (sẽ KHÔNG dùng');
+      // javascript: trong style không lọt vào output
+      expect(html).not.toContain('javascript:');
+      // <h2> còn (whitelisted), style bị strip
+      expect(html).toMatch(/<h2>Hi<\/h2>/);
+      // Layout email (header, gradient) vẫn có style= do renderer hardcode
+      expect(html).toContain('linear-gradient');
+    });
+
+    it('html_content có <a href="javascript:"> → bỏ href nguy hiểm, thẻ a vô hại', () => {
+      // Behavior: javascript:/data: → href rỗng, GIỮ thẻ <a> (để link text hiển thị).
+      // User không click được vì không có href → an toàn. Layout vẫn đẹp.
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'm',
+          html_content: '<a href="javascript:alert(1)">Bad JS</a><a href="data:text/html,evil">Bad Data</a>'
+        }
+      });
+      expect(html).not.toContain('javascript:');
+      expect(html).not.toContain('data:text/html');
+      // Thẻ a không href → vô hại, text hiển thị
+      expect(html).toContain('Bad JS');
+      expect(html).toContain('Bad Data');
+      // Chuỗi xấu nằm trong attribute, không có trong body markup
+      expect(html).not.toContain('alert(1)');
+    });
+
+    it('thẻ không whitelist (table, svg) bị xóa, text bên trong vẫn còn', () => {
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'm',
+          html_content: '<table><tr><td>cell-text</td></tr></table><p>paragraph</p>'
+        }
+      });
+      expect(html).not.toContain('<table');
+      expect(html).not.toContain('<tr>');
+      expect(html).not.toContain('<td>');
+      // Text bên trong table cell giữ lại (sanitize chỉ xóa thẻ, giữ text node)
+      expect(html).toContain('cell-text');
+      expect(html).toContain('<p>paragraph</p>');
+    });
+
+    it('LOGO url trong header layout KHÔNG bị ảnh hưởng (chèn trực tiếp vào template, không đi qua sanitizer)', () => {
+      const html = renderNotificationEmailHtml({
+        notification: { type: 'announcement', title: 'T', message: 'm' }
+      });
+      // Logo <img> nằm trong header gradient (do renderer hardcode), KHÔNG phải từ html_content
+      expect(html).toContain('<img src="/logo.png"');
+    });
+
+    it('replace {{user_name}} rồi sanitize — tên user không thể mở tag', () => {
+      // Edge case: user.full_name chứa `<` (vd nhập "Abc<Xss") — sau khi replace
+      // {{user_name}} thành chuỗi đó, sanitize phải khóa nó lại, không open tag.
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'Hello',
+          message: 'm',
+          html_content: '<p>Hi {{user_name}}!</p>'
+        },
+        user: { full_name: 'Abc<Xss>' }
+      });
+      // Chỉ dòng chứa `<Xss>` raw → sanitize escape thành `&lt;` chứ không open tag.
+      // (User name đã được replace vào text trước sanitize.)
+      // Phương án an toàn: KHÔNG có `<Xss>` raw HTML tag. Có thể có escaped.
+      expect(html).not.toContain('<Xss>');
+      expect(html).not.toContain('Abc<Xss>' + '!');
     });
 
     it('html_content rỗng/whitespace → fallback message (escape)', () => {

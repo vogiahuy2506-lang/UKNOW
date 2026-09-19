@@ -95,12 +95,124 @@ function escapeHtml(str) {
  * sẽ dùng hàm này thay cho layout hardcoded cũ).
  *
  * @param {Object} input
- * @param {Object} input.notification - { type, priority, title, message }
+ * @param {Object} input.notification - { type, priority, title, message, html_content }
  * @param {Object|null} input.user - user nhận (recipients) — null cho preview
  * @param {'vi'|'en'} [input.locale='vi']
  * @param {'desktop'|'mobile'} [input.device='desktop'] — chỉ áp dụng preview iframe, email thật luôn 'desktop'
  * @returns {string} HTML đầy đủ, sẵn để gán vào iframe srcDoc hoặc send qua SMTP
  */
+
+/**
+ * Sanitize HTML admin soạn trong `notification.html_content` trước khi chèn vào email.
+ *
+ * BỐI CẢNH (sau push 5b73c04c):
+ *  - Admin "Save As Template" với body HTML. Trước renderer KHÔNG escape.
+ *  - User gửi feedback email nhận được hiển thị raw `<style>` trong box — admin đã
+ *    paste `<style>` từ layout mẫu vào `html_content`.
+ *  - Email client (Gmail/Outlook) bỏ inline CSS ngoài thẻ `<style>` và bỏ cả
+ *    attribute `style="..."` không phải từ CSP cho phép; layout vỡ.
+ *
+ * QUY TẮC (regex-based, best-effort cho email notification):
+ *  1. STRIP tất cả nội dung thẻ nguy hiểm + thẻ tự đóng: `script`, `style`, `link`,
+ *     `iframe`, `object`, `embed`, `form`, `meta`, `base`, `noscript`, `template`,
+ *     `slot`.
+ *  2. STRIP mọi attribute `on*=...` (event handler: onload/onclick/...).
+ *  3. STRIP mọi attribute `style=...` (CSS injection + Gmail bỏ anyway).
+ *  4. Tag whitelist: `p, br, strong, b, em, i, u, ul, ol, li, h2, h3, h4, blockquote,
+ *     code, pre, a, span, div`. Thẻ khác (table, img, ...) → strip thẻ, giữ text.
+ *  5. Thẻ `<a>`: chỉ giữ `href` với scheme http(s)/mailto/tel + `target=_blank` +
+ *     `rel=noopener noreferrer`. Attribute khác bỏ.
+ *  6. Strip HTML comment.
+ *
+ * LƯU Ý: Best-effort. Nếu admin nhập HTML quá phức tạp (nested table, layout grid)
+ * sẽ mất. Tương lai nên thay bằng DOMPurify nếu cần bulletproof sanitizer.
+ * Cũng KHÔNG xử lý `display:none`/`@import`/URL bypass — đó là giới hạn của regex.
+ *
+ * @param {string} rawHtml
+ * @returns {string} HTML an toàn
+ */
+function sanitizeEmailHtml(rawHtml) {
+  if (!rawHtml || typeof rawHtml !== 'string') return '';
+  let out = String(rawHtml);
+
+  // 1. Block-level strip: xóa cặp thẻ `<tag>...</tag>` (kèm self-closing).
+  const STRIP_BLOCK_TAGS = [
+    'script', 'style', 'link', 'iframe', 'object', 'embed', 'form',
+    'meta', 'base', 'noscript', 'template', 'slot'
+  ];
+  for (const tag of STRIP_BLOCK_TAGS) {
+    const reBlock = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi');
+    out = out.replace(reBlock, '');
+    // Self-closing form: <script src="..." /> hoặc <link ... />
+    const reSelf = new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi');
+    out = out.replace(reSelf, '');
+  }
+
+  // 2. Strip `on*` event handler attributes.
+  out = out.replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '');
+  out = out.replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '');
+  out = out.replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, '');
+
+  // 3. Strip `style=...` attribute.
+  out = out.replace(/\s+style\s*=\s*"[^"]*"/gi, '');
+  out = out.replace(/\s+style\s*=\s*'[^']*'/gi, '');
+
+  // 4. Walk qua từng thẻ: whitelist + attribute cleanup.
+  const ALLOWED_TAGS = new Set([
+    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li',
+    'h2', 'h3', 'h4', 'blockquote', 'code', 'pre',
+    'a', 'span', 'div'
+  ]);
+  out = out.replace(/<\/?([a-z0-9]+)\b([^>]*)>/gi, (_whole, tagName, rest) => {
+    const tag = String(tagName || '').toLowerCase();
+    const isClose = _whole.startsWith('</');
+
+    // Dư phòng: nếu tới đây mà tag nằm trong block-strip list → bỏ.
+    if (STRIP_BLOCK_TAGS.includes(tag)) return '';
+
+    if (!ALLOWED_TAGS.has(tag)) {
+      // Thẻ không whitelisted → xóa MỞ và ĐÓNG, giữ text bên trong (text node
+      // đi qua mặc regex này vì chỉ khớp thẻ). Trả về '' để xóa thẻ.
+      return '';
+    }
+
+    // Closing tag: trả về y nguyên — không cần attribute.
+    if (isClose) return `</${tag}>`;
+
+    // `<br>` không cần đóng; thẻ whitelisted khác giữ self-closing semantics OK.
+    if (tag === 'br') return '<br>';
+
+    if (tag === 'a') {
+      // Trích href. Cho phép 1 dấu quote " hoặc ' hoặc bare value.
+      const hrefMatch =
+        rest.match(/\bhref\s*=\s*"([^"]*)"/i) ||
+        rest.match(/\bhref\s*=\s*'([^']*)'/i) ||
+        rest.match(/\bhref\s*=\s*([^\s>]+)/i);
+      let href = hrefMatch ? hrefMatch[1] : '';
+      // Validate scheme: chỉ http(s)/mailto/tel. Mọi scheme khác (javascript:, data:)
+      // → drop.
+      let safeHref = '';
+      try {
+        const trimmed = String(href || '').trim();
+        if (trimmed && /^(?:https?:|mailto:|tel:)/i.test(trimmed)) {
+          safeHref = trimmed.replace(/"/g, '&quot;');
+        }
+      } catch { /* noop */ }
+      return safeHref
+        ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">`
+        : '<a>';
+    }
+
+    // Thẻ whitelisted khác: drop toàn bộ attributes, giữ thẻ sạch.
+    return `<${tag}>`;
+  });
+
+  // 5. Strip HTML comments.
+  out = out.replace(/<!--[\s\S]*?-->/g, '');
+
+  return out.trim();
+}
+
 export function renderNotificationEmailHtml({ notification, user = null, locale = 'vi', device = 'desktop' }) {
   const n = notification || {};
   const typeKey = n.type || 'announcement';
@@ -125,9 +237,20 @@ export function renderNotificationEmailHtml({ notification, user = null, locale 
 
   let safeMessage;
   if (n.html_content && typeof n.html_content === 'string' && n.html_content.trim() !== '') {
-    // Đường Save As Template: body là HTML do admin soạn → replace {{...}} raw, KHÔNG escape.
-    // Escape lần đầu và lần cuối đều KHÔNG escape các thẻ HTML admin viết.
-    safeMessage = replaceVariablesForUser(n.html_content, sampleUser);
+    // Đường Save As Template: body là HTML do admin soạn.
+    // Pipeline: (1) replace {{...}} bằng giá trị user; (2) SANITIZE để bỏ thẻ
+    // nguy hiểm (`<style>`, `<script>`, event handler, `style=`, `on*=`).
+    // Lý do sanitize:
+    //   - Trước đây KHÔNG sanitize → admin soạn template có `<style>` thì email
+    //     user nhận hiển thị raw CSS hoặc body vỡ (email client bỏ inline CSS
+    //     ngoài thẻ `<style>`, layout nhảy loạn).
+    //   - Email client Gmail/Outlook KHÔNG render CSS trong body `<style>` —
+    //     phải inline từng element (parser tốn time, dễ crash) — đơn giản nhất
+    //     là strip `<style>` và yêu cầu admin dùng thẻ có sẵn.
+    // Sau sanitize admin vẫn dùng được `<p>/<strong>/<a href>` cơ bản nhưng
+    // KHÔNG lộ class/CSS nguy hiểm về phía user.
+    const rendered = replaceVariablesForUser(n.html_content, sampleUser);
+    safeMessage = sanitizeEmailHtml(rendered);
   } else {
     const message = replaceVariablesForUser(n.message || '', sampleUser) || (locale === 'vi' ? 'Nội dung thông báo sẽ hiển thị ở đây...' : 'Notification content will appear here...');
     safeMessage = escapeHtml(message);
