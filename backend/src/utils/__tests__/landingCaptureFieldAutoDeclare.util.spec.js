@@ -237,6 +237,20 @@ describe('landingCaptureFieldAutoDeclare.util — autoDeclareLandingCaptureField
     expect(result.newFields[0].labelVi).toBe('Chức vụ');
   });
 
+  it('label có for nhưng ô không id: <label for="cv">Chức vụ</label><input name="chuc_vu" placeholder="Ví dụ: Chuyên viên"> → lấy label, KHÔNG rơi xuống placeholder', () => {
+    const html = wrapCapture('<label for="cv">Chức vụ</label><input type="text" name="chuc_vu" placeholder="Ví dụ: Chuyên viên" />');
+    const result = autoDeclareLandingCaptureFields(html, emptyConfig());
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0].labelVi).toBe('Chức vụ');
+  });
+
+  it('label có for trỏ sai id: <label for="khac">Chức vụ</label><input id="cv" name="chuc_vu" placeholder="Ví dụ: Chuyên viên"> → lấy label đứng trước, KHÔNG rơi xuống placeholder', () => {
+    const html = wrapCapture('<label for="khac">Chức vụ</label><input type="text" id="cv" name="chuc_vu" placeholder="Ví dụ: Chuyên viên" />');
+    const result = autoDeclareLandingCaptureFields(html, emptyConfig());
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0].labelVi).toBe('Chức vụ');
+  });
+
   it('hai ô liền nhau không có for: mỗi ô lấy đúng label của mình; ô sau không có label thì KHÔNG vơ nhầm nhãn ô trước', () => {
     // 2 ô liền nhau, mỗi ô một label đứng trước
     const htmlTwoWithLabels = wrapCapture(
@@ -260,6 +274,15 @@ describe('landingCaptureFieldAutoDeclare.util — autoDeclareLandingCaptureField
     expect(f1).toBeDefined();
     expect(f2).toBeDefined();
     expect(resOne.newFields.map((f) => f.labelVi)).not.toEqual(['Chức vụ', 'Chức vụ']);
+
+    // <label for="a">Chức vụ</label><input name="chuc_vu"><input name="don_vi" placeholder="...">: ô 2 ra placeholder, không vơ "Chức vụ"
+    const htmlForWithAdjacent = wrapCapture(
+      '<label for="a">Chức vụ</label><input type="text" name="chuc_vu" /><input type="text" name="don_vi" placeholder="Ví dụ: Sở Nội Vụ" />'
+    );
+    const resAdj = autoDeclareLandingCaptureFields(htmlForWithAdjacent, emptyConfig());
+    expect(resAdj.newFields).toHaveLength(2);
+    expect(resAdj.newFields.find((f) => f.labelVi === 'Chức vụ')).toBeDefined();
+    expect(resAdj.newFields.find((f) => f.labelVi === 'Ví dụ: Sở Nội Vụ')).toBeDefined();
   });
 
   it('<label>Khung giờ hẹn</label> + 2 radio cùng name → lấy nhãn nhóm Khung giờ hẹn, không vơ nhãn option', () => {

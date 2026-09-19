@@ -130,8 +130,8 @@ function resolveLabel(inner, tagStr, name) {
     let lastMatch = null;
     let pm;
     while ((pm = precedingLabelRe.exec(chunk))) {
-      // Chỉ nhận label KHÔNG có for và KHÔNG bọc control khác bên trong
-      if (!/\bfor\s*=/i.test(pm[1]) && !/<(input|select|textarea)\b/i.test(pm[2])) {
+      // Chỉ nhận label KHÔNG bọc control khác bên trong
+      if (!/<(input|select|textarea)\b/i.test(pm[2])) {
         lastMatch = {
           content: pm[2],
           endIndexInChunk: precedingLabelRe.lastIndex,
