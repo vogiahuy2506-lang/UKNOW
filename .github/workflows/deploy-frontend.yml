@@ -187,9 +187,21 @@ jobs:
               -v /root/uknow/certbot:/var/www/certbot:ro \
               -v /root/uknow/nginx-domains:/etc/nginx/domains:ro \
               "$FRONTEND_IMAGE"
-            # Dọn image cũ >24h (không dùng plain -af để tránh xoá nhầm image
-            # vừa pull của deploy song song). Cron tuần -af lo dọn sâu.
-            docker image prune -af --filter "until=24h"
+            # Dọn image cũ >2h (không dùng plain -af để tránh xoá nhầm image vừa pull
+            # của deploy song song; một lượt deploy chưa tới 30 phút nên 2h là dư an
+            # toàn). Trước 19/09/2026 mốc này là until=24h và không đỡ được ngày deploy
+            # dày: ~8 image mới trong một ngày đều dưới 24h → ổ 55G đầy 100%, Postgres
+            # quay vòng chết ở checkpoint. Xem chú thích cùng chỗ trong deploy-backend.yml.
+            docker image prune -af --filter "until=2h"
+            # Lưới an toàn cuối: quá 80% thì dọn sâu, kể cả image vừa tạo. Image cũ còn
+            # trên DockerHub nên rollback vẫn pull lại được; image của container đang
+            # chạy không bị prune chạm tới.
+            DISK_USED=$(df -P / | awk 'NR==2 { gsub("%", "", $5); print $5 }')
+            if [ "${DISK_USED:-0}" -ge 80 ]; then
+              echo "[disk] / đang dùng ${DISK_USED}% — dọn sâu: docker image prune -af"
+              docker image prune -af || true
+              df -h /
+            fi
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Polling frontend readiness..."
             READY=false
             for i in $(seq 1 15); do
