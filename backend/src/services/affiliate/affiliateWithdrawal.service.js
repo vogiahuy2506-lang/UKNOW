@@ -6,7 +6,9 @@ import { resolveTier, AFFILIATE_TIERS } from '../../utils/affiliateTier.util.js'
 import auditService from '../audit.service.js';
 
 export const MIN_WITHDRAWAL_AMOUNT = 1_000_000;
-export const INTERNAL_NOTIFY_EMAIL = process.env.AFFILIATE_NOTIFY_EMAIL || 'info@digiso.vn';
+// Mặc định khớp docs/hoa-hong-gioi-thieu.md §11 và note sếp: kế toán nhận ở hotro.digibook@gmail.com.
+// Production chưa đặt AFFILIATE_NOTIFY_EMAIL (kiểm 19/09) nên mặc định này là địa chỉ thật sẽ nhận thư.
+export const INTERNAL_NOTIFY_EMAIL = process.env.AFFILIATE_NOTIFY_EMAIL || 'hotro.digibook@gmail.com';
 
 function formatVnd(amount) {
   return `${Number(amount || 0).toLocaleString('vi-VN')} đ`;

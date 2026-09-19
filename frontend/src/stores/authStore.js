@@ -131,6 +131,8 @@ const normalizeUser = (user) => {
     ...user,
     activePlanId: user.activePlanId ?? user.active_plan_id ?? null,
     activeBillingPeriod: user.activeBillingPeriod ?? user.active_billing_period ?? 'monthly',
+    // Migration 229: server đã ghi "bỏ qua nhập mã giới thiệu" → cổng không hỏi lại ở máy nào.
+    referralPromptDismissedAt: user.referralPromptDismissedAt ?? user.referral_prompt_dismissed_at ?? null,
     roleCode,
     roleName,
     memberships: user.memberships || [],

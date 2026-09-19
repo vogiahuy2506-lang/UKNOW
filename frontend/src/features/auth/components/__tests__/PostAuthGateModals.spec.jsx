@@ -3,9 +3,20 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import PostAuthGateModals from '../PostAuthGateModals';
 import { useAuthStore } from '../../../../stores/authStore';
+import { dismissReferralPromptRemote } from '../../services/authApi.service';
 
 const stableT = (key) => key;
 vi.mock('../../../../i18n', () => ({ useI18n: () => ({ t: stableT }) }));
+
+// Migration 229: nút Bỏ qua ghi cờ ở server. Mock RIÊNG hàm này, giữ nguyên các hàm khác
+// của service (authStore dùng logout/login thật trong các ca khác).
+vi.mock('../../services/authApi.service', async (importOriginal) => ({
+  ...(await importOriginal()),
+  dismissReferralPromptRemote: vi.fn().mockResolvedValue({
+    success: true,
+    data: { referralPromptDismissedAt: '2026-09-19T10:00:00.000Z' },
+  }),
+}));
 
 // Stub các modal để cô lập logic cổng
 vi.mock('../ChangePasswordModal', () => ({
@@ -460,6 +471,56 @@ describe('PostAuthGateModals (PR-B: Cổng sau đăng nhập toàn cục)', () =
       unmount();
 
       // Mở lại trang → vẫn không hiện vì đã dismiss trong localStorage
+      renderWithRouter(['/']);
+      expect(screen.queryByTestId('referral-prompt-modal')).not.toBeInTheDocument();
+    });
+
+    it('migration 229: bấm Bỏ qua → gọi server ghi cờ, user trong store nhận referralPromptDismissedAt', async () => {
+      dismissReferralPromptRemote.mockClear();
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: 15,
+          role: 'user',
+          phone: '0912345678',
+          phoneVerifiedAt: '2026-09-18T10:00:00.000Z',
+          mustChangePassword: false,
+          hasConsented: true,
+          referredByUserId: null,
+          referralPromptDismissedAt: null,
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      renderWithRouter(['/']);
+      fireEvent.click(screen.getByTestId('referral-skip-btn'));
+
+      await waitFor(() => {
+        expect(dismissReferralPromptRemote).toHaveBeenCalledTimes(1);
+      });
+      await waitFor(() => {
+        expect(useAuthStore.getState().user.referralPromptDismissedAt).toBe('2026-09-19T10:00:00.000Z');
+      });
+    });
+
+    it('migration 229: user đã có referralPromptDismissedAt từ server (đổi máy, localStorage trống) → KHÔNG hiện modal', () => {
+      window.localStorage.clear();
+      useAuthStore.setState({
+        isAuthenticated: true,
+        referralPromptDismissed: false,
+        user: {
+          id: 16,
+          role: 'user',
+          phone: '0912345678',
+          phoneVerifiedAt: '2026-09-18T10:00:00.000Z',
+          mustChangePassword: false,
+          hasConsented: true,
+          referredByUserId: null,
+          referralPromptDismissedAt: '2026-09-19T09:00:00.000Z',
+          createdAt: new Date().toISOString(),
+        },
+      });
+
       renderWithRouter(['/']);
       expect(screen.queryByTestId('referral-prompt-modal')).not.toBeInTheDocument();
     });

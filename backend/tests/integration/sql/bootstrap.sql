@@ -73,6 +73,8 @@ CREATE TABLE users (
   referral_code           VARCHAR(16),
   referred_by_user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
   referred_at             TIMESTAMPTZ,
+  -- migration 229: đã bỏ qua bước nhập mã giới thiệu (server chặn nhập bổ sung)
+  referral_prompt_dismissed_at TIMESTAMPTZ,
   -- migration 189: mốc thời gian chấm dứt tài khoản
   deleted_at              TIMESTAMPTZ,
   -- migration 204: SĐT được xác thực bằng OTP — NULL nghĩa là chưa xác thực

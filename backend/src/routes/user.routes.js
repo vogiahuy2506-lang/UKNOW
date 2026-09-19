@@ -42,6 +42,15 @@ router.post(
   userController.bindReferrer.bind(userController)
 );
 
+/**
+ * Ghi nhận người dùng bấm "Bỏ qua" ở bảng nhập mã giới thiệu — sau đó không cho nhập bổ sung
+ * (luật sếp 19/09/2026). Lưu ở server để đổi máy/trình duyệt cũng không hỏi lại.
+ */
+router.post(
+  '/me/referral-prompt/dismiss',
+  userController.dismissReferralPrompt.bind(userController)
+);
+
 // Hồ sơ xuất hoá đơn người dùng tự lưu
 router.get('/invoice-profile', userController.getInvoiceProfile.bind(userController));
 router.put('/invoice-profile', userController.updateInvoiceProfile.bind(userController));

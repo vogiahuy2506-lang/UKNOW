@@ -83,7 +83,7 @@ export async function findProfileBase(userId) {
   const { rows } = await db.query(
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
             u.role, u.active_plan_id, u.subscription_expires_at, u.referral_code,
-            u.referred_by_user_id, u.referred_at,
+            u.referred_by_user_id, u.referred_at, u.referral_prompt_dismissed_at,
             referrer.referral_code AS referrer_code, referrer.full_name AS referrer_name,
             ${PROFILE_LIMIT_COLUMNS},
             u.bot_daily_reply_cap,
@@ -114,7 +114,7 @@ export async function findProfileBaseFallback(userId) {
   const { rows } = await db.query(
     `SELECT u.id, u.username, u.email, u.full_name, u.avatar_url, u.phone, u.status,
             u.role, u.active_plan_id, u.referral_code,
-            u.referred_by_user_id, u.referred_at,
+            u.referred_by_user_id, u.referred_at, u.referral_prompt_dismissed_at,
             NULL AS referrer_code, NULL AS referrer_name,
             NULL AS subscription_expires_at,
             NULL::int AS max_campaigns, NULL::int AS max_zalo_accounts,

@@ -138,3 +138,14 @@ export async function bindReferrer({ referralCode }) {
   const response = await api.post('/users/me/referrer', { referralCode });
   return response.data;
 }
+
+/**
+ * Ghi nhận ở server việc người dùng bấm "Bỏ qua" bảng nhập mã giới thiệu — sau đó server
+ * không nhận mã bổ sung, đổi máy cũng không hỏi lại (luật sếp 19/09/2026).
+ *
+ * @returns {Promise<{ success: boolean, data?: { referralPromptDismissedAt: string|null } }>}
+ */
+export async function dismissReferralPromptRemote() {
+  const response = await api.post('/users/me/referral-prompt/dismiss');
+  return response.data;
+}

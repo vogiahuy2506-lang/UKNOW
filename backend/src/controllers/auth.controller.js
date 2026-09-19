@@ -319,7 +319,8 @@ class AuthController {
       const result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
                 active_plan_id, password_hash, failed_login_attempts, locked_until,
-                must_change_password, phone, phone_verified_at, referral_code
+                must_change_password, phone, phone_verified_at, referral_code,
+                referral_prompt_dismissed_at
          FROM users
          WHERE username = $1`,
         [username]
@@ -466,7 +467,7 @@ class AuthController {
       let result = await client.query(
         `SELECT id, username, email, full_name, avatar_url, status, role,
                 active_plan_id, password_hash, failed_login_attempts, locked_until, phone,
-                phone_verified_at, referral_code
+                phone_verified_at, referral_code, referral_prompt_dismissed_at
          FROM users
          WHERE LOWER(email) = LOWER($1)`,
         [email]
@@ -1045,6 +1046,9 @@ class AuthController {
       referralCode: user.referral_code ?? user.referralCode ?? null,
       referredByUserId: user.referred_by_user_id ?? user.referredByUserId ?? null,
       referredAt: user.referred_at ?? user.referredAt ?? null,
+      // Migration 229: đã bấm "Bỏ qua" ở bảng nhập mã giới thiệu → frontend không hỏi lại,
+      // server không nhận mã bổ sung (luật sếp 19/09/2026).
+      referralPromptDismissedAt: user.referral_prompt_dismissed_at ?? user.referralPromptDismissedAt ?? null,
       createdAt: user.created_at ?? user.createdAt ?? null,
       // Bằng chứng đồng ý văn bản pháp lý (Nghị định 330/2026/NĐ-CP PR-N2)
       consents: consents || null,

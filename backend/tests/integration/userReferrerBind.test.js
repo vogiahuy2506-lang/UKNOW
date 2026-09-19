@@ -140,3 +140,86 @@ describe('User Referrer Bind Integration (POST /api/users/me/referrer)', () => {
     expect(res.body.message).toContain('quá thời hạn');
   });
 });
+
+describe('Bỏ qua bảng nhập mã giới thiệu — lưu ở server, không cho nhập bổ sung (migration 229)', () => {
+  it('POST /me/referral-prompt/dismiss → ghi referral_prompt_dismissed_at; /auth/me và /users/profile trả mốc đó', async () => {
+    const newUser = await createUser({ username: 'skipper_1', email: 'skipper_1@example.com' });
+    const token = await loginAs(newUser);
+
+    const res = await request(app)
+      .post('/api/users/me/referral-prompt/dismiss')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.referralPromptDismissedAt).not.toBeNull();
+
+    const { rows } = await db.query(
+      'SELECT referral_prompt_dismissed_at FROM users WHERE id = $1',
+      [newUser.id]
+    );
+    expect(rows[0].referral_prompt_dismissed_at).not.toBeNull();
+
+    const meRes = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.data.user.referralPromptDismissedAt).not.toBeNull();
+
+    const profRes = await request(app)
+      .get('/api/users/profile')
+      .set('Authorization', `Bearer ${token}`);
+    expect(profRes.status).toBe(200);
+    expect(profRes.body.data.referralPromptDismissedAt).not.toBeNull();
+
+    // Bấm lần hai không đổi mốc (idempotent)
+    const again = await request(app)
+      .post('/api/users/me/referral-prompt/dismiss')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(again.status).toBe(200);
+    expect(new Date(again.body.data.referralPromptDismissedAt).getTime())
+      .toBe(new Date(res.body.data.referralPromptDismissedAt).getTime());
+  });
+
+  it('đã bỏ qua rồi thì POST /me/referrer → 400 REFERRAL_PROMPT_DISMISSED dù còn trong 24h và mã hợp lệ', async () => {
+    const referrer = await createUser({ username: 'ref_skip', email: 'ref_skip@example.com' });
+    await db.query('UPDATE users SET referral_code = $1 WHERE id = $2', ['SKIP123', referrer.id]);
+
+    const newUser = await createUser({ username: 'skipper_2', email: 'skipper_2@example.com' });
+    const token = await loginAs(newUser);
+
+    await request(app)
+      .post('/api/users/me/referral-prompt/dismiss')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+
+    const res = await request(app)
+      .post('/api/users/me/referrer')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ referralCode: 'SKIP123' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.code).toBe('REFERRAL_PROMPT_DISMISSED');
+
+    const { rows } = await db.query('SELECT referred_by_user_id FROM users WHERE id = $1', [newUser.id]);
+    expect(rows[0].referred_by_user_id).toBeNull();
+  });
+
+  it('tài khoản đã có người giới thiệu bấm bỏ qua → 200, không ghi mốc (không có gì để bỏ qua)', async () => {
+    const referrer = await createUser({ username: 'ref_has', email: 'ref_has@example.com' });
+    const newUser = await createUser({ username: 'has_ref', email: 'has_ref@example.com' });
+    await db.query('UPDATE users SET referred_by_user_id = $1, referred_at = NOW() WHERE id = $2', [referrer.id, newUser.id]);
+    const token = await loginAs(newUser);
+
+    const res = await request(app)
+      .post('/api/users/me/referral-prompt/dismiss')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.referralPromptDismissedAt).toBeNull();
+  });
+});

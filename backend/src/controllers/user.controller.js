@@ -147,6 +147,7 @@ const mapProfileResponse = (userRow) => ({
   referralCode: userRow.referral_code ?? null,
   referredByUserId: userRow.referred_by_user_id ?? null,
   referredAt: userRow.referred_at ?? null,
+  referralPromptDismissedAt: userRow.referral_prompt_dismissed_at ?? null,
   referrerCode: userRow.referrer_code ?? null,
   referrerName: userRow.referrer_name ?? null,
   consents: userRow.consents || null,
@@ -544,6 +545,34 @@ class UserController {
   }
 
   /**
+   * POST /api/users/me/referral-prompt/dismiss
+   * Ghi nhận người dùng bấm "Bỏ qua" ở bảng nhập mã giới thiệu (luật sếp 19/09/2026: bỏ qua
+   * thì thôi, không cho nhập bổ sung). Idempotent: đã ghi rồi thì giữ mốc cũ. Tài khoản đã có
+   * người giới thiệu thì không có gì để bỏ qua → trả null, không lỗi.
+   */
+  async dismissReferralPrompt(req, res) {
+    try {
+      const userId = req.user.id;
+      const { rows } = await db.query(
+        `UPDATE users
+         SET referral_prompt_dismissed_at = COALESCE(referral_prompt_dismissed_at, CURRENT_TIMESTAMP)
+         WHERE id = $1 AND referred_by_user_id IS NULL
+         RETURNING referral_prompt_dismissed_at`,
+        [userId]
+      );
+      return res.json({
+        success: true,
+        data: {
+          referralPromptDismissedAt: rows[0]?.referral_prompt_dismissed_at ?? null,
+        },
+      });
+    } catch (error) {
+      console.error('Lỗi ghi nhận bỏ qua mã giới thiệu:', error);
+      return res.status(500).json({ success: false, message: 'Không ghi nhận được thao tác bỏ qua' });
+    }
+  }
+
+  /**
    * POST /api/users/me/referrer
    * Liên kết người giới thiệu khi vừa đăng ký tài khoản mới.
    */
@@ -561,7 +590,7 @@ class UserController {
       }
 
       const { rows: userRows } = await db.query(
-        'SELECT id, email, phone, referred_by_user_id, created_at FROM users WHERE id = $1',
+        'SELECT id, email, phone, referred_by_user_id, referral_prompt_dismissed_at, created_at FROM users WHERE id = $1',
         [userId]
       );
       if (userRows.length === 0) {
@@ -574,6 +603,16 @@ class UserController {
         return res.status(400).json({
           success: false,
           message: 'Tài khoản của bạn đã được liên kết người giới thiệu trước đó',
+        });
+      }
+
+      // Luật sếp 19/09/2026: đã bấm "Bỏ qua" ở bảng nhập mã thì không cho nhập bổ sung,
+      // kể cả còn trong 24h đầu hay đổi sang máy/trình duyệt khác.
+      if (currentUser.referral_prompt_dismissed_at) {
+        return res.status(400).json({
+          success: false,
+          code: 'REFERRAL_PROMPT_DISMISSED',
+          message: 'Bạn đã bỏ qua bước nhập mã giới thiệu khi đăng ký nên không thể bổ sung sau',
         });
       }
 

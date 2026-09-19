@@ -79,6 +79,8 @@ export const usePostAuthGates = () => {
     && isWithin24Hours
     && !referralPromptDismissed
     && !isReferralPromptDismissed(user?.id)
+    // Cờ bỏ qua lưu ở server (migration 229) — đổi máy/trình duyệt cũng không hỏi lại.
+    && !user?.referralPromptDismissedAt
   );
 
   const anyGateOpen = Boolean(mustChangePassword || consentRequired || phoneRequired || referralPromptRequired);

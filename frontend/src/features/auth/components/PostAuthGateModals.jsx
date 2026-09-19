@@ -2,6 +2,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../stores/authStore';
 import { usePostAuthGates, markReferralPromptDismissed } from '../hooks/usePostAuthGates';
+import { dismissReferralPromptRemote } from '../services/authApi.service';
 import ChangePasswordModal from './ChangePasswordModal';
 import PhoneRequiredModal from './PhoneRequiredModal';
 import ConsentRequiredModal from './ConsentRequiredModal';
@@ -80,11 +81,23 @@ const PostAuthGateModals = () => {
     navigate('/login', { replace: true });
   };
 
-  const handleDismissReferralPrompt = () => {
+  const handleDismissReferralPrompt = async () => {
+    // Tắt modal ngay ở máy này (RAM + localStorage) như trước.
     if (user?.id) {
       markReferralPromptDismissed(user.id);
     }
     dismissReferralPrompt();
+    // Ghi ở server để đổi máy/trình duyệt cũng không hỏi lại và không nhận mã bổ sung
+    // (luật sếp 19/09/2026). Lỗi mạng thì bỏ qua: cổng đã tắt cục bộ, server chặn khi hết 24h.
+    try {
+      const res = await dismissReferralPromptRemote();
+      const dismissedAt = res?.data?.referralPromptDismissedAt;
+      if (dismissedAt) {
+        updateUser({ ...user, referralPromptDismissedAt: dismissedAt });
+      }
+    } catch {
+      // yên lặng
+    }
   };
 
   const handleSuccessReferralPrompt = (data) => {

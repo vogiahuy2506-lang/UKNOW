@@ -324,6 +324,9 @@ phải sửa migration**.
   API nào sửa được, kể cả admin. Đổi người giới thiệu là đổi dòng tiền.
 - **Mã giới thiệu sai không được chặn đường đăng ký.** Gõ nhầm thì bỏ qua phần gán, vẫn
   cho tạo tài khoản. Mất một lượt quy gán còn hơn mất một khách.
+- **Bỏ qua là bỏ qua hẳn (19/09/2026, migration 229).** Bảng nhập mã chỉ hiện trong 24 giờ đầu;
+  bấm "Bỏ qua" thì server ghi `users.referral_prompt_dismissed_at` và `POST /users/me/referrer`
+  từ chối từ đó, kể cả đổi máy hay trình duyệt. Trước đó cờ này chỉ nằm trong localStorage.
 
 ## 11. Vận hành
 
