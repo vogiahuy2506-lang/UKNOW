@@ -116,13 +116,24 @@ export function renderNotificationEmailHtml({ notification, user = null, locale 
     ...user
   };
 
-  // Dùng notification.title/message làm HTML source — escape ở chỗ chèn.
-  // replaceVariablesForUser KHÔNG escape (escape riêng sau).
-  const title = replaceVariablesForUser(n.title || '', sampleUser) || (locale === 'vi' ? 'Tiêu đề thông báo' : 'Notification Title');
-  const message = replaceVariablesForUser(n.message || '', sampleUser) || (locale === 'vi' ? 'Nội dung thông báo sẽ hiển thị ở đây...' : 'Notification content will appear here...');
+  // Dùng notification.title làm tiêu đề, message/html_content làm body.
+  // - Nếu `html_content` có (Save As Template → admin soạn body riêng): dùng nó
+  //   làm BODY (replace {{...}}, KHÔNG escape thẻ - admin tự chịu trách nhiệm).
+  //   Title vẫn lấy từ `title` để hiển thị badge.
+  // - Nếu không có html_content: dùng `message` (plain text) làm body, escape.
+  const rawTitle = replaceVariablesForUser(n.title || '', sampleUser) || (locale === 'vi' ? 'Tiêu đề thông báo' : 'Notification Title');
 
-  const safeTitle = escapeHtml(title);
-  const safeMessage = escapeHtml(message);
+  let safeMessage;
+  if (n.html_content && typeof n.html_content === 'string' && n.html_content.trim() !== '') {
+    // Đường Save As Template: body là HTML do admin soạn → replace {{...}} raw, KHÔNG escape.
+    // Escape lần đầu và lần cuối đều KHÔNG escape các thẻ HTML admin viết.
+    safeMessage = replaceVariablesForUser(n.html_content, sampleUser);
+  } else {
+    const message = replaceVariablesForUser(n.message || '', sampleUser) || (locale === 'vi' ? 'Nội dung thông báo sẽ hiển thị ở đây...' : 'Notification content will appear here...');
+    safeMessage = escapeHtml(message);
+  }
+
+  const safeTitle = escapeHtml(rawTitle);
   const safeTypeLabel = escapeHtml(typeLabel);
   const safeSampleName = escapeHtml(sampleUser.full_name || 'Người dùng');
   const safeSampleEmail = escapeHtml(sampleUser.email || '');

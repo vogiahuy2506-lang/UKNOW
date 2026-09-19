@@ -161,5 +161,37 @@ describe('notificationEmailRender.util', () => {
       expect(html).toContain('Tiêu đề thông báo'); // fallback VI
       expect(html).toContain('Nội dung thông báo sẽ hiển thị ở đây...');
     });
+
+    it('html_content (Save As Template) dùng làm BODY, không escape thẻ admin soạn', () => {
+      // Admin soạn HTML riêng trong Save As Template — phải render y nguyên sau
+      // replace {{...}}. KHÔNG escape (admin tự chịu trách nhiệm về HTML).
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'promotion',
+          title: 'Template Title',
+          message: 'plain message (sẽ KHÔNG dùng vì có html_content)',
+          html_content: '<div class="custom"><h2 style="color:red">My Body {{user_name}}</h2><p>Line 2</p></div>'
+        },
+        user: { full_name: 'Trần Văn X' }
+      });
+      // html_content render y nguyên (có thẻ h2 đỏ), replace {{user_name}}
+      expect(html).toContain('<h2 style="color:red">My Body Trần Văn X</h2>');
+      expect(html).toContain('<div class="custom">');
+      // message plain KHÔNG hiển thị (vì html_content có)
+      expect(html).not.toContain('plain message (sẽ KHÔNG dùng');
+    });
+
+    it('html_content rỗng/whitespace → fallback message (escape)', () => {
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'plain & <safe>',
+          html_content: '   ' // whitespace only → coi như rỗng
+        }
+      });
+      // html_content rỗng → message được escape
+      expect(html).toContain('plain &amp; &lt;safe&gt;');
+    });
   });
 });

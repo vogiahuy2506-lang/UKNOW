@@ -1,6 +1,6 @@
 import notificationRepo from '../../repositories/admin/notification.repository.js';
 import emailLogRepo from '../../repositories/admin/notificationEmailLog.repository.js';
-import { sendSystemEmail, buildBaseTemplate } from '../../utils/systemEmail.util.js';
+import { sendSystemEmail } from '../../utils/systemEmail.util.js';
 import { renderNotificationEmailHtml } from '../../utils/notificationEmailRender.util.js';
 
 const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
@@ -193,9 +193,21 @@ export default {
       .replace(/'/g, '&#39;');
   },
 
+  /**
+   * Build email HTML cho 1 notification + user nhận.
+   * 1 PATH DUY NHẤT: dùng shared renderer `renderNotificationEmailHtml` cho CẢ:
+   *   - preview iframe FE (notification.controller#previewEmailHtml)
+   *   - email gửi qua SMTP (sendNow/sendDirect)
+   * Khi notification có `html_content` (do admin "Save As Template"), renderer
+   * dùng nó làm BODY (sau khi replace {{...}}); nếu không có thì dùng message.
+   * Layout (header gradient, badge tone màu, user info chip, footer Digiso) LUÔN
+   * lấy từ renderer → preview iframe và email thực y chang nhau 100%.
+   *
+   * @param {Object} notification - row từ notifications table
+   * @param {Object} user - user nhận (null = preview dùng sample user)
+   * @returns {{subject: string, html: string, titleEn: string|null, messageEn: string|null}}
+   */
   async buildEmailHtml(notification, user) {
-    const config = NOTIFICATION_TYPE_CONFIG[notification.type] || NOTIFICATION_TYPE_CONFIG.announcement;
-
     const title = this.replaceVariables(notification.title, user);
     const message = this.replaceVariables(notification.message, user);
     const titleEn = notification.title_en ? this.replaceVariables(notification.title_en, user) : null;
@@ -203,30 +215,12 @@ export default {
 
     const subject = `[${PRODUCT_NAME}] ${title}`;
 
-    let html;
-    if (notification.html_content && typeof notification.html_content === 'string' && notification.html_content.trim() !== '') {
-      // Đường từ notification_templates (Save As Template): admin đã soạn body_html
-      // riêng → dùng nguyên xi sau khi replace {{...}}, bỏ qua layout hardcoded.
-      // Lưu ý: html_content đã là HTML hợp lệ do admin soạn; ta KHÔNG escape thẻ,
-      // chỉ thay {{...}} đã replaceVariables ở dạng raw (admin tự chịu trách nhiệm
-      // về HTML). Nếu admin muốn text-only thì đã dùng message thay vì html_content.
-      const rendered = this.replaceVariables(notification.html_content, user);
-      html = buildBaseTemplate({
-        subtitle: config.label,
-        content: rendered,
-        footerNote: config.footerNote
-      });
-    } else {
-      // Layout CHÍNH: dùng shared renderer (notificationEmailRender.util.js) — đây là
-      // NGUỒN SỰ THẬT cho cả preview iframe FE lẫn email gửi đi. Mọi thay đổi layout
-      // phải đổi ở file util đó, không hardcode ở đây.
-      html = renderNotificationEmailHtml({
-        notification,
-        user,
-        locale: 'vi',
-        device: 'desktop'
-      });
-    }
+    const html = renderNotificationEmailHtml({
+      notification,
+      user,
+      locale: 'vi',
+      device: 'desktop'
+    });
 
     return {
       subject,

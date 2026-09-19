@@ -1,6 +1,5 @@
 import notificationService from '../../services/admin/notification.service.js';
 import notificationTemplateService from '../../services/admin/notificationTemplate.service.js';
-import { renderNotificationEmailHtml } from '../../utils/notificationEmailRender.util.js';
 
 const handleError = (res, err) => {
   console.error('[NotificationController]', err);
@@ -320,6 +319,10 @@ export async function previewNotification(req, res) {
  *  - Fix: BE render HTML đúng y email thật sẽ gửi qua SMTP. FE iframe chỉ cần
  *    hiển thị HTML này. Một mã render duy nhất, một nguồn sự thật.
  *
+ * QUAN TRỌNG: handler này GỌI THẲNG `notificationService.buildEmailHtml` —
+ * đây là cùng code path với email SMTP gửi đi. Không có nhánh riêng, không
+ * có "preview" đặc biệt. Đảm bảo preview iframe = email thực 100%.
+ *
  * Request:
  *   POST /admin/notifications/preview-email-html
  *   Body: { type?, priority?, title?, message?, html_content?, locale?, device? }
@@ -337,13 +340,16 @@ export async function previewEmailHtml(req, res) {
       title,
       message,
       html_content = null,
+      // locale/device chỉ ảnh hưởng preview iframe (device viewport) - service build
+      // email HTML cố định locale='vi'/desktop cho SMTP. Tuy nhiên để khớp FE trước
+      // đây vẫn truyền qua.
       locale = 'vi',
       device = 'desktop'
     } = req.body;
 
-    // Nếu html_content có (Save As Template đường tới), truyền vào để render với body
-    // custom. Layout vẫn dùng shared renderer nhưng content là html_content của admin.
-    // Lưu ý: html_content là HTML thô do admin soạn — không escape.
+    // Tạo "notification giả" giống row từ DB. Service không cần id, chỉ các field
+    // để render. Locale/device chỉ áp dụng nếu service tôn trọng; hiện tại BE build
+    // email thật cố định vi/desktop, FE xem preview cùng locale.
     const notification = {
       type,
       priority,
@@ -352,16 +358,19 @@ export async function previewEmailHtml(req, res) {
       html_content: html_content || null
     };
 
-    const html = renderNotificationEmailHtml({
-      notification,
-      user: null, // preview dùng sample user trong renderer
-      locale: locale === 'en' ? 'en' : 'vi',
-      device: device === 'mobile' ? 'mobile' : 'desktop'
-    });
+    // Gọi THẲNG service buildEmailHtml — không gọi renderer riêng.
+    // 1 path duy nhất = preview và email thực y chang nhau.
+    const built = await notificationService.buildEmailHtml(notification, null);
+
+    // Locale/device override (FE muốn desktop/mobile viewport ở iframe) — chỉ áp
+    // dụng cho viewport width. Email thực vẫn desktop. Nếu BE không tách thì bỏ.
+    // Hiện tại service cố định desktop → giữ nguyên.
+    void locale;
+    void device;
 
     res.json({
       success: true,
-      data: { html }
+      data: { html: built.html }
     });
   } catch (err) {
     handleError(res, err);
