@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlineShare,
@@ -29,7 +29,9 @@ export default function LandingPageShareModal({ landingPage, open, onClose, onCh
   const [shareType, setShareType] = useState('view');
   const [error, setError] = useState('');
 
-  const loadShares = async () => {
+  // useCallback để effect bên dưới khai đủ phụ thuộc mà không chạy lại mỗi lần render:
+  // danh tính hàm chỉ đổi khi đổi landing page, đúng bằng điều kiện effect vốn đã dùng.
+  const loadShares = useCallback(async () => {
     if (!landingPage?.id) return;
     setLoading(true);
     try {
@@ -40,7 +42,7 @@ export default function LandingPageShareModal({ landingPage, open, onClose, onCh
     } finally {
       setLoading(false);
     }
-  };
+  }, [landingPage?.id]);
 
   useEffect(() => {
     if (open && landingPage?.id) {
@@ -49,7 +51,7 @@ export default function LandingPageShareModal({ landingPage, open, onClose, onCh
       setShareType('view');
       setError('');
     }
-  }, [open, landingPage?.id]);
+  }, [open, landingPage?.id, loadShares]);
 
   if (!open) return null;
 

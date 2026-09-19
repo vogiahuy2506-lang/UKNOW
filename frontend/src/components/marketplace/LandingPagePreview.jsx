@@ -1,7 +1,6 @@
 import {
   HiOutlineGlobe,
   HiOutlineDocumentText,
-  HiOutlineEye,
 } from 'react-icons/hi';
 
 const LandingPagePreview = ({ snapshot }) => {

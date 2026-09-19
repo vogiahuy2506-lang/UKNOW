@@ -7,12 +7,10 @@ import {
   HiOutlineRefresh,
   HiOutlineDownload,
   HiOutlineStar,
-  HiOutlineViewGrid,
   HiOutlineClock,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import marketplaceService from '../../services/marketplace.service';
-import { useI18n } from '../../i18n';
 
 const formatNumber = (n) => {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -109,8 +107,6 @@ const TopListingCard = ({ listing }) => (
 );
 
 const SellerDashboard = () => {
-  const t = useI18n('marketplace');
-
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [earnings, setEarnings] = useState([]);
