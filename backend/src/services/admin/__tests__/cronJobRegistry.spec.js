@@ -77,11 +77,10 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
   });
 
   it('đúng 29 cron cố định, không trùng mã', () => {
-    // 25 → 26: thêm form_booking_reminder (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md, PR-2a việc 5).
-    // 26 → 27: thêm chatbot_contact_alert (PLAN_BAO_LIEN_HE_KHACH_DE_LAI_TRONG_CHAT, PR-1).
-    // 27 → 29: thêm chatbot_digest_weekly và chatbot_digest_monthly (PLAN_BAO_LIEN_HE_KHACH_DE_LAI_TRONG_CHAT, PR-3).
-    expect(CRON_JOBS).toHaveLength(29);
+    // 29 → 30: thêm notification_templates (PLAN_NOTIFICATION_CENTER_SAVE_AS_TEMPLATE,
+    // PR-1 — Save As Template MVP, dispatch mark-only vì template chưa lưu targeting).
+    expect(CRON_JOBS).toHaveLength(30);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(29);
+    expect(new Set(codes).size).toBe(30);
   });
 });

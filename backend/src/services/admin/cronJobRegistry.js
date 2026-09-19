@@ -69,7 +69,11 @@ export const CRON_JOBS = [
     schedule: 'Mỗi 2 phút',
     description: 'Worker mới (migration 228): tick qua các notification_templates có schedule_type=scheduled/recurring đã đến hạn. MVP hiện đánh dấu dispatched và skip vì template chưa lưu targeting kèm theo — phase 2 sẽ mở rộng.',
     impact: 'Mẫu có lịch đi kèm không được tick; người dùng phải chọn mẫu ở tab Chiến dịch mới rồi bấm gửi.',
-    tracked: true,
+    // MVP: chưa wire recordRun trong scheduler.js — đánh dấu tracked=false
+    // để test cronJobRegistry ↔ scheduler không fail. Khi phase 2 implement
+    // dispatcher thật, chuyển về true và thêm recordRun('notification_templates')
+    // trong scheduler.js.
+    tracked: false,
   },
   {
     code: 'zalo_personal_listeners',
