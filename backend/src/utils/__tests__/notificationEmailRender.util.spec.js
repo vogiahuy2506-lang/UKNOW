@@ -282,6 +282,72 @@ describe('notificationEmailRender.util', () => {
       expect(html).toContain('<img src="/logo.png"');
     });
 
+    it('html_content admin paste NGUYÊN document <html><body>...</body></html> → chỉ giữ body content', () => {
+      // Trước đây: admin paste nguyên HTML document → renderer bọc vào "Message Box"
+      // nhỏ của layout gradient → toàn bộ document nén vào 1 ô, layout vỡ.
+      // Sau fix: stripDocumentWrapper() bóc <html><body>, chỉ giữ content trong body.
+      const docHtml = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>My Email</title>
+  <style>.x{color:red}</style>
+</head>
+<body>
+  <h1>Xin chào {{user_name}}</h1>
+  <p>Body content <strong>important</strong></p>
+  <a href="https://example.com">Link</a>
+</body>
+</html>`;
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'fallback m',
+          html_content: docHtml
+        },
+        user: { full_name: 'Trần Văn A' }
+      });
+      // Lưu ý: `<html>`, `<head>`, `<body>`, `<!DOCTYPE>`, `</html>` vẫn còn
+      // trong output vì renderer tự bọc email template mới có những thẻ đó.
+      // Check semantic: content admin paste vào body đã replace + sanitize đúng.
+      expect(html).toContain('Xin chào Trần Văn A');
+      // <h1> không nằm trong whitelist → strip thẻ, giữ text content bên trong.
+      expect(html).toContain('Xin chào Trần Văn A');
+      expect(html).toContain('<strong>important</strong>');
+      expect(html).toContain('href="https://example.com"');
+      // KHÔNG còn CSS rule `.x{color:red}` từ <style> admin paste — strip sạch.
+      expect(html).not.toContain('.x{color:red}');
+      // KHÔNG còn raw `<style>` block trong output.
+      expect(html).not.toContain('<style>');
+    });
+
+    it('html_content chỉ có <body>...</body> (không html wrapper) → vẫn bóc được', () => {
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'm',
+          html_content: '<body><p>Body only</p></body>'
+        }
+      });
+      // Check semantic: content body được giữ lại.
+      expect(html).toContain('<p>Body only</p>');
+    });
+
+    it('html_content là fragment thuần (không html/body) → giữ nguyên như trước', () => {
+      // Đảm bảo backward-compat: admin chỉ nhập `<p>...</p>` thì vẫn render bình thường.
+      const html = renderNotificationEmailHtml({
+        notification: {
+          type: 'announcement',
+          title: 'T',
+          message: 'm',
+          html_content: '<p>Just a paragraph</p>'
+        }
+      });
+      expect(html).toContain('<p>Just a paragraph</p>');
+    });
+
     it('replace {{user_name}} rồi sanitize — tên user không thể mở tag', () => {
       // Edge case: user.full_name chứa `<` (vd nhập "Abc<Xss") — sau khi replace
       // {{user_name}} thành chuỗi đó, sanitize phải khóa nó lại, không open tag.

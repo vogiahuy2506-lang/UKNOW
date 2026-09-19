@@ -103,26 +103,83 @@ function escapeHtml(str) {
  */
 
 /**
+ * Bóc tách lớp wrapper `<html>` / `<body>` khỏi HTML admin paste.
+ *
+ * BỐI CẢNH (sau push 8df46fdc + feedback 19/09):
+ *  - Admin "Save As Template" copy nguyên document HTML (gồm `<!DOCTYPE>`,
+ *    `<html>`, `<head>`, `<body>`, thậm chí `<style>` block) vào `html_content`.
+ *  - Renderer bọc `html_content` trong ô "Message Box" nhỏ của layout gradient
+ *    → toàn bộ document bị ép vào 1 ô → layout vỡ.
+ *  - Fix: nếu input nhận dạng là document đầy đủ (có `<html>...</html>`),
+ *    trích phần body content (hoặc fallback giữa `<html>` ... `</html>` nếu
+ *    thiếu body). Sau đó sanitize bình thường.
+ *
+ * CÁC TRƯỜNG HỢP:
+ *  - `<html><head>...</head><body>...content...</body></html>` → `content`
+ *  - `<html><body>...content...</body></html>` (không head) → `content`
+ *  - `<html>...content...</html>` (không head/body) → `content`
+ *  - `<body>...content...</body>` (chỉ body) → `content`
+ *  - `<p>...content...</p>` (fragment) → giữ nguyên (sanitize như thường)
+ *
+ * LƯU Ý: regex-based, không phân tích HTML chuẩn — chấp nhận format admin
+ * paste phổ biến. Trường hợp lệch chuẩn (vd comment trước `<html>`) vẫn pass
+ * nhờ `i` flag case-insensitive + `[\s\S]*?` non-greedy.
+ *
+ * @param {string} rawHtml
+ * @returns {string} HTML đã bóc wrapper, sẵn sàng sanitize tiếp
+ */
+function stripDocumentWrapper(rawHtml) {
+  let s = String(rawHtml || '');
+
+  // 1. Bỏ DOCTYPE (vd `<!DOCTYPE html>`, `<!DOCTYPE html PUBLIC ...>`).
+  s = s.replace(/<!DOCTYPE[^>]*>/gi, '').trim();
+
+  // 2. Nếu có cặp `<html ...>...</html>` (kèm thuộc tính hay không), bóc trong.
+  const htmlBlock = s.match(/<html\b[^>]*>([\s\S]*?)<\/html>/i);
+  if (htmlBlock) {
+    s = htmlBlock[1];
+  }
+
+  // 3. Bỏ `<head>...</head>` (CSS/meta/title bên trong head KHÔNG cần trong body
+  // email — sẽ bị renderer/SMTP bỏ anyway, và nếu admin paste cả document thì
+  // title/meta là tài liệu HTML, không phải nội dung email).
+  s = s.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
+
+  // 4. Bóc trong `<body>` nếu có.
+  const bodyBlock = s.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyBlock) {
+    s = bodyBlock[1];
+  }
+
+  return s.trim();
+}
+
+/**
  * Sanitize HTML admin soạn trong `notification.html_content` trước khi chèn vào email.
  *
- * BỐI CẢNH (sau push 5b73c04c):
+ * BỐI CẢNH (sau push 5b73c04c + 8df46fdc):
  *  - Admin "Save As Template" với body HTML. Trước renderer KHÔNG escape.
  *  - User gửi feedback email nhận được hiển thị raw `<style>` trong box — admin đã
  *    paste `<style>` từ layout mẫu vào `html_content`.
  *  - Email client (Gmail/Outlook) bỏ inline CSS ngoài thẻ `<style>` và bỏ cả
  *    attribute `style="..."` không phải từ CSP cho phép; layout vỡ.
+ *  - Push 19/09 fix tiếp: admin paste NGUYÊN document (`<html><body>...</body></html>`)
+ *    → tự bóc `<html>`/`<body>` để chỉ giữ nội dung body, bọc lại trong layout
+ *    gradient email (đồng bộ với preview iframe).
  *
  * QUY TẮC (regex-based, best-effort cho email notification):
- *  1. STRIP tất cả nội dung thẻ nguy hiểm + thẻ tự đóng: `script`, `style`, `link`,
+ *  1. BÓC TÁCH document wrapper (`<html>`, `<head>`, `<body>`) nếu admin paste
+ *     nguyên document — xem `stripDocumentWrapper()`.
+ *  2. STRIP tất cả nội dung thẻ nguy hiểm + thẻ tự đóng: `script`, `style`, `link`,
  *     `iframe`, `object`, `embed`, `form`, `meta`, `base`, `noscript`, `template`,
  *     `slot`.
- *  2. STRIP mọi attribute `on*=...` (event handler: onload/onclick/...).
- *  3. STRIP mọi attribute `style=...` (CSS injection + Gmail bỏ anyway).
- *  4. Tag whitelist: `p, br, strong, b, em, i, u, ul, ol, li, h2, h3, h4, blockquote,
+ *  3. STRIP mọi attribute `on*=...` (event handler: onload/onclick/...).
+ *  4. STRIP mọi attribute `style=...` (CSS injection + Gmail bỏ anyway).
+ *  5. Tag whitelist: `p, br, strong, b, em, i, u, ul, ol, li, h2, h3, h4, blockquote,
  *     code, pre, a, span, div`. Thẻ khác (table, img, ...) → strip thẻ, giữ text.
- *  5. Thẻ `<a>`: chỉ giữ `href` với scheme http(s)/mailto/tel + `target=_blank` +
+ *  6. Thẻ `<a>`: chỉ giữ `href` với scheme http(s)/mailto/tel + `target=_blank` +
  *     `rel=noopener noreferrer`. Attribute khác bỏ.
- *  6. Strip HTML comment.
+ *  7. Strip HTML comment.
  *
  * LƯU Ý: Best-effort. Nếu admin nhập HTML quá phức tạp (nested table, layout grid)
  * sẽ mất. Tương lai nên thay bằng DOMPurify nếu cần bulletproof sanitizer.
@@ -133,7 +190,10 @@ function escapeHtml(str) {
  */
 function sanitizeEmailHtml(rawHtml) {
   if (!rawHtml || typeof rawHtml !== 'string') return '';
-  let out = String(rawHtml);
+
+  // Bước 0 (mới 19/09): bóc document wrapper nếu admin paste nguyên `<html>...</html>`.
+  let out = stripDocumentWrapper(rawHtml);
+  if (!out) return '';
 
   // 1. Block-level strip: xóa cặp thẻ `<tag>...</tag>` (kèm self-closing).
   const STRIP_BLOCK_TAGS = [

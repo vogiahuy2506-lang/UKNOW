@@ -152,11 +152,15 @@ export default {
 
   replaceVariables(content, user) {
     if (!content) return content;
+    // Chịu null/undefined user — dùng placeholder khi gọi từ preview (chưa có user
+    // nhận cụ thể). Trước đây `user.full_name` trên null → "Cannot read properties
+    // of null (reading 'full_name')".
+    const u = user || {};
 
     return content
-      .replace(/\{\{user_name\}\}/g, user.full_name || user.username || 'bạn')
-      .replace(/\{\{user_email\}\}/g, user.email || '')
-      .replace(/\{\{user_plan\}\}/g, this.formatPlanName(user.plan) || 'Miễn phí')
+      .replace(/\{\{user_name\}\}/g, u.full_name || u.username || 'bạn')
+      .replace(/\{\{user_email\}\}/g, u.email || '')
+      .replace(/\{\{user_plan\}\}/g, this.formatPlanName(u.plan) || 'Miễn phí')
       .replace(/\{\{product_name\}\}/g, PRODUCT_NAME)
       .replace(/\{\{current_date\}\}/g, new Date().toLocaleDateString('vi-VN', {
         day: '2-digit', month: '2-digit', year: 'numeric'
