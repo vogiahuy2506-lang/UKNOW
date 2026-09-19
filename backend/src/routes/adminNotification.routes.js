@@ -27,7 +27,10 @@ router.get('/', ctrl.getNotifications);
 
 router.get('/templates', ctrl.listTemplates);
 router.get('/templates/:id', ctrl.getTemplate);
-router.post('/templates', requireRole('superadmin'), ctrl.createTemplate);
+// Lưu mẫu: chỉ cần 'admin' (super admin). Convention hiện tại của repo dùng
+// role='admin' cho siêu quản trị. FE cũng check 'admin' để hiện nút. Nếu BE
+// dùng 'superadmin' → FE hiện nút nhưng BE reject 403 → UX lú.
+router.post('/templates', requireRole('admin'), ctrl.createTemplate);
 
 /**
  * GET /admin/notifications/types
