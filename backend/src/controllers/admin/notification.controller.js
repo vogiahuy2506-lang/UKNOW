@@ -339,17 +339,13 @@ export async function previewEmailHtml(req, res) {
       priority = 'normal',
       title,
       message,
-      html_content = null,
-      // locale/device chỉ ảnh hưởng preview iframe (device viewport) - service build
-      // email HTML cố định locale='vi'/desktop cho SMTP. Tuy nhiên để khớp FE trước
-      // đây vẫn truyền qua.
-      locale = 'vi',
-      device = 'desktop'
+      html_content = null
     } = req.body;
 
     // Tạo "notification giả" giống row từ DB. Service không cần id, chỉ các field
-    // để render. Locale/device chỉ áp dụng nếu service tôn trọng; hiện tại BE build
-    // email thật cố định vi/desktop, FE xem preview cùng locale.
+    // để render. Sau rewrite 19/09: html_content là BODY EMAIL TUYỆT ĐỐI —
+    // renderer chỉ sanitize + gói tối thiểu trong <html><body>. Không có layout
+    // wrapper cố định.
     const notification = {
       type,
       priority,
@@ -358,15 +354,8 @@ export async function previewEmailHtml(req, res) {
       html_content: html_content || null
     };
 
-    // Gọi THẲNG service buildEmailHtml — không gọi renderer riêng.
-    // 1 path duy nhất = preview và email thực y chang nhau.
+    // 1 path duy nhất qua service.buildEmailHtml → preview == email thực.
     const built = await notificationService.buildEmailHtml(notification, null);
-
-    // Locale/device override (FE muốn desktop/mobile viewport ở iframe) — chỉ áp
-    // dụng cho viewport width. Email thực vẫn desktop. Nếu BE không tách thì bỏ.
-    // Hiện tại service cố định desktop → giữ nguyên.
-    void locale;
-    void device;
 
     res.json({
       success: true,

@@ -218,11 +218,12 @@ export default {
     const subject = `[${PRODUCT_NAME}] ${title}`;
 
     // 1 PATH DUY NHẤT qua shared renderer → đảm bảo preview == email thực.
+    // Sau rewrite 19/09: renderer không còn nhận `device` (html_content là body
+    // email tuyệt đối, không có layout wrapper responsive cố định).
     const builtHtml = renderNotificationEmailHtml({
       notification,
       user,
-      locale: 'vi',
-      device: 'desktop' // email thật luôn desktop, bất kể FE preview mobile/desktop
+      locale: 'vi'
     });
 
     return {

@@ -1,261 +1,210 @@
 /**
- * Render HTML email cho notification — server-side mirror của FE renderNotificationHtml.
+ * Render HTML email cho notification — SERVER-SIDE AUTHORITATIVE.
  *
- * TẠI SAO CẦN FILE NÀY:
- *  - FE có `frontend/src/features/admin/utils/notificationPreview.util.js` để iframe preview.
- *  - BE có `notification.service.js#buildEmailHtml` để gửi email thật qua SMTP.
- *  - 2 chỗ này từng render layout KHÁC NHAU → admin soạn xong preview đẹp, khách nhận
- *    mail lại trông khác → user feedback "email phải y chang preview".
- *  - Hướng xử lý: BE expose endpoint /admin/notifications/preview-html trả về HTML y hệt
- *    email thật sẽ gửi. FE iframe dùng HTML đó → 1 nguồn sự thật duy nhất.
+ * TRIẾT LÝ (sau rewrite 19/09/2026):
+ *  - `html_content` là NỘI DUNG EMAIL TUYỆT ĐỐI — không bọc thêm greeting, title box,
+ *    message box, user chip, footer cố định. Admin soạn gì trong phần "Soạn mẫu HTML"
+ *    (textarea Rich Text / code editor) thì người nhận sẽ nhận đúng y.
+ *  - Nếu `html_content` rỗng → dùng `message` (plain text), wrap tối thiểu trong
+ *    <body> để hiển thị được trong email client.
+ *  - Preview trong FE iframe dùng cùng hàm này → "soạn xong = gửi đi = nhận được"
+ *    (WYSIWYG email).
  *
- * GIỮ FRONTEND FILE RIÊNG:
- *  - FE vẫn có file util để render OFFLINE (không gọi network) cho những chỗ cần tức thì.
- *  - Layout trong file này khớp với FE util (cùng palette, cùng markup). Khi FE chuyển sang
- *    dùng BE API thì file FE có thể bị thu hồi hoặc giữ làm fallback.
+ * LÝ DO VIẾT LẠI:
+ *  - Trước đây renderer bọc `html_content` trong 1 lớp layout cố định gồm:
+ *    header gradient, greeting, title box, message box, user chip, footer.
+ *    → Admin soạn template ở "Soạn mẫu" nhưng email gửi đi khác hẳn preview.
+ *    → User phản ánh "mail bị gói gọn trong phần nội dung".
+ *  - Rewrite: `html_content` là BODY EMAIL. Chỉ thêm DOCTYPE + <html> wrapper
+ *    tối thiểu để email client render được. Không có lớp layout nào bọc ngoài.
  *
- * ĐỒNG BỘ: nếu đổi layout, đổi cả 2 chỗ (file này + FE util) để tránh lệch.
- *  - Palette: `BADGE_PALETTE` (file này) ↔ `BADGE_PALETTE` trong notificationPreview.util.js.
- *  - Brand: MAIL_FROM_NAME, SUPPORT_EMAIL, FRONTEND_URL — sync với FE constants.
+ * PIPELINE:
+ *  1. Nếu có `html_content`:
+ *       (a) replaceVariables(html_content, user)  — thay {{user_name}} etc.
+ *       (b) sanitizeEmailHtml()                   — strip <style>, <script>, on*=, style=
+ *       (c) gói trong <html><body> tối thiểu
+ *  2. Nếu không có `html_content`:
+ *       (a) escapeHtml(message)                    — plain text an toàn
+ *       (b) gói trong <html><body> tối thiểu
+ *
+ * VARIABLE REPLACEMENT:
+ *  - {{user_name}}     → user.full_name || user.username || 'bạn'
+ *  - {{user_email}}    → user.email || ''
+ *  - {{user_plan}}     → user.plan || 'Miễn phí'
+ *  - {{product_name}}  → MAIL_FROM_NAME
+ *  - {{current_date}}  → DD/MM/YYYY
+ *  - {{dashboard_url}} → FRONTEND_URL
+ *  - {{support_email}} → SUPPORT_EMAIL
+ *
+ * EMAIL CLIENT COMPATIBILITY (Gmail/Outlook):
+ *  - Inline CSS only — mọi <style> block bị strip.
+ *  - Fonts: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
+ *  - Max-width 680px, responsive via viewport meta.
+ *  - Inline max-width on wrapping table/div để không vỡ trên mobile.
+ *
+ * ĐỒNG BỘ: hàm này là DUY NHẤT — không còn file util FE riêng render email.
+ * FE iframe preview gọi BE /preview-email-html endpoint → nhận HTML từ hàm này.
  */
 
-const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'Founder AI Platform';
-const SYSTEM_LOGO_URL = '/logo.png'; // FE public asset, BE không embed — email client load qua URL gốc của frontend.
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'info@digiso.vn';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
+const MAIL_FROM_NAME  = process.env.MAIL_FROM_NAME  || 'Founder AI Platform';
+const SUPPORT_EMAIL   = process.env.SUPPORT_EMAIL   || 'info@digiso.vn';
+const FRONTEND_URL    = process.env.FRONTEND_URL    || 'https://founderai.vn';
 
-const BADGE_PALETTE = {
-  maintenance: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
-  announcement: { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
-  promotion: { bg: '#fff7ed', border: '#fed7aa', text: '#9a3412' },
-  warning: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
-  reminder: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
-  security: { bg: '#fef2f2', border: '#fecaca', text: '#7f1d1d' }
-};
-
-const TYPE_LABELS_VI = {
-  maintenance: 'Bảo trì',
-  announcement: 'Thông báo',
-  promotion: 'Khuyến mãi',
-  warning: 'Cảnh báo',
-  reminder: 'Nhắc nhở',
-  security: 'Bảo mật'
-};
-
-const TYPE_LABELS_EN = {
-  maintenance: 'Maintenance',
-  announcement: 'Announcement',
-  promotion: 'Promotion',
-  warning: 'Warning',
-  reminder: 'Reminder',
-  security: 'Security'
-};
+// -------------------------------------------------------------------
+// Variable replacement
+// -------------------------------------------------------------------
 
 /**
- * Replace `{{var}}` với giá trị user. Khác với notification.service#replaceVariables:
- *  - Service chỉ thay 1 user (recipients). Ở đây thay 1 user cụ thể được truyền vào
- *    (preview thì dùng sampleUser).
- *  - Không escape — output sẽ đi vào HTML đã escape sẵn ở chỗ chèn.
- *
+ * Thay {{var}} bằng giá trị user.
  * @param {string} content
- * @param {Object} user
+ * @param {Object|null} user
  * @returns {string}
  */
 export function replaceVariablesForUser(content, user) {
   if (!content) return '';
   const u = user || {};
   return String(content)
-    .replace(/\{\{user_name\}\}/g, u.full_name || u.username || 'bạn')
-    .replace(/\{\{user_email\}\}/g, u.email || '')
-    .replace(/\{\{user_plan\}\}/g, u.plan || 'Miễn phí')
-    .replace(/\{\{product_name\}\}/g, MAIL_FROM_NAME)
-    .replace(/\{\{current_date\}\}/g, new Date().toLocaleDateString('vi-VN'))
+    .replace(/\{\{user_name\}\}/g,     u.full_name || u.username || 'bạn')
+    .replace(/\{\{user_email\}\}/g,    u.email     || '')
+    .replace(/\{\{user_plan\}\}/g,     u.plan      || 'Miễn phí')
+    .replace(/\{\{product_name\}\}/g,  MAIL_FROM_NAME)
+    .replace(/\{\{current_date\}\}/g,  new Date().toLocaleDateString('vi-VN'))
     .replace(/\{\{dashboard_url\}\}/g, FRONTEND_URL)
     .replace(/\{\{support_email\}\}/g, SUPPORT_EMAIL);
 }
 
-/**
- * Escape HTML để chèn text vào HTML an toàn.
- * @param {string} str
- * @returns {string}
- */
+// -------------------------------------------------------------------
+// HTML helpers
+// -------------------------------------------------------------------
+
+/** Escape text để chèn an toàn vào HTML. */
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;')
+    .replace(/'/g,  '&#39;');
 }
 
-/**
- * Render email HTML cho notification — layout khớp với FE renderNotificationHtml.
- * Đây là NGUỒN SỰ THẬT cho cả preview iframe lẫn email gửi đi (notification.service
- * sẽ dùng hàm này thay cho layout hardcoded cũ).
- *
- * @param {Object} input
- * @param {Object} input.notification - { type, priority, title, message, html_content }
- * @param {Object|null} input.user - user nhận (recipients) — null cho preview
- * @param {'vi'|'en'} [input.locale='vi']
- * @param {'desktop'|'mobile'} [input.device='desktop'] — chỉ áp dụng preview iframe, email thật luôn 'desktop'
- * @returns {string} HTML đầy đủ, sẵn để gán vào iframe srcDoc hoặc send qua SMTP
- */
+// -------------------------------------------------------------------
+// Document wrapper strip
+// -------------------------------------------------------------------
 
 /**
- * Bóc tách lớp wrapper `<html>` / `<body>` khỏi HTML admin paste.
+ * Bóc `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` wrapper khỏi HTML admin paste.
  *
- * BỐI CẢNH (sau push 8df46fdc + feedback 19/09):
- *  - Admin "Save As Template" copy nguyên document HTML (gồm `<!DOCTYPE>`,
- *    `<html>`, `<head>`, `<body>`, thậm chí `<style>` block) vào `html_content`.
- *  - Renderer bọc `html_content` trong ô "Message Box" nhỏ của layout gradient
- *    → toàn bộ document bị ép vào 1 ô → layout vỡ.
- *  - Fix: nếu input nhận dạng là document đầy đủ (có `<html>...</html>`),
- *    trích phần body content (hoặc fallback giữa `<html>` ... `</html>` nếu
- *    thiếu body). Sau đó sanitize bình thường.
+ * Admin "Save As Template" copy nguyên 1 document HTML vào `html_content`.
+ * Nếu giữ nguyên → renderer bọc vào "Message Box" nhỏ → layout vỡ.
+ * Fix: trích nội dung body (hoặc fallback giữa <html>...</html> nếu không có body).
  *
- * CÁC TRƯỜNG HỢP:
- *  - `<html><head>...</head><body>...content...</body></html>` → `content`
- *  - `<html><body>...content...</body></html>` (không head) → `content`
- *  - `<html>...content...</html>` (không head/body) → `content`
- *  - `<body>...content...</body>` (chỉ body) → `content`
- *  - `<p>...content...</p>` (fragment) → giữ nguyên (sanitize như thường)
- *
- * LƯU Ý: regex-based, không phân tích HTML chuẩn — chấp nhận format admin
- * paste phổ biến. Trường hợp lệch chuẩn (vd comment trước `<html>`) vẫn pass
- * nhờ `i` flag case-insensitive + `[\s\S]*?` non-greedy.
- *
- * @param {string} rawHtml
- * @returns {string} HTML đã bóc wrapper, sẵn sàng sanitize tiếp
+ * @param {string} raw
+ * @returns {string}
  */
-function stripDocumentWrapper(rawHtml) {
-  let s = String(rawHtml || '');
+function stripDocumentWrapper(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
 
-  // 1. Bỏ DOCTYPE (vd `<!DOCTYPE html>`, `<!DOCTYPE html PUBLIC ...>`).
+  // Bỏ DOCTYPE
   s = s.replace(/<!DOCTYPE[^>]*>/gi, '').trim();
 
-  // 2. Nếu có cặp `<html ...>...</html>` (kèm thuộc tính hay không), bóc trong.
+  // Bóc trong <html>...</html>
   const htmlBlock = s.match(/<html\b[^>]*>([\s\S]*?)<\/html>/i);
-  if (htmlBlock) {
-    s = htmlBlock[1];
-  }
+  if (htmlBlock) s = htmlBlock[1];
 
-  // 3. Bỏ `<head>...</head>` (CSS/meta/title bên trong head KHÔNG cần trong body
-  // email — sẽ bị renderer/SMTP bỏ anyway, và nếu admin paste cả document thì
-  // title/meta là tài liệu HTML, không phải nội dung email).
+  // Bỏ <head>...</head>
   s = s.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
 
-  // 4. Bóc trong `<body>` nếu có.
+  // Bóc trong <body>...</body>
   const bodyBlock = s.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
-  if (bodyBlock) {
-    s = bodyBlock[1];
-  }
+  if (bodyBlock) s = bodyBlock[1];
 
   return s.trim();
 }
 
-/**
- * Sanitize HTML admin soạn trong `notification.html_content` trước khi chèn vào email.
- *
- * BỐI CẢNH (sau push 5b73c04c + 8df46fdc):
- *  - Admin "Save As Template" với body HTML. Trước renderer KHÔNG escape.
- *  - User gửi feedback email nhận được hiển thị raw `<style>` trong box — admin đã
- *    paste `<style>` từ layout mẫu vào `html_content`.
- *  - Email client (Gmail/Outlook) bỏ inline CSS ngoài thẻ `<style>` và bỏ cả
- *    attribute `style="..."` không phải từ CSP cho phép; layout vỡ.
- *  - Push 19/09 fix tiếp: admin paste NGUYÊN document (`<html><body>...</body></html>`)
- *    → tự bóc `<html>`/`<body>` để chỉ giữ nội dung body, bọc lại trong layout
- *    gradient email (đồng bộ với preview iframe).
- *
- * QUY TẮC (regex-based, best-effort cho email notification):
- *  1. BÓC TÁCH document wrapper (`<html>`, `<head>`, `<body>`) nếu admin paste
- *     nguyên document — xem `stripDocumentWrapper()`.
- *  2. STRIP tất cả nội dung thẻ nguy hiểm + thẻ tự đóng: `script`, `style`, `link`,
- *     `iframe`, `object`, `embed`, `form`, `meta`, `base`, `noscript`, `template`,
- *     `slot`.
- *  3. STRIP mọi attribute `on*=...` (event handler: onload/onclick/...).
- *  4. STRIP mọi attribute `style=...` (CSS injection + Gmail bỏ anyway).
- *  5. Tag whitelist: `p, br, strong, b, em, i, u, ul, ol, li, h2, h3, h4, blockquote,
- *     code, pre, a, span, div`. Thẻ khác (table, img, ...) → strip thẻ, giữ text.
- *  6. Thẻ `<a>`: chỉ giữ `href` với scheme http(s)/mailto/tel + `target=_blank` +
- *     `rel=noopener noreferrer`. Attribute khác bỏ.
- *  7. Strip HTML comment.
- *
- * LƯU Ý: Best-effort. Nếu admin nhập HTML quá phức tạp (nested table, layout grid)
- * sẽ mất. Tương lai nên thay bằng DOMPurify nếu cần bulletproof sanitizer.
- * Cũng KHÔNG xử lý `display:none`/`@import`/URL bypass — đó là giới hạn của regex.
- *
- * @param {string} rawHtml
- * @returns {string} HTML an toàn
- */
-function sanitizeEmailHtml(rawHtml) {
-  if (!rawHtml || typeof rawHtml !== 'string') return '';
+// -------------------------------------------------------------------
+// Sanitizer
+// -------------------------------------------------------------------
 
-  // Bước 0 (mới 19/09): bóc document wrapper nếu admin paste nguyên `<html>...</html>`.
-  let out = stripDocumentWrapper(rawHtml);
+/**
+ * Sanitize HTML admin soạn trong `html_content`.
+ *
+ * QUY TẮC (regex-based, best-effort cho email):
+ *  1. Strip document wrapper (xem stripDocumentWrapper).
+ *  2. Strip thẻ nguy hiểm: script, style, link, iframe, object, embed, form,
+ *     meta, base, noscript, template, slot.
+ *  3. Strip attribute on*= (event handler).
+ *  4. Strip attribute style= (CSS injection; Gmail/Outlook bỏ inline CSS).
+ *  5. Tag whitelist: p, br, strong, b, em, i, u, ul, ol, li, h1, h2, h3, h4,
+ *     h5, h6, blockquote, code, pre, a, span, div, img, table, thead, tbody,
+ *     tfoot, tr, th, td, hr, small.
+ *  6. Thẻ <a>: chỉ giữ href (http(s)/mailto/tel) + target=_blank + rel.
+ *  7. Thẻ <img>: chỉ giữ src + alt + width + height (nếu có).
+ *  8. Strip HTML comment.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+function sanitizeEmailHtml(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+
+  let out = stripDocumentWrapper(raw);
   if (!out) return '';
 
-  // 1. Block-level strip: xóa cặp thẻ `<tag>...</tag>` (kèm self-closing).
-  const STRIP_BLOCK_TAGS = [
+  // 1. Strip block tags
+  const BLOCK_TAGS = [
     'script', 'style', 'link', 'iframe', 'object', 'embed', 'form',
     'meta', 'base', 'noscript', 'template', 'slot'
   ];
-  for (const tag of STRIP_BLOCK_TAGS) {
-    const reBlock = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi');
-    out = out.replace(reBlock, '');
-    // Self-closing form: <script src="..." /> hoặc <link ... />
-    const reSelf = new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi');
-    out = out.replace(reSelf, '');
+  for (const tag of BLOCK_TAGS) {
+    out = out.replace(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi'), '');
+    out = out.replace(new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi'), '');
   }
 
-  // 2. Strip `on*` event handler attributes.
+  // 2. Strip on* event attributes
   out = out.replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '');
   out = out.replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '');
   out = out.replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, '');
 
-  // 3. Strip `style=...` attribute.
+  // 3. Strip style= attributes
   out = out.replace(/\s+style\s*=\s*"[^"]*"/gi, '');
   out = out.replace(/\s+style\s*=\s*'[^']*'/gi, '');
 
-  // 4. Walk qua từng thẻ: whitelist + attribute cleanup.
-  const ALLOWED_TAGS = new Set([
-    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li',
-    'h2', 'h3', 'h4', 'blockquote', 'code', 'pre',
-    'a', 'span', 'div'
+  // 4. Whitelist tags + attribute cleanup
+  const ALLOWED = new Set([
+    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'del', 'ins',
+    'ul', 'ol', 'li',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'blockquote', 'code', 'pre', 'kbd', 'samp',
+    'a', 'span', 'div',
+    'img', 'figure', 'figcaption',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+    'hr', 'small', 'sup', 'sub', 'abbr', 'cite'
   ]);
-  out = out.replace(/<\/?([a-z0-9]+)\b([^>]*)>/gi, (_whole, tagName, rest) => {
+
+  out = out.replace(/<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi, (_whole, tagName, rest) => {
     const tag = String(tagName || '').toLowerCase();
     const isClose = _whole.startsWith('</');
 
-    // Dư phòng: nếu tới đây mà tag nằm trong block-strip list → bỏ.
-    if (STRIP_BLOCK_TAGS.includes(tag)) return '';
+    if (BLOCK_TAGS.includes(tag)) return '';
+    if (!ALLOWED.has(tag)) return '';
 
-    if (!ALLOWED_TAGS.has(tag)) {
-      // Thẻ không whitelisted → xóa MỞ và ĐÓNG, giữ text bên trong (text node
-      // đi qua mặc regex này vì chỉ khớp thẻ). Trả về '' để xóa thẻ.
-      return '';
-    }
-
-    // Closing tag: trả về y nguyên — không cần attribute.
     if (isClose) return `</${tag}>`;
 
-    // `<br>` không cần đóng; thẻ whitelisted khác giữ self-closing semantics OK.
     if (tag === 'br') return '<br>';
 
     if (tag === 'a') {
-      // Trích href. Cho phép 1 dấu quote " hoặc ' hoặc bare value.
       const hrefMatch =
         rest.match(/\bhref\s*=\s*"([^"]*)"/i) ||
         rest.match(/\bhref\s*=\s*'([^']*)'/i) ||
         rest.match(/\bhref\s*=\s*([^\s>]+)/i);
       let href = hrefMatch ? hrefMatch[1] : '';
-      // Validate scheme: chỉ http(s)/mailto/tel. Mọi scheme khác (javascript:, data:)
-      // → drop.
       let safeHref = '';
       try {
-        const trimmed = String(href || '').trim();
-        if (trimmed && /^(?:https?:|mailto:|tel:)/i.test(trimmed)) {
-          safeHref = trimmed.replace(/"/g, '&quot;');
+        const t = String(href || '').trim();
+        if (t && /^(?:https?:|mailto:|tel:)/i.test(t)) {
+          safeHref = t.replace(/"/g, '&quot;');
         }
       } catch { /* noop */ }
       return safeHref
@@ -263,174 +212,137 @@ function sanitizeEmailHtml(rawHtml) {
         : '<a>';
     }
 
-    // Thẻ whitelisted khác: drop toàn bộ attributes, giữ thẻ sạch.
+    if (tag === 'img') {
+      // Chỉ giữ src + alt + width/height nếu hợp lệ
+      const srcMatch =
+        rest.match(/\bsrc\s*=\s*"([^"]*)"/i) ||
+        rest.match(/\bsrc\s*=\s*'([^']*)'/i) ||
+        rest.match(/\bsrc\s*=\s*([^\s>]+)/i);
+      const altMatch =
+        rest.match(/\balt\s*=\s*"([^"]*)"/i) ||
+        rest.match(/\balt\s*=\s*'([^']*)'/i) ||
+        rest.match(/\balt\s*=\s*([^\s>]+)/i);
+      const wMatch  = rest.match(/\bwidth\s*=\s*"([^"]*)"/i) || rest.match(/\bwidth\s*=\s*([^\s>]+)/i);
+      const hMatch  = rest.match(/\bheight\s*=\s*"([^"]*)"/i) || rest.match(/\bheight\s*=\s*([^\s>]+)/i);
+      let attrs = '';
+      if (srcMatch) {
+        const src = String(srcMatch[1]).trim().replace(/"/g, '&quot;');
+        if (/^(?:https?:|data:image)/i.test(src)) {
+          attrs += ` src="${src}"`;
+        }
+      }
+      if (altMatch) attrs += ` alt="${String(altMatch[1]).replace(/"/g, '&quot;')}"`;
+      if (wMatch)   attrs += ` width="${String(wMatch[1]).replace(/[^0-9]/g, '')}"`;
+      if (hMatch)   attrs += ` height="${String(hMatch[1]).replace(/[^0-9]/g, '')}"`;
+      return attrs ? `<img${attrs}>` : '';
+    }
+
+    // Các thẻ whitelisted khác: bỏ toàn bộ attributes, giữ thẻ sạch
     return `<${tag}>`;
   });
 
-  // 5. Strip HTML comments.
+  // 5. Strip HTML comments
   out = out.replace(/<!--[\s\S]*?-->/g, '');
 
   return out.trim();
 }
 
-export function renderNotificationEmailHtml({ notification, user = null, locale = 'vi', device = 'desktop' }) {
-  const n = notification || {};
-  const typeKey = n.type || 'announcement';
-  const palette = BADGE_PALETTE[typeKey] || BADGE_PALETTE.announcement;
-  const labels = locale === 'en' ? TYPE_LABELS_EN : TYPE_LABELS_VI;
-  const typeLabel = labels[typeKey] || (locale === 'en' ? 'Notification' : 'Thông báo');
+// -------------------------------------------------------------------
+// Main renderer
+// -------------------------------------------------------------------
 
-  const sampleUser = {
+/**
+ * Render email HTML từ notification.
+ *
+ * TRIẾT LÝ: `html_content` là BODY EMAIL TUYỆT ĐỐI.
+ * - Có `html_content` → sanitize → gói tối thiểu trong <html><body>.
+ * - Không có `html_content` → escape(message) → gói tối thiểu.
+ *
+ * KHÔNG bọc thêm: header gradient, greeting, title box, message box,
+ * user chip, footer cố định. Admin soạn gì → user nhận đúng y.
+ *
+ * @param {Object} input
+ * @param {Object}        input.notification  - { type, priority, title, message, html_content, html_content_en }
+ * @param {Object|null}  input.user          - user nhận (null cho preview)
+ * @param {'vi'|'en'}    [input.locale='vi']
+ * @returns {string} HTML đầy đủ <!DOCTYPE html>...
+ */
+export function renderNotificationEmailHtml({ notification, user = null, locale = 'vi' }) {
+  const n = notification || {};
+
+  // Sample user: preview defaults + real user fields
+  const u = user || {
     full_name: 'Nguyễn Văn Test',
     username: 'testuser',
     email: 'test@example.com',
-    plan: 'pro',
-    ...user
+    plan: 'pro'
   };
 
-  // Dùng notification.title làm tiêu đề, message/html_content làm body.
-  // - Nếu `html_content` có (Save As Template → admin soạn body riêng): dùng nó
-  //   làm BODY (replace {{...}}, KHÔNG escape thẻ - admin tự chịu trách nhiệm).
-  //   Title vẫn lấy từ `title` để hiển thị badge.
-  // - Nếu không có html_content: dùng `message` (plain text) làm body, escape.
-  const rawTitle = replaceVariablesForUser(n.title || '', sampleUser) || (locale === 'vi' ? 'Tiêu đề thông báo' : 'Notification Title');
+  // ----------------------------------------------------------------
+  // Body content
+  // ----------------------------------------------------------------
+  let bodyHtml;
 
-  let safeMessage;
   if (n.html_content && typeof n.html_content === 'string' && n.html_content.trim() !== '') {
-    // Đường Save As Template: body là HTML do admin soạn.
-    // Pipeline: (1) replace {{...}} bằng giá trị user; (2) SANITIZE để bỏ thẻ
-    // nguy hiểm (`<style>`, `<script>`, event handler, `style=`, `on*=`).
-    // Lý do sanitize:
-    //   - Trước đây KHÔNG sanitize → admin soạn template có `<style>` thì email
-    //     user nhận hiển thị raw CSS hoặc body vỡ (email client bỏ inline CSS
-    //     ngoài thẻ `<style>`, layout nhảy loạn).
-    //   - Email client Gmail/Outlook KHÔNG render CSS trong body `<style>` —
-    //     phải inline từng element (parser tốn time, dễ crash) — đơn giản nhất
-    //     là strip `<style>` và yêu cầu admin dùng thẻ có sẵn.
-    // Sau sanitize admin vẫn dùng được `<p>/<strong>/<a href>` cơ bản nhưng
-    // KHÔNG lộ class/CSS nguy hiểm về phía user.
-    const rendered = replaceVariablesForUser(n.html_content, sampleUser);
-    safeMessage = sanitizeEmailHtml(rendered);
+    // Đường HTML: admin soạn trong "Soạn mẫu HTML".
+    // Pipeline: (1) replace {{var}} bằng user values → (2) sanitize.
+    // Sau sanitize admin vẫn dùng được <p>/<strong>/<a>/<img>/<table> nhưng
+    // KHÔNG có <style>, <script>, event handler, inline CSS.
+    const raw = replaceVariablesForUser(n.html_content, u);
+    bodyHtml = sanitizeEmailHtml(raw);
   } else {
-    const message = replaceVariablesForUser(n.message || '', sampleUser) || (locale === 'vi' ? 'Nội dung thông báo sẽ hiển thị ở đây...' : 'Notification content will appear here...');
-    safeMessage = escapeHtml(message);
+    // Đường plain text: không có html_content → dùng message + escape.
+    const raw = replaceVariablesForUser(n.message || '', u);
+    bodyHtml = escapeHtml(raw);
   }
 
-  const safeTitle = escapeHtml(rawTitle);
-  const safeTypeLabel = escapeHtml(typeLabel);
-  const safeSampleName = escapeHtml(sampleUser.full_name || 'Người dùng');
-  const safeSampleEmail = escapeHtml(sampleUser.email || '');
-  const safeMailFrom = escapeHtml(MAIL_FROM_NAME);
-  const planLabel = sampleUser.plan === 'pro' ? 'Pro' : escapeHtml(sampleUser.plan || 'Miễn phí');
+  // Nếu sau sanitize bodyHtml rỗng → fallback message
+  if (!bodyHtml) {
+    bodyHtml = `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#374151;font-size:15px;line-height:1.7;margin:0;">${escapeHtml(n.message || '')}</p>`;
+  }
 
-  const isUrgent = n.priority === 'urgent';
-  const isHigh = n.priority === 'high' && !isUrgent;
-  const isPromotion = typeKey === 'promotion';
-
-  const widthStyle = device === 'mobile' ? 'max-width: 375px;' : 'max-width: 680px;';
-  const initial = (sampleUser.full_name || 'U').charAt(0).toUpperCase();
+  // ----------------------------------------------------------------
+  // Build full document
+  // ----------------------------------------------------------------
+  const lang = locale === 'en' ? 'en' : 'vi';
 
   return `<!DOCTYPE html>
-<html lang="${locale}">
+<html lang="${lang}">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${safeMailFrom} - ${safeTypeLabel}</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>${escapeHtml(MAIL_FROM_NAME)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="padding:24px 12px;display:flex;justify-content:center;">
-<div style="${widthStyle}margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,.08);">
-
-  <!-- Header gradient -->
-  <div style="background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);padding:24px 40px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        ${SYSTEM_LOGO_URL
-          ? `<div style="background:rgba(255,255,255,.2);padding:6px;border-radius:8px;">
-               <img src="${SYSTEM_LOGO_URL}" alt="${safeMailFrom}" style="max-height:48px;max-width:160px;object-fit:contain;display:block;" />
-             </div>`
-          : `<div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;">📨</div>`
-        }
-        <div>
-          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${safeMailFrom}</h1>
-          <p style="margin:2px 0 0;color:rgba(255,255,255,.85);font-size:13px;">${safeTypeLabel}</p>
-        </div>
-      </div>
-      ${isUrgent
-        ? `<span style="background:#dc2626;color:#fff;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">${locale === 'vi' ? 'Ưu tiên cao' : 'Urgent'}</span>`
-        : isHigh
-          ? `<span style="background:#f59e0b;color:#fff;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">${locale === 'vi' ? 'Ưu tiên' : 'High'}</span>`
-          : ''
-      }
-    </div>
-  </div>
-
-  <!-- Body -->
-  <div style="padding:40px;">
-    <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6;">
-      ${locale === 'vi' ? 'Xin chào' : 'Hello'}
-      <strong style="color:#f97316;">${safeSampleName}</strong>,
-    </p>
-    <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
-      ${locale === 'vi' ? 'Bạn có một thông báo mới từ ' : 'You have a new notification from '}
-      <strong>${safeMailFrom}</strong>:
-    </p>
-
-    <!-- Title Box -->
-    <div style="background:${palette.bg};border:2px solid ${palette.border};border-radius:14px;padding:18px 22px;margin-bottom:20px;">
-      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${palette.text};text-transform:uppercase;letter-spacing:1px;">
-        ${safeTypeLabel}
-      </p>
-      <h2 style="margin:0;font-size:20px;font-weight:700;color:#1f2937;line-height:1.4;">
-        ${safeTitle}
-      </h2>
-    </div>
-
-    <!-- Message Box -->
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;padding:18px 22px;margin-bottom:24px;">
-      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">
-        📝 ${locale === 'vi' ? 'Nội dung' : 'Content'}
-      </p>
-      <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${safeMessage}</p>
-    </div>
-
-    ${isPromotion
-      ? `<div style="text-align:center;margin-bottom:24px;">
-           <a href="${FRONTEND_URL}" style="display:inline-block;background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);color:#fff;padding:13px 32px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35);">
-             ${locale === 'vi' ? 'Khám phá ưu đãi →' : 'Explore now →'}
-           </a>
-         </div>`
-      : ''
-    }
-
-    <p style="margin:0 0 18px;font-size:13px;color:#6b7280;line-height:1.6;">
-      ${locale === 'vi' ? 'Nếu có thắc mắc, vui lòng liên hệ ' : 'If you have questions, please contact '}
-      <a href="mailto:${SUPPORT_EMAIL}" style="color:#f97316;text-decoration:none;font-weight:500;">${SUPPORT_EMAIL}</a>.
-    </p>
-
-    <!-- User Info Chip -->
-    <div style="background:#fff7ed;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
-      <div style="width:36px;height:36px;background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0;">
-        ${escapeHtml(initial)}
-      </div>
-      <div style="min-width:0;flex:1;">
-        <p style="margin:0;font-size:13px;font-weight:600;color:#92400e;">${safeSampleName}</p>
-        <p style="margin:2px 0 0;font-size:12px;color:#b45309;">${safeSampleEmail}</p>
-      </div>
-      <span style="background:#f97316;color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;flex-shrink:0;">
-        ${escapeHtml(planLabel)}
-      </span>
-    </div>
-  </div>
-
-  <!-- Footer -->
-  <div style="padding:24px 40px;text-align:center;font-size:11px;color:#6b7280;">
-    <p style="margin:0 0 4px;font-weight:600;">${locale === 'vi' ? 'Đơn vị chủ quản: Công ty TNHH Giải pháp số Digiso' : 'Operated by Digiso Digital Solutions Co., Ltd'}</p>
-    <p style="margin:0 0 4px;">${locale === 'vi' ? 'Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh' : 'I.101B Block A, Software Tech Park, Vietnam National University HCMC'}</p>
-    <p style="margin:0;">${locale === 'vi' ? 'Điện thoại: (+84) 877 909 606 | Email: info@digiso.vn' : 'Phone: (+84) 877 909 606 | Email: info@digiso.vn'}</p>
-  </div>
-
-</div>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table width="680" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:680px;width:100%;background:#ffffff;
+                      border-radius:12px;overflow:hidden;
+                      box-shadow:0 4px 16px rgba(0,0,0,.08);">
+          <tr>
+            <td style="padding:32px 36px;">
+              ${bodyHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 36px;border-top:1px solid #e5e7eb;text-align:center;">
+              <p style="margin:0 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#9ca3af;">
+                ${escapeHtml(SUPPORT_EMAIL)}
+              </p>
+              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#d1d5db;">
+                <a href="${FRONTEND_URL}" style="color:#9ca3af;text-decoration:none;">${escapeHtml(MAIL_FROM_NAME)}</a>
+                &nbsp;·&nbsp;
+                <a href="${FRONTEND_URL}" style="color:#9ca3af;text-decoration:none;">${escapeHtml(FRONTEND_URL)}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
