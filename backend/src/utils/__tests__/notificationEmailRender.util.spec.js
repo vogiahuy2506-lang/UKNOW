@@ -125,12 +125,11 @@ describe('renderNotificationEmailHtml', () => {
   // Đường plain text
   // ---------------------------------------------------------------------------
 
-  it('không có html_content → message được escape và wrap trong <p>', () => {
+  it('không có html_content + message text thuần → message được escape và wrap trong <p>', () => {
     const html = renderNotificationEmailHtml({
-      notification: { message: 'Hello <b>World</b>' }
+      notification: { message: 'Hello World' }
     });
-    expect(html).toContain('Hello &lt;b&gt;World&lt;/b&gt;');
-    expect(html).not.toContain('<b>World</b>');
+    expect(html).toContain('<p style="margin:0 0 12px;">Hello World</p>');
   });
 
   it('message rỗng + html_content rỗng → fallback <p></p>', () => {
@@ -329,8 +328,59 @@ describe('renderNotificationEmailHtml', () => {
 
   it('html_content rỗng/whitespace → fallback message được escape', () => {
     const html = renderNotificationEmailHtml({
-      notification: { title: 'T', message: 'Fallback <b>text</b>' }
+      notification: { title: 'T', message: 'Fallback text only' }
     });
-    expect(html).toContain('Fallback &lt;b&gt;text&lt;/b&gt;');
+    expect(html).toContain('Fallback text only');
+  });
+
+  // ---------------------------------------------------------------------------
+  // BACKWARD COMPAT (19/09): notification cũ lưu HTML trong `message` do FE
+  // buildPayload cũ. Renderer tự detect và route qua html pipeline.
+  // ---------------------------------------------------------------------------
+
+  it('BACKWARD: message chứa HTML tag (html_content null) → render như html_content', () => {
+    const html = renderNotificationEmailHtml({
+      notification: {
+        title: 'Old notif',
+        message: '<h1>Old HTML in message</h1><p>Body</p>',
+        html_content: null
+      }
+    });
+    expect(html).toContain('<h1>Old HTML in message</h1>');
+    expect(html).toContain('<p>Body</p>');
+    // KHÔNG escape (vì đi qua sanitize pipeline, không qua escapeHtml)
+    expect(html).not.toContain('&lt;h1&gt;');
+  });
+
+  it('BACKWARD: message có <script> vẫn bị strip', () => {
+    const html = renderNotificationEmailHtml({
+      notification: {
+        message: '<p>ok</p><script>alert(1)</script>',
+        html_content: null
+      }
+    });
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('alert');
+    expect(html).toContain('<p>ok</p>');
+  });
+
+  it('BACKWARD: message text thuần (không có HTML tag) → escape + wrap <p>', () => {
+    const html = renderNotificationEmailHtml({
+      notification: {
+        message: 'Just plain text with <symbol>',
+        html_content: null
+      }
+    });
+    // Regex yêu cầu có thẻ đóng hoặc mở — '<symbol>' không có </symbol> và
+    // 'symbol' không phải HTML element recognized nên KHÔNG trigger backward.
+    // → escape bình thường.
+    expect(html).toContain('Just plain text with &lt;symbol&gt;');
+  });
+
+  it('html_content=string rỗng → coi như null, fallback message', () => {
+    const html = renderNotificationEmailHtml({
+      notification: { message: 'fallback only', html_content: '   ' }
+    });
+    expect(html).toContain('fallback only');
   });
 });

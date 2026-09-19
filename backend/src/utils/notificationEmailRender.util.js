@@ -342,22 +342,37 @@ export function renderNotificationEmailHtml({ notification, user = null, locale 
   };
 
   // ----------------------------------------------------------------
-  // Body content
+  // Body content — quyết định đường nào dựa trên data có sẵn.
   // ----------------------------------------------------------------
+  //
+  // ƯU TIÊN:
+  //   1. html_content (đường chính — admin soạn HTML, push 5c70085a tách riêng)
+  //   2. message có chứa HTML tag recognized (BACKWARD COMPAT: data cũ trước
+  //      push 5c70085a, FE buildPayload cũ chưa tách html_content nên nhét HTML
+  //      vào column `message` — renderer tự detect để không phá data cũ)
+  //   3. Plain text fallback (escape + wrap <p>)
+  //
+  // Heuristic BACKWARD: match nguyên 1 thẻ HTML trong whitelist của sanitizer.
+  // Tránh false-positive với text kiểu 'price <symbol>' hay 'use < bằng'.
   let bodyHtml;
+  let htmlSource = null;
 
   if (n.html_content && typeof n.html_content === 'string' && n.html_content.trim() !== '') {
-    // Đường HTML: admin soạn trong "Soạn mẫu HTML".
-    // Pipeline: (1) replace {{var}} bằng user values → (2) sanitize CHỈ thẻ
-    // nguy hiểm (script, iframe, form, embed, object) + on*= handler.
-    // GIỮ: <style>, style="", <table>, <img>, <a href="...">, <strong>, ...
-    // Lý do: email client (Gmail/Outlook) KHÔNG render CSS trong <style> đáng
-    // tin cậy — nhưng admin paste nguyên template (MIXML/CKEditor) cần GIỮ
-    // <style> để fallback. GIỮ style="" vì Gmail CHỈ chấp nhận inline CSS.
-    const raw = replaceVariablesForUser(n.html_content, u);
+    htmlSource = n.html_content;
+  } else if (n.message && typeof n.message === 'string') {
+    const htmlTagRegex = /<\/?(?:p|br|strong|b|em|i|u|s|del|ins|ul|ol|li|h[1-6]|blockquote|code|pre|kbd|samp|a|span|div|img|figure|figcaption|table|thead|tbody|tfoot|tr|th|td|hr|small|sup|sub|abbr|cite|style|link|meta|html|head|body|script|iframe|form|button|input|label|select|option|textarea|nav|header|footer|main|section|article|aside|figure|picture|video|audio|source|svg|canvas)\b[^>]*>/i;
+    if (htmlTagRegex.test(n.message)) {
+      htmlSource = n.message; // BACKWARD: notification cũ chứa HTML trong `message`
+    }
+  }
+
+  if (htmlSource !== null) {
+    // Pipeline HTML: replace {{var}} → sanitize (giữ style, <style>; strip
+    // thẻ nguy hiểm + on*=). Xem chi tiết trong sanitizeEmailHtml JSDoc.
+    const raw = replaceVariablesForUser(htmlSource, u);
     bodyHtml = sanitizeEmailHtml(raw);
   } else {
-    // Đường plain text: không có html_content → escape message + wrap <p>.
+    // Plain text: escape + wrap <p>.
     const raw = replaceVariablesForUser(n.message || '', u);
     bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(raw)}</p>`;
   }
