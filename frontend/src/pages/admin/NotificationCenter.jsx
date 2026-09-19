@@ -73,12 +73,20 @@ const formatDateTime = (value) => {
 };
 
 function buildPayloadFromHtml({ subject, bodyHtml, type, targeting, schedule }) {
+  // Map từ form "Mẫu email" (bodyHtml = HTML admin soạn) sang payload BE.
+  // QUAN TRỌNG (19/09):
+  //  - `message` = text thuần (BE dùng cho email client text-mode fallback).
+  //  - `html_content` = HTML admin soạn (BE dùng cho SMTP HTML body).
+  //  - Trước đây chỉ truyền `message = bodyHtml` → BE lưu HTML vào column
+  //    TEXT → render escape → mail hiển thị "&lt;h1&gt;..." thay vì HTML.
+  const html = String(bodyHtml || '').trim();
   return {
     type,
     title: String(subject || '').trim(),
     title_en: '',
-    message: String(bodyHtml || '').trim(),
+    message: html ? htmlToPlainText(html) : '',
     message_en: '',
+    html_content: html || null,
     target_roles: targeting.roles,
     target_plans: targeting.plans,
     target_statuses: targeting.statuses,
@@ -91,6 +99,27 @@ function buildPayloadFromHtml({ subject, bodyHtml, type, targeting, schedule }) 
     recurrence_pattern: schedule.recurrence_pattern,
     recurrence_end_date: schedule.recurrence_end_date,
   };
+}
+
+/**
+ * Trích text thuần từ HTML admin soạn (dùng cho `message` plain-text fallback).
+ * Match với logic của EmailPreviewModal.stripHtmlToText nhưng đơn giản hơn
+ * (chỉ dùng cho payload, không cần render).
+ */
+function htmlToPlainText(html) {
+  if (!html || typeof html !== 'string') return '';
+  return html
+    .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function validatePayload(payload) {
