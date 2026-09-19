@@ -2453,6 +2453,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ─── Trigger for marketplace_seller_stats.updated_at (mirrors migration 226)
+DROP TRIGGER IF EXISTS trg_seller_stats_updated_at ON marketplace_seller_stats;
+CREATE TRIGGER trg_seller_stats_updated_at
+    BEFORE UPDATE ON marketplace_seller_stats
+    FOR EACH ROW
+    EXECUTE FUNCTION update_marketplace_seller_stats_timestamp();
+
 -- ─── Schema migrations tracker ─────────────────────────────────────────
 -- Tạo sẵn để migrationRunner không tự tạo + đánh dấu là đã chạy hết.
 CREATE TABLE schema_migrations (
