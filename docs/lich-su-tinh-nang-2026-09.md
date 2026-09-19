@@ -1,6 +1,6 @@
-# Lịch sử tính năng — 19/08 → 13/09/2026
+# Lịch sử tính năng — 19/08 → 19/09/2026
 
-Tổng hợp các plan đã triển khai xong từ 19/08 tới 13/09/2026, kèm commit làm bằng chứng. Nối tiếp
+Tổng hợp các plan đã triển khai xong từ 19/08 tới 19/09/2026, kèm commit làm bằng chứng. Nối tiếp
 `lich-su-tinh-nang-2026-08.md` (dừng ở 18/08).
 
 Plan chi tiết nằm trong `_internal/` (không được git theo dõi). Khi tính năng lên `main`, plan được
@@ -394,8 +394,45 @@ vào cột nào.
 | Ghi `lastFailureReason` cho mọi lượt hỏng Zalo cá nhân (mọi chế độ); "Tham số không hợp lệ" lặp lại cùng số trong 30 ngày mới đánh dấu không liên hệ được (bảng đó không có hạn, đánh nhầm là bỏ khách vĩnh viễn); `run_metadata.recipientAudit` đếm hàng nguồn / có số / bị lọc / đã gửi lượt trước; endpoint `GET /delivery-monitor/runs/:id/failures` | `3edfe25e` `c7155362` |
 | Trang Giám sát: nhãn "lượt dự kiến" thay "người"; bấm "N lỗi" mở hàng con `người nhận · lý do · số lần · lần cuối` + dòng giải thích từ `recipientAudit` | `c2427628` `4f208a7c` |
 
-## Việc còn treo (tính tới 14/09/2026)
+## Zalo: khoá tra số khoá nhầm kênh nhóm, tiết kiệm lượt tra, banner lý do hoãn, trần thử lại (16–19/09)
 
+Sếp báo lịch nhóm 09:00 ngày 15/09 không gửi. Truy trên production: lịch khởi động đúng giờ nhưng bị
+hoãn ngay tại node gửi vì tài khoản Zalo đang bị khoá tra số điện thoại tới 00:00 hôm sau; ngày 14/09
+y hệt. Khoá đó do PR-2 ngày 11/09 (`95a3a6f5`) áp cho mọi kênh, trong khi gửi nhóm theo groupId không
+tra số. Khách không thấy lý do nên bấm chạy tay rồi nhân bản chiến dịch, 11 nhóm nhận cùng tin hai lần.
+Cùng lúc phát hiện 13 số từ chối nhận tin bị tra lại mỗi sáng suốt 5 ngày vì bộ phân loại không biết
+chuỗi "không muốn nhận tin nhắn", và đường gửi cá nhân tra số cho mọi bước dù uid đã biết (30 ngày:
+1.426/4.231 lượt tra thừa, tài khoản 34 là 48%).
+
+| Việc | Commit |
+|---|---|
+| Khoá tra số chỉ chặn kênh có tra số (cá nhân, kết bạn); kênh nhóm đi thẳng | `ce089d1f` |
+| "Xin lỗi! Hiện tại tôi không muốn nhận tin nhắn." → danh sách chặn bền `stranger_blocked` ngay lần đầu | `891913cc` |
+| Đã biết uid (dòng dữ liệu hoặc `customers.zalo_id`) thì gửi thẳng, không tra số, không bị khoá tra số chặn, pool không nhả slot oan | `99253edc` |
+| Banner nêu tài khoản nào, vì sao, tới mấy giờ; hiện cả ở trang builder (poll 60s); badge "bị giới hạn tra số" ở Quản lý kênh gửi; hộp xác nhận trước khi Chạy/lưu lịch cá nhân trên tài khoản đang khoá | `0b3e48d9` `a27dc029` |
+| Chế độ một lần: trần 3 lần gửi hỏng cho cùng người (`ZALO_ONESHOT_MAX_SEND_FAILURES`), giãn 6 giờ giữa hai lần thử (`ZALO_ONESHOT_RETRY_DELAY_MS`); trước đó một số bị thử tới 9 lần/ngày | `59a9a2f0` |
+
+Nghiệm thu bằng production (19/09): 13 số run 381 vào bảng chặn 06:00–06:23 ngày 17/09, mỗi số một
+lần; log `lookup_skipped` có; run 374/381/408 mang tên tài khoản trong mốc hoãn; run 381 có 179 người
+đang đếm lỗi với hẹn +6 giờ, run 408 một người bị bỏ sau 3 lần. Tài khoản 34 gửi cá nhân từ 15 số/ngày
+lên 181 rồi 501 số/ngày. **Đính chính**: giả thuyết "Zalo chỉ cho ~30 lượt tra/ngày" ghi ngày 16/09 là
+sai; nghẽn là do thử lại cùng 13 số cộng khoá tra số lúc ~06:30 do run kết bạn gây ra. Run kết bạn 374
+vẫn làm tài khoản bị khoá mỗi sáng, nên vẫn nên tạm dừng hoặc đổi tài khoản cho campaign 348.
+
+Bài học vận hành ghi kèm: cùng một agent sau compaction báo cáo về việc cũ trong khi tool call vẫn làm
+việc mới (đừng tin báo cáo, nhìn `git diff`); thợ báo "unit 3/3 suite" là chạy chọn lọc; đẩy từ
+worktree xong thì cây chính còn bản cũ chưa commit; CI từ chối deploy khi có push mới hơn ("Stale
+backend deploy refused") là bình thường, kiểm lượt sau có chứa commit mình.
+
+## Việc còn treo (tính tới 19/09/2026)
+
+- **Biểu mẫu + đặt lịch + thanh toán**: code đã lên production đủ yêu cầu gốc, kể cả MoMo hiện thông
+  tin ví không QR (`c5ef85b1`, 19/09). **Chưa nghiệm thu thật** mục nào: production chỉ có 1 form thử
+  và 2 bài nộp từ 14/09. Kịch bản 7 bước ở `_internal/NGHIEM_THU_FORM_DAT_LICH_2026-09-19.md`, cần
+  sếp hoặc Phúc làm với điện thoại và app ngân hàng thật. PR-8 Google Trang tính chưa làm.
+- **Chiến dịch "chuyển giao công nghệ" (384)**: sếp đã xoá bản sao (hết gửi đôi) nhưng cũng dừng run
+  gốc lúc 10:36 ngày 16/09, nên tin số 2, 3, 4 chưa bao giờ gửi; muốn tiếp phải tạo lượt chạy mới chỉ
+  giữ bước 2–4.
 - **Nghiệm thu PR-3** sau 2–3 ngày: đếm dòng `zalo_messages` còn `tracking_metadata->>'status' =
   'queued'` theo ngày, phải về 0 (trước vá là 200–350 dòng/tuần). Dấu hiệu sớm tốt: 0 dòng mới
   trong giờ đầu sau deploy.
@@ -470,7 +507,8 @@ vào cột nào.
   test trên Node 20; (3) `.gitattributes` ép `*.js/*.jsx/*.sql` về LF trong khi repo còn nhiều file CRLF —
   kiểm `git status` sau mỗi lần pull. Migration 212–215 (Telegram/WhatsApp, xoá Viber) áp ở deploy
   xanh `5edf9ddf` 22:55 13/09 (chưa kiểm lại `schema_migrations` bằng SQL).
-- **Lead tích "không đồng ý" vẫn đi vào chiến dịch** qua node `read_landing_leads` (phát hiện 13/09,
-  chưa sửa) — chuyện tuân thủ NĐ 330, nên làm sớm.
+- ~~Lead tích "không đồng ý" vẫn đi vào chiến dịch qua node `read_landing_leads`~~ — **đã sửa 19/09**:
+  PR-1 `4d8a073a` bỏ người đã từ chối hoặc đã huỷ nhận tin, PR-2 `a6db951e` chuyển hẳn sang chỉ lấy
+  lead đã tích đồng ý.
 - **`zalo_disconnected` nổ mỗi giờ nhiều ngày** vì nhìn cửa sổ 7 ngày rồi báo mỗi giờ — cùng bệnh với
   cảnh báo tỉ lệ hỏng đã sửa 13/09, chưa có plan.
