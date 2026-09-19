@@ -395,6 +395,7 @@ export default {
     landingCustomizer: 'Tuỳ chỉnh Landing',
     bulkNotification: 'Gửi thông báo',
     notificationCenter: 'Trung tâm thông báo',
+    emailCampaignCenter: 'Trung tâm Chiến dịch Email',
     welcomeEmail: 'Email & lịch nhắc hạn',
     helpArticles: 'Bài viết hướng dẫn',
     helpUnanswered: 'Câu hỏi chưa trả lời',
@@ -8283,9 +8284,9 @@ export default {
   },
 
   notificationCenter: {
-    title: 'Trung tâm thông báo',
+    title: 'Trung tâm Chiến dịch Email',
     subtitle: 'Quản lý và gửi thông báo đến người dùng',
-    history: 'Lịch sử',
+    history: 'Lịch sử chiến dịch',
     create: 'Tạo mới',
     types: {
       maintenance: 'Bảo trì',

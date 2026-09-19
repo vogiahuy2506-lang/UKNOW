@@ -397,6 +397,7 @@ export default {
     landingCustomizer: 'Landing Customizer',
     bulkNotification: 'Send Notification',
     notificationCenter: 'Notification Center',
+    emailCampaignCenter: 'Email Campaign Center',
     welcomeEmail: 'Emails & reminder schedule',
     helpArticles: 'Help Articles',
     helpUnanswered: 'Unanswered Questions',
@@ -8359,9 +8360,9 @@ Feel free to ask me anything!`,
   },
 
   notificationCenter: {
-    title: 'Notification Center',
+    title: 'Email Campaign Center',
     subtitle: 'Manage and send notifications to users',
-    history: 'History',
+    history: 'Campaign history',
     create: 'Create New',
     types: {
       maintenance: 'Maintenance',

@@ -149,7 +149,34 @@ const adminNotificationApiService = {
    */
   getAllUsers(params = {}) {
     return api.get('/admin/members', { params: { ...params, limit: 1000 } });
-  }
+  },
+
+  // =====================
+  // Notification Templates (super admin save-as)
+  // =====================
+
+  /**
+   * List notification templates (admin co the xem de chon o tab Gui).
+   * @param {string=} typeKey - loc theo type_key
+   */
+  listTemplates(typeKey) {
+    const params = typeKey ? { type_key: typeKey } : {};
+    return api.get('/admin/notifications/templates', { params });
+  },
+
+  /**
+   * Lay 1 template theo id.
+   */
+  getTemplate(id) {
+    return api.get(`/admin/notifications/templates/${id}`);
+  },
+
+  /**
+   * Tao template moi (chi superadmin).
+   */
+  createTemplate(data) {
+    return api.post('/admin/notifications/templates', data);
+  },
 };
 
 export default adminNotificationApiService;

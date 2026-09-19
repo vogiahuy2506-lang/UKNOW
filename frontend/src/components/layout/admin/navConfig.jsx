@@ -66,7 +66,7 @@ export const superAdminMenuItems = (t) => [
   { key: 'activation_funnel', name: t('nav.activationFunnel'), defaultCategory: 'overview', path: '/admin/funnel', icon: HiOutlineFilter },
   { key: 'ai_usage_analytics', name: t('nav.aiUsageAnalytics'), defaultCategory: 'messaging', path: '/admin/ai-ops/usage', icon: HiOutlineSparkles },
   { key: 'ai_models', name: t('nav.aiModels'), defaultCategory: 'messaging', path: '/admin/ai-models', icon: HiOutlineCog },
-  { key: 'notification_center', name: t('nav.notificationCenter'), defaultCategory: 'messaging', path: '/admin/notification-center', icon: HiOutlineMailOpen },
+  { key: 'notification_center', name: t('nav.emailCampaignCenter'), defaultCategory: 'messaging', path: '/admin/notification-center', icon: HiOutlineMailOpen },
   { key: 'welcome_email', name: t('nav.welcomeEmail'), defaultCategory: 'messaging', path: '/admin/welcome-email', icon: HiOutlineMail },
   { key: 'help_articles', name: t('nav.helpArticles'), defaultCategory: 'messaging', path: '/admin/help-articles', icon: HiOutlineDocumentText },
   { key: 'help_unanswered', name: t('nav.helpUnanswered'), defaultCategory: 'messaging', path: '/admin/ai-ops/unanswered', icon: HiOutlineQuestionMarkCircle },

@@ -1,871 +1,959 @@
-import { useState, useEffect, useCallback } from 'react';
+/**
+ * Notification Center — Remake 2026-09-19 (v3)
+ * ----------------------------------------------------------------
+ * 3 pill tabs:
+ *   1) Lịch sử chiến dịch — bảng danh sách + hành động
+ *   2) Soạn mẫu         — chọn 1 trong 6 dạng, soạn HTML Vi (code editor), lưu thành mẫu
+ *   3) Chiến dịch mới    — chọn dạng, đối tượng, lịch, nhấn Gửi (có thể dùng mẫu đã lưu)
+ *
+ * Tên hiển thị: "Trung tâm Chiến dịch Email" (alias của "Trung tâm Thông báo").
+ *
+ * Pattern tham khảo AdminWelcomeEmailPage:
+ *  - 1 textarea HTML lớn + chip variables
+ *  - Live preview iframe render HTML vừa soạn
+ *  - Selector chip ở trên editor
+ *
+ * Subject + body tách riêng; map xuống `title` + `message` khi gửi.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlineBell, HiOutlineMail, HiOutlineClock, HiOutlineUserGroup, HiOutlineMailOpen, HiOutlinePencil, HiOutlineEye } from 'react-icons/hi';
-import { FaBell, FaEye, FaCopy, FaRedo, FaClock, FaEnvelope } from 'react-icons/fa';
+import {
+  HiOutlineBell,
+  HiOutlineClock,
+  HiOutlineCode,
+  HiOutlineEye,
+  HiOutlineMailOpen,
+  HiOutlinePaperAirplane,
+  HiOutlinePencil,
+  HiOutlineRefresh,
+  HiOutlineUserGroup,
+  HiOutlineSparkles,
+  HiOutlineBookmark,
+} from 'react-icons/hi';
+import { FaBell, FaClock } from 'react-icons/fa';
 import adminNotificationApiService from '../../features/admin/services/adminNotificationApi.service';
 import {
-  NotificationTypeSelector,
+  renderFreeformPreview,
+  TYPE_TEMPLATES,
+} from '../../features/admin/utils/notificationTemplates.util';
+import {
   TargetingPanel,
   ScheduleSelector,
-  NotificationEditor,
   NotificationHistoryTable,
   EmailPreviewModal,
-  EmailLogsModal
+  EmailLogsModal,
+  SaveAsTemplateModal,
 } from '../../features/admin/components';
+import { useAuthStore } from '../../stores/authStore.js';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const TABS = [
+  { id: 'history', label: 'Lịch sử chiến dịch', icon: HiOutlineMailOpen },
+  { id: 'templates', label: 'Soạn mẫu', icon: HiOutlineCode },
+  { id: 'send', label: 'Chiến dịch mới', icon: HiOutlinePaperAirplane },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const formatDateTime = (value) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+function buildPayloadFromHtml({ subject, bodyHtml, type, targeting, schedule }) {
+  return {
+    type,
+    title: String(subject || '').trim(),
+    title_en: '',
+    message: String(bodyHtml || '').trim(),
+    message_en: '',
+    target_roles: targeting.roles,
+    target_plans: targeting.plans,
+    target_statuses: targeting.statuses,
+    target_user_ids: targeting.user_ids,
+    target_emails: targeting.emails,
+    registered_before: targeting.registered_before,
+    registered_after: targeting.registered_after,
+    schedule_type: schedule.schedule_type,
+    scheduled_at: schedule.scheduled_at,
+    recurrence_pattern: schedule.recurrence_pattern,
+    recurrence_end_date: schedule.recurrence_end_date,
+  };
+}
+
+function validatePayload(payload) {
+  if (!payload.title?.trim()) {
+    return 'Vui lòng nhập tiêu đề email.';
+  }
+  if (!payload.message?.trim()) {
+    return 'Vui lòng nhập nội dung HTML.';
+  }
+  if (payload.schedule_type === 'now') {
+    const hasRecipients =
+      (payload.target_user_ids?.length || 0) > 0 || (payload.target_emails?.length || 0) > 0;
+    if (!hasRecipients) return 'Vui lòng chọn ít nhất một người nhận (user IDs hoặc email)';
+  } else {
+    const hasTargeting =
+      (payload.target_roles?.length || 0) > 0 ||
+      (payload.target_plans?.length || 0) > 0 ||
+      (payload.target_statuses?.length || 0) > 0 ||
+      (payload.target_user_ids?.length || 0) > 0 ||
+      (payload.target_emails?.length || 0) > 0 ||
+      payload.registered_before ||
+      payload.registered_after;
+    if (!hasTargeting) return 'Vui lòng chọn ít nhất một tiêu chí người nhận';
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function PillTabs({ active, onChange, tabs }) {
+  return (
+    <div className="flex flex-wrap gap-2" role="tablist">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const selected = active === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-pressed={selected}
+            onClick={() => onChange(tab.id)}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+              selected
+                ? 'border-orange-500 bg-orange-500 text-white shadow-sm'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TypeChips({ value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn dạng email">
+      {Object.values(TYPE_TEMPLATES).map((t) => {
+        const selected = value === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onChange(t.key)}
+            aria-pressed={selected}
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+              selected
+                ? 'border-orange-500 bg-orange-500 text-white shadow-sm'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function HtmlEditor({ value, onChange, variables, bodyRef }) {
+  const insertVariable = (variable) => {
+    const token = `{{${variable}}}`;
+    const input = bodyRef.current;
+    const start = input?.selectionStart ?? value.length;
+    const end = input?.selectionEnd ?? start;
+    const nextValue = value.slice(0, start) + token + value.slice(end);
+    onChange(nextValue);
+    window.requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <span className="text-sm font-medium text-slate-800">Biến số có sẵn</span>
+        <p className="text-xs text-slate-500">Click để chèn tại vị trí con trỏ trong HTML.</p>
+        <div className="flex flex-wrap gap-2">
+          {variables.map((variable) => (
+            <button
+              key={variable}
+              type="button"
+              onClick={() => insertVariable(variable)}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 font-mono text-xs text-slate-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700"
+            >
+              {`{{${variable}}}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-slate-800">Mã HTML</span>
+          <span className="font-mono text-[10px] text-slate-400">{value.length} chars</span>
+        </div>
+        <textarea
+          ref={bodyRef}
+          aria-label="Mã HTML email"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="<p>Tiêu đề email...</p>"
+          rows={22}
+          spellCheck={false}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 font-mono text-xs leading-5 text-slate-800 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+        />
+        <p className="text-xs text-slate-500">
+          Nội dung body của email (chỉ phần <code className="font-mono">body</code>, không cần thẻ <code className="font-mono">&lt;html&gt;</code> bao ngoài). Tiêu đề riêng ở ô phía trên.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LivePreview({ html, subject, templateKey }) {
+  const previewHtml = useMemo(
+    () => renderFreeformPreview({ templateKey, bodyHtml: html, subject }),
+    [templateKey, html, subject],
+  );
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+            <HiOutlineEye className="h-5 w-5 text-orange-500" />
+            Bản xem trước
+          </h2>
+          <p className="mt-1 truncate text-xs text-slate-500">{subject || 'Chưa có tiêu đề'}</p>
+        </div>
+      </div>
+      {html ? (
+        <iframe
+          title="Email Preview"
+          srcDoc={previewHtml}
+          sandbox=""
+          className="h-[760px] w-full bg-white"
+        />
+      ) : (
+        <div className="flex h-80 items-center justify-center text-sm text-slate-400">
+          Chưa có nội dung để xem trước
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+const VARIABLES = ['user_name', 'user_email', 'user_plan', 'product_name', 'current_date', 'dashboard_url', 'support_email'];
 
 export default function NotificationCenter() {
   const [activeTab, setActiveTab] = useState('history');
-  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  // Notification form state
-  const [notificationType, setNotificationType] = useState('announcement');
-  const [priority, setPriority] = useState('normal');
-  const [targetingCriteria, setTargetingCriteria] = useState({});
-  const [recipientCount, setRecipientCount] = useState(null);
-  const [scheduleConfig, setScheduleConfig] = useState({ schedule_type: 'now' });
-  const [editorData, setEditorData] = useState({
-    title: '',
-    title_en: '',
-    message: '',
-    message_en: ''
-  });
+  // Tab "Mẫu email" state
+  const [typeKey, setTypeKey] = useState('announcement');
+  // drafts: { [type]: { subject, bodyHtml } } — lưu bản đã sửa theo từng type
+  const initialDrafts = useMemo(
+    () => Object.fromEntries(
+      Object.entries(TYPE_TEMPLATES).map(([k, tpl]) => [k, { subject: tpl.subject, bodyHtml: tpl.bodyHtml }]),
+    ),
+    [],
+  );
+  const [drafts, setDrafts] = useState(initialDrafts);
+  const draft = drafts[typeKey] || { subject: '', bodyHtml: '' };
+  const setDraft = (next) => setDrafts((current) => ({ ...current, [typeKey]: next }));
+  const bodyRef = useRef(null);
 
-  // Notifications list
+  // Tab "Gửi" state
+  const [sendTypeKey, setSendTypeKey] = useState('announcement');
+  const [targeting, setTargeting] = useState({});
+  const [schedule, setSchedule] = useState({ schedule_type: 'now' });
+
+  // History
   const [notifications, setNotifications] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [loadingList, setLoadingList] = useState(false);
 
-  // Dashboard stats
-  const [dashboardStats, setDashboardStats] = useState(null);
-
   // Modals
-  const [previewModal, setPreviewModal] = useState({ isOpen: false, notification: null });
-  const [logsModal, setLogsModal] = useState({ isOpen: false, notificationId: null, title: '' });
-  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [previewModal, setPreviewModal] = useState({ open: false, notification: null });
+  const [logsModal, setLogsModal] = useState({ open: false, notificationId: null, title: '' });
 
-  const loadNotifications = useCallback(async (page = 1) => {
-    setLoadingList(true);
-    try {
-      const response = await adminNotificationApiService.getNotifications({
-        page,
-        limit: pagination.limit || 20
-      });
-      if (response.data?.success) {
-        setNotifications(response.data.data.data);
-        setPagination(response.data.data.pagination);
+  // Save-as template modal + saved templates cache (dung o tab "Gui")
+  const [saveAsModal, setSaveAsModal] = useState({
+    open: false,
+    submitting: false,
+    errorMessage: '',
+  });
+  const [savedTemplates, setSavedTemplates] = useState([]);
+  const [selectedSavedTemplateId, setSelectedSavedTemplateId] = useState('');
+
+  // Role check (de an nut "Luu thanh mau" neu khong phai super admin)
+  const currentUser = useAuthStore((state) => state.user);
+  const userRoleCode = String(currentUser?.roleCode || '').trim().toLowerCase();
+  const userRoleRaw = String(currentUser?.role || '').trim().toLowerCase();
+  // Trong convention hiện tai cua repo: role === 'admin' trong DB = super admin.
+  // Frontend cung cap roleCode === 'admin' qua authStore. Chap nhan ca hai dang.
+  const isSuperAdmin = userRoleCode === 'admin' || userRoleRaw === 'admin' || userRoleCode === 'superadmin' || userRoleRaw === 'superadmin';
+
+  // ----------------------------------------------------------------- Loaders
+
+  const loadNotifications = useCallback(
+    async (page = 1) => {
+      setLoadingList(true);
+      try {
+        const response = await adminNotificationApiService.getNotifications({
+          page,
+          limit: pagination.limit || 20,
+        });
+        if (response.data?.success) {
+          setNotifications(response.data.data.data);
+          setPagination(response.data.data.pagination);
+        }
+      } catch (error) {
+        console.error('Error loading notifications:', error);
+        toast.error('Không thể tải danh sách thông báo');
+      } finally {
+        setLoadingList(false);
       }
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-      toast.error('Không thể tải danh sách thông báo');
-    } finally {
-      setLoadingList(false);
-    }
-  }, [pagination.limit]);
+    },
+    [pagination.limit],
+  );
 
-  // Load notifications on mount
   useEffect(() => {
     loadNotifications();
-    loadDashboardStats();
   }, [loadNotifications]);
 
-  const loadDashboardStats = async () => {
+  // Load danh sach mau da luu (cho dropdown o tab "Gui")
+  const loadSavedTemplates = useCallback(async () => {
     try {
-      const response = await adminNotificationApiService.getDashboardStats();
+      const response = await adminNotificationApiService.listTemplates();
       if (response.data?.success) {
-        setDashboardStats(response.data.data);
+        setSavedTemplates(response.data.data || []);
       }
     } catch (error) {
-      console.error('Error loading dashboard stats:', error);
+      console.error('[NotificationCenter] loadSavedTemplates error:', error);
     }
-  };
+  }, []);
 
-  const buildNotificationPayload = useCallback(() => ({
-    type: notificationType,
-    priority,
-    title: editorData.title,
-    title_en: editorData.title_en,
-    message: editorData.message,
-    message_en: editorData.message_en,
-    target_roles: targetingCriteria.roles,
-    target_plans: targetingCriteria.plans,
-    target_statuses: targetingCriteria.statuses,
-    target_user_ids: targetingCriteria.user_ids,
-    target_emails: targetingCriteria.emails,
-    registered_before: targetingCriteria.registered_before,
-    registered_after: targetingCriteria.registered_after,
-    schedule_type: scheduleConfig.schedule_type,
-    scheduled_at: scheduleConfig.scheduled_at,
-    recurrence_pattern: scheduleConfig.recurrence_pattern,
-    recurrence_end_date: scheduleConfig.recurrence_end_date
-  }), [
-    notificationType, priority, editorData, targetingCriteria, scheduleConfig
-  ]);
+  useEffect(() => {
+    loadSavedTemplates();
+  }, [loadSavedTemplates]);
 
-  const validatePayload = (payload) => {
-    if (!payload.title?.trim()) return 'Vui lòng nhập tiêu đề';
-    if (!payload.message?.trim()) return 'Vui lòng nhập nội dung';
-
-    if (payload.schedule_type === 'now') {
-      const hasRecipients =
-        (payload.target_user_ids && payload.target_user_ids.length > 0) ||
-        (payload.target_emails && payload.target_emails.length > 0);
-      if (!hasRecipients) {
-        return 'Vui lòng chọn ít nhất một người nhận (user IDs hoặc email)';
-      }
-    } else {
-      const hasTargeting =
-        (payload.target_roles && payload.target_roles.length > 0) ||
-        (payload.target_plans && payload.target_plans.length > 0) ||
-        (payload.target_statuses && payload.target_statuses.length > 0) ||
-        (payload.target_user_ids && payload.target_user_ids.length > 0) ||
-        (payload.target_emails && payload.target_emails.length > 0) ||
-        payload.registered_before ||
-        payload.registered_after;
-      if (!hasTargeting) {
-        return 'Vui lòng chọn ít nhất một tiêu chí người nhận';
-      }
+  // Save-as handlers
+  const openSaveAsModal = useCallback(() => {
+    const current = drafts[typeKey] || { subject: '', bodyHtml: '' };
+    if (!current.subject.trim() && !current.bodyHtml.trim()) {
+      toast.error('Bản soạn đang trống — hãy nhập subject hoặc HTML trước');
+      return;
     }
-    return null;
-  };
+    setSaveAsModal({ open: true, submitting: false, errorMessage: '' });
+  }, [drafts, typeKey]);
 
-  const handleCreateAndSend = async () => {
-    const payload = buildNotificationPayload();
+  const closeSaveAsModal = useCallback(() => {
+    setSaveAsModal({ open: false, submitting: false, errorMessage: '' });
+  }, []);
+
+  const submitSaveAs = useCallback(
+    async ({ name, slug, description }) => {
+      const current = drafts[typeKey] || { subject: '', bodyHtml: '' };
+      setSaveAsModal((m) => ({ ...m, submitting: true, errorMessage: '' }));
+      try {
+        const response = await adminNotificationApiService.createTemplate({
+          type_key: typeKey,
+          slug,
+          name,
+          description,
+          subject: current.subject,
+          body_html: current.bodyHtml,
+          schedule_type: 'now',
+        });
+        if (response.data?.success) {
+          toast.success(`Đã lưu mẫu "${name}"`);
+          setSaveAsModal({ open: false, submitting: false, errorMessage: '' });
+          await loadSavedTemplates();
+          return true;
+        }
+        const msg = response.data?.message || 'Không thể lưu mẫu';
+        setSaveAsModal((m) => ({ ...m, submitting: false, errorMessage: msg }));
+        return false;
+      } catch (error) {
+        const status = error.response?.status;
+        const data = error.response?.data;
+        let msg = data?.message || error.message || 'Có lỗi xảy ra';
+        if (status === 403) {
+          msg = 'Chỉ super admin mới có quyền lưu mẫu mới';
+        } else if (status === 409) {
+          msg = data?.message || 'Slug đã tồn tại cho dạng email này — chọn tên khác';
+        }
+        setSaveAsModal((m) => ({ ...m, submitting: false, errorMessage: msg }));
+        toast.error(msg);
+        return false;
+      }
+    },
+    [drafts, typeKey, loadSavedTemplates],
+  );
+
+  const onPickSavedTemplate = useCallback(
+    (event) => {
+      const id = event.target.value;
+      setSelectedSavedTemplateId(id);
+      if (!id) return;
+      const tpl = savedTemplates.find((t) => String(t.id) === String(id));
+      if (!tpl) return;
+      setSendTypeKey(tpl.type_key);
+      setDrafts((current) => ({
+        ...current,
+        [tpl.type_key]: {
+          subject: tpl.subject || '',
+          bodyHtml: tpl.body_html || '',
+        },
+      }));
+      toast.success(`Đã fill mẫu "${tpl.name}" vào form`);
+    },
+    [savedTemplates],
+  );
+
+  // ----------------------------------------------------------------- Template actions
+
+  const applyTemplate = useCallback((key) => {
+    const tpl = TYPE_TEMPLATES[key];
+    if (!tpl) return;
+    setTypeKey(key);
+    setDraft({ subject: tpl.subject, bodyHtml: tpl.bodyHtml });
+  }, []);
+
+  const clearTemplate = useCallback(() => {
+    setDraft({ subject: '', bodyHtml: '' });
+  }, []);
+
+  // ----------------------------------------------------------------- Send actions
+
+  const submit = useCallback(async () => {
+    const draftForSend = drafts[sendTypeKey] || TYPE_TEMPLATES[sendTypeKey] || { subject: '', bodyHtml: '' };
+    const payload = buildPayloadFromHtml({
+      subject: draftForSend.subject,
+      bodyHtml: draftForSend.bodyHtml,
+      type: sendTypeKey,
+      targeting,
+      schedule,
+    });
     const validationError = validatePayload(payload);
     if (validationError) {
       toast.error(validationError);
       return;
     }
 
-    setSending(true);
+    setBusy(true);
     try {
-      let response;
-
       if (payload.schedule_type === 'now') {
-        // Gửi ngay — dùng endpoint send-direct (backend đã validate targeting)
-        response = await adminNotificationApiService.sendDirect(payload);
+        const response = await adminNotificationApiService.sendDirect(payload);
         if (response.data?.success) {
           toast.success(response.data.message || 'Gửi thông báo thành công');
-          resetForm();
-          await Promise.all([loadNotifications(), loadDashboardStats()]);
+          await loadNotifications();
           setActiveTab('history');
         } else {
           toast.error(response.data?.message || 'Có lỗi xảy ra');
         }
-      } else {
-        // Hẹn giờ hoặc định kỳ — tạo draft rồi gọi endpoint schedule
-        const createRes = await adminNotificationApiService.createNotification(payload);
-        if (!createRes.data?.success) {
-          toast.error(createRes.data?.message || 'Không thể tạo thông báo');
+        return;
+      }
+
+      const createRes = await adminNotificationApiService.createNotification(payload);
+      if (!createRes.data?.success) {
+        toast.error(createRes.data?.message || 'Không thể tạo thông báo');
+        return;
+      }
+      const notificationId = createRes.data.data.id;
+
+      if (payload.schedule_type === 'scheduled') {
+        const scheduleRes = await adminNotificationApiService.scheduleNotification(
+          notificationId,
+          new Date(payload.scheduled_at).toISOString(),
+        );
+        if (!scheduleRes.data?.success) {
+          toast.error(scheduleRes.data?.message || 'Không thể hẹn giờ thông báo');
           return;
         }
-        const notificationId = createRes.data.data.id;
-
-        if (payload.schedule_type === 'scheduled') {
-          const scheduleRes = await adminNotificationApiService.scheduleNotification(
-            notificationId,
-            new Date(payload.scheduled_at).toISOString()
-          );
-          if (!scheduleRes.data?.success) {
-            toast.error(scheduleRes.data?.message || 'Không thể hẹn giờ thông báo');
-            return;
-          }
-          toast.success('Đã hẹn giờ thông báo thành công');
-        } else {
-          toast.success('Đã tạo thông báo định kỳ thành công');
-        }
-        resetForm();
-        await Promise.all([loadNotifications(), loadDashboardStats()]);
-        setActiveTab('history');
-      }
-    } catch (error) {
-      console.error('Error sending notification:', error);
-      const status = error.response?.status;
-      if (status === 409) {
-        toast.error(error.response?.data?.message || 'Thông báo đang được xử lý, thử lại sau');
+        toast.success('Đã hẹn giờ thông báo thành công');
       } else {
-        toast.error(error.response?.data?.message || error.message || 'Có lỗi xảy ra');
+        toast.success('Đã tạo thông báo định kỳ thành công');
       }
+      await loadNotifications();
+      setActiveTab('history');
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 409) toast.error(error.response?.data?.message || 'Thông báo đang được xử lý, thử lại sau');
+      else toast.error(error.response?.data?.message || error.message || 'Có lỗi xảy ra');
     } finally {
-      setSending(false);
+      setBusy(false);
     }
-  };
+  }, [sendTypeKey, targeting, schedule, drafts, loadNotifications]);
 
-  const resetForm = () => {
-    setEditorData({ title: '', title_en: '', message: '', message_en: '' });
-    setNotificationType('announcement');
-    setPriority('normal');
-    setTargetingCriteria({});
-    setRecipientCount(null);
-    setScheduleConfig({ schedule_type: 'now' });
-  };
-
-  const handleViewNotification = (notification) => {
-    setSelectedNotification(notification);
-  };
-
-  const handlePreviewEmail = (notification) => {
-    setPreviewModal({ isOpen: true, notification });
-  };
-
-  const handleViewLogs = (notification) => {
-    setLogsModal({
-      isOpen: true,
-      notificationId: notification.id,
-      title: notification.title
-    });
-  };
-
-  const handleSendNotification = async (notification) => {
-    if (!confirm(`Gửi thông báo "${notification.title}"?`)) return;
-
-    setSending(true);
-    try {
-      const response = await adminNotificationApiService.sendNotification(notification.id);
-      if (response.data?.success) {
-        toast.success(response.data.message);
-        await Promise.all([loadNotifications(), loadDashboardStats()]);
-      } else {
-        toast.error(response.data?.message);
+  const sendOne = useCallback(
+    async (notification) => {
+      if (!window.confirm(`Gửi thông báo "${notification.title}"?`)) return;
+      setBusy(true);
+      try {
+        const response = await adminNotificationApiService.sendNotification(notification.id);
+        if (response.data?.success) {
+          toast.success(response.data.message);
+          await loadNotifications();
+        } else toast.error(response.data?.message);
+      } catch (error) {
+        const status = error.response?.status;
+        if (status === 409) toast.error(error.response?.data?.message || 'Thông báo đang được xử lý');
+        else toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      } finally {
+        setBusy(false);
       }
-    } catch (error) {
-      const status = error.response?.status;
-      if (status === 409) {
-        toast.error(error.response?.data?.message || 'Thông báo đang được xử lý');
-      } else {
+    },
+    [loadNotifications],
+  );
+
+  const resendOne = useCallback(
+    async (notification) => {
+      if (!window.confirm(`Gửi lại thông báo "${notification.title}"?\n\nLưu ý: Có thể gửi trùng email cho những người đã nhận.`)) return;
+      setBusy(true);
+      try {
+        const response = await adminNotificationApiService.sendDirect({
+          type: notification.type,
+          priority: notification.priority,
+          title: notification.title,
+          title_en: notification.title_en,
+          message: notification.message,
+          message_en: notification.message_en,
+          target_roles: notification.target_roles,
+          target_plans: notification.target_plans,
+          target_statuses: notification.target_statuses,
+          target_user_ids: notification.target_user_ids,
+          target_emails: notification.target_emails,
+          registered_before: notification.registered_before,
+          registered_after: notification.registered_after,
+        });
+        if (response.data?.success) {
+          toast.success(response.data.message);
+          await loadNotifications();
+        } else toast.error(response.data?.message);
+      } catch (error) {
         toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      } finally {
+        setBusy(false);
       }
-    } finally {
-      setSending(false);
-    }
-  };
+    },
+    [loadNotifications],
+  );
 
-  const handleDeleteNotification = async (notification) => {
-    if (!confirm(`Xóa thông báo "${notification.title}"?`)) return;
-
-    setSending(true);
-    try {
-      const response = await adminNotificationApiService.deleteNotification(notification.id);
-      if (response.data?.success) {
-        toast.success('Đã xóa thông báo');
-        loadNotifications();
-      } else {
-        toast.error(response.data?.message);
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleScheduleNotification = async (notification) => {
-    // backend yêu cầu thời gian phải lớn hơn hiện tại ít nhất 1 phút
-    const minDate = new Date(Date.now() + 60 * 1000);
-    const minDateLocal = minDate.toLocaleString('sv-SE', { hour12: false }).replace(' ', ' ');
-    const input = window.prompt(
-      `Nhập thời gian hẹn (định dạng: YYYY-MM-DD HH:mm)\nPhải sau thời điểm: ${minDateLocal}`,
-      minDateLocal.slice(0, 16)
-    );
-    if (!input) return;
-
-    const dateRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
-    if (!dateRegex.test(input)) {
-      toast.error('Định dạng không đúng. Ví dụ: 2024-12-31 10:00');
-      return;
-    }
-
-    const parsed = new Date(input).getTime();
-    if (Number.isNaN(parsed) || parsed <= Date.now()) {
-      toast.error('Thời gian hẹn giờ phải lớn hơn thời gian hiện tại ít nhất 1 phút');
-      return;
-    }
-
-    setSending(true);
-    try {
-      const response = await adminNotificationApiService.scheduleNotification(
-        notification.id,
-        new Date(input).toISOString()
+  const scheduleOne = useCallback(
+    async (notification) => {
+      const minDate = new Date(Date.now() + 60 * 1000);
+      const minDateLocal = minDate.toLocaleString('sv-SE', { hour12: false }).replace(' ', ' ');
+      const input = window.prompt(
+        `Nhập thời gian hẹn (định dạng: YYYY-MM-DD HH:mm)\nPhải sau thời điểm: ${minDateLocal}`,
+        minDateLocal.slice(0, 16),
       );
-      if (response.data?.success) {
-        toast.success('Đã hẹn giờ thông báo');
-        await loadNotifications();
-      } else {
-        toast.error(response.data?.message);
+      if (!input) return;
+      const dateRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
+      if (!dateRegex.test(input)) {
+        toast.error('Định dạng không đúng. Ví dụ: 2024-12-31 10:00');
+        return;
       }
-    } catch (error) {
-      const status = error.response?.status;
-      if (status === 409) {
-        toast.error(error.response?.data?.message || 'Không thể hẹn giờ thông báo này');
-      } else {
+      const parsed = new Date(input).getTime();
+      if (Number.isNaN(parsed) || parsed <= Date.now()) {
+        toast.error('Thời gian hẹn giờ phải lớn hơn thời gian hiện tại ít nhất 1 phút');
+        return;
+      }
+      setBusy(true);
+      try {
+        const response = await adminNotificationApiService.scheduleNotification(notification.id, new Date(input).toISOString());
+        if (response.data?.success) {
+          toast.success('Đã hẹn giờ thông báo');
+          await loadNotifications();
+        } else toast.error(response.data?.message);
+      } catch (error) {
+        const status = error.response?.status;
+        if (status === 409) toast.error(error.response?.data?.message || 'Không thể hẹn giờ thông báo này');
+        else toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [loadNotifications],
+  );
+
+  const deleteOne = useCallback(
+    async (notification) => {
+      if (!window.confirm(`Xóa thông báo "${notification.title}"?`)) return;
+      setBusy(true);
+      try {
+        const response = await adminNotificationApiService.deleteNotification(notification.id);
+        if (response.data?.success) {
+          toast.success('Đã xóa thông báo');
+          await loadNotifications();
+        } else toast.error(response.data?.message);
+      } catch (error) {
         toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      } finally {
+        setBusy(false);
       }
-    } finally {
-      setSending(false);
-    }
-  };
+    },
+    [loadNotifications],
+  );
 
-  const handleCopyNotification = (notification) => {
-    setEditorData({
-      title: notification.title || '',
-      title_en: notification.title_en || '',
-      message: notification.message || '',
-      message_en: notification.message_en || ''
-    });
-    setNotificationType(notification.type || 'announcement');
-    setPriority(notification.priority || 'normal');
-    setTargetingCriteria({
-      roles: notification.target_roles || null,
-      plans: notification.target_plans || null,
-      statuses: notification.target_statuses || null,
-      emails: notification.target_emails || [],
-      user_ids: notification.target_user_ids || [],
-      registered_before: notification.registered_before || null,
-      registered_after: notification.registered_after || null
-    });
-    setRecipientCount(notification.recipient_count || null);
-    setScheduleConfig({
-      schedule_type: 'now'
-    });
-    setActiveTab('create');
-    toast.success('Đã sao chép nội dung thông báo');
-  };
-
-  const handleResend = async (notification) => {
-    if (!confirm(`Gửi lại thông báo "${notification.title}"?\n\nLưu ý: Có thể gửi trùng email cho những người đã nhận.`)) return;
-
-    setSending(true);
-    try {
-      const response = await adminNotificationApiService.sendDirect({
-        type: notification.type,
-        priority: notification.priority,
-        title: notification.title,
-        title_en: notification.title_en,
-        message: notification.message,
-        message_en: notification.message_en,
-        target_roles: notification.target_roles,
-        target_plans: notification.target_plans,
-        target_statuses: notification.target_statuses,
-        target_user_ids: notification.target_user_ids,
-        target_emails: notification.target_emails,
-        registered_before: notification.registered_before,
-        registered_after: notification.registered_after
-      });
-
-      if (response.data?.success) {
-        toast.success(response.data.message);
-        loadNotifications();
-        loadDashboardStats();
-      } else {
-        toast.error(response.data?.message);
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handlePreviewContent = () => {
-    setPreviewModal({
-      isOpen: true,
-      notification: {
-        type: notificationType,
-        priority,
-        title: editorData.title,
-        title_en: editorData.title_en,
-        message: editorData.message,
-        message_en: editorData.message_en
-      }
-    });
-  };
+  // ----------------------------------------------------------------- Render
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-        <div className="px-8 py-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur">
-              <HiOutlineBell className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Trung tâm Thông báo</h1>
-              <p className="text-orange-100 text-sm">Quản lý và gửi thông báo đến người dùng</p>
-            </div>
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <HiOutlineSparkles className="h-7 w-7 text-orange-500" />
+            <h1 className="text-2xl font-bold text-slate-900">Trung tâm Chiến dịch Email</h1>
           </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Soạn mẫu HTML theo từng dạng email → lưu thành mẫu có tên riêng (super admin) → chọn người nhận → gửi ngay hoặc hẹn giờ.
+          </p>
+          <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+            Dùng <code className="font-mono">{`{{user_name}}`}</code>, <code className="font-mono">{`{{dashboard_url}}`}</code>… sẽ tự thay bằng dữ liệu người nhận.
+          </p>
         </div>
       </div>
 
-      <div className="px-8 py-6">
-        {/* Dashboard Stats */}
-        {dashboardStats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                  <HiOutlineMail className="w-6 h-6 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Tổng đã gửi</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {parseInt(dashboardStats.total_sent || 0).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-                  <HiOutlineClock className="w-6 h-6 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Đang hẹn</p>
-                  <p className="text-2xl font-bold text-amber-600">
-                    {parseInt(dashboardStats.total_scheduled || 0).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-                  <HiOutlineMailOpen className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Thất bại</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {parseInt(dashboardStats.total_failed || 0).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                  <HiOutlineEye className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Tỉ lệ mở TB</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {dashboardStats.avg_open_rate ? `${Number(dashboardStats.avg_open_rate).toFixed(1)}%` : '0%'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+      {/* Tabs */}
+      <PillTabs active={activeTab} onChange={setActiveTab} tabs={TABS} />
 
-        {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="border-b border-gray-100 px-4">
-            <nav className="flex gap-1">
+      {/* Tab content */}
+      {activeTab === 'history' ? (
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <header className="flex items-center gap-2">
+            <HiOutlineMailOpen className="h-5 w-5 text-orange-500" />
+            <h2 className="font-semibold text-slate-900">Lịch sử thông báo</h2>
+          </header>
+          <NotificationHistoryTable
+            notifications={notifications}
+            loading={loadingList}
+            pagination={pagination}
+            onPageChange={loadNotifications}
+            onView={() => {}}
+            onPreview={(n) => setPreviewModal({ open: true, notification: n })}
+            onLogs={(n) => setLogsModal({ open: true, notificationId: n.id, title: n.title })}
+            onCopy={(n) => {
+              applyTemplate(n.type || 'announcement');
+              toast.success('Đã copy nội dung thông báo vào tab Mẫu email');
+              setActiveTab('templates');
+            }}
+            onSend={sendOne}
+            onResend={resendOne}
+            onSchedule={scheduleOne}
+            onDelete={deleteOne}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === 'templates' ? (
+        <div className="space-y-5">
+          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <header>
+              <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+                <HiOutlineCode className="h-5 w-5 text-orange-500" />
+                Mẫu email theo dạng
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Mỗi dạng có một mẫu HTML riêng (khác nhau về layout/component). Bấm "Dùng mẫu" để copy vào ô bên dưới, sau đó sửa trực tiếp.
+              </p>
+            </header>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium text-slate-800">Dạng email:</span>
+              <TypeChips value={typeKey} onChange={setTypeKey} />
               <button
-                onClick={() => setActiveTab('history')}
-                className={`
-                  px-6 py-4 font-medium text-sm transition-all flex items-center gap-2 border-b-2 -mb-[1px]
-                  ${activeTab === 'history'
-                    ? 'border-orange-500 text-orange-600 bg-orange-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }
-                `}
+                type="button"
+                onClick={() => applyTemplate(typeKey)}
+                className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600"
               >
-                <HiOutlineMailOpen className="w-4 h-4" />
-                Lịch sử
+                Dùng mẫu {TYPE_TEMPLATES[typeKey]?.label}
               </button>
               <button
-                onClick={() => setActiveTab('create')}
-                className={`
-                  px-6 py-4 font-medium text-sm transition-all flex items-center gap-2 border-b-2 -mb-[1px]
-                  ${activeTab === 'create'
-                    ? 'border-orange-500 text-orange-600 bg-orange-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }
-                `}
+                type="button"
+                onClick={clearTemplate}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700"
               >
-                <HiOutlinePencil className="w-4 h-4" />
-                Tạo mới
+                <HiOutlineRefresh className="h-3.5 w-3.5" />
+                Xóa trắng
               </button>
-            </nav>
-          </div>
+            </div>
+          </section>
 
-          {/* Content */}
-          <div className="p-6">
-            {activeTab === 'history' ? (
-              <NotificationHistoryTable
-                notifications={notifications}
-                loading={loadingList}
-                pagination={pagination}
-                onPageChange={(page) => loadNotifications(page)}
-                onView={handleViewNotification}
-                onPreview={handlePreviewEmail}
-                onLogs={handleViewLogs}
-                onSend={handleSendNotification}
-                onResend={handleResend}
-                onCopy={handleCopyNotification}
-                onSchedule={handleScheduleNotification}
-                onDelete={handleDeleteNotification}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <header className="flex items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+                  <HiOutlinePencil className="h-5 w-5 text-orange-500" />
+                  Soạn HTML
+                </h2>
+                {isSuperAdmin ? (
+                  <button
+                    type="button"
+                    onClick={openSaveAsModal}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-50"
+                    title="Lưu bản soạn hiện tại thành mẫu mới (mẫu gốc KHÔNG đổi)"
+                  >
+                    <HiOutlineBookmark className="h-3.5 w-3.5" />
+                    Lưu thành mẫu
+                  </button>
+                ) : (
+                  <span
+                    className="text-xs text-slate-400"
+                    title="Chỉ super admin mới có quyền lưu mẫu mới"
+                  >
+                    <HiOutlineBookmark className="inline h-3.5 w-3.5" /> Chỉ super admin
+                  </span>
+                )}
+              </header>
+              {isSuperAdmin ? (
+                <p className="rounded-lg border border-dashed border-orange-300 bg-orange-50/60 px-3 py-2 text-xs text-orange-800">
+                  💡 Soạn xong? Bấm <strong>Lưu thành mẫu mới</strong> ở thanh cam bên dưới để lưu vào DB.
+                  Mẫu gốc sẽ <strong>không</strong> bị thay đổi — bạn có thể chọn lại mẫu vừa lưu ở tab <em>Chiến dịch mới</em>.
+                </p>
+              ) : null}
+
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-slate-800">Tiêu đề email (subject)</span>
+                <input
+                  aria-label="Tiêu đề email"
+                  value={draft.subject}
+                  onChange={(event) => setDraft({ ...draft, subject: event.target.value })}
+                  maxLength={200}
+                  placeholder="[Founder AI] Tiêu đề email"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+                <span className="block text-right text-xs text-slate-400">{draft.subject.length}/200</span>
+              </label>
+
+              <HtmlEditor
+                value={draft.bodyHtml}
+                onChange={(v) => setDraft({ ...draft, bodyHtml: v })}
+                variables={VARIABLES}
+                bodyRef={bodyRef}
               />
-            ) : (
-              <div className="space-y-6">
-                {/* Notification Type */}
-                <div className="bg-gray-50 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                    <HiOutlineBell className="w-4 h-4 text-orange-500" />
-                    Loại thông báo
-                  </h3>
-                  <NotificationTypeSelector
-                    value={notificationType}
-                    onChange={setNotificationType}
-                    priority={priority}
-                    onPriorityChange={setPriority}
-                    onTemplateSelect={(template) => {
-                      setEditorData({
-                        title: template.title,
-                        title_en: template.titleEn,
-                        message: template.message,
-                        message_en: template.messageEn
-                      });
-                    }}
-                  />
-                </div>
+            </section>
 
-                {/* Targeting */}
-                <div className="bg-gray-50 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                    <HiOutlineUserGroup className="w-4 h-4 text-orange-500" />
-                    Nhắm đối tượng
-                  </h3>
-                  <TargetingPanel
-                    criteria={targetingCriteria}
-                    onChange={setTargetingCriteria}
-                    recipientCount={recipientCount}
-                    onCountChange={setRecipientCount}
-                  />
-                </div>
+            <LivePreview html={draft.bodyHtml} subject={draft.subject} templateKey={typeKey} />
+          </div>
 
-                {/* Schedule */}
-                <div className="bg-gray-50 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                    <HiOutlineClock className="w-4 h-4 text-orange-500" />
-                    Thời gian gửi
-                  </h3>
-                  <ScheduleSelector
-                    value={scheduleConfig}
-                    onChange={setScheduleConfig}
-                  />
-                </div>
-
-                {/* Editor */}
-                <div className="bg-gray-50 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <HiOutlineMail className="w-4 h-4 text-orange-500" />
-                      Nội dung
-                    </h3>
-                    <button
-                      onClick={handlePreviewContent}
-                      className="px-4 py-2 text-sm text-orange-600 bg-white border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors flex items-center gap-2 shadow-sm"
-                    >
-                      <FaEye className="w-3.5 h-3.5" />
-                      Xem trước
-                    </button>
-                  </div>
-                  <NotificationEditor
-                    data={editorData}
-                    onChange={setEditorData}
-                  />
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="px-5 py-2.5 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
-                  >
-                    Đặt lại
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateAndSend}
-                    disabled={sending}
-                    className={`
-                      px-6 py-2.5 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 shadow-sm
-                      ${sending
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700'
-                      }
-                    `}
-                  >
-                    {sending ? (
-                      <>
-                        <span className="loading loading-spinner loading-sm" />
-                        Đang xử lý...
-                      </>
-                    ) : scheduleConfig.schedule_type === 'now' ? (
-                      <>
-                        <FaBell className="w-4 h-4" />
-                        Gửi ngay
-                      </>
-                    ) : scheduleConfig.schedule_type === 'scheduled' ? (
-                      <>
-                        <FaClock className="w-4 h-4" />
-                        Hẹn giờ
-                      </>
-                    ) : (
-                      <>
-                        <FaBell className="w-4 h-4" />
-                        Lên lịch
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-slate-700">
+            <p>
+              Đã soạn xong mẫu? <strong>Chuyển sang tab "Chiến dịch mới"</strong>, chọn dạng tương ứng rồi cấu hình đối tượng + lịch.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {isSuperAdmin ? (
+                <button
+                  type="button"
+                  onClick={openSaveAsModal}
+                  className="inline-flex items-center gap-2 rounded-lg border border-orange-400 bg-white px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100"
+                  title="Lưu bản soạn hiện tại thành mẫu mới (mẫu gốc KHÔNG đổi)"
+                >
+                  <HiOutlineBookmark className="h-4 w-4" />
+                  Lưu thành mẫu mới
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setSendTypeKey(typeKey);
+                  setActiveTab('send');
+                }}
+                className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+              >
+                Tiếp tục: chuyển sang Chiến dịch mới →
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
-      {/* Detail Modal */}
-      {selectedNotification && (
-        <NotificationDetailModal
-          notification={selectedNotification}
-          onClose={() => setSelectedNotification(null)}
-          onPreview={() => handlePreviewEmail(selectedNotification)}
-          onLogs={() => handleViewLogs(selectedNotification)}
-          onCopy={() => handleCopyNotification(selectedNotification)}
-          onResend={() => handleResend(selectedNotification)}
-          onDelete={() => {
-            handleDeleteNotification(selectedNotification);
-            setSelectedNotification(null);
-          }}
-        />
-      )}
+      {activeTab === 'send' ? (
+        <div className="grid gap-6 xl:grid-cols-2">
+          {/* LEFT — config */}
+          <div className="space-y-5">
+            <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <header>
+                <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+                  <HiOutlinePaperAirplane className="h-5 w-5 text-orange-500" />
+                  Gửi thông báo
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">Chọn dạng email đã soạn, đối tượng và lịch gửi.</p>
+              </header>
 
-      {/* Email Preview Modal */}
+              <div className="space-y-3">
+                <div>
+                  <span className="text-sm font-medium text-slate-800">Dạng email</span>
+                  <div className="mt-2">
+                    <TypeChips value={sendTypeKey} onChange={setSendTypeKey} />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
+                  <label className="text-sm font-medium text-slate-800">
+                    Dùng mẫu đã lưu (tuỳ chọn)
+                  </label>
+                  <select
+                    value={selectedSavedTemplateId}
+                    onChange={onPickSavedTemplate}
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  >
+                    <option value="">— Soạn tự do —</option>
+                    {savedTemplates.map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name} · {TYPE_TEMPLATES[tpl.type_key]?.label || tpl.type_key}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Chọn mẫu để fill subject + HTML vào form bên dưới. Bạn vẫn phải chọn nhóm
+                    người nhận + lịch trước khi gửi.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <header>
+                <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+                  <HiOutlineUserGroup className="h-5 w-5 text-orange-500" />
+                  Nhắm đối tượng
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">Có thể kết hợp nhiều tiêu chí.</p>
+              </header>
+              <TargetingPanel
+                criteria={targeting}
+                onChange={setTargeting}
+              />
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <header>
+                <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+                  <HiOutlineClock className="h-5 w-5 text-orange-500" />
+                  Thời gian gửi
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">Gửi ngay / Hẹn giờ / Định kỳ.</p>
+              </header>
+              <ScheduleSelector value={schedule} onChange={setSchedule} />
+            </section>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={submit}
+                disabled={busy}
+                className={`inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-all ${
+                  busy
+                    ? 'cursor-not-allowed bg-orange-200'
+                    : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700'
+                }`}
+              >
+                {busy ? (
+                  <>
+                    <span className="loading loading-spinner loading-sm" />
+                    Đang xử lý...
+                  </>
+                ) : schedule.schedule_type === 'now' ? (
+                  <>
+                    <FaBell className="h-4 w-4" />
+                    Gửi ngay
+                  </>
+                ) : schedule.schedule_type === 'scheduled' ? (
+                  <>
+                    <FaClock className="h-4 w-4" />
+                    Hẹn giờ
+                  </>
+                ) : (
+                  <>
+                    <FaBell className="h-4 w-4" />
+                    Lên lịch định kỳ
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* RIGHT — preview */}
+          <div className="space-y-5 xl:sticky xl:top-4 xl:self-start">
+            <LivePreview
+              html={drafts[sendTypeKey]?.bodyHtml || TYPE_TEMPLATES[sendTypeKey]?.bodyHtml || ''}
+              subject={drafts[sendTypeKey]?.subject || TYPE_TEMPLATES[sendTypeKey]?.subject || ''}
+              templateKey={sendTypeKey}
+            />
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <p className="font-semibold">Tóm tắt sẽ gửi</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+                <li>Dạng: <strong>{TYPE_TEMPLATES[sendTypeKey]?.label || sendTypeKey}</strong></li>
+                <li>
+                  Thời gian:{' '}
+                  <strong>
+                    {schedule.schedule_type === 'now'
+                      ? 'gửi ngay'
+                      : schedule.schedule_type === 'scheduled'
+                      ? `hẹn ${formatDateTime(schedule.scheduled_at)}`
+                      : `lặp ${schedule.recurrence_pattern || 'daily'}`}
+                  </strong>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Modals */}
       <EmailPreviewModal
-        isOpen={previewModal.isOpen}
-        onClose={() => setPreviewModal({ isOpen: false, notification: null })}
+        isOpen={previewModal.open}
+        onClose={() => setPreviewModal({ open: false, notification: null })}
         notification={previewModal.notification}
       />
-
-      {/* Email Logs Modal */}
       <EmailLogsModal
-        isOpen={logsModal.isOpen}
-        onClose={() => setLogsModal({ isOpen: false, notificationId: null, title: '' })}
+        isOpen={logsModal.open}
+        onClose={() => setLogsModal({ open: false, notificationId: null, title: '' })}
         notificationId={logsModal.notificationId}
         notificationTitle={logsModal.title}
       />
+      <SaveAsTemplateModal
+        open={saveAsModal.open}
+        onClose={closeSaveAsModal}
+        onSubmit={submitSaveAs}
+        submitting={saveAsModal.submitting}
+        errorMessage={saveAsModal.errorMessage}
+        initial={{
+          subject: draft.subject,
+          bodyHtml: draft.bodyHtml,
+          typeKey,
+          typeLabel: TYPE_TEMPLATES[typeKey]?.label || typeKey,
+        }}
+      />
     </div>
   );
 }
 
-// Notification Detail Modal
-function NotificationDetailModal({ notification, onClose, onPreview, onLogs, onCopy, onResend, onDelete }) {
-  if (!notification) return null;
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const TYPE_LABELS = {
-    maintenance: 'Bảo trì',
-    announcement: 'Thông báo',
-    promotion: 'Khuyến mãi',
-    warning: 'Cảnh báo',
-    reminder: 'Nhắc nhở',
-    security: 'Bảo mật'
-  };
-
-  const STATUS_LABELS = {
-    draft: 'Nháp',
-    scheduled: 'Đã hẹn',
-    sending: 'Đang gửi',
-    sent: 'Đã gửi',
-    failed: 'Thất bại',
-    cancelled: 'Đã hủy'
-  };
-
-  const typeColors = {
-    maintenance: 'bg-amber-100 text-amber-700',
-    announcement: 'bg-blue-100 text-blue-700',
-    promotion: 'bg-green-100 text-green-700',
-    warning: 'bg-red-100 text-red-700',
-    reminder: 'bg-purple-100 text-purple-700',
-    security: 'bg-gray-100 text-gray-700'
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                <HiOutlineBell className="w-5 h-5 text-white" />
-              </div>
-              <h2 className="text-lg font-semibold text-white">Chi tiết thông báo</h2>
-            </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-5 overflow-auto max-h-[calc(90vh-120px)]">
-          {/* Type & Status */}
-          <div className="flex gap-3">
-            <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${typeColors[notification.type] || 'bg-gray-100 text-gray-700'}`}>
-              {TYPE_LABELS[notification.type] || notification.type}
-            </span>
-            <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-              notification.status === 'sent' ? 'bg-green-100 text-green-700' :
-              notification.status === 'failed' ? 'bg-red-100 text-red-700' :
-              notification.status === 'scheduled' ? 'bg-amber-100 text-amber-700' :
-              'bg-gray-100 text-gray-700'
-            }`}>
-              {STATUS_LABELS[notification.status] || notification.status}
-            </span>
-          </div>
-
-          {/* Title */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tiêu đề</label>
-            <p className="text-gray-900 mt-1 font-medium">{notification.title}</p>
-            {notification.title_en && (
-              <p className="text-gray-500 text-sm mt-1">EN: {notification.title_en}</p>
-            )}
-          </div>
-
-          {/* Message */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Nội dung</label>
-            <p className="text-gray-900 mt-1 whitespace-pre-wrap leading-relaxed">{notification.message}</p>
-            {notification.message_en && (
-              <p className="text-gray-500 text-sm mt-2">EN: {notification.message_en}</p>
-            )}
-          </div>
-
-          {/* Stats */}
-          {notification.status === 'sent' && (
-            <div className="grid grid-cols-4 gap-3">
-              <div className="bg-gray-50 rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-gray-900">{notification.recipient_count || 0}</p>
-                <p className="text-xs text-gray-500">Người nhận</p>
-              </div>
-              <div className="bg-green-50 rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-green-600">{notification.sent_count || 0}</p>
-                <p className="text-xs text-gray-500">Đã gửi</p>
-              </div>
-              <div className="bg-purple-50 rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-purple-600">{notification.opened_count || 0}</p>
-                <p className="text-xs text-gray-500">Đã mở</p>
-              </div>
-              <div className="bg-orange-50 rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-orange-600">{notification.open_rate || 0}%</p>
-                <p className="text-xs text-gray-500">Tỉ lệ mở</p>
-              </div>
-            </div>
-          )}
-
-          {/* Targeting Info */}
-          {(notification.target_roles || notification.target_plans || notification.target_statuses) && (
-            <div className="bg-gray-50 rounded-xl p-4">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Đối tượng</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {notification.target_roles?.map(role => (
-                  <span key={role} className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium">
-                    {role}
-                  </span>
-                ))}
-                {notification.target_plans?.map(plan => (
-                  <span key={plan} className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-medium">
-                    {plan}
-                  </span>
-                ))}
-                {notification.target_statuses?.map(status => (
-                  <span key={status} className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-xs font-medium">
-                    {status}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-gray-50 rounded-xl p-3">
-              <span className="text-gray-500 text-xs">Tạo lúc:</span>
-              <p className="font-medium text-gray-900">{formatDate(notification.created_at)}</p>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <span className="text-gray-500 text-xs">Gửi lúc:</span>
-              <p className="font-medium text-gray-900">{formatDate(notification.sent_at)}</p>
-            </div>
-            {notification.scheduled_at && (
-              <div className="bg-amber-50 rounded-xl p-3">
-                <span className="text-amber-600 text-xs">Hẹn gửi:</span>
-                <p className="font-medium text-amber-900">{formatDate(notification.scheduled_at)}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-wrap justify-end gap-2 px-6 py-4 bg-gray-50 border-t border-gray-100">
-          <button
-            onClick={onPreview}
-            className="px-4 py-2 text-orange-600 bg-white border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors flex items-center gap-2 text-sm font-medium"
-          >
-            <FaEye className="w-3.5 h-3.5" />
-            Xem email
-          </button>
-          {notification.status === 'sent' && (
-            <button
-              onClick={onLogs}
-              className="px-4 py-2 text-purple-600 bg-white border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors flex items-center gap-2 text-sm font-medium"
-            >
-              <FaEnvelope className="w-3.5 h-3.5" />
-              Chi tiết gửi
-            </button>
-          )}
-          {(notification.status === 'sent' || notification.status === 'failed') && (
-            <button
-              onClick={onResend}
-              className="px-4 py-2 text-green-600 bg-white border border-green-200 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-2 text-sm font-medium"
-            >
-              <FaRedo className="w-3.5 h-3.5" />
-              Gửi lại
-            </button>
-          )}
-          <button
-            onClick={onCopy}
-            className="px-4 py-2 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm font-medium"
-          >
-            <FaCopy className="w-3.5 h-3.5" />
-            Sao chép
-          </button>
-          {(notification.status === 'draft' || notification.status === 'scheduled') && (
-            <button
-              onClick={onDelete}
-              className="px-4 py-2 text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
-            >
-              Xóa
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}

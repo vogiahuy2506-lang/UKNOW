@@ -7,3 +7,4 @@ export { default as NotificationStatsCard, NotificationStatsBar } from './Notifi
 export { default as NotificationHistoryTable, STATUS_CONFIG } from './NotificationHistoryTable';
 export { default as EmailPreviewModal } from './EmailPreviewModal';
 export { default as EmailLogsModal } from './EmailLogsModal';
+export { default as SaveAsTemplateModal } from './SaveAsTemplateModal';
