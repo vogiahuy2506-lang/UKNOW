@@ -137,7 +137,7 @@ export default function FormSubmissionStatusPage() {
   }, [isPendingActive, statusData?.holdExpiresAt, load]);
 
   useEffect(() => {
-    if (!statusData?.payment?.qrString) {
+    if (!statusData?.payment?.qrString || statusData?.payment?.method === 'momo') {
       setQrDataUrl('');
       return;
     }
@@ -152,7 +152,7 @@ export default function FormSubmissionStatusPage() {
     return () => {
       cancelled = true;
     };
-  }, [statusData?.payment?.qrString]);
+  }, [statusData?.payment?.qrString, statusData?.payment?.method]);
 
   // PR-5 — depsKey theo trạng thái hiển thị hiện tại (loading/404/từng nhánh status) để chiều
   // cao gửi cho form-embed.js luôn khớp nội dung thật khi trạng thái đổi.
@@ -241,46 +241,80 @@ export default function FormSubmissionStatusPage() {
               )}
             </div>
 
-            {qrDataUrl ? (
-              <img
-                src={qrDataUrl}
-                alt={t('publicForm.payment.qrAlt')}
-                className="w-48 h-48 mx-auto rounded-xl border border-gray-200 bg-white"
-              />
-            ) : (
-              <div className="w-48 h-48 mx-auto flex items-center justify-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
-                {t('publicForm.payment.qrGenerating')}
-              </div>
-            )}
+            {payment.method === 'momo' ? (
+              <>
+                <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                  {t('publicForm.payment.momoHint')}
+                </p>
 
-            <div className="space-y-2">
-              <CopyableRow
-                label={t('publicForm.payment.bankLabel')}
-                value={payment.bankName}
-                displayValue={payment.bankName}
-              />
-              <CopyableRow
-                label={t('publicForm.payment.accountNumberLabel')}
-                value={payment.accountNumber}
-                displayValue={payment.accountNumber}
-              />
-              <CopyableRow
-                label={t('publicForm.payment.accountNameLabel')}
-                value={payment.accountName}
-                displayValue={payment.accountName}
-              />
-              <CopyableRow
-                label={t('publicForm.payment.amountLabel')}
-                value={String(payment.amount)}
-                displayValue={formatVnd(payment.amount)}
-              />
-              <CopyableRow
-                label={t('publicForm.payment.codeLabel')}
-                value={payment.code}
-                displayValue={payment.code}
-                hint={t('publicForm.payment.codeHint')}
-              />
-            </div>
+                <div className="space-y-2">
+                  <CopyableRow
+                    label={t('publicForm.payment.momoPhoneLabel')}
+                    value={payment.momoPhone}
+                    displayValue={payment.momoPhone}
+                  />
+                  <CopyableRow
+                    label={t('publicForm.payment.momoNameLabel')}
+                    value={payment.momoName}
+                    displayValue={payment.momoName}
+                  />
+                  <CopyableRow
+                    label={t('publicForm.payment.amountLabel')}
+                    value={String(payment.amount)}
+                    displayValue={formatVnd(payment.amount)}
+                  />
+                  <CopyableRow
+                    label={t('publicForm.payment.codeLabel')}
+                    value={payment.code}
+                    displayValue={payment.code}
+                    hint={t('publicForm.payment.codeHint')}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt={t('publicForm.payment.qrAlt')}
+                    className="w-48 h-48 mx-auto rounded-xl border border-gray-200 bg-white"
+                  />
+                ) : (
+                  <div className="w-48 h-48 mx-auto flex items-center justify-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                    {t('publicForm.payment.qrGenerating')}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <CopyableRow
+                    label={t('publicForm.payment.bankLabel')}
+                    value={payment.bankName}
+                    displayValue={payment.bankName}
+                  />
+                  <CopyableRow
+                    label={t('publicForm.payment.accountNumberLabel')}
+                    value={payment.accountNumber}
+                    displayValue={payment.accountNumber}
+                  />
+                  <CopyableRow
+                    label={t('publicForm.payment.accountNameLabel')}
+                    value={payment.accountName}
+                    displayValue={payment.accountName}
+                  />
+                  <CopyableRow
+                    label={t('publicForm.payment.amountLabel')}
+                    value={String(payment.amount)}
+                    displayValue={formatVnd(payment.amount)}
+                  />
+                  <CopyableRow
+                    label={t('publicForm.payment.codeLabel')}
+                    value={payment.code}
+                    displayValue={payment.code}
+                    hint={t('publicForm.payment.codeHint')}
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -329,8 +363,10 @@ export default function FormSubmissionStatusPage() {
 
         <div className="mt-5 pt-4 border-t border-gray-100 space-y-2">
           <p className="text-[11px] text-gray-400 leading-relaxed text-center">
-            {payment?.accountName
-              ? t('publicForm.payment.disclaimerNamed', { name: payment.accountName })
+            {(payment?.method === 'momo' ? payment?.momoName : payment?.accountName)
+              ? t('publicForm.payment.disclaimerNamed', {
+                  name: payment?.method === 'momo' ? payment?.momoName : payment?.accountName,
+                })
               : t('publicForm.payment.disclaimer')}
           </p>
           <p className="text-center">

@@ -876,15 +876,25 @@ class FormService {
     if (paymentEnabled) {
       submitterIpHash = hashSubmitterIp(ipKey);
       status = 'pending_payment';
-      const bankInfo = VIETQR_BANKS[paymentConfig.bankBin] || null;
       holdExpiresAt = new Date(Date.now() + paymentConfig.holdMinutes * 60 * 1000);
-      paymentSnapshot = {
-        bankBin: paymentConfig.bankBin,
-        bankName: bankInfo?.name || paymentConfig.bankBin,
-        accountNumber: paymentConfig.accountNumber,
-        accountName: paymentConfig.accountName,
-        amount: paymentConfig.amount,
-      };
+      if (paymentConfig.method === 'momo') {
+        paymentSnapshot = {
+          method: 'momo',
+          momoPhone: paymentConfig.momoPhone,
+          momoName: paymentConfig.momoName,
+          amount: paymentConfig.amount,
+        };
+      } else {
+        const bankInfo = VIETQR_BANKS[paymentConfig.bankBin] || null;
+        paymentSnapshot = {
+          method: 'bank',
+          bankBin: paymentConfig.bankBin,
+          bankName: bankInfo?.name || paymentConfig.bankBin,
+          accountNumber: paymentConfig.accountNumber,
+          accountName: paymentConfig.accountName,
+          amount: paymentConfig.amount,
+        };
+      }
 
       if (!bookingEnabled) {
         // Không đặt lịch -> không có giao dịch/khoá nào đang mở, đếm trước khi INSERT.
@@ -960,7 +970,8 @@ class FormService {
       submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, db, paymentEnabled, false);
     }
 
-    const qrString = paymentEnabled
+    const isMomo = paymentSnapshot?.method === 'momo';
+    const qrString = paymentEnabled && !isMomo
       ? buildVietQrString({
           bin: paymentSnapshot.bankBin,
           accountNumber: paymentSnapshot.accountNumber,
@@ -1028,9 +1039,16 @@ class FormService {
           <h2>Vui lòng chuyển khoản để giữ chỗ</h2>
           <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
           ${appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>` : ''}
+          ${paymentSnapshot.method === 'momo'
+            ? `
+          <p>Ví MoMo: <strong>${escapeHtml(paymentSnapshot.momoPhone)}</strong></p>
+          <p>Tên: <strong>${escapeHtml(paymentSnapshot.momoName)}</strong></p>
+            `
+            : `
           <p>Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
           <p>Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
           <p>Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
+            `}
           <p>Số tiền: <strong>${escapeHtml(paymentConfig.amount.toLocaleString('vi-VN'))}đ</strong></p>
           <p>Nội dung chuyển khoản (bắt buộc ghi đúng): <strong>${escapeHtml(submission.paymentCode)}</strong></p>
           <p>Hạn giữ chỗ: <strong>${holdMinutesText} phút</strong> kể từ lúc đặt.</p>
@@ -1045,16 +1063,27 @@ class FormService {
       accessToken: submission.accessToken,
       isBotTrap: false,
       payment: paymentEnabled
-        ? {
-            amount: paymentConfig.amount,
-            code: submission.paymentCode,
-            bankBin: paymentSnapshot.bankBin,
-            bankName: paymentSnapshot.bankName,
-            accountNumber: paymentSnapshot.accountNumber,
-            accountName: paymentSnapshot.accountName,
-            qrString,
-            holdExpiresAt: submission.holdExpiresAt,
-          }
+        ? (paymentSnapshot.method === 'momo'
+            ? {
+                method: 'momo',
+                amount: paymentConfig.amount,
+                code: submission.paymentCode,
+                momoPhone: paymentSnapshot.momoPhone,
+                momoName: paymentSnapshot.momoName,
+                qrString: null,
+                holdExpiresAt: submission.holdExpiresAt,
+              }
+            : {
+                method: 'bank',
+                amount: paymentConfig.amount,
+                code: submission.paymentCode,
+                bankBin: paymentSnapshot.bankBin,
+                bankName: paymentSnapshot.bankName,
+                accountNumber: paymentSnapshot.accountNumber,
+                accountName: paymentSnapshot.accountName,
+                qrString,
+                holdExpiresAt: submission.holdExpiresAt,
+              })
         : null,
     };
   }
@@ -1198,21 +1227,35 @@ class FormService {
     let payment = null;
     if (submission.status === 'pending_payment' && !holdExpired && submission.paymentSnapshot) {
       const snap = submission.paymentSnapshot;
-      payment = {
-        amount: submission.paymentAmount,
-        code: submission.paymentCode,
-        bankBin: snap.bankBin,
-        bankName: snap.bankName,
-        accountNumber: snap.accountNumber,
-        accountName: snap.accountName,
-        qrString: buildVietQrString({
-          bin: snap.bankBin,
-          accountNumber: snap.accountNumber,
+      const method = snap.method || 'bank';
+      if (method === 'momo') {
+        payment = {
+          method: 'momo',
           amount: submission.paymentAmount,
-          memo: submission.paymentCode,
-        }),
-        holdExpiresAt: submission.holdExpiresAt,
-      };
+          code: submission.paymentCode,
+          momoPhone: snap.momoPhone,
+          momoName: snap.momoName,
+          qrString: null,
+          holdExpiresAt: submission.holdExpiresAt,
+        };
+      } else {
+        payment = {
+          method: 'bank',
+          amount: submission.paymentAmount,
+          code: submission.paymentCode,
+          bankBin: snap.bankBin,
+          bankName: snap.bankName,
+          accountNumber: snap.accountNumber,
+          accountName: snap.accountName,
+          qrString: buildVietQrString({
+            bin: snap.bankBin,
+            accountNumber: snap.accountNumber,
+            amount: submission.paymentAmount,
+            memo: submission.paymentCode,
+          }),
+          holdExpiresAt: submission.holdExpiresAt,
+        };
+      }
     }
 
     return {

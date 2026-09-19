@@ -73,6 +73,15 @@ const VALID_PAYMENT_CONFIG = {
   holdMinutes: 30,
 };
 
+const VALID_MOMO_PAYMENT_CONFIG = {
+  enabled: true,
+  method: 'momo',
+  amount: 150000,
+  momoPhone: '0912345678',
+  momoName: 'nguyễn văn momo',
+  holdMinutes: 30,
+};
+
 /**
  * Tạo + xuất bản một form. `paymentConfig`/`bookingConfig` truyền qua `overrides`.
  */
@@ -171,6 +180,59 @@ describe('PR-3a — paymentConfig: chỉ chủ workspace, chốt method, audit l
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('PAYMENT_METHOD_UNSUPPORTED');
   });
+
+  it('chủ workspace PUT paymentConfig method: "momo" hợp lệ → 200, lưu đúng, ghi audit log (SĐT CHỈ 4 số cuối)', async () => {
+    const owner = await createUser({ username: 'owner_pay_momo_valid' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token);
+
+    const res = await request(app)
+      .put(`/api/forms/${form.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ paymentConfig: VALID_MOMO_PAYMENT_CONFIG });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.paymentConfig).toEqual({
+      enabled: true,
+      method: 'momo',
+      amount: 150000,
+      momoPhone: '0912345678',
+      momoName: 'NGUYEN VAN MOMO',
+      holdMinutes: 30,
+    });
+
+    const auditRows = await db.query(
+      `SELECT details FROM audit_logs WHERE action = 'FORM_PAYMENT_CONFIG_UPDATED' AND entity_id = $1`,
+      [form.id]
+    );
+    expect(auditRows.rows).toHaveLength(1);
+    const details = auditRows.rows[0].details;
+    expect(details.method).toBe('momo');
+    expect(details.momoPhoneLast4).toBe('5678');
+    expect(JSON.stringify(details)).not.toContain('0912345678');
+  });
+
+  it('momoPhone sai (9 số / bắt đầu 1) → 400', async () => {
+    const owner = await createUser({ username: 'owner_pay_momo_invalid' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token);
+
+    // 9 số
+    const res9 = await request(app)
+      .put(`/api/forms/${form.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ paymentConfig: { ...VALID_MOMO_PAYMENT_CONFIG, momoPhone: '091234567' } });
+    expect(res9.status).toBe(400);
+    expect(res9.body.code).toBe('INVALID_PAYMENT_CONFIG');
+
+    // bắt đầu 1
+    const res1 = await request(app)
+      .put(`/api/forms/${form.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ paymentConfig: { ...VALID_MOMO_PAYMENT_CONFIG, momoPhone: '1912345678' } });
+    expect(res1.status).toBe(400);
+    expect(res1.body.code).toBe('INVALID_PAYMENT_CONFIG');
+  });
 });
 
 describe('PR-3a — nộp bài form thu tiền', () => {
@@ -210,6 +272,7 @@ describe('PR-3a — nộp bài form thu tiền', () => {
     // ngoài Number.MAX_SAFE_INTEGER), khác payment.amount (số JS thật) đọc từ response JSON ở trên.
     expect(Number(row.payment_amount)).toBe(150000);
     expect(row.payment_snapshot).toEqual({
+      method: 'bank',
       bankBin: '970422',
       bankName: 'MB Bank',
       accountNumber: '0123456789',
@@ -265,6 +328,43 @@ describe('PR-3a — nộp bài form thu tiền', () => {
     const raw = JSON.stringify(res.body.data);
     expect(raw).not.toContain('0123456789');
     expect(raw).not.toContain('NGUYEN VAN A');
+  });
+
+  it('nộp bài form momo → 201, pending_payment, payment.method:"momo", qrString: null, snapshot có momoPhone', async () => {
+    const owner = await createUser({ username: 'owner_pay_submit_momo' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_MOMO_PAYMENT_CONFIG });
+    const emailField = form.fields[0];
+
+    const res = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'momo_payer@example.com' } });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.accessToken).toBeTruthy();
+    const payment = res.body.data.payment;
+    expect(payment.method).toBe('momo');
+    expect(payment.amount).toBe(150000);
+    expect(payment.momoPhone).toBe('0912345678');
+    expect(payment.momoName).toBe('NGUYEN VAN MOMO');
+    expect(payment.qrString).toBeNull();
+    expect(payment.code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/);
+    expect(payment.holdExpiresAt).toBeTruthy();
+
+    const dbRow = await db.query(
+      `SELECT status, payment_code, payment_amount, payment_snapshot, hold_expires_at
+       FROM form_submissions WHERE access_token = $1`,
+      [res.body.data.accessToken]
+    );
+    const row = dbRow.rows[0];
+    expect(row.status).toBe('pending_payment');
+    expect(row.payment_code).toBe(payment.code);
+    expect(row.payment_snapshot).toEqual({
+      method: 'momo',
+      momoPhone: '0912345678',
+      momoName: 'NGUYEN VAN MOMO',
+      amount: 150000,
+    });
   });
 });
 
@@ -563,6 +663,55 @@ describe('PR-3a — trang trạng thái công khai', () => {
     expect(raw).not.toContain('Bí Mật');
     expect(raw).not.toContain('secret_respondent');
   });
+
+  it('GET trạng thái form momo → có momoPhone/momoName, không có bankBin/accountNumber, qrString: null', async () => {
+    const owner = await createUser({ username: 'owner_pay_status_momo' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_MOMO_PAYMENT_CONFIG });
+
+    const res = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {} });
+    expect(res.status).toBe(201);
+
+    const statusRes = await request(app).get(`/api/public/forms/${form.publicKey}/submissions/${res.body.data.accessToken}`);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.data.status).toBe('pending_payment');
+    const payment = statusRes.body.data.payment;
+    expect(payment).toBeTruthy();
+    expect(payment.method).toBe('momo');
+    expect(payment.momoPhone).toBe('0912345678');
+    expect(payment.momoName).toBe('NGUYEN VAN MOMO');
+    expect(payment.qrString).toBeNull();
+    expect(payment.bankBin).toBeUndefined();
+    expect(payment.accountNumber).toBeUndefined();
+  });
+
+  it('tương thích ngược: snapshot cũ không có method → trạng thái vẫn coi là bank và có qrString', async () => {
+    const owner = await createUser({ username: 'owner_pay_legacy_snap' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_PAYMENT_CONFIG });
+
+    const res = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: {} });
+    expect(res.status).toBe(201);
+
+    // Cố tình xoá khoá `method` khỏi payment_snapshot trong DB để giả lập bài nộp từ phiên bản cũ
+    await db.query(
+      `UPDATE form_submissions SET payment_snapshot = payment_snapshot - 'method' WHERE access_token = $1`,
+      [res.body.data.accessToken]
+    );
+
+    const statusRes = await request(app).get(`/api/public/forms/${form.publicKey}/submissions/${res.body.data.accessToken}`);
+    expect(statusRes.status).toBe(200);
+    const payment = statusRes.body.data.payment;
+    expect(payment).toBeTruthy();
+    expect(payment.method).toBe('bank');
+    expect(payment.bankBin).toBe('970422');
+    expect(payment.qrString).toBeTruthy();
+    expect(payment.qrString.startsWith('000201')).toBe(true);
+  });
 });
 
 describe('PR-3a — super admin: tắt/bật form', () => {
@@ -746,6 +895,32 @@ describe('PR-3b — thư hướng dẫn chuyển khoản + thư đã xác nhận
     // Escape đúng — không lọt thẻ <b> sống vào email HTML.
     expect(html).toContain('&lt;b&gt;HACK&lt;/b&gt;');
     expect(html).not.toContain('<b>HACK</b>');
+  });
+
+  it('nộp bài thu tiền MoMo có email + sendConfirmation → thư hướng dẫn có dòng "Ví MoMo" và "Tên", không có ngân hàng', async () => {
+    const owner = await createUser({ username: 'owner_pay_momo_mail' });
+    const token = await loginAs(owner);
+    const form = await createPublishedForm(token, { paymentConfig: VALID_MOMO_PAYMENT_CONFIG });
+    const emailField = form.fields[0];
+
+    mockSendMail.mockClear();
+    const res = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [emailField.key]: 'momo_payer_mail@example.com' } });
+    expect(res.status).toBe(201);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const call = mockSendMail.mock.calls.find((c) => c[0].to === 'momo_payer_mail@example.com');
+    expect(call).toBeTruthy();
+    const { subject, html } = call[0];
+    expect(subject).toContain('Hướng dẫn chuyển khoản');
+    expect(html).toContain('Ví MoMo: <strong>0912345678</strong>');
+    expect(html).toContain('Tên: <strong>NGUYEN VAN MOMO</strong>');
+    expect(html).not.toContain('Ngân hàng:');
+    expect(html).toContain('150.000');
+    expect(html).toContain(res.body.data.payment.code);
+    expect(html).toContain(`/f/${form.publicKey}/s/${res.body.data.accessToken}`);
   });
 
   it('chủ bấm "Đã nhận tiền" → thư "đã xác nhận" gửi ĐÚNG người đặt (không gửi cho chủ)', async () => {

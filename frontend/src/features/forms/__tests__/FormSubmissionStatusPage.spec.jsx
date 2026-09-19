@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { I18nProvider } from '../../../i18n';
+import QRCode from 'qrcode';
 import FormSubmissionStatusPage from '../pages/FormSubmissionStatusPage';
 import { fetchPublicSubmissionStatus } from '../services/formPublicApi.service';
 
@@ -55,6 +56,22 @@ const pendingPayment = {
   },
 };
 
+const pendingMomoPayment = {
+  status: 'pending_payment',
+  formTitle: 'Form thu tiền MoMo',
+  appointmentAt: null,
+  holdExpired: false,
+  holdExpiresAt: new Date(Date.now() + 125000).toISOString(),
+  payment: {
+    method: 'momo',
+    code: 'MOMO99',
+    amount: 150000,
+    momoPhone: '0912345678',
+    momoName: 'NGUYEN VAN MOMO',
+    qrString: '00020101021238570010A00000072701270006970436011300123456789020208QRIBFTTA53037045802VN6304ABCD',
+  },
+};
+
 describe('FormSubmissionStatusPage component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,19 +81,10 @@ describe('FormSubmissionStatusPage component', () => {
     vi.useRealTimers();
   });
 
-  it('đang tải -> hiện spinner + chữ "Đang tải trạng thái..."', async () => {
-    let resolvePromise;
-    fetchPublicSubmissionStatus.mockReturnValue(
-      new Promise((resolve) => {
-        resolvePromise = resolve;
-      })
-    );
-
+  it('render giao diện ban đầu khi đang tải', () => {
+    fetchPublicSubmissionStatus.mockReturnValue(new Promise(() => {}));
     renderStatusPage();
-
     expect(screen.getByText('Đang tải trạng thái...')).toBeInTheDocument();
-    resolvePromise(pendingPayment);
-    await waitFor(() => expect(screen.queryByText('Đang tải trạng thái...')).not.toBeInTheDocument());
   });
 
   it('không tìm thấy bài nộp (404/lỗi) -> hiện màn "Không tìm thấy bài nộp"', async () => {
@@ -111,6 +119,25 @@ describe('FormSubmissionStatusPage component', () => {
     const reportLink = screen.getByRole('link', { name: 'Báo cáo vấn đề' });
     expect(reportLink).toHaveAttribute('href', '/contact');
     expect(reportLink).toHaveAttribute('target', '_blank');
+  });
+
+  it('pending_payment MoMo: không gọi QRCode.toDataURL, không có ô QR/"Đang tạo mã QR", hiện đúng 4 dòng thông tin + câu hướng dẫn', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue(pendingMomoPayment);
+
+    renderStatusPage();
+
+    await waitFor(() => expect(screen.getByText('0912345678')).toBeInTheDocument());
+    expect(QRCode.toDataURL).not.toHaveBeenCalled();
+    expect(screen.queryByAltText('Mã QR chuyển khoản')).not.toBeInTheDocument();
+    expect(screen.queryByText('Đang tạo mã QR...')).not.toBeInTheDocument();
+
+    expect(screen.getByText('0912345678')).toBeInTheDocument();
+    expect(screen.getByText('NGUYEN VAN MOMO')).toBeInTheDocument();
+    expect(screen.getByText('150.000 đ')).toBeInTheDocument();
+    expect(screen.getByText('MOMO99')).toBeInTheDocument();
+
+    expect(screen.getByText(/Mở app MoMo → Chuyển tiền → nhập số ví → ghi đúng nội dung/i)).toBeInTheDocument();
+    expect(screen.queryByText('Vietcombank')).not.toBeInTheDocument();
   });
 
   it('pending_payment đã hết hạn giữ chỗ (holdExpired: true) -> KHÔNG hiện QR, hiện màn hết hạn + link quay lại biểu mẫu', async () => {

@@ -102,8 +102,10 @@ class FormController {
           AUDIT_ENTITY_TYPES.FORM,
           form.id,
           {
+            method: form.paymentConfig?.method || null,
             bankBin: form.paymentConfig?.bankBin || null,
             accountNumberLast4: form.paymentConfig?.accountNumber ? form.paymentConfig.accountNumber.slice(-4) : null,
+            momoPhoneLast4: form.paymentConfig?.momoPhone ? form.paymentConfig.momoPhone.slice(-4) : null,
             enabled: Boolean(form.paymentConfig),
           }
         );
@@ -147,8 +149,10 @@ class FormController {
           AUDIT_ENTITY_TYPES.FORM,
           form.id,
           {
+            method: form.paymentConfig?.method || null,
             bankBin: form.paymentConfig?.bankBin || null,
             accountNumberLast4: form.paymentConfig?.accountNumber ? form.paymentConfig.accountNumber.slice(-4) : null,
+            momoPhoneLast4: form.paymentConfig?.momoPhone ? form.paymentConfig.momoPhone.slice(-4) : null,
             enabled: Boolean(form.paymentConfig),
           }
         );

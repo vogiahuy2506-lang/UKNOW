@@ -555,6 +555,85 @@ describe('FormEditorPage component', () => {
       expect(screen.getByText('Số tài khoản phải gồm 6-19 chữ số')).toBeInTheDocument();
       expect(screen.getByText('Vui lòng nhập tên chủ tài khoản')).toBeInTheDocument();
     });
+
+    it('chọn MoMo, điền đủ thông tin hợp lệ: payload.paymentConfig có method momo, không có bankBin/accountNumber', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-momo-1' });
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form thu tiền MoMo' },
+      });
+
+      const enableCheckbox = screen.getByRole('checkbox', { name: /Bật thanh toán/i });
+      fireEvent.click(enableCheckbox);
+
+      const momoRadio = screen.getByRole('radio', { name: /Ví MoMo/i });
+      fireEvent.click(momoRadio);
+
+      fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), {
+        target: { value: '200000' },
+      });
+      fireEvent.change(screen.getByPlaceholderText('Vd: 0912345678'), {
+        target: { value: '0912345678' },
+      });
+      fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), {
+        target: { value: 'Nguyen Van MoMo' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+
+      expect(payload.paymentConfig).toEqual({
+        enabled: true,
+        method: 'momo',
+        amount: 200000,
+        momoPhone: '0912345678',
+        momoName: 'Nguyen Van MoMo',
+        holdMinutes: 30,
+      });
+      expect(payload.paymentConfig.bankBin).toBeUndefined();
+      expect(payload.paymentConfig.accountNumber).toBeUndefined();
+    });
+
+    it('chọn MoMo bỏ trống số điện thoại hoặc tên: báo lỗi chặn lưu', async () => {
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form MoMo thiếu số' },
+      });
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
+      fireEvent.click(screen.getByRole('radio', { name: /Ví MoMo/i }));
+      fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), {
+        target: { value: '200000' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      expect(formAdminApi.createForm).not.toHaveBeenCalled();
+      expect(
+        screen.getByText('Số điện thoại MoMo phải gồm 10 chữ số (bắt đầu bằng 03, 05, 07, 08, 09)')
+      ).toBeInTheDocument();
+      expect(screen.getByText('Vui lòng nhập tên chủ ví MoMo')).toBeInTheDocument();
+    });
   });
 
   /**

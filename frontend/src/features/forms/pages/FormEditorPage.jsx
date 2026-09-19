@@ -92,10 +92,13 @@ const MAX_HOLD_MINUTES = 120;
 const DEFAULT_HOLD_MINUTES = 30;
 const DEFAULT_PAYMENT = {
   enabled: false,
+  method: 'bank',
   amount: '', // chuỗi CHỈ CHỮ SỐ (không dấu chấm) — format hiển thị ở input riêng
   bankBin: '',
   accountNumber: '',
   accountName: '',
+  momoPhone: '',
+  momoName: '',
   holdMinutes: DEFAULT_HOLD_MINUTES,
 };
 
@@ -227,10 +230,13 @@ export default function FormEditorPage() {
         if (data.paymentConfig) {
           setPayment({
             enabled: true,
+            method: data.paymentConfig.method || 'bank',
             amount: data.paymentConfig.amount != null ? String(data.paymentConfig.amount) : '',
             bankBin: data.paymentConfig.bankBin || '',
             accountNumber: data.paymentConfig.accountNumber || '',
             accountName: data.paymentConfig.accountName || '',
+            momoPhone: data.paymentConfig.momoPhone || '',
+            momoName: data.paymentConfig.momoName || '',
             holdMinutes: data.paymentConfig.holdMinutes ?? DEFAULT_HOLD_MINUTES,
           });
         } else {
@@ -620,14 +626,23 @@ export default function FormEditorPage() {
       if (!Number.isInteger(amountNum) || amountNum < MIN_PAYMENT_AMOUNT || amountNum > MAX_PAYMENT_AMOUNT) {
         errs.paymentAmount = t('forms.editorPage.payment.amountInvalid');
       }
-      if (!payment.bankBin || !PAYOS_BANK_BIN_MAP[payment.bankBin]) {
-        errs.paymentBank = t('forms.editorPage.payment.bankRequired');
-      }
-      if (!/^\d{6,19}$/.test(payment.accountNumber || '')) {
-        errs.paymentAccountNumber = t('forms.editorPage.payment.accountNumberInvalid');
-      }
-      if (!payment.accountName || !payment.accountName.trim()) {
-        errs.paymentAccountName = t('forms.editorPage.payment.accountNameRequired');
+      if (payment.method === 'momo') {
+        if (!/^0[35789]\d{8}$/.test((payment.momoPhone || '').trim())) {
+          errs.paymentMomoPhone = t('forms.editorPage.payment.momoPhoneInvalid');
+        }
+        if (!payment.momoName || !payment.momoName.trim()) {
+          errs.paymentMomoName = t('forms.editorPage.payment.momoNameRequired');
+        }
+      } else {
+        if (!payment.bankBin || !PAYOS_BANK_BIN_MAP[payment.bankBin]) {
+          errs.paymentBank = t('forms.editorPage.payment.bankRequired');
+        }
+        if (!/^\d{6,19}$/.test(payment.accountNumber || '')) {
+          errs.paymentAccountNumber = t('forms.editorPage.payment.accountNumberInvalid');
+        }
+        if (!payment.accountName || !payment.accountName.trim()) {
+          errs.paymentAccountName = t('forms.editorPage.payment.accountNameRequired');
+        }
       }
       const holdNum = Number(payment.holdMinutes);
       if (!Number.isInteger(holdNum) || holdNum < MIN_HOLD_MINUTES || holdNum > MAX_HOLD_MINUTES) {
@@ -731,17 +746,28 @@ export default function FormEditorPage() {
       // PAYMENT_CONFIG_OWNER_ONLY chỉ cần THẤY khoá `paymentConfig` trong body, không xét giá
       // trị), nên bỏ hẳn khoá này khỏi payload thay vì gửi null.
       if (!isEmployee) {
-        payload.paymentConfig = payment.enabled
-          ? {
-              enabled: true,
-              method: 'bank',
-              amount: Number(payment.amount),
-              bankBin: payment.bankBin,
-              accountNumber: payment.accountNumber.trim(),
-              accountName: payment.accountName.trim(),
-              holdMinutes: Number(payment.holdMinutes),
-            }
-          : null;
+        if (!payment.enabled) {
+          payload.paymentConfig = null;
+        } else if (payment.method === 'momo') {
+          payload.paymentConfig = {
+            enabled: true,
+            method: 'momo',
+            amount: Number(payment.amount),
+            momoPhone: (payment.momoPhone || '').trim(),
+            momoName: (payment.momoName || '').trim(),
+            holdMinutes: Number(payment.holdMinutes),
+          };
+        } else {
+          payload.paymentConfig = {
+            enabled: true,
+            method: 'bank',
+            amount: Number(payment.amount),
+            bankBin: payment.bankBin,
+            accountNumber: (payment.accountNumber || '').trim(),
+            accountName: (payment.accountName || '').trim(),
+            holdMinutes: Number(payment.holdMinutes),
+          };
+        }
       }
 
       if (isEditMode) {
@@ -1455,6 +1481,38 @@ export default function FormEditorPage() {
                 </p>
               )}
 
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  {t('forms.editorPage.payment.methodLabel')}
+                </label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="bank"
+                      disabled={isEmployee}
+                      checked={payment.method !== 'momo'}
+                      onChange={() => setPayment((prev) => ({ ...prev, method: 'bank' }))}
+                      className="text-primary-600 focus:ring-primary-500"
+                    />
+                    {t('forms.editorPage.payment.methodBank')}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="momo"
+                      disabled={isEmployee}
+                      checked={payment.method === 'momo'}
+                      onChange={() => setPayment((prev) => ({ ...prev, method: 'momo' }))}
+                      className="text-primary-600 focus:ring-primary-500"
+                    />
+                    {t('forms.editorPage.payment.methodMomo')}
+                  </label>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1480,78 +1538,132 @@ export default function FormEditorPage() {
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {t('forms.editorPage.payment.bankLabel')}
-                  </label>
-                  <select
-                    disabled={isEmployee}
-                    value={payment.bankBin}
-                    onChange={(e) => setPayment((prev) => ({ ...prev, bankBin: e.target.value }))}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                      errors.paymentBank
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                    }`}
-                  >
-                    <option value="">{t('forms.editorPage.payment.bankPlaceholder')}</option>
-                    {Object.entries(PAYOS_BANK_BIN_MAP).map(([bin, info]) => (
-                      <option key={bin} value={bin}>
-                        {info.name} ({info.short})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.paymentBank && (
-                    <p className="text-xs text-red-600 mt-1">{errors.paymentBank}</p>
-                  )}
-                </div>
+                {payment.method === 'momo' ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('forms.editorPage.payment.momoPhoneLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        disabled={isEmployee}
+                        value={payment.momoPhone}
+                        onChange={(e) =>
+                          setPayment((prev) => ({ ...prev, momoPhone: e.target.value.replace(/\D/g, '') }))
+                        }
+                        placeholder="Vd: 0912345678"
+                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          errors.paymentMomoPhone
+                            ? 'border-red-300 focus:ring-red-200'
+                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        }`}
+                      />
+                      {errors.paymentMomoPhone && (
+                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoPhone}</p>
+                      )}
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {t('forms.editorPage.payment.accountNumberLabel')}
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    disabled={isEmployee}
-                    value={payment.accountNumber}
-                    onChange={(e) =>
-                      setPayment((prev) => ({ ...prev, accountNumber: e.target.value.replace(/\D/g, '') }))
-                    }
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                      errors.paymentAccountNumber
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                    }`}
-                  />
-                  {errors.paymentAccountNumber && (
-                    <p className="text-xs text-red-600 mt-1">{errors.paymentAccountNumber}</p>
-                  )}
-                </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('forms.editorPage.payment.momoNameLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        disabled={isEmployee}
+                        value={payment.momoName}
+                        onChange={(e) => setPayment((prev) => ({ ...prev, momoName: e.target.value }))}
+                        placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
+                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          errors.paymentMomoName
+                            ? 'border-red-300 focus:ring-red-200'
+                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        }`}
+                      />
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        {t('forms.editorPage.payment.accountNameHint')}
+                      </p>
+                      {errors.paymentMomoName && (
+                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoName}</p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('forms.editorPage.payment.bankLabel')}
+                      </label>
+                      <select
+                        disabled={isEmployee}
+                        value={payment.bankBin}
+                        onChange={(e) => setPayment((prev) => ({ ...prev, bankBin: e.target.value }))}
+                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          errors.paymentBank
+                            ? 'border-red-300 focus:ring-red-200'
+                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        }`}
+                      >
+                        <option value="">{t('forms.editorPage.payment.bankPlaceholder')}</option>
+                        {Object.entries(PAYOS_BANK_BIN_MAP).map(([bin, info]) => (
+                          <option key={bin} value={bin}>
+                            {info.name} ({info.short})
+                          </option>
+                        ))}
+                      </select>
+                      {errors.paymentBank && (
+                        <p className="text-xs text-red-600 mt-1">{errors.paymentBank}</p>
+                      )}
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {t('forms.editorPage.payment.accountNameLabel')}
-                  </label>
-                  <input
-                    type="text"
-                    disabled={isEmployee}
-                    value={payment.accountName}
-                    onChange={(e) => setPayment((prev) => ({ ...prev, accountName: e.target.value }))}
-                    placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                      errors.paymentAccountName
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                    }`}
-                  />
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    {t('forms.editorPage.payment.accountNameHint')}
-                  </p>
-                  {errors.paymentAccountName && (
-                    <p className="text-xs text-red-600 mt-1">{errors.paymentAccountName}</p>
-                  )}
-                </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('forms.editorPage.payment.accountNumberLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        disabled={isEmployee}
+                        value={payment.accountNumber}
+                        onChange={(e) =>
+                          setPayment((prev) => ({ ...prev, accountNumber: e.target.value.replace(/\D/g, '') }))
+                        }
+                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          errors.paymentAccountNumber
+                            ? 'border-red-300 focus:ring-red-200'
+                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        }`}
+                      />
+                      {errors.paymentAccountNumber && (
+                        <p className="text-xs text-red-600 mt-1">{errors.paymentAccountNumber}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('forms.editorPage.payment.accountNameLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        disabled={isEmployee}
+                        value={payment.accountName}
+                        onChange={(e) => setPayment((prev) => ({ ...prev, accountName: e.target.value }))}
+                        placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
+                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          errors.paymentAccountName
+                            ? 'border-red-300 focus:ring-red-200'
+                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        }`}
+                      />
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        {t('forms.editorPage.payment.accountNameHint')}
+                      </p>
+                      {errors.paymentAccountName && (
+                        <p className="text-xs text-red-600 mt-1">{errors.paymentAccountName}</p>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">

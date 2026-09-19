@@ -418,6 +418,7 @@ export const MAX_HOLD_MINUTES = 120;
 export const DEFAULT_HOLD_MINUTES = 30;
 const ACCOUNT_NAME_RE = /^[A-Z0-9 ]{2,50}$/;
 const ACCOUNT_NUMBER_RE = /^\d{6,19}$/;
+const MOMO_PHONE_RE = /^0[35789]\d{8}$/;
 
 /**
  * Chuẩn hoá tên chủ tài khoản: bỏ dấu tiếng Việt (kể cả Đ/đ — không decompose qua NFD), viết
@@ -441,8 +442,8 @@ function normalizeAccountName(raw) {
  * Chuẩn hoá và xác thực cấu hình thanh toán giữ chỗ (payment_config) của biểu mẫu.
  * `null`/`undefined`/`{enabled:false}` đều chuẩn hoá về `null` (tắt thu tiền).
  *
- * PR-3a chỉ nhận `method: 'bank'` — `momo_image` dời sang sau PR-4 (chưa có endpoint upload
- * ảnh cho form) nên bị từ chối 400 ở đây thay vì âm thầm lưu cấu hình không dùng được.
+ * Hỗ trợ `method: 'bank'` (VietQR) và `method: 'momo'` (thông tin ví, không QR — PR-3c).
+ * `momo_image` vẫn bị từ chối 400 (đã thay bằng thông tin ví không QR).
  *
  * Không tự kiểm `phone_verified_at`/`requirePhone` ở đây — route `/api/forms` đã gắn
  * `requirePhone` cho TOÀN BỘ router (`form.routes.js`), nên request tới được hàm này tức là
@@ -458,6 +459,13 @@ function normalizeAccountName(raw) {
  *   accountNumber: string,
  *   accountName: string,
  *   holdMinutes: number
+ * } | {
+ *   enabled: true,
+ *   method: 'momo',
+ *   amount: number,
+ *   momoPhone: string,
+ *   momoName: string,
+ *   holdMinutes: number
  * } | null}
  */
 export function normalizePaymentConfig(raw) {
@@ -468,8 +476,8 @@ export function normalizePaymentConfig(raw) {
   if (!raw.enabled) return null;
 
   const method = String(raw.method || 'bank').trim().toLowerCase();
-  if (method !== 'bank') {
-    throw createValidationError('Phương thức thanh toán này chưa được hỗ trợ (chỉ nhận chuyển khoản ngân hàng)', 'PAYMENT_METHOD_UNSUPPORTED');
+  if (method !== 'bank' && method !== 'momo') {
+    throw createValidationError('Phương thức thanh toán này chưa được hỗ trợ (chỉ nhận chuyển khoản ngân hàng hoặc MoMo)', 'PAYMENT_METHOD_UNSUPPORTED');
   }
 
   const amount = Number(raw.amount);
@@ -480,25 +488,49 @@ export function normalizePaymentConfig(raw) {
     );
   }
 
-  const bankBin = String(raw.bankBin || '').trim();
-  if (!VIETQR_BANKS[bankBin]) {
-    throw createValidationError('Ngân hàng (bankBin) không hợp lệ', 'INVALID_PAYMENT_CONFIG');
-  }
+  let bankBin;
+  let accountNumber;
+  let accountName;
+  let momoPhone;
+  let momoName;
 
-  const accountNumber = String(raw.accountNumber || '').trim();
-  if (!ACCOUNT_NUMBER_RE.test(accountNumber)) {
-    throw createValidationError(
-      `Số tài khoản phải gồm ${MIN_ACCOUNT_NUMBER_LENGTH}-${MAX_ACCOUNT_NUMBER_LENGTH} chữ số`,
-      'INVALID_PAYMENT_CONFIG'
-    );
-  }
+  if (method === 'momo') {
+    momoPhone = String(raw.momoPhone || '').trim();
+    if (!MOMO_PHONE_RE.test(momoPhone)) {
+      throw createValidationError(
+        'Số điện thoại MoMo phải gồm 10 chữ số (bắt đầu bằng 03, 05, 07, 08, 09)',
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
 
-  const accountName = normalizeAccountName(raw.accountName);
-  if (!ACCOUNT_NAME_RE.test(accountName)) {
-    throw createValidationError(
-      'Tên chủ tài khoản không hợp lệ (chỉ chữ in hoa không dấu, số, khoảng trắng, 2-50 ký tự)',
-      'INVALID_PAYMENT_CONFIG'
-    );
+    momoName = normalizeAccountName(raw.momoName);
+    if (!ACCOUNT_NAME_RE.test(momoName)) {
+      throw createValidationError(
+        'Tên chủ ví MoMo không hợp lệ (chỉ chữ in hoa không dấu, số, khoảng trắng, 2-50 ký tự)',
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
+  } else {
+    bankBin = String(raw.bankBin || '').trim();
+    if (!VIETQR_BANKS[bankBin]) {
+      throw createValidationError('Ngân hàng (bankBin) không hợp lệ', 'INVALID_PAYMENT_CONFIG');
+    }
+
+    accountNumber = String(raw.accountNumber || '').trim();
+    if (!ACCOUNT_NUMBER_RE.test(accountNumber)) {
+      throw createValidationError(
+        `Số tài khoản phải gồm ${MIN_ACCOUNT_NUMBER_LENGTH}-${MAX_ACCOUNT_NUMBER_LENGTH} chữ số`,
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
+
+    accountName = normalizeAccountName(raw.accountName);
+    if (!ACCOUNT_NAME_RE.test(accountName)) {
+      throw createValidationError(
+        'Tên chủ tài khoản không hợp lệ (chỉ chữ in hoa không dấu, số, khoảng trắng, 2-50 ký tự)',
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
   }
 
   let holdMinutes = DEFAULT_HOLD_MINUTES;
@@ -511,6 +543,17 @@ export function normalizePaymentConfig(raw) {
       );
     }
     holdMinutes = n;
+  }
+
+  if (method === 'momo') {
+    return {
+      enabled: true,
+      method: 'momo',
+      amount,
+      momoPhone,
+      momoName,
+      holdMinutes,
+    };
   }
 
   return {
