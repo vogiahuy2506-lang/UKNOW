@@ -19,6 +19,16 @@ router.use(requireRole('admin'));
  */
 router.get('/', ctrl.getNotifications);
 
+// =====================
+// Notification Templates (super admin save-as)
+// =====================
+// Dat TRUOC cac route co param dong (/:id) de Express khong nuot nham.
+// GET cho admin thuong (de chon o tab Gui), POST chi superadmin.
+
+router.get('/templates', ctrl.listTemplates);
+router.get('/templates/:id', ctrl.getTemplate);
+router.post('/templates', requireRole('superadmin'), ctrl.createTemplate);
+
 /**
  * GET /admin/notifications/types
  * Get available notification types
@@ -114,5 +124,11 @@ router.get('/:id/stats', ctrl.getNotificationStats);
  * Get email logs for notification
  */
 router.get('/:id/logs', ctrl.getEmailLogs);
+
+// =====================
+// Notification Templates (super admin save-as) — DA DAT TRUOC O TREN
+// =====================
+// (block nay giu lai de khong vo diff; cac route that da duoc chuyen len phia truoc
+//  de tranh Express nuot nham vao /:id)
 
 export default router;

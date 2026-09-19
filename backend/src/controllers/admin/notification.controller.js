@@ -1,4 +1,5 @@
 import notificationService from '../../services/admin/notification.service.js';
+import notificationTemplateService from '../../services/admin/notificationTemplate.service.js';
 
 const handleError = (res, err) => {
   console.error('[NotificationController]', err);
@@ -588,6 +589,58 @@ export async function getAvailableVariables(req, res) {
     const variables = notificationService.getAvailableVariables();
     res.json({ success: true, data: variables });
   } catch (err) {
+    handleError(res, err);
+  }
+}
+
+// =====================
+// Notification Templates (super admin save-as)
+// =====================
+
+/**
+ * GET /admin/notification-templates
+ * Query: ?type_key=announcement
+ * Auth: admin (de ca admin thuong co the xem va chon o tab Gui)
+ */
+export async function listTemplates(req, res) {
+  try {
+    const { type_key } = req.query;
+    const data = await notificationTemplateService.listTemplates(type_key);
+    res.json({ success: true, data });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+
+/**
+ * GET /admin/notification-templates/:id
+ * Auth: admin
+ */
+export async function getTemplate(req, res) {
+  try {
+    const { id } = req.params;
+    const template = await notificationTemplateService.getTemplate(id);
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Khong tim thay mau' });
+    }
+    res.json({ success: true, data: template });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+
+/**
+ * POST /admin/notification-templates
+ * Auth: superadmin
+ */
+export async function createTemplate(req, res) {
+  try {
+    const template = await notificationTemplateService.createTemplate(req.body, req.user?.id);
+    res.status(201).json({ success: true, data: template });
+  } catch (err) {
+    if (err.status === 409) {
+      return res.status(409).json({ success: false, message: err.message, code: err.code });
+    }
     handleError(res, err);
   }
 }
