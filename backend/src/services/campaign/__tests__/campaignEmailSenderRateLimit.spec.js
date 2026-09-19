@@ -21,6 +21,7 @@ describe('campaignEmailSenderService: SMTP rate-limit handling', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(campaignEmailSenderRepository, 'incrementEmailSettingsSentCount').mockResolvedValue();
+    jest.spyOn(campaignEmailSenderRepository, 'isLeadConsentRefusedOrWithdrawn').mockResolvedValue(false);
     jest.spyOn(emailSettingsController, 'logEmailSent').mockResolvedValue();
   });
 

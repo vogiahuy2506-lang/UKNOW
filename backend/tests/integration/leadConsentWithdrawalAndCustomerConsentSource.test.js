@@ -10,6 +10,10 @@ import db from '../../src/config/database.js';
 import { truncateAll, createUser } from './helpers/db.js';
 import leadRepository from '../../src/repositories/lead.repository.js';
 import customerMutationService from '../../src/services/customer/customerMutation.service.js';
+import leadService from '../../src/services/lead/lead.service.js';
+import campaignEmailSenderRepository from '../../src/repositories/campaign/campaignEmailSender.repository.js';
+import campaignEmailSenderService from '../../src/services/campaign/campaignEmailSender.service.js';
+import { CAMPAIGN_EMAIL_SKIP_LABELS } from '../../src/services/campaign/campaignRun.service.js';
 
 let app;
 
@@ -230,6 +234,241 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
       expect(resManual.body.data.items).toHaveLength(1);
       expect(resManual.body.data.items[0].email).toBe('c1@test.local');
       expect(resManual.body.data.items[0].consentSource).toBe('manual');
+    });
+  });
+
+  describe('Việc 3: Chiến dịch tôn trọng đồng ý (PR-1)', () => {
+    it('Node read_landing_leads: 1 lead TRUE + 1 FALSE + 1 NULL → chỉ lấy 2 người (TRUE + NULL), total = 2, excludedRefusedConsent = 1', async () => {
+      const owner = await createUser({ username: 'lead_owner_consent_1' });
+
+      // Lead TRUE
+      await leadRepository.insertLead({
+        lastName: 'Nguyen',
+        firstName: 'Dong Y',
+        email: 'dongy@test.local',
+        phone: '0911111111',
+        marketingConsent: true,
+        landingPageSlug: 'landing-1',
+        idUser: owner.id,
+      });
+
+      // Lead FALSE (từ chối)
+      await leadRepository.insertLead({
+        lastName: 'Tran',
+        firstName: 'Tu Choi',
+        email: 'tuchoi@test.local',
+        phone: '0922222222',
+        marketingConsent: false,
+        landingPageSlug: 'landing-1',
+        idUser: owner.id,
+      });
+
+      // Lead NULL (chưa hỏi / form cũ)
+      await leadRepository.insertLead({
+        lastName: 'Le',
+        firstName: 'Chua Hoi',
+        email: 'chuahoi@test.local',
+        phone: '0933333333',
+        marketingConsent: null,
+        landingPageSlug: 'landing-1',
+        idUser: owner.id,
+      });
+
+      const config = { workspaceOwnerId: owner.id };
+      const result = await leadService.getLeadsForCampaignConfig(config);
+
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.excludedRefusedConsent).toBe(1);
+
+      const emails = result.items.map((i) => i.email).sort();
+      expect(emails).toEqual(['chuahoi@test.local', 'dongy@test.local']);
+      expect(emails).not.toContain('tuchoi@test.local');
+    });
+
+    it('GET /api/leads/preview: items.length = 2, total = 2, excludedRefusedConsent = 1', async () => {
+      const owner = await createUser({ username: 'lead_owner_consent_2' });
+      const token = await loginAs(owner);
+
+      await leadRepository.insertLead({
+        lastName: 'A',
+        firstName: '1',
+        email: 'a1@test.local',
+        marketingConsent: true,
+        landingPageSlug: 'landing-prev',
+        idUser: owner.id,
+      });
+      await leadRepository.insertLead({
+        lastName: 'B',
+        firstName: '2',
+        email: 'b2@test.local',
+        marketingConsent: false,
+        landingPageSlug: 'landing-prev',
+        idUser: owner.id,
+      });
+      await leadRepository.insertLead({
+        lastName: 'C',
+        firstName: '3',
+        email: 'c3@test.local',
+        marketingConsent: null,
+        landingPageSlug: 'landing-prev',
+        idUser: owner.id,
+      });
+
+      const res = await request(app)
+        .get('/api/leads/preview')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.items).toHaveLength(2);
+      expect(res.body.data.pagination.total).toBe(2);
+      expect(res.body.data.pagination.excludedRefusedConsent).toBe(1);
+
+      const emails = res.body.data.items.map((i) => i.email).sort();
+      expect(emails).toEqual(['a1@test.local', 'c3@test.local']);
+      expect(emails).not.toContain('b2@test.local');
+    });
+
+    it('Lead đã bấm link huỷ (marketing_consent = FALSE + consent_withdrawn_at) không nằm trong danh sách gửi', async () => {
+      const owner = await createUser({ username: 'lead_owner_consent_3' });
+
+      const lead = await leadRepository.insertLead({
+        lastName: 'Vo',
+        firstName: 'Huy',
+        email: 'huy@test.local',
+        marketingConsent: true,
+        landingPageSlug: 'landing-unsub',
+        idUser: owner.id,
+      });
+
+      // Bấm link huỷ
+      const unsubRes = await request(app).get(`/api/leads/unsubscribe/${lead.unsubscribeToken}`);
+      expect(unsubRes.status).toBe(200);
+
+      const result = await leadService.getLeadsForCampaignConfig({ workspaceOwnerId: owner.id });
+      expect(result.items).toHaveLength(0);
+      expect(result.total).toBe(0);
+      expect(result.excludedRefusedConsent).toBe(1);
+    });
+
+    it('GET /api/leads (bảng quản lý) và export: vẫn đủ 3 dòng, KHÔNG bị lọc', async () => {
+      const owner = await createUser({ username: 'lead_owner_consent_4' });
+      const token = await loginAs(owner);
+
+      await leadRepository.insertLead({
+        lastName: 'A',
+        firstName: '1',
+        email: 'm1@test.local',
+        marketingConsent: true,
+        landingPageSlug: 'l1',
+        idUser: owner.id,
+      });
+      await leadRepository.insertLead({
+        lastName: 'B',
+        firstName: '2',
+        email: 'm2@test.local',
+        marketingConsent: false,
+        landingPageSlug: 'l1',
+        idUser: owner.id,
+      });
+      await leadRepository.insertLead({
+        lastName: 'C',
+        firstName: '3',
+        email: 'm3@test.local',
+        marketingConsent: null,
+        landingPageSlug: 'l1',
+        idUser: owner.id,
+      });
+
+      // GET /api/leads
+      const resList = await request(app)
+        .get('/api/leads')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resList.status).toBe(200);
+      expect(resList.body.data.items).toHaveLength(3);
+      expect(resList.body.data.pagination.total).toBe(3);
+
+      // GET /api/leads/export
+      const resExport = await request(app)
+        .get('/api/leads/export')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resExport.status).toBe(200);
+      expect(resExport.headers['content-type']).toContain('spreadsheetml');
+    });
+
+    it('Người rút đồng ý giữa lượt chạy: lúc gửi bị bỏ qua với reason=consent_withdrawn', async () => {
+      const owner = await createUser({ username: 'lead_owner_consent_5' });
+
+      // Lead trong DB có marketing_consent = false
+      await leadRepository.insertLead({
+        lastName: 'Dang',
+        firstName: 'Rut',
+        email: 'rutdongy@test.local',
+        marketingConsent: false,
+        consentWithdrawnAt: new Date(),
+        landingPageSlug: 'l-rut',
+        idUser: owner.id,
+      });
+
+      // Tra trực tiếp DB qua repository
+      const isRefused = await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(
+        owner.id,
+        'rutdongy@test.local'
+      );
+      expect(isRefused).toBe(true);
+
+      // Lead TRUE không bị từ chối
+      await leadRepository.insertLead({
+        lastName: 'Khong',
+        firstName: 'Rut',
+        email: 'khongrut@test.local',
+        marketingConsent: true,
+        landingPageSlug: 'l-rut',
+        idUser: owner.id,
+      });
+      const notRefused = await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(
+        owner.id,
+        'khongrut@test.local'
+      );
+      expect(notRefused).toBe(false);
+
+      // Cấu hình email settings mặc định cho user
+      await db.query(
+        `INSERT INTO email_settings (id_user, name, email, reply_to, smtp_host, smtp_port, is_verified, status)
+         VALUES ($1, 'Tester', 'sender@test.local', 'sender@test.local', 'smtp.test', 587, true, 'active')`,
+        [owner.id]
+      );
+
+      // Gửi thử qua campaignEmailSenderService.sendEmailToCustomerDirect
+      const actionNode = {
+        id: 'node_send_email',
+        data: {
+          emailSubject: 'Tiêu đề thử',
+          emailBody: '<p>Nội dung thử</p>',
+          emailFromAddress: 'sender@example.com',
+        },
+      };
+      const customer = { email: 'rutdongy@test.local', full_name: 'Dang Rut' };
+      const campaign = { id: 999, id_user: owner.id };
+      const sendResult = await campaignEmailSenderService.sendEmailToCustomerDirect(
+        actionNode,
+        customer,
+        campaign,
+        1001,
+        null,
+        { emailStep: 1 }
+      );
+
+      expect(sendResult).toEqual({
+        to: 'rutdongy@test.local',
+        status: 'skipped',
+        reason: 'consent_withdrawn',
+      });
+
+      // Nhãn tiếng Việt cho lý do consent_withdrawn (dùng cho ledger/execution log)
+      expect(CAMPAIGN_EMAIL_SKIP_LABELS.consent_withdrawn).toBe('Khách đã rút lại đồng ý nhận tin');
     });
   });
 });

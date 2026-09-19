@@ -259,6 +259,9 @@ export default function LandingLeadsListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('landingLeads.landingSlug')}
                 </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t('forms.submissionsPage.colConsent', { defaultValue: 'Đồng ý tiếp thị' })}
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('landingLeads.extraInfo')}
                 </th>
@@ -267,7 +270,7 @@ export default function LandingLeadsListPage() {
             <tbody className="bg-white divide-y divide-gray-100">
               {isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-500">
                     <span className="inline-block w-4 h-4 mr-2 align-[-2px] border-2 border-gray-300 border-t-orange-500 rounded-full animate-spin" />
                     {t('landingLeads.loading')}
                   </td>
@@ -276,7 +279,7 @@ export default function LandingLeadsListPage() {
 
               {!isLoading && visibleItems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-16 text-center">
+                  <td colSpan={6} className="px-4 py-16 text-center">
                     <HiOutlineSearch className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                     {debouncedSearch ? (
                       <>
@@ -383,6 +386,31 @@ export default function LandingLeadsListPage() {
                         </a>
                       ) : (
                         <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-center whitespace-nowrap">
+                      {row.consentWithdrawnAt ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                          title={new Date(row.consentWithdrawnAt).toLocaleString('vi-VN')}
+                        >
+                          {t('forms.submissionsPage.consentWithdrawn', {
+                            date: new Date(row.consentWithdrawnAt).toLocaleDateString('vi-VN'),
+                            defaultValue: `Đã rút · ${new Date(row.consentWithdrawnAt).toLocaleDateString('vi-VN')}`,
+                          })}
+                        </span>
+                      ) : row.marketingConsent === true ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                          {t('forms.submissionsPage.consentYes', { defaultValue: 'Có' })}
+                        </span>
+                      ) : row.marketingConsent === false ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                          {t('forms.submissionsPage.consentNo', { defaultValue: 'Không' })}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">
+                          {t('forms.submissionsPage.consentNone', { defaultValue: '—' })}
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 max-w-[280px]">

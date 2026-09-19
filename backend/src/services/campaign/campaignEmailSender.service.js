@@ -668,6 +668,15 @@ class CampaignEmailSenderService {
         console.info(`[CampaignRun][Email] skip run=${runId} to=${customer.email} reason=hard_bounced`);
         return { to: customer.email, status: 'skipped', reason: 'hard_bounced' };
       }
+
+      // Bỏ qua nếu lead trong DB có marketing_consent = FALSE (đã từ chối hoặc rút lại đồng ý giữa lượt chạy)
+      const isLeadConsentRefused = await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(
+        campaign.id_user, customer.email.toLowerCase()
+      );
+      if (isLeadConsentRefused) {
+        console.info(`[CampaignRun][Email] skip run=${runId} to=${customer.email} reason=consent_withdrawn`);
+        return { to: customer.email, status: 'skipped', reason: 'consent_withdrawn' };
+      }
     }
 
     const trackingToken = uuidv4();

@@ -376,15 +376,17 @@ class LeadService {
   async getLeadsForCampaignConfig(config = {}) {
     const shared = await this.resolveSharedLeadFilters(config);
     const limit = clampLandingLeadsLimit(config.landingLeadsLimit, 1000);
-    const filterBase = { ...shared, limit };
+    const filterBase = { ...shared, limit, excludeConsentFalse: true };
 
-    const [rows, total] = await Promise.all([
+    const [rows, total, totalAll] = await Promise.all([
       leadRepository.findFiltered(filterBase),
+      leadRepository.countFiltered({ ...shared, excludeConsentFalse: true }),
       leadRepository.countFiltered(shared),
     ]);
 
     const items = rows.map(mapLeadRowToCampaignItem);
-    return { items, total };
+    const excludedRefusedConsent = Math.max(0, totalAll - total);
+    return { items, total, excludedRefusedConsent };
   }
 
   /**

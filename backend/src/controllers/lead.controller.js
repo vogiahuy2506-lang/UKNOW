@@ -74,7 +74,7 @@ class LeadController {
         workspaceOwnerId: workspaceContext.workspaceOwnerId,
         isSuperAdmin: workspaceContext.isSuperAdmin,
       };
-      const { items, total } = await leadService.getLeadsForCampaignConfig(config);
+      const { items, total, excludedRefusedConsent } = await leadService.getLeadsForCampaignConfig(config);
       const limitNorm = clampLandingLeadsLimit(config.landingLeadsLimit, 1000);
 
       return res.json({
@@ -85,6 +85,7 @@ class LeadController {
             total,
             limit: limitNorm,
             fetched: items.length,
+            excludedRefusedConsent: excludedRefusedConsent ?? 0,
           },
         },
       });

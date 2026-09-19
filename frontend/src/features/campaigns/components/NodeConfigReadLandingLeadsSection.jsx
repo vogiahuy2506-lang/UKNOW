@@ -6,6 +6,8 @@ import { LANDING_LEAD_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 import { fetchLandingLeadsSlugFilterOptions } from '../../landing/utils/landingLeadsSlugFilterOptions.js';
 import api from '../../../services/api.js';
+import { HiOutlineExclamation } from 'react-icons/hi';
+import campaignBuilderApiService from '../services/campaignBuilderApi.service.js';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách riêng để React bỏ qua re-render khi prop ổn định.
@@ -117,6 +119,43 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
 
   const [slugOptions, setSlugOptions] = useState([{ value: 'l', label: t('nodeConfigLanding.landingReactSlug', { defaultValue: 'Landing React (/l)' }) }]);
   const [customDefs, setCustomDefs] = useState([]);
+  const [excludedRefusedConsent, setExcludedRefusedConsent] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await campaignBuilderApiService.previewLandingLeads({
+          landingLeadsUseDateRange: formData.landingLeadsUseDateRange,
+          landingLeadsDateFrom: formData.landingLeadsDateFrom,
+          landingLeadsDateTo: formData.landingLeadsDateTo,
+          landingLeadsOccupations: JSON.stringify(formData.landingLeadsOccupations || []),
+          landingLeadsInterests: JSON.stringify(formData.landingLeadsInterests || []),
+          landingLeadsSlugs: JSON.stringify(formData.landingLeadsSlugs || []),
+          landingLeadsCustomFilters: JSON.stringify(formData.landingLeadsCustomFilters || []),
+          landingLeadsLimit: 1,
+        });
+        if (!cancelled) {
+          const excluded = response?.data?.data?.pagination?.excludedRefusedConsent ?? 0;
+          setExcludedRefusedConsent(excluded);
+        }
+      } catch {
+        if (!cancelled) setExcludedRefusedConsent(0);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    formData.landingLeadsUseDateRange,
+    formData.landingLeadsDateFrom,
+    formData.landingLeadsDateTo,
+    formData.landingLeadsOccupations,
+    formData.landingLeadsInterests,
+    formData.landingLeadsSlugs,
+    formData.landingLeadsCustomFilters,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +230,23 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
       ) : (
         <p className="text-xs text-gray-500">{t('nodeConfigLanding.takingAllLeads')}</p>
       )}
+
+      {excludedRefusedConsent > 0 ? (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <span>
+            {t('nodeConfigLanding.consentWarning', {
+              count: excludedRefusedConsent,
+              defaultValue: 'Có {count} lead bị bỏ qua do đã từ chối hoặc đã huỷ nhận tin.',
+            })}
+          </span>
+        </p>
+      ) : null}
+      <p className="text-xs text-gray-500">
+        {t('nodeConfigLanding.consentInfo', {
+          defaultValue: 'Tự động bỏ qua người đã từ chối hoặc đã huỷ nhận tin tiếp thị.',
+        })}
+      </p>
 
       <LandingLeadsMultiFilterBlock
         title={t('nodeConfigLanding.filterByOccupation')}

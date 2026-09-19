@@ -17,6 +17,25 @@ class CampaignEmailSenderRepository {
   }
 
   /**
+   * Check if a lead with this email has marketing_consent = FALSE for this user / workspace.
+   *
+   * @param {number} userId
+   * @param {string} emailLower lowercase email address
+   * @returns {Promise<boolean>}
+   */
+  async isLeadConsentRefusedOrWithdrawn(userId, emailLower) {
+    const result = await db.query(
+      `SELECT 1 FROM leads
+       WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
+         AND LOWER(email) = $2
+         AND marketing_consent = FALSE
+       LIMIT 1`,
+      [userId, emailLower]
+    );
+    return result.rowCount > 0;
+  }
+
+  /**
    * Increment daily_sent_count and total_sent_count for an email settings account.
    *
    * @param {number} settingsId

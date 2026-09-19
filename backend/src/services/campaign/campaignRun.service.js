@@ -58,6 +58,12 @@ export const EMAIL_API_DELAY_MAX_MS = 250;
 export const ZALO_API_DELAY_MIN_MS = 25;
 export const ZALO_API_DELAY_MAX_MS = 125;
 export const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 250;
+
+export const CAMPAIGN_EMAIL_SKIP_LABELS = {
+  unsubscribed: 'Đã hủy đăng ký nhận email',
+  hard_bounced: 'Địa chỉ email bị hard bounce',
+  consent_withdrawn: 'Khách đã rút lại đồng ý nhận tin',
+};
 export const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
 
 class CampaignRunService {
@@ -3640,11 +3646,7 @@ class CampaignRunService {
 
               // Xử lý các trường hợp bỏ qua (unsubscribed / hard bounced)
               if (sendResult.status === 'skipped') {
-                const skipLabels = {
-                  unsubscribed: 'Đã hủy đăng ký nhận email',
-                  hard_bounced: 'Địa chỉ email bị hard bounce',
-                };
-                const skipMessage = skipLabels[sendResult.reason] || 'Bỏ qua';
+                const skipMessage = CAMPAIGN_EMAIL_SKIP_LABELS[sendResult.reason] || 'Bỏ qua';
                 const skippedPayload = {
                   ...sendResult,
                   message: skipMessage,

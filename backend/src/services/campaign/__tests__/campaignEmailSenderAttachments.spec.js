@@ -21,6 +21,7 @@ describe('Finding 1: campaignEmailSenderService đọc attachments khi không d�
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(campaignEmailSenderRepository, 'incrementEmailSettingsSentCount').mockResolvedValue();
+    jest.spyOn(campaignEmailSenderRepository, 'isLeadConsentRefusedOrWithdrawn').mockResolvedValue(false);
     jest.spyOn(emailSettingsController, 'logEmailSent').mockResolvedValue();
   });
 
