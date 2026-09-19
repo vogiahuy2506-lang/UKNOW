@@ -381,4 +381,160 @@ describe('Chatbot Contact Alert Cron Integration (PR-1, Việc 6 & Review)', () 
     expect(rows[0].pending_notify).toBe(true);
     expect(rows[0].suppressed_reason).toBeNull();
   });
+
+  const REAL_SIM_SPAM_FIXTURE = `💐 💐 List sim đầu số 0979
+⚡ 0979.891.896 =5tr0
+⚡ 0979.888.255 =5tr0
+⚡ 0979.096.296 =1tr8
+⚡ 0979.678.858 =6tr0
+⚡ 0979.855.998 =5tr0
+⚡ 0979.388.138 =5tr0
+⚡ 0979.581.699 =5tr0
+⚡ 0979.8338.98 =8tr0
+⚡ 0979.898.633 =3tr0
+⚡ 0979.263.293 =3tr0
+⚡ 0979.028.128 =8tr0
+⚡ 0979.183.389 =5tr0
+⚡ 0979.345.778 =5tr0
+⚡ 0979.903.168 =4tr0
+⚡ 0979.25.6839 =5tr5
+⚡ 0979.255.639 =3tr5
+⚡ 0979.310.368 =4tr5
+⚡ 0979.51.6899 =6tr0
+⚡ 0979.51.0299 =3tr0
+⚡ 0979.212.588 =7tr5
+⚡ 0979.131.599 =7tr0
+⚡ 09.79.59.69.29 =5tr5
+⚡ 0979.39.59.29 =5tr0
+⚡ 0979.610.368 =5tr0`;
+
+  it('bảng rao sim thật của hội thoại 14221 (≥20 số): scanAndNotify bỏ cả tin, 0 alert, không gửi email', async () => {
+    await setCursor('web', 0);
+
+    const user = await createUser({
+      username: 'shop-owner-sim-spam',
+      email: 'owner-sim@example.com',
+    });
+
+    const { rows: widgetRows } = await db.query(
+      `INSERT INTO web_widget_configs (id_user, widget_key)
+       VALUES ($1, $2) RETURNING id`,
+      [user.id, `key_${Date.now()}_sim`]
+    );
+    const widgetId = widgetRows[0].id;
+
+    const { rows: convRows } = await db.query(
+      `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id, visitor_name)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [user.id, widgetId, 'sess_sim', 'Spammer Sim']
+    );
+    const convId = convRows[0].id;
+
+    await db.query(
+      `INSERT INTO webchat_messages (id_conversation, id_user, role, content, created_at)
+       VALUES ($1, $2, 'visitor', $3, NOW())`,
+      [convId, user.id, REAL_SIM_SPAM_FIXTURE]
+    );
+
+    const result = await scanAndNotify();
+    expect(result.scannedCount).toBe(1);
+    expect(result.alertsCreatedOrUpdated).toBe(0);
+    expect(result.emailsSent).toBe(0);
+    expect(mockSendMail).not.toHaveBeenCalled();
+
+    const { rows: alertRows } = await db.query(
+      `SELECT * FROM chatbot_contact_alerts WHERE id_user = $1`,
+      [user.id]
+    );
+    expect(alertRows.length).toBe(0);
+  });
+
+  it('content là JSON hợp lệ có số: scanAndNotify bỏ qua tin, 0 alert, không gửi email', async () => {
+    await setCursor('web', 0);
+
+    const user = await createUser({
+      username: 'shop-owner-json-msg',
+      email: 'owner-json@example.com',
+    });
+
+    const { rows: widgetRows } = await db.query(
+      `INSERT INTO web_widget_configs (id_user, widget_key)
+       VALUES ($1, $2) RETURNING id`,
+      [user.id, `key_${Date.now()}_json`]
+    );
+    const widgetId = widgetRows[0].id;
+
+    const { rows: convRows } = await db.query(
+      `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id, visitor_name)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [user.id, widgetId, 'sess_json', 'Zalo Bot']
+    );
+    const convId = convRows[0].id;
+
+    const jsonPayload = JSON.stringify({
+      title: 'Thông báo sự kiện tuyển dụng',
+      hotline: '0912345678',
+      description: 'Liên hệ tư vấn viên theo SĐT 0912345678',
+    });
+
+    await db.query(
+      `INSERT INTO webchat_messages (id_conversation, id_user, role, content, created_at)
+       VALUES ($1, $2, 'visitor', $3, NOW())`,
+      [convId, user.id, jsonPayload]
+    );
+
+    const result = await scanAndNotify();
+    expect(result.scannedCount).toBe(1);
+    expect(result.alertsCreatedOrUpdated).toBe(0);
+    expect(result.emailsSent).toBe(0);
+    expect(mockSendMail).not.toHaveBeenCalled();
+
+    const { rows: alertRows } = await db.query(
+      `SELECT * FROM chatbot_contact_alerts WHERE id_user = $1`,
+      [user.id]
+    );
+    expect(alertRows.length).toBe(0);
+  });
+
+  it('content bắt đầu bằng { nhưng không parse được (người thật gõ): scanAndNotify vẫn quét và tạo cảnh báo', async () => {
+    await setCursor('web', 0);
+
+    const user = await createUser({
+      username: 'shop-owner-invalid-json',
+      email: 'owner-invalid-json@example.com',
+    });
+
+    const { rows: widgetRows } = await db.query(
+      `INSERT INTO web_widget_configs (id_user, widget_key)
+       VALUES ($1, $2) RETURNING id`,
+      [user.id, `key_${Date.now()}_invalid_json`]
+    );
+    const widgetId = widgetRows[0].id;
+
+    const { rows: convRows } = await db.query(
+      `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id, visitor_name)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [user.id, widgetId, 'sess_inv_json', 'Khách Thật']
+    );
+    const convId = convRows[0].id;
+
+    await db.query(
+      `INSERT INTO webchat_messages (id_conversation, id_user, role, content, created_at)
+       VALUES ($1, $2, 'visitor', '{ xin chào shop, số điện thoại của tôi là 0912345678 nhé', NOW())`,
+      [convId, user.id]
+    );
+
+    const result = await scanAndNotify();
+    expect(result.scannedCount).toBe(1);
+    expect(result.alertsCreatedOrUpdated).toBe(1);
+    expect(result.emailsSent).toBe(1);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+    const { rows: alertRows } = await db.query(
+      `SELECT * FROM chatbot_contact_alerts WHERE id_user = $1`,
+      [user.id]
+    );
+    expect(alertRows.length).toBe(1);
+    expect(alertRows[0].contact_value).toBe('0912345678');
+  });
 });

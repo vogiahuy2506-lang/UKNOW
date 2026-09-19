@@ -464,6 +464,254 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
       })
     );
   });
+
+  const REAL_SIM_SPAM_FIXTURE = `💐 💐 List sim đầu số 0979
+⚡ 0979.891.896 =5tr0
+⚡ 0979.888.255 =5tr0
+⚡ 0979.096.296 =1tr8
+⚡ 0979.678.858 =6tr0
+⚡ 0979.855.998 =5tr0
+⚡ 0979.388.138 =5tr0
+⚡ 0979.581.699 =5tr0
+⚡ 0979.8338.98 =8tr0
+⚡ 0979.898.633 =3tr0
+⚡ 0979.263.293 =3tr0
+⚡ 0979.028.128 =8tr0
+⚡ 0979.183.389 =5tr0
+⚡ 0979.345.778 =5tr0
+⚡ 0979.903.168 =4tr0
+⚡ 0979.25.6839 =5tr5
+⚡ 0979.255.639 =3tr5
+⚡ 0979.310.368 =4tr5
+⚡ 0979.51.6899 =6tr0
+⚡ 0979.51.0299 =3tr0
+⚡ 0979.212.588 =7tr5
+⚡ 0979.131.599 =7tr0
+⚡ 09.79.59.69.29 =5tr5
+⚡ 0979.39.59.29 =5tr0
+⚡ 0979.610.368 =5tr0`;
+
+  it('bảng rao sim thật của hội thoại 14221 (≥20 số): bỏ cả tin, 0 cảnh báo', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'zalo_personal') {
+        return [
+          {
+            id: 401,
+            id_user: 133,
+            id_conversation: 14221,
+            content: REAL_SIM_SPAM_FIXTURE,
+            created_at: fixedNow,
+            visitor_name: 'Spammer Sim',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.scanned).toBe(1);
+    expect(res.detected).toBe(0);
+    expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    expect(mockRepo.setCursor).toHaveBeenCalledWith('zalo_personal', 401);
+  });
+
+  it('đúng 3 số trong một tin: chạm ngưỡng MAX_CONTACTS_PER_MESSAGE -> 0 cảnh báo, bỏ cả tin', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 402,
+            id_user: 1,
+            id_conversation: 50,
+            content: 'Liên hệ qua: 0912345678, 0987654321 hoặc 0901234567 nhé',
+            created_at: fixedNow,
+            visitor_name: 'Khách 3 Số',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.scanned).toBe(1);
+    expect(res.detected).toBe(0);
+    expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+  });
+
+  it('tin có 1 số: tạo 1 cảnh báo (không đổi)', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 403,
+            id_user: 1,
+            id_conversation: 50,
+            content: 'Số em là 0912345678 nhé',
+            created_at: fixedNow,
+            visitor_name: 'Khách 1 Số',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.detected).toBe(1);
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactType: 'phone',
+        contactValue: '0912345678',
+      })
+    );
+  });
+
+  it('tin có 2 liên hệ (SĐT + email): tạo 2 cảnh báo (không đổi)', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 404,
+            id_user: 1,
+            id_conversation: 50,
+            content: 'SĐT 0912345678, mail em a@b.com',
+            created_at: fixedNow,
+            visitor_name: 'Khách 2 Liên Hệ',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.detected).toBe(2);
+    expect(mockRepo.upsertContact).toHaveBeenCalledTimes(2);
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactType: 'phone',
+        contactValue: '0912345678',
+      })
+    );
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactType: 'email',
+        contactValue: 'a@b.com',
+      })
+    );
+  });
+
+  it('content là JSON object hợp lệ có số bên trong: bỏ qua tin, 0 cảnh báo', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'channel') {
+        return [
+          {
+            id: 405,
+            id_user: 1,
+            id_conversation: 50,
+            content: JSON.stringify({
+              title: 'Thông báo khai giảng',
+              hotline: '0912345678',
+              description: 'Chi tiết liên hệ hotline 0912345678',
+            }),
+            created_at: fixedNow,
+            visitor_name: 'Hệ Thống',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.scanned).toBe(1);
+    expect(res.detected).toBe(0);
+    expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+  });
+
+  it('content là JSON array hợp lệ có số bên trong: bỏ qua tin, 0 cảnh báo', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'channel') {
+        return [
+          {
+            id: 406,
+            id_user: 1,
+            id_conversation: 50,
+            content: '  [{"title":"Sự kiện","phone":"0912345678"}]  ',
+            created_at: fixedNow,
+            visitor_name: 'Hệ Thống',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.scanned).toBe(1);
+    expect(res.detected).toBe(0);
+    expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+  });
+
+  it('content bắt đầu bằng { nhưng không parse được (người thật gõ), có số thật: vẫn tạo cảnh báo', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 407,
+            id_user: 1,
+            id_conversation: 50,
+            content: '{ xin chào shop, số điện thoại của tôi là 0912345678 nhé',
+            created_at: fixedNow,
+            visitor_name: 'Khách Gõ Ngoặc',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.scanned).toBe(1);
+    expect(res.detected).toBe(1);
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactType: 'phone',
+        contactValue: '0912345678',
+      })
+    );
+  });
+
+  it('content bắt đầu bằng [ nhưng không parse được, có số thật: vẫn tạo cảnh báo', async () => {
+    mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+      if (source === 'web') {
+        return [
+          {
+            id: 408,
+            id_user: 1,
+            id_conversation: 50,
+            content: '[ sđt 0912345678 ]',
+            created_at: fixedNow,
+            visitor_name: 'Khách Gõ Vuông',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(res.scanned).toBe(1);
+    expect(res.detected).toBe(1);
+    expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactType: 'phone',
+        contactValue: '0912345678',
+      })
+    );
+  });
 });
 
 describe('chatbotContactAlert.service — getFrontendInboxUrl', () => {

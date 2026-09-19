@@ -10,6 +10,7 @@ const HUMAN_WINDOW_MIN = Number(process.env.CHATBOT_CONTACT_ALERT_HUMAN_WINDOW_M
 const COOLDOWN_MIN = Number(process.env.CHATBOT_CONTACT_ALERT_COOLDOWN_MIN) || 30;
 const BATCH_SIZE = Number(process.env.CHATBOT_CONTACT_ALERT_BATCH) || 500;
 const EXCERPT_CHARS = Number(process.env.CHATBOT_CONTACT_ALERT_EXCERPT_CHARS) || 200;
+const MAX_CONTACTS_PER_MESSAGE = Number(process.env.CHATBOT_CONTACT_ALERT_MAX_PER_MSG) || 3;
 
 const SOURCES = ['web', 'channel', 'zalo_personal'];
 
@@ -178,8 +179,21 @@ class ChatbotContactAlertService {
         scanned += messages.length;
 
         for (const msg of messages) {
+          const trimmed = typeof msg.content === 'string' ? msg.content.trim() : '';
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try {
+              JSON.parse(trimmed);
+              continue;
+            } catch {
+              // Parse lỗi thì vẫn quét bình thường
+            }
+          }
+
           const contacts = extractContacts(msg.content);
           if (contacts.length === 0) {
+            continue;
+          }
+          if (contacts.length >= MAX_CONTACTS_PER_MESSAGE) {
             continue;
           }
 
