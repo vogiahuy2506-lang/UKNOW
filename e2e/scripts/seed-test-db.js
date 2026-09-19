@@ -180,9 +180,19 @@ async function main() {
     // từng kích hoạt thật — set trước ở đây để phòng thân: nếu sau này CI bật cờ mà quên vá
     // seed, sẽ lại đúng lỗi "modal-overlay intercepts pointer events" y hệt ba lần trước,
     // chỉ khác nguyên nhân (đã có SĐT nhưng chưa xác thực, thay vì chưa có SĐT).
+    // created_at 30 ngày trước — LẦN THỨ NĂM cùng khuôn lỗi, nguyên nhân mới:
+    // `456954c3` (18/09/2026) thêm cổng ReferralPromptModal vào PostAuthGateModals, mở khi
+    // `!referredByUserId && createdAt trong 24h` (usePostAuthGates.js:68-82). Seed không set
+    // created_at nên user mặc định NOW() → luôn trong 24h → modal đè kín trang, y hệt ba ca
+    // "<div class=\"modal-overlay\"> intercepts pointer events" của auth.spec.js và
+    // campaigns.spec.js, và lần này cũng không dòng log nào nhắc tới mã giới thiệu.
+    // E2E đỏ liên tiếp từ 18/09 08:30 tới 19/09.
+    // Đặt user "già" hơn 24h là cách đúng: nó nói thật rằng đây không phải người mới đăng ký.
+    // KHÔNG đặt referred_by_user_id để tắt modal — như vậy là bịa ra một quan hệ giới thiệu
+    // không có thật, và sẽ làm sai mọi phép đo hoa hồng chạy trên cùng cơ sở dữ liệu này.
     const userResult = await client.query(
-      `INSERT INTO users (username, email, password_hash, full_name, phone, phone_verified_at, status, role, is_verified, verified_at, active_plan_id, subscription_expires_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), 'active', 'user', TRUE, NOW(), $6, NOW() + INTERVAL '1 year')
+      `INSERT INTO users (username, email, password_hash, full_name, phone, phone_verified_at, status, role, is_verified, verified_at, active_plan_id, subscription_expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), 'active', 'user', TRUE, NOW(), $6, NOW() + INTERVAL '1 year', NOW() - INTERVAL '30 days')
        RETURNING id`,
       [username, email, passwordHash, 'E2E Test User', phone, planId]
     );
