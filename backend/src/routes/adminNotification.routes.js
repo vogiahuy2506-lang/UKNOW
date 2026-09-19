@@ -72,6 +72,14 @@ router.post('/preview-recipients', ctrl.previewRecipients);
 router.post('/preview-content', ctrl.previewNotification);
 
 /**
+ * POST /admin/notifications/preview-email-html
+ * Render full HTML email (BE-authoritative) cho FE iframe preview.
+ * Body: { type, priority, title, message, html_content?, locale, device }
+ * Response: { success, data: { html } }
+ */
+router.post('/preview-email-html', ctrl.previewEmailHtml);
+
+/**
  * POST /admin/notifications/count-recipients
  * Count eligible recipients
  */

@@ -1,17 +1,62 @@
-import { useState } from 'react';
-import { FaTimes, FaDesktop, FaMobile, FaCheck } from 'react-icons/fa';
+import { useState, useEffect, useRef } from 'react';
+import { FaTimes, FaDesktop, FaMobile, FaCheck, FaSpinner } from 'react-icons/fa';
 import { HiOutlineMail } from 'react-icons/hi';
-import { renderNotificationHtml } from '../utils/notificationPreview.util';
+import adminNotificationApi from '../services/adminNotificationApi.service';
+
+// Debounce delay (ms) — tránh gọi API mỗi keystroke khi admin đang gõ tiêu đề/nội dung.
+const DEBOUNCE_MS = 400;
 
 export default function EmailPreviewModal({ isOpen, onClose, notification }) {
   const [previewType, setPreviewType] = useState('desktop');
   const [activeLang, setActiveLang] = useState('vi');
+  const [html, setHtml] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const debounceRef = useRef(null);
+  const lastRequestIdRef = useRef(0);
 
-  const html = renderNotificationHtml({
-    notification,
-    locale: activeLang,
-    device: previewType
-  });
+  // Fetch HTML từ BE mỗi khi notification/locale/device đổi.
+  // BE là NGUỒN SỰ THẬT — email thực gửi qua SMTP và iframe preview phải y chang.
+  useEffect(() => {
+    if (!isOpen || !notification) {
+      setHtml('');
+      return;
+    }
+
+    // Debounce: gõ liên tục → chỉ gửi request cuối sau 400ms im lặng.
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      const requestId = ++lastRequestIdRef.current;
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await adminNotificationApi.previewEmailHtml({
+          type: notification.type,
+          priority: notification.priority,
+          title: notification.title,
+          message: notification.message,
+          html_content: notification.html_content ?? null,
+          locale: activeLang,
+          device: previewType
+        });
+        // Bỏ qua response cũ nếu user đã trigger request mới (race condition).
+        if (requestId !== lastRequestIdRef.current) return;
+        setHtml(res?.data?.html || '');
+      } catch (err) {
+        if (requestId !== lastRequestIdRef.current) return;
+        console.error('[EmailPreviewModal] preview-email-html failed:', err);
+        setError(err?.response?.data?.message || err?.message || 'Không thể tải preview');
+        setHtml('');
+      } finally {
+        if (requestId === lastRequestIdRef.current) setLoading(false);
+      }
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [isOpen, notification, activeLang, previewType]);
 
   if (!isOpen) return null;
 
@@ -29,7 +74,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">Xem trước Email</h2>
-                <p className="text-orange-100 text-xs">Xem trước nội dung thông báo trước khi gửi</p>
+                <p className="text-orange-100 text-xs">Render từ server — y chang email thực gửi qua SMTP</p>
               </div>
             </div>
             <button
@@ -101,18 +146,32 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
           </div>
         </div>
 
-        {/* Preview Container (render qua iframe từ helper) */}
+        {/* Preview Container */}
         <div className="flex-1 overflow-auto p-4 bg-gray-50">
-          <iframe
-            title="Email Preview"
-            srcDoc={html}
-            sandbox=""
-            className="mx-auto bg-white rounded-2xl shadow-xl h-[760px] border-0"
-            style={{
-              width: previewType === 'mobile' ? '375px' : '100%',
-              maxWidth: '680px'
-            }}
-          />
+          {loading && !html && (
+            <div className="flex items-center justify-center h-[760px] text-gray-400">
+              <FaSpinner className="w-6 h-6 animate-spin mr-2" />
+              Đang tải preview từ server...
+            </div>
+          )}
+          {error && (
+            <div className="flex items-center justify-center h-[760px] text-red-500 text-sm">
+              {error}
+            </div>
+          )}
+          {!loading && !error && html && (
+            <iframe
+              key={`${activeLang}-${previewType}`}
+              title="Email Preview"
+              srcDoc={html}
+              sandbox=""
+              className="mx-auto bg-white rounded-2xl shadow-xl h-[760px] border-0"
+              style={{
+                width: previewType === 'mobile' ? '375px' : '100%',
+                maxWidth: '680px'
+              }}
+            />
+          )}
         </div>
 
         {/* Footer toolbar */}
@@ -120,7 +179,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">
               <FaCheck className="w-4 h-4 text-green-500 inline mr-1" />
-              Đây là phiên bản xem trước. Email thực tế có thể có một số khác biệt nhỏ.
+              Preview render từ BE — khớp 100% với email thực mà khách nhận.
             </p>
             <button
               onClick={onClose}

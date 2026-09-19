@@ -1,5 +1,6 @@
 import notificationService from '../../services/admin/notification.service.js';
 import notificationTemplateService from '../../services/admin/notificationTemplate.service.js';
+import { renderNotificationEmailHtml } from '../../utils/notificationEmailRender.util.js';
 
 const handleError = (res, err) => {
   console.error('[NotificationController]', err);
@@ -303,6 +304,64 @@ export async function previewNotification(req, res) {
           replaced: ['user_name', 'user_email', 'user_plan', 'product_name', 'current_date']
         }
       }
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+
+/**
+ * Render HTML email preview từ BE — NGUỒN SỰ THẬT cho iframe FE.
+ *
+ * LÝ DO:
+ *  - Trước đây FE render layout riêng (`renderNotificationHtml` util), BE dùng
+ *    `notification.service.buildEmailHtml` → 2 layout KHÁC NHAU. User feedback
+ *    "email phải y chang preview".
+ *  - Fix: BE render HTML đúng y email thật sẽ gửi qua SMTP. FE iframe chỉ cần
+ *    hiển thị HTML này. Một mã render duy nhất, một nguồn sự thật.
+ *
+ * Request:
+ *   POST /admin/notifications/preview-email-html
+ *   Body: { type?, priority?, title?, message?, html_content?, locale?, device? }
+ *
+ * Response:
+ *   { success: true, data: { html: '<!DOCTYPE html>...' } }
+ *
+ * Auth: admin (route đã có middleware)
+ */
+export async function previewEmailHtml(req, res) {
+  try {
+    const {
+      type = 'announcement',
+      priority = 'normal',
+      title,
+      message,
+      html_content = null,
+      locale = 'vi',
+      device = 'desktop'
+    } = req.body;
+
+    // Nếu html_content có (Save As Template đường tới), truyền vào để render với body
+    // custom. Layout vẫn dùng shared renderer nhưng content là html_content của admin.
+    // Lưu ý: html_content là HTML thô do admin soạn — không escape.
+    const notification = {
+      type,
+      priority,
+      title: title || '',
+      message: message || '',
+      html_content: html_content || null
+    };
+
+    const html = renderNotificationEmailHtml({
+      notification,
+      user: null, // preview dùng sample user trong renderer
+      locale: locale === 'en' ? 'en' : 'vi',
+      device: device === 'mobile' ? 'mobile' : 'desktop'
+    });
+
+    res.json({
+      success: true,
+      data: { html }
     });
   } catch (err) {
     handleError(res, err);

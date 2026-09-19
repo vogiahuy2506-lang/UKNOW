@@ -97,6 +97,19 @@ const adminNotificationApiService = {
     return api.post('/admin/notifications/preview-content', data);
   },
 
+  /**
+   * Render full HTML email từ BE (Nguồn sự thật cho iframe preview).
+   * Đảm bảo email thực gửi qua SMTP và preview iframe y chang nhau.
+   *
+   * @param {{type?: string, priority?: string, title?: string,
+   *   message?: string, html_content?: string|null,
+   *   locale?: 'vi'|'en', device?: 'desktop'|'mobile'}} data
+   * @returns {Promise<{data: {html: string}}>}
+   */
+  previewEmailHtml(data) {
+    return api.post('/admin/notifications/preview-email-html', data);
+  },
+
   // =====================
   // Stats & Logs
   // =====================

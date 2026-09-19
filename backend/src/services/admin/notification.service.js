@@ -1,6 +1,7 @@
 import notificationRepo from '../../repositories/admin/notification.repository.js';
 import emailLogRepo from '../../repositories/admin/notificationEmailLog.repository.js';
 import { sendSystemEmail, buildBaseTemplate } from '../../utils/systemEmail.util.js';
+import { renderNotificationEmailHtml } from '../../utils/notificationEmailRender.util.js';
 
 const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
 const PRODUCT_NAME = process.env.PRODUCT_NAME || process.env.MAIL_FROM_NAME || 'Founder AI';
@@ -200,24 +201,12 @@ export default {
     const titleEn = notification.title_en ? this.replaceVariables(notification.title_en, user) : null;
     const messageEn = notification.message_en ? this.replaceVariables(notification.message_en, user) : null;
 
-    const safeTitle = this.escapeHtml(title);
-    const safeMessage = this.escapeHtml(message);
-    const safeFullName = this.escapeHtml(user.full_name || user.username || 'bạn');
-    const safeEmail = this.escapeHtml(user.email || '');
-    const safePlanName = this.escapeHtml(this.formatPlanName(user.plan));
-
-    const priorityBadge = notification.priority === 'urgent'
-      ? `<span style="display:inline-block;background:#dc2626;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">Ưu tiên cao</span>`
-      : notification.priority === 'high'
-        ? `<span style="display:inline-block;background:#f97316;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">Ưu tiên</span>`
-        : '';
-
     const subject = `[${PRODUCT_NAME}] ${title}`;
 
     let html;
     if (notification.html_content && typeof notification.html_content === 'string' && notification.html_content.trim() !== '') {
       // Đường từ notification_templates (Save As Template): admin đã soạn body_html
-      // riêng → dùng nguyên xi sau khi escape, bỏ qua layout hardcoded.
+      // riêng → dùng nguyên xi sau khi replace {{...}}, bỏ qua layout hardcoded.
       // Lưu ý: html_content đã là HTML hợp lệ do admin soạn; ta KHÔNG escape thẻ,
       // chỉ thay {{...}} đã replaceVariables ở dạng raw (admin tự chịu trách nhiệm
       // về HTML). Nếu admin muốn text-only thì đã dùng message thay vì html_content.
@@ -228,15 +217,14 @@ export default {
         footerNote: config.footerNote
       });
     } else {
-      html = this.generateNotificationEmail({
-        type: notification.type,
-        config,
-        title: safeTitle,
-        message: safeMessage,
-        priorityBadge,
-        fullName: safeFullName,
-        email: safeEmail,
-        planName: safePlanName
+      // Layout CHÍNH: dùng shared renderer (notificationEmailRender.util.js) — đây là
+      // NGUỒN SỰ THẬT cho cả preview iframe FE lẫn email gửi đi. Mọi thay đổi layout
+      // phải đổi ở file util đó, không hardcode ở đây.
+      html = renderNotificationEmailHtml({
+        notification,
+        user,
+        locale: 'vi',
+        device: 'desktop'
       });
     }
 
@@ -246,110 +234,6 @@ export default {
       titleEn,
       messageEn
     };
-  },
-
-  /**
-   * Render nội dung email cho thông báo superadmin.
-   * Layout nhất quán với các template khác trong systemEmail.util.js:
-   * - Greeting cá nhân hoá
-   * - Box tiêu đề (badge tone màu theo loại)
-   * - Box nội dung (white card)
-   * - CTA cho promotion
-   * - Support block
-   * - User info chip
-   */
-  generateNotificationEmail({ type, config, title, message, priorityBadge, fullName, email, planName }) {
-    const planChip = planName && planName !== 'Miễn phí'
-      ? `<span style="display:inline-block;background:#f97316;color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">${planName}</span>`
-      : '';
-
-    const initial = (fullName || 'U').charAt(0).toUpperCase();
-
-    const content = `
-      <!-- Greeting -->
-      <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
-        Xin chào <strong style="color:#f97316">${fullName}</strong>,
-      </p>
-      <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6">
-        Bạn có một thông báo mới từ <strong>${PRODUCT_NAME}</strong>:
-      </p>
-
-      <!-- Title Box (badge tone màu theo loại) -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:${config.badgeBg};border:2px solid ${config.badgeBorder};border-radius:14px;margin-bottom:20px">
-        <tr>
-          <td style="padding:18px 22px">
-            <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${config.badgeText};text-transform:uppercase;letter-spacing:1px">
-              ${config.icon} ${type === 'announcement' ? 'Tiêu đề' : config.label}
-            </p>
-            <h2 style="margin:0;font-size:20px;font-weight:700;color:#1f2937;line-height:1.4">
-              ${title}
-              ${priorityBadge ? '&nbsp;' + priorityBadge : ''}
-            </h2>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Message Box -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;margin-bottom:24px">
-        <tr>
-          <td style="padding:18px 22px">
-            <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px">
-              📝 Nội dung
-            </p>
-            <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap">${message}</p>
-          </td>
-        </tr>
-      </table>
-
-      ${type === 'promotion' ? `
-      <!-- CTA cho khuyến mãi -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
-        <tr>
-          <td align="center">
-            <a href="${FRONTEND_URL}"
-               style="display:inline-block;background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);color:#fff;font-size:15px;font-weight:600;
-                      padding:13px 32px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
-              Khám phá ưu đãi →
-            </a>
-          </td>
-        </tr>
-      </table>
-      ` : ''}
-
-      <!-- Support -->
-      <p style="margin:0 0 18px;font-size:13px;color:#6b7280;line-height:1.6">
-        Nếu có thắc mắc, vui lòng liên hệ
-        <a href="mailto:${SUPPORT_EMAIL}" style="color:#f97316;text-decoration:none;font-weight:500">${SUPPORT_EMAIL}</a>.
-      </p>
-
-      <!-- User Info Chip -->
-      ${email ? `
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-radius:10px;margin-top:8px">
-        <tr>
-          <td style="padding:12px 16px">
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td width="36" valign="middle" style="padding-right:10px">
-                  <div style="width:36px;height:36px;background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);border-radius:8px;text-align:center;line-height:36px;color:#fff;font-weight:700;font-size:14px">${initial}</div>
-                </td>
-                <td valign="middle" style="font-size:13px;color:#374151">
-                  <p style="margin:0;font-weight:600;color:#92400e">${fullName}</p>
-                  <p style="margin:2px 0 0;color:#b45309;font-size:12px">${email}</p>
-                </td>
-                ${planChip ? `<td width="auto" align="right" valign="middle">${planChip}</td>` : ''}
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-      ` : ''}
-    `;
-
-    return buildBaseTemplate({
-      subtitle: config.label,
-      content,
-      footerNote: config.footerNote
-    });
   },
 
   // =====================
