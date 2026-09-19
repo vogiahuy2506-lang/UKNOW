@@ -85,8 +85,11 @@ function humanizeFieldName(name) {
 }
 
 /**
- * Nhãn cho một ô: `label[for]` → `aria-label` → `placeholder` → tên ô viết lại (phản biện 16/09,
- * đúng thứ tự đề xuất trong lệnh giao).
+ * Nhãn cho một ô:
+ * 1. `<label for="id">` (như hiện tại)
+ * 2. `<label>` bọc ngoài ô (lấy chữ của label, bỏ thẻ control con; trừ type="radio" vì bọc radio là nhãn option)
+ * 3. `<label>` đứng ngay trước ô trong cùng khối, không có `for` (~400-500 ký tự, không có input/select/textarea xen giữa)
+ * 4. `aria-label` → `placeholder` → tên ô viết lại (như hiện tại)
  */
 function resolveLabel(inner, tagStr, name) {
   const id = getAttr(tagStr, 'id');
@@ -98,6 +101,52 @@ function resolveLabel(inner, tagStr, name) {
       if (text.length >= LABEL_VI_MIN) return text.slice(0, LABEL_VI_MAX);
     }
   }
+
+  const tagIndex = inner.indexOf(tagStr);
+  const inputType = (getAttr(tagStr, 'type') || '').toLowerCase();
+
+  // 2. MỚI — <label> bọc ngoài ô (trừ type="radio" vì label bọc ngoài radio là nhãn lựa chọn option)
+  if (tagIndex !== -1 && inputType !== 'radio') {
+    const wrappingLabelRe = /<label\b[^>]*>([\s\S]*?)<\/label>/gi;
+    let lm;
+    while ((lm = wrappingLabelRe.exec(inner))) {
+      const labelStart = lm.index;
+      const labelEnd = wrappingLabelRe.lastIndex;
+      if (labelStart < tagIndex && labelEnd > tagIndex + tagStr.length) {
+        const withoutControl = lm[1].replace(/<(input|select|textarea)\b[^>]*>(?:[\s\S]*?<\/\1>)?/gi, ' ');
+        const text = decodeBasicEntities(stripTags(withoutControl)).trim();
+        if (text.length >= LABEL_VI_MIN) return text.slice(0, LABEL_VI_MAX);
+        break;
+      }
+    }
+  }
+
+  // 3. MỚI — <label> đứng ngay trước ô trong cùng khối, không có for
+  if (tagIndex !== -1) {
+    const MAX_PRECEDING_DISTANCE = 500;
+    const startIdx = Math.max(0, tagIndex - MAX_PRECEDING_DISTANCE);
+    const chunk = inner.slice(startIdx, tagIndex);
+    const precedingLabelRe = /<label\b([^>]*)>([\s\S]*?)<\/label>/gi;
+    let lastMatch = null;
+    let pm;
+    while ((pm = precedingLabelRe.exec(chunk))) {
+      // Chỉ nhận label KHÔNG có for và KHÔNG bọc control khác bên trong
+      if (!/\bfor\s*=/i.test(pm[1]) && !/<(input|select|textarea)\b/i.test(pm[2])) {
+        lastMatch = {
+          content: pm[2],
+          endIndexInChunk: precedingLabelRe.lastIndex,
+        };
+      }
+    }
+    if (lastMatch) {
+      const between = chunk.slice(lastMatch.endIndexInChunk);
+      if (!/<(input|select|textarea)\b/i.test(between)) {
+        const text = decodeBasicEntities(stripTags(lastMatch.content)).trim();
+        if (text.length >= LABEL_VI_MIN) return text.slice(0, LABEL_VI_MAX);
+      }
+    }
+  }
+
   const ariaLabel = getAttr(tagStr, 'aria-label');
   if (ariaLabel) {
     const text = decodeBasicEntities(ariaLabel).trim();

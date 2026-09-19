@@ -215,34 +215,134 @@ describe('landingCaptureFieldAutoDeclare.util — autoDeclareLandingCaptureField
     // Sau lần lưu thứ hai audit không còn gì để cảnh báo.
     expect(auditLandingCaptureFields(second.html, configAfterFirstSave).unknownNames).toEqual([]);
   });
+
+  it('label bọc ngoài ô: <label>Chức vụ <input name="chuc_vu"></label> → lấy chữ của label', () => {
+    const html = wrapCapture('<label>Chức vụ <input type="text" name="chuc_vu" /></label>');
+    const result = autoDeclareLandingCaptureFields(html, emptyConfig());
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0].labelVi).toBe('Chức vụ');
+  });
+
+  it('label bọc ngoài có thẻ con: <label><span>Chức vụ</span> <input name="chuc_vu" /></label> → stripTags lấy đúng chữ', () => {
+    const html = wrapCapture('<label class="form-item"><span>Chức vụ</span> <input type="text" name="chuc_vu" /></label>');
+    const result = autoDeclareLandingCaptureFields(html, emptyConfig());
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0].labelVi).toBe('Chức vụ');
+  });
+
+  it('label đứng ngay trước ô không có for: <label class="...">Chức vụ</label><input name="chuc_vu" placeholder="Ví dụ: Chuyên viên"> → lấy label, KHÔNG lấy placeholder', () => {
+    const html = wrapCapture('<label class="font-bold text-sm">Chức vụ</label><input type="text" name="chuc_vu" placeholder="Ví dụ: Chuyên viên" />');
+    const result = autoDeclareLandingCaptureFields(html, emptyConfig());
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0].labelVi).toBe('Chức vụ');
+  });
+
+  it('hai ô liền nhau không có for: mỗi ô lấy đúng label của mình; ô sau không có label thì KHÔNG vơ nhầm nhãn ô trước', () => {
+    // 2 ô liền nhau, mỗi ô một label đứng trước
+    const htmlTwoWithLabels = wrapCapture(
+      '<div><label>Chức vụ</label><input type="text" name="chuc_vu" /></div>' +
+      '<div><label>Đơn vị công tác</label><input type="text" name="don_vi" /></div>'
+    );
+    const resTwo = autoDeclareLandingCaptureFields(htmlTwoWithLabels, emptyConfig());
+    expect(resTwo.newFields).toHaveLength(2);
+    expect(resTwo.newFields.find((f) => resTwo.html.includes(f.key) && f.labelVi === 'Chức vụ')).toBeDefined();
+    expect(resTwo.newFields.find((f) => resTwo.html.includes(f.key) && f.labelVi === 'Đơn vị công tác')).toBeDefined();
+
+    // Ô thứ 2 không có label: có ô khác xen giữa label ô 1 và ô 2 → ô 2 KHÔNG lấy nhãn ô 1, rơi về placeholder
+    const htmlOneWithoutLabel = wrapCapture(
+      '<div><label>Chức vụ</label><input type="text" name="chuc_vu" /></div>' +
+      '<div><input type="text" name="don_vi" placeholder="Ví dụ: Sở Nội Vụ" /></div>'
+    );
+    const resOne = autoDeclareLandingCaptureFields(htmlOneWithoutLabel, emptyConfig());
+    expect(resOne.newFields).toHaveLength(2);
+    const f1 = resOne.newFields.find((f) => f.labelVi === 'Chức vụ');
+    const f2 = resOne.newFields.find((f) => f.labelVi === 'Ví dụ: Sở Nội Vụ');
+    expect(f1).toBeDefined();
+    expect(f2).toBeDefined();
+    expect(resOne.newFields.map((f) => f.labelVi)).not.toEqual(['Chức vụ', 'Chức vụ']);
+  });
+
+  it('<label>Khung giờ hẹn</label> + 2 radio cùng name → lấy nhãn nhóm Khung giờ hẹn, không vơ nhãn option', () => {
+    const html = wrapCapture(
+      '<label class="group-title">Khung giờ hẹn</label>' +
+      '<label><input type="radio" name="khung_gio_hen" value="sang" /> Buổi sáng</label>' +
+      '<label><input type="radio" name="khung_gio_hen" value="chieu" /> Buổi chiều</label>'
+    );
+    const result = autoDeclareLandingCaptureFields(html, emptyConfig());
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0].labelVi).toBe('Khung giờ hẹn');
+    expect(result.newFields[0].options).toEqual([
+      { value: 'sang', labelVi: 'Buổi sáng' },
+      { value: 'chieu', labelVi: 'Buổi chiều' },
+    ]);
+  });
 });
 
 /**
- * HTML thật của `checkform` (đo 16/09: 5 ô phụ — 2 text, 1 select, 1 radio 2 lựa chọn, 1 textarea)
- * — dựng fixture đúng cấu trúc đó, xác nhận cả 5 ô được khai báo và audit sạch sau khi lưu.
+ * HTML thật của `checkform` (đo 19/09: 5 ô phụ — 2 text, 1 select, 1 radio 2 lựa chọn, 1 textarea)
+ * Không có thuộc tính `for` trên các thẻ label, có placeholder trên text/textarea.
+ * Xác nhận cả 5 ô được khai báo đúng nhãn thật (không rơi xuống placeholder/tên ô viết lại),
+ * khoá sinh từ nhãn thật (không xấu vĩnh viễn), và audit sạch sau khi lưu.
  */
 describe('landingCaptureFieldAutoDeclare.util — HTML thật của checkform (5 ô phụ)', () => {
   const checkformCaptureHtml = wrapCapture(
-    '<label for="chuc-vu">Chức vụ</label><input type="text" id="chuc-vu" name="chuc_vu" />' +
-    '<label for="don-vi">Đơn vị công tác</label><input type="text" id="don-vi" name="don_vi_cong_tac" />' +
-    '<label for="phuong-an">Phương án họp</label>' +
-    '<select id="phuong-an" name="phuong_an_hop">' +
-    '<option value="">— Chọn —</option>' +
-    '<option value="online">Trực tuyến</option>' +
-    '<option value="offline">Trực tiếp</option>' +
-    '</select>' +
-    '<label><input type="radio" name="khung_gio_hen" value="sang" /> Buổi sáng</label>' +
-    '<label><input type="radio" name="khung_gio_hen" value="chieu" /> Buổi chiều</label>' +
-    '<label for="cau-hoi">Câu hỏi</label><textarea id="cau-hoi" name="cau_hoi"></textarea>'
+    '<div>' +
+    '  <label class="block text-sm font-semibold text-slate-700 mb-1.5">Chức vụ</label>' +
+    '  <input type="text" name="chuc_vu" placeholder="Ví dụ: Chuyên viên, Trưởng phòng" />' +
+    '</div>' +
+    '<div>' +
+    '  <label class="block text-sm font-semibold text-slate-700 mb-1.5">Đơn vị công tác</label>' +
+    '  <input type="text" name="don_vi" placeholder="Ví dụ: Sở Nội Vụ, UBND Huyện" />' +
+    '</div>' +
+    '<div>' +
+    '  <label class="block text-sm font-semibold text-slate-700 mb-1.5">Phương án họp mong muốn</label>' +
+    '  <select name="phuong_an_hop">' +
+    '    <option value="online">Họp trực tuyến</option>' +
+    '    <option value="truc_tiep">Gọi điện thoại trực tiếp</option>' +
+    '  </select>' +
+    '</div>' +
+    '<div>' +
+    '  <label class="block text-sm font-semibold text-slate-700 mb-2">Chọn khung giờ hẹn trực quan</label>' +
+    '  <label><input type="radio" name="khung_gio_hen" value="sang_10_12" checked /> Buổi sáng</label>' +
+    '  <label><input type="radio" name="khung_gio_hen" value="chieu_16_17" /> Buổi chiều</label>' +
+    '</div>' +
+    '<div>' +
+    '  <label class="block text-sm font-semibold text-slate-700 mb-1.5">Câu hỏi đặt ra cho ThS. Ngô Hữu Thống</label>' +
+    '  <textarea name="cau_hoi" placeholder="Nêu rõ vấn đề hoặc quy trình hành chính bạn đang muốn ứng dụng AI để giải quyết..."></textarea>' +
+    '</div>'
   );
 
-  it('sau một lần lưu: 5 trường được khai báo, HTML đổi tên đủ 5 ô, audit không còn cảnh báo', () => {
+  it('sau một lần lưu: 5 trường được khai báo đúng nhãn thật (không rơi vào placeholder/tên ô), khoá sinh từ nhãn đúng, audit không còn cảnh báo', () => {
     const result = autoDeclareLandingCaptureFields(checkformCaptureHtml, emptyConfig());
     expect(result.newFields).toHaveLength(5);
     expect(result.skipped).toEqual([]);
 
     const types = result.newFields.map((f) => f.type).sort();
     expect(types).toEqual(['radio', 'select', 'text', 'text', 'textarea']);
+
+    const labels = result.newFields.map((f) => f.labelVi);
+    expect(labels).toEqual(expect.arrayContaining([
+      'Chức vụ',
+      'Đơn vị công tác',
+      'Phương án họp mong muốn',
+      'Chọn khung giờ hẹn trực quan',
+      'Câu hỏi đặt ra cho ThS. Ngô Hữu Thống',
+    ]));
+
+    // KHÔNG rơi xuống placeholder hay tên ô viết lại
+    expect(labels).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/Ví dụ:/i),
+      'Phuong an hop',
+      'Khung gio hen',
+    ]));
+
+    // Khoá sinh từ nhãn thật (không sinh từ placeholder)
+    const keys = result.newFields.map((f) => f.key);
+    expect(keys.some((k) => k.startsWith('cf_chuc_vu_'))).toBe(true);
+    expect(keys.some((k) => k.startsWith('cf_on_vi_cong_tac_'))).toBe(true);
+    expect(keys.some((k) => k.startsWith('cf_phuong_an_hop_'))).toBe(true);
+    expect(keys.some((k) => k.startsWith('cf_chon_khung_gio_hen_'))).toBe(true);
+    expect(keys.some((k) => k.startsWith('cf_cau_hoi_at_ra_'))).toBe(true);
 
     const savedConfig = {
       version: 1,
@@ -257,3 +357,4 @@ describe('landingCaptureFieldAutoDeclare.util — HTML thật của checkform (5
     expect(() => validateAdminLeadFormConfig({ customFields: result.newFields })).not.toThrow();
   });
 });
+
