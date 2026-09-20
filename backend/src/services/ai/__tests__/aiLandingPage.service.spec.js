@@ -542,7 +542,7 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
       '</body>',
       `<img src="${asset1.url}"><img src="https://images.unsplash.com/photo-123.jpg"></body>`
     );
-    expect(() => validateLandingImageUrls(generatedHtml, [asset1])).toThrow(
+    expect(() => validateLandingImageUrls({ html: generatedHtml, assets: [asset1] })).toThrow(
       expect.objectContaining({
         code: 'LANDING_FAKE_IMAGE_URL',
         status: 422,
@@ -601,7 +601,7 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
       '</body>',
       `<img src="https://fake.cdn.com/test.webp" alt="Fake"></body>`
     );
-    expect(() => validateLandingImageUrls(htmlWithFakeImg, [])).toThrow(
+    expect(() => validateLandingImageUrls({ html: htmlWithFakeImg, assets: [] })).toThrow(
       expect.objectContaining({
         code: 'LANDING_FAKE_IMAGE_URL',
         status: 422,
@@ -943,7 +943,9 @@ describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T8)', () => 
     const asset1 = { url: 'https://cdn.example.com/img1.png' };
     const asset2 = { url: 'https://cdn.example.com/img2.png' };
     const htmlUsingOnlyAsset1 = validFormHtml.replace('</body>', `<img src="${asset1.url}"></body>`);
-    const { unusedAssets, allowlistUrls } = validateLandingImageUrls(htmlUsingOnlyAsset1, [asset1, asset2], {
+    const { unusedAssets, allowlistUrls } = validateLandingImageUrls({
+      html: htmlUsingOnlyAsset1,
+      assets: [asset1, asset2],
       requireAssetsUsed: false,
     });
     expect(unusedAssets).toEqual([asset2]);
@@ -974,7 +976,7 @@ describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T8)', () => 
   it('T4: validateLandingImageUrls phát hiện URL ngoài allowlist -> ném LANDING_FAKE_IMAGE_URL kèm details.fakeImageUrls', () => {
     const htmlWithFake = validFormHtml.replace('</body>', '<img src="https://fake.cdn.com/bad.png"></body>');
     try {
-      validateLandingImageUrls(htmlWithFake, []);
+      validateLandingImageUrls({ html: htmlWithFake, assets: [] });
       throw new Error('Should have thrown');
     } catch (err) {
       expect(err.code).toBe('LANDING_FAKE_IMAGE_URL');
@@ -1068,6 +1070,19 @@ describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T8)', () => 
     expect(strippedHtml).toContain(allowUrl);
     expect(strippedHtml).not.toContain(fakeImgUrl);
     expect(strippedHtml).not.toContain(fakeSourceUrl);
+  });
+
+  it('T7b (review): stripDisallowedImages GIỮ <img> src tương đối và data:image/svg+xml — chốt 2 chưa bao giờ coi đó là bịa', () => {
+    const relativeImg = '<img src="/lp-assets/uploads/1/landing/local.png" alt="rel" />';
+    const dataImg = '<img src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=" alt="icon" />';
+    const fakeImg = '<img src="https://fake.cdn.com/fake.png" alt="fake" />';
+    const html = `<div>${relativeImg}${dataImg}${fakeImg}</div>`;
+
+    const { html: strippedHtml, stripped } = stripDisallowedImages(html, new Set());
+    expect(stripped).toEqual(['https://fake.cdn.com/fake.png']);
+    expect(strippedHtml).toContain(relativeImg);
+    expect(strippedHtml).toContain(dataImg);
+    expect(strippedHtml).not.toContain('fake.cdn.com');
   });
 
   it('T8: editHtml lần 1 bịa ảnh -> retry lần 2 VẪN bịa ảnh -> tự động gỡ ảnh bịa, trả về strippedImageUrls', async () => {

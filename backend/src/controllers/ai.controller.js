@@ -1508,10 +1508,14 @@ class AiController {
 
       await chargeAiCredit(req);
 
+      // Khuôn skippedAttachments là { originalName, reason } (mergeAndFilterLandingFiles,
+      // ingestLandingAttachments) — frontend useCanvasConversation.js đọc `originalName`;
+      // `kind` là mã máy để frontend lọc, không so chuỗi tiếng Việt.
       if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
         for (const url of data.strippedImageUrls) {
           allSkipped.push({
-            name: url,
+            originalName: url,
+            kind: 'fake_image_url',
             reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
           });
         }
@@ -1673,10 +1677,12 @@ class AiController {
         }
       }
 
+      // Cùng khuôn { originalName, kind, reason } như đường sinh (xem chú thích ở generateLandingHtml).
       if (Array.isArray(data.unusedAssets) && data.unusedAssets.length > 0) {
         for (const ua of data.unusedAssets) {
           allSkipped.push({
-            name: ua.name || ua.originalName || 'unknown',
+            originalName: ua.originalName || ua.url || 'Ảnh',
+            kind: 'reference_image',
             reason: 'Không chèn vào trang — coi là ảnh tham khảo',
           });
         }
@@ -1684,7 +1690,8 @@ class AiController {
       if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
         for (const url of data.strippedImageUrls) {
           allSkipped.push({
-            name: url,
+            originalName: url,
+            kind: 'fake_image_url',
             reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
           });
         }

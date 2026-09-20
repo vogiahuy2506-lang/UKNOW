@@ -563,13 +563,17 @@ describe('ai.controller', () => {
       success: true,
       data: expect.objectContaining({
         title: 'Trang sửa',
+        // Khuôn { originalName, kind, reason }: frontend useCanvasConversation đọc originalName,
+        // AiChatbot lọc theo kind — không so chuỗi tiếng Việt.
         skippedAttachments: [
           {
-            name: 'a2.png',
+            originalName: 'a2.png',
+            kind: 'reference_image',
             reason: 'Không chèn vào trang — coi là ảnh tham khảo',
           },
           {
-            name: 'https://fake.cdn.com/bad.png',
+            originalName: 'https://fake.cdn.com/bad.png',
+            kind: 'fake_image_url',
             reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
           },
         ],

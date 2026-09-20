@@ -3090,10 +3090,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           html,
         };
 
+        // Lọc theo mã máy `kind` do backend gắn (ai.controller editLandingHtml), không so chuỗi tiếng Việt.
         const refSkippedCount = Array.isArray(response.data.skippedAttachments)
-          ? response.data.skippedAttachments.filter(
-              (item) => item?.reason === 'Không chèn vào trang — coi là ảnh tham khảo'
-            ).length
+          ? response.data.skippedAttachments.filter((item) => item?.kind === 'reference_image').length
           : 0;
 
         let confirmMsg = locale === 'en'

@@ -180,9 +180,12 @@ export function buildAttachmentPromptBlock(assets = [], documents = [], mode = '
     }
     assets.forEach((asset, idx) => {
       const num = idx + 1;
+      // Chế độ sửa: ảnh có thể chỉ là ảnh tham khảo — không được gợi ý "dùng làm hero" như đường sinh.
       const note = asset.inlineForModel
         ? ''
-        : ' (model không xem được ảnh này — dùng làm ảnh nền hero hoặc minh họa)';
+        : (mode === 'edit'
+          ? ' (model không xem được ảnh này; chỉ chèn nếu người dùng yêu cầu chèn/thay ảnh)'
+          : ' (model không xem được ảnh này — dùng làm ảnh nền hero hoặc minh họa)');
       lines.push(`ASSET_${num}: url="${asset.url}" tên="${asset.originalName || `asset_${num}`}"${note}`);
     });
   }
@@ -233,67 +236,39 @@ export function buildModelParts(fullPrompt, assets = [], documents = []) {
   return parts;
 }
 
+/**
+ * Gỡ thẻ <img>/<source> mang URL ảnh KHÔNG thuộc allowlist — chỉ chạy sau khi AI đã bịa URL hai lần
+ * liên tiếp (xem vòng thử lại trong generate/editHtml).
+ *
+ * Tiêu chí gỡ phải TRÙNG với tiêu chí chốt 2 của validateLandingImageUrls (URL http(s) có đuôi ảnh,
+ * IMAGE_URL_REGEX). Bản đầu (review 20/09) gỡ cả thẻ có src tương đối hay `data:image/svg+xml…` vì
+ * chúng "không nằm trong allowlist" — nhưng chốt 2 chưa bao giờ coi đó là bịa, gỡ chúng là mất icon
+ * SVG inline mà model rất hay sinh. Chỉ gỡ đúng thứ chốt 2 sẽ từ chối.
+ */
 export function stripDisallowedImages(html = '', allowlistUrls = new Set()) {
   const allowlist = allowlistUrls instanceof Set ? allowlistUrls : new Set(allowlistUrls || []);
-  const stripped = [];
-
-  // 1. Xoá thẻ <source ...> trong <picture> có src/srcset không thuộc allowlist
-  let cleanedHtml = html.replace(/<source\b[^>]*>/gi, (match) => {
-    const srcsetMatch = match.match(/\bsrcset\s*=\s*["']([^"']+)["']/i) || match.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
-    const urls = match.match(IMAGE_URL_REGEX) || [];
-    const disallowed = urls.filter((u) => !allowlist.has(u));
-    if (disallowed.length > 0) {
-      disallowed.forEach((u) => {
-        if (!stripped.includes(u)) stripped.push(u);
-      });
-      return '';
-    }
-    return match;
-  });
-
-  // 2. Xoá cả thẻ <img ...> (kể cả có srcset) có src không thuộc allowlist
-  cleanedHtml = cleanedHtml.replace(/<img\b[^>]*>/gi, (match) => {
-    const srcMatch = match.match(/\bsrc\s*=\s*["']([^"']+)["']/i) || match.match(/\bsrc\s*=\s*([^\s>]+)/i);
-    const srcUrl = srcMatch ? srcMatch[1] : null;
-    const urls = match.match(IMAGE_URL_REGEX) || [];
-    const disallowed = urls.filter((u) => !allowlist.has(u));
-    if ((srcUrl && !allowlist.has(srcUrl)) || disallowed.length > 0) {
-      if (srcUrl && !allowlist.has(srcUrl) && !stripped.includes(srcUrl)) {
-        stripped.push(srcUrl);
-      }
-      disallowed.forEach((u) => {
-        if (!stripped.includes(u)) stripped.push(u);
-      });
-      return '';
-    }
-    return match;
-  });
-
-  return { html: cleanedHtml, stripped };
+  const stripped = new Set();
+  const stripIfDisallowed = (tag) => {
+    const disallowed = (tag.match(IMAGE_URL_REGEX) || []).filter((u) => !allowlist.has(u));
+    if (disallowed.length === 0) return tag;
+    disallowed.forEach((u) => stripped.add(u));
+    return '';
+  };
+  const cleanedHtml = String(html || '')
+    .replace(/<source\b[^>]*>/gi, stripIfDisallowed)
+    .replace(/<img\b[^>]*>/gi, stripIfDisallowed);
+  return { html: cleanedHtml, stripped: Array.from(stripped) };
 }
 
-export function validateLandingImageUrls(firstArg, maybeAssets = [], maybeOptions = {}) {
-  let html;
-  let assets;
-  let allowedSourceText;
-  let requireAssetsUsed;
-
-  if (typeof firstArg === 'object' && firstArg !== null && 'html' in firstArg) {
-    html = firstArg.html;
-    assets = firstArg.assets || [];
-    allowedSourceText = firstArg.allowedSourceText || '';
-    requireAssetsUsed = firstArg.requireAssetsUsed !== false;
-  } else {
-    html = firstArg;
-    assets = maybeAssets || [];
-    if (typeof maybeOptions === 'object' && maybeOptions !== null) {
-      allowedSourceText = maybeOptions.allowedSourceText || '';
-      requireAssetsUsed = maybeOptions.requireAssetsUsed !== false;
-    } else {
-      allowedSourceText = typeof maybeOptions === 'string' ? maybeOptions : '';
-      requireAssetsUsed = true;
-    }
-  }
+/**
+ * @param {{ html: string, assets?: Array, allowedSourceText?: string, requireAssetsUsed?: boolean }} opts
+ *   requireAssetsUsed=false (đường SỬA): ảnh đính kèm không xuất hiện trong html chỉ được gom vào
+ *   `unusedAssets` — người dùng gắn ảnh chụp màn hình để chỉ chỗ sửa là chuyện bình thường.
+ * @returns {{ unusedAssets: Array, allowlistUrls: Set<string> }}
+ * @throws 422 — chốt 1 (khi requireAssetsUsed) hoặc chốt 2 với `code='LANDING_FAKE_IMAGE_URL'`,
+ *   `details.fakeImageUrls` liệt kê MỌI URL bịa (để log + đưa vào prompt thử lại).
+ */
+export function validateLandingImageUrls({ html, assets = [], allowedSourceText = '', requireAssetsUsed = true }) {
   // Chốt 1: mỗi asset.url phải xuất hiện nguyên văn trong html (khi requireAssetsUsed = true)
   const unusedAssets = [];
   for (const asset of assets) {
