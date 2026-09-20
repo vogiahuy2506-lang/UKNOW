@@ -16,6 +16,10 @@ describe('assistantCapabilities', () => {
 
   it.each([
     ['bạn có thể tạo landing page không', 'vi', 'core', 'landing_page'],
+    ['bạn có thể thiết kế trang web không', 'vi', 'core', 'landing_page'],
+    ['bạn có thể tạo website được không', 'vi', 'core', 'landing_page'],
+    ['Can you build a web page?', 'en', 'core', 'landing_page'],
+    ['hệ thống có làm trang đích không', 'vi', 'core', 'landing_page'],
     ['Can you create a landing page', 'en', 'core', 'landing_page'],
     ['Can I create a landing page?', 'vi', 'core', 'landing_page'],
     ['Bạn có thể tạo landing page cho tôi không', 'vi', 'core', 'landing_page'],
@@ -33,6 +37,8 @@ describe('assistantCapabilities', () => {
     'làm sao để tạo chiến dịch',
     'how can I create a campaign',
     'tạo landing page cho khóa học',
+    'thiết kế trang web từ file này',
+    'làm website bán hàng',
   ])('leaves how-to and command text for the existing router: %s', (question) => {
     expect(classifyCapabilityProbe(question, 'vi')).toBeNull();
   });

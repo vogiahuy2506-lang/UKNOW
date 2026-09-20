@@ -4163,6 +4163,7 @@ export default {
     wizardDismiss: 'Không phải, tôi chỉ hỏi thôi',
     missingLandingSourceOrInstruction: 'Thiếu mã nguồn trang hoặc yêu cầu chỉnh sửa.',
     landingUpdateSuccess: 'Đã cập nhật landing page theo yêu cầu!',
+    landingEditReferenceImages: '({count} ảnh đính kèm được dùng làm tài liệu tham khảo, không chèn vào trang)',
     // Quick actions
     quickActions: 'Thao tác nhanh',
     createCampaign: 'Tạo Campaign',

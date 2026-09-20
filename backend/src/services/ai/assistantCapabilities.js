@@ -21,7 +21,7 @@ const CAPABILITY_DEFINITIONS = {
         vi: 'tạo landing page',
         en: 'create landing pages',
       },
-      matches: (text) => /landing\s*page|\blanding\b/i.test(text),
+      matches: (text) => /landing\s*page|landingpage|\blanding\b|trang\s*đích|trang\s*dich|trang\s*web|website|\bweb\s*page\b/i.test(text),
     },
     {
       id: 'template',

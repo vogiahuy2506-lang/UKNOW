@@ -45,6 +45,9 @@ function logLandingAiLifecycle({
   htmlChars = 0,
   outputTokens = null,
   outcome = null,
+  fakeImageUrls = null,
+  fakeImageRetry = null,
+  strippedImages = null,
 }) {
   const fields = [
     `[LandingAI] ${event}`,
@@ -56,6 +59,12 @@ function logLandingAiLifecycle({
     `htmlChars=${htmlChars}`,
   ];
   if (outputTokens != null) fields.push(`outputTokens=${outputTokens}`);
+  if (fakeImageRetry != null) fields.push(`fakeImageRetry=${fakeImageRetry}`);
+  if (strippedImages != null) fields.push(`strippedImages=${strippedImages}`);
+  if (Array.isArray(fakeImageUrls) && fakeImageUrls.length > 0) {
+    const formatted = fakeImageUrls.map((u) => String(u).slice(0, 120)).join(',');
+    fields.push(`fakeImageUrls=${fakeImageUrls.length}:${formatted}`);
+  }
   console.log(fields.join(' '));
 }
 
@@ -160,11 +169,15 @@ function htmlHasOptionValue(html, value) {
 
 export const IMAGE_URL_REGEX = /https?:\/\/[^"'()\s<>]+\.(?:png|jpe?g|webp|gif|svg)(?:\?[^"'()\s<>]*)?/gi;
 
-export function buildAttachmentPromptBlock(assets = [], documents = []) {
+export function buildAttachmentPromptBlock(assets = [], documents = [], mode = 'generate') {
   if (!assets.length && !documents.length) return '';
   const lines = [];
   if (assets.length > 0) {
-    lines.push('=== ẢNH ĐÃ TẢI LÊN (dùng ĐÚNG URL, không sửa, không bịa URL ảnh khác) ===');
+    if (mode === 'edit') {
+      lines.push('=== ẢNH ĐÍNH KÈM (có thể là ảnh tham khảo hoặc ảnh cần chèn vào trang) ===');
+    } else {
+      lines.push('=== ẢNH ĐÃ TẢI LÊN (dùng ĐÚNG URL, không sửa, không bịa URL ảnh khác) ===');
+    }
     assets.forEach((asset, idx) => {
       const num = idx + 1;
       const note = asset.inlineForModel
@@ -220,13 +233,77 @@ export function buildModelParts(fullPrompt, assets = [], documents = []) {
   return parts;
 }
 
-export function validateLandingImageUrls({ html, assets = [], allowedSourceText = '' }) {
-  // Chốt 1: mỗi asset.url phải xuất hiện nguyên văn trong html
+export function stripDisallowedImages(html = '', allowlistUrls = new Set()) {
+  const allowlist = allowlistUrls instanceof Set ? allowlistUrls : new Set(allowlistUrls || []);
+  const stripped = [];
+
+  // 1. Xoá thẻ <source ...> trong <picture> có src/srcset không thuộc allowlist
+  let cleanedHtml = html.replace(/<source\b[^>]*>/gi, (match) => {
+    const srcsetMatch = match.match(/\bsrcset\s*=\s*["']([^"']+)["']/i) || match.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+    const urls = match.match(IMAGE_URL_REGEX) || [];
+    const disallowed = urls.filter((u) => !allowlist.has(u));
+    if (disallowed.length > 0) {
+      disallowed.forEach((u) => {
+        if (!stripped.includes(u)) stripped.push(u);
+      });
+      return '';
+    }
+    return match;
+  });
+
+  // 2. Xoá cả thẻ <img ...> (kể cả có srcset) có src không thuộc allowlist
+  cleanedHtml = cleanedHtml.replace(/<img\b[^>]*>/gi, (match) => {
+    const srcMatch = match.match(/\bsrc\s*=\s*["']([^"']+)["']/i) || match.match(/\bsrc\s*=\s*([^\s>]+)/i);
+    const srcUrl = srcMatch ? srcMatch[1] : null;
+    const urls = match.match(IMAGE_URL_REGEX) || [];
+    const disallowed = urls.filter((u) => !allowlist.has(u));
+    if ((srcUrl && !allowlist.has(srcUrl)) || disallowed.length > 0) {
+      if (srcUrl && !allowlist.has(srcUrl) && !stripped.includes(srcUrl)) {
+        stripped.push(srcUrl);
+      }
+      disallowed.forEach((u) => {
+        if (!stripped.includes(u)) stripped.push(u);
+      });
+      return '';
+    }
+    return match;
+  });
+
+  return { html: cleanedHtml, stripped };
+}
+
+export function validateLandingImageUrls(firstArg, maybeAssets = [], maybeOptions = {}) {
+  let html;
+  let assets;
+  let allowedSourceText;
+  let requireAssetsUsed;
+
+  if (typeof firstArg === 'object' && firstArg !== null && 'html' in firstArg) {
+    html = firstArg.html;
+    assets = firstArg.assets || [];
+    allowedSourceText = firstArg.allowedSourceText || '';
+    requireAssetsUsed = firstArg.requireAssetsUsed !== false;
+  } else {
+    html = firstArg;
+    assets = maybeAssets || [];
+    if (typeof maybeOptions === 'object' && maybeOptions !== null) {
+      allowedSourceText = maybeOptions.allowedSourceText || '';
+      requireAssetsUsed = maybeOptions.requireAssetsUsed !== false;
+    } else {
+      allowedSourceText = typeof maybeOptions === 'string' ? maybeOptions : '';
+      requireAssetsUsed = true;
+    }
+  }
+  // Chốt 1: mỗi asset.url phải xuất hiện nguyên văn trong html (khi requireAssetsUsed = true)
+  const unusedAssets = [];
   for (const asset of assets) {
     if (asset.url && !html.includes(asset.url)) {
-      const err = new Error(`AI không dùng ảnh "${asset.originalName || asset.url}" đã đính kèm. Vui lòng thử lại.`);
-      err.status = 422;
-      throw err;
+      unusedAssets.push(asset);
+      if (requireAssetsUsed) {
+        const err = new Error(`AI không dùng ảnh "${asset.originalName || asset.url}" đã đính kèm. Vui lòng thử lại.`);
+        err.status = 422;
+        throw err;
+      }
     }
   }
 
@@ -238,13 +315,21 @@ export function validateLandingImageUrls({ html, assets = [], allowedSourceText 
   }
 
   const foundMatches = html.match(IMAGE_URL_REGEX) || [];
+  const fakeImageUrls = [];
   for (const u of foundMatches) {
     if (!allowlistUrls.has(u)) {
-      const err = new Error('AI bịa URL ảnh ngoài hệ thống. Vui lòng thử lại.');
-      err.status = 422;
-      throw err;
+      fakeImageUrls.push(u);
     }
   }
+  if (fakeImageUrls.length > 0) {
+    const err = new Error('AI bịa URL ảnh ngoài hệ thống. Vui lòng thử lại.');
+    err.status = 422;
+    err.code = 'LANDING_FAKE_IMAGE_URL';
+    err.details = { fakeImageUrls };
+    throw err;
+  }
+
+  return { unusedAssets, allowlistUrls };
 }
 
 class AiLandingPageService {
@@ -361,186 +446,234 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
+    const allowlistUrls = new Set(assets.map((a) => a.url).filter(Boolean));
+    if (businessCtx) {
+      const sourceMatches = String(businessCtx).match(IMAGE_URL_REGEX) || [];
+      sourceMatches.forEach((u) => allowlistUrls.add(u));
+    }
+
+    const runOnce = async (extraRule = '') => {
+      const promptToSend = extraRule ? `${fullPrompt}\n\n${extraRule}` : fullPrompt;
+      const generation = await aiUsageMeter.generateWithBudget(userId, {
+        parts: buildModelParts(promptToSend, assets, documents),
+        jsonMode: true,
+        maxOutputTokens: 16384,
+        timeoutMs: 120000,
+        temperature: 0.4,
+        feature: 'landing_page',
+        metadata: {
+          actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
+        },
+      });
+      const { text, blockReason, finishReason } = generation;
+      telemetry.finishReason = finishReason;
+      telemetry.outputTokens = getOutputTokens(generation);
+
+      if (blockReason) {
+        const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử prompt khác.');
+        err.status = 400;
+        throw err;
+      }
+
+      let title = 'Landing';
+      let html = '';
+
+      // Thử parse JSON trước; nếu fail (model truncate hoặc escape sai) → fallback extract HTML từ raw text
+      try {
+        const parsed = JSON.parse(stripJsonFences(text));
+        title = String(parsed?.title || '').trim() || 'Landing';
+        html = String(parsed?.html || '').trim();
+      } catch {
+        console.warn(`[LandingAI] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML từ raw text`);
+        // Fallback: tìm khối HTML trong raw text
+        const htmlMatch = text.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
+        if (!htmlMatch) {
+          const err = new Error(
+            finishReason === 'MAX_TOKENS'
+              ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy thử yêu cầu ngắn gọn hơn.'
+              : 'AI trả về không phải HTML hợp lệ. Thử lại hoặc rút ngắn yêu cầu.'
+          );
+          err.status = 422;
+          throw err;
+        }
+        // Dẫn qua extractHtmlFromModelText (landingEditGuard.util.js) thay vì lấy thẳng
+        // htmlMatch[0]: đoạn khớp có thể nằm BÊN TRONG chuỗi JSON hỏng và còn mang `\n`/`\"`
+        // thoát — hàm đó giải mã, giải mã không được thì trả '' → 422 ở dưới (cùng lỗi đường
+        // editHtml sếp gặp 09/09 13:10).
+        html = extractHtmlFromModelText(text);
+        if (!html) {
+          const err = new Error('AI trả về HTML bị mã hoá sai định dạng. Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        // Lấy title từ thẻ <title> trong HTML
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+        if (titleMatch) title = titleMatch[1].trim();
+      }
+      telemetry.htmlChars = html.length;
+      if (!html.toLowerCase().includes('<!doctype')) {
+        // Mọi chốt "AI sinh không đạt, thử lại" dưới đây dùng 422, KHÔNG dùng 502: production
+        // đứng sau Cloudflare, và Cloudflare thay mọi 502/504 của origin bằng trang lỗi của nó —
+        // câu "Vui lòng thử lại" không bao giờ tới trình duyệt, người dùng chỉ thấy "Bad gateway"
+        // và tưởng hạ tầng hỏng (sếp gặp 09/09 10:08, xem PLAN_LANDING_SINH_BAT_DONG_BO). 422
+        // đi thẳng, frontend hiện đúng message.
+        const err = new Error('Thiếu <!DOCTYPE html> trong phản hồi AI.');
+        err.status = 422;
+        throw err;
+      }
+      if (!html.includes('cdn.tailwindcss.com')) {
+        const err = new Error('Thiếu Tailwind CDN trong HTML do AI sinh.');
+        err.status = 422;
+        throw err;
+      }
+      if (/\{\{[^}]+\}\}/.test(html)) {
+        const err = new Error('AI trả về template chưa điền nội dung ({{...}}). Vui lòng thử lại hoặc bổ sung hồ sơ doanh nghiệp để AI có đủ context.');
+        err.status = 422;
+        throw err;
+      }
+      // Đếm số lần dùng inline style — cho phép tối đa 2 (ví dụ: keyframe fallback)
+      const inlineStyleCount = (html.match(/\bstyle\s*=/gi) || []).length;
+      if (inlineStyleCount > 2) {
+        const err = new Error('AI sinh HTML dùng inline style thay vì Tailwind. Vui lòng thử lại.');
+        err.status = 422;
+        throw err;
+      }
+
+      if (formMode) {
+        // PR-5b-2a — AI KHÔNG còn tự sinh form: đòi đúng MỘT chỗ trống, và cấm tuyệt đối
+        // <form data-founderai-capture> (mẫu cũ) lọt qua — model đôi khi "quen tay" viết form thật
+        // dù quy tắc 6 đã đổi, phải bắt ở đây chứ không tin lời hứa của prompt.
+        if (/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
+          const err = new Error('AI vẫn tự viết <form> đăng ký lead thay vì chỗ trống biểu mẫu. Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        // Review PR-5b-2a nợ 1 — chỗ trống có thuộc tính data-founderai-form-slot nhưng dạng sai
+        // (ví dụ có nội dung con) không được ÂM THẦM đếm là 0 rồi báo "thiếu chỗ trống" (gây hiểu
+        // lầm — AI CÓ viết, chỉ sai dạng); báo đúng nguyên nhân.
+        if (hasMalformedFormSlot(html)) {
+          const err = new Error('AI tạo chỗ trống biểu mẫu sai dạng (có nội dung bên trong div data-founderai-form-slot). Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        const slotCount = countFormSlots(html);
+        if (slotCount !== 1) {
+          const err = new Error(
+            slotCount === 0
+              ? 'AI không tạo chỗ trống cho biểu mẫu (thiếu data-founderai-form-slot). Vui lòng thử lại.'
+              : `AI tạo ${slotCount} chỗ trống biểu mẫu thay vì đúng 1. Vui lòng thử lại.`
+          );
+          err.status = 422;
+          throw err;
+        }
+      } else {
+        // Chốt chặn form bắt lead: AI phải tự sinh <form data-founderai-capture> với
+        // trường email thật (quy tắc 6 ở trên) — không còn fallback tự chèn placeholder,
+        // vì placeholder không được founderai-capture.js bắt được submit.
+        if (!/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
+          const err = new Error('AI không tạo form đăng ký lead (thiếu data-founderai-capture). Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        if (!/\bname\s*=\s*["']email["']/i.test(html)) {
+          const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: leadFormConfig yêu cầu occupation/
+        // interestArea visible thì HTML phải có field tương ứng — không fallback, vì thiếu field
+        // không gây lỗi cho khách (lead.service.js chỉ để trống) nhưng khiến trang mất dữ liệu mà
+        // cấu hình vốn đòi hỏi, âm thầm và mãi mãi (trang đã publish, không sinh lại).
+        if (leadFormConfig?.fixedFields?.occupation?.visible && !/\bname\s*=\s*["']occupation["']/i.test(html)) {
+          const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường occupation (name="occupation") dù cấu hình yêu cầu. Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        if (leadFormConfig?.fixedFields?.interestArea?.visible && !/\bname\s*=\s*["']interestArea["']/i.test(html)) {
+          const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường interestArea (name="interestArea") dù cấu hình yêu cầu. Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 1: mỗi customFields[] đã áp dụng
+        // (khoá cf_sugg_NN_text tất định) đòi đúng 1 field name="<khoá>" trong HTML — thiếu thì
+        // publish trang không có ô đó, khách không bao giờ điền được, mãi mãi (trang đã publish).
+        const customFields = Array.isArray(leadFormConfig?.customFields) ? leadFormConfig.customFields : [];
+        const missingCustomFieldKey = customFields
+          .find((field) => !new RegExp(`\\bname\\s*=\\s*["']${field.key}["']`, 'i').test(html));
+        if (missingCustomFieldKey) {
+          const err = new Error(`AI tạo form đăng ký lead nhưng thiếu trường "${missingCustomFieldKey.labelVi || missingCustomFieldKey.key}" (name="${missingCustomFieldKey.key}") dù cấu hình yêu cầu. Vui lòng thử lại.`);
+          err.status = 422;
+          throw err;
+        }
+        // 09/09 (sự cố slug-test ở đường sửa AI): ô select/radio có mặt nhưng AI ghi value là NHÃN
+        // ("Lựa chọn 1") thay vì mã ("opt_a") → normalizeCustomSubmitValue từ chối MỌI lead với
+        // "<nhãn> không hợp lệ"; occupation/interestArea thì normalizeOptionalSelectValue đổi thành ''
+        // trong im lặng. Đường sinh đã đưa sẵn markup đúng mã (rule 9) nên hiếm gặp, nhưng lọt qua
+        // kiểm name ở trên là trang publish với form không bao giờ gửi được — chặn 422 cho cùng luật.
+        const wrongOptionField = customFields
+          .filter((field) => field.type === 'select' || field.type === 'radio')
+          .find((field) => (Array.isArray(field.options) ? field.options : []).some((o) => !htmlHasOptionValue(html, o?.value)));
+        if (wrongOptionField) {
+          const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường "${wrongOptionField.labelVi || wrongOptionField.key}" (name="${wrongOptionField.key}") không đúng mã đã cấu hình. Vui lòng thử lại.`);
+          err.status = 422;
+          throw err;
+        }
+        const wrongFixedField = [
+          leadFormConfig?.fixedFields?.occupation?.visible ? ['occupation', OCCUPATION_VALUES] : null,
+          leadFormConfig?.fixedFields?.interestArea?.visible ? ['interestArea', INTEREST_AREA_VALUES] : null,
+        ].find((entry) => entry && entry[1].some((v) => !htmlHasOptionValue(html, v)));
+        if (wrongFixedField) {
+          const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường ${wrongFixedField[0]} (name="${wrongFixedField[0]}") không đúng danh sách hệ thống. Vui lòng thử lại.`);
+          err.status = 422;
+          throw err;
+        }
+      }
+
+      try {
+        validateLandingImageUrls({ html, assets, allowedSourceText: businessCtx, requireAssetsUsed: true });
+      } catch (valErr) {
+        valErr.generatedTitle = title;
+        valErr.generatedHtml = html;
+        throw valErr;
+      }
+
+      return { title, html };
+    };
+
     try {
-    const generation = await aiUsageMeter.generateWithBudget(userId, {
-      parts: buildModelParts(fullPrompt, assets, documents),
-      jsonMode: true,
-      maxOutputTokens: 16384,
-      timeoutMs: 120000,
-      temperature: 0.4,
-      feature: 'landing_page',
-      metadata: {
-        actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
-      },
-    });
-    const { text, blockReason, finishReason } = generation;
-    telemetry.finishReason = finishReason;
-    telemetry.outputTokens = getOutputTokens(generation);
+      let generationResult;
+      try {
+        generationResult = await runOnce('');
+      } catch (firstErr) {
+        if (firstErr.code === 'LANDING_FAKE_IMAGE_URL') {
+          telemetry.fakeImageRetry = 1;
+          telemetry.fakeImageUrls = firstErr.details?.fakeImageUrls || [];
+          const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. Sinh lại toàn bộ trang, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
+          try {
+            generationResult = await runOnce(extraRule);
+          } catch (secondErr) {
+            if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
+              const rawHtml = secondErr.generatedHtml;
+              const { html: strippedHtml, stripped } = stripDisallowedImages(rawHtml, allowlistUrls);
+              telemetry.strippedImages = stripped.length;
+              telemetry.htmlChars = strippedHtml.length;
+              validateLandingImageUrls({ html: strippedHtml, assets, allowedSourceText: businessCtx, requireAssetsUsed: true });
+              generationResult = {
+                title: secondErr.generatedTitle || 'Landing',
+                html: strippedHtml,
+                strippedImageUrls: stripped,
+              };
+            } else {
+              throw secondErr;
+            }
+          }
+        } else {
+          throw firstErr;
+        }
+      }
 
-    if (blockReason) {
-      const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử prompt khác.');
-      err.status = 400;
-      throw err;
-    }
-
-    let title = 'Landing';
-    let html = '';
-
-    // Thử parse JSON trước; nếu fail (model truncate hoặc escape sai) → fallback extract HTML từ raw text
-    try {
-      const parsed = JSON.parse(stripJsonFences(text));
-      title = String(parsed?.title || '').trim() || 'Landing';
-      html = String(parsed?.html || '').trim();
-    } catch {
-      console.warn(`[LandingAI] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML từ raw text`);
-      // Fallback: tìm khối HTML trong raw text
-      const htmlMatch = text.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
-      if (!htmlMatch) {
-        const err = new Error(
-          finishReason === 'MAX_TOKENS'
-            ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy thử yêu cầu ngắn gọn hơn.'
-            : 'AI trả về không phải HTML hợp lệ. Thử lại hoặc rút ngắn yêu cầu.'
-        );
-        err.status = 422;
-        throw err;
-      }
-      // Dẫn qua extractHtmlFromModelText (landingEditGuard.util.js) thay vì lấy thẳng
-      // htmlMatch[0]: đoạn khớp có thể nằm BÊN TRONG chuỗi JSON hỏng và còn mang `\n`/`\"`
-      // thoát — hàm đó giải mã, giải mã không được thì trả '' → 422 ở dưới (cùng lỗi đường
-      // editHtml sếp gặp 09/09 13:10).
-      html = extractHtmlFromModelText(text);
-      if (!html) {
-        const err = new Error('AI trả về HTML bị mã hoá sai định dạng. Vui lòng thử lại.');
-        err.status = 422;
-        throw err;
-      }
-      // Lấy title từ thẻ <title> trong HTML
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      if (titleMatch) title = titleMatch[1].trim();
-    }
-    telemetry.htmlChars = html.length;
-    if (!html.toLowerCase().includes('<!doctype')) {
-      // Mọi chốt "AI sinh không đạt, thử lại" dưới đây dùng 422, KHÔNG dùng 502: production
-      // đứng sau Cloudflare, và Cloudflare thay mọi 502/504 của origin bằng trang lỗi của nó —
-      // câu "Vui lòng thử lại" không bao giờ tới trình duyệt, người dùng chỉ thấy "Bad gateway"
-      // và tưởng hạ tầng hỏng (sếp gặp 09/09 10:08, xem PLAN_LANDING_SINH_BAT_DONG_BO). 422
-      // đi thẳng, frontend hiện đúng message.
-      const err = new Error('Thiếu <!DOCTYPE html> trong phản hồi AI.');
-      err.status = 422;
-      throw err;
-    }
-    if (!html.includes('cdn.tailwindcss.com')) {
-      const err = new Error('Thiếu Tailwind CDN trong HTML do AI sinh.');
-      err.status = 422;
-      throw err;
-    }
-    if (/\{\{[^}]+\}\}/.test(html)) {
-      const err = new Error('AI trả về template chưa điền nội dung ({{...}}). Vui lòng thử lại hoặc bổ sung hồ sơ doanh nghiệp để AI có đủ context.');
-      err.status = 422;
-      throw err;
-    }
-    // Đếm số lần dùng inline style — cho phép tối đa 2 (ví dụ: keyframe fallback)
-    const inlineStyleCount = (html.match(/\bstyle\s*=/gi) || []).length;
-    if (inlineStyleCount > 2) {
-      const err = new Error('AI sinh HTML dùng inline style thay vì Tailwind. Vui lòng thử lại.');
-      err.status = 422;
-      throw err;
-    }
-
-    if (formMode) {
-      // PR-5b-2a — AI KHÔNG còn tự sinh form: đòi đúng MỘT chỗ trống, và cấm tuyệt đối
-      // <form data-founderai-capture> (mẫu cũ) lọt qua — model đôi khi "quen tay" viết form thật
-      // dù quy tắc 6 đã đổi, phải bắt ở đây chứ không tin lời hứa của prompt.
-      if (/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
-        const err = new Error('AI vẫn tự viết <form> đăng ký lead thay vì chỗ trống biểu mẫu. Vui lòng thử lại.');
-        err.status = 422;
-        throw err;
-      }
-      // Review PR-5b-2a nợ 1 — chỗ trống có thuộc tính data-founderai-form-slot nhưng dạng sai
-      // (ví dụ có nội dung con) không được ÂM THẦM đếm là 0 rồi báo "thiếu chỗ trống" (gây hiểu
-      // lầm — AI CÓ viết, chỉ sai dạng); báo đúng nguyên nhân.
-      if (hasMalformedFormSlot(html)) {
-        const err = new Error('AI tạo chỗ trống biểu mẫu sai dạng (có nội dung bên trong div data-founderai-form-slot). Vui lòng thử lại.');
-        err.status = 422;
-        throw err;
-      }
-      const slotCount = countFormSlots(html);
-      if (slotCount !== 1) {
-        const err = new Error(
-          slotCount === 0
-            ? 'AI không tạo chỗ trống cho biểu mẫu (thiếu data-founderai-form-slot). Vui lòng thử lại.'
-            : `AI tạo ${slotCount} chỗ trống biểu mẫu thay vì đúng 1. Vui lòng thử lại.`
-        );
-        err.status = 422;
-        throw err;
-      }
-    } else {
-      // Chốt chặn form bắt lead: AI phải tự sinh <form data-founderai-capture> với
-      // trường email thật (quy tắc 6 ở trên) — không còn fallback tự chèn placeholder,
-      // vì placeholder không được founderai-capture.js bắt được submit.
-      if (!/<form[^>]*\bdata-founderai-capture\b[^>]*>/i.test(html)) {
-        const err = new Error('AI không tạo form đăng ký lead (thiếu data-founderai-capture). Vui lòng thử lại.');
-        err.status = 422;
-        throw err;
-      }
-      if (!/\bname\s*=\s*["']email["']/i.test(html)) {
-        const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
-        err.status = 422;
-        throw err;
-      }
-      // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: leadFormConfig yêu cầu occupation/
-      // interestArea visible thì HTML phải có field tương ứng — không fallback, vì thiếu field
-      // không gây lỗi cho khách (lead.service.js chỉ để trống) nhưng khiến trang mất dữ liệu mà
-      // cấu hình vốn đòi hỏi, âm thầm và mãi mãi (trang đã publish, không sinh lại).
-      if (leadFormConfig?.fixedFields?.occupation?.visible && !/\bname\s*=\s*["']occupation["']/i.test(html)) {
-        const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường occupation (name="occupation") dù cấu hình yêu cầu. Vui lòng thử lại.');
-        err.status = 422;
-        throw err;
-      }
-      if (leadFormConfig?.fixedFields?.interestArea?.visible && !/\bname\s*=\s*["']interestArea["']/i.test(html)) {
-        const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường interestArea (name="interestArea") dù cấu hình yêu cầu. Vui lòng thử lại.');
-        err.status = 422;
-        throw err;
-      }
-      // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 1: mỗi customFields[] đã áp dụng
-      // (khoá cf_sugg_NN_text tất định) đòi đúng 1 field name="<khoá>" trong HTML — thiếu thì
-      // publish trang không có ô đó, khách không bao giờ điền được, mãi mãi (trang đã publish).
-      const customFields = Array.isArray(leadFormConfig?.customFields) ? leadFormConfig.customFields : [];
-      const missingCustomFieldKey = customFields
-        .find((field) => !new RegExp(`\\bname\\s*=\\s*["']${field.key}["']`, 'i').test(html));
-      if (missingCustomFieldKey) {
-        const err = new Error(`AI tạo form đăng ký lead nhưng thiếu trường "${missingCustomFieldKey.labelVi || missingCustomFieldKey.key}" (name="${missingCustomFieldKey.key}") dù cấu hình yêu cầu. Vui lòng thử lại.`);
-        err.status = 422;
-        throw err;
-      }
-      // 09/09 (sự cố slug-test ở đường sửa AI): ô select/radio có mặt nhưng AI ghi value là NHÃN
-      // ("Lựa chọn 1") thay vì mã ("opt_a") → normalizeCustomSubmitValue từ chối MỌI lead với
-      // "<nhãn> không hợp lệ"; occupation/interestArea thì normalizeOptionalSelectValue đổi thành ''
-      // trong im lặng. Đường sinh đã đưa sẵn markup đúng mã (rule 9) nên hiếm gặp, nhưng lọt qua
-      // kiểm name ở trên là trang publish với form không bao giờ gửi được — chặn 422 cho cùng luật.
-      const wrongOptionField = customFields
-        .filter((field) => field.type === 'select' || field.type === 'radio')
-        .find((field) => (Array.isArray(field.options) ? field.options : []).some((o) => !htmlHasOptionValue(html, o?.value)));
-      if (wrongOptionField) {
-        const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường "${wrongOptionField.labelVi || wrongOptionField.key}" (name="${wrongOptionField.key}") không đúng mã đã cấu hình. Vui lòng thử lại.`);
-        err.status = 422;
-        throw err;
-      }
-      const wrongFixedField = [
-        leadFormConfig?.fixedFields?.occupation?.visible ? ['occupation', OCCUPATION_VALUES] : null,
-        leadFormConfig?.fixedFields?.interestArea?.visible ? ['interestArea', INTEREST_AREA_VALUES] : null,
-      ].find((entry) => entry && entry[1].some((v) => !htmlHasOptionValue(html, v)));
-      if (wrongFixedField) {
-        const err = new Error(`AI tạo form đăng ký lead nhưng lựa chọn của trường ${wrongFixedField[0]} (name="${wrongFixedField[0]}") không đúng danh sách hệ thống. Vui lòng thử lại.`);
-        err.status = 422;
-        throw err;
-      }
-    }
-
-    validateLandingImageUrls({ html, assets, allowedSourceText: businessCtx });
-
-    logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
-    return { title, html };
+      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
+      return generationResult;
     } catch (error) {
       logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
       throw error;
@@ -590,7 +723,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     const locale = normalizeAssistantLocale(contentLocale, 'vi');
     const htmlLang = locale === 'en' ? 'en' : 'vi';
 
-    const dataPromptBlock = buildAttachmentPromptBlock(assets, documents);
+    const dataPromptBlock = buildAttachmentPromptBlock(assets, documents, 'edit');
 
     // PR-5b-2c (đính chính 16/09) — trang ĐANG có chỗ trống chờ Biểu mẫu (`AI_LANDING_FORM_MODE=
     // form`, PR-5b-2a) thì prompt phải dặn AI giữ nguyên chỗ trống đó, KHÔNG tự viết form thay
@@ -632,7 +765,7 @@ QUY TẮC KỸ THUẬT:
 2) Nếu bản gốc có thẻ <head> chứa Tailwind CDN, hãy luôn giữ nguyên: <script src="https://cdn.tailwindcss.com"></script>
 3) KHÔNG tự ý chèn thêm thuộc tính style="..." inline; chỉ dùng class Tailwind utility.
 4) Không dùng JavaScript logic ngoài script Tailwind CDN — trừ thẻ script nạp form-embed.js nằm trong khối nhúng Biểu mẫu (nếu trang có): giữ nguyên thẻ đó, không xóa, không thêm logic JS nào khác.
-5) Ảnh: CHỈ dùng các URL trong ẢNH ĐÃ TẢI LÊN hoặc các URL ảnh đã có sẵn trong HTML hiện tại. Khi người dùng yêu cầu chèn hoặc thay ảnh (ví dụ: thay logo, đổi banner), hãy dùng đúng URL ảnh được cung cấp. Tuyệt đối không bịa URL ảnh ngoài hệ thống.
+5) Ảnh đính kèm: phân biệt rõ 2 loại: (a) Ảnh chèn/thay vào trang (logo, banner, sản phẩm...): dùng ĐÚNG URL được cung cấp khi người dùng yêu cầu thay/đổi ảnh. (b) Ảnh tham khảo / ảnh chỉ chỗ sửa (ảnh chụp màn hình, mockup, ví dụ...): CHỈ dùng để HIỂU yêu cầu sửa, TUYỆT ĐỐI KHÔNG chèn URL ảnh này vào HTML. Mọi URL ảnh khác chỉ được lấy từ HTML hiện tại. Tuyệt đối không bịa URL ảnh ngoài hệ thống.
 
 HTML HIỆN TẠI CỦA TRANG:
 """${rawCurrent}"""
@@ -656,65 +789,125 @@ Ví dụ định dạng trả về (JSON hợp lệ):
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
-    try {
-    const generation = await aiUsageMeter.generateWithBudget(userId, {
-      parts: buildModelParts(fullPrompt, assets, documents),
-      jsonMode: true,
-      maxOutputTokens: 32768,
-      timeoutMs: 120000,
-      temperature: 0.2,
-      feature: 'landing_page',
-      metadata: {
-        actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
-        mode: 'edit',
-      },
-    });
-    const { text, blockReason, finishReason } = generation;
-    telemetry.finishReason = finishReason;
-    telemetry.outputTokens = getOutputTokens(generation);
-
-    if (blockReason) {
-      const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử yêu cầu khác.');
-      err.status = 400;
-      throw err;
+    const allowlistUrls = new Set(assets.map((a) => a.url).filter(Boolean));
+    if (rawCurrent) {
+      const sourceMatches = String(rawCurrent).match(IMAGE_URL_REGEX) || [];
+      sourceMatches.forEach((u) => allowlistUrls.add(u));
     }
 
-    let title = 'Landing';
-    let html = '';
+    const runOnce = async (extraRule = '') => {
+      const promptToSend = extraRule ? `${fullPrompt}\n\n${extraRule}` : fullPrompt;
+      const generation = await aiUsageMeter.generateWithBudget(userId, {
+        parts: buildModelParts(promptToSend, assets, documents),
+        jsonMode: true,
+        maxOutputTokens: 32768,
+        timeoutMs: 120000,
+        temperature: 0.2,
+        feature: 'landing_page',
+        metadata: {
+          actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
+          mode: 'edit',
+        },
+      });
+      const { text, blockReason, finishReason } = generation;
+      telemetry.finishReason = finishReason;
+      telemetry.outputTokens = getOutputTokens(generation);
 
-    try {
-      const parsed = JSON.parse(stripJsonFences(text));
-      title = String(parsed?.title || '').trim() || 'Landing';
-      html = String(parsed?.html || '').trim();
-    } catch {
-      console.warn(`[LandingAI.editHtml] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML`);
-      html = extractHtmlFromModelText(text);
-
-      if (!html) {
-        const err = new Error(
-          finishReason === 'MAX_TOKENS'
-            ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy chia nhỏ yêu cầu sửa đổi.'
-            : 'AI trả về không phải HTML hợp lệ. Vui lòng thử lại với yêu cầu cụ thể hơn.'
-        );
-        err.status = 422;
+      if (blockReason) {
+        const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử yêu cầu khác.');
+        err.status = 400;
         throw err;
       }
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      if (titleMatch) title = titleMatch[1].trim();
-    }
-    telemetry.htmlChars = html.length;
 
-    // Chốt chặn kiểm tra chất lượng kết quả
-    validateEditHtmlOutput({
-      currentHtml: rawCurrent,
-      newHtml: html,
-      finishReason,
-    });
+      let title = 'Landing';
+      let html = '';
 
-    validateLandingImageUrls({ html, assets, allowedSourceText: rawCurrent });
+      try {
+        const parsed = JSON.parse(stripJsonFences(text));
+        title = String(parsed?.title || '').trim() || 'Landing';
+        html = String(parsed?.html || '').trim();
+      } catch {
+        console.warn(`[LandingAI.editHtml] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML`);
+        html = extractHtmlFromModelText(text);
 
-    logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
-    return { title, html };
+        if (!html) {
+          const err = new Error(
+            finishReason === 'MAX_TOKENS'
+              ? 'AI sinh HTML quá dài bị cắt ngắn. Hãy chia nhỏ yêu cầu sửa đổi.'
+              : 'AI trả về không phải HTML hợp lệ. Vui lòng thử lại với yêu cầu cụ thể hơn.'
+          );
+          err.status = 422;
+          throw err;
+        }
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+        if (titleMatch) title = titleMatch[1].trim();
+      }
+      telemetry.htmlChars = html.length;
+
+      // Chốt chặn kiểm tra chất lượng kết quả
+      validateEditHtmlOutput({
+        currentHtml: rawCurrent,
+        newHtml: html,
+        finishReason,
+      });
+
+      let valRes;
+      try {
+        valRes = validateLandingImageUrls({
+          html,
+          assets,
+          allowedSourceText: rawCurrent,
+          requireAssetsUsed: false,
+        });
+      } catch (valErr) {
+        valErr.generatedTitle = title;
+        valErr.generatedHtml = html;
+        throw valErr;
+      }
+
+      return { title, html, unusedAssets: valRes.unusedAssets };
+    };
+
+    try {
+      let editResult;
+      try {
+        editResult = await runOnce('');
+      } catch (firstErr) {
+        if (firstErr.code === 'LANDING_FAKE_IMAGE_URL') {
+          telemetry.fakeImageRetry = 1;
+          telemetry.fakeImageUrls = firstErr.details?.fakeImageUrls || [];
+          const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. Sinh lại toàn bộ trang, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
+          try {
+            editResult = await runOnce(extraRule);
+          } catch (secondErr) {
+            if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
+              const rawHtml = secondErr.generatedHtml;
+              const { html: strippedHtml, stripped } = stripDisallowedImages(rawHtml, allowlistUrls);
+              telemetry.strippedImages = stripped.length;
+              telemetry.htmlChars = strippedHtml.length;
+              const valRes = validateLandingImageUrls({
+                html: strippedHtml,
+                assets,
+                allowedSourceText: rawCurrent,
+                requireAssetsUsed: false,
+              });
+              editResult = {
+                title: secondErr.generatedTitle || 'Landing',
+                html: strippedHtml,
+                unusedAssets: valRes.unusedAssets,
+                strippedImageUrls: stripped,
+              };
+            } else {
+              throw secondErr;
+            }
+          }
+        } else {
+          throw firstErr;
+        }
+      }
+
+      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
+      return editResult;
     } catch (error) {
       logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
       throw error;

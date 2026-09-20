@@ -1508,6 +1508,15 @@ class AiController {
 
       await chargeAiCredit(req);
 
+      if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
+        for (const url of data.strippedImageUrls) {
+          allSkipped.push({
+            name: url,
+            reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
+          });
+        }
+      }
+
       if (allSkipped.length > 0) {
         data.skippedAttachments = allSkipped;
       }
@@ -1628,7 +1637,7 @@ class AiController {
         files: mergedFiles,
         ownerUserId,
         actorUserId: req.user.id,
-        landingPageId: resolvedLandingPageId,
+        landingPageId: null,
       });
       const allSkipped = [...(mergeSkipped || []), ...(ingestSkipped || [])];
 
@@ -1661,6 +1670,23 @@ class AiController {
             content: confirmMsg,
             type: 'landing_edit_ack',
           }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save edit chat messages:', err.message));
+        }
+      }
+
+      if (Array.isArray(data.unusedAssets) && data.unusedAssets.length > 0) {
+        for (const ua of data.unusedAssets) {
+          allSkipped.push({
+            name: ua.name || ua.originalName || 'unknown',
+            reason: 'Không chèn vào trang — coi là ảnh tham khảo',
+          });
+        }
+      }
+      if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
+        for (const url of data.strippedImageUrls) {
+          allSkipped.push({
+            name: url,
+            reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
+          });
         }
       }
 

@@ -4152,6 +4152,7 @@ export default {
     wizardDismiss: 'No, I am just asking',
     missingLandingSourceOrInstruction: 'Missing landing page source or edit instructions.',
     landingUpdateSuccess: 'Landing page updated successfully!',
+    landingEditReferenceImages: '({count} attached image(s) used as reference, not inserted into page)',
     // Quick actions
     quickActions: 'Quick actions',
     createCampaign: 'Create Campaign',

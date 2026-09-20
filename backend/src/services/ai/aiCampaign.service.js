@@ -1415,7 +1415,7 @@ Data structure:
 }
 
 ### 8. type: "landing_page"
-Khi người dùng muốn TẠO LANDING PAGE và đã có ĐỦ thông tin.
+Khi người dùng muốn TẠO LANDING PAGE và đã có ĐỦ thông tin. Yêu cầu thiết kế / tạo / làm landing page, trang web, website, web page (kể cả có hay không có đính kèm file) -> tạo landing page mới (tuyệt đối KHÔNG BAO GIỜ gọi ask_campaign_details cho yêu cầu tạo trang web/website).
 TUYỆT ĐỐI KHÔNG viết HTML/CSS trong phản hồi chat này. Chỉ trả về mô tả yêu cầu (prompt) để hệ thống sinh trang riêng biệt.
 
 Data structure:
@@ -1479,7 +1479,7 @@ YÊU CẦU NGOÀI PHẠM VI HOÀN TOÀN:
 2. Nếu ĐÃ có đủ thông tin (user trả lời xong ask_campaign_details) → type: "confirm_create"
 3. Nếu THIẾU thông tin khác (tên sản phẩm, mục tiêu...) → type: "ask_more"
 
-### Khi user prompt "tạo landing page [...]":
+### Khi user prompt "tạo landing page / trang web / website [...]":
 1. Nếu CHƯA có đủ thông tin (mục tiêu trang, đối tượng...) → type: "ask_landing_details"
 2. Nếu ĐÃ có đủ thông tin (user trả lời xong ask_landing_details hoặc tự cung cấp đủ) → type: "landing_page"
 3. KHÔNG dùng ask_more cho landing page
@@ -2089,7 +2089,7 @@ Khi tạo xong script và muốn user xem trước.
 Khi muốn TẠO VÀ CHẠY NGAY - không cần xác nhận.
 
 ### 6. type: "landing_page"
-Khi muốn tạo Landing Page.
+Khi muốn tạo Landing Page. Yêu cầu thiết kế / tạo / làm landing page, trang web, website, web page (kể cả có hay không có đính kèm file) -> tạo landing page mới (tuyệt đối KHÔNG BAO GIỜ gọi ask_campaign_details cho yêu cầu tạo trang web/website).
 
 ## 3 CHIẾN DỊCH TÁCH BIỆT (KHÔNG BAO GIỜ GỘP):
 1. Gmail (Email) - dùng action/send_email với emailSteps[]

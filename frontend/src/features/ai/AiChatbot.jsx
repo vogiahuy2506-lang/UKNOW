@@ -3090,9 +3090,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           html,
         };
 
-        const confirmMsg = locale === 'en'
+        const refSkippedCount = Array.isArray(response.data.skippedAttachments)
+          ? response.data.skippedAttachments.filter(
+              (item) => item?.reason === 'Không chèn vào trang — coi là ảnh tham khảo'
+            ).length
+          : 0;
+
+        let confirmMsg = locale === 'en'
           ? `I have updated the landing page "${title || pageData.title}" according to your request: "${trimmedInstr}". Check the preview above!`
           : `Mình đã cập nhật landing page "${title || pageData.title}" theo yêu cầu: "${trimmedInstr}". Bạn xem lại giao diện bên trên nhé!`;
+
+        if (refSkippedCount > 0) {
+          confirmMsg += ` ${t('aiChatbot.landingEditReferenceImages', { count: refSkippedCount })}`;
+        }
 
         update((prev) => {
           const next = prev.map((msg, i) => {

@@ -860,6 +860,34 @@ describe('aiCampaign.service', () => {
       expect(systemPrompt).toContain('TUYỆT ĐỐI KHÔNG viết HTML');
     });
 
+    it('T12: system prompt dặn dò trang web, website, web page và KHÔNG BAO GIỜ gọi ask_campaign_details', async () => {
+      axiosPost.mockResolvedValueOnce({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: {
+                parts: [{ text: JSON.stringify({ type: 'text', content: 'Chào bạn', missing_fields: [], data: null }) }],
+              },
+            },
+          ],
+        },
+      });
+
+      await aiCampaignService.processSmartChat({
+        history: [{ role: 'user', content: 'Tạo website cho tôi' }],
+        userId: 1,
+      });
+
+      expect(axiosPost).toHaveBeenCalled();
+      const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+      const payload = lastCall[1];
+      const systemPrompt = payload.systemInstruction.parts[0].text;
+      expect(systemPrompt).toContain('trang web, website, web page');
+      expect(systemPrompt).toContain('tuyệt đối KHÔNG BAO GIỜ gọi ask_campaign_details cho yêu cầu tạo trang web/website');
+      expect(systemPrompt).toContain('### Khi user prompt "tạo landing page / trang web / website [...]":');
+    });
+
     it('khi model trả type landing_page: gọi aiLandingPageService.generate và trả title + html', async () => {
       axiosPost.mockResolvedValueOnce({
         data: {

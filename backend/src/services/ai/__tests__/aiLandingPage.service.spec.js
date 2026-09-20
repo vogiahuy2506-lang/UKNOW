@@ -16,6 +16,8 @@ const {
   default: aiLandingPageService,
   buildModelParts,
   buildAttachmentPromptBlock,
+  validateLandingImageUrls,
+  stripDisallowedImages,
 } = await import('../aiLandingPage.service.js');
 
 /**
@@ -540,18 +542,22 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
       '</body>',
       `<img src="${asset1.url}"><img src="https://images.unsplash.com/photo-123.jpg"></body>`
     );
+    expect(() => validateLandingImageUrls(generatedHtml, [asset1])).toThrow(
+      expect.objectContaining({
+        code: 'LANDING_FAKE_IMAGE_URL',
+        status: 422,
+      })
+    );
+
     mockGenerateReturns(generatedHtml);
 
-    await expect(
-      aiLandingPageService.generate({
-        userId: 1,
-        prompt: 'Tạo landing',
-        assets: [asset1],
-      })
-    ).rejects.toMatchObject({
-      status: 422,
-      message: 'AI bịa URL ảnh ngoài hệ thống. Vui lòng thử lại.',
+    const result = await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'Tạo landing',
+      assets: [asset1],
     });
+    expect(result.html).not.toContain('https://images.unsplash.com/photo-123.jpg');
+    expect(result.strippedImageUrls).toEqual(['https://images.unsplash.com/photo-123.jpg']);
   });
 
   it('(iv) đường sửa: URL ảnh đã có trong currentHtml được giữ, không 422', async () => {
@@ -590,24 +596,28 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
     expect(result.html).toContain(assetNew.url);
   });
 
-  it('(v) không asset → prompt không có khối ẢNH, <img> lạ vẫn 422', async () => {
+  it('(v) không asset → prompt không có khối ẢNH, <img> lạ được gỡ bỏ sau retry', async () => {
     const htmlWithFakeImg = validFormHtml.replace(
       '</body>',
       `<img src="https://fake.cdn.com/test.webp" alt="Fake"></body>`
     );
+    expect(() => validateLandingImageUrls(htmlWithFakeImg, [])).toThrow(
+      expect.objectContaining({
+        code: 'LANDING_FAKE_IMAGE_URL',
+        status: 422,
+      })
+    );
+
     mockGenerateReturns(htmlWithFakeImg);
 
-    await expect(
-      aiLandingPageService.generate({
-        userId: 1,
-        prompt: 'Tạo landing không ảnh',
-        assets: [],
-        documents: [],
-      })
-    ).rejects.toMatchObject({
-      status: 422,
-      message: 'AI bịa URL ảnh ngoài hệ thống. Vui lòng thử lại.',
+    const result = await aiLandingPageService.generate({
+      userId: 1,
+      prompt: 'Tạo landing không ảnh',
+      assets: [],
+      documents: [],
     });
+    expect(result.html).not.toContain('https://fake.cdn.com/test.webp');
+    expect(result.strippedImageUrls).toEqual(['https://fake.cdn.com/test.webp']);
 
     // Kiểm tra prompt không có khối ẢNH ĐÃ TẢI LÊN
     const callArgs = generateWithBudget.mock.calls[0][1];
@@ -900,6 +910,184 @@ describe('PDF scan inline landing page — C10, C11', () => {
     const promptBlock = buildAttachmentPromptBlock([], [doc]);
     expect(promptBlock).toContain('PDF dạng ảnh');
     expect(promptBlock).not.toContain('[Nội dung tệp');
+  });
+});
+
+describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T8)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getContextForLandingAi.mockResolvedValue('');
+  });
+
+  it('T1: editHtml với 2 ảnh đính kèm, AI chỉ dùng 1 ảnh trong HTML -> thành công, trả về unusedAssets', async () => {
+    const asset1 = { url: 'https://cdn.example.com/img1.png', originalName: 'img1.png' };
+    const asset2 = { url: 'https://cdn.example.com/img2.png', originalName: 'img2.png' };
+    const htmlUsingOnlyAsset1 = validFormHtml.replace('</body>', `<img src="${asset1.url}"></body>`);
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: htmlUsingOnlyAsset1 }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    const result = await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Chỉ dùng ảnh 1',
+      assets: [asset1, asset2],
+    });
+    expect(result.html).toContain(asset1.url);
+    expect(result.unusedAssets).toHaveLength(1);
+    expect(result.unusedAssets[0].url).toBe(asset2.url);
+  });
+
+  it('T2: validateLandingImageUrls với requireAssetsUsed: false -> trả về unusedAssets, không ném LANDING_ASSETS_NOT_USED', () => {
+    const asset1 = { url: 'https://cdn.example.com/img1.png' };
+    const asset2 = { url: 'https://cdn.example.com/img2.png' };
+    const htmlUsingOnlyAsset1 = validFormHtml.replace('</body>', `<img src="${asset1.url}"></body>`);
+    const { unusedAssets, allowlistUrls } = validateLandingImageUrls(htmlUsingOnlyAsset1, [asset1, asset2], {
+      requireAssetsUsed: false,
+    });
+    expect(unusedAssets).toEqual([asset2]);
+    expect(allowlistUrls).toContain(asset1.url);
+    expect(allowlistUrls).toContain(asset2.url);
+  });
+
+  it('T3: editHtml gọi với đính kèm -> prompt chứa tiêu đề ảnh tham khảo và quy tắc 5a/5b', async () => {
+    const asset1 = { url: 'https://cdn.example.com/img1.png', originalName: 'img1.png' };
+    const htmlWithImg = validFormHtml.replace('</body>', `<img src="${asset1.url}"></body>`);
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: htmlWithImg }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Đổi ảnh',
+      assets: [asset1],
+    });
+    const promptText = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(promptText).toContain('=== ẢNH ĐÍNH KÈM (có thể là ảnh tham khảo hoặc ảnh cần chèn vào trang) ===');
+    expect(promptText).toContain('Ảnh chèn/thay vào trang');
+    expect(promptText).toContain('Ảnh tham khảo / ảnh chỉ chỗ sửa');
+  });
+
+  it('T4: validateLandingImageUrls phát hiện URL ngoài allowlist -> ném LANDING_FAKE_IMAGE_URL kèm details.fakeImageUrls', () => {
+    const htmlWithFake = validFormHtml.replace('</body>', '<img src="https://fake.cdn.com/bad.png"></body>');
+    try {
+      validateLandingImageUrls(htmlWithFake, []);
+      throw new Error('Should have thrown');
+    } catch (err) {
+      expect(err.code).toBe('LANDING_FAKE_IMAGE_URL');
+      expect(err.status).toBe(422);
+      expect(err.details?.fakeImageUrls).toEqual(['https://fake.cdn.com/bad.png']);
+    }
+  });
+
+  it('T5: generate lần 1 AI bịa URL ảnh -> retry lần 2 sạch -> thành công, log có fakeImageRetry: 1', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const htmlFake = validFormHtml.replace('</body>', '<img src="https://fake.cdn.com/img1.png"></body>');
+      const htmlClean = validFormHtml;
+      generateWithBudget
+        .mockResolvedValueOnce({
+          text: JSON.stringify({ title: 'T', html: htmlFake }),
+          blockReason: null,
+          finishReason: 'STOP',
+        })
+        .mockResolvedValueOnce({
+          text: JSON.stringify({ title: 'T', html: htmlClean }),
+          blockReason: null,
+          finishReason: 'STOP',
+        });
+
+      const result = await aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'Tạo landing page',
+      });
+      expect(result.html).toBe(htmlClean);
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+
+      const retryPrompt = generateWithBudget.mock.calls[1][1].parts[0].text;
+      expect(retryPrompt).toContain('LƯU Ý ĐẶC BIỆT');
+      expect(retryPrompt).toContain('https://fake.cdn.com/img1.png');
+
+      const lifecycleLogs = logSpy.mock.calls
+        .map((c) => c[0])
+        .filter((msg) => typeof msg === 'string' && msg.includes('[LandingAI] done'));
+      expect(lifecycleLogs.length).toBeGreaterThan(0);
+      expect(lifecycleLogs.some((msg) => msg.includes('fakeImageRetry=1'))).toBe(true);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it('T6: generate lần 1 bịa ảnh -> retry lần 2 VẪN bịa ảnh -> stripDisallowedImages thành công, có strippedImageUrls', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const htmlFake = validFormHtml.replace('</body>', '<img src="https://fake.cdn.com/img1.png"></body>');
+      generateWithBudget.mockResolvedValue({
+        text: JSON.stringify({ title: 'T', html: htmlFake }),
+        blockReason: null,
+        finishReason: 'STOP',
+      });
+
+      const result = await aiLandingPageService.generate({
+        userId: 1,
+        prompt: 'Tạo landing page',
+      });
+      expect(result.html).not.toContain('https://fake.cdn.com/img1.png');
+      expect(result.strippedImageUrls).toEqual(['https://fake.cdn.com/img1.png']);
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+
+      const lifecycleLogs = logSpy.mock.calls
+        .map((c) => c[0])
+        .filter((msg) => typeof msg === 'string' && msg.includes('[LandingAI] done'));
+      expect(lifecycleLogs.length).toBeGreaterThan(0);
+      expect(lifecycleLogs.some((msg) => msg.includes('strippedImages=1'))).toBe(true);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it('T7: stripDisallowedImages gỡ thẻ <img> và <source> ngoài allowlist, giữ nguyên ảnh hợp lệ', () => {
+    const allowUrl = 'https://cdn.example.com/valid.png';
+    const fakeImgUrl = 'https://fake.cdn.com/fake.png';
+    const fakeSourceUrl = 'https://fake.cdn.com/fake.webp';
+    const html = `<div>
+      <img src="${allowUrl}" alt="valid" />
+      <img src="${fakeImgUrl}" alt="fake" />
+      <picture>
+        <source srcset="${fakeSourceUrl}" type="image/webp">
+        <img src="${allowUrl}" alt="pic">
+      </picture>
+    </div>`;
+
+    const { html: strippedHtml, stripped } = stripDisallowedImages(html, [allowUrl]);
+    expect(stripped).toContain(fakeImgUrl);
+    expect(stripped).toContain(fakeSourceUrl);
+    expect(strippedHtml).toContain(allowUrl);
+    expect(strippedHtml).not.toContain(fakeImgUrl);
+    expect(strippedHtml).not.toContain(fakeSourceUrl);
+  });
+
+  it('T8: editHtml lần 1 bịa ảnh -> retry lần 2 VẪN bịa ảnh -> tự động gỡ ảnh bịa, trả về strippedImageUrls', async () => {
+    const fakeUrl = 'https://fake.cdn.com/fake-edit.png';
+    const htmlFake = validFormHtml.replace('</body>', `<img src="${fakeUrl}"></body>`);
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: htmlFake }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+
+    const result = await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: validFormHtml,
+      instruction: 'Thêm ảnh',
+      assets: [],
+    });
+    expect(result.html).not.toContain(fakeUrl);
+    expect(result.strippedImageUrls).toEqual([fakeUrl]);
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
   });
 });
 

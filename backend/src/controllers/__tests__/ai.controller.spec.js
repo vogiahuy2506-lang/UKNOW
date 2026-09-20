@@ -27,7 +27,25 @@ jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({ default: {} }));
+const editHtml = jest.fn();
+jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({
+  default: {
+    editHtml,
+  },
+}));
+
+const ingestLandingAttachments = jest.fn();
+jest.unstable_mockModule('../../services/landing/landingAsset.service.js', () => ({
+  ingestLandingAttachments,
+  mergeAndFilterLandingFiles: jest.fn((files) => ({ files: files || [], skipped: [] })),
+}));
+
+const findLandingByIdInScope = jest.fn();
+jest.unstable_mockModule('../../repositories/landingPage.repository.js', () => ({
+  default: {
+    findByIdInScope: findLandingByIdInScope,
+  },
+}));
 jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => ({
   default: {
     prepareScript,
@@ -506,5 +524,56 @@ describe('ai.controller', () => {
     expect(createReqArg.body.nodes[0].config.sheetName).toBe('Khách tháng 9');
     expect(createReqArg.body.nodes[0].config.sheetNameSource).toBe('auto');
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, campaignId: 999 }));
+  });
+
+  it('T10. editLandingHtml: truyền landingPageId: null vào ingestLandingAttachments và gom unusedAssets/strippedImageUrls vào skippedAttachments', async () => {
+    findLandingByIdInScope.mockResolvedValue({ id: 456, customConfig: null });
+    ingestLandingAttachments.mockResolvedValue({
+      assets: [{ url: 'https://cdn.example.com/a1.png', originalName: 'a1.png' }],
+      documents: [],
+      skipped: [],
+    });
+
+    editHtml.mockResolvedValue({
+      title: 'Trang sửa',
+      html: '<div>Đã sửa</div>',
+      unusedAssets: [{ originalName: 'a2.png', url: 'https://cdn.example.com/a2.png' }],
+      strippedImageUrls: ['https://fake.cdn.com/bad.png'],
+    });
+
+    const req = {
+      user: { id: 1, role: 'user' },
+      body: {
+        currentHtml: '<div>Gốc</div>',
+        instruction: 'Đổi tiêu đề',
+        landingPageId: 456,
+        files: [{ tempId: 't1', originalName: 'a1.png' }],
+      },
+    };
+    const res = makeRes();
+
+    await aiController.editLandingHtml(req, res);
+
+    expect(ingestLandingAttachments).toHaveBeenCalledWith(
+      expect.objectContaining({
+        landingPageId: null,
+      })
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({
+        title: 'Trang sửa',
+        skippedAttachments: [
+          {
+            name: 'a2.png',
+            reason: 'Không chèn vào trang — coi là ảnh tham khảo',
+          },
+          {
+            name: 'https://fake.cdn.com/bad.png',
+            reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
+          },
+        ],
+      }),
+    });
   });
 });
