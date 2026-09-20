@@ -21,6 +21,7 @@
  *   - Match course theo course_code = product_id.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from '@jest/globals';
+import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
@@ -541,5 +542,56 @@ describe('HMAC signature verification', () => {
     await new Promise((r) => setTimeout(r, 200));
     const { rows } = await db.query(`SELECT COUNT(*)::int AS c FROM customer_purchases`);
     expect(rows[0].c).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+describe('Decommissioned legacy channel webhook and connect routes', () => {
+  it('POST /api/webhooks/facebook trả 404 (đã khai tử route webhook theo tài khoản)', async () => {
+    const res = await request(app).post('/api/webhooks/facebook').send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /api/webhooks/facebook trả 404', async () => {
+    const res = await request(app).get('/api/webhooks/facebook');
+    expect(res.status).toBe(404);
+  });
+
+  it('POST /api/webhooks/zalo-oa trả 404 (đã khai tử route webhook theo tài khoản)', async () => {
+    const res = await request(app).post('/api/webhooks/zalo-oa').send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /api/webhooks/zalo-oa trả 404', async () => {
+    const res = await request(app).get('/api/webhooks/zalo-oa');
+    expect(res.status).toBe(404);
+  });
+
+  it('POST /api/ai/chatbot/channels/connect/facebook trả 404 (đã khai tử endpoint phát URL chết)', async () => {
+    const user = await createUser({ role: 'admin' });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: 'admin' },
+      process.env.JWT_SECRET || 'test-jwt-secret',
+      { expiresIn: '1h' }
+    );
+    const res = await request(app)
+      .post('/api/ai/chatbot/channels/connect/facebook')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('POST /api/ai/chatbot/channels/connect/zalo-oa trả 404 (đã khai tử endpoint phát URL chết)', async () => {
+    const user = await createUser({ role: 'admin' });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: 'admin' },
+      process.env.JWT_SECRET || 'test-jwt-secret',
+      { expiresIn: '1h' }
+    );
+    const res = await request(app)
+      .post('/api/ai/chatbot/channels/connect/zalo-oa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(404);
   });
 });

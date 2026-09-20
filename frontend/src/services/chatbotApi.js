@@ -115,15 +115,6 @@ const chatbotApi = {
     return response.data;
   },
 
-  connectZaloOA: async (data) => {
-    const response = await api.post('/ai/chatbot/channels/connect/zalo-oa', data);
-    return response.data;
-  },
-
-  connectFacebook: async (data) => {
-    const response = await api.post('/ai/chatbot/channels/connect/facebook', data);
-    return response.data;
-  },
 
   disconnectChannel: async (channel) => {
     const response = await api.delete(`/ai/chatbot/channels/${channel}`);
@@ -141,11 +132,6 @@ const chatbotApi = {
     return response.data;
   },
 
-  // Complete Facebook OAuth connection
-  completeFacebookConnection: async (data) => {
-    const response = await api.post('/ai/chatbot/channels/connect/facebook', data);
-    return response.data;
-  },
 
   // Complete Facebook OAuth connection for chatbot
   completeFacebookOAuthForChatbot: async (chatbotId, data) => {

@@ -1,6 +1,4 @@
-import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import crypto from 'crypto';
-import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import whatsappOAuthService, {
   stashPendingOAuth,
   verifyState,
@@ -63,14 +61,14 @@ class OAuthController {
    * GET /api/webhooks/oauth/callback/facebook
    */
   async handleFacebookCallback(req, res) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
     try {
       const { code, state, error, error_reason } = req.query;
 
       // Handle user denied or error
       if (error) {
         console.log('[OAuth] Facebook user denied or error:', error, error_reason);
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-        return res.redirect(`${frontendUrl}/settings/channel-connections?error=facebook_denied&reason=${error_reason || error}`);
+        return res.redirect(`${frontendUrl}/app/chatbot-studio?error=facebook_denied&reason=${encodeURIComponent(error_reason || error)}`);
       }
 
       if (!code) {
@@ -81,11 +79,17 @@ class OAuthController {
       try {
         stateData = JSON.parse(Buffer.from(decodeURIComponent(state), 'base64').toString());
       } catch {
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-        return res.redirect(`${frontendUrl}/settings/channel-connections?error=invalid_state`);
+        return res.redirect(`${frontendUrl}/app/chatbot-studio?error=invalid_state`);
       }
 
       const { chatbot_id, redirect_to } = stateData;
+
+      // Khóa chặt: bắt buộc phải có chatbot_id (Studio là đường duy nhất)
+      if (!chatbot_id || redirect_to !== 'studio') {
+        return res.redirect(
+          `${frontendUrl}/app/chatbot-studio?error=missing_chatbot&message=${encodeURIComponent('Hãy kết nối Facebook từ trang Chatbot của bạn')}`
+        );
+      }
 
       // Exchange code for short-lived token
       const appId = process.env.FACEBOOK_APP_ID;
@@ -99,7 +103,7 @@ class OAuthController {
 
       if (tokenData.error) {
         console.error('[OAuth] Token exchange error:', tokenData.error);
-        return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=token_exchange_failed`);
+        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=token_exchange_failed`);
       }
 
       const shortLivedToken = tokenData.access_token;
@@ -111,7 +115,7 @@ class OAuthController {
 
       if (longLivedData.error) {
         console.error('[OAuth] Long-lived token exchange error:', longLivedData.error);
-        return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=long_token_failed`);
+        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=long_token_failed`);
       }
 
       const pageAccessToken = longLivedData.access_token;
@@ -123,7 +127,7 @@ class OAuthController {
 
       if (pagesData.error) {
         console.error('[OAuth] Get pages error:', pagesData.error);
-        return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=get_pages_failed`);
+        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=get_pages_failed`);
       }
 
       if (!pagesData.data || pagesData.data.length === 0) {
@@ -141,106 +145,30 @@ class OAuthController {
         }
       }
 
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
       if (pagesData.data && pagesData.data.length > 0) {
         const pagesJson = encodeURIComponent(JSON.stringify(pagesData.data));
-        if (redirect_to === 'studio' && chatbot_id) {
-          return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&facebook_pages=${pagesJson}&token=${encodeURIComponent(pageAccessToken)}`);
-        }
-        return res.redirect(`${frontendUrl}/settings/channel-connections?facebook_pages=${pagesJson}&token=${encodeURIComponent(pageAccessToken)}`);
+        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&facebook_pages=${pagesJson}&token=${encodeURIComponent(pageAccessToken)}`);
       }
 
-      if (redirect_to === 'studio' && chatbot_id) {
-        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=no_pages`);
-      }
-      return res.redirect(`${frontendUrl}/settings/channel-connections?error=no_pages`);
+      return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=no_pages`);
     } catch (err) {
       console.error('[OAuth] Facebook callback error:', err);
-      return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=callback_error`);
+      return res.redirect(`${frontendUrl}/app/chatbot-studio?error=callback_error`);
     }
   }
 
   /**
    * Complete Facebook connection after page selection
    * POST /api/webhooks/oauth/facebook/complete
+   * @deprecated Hệ thống webhook theo tài khoản đã khai tử. Studio là đường duy nhất.
    */
   async completeFacebookConnection(req, res) {
-    try {
-      const { user_id } = req.user;
-      const { page_id, page_name, page_access_token } = req.body;
-
-      if (!page_id || !page_access_token) {
-        return res.status(400).json({ success: false, message: 'Page ID và Access Token là bắt buộc' });
-      }
-
-      // Verify token
-      const verifyResponse = await fetch(`${FB_GRAPH_BASE}/${page_id}?access_token=${page_access_token}`);
-      const pageData = await verifyResponse.json();
-
-      if (pageData.error) {
-        return res.status(400).json({ 
-          success: false, 
-          message: `Token không hợp lệ: ${pageData.error.message}` 
-        });
-      }
-
-      // Setup webhook automatically
-      await this.setupFacebookWebhook(page_id, page_access_token);
-
-      // Save channel connection
-      const webhookUrl = `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/facebook`;
-      const channel = await chatbotRepository.upsertChannel(user_id, 'facebook', {
-        display_name: page_name || pageData.name || 'Facebook Page',
-        credentials: {
-          page_access_token,
-          page_id,
-          page_name: pageData.name || page_name,
-          connected_at: new Date().toISOString(),
-        },
-        webhook_url: webhookUrl,
-        settings: { auto_setup: true },
-      });
-
-      return res.json({
-        success: true,
-        message: 'Kết nối Facebook thành công!',
-        data: {
-          page_name: pageData.name,
-          page_id,
-        },
-      });
-    } catch (err) {
-      console.error('[OAuth] Complete Facebook connection error:', err);
-      return res.status(500).json({ success: false, message: err.message });
-    }
+    return res.status(400).json({
+      success: false,
+      message: 'Hãy kết nối Facebook từ trang Chatbot của bạn',
+    });
   }
 
-  /**
-   * Auto setup Facebook webhook subscription
-   */
-  async setupFacebookWebhook(pageId, accessToken) {
-    try {
-      const webhookUrl = `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/facebook`;
-      
-      // Subscribe app to page
-      const subscribeResponse = await fetch(
-        `${FB_GRAPH_BASE}/${pageId}/subscribed_apps?access_token=${accessToken}`,
-        { method: 'POST' }
-      );
-      const subscribeData = await subscribeResponse.json();
-
-      if (subscribeData.success) {
-        console.log('[Facebook] Successfully subscribed to page webhook');
-      } else {
-        console.warn('[Facebook] Webhook subscription response:', subscribeData);
-      }
-
-      return subscribeData;
-    } catch (err) {
-      console.warn('[Facebook] Webhook setup error (non-critical):', err.message);
-      return null;
-    }
-  }
 
   // ── Zalo OA OAuth ─────────────────────────────────────────────
 
@@ -251,6 +179,7 @@ class OAuthController {
   async initZaloOAuth(req, res) {
     try {
       const { user_id } = req.user;
+      const { chatbot_id, redirect_to } = req.query;
       
       const appId = process.env.ZALO_OA_APP_ID;
       const appSecret = process.env.ZALO_OA_APP_SECRET;
@@ -263,7 +192,7 @@ class OAuthController {
       }
 
       // Generate state
-      const stateData = { user_id, timestamp: Date.now() };
+      const stateData = { user_id, chatbot_id, redirect_to, timestamp: Date.now() };
       const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
       
       // Build Zalo OAuth URL
@@ -287,13 +216,14 @@ class OAuthController {
    * GET /api/webhooks/oauth/callback/zalo-oa
    */
   async handleZaloCallback(req, res) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
     try {
       const { code, state, error, error_description } = req.query;
 
       // Handle error
       if (error) {
         console.log('[OAuth] Zalo user denied or error:', error, error_description);
-        return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=zalo_denied&reason=${error_description || error}`);
+        return res.redirect(`${frontendUrl}/app/chatbot-studio?error=zalo_denied&reason=${encodeURIComponent(error_description || error)}`);
       }
 
       if (!code) {
@@ -305,10 +235,17 @@ class OAuthController {
       try {
         stateData = JSON.parse(Buffer.from(state, 'base64').toString());
       } catch {
-        return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=invalid_state`);
+        return res.redirect(`${frontendUrl}/app/chatbot-studio?error=invalid_state`);
       }
 
-      const { user_id } = stateData;
+      const { chatbot_id, redirect_to } = stateData;
+
+      // Khóa chặt: bắt buộc phải có chatbot_id (Studio là đường duy nhất)
+      if (!chatbot_id || redirect_to !== 'studio') {
+        return res.redirect(
+          `${frontendUrl}/app/chatbot-studio?error=missing_chatbot&message=${encodeURIComponent('Hãy kết nối Zalo OA từ trang Chatbot của bạn')}`
+        );
+      }
 
       // Exchange code for access token
       const appId = process.env.ZALO_OA_APP_ID;
@@ -329,10 +266,10 @@ class OAuthController {
 
       if (tokenData.error) {
         console.error('[OAuth] Zalo token exchange error:', tokenData.error);
-        return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=zalo_token_failed`);
+        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=zalo&error=zalo_token_failed`);
       }
 
-      const { access_token, refresh_token, expires_in } = tokenData;
+      const { access_token } = tokenData;
 
       // Get OA info
       let oaInfo = {};
@@ -345,40 +282,15 @@ class OAuthController {
         console.warn('[OAuth] Zalo profile fetch error:', e.message);
       }
 
-      // Save connection directly (Zalo OA is simpler)
-      const webhookUrl = `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/zalo-oa`;
-      const channel = await chatbotRepository.upsertChannel(user_id, 'zalo_oa', {
-        display_name: oaInfo.name || 'Zalo OA',
-        credentials: {
-          access_token,
-          refresh_token,
-          expires_in,
-          zalo_app_id: appId,
-          connected_at: new Date().toISOString(),
-        },
-        webhook_url: webhookUrl,
-        settings: { auto_setup: true },
-      });
-
-      auditService.log({
-        userId: user_id,
-        ownerId: user_id,
-        category: 'workspace',
-        action: AUDIT_ACTIONS.ZALO_ACCOUNT_CONNECTED,
-        entityType: AUDIT_ENTITY_TYPES.ZALO_SETTING,
-        entityId: channel?.id ?? null,
-        details: {
-          channel: 'zalo_oa',
-          displayName: oaInfo.name || 'Zalo OA',
-        },
-      });
-
-      return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?success=zalo_connected&name=${encodeURIComponent(oaInfo.name || 'Zalo OA')}`);
+      return res.redirect(
+        `${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=zalo&channel_oauth=zalo&chatbot_id=${chatbot_id}&oa_name=${encodeURIComponent(oaInfo.name || 'Zalo OA')}&token=${encodeURIComponent(access_token)}`
+      );
     } catch (err) {
       console.error('[OAuth] Zalo callback error:', err);
-      return res.redirect(`${process.env.FRONTEND_URL}/settings/channel-connections?error=zalo_callback_error`);
+      return res.redirect(`${frontendUrl}/app/chatbot-studio?error=zalo_callback_error`);
     }
   }
+
 
   // ── WhatsApp Embedded Signup OAuth ─────────────────────────────
 

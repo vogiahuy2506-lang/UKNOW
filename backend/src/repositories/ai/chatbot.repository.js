@@ -86,17 +86,6 @@ class ChatbotRepository {
     return rows[0] || null;
   }
 
-  async findFirstActiveChannelByType(channel) {
-    const { rows } = await db.query(
-      `SELECT cc.*, u.id AS user_id FROM channel_connections cc
-       JOIN users u ON u.id = cc.id_user
-       WHERE cc.channel = $1 AND cc.is_active = true
-       LIMIT 1`,
-      [channel]
-    );
-    return rows[0] || null;
-  }
-
   async upsertChannel(userId, channel, { display_name, credentials, webhook_url, webhook_token, settings }) {
     const { rows } = await db.query(
       `INSERT INTO channel_connections (id_user, channel, display_name, credentials, webhook_url, webhook_token, settings)

@@ -1,6 +1,5 @@
 import express from 'express';
 import webhookController from '../controllers/webhook.controller.js';
-import chatbotWebhookController from '../controllers/chatbotWebhook.controller.js';
 import chatbotChannelWebhookController from '../controllers/chatbotChannelWebhook.controller.js';
 import oauthController from '../controllers/oauth.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
@@ -66,22 +65,6 @@ router.post('/chatbot/facebook/:token', chatbotChannelWebhookController.handleFa
  */
 router.get('/chatbot/whatsapp/:token', chatbotChannelWebhookController.verifyWhatsApp.bind(chatbotChannelWebhookController));
 router.post('/chatbot/whatsapp/:token', chatbotChannelWebhookController.handleWhatsApp.bind(chatbotChannelWebhookController));
-
-// ── Legacy Webhooks (backwards compatibility) ─────────────────
-
-/**
- * Legacy Zalo OA webhook
- * @deprecated
- */
-router.get('/zalo-oa', chatbotWebhookController.verifyZaloOA.bind(chatbotWebhookController));
-router.post('/zalo-oa', chatbotWebhookController.handleZaloOA.bind(chatbotWebhookController));
-
-/**
- * Legacy Facebook webhook
- * @deprecated
- */
-router.get('/facebook', chatbotWebhookController.verifyFacebook.bind(chatbotWebhookController));
-router.post('/facebook', chatbotWebhookController.handleFacebook.bind(chatbotWebhookController));
 
 /**
  * POST /api/webhooks/woocommerce/order

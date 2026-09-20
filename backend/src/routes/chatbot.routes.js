@@ -188,8 +188,6 @@ router.get('/shared-by-me', requireSelfContext, chatbotController.getSharedByMe.
 // ── Channel Connections ──────────────────────────────────────────
 
 router.get('/channels', requirePermission('chatbot_channels_manage'), chatbotController.listChannels.bind(chatbotController));
-router.post('/channels/connect/zalo-oa', requirePermission('chatbot_channels_manage'), chatbotController.connectZaloOA.bind(chatbotController));
-router.post('/channels/connect/facebook', requirePermission('chatbot_channels_manage'), chatbotController.connectFacebook.bind(chatbotController));
 router.delete('/channels/:channel', requirePermission('chatbot_channels_manage'), chatbotController.disconnectChannel.bind(chatbotController));
 router.post('/channels/test/zalo-oa', requirePermission('chatbot_channels_manage'), chatbotController.testZaloOAConnection.bind(chatbotController));
 router.post('/channels/test/facebook', requirePermission('chatbot_channels_manage'), chatbotController.testFacebookConnection.bind(chatbotController));
