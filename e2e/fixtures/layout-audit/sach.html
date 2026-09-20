@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Sách "Khởi Nghiệp Tinh Gọn" — Trang bán sách</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!--
+    Fixture "trang bình thường" cho bộ đo hiển thị (PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA, PR-1):
+    phải ra 0 finding ở 1280 và 390. Cố ý chứa các "bẫy dương tính giả" mà bộ đo phải bỏ qua:
+      - hero chữ trên ảnh nền + lớp phủ tối + nút (chữ nằm TRÊN, không bị che)
+      - liên kết kéo giãn (a.absolute.inset-0) trong suốt nằm TRÊN chữ thẻ  → B không "đặc"
+      - lớp hover opacity-0 có nền, nằm trên chữ                            → B trong suốt
+      - header fixed + banner dính đáy                                       → thanh dính
+      - slider overflow-hidden có slide nằm hẳn ngoài                        → chuyện cố ý
+      - bảng bọc overflow-x-auto rộng hơn màn hình                           → cuộn hợp lệ
+      - chữ sr-only dài                                                      → hộp 1px
+      - ngăn kéo menu fixed nằm ngoài màn hình                               → chuyện cố ý
+    html có scroll-smooth: bộ đo phải cuộn tức thời, không đo giữa chừng animation.
+    Trang đủ dài (> 2400px ở 1280) để bộ đo buộc phải cuộn.
+  -->
+</head>
+<body class="bg-white text-slate-800 antialiased">
+
+  <!-- Header cố định -->
+  <header class="fixed top-0 inset-x-0 z-40 bg-white/95 border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="#" class="text-lg font-extrabold text-amber-600">Sách Khởi Nghiệp</a>
+      <nav class="hidden md:flex gap-6 text-sm font-semibold text-slate-600">
+        <a href="#noi-dung">Nội dung</a>
+        <a href="#bang-gia">Bảng giá</a>
+        <a href="#hoi-dap">Hỏi đáp</a>
+      </nav>
+      <a href="#dat-mua" class="bg-amber-500 text-white text-sm font-bold px-4 py-2 rounded-full">Đặt mua</a>
+    </div>
+  </header>
+
+  <!-- Ngăn kéo menu mobile nằm ngoài màn hình (cố ý) -->
+  <aside class="fixed top-0 -right-80 w-72 h-full bg-white shadow-xl z-50 p-6">
+    <p class="font-bold">Menu điện thoại</p>
+    <p class="mt-2 text-sm">Nội dung · Bảng giá · Hỏi đáp</p>
+  </aside>
+
+  <!-- Hero: chữ trên ảnh nền, có lớp phủ tối -->
+  <section class="relative min-h-[720px] flex items-center overflow-hidden"
+    style="background-color:#1e293b;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22400%22><rect width=%22400%22 height=%22400%22 fill=%22%23334155%22/><circle cx=%22300%22 cy=%22100%22 r=%22140%22 fill=%22%23475569%22/></svg>');background-size:cover">
+    <div class="absolute inset-0 bg-black/50"></div>
+    <div class="relative z-10 max-w-4xl mx-auto px-4 pt-24 pb-16 text-center">
+      <p class="text-amber-300 font-semibold tracking-wide uppercase text-sm">Sách mới 2026</p>
+      <h1 class="mt-4 text-4xl sm:text-6xl font-extrabold text-white leading-tight">Khởi Nghiệp Tinh Gọn cho người Việt</h1>
+      <p class="mt-6 text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto">Từ ý tưởng đến khách hàng đầu tiên trong 90 ngày, với những bài học thật từ 40 founder Việt Nam.</p>
+      <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="#dat-mua" class="inline-block bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-8 py-4 rounded-full">Đặt mua ngay</a>
+        <a href="#noi-dung" class="inline-block border border-white text-white font-semibold px-8 py-4 rounded-full">Đọc thử chương 1</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Nội dung sách: thẻ có liên kết kéo giãn trong suốt và lớp hover opacity-0 nằm TRÊN chữ -->
+  <section id="noi-dung" class="py-24 bg-slate-50">
+    <div class="max-w-6xl mx-auto px-4">
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-center">Bên trong cuốn sách</h2>
+      <p class="mt-4 text-center text-slate-600 max-w-2xl mx-auto">Ba phần, mười hai chương, mỗi chương kèm bài tập làm ngay trong tuần.</p>
+      <div class="mt-16 grid gap-8 md:grid-cols-3">
+        <article class="group relative bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h3 class="text-xl font-bold">Phần 1 · Kiểm chứng ý tưởng</h3>
+          <p class="mt-3 text-slate-600">Cách phỏng vấn khách hàng trong 5 ngày mà không tốn đồng nào, và cách đọc câu trả lời để biết nên đi tiếp hay dừng.</p>
+          <a href="#chuong-1" class="absolute inset-0" aria-label="Xem phần 1"></a>
+          <div class="absolute inset-0 rounded-2xl bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        </article>
+        <article class="group relative bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h3 class="text-xl font-bold">Phần 2 · Bản mẫu đầu tiên</h3>
+          <p class="mt-3 text-slate-600">Dựng bản mẫu trong một cuối tuần, chọn đúng tính năng để cắt bỏ, và đo mức độ quay lại của người dùng đầu tiên.</p>
+          <a href="#chuong-5" class="absolute inset-0" aria-label="Xem phần 2"></a>
+          <div class="absolute inset-0 rounded-2xl bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        </article>
+        <article class="group relative bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h3 class="text-xl font-bold">Phần 3 · Tăng trưởng có kiểm soát</h3>
+          <p class="mt-3 text-slate-600">Ba kênh bán hàng phù hợp thị trường Việt Nam, cách tính giá, và khi nào nên tuyển người đầu tiên.</p>
+          <a href="#chuong-9" class="absolute inset-0" aria-label="Xem phần 3"></a>
+          <div class="absolute inset-0 rounded-2xl bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cảm nhận: slider overflow-hidden, các slide sau nằm hẳn ngoài -->
+  <section class="py-24 bg-white">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-center">Độc giả nói gì</h2>
+      <div class="mt-12 overflow-hidden rounded-2xl border border-slate-200">
+        <div class="flex">
+          <blockquote class="w-full shrink-0 p-10 text-center">
+            <p class="text-xl italic text-slate-700">"Đọc xong chương 3, tôi dừng một ý tưởng tốn 200 triệu. Đáng giá hơn mọi khoá học tôi từng mua."</p>
+            <footer class="mt-6 font-semibold text-slate-900">Nguyễn Thu Hà — Founder cửa hàng handmade</footer>
+          </blockquote>
+          <blockquote class="w-full shrink-0 p-10 text-center">
+            <p class="text-xl italic text-slate-700">"Ví dụ toàn là doanh nghiệp Việt, nên áp dụng được ngay chứ không phải dịch từ Silicon Valley."</p>
+            <footer class="mt-6 font-semibold text-slate-900">Trần Quốc Bảo — Giám đốc sản phẩm</footer>
+          </blockquote>
+          <blockquote class="w-full shrink-0 p-10 text-center">
+            <p class="text-xl italic text-slate-700">"Bài tập cuối mỗi chương buộc mình phải làm thật. Ba tháng sau đã có 30 khách trả tiền."</p>
+            <footer class="mt-6 font-semibold text-slate-900">Lê Minh Anh — Nhà sáng lập ứng dụng học tiếng Anh</footer>
+          </blockquote>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bảng giá: bảng rộng bọc overflow-x-auto, kèm chữ sr-only dài -->
+  <section id="bang-gia" class="py-24 bg-slate-50">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-center">Chọn gói phù hợp</h2>
+      <span class="sr-only">Bảng so sánh ba gói sách gồm sách giấy, sách giấy kèm sách nói và bộ đầy đủ kèm buổi hỏi đáp trực tuyến với tác giả.</span>
+      <div class="mt-12 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table class="min-w-[760px] w-full text-left">
+          <thead class="bg-slate-100 text-sm uppercase text-slate-600">
+            <tr><th class="p-4">Gói</th><th class="p-4">Bao gồm</th><th class="p-4">Giá</th><th class="p-4">Giao hàng</th></tr>
+          </thead>
+          <tbody class="text-slate-700">
+            <tr class="border-t border-slate-100"><td class="p-4 font-bold">Sách giấy</td><td class="p-4">Bản in bìa mềm, 320 trang</td><td class="p-4 font-bold">169.000đ</td><td class="p-4">2–3 ngày</td></tr>
+            <tr class="border-t border-slate-100"><td class="p-4 font-bold">Giấy + sách nói</td><td class="p-4">Bản in và 9 giờ sách nói</td><td class="p-4 font-bold">249.000đ</td><td class="p-4">2–3 ngày</td></tr>
+            <tr class="border-t border-slate-100"><td class="p-4 font-bold">Bộ đầy đủ</td><td class="p-4">Sách, sách nói, buổi hỏi đáp với tác giả</td><td class="p-4 font-bold">399.000đ</td><td class="p-4">2–3 ngày</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hỏi đáp -->
+  <section id="hoi-dap" class="py-24 bg-white">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-center">Câu hỏi thường gặp</h2>
+      <dl class="mt-12 space-y-8">
+        <div>
+          <dt class="text-lg font-bold">Sách có phù hợp người chưa từng kinh doanh không?</dt>
+          <dd class="mt-2 text-slate-600">Có. Phần 1 viết cho người mới bắt đầu, không cần kiến thức nền, chỉ cần một ý tưởng bạn muốn thử.</dd>
+        </div>
+        <div>
+          <dt class="text-lg font-bold">Bao lâu tôi nhận được sách?</dt>
+          <dd class="mt-2 text-slate-600">Nội thành 2–3 ngày làm việc, các tỉnh 3–5 ngày. Sách nói gửi qua email ngay sau khi thanh toán.</dd>
+        </div>
+        <div>
+          <dt class="text-lg font-bold">Tôi có được đổi trả không?</dt>
+          <dd class="mt-2 text-slate-600">Đổi trả trong 7 ngày nếu sách lỗi in hoặc thiếu trang, chúng tôi chịu phí vận chuyển hai chiều.</dd>
+        </div>
+        <div>
+          <dt class="text-lg font-bold">Buổi hỏi đáp với tác giả diễn ra khi nào?</dt>
+          <dd class="mt-2 text-slate-600">Mỗi tháng một buổi vào tối thứ Bảy đầu tiên, qua Zoom, có ghi hình để xem lại nếu bạn bận.</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- Kêu gọi hành động cuối trang -->
+  <section id="dat-mua" class="py-24 bg-amber-500">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900">Bắt đầu cuối tuần này</h2>
+      <p class="mt-4 text-lg text-slate-800">Đặt hôm nay để nhận thêm bộ mẫu phỏng vấn khách hàng miễn phí.</p>
+      <a href="#" class="mt-8 inline-block bg-slate-900 text-white font-bold px-10 py-4 rounded-full">Đặt mua ngay</a>
+    </div>
+  </section>
+
+  <footer class="py-12 bg-slate-900 text-slate-400 text-center text-sm">
+    <p>© 2026 Nhà xuất bản Khởi Nghiệp. Mọi quyền được bảo lưu.</p>
+    <p class="mt-2">Hotline 1900 0000 · hotro@sachkhoinghiep.example</p>
+  </footer>
+
+  <!-- Banner dính đáy -->
+  <div class="fixed bottom-0 inset-x-0 z-40 bg-slate-900 text-white">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <p class="text-sm">Miễn phí vận chuyển cho đơn từ 199.000đ</p>
+      <a href="#dat-mua" class="bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-full">Đặt mua</a>
+    </div>
+  </div>
+
+</body>
+</html>

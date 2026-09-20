@@ -10,6 +10,7 @@ import {
 import { useI18n } from '../../../i18n';
 import { getPublicUrlFromSlug } from '../../landing-canvas/utils/buildCanvasSrcDoc.js';
 import { slugifyLandingTitle } from '../utils/landingPaste.js';
+import { buildFullLandingHtml } from '../utils/layoutAudit.js';
 import { injectFormSlotPreviewHint } from '../../landing-pages/utils/injectLandingEnhancements.js';
 
 /**
@@ -49,31 +50,7 @@ const LandingPageCard = ({
   const isSaved = Boolean(page.landingPageId);
   const publicUrl = isSaved && page.slug ? getPublicUrlFromSlug(page.slug) : '';
 
-  const rawHtml = page.html || '';
-  const isFullDocument = /<!doctype\s+html/i.test(rawHtml) || /<html[\s>]/i.test(rawHtml);
-  const fullHtml = isFullDocument
-    ? rawHtml.replace(/<head([^>]*)>/i, (m, attrs) => {
-        const hasTailwind = rawHtml.includes('cdn.tailwindcss.com');
-        const tailwindTag = hasTailwind ? '' : '\n  <script src="https://cdn.tailwindcss.com"></script>';
-        const cssTag = page.css ? `\n  <style>${page.css}</style>` : '';
-        return `<head${attrs}>${tailwindTag}${cssTag}`;
-      })
-    : `<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${page.title || 'Landing Page'}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { margin: 0; padding: 0; }
-    ${page.css || ''}
-  </style>
-</head>
-<body>
-  ${rawHtml}
-</body>
-</html>`;
+  const fullHtml = buildFullLandingHtml(page);
 
   // PR-5b-2c mục 5 — thẻ landing của trợ lý nổi xem trước srcDoc THẲNG (không qua
   // buildCanvasSrcDoc.js như trình soạn landing), nên chỗ trống `data-founderai-form-slot` (AI

@@ -121,6 +121,15 @@ jobs:
         env:
           CI: 'true'
 
+      # Nghiệm thu bộ đo hiển thị landing (PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA, PR-1): Chromium thật + Tailwind
+      # CDN, không cần DB/backend. Chạy độc lập với `npm test` để một bên đỏ không che bên kia.
+      - name: Run layout-audit Playwright tests
+        if: ${{ !cancelled() }}
+        run: npm run test:layout-audit
+        working-directory: e2e
+        env:
+          CI: 'true'
+
       - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
