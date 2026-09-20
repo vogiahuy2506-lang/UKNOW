@@ -2,18 +2,13 @@ import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
 import { parseAiJson } from '../../utils/aiJsonParse.util.js';
 import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
-import * as fileParserUtil from '../../utils/fileParser.util.js';
-
-const {
-  extractTextFromBuffer,
-  PDF_INLINE_MAX_BYTES = 10 * 1024 * 1024,
-  PDF_INLINE_BUDGET_BYTES = 15 * 1024 * 1024,
-} = fileParserUtil;
-const isPdfFile =
-  fileParserUtil.isPdfFile ||
-  ((name, mime) =>
-    String(name || '').toLowerCase().endsWith('.pdf') ||
-    String(mime || '').toLowerCase() === 'application/pdf');
+import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import {
+  PDF_INLINE_MAX_BYTES,
+  PDF_INLINE_BUDGET_BYTES,
+  isPdfFile,
+  formatMb,
+} from '../../utils/pdfInline.util.js';
 import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
@@ -75,9 +70,8 @@ export async function runChat({
             });
             inlinePdfBudget -= buffer.length;
           } else if (buffer.length > PDF_INLINE_MAX_BYTES) {
-            const sizeMb = Math.round(buffer.length / (1024 * 1024));
             parts.push({
-              text: `[Tệp đính kèm "${fileName}" là PDF dạng ảnh (scan) nặng ${sizeMb} MB, vượt giới hạn 10 MB nên không đọc được. Hãy nói cho người dùng biết và đề nghị nén tệp, tách nhỏ, hoặc gửi ảnh từng trang]`,
+              text: `[Tệp đính kèm "${fileName}" là PDF dạng ảnh (scan) nặng ${formatMb(buffer.length)} MB, vượt giới hạn 10 MB nên không đọc được. Hãy nói cho người dùng biết và đề nghị nén tệp, tách nhỏ, hoặc gửi ảnh từng trang]`,
             });
           } else {
             parts.push({

@@ -2,7 +2,8 @@ import { describe, it, expect, jest, beforeAll } from '@jest/globals';
 import moduleLib from 'module';
 
 const mockPdfParse = jest.fn().mockImplementation(async (buffer) => {
-  if (buffer.toString() === 'error') {
+  // fileParser đưa pdf-parse một VIEW Uint8Array (không phải Buffer) nên phải bọc lại mới đọc được chữ.
+  if (Buffer.from(buffer).toString() === 'error') {
     throw new Error('PDF mock error');
   }
   return { text: 'Extracted PDF Content' };

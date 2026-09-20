@@ -33,13 +33,6 @@ jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
 
 jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
   extractTextFromBuffer,
-  isPdfFile: (name, type) => {
-    const ext = (name || '').toLowerCase();
-    const mime = String(type || '').toLowerCase();
-    return ext.endsWith('.pdf') || mime === 'application/pdf';
-  },
-  PDF_INLINE_MAX_BYTES: 10 * 1024 * 1024,
-  PDF_INLINE_BUDGET_BYTES: 15 * 1024 * 1024,
 }));
 
 jest.unstable_mockModule('../../../utils/googleUrlFetch.util.js', () => ({

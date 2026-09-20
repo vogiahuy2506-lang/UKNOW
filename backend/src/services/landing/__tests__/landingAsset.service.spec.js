@@ -12,8 +12,6 @@ const mockExtractTextFromBuffer = jest.fn(async () => 'Nội dung trích xuất'
 
 jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
   extractTextFromBuffer: mockExtractTextFromBuffer,
-  PDF_INLINE_MAX_BYTES: 10 * 1024 * 1024,
-  PDF_INLINE_BUDGET_BYTES: 15 * 1024 * 1024,
 }));
 
 jest.unstable_mockModule('heic-convert', () => ({

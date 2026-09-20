@@ -1,12 +1,7 @@
 import crypto from 'crypto';
 import uploadController from '../../controllers/upload.controller.js';
-import * as fileParserUtil from '../../utils/fileParser.util.js';
-
-const {
-  extractTextFromBuffer,
-  PDF_INLINE_MAX_BYTES = 10 * 1024 * 1024,
-  PDF_INLINE_BUDGET_BYTES = 15 * 1024 * 1024,
-} = fileParserUtil;
+import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import { PDF_INLINE_MAX_BYTES, PDF_INLINE_BUDGET_BYTES, formatMb } from '../../utils/pdfInline.util.js';
 import { validateFile } from '../chatbot/chatAttachment.service.js';
 import { getStorageBackend } from '../storage/storageBackend.js';
 import { registerWrittenStorageObject } from '../storage/storageObject.service.js';
@@ -258,10 +253,9 @@ export async function ingestLandingAttachments({
               totalInlinePdfBytes += buffer.length;
               continue;
             } else if (buffer.length > PDF_INLINE_MAX_BYTES) {
-              const sizeMb = Math.round(buffer.length / (1024 * 1024));
               skipped.push({
                 originalName: file.originalName || fileName,
-                reason: `PDF dạng ảnh (scan) nặng ${sizeMb} MB, vượt giới hạn 10 MB — hãy nén hoặc tách nhỏ`,
+                reason: `PDF dạng ảnh (scan) nặng ${formatMb(buffer.length)} MB, vượt giới hạn 10 MB — hãy nén hoặc tách nhỏ`,
               });
               continue;
             } else {
