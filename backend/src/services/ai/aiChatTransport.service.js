@@ -2,7 +2,18 @@ import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
 import { parseAiJson } from '../../utils/aiJsonParse.util.js';
 import uploadController from '../../controllers/upload.controller.js';
 import axios from 'axios';
-import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import * as fileParserUtil from '../../utils/fileParser.util.js';
+
+const {
+  extractTextFromBuffer,
+  PDF_INLINE_MAX_BYTES = 10 * 1024 * 1024,
+  PDF_INLINE_BUDGET_BYTES = 15 * 1024 * 1024,
+} = fileParserUtil;
+const isPdfFile =
+  fileParserUtil.isPdfFile ||
+  ((name, mime) =>
+    String(name || '').toLowerCase().endsWith('.pdf') ||
+    String(mime || '').toLowerCase() === 'application/pdf');
 import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
@@ -26,9 +37,13 @@ export async function runChat({
   requestedModel = null,
 } = {}) {
   const googleUrlCache = new Map();
+  // Ngân sách inline PDF dạng ảnh (scan) cho cả lịch sử lẫn tin hiện tại của một request
+  // Ghi chú: lịch sử duyệt cũ → mới nên ngân sách có thể cạn trước tệp mới nhất; chấp nhận ở bản này (mỗi tệp scan thường 1–3 MB), ưu tiên tệp lượt hiện tại là việc sau.
+  let inlinePdfBudget = PDF_INLINE_BUDGET_BYTES;
 
   // Hàm đọc và đính kèm một file vào parts array
   const attachFileToParts = async (parts, file) => {
+    const fileName = file.originalName || 'tệp';
     try {
       let buffer = null;
       if (file.tempId) {
@@ -45,12 +60,41 @@ export async function runChat({
         const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
         if (extractedText.trim()) {
           parts.push({
-            text: `[Nội dung tệp đính kèm: "${file.originalName}"]:\n${extractedText}\n[Hết nội dung tệp: "${file.originalName}"]`,
+            text: `[Nội dung tệp đính kèm: "${fileName}"]:\n${extractedText}\n[Hết nội dung tệp: "${fileName}"]`,
+          });
+        } else if (isPdfFile(file.originalName, mimeType)) {
+          if (buffer.length <= PDF_INLINE_MAX_BYTES && buffer.length <= inlinePdfBudget) {
+            parts.push({
+              text: `[Tệp đính kèm "${fileName}" là PDF dạng ảnh (scan) — nội dung nằm trong tệp PDF ngay sau đây, hãy đọc trực tiếp]`,
+            });
+            parts.push({
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: buffer.toString('base64'),
+              },
+            });
+            inlinePdfBudget -= buffer.length;
+          } else if (buffer.length > PDF_INLINE_MAX_BYTES) {
+            const sizeMb = Math.round(buffer.length / (1024 * 1024));
+            parts.push({
+              text: `[Tệp đính kèm "${fileName}" là PDF dạng ảnh (scan) nặng ${sizeMb} MB, vượt giới hạn 10 MB nên không đọc được. Hãy nói cho người dùng biết và đề nghị nén tệp, tách nhỏ, hoặc gửi ảnh từng trang]`,
+            });
+          } else {
+            parts.push({
+              text: `[Tệp đính kèm "${fileName}" là PDF dạng ảnh (scan), đã hết ngân sách 15 MB PDF dạng ảnh trong một lượt nên không đọc được. Hãy nói cho người dùng biết và đề nghị gửi ở lượt chat tiếp theo]`,
+            });
+          }
+        } else {
+          parts.push({
+            text: `[Tệp đính kèm "${fileName}" không đọc được chữ nào (tệp rỗng hoặc định dạng không hỗ trợ). Hãy báo cho người dùng]`,
           });
         }
       }
     } catch (err) {
       console.warn(`Could not read file ${file.tempId || file.storage_key || file.storageKey} for AI:`, err.message);
+      parts.push({
+        text: `[Tệp đính kèm "${fileName}" đã hết hạn hoặc không đọc được, hãy đề nghị người dùng đính kèm lại]`,
+      });
     }
   };
 

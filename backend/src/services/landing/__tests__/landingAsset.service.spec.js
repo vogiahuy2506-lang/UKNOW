@@ -12,6 +12,8 @@ const mockExtractTextFromBuffer = jest.fn(async () => 'Nội dung trích xuất'
 
 jest.unstable_mockModule('../../../utils/fileParser.util.js', () => ({
   extractTextFromBuffer: mockExtractTextFromBuffer,
+  PDF_INLINE_MAX_BYTES: 10 * 1024 * 1024,
+  PDF_INLINE_BUDGET_BYTES: 15 * 1024 * 1024,
 }));
 
 jest.unstable_mockModule('heic-convert', () => ({
@@ -382,6 +384,68 @@ describe('landingAsset.service (Việc 1.6)', () => {
     expect(res.assets).toHaveLength(1);
     expect(res.assets[0].originalName).toBe('photo.heic');
     expect(mockPut).toHaveBeenCalledTimes(1);
+  });
+
+  describe('PR scan PDF in ingestLandingAttachments', () => {
+    it('C6: PDF 2 KB, mock trích -> \'\' -> documents[0].inlinePdf === true, skipped rỗng', async () => {
+      const pdfBuf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(2048, 0x20)]);
+      mockReadTempFileBuffer.mockResolvedValueOnce(pdfBuf);
+      mockExtractTextFromBuffer.mockResolvedValueOnce('');
+
+      const res = await ingestLandingAttachments({
+        files: [{ tempId: 't_c6', originalName: 'scan2k.pdf', contentType: 'application/pdf' }],
+        ownerUserId: 123,
+      });
+
+      expect(res.skipped).toHaveLength(0);
+      expect(res.documents).toHaveLength(1);
+      expect(res.documents[0].inlinePdf).toBe(true);
+      expect(res.documents[0].contentType).toBe('application/pdf');
+      expect(res.documents[0].base64).toBe(pdfBuf.toString('base64'));
+      expect(res.documents[0].originalName).toBe('scan2k.pdf');
+    });
+
+    it('C7: PDF 11 MB, trích rỗng, là tệp duy nhất -> ném 400, message chứa tên tệp và \'vượt giới hạn\'', async () => {
+      const pdfBuf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(11 * 1024 * 1024, 0x20)]);
+      mockReadTempFileBuffer.mockResolvedValueOnce(pdfBuf);
+      mockExtractTextFromBuffer.mockResolvedValueOnce('');
+
+      await expect(
+        ingestLandingAttachments({
+          files: [{ tempId: 't_c7', originalName: 'big_scan.pdf', contentType: 'application/pdf' }],
+          ownerUserId: 123,
+        })
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringMatching(/big_scan\.pdf.*vượt giới hạn/),
+      });
+    });
+
+    it('C8: .docx trích rỗng -> skipped[0].reason chứa \'Không đọc được chữ\', documents rỗng (không inline)', async () => {
+      // 1 ảnh png hợp lệ để không bị 400
+      const pngBuf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      // docx bắt đầu bằng PK\x03\x04
+      const docxBuf = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(200, 0x20)]);
+
+      mockReadTempFileBuffer.mockResolvedValueOnce(pngBuf).mockResolvedValueOnce(docxBuf);
+      mockExtractTextFromBuffer.mockResolvedValueOnce('');
+      mockPut.mockResolvedValue(true);
+      mockRegisterWrittenStorageObject.mockResolvedValue({ id: 101 });
+
+      const res = await ingestLandingAttachments({
+        files: [
+          { tempId: 't_png', originalName: 'logo.png', contentType: 'image/png' },
+          { tempId: 't_docx', originalName: 'empty.docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        ],
+        ownerUserId: 123,
+      });
+
+      expect(res.assets).toHaveLength(1);
+      expect(res.documents).toHaveLength(0);
+      expect(res.skipped).toHaveLength(1);
+      expect(res.skipped[0].originalName).toBe('empty.docx');
+      expect(res.skipped[0].reason).toContain('Không đọc được chữ');
+    });
   });
 });
 

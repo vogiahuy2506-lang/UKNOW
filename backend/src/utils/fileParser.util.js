@@ -17,6 +17,15 @@ const KNOWN_BINARY_EXTENSIONS = new Set([
   '.mov', '.mkv', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp'
 ]);
 
+export const PDF_INLINE_MAX_BYTES = 10 * 1024 * 1024;    // mỗi tệp
+export const PDF_INLINE_BUDGET_BYTES = 15 * 1024 * 1024; // mỗi request gửi Gemini, chừa chỗ cho chữ + ảnh
+
+export function isPdfFile(originalName, contentType) {
+  const ext = path.extname(originalName || '').toLowerCase();
+  const mime = String(contentType || '').toLowerCase();
+  return ext === '.pdf' || mime === 'application/pdf';
+}
+
 /**
  * Trích xuất text thuần từ file buffer theo định dạng
  * @param {Buffer} buffer - File buffer
@@ -33,7 +42,17 @@ export async function extractTextFromBuffer(buffer, originalName, contentType, o
   // 1. PDF Documents
   if (ext === '.pdf' || mime === 'application/pdf') {
     try {
-      const data = await pdfParse(buffer, { max: pdfMax });
+      // pdf.js 1.10 (pdf-parse) tính lệch offset khi Buffer nằm trong pool của Node (byteOffset ≠ 0,
+      // hoặc buffer.buffer.byteLength !== buffer.byteLength với tệp < 4 KB từ readFileSync/Buffer.concat).
+      // Dùng Uint8Array trên ArrayBuffer độc lập để pdf.js không lệch offset, kèm .toString() kiểu Buffer
+      // để tương thích các mock/test kiểm tra nội dung buffer bằng .toString().
+      const bytes = new Uint8Array(
+        buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+      );
+      bytes.toString = function (enc) {
+        return Buffer.from(this.buffer, this.byteOffset, this.byteLength).toString(enc);
+      };
+      const data = await pdfParse(bytes, { max: pdfMax });
       return data.text || '';
     } catch (err) {
       console.error('[FileParser] PDF parse error:', err);

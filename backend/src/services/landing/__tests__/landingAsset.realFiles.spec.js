@@ -52,6 +52,7 @@ const XLSX = require('xlsx');
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const HEIC = fs.readFileSync(path.join(FIXTURES, 'anh-iphone.heic'));
 const DOC = fs.readFileSync(path.join(FIXTURES, 'brochure.doc'));
+const SCAN_PDF = fs.readFileSync(path.join(FIXTURES, 'scan-1-trang.pdf'));
 const PNG_1x1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64'
@@ -168,7 +169,7 @@ describe('ingestLandingAttachments — tệp lỗi không làm hỏng cả lư�
     expect(res.skipped[1].reason).toContain('không khớp định dạng');
   });
 
-  it('tài liệu không có chữ (PDF scan) → vào skipped kèm lý do, ảnh vẫn dùng được', async () => {
+  it('tài liệu PDF hỏng → skipped kèm lý do, ảnh vẫn dùng được', async () => {
     serveTempFiles({ t_png: PNG_1x1, t_pdf: Buffer.from('%PDF-1.4\n', 'latin1') });
 
     const res = await ingestLandingAttachments({
@@ -182,6 +183,24 @@ describe('ingestLandingAttachments — tệp lỗi không làm hỏng cả lư�
     expect(res.assets).toHaveLength(1);
     expect(res.skipped).toHaveLength(1);
     expect(res.skipped[0].originalName).toBe('scan.pdf');
+  });
+
+  it('C9: ingest fixture scan-1-trang.pdf → documents[0].inlinePdf === true, skipped rỗng', async () => {
+    serveTempFiles({ t_scan: SCAN_PDF });
+
+    const res = await ingestLandingAttachments({
+      files: [
+        { tempId: 't_scan', originalName: 'scan-1-trang.pdf', contentType: 'application/pdf' },
+      ],
+      ownerUserId: 39,
+    });
+
+    expect(res.skipped).toHaveLength(0);
+    expect(res.documents).toHaveLength(1);
+    expect(res.documents[0].inlinePdf).toBe(true);
+    expect(res.documents[0].contentType).toBe('application/pdf');
+    expect(res.documents[0].base64).toBe(SCAN_PDF.toString('base64'));
+    expect(res.documents[0].originalName).toBe('scan-1-trang.pdf');
   });
 
   it('ca 9: KHÔNG tệp nào dùng được → ném 400 kèm tên từng tệp và lý do (không trừ credit vì lỗi trước khi sinh)', async () => {

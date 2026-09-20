@@ -181,13 +181,19 @@ export function buildAttachmentPromptBlock(assets = [], documents = []) {
     lines.push('- Bảng tính/số liệu (.xlsx, .xls, .csv): trích xuất bảng giá, gói dịch vụ, thông số kỹ thuật hoặc các chỉ số đo lường nổi bật để đưa vào bảng giá (pricing table/cards), bảng so sánh hoặc khối thống kê (stats).');
     lines.push('- Trình chiếu (.pptx): khai thác nội dung các slide, luận điểm bán hàng (USP), lợi ích cốt lõi và các bước quy trình để xây dựng cấu trúc các section mạch lạc.');
     documents.forEach((doc) => {
-      lines.push(`\n[Nội dung tệp "${doc.originalName || 'tài liệu'}"]:\n${doc.text}\n[Hết]`);
+      if (doc.inlinePdf) {
+        lines.push(
+          `\n[Tệp "${doc.originalName || 'tài liệu'}" là PDF dạng ảnh (scan): nội dung nằm trong tệp PDF đính kèm ở phần dữ liệu, hãy đọc trực tiếp từ đó và tuân thủ như tài liệu đính kèm]`
+        );
+      } else {
+        lines.push(`\n[Nội dung tệp "${doc.originalName || 'tài liệu'}"]:\n${doc.text}\n[Hết]`);
+      }
     });
   }
   return `\n\n${lines.join('\n')}\n`;
 }
 
-export function buildModelParts(fullPrompt, assets = []) {
+export function buildModelParts(fullPrompt, assets = [], documents = []) {
   const parts = [{ text: fullPrompt }];
   assets.forEach((asset, idx) => {
     if (asset.inlineForModel && asset.base64 && asset.contentType) {
@@ -196,6 +202,17 @@ export function buildModelParts(fullPrompt, assets = []) {
         inlineData: {
           mimeType: asset.contentType,
           data: asset.base64,
+        },
+      });
+    }
+  });
+  documents.forEach((doc) => {
+    if (doc.inlinePdf && doc.base64) {
+      parts.push({ text: `Tệp "${doc.originalName || 'Tài liệu'}" ở trên là PDF sau đây:` });
+      parts.push({
+        inlineData: {
+          mimeType: 'application/pdf',
+          data: doc.base64,
         },
       });
     }
@@ -340,12 +357,13 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       outputTokens: null,
       assetsCount: assets.length,
       inlineAssetsCount: assets.filter((a) => a.inlineForModel).length,
+      inlinePdfCount: documents.filter((d) => d.inlinePdf).length,
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
     try {
     const generation = await aiUsageMeter.generateWithBudget(userId, {
-      parts: buildModelParts(fullPrompt, assets),
+      parts: buildModelParts(fullPrompt, assets, documents),
       jsonMode: true,
       maxOutputTokens: 16384,
       timeoutMs: 120000,
@@ -634,12 +652,13 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       outputTokens: null,
       assetsCount: assets.length,
       inlineAssetsCount: assets.filter((a) => a.inlineForModel).length,
+      inlinePdfCount: documents.filter((d) => d.inlinePdf).length,
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
     try {
     const generation = await aiUsageMeter.generateWithBudget(userId, {
-      parts: buildModelParts(fullPrompt, assets),
+      parts: buildModelParts(fullPrompt, assets, documents),
       jsonMode: true,
       maxOutputTokens: 32768,
       timeoutMs: 120000,

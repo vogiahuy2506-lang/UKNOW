@@ -1,6 +1,12 @@
 import crypto from 'crypto';
 import uploadController from '../../controllers/upload.controller.js';
-import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import * as fileParserUtil from '../../utils/fileParser.util.js';
+
+const {
+  extractTextFromBuffer,
+  PDF_INLINE_MAX_BYTES = 10 * 1024 * 1024,
+  PDF_INLINE_BUDGET_BYTES = 15 * 1024 * 1024,
+} = fileParserUtil;
 import { validateFile } from '../chatbot/chatAttachment.service.js';
 import { getStorageBackend } from '../storage/storageBackend.js';
 import { registerWrittenStorageObject } from '../storage/storageObject.service.js';
@@ -103,6 +109,7 @@ export async function ingestLandingAttachments({
   const documents = [];
   const skipped = [];
   let totalDocChars = 0;
+  let totalInlinePdfBytes = 0;
 
   for (const file of files) {
     if (!file) continue;
@@ -235,6 +242,37 @@ export async function ingestLandingAttachments({
         const trimmed = String(text || '').trim().slice(0, fileLimit);
 
         if (!trimmed) {
+          if (validation.mime === 'application/pdf') {
+            if (
+              buffer.length <= PDF_INLINE_MAX_BYTES &&
+              totalInlinePdfBytes + buffer.length <= PDF_INLINE_BUDGET_BYTES
+            ) {
+              documents.push({
+                originalName: file.originalName || 'Tài liệu',
+                text: '',
+                inlinePdf: true,
+                contentType: 'application/pdf',
+                sizeBytes: buffer.length,
+                base64: buffer.toString('base64'),
+              });
+              totalInlinePdfBytes += buffer.length;
+              continue;
+            } else if (buffer.length > PDF_INLINE_MAX_BYTES) {
+              const sizeMb = Math.round(buffer.length / (1024 * 1024));
+              skipped.push({
+                originalName: file.originalName || fileName,
+                reason: `PDF dạng ảnh (scan) nặng ${sizeMb} MB, vượt giới hạn 10 MB — hãy nén hoặc tách nhỏ`,
+              });
+              continue;
+            } else {
+              skipped.push({
+                originalName: file.originalName || fileName,
+                reason: 'Đã đủ 15 MB PDF dạng ảnh, tệp này không được đọc',
+              });
+              continue;
+            }
+          }
+
           skipped.push({
             originalName: file.originalName || fileName,
             reason: 'Không đọc được chữ trong tệp (có thể là bản scan)',

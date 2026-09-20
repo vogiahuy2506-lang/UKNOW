@@ -12,7 +12,11 @@ jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
   default: { generateWithBudget },
 }));
 
-const { default: aiLandingPageService } = await import('../aiLandingPage.service.js');
+const {
+  default: aiLandingPageService,
+  buildModelParts,
+  buildAttachmentPromptBlock,
+} = await import('../aiLandingPage.service.js');
 
 /**
  * Chốt kiểm sau sinh (aiLandingPage.service.js): trang phải có ĐÚNG MỘT
@@ -870,4 +874,33 @@ describe('aiLandingPageService.editHtml — prompt nạp danh sách khoá cf_* �
     expect(sentPrompt).not.toMatch(/DANH SÁCH KHOÁ TRƯỜNG ĐÃ KHAI BÁO/);
   });
 });
+
+describe('PDF scan inline landing page — C10, C11', () => {
+  it('C10: buildModelParts có part inlineData application/pdf data QUJD, đứng sau part text', () => {
+    const parts = buildModelParts('prompt text', [], [
+      { inlinePdf: true, base64: 'QUJD', originalName: 'a.pdf' },
+    ]);
+    expect(parts[0]).toEqual({ text: 'prompt text' });
+    expect(parts).toContainEqual({
+      inlineData: {
+        mimeType: 'application/pdf',
+        data: 'QUJD',
+      },
+    });
+    const inlineIndex = parts.findIndex((p) => p.inlineData?.mimeType === 'application/pdf');
+    expect(inlineIndex).toBeGreaterThan(0);
+  });
+
+  it('C11: buildAttachmentPromptBlock chứa "PDF dạng ảnh" và không chứa "[Nội dung tệp"', () => {
+    const doc = {
+      inlinePdf: true,
+      originalName: 'scan.pdf',
+      base64: 'QUJD',
+    };
+    const promptBlock = buildAttachmentPromptBlock([], [doc]);
+    expect(promptBlock).toContain('PDF dạng ảnh');
+    expect(promptBlock).not.toContain('[Nội dung tệp');
+  });
+});
+
 
