@@ -39,6 +39,13 @@ function hasContactContext(text, start, end) {
 }
 
 /**
+ * Đầu số di động Việt Nam đang lưu hành (sau quy đổi 11→10 số năm 2018):
+ * 03[2-9] · 05[2689] · 07[06789] · 08[1-9] · 09x.
+ * Cục bộ cho máy quét liên hệ — KHÔNG siết `vietnamesePhone.util.js`, xem Bẫy 3.
+ */
+const VN_MOBILE_PREFIX_REGEX = /^0(3[2-9]|5[2689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
+
+/**
  * Nhận diện và trích xuất số điện thoại / email khách để lại trong văn bản hội thoại.
  * Thuần logic, không truy vấn cơ sở dữ liệu.
  *
@@ -56,6 +63,7 @@ export function extractContacts(text) {
   const pushPhone = (raw) => {
     const normalized = normalizeVietnamesePhone(raw);
     if (!isValidVietnamesePhone(normalized) || seenValues.has(normalized)) return;
+    if (!VN_MOBILE_PREFIX_REGEX.test(normalized)) return;
     seenValues.add(normalized);
     results.push({ type: 'phone', value: normalized, raw });
   };

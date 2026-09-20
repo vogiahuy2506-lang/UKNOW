@@ -128,4 +128,37 @@ describe('contactDetect.util — extractContacts', () => {
     expect(extractContacts(null)).toEqual([]);
     expect(extractContacts(undefined)).toEqual([]);
   });
+
+  describe('PR-4 — Siết đầu số di động thật (loại trừ hash ảnh, MST, đầu số không tồn tại)', () => {
+    it('nhận số trên danh thiếp thật (0326886627)', () => {
+      expect(extractContacts('0326886627')).toEqual([
+        { type: 'phone', value: '0326886627', raw: '0326886627' },
+      ]);
+    });
+
+    it('nhận ca cơ bản có khoảng trắng (Chị gọi em nhé 0912 345 678)', () => {
+      expect(extractContacts('Chị gọi em nhé 0912 345 678')).toEqual([
+        { type: 'phone', value: '0912345678', raw: '0912 345 678' },
+      ]);
+    });
+
+    it('không nhận hash ảnh có chứa chuỗi dạng 080... (080 không phải đầu số)', () => {
+      expect(extractContacts('photo-stal-31.zdn.vn/no/jpg/0ebb982ddc0800565919/2aOboQ')).toEqual([]);
+    });
+
+    it('không nhận mã số thuế doanh nghiệp dạng 031... (031 không phải đầu số di động)', () => {
+      expect(extractContacts('DIGISO (MST) 0318700853')).toEqual([]);
+      expect(extractContacts('CÔNG TY … TÂY NAM Á, MST 0319390322')).toEqual([]);
+    });
+
+    it('tầng B cũ: nhận và phục hồi số 0 cho số 9 chữ số hợp lệ (liên hệ tôi qua số 844790999)', () => {
+      expect(extractContacts('liên hệ tôi qua số 844790999')).toEqual([
+        { type: 'phone', value: '0844790999', raw: '844790999' },
+      ]);
+    });
+
+    it('khách hỏi xin số của shop (Cho em xin sdt của shop với) -> không nhận', () => {
+      expect(extractContacts('Cho em xin sdt của shop với')).toEqual([]);
+    });
+  });
 });

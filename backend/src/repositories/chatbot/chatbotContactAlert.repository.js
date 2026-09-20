@@ -92,7 +92,8 @@ class ChatbotContactAlertRepository {
     if (source === 'zalo_personal') {
       const { rows } = await queryable.query(
         `SELECT m.id, m.id_user, m.id_conversation, m.content, m.created_at,
-                c.visitor_name, 'zalo_personal' AS source, 'zalo_personal' AS channel, zs.display_name
+                c.visitor_name, 'zalo_personal' AS source, 'zalo_personal' AS channel, zs.display_name,
+                c.external_id, c.visitor_info
          FROM zalo_personal_messages m
          JOIN zalo_personal_conversations c ON c.id = m.id_conversation
          LEFT JOIN zalo_settings zs ON zs.id = c.id_zalo_setting

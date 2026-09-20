@@ -712,6 +712,392 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
       })
     );
   });
+
+  describe('PR-4 — Bỏ hội thoại nhóm, nhận danh thiếp Zalo, con trỏ quét', () => {
+    it('tin Zalo cá nhân 1-1, visitor_info = {}, có SĐT -> sinh cảnh báo', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 501,
+              id_user: 1,
+              id_conversation: 60,
+              content: 'Số em là 0912345678 nhé',
+              created_at: fixedNow,
+              visitor_name: 'Khách 1-1',
+              external_id: 'user_123',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.detected).toBe(1);
+      expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contactType: 'phone',
+          contactValue: '0912345678',
+        })
+      );
+    });
+
+    it('cùng tin Zalo cá nhân, visitor_info = {"is_group": true} -> không sinh cảnh báo', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 502,
+              id_user: 1,
+              id_conversation: 60,
+              content: 'Số em là 0912345678 nhé',
+              created_at: fixedNow,
+              visitor_name: 'Nhóm Zalo',
+              external_id: 'conv_123',
+              visitor_info: { is_group: true },
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('cùng tin Zalo cá nhân, external_id = "group_172387", visitor_info = {} -> không sinh cảnh báo', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 503,
+              id_user: 1,
+              id_conversation: 60,
+              content: 'Số em là 0912345678 nhé',
+              created_at: fixedNow,
+              visitor_name: 'Nhóm Zalo',
+              external_id: 'group_172387',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('cùng tin Zalo cá nhân, external_id = "g_172387" -> không sinh cảnh báo', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 504,
+              id_user: 1,
+              id_conversation: 60,
+              content: 'Số em là 0912345678 nhé',
+              created_at: fixedNow,
+              visitor_name: 'Nhóm Zalo',
+              external_id: 'g_172387',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('cùng tin Zalo cá nhân, visitor_info = {"group_id":"172387"} -> không sinh cảnh báo', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 505,
+              id_user: 1,
+              id_conversation: 60,
+              content: 'Số em là 0912345678 nhé',
+              created_at: fixedNow,
+              visitor_name: 'Nhóm Zalo',
+              external_id: 'conv_123',
+              visitor_info: { group_id: '172387' },
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('cùng tin Zalo cá nhân, visitor_info là chuỗi \'{"is_group":true}\' -> không sinh cảnh báo', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 506,
+              id_user: 1,
+              id_conversation: 60,
+              content: 'Số em là 0912345678 nhé',
+              created_at: fixedNow,
+              visitor_name: 'Nhóm Zalo',
+              external_id: 'conv_123',
+              visitor_info: '{"is_group":true}',
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('nguồn web hoặc channel có is_group -> vẫn sinh cảnh báo (chỉ áp dụng lọc nhóm cho zalo_personal)', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'channel') {
+          return [
+            {
+              id: 507,
+              id_user: 1,
+              id_conversation: 60,
+              content: 'Số em là 0912345678 nhé',
+              created_at: fixedNow,
+              visitor_name: 'Khách Channel',
+              external_id: 'group_123',
+              visitor_info: { is_group: true },
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.detected).toBe(1);
+      expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contactType: 'phone',
+          contactValue: '0912345678',
+        })
+      );
+    });
+
+    it('danh thiếp Zalo hợp lệ {"title":"Shiro","description":"{\\"phone\\":\\"0326886627\\",...}"} -> sinh đúng 1 cảnh báo', async () => {
+      const cardContent = JSON.stringify({
+        title: 'Shiro',
+        description: JSON.stringify({
+          phone: '0326886627',
+          qrCodeUrl: 'https://qr-talk.zdn.vn/37/350435420/abc',
+        }),
+      });
+
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 508,
+              id_user: 1,
+              id_conversation: 60,
+              content: cardContent,
+              created_at: fixedNow,
+              visitor_name: 'Khách Shiro',
+              external_id: 'user_456',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(1);
+      expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contactType: 'phone',
+          contactValue: '0326886627',
+        })
+      );
+    });
+
+    it('danh thiếp Zalo mà description không parse được JSON -> bỏ cả tin, 0 cảnh báo', async () => {
+      const cardContent = JSON.stringify({
+        title: 'Shiro',
+        description: '{ invalid json description with 0912345678',
+      });
+
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 509,
+              id_user: 1,
+              id_conversation: 60,
+              content: cardContent,
+              created_at: fixedNow,
+              visitor_name: 'Khách Hỏng',
+              external_id: 'user_456',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('JSON quảng bá {"title":"🚨 THÔNG BÁO … 0919909061"} không phải danh thiếp -> không sinh cảnh báo', async () => {
+      const promoContent = JSON.stringify({
+        title: '🚨 THÔNG BÁO KHAI GIẢNG KHÓA HỌC HOT 0919909061',
+        summary: 'Liên hệ ngay 0919909061 để nhận ưu đãi',
+      });
+
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 510,
+              id_user: 1,
+              id_conversation: 60,
+              content: promoContent,
+              created_at: fixedNow,
+              visitor_name: 'Spam Bot',
+              external_id: 'user_456',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(1);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('content không phải chuỗi (null hoặc số) -> không ném lỗi, bỏ qua an toàn', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'web') {
+          return [
+            {
+              id: 511,
+              id_user: 1,
+              id_conversation: 50,
+              content: null,
+              created_at: fixedNow,
+              visitor_name: 'Khách Null',
+            },
+            {
+              id: 512,
+              id_user: 1,
+              id_conversation: 50,
+              content: 123456789,
+              created_at: fixedNow,
+              visitor_name: 'Khách Number',
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(2);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+    });
+
+    it('con trỏ: lô 3 tin (nhóm, nhóm, 1-1) -> con trỏ cập nhật tới id của tin cuối cùng', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 601,
+              id_user: 1,
+              id_conversation: 10,
+              content: 'SĐT nhóm 1: 0912345678',
+              external_id: 'group_10',
+              visitor_info: { is_group: true },
+            },
+            {
+              id: 602,
+              id_user: 1,
+              id_conversation: 20,
+              content: 'SĐT nhóm 2: 0987654321',
+              external_id: 'group_20',
+              visitor_info: { is_group: true },
+            },
+            {
+              id: 603,
+              id_user: 1,
+              id_conversation: 30,
+              content: 'SĐT 1-1: 0901234567',
+              external_id: 'user_30',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(3);
+      expect(res.detected).toBe(1);
+      expect(mockRepo.upsertContact).toHaveBeenCalledTimes(1);
+      expect(mockRepo.setCursor).toHaveBeenCalledWith('zalo_personal', 603);
+    });
+
+    it('con trỏ: lô toàn tin nhóm -> con trỏ vẫn nhảy tới id cuối lô', async () => {
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 701,
+              id_user: 1,
+              id_conversation: 10,
+              content: 'SĐT nhóm 1: 0912345678',
+              external_id: 'group_10',
+              visitor_info: { is_group: true },
+            },
+            {
+              id: 702,
+              id_user: 1,
+              id_conversation: 20,
+              content: 'SĐT nhóm 2: 0987654321',
+              external_id: 'group_20',
+              visitor_info: { is_group: true },
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.scanned).toBe(2);
+      expect(res.detected).toBe(0);
+      expect(mockRepo.upsertContact).not.toHaveBeenCalled();
+      expect(mockRepo.setCursor).toHaveBeenCalledWith('zalo_personal', 702);
+    });
+  });
 });
 
 describe('chatbotContactAlert.service — getFrontendInboxUrl', () => {

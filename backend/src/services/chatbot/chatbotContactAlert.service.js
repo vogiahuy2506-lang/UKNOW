@@ -4,6 +4,7 @@ import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 import { sendSystemEmail, SENDER_NAME } from '../../utils/systemEmail.util.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import { logError } from '../../utils/logger.util.js';
+import { isZaloGroupConversation } from '../../utils/zaloGroupName.util.js';
 
 const CHATBOT_CONTACT_ALERT_ENABLED = process.env.CHATBOT_CONTACT_ALERT_ENABLED !== 'false';
 const HUMAN_WINDOW_MIN = Number(process.env.CHATBOT_CONTACT_ALERT_HUMAN_WINDOW_MIN) || 120;
@@ -40,6 +41,27 @@ function formatChannelLabel(alert) {
     return `${ch || 'Kênh'}${display}`;
   }
   return 'Chatbot';
+}
+
+export function safeParseJson(raw, fallback = {}) {
+  if (typeof raw !== 'string') return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function extractZaloContactCardPhone(parsed) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const desc = parsed.description;
+  if (typeof desc !== 'string' || !desc.trim().startsWith('{')) return null;
+  let inner;
+  try { inner = JSON.parse(desc); } catch { return null; }
+  if (!inner || typeof inner !== 'object') return null;
+  const phone = inner.phone;
+  return typeof phone === 'string' && phone.trim() ? phone.trim() : null;
 }
 
 function buildAlertEmailHtml({ userFullName, alerts, inboxUrl }) {
@@ -179,23 +201,33 @@ class ChatbotContactAlertService {
         scanned += messages.length;
 
         for (const msg of messages) {
-          const trimmed = typeof msg.content === 'string' ? msg.content.trim() : '';
-          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-            try {
-              JSON.parse(trimmed);
+          if (source === 'zalo_personal') {
+            const info = typeof msg.visitor_info === 'string'
+              ? safeParseJson(msg.visitor_info)
+              : (msg.visitor_info || {});
+            if (isZaloGroupConversation({ externalId: msg.external_id, conversationInfo: info })) {
               continue;
-            } catch {
-              // Parse lỗi thì vẫn quét bình thường
             }
           }
 
-          const contacts = extractContacts(msg.content);
-          if (contacts.length === 0) {
-            continue;
+          let contacts;
+          const trimmed = typeof msg.content === 'string' ? msg.content.trim() : '';
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            let parsed;
+            try {
+              parsed = JSON.parse(trimmed);
+            } catch {
+              parsed = undefined; // Parse lỗi thì rơi xuống quét bình thường, giữ nguyên hành vi a026eddc
+            }
+            if (parsed !== undefined) {
+              const cardPhone = extractZaloContactCardPhone(parsed);
+              if (!cardPhone) continue;              // JSON khác: bỏ cả tin, như a026eddc
+              contacts = extractContacts(cardPhone); // danh thiếp: CHỈ quét đúng số trên thiếp
+            }
           }
-          if (contacts.length >= MAX_CONTACTS_PER_MESSAGE) {
-            continue;
-          }
+          if (!contacts) contacts = extractContacts(msg.content);
+          if (contacts.length === 0) continue;
+          if (contacts.length >= MAX_CONTACTS_PER_MESSAGE) continue;
 
           detected += contacts.length;
 

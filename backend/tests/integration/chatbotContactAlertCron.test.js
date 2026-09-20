@@ -537,4 +537,140 @@ describe('Chatbot Contact Alert Cron Integration (PR-1, Việc 6 & Review)', () 
     expect(alertRows.length).toBe(1);
     expect(alertRows[0].contact_value).toBe('0912345678');
   });
+
+  describe('PR-4 Integration — Bỏ nhóm Zalo, nhận danh thiếp, siết đầu số', () => {
+    it('hội thoại nhóm Zalo có SĐT -> scanAndNotify bỏ qua, 0 alert, con trỏ vẫn nhảy', async () => {
+      await setCursor('zalo_personal', 0);
+
+      const user = await createUser({
+        username: 'shop-owner-group-test',
+        email: 'owner-group@example.com',
+      });
+
+      const { rows: zaloAcc } = await db.query(
+        `INSERT INTO zalo_settings (id_user, is_active, display_name)
+         VALUES ($1, true, 'Zalo Group Test') RETURNING id`,
+        [user.id]
+      );
+
+      const { rows: groupConv } = await db.query(
+        `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name, visitor_info)
+         VALUES ($1, $2, 'group_9999', 'Nhóm Học Tập', $3) RETURNING id`,
+        [user.id, zaloAcc[0].id, JSON.stringify({ is_group: true, group_id: '9999' })]
+      );
+      const convId = groupConv[0].id;
+
+      const { rows: msgRows } = await db.query(
+        `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, created_at)
+         VALUES ($1, $2, $3, 'visitor', 'Số mình nè 0912345678', NOW())
+         RETURNING id`,
+        [convId, user.id, zaloAcc[0].id]
+      );
+      const msgId = Number(msgRows[0].id);
+
+      const result = await scanAndNotify();
+      expect(result.scannedCount).toBe(1);
+      expect(result.alertsCreatedOrUpdated).toBe(0);
+      expect(result.emailsSent).toBe(0);
+      expect(mockSendMail).not.toHaveBeenCalled();
+
+      const { rows: alertRows } = await db.query(
+        `SELECT * FROM chatbot_contact_alerts WHERE id_user = $1`,
+        [user.id]
+      );
+      expect(alertRows.length).toBe(0);
+
+      const cursor = await getCursor('zalo_personal');
+      expect(cursor).toBe(msgId);
+    });
+
+    it('danh thiếp Zalo trong hội thoại 1-1 -> scanAndNotify nhận đúng số trên thiếp và gửi email', async () => {
+      await setCursor('zalo_personal', 0);
+
+      const user = await createUser({
+        username: 'shop-owner-card-test',
+        email: 'owner-card@example.com',
+      });
+
+      const { rows: zaloAcc } = await db.query(
+        `INSERT INTO zalo_settings (id_user, is_active, display_name)
+         VALUES ($1, true, 'Zalo Card Test') RETURNING id`,
+        [user.id]
+      );
+
+      const { rows: directConv } = await db.query(
+        `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name, visitor_info)
+         VALUES ($1, $2, 'user_8888', 'Khách Shiro', '{}') RETURNING id`,
+        [user.id, zaloAcc[0].id]
+      );
+      const convId = directConv[0].id;
+
+      const cardPayload = JSON.stringify({
+        title: 'Shiro',
+        description: JSON.stringify({
+          phone: '0326886627',
+          qrCodeUrl: 'https://qr-talk.zdn.vn/37/350435420/abc',
+        }),
+      });
+
+      await db.query(
+        `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, created_at)
+         VALUES ($1, $2, $3, 'visitor', $4, NOW())`,
+        [convId, user.id, zaloAcc[0].id, cardPayload]
+      );
+
+      const result = await scanAndNotify();
+      expect(result.scannedCount).toBe(1);
+      expect(result.alertsCreatedOrUpdated).toBe(1);
+      expect(result.emailsSent).toBe(1);
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+      const { rows: alertRows } = await db.query(
+        `SELECT * FROM chatbot_contact_alerts WHERE id_user = $1`,
+        [user.id]
+      );
+      expect(alertRows.length).toBe(1);
+      expect(alertRows[0].contact_value).toBe('0326886627');
+    });
+
+    it('chuỗi số có mã số thuế (031...) hoặc hash ảnh (080...) -> scanAndNotify bỏ qua, 0 alert', async () => {
+      await setCursor('web', 0);
+
+      const user = await createUser({
+        username: 'shop-owner-mst-test',
+        email: 'owner-mst@example.com',
+      });
+
+      const { rows: widgetRows } = await db.query(
+        `INSERT INTO web_widget_configs (id_user, widget_key)
+         VALUES ($1, $2) RETURNING id`,
+        [user.id, `key_${Date.now()}_mst`]
+      );
+      const widgetId = widgetRows[0].id;
+
+      const { rows: convRows } = await db.query(
+        `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id, visitor_name)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [user.id, widgetId, 'sess_mst', 'Khách Doanh Nghiệp']
+      );
+      const convId = convRows[0].id;
+
+      await db.query(
+        `INSERT INTO webchat_messages (id_conversation, id_user, role, content, created_at)
+         VALUES ($1, $2, 'visitor', 'DIGISO (MST) 0318700853 và ảnh photo-stal-31.zdn.vn/no/jpg/0ebb982ddc0800565919/2aOboQ', NOW())`,
+        [convId, user.id]
+      );
+
+      const result = await scanAndNotify();
+      expect(result.scannedCount).toBe(1);
+      expect(result.alertsCreatedOrUpdated).toBe(0);
+      expect(result.emailsSent).toBe(0);
+
+      const { rows: alertRows } = await db.query(
+        `SELECT * FROM chatbot_contact_alerts WHERE id_user = $1`,
+        [user.id]
+      );
+      expect(alertRows.length).toBe(0);
+    });
+  });
 });
