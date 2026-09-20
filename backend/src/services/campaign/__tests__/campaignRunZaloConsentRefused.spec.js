@@ -414,4 +414,47 @@ describe('CampaignRun — Chặn đồng ý kênh Zalo (PR-5)', () => {
       null
     );
   }, 15000);
+
+  // Dòng gửi theo UID vẫn phải kiểm đồng ý theo SĐT. Trước bản review, chốt chỉ dò
+  // `entryRow.phone` và `entryRow.sdt`, nên bảng dữ liệu đặt tên cột `so_dien_thoai`
+  // làm chốt tự tắt IM LẶNG — lead đã từ chối vẫn nhận tin Zalo.
+  it('ca 4: gửi theo uid, cột SĐT tên "so_dien_thoai" → vẫn kiểm đồng ý theo SĐT đó', async () => {
+    currentCampaignNodes = [
+      {
+        id: 500,
+        node_type: 'data',
+        node_subtype: 'read_sheet',
+        execution_order: 1,
+        config: {},
+      },
+      {
+        id: 300,
+        node_type: 'action',
+        node_subtype: 'send_zalo_personal',
+        execution_order: 2,
+        config: {
+          zaloAccountId: 99,
+          zaloRecipientSource: 'node',
+          zaloRecipientNodeId: '500',
+          zaloRecipientType: 'uid',
+          zaloRecipientField: 'zalo_id',
+          zaloPersonalTemplateSteps: [{ stepIndex: 1, templateId: 1 }],
+        },
+      },
+    ];
+
+    mockGetCustomersFromDataNode.mockResolvedValue({
+      items: [
+        { zalo_id: 'uid-abc-123', so_dien_thoai: '0912345678', name: 'Khách gửi theo uid' },
+      ],
+      dataLoadMeta: {},
+    });
+
+    mockIsLeadPhoneConsentRefused.mockResolvedValue(true);
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockIsLeadPhoneConsentRefused).toHaveBeenCalledWith(10, '0912345678');
+    expect(mockSendPersonalMessageQueued).not.toHaveBeenCalled();
+  }, 15000);
 });

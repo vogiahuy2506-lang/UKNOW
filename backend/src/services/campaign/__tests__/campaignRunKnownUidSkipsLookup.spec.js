@@ -126,6 +126,7 @@ jest.unstable_mockModule('../zaloCampaignRecipient.service.js', () => ({
   default: {
     normalizePhone: jest.fn((raw) => String(raw || '').trim()),
     isPhoneUnreachable: jest.fn().mockResolvedValue(false),
+    isLeadPhoneConsentRefused: jest.fn().mockResolvedValue(false),
     getBoundSenderAccountId: jest.fn().mockResolvedValue(null),
     bindSenderAccount: jest.fn().mockResolvedValue(null),
     markPhoneUnreachableFromError: jest.fn().mockResolvedValue(null),

@@ -5005,17 +5005,25 @@ class CampaignRunService {
                   return { success: true, skippedUnreachable: true };
                 }
               }
+              // Dòng gửi theo uid vẫn phải kiểm đồng ý theo SĐT, nên phải dò cột SĐT theo
+              // ĐÚNG bộ tên mà đường gửi vẫn dùng (`campaignZaloSender.service.js:1156-1179`).
+              // Chỉ dò `phone` + `sdt` là chốt đồng ý tự tắt im lặng với bảng dữ liệu đặt tên
+              // cột kiểu `so_dien_thoai`/`phone_number`/`mobile` — lead đã từ chối vẫn nhận tin.
               const phoneForConsent = recipientType === 'phone'
                 ? recipient
-                : (entryRow?.phone || entryRow?.sdt || null);
+                : ([
+                  entryRow?.phone, entryRow?.phoneNumber, entryRow?.phone_number,
+                  entryRow?.zaloPhone, entryRow?.zalo_phone, entryRow?.mobile,
+                  entryRow?.mobilePhone, entryRow?.mobile_phone, entryRow?.phoneNo,
+                  entryRow?.phone_no, entryRow?.contactPhone, entryRow?.contact_phone,
+                  entryRow?.sdt, entryRow?.so_dien_thoai,
+                ].find((value) => String(value ?? '').trim() !== '') ?? null);
               if (phoneForConsent) {
                 // eslint-disable-next-line no-await-in-loop
-                const consentRefused = typeof zaloCampaignRecipientService.isLeadPhoneConsentRefused === 'function'
-                  ? await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
+                const consentRefused = await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
                     userId,
                     phoneForConsent
-                  )
-                  : false;
+                  );
                 if (consentRefused) {
                   skippedSends += 1;
                   const progressMessage = buildZaloPersonalProgressMessage();
@@ -6743,12 +6751,10 @@ class CampaignRunService {
               continue;
             }
             // eslint-disable-next-line no-await-in-loop
-            const consentRefusedFriend = typeof zaloCampaignRecipientService.isLeadPhoneConsentRefused === 'function'
-              ? await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
+            const consentRefusedFriend = await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
                 userId,
                 phone
-              )
-              : false;
+              );
             if (consentRefusedFriend) {
               skippedSends += 1;
               const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;

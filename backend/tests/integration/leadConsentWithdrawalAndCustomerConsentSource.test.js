@@ -454,7 +454,10 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
       expect(resExport.headers['content-type']).toContain('spreadsheetml');
     });
 
-    it('Lớp GỬI: lead FALSE và lead NULL đều bị bỏ qua (reason=consent_withdrawn), lead TRUE gửi bình thường', async () => {
+    // Tiêu đề trước ghi "lead FALSE và lead NULL đều bị bỏ qua" — NGƯỢC với chính assert ở dưới
+    // (dòng lead NULL assert `false`, tức được gửi). Đọc tên test để hiểu hành vi là đúng cách
+    // mà hồi quy `IS TRUE` sống sót lần trước, nên tên phải khớp assert.
+    it('Lớp GỬI: chỉ lead FALSE bị bỏ qua (reason=consent_withdrawn); lead NULL và lead TRUE gửi bình thường', async () => {
       const owner = await createUser({ username: 'lead_owner_consent_5' });
 
       // 1. Lead FALSE
