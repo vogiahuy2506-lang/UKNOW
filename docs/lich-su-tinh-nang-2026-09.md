@@ -424,6 +424,76 @@ việc mới (đừng tin báo cáo, nhìn `git diff`); thợ báo "unit 3/3 sui
 worktree xong thì cây chính còn bản cũ chưa commit; CI từ chối deploy khi có push mới hơn ("Stale
 backend deploy refused") là bình thường, kiểm lượt sau có chứa commit mình.
 
+## Chiến dịch tôn trọng đồng ý nhận tin, cả email và Zalo (19–20/09)
+
+Node "Đọc lead landing" không hề lọc `marketing_consent`, nên 7 khách đã bấm từ chối ở form landing
+vẫn nhận email chiến dịch; đường huỷ nhận tin cũng vô hiệu vì nó chỉ đặt `marketing_consent = FALSE`
+— đúng cột mà node không đọc. Đo production 19/09: 51 lead = 38 đồng ý, 7 từ chối, 6 chưa hỏi.
+Sếp chốt: **chỉ loại người đã nói KHÔNG hoặc đã bấm huỷ; người "chưa hỏi" vẫn gửi**.
+
+| Việc | Commit |
+|---|---|
+| Node chỉ lấy lead chưa từ chối (`excludeConsentFalse` → `marketing_consent IS NOT FALSE`), bảng quản lý và xuất Excel KHÔNG bị lọc | `a6db951e` `fd9f6129` |
+| Chặn lúc GỬI email: đọc lại DB theo lead mới nhất của email đó, không dùng ảnh chụp lúc đọc node | `a6db951e` `fd9f6129` |
+| Kênh Zalo cá nhân + kết bạn kiểm đồng ý theo SĐT, chặn **trước** khi tra số để không đốt hạn mức tra | `fd9f6129` |
+| Nhãn khách đọc: "Khách đã rút lại đồng ý" → "Khách từ chối hoặc đã rút lại đồng ý nhận tin" | `fd9f6129` |
+| Cổng đồng ý Zalo hỏng-ĐÓNG (gỡ `typeof ... === 'function'`), dò cột SĐT theo đủ 12 tên cột | `902f0e46` |
+
+Bản đầu (`a6db951e`) ship `marketing_consent IS TRUE` — **loại luôn nhóm "chưa hỏi"**, tức đúng
+phương án đã bị loại, và sống một ngày trên production với 6 lead thật bị loại oan. Nó sống được vì
+**không có ca test nào cho `NULL`**, cộng một tiêu đề test ghi ngược thân test ("lead FALSE và lead
+NULL đều bị bỏ qua" trong khi assert là NULL được gửi). Nay cả ba hàm đều có ca `NULL`.
+
+Hai bẫy khác bắt được ở vòng review: chốt đồng ý bị bọc `typeof ... === 'function'` nên method mất là
+lặng lẽ bỏ kiểm — thợ làm vậy vì 10 spec mock service thiếu method mới (bỏ bọc thì 7 spec/19 test
+vỡ), cách đúng là vá mock chứ không làm yếu code chạy thật; và chốt dò cột SĐT chỉ `phone || sdt`
+trong khi repo có sẵn bộ 12 tên, nên bảng dữ liệu đặt cột `so_dien_thoai` làm chốt tự tắt im lặng.
+
+**Còn nợ**: 3 khoá dịch vẫn ghi "bỏ qua người **chưa đồng ý**" trong khi hệ thống chỉ bỏ qua người
+**đã từ chối**; lead "chưa hỏi" vẫn được ghi sang `customers` với `consent_source='landing_lead'`.
+
+## Báo liên hệ khách để lại: lọc rác rao sim, bỏ hội thoại nhóm, nhận danh thiếp Zalo (19–20/09)
+
+Máy quét báo "khách để lại liên hệ" đẻ **7.437 dòng trong 6 ngày cho một chủ shop, 99,3% từ đúng một
+hội thoại** — một tài khoản bán sim spam danh sách số vào Zalo; đã gửi 52 thư sai. Đo tiếp thì thấy
+gốc nằm sâu hơn chuyện rao sim: trong 100 cảnh báo sinh từ tin dạng JSON, **85 là hội thoại nhóm** —
+mà nhóm chưa bao giờ thuộc phạm vi tính năng, vì AI không trả lời hội thoại nhóm.
+
+| Việc | Commit |
+|---|---|
+| Một tin sinh ≥3 liên hệ thì bỏ cả tin (`CHATBOT_CONTACT_ALERT_MAX_PER_MSG`, mặc định 3); tin `content` là JSON hợp lệ thì bỏ, parse lỗi vẫn quét | `a026eddc` |
+| Máy quét bỏ hội thoại nhóm (lọc trong vòng lặp, KHÔNG ở SQL để con trỏ quét không tụt lại sau đuôi tin nhóm) | `022e9dac` |
+| Danh thiếp Zalo được nhận lại: `description` parse ra object có khoá `phone` thì lấy đúng số đó | `022e9dac` |
+| Bảng đầu số di động thật, cục bộ cho bộ nhận diện (chặn mã số thuế `031…` và khúc hash ảnh `080…` bị đọc thành SĐT) | `022e9dac` `2dd54a47` |
+
+Bảng đầu số bản đầu **thiếu 055 (Wintel/Reddi)** — 84 khách thật, và lưới đó chi phối cả câu bot trả
+lời khách "Đã ghi nhận số…", nên khách Wintel bị im lặng hai lần. Nó lọt qua 56 test vì mọi ca đều là
+ca mẫu; đột biến "bỏ 099" và "nhận thêm 071-075" đều xanh. Nay có ca ghim **từng** đầu số: 36 đầu số
+phải nhận, 12 phải loại.
+
+Dọn tay production: sao lưu rồi xoá 7.382 dòng rác của đúng một hội thoại, còn 55.
+
+## Sự cố: ổ đĩa VPS đầy 100%, Postgres quay vòng chết ở checkpoint (19/09)
+
+Lần thứ hai cùng nguyên nhân (lần đầu 10/08). Triệu chứng khác lần trước: Postgres không chỉ từ chối
+kết nối mà **quay vòng chết** — redo xong sạch trong 0,03 giây rồi `PANIC: could not write to file
+"pg_logical/replorigin_checkpoint.tmp": No space left on device`, checkpointer bị hạ, `reinitializing`,
+lặp lại mỗi ~0,5 giây. `docker inspect` cho `restarts=0` vì container không hề restart — postmaster
+bên trong tự quay vòng, nên đừng dùng số lần restart để kết luận.
+
+Phòng đã áp từ 10/08 **không đỡ được**: hai workflow deploy prune với `--filter "until=24h"`, mà ngày
+19/09 có ~8 image mới đều dưới 24 giờ nên không xoá được cái nào; cron tuần thì chờ Chủ nhật. Dọn tay
+thu hồi 20,38GB.
+
+| Việc | Commit |
+|---|---|
+| `until=24h` → `until=2h` (vẫn chống đua deploy song song vì một lượt deploy chưa tới 30 phút), thêm lưới cuối: quá 80% thì `docker image prune -af` | `04357e5f` |
+
+Hậu kiểm sau khi DB lên: `amcheck` với `bt_index_check(heapallindexed => true)` — **637 index btree,
+hỏng 0**, khác 10/08 (12 index hỏng trả thiếu dòng im lặng). Kiểm nhẹ không bật `heapallindexed` sẽ
+nói "sạch" cả khi đang hỏng. Đóng sổ hai lượt chạy vô ích của tài khoản nội bộ: 0 thành công trên
+25.165 lượt, mỗi ngày vào lại làm khoá tra số của chính tài khoản đó.
+
 ## Việc còn treo (tính tới 19/09/2026)
 
 - **Biểu mẫu + đặt lịch + thanh toán**: code đã lên production đủ yêu cầu gốc, kể cả MoMo hiện thông
