@@ -237,8 +237,8 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
     });
   });
 
-  describe('Việc 3: Chiến dịch tôn trọng đồng ý (PR-2)', () => {
-    it('Node read_landing_leads: 1 lead TRUE + 1 FALSE + 1 NULL → chỉ lấy 1 người (TRUE), total = 1, excludedNoConsent = 2', async () => {
+  describe('Việc 3: Chiến dịch tôn trọng đồng ý (PR-2 và PR-5)', () => {
+    it('Node read_landing_leads: 1 lead TRUE + 1 FALSE + 1 NULL → giữ cả TRUE và NULL, total = 2, excludedNoConsent = 1', async () => {
       const owner = await createUser({ username: 'lead_owner_consent_1' });
 
       // Lead TRUE (đồng ý)
@@ -263,7 +263,7 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
         idUser: owner.id,
       });
 
-      // Lead NULL (chưa hỏi / form cũ)
+      // Lead NULL (chưa hỏi / form cũ) — PR-5: giữ lại, không loại
       await leadRepository.insertLead({
         lastName: 'Le',
         firstName: 'Chua Hoi',
@@ -277,17 +277,72 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
       const config = { workspaceOwnerId: owner.id };
       const result = await leadService.getLeadsForCampaignConfig(config);
 
-      expect(result.items).toHaveLength(1);
-      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.excludedNoConsent).toBe(1);
+
+      const emails = result.items.map((i) => i.email).sort();
+      expect(emails).toEqual(['chuahoi@test.local', 'dongy@test.local']);
+      expect(emails).not.toContain('tuchoi@test.local');
+    });
+
+    it('Node read_landing_leads: 1 lead TRUE + 1 NULL + 2 FALSE → total = 2, excludedNoConsent = 2', async () => {
+      const owner = await createUser({ username: 'lead_owner_consent_pr5_ex' });
+
+      await leadRepository.insertLead({
+        lastName: 'Nguyen',
+        firstName: 'Dong Y',
+        email: 'dongy2@test.local',
+        phone: '0911111112',
+        marketingConsent: true,
+        landingPageSlug: 'landing-pr5',
+        idUser: owner.id,
+      });
+
+      await leadRepository.insertLead({
+        lastName: 'Le',
+        firstName: 'Chua Hoi',
+        email: 'chuahoi2@test.local',
+        phone: '0933333334',
+        marketingConsent: null,
+        landingPageSlug: 'landing-pr5',
+        idUser: owner.id,
+      });
+
+      await leadRepository.insertLead({
+        lastName: 'Tran',
+        firstName: 'Tu Choi 1',
+        email: 'tuchoi2_1@test.local',
+        phone: '0922222223',
+        marketingConsent: false,
+        landingPageSlug: 'landing-pr5',
+        idUser: owner.id,
+      });
+
+      await leadRepository.insertLead({
+        lastName: 'Pham',
+        firstName: 'Tu Choi 2',
+        email: 'tuchoi2_2@test.local',
+        phone: '0922222224',
+        marketingConsent: false,
+        landingPageSlug: 'landing-pr5',
+        idUser: owner.id,
+      });
+
+      const config = { workspaceOwnerId: owner.id };
+      const result = await leadService.getLeadsForCampaignConfig(config);
+
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
       expect(result.excludedNoConsent).toBe(2);
 
       const emails = result.items.map((i) => i.email).sort();
-      expect(emails).toEqual(['dongy@test.local']);
-      expect(emails).not.toContain('tuchoi@test.local');
-      expect(emails).not.toContain('chuahoi@test.local');
+      expect(emails).toEqual(['chuahoi2@test.local', 'dongy2@test.local']);
+      expect(emails).not.toContain('tuchoi2_1@test.local');
+      expect(emails).not.toContain('tuchoi2_2@test.local');
     });
 
-    it('GET /api/leads/preview: items.length = 1, total = 1, excludedNoConsent = 2', async () => {
+    it('GET /api/leads/preview: items.length = 2, total = 2, excludedNoConsent = 1', async () => {
       const owner = await createUser({ username: 'lead_owner_consent_2' });
       const token = await loginAs(owner);
 
@@ -321,14 +376,13 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.data.items).toHaveLength(1);
-      expect(res.body.data.pagination.total).toBe(1);
-      expect(res.body.data.pagination.excludedNoConsent).toBe(2);
+      expect(res.body.data.items).toHaveLength(2);
+      expect(res.body.data.pagination.total).toBe(2);
+      expect(res.body.data.pagination.excludedNoConsent).toBe(1);
 
       const emails = res.body.data.items.map((i) => i.email).sort();
-      expect(emails).toEqual(['a1@test.local']);
+      expect(emails).toEqual(['a1@test.local', 'c3@test.local']);
       expect(emails).not.toContain('b2@test.local');
-      expect(emails).not.toContain('c3@test.local');
     });
 
     it('Lead đã bấm link huỷ (marketing_consent = FALSE + consent_withdrawn_at) không nằm trong danh sách gửi', async () => {
@@ -436,7 +490,7 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
 
       // Tra trực tiếp DB qua repository
       expect(await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(owner.id, 'rutdongy@test.local')).toBe(true);
-      expect(await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(owner.id, 'chuahoi@test.local')).toBe(true);
+      expect(await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(owner.id, 'chuahoi@test.local')).toBe(false);
       expect(await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(owner.id, 'khongrut@test.local')).toBe(false);
 
       // Cấu hình email settings mặc định cho user
@@ -471,7 +525,10 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
         reason: 'consent_withdrawn',
       });
 
-      // Gửi cho lead NULL → bị bỏ qua (reason=consent_withdrawn)
+      // Gửi cho lead NULL → gửi bình thường (theo chốt 19/09)
+      const sendRawSpy = jest.spyOn(campaignEmailSenderService, 'sendRawEmail').mockResolvedValue({
+        info: { messageId: 'test-sent-id-123' },
+      });
       const resNull = await campaignEmailSenderService.sendEmailToCustomerDirect(
         actionNode,
         { email: 'chuahoi@test.local', full_name: 'Le Chua Hoi' },
@@ -480,16 +537,10 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
         null,
         { emailStep: 1 }
       );
-      expect(resNull).toEqual({
-        to: 'chuahoi@test.local',
-        status: 'skipped',
-        reason: 'consent_withdrawn',
-      });
+      expect(resNull.status).toBe('success');
+      expect(resNull.to).toBe('chuahoi@test.local');
 
       // Gửi cho lead TRUE → gửi bình thường
-      const sendRawSpy = jest.spyOn(campaignEmailSenderService, 'sendRawEmail').mockResolvedValue({
-        info: { messageId: 'test-sent-id-123' },
-      });
       const resTrue = await campaignEmailSenderService.sendEmailToCustomerDirect(
         actionNode,
         { email: 'khongrut@test.local', full_name: 'Khong Rut' },
@@ -503,7 +554,7 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
       sendRawSpy.mockRestore();
 
       // Nhãn tiếng Việt cho lý do consent_withdrawn (dùng cho ledger/execution log)
-      expect(CAMPAIGN_EMAIL_SKIP_LABELS.consent_withdrawn).toBe('Khách đã rút lại đồng ý nhận tin');
+      expect(CAMPAIGN_EMAIL_SKIP_LABELS.consent_withdrawn).toBe('Khách từ chối hoặc đã rút lại đồng ý nhận tin');
     });
 
     it('Nhiều dòng cùng email: lấy theo dòng MỚI NHẤT của email đó (created_at DESC)', async () => {
@@ -599,6 +650,77 @@ describe('PR-N3b: Lead Consent Withdrawal & Customer Consent Source', () => {
         status: 'skipped',
         reason: 'consent_withdrawn',
       });
+    });
+  });
+
+  describe('Phần B: Kênh Zalo kiểm đồng ý theo SĐT (isLeadPhoneConsentRefused)', () => {
+    it('isLeadPhoneConsentRefused: các định dạng SĐT, lead NULL, số < 9 chữ số', async () => {
+      const owner = await createUser({ username: 'lead_owner_zalo_consent' });
+
+      // Lead 1: FALSE với định dạng 0912345678
+      await leadRepository.insertLead({
+        lastName: 'Nguyen',
+        firstName: 'Zalo False 1',
+        email: 'zf1@test.local',
+        phone: '0912345678',
+        marketingConsent: false,
+        landingPageSlug: 'lz-1',
+        idUser: owner.id,
+      });
+
+      // Lead 2: FALSE với định dạng +84923456789 (bắt bẫy SĐT quốc tế)
+      await leadRepository.insertLead({
+        lastName: 'Tran',
+        firstName: 'Zalo False 2',
+        email: 'zf2@test.local',
+        phone: '+84923456789',
+        marketingConsent: false,
+        landingPageSlug: 'lz-1',
+        idUser: owner.id,
+      });
+
+      // Lead 3: FALSE với định dạng 0934-567-890 (có dấu gạch nối)
+      await leadRepository.insertLead({
+        lastName: 'Le',
+        firstName: 'Zalo False 3',
+        email: 'zf3@test.local',
+        phone: '0934-567-890',
+        marketingConsent: false,
+        landingPageSlug: 'lz-1',
+        idUser: owner.id,
+      });
+
+      // Lead 4: NULL với số 0945678901 (chưa hỏi)
+      await leadRepository.insertLead({
+        lastName: 'Pham',
+        firstName: 'Zalo Null',
+        email: 'zn@test.local',
+        phone: '0945678901',
+        marketingConsent: null,
+        landingPageSlug: 'lz-1',
+        idUser: owner.id,
+      });
+
+      // 1. lead FALSE lưu 0912345678, gửi tới 0912345678 → chặn (true)
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '0912345678')).toBe(true);
+
+      // 2. lead FALSE lưu +84923456789, gửi tới 0923456789 → chặn (true) (bắt bẫy 9 số cuối)
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '0923456789')).toBe(true);
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '+84923456789')).toBe(true);
+
+      // 3. lead FALSE lưu 0934-567-890, gửi tới 0934567890 → chặn (true)
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '0934567890')).toBe(true);
+
+      // 4. lead NULL, gửi tới số đó → không chặn (false)
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '0945678901')).toBe(false);
+
+      // 5. không có lead nào theo số đó → không chặn (false)
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '0999999999')).toBe(false);
+
+      // 6. chuỗi số < 9 chữ số → không chặn, không ném lỗi (false)
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '123456')).toBe(false);
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, '')).toBe(false);
+      expect(await campaignEmailSenderRepository.isLeadPhoneConsentRefused(owner.id, null)).toBe(false);
     });
   });
 });

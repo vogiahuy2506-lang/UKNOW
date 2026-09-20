@@ -17,8 +17,9 @@ class CampaignEmailSenderRepository {
   }
 
   /**
-   * Check if a lead with this email has not consented (marketing_consent IS NOT TRUE)
+   * Check if a lead with this email has refused consent (marketing_consent = FALSE)
    * or has withdrawn consent for this user / workspace, based on the newest lead record.
+   * NULL (chưa hỏi) trả false — theo chốt 19/09 nhóm chưa hỏi vẫn gửi.
    *
    * @param {number} userId
    * @param {string} emailLower lowercase email address
@@ -35,7 +36,32 @@ class CampaignEmailSenderRepository {
       [userId, emailLower]
     );
     if (result.rowCount === 0) return false;
-    return result.rows[0].marketing_consent !== true;
+    return result.rows[0].marketing_consent === false;
+  }
+
+  /**
+   * Lead mới nhất theo SĐT có ĐANG TỪ CHỐI nhận tin không (marketing_consent = FALSE).
+   * NULL (chưa hỏi) trả false — theo chốt 19/09 nhóm chưa hỏi vẫn gửi.
+   *
+   * @param {number} userId
+   * @param {string} phoneNormalized
+   * @returns {Promise<boolean>}
+   */
+  async isLeadPhoneConsentRefused(userId, phoneNormalized) {
+    const digits = String(phoneNormalized || '').replace(/\D/g, '');
+    if (digits.length < 9) return false;
+    const last9 = digits.slice(-9);
+    const result = await db.query(
+      `SELECT marketing_consent
+         FROM leads
+        WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
+          AND RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9) = $2
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1`,
+      [userId, last9]
+    );
+    if (result.rowCount === 0) return false;
+    return result.rows[0].marketing_consent === false;
   }
 
   /**

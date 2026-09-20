@@ -1,4 +1,5 @@
 import zaloCampaignRecipientRepository from '../../repositories/campaign/zaloCampaignRecipient.repository.js';
+import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
 import {
   normalizePhoneForZaloCampaign,
   inferZaloUnreachableReason,
@@ -7,6 +8,18 @@ import {
 class ZaloCampaignRecipientService {
   normalizePhone(raw) {
     return normalizePhoneForZaloCampaign(raw);
+  }
+
+  /**
+   * Lead mới nhất theo SĐT có ĐANG TỪ CHỐI nhận tin không (marketing_consent = FALSE).
+   * NULL (chưa hỏi) trả false — theo chốt 19/09 nhóm chưa hỏi vẫn gửi.
+   *
+   * @param {number|string} userId
+   * @param {string} rawPhone
+   * @returns {Promise<boolean>}
+   */
+  async isLeadPhoneConsentRefused(userId, rawPhone) {
+    return campaignEmailSenderRepository.isLeadPhoneConsentRefused(userId, rawPhone);
   }
 
   /**

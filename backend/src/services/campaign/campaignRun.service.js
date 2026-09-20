@@ -62,7 +62,7 @@ export const ZALO_GROUP_TEMPLATE_DELAY_MIN_MS = 250;
 export const CAMPAIGN_EMAIL_SKIP_LABELS = {
   unsubscribed: 'Đã hủy đăng ký nhận email',
   hard_bounced: 'Địa chỉ email bị hard bounce',
-  consent_withdrawn: 'Khách đã rút lại đồng ý nhận tin',
+  consent_withdrawn: 'Khách từ chối hoặc đã rút lại đồng ý nhận tin',
 };
 export const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
 
@@ -5005,6 +5005,69 @@ class CampaignRunService {
                   return { success: true, skippedUnreachable: true };
                 }
               }
+              const phoneForConsent = recipientType === 'phone'
+                ? recipient
+                : (entryRow?.phone || entryRow?.sdt || null);
+              if (phoneForConsent) {
+                // eslint-disable-next-line no-await-in-loop
+                const consentRefused = typeof zaloCampaignRecipientService.isLeadPhoneConsentRefused === 'function'
+                  ? await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
+                    userId,
+                    phoneForConsent
+                  )
+                  : false;
+                if (consentRefused) {
+                  skippedSends += 1;
+                  const progressMessage = buildZaloPersonalProgressMessage();
+                  const sentAt = toHoChiMinhIso();
+                  const accForLog = workingAccount;
+                  const senderName = resolveZaloSenderName(accForLog);
+                  const zaloName = resolveZaloRecipientName({
+                    entryRow,
+                    sendResult: null,
+                    fallbackRecipient: recipient,
+                  });
+                  const skipPayload = {
+                    channel: 'zalo_personal',
+                    accountId: accForLog.id,
+                    accountName: accForLog.displayName,
+                    senderName,
+                    zaloName,
+                    groupName: null,
+                    recipientType,
+                    recipient,
+                    customerId,
+                    zaloMessageId: null,
+                    phone: recipientType === 'phone' ? recipient : phoneForConsent,
+                    message,
+                    status: 'skipped',
+                    skipReason: 'consent_refused',
+                    skipDetail: 'Khách đã từ chối nhận tin ở biểu mẫu/landing — bỏ qua, không tra số.',
+                    messageText: progressMessage,
+                    sentAt,
+                    templateId: stepMeta?.templateId || null,
+                    stepIndex: stepMeta?.stepIndex || null,
+                    attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
+                    trackingToken: '',
+                    variables,
+                  };
+                  sendResults.push(skipPayload);
+                  {
+                    const zpLog = getZaloPersonalProgressForLog();
+                    // eslint-disable-next-line no-await-in-loop
+                    await campaignExecutionLogService.logExecutionNode({
+                      campaignId,
+                      runId,
+                      node,
+                      status: 'success',
+                      progressCurrent: zpLog.current,
+                      progressTotal: zpLog.total,
+                      executionData: buildSendZaloPersonalExecutionData(skipPayload),
+                    });
+                  }
+                  return { success: true, skippedConsentRefused: true };
+                }
+              }
               if (multiEnabled) {
                 const maxSwitchAttempt = Math.max(1, multiAccountIds.length);
                 let switched = false;
@@ -6645,6 +6708,60 @@ class CampaignRunService {
                 contentMode,
                 skipReason: 'zalo_unreachable_cached',
                 skipDetail: 'SĐT đã đánh dấu không gửi được Zalo — bỏ qua lời mời kết bạn, không tốn slot.',
+                customerId: Number.parseInt(customerId, 10) || null,
+                zaloMessageId: null,
+                trackingToken: '',
+                messageText: progressMessage,
+              };
+              sendResults.push(skipPayload);
+              // eslint-disable-next-line no-await-in-loop
+              await campaignExecutionLogService.logExecutionNode({
+                campaignId,
+                runId,
+                node,
+                status: 'success',
+                progressCurrent: successfulSends + failedSends + skippedSends,
+                progressTotal: totalRecipients,
+                executionData: buildSendZaloFriendExecutionData(skipPayload),
+              });
+              if (isContinuousMode) {
+                const completedAtIso = toHoChiMinhIso();
+                // eslint-disable-next-line no-await-in-loop
+                await upsertRecipientProgress({
+                  nodeId: node.id,
+                  channel: 'zalo_friend_request',
+                  recipientKey: phone,
+                  completedStep: 1,
+                  totalSteps: 1,
+                  firstSentAt: progress?.firstSentAt || completedAtIso,
+                  lastCompletedAt: completedAtIso,
+                  nextDueAt: null,
+                  removeZaloFailureFromMeta: true,
+                });
+              }
+              // eslint-disable-next-line no-continue
+              continue;
+            }
+            // eslint-disable-next-line no-await-in-loop
+            const consentRefusedFriend = typeof zaloCampaignRecipientService.isLeadPhoneConsentRefused === 'function'
+              ? await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
+                userId,
+                phone
+              )
+              : false;
+            if (consentRefusedFriend) {
+              skippedSends += 1;
+              const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+              const skipPayload = {
+                channel: 'zalo_friend_request',
+                accountId: account.id,
+                accountName: account.displayName,
+                phone,
+                requestMessage: message,
+                status: 'skipped',
+                contentMode,
+                skipReason: 'consent_refused',
+                skipDetail: 'Khách đã từ chối nhận tin ở biểu mẫu/landing — bỏ qua lời mời kết bạn.',
                 customerId: Number.parseInt(customerId, 10) || null,
                 zaloMessageId: null,
                 trackingToken: '',
