@@ -40,10 +40,19 @@ function hasContactContext(text, start, end) {
 
 /**
  * Đầu số di động Việt Nam đang lưu hành (sau quy đổi 11→10 số năm 2018):
- * 03[2-9] · 05[2689] · 07[06789] · 08[1-9] · 09x.
- * Cục bộ cho máy quét liên hệ — KHÔNG siết `vietnamesePhone.util.js`, xem Bẫy 3.
+ * 03[2-9] Viettel · 05[25689] Vietnamobile/Gmobile/**Wintel(055)** · 07[06789] MobiFone ·
+ * 08[1-9] Vinaphone/Viettel/Itelecom · 09x mọi nhà mạng.
+ *
+ * Bản đầu của lệnh giao PR-4 ghi `5[2689]` — **thiếu 055 (Wintel/Reddi, phát hành 2021)**.
+ * Đo production 20/09/2026: **84 khách thật** dùng 055, và lưới này chi phối cả câu bot
+ * trả lời khách "Đã ghi nhận số…" (`chatRouter.service.js`, `chatbot.controller.js`),
+ * nên thiếu một đầu số là im lặng hai lần với khách thật. Ca test bảng đầu số ở
+ * `__tests__/contactDetect.util.spec.js` ghim từng đầu số để lỗi này không lặp.
+ *
+ * Cục bộ cho máy quét liên hệ — KHÔNG siết `vietnamesePhone.util.js` (dùng chung cho nạp
+ * khách/chiến dịch/hạn mức).
  */
-const VN_MOBILE_PREFIX_REGEX = /^0(3[2-9]|5[2689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
+const VN_MOBILE_PREFIX_REGEX = /^0(3[2-9]|5[25689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
 
 /**
  * Nhận diện và trích xuất số điện thoại / email khách để lại trong văn bản hội thoại.

@@ -161,4 +161,42 @@ describe('contactDetect.util — extractContacts', () => {
       expect(extractContacts('Cho em xin sdt của shop với')).toEqual([]);
     });
   });
+
+  // Ghim TỪNG đầu số, không chỉ vài ca mẫu. Lý do bảng này tồn tại: lệnh giao PR-4 ghi
+  // `5[2689]` và bỏ sót 055 (Wintel/Reddi) — 84 khách thật trên production. Không có ca
+  // ghim từng đầu số thì cả hai đột biến "bỏ 099" và "nhận thêm 071-075" đều xanh, nên
+  // lỗi bảng đầu số không bao giờ bị test bắt.
+  describe('PR-4 — bảng đầu số di động: ghim từng đầu số đang lưu hành', () => {
+    const DANG_LUU_HANH = [
+      // Viettel
+      '032', '033', '034', '035', '036', '037', '038', '039', '086', '096', '097', '098',
+      // Vinaphone
+      '081', '082', '083', '084', '085', '088', '091', '094',
+      // MobiFone
+      '070', '076', '077', '078', '079', '089', '090', '093',
+      // Vietnamobile
+      '052', '056', '058', '092',
+      // Gmobile
+      '059', '099',
+      // Itelecom
+      '087',
+      // Wintel/Reddi — đầu số bị lệnh giao bỏ sót
+      '055',
+    ];
+
+    // Không tồn tại trong bảng số di động VN. 031 và 080 là đúng hai đầu số của hai dương
+    // tính giả đo được trên production: mã số thuế 0318700853 và khúc hash ảnh 0800565919.
+    const KHONG_TON_TAI = [
+      '030', '031', '050', '053', '054', '057', '071', '072', '073', '074', '075', '080',
+    ];
+
+    it.each(DANG_LUU_HANH)('nhận đầu số %s', (dauSo) => {
+      const so = `${dauSo}1234567`;
+      expect(extractContacts(so)).toEqual([{ type: 'phone', value: so, raw: so }]);
+    });
+
+    it.each(KHONG_TON_TAI)('không nhận đầu số %s', (dauSo) => {
+      expect(extractContacts(`${dauSo}1234567`)).toEqual([]);
+    });
+  });
 });

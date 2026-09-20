@@ -935,6 +935,47 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
       );
     });
 
+    // Ca này phân biệt "chỉ quét số trên thiếp" với "quét cả chuỗi thẻ". Thẻ ở ca trên có
+    // title "Shiro" — không chứa chữ số nào, nên nó KHÔNG phân biệt được hai cách làm: đột
+    // biến đổi `extractContacts(cardPhone)` thành `extractContacts(trimmed)` vẫn xanh.
+    it('danh thiếp có SỐ KHÁC trong title -> chỉ ghi số của description.phone, bỏ số trong title', async () => {
+      const cardContent = JSON.stringify({
+        title: 'Shop ABC hotline 0912345678',
+        description: JSON.stringify({
+          phone: '0326886627',
+          qrCodeUrl: 'https://qr-talk.zdn.vn/37/350435420/abc',
+        }),
+      });
+
+      mockRepo.fetchVisitorMessagesAfter.mockImplementation(async (source) => {
+        if (source === 'zalo_personal') {
+          return [
+            {
+              id: 509,
+              id_user: 1,
+              id_conversation: 61,
+              content: cardContent,
+              created_at: fixedNow,
+              visitor_name: 'Khách Shiro',
+              external_id: 'user_457',
+              visitor_info: {},
+            },
+          ];
+        }
+        return [];
+      });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(res.detected).toBe(1);
+      expect(mockRepo.upsertContact).toHaveBeenCalledTimes(1);
+      expect(mockRepo.upsertContact).toHaveBeenCalledWith(
+        expect.objectContaining({ contactType: 'phone', contactValue: '0326886627' })
+      );
+      expect(mockRepo.upsertContact).not.toHaveBeenCalledWith(
+        expect.objectContaining({ contactValue: '0912345678' })
+      );
+    });
+
     it('danh thiếp Zalo mà description không parse được JSON -> bỏ cả tin, 0 cảnh báo', async () => {
       const cardContent = JSON.stringify({
         title: 'Shiro',
