@@ -102,8 +102,9 @@ export async function seedLandingPageOverage(client, { userId, mode }) {
   const ids = [];
   for (const [index, title] of DEMO_LANDING_PAGES.entries()) {
     const { rows } = await client.query(
-      `INSERT INTO landing_pages (id_user, workspace_owner_id, created_by, slug, title, status, is_published, published_at)
-       VALUES ($1, $1, $1, $2, $3, 'published', TRUE, NOW() - ($4 || ' days')::INTERVAL)
+      // landing_pages không có cột status / published_at (bootstrap = production): chỉ is_published.
+      `INSERT INTO landing_pages (id_user, workspace_owner_id, created_by, slug, title, is_published, created_at)
+       VALUES ($1, $1, $1, $2, $3, TRUE, NOW() - ($4 || ' days')::INTERVAL)
        RETURNING id`,
       [userId, `demo-landing-${index + 1}`, title, String(DEMO_LANDING_PAGES.length - index)],
     );
@@ -711,6 +712,8 @@ export async function seedChatbot(client, { userId }) {
  */
 export async function seedInbox(client, { userId }) {
   // 1. Kênh Zalo OA trong channel_connections (phục vụ /app/settings/inbox)
+  // Không dùng ON CONFLICT: ràng buộc unique của bảng này đổi theo migration (231 nới thành
+  // (id_user, channel, fb_page_id)), mà seed luôn chạy trên schema vừa dựng lại nên không thể trùng.
   const channelRes = await client.query(
     `INSERT INTO channel_connections (
       id_user, channel, display_name, is_active, webhook_token, external_channel_id,
@@ -718,7 +721,7 @@ export async function seedInbox(client, { userId }) {
     ) VALUES (
       $1, 'zalo_oa', 'Zalo Official Account UKNOW', TRUE, 'token_demo_inbox_zalo_oa', '2847192837482910',
       NOW() - INTERVAL '20 days', NOW()
-    ) ON CONFLICT (id_user, channel) DO UPDATE SET display_name = EXCLUDED.display_name
+    )
     RETURNING id`,
     [userId],
   );
@@ -779,11 +782,11 @@ export async function seedInbox(client, { userId }) {
     // Seed webchat_conversations (widget trên website)
     const webConvRes = viaZaloOa ? null : await client.query(
       `INSERT INTO webchat_conversations (
-        id_user, id_widget_config, widget_key, session_id,
+        id_user, id_widget_config, session_id,
         visitor_name, visitor_email, started_at, last_message_at, status,
         ai_paused, ai_paused_at, created_at
       ) VALUES (
-        $1, $2, 'uknow_demo_inbox_widget', $3,
+        $1, $2, $3,
         $4, $5, NOW() - ($6 || ' hours')::INTERVAL, NOW() - ($7 || ' hours')::INTERVAL, 'active',
         $8, CASE WHEN $8 THEN NOW() - INTERVAL '1 hour' ELSE NULL END,
         NOW() - ($6 || ' hours')::INTERVAL
@@ -922,29 +925,29 @@ export async function seedCampaignCustomers(client, { userId }) {
         const bodyText = defaultTemplate?.body_text || `Xin chào ${customer.full_name || 'Quý khách'}, cảm ơn bạn đã đồng hành cùng UKNOW.`;
 
         const emailRes = await client.query(
+          // Cột theo bootstrap.sql (= production) sau 3a21b66c: email_messages KHÔNG có
+          // id_user / last_clicked_at / updated_at.
           `INSERT INTO email_messages (
-             id_user, id_campaign, id_run, id_customer, id_email_template,
+             id_campaign, id_run, id_customer, id_email_template,
              recipient_email, recipient_name, sender_email, sender_name,
              from_address, reply_to, subject, body_html, body_text,
              status, open_count, click_count,
-             first_opened_at, last_opened_at, first_clicked_at, last_clicked_at,
-             sent_at, delivered_at, created_at, updated_at
+             first_opened_at, last_opened_at, first_clicked_at,
+             sent_at, delivered_at, created_at
            ) VALUES (
-             $1, $2, $3, $4, $5,
-             $6, $7, 'cskh@uknow.vn', 'CSKH UKNOW',
-             'CSKH UKNOW <cskh@uknow.vn>', 'support@uknow.vn', $8, $9, $10,
-             'delivered', $11, $12,
-             CASE WHEN $11 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '1 hour' ELSE NULL END,
-             CASE WHEN $11 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '2 hours' ELSE NULL END,
-             CASE WHEN $12 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '3 hours' ELSE NULL END,
-             CASE WHEN $12 > 0 THEN NOW() - ($13 || ' days')::INTERVAL + INTERVAL '3 hours' ELSE NULL END,
-             NOW() - ($13 || ' days')::INTERVAL,
-             NOW() - ($13 || ' days')::INTERVAL,
-             NOW() - ($13 || ' days')::INTERVAL,
-             NOW() - ($13 || ' days')::INTERVAL
+             $1, $2, $3, $4,
+             $5, $6, 'cskh@uknow.vn', 'CSKH UKNOW',
+             'CSKH UKNOW <cskh@uknow.vn>', 'support@uknow.vn', $7, $8, $9,
+             'delivered', $10, $11,
+             CASE WHEN $10 > 0 THEN NOW() - ($12 || ' days')::INTERVAL + INTERVAL '1 hour' ELSE NULL END,
+             CASE WHEN $10 > 0 THEN NOW() - ($12 || ' days')::INTERVAL + INTERVAL '2 hours' ELSE NULL END,
+             CASE WHEN $11 > 0 THEN NOW() - ($12 || ' days')::INTERVAL + INTERVAL '3 hours' ELSE NULL END,
+             NOW() - ($12 || ' days')::INTERVAL,
+             NOW() - ($12 || ' days')::INTERVAL,
+             NOW() - ($12 || ' days')::INTERVAL
            ) RETURNING id`,
           [
-            userId, campaign.id, runId, customer.id, defaultTemplate?.id || null,
+            campaign.id, runId, customer.id, defaultTemplate?.id || null,
             customer.email, customer.full_name || 'Khách hàng',
             subject, bodyHtml, bodyText,
             openCount, clickCount, daysAgo,
@@ -1007,20 +1010,20 @@ export async function seedCampaignCustomers(client, { userId }) {
           const zaloMsgContent = `Chào ${customer.full_name || 'bạn'}, UKNOW gửi tặng bạn mã giảm giá 20% khi gia hạn dịch vụ trong tháng này!`;
           const zaloRes = await client.query(
             `INSERT INTO zalo_messages (
-               id_user, id_campaign, id_run, id_customer,
-               recipient_phone, recipient_name, channel,
-               message_content, status, click_count,
+               id_campaign, id_run, id_customer,
+               recipient_type, recipient_value, account_name, channel,
+               message_text, status, click_count,
                sent_at, created_at, updated_at
              ) VALUES (
-               $1, $2, $3, $4,
-               $5, $6, 'zalo_oa',
-               $7, 'delivered', $8,
-               NOW() - ($9 || ' days')::INTERVAL,
-               NOW() - ($9 || ' days')::INTERVAL,
-               NOW() - ($9 || ' days')::INTERVAL
+               $1, $2, $3,
+               'phone', $4, $5, 'zalo_oa',
+               $6, 'delivered', $7,
+               NOW() - ($8 || ' days')::INTERVAL,
+               NOW() - ($8 || ' days')::INTERVAL,
+               NOW() - ($8 || ' days')::INTERVAL
              ) RETURNING id`,
             [
-              userId, campaign.id, runId, customer.id,
+              campaign.id, runId, customer.id,
               customer.phone || '0901234501', customer.full_name || 'Khách hàng',
               zaloMsgContent, clickCount, daysAgo,
             ],
@@ -1098,10 +1101,10 @@ export async function seedLandingPages(client, { userId }) {
   await client.query(
     `INSERT INTO landing_pages (
       id_user, workspace_owner_id, created_by, slug, title, html_content,
-      status, is_published, published_at, created_at, updated_at
+      is_published, created_at, updated_at
     ) VALUES (
       $1, $1, $1, 'khoa-hoc-marketing-tu-dong-hoa', 'Khoá học Marketing Tự Động Hoá Thực Chiến', $2,
-      'published', TRUE, NOW() - INTERVAL '15 days', NOW() - INTERVAL '15 days', NOW()
+      TRUE, NOW() - INTERVAL '15 days', NOW()
     )`,
     [userId, DEMO_LANDING_HTML],
   );
@@ -1109,10 +1112,10 @@ export async function seedLandingPages(client, { userId }) {
   const res2 = await client.query(
     `INSERT INTO landing_pages (
       id_user, workspace_owner_id, created_by, slug, title,
-      status, is_published, published_at, created_at, updated_at
+      is_published, created_at, updated_at
     ) VALUES (
       $1, $1, $1, 'dich-vu-doanh-nghiep-vip', 'Trang Giới Thiệu Dịch Vụ Doanh Nghiệp VIP',
-      'published', TRUE, NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days', NOW()
+      TRUE, NOW() - INTERVAL '5 days', NOW()
     ) RETURNING id`,
     [userId],
   );
@@ -1123,10 +1126,10 @@ export async function seedLandingPages(client, { userId }) {
   // thì màn hình chỉ báo "đang chờ hệ thống cấp DNS", không có hướng dẫn nào.
   await client.query(
     `INSERT INTO landing_page_domains (
-      landing_page_id, hostname, domain_type, is_apex_domain,
+      landing_page_id, hostname, is_apex_domain,
       verification_token, status, cf_managed, verified_at, created_at, updated_at
     ) VALUES (
-      $1, 'dangky.doanhnghiep.vn', 'subdomain', FALSE,
+      $1, 'dangky.doanhnghiep.vn', FALSE,
       'token_demo_verify_domain', 'pending_verification', FALSE, NULL, NOW() - INTERVAL '5 days', NOW()
     )`,
     [landing2Id],

@@ -293,6 +293,45 @@ export async function highlight(locator) {
 }
 
 /**
+ * Chụp một phần tử KÈM lề ngoài, để viền khoanh đỏ (outline nằm ngoài hộp) không bị
+ * cắt mất. Dùng khi chính phần tử được chụp cũng là phần tử được khoanh.
+ *
+ * Phần tử phải nằm trọn trong khung nhìn lúc bấm máy — bọc trong `tallViewportShot`
+ * nếu nó nằm sâu dưới trang.
+ */
+export async function paddedShot(page, locator, { pad = 14 } = {}) {
+  const target = locator.first();
+  return {
+    screenshot: async (options = {}) => {
+      await target.scrollIntoViewIfNeeded().catch(() => {});
+      await page.waitForTimeout(150);
+      const box = await target.boundingBox();
+      if (!box) throw new Error('paddedShot: phần tử không có kích thước');
+      const x = Math.max(0, box.x - pad);
+      const y = Math.max(0, box.y - pad);
+      return page.screenshot({
+        ...options,
+        clip: { x, y, width: box.width + (box.x - x) + pad, height: box.height + (box.y - y) + pad },
+      });
+    },
+  };
+}
+
+/**
+ * Khoanh đỏ một Ô BẢNG (th/td).
+ *
+ * `outline` trên ô bảng vẽ ra ngoài ô: trên cùng bị khung thẻ `overflow-hidden`
+ * cắt mất, hai ô kề nhau thì viền đè lên nhau thành hình móc. Viền vẽ VÀO TRONG
+ * bằng box-shadow thì luôn nằm trọn trong ô.
+ */
+export async function highlightCell(locator) {
+  await locator.first().evaluate((el, color) => {
+    el.style.boxShadow = `inset 0 0 0 3px ${color}`;
+    el.style.borderRadius = '6px';
+  }, HIGHLIGHT_COLOR);
+}
+
+/**
  * Chụp ảnh thanh menu trái với một nhóm đang mở và một mục được khoanh đỏ.
  *
  * Đây là mẫu chú thích lặp nhiều nhất trong bộ bài hướng dẫn (hơn 20 chỗ), nên
@@ -346,6 +385,30 @@ export async function regionShot(page, { path, clip, mark, waitFor }) {
   if (mark) await highlight(page.locator(mark));
   await page.waitForTimeout(150);
   return contentShot(page, target);
+}
+
+/**
+ * Đổi địa chỉ máy mình (`http://localhost:5174`) đang hiện trên màn hình thành
+ * địa chỉ thật, để ảnh chụp ở máy mình đem lên bài không lộ chữ "localhost".
+ *
+ * Chỉ đổi CHỮ HIỂN THỊ (text node và giá trị ô nhập) ngay trước khi bấm máy; không
+ * đụng `href`/`src` nên trang vẫn chạy bình thường.
+ */
+export async function maskLocalOrigin(page, publicOrigin = 'https://founderai.biz') {
+  await page.evaluate((origin) => {
+    const local = /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      if (local.test(node.nodeValue)) node.nodeValue = node.nodeValue.replace(local, origin);
+      local.lastIndex = 0;
+    }
+    for (const input of document.querySelectorAll('input, textarea')) {
+      if (local.test(input.value)) input.value = input.value.replace(local, origin);
+      local.lastIndex = 0;
+    }
+  }, publicOrigin);
 }
 
 function escapeRegExp(text) {

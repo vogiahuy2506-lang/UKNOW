@@ -23,6 +23,10 @@ const SHEETS = [
   'faq-billing', 'campaign-create',
   'getting-started', 'dung-thu', 'zalo-account', 'zalo-gui-cham', 'ai-profile',
   'voucher',
+  // Lô 21/09/2026 — 13 bài mới. Phần lớn ảnh tự dựng dữ liệu qua
+  // lib/shotFixtures.js nên chỉ chạy ở máy mình (localOnly).
+  'bieu-mau', 'dat-lich-giu-cho', 'tai-khoan-dieu-khoan-sdt', 'goi-sap-het-han',
+  'nhat-ky-hoat-dong', 'doi-tac', 'marketplace', 'lien-he-khach-de-lai', 'dung-luong-luu-tru',
 ];
 
 for (const slugToCapture of SHEETS) {
