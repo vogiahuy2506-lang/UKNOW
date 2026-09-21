@@ -420,7 +420,6 @@ function FacebookForm({ chatbot }) {
 
   // ── Render ────────────────────────────────────────────────────
   const hasPages = pages.length > 0;
-  const selectedPage = pages.find((p) => p.id === selectedConnId);
 
   return (
     <div className="space-y-5">

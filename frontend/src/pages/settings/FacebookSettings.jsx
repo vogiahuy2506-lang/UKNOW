@@ -3,7 +3,6 @@ import {
   HiOutlineLink,
   HiOutlineTrash,
   HiOutlineRefresh,
-  HiOutlineCheckCircle,
   HiOutlineExclamation,
   HiOutlineExternalLink,
 } from 'react-icons/hi';
@@ -56,7 +55,6 @@ function ConnectionStatus({ conn }) {
 }
 
 export default function FacebookSettings() {
-  const { t } = { t: (k) => k }; // no i18n yet
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);

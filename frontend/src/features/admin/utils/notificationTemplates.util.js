@@ -20,7 +20,7 @@
  */
 
 const SENDER_NAME = 'Founder AI';
-const SENDER_TAGLINE = 'Nền tảng Marketing & AI cho doanh nghiệp';
+const _SENDER_TAGLINE = 'Nền tảng Marketing & AI cho doanh nghiệp';
 
 // ---------------------------------------------------------------------------
 // Header + Footer — pattern giống buildBaseTemplate() của backend

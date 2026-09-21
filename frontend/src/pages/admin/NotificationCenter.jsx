@@ -19,7 +19,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  HiOutlineBell,
   HiOutlineClock,
   HiOutlineCode,
   HiOutlineEye,
@@ -313,7 +312,6 @@ export default function NotificationCenter() {
   );
   const [drafts, setDrafts] = useState(initialDrafts);
   const draft = drafts[typeKey] || { subject: '', bodyHtml: '' };
-  const setDraft = (next) => setDrafts((current) => ({ ...current, [typeKey]: next }));
   const bodyRef = useRef(null);
 
   // Tab "Gửi" state
@@ -471,12 +469,12 @@ export default function NotificationCenter() {
     const tpl = TYPE_TEMPLATES[key];
     if (!tpl) return;
     setTypeKey(key);
-    setDraft({ subject: tpl.subject, bodyHtml: tpl.bodyHtml });
+    setDrafts((current) => ({ ...current, [key]: { subject: tpl.subject, bodyHtml: tpl.bodyHtml } }));
   }, []);
 
   const clearTemplate = useCallback(() => {
-    setDraft({ subject: '', bodyHtml: '' });
-  }, []);
+    setDrafts((current) => ({ ...current, [typeKey]: { subject: '', bodyHtml: '' } }));
+  }, [typeKey]);
 
   // ----------------------------------------------------------------- Send actions
 
@@ -772,7 +770,7 @@ export default function NotificationCenter() {
                 <input
                   aria-label="Tiêu đề email"
                   value={draft.subject}
-                  onChange={(event) => setDraft({ ...draft, subject: event.target.value })}
+                  onChange={(event) => setDrafts((current) => ({ ...current, [typeKey]: { ...current[typeKey], subject: event.target.value } }))}
                   maxLength={200}
                   placeholder="[Founder AI] Tiêu đề email"
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
@@ -782,7 +780,7 @@ export default function NotificationCenter() {
 
               <HtmlEditor
                 value={draft.bodyHtml}
-                onChange={(v) => setDraft({ ...draft, bodyHtml: v })}
+                onChange={(v) => setDrafts((current) => ({ ...current, [typeKey]: { ...current[typeKey], bodyHtml: v } }))}
                 variables={VARIABLES}
                 bodyRef={bodyRef}
               />
