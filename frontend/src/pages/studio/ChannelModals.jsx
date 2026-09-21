@@ -378,7 +378,7 @@ function FacebookForm({ chatbot }) {
         <div className="flex gap-2">
           <input
             type="text"
-            value={verifyToken || (webhook ? '•••••••• (Đã bảo mật)' : 'Nối xong sẽ hiện')}
+            value={verifyToken || (webhook ? '•••••••• (chỉ hiện ngay sau khi nối)' : 'Nối xong sẽ hiện')}
             readOnly
             className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
           />
@@ -398,6 +398,7 @@ function FacebookForm({ chatbot }) {
         </div>
         <p className="text-[11px] text-slate-400 mt-1">
           Chuỗi bảo mật do hệ thống sinh để dán vào trường Verify Token khi cấu hình Webhook trên Meta App Dashboard.
+          {' '}<strong>Copy ngay</strong> — API đọc kênh không trả lại chuỗi này, đóng modal rồi thì phải nối lại để lấy chuỗi mới.
         </p>
       </div>
 
