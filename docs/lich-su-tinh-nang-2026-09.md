@@ -620,6 +620,45 @@ Bốn đợt vá liên tiếp trong cùng khu vực, mỗi đợt từ một s�
 | Nội dung chuyển khoản PayOS bỏ dấu và cắt theo từ, không xén giữa chữ; kèm trang đối soát cho kế toán | `8ce30c19` |
 | 3 câu chữ ở node "Đọc lead landing" nói sai về đồng ý nhận tin (nói "chỉ gửi người đã đồng ý", thực tế là "bỏ qua người đã từ chối") | `871b85eb` `4d06d304` |
 
+## Lịch chạy chiến dịch thôi chết im lặng — và hai chỗ cùng bệnh (21/09)
+
+Sếp đặt lịch gửi Zalo nhóm cho chiến dịch 395 lúc **07:30 ngày 21/09**. Tới giờ không có gì xảy ra:
+không tin nhắn, không lượt chạy, không một dòng báo lỗi. Popup lịch vẫn xanh mướt "Đang bật · Đã
+chạy 0 lần".
+
+Truy ra bằng ba con số trong DB, không cần log: mọi lượt chạy của chiến dịch đều `run_type=manual`
+với `id_schedule` rỗng; `campaign_schedules.updated_at` là 11:33 — **sau** giờ hẹn, nên lịch còn bật
+lúc cron nổ; `audit_logs` không có thao tác nào giữa 20/09 09:43 và 21/09 11:32, nên chiến dịch vẫn
+là `draft` lúc 07:30.
+
+Cơ chế: lịch nổ đúng giờ → `createCampaignRunRecord` ném 400 *"Chỉ có thể chạy chiến dịch đang hoạt
+động"* (lượt chạy từ lịch **cố ý** không được tự kích hoạt chiến dịch, để nút Tạm dừng còn nghĩa) →
+scheduler bắt lỗi rồi `console.error`. Mà container được tạo mới lúc 11:09 hôm đó, nên tới lúc đi
+hỏi thì **dấu vết cuối cùng cũng đã bị xoá**.
+
+Đào tiếp thì thấy đây không phải một lỗi mà là một **hình dạng lỗi** — hệ thống làm đúng logic rồi
+nuốt mất kết quả. Hai chỗ nữa cùng bệnh, vá luôn trong đợt này.
+
+| Việc | Commit |
+|---|---|
+| PR-1: chặn 409 khi đặt lịch **bật** cho chiến dịch chưa `active` (câu nói đúng việc phải làm); lịch nổ hỏng thì ghi một dòng `campaign_runs` `failed` có `id_schedule` + `error_message`; popup lịch hiện cảnh báo, sửa chữ cứng "đang tạm dừng" vốn sai cho chiến dịch Nháp | `e0326953` |
+| PR-2: chặn lịch trùng hai lớp — controller trả 409, migration 231 thêm unique index bán phần `(id_campaign, schedule_type, cron_expression) WHERE enabled`; 4 action nhật ký mới cho thao tác lịch (trước đó bật/tắt/xoá lịch **không ghi audit dòng nào**) | `c0e75db9` |
+| PR-3: danh sách tài khoản Zalo trong node chiến dịch thôi biến mọi lỗi HTTP thành "chưa có tài khoản" — hộp đỏ nêu lý do + nút Thử lại; `api.js` tôn trọng `signal` của người gọi thay vì ghi đè rồi vứt | `2cc74646` |
+| Review: huỷ lượt init QR Telegram cũ trước khi mở lượt mới | `a3a9205c` |
+
+Ba điểm đáng nhớ:
+
+- **Không tăng `run_count` khi ghi lượt chạy hỏng.** `isReadonlyOnceSchedule` khoá nút gạt khi
+  `run_count > 0`; tăng lên là người dùng mất quyền bật/tắt một lịch **chưa từng gửi được gì**.
+- **Migration 231 tự phòng thân**: còn nhóm lịch bật trùng thì chỉ `RAISE WARNING` và bỏ qua, không
+  làm đỏ cả lượt deploy. Đổi lại phải **kiểm `pg_indexes` sau deploy** — cảnh báo nằm trong log
+  deploy, thứ bị xoá. Đo trên production 21/09: 0 nhóm trùng, index đã tạo lúc 14:51.
+- **PR-3 gỡ mất một lưới an toàn mà một chỗ đang dựa vào.** Trong 7 nơi truyền `{ signal }`, sáu là
+  GET (mất khử trùng chỉ tốn thêm một lượt đọc), chỗ thứ bảy là `POST .../telegram-accounts/init` —
+  có side effect. Nút "Tạo QR mới" trong modal không khoá theo `connecting`, mà init mất 20–40s ở
+  cold path: trước đây bộ khử trùng huỷ hộ lượt cũ, sau PR-3 thì không còn ai huỷ, mỗi lần bấm lại
+  mở thêm một phiên Telegram ở server.
+
 ## Việc còn treo (tính tới 21/09/2026)
 
 - **Biểu mẫu + đặt lịch + thanh toán**: code đã lên production đủ yêu cầu gốc, kể cả MoMo hiện thông
@@ -708,20 +747,15 @@ Bốn đợt vá liên tiếp trong cùng khu vực, mỗi đợt từ một s�
   lead đã tích đồng ý.
 - **`zalo_disconnected` nổ mỗi giờ nhiều ngày** vì nhìn cửa sổ 7 ngày rồi báo mỗi giờ — cùng bệnh với
   cảnh báo tỉ lệ hỏng đã sửa 13/09, chưa có plan.
-- **Lịch chạy chiến dịch chết im lặng khi chiến dịch còn nháp** (đo 21/09, chiến dịch 395 của sếp):
-  lịch hẹn 07:30 nổ đúng giờ, `createCampaignRunRecord` ném 400 vì chiến dịch là `draft`, scheduler
-  chỉ `console.error` — không lượt chạy, không `last_run_at`, không cảnh báo nào trên giao diện. Cảnh
-  báo "chiến dịch không hoạt động" có sẵn trong **bảng** Lịch chạy nhưng popup "Lịch chạy đã thiết
-  lập" không đọc trường đó. Kèm hai lỗ: lịch bị tạo trùng (không unique index, controller không kiểm
-  — sếp bấm hai lần cách nhau một phút ra hai lịch y hệt), và thao tác lịch **không ghi audit** dòng
-  nào. Lệnh giao 3 PR: `_internal/LENH_GIAO_LICH_CHAY_KHONG_CHET_IM_LANG_2026-09-21.md`.
+- ~~**Lịch chạy chiến dịch chết im lặng khi chiến dịch còn nháp**~~ — **đã sửa 21/09**, cả 3 PR lên
+  production (`e0326953`, `c0e75db9`, `2cc74646`) kèm một bản vá review (`a3a9205c`). Chi tiết ở mục
+  ngay trên.
 - **Lượt chạy hỏng 100% vẫn báo `completed`**: run #434 của chiến dịch 395 có đúng một lượt gửi và nó
   `failed` (`ZALO_SEND_NOT_DELIVERED`, tài khoản Zalo chưa được cấp quyền gửi trong nhóm), nhưng bảng
   tổng quan hiện "hoàn tất". Chưa có plan.
-- **Danh sách tài khoản Zalo trong node chiến dịch hiện rỗng dù có 3 tài khoản** (đo 21/09, không cái
-  nào bị khoá, 2 `connected`): `NodeConfigModal` biến mọi lỗi HTTP thành mảng rỗng rồi in "Chưa có
-  tài khoản Zalo khả dụng" — câu nói sai sự thật. Nghi do bộ khử trùng request trong `api.js` huỷ
-  lượt đang bay (trang builder có 2 nơi gọi `/zalo/accounts`). Nằm trong PR-3 của lệnh giao trên.
+- ~~**Danh sách tài khoản Zalo trong node chiến dịch hiện rỗng dù có 3 tài khoản**~~ — **đã sửa
+  21/09** (`2cc74646`). Nguyên nhân đúng như nghi: `api.js` ghi đè `signal` của người gọi rồi khử
+  trùng, nên lượt đang bay bị lượt cùng URL huỷ ngầm; `NodeConfigModal` biến lỗi đó thành mảng rỗng.
 - **Khai tử webhook kênh theo tài khoản — phần còn lại chưa commit**, thay đổi còn trong cây làm việc
   (`chatbot.controller.js`, `oauth.controller.js`, `webhook.routes.js`).
   Xem `_internal/LENH_GIAO_TIEP_KHAI_TU_WEBHOOK_KENH_2026-09-20.md`.
