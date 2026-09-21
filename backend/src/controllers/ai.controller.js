@@ -40,12 +40,22 @@ import { listUserFilesSinceLastLanding } from '../repositories/aiSession.reposit
 import landingPageRepository from '../repositories/landingPage.repository.js';
 import { getWorkspaceScope } from '../utils/workspaceContext.util.js';
 import { generateSystemInstruction as generateChatbotSystemInstruction } from '../services/ai/chatbotInstructionWriter.service.js';
+import {
+  AUTO_LAYOUT_FIX_MAX_ROUNDS,
+  normalizeLayoutFindings,
+  buildAutoLayoutFixInstruction,
+} from '../utils/landingLayoutFindings.util.js';
 
 const SUPPORTED_SYSTEM_INSTRUCTION_LANGUAGES = ['vi', 'en'];
 
 // PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md, Việc 1.2 — patchLandingMessage() chỉ nhận
 // đúng 3 khoá này trong data, bỏ qua mọi khoá khác client gửi lên.
 const LANDING_MESSAGE_PATCH_KEYS = ['landingPageId', 'slug', 'isPublished'];
+
+// Lượt sửa tự động (không trừ credit) đang chạy, khoá `${userId}:${messageId}`. Trần 2 lượt/tin đếm
+// ở DB chỉ tăng SAU khi AI trả kết quả → bắn song song N request cùng lúc đều thấy count cũ và đều
+// được sửa miễn phí. Backend production chạy đúng 1 replica (CLAUDE.md) nên khoá trong bộ nhớ đủ.
+const autoLayoutFixInFlight = new Set();
 
 function buildAiErrorPayload(error, fallbackMessage = 'Lỗi khi xử lý yêu cầu AI') {
   return {
@@ -716,6 +726,45 @@ class AiController {
       if (!data || typeof data !== 'object' || Array.isArray(data)) {
         return res.status(400).json({ success: false, message: 'Thiếu data để cập nhật' });
       }
+
+      // Hoàn tác lượt sửa AI: server TỰ hoán html ↔ previousHtml, title ↔ previousTitle. KHÔNG nhận
+      // html/title từ client — endpoint này không qua AI nên không được thành cửa nhét HTML lạ.
+      if (data.revert === true) {
+        const owned = await aiSessionRepo.getSessionWizardState(sessionId, req.user.id);
+        if (!owned) {
+          return res.status(404).json({ success: false, message: 'Session không tồn tại' });
+        }
+        const message = await aiSessionRepo.getLandingPageMessage(sessionId, req.user.id, messageId);
+        if (!message) {
+          return res.status(404).json({ success: false, message: 'Không tìm thấy tin landing_page để hoàn tác' });
+        }
+        const stored = message.data || {};
+        if (typeof stored.previousHtml !== 'string' || !stored.previousHtml.trim()) {
+          return res.status(409).json({
+            success: false,
+            code: 'NOTHING_TO_REVERT',
+            message: 'Chưa có bản trước để quay lại',
+          });
+        }
+        const restoredTitle = typeof stored.previousTitle === 'string' && stored.previousTitle.trim()
+          ? stored.previousTitle
+          : stored.title;
+        const swapped = {
+          ...(restoredTitle ? { title: restoredTitle } : {}),
+          html: stored.previousHtml,
+          previousHtml: typeof stored.html === 'string' ? stored.html : '',
+          ...(stored.title ? { previousTitle: stored.title } : {}),
+        };
+        const reverted = await aiSessionRepo.updateLandingPageMessage(sessionId, req.user.id, swapped, message.id);
+        if (!reverted) {
+          return res.status(404).json({ success: false, message: 'Không tìm thấy tin landing_page để hoàn tác' });
+        }
+        return res.json({
+          success: true,
+          data: { title: restoredTitle, html: swapped.html, canRevert: true },
+        });
+      }
+
       const patch = {};
       for (const key of LANDING_MESSAGE_PATCH_KEYS) {
         if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -1503,7 +1552,12 @@ class AiController {
             ...(leadFormDraft ? { leadFormDraft, leadFormConfig: data.leadFormConfig } : {}),
           },
         };
-        await aiSessionRepo.saveMessages(sid, req.user.id, userContent, assistantMsg).catch(() => {});
+        const saved = await aiSessionRepo
+          .saveMessagesReturningIds(sid, req.user.id, userContent, assistantMsg)
+          .catch(() => null);
+        // Vòng tự sửa ở frontend cần id tin để server đếm trần lượt theo từng tin. Lưu hỏng thì
+        // không có khoá này — không chặn response.
+        if (saved?.assistantMessageId) data.messageId = saved.assistantMessageId;
       }
 
       await chargeAiCredit(req);
@@ -1579,6 +1633,7 @@ class AiController {
    * POST /ai/edit-landing-html — Chỉnh sửa landing page HTML5 hiện tại theo yêu cầu.
    */
   async editLandingHtml(req, res) {
+    let autoFixLockKey = null;
     try {
       const {
         currentHtml,
@@ -1589,6 +1644,10 @@ class AiController {
         files: incomingFiles = [],
         landingPageId = null,
       } = req.body || {};
+      // Lượt sửa TỰ ĐỘNG do bộ đo hiển thị của frontend (plan landing tự kiểm, mục 10.2): không
+      // trừ credit (middleware bỏ pre-flight), nên client chỉ được đưa DỮ LIỆU (findings) — lệnh
+      // sửa do server viết, `instruction` client gửi bị bỏ qua.
+      const isAutoFix = req.body?.autoLayoutFix === true;
 
       if (!String(currentHtml || '').trim()) {
         return res.status(400).json({
@@ -1597,12 +1656,69 @@ class AiController {
         });
       }
 
-      if (!String(instruction || '').trim()) {
+      let layoutFindings = [];
+      if (isAutoFix) {
+        layoutFindings = normalizeLayoutFindings(req.body.layoutFindings);
+        if (!layoutFindings.length) {
+          return res.status(400).json({
+            success: false,
+            code: 'LAYOUT_FINDINGS_REQUIRED',
+            message: 'Thiếu dữ liệu đo hiển thị để sửa tự động',
+          });
+        }
+      } else if (!String(instruction || '').trim()) {
         return res.status(400).json({
           success: false,
           message: 'Vui lòng nhập mô tả yêu cầu chỉnh sửa cho AI',
         });
       }
+
+      const sid = Number(sessionId);
+      const hasSession = Number.isInteger(sid) && sid > 0;
+
+      // Tin landing_page đang sửa: lấy id chính xác (messageId null → tin mới nhất, cùng luật với
+      // updateLandingPageMessage), title trước đó (cho Hoàn tác) và số lượt tự sửa đã dùng.
+      let landingMessage = null;
+      if (hasSession) {
+        try {
+          landingMessage = await aiSessionRepo.getLandingPageMessage(sid, req.user.id, messageId);
+        } catch (err) {
+          if (isAutoFix) throw err; // sửa tự động phải đếm được trần, không đọc được thì không chạy
+          console.warn('[AI.editLandingHtml] Failed to read landing_page message:', err.message);
+        }
+      }
+
+      let autoFixUsed = 0;
+      if (isAutoFix) {
+        if (!hasSession) {
+          return res.status(400).json({
+            success: false,
+            code: 'AUTO_LAYOUT_FIX_SESSION_REQUIRED',
+            message: 'Sửa tự động cần phiên chat hợp lệ',
+          });
+        }
+        if (!landingMessage) {
+          return res.status(404).json({
+            success: false,
+            code: 'LANDING_MESSAGE_NOT_FOUND',
+            message: 'Không tìm thấy tin landing_page để sửa',
+          });
+        }
+        autoFixUsed = Number(landingMessage.data?.autoLayoutFixCount) || 0;
+        const lockKey = `${req.user.id}:${landingMessage.id}`;
+        if (autoFixUsed >= AUTO_LAYOUT_FIX_MAX_ROUNDS || autoLayoutFixInFlight.has(lockKey)) {
+          return res.status(429).json({
+            success: false,
+            code: 'AUTO_LAYOUT_FIX_LIMIT',
+            message: 'Trang này đã dùng hết lượt sửa hiển thị tự động',
+          });
+        }
+        autoLayoutFixInFlight.add(lockKey);
+        autoFixLockKey = lockKey;
+      }
+      const effectiveInstruction = isAutoFix
+        ? buildAutoLayoutFixInstruction(layoutFindings)
+        : String(instruction).trim();
 
       const ownerUserId = (req.user?.activeContext?.type === 'employee'
         ? req.user.activeContext.ownerId
@@ -1625,8 +1741,9 @@ class AiController {
         }
       }
 
-      // Đường sửa chỉ nhận files tường minh từ request body, không gom từ phiên chat
-      const rawIncoming = Array.isArray(incomingFiles)
+      // Đường sửa chỉ nhận files tường minh từ request body, không gom từ phiên chat. Lượt tự sửa
+      // miễn phí không nhận file nào (không có gì để đính kèm, và không mở đường nạp file miễn phí).
+      const rawIncoming = !isAutoFix && Array.isArray(incomingFiles)
         ? incomingFiles.slice(0, 6).map((f) => ({
             tempId: f?.tempId,
             storageKey: f?.storageKey || f?.storage_key,
@@ -1649,23 +1766,47 @@ class AiController {
         userId: ownerUserId,
         actorUserId: req.user.id,
         currentHtml: String(currentHtml),
-        instruction: String(instruction).trim(),
+        instruction: effectiveInstruction,
         contentLocale,
         assets,
         documents,
         leadFormConfig,
+        autoLayoutFix: isAutoFix,
+        layoutFindingsCount: layoutFindings.length,
       });
 
-      await chargeAiCredit(req);
+      // Lượt tự sửa của hệ thống không bao giờ trừ credit (chargeAiCredit cũng tự bỏ qua khi
+      // req.aiCreditSkipped, nhưng đây là chốt chính).
+      if (!isAutoFix) await chargeAiCredit(req);
 
-      if (sessionId) {
-        const sid = Number(sessionId);
-        if (Number.isInteger(sid) && sid > 0) {
-          await aiSessionRepo.updateLandingPageMessage(sid, req.user.id, {
-            title: data.title,
-            html: data.html,
-          }, messageId).catch((err) => console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message));
+      if (hasSession) {
+        // Một UPDATE (jsonb `||`): html mới + MỘT bản trước để Hoàn tác + bộ đếm lượt tự sửa.
+        // Sửa do người dùng (đã trừ credit) đặt lại bộ đếm về 0 — mỗi hành động trả phí được 2 lượt
+        // tự sửa miễn phí; không đặt lại thì lượt sinh trang đã ăn hết trần và các lần sửa sau
+        // không bao giờ được tự sửa nữa.
+        const saved = await aiSessionRepo.updateLandingPageMessage(sid, req.user.id, {
+          title: data.title,
+          html: data.html,
+          previousHtml: String(currentHtml),
+          ...(landingMessage?.data?.title ? { previousTitle: String(landingMessage.data.title) } : {}),
+          autoLayoutFixCount: isAutoFix ? autoFixUsed + 1 : 0,
+        }, landingMessage?.id ?? messageId).catch((err) => {
+          console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message);
+          return false;
+        });
+        if (saved) data.canRevert = true;
 
+        if (isAutoFix) {
+          // Lệnh do server dựng đầy selector/pixel — KHÔNG được lưu thành tin của người dùng hay
+          // lặp lại trong lời xác nhận (tải lại phiên sẽ lộ ra). Chỉ ghi câu tiếng người của AI.
+          const ackContent = contentLocale === 'en'
+            ? (data.changeSummary ? `Layout adjusted: ${data.changeSummary}` : 'I adjusted the page layout.')
+            : (data.changeSummary ? `Đã chỉnh hiển thị: ${data.changeSummary}` : 'Đã chỉnh lại hiển thị của trang.');
+          await aiSessionRepo.saveAssistantMessage(sid, req.user.id, {
+            content: ackContent,
+            type: 'landing_edit_ack',
+          }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save auto-fix ack message:', err.message));
+        } else {
           const confirmMsg = contentLocale === 'en'
             ? `I have updated the landing page "${data.title}" according to your request: "${String(instruction).trim()}".`
             : `Mình đã cập nhật landing page "${data.title}" theo yêu cầu: "${String(instruction).trim()}".`;
@@ -1713,6 +1854,8 @@ class AiController {
         });
       }
       return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi chỉnh sửa landing page bằng AI'));
+    } finally {
+      if (autoFixLockKey) autoLayoutFixInFlight.delete(autoFixLockKey);
     }
   }
 

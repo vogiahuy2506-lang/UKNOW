@@ -9,6 +9,18 @@ import {
 } from '../../utils/landingEditGuard.util.js';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
 import { countFormSlots, hasMalformedFormSlot } from '../../utils/landingHtmlInjection.util.js';
+import { normalizeChangeSummary } from '../../utils/landingLayoutFindings.util.js';
+
+/**
+ * Phòng bệnh từ gốc (PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA mục 10.5): sự cố 20/09 do AI đặt cột ngày
+ * bằng absolute + toạ độ âm nên vòng tròn số thứ tự đè lên năm. Bộ đo ở trình duyệt là chữa bệnh;
+ * luật này là phòng bệnh — dùng chung cho prompt SINH và prompt SỬA. Không dùng dấu backtick ở đây.
+ */
+export const LAYOUT_SAFETY_RULE =
+  'BỐ CỤC AN TOÀN: không đặt chữ bằng absolute với toạ độ âm (-left-*, -top-*, -translate-* lên chữ). ' +
+  'Dòng thời gian, các bước, bảng mốc: dùng lưới grid grid-cols-[9rem_1fr] gap-6 (hoặc flex với cột mốc w-36 shrink-0), ' +
+  'cột mốc đủ rộng cho dd/mm/yyyy ở text-lg; dấu chấm/số thứ tự nằm trong cột riêng, không đè lên chữ; ' +
+  'chữ trong ô hẹp dùng break-words, không whitespace-nowrap.';
 
 /**
  * PR-5b-2a — công tắc "AI dựng landing dùng Biểu mẫu thay form lead" (mặc định TẮT). Đọc
@@ -48,10 +60,15 @@ function logLandingAiLifecycle({
   fakeImageUrls = null,
   fakeImageRetry = null,
   strippedImages = null,
+  autoLayoutFix = null,
+  findings = null,
 }) {
   const fields = [
     `[LandingAI] ${event}`,
     `mode=${mode}`,
+    // Đứng NGAY SAU mode để `[LandingAI] start mode=edit` vẫn khớp lệnh grep đếm lượt sửa.
+    ...(autoLayoutFix != null ? [`autoLayoutFix=${autoLayoutFix}`] : []),
+    ...(findings != null ? [`findings=${findings}`] : []),
     ...(outcome ? [`outcome=${outcome}`] : []),
     `ms=${Date.now() - startedAt}`,
     `finishReason=${finishReason || 'unknown'}`,
@@ -400,6 +417,7 @@ QUY TẮC KỸ THUẬT (bắt buộc):
    - <title> khớp hoặc gần với "title" JSON
    - <script src="https://cdn.tailwindcss.com"></script>
 4) Styling — NGHIÊM CẤM TUYỆT ĐỐI dùng thuộc tính style="..." inline trên BẤT KỲ thẻ HTML nào. KHÔNG được viết style="color:...", style="background-color:...", style="font-size:...", style="padding:...", style="margin:..." hay bất kỳ thuộc tính style inline nào. CHỈ được dùng class Tailwind utility (ví dụ class="bg-orange-500 text-white px-6 py-3"). Không dùng <style> block lớn; chỉ được vài dòng cho keyframe animation nếu thật sự cần.
+4b) ${LAYOUT_SAFETY_RULE}
 5) Không dùng JavaScript ngoài script Tailwind CDN ở trên (không thư viện khác, không inline script logic).
 ${formRule}
 7) Toàn bộ chữ hiển thị phải theo CUSTOMER_CONTENT_LANGUAGE ở trên. Link ngoài dùng https, ngắn gọn.
@@ -670,6 +688,8 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     assets = [],
     documents = [],
     leadFormConfig = null,
+    autoLayoutFix = false,
+    layoutFindingsCount = 0,
   }) {
     const rawCurrent = String(currentHtml || '').trim();
     if (!rawCurrent) {
@@ -723,6 +743,12 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       ? `2d) DANH SÁCH KHOÁ TRƯỜNG ĐÃ KHAI BÁO CHO TRANG NÀY (áp dụng khi NGOẠI LỆ 2b được dùng — thêm trường mới vào form đăng ký): trường mới PHẢI dùng ĐÚNG một trong các name/value dưới đây, COPY Y NGUYÊN — KHÔNG tự đặt tên trường khác, KHÔNG tự sinh khoá cf_ mới. Yêu cầu của người dùng không khớp field/option nào trong danh sách → chọn field gần nghĩa nhất trong danh sách và dùng đúng name đó:\n${declaredFieldsListing}`
       : '';
 
+    // changeSummary hiện thẳng cho người dùng KHÔNG rành kỹ thuật (sếp chốt 20/09: không class/pixel).
+    const summaryLanguage = locale === 'en' ? 'tiếng Anh' : 'tiếng Việt';
+    const summaryExample = locale === 'en'
+      ? 'Widened the date column in the Timeline section so the year is no longer covered'
+      : 'Đã nới cột ngày ở phần Dòng thời gian để năm không bị che';
+
     const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên chỉnh sửa landing page marketing.
 
 Nhiệm vụ: Chỉnh sửa trang landing HTML5 hiện tại theo ĐÚNG yêu cầu của người dùng.
@@ -733,14 +759,15 @@ QUY TẮC CHỈNH SỬA TỐI QUAN TRỌNG:
 1) Dưới đây là HTML hiện tại của trang. Nhiệm vụ của bạn là CHỈ thay đổi đúng phần người dùng yêu cầu.
 2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và form đăng ký lead hiện có của trang — comment "${LANDING_FORM_PLACEHOLDER}" (trang cũ), hoặc thẻ iframe form nhúng "/embed/lead-form/..." (trang cũ), hoặc form có thuộc tính "data-founderai-capture" cùng đủ 3 trường name="name"/"email"/"phone" và checkbox name="marketingConsent" (trang mới) — GIỮ NGUYÊN VĂN toàn bộ form đó, không đổi tên thuộc tính, không xóa trường nào. Nếu trang có khối nhúng Biểu mẫu (thẻ section mang thuộc tính data-founderai-form-section, bên trong có div mang thuộc tính data-founderai-form, thẻ noscript, và thẻ script nạp form-embed.js) thì GIỮ NGUYÊN VĂN toàn bộ khối đó — không đổi giá trị thuộc tính data-founderai-form, không xóa hay sửa thẻ script form-embed.js bên trong; được phép DI CHUYỂN cả khối nguyên vẹn sang vị trí khác trong trang nếu người dùng yêu cầu. Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
 2b) NGOẠI LỆ CỦA QUY TẮC 2 — khi yêu cầu là THÊM một trường mới vào form đăng ký (ví dụ: "thêm ô Tên công ty vào form", "thêm trường Quy mô kiểu chọn với 3 lựa chọn..."): đây là thay đổi ĐƯỢC PHÉP trên chính form đó. Thêm ĐÚNG các thẻ input/textarea/select/radio/checkbox được yêu cầu vào BÊN TRONG form "data-founderai-capture" hiện có (đặt sau các trường đang có, trước nút submit) — KHÔNG tạo form thứ 2, KHÔNG đổi thuộc tính "data-founderai-capture", và bắt buộc GIỮ NGUYÊN mọi trường đang có (name/email/phone/marketingConsent và mọi trường cf_* khác) — chỉ THÊM, không xoá, không đổi tên trường nào khác ngoài trường mới được yêu cầu.
-${declaredFieldsRule}${formSlotEditRule}3) Trả về JSON { "title": "...", "html": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích.
+${declaredFieldsRule}${formSlotEditRule}3) Trả về JSON { "title": "...", "html": "...", "changeSummary": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích trong "html". "changeSummary" là MỘT câu ${summaryLanguage} tối đa 160 ký tự, viết cho người KHÔNG rành kỹ thuật, nói bạn đã đổi gì ở phần nào của trang (ví dụ: "${summaryExample}"); TUYỆT ĐỐI không nhắc class, CSS, pixel, tên thẻ HTML hay mã nguồn trong câu này.
 
 QUY TẮC KỸ THUẬT:
-1) Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Hai khóa: "title" (string) và "html" (string).
+1) Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Ba khóa: "title" (string), "html" (string) và "changeSummary" (string).
 2) Nếu bản gốc có thẻ <head> chứa Tailwind CDN, hãy luôn giữ nguyên: <script src="https://cdn.tailwindcss.com"></script>
 3) KHÔNG tự ý chèn thêm thuộc tính style="..." inline; chỉ dùng class Tailwind utility.
 4) Không dùng JavaScript logic ngoài script Tailwind CDN — trừ thẻ script nạp form-embed.js nằm trong khối nhúng Biểu mẫu (nếu trang có): giữ nguyên thẻ đó, không xóa, không thêm logic JS nào khác.
 5) Ảnh đính kèm: phân biệt rõ 2 loại: (a) Ảnh chèn/thay vào trang (logo, banner, sản phẩm...): dùng ĐÚNG URL được cung cấp khi người dùng yêu cầu thay/đổi ảnh. (b) Ảnh tham khảo / ảnh chỉ chỗ sửa (ảnh chụp màn hình, mockup, ví dụ...): CHỈ dùng để HIỂU yêu cầu sửa, TUYỆT ĐỐI KHÔNG chèn URL ảnh này vào HTML. Mọi URL ảnh khác chỉ được lấy từ HTML hiện tại. Tuyệt đối không bịa URL ảnh ngoài hệ thống.
+6) ${LAYOUT_SAFETY_RULE} Luật này áp dụng cho phần bạn THÊM hoặc SỬA; KHÔNG viết lại phần không được yêu cầu chỉ vì luật này.
 
 HTML HIỆN TẠI CỦA TRANG:
 """${rawCurrent}"""
@@ -749,7 +776,7 @@ YÊU CẦU CHỈNH SỬA TỪ NGƯỜI DÙNG:
 """${instr}"""
 ${dataPromptBlock}
 Ví dụ định dạng trả về (JSON hợp lệ):
-{"title":"...","html":"..."}`;
+{"title":"...","html":"...","changeSummary":"..."}`;
 
     const telemetry = {
       mode: 'edit',
@@ -758,6 +785,7 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       finishReason: null,
       htmlChars: 0,
       outputTokens: null,
+      ...(autoLayoutFix ? { autoLayoutFix: 1, findings: Number(layoutFindingsCount) || 0 } : {}),
       assetsCount: assets.length,
       inlineAssetsCount: assets.filter((a) => a.inlineForModel).length,
       inlinePdfCount: documents.filter((d) => d.inlinePdf).length,
@@ -782,6 +810,7 @@ Ví dụ định dạng trả về (JSON hợp lệ):
         metadata: {
           actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
           mode: 'edit',
+          ...(autoLayoutFix ? { autoLayoutFix: true } : {}),
         },
       });
       const { text, blockReason, finishReason } = generation;
@@ -796,11 +825,13 @@ Ví dụ định dạng trả về (JSON hợp lệ):
 
       let title = 'Landing';
       let html = '';
+      let changeSummary = '';
 
       try {
         const parsed = JSON.parse(stripJsonFences(text));
         title = String(parsed?.title || '').trim() || 'Landing';
         html = String(parsed?.html || '').trim();
+        changeSummary = normalizeChangeSummary(parsed?.changeSummary);
       } catch {
         console.warn(`[LandingAI.editHtml] JSON parse failed (finishReason=${finishReason}), thử fallback extract HTML`);
         html = extractHtmlFromModelText(text);
@@ -837,10 +868,16 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       } catch (valErr) {
         valErr.generatedTitle = title;
         valErr.generatedHtml = html;
+        valErr.generatedChangeSummary = changeSummary;
         throw valErr;
       }
 
-      return { title, html, unusedAssets: valRes.unusedAssets };
+      return {
+        title,
+        html,
+        unusedAssets: valRes.unusedAssets,
+        ...(changeSummary ? { changeSummary } : {}),
+      };
     };
 
     try {
@@ -871,6 +908,7 @@ Ví dụ định dạng trả về (JSON hợp lệ):
                 html: strippedHtml,
                 unusedAssets: valRes.unusedAssets,
                 strippedImageUrls: stripped,
+                ...(secondErr.generatedChangeSummary ? { changeSummary: secondErr.generatedChangeSummary } : {}),
               };
             } else {
               throw secondErr;

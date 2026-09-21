@@ -29,13 +29,17 @@ export async function getSessionMessages(sessionId, userId) {
   if (!sessions.length) return null;
 
   const { rows } = await db.query(
-    `SELECT role, content, type, data, missing_fields
+    `SELECT id, role, content, type, data, missing_fields
      FROM ai_chat_messages
      WHERE session_id = $1
      ORDER BY id ASC`,
     [sessionId]
   );
-  return { messages: rows, wizardState: sessions[0].wizard_state || null };
+  // id là BIGSERIAL → pg trả chuỗi; đổi sang số cho khớp `data.messageId` của đường sinh landing.
+  // Frontend đã đọc `msg.id` (AiChatbot.jsx: messageId={msg.id}) — thiếu cột này thì thẻ landing
+  // tải lại từ phiên không có id, mọi lượt sửa rơi về "tin landing_page mới nhất".
+  const messages = rows.map((row) => ({ ...row, id: Number(row.id) }));
+  return { messages, wizardState: sessions[0].wizard_state || null };
 }
 
 /**
@@ -191,6 +195,44 @@ export async function saveMessages(sessionId, userId, userContent, assistantMsg,
   return true;
 }
 
+// Cùng SQL với saveMessages, thêm RETURNING để biết id tin vừa lưu (thẻ landing cần id để vòng tự
+// sửa đếm trần lượt theo từng tin). saveMessages giữ nguyên trả boolean — nhiều nơi đang dùng.
+// Trả { userMessageId, assistantMessageId } hoặc null nếu không ghi được.
+export async function saveMessagesReturningIds(sessionId, userId, userContent, assistantMsg, userFiles = []) {
+  const userData = Array.isArray(userFiles) && userFiles.length
+    ? JSON.stringify({ files: userFiles })
+    : null;
+  const { rowCount, rows } = await db.query(
+    `INSERT INTO ai_chat_messages (session_id, role, content, type, data, missing_fields)
+     SELECT * FROM (VALUES
+       ($1::bigint, 'user',      $3::text, NULL::varchar, $8::jsonb, NULL::jsonb),
+       ($1::bigint, 'assistant', $4::text, $5::varchar,   $6::jsonb,   $7::jsonb)
+     ) AS v(session_id, role, content, type, data, missing_fields)
+     WHERE EXISTS (SELECT 1 FROM ai_chat_sessions WHERE id = $1 AND id_user = $2)
+     RETURNING id, role`,
+    [
+      sessionId,
+      userId,
+      userContent,
+      assistantMsg.content ?? '',
+      assistantMsg.type ?? null,
+      assistantMsg.data != null ? JSON.stringify(assistantMsg.data) : null,
+      assistantMsg.missing_fields?.length ? JSON.stringify(assistantMsg.missing_fields) : null,
+      userData,
+    ]
+  );
+  if (!rowCount) return null;
+  await db.query(
+    `UPDATE ai_chat_sessions SET updated_at = NOW() WHERE id = $1 AND id_user = $2`,
+    [sessionId, userId]
+  );
+  const idOf = (role) => {
+    const row = (rows || []).find((r) => r.role === role);
+    return row ? Number(row.id) : null;
+  };
+  return { userMessageId: idOf('user'), assistantMessageId: idOf('assistant') };
+}
+
 // Lưu một assistant message duy nhất (không có user message đi kèm) — cùng gate ownership.
 export async function saveAssistantMessage(sessionId, userId, assistantMsg) {
   const { rowCount } = await db.query(
@@ -219,6 +261,25 @@ export async function deleteSession(sessionId, userId) {
     [sessionId, userId]
   );
   return rowCount > 0;
+}
+
+// Đọc MỘT tin landing_page: { id, data } hoặc null. messageId null → tin landing_page mới nhất của
+// phiên — CÙNG luật với nhánh null của updateLandingPageMessage bên dưới. Có gate ownership.
+export async function getLandingPageMessage(sessionId, userId, messageId = null) {
+  const mid = Number(messageId);
+  const byId = Number.isInteger(mid) && mid > 0;
+  const { rows } = await db.query(
+    `SELECT m.id, m.data
+     FROM ai_chat_messages m
+     JOIN ai_chat_sessions s ON s.id = m.session_id
+     WHERE m.session_id = $1 AND s.id_user = $2 AND m.type = 'landing_page'
+       ${byId ? 'AND m.id = $3' : ''}
+     ORDER BY m.id DESC
+     LIMIT 1`,
+    byId ? [sessionId, userId, mid] : [sessionId, userId]
+  );
+  if (!rows.length) return null;
+  return { id: Number(rows[0].id), data: rows[0].data || {} };
 }
 
 export async function updateLandingPageMessage(sessionId, userId, updatedData, messageId = null) {

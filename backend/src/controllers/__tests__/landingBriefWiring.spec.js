@@ -7,6 +7,7 @@ const mockResolveLandingBrief = jest.fn();
 const mockBuildLandingBriefContext = jest.fn();
 const mockChargeAiCredit = jest.fn();
 const mockSaveMessages = jest.fn();
+const mockSaveMessagesReturningIds = jest.fn();
 
 jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({
   default: { generate: mockGenerate },
@@ -28,6 +29,7 @@ jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({
 }));
 jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   saveMessages: mockSaveMessages,
+  saveMessagesReturningIds: mockSaveMessagesReturningIds,
   createSession: jest.fn(),
   getSessionWizardState: jest.fn(),
   saveAssistantMessage: jest.fn(),
@@ -99,6 +101,7 @@ describe('LandingBrief endpoint wiring', () => {
     mockGenerateLandingPage.mockResolvedValue({ title: 'T', html: '<div/>', css: '' });
     mockChargeAiCredit.mockResolvedValue(undefined);
     mockSaveMessages.mockResolvedValue(undefined);
+    mockSaveMessagesReturningIds.mockResolvedValue({ userMessageId: 1, assistantMessageId: 2 });
   });
 
   it('POST /ai/generate-landing-html: invalid brief → 400 and does not call Gemini generate', async () => {
@@ -144,7 +147,9 @@ describe('LandingBrief endpoint wiring', () => {
       actorUserId: 9,
       landingBriefContext: 'BRIEF_CTX',
     }));
-    expect(mockSaveMessages).toHaveBeenCalledWith(77, 9, 'summary', expect.any(Object));
+    // Đường sinh landing lưu bằng saveMessagesReturningIds (để trả messageId) — cùng đối số: actor ghi phiên.
+    expect(mockSaveMessagesReturningIds).toHaveBeenCalledWith(77, 9, 'summary', expect.any(Object));
+    expect(mockSaveMessages).not.toHaveBeenCalled();
     expect(mockChargeAiCredit).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });

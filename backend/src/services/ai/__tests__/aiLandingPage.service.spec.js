@@ -1106,4 +1106,140 @@ describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T8)', () => 
   });
 });
 
+/**
+ * PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA mục 10.3 + 10.5 — changeSummary tiếng người từ chính AI, và
+ * luật BỐ CỤC AN TOÀN ở cả prompt SINH lẫn prompt SỬA (phòng bệnh; bộ đo ở trình duyệt là chữa bệnh).
+ */
+describe('aiLandingPageService — changeSummary + BỐ CỤC AN TOÀN (PR-2 landing tự kiểm)', () => {
+  const returnsSummary = (changeSummary, extra = {}) =>
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: validFormHtml, ...(changeSummary !== undefined ? { changeSummary } : {}), ...extra }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+  const edit = (over = {}) =>
+    aiLandingPageService.editHtml({ userId: 1, currentHtml: validFormHtml, instruction: 'Sửa bố cục', ...over });
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getContextForLandingAi.mockResolvedValue('');
+  });
+
+  it('prompt SINH có luật BỐ CỤC AN TOÀN (grid-cols-[9rem_1fr]) và KHÔNG đòi changeSummary', async () => {
+    mockGenerateReturns(validFormHtml);
+    await aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toContain('BỐ CỤC AN TOÀN: không đặt chữ bằng absolute với toạ độ âm');
+    expect(sentPrompt).toContain('grid grid-cols-[9rem_1fr] gap-6');
+    expect(sentPrompt).toContain('w-36 shrink-0');
+    expect(sentPrompt).toContain('không whitespace-nowrap');
+    expect(sentPrompt).not.toContain('changeSummary');
+    // chèn NGAY SAU quy tắc 4 (styling), trước quy tắc 5, không làm lệch đánh số
+    expect(sentPrompt).toMatch(/keyframe animation nếu thật sự cần\.\n4b\) BỐ CỤC AN TOÀN[^\n]*\n5\) Không dùng JavaScript/);
+  });
+
+  it('prompt SỬA có luật BỐ CỤC AN TOÀN (chỉ cho phần thêm/sửa) và đòi changeSummary tiếng người', async () => {
+    returnsSummary('Đã nới cột ngày ở phần Dòng thời gian để năm không bị che');
+    await edit();
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toContain('grid grid-cols-[9rem_1fr] gap-6');
+    expect(sentPrompt).toContain('BỐ CỤC AN TOÀN');
+    expect(sentPrompt).toMatch(/áp dụng cho phần bạn THÊM hoặc SỬA; KHÔNG viết lại phần không được yêu cầu/);
+    expect(sentPrompt).toContain('{ "title": "...", "html": "...", "changeSummary": "..." }');
+    expect(sentPrompt).toContain('Ba khóa: "title" (string), "html" (string) và "changeSummary" (string).');
+    expect(sentPrompt).toMatch(/MỘT câu tiếng Việt tối đa 160 ký tự, viết cho người KHÔNG rành kỹ thuật/);
+    expect(sentPrompt).toContain('Đã nới cột ngày ở phần Dòng thời gian để năm không bị che');
+    expect(sentPrompt).toMatch(/TUYỆT ĐỐI không nhắc class, CSS, pixel, tên thẻ HTML hay mã nguồn/);
+    expect(sentPrompt).toContain('{"title":"...","html":"...","changeSummary":"..."}');
+    // Rule 2b vẫn liền ngay rule 3 như trước — test "prompt giữ nguyên văn" phía trên không được vỡ
+    expect(sentPrompt).toMatch(/không đổi tên trường nào khác ngoài trường mới được yêu cầu\.\n3\) Trả về JSON/);
+  });
+
+  it('locale en: changeSummary dặn viết tiếng Anh, ví dụ tiếng Anh', async () => {
+    returnsSummary('Widened the date column');
+    await edit({ contentLocale: 'en' });
+    const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
+    expect(sentPrompt).toMatch(/MỘT câu tiếng Anh tối đa 160 ký tự/);
+    expect(sentPrompt).toContain('Widened the date column in the Timeline section so the year is no longer covered');
+  });
+
+  it('parse: changeSummary là string → trả về trong kết quả', async () => {
+    returnsSummary('Đã nới cột ngày ở phần Dòng thời gian để năm không bị che');
+    const result = await edit();
+    expect(result.changeSummary).toBe('Đã nới cột ngày ở phần Dòng thời gian để năm không bị che');
+    expect(result.html).toBe(validFormHtml);
+  });
+
+  it('parse: chứa thẻ HTML → bỏ thẻ, gộp khoảng trắng; quá 200 ký tự → cắt 200', async () => {
+    returnsSummary('Đã <b>nới</b>\n  cột   ngày');
+    expect((await edit()).changeSummary).toBe('Đã nới cột ngày');
+    returnsSummary('Đã sửa '.repeat(100));
+    expect((await edit()).changeSummary).toHaveLength(200);
+  });
+
+  it.each([
+    ['thiếu khoá', undefined],
+    ['là object', { a: 1 }],
+    ['là số', 42],
+    ['là mảng', ['Đã sửa']],
+    ['rỗng sau khi bỏ thẻ', '<p></p>'],
+    ['lộ chuyện kỹ thuật (pr-4)', 'Đã thêm pr-4 vào cột ngày'],
+    ['lộ chuyện kỹ thuật (px)', 'Đã tăng khoảng cách thêm 16px'],
+  ])('parse: changeSummary %s → KHÔNG có khoá changeSummary trong kết quả', async (_label, value) => {
+    returnsSummary(value);
+    const result = await edit();
+    expect(result).not.toHaveProperty('changeSummary');
+    expect(result.html).toBe(validFormHtml);
+  });
+
+  it('đường fallback không JSON (model trả HTML trần) → không có changeSummary, không lỗi', async () => {
+    generateWithBudget.mockResolvedValue({ text: `Đây là trang:\n\`\`\`html\n${validFormHtml}\n\`\`\``, blockReason: null, finishReason: 'STOP' });
+    const result = await edit();
+    expect(result).not.toHaveProperty('changeSummary');
+    expect(result.html).toBe(validFormHtml);
+  });
+
+  it('nhánh tự gỡ ảnh bịa vẫn mang changeSummary của lượt sinh', async () => {
+    const fakeUrl = 'https://fake.cdn.com/fake-summary.png';
+    const htmlFake = validFormHtml.replace('</body>', `<img src="${fakeUrl}"></body>`);
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: htmlFake, changeSummary: 'Đã thêm ảnh vào cuối trang' }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    const result = await edit({ instruction: 'Thêm ảnh' });
+    expect(result.strippedImageUrls).toEqual([fakeUrl]);
+    expect(result.changeSummary).toBe('Đã thêm ảnh vào cuối trang');
+  });
+
+  it('lượt tự sửa: metadata gửi aiUsageMeter có autoLayoutFix=true; lượt thường KHÔNG có khoá này', async () => {
+    returnsSummary('Đã sửa');
+    await edit({ autoLayoutFix: true, layoutFindingsCount: 2 });
+    expect(generateWithBudget.mock.calls[0][1].metadata).toMatchObject({ mode: 'edit', autoLayoutFix: true });
+    returnsSummary('Đã sửa');
+    await edit();
+    expect(generateWithBudget.mock.calls[1][1].metadata).toEqual({ actorUserId: 1, mode: 'edit' });
+  });
+
+  it('log vòng đời: lượt tự sửa có autoLayoutFix=1 findings=<n> ngay sau mode=edit; lượt thường giữ nguyên', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      returnsSummary('Đã sửa');
+      await edit({ autoLayoutFix: true, layoutFindingsCount: 2 });
+      const auto = logSpy.mock.calls.map(([line]) => line);
+      expect(auto[0]).toMatch(/^\[LandingAI\] start mode=edit autoLayoutFix=1 findings=2 ms=\d+ /);
+      expect(auto[1]).toMatch(/^\[LandingAI\] done mode=edit autoLayoutFix=1 findings=2 outcome=success ms=\d+ /);
+      // lệnh đếm lượt sửa của nghiệm thu N4 vẫn khớp cả hai loại
+      expect(auto[0]).toMatch(/^\[LandingAI\] start mode=edit/);
+
+      logSpy.mockClear();
+      returnsSummary('Đã sửa');
+      await edit();
+      const normal = logSpy.mock.calls.map(([line]) => line);
+      expect(normal[0]).toMatch(/^\[LandingAI\] start mode=edit ms=\d+ finishReason=unknown promptChars=\d+ htmlChars=0$/);
+      expect(normal[0]).not.toContain('autoLayoutFix');
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});

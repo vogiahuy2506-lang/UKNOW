@@ -16,12 +16,21 @@ function buildCreditErrorPayload(error) {
  * Pre-flight only: verify credit available before handler (no charge).
  * Handler must call chargeAiCredit(req) after successful AI output.
  *
+ * Lượt sửa TỰ ĐỘNG do lỗi hiển thị của hệ thống (`body.autoLayoutFix === true`, plan landing tự
+ * kiểm mục 10.2) KHÔNG kiểm và KHÔNG trừ credit — khách hết credit vẫn được sửa lỗi của hệ thống.
+ * Chống lợi dụng nằm ở handler: trần 2 lượt/tin đếm ở server, lệnh sửa do server dựng, tin phải
+ * thuộc phiên của chính user. Token model vẫn ghi qua aiUsageMeter.
+ *
  * @param {string} feature
  */
 export function assertAiCreditAvailable(feature) {
   return async (req, res, next) => {
     try {
       req.aiCreditFeature = feature;
+      if (req.body?.autoLayoutFix === true) {
+        req.aiCreditSkipped = true;
+        return next();
+      }
       const forceBillable = Boolean(req.body?.forceBillable);
       req.aiCreditForceBillable = forceBillable;
       const ownerContextId = req.user?.activeContext?.type === 'employee'
@@ -45,6 +54,7 @@ export function assertAiCreditAvailable(feature) {
  * @param {import('express').Request} req
  */
 export async function chargeAiCredit(req) {
+  if (req.aiCreditSkipped) return; // lượt tự sửa của hệ thống — không bao giờ trừ credit
   if (!req.user?.id || !req.aiCreditFeature) return;
   await aiCreditMeter.consume(req.user.id, {
     feature: req.aiCreditFeature,

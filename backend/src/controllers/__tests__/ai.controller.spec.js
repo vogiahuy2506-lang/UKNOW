@@ -28,9 +28,11 @@ jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
 }));
 
 const editHtml = jest.fn();
+const generateLanding = jest.fn();
 jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({
   default: {
     editHtml,
+    generate: generateLanding,
   },
 }));
 
@@ -102,15 +104,24 @@ jest.unstable_mockModule('../campaign.controller.js', () => ({
   },
 }));
 jest.unstable_mockModule('../../services/campaign/campaignCrud.service.js', () => ({ default: {} }));
+const getLandingPageMessage = jest.fn();
+const updateLandingPageMessage = jest.fn();
+const saveMessagesReturningIds = jest.fn();
+const saveAssistantMessage = jest.fn();
 jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   createSession,
   saveMessages,
   getSessionWizardState,
   updateWizardStateSections,
+  getLandingPageMessage,
+  updateLandingPageMessage,
+  saveMessagesReturningIds,
+  saveAssistantMessage,
   listUserFilesSinceLastLanding: jest.fn(async () => []),
 }));
 
 const { default: aiController } = await import('../ai.controller.js');
+const { buildAutoLayoutFixInstruction, normalizeLayoutFindings } = await import('../../utils/landingLayoutFindings.util.js');
 
 const makeRes = () => {
   const res = {
@@ -578,6 +589,423 @@ describe('ai.controller', () => {
           },
         ],
       }),
+    });
+  });
+});
+
+
+/**
+ * PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA mục 10 (PR-2): lượt sửa tự động không trừ credit, lệnh sửa do
+ * server dựng, trần 2 lượt/tin, lưu bản trước + Hoàn tác, và trả messageId của thẻ landing vừa sinh.
+ */
+describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landing tự kiểm)', () => {
+  const finding = (over = {}) => ({
+    kind: 'text_covered',
+    width: 1280,
+    text: '03/02/2026',
+    selector: 'span.block.text-lg.font-extrabold:nth-of-type(1)',
+    coveredBy: { text: '1', selector: 'div.absolute.-left-11.w-8:nth-of-type(1)' },
+    overlapPx: 12,
+    side: 'right',
+    sectionTitle: 'Dòng Thời Gian',
+    ...over,
+  });
+
+  const autoReq = (body = {}, user = { id: 1, role: 'user' }) => ({
+    user,
+    body: {
+      currentHtml: '<div>Trang hiện tại</div>',
+      autoLayoutFix: true,
+      layoutFindings: [finding()],
+      sessionId: 55,
+      messageId: 900,
+      ...body,
+    },
+  });
+  const manualReq = (body = {}) => ({
+    user: { id: 1, role: 'user' },
+    body: {
+      currentHtml: '<div>Trang hiện tại</div>',
+      instruction: 'Đổi tiêu đề thành Xin chào',
+      sessionId: 55,
+      messageId: 900,
+      ...body,
+    },
+  });
+
+  beforeEach(() => {
+    editHtml.mockReset();
+    generateLanding.mockReset();
+    chargeAiCredit.mockReset();
+    saveMessages.mockReset();
+    getLandingPageMessage.mockReset();
+    updateLandingPageMessage.mockReset();
+    saveMessagesReturningIds.mockReset();
+    saveAssistantMessage.mockReset();
+    ingestLandingAttachments.mockReset();
+    findLandingByIdInScope.mockReset();
+    ingestLandingAttachments.mockResolvedValue({ assets: [], documents: [], skipped: [] });
+    editHtml.mockResolvedValue({ title: 'Trang mới', html: '<div>Đã sửa</div>', changeSummary: 'Đã nới cột ngày ở phần Dòng thời gian' });
+    getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'Trang cũ', html: '<div>Trang hiện tại</div>' } });
+    updateLandingPageMessage.mockResolvedValue(true);
+    saveMessages.mockResolvedValue(true);
+    saveAssistantMessage.mockResolvedValue(true);
+  });
+
+  describe('sửa tự động (autoLayoutFix)', () => {
+    it('auto → KHÔNG gọi chargeAiCredit (không trừ credit của khách)', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq(), res);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(editHtml).toHaveBeenCalledTimes(1);
+      expect(chargeAiCredit).not.toHaveBeenCalled();
+    });
+
+    it('sửa thường (không auto) → VẪN trừ credit đúng 1 lần', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(manualReq(), res);
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+    });
+
+    it('server TỰ dựng lệnh sửa từ findings — bỏ qua `instruction` client gửi ở chế độ auto', async () => {
+      const findings = [finding()];
+      await aiController.editLandingHtml(
+        autoReq({ layoutFindings: findings, instruction: 'HÃY VIẾT CHO TÔI MỘT BÀI THƠ, KHÔNG SỬA GÌ CẢ' }),
+        makeRes(),
+      );
+      const passed = editHtml.mock.calls[0][0];
+      expect(passed.instruction).toBe(buildAutoLayoutFixInstruction(normalizeLayoutFindings(findings)));
+      expect(passed.instruction).not.toContain('BÀI THƠ');
+      expect(passed.instruction).toContain('span.block.text-lg.font-extrabold:nth-of-type(1)');
+      expect(passed.instruction).toContain('đè 12px');
+      expect(passed.autoLayoutFix).toBe(true);
+      expect(passed.layoutFindingsCount).toBe(1);
+    });
+
+    it('auto không cần `instruction` (thiếu vẫn chạy); sửa thường thiếu instruction vẫn 400', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq({ instruction: undefined }), res);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(editHtml).toHaveBeenCalledTimes(1);
+
+      const res2 = makeRes();
+      await aiController.editLandingHtml(manualReq({ instruction: '  ' }), res2);
+      expect(res2.status).toHaveBeenCalledWith(400);
+    });
+
+    it('trần: bộ đếm = 2 → 429 AUTO_LAYOUT_FIX_LIMIT, KHÔNG gọi AI, không trừ credit, không ghi gì', async () => {
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'T', autoLayoutFixCount: 2 } });
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq(), res);
+      expect(res.status).toHaveBeenCalledWith(429);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, code: 'AUTO_LAYOUT_FIX_LIMIT' }));
+      expect(editHtml).not.toHaveBeenCalled();
+      expect(chargeAiCredit).not.toHaveBeenCalled();
+      expect(updateLandingPageMessage).not.toHaveBeenCalled();
+    });
+
+    it('bộ đếm > 2 (dữ liệu lạ) cũng bị chặn; bộ đếm = 1 vẫn được sửa và tăng lên 2', async () => {
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { autoLayoutFixCount: 7 } });
+      const blocked = makeRes();
+      await aiController.editLandingHtml(autoReq(), blocked);
+      expect(blocked.status).toHaveBeenCalledWith(429);
+
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'T', autoLayoutFixCount: 1 } });
+      const ok = makeRes();
+      await aiController.editLandingHtml(autoReq(), ok);
+      expect(ok.status).not.toHaveBeenCalled();
+      expect(updateLandingPageMessage.mock.calls[0][2].autoLayoutFixCount).toBe(2);
+    });
+
+    it('findings rỗng / toàn phần tử sai kiểu → 400 LAYOUT_FINDINGS_REQUIRED, không gọi AI', async () => {
+      for (const layoutFindings of [undefined, [], 'x', [{ kind: 'bogus' }, null, 3]]) {
+        const res = makeRes();
+        await aiController.editLandingHtml(autoReq({ layoutFindings }), res);
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'LAYOUT_FINDINGS_REQUIRED' }));
+      }
+      expect(editHtml).not.toHaveBeenCalled();
+      expect(getLandingPageMessage).not.toHaveBeenCalled();
+    });
+
+    it('thiếu sessionId → 400; không tìm thấy tin landing_page → 404; cả hai không gọi AI', async () => {
+      const noSession = makeRes();
+      await aiController.editLandingHtml(autoReq({ sessionId: undefined }), noSession);
+      expect(noSession.status).toHaveBeenCalledWith(400);
+      expect(noSession.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTO_LAYOUT_FIX_SESSION_REQUIRED' }));
+
+      getLandingPageMessage.mockResolvedValue(null);
+      const noMessage = makeRes();
+      await aiController.editLandingHtml(autoReq(), noMessage);
+      expect(noMessage.status).toHaveBeenCalledWith(404);
+      expect(noMessage.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'LANDING_MESSAGE_NOT_FOUND' }));
+      expect(editHtml).not.toHaveBeenCalled();
+    });
+
+    it('không đọc được tin (lỗi DB) → không chạy sửa miễn phí (500), không gọi AI', async () => {
+      getLandingPageMessage.mockRejectedValue(new Error('db down'));
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq(), res);
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(editHtml).not.toHaveBeenCalled();
+    });
+
+    it('thành công: một UPDATE ghi html mới + previousHtml + previousTitle + autoLayoutFixCount 1, đúng id tin đã đọc', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq({ messageId: undefined }), res);
+      expect(updateLandingPageMessage).toHaveBeenCalledTimes(1);
+      const [sid, uid, patch, mid] = updateLandingPageMessage.mock.calls[0];
+      expect([sid, uid, mid]).toEqual([55, 1, 900]); // id lấy từ tin đã đọc, không phải messageId client
+      expect(patch).toEqual({
+        title: 'Trang mới',
+        html: '<div>Đã sửa</div>',
+        previousHtml: '<div>Trang hiện tại</div>',
+        previousTitle: 'Trang cũ',
+        autoLayoutFixCount: 1,
+      });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          html: '<div>Đã sửa</div>',
+          changeSummary: 'Đã nới cột ngày ở phần Dòng thời gian',
+          canRevert: true,
+        }),
+      });
+    });
+
+    it('lưu hỏng thì KHÔNG báo canRevert; không có title cũ thì không ghi previousTitle', async () => {
+      updateLandingPageMessage.mockResolvedValue(false);
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: {} });
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq(), res);
+      const { data } = res.json.mock.calls[0][0];
+      expect(data).not.toHaveProperty('canRevert');
+      expect(updateLandingPageMessage.mock.calls[0][2]).not.toHaveProperty('previousTitle');
+    });
+
+    it('lệnh kỹ thuật KHÔNG bị lưu thành tin của người dùng: chỉ ghi lời xác nhận tiếng người của AI', async () => {
+      await aiController.editLandingHtml(autoReq(), makeRes());
+      expect(saveMessages).not.toHaveBeenCalled();
+      expect(saveAssistantMessage).toHaveBeenCalledTimes(1);
+      const [, , ack] = saveAssistantMessage.mock.calls[0];
+      expect(ack.type).toBe('landing_edit_ack');
+      expect(ack.content).toBe('Đã chỉnh hiển thị: Đã nới cột ngày ở phần Dòng thời gian');
+      expect(ack.content).not.toMatch(/px|span\.|nth-of-type|absolute/);
+    });
+
+    it('không có changeSummary → lời xác nhận chung, không lộ gì kỹ thuật', async () => {
+      editHtml.mockResolvedValue({ title: 'T', html: '<div>x</div>' });
+      await aiController.editLandingHtml(autoReq(), makeRes());
+      expect(saveAssistantMessage.mock.calls[0][2].content).toBe('Đã chỉnh lại hiển thị của trang.');
+    });
+
+    it('auto không nhận file đính kèm (không mở đường nạp file miễn phí)', async () => {
+      await aiController.editLandingHtml(autoReq({ files: [{ tempId: 't1', originalName: 'a.png' }] }), makeRes());
+      expect(ingestLandingAttachments).toHaveBeenCalledWith(expect.objectContaining({ files: [] }));
+    });
+
+    it('bắn song song: request thứ hai cùng tin khi lượt đầu chưa xong → 429 (không lách trần bằng đua request)', async () => {
+      let finishFirst;
+      editHtml.mockImplementationOnce(
+        () => new Promise((resolve) => { finishFirst = () => resolve({ title: 'T', html: '<div>x</div>' }); }),
+      );
+      const firstRes = makeRes();
+      const first = aiController.editLandingHtml(autoReq(), firstRes);
+      await new Promise((resolve) => setImmediate(resolve)); // để lượt đầu tới chỗ chờ AI
+
+      const secondRes = makeRes();
+      await aiController.editLandingHtml(autoReq(), secondRes);
+      expect(secondRes.status).toHaveBeenCalledWith(429);
+      expect(editHtml).toHaveBeenCalledTimes(1);
+
+      finishFirst();
+      await first;
+      expect(firstRes.status).not.toHaveBeenCalled();
+
+      // xong lượt đầu thì khoá nhả: lượt sau (bộ đếm vẫn 0 trong mock) chạy được
+      const thirdRes = makeRes();
+      await aiController.editLandingHtml(autoReq(), thirdRes);
+      expect(thirdRes.status).not.toHaveBeenCalled();
+    });
+
+    it('AI lỗi giữa chừng vẫn nhả khoá — lượt sau không bị kẹt 429', async () => {
+      editHtml.mockRejectedValueOnce(Object.assign(new Error('AI hỏng'), { status: 502 }));
+      const failed = makeRes();
+      await aiController.editLandingHtml(autoReq(), failed);
+      expect(failed.status).toHaveBeenCalledWith(502);
+      expect(updateLandingPageMessage).not.toHaveBeenCalled();
+
+      const retry = makeRes();
+      await aiController.editLandingHtml(autoReq(), retry);
+      expect(retry.status).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sửa thường (người dùng gõ, có trừ credit)', () => {
+    it('lưu previousHtml + previousTitle, ĐẶT LẠI bộ đếm về 0, báo canRevert, lưu tin user + tin xác nhận như cũ', async () => {
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'Trang cũ', autoLayoutFixCount: 2 } });
+      const res = makeRes();
+      await aiController.editLandingHtml(manualReq(), res);
+      expect(editHtml.mock.calls[0][0].instruction).toBe('Đổi tiêu đề thành Xin chào');
+      expect(editHtml.mock.calls[0][0].autoLayoutFix).toBe(false);
+      expect(updateLandingPageMessage.mock.calls[0][2]).toEqual({
+        title: 'Trang mới',
+        html: '<div>Đã sửa</div>',
+        previousHtml: '<div>Trang hiện tại</div>',
+        previousTitle: 'Trang cũ',
+        autoLayoutFixCount: 0,
+      });
+      expect(res.json.mock.calls[0][0].data.canRevert).toBe(true);
+      expect(saveMessages).toHaveBeenCalledWith(55, 1, 'Đổi tiêu đề thành Xin chào', expect.objectContaining({ type: 'landing_edit_ack' }));
+      expect(saveAssistantMessage).not.toHaveBeenCalled();
+    });
+
+    it('không đọc được tin (lỗi DB) → vẫn sửa được như trước, dùng messageId client', async () => {
+      getLandingPageMessage.mockRejectedValue(new Error('db down'));
+      const res = makeRes();
+      await aiController.editLandingHtml(manualReq(), res);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(updateLandingPageMessage.mock.calls[0][3]).toBe(900);
+      expect(updateLandingPageMessage.mock.calls[0][2]).not.toHaveProperty('previousTitle');
+    });
+
+    it('không có sessionId → không đọc/ghi tin nào, không canRevert (hành vi cũ)', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(manualReq({ sessionId: undefined }), res);
+      expect(getLandingPageMessage).not.toHaveBeenCalled();
+      expect(updateLandingPageMessage).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('canRevert');
+    });
+  });
+
+  describe('Hoàn tác (PATCH /ai/sessions/:id/landing-message)', () => {
+    const revertReq = (data = { revert: true }, extra = {}) => ({
+      user: { id: 1, role: 'user' },
+      params: { id: '55' },
+      body: { messageId: 900, data, ...extra },
+    });
+    const stored = {
+      id: 900,
+      data: { title: 'Trang mới', html: '<div>B mới</div>', previousTitle: 'Trang cũ', previousHtml: '<div>A cũ</div>', autoLayoutFixCount: 2 },
+    };
+
+    beforeEach(() => {
+      getSessionWizardState.mockResolvedValue({ any: 'state' });
+      getLandingPageMessage.mockResolvedValue(stored);
+    });
+
+    it('hoán html ↔ previousHtml và title ↔ previousTitle do SERVER làm, trả { title, html }', async () => {
+      const res = makeRes();
+      await aiController.patchLandingMessage(revertReq(), res);
+      expect(getLandingPageMessage).toHaveBeenCalledWith(55, 1, 900);
+      expect(updateLandingPageMessage).toHaveBeenCalledWith(
+        55,
+        1,
+        { title: 'Trang cũ', html: '<div>A cũ</div>', previousHtml: '<div>B mới</div>', previousTitle: 'Trang mới' },
+        900,
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: { title: 'Trang cũ', html: '<div>A cũ</div>', canRevert: true },
+      });
+    });
+
+    it('không có bản trước → 409 NOTHING_TO_REVERT, không ghi gì', async () => {
+      for (const data of [{ title: 'T', html: '<p/>' }, { title: 'T', html: '<p/>', previousHtml: '   ' }, { previousHtml: 5 }]) {
+        getLandingPageMessage.mockResolvedValue({ id: 900, data });
+        const res = makeRes();
+        await aiController.patchLandingMessage(revertReq(), res);
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'NOTHING_TO_REVERT' }));
+      }
+      expect(updateLandingPageMessage).not.toHaveBeenCalled();
+    });
+
+    it('BỎ QUA html/title/previousHtml client gửi kèm — chỉ dùng bản đã lưu ở server', async () => {
+      const res = makeRes();
+      await aiController.patchLandingMessage(
+        revertReq({ revert: true, html: '<script>evil()</script>', title: 'HACK', previousHtml: '<b>evil</b>', previousTitle: 'HACK2' }),
+        res,
+      );
+      const patch = updateLandingPageMessage.mock.calls[0][2];
+      expect(patch.html).toBe('<div>A cũ</div>');
+      expect(patch.title).toBe('Trang cũ');
+      expect(patch.previousHtml).toBe('<div>B mới</div>');
+      expect(JSON.stringify(patch)).not.toMatch(/evil|HACK/);
+      expect(JSON.stringify(res.json.mock.calls[0][0])).not.toMatch(/evil|HACK/);
+    });
+
+    it('thiếu previousTitle → giữ title hiện tại, và title hiện tại thành previousTitle mới (Hoàn tác ↔ Làm lại)', async () => {
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'Trang mới', html: '<div>B</div>', previousHtml: '<div>A</div>' } });
+      await aiController.patchLandingMessage(revertReq(), makeRes());
+      const patch = updateLandingPageMessage.mock.calls[0][2];
+      expect(patch).toEqual({ title: 'Trang mới', html: '<div>A</div>', previousHtml: '<div>B</div>', previousTitle: 'Trang mới' });
+    });
+
+    it('session không thuộc user → 404; tin không tồn tại → 404; không ghi', async () => {
+      getSessionWizardState.mockResolvedValue(null);
+      const noSession = makeRes();
+      await aiController.patchLandingMessage(revertReq(), noSession);
+      expect(noSession.status).toHaveBeenCalledWith(404);
+
+      getSessionWizardState.mockResolvedValue({ any: 'state' });
+      getLandingPageMessage.mockResolvedValue(null);
+      const noMessage = makeRes();
+      await aiController.patchLandingMessage(revertReq(), noMessage);
+      expect(noMessage.status).toHaveBeenCalledWith(404);
+      expect(updateLandingPageMessage).not.toHaveBeenCalled();
+    });
+
+    it('chỉ revert === true mới vào nhánh hoàn tác; các nhánh cũ (whitelist 3 khoá) giữ nguyên', async () => {
+      const res = makeRes();
+      await aiController.patchLandingMessage(revertReq({ revert: 'true', html: '<p>x</p>' }), res);
+      expect(res.status).toHaveBeenCalledWith(400); // không có khoá whitelist nào
+      expect(updateLandingPageMessage).not.toHaveBeenCalled();
+
+      const res2 = makeRes();
+      await aiController.patchLandingMessage(revertReq({ slug: 'trang-a', html: '<p>x</p>' }), res2);
+      expect(updateLandingPageMessage).toHaveBeenCalledWith(55, 1, { slug: 'trang-a' }, 900);
+      expect(res2.json).toHaveBeenCalledWith({ success: true, data: { slug: 'trang-a' } });
+    });
+  });
+
+  describe('generateLandingHtml trả messageId (10.1)', () => {
+    const genReq = (body = {}) => ({ user: { id: 1, role: 'user' }, body: { prompt: 'Landing khoá học', sessionId: 55, ...body } });
+
+    beforeEach(() => {
+      generateLanding.mockResolvedValue({ title: 'Trang khoá học', html: '<div>Nội dung</div>' });
+    });
+
+    it('lưu tin bằng saveMessagesReturningIds và gán data.messageId = id tin assistant', async () => {
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 4241, assistantMessageId: 4242 });
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(), res);
+      expect(saveMessagesReturningIds).toHaveBeenCalledTimes(1);
+      expect(saveMessagesReturningIds.mock.calls[0][4]).toBeUndefined();
+      expect(saveMessagesReturningIds.mock.calls[0][3]).toMatchObject({ type: 'landing_page', data: { title: 'Trang khoá học' } });
+      expect(saveMessages).not.toHaveBeenCalled(); // không đổi saveMessages / không lưu hai lần
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: expect.objectContaining({ messageId: 4242 }) });
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1); // sinh trang vẫn trừ credit
+    });
+
+    it('lưu hỏng (null hoặc ném lỗi) → không có messageId, response vẫn thành công', async () => {
+      saveMessagesReturningIds.mockResolvedValue(null);
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(), res);
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+
+      saveMessagesReturningIds.mockRejectedValue(new Error('db down'));
+      const res2 = makeRes();
+      await aiController.generateLandingHtml(genReq(), res2);
+      expect(res2.json.mock.calls[0][0]).toMatchObject({ success: true });
+      expect(res2.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+    });
+
+    it('không có sessionId → không lưu, không messageId', async () => {
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq({ sessionId: undefined }), res);
+      expect(saveMessagesReturningIds).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
     });
   });
 });
