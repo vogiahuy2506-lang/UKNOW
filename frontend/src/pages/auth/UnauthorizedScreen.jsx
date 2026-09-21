@@ -5,15 +5,21 @@ import Navbar from '../../components/layout/client/Navbar';
 import Footer from '../../components/layout/client/Footer';
 import { useI18n } from '../../i18n';
 import { getPostAuthPath } from '../../utils/authRedirect';
+import RecheckPermissionsButton from '../../components/layout/RecheckPermissionsButton';
 
 /**
  * UnauthorizedScreen - Refactored với Impeccable design principles
+ *
+ * `reason="permission"`: route đòi một quyền nhân viên mà chủ chưa cấp — chỉ khi đó mới nói "{công ty} chưa
+ * cấp quyền này cho bạn" và có nút kiểm tra lại. Các lý do khác (chỉ chủ tài khoản, tính năng tắt, chỉ admin)
+ * giữ câu chung — nói "chưa cấp quyền" ở đó là sai và nút kiểm tra lại vô ích.
  */
-const UnauthorizedScreen = () => {
+const UnauthorizedScreen = ({ reason = 'other' }) => {
   const { t } = useI18n();
   const { user, logout, activeContext } = useAuthStore();
   const navigate = useNavigate();
   const homePath = getPostAuthPath(user, activeContext);
+  const isPermissionDenied = reason === 'permission' && activeContext?.type === 'employee';
 
   const handleLogout = async () => {
     await logout();
@@ -78,7 +84,11 @@ const UnauthorizedScreen = () => {
               {t('unauthorized.title')}
             </h1>
             <p className="mt-4 text-base leading-relaxed text-slate-600">
-              {t('unauthorized.description')}
+              {isPermissionDenied
+                ? t('unauthorized.employeeDescription', {
+                    ownerName: activeContext.ownerName || t('workspaceNoPermissions.fallbackOwner'),
+                  })
+                : t('unauthorized.description')}
             </p>
 
             {/* User info */}
@@ -91,6 +101,12 @@ const UnauthorizedScreen = () => {
                 <p className="text-sm font-bold text-slate-800 truncate">
                   {user.email || user.username}
                 </p>
+              </div>
+            )}
+
+            {isPermissionDenied && (
+              <div className="mt-6">
+                <RecheckPermissionsButton buttonClassName="w-full rounded-xl border border-orange-200 bg-orange-50 px-6 py-3 text-sm font-bold text-orange-700 transition-all hover:bg-orange-100 disabled:opacity-60" />
               </div>
             )}
 

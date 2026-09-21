@@ -409,7 +409,7 @@ describe('tab Phân quyền: chọn nhanh và lưu', () => {
     expect(checkedCount()).toBe(4);
   });
 
-  it('bấm Lưu sau khi chọn nhanh gửi đúng bản đồ quyền; xong hiện dòng nhắc tải lại trang', async () => {
+  it('bấm Lưu sau khi chọn nhanh gửi đúng bản đồ quyền; KHÔNG còn dòng bắt nhân viên F5 (đã có làm mới tự động)', async () => {
     const user = await setup();
     api.updateEmployeePermissions.mockReturnValue(ok({ permissions: { campaigns_view: true, reports_view: true, customers: true, leads: true } }));
     await user.click(screen.getByRole('button', { name: 'Chỉ xem' }));
@@ -421,7 +421,8 @@ describe('tab Phân quyền: chọn nhanh và lưu', () => {
     expect(Array.isArray(sent)).toBe(false);
     const granted = Object.entries(sent).filter(([, v]) => v === true).map(([k]) => k).sort();
     expect(granted).toEqual(['campaigns_view', 'customers', 'leads', 'reports_view']);
-    expect(await screen.findByText(/tải lại trang \(F5\)/)).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Lưu quyền hạn' });
+    expect(screen.queryByText(/F5/)).not.toBeInTheDocument();
   });
 
   it('lưu khi chưa tick gì gửi {} chứ không phải [] (P4)', async () => {

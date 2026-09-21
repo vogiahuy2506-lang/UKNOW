@@ -148,7 +148,6 @@ const EmployeeManagement = () => {
   const [isSavingInfo, setIsSavingInfo]         = useState(false);
   const [permState, setPermState]               = useState({});
   const [isSavingPerm, setIsSavingPerm]         = useState(false);
-  const [permSaved, setPermSaved]               = useState(false);
   const [limitsState, setLimitsState]           = useState({
     dailyEmailLimit: null, monthlyEmailLimit: null,
     dailyZaloLimit:  null, monthlyZaloLimit:  null,
@@ -303,7 +302,6 @@ const EmployeeManagement = () => {
   const openEmployeeModal = (emp, tab = 'info') => {
     setSelectedEmployee(emp);
     setActiveTab(tab);
-    setPermSaved(false);
     editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
     // Nhân viên mới có permissions = [] (mảng rỗng) — nạp thành {} để không gửi lại `[]` khi lưu.
     setPermState(toPermissionState(emp.permissions));
@@ -343,7 +341,6 @@ const EmployeeManagement = () => {
       // Backend kéo thêm quyền phụ thuộc (vd tạo chiến dịch → xem chiến dịch): phản chiếu lại để ô tick khớp DB.
       const saved = res?.data?.data?.permissions;
       if (saved && typeof saved === 'object' && !Array.isArray(saved)) setPermState(saved);
-      setPermSaved(true);
       fetchEmployees(true);
     } catch (err) {
       toast.error(err?.response?.data?.message || t('employee.updatePermFailed'));
@@ -432,7 +429,6 @@ const EmployeeManagement = () => {
   // Chọn nhanh bộ quyền: chỉ tick ô, KHÔNG lưu — chủ xem lại rồi bấm "Lưu quyền hạn".
   const handleApplyPreset = (preset) => {
     setPermState(buildPermissionPreset(preset, ALL_PERMISSION_KEYS));
-    setPermSaved(false);
   };
 
   // ── Khóa / Mở khóa ────────────────────────────────────────────────────────
@@ -898,11 +894,6 @@ const EmployeeManagement = () => {
                     );
                   })}
                 </div>
-                {permSaved && (
-                  <p role="status" className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                    {t('employee.permReloadNote')}
-                  </p>
-                )}
                 <div className="flex justify-end pt-2">
                   <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
                     {isSavingPerm ? t('employee.saving') : t('employee.savePerm')}

@@ -105,6 +105,7 @@ import LandingPageCustomizer from './pages/superadmin/LandingPageCustomizer';
 import AuditLogsPage from './pages/settings/AuditLogsPage';
 import UserDeliveryMonitorPage from './pages/campaigns/UserDeliveryMonitorPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
+import PermissionRoute from './components/routes/PermissionRoute';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
@@ -174,17 +175,6 @@ const OwnerRoute = ({ children }) => {
 // Gác route bằng cờ tính năng (Feature flag)
 const FeatureFlagRoute = ({ flag, children }) => {
   if (import.meta.env[flag] !== 'true') return <UnauthorizedScreen />;
-  return children;
-};
-
-// Self context luôn vào được; employee context chỉ vào được nếu có ít nhất 1 trong các permission
-const PermissionRoute = ({ permission, children }) => {
-  const { activeContext } = useAuthStore();
-  if (activeContext?.type === 'employee') {
-    const perms = Array.isArray(permission) ? permission : [permission];
-    const hasPermission = perms.some((p) => activeContext?.permissions?.[p] === true);
-    if (!hasPermission) return <UnauthorizedScreen />;
-  }
   return children;
 };
 

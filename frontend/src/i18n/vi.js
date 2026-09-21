@@ -1454,7 +1454,6 @@ export default {
     presetMarketing: 'Làm marketing',
     presetAll: 'Tất cả',
     presetNone: 'Bỏ hết',
-    permReloadNote: 'Đã lưu. Nhân viên cần tải lại trang (F5) để nhận quyền mới.',
     resetTempPasswordNote: 'Hệ thống sẽ tạo một mật khẩu tạm. Nhân viên phải đổi ngay ở lần đăng nhập đầu.',
     resetResultTitle: 'Mật khẩu tạm của {username}',
     resetResultOnce: 'Mật khẩu này chỉ hiện một lần. Hãy sao chép và gửi cho nhân viên ngay — đóng hộp này là không xem lại được.',
@@ -4825,8 +4824,9 @@ export default {
   // Header
   header: {
     openMenu: 'Mở menu',
-    activeContext: 'Ngữ cảnh hoạt động',
-    personal: 'Cá nhân',
+    activeContext: 'Không gian làm việc',
+    personal: 'Tài khoản của tôi',
+    employeeOf: 'Nhân viên của {ownerName}',
     docs: 'Hướng dẫn',
     courses: 'Khóa học',
     home: 'Trang chủ',
@@ -7777,6 +7777,26 @@ export default {
     loginWith: 'Đăng nhập với tài khoản',
     goToMyPage: 'Về trang của tôi',
     logout: 'Đăng xuất',
+    employeeDescription: '{ownerName} chưa cấp quyền này cho bạn.',
+  },
+
+  // Dải mời nhân viên chuyển sang không gian công ty + thẻ "chưa được cấp quyền nào" (PLAN_NHAN_VIEN PR-3)
+  workspaceInvite: {
+    singlePrefix: 'Bạn là nhân viên của',
+    enterSingle: 'Vào không gian của {ownerName}',
+    multiMessage: 'Bạn là nhân viên của nhiều công ty. Chọn không gian bạn muốn vào:',
+    enterMulti: 'Vào {ownerName}',
+    dismiss: 'Đóng thông báo',
+  },
+  workspaceNoPermissions: {
+    title: 'Bạn chưa được cấp quyền nào',
+    intro: 'Bạn đang ở không gian của {ownerName} nhưng chưa được cấp quyền nào.',
+    steps: 'Nhờ chủ tài khoản mở Cài đặt → Nhân viên, bấm vào tên bạn, chọn tab Phân quyền, tick quyền rồi lưu. Sau đó bấm nút bên dưới.',
+    recheck: 'Tôi đã được cấp quyền — kiểm tra lại',
+    checking: 'Đang kiểm tra...',
+    resultUnchanged: 'Chưa thấy quyền mới. Hãy chắc chắn chủ tài khoản đã bấm "Lưu quyền hạn", rồi thử lại.',
+    resultFailed: 'Không kiểm tra được lúc này. Hãy kiểm tra kết nối mạng rồi thử lại.',
+    fallbackOwner: 'công ty',
   },
 
   // Renewal Screen

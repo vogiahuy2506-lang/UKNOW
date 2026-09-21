@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import api, { setAuthStore } from '../services/api';
 import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
 import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
-import { clearQueryCache } from '../lib/queryClient';
+import { clearQueryCache, queryClient } from '../lib/queryClient';
 
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
 
@@ -106,6 +106,47 @@ const pickDefaultContext = (user) => {
     return buildEmployeeContext(memberships[0]);
   }
   return { type: 'self' };
+};
+
+// Chữ ký để so hai ngữ cảnh nhân viên: chỉ những gì màn hình thật sự dùng (quyền, giới hạn, tên/ảnh
+// công ty). So bằng chữ ký chứ không so từng khoá, để lần làm mới không đổi gì thì KHÔNG set lại store
+// (set lại = render thừa cả app mỗi lần cửa sổ lấy lại focus).
+const contextSignature = (ctx) => JSON.stringify([
+  ctx?.ownerId == null ? null : String(ctx.ownerId), // tìm membership theo String — chữ ký cũng phải vậy
+  ctx?.ownerName ?? null,
+  ctx?.ownerAvatarUrl ?? null,
+  ctx?.permissions ?? null,
+  ctx?.dailyEmailLimit ?? null,
+  ctx?.monthlyEmailLimit ?? null,
+  ctx?.dailyZaloLimit ?? null,
+  ctx?.monthlyZaloLimit ?? null,
+]);
+
+/**
+ * Đối chiếu ngữ cảnh đang dùng với danh sách membership MỚI NHẤT của server (PLAN_NHAN_VIEN mục 5.3).
+ * `activeContext.permissions` là ảnh chụp lúc đăng nhập — chủ đổi quyền/thêm/gỡ nhân viên xong thì
+ * ảnh chụp đó cũ đi mà không ai cập nhật, tới khi nhân viên F5.
+ *
+ *   - 'unchanged'     — đang ở `self`, hoặc ngữ cảnh nhân viên vẫn khớp membership (không làm gì).
+ *   - 'updated'       — cùng công ty nhưng quyền/giới hạn/tên đổi → thay ngữ cảnh, KHÔNG xoá cache
+ *                       (dữ liệu vẫn của cùng một không gian, chỉ cần tải lại những request từng 403).
+ *   - 'workspaceLost' — membership biến mất hoặc bị khoá (`isLocked`) → về ngữ cảnh mặc định; đây là
+ *                       đổi không gian nên phải xoá cache như `switchContext`.
+ */
+export const reconcileActiveContext = (user, activeContext) => {
+  if (activeContext?.type !== 'employee') return { kind: 'unchanged', context: activeContext };
+
+  const membership = (user?.memberships || []).find(
+    (m) => String(m.ownerId) === String(activeContext.ownerId)
+  );
+  if (!membership || membership.isLocked) {
+    return { kind: 'workspaceLost', context: pickDefaultContext(user) };
+  }
+
+  const next = buildEmployeeContext(membership);
+  return contextSignature(next) === contextSignature(activeContext)
+    ? { kind: 'unchanged', context: activeContext }
+    : { kind: 'updated', context: next };
 };
 
 /**
@@ -266,13 +307,42 @@ export const useAuthStore = create((set, get) => ({
 
         // Bỏ qua nếu đã logout hoặc đổi sang tài khoản khác trong lúc chờ response —
         // response này thuộc về phiên cũ, áp lại sẽ ghi đè sai user hiện tại.
+        const isStale = () => {
+          const now = get();
+          return !now.isAuthenticated || String(now.user?.id) !== String(normalizedUser?.id);
+        };
         const current = get();
-        if (!current.isAuthenticated || String(current.user?.id) !== String(normalizedUser?.id)) {
-          return { success: false };
+        if (isStale()) return { success: false };
+
+        // Nhân viên đang đăng nhập: chủ vừa cấp/đổi/gỡ quyền hoặc gỡ họ khỏi team → dựng lại
+        // ngữ cảnh từ membership mới (trước đây chỉ `user` được cập nhật, `activeContext` đứng nguyên).
+        const reconciled = reconcileActiveContext(normalizedUser, current.activeContext);
+
+        if (reconciled.kind === 'workspaceLost') {
+          // Đổi không gian → xoá cache TRƯỚC khi đổi ngữ cảnh, đúng thứ tự của switchContext.
+          saveContext(reconciled.context);
+          notifyStorageQuotaClear();
+          await clearQueryCache();
+          if (isStale()) return { success: false };
+          set({ user: normalizedUser, activeContext: reconciled.context });
+          notifyStorageQuotaRefresh();
+          return { success: true, user: normalizedUser, contextChanged: true };
         }
 
-        set({ user: normalizedUser });
-        return { success: true, user: normalizedUser };
+        if (reconciled.kind === 'updated') {
+          saveContext(reconciled.context);
+          set({ user: normalizedUser, activeContext: reconciled.context });
+          // Cùng không gian: KHÔNG xoá cache, chỉ đánh dấu cũ để các request từng 403 tự gọi lại.
+          queryClient.invalidateQueries();
+          return { success: true, user: normalizedUser, contextChanged: true };
+        }
+
+        // Không có gì đổi thì đừng set: user mới luôn là object mới, set lại làm mọi component
+        // đang subscribe `user` render lại — mà lần làm mới này giờ chạy mỗi lần quay lại tab.
+        if (JSON.stringify(current.user) !== JSON.stringify(normalizedUser)) {
+          set({ user: normalizedUser });
+        }
+        return { success: true, user: normalizedUser, contextChanged: false };
       } catch (error) {
         console.error('[AuthStore] refreshCurrentUser failed:', error?.message || error);
         return { success: false, error };

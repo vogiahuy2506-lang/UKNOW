@@ -31,7 +31,7 @@ const AVATAR_STYLES = {
 
 const Header = ({ onToggleSidebar }) => {
   const { t, locale, changeLocale } = useI18n();
-  const { user, logout, activeContext, switchContext } = useAuthStore();
+  const { user, logout, activeContext, switchContext, refreshCurrentUser } = useAuthStore();
   const navigate = useNavigate();
   const { showMarketplace } = useMarketplaceModal();
 
@@ -186,8 +186,12 @@ const Header = ({ onToggleSidebar }) => {
           <button
             type="button"
             onClick={() => {
-              setProfileOpen((open) => !open);
+              const nextOpen = !profileOpen;
+              setProfileOpen(nextOpen);
               setDocsOpen(false);
+              // Mở menu = lúc người dùng đi tìm "không gian công ty": làm mới danh sách để lời mời/quyền mới
+              // (chủ vừa thêm mình) hiện ra ngay, không phải F5 (PLAN_NHAN_VIEN mục 5.3).
+              if (nextOpen) refreshCurrentUser();
             }}
             className="flex items-center gap-1.5 h-8 px-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
@@ -218,7 +222,7 @@ const Header = ({ onToggleSidebar }) => {
                   {t('header.activeContext')}
                 </p>
                 <button
-                  onClick={async () => { setProfileOpen(false); await switchContext(null); }}
+                  onClick={async () => { setProfileOpen(false); await switchContext(null); navigate('/app'); }}
                   className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors ${
                     activeContext.type === 'self'
                       ? 'bg-orange-50 text-orange-600 font-semibold'
@@ -234,7 +238,7 @@ const Header = ({ onToggleSidebar }) => {
                 {user?.memberships?.map((m) => (
                   <button
                     key={m.ownerId}
-                    onClick={async () => { setProfileOpen(false); await switchContext(m.ownerId); }}
+                    onClick={async () => { setProfileOpen(false); await switchContext(m.ownerId); navigate('/app'); }}
                     className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors mt-1 ${
 
                       activeContext.type === 'employee' && activeContext.ownerId === m.ownerId
@@ -244,7 +248,7 @@ const Header = ({ onToggleSidebar }) => {
                   >
                     <div className="flex items-center gap-2.5">
                       <HiOutlineUserGroup className="w-4 h-4" />
-                      <span className="truncate max-w-[140px]">{m.ownerName || m.ownerUsername}</span>
+                      <span className="truncate max-w-[140px]">{t('header.employeeOf', { ownerName: m.ownerName || m.ownerUsername })}</span>
                     </div>
                     {activeContext.type === 'employee' && activeContext.ownerId === m.ownerId && (
                       <HiOutlineCheck className="w-4 h-4 shrink-0" />

@@ -179,9 +179,10 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     const buttons = within(nav).getAllByRole('button');
     const titles = buttons.map((b) => b.getAttribute('title'));
 
-    // Không có bất kỳ nhóm/mục nào khác rò ra — đúng 3 nút: 2 mục main không gate
-    // (ai_assistant/dashboard, không đổi hành vi cũ) + duy nhất 1 nhóm "Chiến dịch".
-    expect(titles).toEqual(['Trợ lý AI', 'Tổng quan', 'Chiến dịch']);
+    // Không có bất kỳ nhóm/mục nào khác rò ra — đúng 2 nút: mục main không gate (Trợ lý AI) + duy nhất 1
+    // nhóm "Chiến dịch". "Tổng quan" từng hiện ở đây dù route /app/reports đòi reports_view (nhân viên bấm
+    // vào là bị chặn) — PLAN_NHAN_VIEN PR-3 mục 5 (P2) đã gắn permission reports_view cho mục này.
+    expect(titles).toEqual(['Trợ lý AI', 'Chiến dịch']);
 
     const campaignsButton = screen.getByRole('button', { name: 'Chiến dịch' });
     fireEvent.click(campaignsButton);
@@ -191,6 +192,50 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     // ĐÚNG 2 mục — không phải quick_send/channel_management/message_templates/
     // customers (mỗi mục đó cần một permission khác mà nhân viên này không có).
     expect(linkNames).toEqual(['Quản lý chiến dịch', 'Hiệu quả chiến dịch']);
+  });
+
+  // PLAN_NHAN_VIEN PR-3 mục 5 (P2): 3 mục AI Chatbot từng `ownerOnly` dù route + backend cho nhân viên có
+  // quyền chatbots_manage / inbox_view / media_library_view → chủ tick 7 ô quyền mà nhân viên không bao giờ
+  // thấy mục menu. Ngược lại "Tổng quan" không gắn quyền nên ai cũng thấy một mục bấm vào là bị chặn.
+  describe('nhân viên: menu theo đúng quyền (P2)', () => {
+    const employeeTitles = (permissions) => {
+      authState.user = { role: 'user', username: 'emp2', fullName: 'Nhân viên B' };
+      authState.activeContext = { type: 'employee', permissions };
+      renderAppSidebar();
+      const nav = screen.getByRole('navigation');
+      return within(nav).getAllByRole('button').map((b) => b.getAttribute('title'));
+    };
+    const openGroupLinks = (groupTitle) => {
+      fireEvent.click(screen.getByRole('button', { name: groupTitle }));
+      return screen.getAllByRole('link').map((l) => l.textContent);
+    };
+
+    it('không có quyền nào: chỉ còn "Trợ lý AI" — không có "Tổng quan", không nhóm nào', () => {
+      expect(employeeTitles({})).toEqual(['Trợ lý AI']);
+    });
+
+    it('reports_view → hiện "Tổng quan"', () => {
+      expect(employeeTitles({ reports_view: true })).toEqual(['Trợ lý AI', 'Tổng quan']);
+    });
+
+    it('inbox_view → nhóm AI Chatbot chỉ có "Lịch sử trò chuyện"', () => {
+      expect(employeeTitles({ inbox_view: true })).toEqual(['Trợ lý AI', 'AI Chatbot']);
+      expect(openGroupLinks('AI Chatbot')).toEqual(['Lịch sử trò chuyện']);
+    });
+
+    it('chatbots_manage → chỉ "Tạo AI Chatbot"', () => {
+      employeeTitles({ chatbots_manage: true });
+      expect(openGroupLinks('AI Chatbot')).toEqual(['Tạo AI Chatbot']);
+    });
+
+    it('media_library_view → chỉ "Thư viện media"', () => {
+      employeeTitles({ media_library_view: true });
+      expect(openGroupLinks('AI Chatbot')).toEqual(['Thư viện media']);
+    });
+
+    it('quyền sai chỗ không mở nhầm mục: inbox_reply đơn lẻ (không có inbox_view) không hiện "Lịch sử trò chuyện"', () => {
+      expect(employeeTitles({ inbox_reply: true })).toEqual(['Trợ lý AI']);
+    });
   });
 
   it('VITE_FEATURE_COURSES khác \'true\' — mục "Quản lý khoá học" không hiện (nhóm Quản trị ẩn hẳn)', () => {

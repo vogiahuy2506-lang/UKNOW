@@ -1452,7 +1452,6 @@ export default {
     presetMarketing: 'Marketing',
     presetAll: 'Everything',
     presetNone: 'Clear all',
-    permReloadNote: 'Saved. The employee needs to reload the page (F5) to receive the new permissions.',
     resetTempPasswordNote: 'The system will generate a temporary password. The employee must change it at their first sign-in.',
     resetResultTitle: 'Temporary password for {username}',
     resetResultOnce: 'This password is shown only once. Copy it and send it to the employee now — once you close this box you cannot view it again.',
@@ -4818,8 +4817,9 @@ export default {
   // Header
   header: {
     openMenu: 'Open menu',
-    activeContext: 'Active Context',
-    personal: 'Personal',
+    activeContext: 'Workspace',
+    personal: 'My account',
+    employeeOf: 'Employee of {ownerName}',
     docs: 'Docs',
     courses: 'Courses',
     home: 'Home',
@@ -7851,6 +7851,26 @@ Feel free to ask me anything!`,
     loginWith: 'Logged in with account',
     goToMyPage: 'Go to My Page',
     logout: 'Logout',
+    employeeDescription: '{ownerName} has not granted you this permission.',
+  },
+
+  // Workspace invite banner + "no permissions yet" card (PLAN_NHAN_VIEN PR-3)
+  workspaceInvite: {
+    singlePrefix: 'You are an employee of',
+    enterSingle: "Go to {ownerName}'s workspace",
+    multiMessage: 'You are an employee of several companies. Choose the workspace you want to enter:',
+    enterMulti: 'Go to {ownerName}',
+    dismiss: 'Dismiss notice',
+  },
+  workspaceNoPermissions: {
+    title: 'You have no permissions yet',
+    intro: "You are in {ownerName}'s workspace but have not been granted any permissions yet.",
+    steps: 'Ask the account owner to open Settings → Employees, click your name, choose the Permissions tab, tick the permissions and save. Then click the button below.',
+    recheck: 'I have been granted permissions — check again',
+    checking: 'Checking...',
+    resultUnchanged: 'No new permissions yet. Make sure the account owner clicked "Save permissions", then try again.',
+    resultFailed: 'Could not check right now. Check your connection and try again.',
+    fallbackOwner: 'the company',
   },
 
   // Renewal Screen

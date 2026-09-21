@@ -9,6 +9,8 @@ import AiChatbot from '../features/ai/AiChatbot';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
+import WorkspaceInviteBanner from '../components/layout/WorkspaceInviteBanner';
+import { useRefreshUserOnFocus } from '../hooks/useRefreshUserOnFocus';
 import { usePostAuthGates } from '../features/auth/hooks/usePostAuthGates';
 import TrialWelcomeModal from '../features/auth/components/TrialWelcomeModal';
 import PlanExpiryModal from '../features/auth/components/PlanExpiryModal';
@@ -43,6 +45,8 @@ const MainLayout = ({ children = null }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeContext = useAuthStore((state) => state.activeContext);
   const fetchAiCredits = useAuthStore((state) => state.fetchAiCredits);
+  // Quay lại tab thì làm mới hồ sơ: nhân viên nhận quyền/lời mời mới mà không cần F5 (PLAN_NHAN_VIEN mục 5.3).
+  useRefreshUserOnFocus({ enabled: isAuthenticated && user?.role !== 'admin' });
   const [trial, setTrial] = useState(null);
 
   useEffect(() => {
@@ -238,6 +242,7 @@ const MainLayout = ({ children = null }) => {
 
         <div className="flex-1 min-h-0 min-w-0 flex flex-col" style={{ paddingTop: HEADER_HEIGHT }}>
           {!isSpecialPage && <CreditWarningBanner />}
+          {!isSpecialPage && <WorkspaceInviteBanner />}
           <main ref={mainContentRef} className={`flex-1 min-h-0 min-w-0 relative ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
             <div className="relative h-full flex flex-col min-h-0">
               {children ?? <Outlet />}
@@ -304,6 +309,7 @@ const MainLayout = ({ children = null }) => {
         }}
       >
         {!isBuilderPage && <CreditWarningBanner />}
+        {!isBuilderPage && <WorkspaceInviteBanner />}
 
         <main
           ref={mainContentRef}

@@ -33,14 +33,8 @@ export function buildPermissionPreset(preset, allKeys) {
   return out;
 }
 
-/**
- * Số quyền ĐÃ cấp. `user_members.permissions` mặc định là mảng rỗng `[]` cho nhân viên mới (không
- * phải `{}`), và sau khi lưu là object đủ khoá true/false — cả hai đều phải đếm ra đúng.
- */
-export function countGrantedPermissions(permissions) {
-  if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) return 0;
-  return Object.values(permissions).filter((value) => value === true).length;
-}
+// Đếm quyền đã cấp dùng chung với màn hình phía nhân viên — nguồn duy nhất ở utils.
+export { countGrantedPermissions } from '../../utils/workspacePermissions.util';
 
 /** Quyền để nạp vào form: mảng rỗng của nhân viên mới → `{}` (không gửi lại `[]` lên backend). */
 export function toPermissionState(permissions) {
