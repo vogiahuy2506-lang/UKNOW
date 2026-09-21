@@ -181,3 +181,113 @@ describe('i18n — mọi khoá được gọi phải có bản dịch', () => {
     expect(stale).toEqual([]);
   });
 });
+
+/**
+ * ── Hai lỗ của phép quét trên, bịt ngày 21/09/2026 ───────────────────────────────────────────
+ *
+ * Sếp gửi ảnh chụp giao diện hiện nguyên văn một chuỗi ICU. Đào ra thì phép quét ở trên tuy
+ * đúng ý tưởng nhưng có hai chỗ hụt, và cả hai đều để lỗi thật lên tới màn hình khách:
+ *
+ *   1. **Gom namespace THEO KHOÁ, không theo FILE.** `CALL_SITES` khoá theo chuỗi khoá và trộn
+ *      namespace của mọi file dùng chung khoá đó. `createListing.createSuccess` được gọi ở hai
+ *      file: một file `useI18n('marketplace')` (đúng) và MarketplaceListingModal.jsx dùng `t`
+ *      gốc (thiếu tiền tố). Namespace `marketplace` của file đúng che cho file sai, nên toast
+ *      hiện ra chữ "createListing.createSuccess".
+ *
+ *   2. **Chấp nhận giải ở GỐC cho cả file chỉ dùng `useI18n('ns')`.** `common.view` có ở gốc từ
+ *      điển nên `isResolvable` cho qua, nhưng MarketplaceContent.jsx dùng
+ *      `useI18n('marketplace')` — lúc chạy LUÔN thêm tiền tố và không bao giờ tra gốc, nên nút
+ *      hiện chữ "common.view". Gốc chỉ được phép dùng khi file CÓ một `useI18n()` trần.
+ *
+ * Đã đo sau khi vá 6 chỗ: 6.535 điểm gọi, 0 vỡ. Thử đột biến hai chiều: xoá
+ * `marketplace.common.view` → đỏ 2 ca; trả khoá về dạng thiếu tiền tố → đỏ 1 ca.
+ */
+const BARE_USE_I18N_RE = /useI18n\(\s*\)/;
+
+/** @returns {Array<{ file: string, line: number, key: string, namespaces: string[], allowRoot: boolean }>} */
+function collectStrictSites() {
+  const out = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!/node_modules|dist/.test(full)) walk(full);
+        continue;
+      }
+      if (!/\.jsx?$/.test(entry.name) || full.includes(`${path.sep}i18n${path.sep}`)) continue;
+
+      const code = fs.readFileSync(full, 'utf8');
+      const namespaces = [...new Set([...code.matchAll(SCOPED_NS_RE)].map((m) => m[1]))];
+      // Không scope hoá gì thì mọi `t` là bản gốc; có `useI18n()` trần thì file dùng lẫn cả hai.
+      const allowRoot = namespaces.length === 0 || BARE_USE_I18N_RE.test(code);
+      const relative = path.relative(SRC_DIR, full);
+
+      code.split('\n').forEach((line, idx) => {
+        if (COMMENT_LINE_RE.test(line)) return;
+        let m;
+        KEY_RE.lastIndex = 0;
+        while ((m = KEY_RE.exec(line)) !== null) {
+          out.push({ file: relative, line: idx + 1, key: m[2], namespaces, allowRoot });
+        }
+      });
+    }
+  })(SRC_DIR);
+  return out;
+}
+
+const STRICT_SITES = collectStrictSites();
+
+describe('i18n — phép quét chặt: khoá phải giải được ĐÚNG cách file đó gọi', () => {
+  it('quét được lượng điểm gọi hợp lý (đối chứng dương)', () => {
+    expect(STRICT_SITES.length).toBeGreaterThan(5000);
+  });
+
+  it('phân biệt được file chỉ scope hoá với file dùng `t` gốc (nếu hỏng, cả phép quét vô nghĩa)', () => {
+    const scopedOnly = STRICT_SITES.find((s) => s.file.includes('MarketplaceContent'));
+    expect(scopedOnly?.namespaces).toContain('marketplace');
+    expect(scopedOnly?.allowRoot).toBe(false);
+  });
+
+  it.each([
+    ['vi', vi],
+    ['en', en],
+  ])('%s: không khoá nào chỉ giải được bằng đường mà runtime KHÔNG đi', (locale, dict) => {
+    const broken = STRICT_SITES.filter((s) => {
+      const viaRoot = s.allowRoot && isTranslated(resolveKey(dict, s.key));
+      const viaNs = s.namespaces.some((ns) => isTranslated(resolveKey(dict, `${ns}.${s.key}`)));
+      return !viaRoot && !viaNs;
+    }).map((s) => `${s.file}:${s.line}  ${s.key}  ns=[${s.namespaces.join(',')}] goc=${s.allowRoot}`);
+
+    expect(broken).toEqual([]);
+  });
+});
+
+describe('i18n — không được dùng cú pháp ICU', () => {
+  // Bộ dịch ở index.jsx chỉ chạy `value.replace(/\{(\w+)\}/g, ...)`. Mọi cấu trúc ICU
+  // (`{x, select, ...}`, `{x, plural, ...}`) sẽ KHÔNG được xử lý và lọt nguyên văn ra màn hình —
+  // đúng thứ sếp chụp được ngày 21/09 ở nhãn "Chạy liên tục".
+  //
+  // Ca này đọc GIÁ TRỊ trong từ điển, không grep file nguồn: grep sẽ khớp cả dòng chú thích
+  // (chính chú thích giải thích lỗi này cũng chứa mẫu ICU).
+  const ICU_RE = /\{\s*\w+\s*,\s*(select|plural|selectordinal)\s*,/;
+
+  const leaves = (obj, prefix = '', out = []) => {
+    for (const [k, v] of Object.entries(obj ?? {})) {
+      const key = prefix ? `${prefix}.${k}` : k;
+      if (v && typeof v === 'object' && !Array.isArray(v)) leaves(v, key, out);
+      else if (typeof v === 'string') out.push([key, v]);
+    }
+    return out;
+  };
+
+  it.each([
+    ['vi', vi],
+    ['en', en],
+  ])('%s: không chuỗi dịch nào chứa select/plural', (locale, dict) => {
+    const offenders = leaves(dict)
+      .filter(([, value]) => ICU_RE.test(value))
+      .map(([key, value]) => `${key}  "${value.slice(0, 80)}"`);
+
+    expect(offenders).toEqual([]);
+  });
+});

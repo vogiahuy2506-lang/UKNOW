@@ -633,7 +633,9 @@ const Campaigns = () => {
                                 </span>
                                 {isContinuous && (
                                   <span className="text-xs text-emerald-600 font-medium">
-                                    {t('campaignRun.continuousRunning', { interval: pollIntervalMinutes })}
+                                    {pollIntervalMinutes
+                                      ? t('campaignRun.continuousRunningEvery', { interval: pollIntervalMinutes })
+                                      : t('campaignRun.continuousRunning')}
                                   </span>
                                 )}
                                 {activePause && (

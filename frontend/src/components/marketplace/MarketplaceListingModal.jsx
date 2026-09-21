@@ -113,7 +113,10 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
         priceCredits: parseInt(form.priceCredits, 10) || 0,
         includeKnowledgeBase,
       });
-      toast.success(t('createListing.createSuccess') || 'Đăng marketplace thành công!');
+      // `t` ở file này là bản gốc (useI18n() không namespace) nên khoá phải ghi đủ đường dẫn.
+      // Viết thiếu `marketplace.` thì t() trả về CHÍNH chuỗi khoá — vẫn truthy, nên `||` phía sau
+      // không bao giờ chạy và toast hiện ra chữ "createListing.createSuccess".
+      toast.success(t('marketplace.createListing.createSuccess'));
       onSuccess?.();
       onClose();
     } catch (error) {

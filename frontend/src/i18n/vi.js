@@ -85,6 +85,12 @@ export default {
     common: {
       loadError: 'Không thể tải danh sách',
       updateError: 'Không thể cập nhật',
+      // Hai khoá dưới đây bị dùng ở MarketplaceContent/MyFavorites mà chưa hề khai báo ở ĐÂY.
+      // Chúng giải được ở GỐC từ điển nên test cũ cho qua, nhưng hai trang đó dùng
+      // useI18n('marketplace') nên lúc chạy luôn thêm tiền tố và không bao giờ tra gốc — nút hiện
+      // chữ "common.view".
+      view: 'Xem',
+      noDescription: 'Chưa có mô tả',
     },
     browse: {
       headerTitle: 'Marketplace',
@@ -5019,9 +5025,12 @@ export default {
       formulaPlaceholder: 'VD: CONCAT(col_A, " ", col_B) hoặc DATE_FORMAT(NOW(), "%d/%m/%Y")',
       fixedValuePlaceholder: 'Nhập giá trị cố định...',
       example: 'Ví dụ:',
-      exampleMapping: '{var} → Cột "{column}" hoặc cột A',
-      exampleFunction: '{var} → Hàm: CONCAT(col_B, " ", col_C)',
-      exampleNow: '{var} → Hàm: DATE_FORMAT(NOW(), "%d/%m/%Y")',
+      // Bỏ tiền tố '{var} → ': JSX đã render <code>tên_biến</code> rồi mũi tên ở NGOÀI, nên
+      // để trong chuỗi là lặp hai lần — và hai dòng dưới không truyền `var` nên nó in ra
+      // nguyên văn "{var} →".
+      exampleMapping: 'Cột "{column}" hoặc cột A',
+      exampleFunction: 'Hàm: CONCAT(col_B, " ", col_C)',
+      exampleNow: 'Hàm: DATE_FORMAT(NOW(), "%d/%m/%Y")',
     },
 
     // Save customer section
@@ -5455,7 +5464,10 @@ export default {
     viewSchedules: 'Xem lịch đã thiết lập',
     schedule: 'Lên lịch',
     running: 'Đang chạy',
-    continuousRunning: 'Chạy liên tục{interval, select, undefined {} other { ({interval} phút/lần)}}',
+    // Tách hai khoá thay vì một chuỗi ICU: bộ dịch ở i18n/index.jsx chỉ thay `{tên}` bằng regex,
+    // KHÔNG hiểu select/plural — chuỗi ICU lọt nguyên văn ra màn hình (ảnh sếp gửi 21/09).
+    continuousRunning: 'Chạy liên tục',
+    continuousRunningEvery: 'Chạy liên tục ({interval} phút/lần)',
     quotaPausedUntil: 'Hết lượt gửi — tự chạy lại {until}',
     smtpPausedUntil: 'Máy chủ email tạm chặn — tự gửi tiếp {until}',
     zaloPausedUntil: 'Zalo tạm nghỉ theo hạn mức — tự gửi tiếp {until}',

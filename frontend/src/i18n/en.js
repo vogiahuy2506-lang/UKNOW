@@ -85,6 +85,11 @@ export default {
     common: {
       loadError: 'Failed to load listings',
       updateError: 'Failed to update',
+      // Used by MarketplaceContent/MyFavorites but never declared: t() returns the key itself, so
+      // the button rendered the literal text "common.view", and because that string is truthy the
+      // `|| 'Xem'` fallback at the call site never ran.
+      view: 'View',
+      noDescription: 'No description yet',
     },
     browse: {
       headerTitle: 'Marketplace',
@@ -5013,9 +5018,12 @@ export default {
       formulaPlaceholder: 'E.g.: CONCAT(col_A, " ", col_B) or DATE_FORMAT(NOW(), "%d/%m/%Y")',
       fixedValuePlaceholder: 'Enter fixed value...',
       example: 'Example:',
-      exampleMapping: '{var} → Column "{column}" or column A',
-      exampleFunction: '{var} → Function: CONCAT(col_B, " ", col_C)',
-      exampleNow: '{var} → Function: DATE_FORMAT(NOW(), "%d/%m/%Y")',
+      // Dropped the '{var} → ' prefix: the JSX already renders <code>var_name</code> and the arrow
+      // OUTSIDE the string, so keeping it here duplicated both — and the last two calls pass no
+      // `var`, which leaked the literal "{var} →".
+      exampleMapping: 'Column "{column}" or column A',
+      exampleFunction: 'Function: CONCAT(col_B, " ", col_C)',
+      exampleNow: 'Function: DATE_FORMAT(NOW(), "%d/%m/%Y")',
     },
 
     // Save customer section
@@ -5449,7 +5457,11 @@ export default {
     viewSchedules: 'View configured schedules',
     schedule: 'Schedule',
     running: 'Running',
-    continuousRunning: 'Running continuously{interval, select, undefined {} other { ({interval} min/interval)}}',
+    // Two keys instead of one ICU `{interval, select, ...}` string: the translator in
+    // i18n/index.jsx only substitutes `{name}` via regex and does NOT understand select/plural,
+    // so the raw ICU pattern leaked straight to the screen.
+    continuousRunning: 'Running continuously',
+    continuousRunningEvery: 'Running continuously ({interval} min/interval)',
     quotaPausedUntil: 'Out of send quota — resumes {until}',
     smtpPausedUntil: 'Mail server throttled — resumes {until}',
     zaloPausedUntil: 'Zalo rate limit — resumes {until}',
