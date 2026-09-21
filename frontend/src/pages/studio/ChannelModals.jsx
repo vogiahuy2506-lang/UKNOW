@@ -288,7 +288,6 @@ function ZaloForm({ chatbot }) {
 function FacebookForm({ chatbot }) {
   // ── State ─────────────────────────────────────────────────────
   const [step, setStep] = useState(1);         // 1 | 2 | 3
-  const [mode, setMode] = useState('oauth');    // 'oauth' | 'manual'
   const [pages, setPages] = useState([]);
   const [selectedConnId, setSelectedConnId] = useState(null);
   const [loadingPages, setLoadingPages] = useState(true);
@@ -297,11 +296,6 @@ function FacebookForm({ chatbot }) {
 
   // Step 2: webhook config shown after save
   const [config, setConfig] = useState(null);    // { webhook_url, verify_token, display_name }
-
-  // Manual mode inputs
-  const [manualPageId, setManualPageId] = useState('');
-  const [manualToken, setManualToken] = useState('');
-  const [manualName, setManualName] = useState('');
 
   // ── Load existing connections + current chatbot config ───────────
   const loadConnections = useCallback(async () => {
@@ -315,6 +309,14 @@ function FacebookForm({ chatbot }) {
       // Pages list from ChannelSettings
       const list = pagesRes.status === 'fulfilled' ? (pagesRes.value?.data?.data || []) : [];
       setPages(list);
+
+      // Check for errors - show toast if either API failed
+      if (pagesRes.status === 'rejected' || cfgRes.status === 'rejected') {
+        const err = pagesRes.status === 'rejected' ? pagesRes.reason : cfgRes.reason;
+        console.error('[FacebookForm] load failed:', err);
+        toast.error(err?.response?.data?.message || 'Không thể tải cấu hình Facebook.');
+        return; // stop here, don't proceed
+      }
 
       // Existing chatbot config (if any)
       // Backend returns { success, data: [channels] } → axios wraps as response.data
@@ -411,36 +413,6 @@ function FacebookForm({ chatbot }) {
     }
   };
 
-  // ── Save manual inputs ─────────────────────────────────────────
-  const handleSaveManual = async () => {
-    if (!manualPageId.trim() || !manualToken.trim()) {
-      toast.error('Page ID và Page Access Token là bắt buộc.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await chatbotApi.saveFacebookPageConfig(chatbot.id, {
-        page_id: manualPageId.trim(),
-        page_access_token: manualToken.trim(),
-        page_name: manualName.trim() || undefined,
-      });
-      const saved = res?.data?.data || res;
-      if (saved) {
-        setConfig({
-          webhook_url: saved.webhook_url || '',
-          verify_token: saved.verify_token || '',
-          display_name: saved.display_name || manualName.trim(),
-        });
-      }
-      toast.success(res?.message || 'Đã kết nối Fanpage với chatbot.');
-      setStep(2);
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Lưu thất bại.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // ── Copy to clipboard helper ──────────────────────────────────
   const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text).then(() => toast.success(`Đã copy ${label}.`));
@@ -460,31 +432,9 @@ function FacebookForm({ chatbot }) {
           <span className="text-sm font-semibold text-slate-800">Kết nối Fanpage</span>
         </div>
 
-        {/* OAuth vs Manual toggle */}
-        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs mb-3">
-          <button
-            type="button"
-            onClick={() => setMode('oauth')}
-            className={`flex-1 px-3 py-2 font-medium transition-colors ${
-              mode === 'oauth' ? 'bg-indigo-50 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            🔗 Kết nối qua Facebook
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('manual')}
-            className={`flex-1 px-3 py-2 font-medium transition-colors ${
-              mode === 'manual' ? 'bg-indigo-50 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            ✏️ Nhập tay
-          </button>
-        </div>
-
-        {mode === 'oauth' ? (
-          <div className="space-y-3">
-            {loadingPages ? (
+        {/* OAuth: show linked pages */}
+        <div className="space-y-3">
+          {loadingPages ? (
               /* Skeleton while loading pages */
               <div className="space-y-2">
                 {[1, 2].map((i) => (
@@ -536,7 +486,7 @@ function FacebookForm({ chatbot }) {
                 })}
               </div>
             ) : (
-              /* No pages linked yet — guide to ChannelSettings */
+              /* No pages linked yet — guide to OAuth */
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
                 <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
                   <span className="text-lg font-bold text-slate-400">f</span>
@@ -592,49 +542,6 @@ function FacebookForm({ chatbot }) {
               </button>
             )}
           </div>
-        ) : (
-          /* Manual mode */
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Page ID</label>
-              <input
-                type="text"
-                value={manualPageId}
-                onChange={(e) => setManualPageId(e.target.value)}
-                placeholder="VD: 1234567890"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Page Access Token</label>
-              <input
-                type="password"
-                value={manualToken}
-                onChange={(e) => setManualToken(e.target.value)}
-                placeholder="EAAxxxxxxx..."
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Tên Page (tuỳ chọn)</label>
-              <input
-                type="text"
-                value={manualName}
-                onChange={(e) => setManualName(e.target.value)}
-                placeholder="VD: UKNOW Official Fanpage"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleSaveManual}
-              disabled={saving || !manualPageId.trim() || !manualToken.trim()}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Step 2: Cấu hình Webhook — chỉ hiện khi đã save */}
