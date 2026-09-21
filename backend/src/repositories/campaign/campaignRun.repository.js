@@ -716,6 +716,42 @@ class CampaignRunRepository {
     );
     return result.rows[0];
   }
+
+  /**
+   * Ghi vết một lượt chạy THEO LỊCH đã hỏng ngay lúc bắn (chưa tạo được lượt chạy thật) — vd chiến
+   * dịch còn `draft` nên createCampaignRunRecord ném 400. Trước đây scheduler chỉ console.error và
+   * log container bị xoá mỗi lần deploy (21/09/2026: lịch 07:30 của chiến dịch 395 biến mất không dấu
+   * vết). KHÔNG đụng `campaign_schedules.run_count`: lịch chưa từng gửi được gì thì không được tính
+   * là đã chạy (isReadonlyOnceSchedule khoá nút gạt khi run_count > 0).
+   *
+   * @returns {Promise<{ id: number }|null>}
+   */
+  async insertFailedScheduledRun({
+    campaignId,
+    workspaceOwnerId = null,
+    scheduleId,
+    runName = null,
+    errorMessage,
+  }) {
+    const message = String(errorMessage || 'Lượt chạy theo lịch không khởi động được').slice(0, 1000);
+    const result = await db.query(
+      `INSERT INTO campaign_runs
+         (id_campaign, workspace_owner_id, id_schedule, run_name, run_type, status,
+          error_message, started_at, completed_at, run_metadata)
+       VALUES ($1, $2, $3, $4, 'scheduled', 'failed', $5,
+               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $6::jsonb)
+       RETURNING id`,
+      [
+        campaignId,
+        workspaceOwnerId,
+        scheduleId,
+        runName ? String(runName).slice(0, 255) : null,
+        message,
+        JSON.stringify({ source: 'schedule', runName: runName || null, failedAtTrigger: true }),
+      ]
+    );
+    return result.rows[0] || null;
+  }
 }
 
 export default new CampaignRunRepository();

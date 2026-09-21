@@ -6,6 +6,11 @@ import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.uti
 // đọc, cùng luật nổ với scheduler.
 import { computeScheduleNextRunAt } from '../utils/campaignScheduleCron.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import {
+  CAMPAIGN_NOT_ACTIVE_CODE,
+  buildCampaignNotActiveMessage,
+  isCampaignActiveForSchedule,
+} from '../utils/campaignScheduleActivation.util.js';
 
 function normalizeOptionalBoolean(value) {
   if (value === undefined) return undefined;
@@ -160,6 +165,17 @@ class CampaignScheduleController {
         });
       }
 
+      // Lịch bật cho chiến dịch chưa `active` sẽ nổ rồi chết im lặng (createCampaignRunRecord ném 400,
+      // lịch không được tự kích hoạt chiến dịch). Chặn ngay lúc đặt; lịch TẮT vẫn cho soạn sẵn.
+      if (isEnabling && !isCampaignActiveForSchedule(campaign.status)) {
+        return res.status(409).json({
+          success: false,
+          code: CAMPAIGN_NOT_ACTIVE_CODE,
+          campaignStatus: campaign.status ?? null,
+          message: buildCampaignNotActiveMessage(campaign.status),
+        });
+      }
+
       const row = await campaignScheduleRepository.create({
         campaignId,
         scheduleName,
@@ -237,6 +253,18 @@ class CampaignScheduleController {
         return res.status(409).json({
           success: false,
           message: 'Lịch chạy 1 lần đã hoàn thành, không thể bật lại',
+        });
+      }
+
+      // Chỉ chặn lúc BẬT một lịch đang tắt — lịch đã bật từ trước mà sửa tên/giờ thì không bị chặn
+      // (đã hỏng từ trước, giao diện có cảnh báo riêng; chặn ở đây làm người dùng không sửa được gì).
+      if (enabled === true && scheduleData.enabled !== true
+        && !isCampaignActiveForSchedule(scheduleData.campaign_status)) {
+        return res.status(409).json({
+          success: false,
+          code: CAMPAIGN_NOT_ACTIVE_CODE,
+          campaignStatus: scheduleData.campaign_status ?? null,
+          message: buildCampaignNotActiveMessage(scheduleData.campaign_status),
         });
       }
 

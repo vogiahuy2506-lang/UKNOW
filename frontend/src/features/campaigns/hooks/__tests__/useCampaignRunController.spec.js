@@ -188,4 +188,68 @@ describe('useCampaignRunController', () => {
     expect(toast.error).toHaveBeenCalledWith('campaigns.scheduleOneTimeCompleted');
     expect(campaignRunApiService.updateCampaignSchedule).not.toHaveBeenCalled();
   });
+
+  // Lệnh giao 21/09/2026, PR-1 Việc 1.4: catch cũ nuốt thông điệp server nên câu 409
+  // CAMPAIGN_NOT_ACTIVE ("Bấm «Chạy ngay» một lần…") không bao giờ tới màn hình.
+  describe('thông điệp lỗi của server phải tới người dùng', () => {
+    const NOT_ACTIVE_MESSAGE = 'Chiến dịch đang ở trạng thái Nháp nên lịch sẽ không chạy. Bấm «Chạy ngay» một lần để kích hoạt chiến dịch, rồi đặt lịch lại.';
+    const serverError = (message) => Object.assign(new Error('Request failed with status code 409'), {
+      response: { status: 409, data: { success: false, code: 'CAMPAIGN_NOT_ACTIVE', message } },
+    });
+
+    const openAndFillScheduleForm = async (result) => {
+      await act(async () => {
+        result.current.openScheduleModal({ id: 395, campaignName: 'Nhắc lịch' });
+      });
+      await act(async () => {
+        result.current.setScheduleForm((prev) => ({
+          ...prev, scheduleType: 'daily', scheduleTime: '09:00', enabled: true,
+        }));
+      });
+    };
+
+    it('tạo lịch bị 409 → toast hiện ĐÚNG câu của server, không phải "createScheduleFailed"', async () => {
+      campaignRunApiService.createCampaignSchedule.mockRejectedValueOnce(serverError(NOT_ACTIVE_MESSAGE));
+      const { result } = renderHook(() => useCampaignRunController());
+      await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
+      await openAndFillScheduleForm(result);
+
+      await act(async () => {
+        await result.current.handleSaveSchedule();
+      });
+
+      expect(campaignRunApiService.createCampaignSchedule).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith(NOT_ACTIVE_MESSAGE, expect.objectContaining({ duration: expect.any(Number) }));
+      expect(toast.error).not.toHaveBeenCalledWith('campaigns.createScheduleFailed', expect.anything());
+    });
+
+    it('tạo lịch lỗi mạng (không có phản hồi server) → rơi về chuỗi mặc định', async () => {
+      campaignRunApiService.createCampaignSchedule.mockRejectedValueOnce(new Error('Network Error'));
+      const { result } = renderHook(() => useCampaignRunController());
+      await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
+      await openAndFillScheduleForm(result);
+
+      await act(async () => {
+        await result.current.handleSaveSchedule();
+      });
+
+      expect(toast.error).toHaveBeenCalledWith('campaigns.createScheduleFailed', expect.anything());
+    });
+
+    it('bật lại lịch bị 409 CAMPAIGN_NOT_ACTIVE → toast hiện câu của server', async () => {
+      campaignRunApiService.getCampaignSchedules.mockResolvedValueOnce({
+        data: { data: [{ id: 177, campaignId: 395, scheduleName: 'Nhắc lịch', scheduleType: 'daily', runCount: 0, enabled: false, campaignStatus: 'draft' }] },
+      });
+      campaignRunApiService.updateCampaignSchedule.mockRejectedValueOnce(serverError(NOT_ACTIVE_MESSAGE));
+      const { result } = renderHook(() => useCampaignRunController());
+      await waitFor(() => expect(result.current.schedules).toHaveLength(1));
+
+      await act(async () => {
+        await result.current.handleToggleSchedule(177, false);
+      });
+
+      expect(campaignRunApiService.updateCampaignSchedule).toHaveBeenCalledWith(177, { enabled: true });
+      expect(toast.error).toHaveBeenCalledWith(NOT_ACTIVE_MESSAGE, expect.objectContaining({ duration: expect.any(Number) }));
+    });
+  });
 });

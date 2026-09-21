@@ -5430,7 +5430,12 @@ export default {
     close: 'Close',
     activeCampaigns: 'Active Campaigns',
     scheduledCampaigns: 'Scheduled Campaigns',
-    scheduleCampaignNotActiveWarning: 'Campaign is paused — this schedule will not send',
+    // Was hard-coded "paused", which also fired for Draft campaigns (assignment 21/09/2026).
+    scheduleCampaignNotActiveWarning: 'Campaign status is {status} — this schedule will not send',
+    scheduleCampaignStatus: {
+      draft: 'Draft',
+      paused: 'Paused',
+    },
     pausedCampaigns: 'Paused Campaigns',
     noActiveCampaigns: 'No active campaigns',
     noPausedCampaigns: 'No paused campaigns',

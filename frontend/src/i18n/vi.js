@@ -5436,7 +5436,12 @@ export default {
     close: 'Đóng',
     activeCampaigns: 'Chiến dịch đang hoạt động',
     scheduledCampaigns: 'Lịch chạy đã thiết lập',
-    scheduleCampaignNotActiveWarning: 'Chiến dịch đang tạm dừng — lịch này sẽ không gửi',
+    // Trước đây cứng "đang tạm dừng" nên bắn sai cho cả chiến dịch Nháp (lệnh giao 21/09/2026).
+    scheduleCampaignNotActiveWarning: 'Chiến dịch đang ở trạng thái {status} — lịch này sẽ không gửi',
+    scheduleCampaignStatus: {
+      draft: 'Nháp',
+      paused: 'Tạm dừng',
+    },
     pausedCampaigns: 'Chiến dịch đang tạm dừng',
     noActiveCampaigns: 'Không có chiến dịch đang hoạt động',
     noPausedCampaigns: 'Không có chiến dịch tạm dừng',
