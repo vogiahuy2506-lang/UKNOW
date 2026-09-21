@@ -3,7 +3,6 @@
  * PR-3): nhận diện câu than phiền lỗi hiển thị, tìm đúng thẻ trong danh sách tin, áp kết quả đo/sửa
  * vào thẻ, dựng instruction. Không React, không mạng — test riêng ở __tests__/landingLayoutFlow.spec.js.
  */
-import { describeFindingsForAi } from './layoutAudit.js';
 
 // Người dùng gõ câu than phiền về lỗi hiển thị → đo trước khi gửi để AI biết đúng chỗ (plan 12.3.5).
 // Từ ngắn (đè, che) chỉ tính khi đứng riêng — "đèn", "check", "chèn" không phải than phiền. Ranh giới
@@ -16,16 +15,9 @@ export const LAYOUT_COMPLAINT_RE = new RegExp(
 
 export const looksLikeLayoutComplaint = (text) => LAYOUT_COMPLAINT_RE.test(String(text || ''));
 
-/**
- * Nối kết quả đo vào instruction GỬI LÊN server (người dùng không thấy ở tin hiển thị — xem chú
- * thích ở handleEditLandingPageWithAi về chỗ còn lộ khi tải lại phiên). Không có finding → giữ
- * nguyên câu người dùng gõ.
- */
-export function appendFindingsToInstruction(instruction, findings) {
-  const described = describeFindingsForAi(findings);
-  if (!described) return instruction;
-  return `${instruction}\n\nHệ thống vừa đo trang này trong trình duyệt và thấy:\n${described}`;
-}
+// Số đo cho đường sửa THƯỜNG đi bằng trường riêng `layoutFindings` của aiApi.editLandingHtml — server
+// nối vào lệnh cho AI nhưng không lưu vào tin người dùng. Bản đầu có hàm nối findings thẳng vào
+// `instruction` ở đây; đã bỏ ở review vì selector/pixel sẽ hiện ra khi tải lại phiên.
 
 /** Tên phần hay gặp nhất trong các finding còn lại ('' nếu không có) — để nói "phần X" bằng tiếng người. */
 export function pickSectionTitle(findings) {

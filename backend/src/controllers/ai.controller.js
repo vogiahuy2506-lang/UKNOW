@@ -44,6 +44,7 @@ import {
   AUTO_LAYOUT_FIX_MAX_ROUNDS,
   normalizeLayoutFindings,
   buildAutoLayoutFixInstruction,
+  buildLayoutFindingsContext,
 } from '../utils/landingLayoutFindings.util.js';
 
 const SUPPORTED_SYSTEM_INSTRUCTION_LANGUAGES = ['vi', 'en'];
@@ -1725,9 +1726,15 @@ class AiController {
         autoLayoutFixInFlight.add(lockKey);
         autoFixLockKey = lockKey;
       }
+      // Đường sửa THƯỜNG cũng nhận `layoutFindings` (frontend đo trước khi gửi khi người dùng than
+      // "chữ bị đè" hay gắn ảnh chụp): nối vào lệnh ĐƯA CHO AI để nó biết đúng chỗ. Tin của người dùng
+      // và lời xác nhận lưu bên dưới vẫn dùng `instruction` nguyên văn họ gõ — số đo (selector, pixel)
+      // không bao giờ vào lịch sử phiên. Lượt này có trừ credit như mọi lượt sửa thường.
+      const userInstruction = String(instruction || '').trim();
+      const hintContext = isAutoFix ? '' : buildLayoutFindingsContext(req.body?.layoutFindings);
       const effectiveInstruction = isAutoFix
         ? buildAutoLayoutFixInstruction(layoutFindings)
-        : String(instruction).trim();
+        : (hintContext ? `${userInstruction}\n\n${hintContext}` : userInstruction);
 
       const ownerUserId = (req.user?.activeContext?.type === 'employee'
         ? req.user.activeContext.ownerId

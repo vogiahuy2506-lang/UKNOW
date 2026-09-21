@@ -57,7 +57,6 @@ import { useLandingLayoutAutoFix } from './hooks/useLandingLayoutAutoFix.js';
 import { buildFullLandingHtml, runLayoutAudit } from './utils/layoutAudit.js';
 import {
   looksLikeLayoutComplaint,
-  appendFindingsToInstruction,
   applyLayoutResultToMessages,
   setLayoutStatusOnMessages,
   patchLandingMessageData,
@@ -417,6 +416,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const { runAutoFix } = useLandingLayoutAutoFix();
   const layoutRunSeqRef = useRef(0);
   const layoutRunByCardRef = useRef(new Map()); // layoutCardKey → token của lượt kiểm MỚI NHẤT (lượt cũ bị thay thế thì bỏ kết quả)
+  // api.js huỷ request CŨ HƠN khi trùng METHOD:url, mà lượt tự sửa nền và lượt sửa tay đều là
+  // POST /ai/edit-landing-html. Hai chốt (review PR-3): (1) đang có lượt sửa TAY nào chạy thì lượt nền
+  // của MỌI thẻ không được bắn request — nếu không, lượt nền của thẻ A huỷ mất lượt sửa đã trả credit
+  // của thẻ B; (2) các lượt nền xếp hàng chạy lần lượt để không huỷ lẫn nhau.
+  const manualLandingEditsInFlightRef = useRef(0);
+  const layoutCheckQueueRef = useRef(Promise.resolve());
   const campaignConfirmationRequestRef = useRef(0);
   const directRecipientsRef = useRef(null);
   const sessionWizardStateCache = useRef(new Map()); // sessionId → wizard_state từ server (restore khi tab-switch)
@@ -559,14 +564,21 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     updateSessionMessages(sessionId, (prev) => setLayoutStatusOnMessages(prev, {
       messageId, html: baseHtml, status: 'checking',
     }));
-    return runAutoFix({ page, sessionId, messageId, locale, isCancelled: () => !isCurrent() })
-      .then((result) => {
-        if (isCurrent()) finish(result);
-      })
-      .catch(() => {
-        // Không bao giờ để thẻ kẹt ở "Đang kiểm tra…"
-        if (isCurrent()) finish({ status: 'unknown', page, findings: [] });
-      });
+    const isCancelled = () => !isCurrent() || manualLandingEditsInFlightRef.current > 0;
+    const run = () => {
+      if (!isCurrent()) return undefined; // bị lượt mới hơn thay thế trong lúc xếp hàng
+      return runAutoFix({ page, sessionId, messageId, locale, isCancelled })
+        .then((result) => {
+          if (isCurrent()) finish(result);
+        })
+        .catch(() => {
+          // Không bao giờ để thẻ kẹt ở "Đang kiểm tra…"
+          if (isCurrent()) finish({ status: 'unknown', page, findings: [] });
+        });
+    };
+    const queued = layoutCheckQueueRef.current.then(run, run);
+    layoutCheckQueueRef.current = queued.catch(() => {});
+    return queued;
   };
 
   // Every confirm_create path flows through this one read-only preview request.
@@ -3159,19 +3171,21 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       messageId: targetMessageId, html: rawHtml, status: 'unknown',
     }));
 
+    // Từ đây tới `finally`: lượt nền của mọi thẻ không được bắn request (xem manualLandingEditsInFlightRef).
+    manualLandingEditsInFlightRef.current += 1;
     try {
-      // Người dùng than lỗi hiển thị ("bị đè", "mất chữ"…) hoặc gửi kèm ảnh chụp → ĐO trước, nối kết
-      // quả đo vào instruction gửi lên để AI biết đúng chỗ (sự cố 20/09: AI không đo được nên đoán rồi
-      // tự báo "đã sửa"). Tin hiển thị/xác nhận vẫn là câu người dùng gõ. Chưa đo được / không có lỗi
-      // → gửi như cũ. Còn lộ: server lưu instruction này làm tin người dùng nên tải lại phiên sẽ
-      // thấy phần đo — cần backend nhận findings ở đường sửa thường mới bịt được.
-      let instructionForAi = trimmedInstr;
+      // Người dùng than lỗi hiển thị ("bị đè", "mất chữ"…) hoặc gửi kèm ảnh chụp → ĐO trước, gửi kết
+      // quả đo bằng trường RIÊNG `layoutFindings` để AI biết đúng chỗ (sự cố 20/09: AI không đo được
+      // nên đoán rồi tự báo "đã sửa"). `instruction` luôn là NGUYÊN VĂN câu người dùng gõ: server lưu
+      // nó làm tin của họ và lặp lại trong lời xác nhận, nên nối số đo (selector, pixel) vào đây là lộ
+      // khi tải lại phiên. Chưa đo được / không có lỗi → gửi như cũ.
+      let hintFindings = null;
       if (!skipLayoutAudit && (looksLikeLayoutComplaint(trimmedInstr) || (Array.isArray(files) && files.length > 0))) {
         try {
           // Bước này CHẶN lượt sửa nên hạ trần còn 4 giây (mặc định 6): kẹt mạng thì gửi như cũ.
           const audit = await runLayoutAudit(buildFullLandingHtml(pageData), { timeoutMs: 4000 });
           if (!audit.timedOut && audit.errors.length === 0 && audit.findings.length > 0) {
-            instructionForAi = appendFindingsToInstruction(trimmedInstr, audit.findings);
+            hintFindings = audit.findings;
           }
         } catch {
           // gửi như cũ
@@ -3179,7 +3193,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       }
 
       const response = await aiApi.editLandingHtml({
-        instruction: instructionForAi,
+        instruction: trimmedInstr,
+        ...(hintFindings ? { layoutFindings: hintFindings } : {}),
         currentHtml: rawHtml,
         locale,
         sessionId: mySessionId,
@@ -3262,6 +3277,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       }]);
       return false;
     } finally {
+      manualLandingEditsInFlightRef.current = Math.max(0, manualLandingEditsInFlightRef.current - 1);
       setIsTyping(false);
       setEditingLandingPageIndex(null);
       if (mySessionId) clearTabPending(mySessionId);

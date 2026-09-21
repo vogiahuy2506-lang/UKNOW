@@ -137,6 +137,26 @@ export function buildAutoLayoutFixInstruction(findings) {
   ].join('\n');
 }
 
+/**
+ * Ngữ cảnh đo cho đường sửa THƯỜNG (người dùng gõ "chữ bị đè", frontend đo trước khi gửi): server nối
+ * đoạn này vào lệnh ĐƯA CHO AI, còn tin của người dùng và lời xác nhận lưu trong phiên chỉ giữ đúng
+ * câu họ gõ. Review PR-3 (21/09): bản đầu để frontend tự nối findings vào `instruction` → server lưu
+ * cả selector/pixel thành tin người dùng, tải lại phiên là lộ — phạm nguyên tắc 1 (khách không bao
+ * giờ thấy class/pixel). Trả '' nếu không còn finding hợp lệ.
+ *
+ * @param {unknown} findings
+ * @returns {string}
+ */
+export function buildLayoutFindingsContext(findings) {
+  const list = normalizeLayoutFindings(findings);
+  if (!list.length) return '';
+  const lines = list.map((f, i) => `${i + 1}. ${describeFinding(f)}`).join('\n');
+  return [
+    'Hệ thống vừa render trang này trong trình duyệt và đo được các lỗi hiển thị sau (dùng để xác định ĐÚNG chỗ người dùng nói tới; nếu yêu cầu của họ là về lỗi hiển thị thì sửa cho hết các lỗi này, không xoá chữ, không đổi nội dung):',
+    lines,
+  ].join('\n');
+}
+
 // Câu báo cho NGƯỜI DÙNG không được lộ chuyện kỹ thuật (sếp chốt 20/09: không class/pixel/selector).
 // Prompt đã cấm; đây là lưới cuối — model lỡ nhắc thì bỏ cả câu chứ không sửa hộ, phía gọi có lời
 // dự phòng khi không có changeSummary.

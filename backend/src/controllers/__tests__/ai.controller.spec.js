@@ -882,6 +882,38 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(saveAssistantMessage).not.toHaveBeenCalled();
     });
 
+    // Review PR-3 (21/09): frontend từng tự nối findings vào `instruction` → server lưu cả selector/
+    // pixel thành tin của người dùng và lặp lại trong lời xác nhận; tải lại phiên là lộ (phạm nguyên
+    // tắc 1: khách không bao giờ thấy class/pixel). Giờ findings đi trường riêng, chỉ vào lệnh cho AI.
+    it('sửa thường KÈM layoutFindings: AI nhận số đo, còn tin người dùng + lời xác nhận lưu NGUYÊN VĂN câu họ gõ', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(
+        manualReq({ instruction: 'chỗ này bị đè, sửa giúp tôi', layoutFindings: [finding()] }),
+        res,
+      );
+      const sentToAi = editHtml.mock.calls[0][0].instruction;
+      expect(sentToAi.startsWith('chỗ này bị đè, sửa giúp tôi\n\n')).toBe(true);
+      expect(sentToAi).toContain('span.block.text-lg.font-extrabold:nth-of-type(1)');
+      expect(sentToAi).toContain('đè 12px');
+      expect(editHtml.mock.calls[0][0].autoLayoutFix).toBe(false);
+
+      const [, , savedUserContent, savedAck] = saveMessages.mock.calls[0];
+      expect(savedUserContent).toBe('chỗ này bị đè, sửa giúp tôi');
+      for (const leaked of ['nth-of-type', '12px', 'span.block', 'Hệ thống vừa render']) {
+        expect(savedUserContent).not.toContain(leaked);
+        expect(savedAck.content).not.toContain(leaked);
+      }
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1); // vẫn là lượt sửa trả phí
+    });
+
+    it('sửa thường với layoutFindings rác / rỗng → lệnh cho AI y nguyên câu người dùng', async () => {
+      for (const layoutFindings of [undefined, [], 'x', [{ kind: 'bogus' }, null]]) {
+        editHtml.mockClear();
+        await aiController.editLandingHtml(manualReq({ layoutFindings }), makeRes());
+        expect(editHtml.mock.calls[0][0].instruction).toBe('Đổi tiêu đề thành Xin chào');
+      }
+    });
+
     it('không đọc được tin (lỗi DB) → vẫn sửa được như trước, dùng messageId client', async () => {
       getLandingPageMessage.mockRejectedValue(new Error('db down'));
       const res = makeRes();

@@ -223,7 +223,9 @@ describe('AiChatbot — vòng tự kiểm → tự sửa hiển thị landing (P
       expect(aiApi.editLandingHtml.mock.calls[0][0].messageId).toBe(77);
     });
 
-    it('câu than phiền lỗi hiển thị → ĐO trước, nối kết quả vào instruction GỬI ĐI; tin hiển thị vẫn là câu người dùng gõ', async () => {
+    // Review PR-3: bản đầu NỐI số đo vào `instruction` → server lưu cả selector/pixel thành tin người
+    // dùng và lặp lại trong lời xác nhận; tải lại phiên là lộ. Số đo phải đi bằng trường RIÊNG.
+    it('câu than phiền lỗi hiển thị → ĐO trước, gửi số đo bằng `layoutFindings`; `instruction` là NGUYÊN VĂN câu người dùng gõ (KHÔNG nối vào instruction)', async () => {
       runLayoutAudit.mockResolvedValueOnce(BROKEN).mockResolvedValue(CLEAN);
       aiApi.editLandingHtml.mockResolvedValue({ success: true, data: { title: 'Trang cũ', html: '<div>Mới</div>' } });
       await openSession(landingDb);
@@ -231,11 +233,11 @@ describe('AiChatbot — vòng tự kiểm → tự sửa hiển thị landing (P
       await typeAndSend('chữ ở dòng thời gian bị đè lên nhau');
 
       await waitFor(() => expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(1));
-      const { instruction, autoLayoutFix } = aiApi.editLandingHtml.mock.calls[0][0];
+      const { instruction, autoLayoutFix, layoutFindings } = aiApi.editLandingHtml.mock.calls[0][0];
       expect(autoLayoutFix).toBeUndefined(); // đây là lượt sửa THƯỜNG (có credit), không phải tự sửa
-      expect(instruction.startsWith('chữ ở dòng thời gian bị đè lên nhau')).toBe(true);
-      expect(instruction).toContain('[Đo bố cục ở 1280px] Chữ "03/02/2026"');
-      expect(instruction).toContain('span.block.text-lg.font-extrabold:nth-of-type(1)');
+      expect(instruction).toBe('chữ ở dòng thời gian bị đè lên nhau');
+      expect(instruction).not.toMatch(/nth-of-type|px|Đo bố cục/);
+      expect(layoutFindings).toEqual(BROKEN.findings);
       // người dùng chỉ thấy đúng câu mình gõ
       expect(await screen.findByText('chữ ở dòng thời gian bị đè lên nhau')).toBeInTheDocument();
       expect(screen.queryByText(/\[Đo bố cục/)).toBeNull();
@@ -262,6 +264,7 @@ describe('AiChatbot — vòng tự kiểm → tự sửa hiển thị landing (P
       await typeAndSend('chữ bị che mất');
       await waitFor(() => expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(1));
       expect(aiApi.editLandingHtml.mock.calls[0][0].instruction).toBe('chữ bị che mất');
+      expect(aiApi.editLandingHtml.mock.calls[0][0].layoutFindings).toBeUndefined();
     });
 
     it('câu xác nhận dùng changeSummary: "Đã sửa: …" (không còn câu dài lặp lại yêu cầu)', async () => {
@@ -325,6 +328,59 @@ describe('AiChatbot — vòng tự kiểm → tự sửa hiển thị landing (P
       fireEvent.click(await screen.findByText('Hoàn tác'));
       await waitFor(() => expect(mockToast.error).toHaveBeenCalledTimes(1));
       expect(screen.getByText('Hoàn tác')).toBeInTheDocument();
+    });
+  });
+
+  // Review PR-3 — chạm tiền: api.js huỷ request CŨ HƠN khi trùng METHOD:url, mà lượt tự sửa nền và lượt
+  // sửa tay đều là POST /ai/edit-landing-html. Lượt nền của thẻ B bắn đúng lúc người dùng đang sửa tay
+  // thẻ A sẽ huỷ mất lượt sửa ĐÃ TRẢ CREDIT của thẻ A (server vẫn chạy và vẫn trừ, client mất kết quả).
+  describe('lượt kiểm nền không được chen vào lượt sửa tay đang chạy', () => {
+    const deferred = () => {
+      let resolve;
+      const promise = new Promise((r) => { resolve = r; });
+      return { promise, resolve };
+    };
+    const twoCards = [
+      { id: 10, role: 'user', content: 'Tạo landing page A' },
+      { id: 77, role: 'assistant', type: 'landing_page', content: 'Đã tạo', data: { title: 'Trang A', html: '<div>A</div>' } },
+      { id: 11, role: 'user', content: 'Tạo landing page B' },
+      { id: 88, role: 'assistant', type: 'landing_page', content: 'Đã tạo', data: { title: 'Trang B', html: '<div>B</div>' } },
+    ];
+    const editCard = async (cardIndex, text) => {
+      fireEvent.click((await screen.findAllByText('Sửa trang này với AI'))[cardIndex]);
+      const box = await screen.findByPlaceholderText(/Đổi nền sang màu tím/);
+      fireEvent.change(box, { target: { value: text } });
+      fireEvent.click(screen.getByText('Áp dụng sửa'));
+    };
+
+    it('thẻ B đang được kiểm nền, người dùng sửa tay thẻ A → KHÔNG có request tự sửa nào bắn ra khi lượt sửa tay còn chạy', async () => {
+      const backgroundAudit = deferred();
+      const manualEditA = deferred();
+      runLayoutAudit.mockReturnValueOnce(backgroundAudit.promise).mockResolvedValue(CLEAN);
+      aiApi.editLandingHtml
+        .mockResolvedValueOnce({ success: true, data: { title: 'Trang B', html: '<div>B1</div>' } }) // sửa tay thẻ B
+        .mockReturnValueOnce(manualEditA.promise); // sửa tay thẻ A — treo
+
+      await openSession(twoCards);
+      await screen.findByText('Trang B');
+
+      await editCard(1, 'Đổi tiêu đề trang B');
+      await waitFor(() => expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(runLayoutAudit).toHaveBeenCalledTimes(1)); // kiểm nền thẻ B đang treo
+
+      await editCard(0, 'Đổi tiêu đề trang A');
+      await waitFor(() => expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(2));
+      expect(aiApi.editLandingHtml.mock.calls[1][0]).toMatchObject({ messageId: 77, instruction: 'Đổi tiêu đề trang A' });
+
+      // Bộ đo của thẻ B trả về CÓ LỖI đúng lúc lượt sửa tay thẻ A còn đang chạy.
+      backgroundAudit.resolve(BROKEN);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(2);
+      expect(aiApi.editLandingHtml.mock.calls.some(([arg]) => arg.autoLayoutFix === true)).toBe(false);
+
+      manualEditA.resolve({ success: true, data: { title: 'Trang A', html: '<div>A1</div>' } });
+      await waitFor(() => expect(mockToast.success).toHaveBeenCalledTimes(2));
+      expect(mockToast.error).not.toHaveBeenCalled();
     });
   });
 });

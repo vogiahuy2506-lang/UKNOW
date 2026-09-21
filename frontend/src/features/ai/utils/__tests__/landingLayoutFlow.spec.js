@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   looksLikeLayoutComplaint,
-  appendFindingsToInstruction,
   pickSectionTitle,
   findLandingMessageIndex,
   applyLayoutResultToMessages,
@@ -35,17 +34,11 @@ describe('looksLikeLayoutComplaint', () => {
   });
 });
 
-describe('appendFindingsToInstruction', () => {
-  it('giữ nguyên câu người dùng gõ, nối kết quả đo phía sau', () => {
-    const out = appendFindingsToInstruction('chữ bị đè', [finding()]);
-    expect(out.startsWith('chữ bị đè\n\n')).toBe(true);
-    expect(out).toContain('[Đo bố cục ở 1280px] Chữ "03/02/2026"');
-    expect(out).toContain('span.block:nth-of-type(1)');
-  });
-  it('không có finding → y nguyên', () => {
-    expect(appendFindingsToInstruction('chữ bị đè', [])).toBe('chữ bị đè');
-    expect(appendFindingsToInstruction('chữ bị đè', undefined)).toBe('chữ bị đè');
-  });
+// (Review PR-3) appendFindingsToInstruction đã bỏ: số đo đi bằng trường riêng `layoutFindings`, không
+// nối vào `instruction` — xem ca "KHÔNG nối vào instruction" ở AiChatbot.landingAutoFix.spec.jsx.
+it('module KHÔNG còn hàm nối findings vào instruction (chống đưa lại đường làm lộ selector/pixel)', async () => {
+  const mod = await import('../landingLayoutFlow.js');
+  expect(mod.appendFindingsToInstruction).toBeUndefined();
 });
 
 describe('pickSectionTitle', () => {

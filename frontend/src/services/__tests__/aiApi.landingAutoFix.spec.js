@@ -30,6 +30,25 @@ describe('aiApi — landing tự kiểm hiển thị (PR-3)', () => {
     expect(config).toMatchObject({ timeout: 120000 });
   });
 
+  // Review PR-3: số đo cho lượt sửa THƯỜNG đi bằng trường riêng (server không lưu vào tin người dùng),
+  // `instruction` giữ nguyên văn; KHÔNG kèm cờ autoLayoutFix nên lượt này vẫn trừ credit như thường.
+  it('editLandingHtml thường KÈM số đo: gửi layoutFindings, instruction nguyên văn, KHÔNG có autoLayoutFix', async () => {
+    const layoutFindings = [{ kind: 'text_covered', width: 1280, text: 'a', selector: 'p:nth-of-type(1)', coveredBy: null, overlapPx: 12 }];
+    await aiApi.editLandingHtml({ instruction: 'chữ bị đè', currentHtml: '<p/>', sessionId: 5, messageId: 9, layoutFindings });
+    const [, payload] = api.post.mock.calls[0];
+    expect(payload.instruction).toBe('chữ bị đè');
+    expect(payload.layoutFindings).toEqual(layoutFindings);
+    expect(payload).not.toHaveProperty('autoLayoutFix');
+  });
+
+  it('editLandingHtml thường với layoutFindings rỗng / không phải mảng → không gửi trường này', async () => {
+    for (const layoutFindings of [[], null, undefined, 'x']) {
+      api.post.mockClear();
+      await aiApi.editLandingHtml({ instruction: 'x', currentHtml: '<p/>', layoutFindings });
+      expect(api.post.mock.calls[0][1]).not.toHaveProperty('layoutFindings');
+    }
+  });
+
   it('chỉ boolean true mới bật chế độ tự động (không gửi cờ khi truyền giá trị khác)', async () => {
     await aiApi.editLandingHtml({ instruction: 'x', currentHtml: '<p/>', autoLayoutFix: 'true', layoutFindings: [1] });
     expect(api.post.mock.calls[0][1]).not.toHaveProperty('autoLayoutFix');

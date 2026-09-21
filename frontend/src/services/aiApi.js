@@ -249,7 +249,12 @@ const aiApi = {
       sessionId,
       messageId,
       ...(formattedFiles ? { files: formattedFiles } : {}),
-      ...(autoLayoutFix === true ? { autoLayoutFix: true, layoutFindings: Array.isArray(layoutFindings) ? layoutFindings : [] } : {}),
+      // Tự động: luôn gửi cờ + findings. Sửa THƯỜNG: chỉ gửi findings khi có (frontend đo trước khi
+      // người dùng than "chữ bị đè") — server nối số đo vào lệnh cho AI nhưng KHÔNG lưu vào tin người
+      // dùng; đừng bao giờ tự nối findings vào `instruction` (sẽ lộ selector/pixel khi tải lại phiên).
+      ...(autoLayoutFix === true
+        ? { autoLayoutFix: true, layoutFindings: Array.isArray(layoutFindings) ? layoutFindings : [] }
+        : (Array.isArray(layoutFindings) && layoutFindings.length > 0 ? { layoutFindings } : {})),
     };
     const response = await api.post('/ai/edit-landing-html', payload, {
       timeout: 120000
