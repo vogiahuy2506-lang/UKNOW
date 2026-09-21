@@ -248,7 +248,14 @@ const Header = ({ onToggleSidebar }) => {
                   >
                     <div className="flex items-center gap-2.5">
                       <HiOutlineUserGroup className="w-4 h-4" />
-                      <span className="truncate max-w-[140px]">{t('header.employeeOf', { ownerName: m.ownerName || m.ownerUsername })}</span>
+                      {/* 180px = bề rộng còn lại của menu 256px sau icon + dấu tích. Ở 140px, "Nhân viên của …" bị
+                          cắt ngay trước tên công ty — đúng phần người dùng cần đọc. `title` để rê chuột xem đủ. */}
+                      <span
+                        className="truncate max-w-[180px]"
+                        title={t('header.employeeOf', { ownerName: m.ownerName || m.ownerUsername })}
+                      >
+                        {t('header.employeeOf', { ownerName: m.ownerName || m.ownerUsername })}
+                      </span>
                     </div>
                     {activeContext.type === 'employee' && activeContext.ownerId === m.ownerId && (
                       <HiOutlineCheck className="w-4 h-4 shrink-0" />
