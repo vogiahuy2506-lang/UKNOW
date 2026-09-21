@@ -67,6 +67,9 @@ for (const slugToCapture of SHEETS) {
     // Chạy tuần tự: các ảnh dùng chung một trang và có bước mở menu.
     test(`chụp ${slugToCapture}`, async ({ page, baseURL }) => {
       const sheetDef = (await import(`./shots/${slugToCapture}.js`)).default;
+      // Sheet nào phải chờ AI sinh nội dung thật thì tự khai `timeoutMs` — 120 giây mặc định không đủ
+      // cho một lượt dựng landing page + một lượt sửa.
+      if (sheetDef.timeoutMs) test.setTimeout(sheetDef.timeoutMs);
       const failures = [];
       // Ảnh nào phải BẤM vào luồng đổi gói / cần trạng thái do seed dựng sẵn thì
       // chỉ chạy khi trỏ vào máy mình. Trên tài khoản thật, bấm nhầm là đơn thật.

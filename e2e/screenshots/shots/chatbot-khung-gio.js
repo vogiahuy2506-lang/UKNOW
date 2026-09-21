@@ -38,6 +38,7 @@ async function openLimitsSection(page) {
 
 export default {
   slug: 'chatbot-khung-gio',
+  timeoutMs: 420_000,
   shots: [
     {
       name: 'nut-cau-hinh-chatbot',
@@ -77,6 +78,37 @@ export default {
           await page.waitForTimeout(400);
           const card = await enclosingSection(page, heading, { minWidth: 500 });
           return paddedShot(page, card, { pad: 10 });
+        });
+      },
+    },
+    {
+      name: 'ai-viet-ho-xem-truoc',
+      caption: 'ô hướng dẫn cách trả lời với nút "AI viết hộ", bên dưới là khung Xem trước bản AI vừa viết',
+      localOnly: true,
+      async take(page) {
+        // Cần AI chạy thật (GEMINI_API_KEY trong e2e/.env.test) — tốn 1 lượt AI. Chỉ xem trước, KHÔNG bấm
+        // "Dùng cái này" và không lưu cấu hình.
+        return tallViewportShot(page, 2400, async () => {
+          const { configButton } = await openStudio(page);
+          await configButton.click();
+          const dialog = page.locator('div.fixed.inset-0').filter({ hasText: 'Cấu hình chatbot' }).last();
+          await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+          const toggle = dialog.getByRole('button', { name: 'AI viết hộ' }).first();
+          await toggle.scrollIntoViewIfNeeded();
+          await toggle.click();
+          const hint = dialog.getByPlaceholder(/Trợ lý tư vấn khoá học tiếng Anh/).first();
+          await hint.waitFor({ state: 'visible', timeout: 15_000 });
+          await hint.fill('Trợ lý tư vấn khoá học marketing online cho chủ shop, xưng em, thân thiện, luôn xin số điện thoại để gọi lại');
+          await dialog.getByRole('button', { name: 'Viết', exact: true }).first().click();
+          const preview = dialog.getByTestId('system-instruction-ai-preview').first();
+          await preview.waitFor({ state: 'visible', timeout: 240_000 });
+          await page.waitForTimeout(800);
+          await hideVolatileChrome(page);
+          await highlight(toggle);
+          await page.waitForTimeout(200);
+          // Khối "Hướng dẫn AI" của ô hướng dẫn: từ nút AI viết hộ tới hết khung xem trước + hàng nút.
+          const block = preview.locator('xpath=ancestor::div[.//button[normalize-space()="AI viết hộ"]][1]');
+          return paddedShot(page, block, { pad: 12 });
         });
       },
     },

@@ -63,6 +63,7 @@ const TOOLBAR_HEIGHT = 210;
 
 export default {
   slug: 'landing-page',
+  timeoutMs: 600_000,
   shots: [
     {
       name: 'menu-tao-landing-page',
@@ -223,6 +224,31 @@ export default {
         // Chỉ chụp đúng hàng thanh công cụ (khối gần nhất chứa cả nút đầu lẫn nút Lưu).
         const bar = save.locator('xpath=ancestor::div[.//button[@title="Quay lại danh sách"]][1]');
         return paddedShot(page, bar, { pad: 8 });
+      },
+    },
+    {
+      name: 'khung-chat-ai-dinh-kem-va-hoan-tac',
+      caption: 'khung chat AI Assistant bên trái, khoanh đỏ nút Đính kèm tệp và nút Hoàn tác',
+      localOnly: true,
+      async take(page) {
+        // "Hoàn tác" chỉ hiện trên tin của AI SAU khi AI tự áp một lượt sửa → cần AI chạy thật
+        // (GEMINI_API_KEY trong e2e/.env.test), tốn 1 lượt AI. Trang KHÔNG được lưu: không bấm "Lưu".
+        await openEditor(page, { pageTitle: 'Khoá học Marketing' });
+        const input = page.locator('main textarea').first();
+        await input.waitFor({ state: 'visible', timeout: 30_000 });
+        await input.fill('Đổi màu nút đăng ký sang màu cam và làm tiêu đề chính to hơn một chút.');
+        await page.locator('main button[title="Gửi"]').first().click();
+        const undo = page.locator('main').getByRole('button', { name: 'Hoàn tác' }).last();
+        await undo.waitFor({ state: 'visible', timeout: 300_000 });
+        await page.waitForTimeout(1500);
+        await settle(page);
+        await hideVolatileChrome(page);
+        await highlight(page.locator('main button[title*="Đính kèm"]').first());
+        await highlight(undo);
+        await page.waitForTimeout(200);
+        // Cột chat bên trái = khối bao gần nhất chứa cả ô nhập lẫn tiêu đề "AI Assistant".
+        const panel = input.locator('xpath=ancestor::div[.//*[normalize-space()="AI Assistant"]][1]');
+        return paddedShot(page, panel, { pad: 6 });
       },
     },
   ],
