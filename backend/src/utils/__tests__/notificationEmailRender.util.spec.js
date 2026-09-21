@@ -44,6 +44,20 @@ describe('replaceVariablesForUser', () => {
       .toBe('Hi alice');
   });
 
+  // Thư gửi 19/09/2026 mang nguyên văn chữ "{{message}}": bốn mẫu sẵn có (announcement /
+  // warning / reminder / security) đặt {{message}} trong thân HTML để chứa lối nhắn admin tự viết,
+  // mà không bộ thay biến nào hỗ trợ nó.
+  it('thay {{message}} bằng lời nhắn của admin, có escape', () => {
+    expect(replaceVariablesForUser('Nội dung: {{message}}', sampleUser, { message: 'Giảm 50%' }))
+      .toBe('Nội dung: Giảm 50%');
+    expect(replaceVariablesForUser('{{message}}', sampleUser, { message: '<script>x</script>' }))
+      .toBe('&lt;script&gt;x&lt;/script&gt;');
+  });
+
+  it('thiếu extras thì {{message}} thành rỗng, KHÔNG để lọt nguyên văn', () => {
+    expect(replaceVariablesForUser('[{{message}}]', sampleUser)).toBe('[]');
+  });
+
   it('trả về chuỗi rỗng khi content null/undefined', () => {
     expect(replaceVariablesForUser(null, sampleUser)).toBe('');
     expect(replaceVariablesForUser(undefined, sampleUser)).toBe('');

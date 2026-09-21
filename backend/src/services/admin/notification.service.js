@@ -215,7 +215,14 @@ export default {
    */
   async buildEmailHtml(notification, user) {
     const { html: title } = { html: this.replaceVariables(notification.title || '', user) };
-    const subject = `[${PRODUCT_NAME}] ${title}`;
+    // Đừng thêm tiền tố hai lần. Cả 6 mẫu sẵn có ở
+    // frontend/src/features/admin/utils/notificationTemplates.util.js đặt `[Founder AI] ` ngay
+    // trong `subject`, mà `subject` đi thẳng vào `notification.title`
+    // (NotificationCenter.jsx buildPayloadFromHtml) — nên thư gửi 19/09 có tiêu đề
+    // "[Founder AI] [Founder AI] 🎁 Ưu đãi…". Kiểm ở đây thay vì sửa 6 mẫu, vì nó bịt được cả
+    // những mẫu admin đã tự lưu vào `notification_templates` với tiền tố dính sẵn.
+    const prefix = `[${PRODUCT_NAME}] `;
+    const subject = title.startsWith(prefix) ? title : `${prefix}${title}`;
 
     // 1 PATH DUY NHẤT qua shared renderer → đảm bảo preview == email thực.
     // Sau rewrite 19/09: renderer không còn nhận `device` (html_content là body
