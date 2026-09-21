@@ -132,7 +132,14 @@ router.patch(
   '/:id/permissions',
   [
     param('id').isInt({ min: 1 }).withMessage('ID nhân viên không hợp lệ'),
-    body('permissions').isObject().withMessage('permissions phải là object'),
+    // Object thường, hoặc mảng RỖNG (client chưa tick gì gửi `[]`). Mảng có phần tử vẫn bị từ chối.
+    body('permissions')
+      .custom((value) => {
+        const isPlainObject = value !== null && typeof value === 'object' && !Array.isArray(value);
+        const isEmptyArray = Array.isArray(value) && value.length === 0;
+        return isPlainObject || isEmptyArray;
+      })
+      .withMessage('permissions phải là object'),
   ],
   handleValidationErrors,
   employeeController.updatePermissions
