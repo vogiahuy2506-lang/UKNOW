@@ -57,3 +57,28 @@ describe('campaignScheduleRepository — trả thêm trạng thái chiến dịc
     expect(mockQuery.mock.calls[0][0]).toMatch(/c\.status AS campaign_status/);
   });
 });
+
+describe('campaignScheduleRepository.findEnabledDuplicate (migration 231)', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('chỉ tính lịch ĐANG BẬT cùng chiến dịch + kiểu + cron, bỏ qua chính lịch đang sửa', async () => {
+    mockQuery.mockResolvedValue({ rows: [{ id: 178 }] });
+    const dup = await scheduleRepo.findEnabledDuplicate({ campaignId: 395, scheduleType: 'once', cronExpression: '30 07 21 9 *', excludeId: 177 });
+    expect(dup).toEqual({ id: 178 });
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/id_campaign = \$1/);
+    expect(sql).toMatch(/schedule_type = \$2/);
+    expect(sql).toMatch(/cron_expression = \$3/);
+    expect(sql).toMatch(/enabled = TRUE/);
+    expect(sql).toMatch(/\$4::bigint IS NULL OR id <> \$4::bigint/);
+    expect(params).toEqual([395, 'once', '30 07 21 9 *', 177]);
+  });
+
+  it('không trùng → null; không truyền excludeId → $4 là null', async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    await expect(scheduleRepo.findEnabledDuplicate({ campaignId: 1, scheduleType: 'daily', cronExpression: '0 9 * * *' })).resolves.toBeNull();
+    expect(mockQuery.mock.calls[0][1][3]).toBeNull();
+  });
+});

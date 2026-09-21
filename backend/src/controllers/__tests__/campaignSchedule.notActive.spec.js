@@ -10,6 +10,7 @@ const mockRepository = {
   hasRunningCampaignRun: jest.fn(),
   create: jest.fn(),
   findMutableById: jest.fn(),
+  findEnabledDuplicate: jest.fn(),
   update: jest.fn(),
 };
 
@@ -21,6 +22,11 @@ jest.unstable_mockModule('../../utils/scheduler.js', () => ({
 }));
 jest.unstable_mockModule('../../repositories/campaign/campaignSchedule.repository.js', () => ({
   default: mockRepository,
+}));
+jest.unstable_mockModule('../../services/audit.service.js', () => ({
+  logWorkspace: jest.fn(async () => {}),
+  AUDIT_ACTIONS: {},
+  AUDIT_ENTITY_TYPES: { CAMPAIGN: 'campaign' },
 }));
 jest.unstable_mockModule('../../utils/onceScheduleValidation.util.js', () => ({
   assertOnceCronNotYearRolled: jest.fn(() => ({ ok: true })),
@@ -51,6 +57,7 @@ describe('CampaignScheduleController.create — chiến dịch không hoạt đ�
   beforeEach(() => {
     jest.clearAllMocks();
     mockRepository.hasRunningCampaignRun.mockResolvedValue(false);
+    mockRepository.findEnabledDuplicate.mockResolvedValue(null);
     mockRepository.create.mockResolvedValue(createdRow);
   });
 
@@ -123,6 +130,7 @@ describe('CampaignScheduleController.update — bật lại lịch đang tắt',
   beforeEach(() => {
     jest.clearAllMocks();
     mockRepository.hasRunningCampaignRun.mockResolvedValue(false);
+    mockRepository.findEnabledDuplicate.mockResolvedValue(null);
     mockRepository.update.mockResolvedValue({ ...createdRow, enabled: true });
   });
   const updateReq = (body, user = owner) => ({ user, params: { id: '177' }, body });

@@ -110,6 +110,25 @@ class CampaignScheduleRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * Lịch ĐANG BẬT cùng chiến dịch + kiểu + cron (khớp uq_campaign_schedules_enabled_dup, migration
+   * 231). `excludeId` bỏ qua chính lịch đang sửa. Trả null nếu không trùng.
+   */
+  async findEnabledDuplicate({ campaignId, scheduleType, cronExpression, excludeId = null }) {
+    const result = await db.query(
+      `SELECT id
+       FROM campaign_schedules
+       WHERE id_campaign = $1
+         AND schedule_type = $2
+         AND cron_expression = $3
+         AND enabled = TRUE
+         AND ($4::bigint IS NULL OR id <> $4::bigint)
+       LIMIT 1`,
+      [campaignId, scheduleType, cronExpression, excludeId]
+    );
+    return result.rows[0] || null;
+  }
+
   async checkCampaignExists(input) {
     return Boolean(await this.findCampaignForSchedule(input));
   }
