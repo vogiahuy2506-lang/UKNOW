@@ -270,14 +270,22 @@ describe('ChatbotChannelWebhookController - Facebook: AI tạm dừng kiểm tr�
     jest.clearAllMocks();
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-09-15T22:00:00+07:00'));
+    inboundReplyDebounceService._resetForTests();
   });
 
   afterEach(() => {
+    inboundReplyDebounceService._resetForTests();
     jest.useRealTimers();
   });
 
+  // Từ 21/09/2026 kênh Facebook cũng gom tin qua inboundReplyDebounceService như Zalo OA: mọi cổng
+  // (tạm dừng AI → khung giờ → rate limit) chạy trong `_processFacebookBatch` SAU khi hết nhịp gom.
+  // Không tua đồng hồ thì batch không bao giờ chạy — test "không gửi gì" sẽ xanh vì chẳng có gì xảy ra.
+  const flushDebounce = () => jest.advanceTimersByTimeAsync(10_000);
+
   function arrange({ paused }) {
     mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8 });
+    mockFindActiveChannelById.mockResolvedValue({ id: 20, id_chatbot: 8 });
     mockFindChatbotById.mockResolvedValue({
       id: 8,
       id_user: 1,
@@ -296,8 +304,11 @@ describe('ChatbotChannelWebhookController - Facebook: AI tạm dừng kiểm tr�
     arrange({ paused: true });
     const res = { send: jest.fn() };
     await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb_tok' }, body: {} }, res);
+    await flushDebounce();
 
     expect(mockAddMessage).toHaveBeenCalledWith(300, expect.objectContaining({ role: 'visitor', content: 'Alo' }));
+    // Batch ĐÃ chạy tới cổng tạm dừng (không phải "chưa chạy gì") rồi mới dừng ở đó.
+    expect(mockIsAiPaused).toHaveBeenCalledWith(300, 'channel');
     expect(mockFbSendReply).not.toHaveBeenCalled();
     expect(mockCheckBeforeAi).not.toHaveBeenCalled();
     expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
@@ -307,8 +318,13 @@ describe('ChatbotChannelWebhookController - Facebook: AI tạm dừng kiểm tr�
     arrange({ paused: false });
     const res = { send: jest.fn() };
     await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb_tok' }, body: {} }, res);
+    // Chưa hết nhịp gom thì chưa được trả lời gì.
+    expect(mockFbSendReply).not.toHaveBeenCalled();
+    await flushDebounce();
 
     expect(mockFbSendReply).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'fb_user_1', message: 'Ngoài giờ' }));
+    // Ngoài giờ thì dừng TRƯỚC cổng rate limit và không gọi AI.
+    expect(mockCheckBeforeAi).not.toHaveBeenCalled();
     expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
   });
 });

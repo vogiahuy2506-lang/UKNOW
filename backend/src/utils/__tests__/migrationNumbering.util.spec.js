@@ -36,6 +36,21 @@ const GRANDFATHERED_DUPLICATE_PREFIXES = Object.freeze([
   50,
 ]);
 
+/**
+ * Số trùng TỪ ngưỡng enforce trở lên mà không gỡ được — ghim ĐÚNG cặp file, không phải cả con số:
+ * thêm một file 231 thứ ba, hay bất kỳ số trùng nào khác, vẫn đỏ.
+ *
+ * 231: `231_campaign_schedules_unique_enabled.sql` (c0e75db9, 21/09/2026 14:16 — ĐÃ chạy trên production)
+ * và `231_facebook_channel_connections.sql` (62204480, cùng ngày 16:48) được hai người đánh số song song.
+ * Không đổi tên được file nào: cả hai đã nằm trên origin/main, mà chốt append-only
+ * (migrationSafety.util.js) coi D/R là vi phạm, không có cửa thoát. Runner sắp theo TÊN FILE nên thứ tự
+ * vẫn tất định (campaign_… trước facebook_…), hai file đụng hai bảng khác nhau, không phụ thuộc nhau.
+ * Migration mới dùng số 234 trở đi.
+ */
+const PINNED_DUPLICATES_ABOVE_FLOOR = Object.freeze({
+  231: ['231_campaign_schedules_unique_enabled.sql', '231_facebook_channel_connections.sql'],
+});
+
 /** SQL files without NNN_ prefix — allowlist only. */
 const ALLOWLISTED_UNPREFIXED = Object.freeze(['custom_chatbot_chunks.sql']);
 
@@ -62,9 +77,20 @@ describe('migration numbering (PLAN_SCHEMA_DRIFT S-3)', () => {
 
     const duplicates = [...byPrefix.entries()]
       .filter(([, names]) => names.length > 1)
+      .filter(([prefix, names]) => {
+        const pinned = PINNED_DUPLICATES_ABOVE_FLOOR[prefix];
+        return !pinned || JSON.stringify([...names].sort()) !== JSON.stringify([...pinned].sort());
+      })
       .map(([prefix, names]) => `${String(prefix).padStart(3, '0')}: ${names.join(', ')}`);
 
     expect(duplicates).toEqual([]);
+  });
+
+  it('cặp trùng số đã ghim vẫn còn đúng hai file đó (gỡ được thì xoá khỏi danh sách ghim)', () => {
+    for (const [prefix, pinned] of Object.entries(PINNED_DUPLICATES_ABOVE_FLOOR)) {
+      const actual = files.filter((f) => f.startsWith(`${String(prefix).padStart(3, '0')}_`)).sort();
+      expect(actual).toEqual([...pinned].sort());
+    }
   });
 
   it('mọi số trùng dưới ngưỡng enforce đều nằm trong grandfather list', () => {

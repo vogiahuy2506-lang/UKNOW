@@ -76,11 +76,13 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 29 cron cố định, không trùng mã', () => {
+  it('đúng 31 cron cố định, không trùng mã', () => {
     // 29 → 30: thêm notification_templates (PLAN_NOTIFICATION_CENTER_SAVE_AS_TEMPLATE,
     // PR-1 — Save As Template MVP, dispatch mark-only vì template chưa lưu targeting).
-    expect(CRON_JOBS).toHaveLength(30);
+    // 30 → 31: thêm facebook_token_refresh (06209dca, 21/09/2026 — làm mới Page Access Token 03:00
+    // hàng ngày). Thêm cron mà quên sửa số ở đây là đỏ cả bộ unit, chặn luôn deploy backend.
+    expect(CRON_JOBS).toHaveLength(31);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(30);
+    expect(new Set(codes).size).toBe(31);
   });
 });

@@ -1705,6 +1705,52 @@ CREATE INDEX IF NOT EXISTS idx_channel_connections_webhook_token ON channel_conn
 CREATE INDEX IF NOT EXISTS idx_channel_conn_fb_user ON channel_connections(fb_user_id) WHERE fb_user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_channel_conn_fb_page ON channel_connections(fb_page_id) WHERE fb_page_id IS NOT NULL;
 
+-- ─── Facebook token tracking (migration 233) ─────────────────────────
+-- Mirror của 233_facebook_token_tracking.sql: commit gốc (06209dca) thêm migration mà không đưa bảng
+-- này vào đây, nên DB test thiếu bảng + trigger mà production sẽ có sau deploy.
+CREATE TABLE IF NOT EXISTS facebook_token_tracking (
+  id                    SERIAL PRIMARY KEY,
+  channel_connection_id INTEGER NOT NULL REFERENCES channel_connections(id) ON DELETE CASCADE,
+  token_created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  token_expires_at      TIMESTAMP WITH TIME ZONE,
+  last_refreshed_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_check_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  is_valid              BOOLEAN DEFAULT true,
+  error_message         TEXT,
+  created_at            TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at            TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE (channel_connection_id)
+);
+CREATE INDEX IF NOT EXISTS idx_facebook_token_tracking_connection
+  ON facebook_token_tracking(channel_connection_id);
+CREATE INDEX IF NOT EXISTS idx_facebook_token_tracking_expiry
+  ON facebook_token_tracking(token_expires_at)
+  WHERE token_expires_at IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION update_facebook_token_tracking()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.credentials ? 'page_access_token' AND OLD.credentials->>'page_access_token' IS DISTINCT FROM NEW.credentials->>'page_access_token' THEN
+    INSERT INTO facebook_token_tracking (channel_connection_id, token_created_at, token_expires_at, last_refreshed_at)
+    VALUES (NEW.id, NOW(), NOW() + INTERVAL '55 days', NOW())
+    ON CONFLICT (channel_connection_id)
+    DO UPDATE SET
+      token_created_at = NOW(),
+      token_expires_at = NOW() + INTERVAL '55 days',
+      last_refreshed_at = NOW(),
+      updated_at = NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_facebook_token_tracking ON channel_connections;
+CREATE TRIGGER trg_facebook_token_tracking
+  AFTER UPDATE OF credentials ON channel_connections
+  FOR EACH ROW
+  WHEN (OLD.channel = 'facebook')
+  EXECUTE FUNCTION update_facebook_token_tracking();
+
 -- ─── Channel conversations & messages (migration 031, 032, 095) ────────
 CREATE TABLE IF NOT EXISTS channel_conversations (
   id              BIGSERIAL PRIMARY KEY,
